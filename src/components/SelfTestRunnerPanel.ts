@@ -33,7 +33,7 @@ import {
 const STATUS_COLOR: Record<SmokeStatus, string> = {
   pass: '#4caf50',
   warn: '#ff9800',
-  fail: '#d50000',
+  fail: '#ff453a',
 };
 
 const STATUS_LABEL: Record<SmokeStatus, string> = {

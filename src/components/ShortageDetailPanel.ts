@@ -44,7 +44,7 @@ function getHistory(commodity: FullSetCommodity): { score: number; at: number }[
 // ── Risk colors ───────────────────────────────────────────────────────────
 
 const RISK_COLOR: Record<RiskLevel, string> = {
-  CRITICAL: '#d50000',
+  CRITICAL: '#ff453a',
   HIGH:     '#ff9800',
   MODERATE: '#ffeb3b',
   LOW:      '#4caf50',
@@ -179,8 +179,8 @@ export class ShortageDetailPanel extends Panel {
     const history = getHistory(this.commodity);
     const sparkline = buildSparkline(history, color);
     const freshness = freshnessLabel(forecast.lastUpdated);
-    const CONF_COLORS: Record<string, string> = { high: '#4caf50', medium: '#ff9800', low: '#f44336' };
-    const confColor = CONF_COLORS[forecast.confidence] ?? '#f44336';
+    const CONF_COLORS: Record<string, string> = { high: '#4caf50', medium: '#ff9800', low: '#ef4444' };
+    const confColor = CONF_COLORS[forecast.confidence] ?? '#ef4444';
 
     const topDrivers = [...forecast.drivers]
       .sort((a, b) => b.score - a.score)

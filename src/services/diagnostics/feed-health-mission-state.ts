@@ -83,7 +83,7 @@ export const MISSION_STATE_COLOR: Record<MissionState, string> = {
   nominal:  '#4caf50',
   reduced:  '#ffc107',
   degraded: '#ff9800',
-  critical: '#d50000',
+  critical: '#ff453a',
 };
 
 /** Order from healthiest to worst; useful for sorting / comparing two

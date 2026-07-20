@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/no-nested-template-literals */
 /**
  * Algorithm Evaluation Panel — Phase 4 Learn-stage accuracy surface.
  *
@@ -15,9 +14,13 @@ import {
   type TrendDirection,
 } from '@/services/intelligence/algo-eval-ledger';
 import { escapeHtml } from '@/utils/sanitize';
+import { formatDurationMs } from '@/utils/format-duration';
 
 const REFRESH_MS = 15_000;
-const PENDING_LIMIT = 10;
+/** Max groups shown in the pending list. */
+const PENDING_GROUP_LIMIT = 30;
+/** Max individual predictions revealed inside one expanded group. */
+const PENDING_ITEMS_PER_GROUP = 50;
 
 const TREND_LABEL: Record<TrendDirection, string> = {
   improving: '↑',
@@ -26,9 +29,9 @@ const TREND_LABEL: Record<TrendDirection, string> = {
 };
 
 const TREND_COLOR: Record<TrendDirection, string> = {
-  improving: '#4caf50',
-  stable: '#9e9e9e',
-  degrading: '#f44336',
+  improving: 'var(--status-ok, #4caf50)',
+  stable: 'var(--text-tertiary, #9e9e9e)',
+  degrading: 'var(--status-error, #ff453a)',
 };
 
 export class AlgoEvalPanel extends Panel {
@@ -49,7 +52,7 @@ export class AlgoEvalPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getAlgoEvalLedger().subscribe(() => this.render());
   }
 
@@ -69,17 +72,20 @@ export class AlgoEvalPanel extends Panel {
     const ledger = getAlgoEvalLedger();
     const stats = ledger.getAllStats();
     const unresolved = ledger.getUnresolved();
-    const sortedPending = [...unresolved];
-    sortedPending.sort((a, b) => a.predictedAt.getTime() - b.predictedAt.getTime());
-    const oldestPending = sortedPending.slice(0, PENDING_LIMIT);
 
     // Panel count: how many predictions are still waiting on a resolution.
     this.setCount(unresolved.length);
 
+    // Preserve which pending groups the user has expanded across re-renders.
+    const openKeys = new Set<string>();
+    for (const el of this.content.querySelectorAll<HTMLElement>('details.algo-pending-group[open]')) {
+      if (el.dataset.groupKey) openKeys.add(el.dataset.groupKey);
+    }
+
     const html = `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;">
       ${renderOverall(stats, unresolved.length)}
       ${renderStatsTable(stats)}
-      ${renderPendingList(oldestPending)}
+      ${renderPendingList(groupPending(unresolved, Date.now()), openKeys)}
     </div>`;
     this.setContent(html);
   }
@@ -143,37 +149,84 @@ function renderStatsTable(stats: readonly AlgorithmStats[]): string {
   </div>`;
 }
 
-function renderPendingList(pending: readonly AlgorithmPrediction[]): string {
-  if (pending.length === 0) {
+/** One (algorithm, domain, predicted band) bucket of pending predictions. */
+interface PendingGroup {
+  key: string;
+  algorithmId: string;
+  domain: string;
+  predictedValue: string;
+  count: number;
+  oldestAgeMs: number;
+  /** Members sorted oldest-first. */
+  items: AlgorithmPrediction[];
+}
+
+function groupPending(pending: readonly AlgorithmPrediction[], now: number): PendingGroup[] {
+  const groups = new Map<string, PendingGroup>();
+  for (const p of pending) {
+    const predictedValue = String(p.predictedValue);
+    const key = `${p.algorithmId}|${p.domain}|${predictedValue}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, algorithmId: p.algorithmId, domain: p.domain, predictedValue, count: 0, oldestAgeMs: 0, items: [] };
+      groups.set(key, group);
+    }
+    group.count += 1;
+    group.items.push(p);
+    group.oldestAgeMs = Math.max(group.oldestAgeMs, now - p.predictedAt.getTime());
+  }
+  const list = [...groups.values()];
+  for (const group of list) {
+    group.items.sort((a, b) => a.predictedAt.getTime() - b.predictedAt.getTime());
+  }
+  // Oldest-waiting groups first — those are the ones blocking the Learn loop.
+  list.sort((a, b) => b.oldestAgeMs - a.oldestAgeMs);
+  return list;
+}
+
+function renderPendingList(groups: readonly PendingGroup[], openKeys: ReadonlySet<string>): string {
+  if (groups.length === 0) {
     return `<div>
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Pending resolution</div>
       <div style="font-size:12px;color:var(--text-secondary,#aaa);">No pending predictions.</div>
     </div>`;
   }
   const now = Date.now();
-  const items = pending.map((p) => {
-    const ageMs = now - p.predictedAt.getTime();
-    return `<li style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border-subtle,rgba(255,255,255,0.05));font-size:12px;">
-      <span style="font-family:ui-monospace,monospace;color:var(--text-primary,#fff);">${escapeHtml(p.algorithmId)}</span>
-      <span style="color:var(--text-secondary,#aaa);">${escapeHtml(p.domain)}</span>
-      <span style="color:var(--text-secondary,#aaa);">predicted ${escapeHtml(String(p.predictedValue))}</span>
-      <span style="color:var(--text-secondary,#aaa);margin-left:auto;">${formatAgo(ageMs)}</span>
-    </li>`;
-  }).join('');
+  const shown = groups.slice(0, PENDING_GROUP_LIMIT);
+  const rows = shown.map((g) => renderPendingGroup(g, now, openKeys.has(g.key))).join('');
+  const moreGroups = groups.length > shown.length
+    ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);padding:4px 0;">…and ${groups.length - shown.length} more groups</div>`
+    : '';
   return `<div>
     <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Pending resolution</div>
-    <ul style="margin:0;padding:0;list-style:none;">${items}</ul>
+    <div style="display:flex;flex-direction:column;">${rows}${moreGroups}</div>
   </div>`;
 }
 
-function formatAgo(ms: number): string {
-  if (ms < 0) return 'just now';
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
+function renderPendingGroup(group: PendingGroup, now: number, open: boolean): string {
+  const countBadge = group.count > 1
+    ? `<span style="color:var(--text-secondary,#aaa);">×${group.count}</span>`
+    : '';
+  const summary = `<summary style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer;">
+      <span style="font-family:ui-monospace,monospace;color:var(--text-primary,#fff);">${escapeHtml(group.algorithmId)}</span>
+      <span style="color:var(--text-secondary,#aaa);">${escapeHtml(group.domain)}</span>
+      <span style="color:var(--text-secondary,#aaa);">predicted ${escapeHtml(group.predictedValue)}</span>
+      ${countBadge}
+      <span style="color:var(--text-secondary,#aaa);margin-left:auto;">oldest ${formatDurationMs(group.oldestAgeMs)}</span>
+    </summary>`;
+  const shownItems = group.items.slice(0, PENDING_ITEMS_PER_GROUP);
+  const items = shownItems.map((p) => {
+    const ageMs = now - p.predictedAt.getTime();
+    return `<li style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;color:var(--text-secondary,#aaa);">
+      <span>predicted ${escapeHtml(String(p.predictedValue))}</span>
+      <span style="margin-left:auto;">${formatDurationMs(ageMs)} ago</span>
+    </li>`;
+  }).join('');
+  const moreItems = group.count > shownItems.length
+    ? `<li style="padding:3px 0;font-size:11px;color:var(--text-secondary,#aaa);">…and ${group.count - shownItems.length} more</li>`
+    : '';
+  return `<details class="algo-pending-group" data-group-key="${escapeHtml(group.key)}"${open ? ' open' : ''} style="border-bottom:1px solid var(--border-subtle,rgba(255,255,255,0.05));">
+    ${summary}
+    <ul style="margin:0 0 6px;padding:0 0 0 18px;list-style:none;">${items}${moreItems}</ul>
+  </details>`;
 }

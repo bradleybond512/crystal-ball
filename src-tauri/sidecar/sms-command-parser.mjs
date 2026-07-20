@@ -96,6 +96,7 @@ function runCommand(parsed, context) {
       const outcome = keyword ? `watch:${keyword.slice(0, 32)}` : 'watch:invalid';
       if (keyword && context.watchRegistry) {
         context.watchRegistry.push({ keyword, addedBy: context.from, at: Date.now() });
+        if (context.watchRegistry.length > 100) context.watchRegistry.length = 100;
       }
       return { text, outcome };
     }
@@ -106,6 +107,7 @@ function runCommand(parsed, context) {
       const ok = Number.isFinite(threshold) && threshold >= 0 && threshold <= 1 && Boolean(domain);
       if (ok && context.alertRegistry) {
         context.alertRegistry.push({ threshold, domain: String(domain).toLowerCase(), addedBy: context.from, at: Date.now() });
+        if (context.alertRegistry.length > 100) context.alertRegistry.length = 100;
       }
       return { text, outcome: ok ? `alert:${threshold}:${domain}` : 'alert:invalid' };
     }

@@ -1,12 +1,24 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 
 const DEFAULT_BASE = join(homedir(), '.crystal-ball');
 
 export function createStorage(baseDir = DEFAULT_BASE) {
+  // Resolve a caller-supplied relative path under baseDir and REFUSE anything
+  // that escapes the sandbox (`../`, an absolute path, a null byte). Caller
+  // input — e.g. an MCP watchlist `name` — reaches here, so without this guard a
+  // name like `../../.ssh/authorized_keys` would read/write/delete outside
+  // ~/.crystal-ball. Defense-in-depth for every tool that touches storage.
   function resolve(relPath) {
-    return join(baseDir, relPath);
+    const str = String(relPath);
+    if (str.includes('\0')) throw new Error('Invalid path');
+    const full = join(baseDir, str);
+    const rel = relative(baseDir, full);
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+      throw new Error(`Path escapes storage sandbox: ${relPath}`);
+    }
+    return full;
   }
 
   function readJSON(relPath) {

@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -9,13 +9,14 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use keyring::Entry;
 use reqwest::Url;
 use sha2::{Digest, Sha256};
+use aes_gcm::{Aes256Gcm, Nonce, aead::{Aead, KeyInit}};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
@@ -138,6 +139,11 @@ struct LocalApiState {
  child: Mutex<Option<Child>>,
  token: Mutex<Option<String>>,
  port: Mutex<Option<u16>>,
+ // True only once the sidecar has written its real bound port to the port
+ // file. On the timeout fallback we record the default port but leave this
+ // false — secret injection must not post plaintext to a port we never
+ // confirmed is actually our child (a squatter on 46123 would receive it).
+ port_confirmed: AtomicBool,
  restart_count: Mutex<u32>,
  last_restart_at: Mutex<Option<Instant>>,
 }
@@ -153,6 +159,7 @@ impl Default for LocalApiState {
  child: Mutex::new(None),
  token: Mutex::new(None),
  port: Mutex::new(None),
+ port_confirmed: AtomicBool::new(false),
  restart_count: Mutex::new(0),
  last_restart_at: Mutex::new(None),
  }
@@ -163,6 +170,15 @@ impl Default for LocalApiState {
 /// repeated macOS Keychain prompts (each `Entry::get_password()` triggers one).
 struct SecretsCache {
  secrets: Mutex<HashMap<String, String>>,
+ // Keys the user explicitly set or deleted via Settings since launch. The
+ // async keychain read works from a snapshot taken before these edits, so its
+ // merge must skip them — otherwise a just-deleted key gets resurrected (and
+ // re-injected into the sidecar). Lock order is always `secrets` then this.
+ user_mutated: Mutex<HashSet<String>>,
+ // False until the async keychain read finishes (success, empty, or timeout).
+ // The renderer's boot-time secret load must wait on this — reading the cache
+ // before it flips would memoize a null for every key for the whole session.
+ loaded: AtomicBool,
 }
 
 /// In-memory mirror of persistent-cache.json. The file can grow to 10+ MB,
@@ -185,11 +201,30 @@ const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 /// The consolidated `secrets-vault` read surfaces a macOS "Always Allow" ACL
 /// dialog after every re-signed build. macOS Keychain ACL tracks applications
 /// by CDHash (per-binary), so each new build requires one "Always Allow" click.
-/// The previous 15s window was too narrow — the user often missed it, timing
-/// out every API key. 120s gives a full 2-minute window to click the prompt.
-/// The per-key fallback keeps its short timeout so a failed vault doesn't
-/// stack 40+ prompts. The load runs on a worker thread (UI is already up).
-const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(120);
+/// 10s is enough to click the prompt; if dismissed, the shadow file fallback
+/// returns cached secrets instantly so the sidecar boots with keys regardless.
+const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Timeout for a USER-INITIATED vault read (the `reload_secrets_from_keychain`
+/// command). Much longer than the boot read: the user just clicked a button with
+/// the window frontmost, so the macOS "Always Allow" ACL dialog can present and
+/// be answered without the boot path's need to fail fast so the app isn't
+/// blocked. Nothing waits on this — it runs on a spawn_blocking worker.
+const KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Timeout for the automatic background retry fired when the boot vault read
+/// times out. The macOS keychain often answers seconds after the 10s boot
+/// deadline (the boot read fails fast so the app isn't blocked, then orphans
+/// the worker and discards its late answer). This retry re-reads the vault with
+/// a long deadline and, on success, re-injects into the running sidecar — so a
+/// slow keychain self-heals within the session without a relaunch or prompt.
+const KEYCHAIN_VAULT_RETRY_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Filename for the encrypted (AES-256-GCM) shadow copy of the secrets vault
+/// written to the app data directory (mode 0600). Read as a fallback when the
+/// keychain prompt is dismissed or times out. Written only when a machine-bound
+/// key is derivable; never persisted in plaintext.
+const VAULT_SHADOW_FILE: &str = "secrets-vault-shadow.json";
 
 /// Run a single keychain `get_password()` call on a worker thread
 /// and wait at most `timeout` for the answer. Returns:
@@ -228,6 +263,8 @@ impl SecretsCache {
  fn empty() -> Self {
  SecretsCache {
  secrets: Mutex::new(HashMap::new()),
+ user_mutated: Mutex::new(HashSet::new()),
+ loaded: AtomicBool::new(false),
  }
  }
 
@@ -239,11 +276,70 @@ impl SecretsCache {
  /// `AppHandle`. When provided, timeout warnings land in the
  /// desktop log so the operator can tell which keychain entries
  /// are blocked by an ACL prompt.
- fn populate_from_keychain(&self, app: Option<&AppHandle>) {
- let loaded = Self::read_keychain_blocking(app);
+ fn populate_from_keychain(&self, app: Option<&AppHandle>, vault_timeout: Duration) -> bool {
+ let (loaded, vault_timed_out) = Self::read_keychain_blocking(app, vault_timeout);
  if let Ok(mut guard) = self.secrets.lock() {
- *guard = loaded;
+ // Preserve edits made concurrently with the (up to 120s) keychain
+ // read — the UI is usable before boot finishes, so a Settings save
+ // or delete can land mid-flight. Those edits are newer than this
+ // snapshot: skip any key the user touched (a delete leaves it absent
+ // from the map, so a blind or_insert would resurrect it), and never
+ // clobber a key we already hold.
+ let touched = self.user_mutated.lock().ok();
+ for (key, value) in loaded {
+ if touched.as_ref().is_some_and(|t| t.contains(&key)) {
+ continue;
  }
+ guard.entry(key).or_insert(value);
+ }
+ }
+ // Mark ready even on timeout/empty — the read is done, the cache is as
+ // populated as it will get this launch, and the renderer should stop
+ // waiting and reload from whatever loaded.
+ self.loaded.store(true, Ordering::SeqCst);
+ vault_timed_out
+ }
+
+ /// Vault-ONLY re-read for the boot self-heal retry. Reads solely the
+ /// consolidated `secrets-vault` entry and NEVER the legacy per-key
+ /// migration scan — that scan issues a keychain call (and a delete) per
+ /// supported key, which we must not do from a background retry (per-key
+ /// ACL prompts + the delete path that caused a past key-loss incident).
+ /// On a successful vault read the recovered keys are merged into the cache
+ /// (respecting concurrent user edits, never clobbering held keys) and the
+ /// shadow file is refreshed. Returns true only when the vault read
+ /// succeeded; a timeout or absent entry returns false and touches nothing.
+ fn repopulate_vault_only(&self, app: &AppHandle, timeout: Duration) -> bool {
+ let json = match read_keychain_entry_with_timeout(
+ KEYRING_SERVICE,
+ "secrets-vault".to_string(),
+ timeout,
+ ) {
+ Ok(Some(json)) => json,
+ // Err(()) = timed out again, Ok(None) = entry absent. Either way do
+ // NOT fall through to migration — just leave the shadow in place.
+ _ => return false,
+ };
+ let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) else {
+ return false;
+ };
+ let secrets: HashMap<String, String> = map
+ .into_iter()
+ .filter(|(k, v)| SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty())
+ .map(|(k, v)| (k, v.trim().to_string()))
+ .collect();
+ if let Ok(mut guard) = self.secrets.lock() {
+ let touched = self.user_mutated.lock().ok();
+ for (key, value) in secrets.iter() {
+ if touched.as_ref().is_some_and(|t| t.contains(key)) {
+ continue;
+ }
+ guard.entry(key.clone()).or_insert_with(|| value.clone());
+ }
+ }
+ // Refresh the shadow so the next launch's timeout fallback is current.
+ write_vault_shadow(app, &secrets);
+ true
  }
 
  /// Pulled out so callers can run the load on whichever thread they
@@ -256,12 +352,16 @@ impl SecretsCache {
  /// warning and skip that key — features that need it will return
  /// the existing 503 + `keyMissing` error path until it's
  /// re-fetched on the next launch.
- fn read_keychain_blocking(app: Option<&AppHandle>) -> HashMap<String, String> {
+ fn read_keychain_blocking(app: Option<&AppHandle>, vault_timeout: Duration) -> (HashMap<String, String>, bool) {
+ // `vault_timed_out` tells the caller the consolidated read hit its deadline
+ // (as opposed to the entry being absent) — the boot path uses it to fire a
+ // longer background retry that captures the keychain's late answer.
+ let mut vault_timed_out = false;
  // Try consolidated vault first — single keychain read.
  match read_keychain_entry_with_timeout(
  KEYRING_SERVICE,
  "secrets-vault".to_string(),
- KEYCHAIN_VAULT_TIMEOUT,
+ vault_timeout,
  ) {
  Ok(Some(json)) => {
  if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) {
@@ -272,21 +372,32 @@ impl SecretsCache {
  })
  .map(|(k, v)| (k, v.trim().to_string()))
  .collect();
- return secrets;
+ // Update the shadow file so the next timeout-fallback is fresh.
+ if let Some(a) = app { write_vault_shadow(a, &secrets); }
+ return (secrets, vault_timed_out);
  }
  }
  Ok(None) => {
      // No vault entry. If migration was already attempted, there is nothing to
      // migrate — skip the 73-key scan to avoid one macOS ACL prompt per key.
      if app.is_some_and(|a| migration_done(a)) {
-         return HashMap::new();
+         return (HashMap::new(), vault_timed_out);
      }
  }
  Err(()) => {
- log_keychain_timeout(app, "secrets-vault", KEYCHAIN_VAULT_TIMEOUT);
- // Vault unreachable → still try migration; if every per-key
- // read also times out, we end up with an empty map and the
- // sidecar boots without secrets. Caller logs the count.
+ vault_timed_out = true;
+ log_keychain_timeout(app, "secrets-vault", vault_timeout);
+ // Keychain prompt dismissed or timed out — fall back to the
+ // shadow file written on the last successful save/read.
+ if let Some(secrets) = app.and_then(read_vault_shadow) {
+     if let Some(a) = app {
+         append_desktop_log(a, "INFO", &format!(
+             "secrets-cache: keychain timed out, loaded {} keys from shadow vault",
+             secrets.len(),
+         ));
+     }
+     return (secrets, vault_timed_out);
+ }
  }
  }
 
@@ -329,6 +440,7 @@ impl SecretsCache {
  if let Ok(vault_entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
  if vault_entry.set_password(&json).is_ok() {
  vault_written = true;
+ if let Some(a) = app { write_vault_shadow(a, &secrets); }
  // Only delete keys we successfully read — not the full set.
  // Non-timeout errors collapse to Ok(None) so those entries
  // stay untouched and can be retried next launch.
@@ -352,7 +464,7 @@ impl SecretsCache {
  if let Some(app) = app { mark_migration_done(app); }
  }
 
- secrets
+ (secrets, vault_timed_out)
  }
 
  /// Convenience constructor — synchronous load for tests + any
@@ -362,7 +474,7 @@ impl SecretsCache {
  #[allow(dead_code)]
  fn load_from_keychain() -> Self {
  let cache = Self::empty();
- cache.populate_from_keychain(None);
+ cache.populate_from_keychain(None, KEYCHAIN_VAULT_TIMEOUT);
  cache
  }
 }
@@ -633,6 +745,157 @@ fn save_vault(cache: &HashMap<String, String>) -> Result<(), String> {
  Ok(())
 }
 
+/// AES-256-GCM envelope for the at-rest shadow vault. `n` = 12-byte nonce,
+/// `c` = ciphertext+tag. Bytes serialize as JSON arrays so no base64 dep/version
+/// is involved. `v` versions the format for any future migration.
+#[derive(Serialize, serde::Deserialize)]
+struct ShadowEnvelope {
+ v: u8,
+ n: Vec<u8>,
+ c: Vec<u8>,
+}
+
+/// Derive a 32-byte AES key bound to this machine for the shadow vault.
+/// Deliberately NOT keychain-backed: the shadow vault exists to survive keychain
+/// timeouts, so its key must be derivable WITHOUT the keychain. Bind to the macOS
+/// hardware IOPlatformUUID so the at-rest secrets can't be decrypted from a
+/// copied / backed-up / leaked file on another machine. An on-host attacker with
+/// code execution can still re-derive it — the accepted limit absent a
+/// keychain-free secure enclave. None → the shadow copy is skipped entirely
+/// (no stable id); secrets are never written to disk in plaintext.
+#[cfg(target_os = "macos")]
+fn vault_shadow_key() -> Option<[u8; 32]> {
+ let out = std::process::Command::new("ioreg")
+     .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+     .output()
+     .ok()?;
+ let text = String::from_utf8_lossy(&out.stdout);
+ let uuid = text
+     .lines()
+     .find(|l| l.contains("IOPlatformUUID"))
+     .and_then(|l| l.split('"').nth(3))?;
+ if uuid.len() < 16 {
+     return None;
+ }
+ let mut hasher = Sha256::new();
+ hasher.update(b"crystalball-vault-shadow-key-v2\0");
+ hasher.update(uuid.as_bytes());
+ Some(hasher.finalize().into())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn vault_shadow_key() -> Option<[u8; 32]> {
+ None
+}
+
+/// Encrypt the shadow-vault JSON with AES-256-GCM under the machine-bound key.
+fn encrypt_vault_shadow(key: &[u8; 32], plaintext: &str) -> Option<String> {
+ let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+ let mut nonce_bytes = [0u8; 12];
+ getrandom::fill(&mut nonce_bytes).ok()?;
+ let ct = cipher
+     .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+     .ok()?;
+ serde_json::to_string(&ShadowEnvelope { v: 2, n: nonce_bytes.to_vec(), c: ct }).ok()
+}
+
+/// Decrypt a v2 AES-256-GCM envelope. None if `raw` is not a v2 envelope (e.g. a
+/// legacy plaintext file, or one written on a different machine) or if the GCM
+/// tag fails to authenticate — callers fall back to treating `raw` as plaintext.
+fn decrypt_vault_shadow(key: &[u8; 32], raw: &str) -> Option<String> {
+ let env: ShadowEnvelope = serde_json::from_str(raw).ok()?;
+ if env.v != 2 || env.n.len() != 12 {
+     return None;
+ }
+ let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+ let pt = cipher.decrypt(Nonce::from_slice(&env.n), env.c.as_ref()).ok()?;
+ String::from_utf8(pt).ok()
+}
+
+/// Write an encrypted shadow copy of the vault to the app data dir (mode 0600).
+/// Encrypted at rest under a machine-bound key (AES-256-GCM). Where no stable
+/// machine id exists (non-macOS) the shadow copy is skipped rather than written
+/// in plaintext. Best-effort — non-fatal; the keychain remains authoritative.
+fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
+ let Ok(path) = vault_shadow_path(app) else { return };
+ let json = match serde_json::to_string(secrets) {
+     Ok(j) => j,
+     Err(_) => return,
+ };
+ // Never persist secrets to disk in plaintext. If there is no machine-bound
+ // key (non-macOS) or encryption fails, skip the shadow copy entirely — the
+ // OS keychain / credential manager remains authoritative; we only forgo the
+ // keychain-timeout fallback cache here. Also delete any pre-existing shadow
+ // file (e.g. a legacy plaintext copy from an older build) so read_vault_shadow
+ // can't load it back as stale secrets during keychain fallback.
+ let Some(payload) = vault_shadow_key().and_then(|k| encrypt_vault_shadow(&k, &json)) else {
+     let _ = fs::remove_file(&path);
+     return;
+ };
+ if let Some(parent) = path.parent() {
+     let _ = fs::create_dir_all(parent);
+ }
+ // Write to a temp file then rename for atomic update.
+ let tmp = path.with_extension("tmp");
+ let wrote = (|| -> std::io::Result<()> {
+     fs::write(&tmp, payload.as_bytes())?;
+     #[cfg(unix)]
+     {
+         use std::os::unix::fs::PermissionsExt;
+         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+     }
+     fs::rename(&tmp, &path)?;
+     Ok(())
+ })();
+ if let Err(e) = wrote {
+     eprintln!("[secrets] shadow vault write failed: {e}");
+     let _ = fs::remove_file(&tmp);
+ } else {
+     // Exclude the shadow vault file itself from Time Machine / iCloud backups.
+     // The parent app_data_dir already has the xattr, but per-file exclusion
+     // protects against iCloud snapshotting the file before the dir xattr is set.
+     #[cfg(target_os = "macos")]
+     {
+         let _ = std::process::Command::new("xattr")
+             .args([
+                 "-w",
+                 "com.apple.metadata:com_apple_backup_excludeItem",
+                 "com.apple.backup.excludeItem",
+                 &path.to_string_lossy(),
+             ])
+             .output();
+     }
+ }
+}
+
+/// Read the shadow vault file if it exists. Returns a filtered map of valid keys.
+/// A v2 AES-256-GCM envelope is decrypted under the machine-bound key; anything
+/// else is treated as a legacy plaintext file so existing installs are never
+/// locked out (the next successful keychain read re-writes it encrypted).
+fn read_vault_shadow(app: &AppHandle) -> Option<HashMap<String, String>> {
+ let path = vault_shadow_path(app).ok()?;
+ let raw = fs::read_to_string(&path).ok()?;
+ // Only accept an authenticated AES-256-GCM envelope. Never fall back to
+ // parsing the file as raw plaintext — a legacy or tampered plaintext shadow
+ // must not be trusted as secrets. Pairs with write_vault_shadow, which now
+ // only ever writes encrypted (and deletes the file when it cannot).
+ let key = vault_shadow_key()?;
+ let json = decrypt_vault_shadow(&key, &raw)?;
+ let map: HashMap<String, String> = serde_json::from_str(&json).ok()?;
+ let filtered: HashMap<String, String> = map
+     .into_iter()
+     .filter(|(k, v)| SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty())
+     .map(|(k, v)| (k, v.trim().to_string()))
+     .collect();
+ if filtered.is_empty() { None } else { Some(filtered) }
+}
+
+fn vault_shadow_path(app: &AppHandle) -> Result<PathBuf, String> {
+ let dir = app.path().app_data_dir()
+     .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
+ Ok(dir.join(VAULT_SHADOW_FILE))
+}
+
 fn generate_local_token() -> String {
  let mut buf = [0u8; 32];
  getrandom::fill(&mut buf).expect("OS CSPRNG unavailable");
@@ -783,6 +1046,15 @@ fn list_supported_secret_keys(webview: Webview) -> Result<Vec<String>, String> {
  .collect())
 }
 
+/// Whether the async keychain load has finished. The renderer's boot-time
+/// secret load polls this before reading any key, so it never memoizes a null
+/// for a key that simply hadn't loaded yet (see the async-boot reordering).
+#[tauri::command]
+fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Result<bool, String> {
+ require_trusted_window(webview.label())?;
+ Ok(cache.loaded.load(Ordering::SeqCst))
+}
+
 #[tauri::command]
 fn get_secret(
  webview: Webview,
@@ -800,6 +1072,36 @@ fn get_secret(
  Ok(secrets.get(&key).cloned())
 }
 
+/// Block until the async keychain load has finished before a Settings write
+/// builds its `proposed` vault. The window now renders before hydration, so a
+/// user can hit Save while the in-memory cache is still empty; cloning that
+/// partial snapshot as the save base would persist a vault containing only the
+/// edited key and wipe every other stored secret. Waiting guarantees the cache
+/// is the full source of truth first. Bounded by the same worst-case the
+/// renderer waits on (`save_vault` already blocks on the keychain, so blocking
+/// here is consistent). Returns false if it never loads — the caller then
+/// refuses the write rather than risk a partial-vault overwrite.
+fn wait_until_secrets_loaded(cache: &SecretsCache) -> bool {
+ if cache.loaded.load(Ordering::SeqCst) {
+ return true;
+ }
+ // Match the keychain read's own worst case: the 120s vault read plus, on a
+ // one-time migration from the legacy per-key format, up to one 3s ACL timeout
+ // per supported key. Giving up sooner would reject a save while the cache is
+ // still legitimately loading. Mirrors the renderer's waitUntilLoaded cap.
+ let max_wait = KEYCHAIN_VAULT_TIMEOUT
+ + KEYCHAIN_PER_CALL_TIMEOUT * (SUPPORTED_SECRET_KEYS.len() as u32)
+ + Duration::from_secs(30);
+ let deadline = Instant::now() + max_wait;
+ while Instant::now() < deadline {
+ if cache.loaded.load(Ordering::SeqCst) {
+ return true;
+ }
+ std::thread::sleep(Duration::from_millis(50));
+ }
+ cache.loaded.load(Ordering::SeqCst)
+}
+
 #[tauri::command]
 fn set_secret(
  webview: Webview,
@@ -811,6 +1113,9 @@ fn set_secret(
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
  }
+ if !wait_until_secrets_loaded(&cache) {
+ return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
+ }
  let mut secrets = cache
  .secrets
  .lock()
@@ -821,11 +1126,52 @@ fn set_secret(
  if trimmed.is_empty() {
  proposed.remove(&key);
  } else {
- proposed.insert(key, trimmed);
+ proposed.insert(key.clone(), trimmed);
  }
  save_vault(&proposed)?;
+ write_vault_shadow(&webview.app_handle(), &proposed);
  *secrets = proposed;
+ // Shield this edit from a still-in-flight async keychain read (see merge).
+ if let Ok(mut touched) = cache.user_mutated.lock() {
+ touched.insert(key);
+ }
  Ok(())
+}
+
+/// User-initiated re-read of the keychain vault. The boot read runs on a
+/// background worker with a fail-fast 10s timeout so a not-yet-granted ACL can't
+/// stall startup — which means if the macOS "Always Allow" dialog isn't answered
+/// in that window (e.g. it never surfaced because the app wasn't frontmost), the
+/// app falls back to the shadow vault and never retries until the next launch.
+/// This command lets the user force the read on demand from Settings: the window
+/// is frontmost and they just clicked, so the ACL dialog reliably presents, and
+/// a generous 60s timeout gives them time to answer. On success the freshly
+/// loaded keys are re-injected into the running sidecar so keyed feeds recover
+/// without a relaunch. Returns the number of keys now in the cache.
+#[tauri::command]
+async fn reload_secrets_from_keychain(webview: Webview) -> Result<usize, String> {
+ require_trusted_window(webview.label())?;
+ let app = webview.app_handle().clone();
+ let load_app = app.clone();
+ let secrets: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
+ let cache = load_app.state::<SecretsCache>();
+ cache.populate_from_keychain(Some(&load_app), KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT);
+ cache
+ .secrets
+ .lock()
+ .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+ .unwrap_or_default()
+ })
+ .await
+ .map_err(|e| format!("keychain reload task failed: {e}"))?;
+ let count = secrets.len();
+ inject_secrets_into_running_sidecar(&app, secrets).await;
+ append_desktop_log(
+ &app,
+ "INFO",
+ &format!("reload_secrets_from_keychain: loaded {count} keys, re-injected into sidecar"),
+ );
+ Ok(count)
 }
 
 #[tauri::command]
@@ -834,6 +1180,9 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
  }
+ if !wait_until_secrets_loaded(&cache) {
+ return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
+ }
  let mut secrets = cache
  .secrets
  .lock()
@@ -841,7 +1190,12 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  let mut proposed = secrets.clone();
  proposed.remove(&key);
  save_vault(&proposed)?;
+ write_vault_shadow(&webview.app_handle(), &proposed);
  *secrets = proposed;
+ // Shield this deletion from a still-in-flight async keychain read (see merge).
+ if let Ok(mut touched) = cache.user_mutated.lock() {
+ touched.insert(key);
+ }
  Ok(())
 }
 
@@ -1153,8 +1507,23 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
  let mgr = objc_msgSend(objc_msgSend(cls, alloc), init);
  if mgr.is_null() { return Err("Could not create CLLocationManager".into()); }
 
- // Authorization is requested once by the app-retained manager in setup();
- // re-requesting here spawns a second prompt on first run.
+ // Only proceed if the app is ALREADY authorized. Authorization is requested
+ // exactly once by the app-retained manager in setup(); calling
+ // startUpdatingLocation on an undetermined manager here spawns a SECOND
+ // prompt racing that request (the "double prompt on first run"). When not yet
+ // authorized, release + return so the caller falls back (IP geolocation)
+ // until the single prompt is answered; later calls then succeed silently.
+ let auth_sel = sel_registerName(b"authorizationStatus\0".as_ptr());
+ let auth_fn: unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32 =
+  std::mem::transmute(objc_msgSend as *const ());
+ let status = auth_fn(mgr, auth_sel);
+ // CLAuthorizationStatus: 3 = authorizedAlways, 4 = authorizedWhenInUse.
+ if status != 3 && status != 4 {
+  let release = sel_registerName(b"release\0".as_ptr());
+  objc_msgSend(mgr, release);
+  return Err("Location not yet authorized — grant Location Services for Crystal Ball in System Settings, then retry".into());
+ }
+
  let start = sel_registerName(b"startUpdatingLocation\0".as_ptr());
  objc_msgSend(mgr, start);
 
@@ -1750,11 +2119,34 @@ async fn fetch_polymarket(webview: Webview, path: String, params: String) -> Res
 }
 
 
-/// Navigation guard for trusted windows. Only same-origin bundled app content
-/// (`tauri://` scheme) or the local sidecar (`127.0.0.1` host) may be loaded;
-/// any attempt to navigate the window to an external origin is blocked.
+/// Navigation guard for the live-channels auxiliary window.
+///
+/// This window carries the same `require_trusted_window` IPC privileges as
+/// `main` (it can read secrets), so it must follow the same release-build rule:
+/// never navigable to an arbitrary loopback service, or a compromised renderer
+/// could redirect it to a sibling port and inherit those privileges.
+///
+/// - Production: `tauri://` bundled content, plus the `tauri.localhost`
+///   WebView2 workaround origin (parity with `is_main_window_navigation`). The
+///   window loads its document from the bundled asset and only *fetches* (never
+///   navigates to) the sidecar, so loopback is not needed.
+/// - Debug builds only: the Vite dev server / sidecar loopback origins, because
+///   in dev the window is loaded directly from one of them and reloads re-enter
+///   this guard. Compiled out of release builds.
 fn is_trusted_window_navigation(url: &Url) -> bool {
- url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
+ if url.scheme() == "tauri" {
+  return true;
+ }
+ if matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost") {
+  return true;
+ }
+ #[cfg(debug_assertions)]
+ if matches!(url.scheme(), "http" | "https")
+  && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1" | "[::1]"))
+ {
+  return true;
+ }
+ false
 }
 
 /// Tighter navigation guard for the main window only.
@@ -2347,6 +2739,46 @@ mod sanitize_path_tests {
 }
 
 #[cfg(test)]
+mod vault_shadow_crypto_tests {
+ use super::{decrypt_vault_shadow, encrypt_vault_shadow};
+
+ #[test]
+ fn roundtrip_recovers_plaintext_and_hides_secret() {
+ let key = [7u8; 32];
+ let plaintext = r#"{"ANTHROPIC_API_KEY":"sk-secret-123","GROQ_API_KEY":"gk-x"}"#;
+ let enc = encrypt_vault_shadow(&key, plaintext).expect("encrypt");
+ // The on-disk envelope must not leak the plaintext secret, and must be v2.
+ assert!(!enc.contains("sk-secret-123"), "ciphertext leaked the secret");
+ assert!(enc.contains("\"v\":2"));
+ assert_eq!(decrypt_vault_shadow(&key, &enc).expect("decrypt"), plaintext);
+ }
+
+ #[test]
+ fn legacy_plaintext_is_not_a_v2_envelope() {
+ // A legacy plaintext map must decrypt to None so the caller falls back to
+ // reading it as-is (no lockout for existing installs).
+ let key = [7u8; 32];
+ assert!(decrypt_vault_shadow(&key, r#"{"ANTHROPIC_API_KEY":"sk-x"}"#).is_none());
+ }
+
+ #[test]
+ fn wrong_key_fails_authentication() {
+ // A file copied to another machine (different derived key) must not decrypt.
+ let enc = encrypt_vault_shadow(&[1u8; 32], r#"{"A":"b"}"#).expect("encrypt");
+ assert!(decrypt_vault_shadow(&[2u8; 32], &enc).is_none());
+ }
+
+ #[test]
+ fn tampered_ciphertext_is_rejected() {
+ let key = [9u8; 32];
+ let enc = encrypt_vault_shadow(&key, r#"{"A":"b"}"#).expect("encrypt");
+ // Flip a byte inside the ciphertext array — GCM auth must reject it.
+ let tampered = enc.replacen("\"c\":[", "\"c\":[255,", 1);
+ assert!(decrypt_vault_shadow(&key, &tampered).is_none());
+ }
+}
+
+#[cfg(test)]
 mod secret_ipc_tests {
  use super::{require_trusted_window, SUPPORTED_SECRET_KEYS, TRUSTED_WINDOWS};
 
@@ -2667,6 +3099,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = None;
  }
+ state.port_confirmed.store(false, Ordering::SeqCst);
 
  // ── Restart counter / flap detector ──────────────────────────────
  if let (Ok(mut count), Ok(mut last)) = (state.restart_count.lock(), state.last_restart_at.lock()) {
@@ -2965,6 +3398,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = Some(confirmed_port);
  }
+ state.port_confirmed.store(true, Ordering::SeqCst);
  } else {
  append_desktop_log(
  app,
@@ -2974,6 +3408,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = Some(DEFAULT_LOCAL_API_PORT);
  }
+ state.port_confirmed.store(false, Ordering::SeqCst);
  }
 
  Ok(())
@@ -2982,6 +3417,143 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
 /// Frontend → desktop log bridge. JS calls this from window.onerror,
 /// unhandledrejection, and key event handlers so renderer-side errors land
 /// in desktop.log instead of dying in WebInspector.
+/// Wall-clock millis since the UNIX epoch — renderer-watchdog timestamps.
+fn renderer_now_ms() -> u64 {
+ SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// Last time the renderer's 3s heartbeat reached us (ms since epoch). A hung
+/// renderer main thread (Defect A's infinite JS loop) stops updating this; the
+/// watchdog thread below notices the silence and reloads the webview.
+static LAST_RENDERER_HEARTBEAT_MS: AtomicU64 = AtomicU64::new(0);
+
+/// Renderer heartbeat sink. The paired renderer beats every 3s via log-bridge's
+/// installRendererHeartbeat(); a wedged main thread simply stops calling this.
+#[tauri::command]
+fn renderer_heartbeat(webview: Webview, visible: bool) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ let _ = visible; // reserved for future hidden-window policy
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ Ok(())
+}
+
+/// Set true by the renderer watchdog after it reloads a wedged webview. The
+/// renderer consumes it once on the next boot (take_watchdog_recovery) to toast
+/// "recovered". An atomic flag survives the reload race that an emit() to a
+/// tearing-down webview would lose.
+static WATCHDOG_RECOVERY_PENDING: AtomicBool = AtomicBool::new(false);
+
+/// ~/Library/Logs/CrystalBall — the human-facing dated log the watchdog writes
+/// heartbeats + stall/recovery evidence to (sibling of the app_log_dir bundle
+/// folder that holds desktop.log). Created 0700 if missing.
+fn crystalball_log_dir(app: &AppHandle) -> Option<PathBuf> {
+ let dir = app.path().app_log_dir().ok()?.parent()?.join("CrystalBall");
+ fs::create_dir_all(&dir).ok()?;
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+ }
+ Some(dir)
+}
+
+/// Civil (UTC) date + time-of-day from a Unix timestamp — pure, no chrono dep.
+/// Howard Hinnant's civil_from_days algorithm; drives the dated log filename.
+fn epoch_to_utc(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
+ let days = secs.div_euclid(86_400);
+ let rem = secs.rem_euclid(86_400);
+ let (hh, mm, ss) = ((rem / 3600) as u32, ((rem % 3600) / 60) as u32, (rem % 60) as u32);
+ let z = days + 719_468;
+ let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
+ let doe = z - era * 146_097;
+ let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+ let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+ let mp = (5 * doy + 2) / 153;
+ let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+ let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+ let mut y = yoe + era * 400;
+ if m <= 2 { y += 1; }
+ (y, m, d, hh, mm, ss)
+}
+
+/// Append one line to ~/Library/Logs/CrystalBall/crystal-ball.<YYYY-MM-DD>.log.
+/// Purpose-built for watchdog heartbeats + stall/recovery evidence so the file
+/// ticks as proof-of-life independent of the com.bradleybond desktop log.
+fn append_watchdog_log(app: &AppHandle, level: &str, message: &str) {
+ let Some(dir) = crystalball_log_dir(app) else { return };
+ let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+ let (y, mo, d, h, mi, s) = epoch_to_utc(secs);
+ let path = dir.join(format!("crystal-ball.{y:04}-{mo:02}-{d:02}.log"));
+ let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) else { return };
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+ }
+ let sanitized: String = message.chars().map(|c| if c == '\n' || c == '\r' { ' ' } else { c }).collect();
+ let _ = writeln!(file, "{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z [{level}] {sanitized}");
+}
+
+/// Best-effort forensic capture for a renderer stall, on its OWN thread so it
+/// can never delay the reload (a wedged `sample`/`ps` must not block recovery).
+/// We `sample` our OWN process — identity-certain and safe. We deliberately do
+/// NOT sample "the busiest WebKit.WebContent" process: that XPC service is
+/// re-parented to launchd and shared across every WebKit app, so it can't be
+/// attributed to us — sampling it risks dumping an unrelated app's memory into
+/// our logs and may miss our actual renderer. Instead we log a non-invasive `ps`
+/// CPU snapshot of the WebContent processes so the hot renderer is still evident.
+fn spawn_stall_capture(app: AppHandle) {
+ std::thread::spawn(move || {
+  // Snapshot WebContent CPU and pick the hottest one to sample. The renderer
+  // (WebContent) is where our JS burns during a stall; our own host process is
+  // just waiting, so sampling it is useless (all threads in cvwait). The XPC
+  // service can't be attributed with certainty, but our stalled renderer is
+  // reliably the busiest WebContent — and `-mayDie` + this detached thread keep
+  // a wedged `sample` from ever blocking recovery. Fall back to our own pid if
+  // no WebContent is meaningfully busy.
+  let mut hot_pid: Option<String> = None;
+  let mut hot_cpu: f32 = 0.0;
+  if let Ok(ps) = Command::new("/bin/ps").args(["-axo", "pid,pcpu,pmem,comm"]).output() {
+   let text = String::from_utf8_lossy(&ps.stdout);
+   for line in text.lines().filter(|l| l.contains("WebKit.WebContent")) {
+    append_watchdog_log(&app, "INFO", &format!("stall: WebContent {}", line.trim()));
+    let mut cols = line.split_whitespace();
+    if let (Some(pid), Some(cpu)) = (cols.next(), cols.next()) {
+     if let Ok(c) = cpu.parse::<f32>() {
+      if c > hot_cpu { hot_cpu = c; hot_pid = Some(pid.to_string()); }
+     }
+    }
+   }
+  }
+  let Some(dir) = crystalball_log_dir(&app) else { return };
+  let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+  let out = dir.join(format!("crystal-ball-sample-{secs}.txt"));
+  let out_str = out.to_string_lossy().to_string();
+  let (target, label) = match hot_pid {
+   Some(ref p) if hot_cpu >= 5.0 => (p.clone(), "webcontent"),
+   _ => (std::process::id().to_string(), "app-process"),
+  };
+  let ok = Command::new("/usr/bin/sample")
+   .args([&target, "2", "-file", &out_str, "-mayDie"])
+   .output()
+   .map(|o| o.status.success())
+   .unwrap_or(false);
+  if ok {
+   append_watchdog_log(&app, "INFO", &format!("stall: {label} sample captured (pid={target} cpu={hot_cpu:.0}%): {out_str}"));
+  } else {
+   append_watchdog_log(&app, "WARN", &format!("stall: {label} sample capture failed (pid={target})"));
+  }
+ });
+}
+
+/// Consumed once by the renderer on boot: true iff the watchdog reloaded a
+/// wedged webview since the last check, so the renderer can toast "recovered".
+#[tauri::command]
+fn take_watchdog_recovery(webview: Webview) -> Result<bool, String> {
+ require_trusted_window(webview.label())?;
+ Ok(WATCHDOG_RECOVERY_PENDING.swap(false, Ordering::Relaxed))
+}
+
 #[tauri::command]
 fn log_frontend(webview: Webview, app: AppHandle, level: String, message: String, context: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
@@ -3057,6 +3629,129 @@ async fn copy_diagnostics(webview: Webview, app: AppHandle) -> Result<String, St
  }
  out.push('\n');
  Ok(out)
+}
+
+/// Push freshly-loaded keychain secrets into the already-running sidecar via
+/// its `/api/local-env-update` IPC endpoint — the same per-key channel the
+/// renderer uses when the user edits a key in Settings (`pushSecretToSidecar`).
+/// Secrets take effect without restarting the sidecar (or the app).
+///
+/// Used at boot so a slow Touch ID / Keychain read never gates sidecar startup:
+/// the sidecar boots with zero secrets, then these get injected the moment the
+/// keychain resolves. Best-effort — the keychain remains the source of truth,
+/// so a failed push just means those routes return 503 until the next launch.
+async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(String, String)>) {
+ let total = secrets.len();
+ if total == 0 {
+ return;
+ }
+ let (token, port) = {
+ let state = app.state::<LocalApiState>();
+ // Confirm the sidecar we launched is still the live listener before
+ // sending any secret bytes. If it exited during the keychain read, the
+ // recorded port may now belong to a foreign local process, and posting
+ // plaintext secrets there would leak them.
+ let alive = match state.child.lock() {
+ Ok(mut slot) => match slot.as_mut() {
+ Some(child) => matches!(child.try_wait(), Ok(None)),
+ None => false,
+ },
+ Err(_) => false,
+ };
+ if !alive {
+ append_desktop_log(
+ app,
+ "WARN",
+ "sidecar not alive at secret-injection time — secrets not pushed (will load on next launch)",
+ );
+ return;
+ }
+ // Only post to a port the sidecar actually confirmed via its port file. On
+ // the timeout fallback the recorded port is just the default (46123), which
+ // a foreign process could be squatting if our sidecar bound elsewhere after
+ // EADDRINUSE — posting plaintext secrets there would leak them.
+ if !state.port_confirmed.load(Ordering::SeqCst) {
+ append_desktop_log(
+ app,
+ "WARN",
+ "sidecar port unconfirmed at secret-injection time — secrets not pushed (will load on next launch)",
+ );
+ return;
+ }
+ let token = state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
+ let port = state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
+ (token, port)
+ };
+ let client = match reqwest::Client::builder()
+ .timeout(Duration::from_secs(3))
+ .build()
+ {
+ Ok(c) => c,
+ Err(e) => {
+ append_desktop_log(
+ app,
+ "WARN",
+ &format!("secret injection skipped: http client build failed: {e}"),
+ );
+ return;
+ }
+ };
+ let url = format!("http://127.0.0.1:{port}/api/local-env-update");
+ let secrets_cache = app.state::<SecretsCache>();
+ let mut pushed = 0usize;
+ let mut skipped = 0usize;
+ for (key, _snapshot) in secrets {
+ // Re-read the live cache value per key rather than trusting this snapshot.
+ // If the user edited the secret in Settings after the snapshot was taken,
+ // the cache holds the newer value and we post that (never the stale one).
+ // If the key was deleted since the snapshot it's gone from the cache, so
+ // skip it rather than resurrect a just-removed credential. Posting the
+ // current value is idempotent with the renderer's own push and recovers
+ // any key whose early renderer push silently failed.
+ let value = match secrets_cache.secrets.lock() {
+ Ok(map) => match map.get(&key) {
+ Some(v) => v.clone(),
+ None => {
+ skipped += 1;
+ continue;
+ }
+ },
+ Err(_) => {
+ skipped += 1;
+ continue;
+ }
+ };
+ // start_local_api already confirmed the sidecar's port before this runs,
+ // so a few quick attempts absorb any momentary unreadiness.
+ for attempt in 0..3 {
+ let result = client
+ .post(&url)
+ .header("Authorization", format!("Bearer {token}"))
+ .json(&serde_json::json!({ "key": key, "value": value }))
+ .send()
+ .await;
+ match result {
+ Ok(resp) if resp.status().is_success() => {
+ pushed += 1;
+ break;
+ }
+ _ => {
+ if attempt < 2 {
+ // Sleep off the async executor (no tokio timer in scope).
+ let _ = tauri::async_runtime::spawn_blocking(|| {
+ std::thread::sleep(Duration::from_millis(400))
+ })
+ .await;
+ }
+ }
+ }
+ }
+ }
+ append_desktop_log(
+ app,
+ "INFO",
+ &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: deleted or unreadable since load)"),
+ );
 }
 
 fn stop_local_api(app: &AppHandle) {
@@ -3244,13 +3939,39 @@ fn main() {
  // WebKit2GTK's bubblewrap sandbox can fail inside an AppImage FUSE
  // mount, causing blank white screens. Disable it when running as
  // AppImage — the AppImage itself already provides isolation.
+ //
+ // R2-SEC-008: this weakens renderer isolation, so (a) users who know
+ // their distro runs bubblewrap fine inside FUSE can opt out with
+ // CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 (which also clears any inherited
+ // disable variable so the opt-out actually holds), and (b) whenever
+ // the sandbox ends up disabled we say so loudly on stderr (journal)
+ // instead of silently.
  if env::var_os("APPIMAGE").is_some() {
  // WebKitGTK 2.39.3+ deprecated WEBKIT_FORCE_SANDBOX and now expects
  // WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 instead.  Setting the
  // old variable on newer WebKitGTK triggers a noisy deprecation
  // warning in the system journal, so only set the new one.
- if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_none() {
+ if env::var_os("CRYSTALBALL_KEEP_WEBKIT_SANDBOX").is_some() {
+ // An inherited disable var (e.g. from an old wrapper script) would
+ // silently override the opt-out — clear it so KEEP means KEEP.
+ if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_some() {
+ unsafe { env::remove_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS") };
+ }
+ eprintln!(
+ "[tauri] CRYSTALBALL_KEEP_WEBKIT_SANDBOX set; leaving the WebKit bubblewrap sandbox enabled inside the AppImage"
+ );
+ } else if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_none() {
  unsafe { env::set_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1") };
+ eprintln!(
+ "[tauri] APPIMAGE detected: WebKit bubblewrap sandbox disabled (blank-screen workaround). Set CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 to keep it enabled."
+ );
+ } else {
+ // Disable var was already present in the environment — the sandbox
+ // is off because of it, not us, but the warning invariant still
+ // applies: never disable silently.
+ eprintln!(
+ "[tauri] WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS inherited from environment: WebKit bubblewrap sandbox is disabled. Set CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 to clear it."
+ );
  }
  // Prevent GTK from loading host input-method modules that may
  // link against incompatible library versions.
@@ -3293,10 +4014,12 @@ fn main() {
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,
+ secrets_ready,
  set_always_on,
  get_always_on,
  set_secret,
  delete_secret,
+ reload_secrets_from_keychain,
  get_local_api_token,
  get_local_api_port,
  get_desktop_runtime_info,
@@ -3307,6 +4030,8 @@ fn main() {
  open_logs_folder,
  open_sidecar_log_file,
  log_frontend,
+ renderer_heartbeat,
+ take_watchdog_recovery,
  copy_diagnostics,
  open_settings_window_command,
  close_settings_window,
@@ -3330,6 +4055,71 @@ fn main() {
  // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)
  let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
  app.manage(PersistentCache::load(&cache_path));
+
+ // ── Renderer watchdog ──────────────────────────────────────────────────
+ // The renderer beats every 3s (log-bridge installRendererHeartbeat). If a
+ // FOCUSED window stops beating for >60s the JS main thread is wedged — Defect
+ // A's infinite-loop freeze (which ran 84 min, so 60s catches it easily) — so
+ // log it and reload the webview. The threshold is deliberately well above
+ // transient stalls: a heavy boot / data storm can block the main thread ~25s
+ // and recovers on its own (the rAF-gap detector logs those), so a tight
+ // threshold would false-reload during startup. Hidden/unfocused windows are
+ // exempt (WKWebView throttles the heartbeat timer there).
+ {
+ let app_handle = app.handle().clone();
+ std::thread::spawn(move || {
+ std::thread::sleep(Duration::from_secs(60)); // let the renderer finish its heavy boot
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ let mut focused_since: Option<Instant> = None;
+ let mut last_reload = Instant::now() - Duration::from_secs(600);
+ let mut tick: u32 = 0;
+ append_watchdog_log(&app_handle, "INFO", "renderer watchdog armed — dated log active");
+ loop {
+ std::thread::sleep(Duration::from_secs(3));
+ tick = tick.wrapping_add(1);
+ // Heartbeat tick to the dated log (~every 30s) — steady proof-of-life
+ // that both the watchdog thread and the renderer's beat are alive,
+ // regardless of focus.
+ if tick % 10 == 0 {
+ let beat_age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
+ let focused = app_handle.get_webview_window("main").and_then(|w| w.is_focused().ok()).unwrap_or(false);
+ append_watchdog_log(&app_handle, "INFO", &format!("heartbeat: renderer last beat {beat_age}ms ago, focused={focused}"));
+ }
+ let win = match app_handle.get_webview_window("main") { Some(w) => w, None => continue };
+ if !win.is_focused().unwrap_or(false) { focused_since = None; continue; }
+ // Just gained focus: re-baseline so a resume isn't flagged before the
+ // renderer's throttled heartbeat timer wakes back up.
+ if focused_since.is_none() {
+ focused_since = Some(Instant::now());
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ continue;
+ }
+ if focused_since.map(|t| t.elapsed()).unwrap_or_default() < Duration::from_secs(12) { continue; }
+ let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
+ if age > 60_000 {
+ if last_reload.elapsed() < Duration::from_secs(120) { continue; } // no reload loop
+ // Recovery path: log the stall, kick off forensic capture on its own
+ // thread (so a slow sample can't delay recovery), then reload the webview.
+ // We NEVER exit the app — a wedged renderer is recoverable, and exiting
+ // would lose the session with no crash report.
+ let msg = format!("renderer watchdog: no heartbeat for {age}ms while focused — capturing diagnostics + reloading webview (hung main thread)");
+ append_desktop_log(&app_handle, "ERROR", &msg);
+ append_watchdog_log(&app_handle, "ERROR", &msg);
+ // Set the recovery flag BEFORE reload so the freshly-booted renderer can't
+ // race ahead and consume a not-yet-set flag (which would strand a stale
+ // toast for a later normal boot).
+ WATCHDOG_RECOVERY_PENDING.store(true, Ordering::Relaxed);
+ spawn_stall_capture(app_handle.clone());
+ let _ = win.reload();
+ append_watchdog_log(&app_handle, "INFO", "webview reloaded after stall — recovery toast pending; app NOT exited");
+ last_reload = Instant::now();
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ focused_since = Some(Instant::now());
+ }
+ }
+ });
+ }
+
  // Mark the app data dir as excluded from Time Machine / iCloud so
  // persistent-cache.json (plaintext intelligence data) doesn't leave the machine.
  if let Ok(data_dir) = app.handle().path().app_data_dir() {
@@ -3390,49 +4180,130 @@ fn main() {
  ),
  );
 
- // Off-main-thread keychain load + sidecar boot.
+ // ── Async boot: sidecar FIRST, keychain SECOND ───────────────────
  //
- // The Tauri builder runs on the main UI thread; calling
- // `Entry::get_password()` there blocks until macOS Keychain
- // responds (multiple seconds when the user has a populated
- // vault, sometimes longer if Keychain Access is unlocked
- // mid-call). That freeze is what made Crystal Ball appear
- // hung after each rebuild.
+ // Nothing on the Tauri builder's main UI thread may block on the
+ // macOS Keychain: `Entry::get_password()` can stall for up to
+ // KEYCHAIN_VAULT_TIMEOUT (120s) while a Touch ID / "Always Allow"
+ // ACL prompt is pending. Previously the sidecar boot lived in the
+ // SAME task as the keychain read and ran AFTER it, so a stalled
+ // Touch ID delayed the entire data backend for the full timeout —
+ // the freeze this fixes.
  //
- // Sidecar startup intentionally lives inside the same task
- // because `start_local_api` reads `app.state::<SecretsCache>()`
- // to inject env vars — running it before the populate would
- // ship an empty env to the sidecar.
+ // Now we boot the sidecar first with an empty cache (0 secrets),
+ // then read the keychain on a worker thread, then inject the
+ // secrets into the already-running sidecar via the same
+ // `/api/local-env-update` IPC the renderer uses for live key edits.
+ // The window and the data backend are both usable immediately; no
+ // restart is required when the keychain finally resolves.
  let setup_handle = app.handle().clone();
- tauri::async_runtime::spawn_blocking(move || {
- let cache = setup_handle.state::<SecretsCache>();
- // populate_from_keychain has per-call timeouts so this returns
- // in bounded time even if individual keychain entries are blocked
- // by ACL prompts — see KEYCHAIN_PER_CALL_TIMEOUT.
- cache.populate_from_keychain(Some(&setup_handle));
- let loaded = cache
- .secrets
- .lock()
- .map(|m| m.len())
- .unwrap_or(0);
- append_desktop_log(
- &setup_handle,
- "INFO",
- &format!("secrets-cache: loaded {loaded} keys from keychain (async)"),
- );
- // Sidecar spawn is unconditional. start_local_api generates its
- // own auth token via generate_local_token() — it does not
- // depend on the keychain. Even when populate timed out and the
- // cache is empty, the sidecar boots and serves routes that
- // don't require API keys; routes that do return 503 +
- // `keyMissing` until the cache is filled on a future launch.
- if let Err(err) = start_local_api(&setup_handle) {
+ tauri::async_runtime::spawn(async move {
+ // 1. Boot the sidecar without waiting on the keychain.
+ //    start_local_api generates its own auth token and depends on
+ //    no secret; with the cache still empty it ships 0 secrets in
+ //    the env. It runs on a blocking thread because it waits (≤15s)
+ //    for the sidecar to confirm its listening port.
+ let start_handle = setup_handle.clone();
+ let sidecar_ok = match tauri::async_runtime::spawn_blocking(move || start_local_api(&start_handle)).await {
+ Ok(Ok(())) => true,
+ Ok(Err(err)) => {
  append_desktop_log(
  &setup_handle,
  "ERROR",
  &format!("local API sidecar failed to start: {err}"),
  );
  eprintln!("[tauri] local API sidecar failed to start: {err}");
+ false
+ }
+ Err(join_err) => {
+ append_desktop_log(
+ &setup_handle,
+ "ERROR",
+ &format!("sidecar start task panicked: {join_err}"),
+ );
+ false
+ }
+ };
+ // Always read the keychain even if the sidecar failed: the cache feeds the
+ // renderer (which polls `secrets_ready`) independently of the sidecar, and
+ // leaving `loaded` false would make both windows poll until the client cap.
+ // We just skip the IPC injection below — there's no sidecar to inject into,
+ // and its port_confirmed/liveness guards would no-op the push anyway.
+
+ // 2. Read the keychain on a worker thread. Bounded by the per-call
+ //    timeouts (≤120s for the consolidated vault), but the UI and
+ //    sidecar are already live so this no longer blocks startup.
+ let load_handle = setup_handle.clone();
+ let (secrets, vault_timed_out): (Vec<(String, String)>, bool) = tauri::async_runtime::spawn_blocking(move || {
+ let cache = load_handle.state::<SecretsCache>();
+ let timed_out = cache.populate_from_keychain(Some(&load_handle), KEYCHAIN_VAULT_TIMEOUT);
+ let snapshot: Vec<(String, String)> = cache
+ .secrets
+ .lock()
+ .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+ .unwrap_or_default();
+ (snapshot, timed_out)
+ })
+ .await
+ .unwrap_or_default();
+ append_desktop_log(
+ &setup_handle,
+ "INFO",
+ &format!(
+ "secrets-cache: loaded {} keys from keychain (async)",
+ secrets.len()
+ ),
+ );
+
+ // 3. Inject the loaded secrets into the live sidecar via IPC — no
+ //    restart. Until this completes, key-dependent routes return
+ //    503 + `keyMissing`, exactly as on a cold cache. Skipped when the
+ //    sidecar never started — the renderer already has the secrets.
+ let initial_count = secrets.len();
+ if sidecar_ok {
+ inject_secrets_into_running_sidecar(&setup_handle, secrets).await;
+ }
+
+ // 4. Self-heal: if the boot vault read TIMED OUT (not merely empty), we
+ //    are running on the possibly-stale shadow copy. The macOS keychain
+ //    frequently answers a few seconds after the 10s boot cutoff, but the
+ //    boot path orphans that worker and discards the late answer. Fire ONE
+ //    detached retry with a long deadline; on success re-inject the
+ //    recovered keys so the session heals with no relaunch or ACL prompt.
+ if vault_timed_out {
+ let retry_handle = setup_handle.clone();
+ tauri::async_runtime::spawn(async move {
+ let blocking_handle = retry_handle.clone();
+ let recovered: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
+ let cache = blocking_handle.state::<SecretsCache>();
+ // Vault-ONLY read — must never reach the per-key migration/delete path.
+ if cache.repopulate_vault_only(&blocking_handle, KEYCHAIN_VAULT_RETRY_TIMEOUT) {
+ cache
+ .secrets
+ .lock()
+ .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+ .unwrap_or_default()
+ } else {
+ Vec::new()
+ }
+ })
+ .await
+ .unwrap_or_default();
+ if recovered.len() > initial_count {
+ append_desktop_log(
+ &retry_handle,
+ "INFO",
+ &format!(
+ "secrets-cache: background retry recovered {} keys (boot read had {})",
+ recovered.len(),
+ initial_count,
+ ),
+ );
+ if sidecar_ok {
+ inject_secrets_into_running_sidecar(&retry_handle, recovered).await;
+ }
+ }
+ });
  }
  });
 
@@ -3600,16 +4471,52 @@ mod navigation_guard_tests {
   assert!(is_main_window_navigation(&url("http://localhost:3001/")));
  }
 
- // ── trusted-window (aux) guard ───────────────────────────────────────────
+ // ── live-channels (trusted aux) guard ────────────────────────────────────
 
  #[test]
- fn trusted_window_allows_tauri_and_loopback() {
+ fn trusted_window_allows_tauri_scheme() {
   assert!(is_trusted_window_navigation(&url("tauri://localhost/index.html")));
-  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+ }
+
+ #[test]
+ fn trusted_window_allows_windows_app_origin() {
+  // Parity with the main-window guard: bundled content served by WebView2.
+  assert!(is_trusted_window_navigation(&url("http://tauri.localhost/live-channels.html")));
+  assert!(is_trusted_window_navigation(&url("https://tauri.localhost/live-channels.html")));
  }
 
  #[test]
  fn trusted_window_rejects_external_origin() {
   assert!(!is_trusted_window_navigation(&url("https://evil.example.com/")));
+  // A look-alike host that merely ends in the trusted suffix must not pass.
+  assert!(!is_trusted_window_navigation(&url("https://tauri.localhost.evil.com/")));
+ }
+
+ // Loopback is allowed ONLY in debug builds (the dev server / sidecar origin
+ // the window is loaded from). In release builds it is compiled out, so a
+ // compromised renderer cannot navigate to a sibling loopback service and
+ // inherit the window's trusted-window IPC privileges.
+ #[cfg(debug_assertions)]
+ #[test]
+ fn trusted_window_allows_loopback_dev_only_in_debug() {
+  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+  assert!(is_trusted_window_navigation(&url("http://localhost:3001/live-channels.html")));
+ }
+}
+
+#[cfg(test)]
+mod watchdog_log_tests {
+ use super::epoch_to_utc;
+
+ #[test]
+ fn epoch_to_utc_known_instants() {
+  assert_eq!(epoch_to_utc(0), (1970, 1, 1, 0, 0, 0));
+  assert_eq!(epoch_to_utc(86_400), (1970, 1, 2, 0, 0, 0));
+  // 2024-01-01T00:00:00Z (post-leap boundary)
+  assert_eq!(epoch_to_utc(1_704_067_200), (2024, 1, 1, 0, 0, 0));
+  // 2025-01-01T00:00:00Z (2024 was a 366-day leap year)
+  assert_eq!(epoch_to_utc(1_735_689_600), (2025, 1, 1, 0, 0, 0));
+  // time-of-day extraction: +1h1m1s
+  assert_eq!(epoch_to_utc(1_704_070_861), (2024, 1, 1, 1, 1, 1));
  }
 }

@@ -81,7 +81,9 @@ jobs:
               // agents own the body text after that.
               console.log(`PR #${prs[0].number} already exists; leaving body untouched.`);
               core.setOutput('pr_number', String(prs[0].number));
-            } else {
+              return;
+            }
+            try {
               const { data: pr } = await github.rest.pulls.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -93,6 +95,22 @@ jobs:
               });
               console.log(`Created PR #${pr.number}: ${pr.html_url}`);
               core.setOutput('pr_number', String(pr.number));
+            } catch (err) {
+              const msg = String((err && err.message) || err);
+              // 403 "GitHub Actions is not permitted to create or approve pull
+              // requests" => the repo/org setting "Allow GitHub Actions to
+              // create and approve pull requests" is off. Nothing this workflow
+              // can do about it; the PR is created by the agent/harness anyway.
+              // Warn instead of failing so the check stays green.
+              if (/not permitted to create|not accessible by integration|403/i.test(msg)) {
+                core.warning(
+                  `Could not auto-create a PR for ${branch}: ${msg}. ` +
+                  `Enable Settings → Actions → General → "Allow GitHub Actions to ` +
+                  `create and approve pull requests" to use auto-PR creation.`
+                );
+                return;
+              }
+              throw err;
             }
 
       - name: Label PR by branch prefix
@@ -150,8 +168,15 @@ jobs:
       - name: Enable GitHub auto-merge
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a PAT / App token (AUTO_MERGE_PAT) because the default
+          # GITHUB_TOKEN cannot call enablePullRequestAutoMerge in this repo —
+          # it returns "Resource not accessible by integration", which used to
+          # fail this check on every push. With the PAT present, auto-merge is
+          # enabled for real; without it, the step degrades to a warning so the
+          # check stays green instead of blocking the PR.
+          github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
           script: |
+            const usingPat = Boolean('${{ secrets.AUTO_MERGE_PAT }}');
             const branch = '${{ github.ref_name }}';
             const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
@@ -159,24 +184,43 @@ jobs:
               head: `${context.repo.owner}:${branch}`,
               state: 'open'
             });
-            if (prs.length > 0) {
-              const prNodeId = prs[0].node_id;
-              // The repo currently disallows squash merges
-              // (allow_squash_merge=false / allow_rebase_merge=true).
-              // Use REBASE so auto-merge actually engages instead of
-              // bouncing with "squash merging is not allowed."
-              const mutation = `
-                mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
-                  enablePullRequestAutoMerge(input: {
-                    pullRequestId: $pullRequestId
-                    mergeMethod: REBASE
-                  }) {
-                    pullRequest {
-                      number
-                    }
+            if (prs.length === 0) {
+              core.info(`No open PR for ${branch}; nothing to enable.`);
+              return;
+            }
+            const pr = prs[0];
+            // The repo currently disallows squash merges
+            // (allow_squash_merge=false / allow_rebase_merge=true).
+            // Use REBASE so auto-merge actually engages instead of
+            // bouncing with "squash merging is not allowed."
+            const mutation = `
+              mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $pullRequestId
+                  mergeMethod: REBASE
+                }) {
+                  pullRequest {
+                    number
                   }
                 }
-              `;
-              await github.graphql(mutation, { pullRequestId: prNodeId });
-              console.log(`Enabled GitHub auto-merge for PR #${prs[0].number}`);
+              }
+            `;
+            try {
+              await github.graphql(mutation, { pullRequestId: pr.node_id });
+              core.info(`Enabled GitHub auto-merge for PR #${pr.number}`);
+            } catch (err) {
+              const msg = String((err && err.message) || err);
+              // Benign states: auto-merge already enabled, or the PR is already
+              // mergeable/clean so there is nothing to queue. Not a failure.
+              if (/already|clean status|not mergeable|in the (allowed|clean)/i.test(msg)) {
+                core.info(`Auto-merge not (re)enabled for PR #${pr.number}: ${msg}`);
+                return;
+              }
+              // "Resource not accessible by integration" => the token can't
+              // enable auto-merge. Expected with the default GITHUB_TOKEN.
+              // Warn (don't fail) so this check stops blocking every PR.
+              const hint = usingPat
+                ? 'The AUTO_MERGE_PAT may be missing repo/PR scope or lack write access.'
+                : 'Add an AUTO_MERGE_PAT secret (a PAT or App token with repo scope) — the default GITHUB_TOKEN cannot enable auto-merge in this repo.';
+              core.warning(`Could not enable auto-merge for PR #${pr.number}: ${msg}. ${hint}`);
             }

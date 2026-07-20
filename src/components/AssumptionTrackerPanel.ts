@@ -27,18 +27,18 @@ const ASSUMPTIONS_DISPLAY_LIMIT = 50;
 const STATUS_COLOR: Record<AssumptionStatus, string> = {
   active: '#4a9eff',
   confirmed: '#4caf50',
-  violated: '#f44336',
+  violated: '#ff453a',
   expired: '#9e9e9e',
 };
 
 const CONFIDENCE_COLOR: Record<AssumptionConfidence, string> = {
   high: '#4caf50',
   medium: '#ffb74d',
-  low: '#f44336',
+  low: '#ff453a',
 };
 
 const SEVERITY_COLOR: Record<ViolationSeverity, string> = {
-  critical: '#f44336',
+  critical: '#ff453a',
   significant: '#ffb74d',
   minor: '#9e9e9e',
 };
@@ -72,7 +72,7 @@ export class AssumptionTrackerPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getAssumptionTrackerService().subscribe(() => this.render());
   }
 

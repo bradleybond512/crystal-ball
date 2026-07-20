@@ -23,7 +23,7 @@ const REFRESH_MS = 3_600_000; // 1 hour
 // ── Colour palette ─────────────────────────────────────────────────────────
 
 const TIER_COLOR: Record<RiskTier, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high:     '#ff9800',
   elevated: '#ffeb3b',
   moderate: '#4caf50',
@@ -89,7 +89,7 @@ export class PoliticalEconomyPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     if (typeof document !== 'undefined') {
       document.addEventListener('click', this.onCardToggle);
       document.addEventListener('keydown', this.onCardKey);
@@ -125,10 +125,10 @@ export class PoliticalEconomyPanel extends Panel {
       const data = buildRenderData();
       this.setCount(data.criticalCount + data.highCount);
       this.setContent(this.buildHtml(data));
-    } catch (err) {
+    } catch (error) {
       this.showError('Failed to render Political Economy data');
       // eslint-disable-next-line no-console
-      console.error('[PoliticalEconomyPanel] render error', err);
+      console.error('[PoliticalEconomyPanel] render error', error);
     }
   }
 
@@ -150,7 +150,7 @@ export class PoliticalEconomyPanel extends Panel {
     const bits: string[] = [];
     if (data.criticalCount > 0) bits.push(`${data.criticalCount} CRITICAL`);
     if (data.highCount > 0) bits.push(`${data.highCount} HIGH`);
-    return `<div style="padding:6px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+    return `<div style="padding:6px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);font-size:11px;font-weight:700;color:#ff453a;letter-spacing:0.04em;">
       ⚠ KLEPTOCRACY ALERTS: ${bits.join(' · ')}
     </div>`;
   }

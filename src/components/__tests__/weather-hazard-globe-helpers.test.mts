@@ -155,7 +155,7 @@ test('stormsToBillboards: per-storm descriptor with category color + description
   ];
   const out = stormsToBillboards(storms);
   assert.equal(out.length, 1);
-  assert.equal(out[0]!.color, '#d50000'); // CAT 4
+  assert.equal(out[0]!.color, '#ff453a'); // CAT 4
   assert.match(out[0]!.description, /Frances/);
   assert.match(out[0]!.description, /CAT 4/);
   assert.match(out[0]!.description, /140 mph/);

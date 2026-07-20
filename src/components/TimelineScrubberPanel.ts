@@ -21,7 +21,7 @@ const SEV_COLORS: Record<TimelineEventSeverity, string> = {
   low: '#4caf50',
   medium: '#ffc107',
   high: '#ff9800',
-  critical: '#f44336',
+  critical: '#ff453a',
 };
 
 const SEV_ORDER: TimelineEventSeverity[] = ['critical', 'high', 'medium', 'low'];
@@ -43,7 +43,7 @@ export class TimelineScrubberPanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 45_000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 45_000);
   }
 
   private render(): void {

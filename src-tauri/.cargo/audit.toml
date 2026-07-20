@@ -1,11 +1,13 @@
 # cargo-audit configuration — read by `cargo audit` in CI
 # (.github/workflows/security-audit.yml).
 #
-# All ignores below are *unmaintained / unsound advisories* against
-# transitive deps pulled in by Tauri 2.x + wry on Linux (GTK3 stack).
-# No vulnerabilities (i.e. exploitable RCE / data-disclosure) are
-# ignored — only RustSec advisories whose `informational` kind is
-# `unmaintained` or `unsound`.
+# Ignores below are *unmaintained / unsound advisories* against
+# transitive deps pulled in by Tauri 2.x + wry on Linux (GTK3 stack),
+# PLUS one explicitly documented policy deviation (the quick-xml
+# section at the bottom): two real DoS advisories ignored temporarily
+# because no upstream upgrade path exists yet and the affected parsing
+# is local/build-time only. No RCE / data-disclosure vulnerability is
+# ignored.
 #
 # The fixes for every entry below land at the Tauri/wry layer when
 # upstream migrates to gtk4 / replaces the GTK3 bindings. Holding
@@ -41,4 +43,21 @@ ignore = [
     "RUSTSEC-2025-0098",  # unic-ucd-version unmaintained
     "RUSTSEC-2025-0100",  # unic-ucd-ident unmaintained
     "RUSTSEC-2026-0097",  # rand 0.7.3 unsound — phf-codegen → selectors → kuchikiki (build-time only)
+
+    # ── quick-xml DoS advisories (POLICY DEVIATION — temporary) ──
+    # These two ARE real vulnerabilities (not unsound/unmaintained), ignored
+    # deliberately and temporarily (accepted 2026-07-04, narrowed 2026-07-05):
+    #   - RUSTSEC-2026-0194: quadratic-time duplicate-attribute check;
+    #     RUSTSEC-2026-0195: unbounded namespace-declaration allocation
+    #     (memory-exhaustion). Both fixed in quick-xml >= 0.41.
+    #   - plist has been updated to 1.10.0 (quick-xml 0.41 — patched), so the
+    #     only remaining vulnerable path is wayland-scanner 0.31.10, which
+    #     semver-pins quick-xml ^0.39 and is BUILD-TIME codegen only — it
+    #     never parses network-supplied XML, so neither vector is
+    #     attacker-reachable in this app.
+    # DROP both entries as soon as wayland-scanner (or the Tauri stack
+    # pinning it) adopts quick-xml >= 0.41 — check on every Tauri bump
+    # alongside the GTK3 review cadence above.
+    "RUSTSEC-2026-0194",  # quick-xml duplicate-attribute DoS — wayland-scanner (build-time only)
+    "RUSTSEC-2026-0195",  # quick-xml NsReader memory DoS — same build-time path
 ]

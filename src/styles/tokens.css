@@ -23,3 +23,165 @@
   --domain-geopolitical:    #7f1d1d;
   --domain-infrastructure:  #374151;
 }
+
+/* ============================================================
+ * Semantic token layer (Wave 4 of the 2026-07 design review).
+ * Values are derived from a frequency analysis of the hardcoded
+ * colors already shipping in src/components + src/styles, so
+ * adopting a token is always pixel-identical to the literal it
+ * replaces. All values are FIXED (not theme-flipped) to match the
+ * existing tokens above; theme-aware cousins live in main.css
+ * (--bg/--surface/--border/--text/--text-secondary/--overlay-*).
+ * Full reference: docs/DESIGN_SYSTEM.md.
+ * New code must use these instead of raw hex/rgba —
+ * scripts/lint-colors.mjs enforces no regressions per file.
+ * ============================================================ */
+:root {
+  /* ── Severity scale (calm → severe) ─────────────────────────
+   * One vocabulary for event/alert severity everywhere:
+   * info → low → moderate → elevated → high → critical.
+   * Each has a translucent -bg twin for chips and badges; twins
+   * keep the alpha most used in the wild for that hue. */
+  --sev-info:     #60a5fa; /* advisory / informational (blue-400) */
+  --sev-low:      #22c55e; /* minor, no action (green-500) */
+  --sev-moderate: #facc15; /* worth watching (yellow-400) */
+  --sev-elevated: #fb923c; /* prepare / degraded (orange-400) */
+  --sev-high:     #ef4444; /* act now (red-500) */
+  --sev-critical: #ff453a; /* life-safety / extreme (Apple dark systemRed) */
+  --sev-info-bg:     rgba(96, 165, 250, 0.18);
+  --sev-low-bg:      rgba(34, 197, 94, 0.10);
+  --sev-moderate-bg: rgba(250, 204, 21, 0.15);
+  --sev-elevated-bg: rgba(251, 146, 60, 0.15);
+  --sev-high-bg:     rgba(239, 68, 68, 0.12);
+  --sev-critical-bg: rgba(255, 69, 58, 0.12);
+  --sev-critical-rgb: 255, 69, 58; /* rgba() composition twin for --sev-critical */
+
+  /* ── Surface tiers (window → overlay) ───────────────────────
+   * Dark-first fixed values matching the de-facto literals. */
+  --surface-0: #0a0a0a; /* window / app background */
+  --surface-1: #141414; /* panel / card */
+  --surface-2: #1a1a1a; /* inset: inputs, wells, nested cards */
+  --surface-3: #222222; /* overlay: menus, popovers, modals */
+  --surface-border:        #333333; /* default hairline */
+  --surface-border-strong: #444444; /* emphasized / hover border */
+
+  /* ── Text tiers ──────────────────────────────────────────────
+   * --text-secondary (#ccc) already exists in main.css and stays
+   * the second tier; these complete the ladder. */
+  --text-primary:  #f2f3f5; /* headline numbers, strong values */
+  --text-tertiary: #9e9e9e; /* supporting labels, meta rows */
+  --text-disabled: #666666; /* disabled / resolved / inert */
+
+  /* ── Status (feed dots, staleness chips, source health) ─────
+   * stale intentionally shares the warn hue today; keep the
+   * semantic distinction in markup so the values can diverge. */
+  --status-ok:    #4caf50;
+  --status-warn:  #ff9800;
+  --status-stale: #ff9800;
+  --status-error: #ff453a;
+
+  /* ── Accent ──────────────────────────────────────────────────
+   * --accent itself is theme-owned (main.css / happy-theme.css);
+   * --accent-muted derives from it for secondary emphasis. */
+  --accent-muted: color-mix(in srgb, var(--accent, #fff) 55%, transparent);
+}
+
+/* ── Home Shell palette (Phase 1 UI re-imagination) ─────────────
+ * Near-black professional skin for HomeShellOverlay. Scoped on
+ * :root so future phases (Library, situation dossier, full skin)
+ * reuse the same tokens. RGB triplets exist for rgba() composition
+ * (hairlines and tone washes at varying alphas). */
+:root {
+  --hs-bg-base:   #0b0d12;
+  --hs-bg-card:   #0b0f14;
+  --hs-bg-deck:   #0d141c;
+  --hs-bg-ribbon: #090d12;
+  --hs-map-glow:  #16222e;
+  --hs-map-edge:  #0a1017;
+
+  --hs-fg:       #e8eef4;
+  --hs-fg-line:  #aeb9c4;
+  --hs-fg-hint:  #9fb0c0;
+  --hs-fg-muted: #8b98a5;
+  --hs-fg-faint: #7a8a99;
+  --hs-fg-dim:   #5c6873;
+
+  --hs-ok:   #4caf7d;
+  --hs-warn: #d0a03c;
+  --hs-bad:  #d05a5a;
+
+  --hs-white-rgb:   255, 255, 255;
+  --hs-base-rgb:    11, 13, 18;
+  --hs-surface-rgb: 11, 15, 20;
+  --hs-ok-rgb:      76, 175, 125;
+  --hs-warn-rgb:    208, 160, 60;
+  --hs-bad-rgb:     208, 90, 90;
+}
+
+/* ── Apple design language (2026-07 restyle) ────────────────────
+ * Geometry, elevation, materials, type, and motion tokens for the
+ * Cupertino Glass + Graphite direction. Spec:
+ * docs/superpowers/specs/2026-07-13-apple-design-language-design.md.
+ * Blur companions (--mat-blur-*) may only be APPLIED under
+ * body.is-desktop-macos and only on the six chrome surfaces named in
+ * the spec's glass budget — never per-card. */
+:root {
+  /* Geometry */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+  /* Legacy aliases — these names are already referenced by
+     WelcomeFlow/ContextualHint/Toast but were never defined. */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  /* Elevation (contact + ambient); edge companions ride box-shadow. */
+  --e-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --e-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --e-3: 0 4px 12px rgba(0, 0, 0, 0.45), 0 16px 40px rgba(0, 0, 0, 0.35);
+  --e-4: 0 8px 24px rgba(0, 0, 0, 0.5), 0 32px 80px rgba(0, 0, 0, 0.4);
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --edge-hairline: inset 0 0 0 0.5px rgba(255, 255, 255, 0.11);
+  --elevation-2: var(--e-2); /* legacy alias, referenced-but-undefined today */
+  --elevation-3: var(--e-3); /* same class of alias — Toast.ts shadow was computing to none */
+
+  /* Materials */
+  --mat-chrome-bg: rgba(24, 28, 36, 0.55);
+  --mat-raised-bg: rgba(25, 29, 37, 0.62);
+  --mat-blur-chrome: blur(22px) saturate(1.5);
+  --mat-blur-raised: blur(24px) saturate(1.5);
+  --mat-thin: rgba(255, 255, 255, 0.07);
+  --mat-solid-1: #14171d;
+  --mat-solid-2: #171a21;
+  --mat-solid-3: #1e222b;
+
+  /* Typography */
+  --font-ui: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+  --font-data: ui-monospace, 'SF Mono', Menlo, monospace;
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 13.5px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+
+  /* Motion */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.32, 1.4, 0.42, 1); /* overlay entrances ONLY */
+
+  /* Graphite accent */
+  --accent-fill: rgba(255, 255, 255, 0.92);
+  --accent-selection: rgba(255, 255, 255, 0.16);
+  /* Text sitting ON an --accent-selection wash. Theme-flipped alongside the
+     accent tokens (macos-native.css light block); dark-fixed shell surfaces
+     can keep using --hs-fg/--text-primary directly. */
+  --text-on-selection: #f2f3f5;
+}

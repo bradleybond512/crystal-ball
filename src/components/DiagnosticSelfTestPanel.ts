@@ -28,11 +28,11 @@ const REFRESH_MS = 5 * 60 * 1000; // 5 minutes per spec
 const STATUS_COLOR: Record<AggregateStatus, string> = {
   PASS: '#4caf50',
   WARN: '#ff9800',
-  FAIL: '#d50000',
+  FAIL: '#ff453a',
 };
 
 const MISSION_COLOR: Record<MissionState['global'], string> = {
-  DEGRADED: '#d50000',
+  DEGRADED: '#ff453a',
   LIMITED:  '#ff9800',
   NOMINAL:  '#4caf50',
   ENHANCED: '#2196f3',
@@ -41,7 +41,7 @@ const MISSION_COLOR: Record<MissionState['global'], string> = {
 const VERDICT_COLOR: Record<'ok' | 'degraded' | 'fail', string> = {
   ok:       '#4caf50',
   degraded: '#ff9800',
-  fail:     '#d50000',
+  fail:     '#ff453a',
 };
 
 const VERDICT_LABEL: Record<'ok' | 'degraded' | 'fail', string> = {
@@ -155,7 +155,7 @@ export class DiagnosticSelfTestPanel extends Panel {
       ? this.rows.map((r) => this.buildRow(r)).join('')
       : `<tr><td colspan="5" style="padding:14px 12px;color:var(--text-secondary,#888);">No self-test results yet. Click <strong>Run Self-Test</strong> to start.</td></tr>`;
     const error = this.lastResponse?.error
-      ? `<div style="padding:8px 12px;background:rgba(213,0,0,0.12);color:#d50000;font-size:11px;">Probe error: ${escapeHtml(this.lastResponse.error)}</div>`
+      ? `<div style="padding:8px 12px;background:rgba(255, 69, 58,0.12);color:#ff453a;font-size:11px;">Probe error: ${escapeHtml(this.lastResponse.error)}</div>`
       : '';
     return `${missionPill}${headerBar}${error}
       <table role="table" style="width:100%;border-collapse:collapse;font-size:12px;">

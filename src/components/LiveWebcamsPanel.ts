@@ -4,53 +4,23 @@ import { escapeHtml } from '@/utils/sanitize';
 import { t } from '../services/i18n';
 import { trackWebcamSelected, trackWebcamRegionFiltered } from '@/services/analytics';
 import { getStreamQuality, subscribeStreamQualityChange } from '@/services/ai-flow-settings';
+import {
+  YOUTUBE_LIVE_FEEDS,
+  feedsForRegion,
+  type YoutubeLiveFeed,
+} from '@/services/webcams/youtube-live-registry';
 
 type WebcamRegion = 'iran' | 'middle-east' | 'europe' | 'asia' | 'americas';
 
-interface WebcamFeed {
-  id: string;
-  city: string;
-  country: string;
-  region: WebcamRegion;
-  channelHandle: string;
-  fallbackVideoId: string;
-}
+type WebcamFeed = YoutubeLiveFeed;
 
 // Verified YouTube live stream IDs — validated Feb 2026 via title cross-check.
 // IDs may rotate; update when stale.
-const WEBCAM_FEEDS: WebcamFeed[] = [
-  // Iran Attacks — Tehran, Tel Aviv, Jerusalem
-  { id: 'iran-tehran', city: 'Tehran', country: 'Iran', region: 'iran', channelHandle: '@IranHDCams', fallbackVideoId: '-zGuR1qVKrU' },
-  { id: 'iran-telaviv', city: 'Tel Aviv', country: 'Israel', region: 'iran', channelHandle: '@IsraelLiveCam', fallbackVideoId: 'gmtlJ_m2r5A' },
-  { id: 'iran-jerusalem', city: 'Jerusalem', country: 'Israel', region: 'iran', channelHandle: '@JerusalemLive', fallbackVideoId: 'JHwwZRH2wz8' },
-  { id: 'iran-multicam', city: 'Middle East', country: 'Multi', region: 'iran', channelHandle: '@MiddleEastCams', fallbackVideoId: '4E-iFtUM2kk' },
-  // Middle East — Jerusalem & Tehran adjacent (conflict hotspots)
-  { id: 'jerusalem', city: 'Jerusalem', country: 'Israel', region: 'middle-east', channelHandle: '@TheWesternWall', fallbackVideoId: 'UyduhBUpO7Q' },
-  { id: 'tehran', city: 'Tehran', country: 'Iran', region: 'middle-east', channelHandle: '@IranHDCams', fallbackVideoId: '-zGuR1qVKrU' },
-  { id: 'tel-aviv', city: 'Tel Aviv', country: 'Israel', region: 'middle-east', channelHandle: '@IsraelLiveCam', fallbackVideoId: 'gmtlJ_m2r5A' },
-  { id: 'mecca', city: 'Mecca', country: 'Saudi Arabia', region: 'middle-east', channelHandle: '@MakkahLive', fallbackVideoId: 'DEcpmPUbkDQ' },
-  // Europe
-  { id: 'kyiv', city: 'Kyiv', country: 'Ukraine', region: 'europe', channelHandle: '@DWNews', fallbackVideoId: '-Q7FuPINDjA' },
-  { id: 'odessa', city: 'Odessa', country: 'Ukraine', region: 'europe', channelHandle: '@UkraineLiveCam', fallbackVideoId: 'e2gC37ILQmk' },
-  { id: 'paris', city: 'Paris', country: 'France', region: 'europe', channelHandle: '@PalaisIena', fallbackVideoId: 'OzYp4NRZlwQ' },
-  { id: 'st-petersburg', city: 'St. Petersburg', country: 'Russia', region: 'europe', channelHandle: '@SPBLiveCam', fallbackVideoId: 'CjtIYbmVfck' },
-  { id: 'london', city: 'London', country: 'UK', region: 'europe', channelHandle: '@EarthCam', fallbackVideoId: 'Lxqcg1qt0XU' },
-  // Americas
-  { id: 'washington', city: 'Washington DC', country: 'USA', region: 'americas', channelHandle: '@AxisCommunications', fallbackVideoId: '1wV9lLe14aU' },
-  { id: 'new-york', city: 'New York', country: 'USA', region: 'americas', channelHandle: '@EarthCam', fallbackVideoId: '4qyZLflp-sI' },
-  { id: 'los-angeles', city: 'Los Angeles', country: 'USA', region: 'americas', channelHandle: '@VeniceVHotel', fallbackVideoId: 'EO_1LWqsCNE' },
-  { id: 'miami', city: 'Miami', country: 'USA', region: 'americas', channelHandle: '@FloridaLiveCams', fallbackVideoId: '5YCajRjvWCg' },
-  // Asia-Pacific — Taipei first (strait hotspot), then Shanghai, Tokyo, Seoul
-  { id: 'taipei', city: 'Taipei', country: 'Taiwan', region: 'asia', channelHandle: '@JackyWuTaipei', fallbackVideoId: 'z_fY1pj1VBw' },
-  { id: 'shanghai', city: 'Shanghai', country: 'China', region: 'asia', channelHandle: '@SkylineWebcams', fallbackVideoId: '76EwqI5XZIc' },
-  { id: 'tokyo', city: 'Tokyo', country: 'Japan', region: 'asia', channelHandle: '@TokyoLiveCam4K', fallbackVideoId: '4pu9sF5Qssw' },
-  { id: 'seoul', city: 'Seoul', country: 'South Korea', region: 'asia', channelHandle: '@UNvillage_live', fallbackVideoId: '-JhoMGoAfFc' },
-  { id: 'sydney', city: 'Sydney', country: 'Australia', region: 'asia', channelHandle: '@WebcamSydney', fallbackVideoId: '7pcL-0Wo77U' },
-];
+const WEBCAM_FEEDS: WebcamFeed[] = YOUTUBE_LIVE_FEEDS;
 
 const MAX_GRID_CELLS = 4;
 
-type ViewMode = 'grid' | 'single';
+type ViewMode = 'grid' | 'single' | 'map';
 type RegionFilter = 'all' | WebcamRegion;
 
 export class LiveWebcamsPanel extends Panel {
@@ -67,6 +37,15 @@ export class LiveWebcamsPanel extends Panel {
   private readonly IDLE_PAUSE_MS = 60 * 60 * 1000; // 60 minutes
   private isIdle = false;
   private _boundYtMsg!: (e: MessageEvent) => void;
+  // Per-iframe "did it ever start playing?" watchdog. Live-stream IDs go stale
+  // (the broadcast ends), and an ended stream shows YouTube's own "recording not
+  // available" screen WITHOUT firing the IFrame API onError — so the only
+  // reliable signal is: muted-autoplay never reached a playing state. If so, we
+  // swap the dead player for a "Watch live on YouTube" fallback card.
+  private _startWatchdogs = new Map<HTMLIFrameElement, ReturnType<typeof setTimeout>>();
+  // Generous, so a genuinely-live-but-slow stream isn't briefly mislabelled;
+  // a later yt-state playing message clears the fallback anyway if it does show.
+  private readonly NO_START_MS = 14_000;
 
   constructor() {
  super({ id: 'live-webcams', title: t('panels.liveWebcams'), className: 'panel-wide' });
@@ -79,8 +58,7 @@ export class LiveWebcamsPanel extends Panel {
   }
 
   private get filteredFeeds(): WebcamFeed[] {
- if (this.regionFilter === 'all') return WEBCAM_FEEDS;
- return WEBCAM_FEEDS.filter(f => f.region === this.regionFilter);
+ return feedsForRegion(this.regionFilter);
   }
 
   private static readonly ALL_GRID_IDS = ['jerusalem', 'tehran', 'kyiv', 'washington'];
@@ -138,8 +116,17 @@ export class LiveWebcamsPanel extends Panel {
  singleBtn.setAttribute('aria-label', 'Single view');
  singleBtn.addEventListener('click', () => this.setViewMode('single'));
 
+ const mapBtn = document.createElement('button');
+ mapBtn.className = `webcam-view-btn${this.viewMode === 'map' ? ' active' : ''}`;
+ mapBtn.dataset.mode = 'map';
+ mapBtn.textContent = '📍';
+ mapBtn.title = 'Map view — click a location to watch its live stream';
+ mapBtn.setAttribute('aria-label', 'Map view');
+ mapBtn.addEventListener('click', () => this.setViewMode('map'));
+
  viewGroup.append(gridBtn);
  viewGroup.append(singleBtn);
+ viewGroup.append(mapBtn);
 
  this.toolbar.append(regionGroup);
  this.toolbar.append(viewGroup);
@@ -190,10 +177,27 @@ export class LiveWebcamsPanel extends Panel {
  iframe.title = `${feed.city} live webcam`;
  iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+ // Carry the source info so the offline fallback can link to the channel's
+ // live page (its current stream) when this frozen video id is dead.
+ iframe.dataset.city = feed.city;
+ iframe.dataset.channelHandle = feed.channelHandle;
  if (!isDesktopRuntime()) {
  iframe.allowFullscreen = true;
  iframe.setAttribute('loading', 'lazy');
  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+ }
+ // Offline detection relies on the sidecar embed's yt-state/yt-error
+ // postMessages, which only the desktop path emits. A direct
+ // youtube-nocookie iframe (web) never reports state, so a watchdog there
+ // would false-fire on every stream — only arm it on desktop.
+ if (isDesktopRuntime()) {
+ // If muted autoplay never reaches a playing state, the stream is offline.
+ this._startWatchdogs.set(iframe, setTimeout(() => {
+ this._startWatchdogs.delete(iframe);
+ if (!iframe.isConnected) return;
+ const cell = iframe.closest<HTMLElement>('.webcam-cell, .webcam-single');
+ if (cell) this._showOfflineFallback(cell, iframe);
+ }, this.NO_START_MS));
  }
  return iframe;
   }
@@ -208,9 +212,94 @@ export class LiveWebcamsPanel extends Panel {
 
  if (this.viewMode === 'grid') {
  this.renderGrid();
+ } else if (this.viewMode === 'map') {
+ this.renderMap();
  } else {
  this.renderSingle();
  }
+  }
+
+  /** Map view: plot each live-video stream at its city on an equirectangular
+   *  world map. Click a pin → play that stream in single view. This is the
+   *  "click a spot and see video" surface. */
+  private renderMap(): void {
+ this.content.innerHTML = '';
+ this.content.className = 'panel-content webcam-content';
+
+ const feeds = this.filteredFeeds.filter((f) => f.lat !== 0 || f.lon !== 0);
+ const wrap = document.createElement('div');
+ wrap.className = 'webcam-map';
+
+ const W = 760, H = 380;
+ const SVG_NS = 'http://www.w3.org/2000/svg';
+ const svg = document.createElementNS(SVG_NS, 'svg');
+ svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+ svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+ // Explicit width + aspect-ratio — without a height an inline SVG defaults to
+ // ~150px tall instead of scaling to the viewBox ratio.
+ svg.style.width = '100%';
+ svg.style.height = 'auto';
+ svg.style.aspectRatio = `${W} / ${H}`;
+ svg.style.maxHeight = '70vh';
+ svg.style.display = 'block';
+ svg.style.background = 'linear-gradient(180deg,#0b1a2b,#0a1420)';
+ svg.style.borderRadius = '6px';
+
+ // Graticule every 30° for orientation (no coastline data needed).
+ for (let lon = -150; lon <= 150; lon += 30) {
+ const x = ((lon + 180) / 360) * W;
+ const line = document.createElementNS(SVG_NS, 'line');
+ line.setAttribute('x1', String(x)); line.setAttribute('y1', '0');
+ line.setAttribute('x2', String(x)); line.setAttribute('y2', String(H));
+ line.setAttribute('stroke', 'rgba(255,255,255,0.06)'); line.setAttribute('stroke-width', '1');
+ svg.append(line);
+ }
+ for (let lat = -60; lat <= 60; lat += 30) {
+ const y = ((90 - lat) / 180) * H;
+ const line = document.createElementNS(SVG_NS, 'line');
+ line.setAttribute('x1', '0'); line.setAttribute('y1', String(y));
+ line.setAttribute('x2', String(W)); line.setAttribute('y2', String(y));
+ line.setAttribute('stroke', 'rgba(255,255,255,0.06)'); line.setAttribute('stroke-width', '1');
+ svg.append(line);
+ }
+
+ for (const feed of feeds) {
+ const x = ((feed.lon + 180) / 360) * W;
+ const y = ((90 - feed.lat) / 180) * H;
+ const g = document.createElementNS(SVG_NS, 'g');
+ g.style.cursor = 'pointer';
+ g.addEventListener('click', () => {
+ trackWebcamSelected(feed.id, feed.city, 'map');
+ this.activeFeed = feed;
+ this.setViewMode('single');
+ });
+
+ const halo = document.createElementNS(SVG_NS, 'circle');
+ halo.setAttribute('cx', String(x)); halo.setAttribute('cy', String(y));
+ halo.setAttribute('r', '7'); halo.setAttribute('fill', 'rgba(255,59,48,0.25)');
+ const dot = document.createElementNS(SVG_NS, 'circle');
+ dot.setAttribute('cx', String(x)); dot.setAttribute('cy', String(y));
+ dot.setAttribute('r', '4'); dot.setAttribute('fill', '#ff3b30');
+ dot.setAttribute('stroke', '#fff'); dot.setAttribute('stroke-width', '1');
+ const label = document.createElementNS(SVG_NS, 'text');
+ label.setAttribute('x', String(x + 8)); label.setAttribute('y', String(y + 3));
+ label.setAttribute('fill', '#e8eef5'); label.setAttribute('font-size', '10');
+ label.setAttribute('font-family', 'sans-serif');
+ label.textContent = feed.city;
+ const title = document.createElementNS(SVG_NS, 'title');
+ title.textContent = `${feed.city}, ${feed.country} — click to watch live`;
+ g.append(title, halo, dot, label);
+ svg.append(g);
+ }
+
+ wrap.append(svg);
+ if (feeds.length === 0) {
+ const empty = document.createElement('p');
+ empty.className = 'webcam-placeholder';
+ empty.textContent = 'No located streams in this region.';
+ wrap.append(empty);
+ }
+ this.content.append(wrap);
   }
 
   private renderGrid(): void {
@@ -260,7 +349,9 @@ export class LiveWebcamsPanel extends Panel {
  if (desktop && i > 0) {
  // Stagger iframe creation on desktop — WKWebView throttles concurrent autoplay.
  setTimeout(() => {
- if (!this.isVisible || this.isIdle) return;
+ // Bail if we left grid view before this fired — otherwise a staggered
+ // iframe loads onto a detached/other view (e.g. after switching to map).
+ if (!this.isVisible || this.isIdle || this.viewMode !== 'grid' || !cell.isConnected) return;
  const iframe = this.createIframe(feed);
  label.before(iframe);
  this.iframes.push(iframe);
@@ -312,6 +403,8 @@ export class LiveWebcamsPanel extends Panel {
   }
 
   private destroyIframes(): void {
+ for (const t of this._startWatchdogs.values()) clearTimeout(t);
+ this._startWatchdogs.clear();
  this.iframes.forEach(iframe => {
  iframe.src = 'about:blank';
  iframe.remove();
@@ -322,7 +415,7 @@ export class LiveWebcamsPanel extends Panel {
   /** Listen for postMessage events from the sidecar YouTube embed and display errors. */
   private _setupYtMessageListener(): void {
  this._boundYtMsg = (e: MessageEvent) => {
- const data = e.data as { type?: string; code?: number } | null;
+ const data = e.data as { type?: string; code?: number; state?: number } | null;
  if (!data?.type?.startsWith('yt-')) return;
 
  const iframe = this.iframes.find(f => f.contentWindow === e.source);
@@ -330,34 +423,65 @@ export class LiveWebcamsPanel extends Panel {
  const cell = iframe.closest<HTMLElement>('.webcam-cell, .webcam-single');
  if (!cell) return;
 
+ // Reached a playing/buffering state → the stream is live. Cancel the
+ // offline watchdog and clear any fallback that may already be showing.
+ if (data.type === 'yt-state' && (data.state === 1 || data.state === 3)) {
+ const t = this._startWatchdogs.get(iframe);
+ if (t) { clearTimeout(t); this._startWatchdogs.delete(iframe); }
+ cell.querySelector('.webcam-err-overlay')?.remove();
+ return;
+ }
+
+ // A hard player error (bad id / unavailable / embed blocked) → offline
+ // fallback immediately; the video id is dead.
  if (data.type === 'yt-error') {
- const c = data.code;
- let msg = `YT error ${c}`;
- if (c === 2) msg = 'Bad video ID (2)';
- else if (c === 5) msg = 'HTML5 error (5)';
- else if (c === 100)  msg = 'Video unavailable (100)';
- else if (c === 101 || c === 150) msg = 'Embed blocked (150)';
- this._showCellError(cell, msg);
- } else if (data.type === 'yt-autoplay-failed') {
- this._showCellError(cell, 'Autoplay blocked — click to play');
+ const t = this._startWatchdogs.get(iframe);
+ if (t) { clearTimeout(t); this._startWatchdogs.delete(iframe); }
+ this._showOfflineFallback(cell, iframe);
  }
  };
  window.addEventListener('message', this._boundYtMsg);
   }
 
-  private _showCellError(cell: HTMLElement, msg: string): void {
- let overlay = cell.querySelector<HTMLElement>('.webcam-err-overlay');
- if (!overlay) {
- overlay = document.createElement('div');
+  /** Replace a dead/offline player with a card that links to the channel's
+   *  current live stream on YouTube — so a stale video id never leaves a black
+   *  box, and the user is one click from the actual live feed. */
+  private _showOfflineFallback(cell: HTMLElement, iframe: HTMLIFrameElement): void {
+ if (cell.querySelector('.webcam-err-overlay')) return;
+ const city = iframe.dataset.city ?? 'This camera';
+ const handle = iframe.dataset.channelHandle ?? '';
+ // Channel handles are '@name' from our static registry — /live shows the
+ // channel's current live broadcast (or its live tab if none).
+ const liveUrl = handle ? `https://www.youtube.com/${encodeURIComponent(handle)}/live` : 'https://www.youtube.com';
+
+ const overlay = document.createElement('div');
  overlay.className = 'webcam-err-overlay';
  overlay.style.cssText =
- 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
- 'background:rgba(0,0,0,0.72);color:#ff6b6b;font-size:11px;font-family:monospace;' +
- 'pointer-events:none;z-index:6;padding:8px;text-align:center;';
+ 'position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;' +
+ 'background:rgba(10,12,16,0.92);color:#e8eef5;font-size:12px;' +
+ 'font-family:-apple-system,system-ui,sans-serif;z-index:6;padding:10px;text-align:center;';
+
+ const title = document.createElement('div');
+ title.textContent = `${city} — stream offline`;
+ title.style.cssText = 'font-weight:600;opacity:0.85;';
+
+ const link = document.createElement('a');
+ link.href = liveUrl;
+ link.target = '_blank';
+ link.rel = 'noopener noreferrer';
+ link.textContent = '🔴 Watch live on YouTube →';
+ link.style.cssText =
+ 'color:#fff;background:#c4302b;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:600;';
+
+ const retry = document.createElement('button');
+ retry.textContent = 'Retry';
+ retry.style.cssText =
+ 'background:transparent;border:1px solid rgba(255,255,255,0.25);color:#cfd8e3;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;';
+ retry.addEventListener('click', () => this.render());
+
+ overlay.append(title, link, retry);
  cell.style.position = 'relative';
  cell.append(overlay);
- }
- overlay.textContent = msg;
   }
 
   private setupIntersectionObserver(): void {

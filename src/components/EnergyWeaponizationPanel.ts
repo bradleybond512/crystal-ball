@@ -19,7 +19,7 @@ import {
 const REFRESH_MS = 30 * 60 * 1000; // 30 minutes
 
 const RISK_COLOR: Record<DependencyRisk, string> = {
-  Critical: '#d50000',
+  Critical: '#ff453a',
   High: '#ff9800',
   Medium: '#ffeb3b',
   Low: '#4caf50',
@@ -30,7 +30,7 @@ function riskColor(level: DependencyRisk): string {
 }
 
 function severityColor(score: number): string {
-  if (score >= 9) return '#d50000';
+  if (score >= 9) return '#ff453a';
   if (score >= 7) return '#ff9800';
   if (score >= 5) return '#ffeb3b';
   return '#9e9e9e';
@@ -61,7 +61,7 @@ export class EnergyWeaponizationPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -75,7 +75,7 @@ export class EnergyWeaponizationPanel extends Panel {
     const { dependencies, events, globalEnergyRiskIndex, ongoingCoercionCount, criticalDependencyCount, totalHistoricImpactBn } = data;
     let idxColor = '#ffeb3b';
     if (globalEnergyRiskIndex >= 60) {
-      idxColor = '#d50000';
+      idxColor = '#ff453a';
     } else if (globalEnergyRiskIndex >= 40) {
       idxColor = '#ff9800';
     }
@@ -100,11 +100,11 @@ export class EnergyWeaponizationPanel extends Panel {
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Ongoing Coercion</div>
-        <div style="font-size:18px;font-weight:700;color:#d50000;">${ongoingCount}</div>
+        <div style="font-size:18px;font-weight:700;color:#ff453a;">${ongoingCount}</div>
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Critical Dependencies</div>
-        <div style="font-size:18px;font-weight:700;color:#d50000;">${criticalCount}</div>
+        <div style="font-size:18px;font-weight:700;color:#ff453a;">${criticalCount}</div>
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Historic Impact</div>
@@ -125,7 +125,7 @@ export class EnergyWeaponizationPanel extends Panel {
   private renderDepRow(dep: EnergyDependency): string {
     const color = riskColor(dep.riskLevel);
     const altText = dep.alternativeExists ? '&#x2713; Alt available' : '&#x2717; No alternative';
-    const altColor = dep.alternativeExists ? '#4caf50' : '#d50000';
+    const altColor = dep.alternativeExists ? '#4caf50' : '#ff453a';
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;padding:6px 8px;font-size:11px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <div style="font-weight:600;">${escapeHtml(dep.importer)} &larr; ${escapeHtml(dep.exporter)}</div>
@@ -153,14 +153,14 @@ export class EnergyWeaponizationPanel extends Panel {
   private renderEventRow(ev: EnergyCoercionEvent): string {
     const color = severityColor(ev.severityScore);
     const ongoingBadge = ev.ongoing
-      ? `<span style="font-size:9px;font-weight:700;color:#d50000;border:1px solid #d50000;border-radius:3px;padding:0 4px;margin-left:6px;">ONGOING</span>`
+      ? `<span style="font-size:9px;font-weight:700;color:#ff453a;border:1px solid #ff453a;border-radius:3px;padding:0 4px;margin-left:6px;">ONGOING</span>`
       : '';
     const actionCls = actionClass(ev.action);
     const actionColorMap: Record<string, string> = {
-      'action-cut': '#d50000',
+      'action-cut': '#ff453a',
       'action-price': '#ff9800',
       'action-transit': '#ffeb3b',
-      'action-attack': '#d50000',
+      'action-attack': '#ff453a',
       'action-embargo': '#ff9800',
     };
     const actionColor = actionColorMap[actionCls] ?? '#9e9e9e';

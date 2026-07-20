@@ -11,6 +11,7 @@
  */
 
 import { unifiedAlertStore, type UnifiedAlert, type AlertSource } from './unified-alerts';
+import { formatDurationMinutes } from '@/utils/format-duration';
 
 const SCAN_INTERVAL_MS = 60_000;
 const ALPHA = 0.3;                       // EWMA weight on new samples
@@ -73,14 +74,14 @@ function scan(): void {
     if (s.silenceFiredAt !== null && now - s.silenceFiredAt < 3_600_000) continue;
     s.silenceFiredAt = now;
 
-    const normalMin = Math.round(s.ewmaIntervalMs / 60_000);
-    const gapMin = Math.round(gap / 60_000);
+    const normalLabel = formatDurationMinutes(s.ewmaIntervalMs / 60_000);
+    const gapLabel = formatDurationMinutes(gap / 60_000);
     synthetic.push({
       id: `silence-${source}-${Math.floor(now / 3_600_000)}`,
       source: 'correlation',
       severity: 'low',
-      title: `Silence: ${source} feed quiet for ${gapMin}m`,
-      body: `Normally fires every ~${normalMin}m. ${gapMin}m since last event — possible outage, blackout, or upstream failure.`,
+      title: `Silence: ${source} feed quiet for ${gapLabel}`,
+      body: `Normally fires every ~${normalLabel}. ${gapLabel} since last event — possible outage, blackout, or upstream failure.`,
       timestamp: now,
       relevanceScore: 50,
       acknowledged: false,

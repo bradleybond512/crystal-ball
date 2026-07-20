@@ -51,7 +51,7 @@
 }
 
 .settings-header-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 8px;
@@ -399,7 +399,7 @@
 }
 
 .settings-feat-pill {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 10px;
@@ -995,7 +995,7 @@ tr.diag-err td { color: var(--settings-red); }
 .wm-toggle-vis:hover { opacity: 1; }
 
 .wm-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 10px;

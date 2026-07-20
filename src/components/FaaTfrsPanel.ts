@@ -95,7 +95,7 @@ export class FaaTfrsPanel extends Panel {
     this.setCount(tfrs.length);
 
     const degradedBanner = degraded
-      ? `<div style="padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;margin-bottom:6px;font-size:11px;">
+      ? `<div style="padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;margin-bottom:6px;font-size:11px;">
            Degraded: ${escapeHtml(reason ?? 'upstream error')}
          </div>`
       : '';

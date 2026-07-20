@@ -10,6 +10,7 @@ import type {
   SiteConditions,
   SiteConfig,
 } from './datacenter-types.ts';
+import type { PowerContext } from '../infrastructure/osm-power.ts';
 import { bumpDcLevel, dcLevelRank, maxDcLevel } from './datacenter-types.ts';
 import { computePowerPosture } from './power-posture.ts';
 import { computeWeatherPosture } from './weather-posture.ts';
@@ -26,6 +27,7 @@ export interface PostureInput {
   airQuality?: SiteAirQuality | null;
   seismicNearby?: NearbySeismicEvent[];
   connectivity?: ConnectivitySignal | null;
+  gridInfrastructure?: PowerContext | null;
 }
 
 function blendOverall(power: DcLevel, weather: DcLevel): DcLevel {
@@ -75,6 +77,7 @@ export function computeDatacenterPosture(input: PostureInput): DataCenterPosture
     headline: buildHeadline(overall, weather, power),
     power,
     weather,
+    gridInfrastructure: input.gridInfrastructure ?? null,
     conditions: input.conditions ?? null,
     forecast24h: input.forecast24h ?? [],
     airQuality: input.airQuality ?? null,

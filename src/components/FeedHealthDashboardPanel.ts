@@ -15,7 +15,7 @@ const REFRESH_MS = 10_000;
 const STATUS_COLOR: Record<FeedRecord['status'], string> = {
   ok: '#4caf50',
   stale: '#ff9800',
-  error: '#f44336',
+  error: '#ff453a',
   offline: '#9e9e9e',
 };
 
@@ -37,7 +37,7 @@ export class FeedHealthDashboardPanel extends Panel {
       trackActivity: true,
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   override destroy(): void {
@@ -74,7 +74,7 @@ export class FeedHealthDashboardPanel extends Panel {
     const degradedCount = records.filter(r => r.status === 'stale' || r.status === 'error').length;
     const offlineCount = records.filter(r => r.status === 'offline').length;
 
-    let scoreColor = '#f44336';
+    let scoreColor = '#ff453a';
     if (healthScore > 80) scoreColor = '#4caf50';
     else if (healthScore >= 50) scoreColor = '#ff9800';
 
@@ -107,7 +107,7 @@ export class FeedHealthDashboardPanel extends Panel {
 
     const items = staleRecords.map(r => {
       const isCrit = staleCritIds.has(r.feedId);
-      const color = isCrit ? '#f44336' : '#ff9800';
+      const color = isCrit ? '#ff453a' : '#ff9800';
       return `<span class="stale-feed-name" style="color:${color}">${escapeHtml(r.feedId)}</span>`;
     }).join(', ');
 

@@ -159,6 +159,30 @@ test('situations summary field is redacted for embedded PII', () => {
   assert.ok(!bundle.situations?.[0]?.summary?.includes('user@example.com'));
 });
 
+test('situations name and tags are redacted for embedded PII', () => {
+  const situations: SituationSummary[] = [{
+    id: 'sit-1',
+    name: 'Outage flagged by user@example.com',
+    status: 'active',
+    severity: 'high',
+    domain: 'weather',
+    startedAt: NOW,
+    updatedAt: NOW,
+    observationIds: [],
+    correlationIds: [],
+    confidence: 0.5,
+    // tags propagate from event.tags — must get the same scrub as name/summary.
+    tags: ['contact:user@example.com', 'Bearer abcd1234abcd1234abcd1234abcd1234'],
+    summary: 'x',
+  }];
+  const bundle = buildExportBundle({ ...baseInput(), situations });
+  const s = bundle.situations?.[0];
+  assert.ok(!s?.name?.includes('user@example.com'), `name leaked: ${s?.name}`);
+  const tagsJson = JSON.stringify(s?.tags);
+  assert.ok(!tagsJson.includes('user@example.com'), `tag email leaked: ${tagsJson}`);
+  assert.ok(!tagsJson.includes('abcd1234abcd1234'), `tag token leaked: ${tagsJson}`);
+});
+
 // ── Correlations inventory ─────────────────────────────────────────────
 
 test('correlations inventory carries chainType, title, confidence, eventIds', () => {
@@ -176,6 +200,22 @@ test('correlations inventory carries chainType, title, confidence, eventIds', ()
   assert.equal(c?.chainType, 'seismic-cascade');
   assert.equal(c?.confidence, 0.7);
   assert.equal(c?.eventIds.length, 3);
+});
+
+test('correlations title is redacted for embedded PII', () => {
+  const correlations: CorrelationSummary[] = [{
+    id: 'corr-1',
+    chainType: 'seismic-cascade',
+    title: 'chain flagged by user@example.com',
+    confidence: 0.7,
+    detectedAt: NOW,
+    eventIds: [],
+  }];
+  const bundle = buildExportBundle({ ...baseInput(), correlations });
+  assert.ok(
+    !bundle.correlations?.[0]?.title?.includes('user@example.com'),
+    `title leaked: ${bundle.correlations?.[0]?.title}`,
+  );
 });
 
 test('correlations is omitted when not supplied', () => {
@@ -352,4 +392,32 @@ test('default cap on algorithmTrace prevents unbounded growth', () => {
   assert.ok(bundle.algorithmTrace!.length <= 100, `expected ≤100, got ${bundle.algorithmTrace?.length}`);
   const note = bundle.truncations.find((t) => t.field === 'algorithmTrace');
   assert.ok(note, 'expected truncation note for algorithmTrace');
+});
+
+// Round-1 audit #6/#8: redactSystemHealth spread `...report` through, leaking the
+// free-text panels[].lastError and notifications.unsafeSuppressions[].reason
+// (which can carry a thrown URL / token / PII) into the GitHub-paste bundle.
+test('redactSystemHealth scrubs free text in panels[].lastError + unsafeSuppressions[].reason', () => {
+  const EMAIL = 'panel-canary@example.invalid';
+  const TOKEN = 'aaaabbbbccccddddeeeeffff00001111';
+  const systemHealth: SystemHealthReport = {
+    ...makeSystemHealth(),
+    panels: [{
+      panelId: 'nws-alerts',
+      label: 'Weather',
+      status: 'failing',
+      mounted: true,
+      enabled: true,
+      visible: true,
+      lastError: `render failed for ${EMAIL} (Bearer ${TOKEN})`,
+      dependencies: [],
+    }] as SystemHealthReport['panels'],
+    notifications: {
+      ...emptyNotifSummary(),
+      unsafeSuppressions: [{ candidateId: 'c1', reason: `suppressed alert from ${EMAIL}`, at: NOW }],
+    },
+  };
+  const json = exportBundleToJson(buildExportBundle({ ...baseInput(), systemHealth }));
+  assert.doesNotMatch(json, /panel-canary@example\.invalid/, 'panel/suppression email must be redacted');
+  assert.doesNotMatch(json, /aaaabbbbccccddddeeeeffff00001111/, 'panel lastError token must be redacted');
 });

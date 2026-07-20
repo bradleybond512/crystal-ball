@@ -54,7 +54,7 @@ export class ETFFlowsPanel extends Panel {
  // Try sidecar first (Yahoo Finance), fall back to cloud API
  let sidecarOk = false;
  try {
- const sr = await fetch(`${getApiBaseUrl()}/api/btc-etf-flows`);
+ const sr = await fetch(`${getApiBaseUrl()}/api/btc-etf-flows`, { signal: AbortSignal.timeout(10_000) });
  if (sr.ok) {
  const sd = await sr.json() as ListEtfFlowsResponse;
  if (sd && typeof sd === 'object' && Array.isArray(sd.etfs) && sd.etfs.length > 0) {

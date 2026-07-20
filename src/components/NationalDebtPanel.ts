@@ -21,7 +21,7 @@ function debtColor(pct: number): string {
   if (pct < 60) return '#4caf50';
   if (pct < 90) return '#ffeb3b';
   if (pct < 150) return '#ff9800';
-  return '#f44336';
+  return '#ff453a';
 }
 
 export class NationalDebtPanel extends Panel {

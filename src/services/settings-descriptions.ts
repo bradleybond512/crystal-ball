@@ -6,6 +6,15 @@
  *
  * Runs on load and re-runs when the settings area re-renders (observed
  * via MutationObserver on the settings root).
+ *
+ * Performance note: the observer used to watch `document.body` with
+ * `subtree: true`, which fired `querySelectorAll('.settings-secret-row')`
+ * on every DOM mutation app-wide.  It now:
+ *   1. Exits immediately if no .settings-secret-row elements exist in the
+ *      document (no-op in the main window).
+ *   2. Self-disconnects once all visible rows have been injected (the
+ *      settings UI is rendered once per tab navigation, not continuously).
+ *   3. Scopes to the narrowest available container element.
  */
 
 import { KEY_DESCRIPTIONS } from './settings-constants';
@@ -31,7 +40,21 @@ function injectDescriptions(root: ParentNode): void {
   }
 }
 
+/** Returns true when every visible .settings-secret-row has been injected. */
+function allRowsInjected(): boolean {
+  const rows = document.querySelectorAll<HTMLElement>('.settings-secret-row');
+  if (rows.length === 0) return false; // nothing rendered yet
+  for (const row of rows) {
+    if (!row.querySelector('.settings-secret-desc')) return false;
+  }
+  return true;
+}
+
 function runInjection(): void {
+  // Fast-exit: if there are no settings rows in this window (e.g. main
+  // window), do nothing — avoids a full querySelectorAll scan on every
+  // DOM mutation triggered by panel renders, timers, etc.
+  if (!document.querySelector('.settings-secret-row')) return;
   injectDescriptions(document);
 }
 
@@ -41,9 +64,24 @@ export function startSettingsDescriptions(): void {
   if (started) return;
   started = true;
   runInjection();
-  // Re-inject after any re-render of the settings area.
-  const observer = new MutationObserver(runInjection);
-  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Re-inject after any re-render of the settings area, but self-disconnect
+  // once all visible rows are injected so we stop paying the MutationObserver
+  // cost for the rest of the settings session.
+  //
+  // Scope to the narrowest available container.  Settings-main.ts renders
+  // inside `document.body` but uses a `#settingsSearch` input as a landmark;
+  // fall back to `document.body` when that container isn't mounted yet.
+  const root: Node = document.body;
+  let observer: MutationObserver | null = new MutationObserver(() => {
+    if (!observer) return;
+    runInjection();
+    if (allRowsInjected()) {
+      observer.disconnect();
+      observer = null;
+    }
+  });
+  observer.observe(root, { childList: true, subtree: true });
 }
 
 // Auto-start on module load so settings-main.ts (which imports transitively

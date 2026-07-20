@@ -69,6 +69,17 @@ const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
 const PRUNE_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours
 
+/**
+ * Throttle the subscriber fan-out. ~26 subscribers re-run on every notify (each
+ * getAll()s + reprocesses the whole set), and several re-ingest/re-acknowledge
+ * from their callback — a feedback loop that, unbounded, fires the fan-out every
+ * frame and drives the ingest-burst CPU/GC stall. Leading + trailing throttle
+ * caps it to ≤1 fan-out per interval while never dropping the final state.
+ */
+let notifyThrottleMs = 100;
+/** Test seam — override the notify throttle (0 = fire immediately, as before). */
+export function _setNotifyThrottleForTest(ms: number): void { notifyThrottleMs = ms; }
+
 // ── Haversine distance ──────────────────────────────────────────────────
 
 const EARTH_RADIUS_KM = 6371;
@@ -127,6 +138,12 @@ class UnifiedAlertStore {
   private listeners = new Set<() => void>();
   private flushScheduled = false;
   private flushDirty = false;
+  /** Incoming alerts accumulated across a burst for ONE coalesced IDB archive write. */
+  private pendingArchive: UnifiedAlert[] = [];
+  /** Throttled subscriber fan-out state (see notifyThrottleMs). */
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  private notifyDirty = false;
+  private lastNotifyAt = 0;
 
   constructor() {
     this.loadFromStorage();
@@ -152,26 +169,110 @@ class UnifiedAlertStore {
     this.flushDirty = true;
     if (this.flushScheduled) return;
     this.flushScheduled = true;
-    const run = () => {
-      this.flushScheduled = false;
-      if (!this.flushDirty) return;
-      this.flushDirty = false;
-      this.persist();
-      this.notify();
-    };
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    // Scheduled (non-unload) drain: throttle the subscriber fan-out.
+    const run = () => this.drainFlush(false);
+    // rAF coalesces to one flush per painted frame — but it is PAUSED while the
+    // document is hidden. This app ingests in the background, so fall back to a
+    // timer when hidden (or when rAF is unavailable) so prune/persist/archive
+    // still run instead of backing up until the window is foregrounded again.
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (typeof requestAnimationFrame === 'function' && !hidden) requestAnimationFrame(run);
+    else if (typeof setTimeout === 'function') setTimeout(run, 0);
     else queueMicrotask(run);
   }
 
   /**
-   * Synchronously flush any pending persist+notify. Registered on page unload
-   * so a deferred frame never drops the last write (durability guard).
+   * Synchronously flush any pending work. Registered on page unload so a
+   * deferred frame never drops the last write (durability guard).
    */
   private flushNow(): void {
-    if (!this.flushDirty) return;
-    this.flushDirty = false;
+    // Clear the scheduled flag so that if a flush was armed via requestAnimationFrame
+    // while visible and the document then went hidden (this runs on the
+    // visibilitychange→hidden transition), the now-paused rAF no longer blocks
+    // subsequent hidden ingests from re-arming the setTimeout fallback. A stale
+    // rAF that later fires is a harmless no-op (guarded by flushDirty).
+    this.drainFlush(true);
+  }
+
+  /**
+   * Run the coalesced flush if dirty. `immediate` forces a synchronous notify
+   * (unload durability); otherwise the subscriber fan-out is throttled.
+   */
+  private drainFlush(immediate: boolean): void {
+    this.flushScheduled = false;
+    if (this.flushDirty) {
+      this.flushDirty = false;
+      this.flush(immediate);
+      return;
+    }
+    // Nothing to persist — but on unload a throttled notify may still be pending
+    // (the flush already ran, only its trailing fan-out is queued). Deliver it
+    // synchronously so subscribers never miss the final state on page close.
+    // Guard on notifyDirty so a bare unload with nothing pending is a no-op.
+    if (immediate && this.notifyDirty) this.deliverNotifyNow();
+  }
+
+  /**
+   * The single coalesced per-burst work unit: prune → persist (localStorage) →
+   * archive (one IDB putBatch) → notify. Doing prune + the IDB write here rather
+   * than per-ingest collapses N ingests in a frame into ONE spread+sort, ONE
+   * stringify and ONE structured clone — the serialization/GC churn behind the
+   * ingest-burst renderer stall. The subscriber fan-out is throttled separately
+   * (see scheduleNotify) so it cannot fire every frame.
+   */
+  private flush(immediate: boolean): void {
+    this.prune();
     this.persist();
+    this.flushArchive();
+    // An immediate (unload) flush just changed state → deliver now; otherwise
+    // throttle the fan-out.
+    if (immediate) this.deliverNotifyNow();
+    else this.scheduleNotify();
+  }
+
+  /** Throttled subscriber fan-out: leading fire when idle, else a trailing fire. */
+  private scheduleNotify(): void {
+    this.notifyDirty = true;
+    if (this.notifyTimer !== null) return;
+    const elapsed = Date.now() - this.lastNotifyAt;
+    if (elapsed >= notifyThrottleMs) {
+      this.emitNotify();
+    } else {
+      this.notifyTimer = setTimeout(() => { this.notifyTimer = null; this.emitNotify(); }, notifyThrottleMs - elapsed);
+    }
+  }
+
+  private emitNotify(): void {
+    if (this.notifyDirty) this.deliverNotifyNow();
+  }
+
+  /** Fire the subscriber fan-out now: cancel any pending trailing timer, clear dirty, notify. */
+  private deliverNotifyNow(): void {
+    if (this.notifyTimer !== null) { clearTimeout(this.notifyTimer); this.notifyTimer = null; }
+    this.notifyDirty = false;
+    this.lastNotifyAt = Date.now();
     this.notify();
+  }
+
+  /** Test seam — simulate the pagehide/unload synchronous flush. */
+  _flushNowForTest(): void { this.flushNow(); }
+
+  /** Fire-and-forget: one structured-clone IDB write for the whole burst. */
+  private flushArchive(): void {
+    if (this.pendingArchive.length === 0) return;
+    const batch = this.pendingArchive;
+    this.pendingArchive = [];
+    // Shed `raw` before the structured clone — the same multi-KB source
+    // payloads behind the persist rope storm show up here as
+    // globalFuncCloneObject/operationSpreadGeneric in hang samples, and they
+    // grew the archive store to 60 MB on disk. ThreatInboxPanel reads `raw`
+    // back for 'threat-reactor' rows (ReactorMeta), so keep it for that
+    // source only.
+    const slim = batch.map((a) =>
+      a.raw === undefined || (a.source as string) === 'threat-reactor' ? a : { ...a, raw: undefined },
+    );
+    // Best-effort 30-day retention archive — never blocks the flush.
+    alertDB.putBatch(slim).catch(() => { /* silent — IDB persistence is best-effort */ });
   }
 
   /** Add or update alerts. Deduplicates by id. Stamps distance, dispatches notifications for new alerts. */
@@ -198,11 +299,16 @@ class UnifiedAlertStore {
       }
     }
     if (changed) {
-      this.prune();
+      // Defer prune + persist + the IDB archive write to a single coalesced
+      // flush per burst (see flush()). Accumulate this batch for the one
+      // trailing putBatch instead of cloning on every ingest.
+      for (const alert of incoming) this.pendingArchive.push(alert);
+      // Backstop: a single huge ingest (or a long hidden backlog) could grow the
+      // map far past the cap before the deferred flush prunes it. Bound the
+      // transient oversize/memory without re-introducing per-ingest churn for
+      // normal small bursts.
+      if (this.alerts.size > MAX_ALERTS * 2) this.prune();
       this.scheduleFlush();
-
-      // Fire-and-forget: persist to IndexedDB for 30-day retention
-      alertDB.putBatch(incoming).catch(() => { /* silent — IDB persistence is best-effort */ });
     }
     // Dispatch notifications for genuinely new alerts (after store update)
     for (const alert of newAlerts) {
@@ -307,9 +413,36 @@ class UnifiedAlertStore {
 
   private persist(): void {
     try {
-      const entries = [...this.alerts.values()];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.entriesForPersist()));
     } catch { /* storage full — silently drop */ }
+  }
+
+  /**
+   * Bound the SERIALIZED payload independent of map size. prune() normally keeps
+   * the map ≤ MAX_ALERTS, but this is a persist-time backstop so the stringify
+   * cost can never blow up regardless of how the map got large: pinned + unacked
+   * alerts are always kept, the remainder is filled most-recent-first.
+   */
+  private entriesForPersist(): UnifiedAlert[] {
+    const all = [...this.alerts.values()];
+    let bounded: UnifiedAlert[];
+    if (all.length <= MAX_ALERTS) {
+      bounded = all;
+    } else {
+      const kept = all.filter((a) => a.pinned || !a.acknowledged);
+      const rest = all
+        .filter((a) => !a.pinned && a.acknowledged)
+        .sort((a, b) => b.timestamp - a.timestamp);
+      bounded = [...kept, ...rest].slice(0, Math.max(MAX_ALERTS, kept.length));
+    }
+    // Bound the BYTES, not just the count: `raw` carries the original source
+    // payload (NWS polygons, GDELT docs — tens of KB per alert), which made
+    // this blob multi-MB and each stringify a main-thread rope storm (live
+    // sample: JSRopeString::resolveToBuffer hot; on-disk localStorage WAL
+    // churning at 13 MB). Nothing reads `raw` back from the reloaded store —
+    // the only `raw` consumer (ThreatInboxPanel) reads alertDB rows, not this
+    // blob — so shed it at persist time. JSON.stringify drops undefined.
+    return bounded.map((a) => (a.raw === undefined ? a : { ...a, raw: undefined }));
   }
 
   private loadFromStorage(): void {
@@ -332,3 +465,6 @@ class UnifiedAlertStore {
 }
 
 export const unifiedAlertStore = new UnifiedAlertStore();
+
+/** Exported for tests only — production code uses the `unifiedAlertStore` singleton. */
+export { UnifiedAlertStore };

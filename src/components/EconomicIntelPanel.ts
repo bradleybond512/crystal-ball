@@ -326,7 +326,7 @@ function vixGaugeColor(g: VixGauge): string {
   if (g === 'calm') return '#4caf50';
   if (g === 'elevated') return '#ffeb3b';
   if (g === 'stress') return '#ff9800';
-  return '#d50000';
+  return '#ff453a';
 }
 
 function trendArrow(trend: TrendDirection): string {

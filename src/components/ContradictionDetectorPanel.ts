@@ -6,7 +6,6 @@
  * indicator, the detected confidence, and Resolve / Dismiss buttons.
  * A second tab shows resolved + dismissed history.
  */
-/* eslint-disable sonarjs/no-nested-template-literals */
 
 import { Panel } from './Panel';
 import {
@@ -15,6 +14,8 @@ import {
   type ConflictType,
 } from '@/services/intelligence/contradiction-detector';
 import { escapeHtml } from '@/utils/sanitize';
+import { statLine } from './ui/statLine';
+import { formatDurationMinutes } from '@/utils/format-duration';
 
 const REFRESH_MS = 15_000;
 
@@ -54,7 +55,7 @@ export class ContradictionDetectorPanel extends Panel {
     const svc = getContradictionDetector();
     this.listener = () => this.render();
     svc.subscribe(this.listener);
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.render();
   }
 
@@ -100,10 +101,12 @@ export class ContradictionDetectorPanel extends Panel {
   private renderHeader(
     stats: ReturnType<ReturnType<typeof getContradictionDetector>['stats']>,
   ): string {
-    return `<div style="display:flex;gap:14px;font-size:11px;color:#bbb;">
-      <span><strong style="color:#4a9eff;">${stats.openCount}</strong> open</span>
-      <span><strong>${stats.totalDetected}</strong> total</span>
-      <span>avg resolution <strong>${stats.avgResolutionMinutes.toFixed(0)}m</strong></span>
+    return `<div style="font-size:11px;color:var(--text-secondary,#bbb);">
+      ${statLine([
+        { value: stats.openCount, label: 'open', valueColor: 'var(--accent,#4a9eff)' },
+        { value: stats.totalDetected, label: 'total' },
+        { value: formatDurationMinutes(stats.avgResolutionMinutes), label: 'avg resolution', labelFirst: true },
+      ])}
     </div>`;
   }
 

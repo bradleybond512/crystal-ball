@@ -11,7 +11,7 @@ import type { ShadowVessel, ShadowFleetStat, AisStatus, RiskLevel } from './shad
 const REFRESH_MS = 24 * 60 * 60_000; // 24h
 
 const RISK_COLOR: Record<RiskLevel, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff9800',
   medium: '#ffeb3b',
 };
@@ -24,7 +24,7 @@ const AIS_LABEL: Record<AisStatus, string> = {
 };
 
 const AIS_COLOR: Record<AisStatus, string> = {
-  spoofing: '#d50000',
+  spoofing: '#ff453a',
   dark: '#b71c1c',
   intermittent: '#ff9800',
   active: '#4caf50',
@@ -120,7 +120,7 @@ export class ShadowFleetPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -149,7 +149,7 @@ export class ShadowFleetPanel extends Panel {
       { style: 'display:flex;align-items:center;gap:8px;font-size:11px;' },
       h('div', { style: 'text-transform:uppercase;color:var(--text-secondary,#aaa);white-space:nowrap;' }, 'Global Evasion Risk'),
       h('div', { style: 'flex:1;background:var(--border-subtle,#333);border-radius:2px;height:7px;' },
-        h('div', { style: `width:${data.globalEvasionRiskIndex}%;background:#d50000;height:7px;border-radius:2px;` }, '')),
+        h('div', { style: `width:${data.globalEvasionRiskIndex}%;background:#ff453a;height:7px;border-radius:2px;` }, '')),
       h('div', { style: 'font-family:ui-monospace,monospace;font-weight:700;width:34px;text-align:right;' }, String(data.globalEvasionRiskIndex)),
     );
 

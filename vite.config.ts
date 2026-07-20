@@ -7,6 +7,7 @@ import { spawnSync } from 'child_process';
 import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
+import { isSafetyFeedPath } from './src/utils/sw-safety-feeds';
 
 const isE2E = process.env.VITE_E2E === '1';
 const isDesktopBuild = process.env.VITE_DESKTOP_RUNTIME === '1';
@@ -125,17 +126,30 @@ function htmlVariantPlugin(): Plugin {
  .replace(/"description": "Real-time global intelligence dashboard with live news, markets, military tracking, infrastructure monitoring, and geopolitical data."/, `"description": "${activeMeta.description}"`)
  .replace(/"featureList": \[[\s\S]*?\]/, `"featureList": ${JSON.stringify(activeMeta.features, null, 8).replace(/\n/g, '\n ')}`);
 
- // Desktop CSP: inject localhost wildcard for dynamic sidecar port.
- // Web builds intentionally exclude localhost to avoid exposing attack surface.
+ // Desktop CSP: inject loopback wildcard for the dynamic sidecar port so the
+ // index.html meta-CSP (which intersects with the authoritative tauri.conf.json
+ // CSP) cannot block 127.0.0.1:<port>. The production *web* allowlist
+ // intentionally excludes localhost to avoid exposing the user's local services
+ // as attack surface from a hijacked page.
  if (isDesktopBuild) {
  result = result
  .replace(
- /connect-src 'self' https: http:\/\/localhost:5173/,
- "connect-src 'self' https: http://localhost:5173 http://127.0.0.1:*"
+ /connect-src 'self' blob: data:/,
+ "connect-src 'self' blob: data: http://127.0.0.1:* http://localhost:*"
  )
  .replace(
  /frame-src 'self'/,
  "frame-src 'self' http://127.0.0.1:*"
+ );
+ }
+
+ // Dev server only: the Vite HMR websocket + dev origin live on loopback, which
+ // the production allowlist (no bare ws:/http:) would otherwise block. The
+ // `ctx.server` field is present only for the `serve` (dev) command.
+ if (ctx.server) {
+ result = result.replace(
+ /connect-src 'self' blob: data:/,
+ "connect-src 'self' blob: data: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*"
  );
  }
 
@@ -765,7 +779,14 @@ export default defineConfig({
  },
  {
  urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
- sameOrigin && /^\/api\//.test(url.pathname),
+ sameOrigin && /^\/api\//.test(url.pathname)
+ // Don't persist personal-location responses (home/saved-place lat/lon) into
+ // on-disk CacheStorage — they'd sit unencrypted in the browser profile.
+ && !/[?&](lat|lon|latitude|longitude)=/i.test(url.search)
+ // Never cache safety-critical realtime feeds (NWS/IPAWS/severe/volcano/quake):
+ // a stale cached 200 would render an active warning as a fresh all-clear
+ // during a connectivity gap. They get the NetworkOnly rule below (fail-closed).
+ && !isSafetyFeedPath(url.pathname),
  handler: 'NetworkFirst',
  method: 'GET',
  options: {
@@ -774,6 +795,15 @@ export default defineConfig({
  expiration: { maxEntries: 200, maxAgeSeconds: 4 * 60 * 60 },
  cacheableResponse: { statuses: [0, 200] },
  },
+ },
+ {
+ // Safety-critical realtime feeds — fail CLOSED. NetworkOnly means an outage
+ // surfaces as a network error (the sidecar's 503 {stale:true}) the renderer
+ // can record as stale, instead of a Workbox cache fallback marking it fresh.
+ urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
+ sameOrigin && isSafetyFeedPath(url.pathname),
+ handler: 'NetworkOnly',
+ method: 'GET',
  },
  {
  urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>

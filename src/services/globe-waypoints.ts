@@ -1,5 +1,6 @@
 import { Cartesian3, Math as CesiumMath, type Viewer } from 'cesium';
 import type { CameraBookmark } from './camera-bookmarks';
+import { safeSetItem } from '../utils/safe-storage';
 
 const STORAGE_KEY = 'crystalball-waypoints';
 
@@ -17,12 +18,12 @@ export function loadWaypoints(): Waypoint[] {
 export function saveWaypoint(wp: Waypoint): void {
   const all = loadWaypoints().filter(w => w.id !== wp.id);
   all.push(wp);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  safeSetItem(STORAGE_KEY, JSON.stringify(all));
 }
 
 export function deleteWaypoint(id: string): void {
   const all = loadWaypoints().filter(w => w.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  safeSetItem(STORAGE_KEY, JSON.stringify(all));
 }
 
 export class WaypointTour {

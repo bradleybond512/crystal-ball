@@ -158,8 +158,10 @@ export function canSpend(provider: LlmProvider): boolean {
  * cloud request so that N parallel callers (e.g. the multi-persona
  * ensemble) cannot all race past canSpend() and overshoot the cap.
  *
- * If the call later fails, the slot is NOT refunded — the call was
- * still attempted, and conservative accounting is the safer default.
+ * If the call never actually issues (the provider returned nothing or
+ * threw before spending a real slot), the caller must release the
+ * reservation via refundCloudCall() — typically from a finally block —
+ * so a failed attempt doesn't permanently burn budget.
  */
 export function reserveCloudCall(provider: LlmProvider): boolean {
   if (provider === 'local' || provider === 'none') return true;
@@ -173,6 +175,23 @@ export function reserveCloudCall(provider: LlmProvider): boolean {
   save();
   document.dispatchEvent(new CustomEvent<BudgetStatus>(EVENT_NAME, { detail: getBudgetStatus() }));
   return true;
+}
+
+/**
+ * Release a slot previously taken by reserveCloudCall() when the cloud
+ * call did not actually happen (empty result or thrown error). The
+ * counter is clamped at zero so a stray refund can never drive the
+ * budget negative.
+ */
+export function refundCloudCall(provider: LlmProvider): void {
+  if (provider === 'local' || provider === 'none') return;
+  load();
+  rolloverIfNeeded();
+  if (provider === 'cloud-agent') state.cloudAgent = Math.max(0, state.cloudAgent - 1);
+  else if (provider === 'cloud-chat') state.cloudChat = Math.max(0, state.cloudChat - 1);
+  else return;
+  save();
+  document.dispatchEvent(new CustomEvent<BudgetStatus>(EVENT_NAME, { detail: getBudgetStatus() }));
 }
 
 /**

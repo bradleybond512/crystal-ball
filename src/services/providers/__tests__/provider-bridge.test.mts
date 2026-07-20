@@ -21,7 +21,10 @@ test('snapshots satisfy the provider-redundancy contract', () => {
   const report = assessProviderRedundancy({ generatedAt: T0 + 1000, snapshots });
   const adsb = report.domains.find((d) => d.domain === 'adsb');
   assert.ok(adsb);
-  assert.equal(adsb.verdict, 'redundant_agreement');
+  // Two providers up but snapshotsFromRegistry emits no fact fingerprints, so
+  // agreement can't be verified — 'redundant_unverified', not a false
+  // full-confidence 'redundant_agreement'.
+  assert.equal(adsb.verdict, 'redundant_unverified');
 });
 
 test('primary down with healthy backup maps to the right verdict', () => {
@@ -57,4 +60,41 @@ test('singleton state records and resets', () => {
   assert.equal(getProviderHealthState().outcomes['nws-alerts']?.length, 1);
   resetProvidersStateForTest();
   assert.deepEqual(getProviderHealthState().outcomes, {});
+});
+
+test('two up but only one carries a fingerprint → redundant_unverified, not agreement', () => {
+  const report = assessProviderRedundancy({ generatedAt: T0, snapshots: [
+    { providerId: 'usgs-earthquakes', domain: 'disasters', label: 'USGS', primary: false, level: 'healthy', recentFactFingerprint: 'c:v:12' },
+    { providerId: 'gdacs', domain: 'disasters', label: 'GDACS', primary: true, level: 'healthy' },
+  ] });
+  const d = report.domains.find((x) => x.domain === 'disasters')!;
+  assert.equal(d.verdict, 'redundant_unverified');
+  assert.notEqual(d.confidenceMultiplier, 1);
+});
+
+test('lone healthy non-primary source reads single_source, not primary_down_with_backup', () => {
+  const report = assessProviderRedundancy({ generatedAt: T0, snapshots: [
+    { providerId: 'usgs-earthquakes', domain: 'disasters', label: 'USGS', primary: false, level: 'healthy', recentFactFingerprint: 'c:v:12' },
+    { providerId: 'emsc-seismic', domain: 'disasters', label: 'EMSC', primary: false, level: 'silent' },
+  ] });
+  const d = report.domains.find((x) => x.domain === 'disasters')!;
+  assert.equal(d.verdict, 'single_source');
+});
+
+test('snapshotsFromRegistry attaches fingerprints when provided', () => {
+  let s = emptyProviderHealthState();
+  for (const id of ['usgs-earthquakes', 'emsc-seismic']) {
+    s = recordFetchOutcome(s, id, ok(T0));
+  }
+  const snaps = snapshotsFromRegistry(s, T0 + 1000, 'disasters', {
+    'usgs-earthquakes': 'v:12',
+    'emsc-seismic': 'v:12',
+  });
+  const usgs = snaps.find((x) => x.providerId === 'usgs-earthquakes');
+  const emsc = snaps.find((x) => x.providerId === 'emsc-seismic');
+  assert.equal(usgs?.recentFactFingerprint, 'v:12');
+  assert.equal(emsc?.recentFactFingerprint, 'v:12');
+  // providers without a supplied fingerprint stay undefined
+  const gdacs = snaps.find((x) => x.providerId === 'gdacs');
+  assert.equal(gdacs?.recentFactFingerprint, undefined);
 });

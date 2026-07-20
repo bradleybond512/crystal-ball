@@ -28,7 +28,7 @@ interface PanelState {
 }
 
 const SEVERITY_FROM_SCORE: { min: number; label: string; color: string }[] = [
-  { min: 0.8, label: 'critical', color: '#f44336' },
+  { min: 0.8, label: 'critical', color: '#ff453a' },
   { min: 0.6, label: 'high', color: '#ffb74d' },
   { min: 0.35, label: 'medium', color: '#4a9eff' },
   { min: 0, label: 'low', color: '#9e9e9e' },
@@ -57,7 +57,7 @@ export class NotificationHistoryPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getNotificationProvenanceService().subscribe(() => this.render());
   }
 

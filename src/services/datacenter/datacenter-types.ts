@@ -1,5 +1,6 @@
 import type { GridAlert } from '../power-grid.ts';
 import type { EiaRegion } from '../infrastructure/grid-monitor.ts';
+import type { PowerContext } from '../infrastructure/osm-power.ts';
 import type { ThreatLevel, WeatherHazardKind } from '../weather/weather-threat-types.ts';
 import type { StormModePayload } from '../weather/personal-storm-mode.ts';
 
@@ -122,6 +123,8 @@ export interface DataCenterPosture {
   headline: string;
   power: PowerPosture;
   weather: WeatherPosture;
+  /** Nearby grid infrastructure (OSM: plants/substations/lines), when fetched. */
+  gridInfrastructure: PowerContext | null;
   conditions: SiteConditions | null;
   forecast24h: ForecastSlot[];
   airQuality: SiteAirQuality | null;

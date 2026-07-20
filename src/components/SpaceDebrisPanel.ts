@@ -53,7 +53,7 @@ const RISK_COLORS: Record<string, string> = {
   'risk-low':      '#4caf50',
   'risk-moderate': '#ff9800',
   'risk-elevated': '#ff5722',
-  'risk-critical': '#d50000',
+  'risk-critical': '#ff453a',
 };
 
 export class SpaceDebrisPanel extends Panel {
@@ -81,7 +81,7 @@ export class SpaceDebrisPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -193,7 +193,7 @@ export class SpaceDebrisPanel extends Panel {
             style: `padding:3px 6px;font-size:10px;text-align:right;color:${ev.stillInOrbit ? '#ef4444' : '#4caf50'}`,
           }, ev.stillInOrbit ? 'IN ORBIT' : 'DECAYED'),
           h('td', {
-            style: `padding:3px 6px;font-size:10px;text-align:right;color:${ev.forcedISSManeuver ? '#d50000' : '#9e9e9e'}`,
+            style: `padding:3px 6px;font-size:10px;text-align:right;color:${ev.forcedISSManeuver ? '#ff453a' : '#9e9e9e'}`,
           }, ev.forcedISSManeuver ? 'ISS ⚠' : '—'),
         ),
       );

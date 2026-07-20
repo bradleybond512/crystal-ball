@@ -7,6 +7,16 @@ import {
   resetRecurringLoopsForTests,
 } from '../recurring-loops';
 
+// Poll a condition until it holds or the deadline passes. Used instead of a
+// fixed sleep so real-timer tests stay deterministic under CPU/event-loop
+// contention (e.g. when the whole test suite runs in parallel).
+async function waitFor(cond: () => boolean, timeoutMs = 2000, stepMs = 5): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond() && Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, stepMs));
+  }
+}
+
 beforeEach(() => {
   resetRecurringLoopsForTests();
 });
@@ -53,9 +63,14 @@ describe('registerRecurringLoop', () => {
       calls++;
       throw new Error('boom');
     }, 10);
-    await new Promise<void>((resolve) => setTimeout(resolve, 35));
+    // Poll until the loop has ticked twice despite throwing every time.
+    // A condition-based wait (not a fixed sleep) keeps this deterministic
+    // under event-loop contention: a real timer can't always deliver two
+    // 10ms ticks inside a fixed 35ms window when the machine is loaded.
+    // A timer that *died* on the first throw would never reach 2 and we'd
+    // fail on the deadline — which is the regression we actually guard.
+    await waitFor(() => calls >= 2);
     handle.cancel();
-    // We should have ticked multiple times despite throws.
     assert.ok(calls >= 2, `expected >=2 calls, got ${calls}`);
   });
 
@@ -68,7 +83,8 @@ describe('registerRecurringLoop', () => {
 
   it('records tickCount and lastTickAt as the loop runs', async () => {
     const handle = registerRecurringLoop('tick-counter', () => {}, 10);
-    await new Promise<void>((resolve) => setTimeout(resolve, 35));
+    // Condition-based wait — see note on the throwing-loop test above.
+    await waitFor(() => handle.inspect().tickCount >= 2);
     const reg = handle.inspect();
     handle.cancel();
     assert.ok(reg.tickCount >= 2, `expected >=2 ticks, got ${reg.tickCount}`);

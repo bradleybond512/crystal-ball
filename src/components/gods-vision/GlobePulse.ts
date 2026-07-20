@@ -4,6 +4,7 @@ import {
   HeightReference,
   type Viewer,
 } from 'cesium';
+import { timeCoherentRadius } from '@/services/globe/time-coherent-radius';
 import type { GlobeDataManager } from '@/components/GlobeDataManager';
 import { isAppActive, onActivityChange } from '@/services/app-activity';
 
@@ -60,10 +61,13 @@ export class GlobePulse {
  if (alert.lat === undefined || alert.lon === undefined) continue;
  const pos = Cartesian3.fromDegrees(alert.lon, alert.lat, 0);
  const startMs = Date.now();
- const radiusCb = new CallbackProperty(() => {
+ // Time-coherent so both ellipse axes read the same value per frame — a raw
+ // CallbackProperty can grow between the semiMajor/semiMinor reads and throw
+ // "semiMajorAxis must be >= semiMinorAxis", halting the render loop.
+ const radiusCb = timeCoherentRadius(() => {
  const t = (Date.now() - startMs) % PULSE_DURATION_MS;
  return (t / PULSE_DURATION_MS) * PULSE_MAX_RADIUS_M;
- }, false);
+ });
  const pulse: PulseEntry = {
  entityId: id,
  startMs,

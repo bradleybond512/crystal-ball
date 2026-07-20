@@ -7,6 +7,7 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import {
   getActiveLearningQueueService,
   type ActiveLearningItem,
@@ -55,7 +56,7 @@ export class ActiveLearningQueuePanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = this.service.subscribe(() => this.render());
   }
 
@@ -111,7 +112,7 @@ export class ActiveLearningQueuePanel extends Panel {
         <span style="font-size:9px;font-weight:700;padding:2px 5px;background:${statusColor};color:#fff;border-radius:3px;text-transform:uppercase;">${escapeHtml(item.status)}</span>
         <span style="font-size:9px;font-weight:600;padding:2px 5px;background:rgba(255,255,255,0.06);border-radius:3px;text-transform:uppercase;">${escapeHtml(item.domain)}</span>
         <span style="font-size:11px;color:var(--text-secondary,#bbb);">${escapeHtml(item.reason)}</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--text-secondary,#aaa);">${ageMinutes}m ago</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text-secondary,#aaa);">${formatDurationMinutes(ageMinutes)} ago</span>
       </div>
       <div style="margin-top:4px;font-size:10px;color:var(--text-secondary,#888);">obs <code>${escapeHtml(item.observationId)}</code></div>
       ${item.notes ? `<div style="margin-top:4px;font-size:11px;color:var(--text-secondary,#ccc);font-style:italic;">${escapeHtml(item.notes)}</div>` : ''}

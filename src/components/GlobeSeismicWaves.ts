@@ -27,6 +27,7 @@ import {
   NearFarScalar,
   type Viewer,
 } from 'cesium';
+import { timeCoherentRadius } from '@/services/globe/time-coherent-radius';
 
 import {
   type GlobeSeismicOverlay,
@@ -151,7 +152,7 @@ export class GlobeSeismicWaves {
 
   private async fetchAndApply(): Promise<void> {
     try {
-      const res = await fetch(ENDPOINT);
+      const res = await fetch(ENDPOINT, { signal: AbortSignal.timeout(8_000) });
       if (!res.ok) return;
       const body = (await res.json()) as { overlays?: GlobeSeismicOverlay[] };
       if (!body || !Array.isArray(body.overlays)) return;
@@ -195,10 +196,10 @@ export class GlobeSeismicWaves {
     const color = Color.fromCssColorString(colorForMagnitude(overlay.magnitude).hex);
 
     // Epicenter dot — pulses on wall-clock time, doesn't need overlay state.
-    const pulse = new CallbackProperty(() => {
+    const pulse = timeCoherentRadius(() => {
       const t = (Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS;
       return t * EPICENTER_PULSE_MAX_M;
-    }, false);
+    });
     const epicenter = this.dataSource.entities.add({
       id: entityKey(overlay.eventId, ENTITY_KEYS.epicenter),
       position: Cartesian3.fromDegrees(overlay.lon, overlay.lat),
@@ -225,7 +226,7 @@ export class GlobeSeismicWaves {
     this.entitiesByKey.set(entityKey(overlay.eventId, ENTITY_KEYS.epicenter), epicenter);
 
     // P-wave ring — radius/opacity read live from this.currentOverlays.
-    const pRingRadius = new CallbackProperty(() => this.currentRadiusKm(overlay.eventId, 'p') * 1000, false);
+    const pRingRadius = timeCoherentRadius(() => this.currentRadiusKm(overlay.eventId, 'p') * 1000);
     const pRingColor = new CallbackProperty(
       () => Color.fromCssColorString('#5599ff').withAlpha(this.currentOpacity(overlay.eventId, 'p')),
       false,
@@ -246,7 +247,7 @@ export class GlobeSeismicWaves {
     this.entitiesByKey.set(entityKey(overlay.eventId, ENTITY_KEYS.pWave), pRing);
 
     // S-wave ring — slightly thicker outline, red.
-    const sRingRadius = new CallbackProperty(() => this.currentRadiusKm(overlay.eventId, 's') * 1000, false);
+    const sRingRadius = timeCoherentRadius(() => this.currentRadiusKm(overlay.eventId, 's') * 1000);
     const sRingColor = new CallbackProperty(
       () => Color.fromCssColorString('#ff3344').withAlpha(this.currentOpacity(overlay.eventId, 's')),
       false,

@@ -73,14 +73,24 @@ export function clearHistory(): void {
   saveHistory();
 }
 
+/** Persist a complete question/answer exchange (both roles) to history, so
+ *  deterministic (non-LLM) answers survive reload and stay in the transcript
+ *  the LLM path reads for continuity. Mirrors what sendMessage() records. */
+export function recordExchange(userText: string, assistantText: string): void {
+  addToHistory('user', userText);
+  addToHistory('assistant', assistantText);
+  saveHistory();
+}
+
 // ── Context builder ──────────────────────────────────────────────────────────
 
 function buildSituationContext(): string {
   try {
  const situations = situationEngine.getActionableSituations();
  if (situations.length === 0) return 'No active situations detected.';
+ const cap = (s: string, n: number) => s.replace(/[\r\n]+/g, ' ').slice(0, n);
  const sitLines = situations.slice(0, 8).map(
- s => `- [${s.phase}] ${s.title}: ${s.summary} (confidence: ${(s.confidence * 100).toFixed(0)}%)`,
+ s => `- [${s.phase}] ${cap(s.title, 120)}: ${cap(s.summary, 200)} (confidence: ${(s.confidence * 100).toFixed(0)}%)`,
  );
  return `Active situations (${situations.length}):\n${sitLines.join('\n')}`;
   } catch {
@@ -94,9 +104,10 @@ function buildAlertContext(): string {
  const sorted = [...alerts].sort((a: UnifiedAlert, b: UnifiedAlert) => b.timestamp - a.timestamp);
  const recent = sorted.slice(0, 10);
  if (recent.length === 0) return '';
+ const sanitize = (s: string) => s.replace(/[\r\n]+/g, ' ').slice(0, 120);
  const alertLines = recent.map(a => {
- const loc = a.location?.label ? ` (${a.location.label})` : '';
- return `- [${a.severity}] ${a.title}${loc}`;
+ const loc = a.location?.label ? ` (${sanitize(a.location.label)})` : '';
+ return `- [${a.severity}] ${sanitize(a.title)}${loc}`;
  });
  return `Recent alerts (${alerts.length} total, showing ${recent.length}):\n${alertLines.join('\n')}`;
   } catch {
@@ -109,7 +120,9 @@ function buildLocationContext(): string {
  const proxConfig = loadProximityConfig();
  if (!proxConfig.location) return '';
  const loc = proxConfig.location;
- return `User location: ${loc.label} (${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}), radius: ${proxConfig.radiusKm} km`;
+ // Send only the place label + radius to the cloud LLM — never precise home
+ // coordinates. The label already identifies the area for context.
+ return `User location: ${loc.label}, radius: ${proxConfig.radiusKm} km`;
   } catch {
  return '';
   }

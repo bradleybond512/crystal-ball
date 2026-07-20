@@ -16,11 +16,11 @@ const REFRESH_MS = 60 * 60 * 1000; // 1 hour
 const FREEDOM_COLOR: Record<FreedomCategory, string> = {
   Free: '#4caf50',
   'Partly Free': '#ffeb3b',
-  'Not Free': '#d50000',
+  'Not Free': '#ff453a',
 };
 
 const SEV_COLOR: Record<string, string> = {
-  'sev-critical': '#d50000',
+  'sev-critical': '#ff453a',
   'sev-high': '#ff9800',
   'sev-medium': '#ffeb3b',
   'sev-low': '#4caf50',
@@ -51,7 +51,7 @@ export class DigitalAutocracyPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -82,7 +82,7 @@ export class DigitalAutocracyPanel extends Panel {
   private renderHeader(data: ReturnType<typeof buildRenderData>): string {
     const idx = data.globalFreedomIndex;
     let idxColor: string;
-    if (idx < 40) { idxColor = '#d50000'; }
+    if (idx < 40) { idxColor = '#ff453a'; }
     else if (idx < 60) { idxColor = '#ff9800'; }
     else { idxColor = '#4caf50'; }
     const popM = data.populationUnderRepression;
@@ -93,7 +93,7 @@ export class DigitalAutocracyPanel extends Panel {
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:3px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Not Free</div>
-        <div style="font-size:16px;font-weight:700;color:#d50000;">${data.notFreeCount}</div>
+        <div style="font-size:16px;font-weight:700;color:#ff453a;">${data.notFreeCount}</div>
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:3px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Partly Free</div>
@@ -105,7 +105,7 @@ export class DigitalAutocracyPanel extends Panel {
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:3px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Pop. Repressed</div>
-        <div style="font-size:16px;font-weight:700;color:#d50000;">${popM.toLocaleString()}M</div>
+        <div style="font-size:16px;font-weight:700;color:#ff453a;">${popM.toLocaleString()}M</div>
       </div>
     </div>`;
   }
@@ -124,7 +124,7 @@ export class DigitalAutocracyPanel extends Panel {
     const catColor = FREEDOM_COLOR[c.category];
     const trendArrow = trendIcon(c.trend);
     let trendColor: string;
-    if (c.trend === 'worsening') { trendColor = '#d50000'; }
+    if (c.trend === 'worsening') { trendColor = '#ff453a'; }
     else if (c.trend === 'improving') { trendColor = '#4caf50'; }
     else { trendColor = '#aaa'; }
     const scBadge = c.socialCredit

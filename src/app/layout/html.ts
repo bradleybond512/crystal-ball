@@ -15,6 +15,8 @@ import { t } from '@/services/i18n';
 import { getMode } from '@/services/mode-manager';
 import { getCurrentTheme } from '@/utils/theme-manager';
 import { escapeHtml } from '@/utils/sanitize';
+import { icon } from '@/components/ui/icons';
+import { isHomeShellAvailable } from '@/services/home-shell/shell-gate';
 
 function getMapLabel(): string {
   if (SITE_VARIANT === 'tech') return t('panels.techMap');
@@ -87,7 +89,9 @@ export function buildSidebarNav(ctx: AppContext): string {
  const cfg = ctx.panelSettings[key];
  if (!cfg) continue;
  const disabled = cfg.enabled ? '' : ' is-disabled';
- html += `<button class="mac-sidebar-panel-item${disabled}" data-panel-key="${key}"><span class="mac-sidebar-panel-dot"></span>${cfg.name}</button>`;
+ // title tooltip: labels ellipsize at the sidebar width, so always expose
+ // the full name on hover (harmless when it fits, essential when it clips).
+ html += `<button class="mac-sidebar-panel-item${disabled}" data-panel-key="${key}" title="${escapeHtml(cfg.name)}"><span class="mac-sidebar-panel-dot"></span>${cfg.name}</button>`;
  }
  html += `</div>`;
   }
@@ -103,6 +107,10 @@ const TOOLBAR_TITLES: Record<string, string> = {
 export function buildDesktopLayout(ctx: AppContext): string {
   const toolbarTitle = TOOLBAR_TITLES[SITE_VARIANT] ?? 'Crystal Ball';
   const ghostActive = getMode() === 'ghost' ? ' mac-ghost-mode-active' : '';
+  // Visible re-entry to the Home Shell — only where the shell can mount.
+  const newViewBtn = isHomeShellAvailable()
+    ? `<button class="mac-ghost-mode-btn" id="homeShellReturnBtn" title="Return to the new Home view (⌘⇧O)">${icon('eye', { size: 14 })} New view</button>`
+    : '';
   return String.raw`
  <!-- Original header kept for compatibility; hidden via CSS on desktop -->
  <div class="header" aria-hidden="true" style="display:none">
@@ -140,10 +148,11 @@ export function buildDesktopLayout(ctx: AppContext): string {
 
  <!-- Mode Selector: Ghost + God's Vision only -->
  ${SITE_VARIANT === 'happy' ? '' : `<div class="mac-mode-section" id="modeSelectorSection">
- <button class="mac-alert-family-btn" id="alertFamilyBtn">⚠ Alert Family</button>
- <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">👻 Ghost Mode</button>
- <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
- <button class="mac-ghost-mode-btn" id="savedPlacesFilterBtn" title="Filter all panels by saved place proximity">📍 Proximity: OFF</button>
+ ${newViewBtn}
+ <button class="mac-alert-family-btn" id="alertFamilyBtn">${icon('alert-triangle', { size: 14 })} Alert Family</button>
+ <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">${icon('ghost', { size: 14 })} Ghost Mode</button>
+ <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">${icon('globe', { size: 14 })} God's Vision</button>
+ <button class="mac-ghost-mode-btn" id="savedPlacesFilterBtn" title="Filter all panels by saved place proximity">${icon('pin', { size: 14 })} Proximity: OFF</button>
  </div>
  <div class="mac-situational-mode-section" id="situationalModeSwitcherSection">
  <div class="mac-situational-mode-label">
@@ -151,10 +160,10 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <span class="mac-situational-mode-auto" id="situationalModeAutoIndicator" title="System is auto-selecting mode based on active alerts">Auto</span>
  </div>
  <div class="mac-situational-mode-btns">
- <button class="mac-situational-mode-btn" data-mode-key="monitoring" title="Monitoring — normal operations, all panels visible">📡 Monitor</button>
- <button class="mac-situational-mode-btn" data-mode-key="alert" title="Alert — active threats, red accents, critical items pinned">🚨 Alert</button>
- <button class="mac-situational-mode-btn" data-mode-key="investigation" title="Investigation — focus evidence chain, de-emphasise noise">🔍 Investigate</button>
- <button class="mac-situational-mode-btn" data-mode-key="briefing" title="Briefing — quiet palette, intel feeds emphasised">📋 Brief</button>
+ <button class="mac-situational-mode-btn" data-mode-key="monitoring" title="Monitoring — normal operations, all panels visible">${icon('antenna', { size: 14 })} Monitor</button>
+ <button class="mac-situational-mode-btn" data-mode-key="alert" title="Alert — active threats, red accents, critical items pinned">${icon('alert-triangle', { size: 14 })} Alert</button>
+ <button class="mac-situational-mode-btn" data-mode-key="investigation" title="Investigation — focus evidence chain, de-emphasise noise">${icon('magnifier', { size: 14 })} Investigate</button>
+ <button class="mac-situational-mode-btn" data-mode-key="briefing" title="Briefing — quiet palette, intel feeds emphasised">${icon('clipboard', { size: 14 })} Brief</button>
  </div>
  </div>`}
 
@@ -163,7 +172,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <button class="mac-sidebar-footer-btn theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
  ${buildThemeIcon()}
  </button>
- <button class="mac-sidebar-footer-btn" id="lowPowerBtn" title="Low Power Mode — disable animations and spatial audio">⚡</button>
+ <button class="mac-sidebar-footer-btn" id="lowPowerBtn" title="Low Power Mode — disable animations + spatial audio and quarter feed-poll frequency (Silent preset or on-battery halve it)">⚡</button>
  <span id="unifiedSettingsMount"></span>
  <span id="sidebarUpdateBtn">${buildSidebarUpdateBtnHtml(ctx)}</span>
  </div>
@@ -206,8 +215,8 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <button class="mac-toolbar-overflow-btn" id="toolbarSettingsBtn" title="Settings (⌘,)">⚙</button>
  <button class="mac-toolbar-overflow-btn" id="toolbarThemeBtn" title="Toggle theme">☀</button>
  <button class="mac-toolbar-overflow-btn" id="toolbarModeBtn" title="Cycle mode (⌘M)">🕊</button>
- <button class="mac-toolbar-overflow-btn" id="toolbarBriefBtn" title="Export intelligence brief PDF">📄</button>
- <button class="mac-toolbar-overflow-btn" id="toolbarAiBriefBtn" title="AI Situation Brief">🧠</button>
+ <button class="mac-toolbar-overflow-btn" id="toolbarBriefBtn" title="Export intelligence brief PDF">${icon('doc', { size: 14, label: 'Export intelligence brief PDF' })}</button>
+ <button class="mac-toolbar-overflow-btn" id="toolbarAiBriefBtn" title="AI Situation Brief">${icon('brain', { size: 14, label: 'AI Situation Brief' })}</button>
  </div>
  <span class="header-clock" id="headerClock" data-tauri-drag-region></span>
  <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
@@ -262,13 +271,13 @@ export function buildWebLayout(ctx: AppContext): string {
  <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
  ${ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}
  <button class="copy-link-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)" style="display:inline-flex;align-items:center;gap:6px;">
- 🌍 <span style="font-size:11px;">God's Vision</span>
+ ${icon('globe', { size: 14 })} <span style="font-size:11px;">God's Vision</span>
  </button>
  <button class="copy-link-btn" id="webBriefBtn" title="Export intelligence brief PDF" style="display:inline-flex;align-items:center;gap:6px;">
- 📄 <span style="font-size:11px;">Export Brief</span>
+ ${icon('doc', { size: 14 })} <span style="font-size:11px;">Export Brief</span>
  </button>
  <button class="copy-link-btn" id="webAiBriefBtn" title="AI Situation Brief" style="display:inline-flex;align-items:center;gap:6px;">
- 🧠 <span style="font-size:11px;">AI Brief</span>
+ ${icon('brain', { size: 14 })} <span style="font-size:11px;">AI Brief</span>
  </button>
  <button class="theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
  ${buildThemeIcon()}

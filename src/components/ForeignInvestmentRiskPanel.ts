@@ -27,7 +27,7 @@ export class ForeignInvestmentRiskPanel extends Panel {
         'CFIUS and allied-body FDI review outcomes (blocked / conditioned / approved), sector-level foreign ownership exposure, and high-risk deal tracking across semiconductors, AI, telecom, energy, and defense.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {
@@ -69,10 +69,10 @@ export class ForeignInvestmentRiskPanel extends Panel {
     totalValueBlockedBn: number,
   ): string {
     return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;">
-      ${this.metricCard('Block Rate', `${blockRate}%`, '#d50000')}
+      ${this.metricCard('Block Rate', `${blockRate}%`, '#ff453a')}
       ${this.metricCard('Approval Rate', `${approvalRate}%`, '#4caf50')}
       ${this.metricCard('Pending Review', String(pendingCount), '#ff9800')}
-      ${this.metricCard('High Risk', String(highRiskCount), '#d50000')}
+      ${this.metricCard('High Risk', String(highRiskCount), '#ff453a')}
       ${this.metricCard('Blocked Value', `$${totalValueBlockedBn.toFixed(0)}B`, '#ff5722')}
     </div>`;
   }
@@ -147,14 +147,14 @@ export class ForeignInvestmentRiskPanel extends Panel {
   }
 
   private riskColor(level: string): string {
-    if (level === 'Critical') return '#d50000';
+    if (level === 'Critical') return '#ff453a';
     if (level === 'High') return '#ff9800';
     if (level === 'Medium') return '#ffeb3b';
     return '#9e9e9e';
   }
 
   private statusColor(status: FDITransaction['status']): string {
-    if (status === 'Blocked') return '#d50000';
+    if (status === 'Blocked') return '#ff453a';
     if (status === 'Pending') return '#ff9800';
     if (status === 'Conditioned') return '#ffeb3b';
     if (status === 'Approved') return '#4caf50';

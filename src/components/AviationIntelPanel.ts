@@ -63,7 +63,7 @@ const HAZARD_COLOR: Record<AviationSigmet['hazard'], string> = {
   volcanic_ash: '#ff9800',
   turbulence: '#ffeb3b',
   icing: '#4a9eff',
-  thunderstorm: '#f44336',
+  thunderstorm: '#ef4444',
   mountain_obscuration: '#9e9e9e',
   ifr: '#9c27b0',
   other: '#607d8b',
@@ -73,7 +73,7 @@ const SEVERITY_COLOR: Record<AviationSigmet['severity'], string> = {
   light: '#4caf50',
   moderate: '#ffeb3b',
   severe: '#ff9800',
-  extreme: '#f44336',
+  extreme: '#ef4444',
 };
 
 const MILITARY_TYPE_LABEL: Record<MilitaryAircraft['type'], string> = {
@@ -220,7 +220,7 @@ export class AviationIntelPanel extends Panel {
     const envelope = this.envelopeFor(this.activeTab);
     if (envelope === null) return `<div style="opacity:0.6;">No data yet.</div>`;
     const banner = envelope.degraded
-      ? `<div style="padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;margin-bottom:6px;font-size:11px;">
+      ? `<div style="padding:4px 6px;background:rgba(239, 68, 68, 0.10);border-left:3px solid #ef4444;margin-bottom:6px;font-size:11px;">
            Degraded: ${escapeHtml(envelope.reason ?? 'unknown')} (source: ${escapeHtml(envelope.source)})
          </div>`
       : '';
@@ -264,8 +264,8 @@ export class AviationIntelPanel extends Panel {
   }
 
   private renderNotamCard(n: AviationNotam, isTfr: boolean): string {
-    const tfrAccent = isTfr ? '#f44336' : '#4a9eff';
-    const accent = n.presidential ? '#d50000' : tfrAccent;
+    const tfrAccent = isTfr ? '#ef4444' : '#4a9eff';
+    const accent = n.presidential ? '#ff453a' : tfrAccent;
     const altLabel = n.altitudeFt
       ? `${n.altitudeFt.min ?? 'SFC'}–${n.altitudeFt.max ?? 'unlimited'} ft`
       : '';
@@ -283,7 +283,7 @@ export class AviationIntelPanel extends Panel {
     return `
       <div style="margin:4px 0;padding:6px;border-left:3px solid ${accent};background:rgba(255,255,255,0.03);">
         <div style="display:flex;justify-content:space-between;font-weight:600;">
-          <span>${escapeHtml(n.notamNumber || n.id)}${n.presidential ? ' • <span style="color:#d50000;">PRESIDENTIAL</span>' : ''}</span>
+          <span>${escapeHtml(n.notamNumber || n.id)}${n.presidential ? ' • <span style="color:#ff453a;">PRESIDENTIAL</span>' : ''}</span>
           <span style="opacity:0.7;font-size:11px;">${escapeHtml(n.icaoId ?? n.affectedFir ?? '')}</span>
         </div>
         ${centerLine}
@@ -394,7 +394,7 @@ export class AviationIntelPanel extends Panel {
           <span>${escapeHtml(ac.callsign ?? ac.icao24)} • ${escapeHtml(MILITARY_TYPE_LABEL[ac.type])}</span>
           <span style="opacity:0.7;font-size:11px;">${ac.altitudeFt === null ? '—' : `${ac.altitudeFt} ft`} • ${ac.velocityKts === null ? '—' : `${Math.round(ac.velocityKts)} kt`}</span>
         </div>
-        ${ac.emergency ? `<div style="color:#d50000;font-weight:700;">EMERGENCY squawk ${escapeHtml(ac.squawk ?? '')}</div>` : ''}
+        ${ac.emergency ? `<div style="color:#ff453a;font-weight:700;">EMERGENCY squawk ${escapeHtml(ac.squawk ?? '')}</div>` : ''}
         ${ac.country ? `<div style="opacity:0.7;font-size:11px;">${escapeHtml(ac.country)}</div>` : ''}
       </div>
     `;
@@ -448,7 +448,7 @@ export class AviationIntelPanel extends Panel {
 
     const summaryLine = `<div style="font-size:11px;opacity:0.8;margin-bottom:6px;">
         Total: <strong>${c.total}</strong> · Emergency: <strong style="color:${
-      c.emergency > 0 ? '#d50000' : 'inherit'
+      c.emergency > 0 ? '#ff453a' : 'inherit'
     };">${c.emergency}</strong> · In TFR/SIGMET: <strong style="color:${
       inHazard.length > 0 ? '#ff9800' : 'inherit'
     };">${inHazard.length}</strong>
@@ -471,8 +471,8 @@ export class AviationIntelPanel extends Panel {
         const labelText = f.emergencySquawk ? emergencyLabel(f.emergencySquawk) : 'Emergency';
         const where = `${f.lat.toFixed(2)}°, ${f.lon.toFixed(2)}°`;
         const callsign = f.callsign ?? `ICAO ${f.icao24}`;
-        return `<div style="margin:4px 0;padding:6px;border-left:3px solid #d50000;background:rgba(213,0,0,0.10);">
-          <div style="display:flex;justify-content:space-between;font-weight:700;color:#d50000;">
+        return `<div style="margin:4px 0;padding:6px;border-left:3px solid #ff453a;background:rgba(255, 69, 58,0.10);">
+          <div style="display:flex;justify-content:space-between;font-weight:700;color:#ff453a;">
             <span>${escapeHtml(callsign)} • SQ ${escapeHtml(f.squawk ?? '')} • ${escapeHtml(labelText)}</span>
             <span style="font-size:11px;">${escapeHtml(where)}</span>
           </div>
@@ -484,7 +484,7 @@ export class AviationIntelPanel extends Panel {
         </div>`;
       })
       .join('');
-    return `<h4 style="margin:8px 0 4px 0;color:#d50000;">⚠ Unusual squawks (${emergencies.length})</h4>${rows}`;
+    return `<h4 style="margin:8px 0 4px 0;color:#ff453a;">⚠ Unusual squawks (${emergencies.length})</h4>${rows}`;
   }
 
   private renderHazardBlock(
@@ -495,7 +495,7 @@ export class AviationIntelPanel extends Panel {
       .map((f) => {
         const callsign = f.callsign ?? `ICAO ${f.icao24}`;
         const tfrTag = f.hazards.tfrIds.length > 0
-          ? `<span style="color:#f44336;">TFR ${escapeHtml(f.hazards.tfrIds.join(', '))}</span>`
+          ? `<span style="color:#ff453a;">TFR ${escapeHtml(f.hazards.tfrIds.join(', '))}</span>`
           : '';
         const sigmetTag = f.hazards.sigmetIds.length > 0
           ? `<span style="color:#ffeb3b;">${escapeHtml(f.hazards.sigmetIds.join(', '))}</span>`
@@ -548,13 +548,13 @@ function pirepColor(hazard: AviationPirep['hazard']): string {
 }
 
 function aircraftColor(ac: MilitaryAircraft): string {
-  if (ac.emergency) return '#d50000';
+  if (ac.emergency) return '#ff453a';
   if (ac.type === 'bomber') return '#ff9800';
   return '#4a9eff';
 }
 
 function delayProgramColor(t: AirportGroundDelay['programType']): string {
-  if (t === 'ground_stop') return '#f44336';
+  if (t === 'ground_stop') return '#ff453a';
   if (t === 'ground_delay') return '#ff9800';
   return '#4a9eff';
 }

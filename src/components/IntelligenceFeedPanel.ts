@@ -23,7 +23,7 @@ interface FeedResponse {
 const REFRESH_MS = 30_000;
 
 const SEV_COLOR: Record<string, string> = {
-  CRITICAL: '#d50000',
+  CRITICAL: '#ff453a',
   HIGH:     '#ff9800',
   MEDIUM:   '#ffeb3b',
   LOW:      '#4caf50',

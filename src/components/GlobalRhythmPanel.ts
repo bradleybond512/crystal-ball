@@ -25,7 +25,7 @@ const STRENGTH_COLOR: Record<AnomalyStrength, string> = {
   none: '#9e9e9e',
   mild: '#4a9eff',
   moderate: '#ffb74d',
-  strong: '#f44336',
+  strong: '#ff453a',
 };
 
 const STRENGTH_LABEL: Record<AnomalyStrength, string> = {
@@ -60,7 +60,7 @@ export class GlobalRhythmPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getGlobalRhythmEngine().subscribe(() => this.render());
   }
 
@@ -142,7 +142,7 @@ function renderHeader(
     `<option value="${escapeHtml(d)}"${d === selected ? ' selected' : ''}>${escapeHtml(d)}</option>`,
   ).join('');
   const badge = unusual && latest
-    ? `<span style="font-size:11px;font-weight:700;letter-spacing:0.06em;padding:4px 10px;border-radius:3px;background:#f4433626;color:#f44336;">UNUSUAL — ${STRENGTH_LABEL[latest.anomalyStrength].toUpperCase()} (Δ ${latest.deviation.toFixed(2)})</span>`
+    ? `<span style="font-size:11px;font-weight:700;letter-spacing:0.06em;padding:4px 10px;border-radius:3px;background:#ff453a26;color:#ff453a;">UNUSUAL — ${STRENGTH_LABEL[latest.anomalyStrength].toUpperCase()} (Δ ${latest.deviation.toFixed(2)})</span>`
     : '<span style="font-size:11px;color:var(--text-secondary,#aaa);">baseline within tolerance</span>';
   return `<div style="display:flex;align-items:center;gap:12px;">
     <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary,#aaa);">

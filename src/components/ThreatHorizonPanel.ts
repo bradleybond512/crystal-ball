@@ -30,7 +30,7 @@ const BASIS_LABEL: Record<ThreatBasis, string> = {
 
 const STATUS_COLOR: Record<ThreatStatus, string> = {
   watching: '#ffb74d',
-  escalating: '#f44336',
+  escalating: '#ff453a',
   dismissed: '#9e9e9e',
 };
 
@@ -57,7 +57,7 @@ export class ThreatHorizonPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getThreatHorizonScanner().subscribe(() => this.render());
   }
 
@@ -177,7 +177,7 @@ function renderThreatRow(t: HorizonThreat): string {
       <ul style="margin:0;padding-left:18px;">${actionItems}</ul>
     </div>
     <div style="display:flex;gap:8px;">
-      <button data-threat-escalate="${escapeHtml(t.id)}" style="padding:4px 10px;font-size:11px;background:#f4433626;color:#f44336;border:1px solid #f4433655;border-radius:3px;cursor:pointer;">Escalate</button>
+      <button data-threat-escalate="${escapeHtml(t.id)}" style="padding:4px 10px;font-size:11px;background:#ff453a26;color:#ff453a;border:1px solid #ff453a55;border-radius:3px;cursor:pointer;">Escalate</button>
       <button data-threat-dismiss="${escapeHtml(t.id)}" style="padding:4px 10px;font-size:11px;background:transparent;color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Dismiss</button>
     </div>
   </li>`;

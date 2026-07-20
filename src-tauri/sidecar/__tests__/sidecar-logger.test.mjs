@@ -49,6 +49,49 @@ test('all three levels write JSON', () => {
   assert.deepEqual(levels, ['info', 'warn', 'error']);
 });
 
+// ── Non-object fields coercion ─────────────────────────────────────────
+// Regression: callers pass `logger.warn(msg, err.message)` (a bare string) in
+// several LLM-proxy paths. `{ ...record, ...string }` spreads the string
+// character-by-character into indexed keys, producing garbage log lines like
+// {"0":"u","1":"p","2":"s",...}. Non-object fields must be wrapped, not spread.
+
+test('string field is wrapped in detail, not spread char-by-char', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  logger.warn('Ollama unavailable', 'upstream 404 not found');
+  const parsed = JSON.parse(readLog(dir).trim().split('\n')[0]);
+  assert.equal(parsed.msg, 'Ollama unavailable');
+  assert.equal(parsed.detail, 'upstream 404 not found');
+  assert.equal(parsed['0'], undefined, 'string must NOT be spread into indexed keys');
+});
+
+test('Error field is wrapped as its message', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  logger.error('request failed', new Error('ECONNREFUSED'));
+  const parsed = JSON.parse(readLog(dir).trim().split('\n')[0]);
+  assert.equal(parsed.detail, 'ECONNREFUSED');
+});
+
+test('array field is wrapped in detail, not spread by index', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  logger.warn('regions', ['us', 'eu']);
+  const parsed = JSON.parse(readLog(dir).trim().split('\n')[0]);
+  assert.deepEqual(parsed.detail, ['us', 'eu']);
+  assert.equal(parsed['0'], undefined, 'array must NOT be spread into indexed keys');
+});
+
+test('plain object field is still spread as top-level keys (unchanged)', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  logger.info('counts', { count: 3, region: 'us' });
+  const parsed = JSON.parse(readLog(dir).trim().split('\n')[0]);
+  assert.equal(parsed.count, 3);
+  assert.equal(parsed.region, 'us');
+  assert.equal(parsed.detail, undefined, 'plain objects must not be wrapped');
+});
+
 // ── Rotation ───────────────────────────────────────────────────────────
 
 test('rotates when size exceeds maxBytes', () => {

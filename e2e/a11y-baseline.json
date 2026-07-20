@@ -1,1 +1,70 @@
-{}
+{
+  "dashboard-root": {
+    "panel": "dashboard-root",
+    "violationCount": 8,
+    "violationIds": [
+      "aria-required-children",
+      "aria-required-parent",
+      "color-contrast",
+      "empty-table-header",
+      "label",
+      "region",
+      "scrollable-region-focusable",
+      "select-name"
+    ],
+    "updatedAt": "2026-07-13T14:10:29.478Z"
+  },
+  "insights": {
+    "panel": "insights",
+    "violationCount": 0,
+    "violationIds": [],
+    "updatedAt": "2026-07-13T14:10:38.414Z"
+  },
+  "alert-center": {
+    "panel": "alert-center",
+    "violationCount": 2,
+    "violationIds": [
+      "color-contrast",
+      "scrollable-region-focusable"
+    ],
+    "updatedAt": "2026-07-13T14:10:47.100Z"
+  },
+  "unified-alert-inbox": {
+    "panel": "unified-alert-inbox",
+    "violationCount": 2,
+    "violationIds": [
+      "color-contrast",
+      "empty-table-header"
+    ],
+    "updatedAt": "2026-07-13T14:10:55.355Z"
+  },
+  "correlation-matrix": {
+    "panel": "correlation-matrix",
+    "violationCount": 2,
+    "violationIds": [
+      "color-contrast",
+      "scrollable-region-focusable"
+    ],
+    "updatedAt": "2026-07-13T14:11:04.049Z"
+  },
+  "strike-packages": {
+    "panel": "strike-packages",
+    "violationCount": 0,
+    "violationIds": [],
+    "updatedAt": "2026-07-13T14:11:12.567Z"
+  },
+  "markets": {
+    "panel": "markets",
+    "violationCount": 0,
+    "violationIds": [],
+    "updatedAt": "2026-07-13T14:11:21.392Z"
+  },
+  "live-news": {
+    "panel": "live-news",
+    "violationCount": 1,
+    "violationIds": [
+      "color-contrast"
+    ],
+    "updatedAt": "2026-07-13T14:11:30.939Z"
+  }
+}

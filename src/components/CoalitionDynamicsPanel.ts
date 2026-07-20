@@ -43,7 +43,7 @@ export class CoalitionDynamicsPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -116,7 +116,7 @@ export class CoalitionDynamicsPanel extends Panel {
         h('div', { className: 'cd-fault-line' }, `⚠ ${c.keyFaultLine}`),
         h('div', { className: 'cd-development' }, c.recentDevelopment),
       );
-      coalSection.appendChild(row);
+      coalSection.append(row);
     }
 
     const eventSection = h('div', { className: 'cd-events' },
@@ -134,7 +134,7 @@ export class CoalitionDynamicsPanel extends Panel {
         ),
         h('div', { className: 'cd-event-desc' }, ev.description),
       );
-      eventSection.appendChild(row);
+      eventSection.append(row);
     }
 
     replaceChildren(this.getContentElement(), header, coalSection, eventSection);

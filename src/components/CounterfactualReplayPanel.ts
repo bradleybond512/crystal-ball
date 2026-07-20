@@ -65,7 +65,7 @@ export class CounterfactualReplayPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {
@@ -118,7 +118,7 @@ export class CounterfactualReplayPanel extends Panel {
       ? `<option value="">No situations available yet</option>`
       : snapshots.map((s) => `<option value="${escapeHtml(s.id)}"${s.id === this.state.form.baseSnapshotId ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
     const errorBlock = this.state.form.error
-      ? `<div style="color:#f44336;font-size:11px;margin-top:6px;">${escapeHtml(this.state.form.error)}</div>`
+      ? `<div style="color:#ff453a;font-size:11px;margin-top:6px;">${escapeHtml(this.state.form.error)}</div>`
       : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:8px;">
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">New scenario</div>
@@ -247,7 +247,7 @@ function renderScenarioList(scenarios: readonly CounterfactualScenario[], select
 }
 
 function cascadeColor(score: number): string {
-  if (score > 0.7) return '#f44336';
+  if (score > 0.7) return '#ff453a';
   if (score > 0.4) return '#ff9800';
   if (score > 0.1) return '#ffeb3b';
   return '#4caf50';

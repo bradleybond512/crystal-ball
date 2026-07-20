@@ -212,6 +212,18 @@ function dedupeByTitlePrefix(alerts: UnifiedAlert[]): UnifiedAlert[] {
 }
 
 /** Detect geographic bursts: many hot alerts in a short window sharing a panel. */
+/** The most frequent alert source in a group (ties broken by first-seen). */
+function dominantSourceOf(alerts: readonly UnifiedAlert[]): UnifiedAlert['source'] | undefined {
+  const counts = new Map<UnifiedAlert['source'], number>();
+  for (const a of alerts) counts.set(a.source, (counts.get(a.source) ?? 0) + 1);
+  let dominant: UnifiedAlert['source'] | undefined;
+  let max = 0;
+  for (const [src, count] of counts) {
+    if (count > max) { max = count; dominant = src; }
+  }
+  return dominant;
+}
+
 function fromAlertBurst(alerts: UnifiedAlert[]): Hypothesis[] {
   const now = Date.now();
   const hot = alerts.filter(a =>
@@ -248,7 +260,10 @@ function fromAlertBurst(alerts: UnifiedAlert[]): Hypothesis[] {
     const SOURCE_CAP: Partial<Record<UnifiedAlert['source'], number>> = {
       'air-quality': 0.6, 'travel-advisory': 0.65, 'local-ids': 0.55,
     };
-    const dominantSource = unique[0]?.source;
+    // Dominant = the most frequent source in the burst, not whichever alert
+    // sorted first — otherwise a burst that is mostly low-signal noise escapes
+    // the cap the moment a single high-signal alert happens to lead the group.
+    const dominantSource = dominantSourceOf(unique);
     const cap = (dominantSource && SOURCE_CAP[dominantSource]) ?? 0.85;
     const confidence = Math.min(rawConf, cap);
 
@@ -312,11 +327,20 @@ function persist(snapshot: AnalystSnapshot): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch { /* quota */ }
 }
 
+/** Minimal structural guard for a deserialized AnalystSnapshot. */
+function isValidAnalystSnapshot(v: unknown): v is AnalystSnapshot {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const s = v as Record<string, unknown>;
+  return typeof s['timestamp'] === 'number' && Array.isArray(s['hypotheses']);
+}
+
 /** Retrieve the last persisted snapshot, if any. */
 export function getAnalystSnapshot(): AnalystSnapshot | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) as AnalystSnapshot : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidAnalystSnapshot(parsed) ? parsed : null;
   } catch { return null; }
 }
 

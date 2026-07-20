@@ -26,6 +26,17 @@ function defaultLogDir() {
   return tmpdir();
 }
 
+// Only a plain object can be spread into the record as top-level fields.
+// A bare string/Error/array passed as `fields` (e.g. logger.warn(msg, err.message))
+// would otherwise be spread char/index-by-index into {"0":"u","1":"p",...}.
+// Wrap any non-plain-object under `detail` so the line stays readable.
+function normalizeFields(fields) {
+  if (fields === undefined || fields === null) return undefined;
+  if (fields instanceof Error) return { detail: fields.message };
+  if (typeof fields === 'object' && !Array.isArray(fields)) return fields;
+  return { detail: fields };
+}
+
 /**
  * Create a sidecar logger that writes JSON lines to <dir>/sidecar.log.
  *
@@ -99,10 +110,11 @@ export function createSidecarLogger(opts = {}) {
   }
 
   function write(level, msg, fields) {
+    const normalized = normalizeFields(fields);
     // Serialize inside try/catch — circular refs or BigInt fields must not throw.
     let line;
     try {
-      const record = { at: now(), level, msg, ...fields };
+      const record = { at: now(), level, msg, ...normalized };
       line = JSON.stringify(record) + '\n';
     } catch {
       try {
@@ -111,7 +123,7 @@ export function createSidecarLogger(opts = {}) {
     }
 
     if (line !== undefined) appendLine(line);
-    mirrorToConsole(level, msg, fields);
+    mirrorToConsole(level, msg, normalized);
   }
 
   return {
@@ -122,10 +134,10 @@ export function createSidecarLogger(opts = {}) {
     log(msg, fields) { write('info', msg, fields); },
     child(extra) {
       return {
-        info(msg, fields) { write('info', msg, { ...extra, ...fields }); },
-        warn(msg, fields) { write('warn', msg, { ...extra, ...fields }); },
-        error(msg, fields) { write('error', msg, { ...extra, ...fields }); },
-        log(msg, fields) { write('info', msg, { ...extra, ...fields }); },
+        info(msg, fields) { write('info', msg, { ...extra, ...normalizeFields(fields) }); },
+        warn(msg, fields) { write('warn', msg, { ...extra, ...normalizeFields(fields) }); },
+        error(msg, fields) { write('error', msg, { ...extra, ...normalizeFields(fields) }); },
+        log(msg, fields) { write('info', msg, { ...extra, ...normalizeFields(fields) }); },
       };
     },
   };

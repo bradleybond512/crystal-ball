@@ -2,7 +2,7 @@
 import { createSidecarLogger } from './sidecar-logger.mjs';
 import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
-import { timingSafeEqual, randomUUID } from 'node:crypto';
+import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
@@ -61,11 +61,20 @@ function eventSeverityScore(label) {
 // the gap is observable without flooding the sidecar log on a persistent fault.
 const _eventStoreWriteWarnAt = new Map();
 function warnEventStoreWriteFailure(kind, err) {
+  const message = String(err?.message ?? err);
+  // A duplicate event id is an idempotent re-append (same observation/situation
+  // seen again on a later refresh), not a failure — the append-only invariant
+  // already preserved the original row. Log at debug so known duplicates don't
+  // light up the error badge on every boot / refresh cycle.
+  if (message.includes('append-only violation')) {
+    console.debug(`[sidecar] event-store ${kind} duplicate id skipped (idempotent)`);
+    return;
+  }
   const now = Date.now();
   const last = _eventStoreWriteWarnAt.get(kind) ?? 0;
   if (now - last < 60_000) return;
   _eventStoreWriteWarnAt.set(kind, now);
-  console.warn(`[sidecar] event-store ${kind} append failed: ${String(err?.message ?? err)}`);
+  console.warn(`[sidecar] event-store ${kind} append failed: ${message}`);
 }
 
 // ── Event-store payload redaction ──────────────────────────────────────────
@@ -120,10 +129,16 @@ export function appendObservationToEventStore(store, obs) {
     const occurredAt = typeof obs?.timestamp === 'number' && obs.timestamp > 0
       ? new Date(obs.timestamp).toISOString()
       : new Date().toISOString();
+    // Stable id for records that carry one (e.g. USGS earthquakes reappear in
+    // the feed every poll). Check-then-append makes re-ingestion idempotent so
+    // we don't keep re-inserting an already-stored event. Records without a
+    // stable id get a fresh UUID and are always genuinely new.
+    const id = (typeof obs?.id === 'string' && obs.id)
+      ? `${obs.sourceId || obs.domain || 'obs'}:${obs.id}`
+      : randomUUID();
+    if (typeof store.hasEvent === 'function' && store.hasEvent(id)) return;
     store.appendEvent({
-      id: (typeof obs?.id === 'string' && obs.id)
-        ? `${obs.sourceId || obs.domain || 'obs'}:${obs.id}`
-        : randomUUID(),
+      id,
       event_type: 'observation',
       occurred_at: occurredAt,
       domain: typeof obs?.domain === 'string' && obs.domain ? obs.domain : null,
@@ -234,6 +249,20 @@ function isValidToken(authHeader) {
   const actual = Buffer.from(authHeader);
   if (expected.length !== actual.length) return false;
   return timingSafeEqual(expected, actual);
+}
+
+// DNS-rebinding defense. The server binds loopback only, but a browser page at
+// evil.com whose DNS is rebound to 127.0.0.1 would issue same-origin requests
+// (bypassing CORS) carrying a `Host: evil.com:<port>` header. Requiring the
+// Host to name loopback on our own port rejects those before any routing —
+// including the deliberately unauthenticated loopback-only routes (analyst
+// state/commands, shortage/seismic mirrors). Legitimate callers (renderer, MCP
+// server, curl) always target 127.0.0.1/localhost on the sidecar port.
+function isAllowedHost(hostHeader, port) {
+  if (!hostHeader) return false;
+  return hostHeader === `127.0.0.1:${port}`
+    || hostHeader === `localhost:${port}`
+    || hostHeader === `[::1]:${port}`;
 }
 // Node 22 ships a built-in WebSocket global (WHATWG API) — no external dep needed.
 const AisWebSocket = WebSocket;
@@ -398,9 +427,19 @@ function cachedFetch(key, ttlMs, fetcher) {
   const promise = fetcher().then(data => {
     _responseCache.set(key, { data, expiresAt: Date.now() + ttlMs });
     if (_responseCache.size > 200) {
+      // First pass: evict expired entries (free win, no ordering needed).
       const now = Date.now();
       for (const [k, v] of _responseCache) {
         if (now >= v.expiresAt) _responseCache.delete(k);
+      }
+      // Second pass: if the map is still oversized (all entries are fresh),
+      // evict the oldest-expiring entries until we're back under the limit.
+      // Without this, the cache grows unbounded when every slot is unexpired.
+      if (_responseCache.size > 200) {
+        const sorted = [..._responseCache.entries()].sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+        for (const [k] of sorted.slice(0, _responseCache.size - 160)) {
+          _responseCache.delete(k);
+        }
       }
     }
     return data;
@@ -503,6 +542,91 @@ async function fetchGdeltSummary() {
 
 // Pre-compiled regex patterns (avoid re-creation in hot paths)
 const RE_HTML_TAGS = /<[^>]+>/g;
+
+// ── Config-driven webcam extractor (shared by Caltrans/TfL/Singapore handlers) ──
+// Mirrors the pure logic from src/services/webcams/webcam-config-loader.ts.
+// Cannot import .ts files from .mjs — small pure helpers replicated here.
+
+function _wcGetPath(obj, path) {
+  const parts = path.split('.');
+  let cur = obj;
+  for (const part of parts) {
+    if (cur == null || typeof cur !== 'object') return undefined;
+    const idx = Number(part);
+    cur = (!Number.isNaN(idx) && Array.isArray(cur)) ? cur[idx] : cur[part];
+  }
+  return cur;
+}
+
+function _wcResolveGetter(getter, row) {
+  if (typeof getter === 'function') return getter(row);
+  return _wcGetPath(row, getter);
+}
+
+function _wcInferStreamType(url) {
+  // Strip query/hash so tokenised stream URLs (…/stream.m3u8?token=…) still
+  // classify by their real extension instead of falling back to snapshot.
+  const path = url.split(/[?#]/, 1)[0] ?? url;
+  if (path.endsWith('.m3u8')) return 'hls';
+  if (url.includes('multipart') || path.endsWith('.mjpg') || path.endsWith('.mjpeg')) return 'mjpeg';
+  return 'snapshot';
+}
+
+export function extractWebcamFeeds(sourceId, arrayPath, map, category, refreshIntervalSec, onlineWhen, metadata, payloads) {
+  const out = [];
+  for (const payload of payloads) {
+    let rows;
+    if (!arrayPath) {
+      rows = Array.isArray(payload) ? payload : [];
+    } else {
+      const val = _wcGetPath(payload, arrayPath);
+      rows = Array.isArray(val) ? val : [];
+    }
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      if (onlineWhen && !onlineWhen(row)) continue;
+
+      const rawId = _wcResolveGetter(map.id, row);
+      const rawName = _wcResolveGetter(map.name, row);
+      const rawLat = _wcResolveGetter(map.lat, row);
+      const rawLon = _wcResolveGetter(map.lon, row);
+      const rawSnap = _wcResolveGetter(map.snapshotUrl, row);
+
+      const lat = (typeof rawLat === 'number' && Number.isFinite(rawLat)) ? rawLat : Number.parseFloat(typeof rawLat === 'string' ? rawLat : '');
+      const lon = (typeof rawLon === 'number' && Number.isFinite(rawLon)) ? rawLon : Number.parseFloat(typeof rawLon === 'string' ? rawLon : '');
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (typeof rawSnap !== 'string' || rawSnap.length === 0) continue;
+
+      const idStr = (typeof rawId === 'string' && rawId.length > 0) ? rawId
+        : (typeof rawId === 'number') ? String(rawId) : `${lat}-${lon}`;
+      const id = `${sourceId}:${idStr}`;
+      const nameStr = (typeof rawName === 'string' && rawName.length > 0) ? rawName
+        : (typeof rawName === 'number') ? String(rawName) : 'Camera';
+
+      let streamUrl;
+      if (map.streamUrl) {
+        const rawStream = _wcResolveGetter(map.streamUrl, row);
+        if (typeof rawStream === 'string' && rawStream.length > 0) streamUrl = rawStream;
+      }
+      const streamType = streamUrl ? _wcInferStreamType(streamUrl) : 'snapshot';
+
+      out.push({
+        id,
+        source: sourceId,
+        name: nameStr,
+        lat,
+        lon,
+        snapshotUrl: rawSnap,
+        ...(streamUrl ? { streamUrl } : {}),
+        streamType,
+        refreshIntervalSec,
+        category,
+        metadata: metadata ?? {},
+      });
+    }
+  }
+  return out;
+}
 
 // ── ibi511 platform parser (shared by AZ/ID/GA in /api/webcams/dot-extended) ──
 // Mirrors parseIbi511 in src/services/webcams/adapters/dot-extended.ts.
@@ -1162,6 +1286,22 @@ const ALLOWED_ENV_KEYS = new Set([
   'URLSCAN_API_KEY', 'BITCOINABUSE_API_KEY', 'VULNERS_API_KEY', 'MEDIASTACK_API_KEY',
   'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN',
   'OPENAQ_API_KEY', 'WINDY_WEBCAMS_API_KEY', 'NPS_API_KEY',
+  // Sidecar-consumed secrets that previously only reached process.env via the
+  // spawn-time env injection. Now that secrets are pushed in over this IPC
+  // endpoint at boot (so a stalled Keychain read can't gate sidecar startup),
+  // these must be accepted here too — otherwise these integrations would read
+  // as unconfigured after launch, and live Settings edits for them would be
+  // silently rejected. Pure renderer-side keys (CESIUM/MAPBOX/MAPTILER/
+  // GOOGLE_MAPS) are intentionally excluded: the sidecar never reads them.
+  'CENSYS_API_ID', 'CENSYS_API_SECRET',
+  'MISP_API_KEY', 'MISP_URL', 'OPENCTI_API_KEY', 'OPENCTI_URL',
+  'SECURITYTRAILS_API_KEY', 'WHOISXML_API_KEY',
+  'NSW_API_KEY', 'ROAD511_API_KEY', 'UK_HIGHWAYS_API_KEY', 'UCDP_API_TOKEN',
+  'TWILIO_AUTH_TOKEN',
+  'PATREON_ACCESS_TOKEN', 'PATREON_REFRESH_TOKEN', 'PATREON_AUDIO_RSS_URL',
+  'PATREON_OAUTH_CLIENT_ID', 'PATREON_OAUTH_CLIENT_SECRET',
+  'S2U_XMPP_JID', 'S2U_XMPP_SECRET',
+  'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN',
 ]);
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -1242,20 +1382,44 @@ async function scoreIPsQuery(ips) {
 // Block requests to private/reserved IP ranges to prevent the RSS proxy
 // from being used as a localhost pivot or internal network scanner.
 
-function isPrivateIP(ip) {
-  // IPv4-mapped IPv6 — extract the v4 portion
-  const v4Mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  const addr = v4Mapped ? v4Mapped[1] : ip;
+export function isPrivateIP(ip) {
+  // Normalize: strip IPv6 brackets and any zone id (fe80::1%en0).
+  const addr = String(ip).replace(/^\[|\]$/g, '').split('%')[0];
+  const lower = addr.toLowerCase();
 
-  // IPv6 loopback
-  if (addr === '::1' || addr === '::') return true;
+  // IPv6 loopback / unspecified.
+  if (lower === '::1' || lower === '::') return true;
 
-  // IPv6 link-local / unique-local
-  if (/^f[cd][0-9a-f]{2}:/i.test(addr)) return true; // fc00::/7 (ULA)
-  if (/^fe[89ab][0-9a-f]:/i.test(addr)) return true;  // fe80::/10 (link-local)
+  // IPv6 link-local / unique-local.
+  if (/^f[cd][0-9a-f]{2}:/.test(lower)) return true; // fc00::/7 (ULA)
+  if (/^fe[89ab][0-9a-f]:/.test(lower)) return true; // fe80::/10 (link-local)
 
-  const parts = addr.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(p => isNaN(p))) return false; // not an IPv4
+  // IPv6 transition/translation prefixes can wrap an ARBITRARY IPv4 (including
+  // 127.0.0.1 / 169.254.169.254 / RFC1918), and unwrapping every encoding by
+  // hand is error-prone — reject the prefixes outright. SSRF defense outweighs
+  // the rare IPv6-only-network legitimate case.
+  if (lower.startsWith('64:ff9b:')) return true; // NAT64  64:ff9b::/96
+  if (lower.startsWith('2002:')) return true;    // 6to4   2002::/16
+
+  // Extract an embedded IPv4 from the IPv4-mapped / IPv4-compatible forms
+  // (dotted `::ffff:1.2.3.4` / `::1.2.3.4`, or hex `::ffff:7f00:0001`) so a
+  // private v4 can't slip through wrapped in IPv6, then fall through to the v4
+  // octet checks below.
+  let target = addr;
+  let m = lower.match(/^::(?:ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (m) {
+    target = m[1];
+  } else {
+    m = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (m) {
+      const hi = parseInt(m[1], 16);
+      const lo = parseInt(m[2], 16);
+      target = [(hi >> 8) & 255, hi & 255, (lo >> 8) & 255, lo & 255].join('.');
+    }
+  }
+
+  const parts = target.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return false; // not an IPv4
 
   const [a, b] = parts;
   if (a === 127) return true; // 127.0.0.0/8  loopback
@@ -1263,9 +1427,69 @@ function isPrivateIP(ip) {
   if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
   if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
   if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
   if (a === 0) return true; // 0.0.0.0/8
   if (a >= 224) return true; // 224.0.0.0+ multicast/reserved
   return false;
+}
+
+// For user-configured LOCAL-service probes (Ollama, self-hosted relays) where
+// loopback/LAN is legitimate, we still refuse the targets a real config never
+// uses but an attacker would: the link-local cloud-metadata range, the
+// unspecified address, and multicast/reserved. Literal-host check only (these
+// values are user-entered IPs/hosts, not DNS-rebind vectors).
+export function isDangerousProbeHost(urlString) {
+  let host;
+  try {
+    host = new URL(urlString).hostname.replace(/^\[|\]$/g, '').split('%')[0].toLowerCase();
+  } catch {
+    return true;
+  }
+  if (host === '0.0.0.0' || host === '::') return true; // unspecified
+  if (host.startsWith('169.254.') || host.startsWith('fe80:')) return true; // link-local incl. metadata
+  // ::ffff:169.254.x.x and 169.254.x.x wrapped in IPv6.
+  if (/(^|:)169\.254\./.test(host)) return true;
+  const o = host.split('.').map(Number);
+  if (o.length === 4 && o.every((n) => Number.isInteger(n)) && o[0] >= 224) return true; // multicast/reserved
+  return false;
+}
+
+// IPAWS (federal emergency alerts: NWS CAP + FEMA) outage disposition. Pure so
+// the safety rule — "a total upstream outage must never be reported as a fresh,
+// healthy all-clear" — is unit-testable without HTTP mocking. nwsData/femaData
+// are the parsed upstream payloads, or null when that upstream failed.
+export function ipawsOutageDisposition(nwsData, femaData) {
+  const nwsDown = nwsData === null || nwsData === undefined;
+  const femaDown = femaData === null || femaData === undefined;
+  const totalOutage = nwsDown && femaDown;
+  const partialOutage = nwsDown || femaDown;
+  return {
+    totalOutage,
+    partialOutage,
+    degraded: partialOutage,
+    reason: !partialOutage
+      ? null
+      : totalOutage
+        ? 'Both NWS and FEMA IPAWS upstreams are unreachable'
+        : 'One IPAWS upstream is unreachable',
+  };
+}
+
+// ProMED: a HTTP-200 response that parses to ZERO alerts is a break signal — a
+// non-RSS body (maintenance page / Cloudflare challenge) or a schema change, not
+// a quiet feed (ProMED's live disease feed effectively always has items). Treat
+// 0 alerts as degraded so the snapshot is NOT cached and the next caller retries
+// instead of serving a 15-min "zero disease outbreaks" all-clear. Pure helper.
+export function promedResultIsDegraded(alerts) {
+  return !Array.isArray(alerts) || alerts.length === 0;
+}
+
+// GDACS: never persist a degraded EMPTY result for the full TTL. The ERCC
+// fallback discards its response (events=[]); caching that would serve "zero
+// global disasters" as a fresh 30-min all-clear, masking the primary outage. A
+// real primary result (degraded=false) or any fallback with events is cacheable.
+export function gdacsResultShouldCache(degraded, eventCount) {
+  return !(degraded && eventCount === 0);
 }
 
 // DNS resolution cache — avoids repeated lookups on the same hostname (5 min TTL).
@@ -2805,7 +3029,10 @@ async function probeSelfTestTarget(port, target) {
     try {
       const resp = await fetch(url, {
         method: target.method,
-        headers: { Accept: 'application/json' },
+        // Self-test probes hit auth-gated /api routes, so authenticate as a real
+        // internal client — without the token every non-exempt target 401s and
+        // the Self-Test tab reports the whole sidecar as failing.
+        headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` },
         signal: ac.signal,
       });
       status = resp.status;
@@ -4028,6 +4255,67 @@ function setCached(key, data, ttlMs) {
   _ensureSidecarCacheSweep();
 }
 
+// ── Webcam helpers (shared by /api/webcams aggregator and sub-handlers) ──
+
+// Pure helper: derive per-source health from Promise.allSettled results.
+// targets: array of { source, path, shape }
+// settled: result of Promise.allSettled(targets.map(...))
+// keyedSources: Set of source names that require an API key
+// now: unix epoch seconds
+export function deriveWebcamSourceHealth(targets, settled, keyedSources, now) {
+  const rows = targets.map((sub, i) => {
+    const r = settled[i];
+    const needsKey = keyedSources.has(sub.source);
+    if (r.status === 'rejected') {
+      const msg = String(r.reason?.message ?? r.reason ?? 'error');
+      const status = needsKey && /401|403|missing|unauthor/i.test(msg) ? 'missing_key'
+        : /429|rate/i.test(msg) ? 'rate_limited' : 'down';
+      return { source: sub.source, status, count: 0, needsKey, error: msg, lastChecked: now };
+    }
+    const feeds = Array.isArray(r.value) ? r.value : [];
+    return { source: sub.source, status: feeds.length > 0 ? 'ok' : 'empty', count: feeds.length, needsKey, lastChecked: now };
+  });
+  // A source can expose multiple subroutes (e.g. DOT511). Merge into one row per
+  // source: feeds win over failures, counts sum, the most actionable failure shows.
+  const SEVERITY = { ok: 0, missing_key: 1, down: 2, rate_limited: 3, empty: 4 };
+  const merged = new Map();
+  for (const row of rows) {
+    const prev = merged.get(row.source);
+    if (!prev) { merged.set(row.source, { ...row }); continue; }
+    const winner = SEVERITY[row.status] < SEVERITY[prev.status] ? row : prev;
+    merged.set(row.source, {
+      source: row.source,
+      status: winner.status,
+      count: prev.count + row.count,
+      needsKey: prev.needsKey || row.needsKey,
+      ...(winner.error ? { error: winner.error } : {}),
+      lastChecked: now,
+    });
+  }
+  return [...merged.values()];
+}
+
+// HEAD-validates snapshot URLs in a static catalog, drops unreachable ones, caches result.
+async function validateWebcamCatalog(cams, cacheKey, ttlMs) {
+  const cached = getCached(cacheKey, ttlMs);
+  if (cached) return cached;
+  const checked = await Promise.all(cams.map(async (c) => {
+    try {
+      const r = await fetchWithTimeout(c.snapshotUrl, { method: 'HEAD' }, 4000);
+      // 403/405 usually mean "HEAD not allowed", not a dead cam — keep it.
+      return (r.ok || r.status === 403 || r.status === 405) ? c : null;
+    }
+    catch { return null; }
+  }));
+  const feeds = checked.filter(Boolean);
+  // A transient network blip can make every HEAD fail. Don't poison the cache
+  // with an empty result or blank the source for the full TTL: serve the last
+  // good cache if present, else the raw static catalog, and don't cache it.
+  if (feeds.length === 0) return getCachedStale(cacheKey) ?? cams;
+  setCached(cacheKey, feeds, ttlMs);
+  return feeds;
+}
+
 // Single-flight de-duplication for cold-cache fetches. Without this, N callers
 // that all miss the cache for the same key each fire their own upstream fetch.
 // This collapses the concurrent-miss window: the first caller's promise is held
@@ -4074,6 +4362,19 @@ async function getOrFetchPromedSnapshot() {
       }
       const xml = await resp.text();
       const alerts = parseProMedRss(xml);
+      // A 200 that parses to zero alerts is a break signal (non-RSS body /
+      // schema change), not a quiet feed — degrade + do NOT cache, so the empty
+      // result can't be served as a fresh 15-min "zero disease outbreaks".
+      if (promedResultIsDegraded(alerts)) {
+        return {
+          alerts: [],
+          lastFetch: new Date().toISOString(),
+          novelCount: 0,
+          outbreakCount: 0,
+          degraded: true,
+          reason: 'ProMED returned HTTP 200 but parsed 0 items (non-RSS body or schema change)',
+        };
+      }
       const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
       const result = {
         alerts,
@@ -4580,8 +4881,12 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  } catch {
  return fail('Invalid URL');
  }
- const safe = await isSafeUrl(probeUrl);
- if (!safe) return fail('URL points to a private or disallowed address');
+ // User-run LOCAL service (Ollama / self-hosted relay): localhost & LAN are the
+ // normal targets here, so the public-only SSRF guard does NOT apply — the probe
+ // is gated by the local API token. Still reject the cloud-metadata / unspecified
+ // / multicast targets a real config would never legitimately use, so a
+ // token-holder can't pivot the validation probe into a metadata grab.
+ if (isDangerousProbeHost(probeUrl)) return fail('Refusing to probe a metadata or unspecified address');
  const response = await fetchWithTimeout(probeUrl, { method: 'GET' }, 8000);
  if (!response.ok) {
  // Fall back to native Ollama /api/tags endpoint
@@ -4606,8 +4911,12 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  case 'VITE_OPENSKY_RELAY_URL': {
  const probeUrl = relayToHttpUrl(value);
  if (!probeUrl) return fail('Relay URL is invalid');
- const safe = await isSafeUrl(probeUrl);
- if (!safe) return fail('URL points to a private or disallowed address');
+ // User-run LOCAL service (Ollama / self-hosted relay): localhost & LAN are the
+ // normal targets here, so the public-only SSRF guard does NOT apply — the probe
+ // is gated by the local API token. Still reject the cloud-metadata / unspecified
+ // / multicast targets a real config would never legitimately use, so a
+ // token-holder can't pivot the validation probe into a metadata grab.
+ if (isDangerousProbeHost(probeUrl)) return fail('Refusing to probe a metadata or unspecified address');
  const response = await fetchWithTimeout(probeUrl, { method: 'GET' });
  if (response.status >= 500) return fail(`Relay probe failed (${response.status})`);
  return ok('Relay URL is reachable');
@@ -5452,6 +5761,45 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── Read-only diagnostic endpoints (pre-auth) ─────────────────────────
+  // These are localhost-only, expose no secrets, and are polled frequently
+  // by the renderer.  Placing them above the auth gate avoids thousands of
+  // spurious 401s when the renderer's IPC token isn't ready yet (cold
+  // start / IPC custom-protocol fallback).
+
+  if (requestUrl.pathname === '/api/health') {
+    const mem = process.memoryUsage();
+    const missing = wmMissingKeys();
+    if (aisState.socket?.readyState === 1) {
+      recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
+    } else if (aisState.lastSnapshotAt > 0) {
+      recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
+    }
+    return Response.json({
+      ok: true,
+      pid: process.pid,
+      uptime_ms: Date.now() - SIDECAR_START_MS,
+      port: context.port,
+      rss_mb: Math.round(mem.rss / 1024 / 1024),
+      heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+      ais_connected: aisState.socket?.readyState === 1,
+      ais_vessels: aisState.vessels.size,
+      keys_configured: EXPECTED_API_KEYS.length - missing.length,
+      keys_total: EXPECTED_API_KEYS.length,
+      keys_missing: missing,
+      feeds: getFeedSnapshots(),
+    }, { status: 200, headers: { 'content-type': 'application/json', ...makeCorsHeaders(req) } });
+  }
+
+  if (requestUrl.pathname === '/api/spaceweather/status') {
+    const status = await fetchSpaceweatherStatusSidecar();
+    return json(status);
+  }
+  if (requestUrl.pathname === '/api/spaceweather/alerts') {
+    const alerts = await fetchSpaceweatherAlertsSidecar();
+    return json({ alerts, asOf: new Date().toISOString() });
+  }
+
   // ── Global auth gate ────────────────────────────────────────────────────
   // Every endpoint below requires a valid LOCAL_API_TOKEN.  This prevents
   // other local processes, malicious browser scripts, and rogue extensions
@@ -6036,8 +6384,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // Renderer runs the globe-overlay-emitter (Layer 4) and POSTs the
   // resulting `GlobeSeismicOverlay[]` here every 5s. The God's Eye Cesium
   // panel (Layer 6) reads from GET. Read-only mirror — same shape as
-  // /api/analyst-state. No bearer auth: route is loopback-only and the
-  // payload is non-sensitive (positions/magnitudes already public).
+  // /api/analyst-state. Sits below the global auth gate, so a valid
+  // LOCAL_API_TOKEN is required (renderer and MCP client both send it).
   if (requestUrl.pathname === '/api/seismic-globe-overlays') {
     if (req.method === 'POST') {
       try {
@@ -6080,7 +6428,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // POSTs the results here after each render cycle. GET /api/shortage/summary
   // returns the summary array; GET /api/shortage/:commodity returns the full
   // forecast for a single commodity. 30-minute cache controlled by the
-  // renderer's ttlMs field. No bearer auth: loopback-only, non-sensitive.
+  // renderer's ttlMs field. Sits below the global auth gate, so a valid
+  // LOCAL_API_TOKEN is required (renderer and MCP client both send it).
   if (requestUrl.pathname === '/api/shortage/state') {
     if (req.method === 'POST') {
       try {
@@ -8485,10 +8834,13 @@ async function dispatch(requestUrl, req, routes, context) {
         // Fallback 2: Copernicus ERCC RSS (skip parse errors)
         try {
           await fetchWithTimeout(GDACS_ERCC_FALLBACK, { headers: { Accept: 'application/rss+xml,application/xml;q=0.9', 'User-Agent': CHROME_UA } }, 8_000);
+          // ERCC is reachable but its RSS is not parsed here, so this yields zero
+          // usable events. That is NOT a success — record it as a failure so the
+          // feed reads degraded, and the empty result below is left uncached.
           events = [];
           feedSource = 'ercc.jrc.ec.europa.eu';
           degraded = true;
-          trackSuccess('gdacs', 'fallback-1');
+          trackFailure('gdacs', new Error('GDACS ERCC fallback reachable but returned no parseable events'));
         } catch {
           const stale = getCachedStale('gdacs-rss');
           if (stale) return json({ ...stale, degraded: true, source: 'cached' });
@@ -8504,7 +8856,12 @@ async function dispatch(requestUrl, req, routes, context) {
         Object.entries(grouped).map(([k, v]) => [k, v.map((e) => ({ ...e, rgba: alertLevelRgba(e.alertLevel) }))])
       ),
     };
-    setCached('gdacs-rss', result, CACHE_TTL);
+    // Don't persist a degraded empty result (the ERCC fallback discards its
+    // response → events=[]) for the full TTL — that would serve "zero global
+    // disasters" as a fresh 30-min all-clear, masking the primary outage.
+    if (gdacsResultShouldCache(degraded, events.length)) {
+      setCached('gdacs-rss', result, CACHE_TTL);
+    }
     return json(result);
   }
 
@@ -8883,6 +9240,12 @@ async function dispatch(requestUrl, req, routes, context) {
 
  const combined = [...parseNwsCapFeatures(nwsFeatures), ...parseFemaDisasters(femaRows)];
  const fresh = expireAlerts(dedupeAlerts(combined), Date.now());
+ // safeJson() + Promise.allSettled swallow upstream errors, so the catch
+ // below is UNREACHABLE for a NWS/FEMA outage. Detect it here: when BOTH
+ // upstreams are down this is a total outage of the federal emergency-alert
+ // feed — NEVER report that as a fresh, healthy all-clear (mirrors the
+ // /api/nws-alerts route's policy). A partial outage still surfaces `degraded`.
+ const disp = ipawsOutageDisposition(nwsData, femaData);
  const result = {
  alerts: fresh,
  fetchedAt: new Date().toISOString(),
@@ -8890,7 +9253,12 @@ async function dispatch(requestUrl, req, routes, context) {
  nws: nwsData ? 'ok' : 'degraded',
  fema: femaData ? 'ok' : 'degraded',
  },
+ ...(disp.degraded ? { degraded: true, reason: disp.reason } : {}),
  };
+ if (disp.totalOutage) {
+ trackFailure('ipaws', new Error(disp.reason));
+ return json(result); // NOT cached — an outage must not become a fresh all-clear
+ }
  trackSuccess('ipaws', 'primary');
  setCached('ipaws-active', result);
  return json(result);
@@ -9667,16 +10035,6 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── Space Weather status + alerts (mirrors src/services/spaceweather/swpc-monitor.ts) ──
-  if (requestUrl.pathname === '/api/spaceweather/status') {
-    const status = await fetchSpaceweatherStatusSidecar();
-    return json(status);
-  }
-  if (requestUrl.pathname === '/api/spaceweather/alerts') {
-    const alerts = await fetchSpaceweatherAlertsSidecar();
-    return json({ alerts, asOf: new Date().toISOString() });
-  }
-
   // ── Solar imagery catalog (metadata) — mirrors
   //    src/services/spaceweather/solar-imagery.ts ────────────────────────
   if (requestUrl.pathname === '/api/spaceweather/imagery') {
@@ -10327,6 +10685,56 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Stock fusion source A: Finnhub (keyed; proven in the market panel) ────
+  if (requestUrl.pathname === '/api/stocks-finnhub') {
+ const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ const finnhubKey = process.env.FINNHUB_API_KEY;
+ if (!finnhubKey) return json({ quotes: [], degraded: true, error: 'no Finnhub key' });
+ try {
+ const results = await Promise.allSettled(SYMS.map((s) =>
+ fetchWithTimeout(
+ `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(finnhubKey)}`,
+ { headers: { 'User-Agent': CHROME_UA } }, 8000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Finnhub ${r.status}`); } return r.json(); })
+ ));
+ const quotes = [];
+ for (const [i, sym] of SYMS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const price = res.value?.c;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: sym, price });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Finnhub prices' });
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Stock fusion source B: Yahoo Finance chart (no key) ──────────────────
+  if (requestUrl.pathname === '/api/stocks-yahoo') {
+ const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ try {
+ const results = await Promise.allSettled(SYMS.map((s) =>
+ fetchWithTimeout(
+ `https://query1.finance.yahoo.com/v8/finance/chart/${s}?interval=1d&range=1d`,
+ { headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' } }, 10_000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Yahoo ${r.status}`); } return r.json(); })
+ ));
+ const quotes = [];
+ for (const [i, sym] of SYMS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const price = res.value?.chart?.result?.[0]?.meta?.regularMarketPrice;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: sym, price });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Yahoo prices' });
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
   // ── Crypto quotes via CoinGecko ───────────────────────────────────────────
   if (requestUrl.pathname === '/api/crypto-quotes') {
  const ids = (requestUrl.searchParams.get('ids') || 'bitcoin,ethereum,solana,ripple');
@@ -10349,6 +10757,33 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ quotes });
  } catch (error) {
  return json({ quotes: [], error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Coinbase public spot prices (no key) — 2nd crypto source for fusion.
+  // Coinbase (not Binance global, which returns HTTP 451 in the US) so the
+  // corroboration works from US/restricted regions. ───────────────────────
+  if (requestUrl.pathname === '/api/crypto-quotes-coinbase') {
+ const PAIRS = [['BTC', 'BTC-USD'], ['ETH', 'ETH-USD'], ['SOL', 'SOL-USD'], ['XRP', 'XRP-USD']];
+ try {
+ const results = await Promise.allSettled(PAIRS.map(([, pair]) =>
+ fetchWithTimeout(
+ `https://api.coinbase.com/v2/prices/${pair}/spot`,
+ { headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' } },
+ 10_000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Coinbase ${r.status}`); } return r.json(); })
+ ));
+ const quotes = [];
+ for (const [i, PAIR] of PAIRS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const amount = Number.parseFloat(res.value?.data?.amount);
+ if (Number.isFinite(amount)) quotes.push({ symbol: PAIR[0], price: amount });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all Coinbase requests failed' });
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
  }
   }
 
@@ -12570,10 +13005,15 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── NIFC active fire perimeters (free public ArcGIS REST) ────────────────
   if (requestUrl.pathname === '/api/wildfire/perimeters') {
  try {
+ // outFields=* — the WFIGS layer prefixes every field (poly_IncidentName,
+ // attr_PercentContained, …). The old explicit list used unprefixed names
+ // (IncidentName, GISAcres, POOState, ModifiedOnDateTime_dt) — ALL invalid on
+ // this layer, so ArcGIS returned a 400-shaped error body and the handler saw
+ // zero features even though ~150 fires are active. '*' is robust to the
+ // prefixing; the frontend picks the prefixed keys it needs.
  const url = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/'
  + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
- + '?where=1%3D1&outFields=IrwinID,IncidentName,GISAcres,PercentContained,POOState,'
- + 'ModifiedOnDateTime_dt&f=geojson&resultRecordCount=500';
+ + '?where=1%3D1&outFields=*&f=geojson&resultRecordCount=500';
  const resp = await fetchWithTimeout(url, {
  headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
  }, 20_000);
@@ -13050,6 +13490,10 @@ async function dispatch(requestUrl, req, routes, context) {
  const parsed = parseWebhookDispatchRequest(parsedBody);
  if (!parsed.ok) return json({ error: parsed.error }, 400, makeCorsHeaders(req));
 
+ // Webhooks carry secrets in body/headers — reject cleartext http: to prevent
+ // credential leakage and SSRF to LAN hosts via DNS rebinding over plaintext.
+ try { if (new URL(parsed.url).protocol !== 'https:') return json({ error: 'Webhook URLs must use HTTPS' }, 400, makeCorsHeaders(req)); } catch { return json({ error: 'Invalid webhook URL' }, 400, makeCorsHeaders(req)); }
+
  // SSRF protection: block private IPs, reserved ranges, and DNS rebinding.
  const safety = await isSafeUrl(parsed.url);
  if (!safety.safe) {
@@ -13116,6 +13560,11 @@ async function dispatch(requestUrl, req, routes, context) {
  moduleCache.clear();
  failedImports.clear();
  cloudPreferred.clear();
+ // Async-boot timing: routes hit before this key arrived may have cached a
+ // degraded/requiresKey response. Drop the route caches so the next request
+ // re-fetches with the newly injected secret instead of serving stale.
+ _sidecarCache.clear();
+ _responseCache.clear();
  return json({ ok: true, key });
  }
  return json({ error: 'key not in allowlist' }, 403);
@@ -13719,6 +14168,7 @@ async function dispatch(requestUrl, req, routes, context) {
  return {
  icao,
  callsign: s[1] ? String(s[1]).trim() || null : null,
+ country: s[2] ? String(s[2]).trim() || null : null,
  lat: latV, lon: lonV,
  alt: altMeters != null ? Math.round(Number(altMeters) * 3.28084) : null,  // m → ft
  speed: velMs != null ? Math.round(Number(velMs) * 1.94384) : null,        // m/s → kt
@@ -13739,6 +14189,7 @@ async function dispatch(requestUrl, req, routes, context) {
  return {
  icao,
  callsign: a.flight ? String(a.flight).trim() || null : null,
+ country: null,
  lat: a.lat, lon: a.lon,
  alt: typeof a.alt_baro === 'number' ? a.alt_baro : (typeof a.alt_geom === 'number' ? a.alt_geom : null),
  speed: typeof a.gs === 'number' ? Math.round(a.gs) : null,
@@ -13842,6 +14293,7 @@ async function dispatch(requestUrl, req, routes, context) {
  existing.ts = ac.ts;
  }
  existing.callsign ??= ac.callsign;
+ existing.country ??= ac.country;
  existing.squawk ??= ac.squawk;
  existing.type ??= ac.type;
  if (existing.military !== true && ac.military === true) existing.military = true;
@@ -14506,6 +14958,58 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
  } catch (error) {
  return json({ assets: [], error: String(error) });
+ }
+  }
+
+  // ── OSM power infrastructure (Overpass proxy; CSP-safe relay) ───────────
+  // The renderer can't reach overpass-api.de directly (desktop CSP restricts
+  // connect-src to 127.0.0.1). This relays the renderer's Overpass QL body to
+  // a fixed upstream and returns the raw JSON for client-side parsing. The
+  // upstream URL is hardcoded (no SSRF surface); only the QL body is relayed.
+  if (requestUrl.pathname === '/api/osm-power' && req.method === 'POST') {
+ let rawBody = '';
+ try {
+ const buf = await readBody(req);
+ rawBody = buf ? buf.toString('utf8') : '';
+ } catch {
+ return json({ elements: [], error: 'request body too large' }, 413);
+ }
+ if (!rawBody.startsWith('data=')) {
+ return json({ elements: [], error: 'expected Overpass QL body (data=...)' }, 400);
+ }
+ const cacheKey = `osm-power-${createHash('sha256').update(rawBody).digest('hex')}`;
+ const cached = getCached(cacheKey, 6 * 60 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ // Single-flight: concurrent identical Overpass queries (e.g. rapid camera
+ // pans on the power overlay) share ONE upstream request instead of each
+ // firing its own 30s fetch. Without this, cold-cache bursts saturate the
+ // sidecar fetch pool and starve every other /api route — whole-app stall.
+ const data = await dedupeInflight(cacheKey, async () => {
+ const fresh = getCached(cacheKey, 6 * 60 * 60 * 1000);
+ if (fresh) return fresh;
+ const resp = await fetchWithTimeout(
+ 'https://overpass-api.de/api/interpreter',
+ {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': CHROME_UA },
+ body: rawBody,
+ },
+ 30_000,
+ );
+ if (!resp.ok) throw new Error(`overpass upstream ${resp.status}`);
+ const parsed = await resp.json();
+ setCached(cacheKey, parsed, 6 * 60 * 60 * 1000);
+ return parsed;
+ });
+ return json(data);
+ } catch (error) {
+ // Serve-stale-on-error: Overpass is aggressively rate-limited (429/queue).
+ // Reuse the last good payload rather than caching an empty set, which would
+ // blank the layer for the full 6h TTL on a transient failure.
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json(stale);
+ return json({ elements: [], error: String(error) });
  }
   }
 
@@ -15581,33 +16085,30 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── NOAA coastal/buoy cams (NDBC buoycam, public no-auth) ──
+  // validateWebcamCatalog HEAD-checks each snapshotUrl and drops dead ones.
   if (requestUrl.pathname === '/api/webcams/coastal') {
- const cacheKey = 'webcams-coastal';
- const cached = getCached(cacheKey, 30 * 60 * 1000);
- if (cached) return json(cached);
- const records = [
- { stationId: '44025', name: 'NDBC 44025 — Long Island, NY', lat: 40.251, lon: -73.165, agency: 'NDBC', region: 'Mid-Atlantic' },
- { stationId: '44013', name: 'NDBC 44013 — Boston, MA', lat: 42.346, lon: -70.651, agency: 'NDBC', region: 'Northeast' },
- { stationId: '46042', name: 'NDBC 46042 — Monterey Bay, CA', lat: 36.789, lon: -122.469, agency: 'NDBC', region: 'California' },
- { stationId: '46026', name: 'NDBC 46026 — San Francisco, CA', lat: 37.755, lon: -122.839, agency: 'NDBC', region: 'California' },
- { stationId: '41047', name: 'NDBC 41047 — Northeast Bahamas', lat: 27.467, lon: -71.516, agency: 'NDBC', region: 'Atlantic' },
- { stationId: '46059', name: 'NDBC 46059 — West California', lat: 38.094, lon: -129.951, agency: 'NDBC', region: 'Pacific' },
- { stationId: '42040', name: 'NDBC 42040 — Mobile South, AL', lat: 29.205, lon: -88.205, agency: 'NDBC', region: 'Gulf of Mexico' },
+ const COASTAL_CAMS = [
+ { stationId: '44025', name: 'NDBC 44025 — Long Island, NY', lat: 40.251, lon: -73.165, agency: 'NDBC', region: 'Mid-Atlantic', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=44025' },
+ { stationId: '44013', name: 'NDBC 44013 — Boston, MA', lat: 42.346, lon: -70.651, agency: 'NDBC', region: 'Northeast', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=44013' },
+ { stationId: '46042', name: 'NDBC 46042 — Monterey Bay, CA', lat: 36.789, lon: -122.469, agency: 'NDBC', region: 'California', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=46042' },
+ { stationId: '46026', name: 'NDBC 46026 — San Francisco, CA', lat: 37.755, lon: -122.839, agency: 'NDBC', region: 'California', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=46026' },
+ { stationId: '41047', name: 'NDBC 41047 — Northeast Bahamas', lat: 27.467, lon: -71.516, agency: 'NDBC', region: 'Atlantic', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=41047' },
+ { stationId: '46059', name: 'NDBC 46059 — West California', lat: 38.094, lon: -129.951, agency: 'NDBC', region: 'Pacific', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=46059' },
+ { stationId: '42040', name: 'NDBC 42040 — Mobile South, AL', lat: 29.205, lon: -88.205, agency: 'NDBC', region: 'Gulf of Mexico', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=42040' },
  ];
- const feeds = records.map(r => ({
+ const valid = await validateWebcamCatalog(COASTAL_CAMS, 'webcams:coastal:valid', 30 * 60 * 1000);
+ const feeds = valid.map(r => ({
  id: `NOAA_COASTAL:${r.stationId}`,
  source: 'NOAA_COASTAL',
  name: r.name,
  lat: r.lat,
  lon: r.lon,
- snapshotUrl: `https://www.ndbc.noaa.gov/buoycam.php?station=${encodeURIComponent(r.stationId)}`,
+ snapshotUrl: r.snapshotUrl,
  refreshIntervalSec: 600,
  category: 'coastal',
  metadata: { stationId: r.stationId, agency: r.agency, region: r.region },
  }));
- const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
- setCached(cacheKey, result, 30 * 60 * 1000);
- return json(result);
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
   // ── Master webcam aggregator (calls all sub-routes, dedupes, filters) ──
@@ -15628,15 +16129,28 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'WINDY', path: '/api/webcams/windy', shape: 'feeds' },
  { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
  { source: 'DOT511', path: '/api/webcams/dot-extended', shape: 'feeds' },
+ { source: 'USFS', path: '/api/webcams/usfs', shape: 'feeds' },
+ { source: 'CALTRANS', path: '/api/webcams/caltrans', shape: 'feeds' },
+ { source: 'TFL', path: '/api/webcams/tfl', shape: 'feeds' },
+ { source: 'SINGAPORE', path: '/api/webcams/singapore', shape: 'feeds' },
+ { source: 'GEONET', path: '/api/webcams/geonet', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
  const baseUrl = `http://127.0.0.1:${port}`;
  const results = await Promise.allSettled(targets.map(async (sub) => {
  try {
- const r = await fetchWithTimeout(`${baseUrl}${sub.path}`, { headers: { Accept: 'application/json' } }, 20000);
- if (!r.ok) return [];
- const data = await r.json();
+ // These sub-endpoints sit behind the LOCAL_API_TOKEN auth gate, so the
+ // internal self-call must carry the sidecar's own token — without it every
+ // source (even keyless ones) 401s and the catalog comes back empty.
+ const r = await fetchWithTimeout(`${baseUrl}${sub.path}`, { headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20000);
+ let data = null;
+ try { data = await r.json(); } catch { data = null; }
+ // Surface the failure as a rejection so deriveWebcamSourceHealth can classify
+ // it (missing_key / rate_limited / down) instead of it collapsing to "empty".
+ if (!r.ok) {
+ throw new Error(data?.requiresKey === true ? `missing key (HTTP ${r.status})` : `HTTP ${r.status}`);
+ }
  if (sub.shape === 'feeds') return Array.isArray(data?.feeds) ? data.feeds : [];
  if (sub.shape === 'cameras') {
  // DOT/Caltrans: legacy { cameras: [{id, title, state, lat, lon, imageUrl}] }
@@ -15671,10 +16185,12 @@ async function dispatch(requestUrl, req, routes, context) {
  }));
  }
  return [];
- } catch {
- return [];
+ } catch (error) {
+ throw error instanceof Error ? error : new Error(String(error));
  }
  }));
+ const KEYED_WEBCAM_SOURCES = new Set(['WINDY', 'NPS']);
+ const sourceHealth = deriveWebcamSourceHealth(targets, results, KEYED_WEBCAM_SOURCES, Math.floor(Date.now() / 1000));
  let allFeeds = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
  if (categoryFilter.length > 0) allFeeds = allFeeds.filter(f => categoryFilter.includes(f.category));
  if (bbox) {
@@ -15684,7 +16200,7 @@ async function dispatch(requestUrl, req, routes, context) {
  allFeeds = allFeeds.filter(f => f.lat >= minLat && f.lat <= maxLat && f.lon >= minLon && f.lon <= maxLon);
  }
  }
- const result = { feeds: allFeeds, count: allFeeds.length, updatedAt: Math.floor(Date.now() / 1000) };
+ const result = { feeds: allFeeds, count: allFeeds.length, sourceHealth, updatedAt: Math.floor(Date.now() / 1000) };
  setCached(cacheKey, result, 5 * 60 * 1000);
  return json(result);
   }
@@ -15798,45 +16314,40 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── USGS stream gauge cams (pinned site list, photo URLs from USGS NWIS) ──
+  // validateWebcamCatalog HEAD-checks each snapshotUrl and drops dead ones.
   if (requestUrl.pathname === '/api/webcams/streamgauge') {
- const cacheKey = 'webcams-streamgauge';
- const cached = getCached(cacheKey, 60 * 60 * 1000);
- if (cached) return json(cached);
- const records = [
- { siteNo: '11447650', name: 'Sacramento River at Freeport, CA', lat: 38.4555, lon: -121.5021, state: 'CA' },
- { siteNo: '01646500', name: 'Potomac River near Wash, DC Little Falls Pump Sta', lat: 38.9498, lon: -77.1278, state: 'DC' },
- { siteNo: '07010000', name: 'Mississippi River at St. Louis, MO', lat: 38.6296, lon: -90.1798, state: 'MO' },
- { siteNo: '02035000', name: 'James River at Cartersville, VA', lat: 37.6712, lon: -78.0867, state: 'VA' },
- { siteNo: '03612600', name: 'Ohio River at Olmsted, IL', lat: 37.18, lon: -89.0567, state: 'IL' },
- { siteNo: '08374550', name: 'Rio Grande at Foster Ranch, TX', lat: 29.6306, lon: -102.0339, state: 'TX' },
- { siteNo: '14211720', name: 'Willamette River at Portland, OR', lat: 45.5167, lon: -122.6692, state: 'OR' },
- { siteNo: '12150800', name: 'Snohomish River near Monroe, WA', lat: 47.83, lon: -121.9967, state: 'WA' },
+ const STREAM_CAMS = [
+ { siteNo: '11447650', name: 'Sacramento River at Freeport, CA', lat: 38.4555, lon: -121.5021, state: 'CA', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=11447650' },
+ { siteNo: '01646500', name: 'Potomac River near Wash, DC Little Falls Pump Sta', lat: 38.9498, lon: -77.1278, state: 'DC', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=01646500' },
+ { siteNo: '07010000', name: 'Mississippi River at St. Louis, MO', lat: 38.6296, lon: -90.1798, state: 'MO', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=07010000' },
+ { siteNo: '02035000', name: 'James River at Cartersville, VA', lat: 37.6712, lon: -78.0867, state: 'VA', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=02035000' },
+ { siteNo: '03612600', name: 'Ohio River at Olmsted, IL', lat: 37.18, lon: -89.0567, state: 'IL', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=03612600' },
+ { siteNo: '08374550', name: 'Rio Grande at Foster Ranch, TX', lat: 29.6306, lon: -102.0339, state: 'TX', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=08374550' },
+ { siteNo: '14211720', name: 'Willamette River at Portland, OR', lat: 45.5167, lon: -122.6692, state: 'OR', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=14211720' },
+ { siteNo: '12150800', name: 'Snohomish River near Monroe, WA', lat: 47.83, lon: -121.9967, state: 'WA', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=12150800' },
  ];
- const feeds = records.map(r => ({
+ const valid = await validateWebcamCatalog(STREAM_CAMS, 'webcams:streamgauge:valid', 30 * 60 * 1000);
+ const feeds = valid.map(r => ({
  id: `USGS_STREAM:${r.siteNo}`,
  source: 'USGS_STREAM',
  name: r.name,
  lat: r.lat,
  lon: r.lon,
- snapshotUrl: `https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=${encodeURIComponent(r.siteNo)}`,
+ snapshotUrl: r.snapshotUrl,
  refreshIntervalSec: 3600,
  category: 'stream',
  metadata: { siteNo: r.siteNo, state: r.state },
  }));
- const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
- setCached(cacheKey, result, 60 * 60 * 1000);
- return json(result);
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
   // ── USGS volcano webcams (static catalog from src/services/webcams/volcano-cam-catalog.ts) ──
   // The catalog is pinned in code rather than scraped because USGS HVO/CVO/AVO/YVO
   // pages don't expose a machine-readable index. Refresh cadence is 60s per cam
   // — the snapshots are served from observatory webservers directly.
+  // validateWebcamCatalog HEAD-checks each URL and drops dead ones before mapping.
   if (requestUrl.pathname === '/api/webcams/volcano') {
- const cacheKey = 'webcams-volcano';
- const cached = getCached(cacheKey, 30 * 60 * 1000);
- if (cached) return json(cached);
- const cams = [
+ const VOLCANO_CAMS = [
  { id: 'kilauea-summit', name: 'Kīlauea — Summit (KW)', volcano: 'Kilauea', observatory: 'HVO', lat: 19.4067, lon: -155.2834, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/kilauea/KWcam.jpg' },
  { id: 'kilauea-east-rift', name: 'Kīlauea — East Rift (PG)', volcano: 'Kilauea', observatory: 'HVO', lat: 19.385, lon: -154.95, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/kilauea/PGcam.jpg' },
  { id: 'mauna-loa-summit', name: 'Mauna Loa — Summit (M1)', volcano: 'Mauna Loa', observatory: 'HVO', lat: 19.475, lon: -155.608, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/mauna_loa/M1cam.jpg' },
@@ -15851,7 +16362,8 @@ async function dispatch(requestUrl, req, routes, context) {
  { id: 'great-sitkin', name: 'Great Sitkin — GSCK', volcano: 'Great Sitkin', observatory: 'AVO', lat: 52.076, lon: -176.13, snapshotUrl: 'https://avo.alaska.edu/webcam/GSCK.jpg' },
  { id: 'yellowstone-old-faithful', name: 'Yellowstone — Old Faithful', volcano: 'Yellowstone', observatory: 'YVO', lat: 44.46, lon: -110.829, snapshotUrl: 'https://www.nps.gov/webcams-yell/oldfaithvc.jpg' },
  ];
- const feeds = cams.map(c => ({
+ const valid = await validateWebcamCatalog(VOLCANO_CAMS, 'webcams:volcano:valid', 30 * 60 * 1000);
+ const feeds = valid.map(c => ({
  id: `USGS_VOLCANO:${c.id}`,
  source: 'USGS_VOLCANO',
  name: c.name,
@@ -15862,9 +16374,167 @@ async function dispatch(requestUrl, req, routes, context) {
  category: 'volcano',
  metadata: { volcano: c.volcano, observatory: c.observatory },
  }));
- const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
- setCached(cacheKey, result, 30 * 60 * 1000);
- return json(result);
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
+  // ── Keyless config-driven sources: Caltrans CWWP2, TfL JamCams, Singapore LTA ──
+  // Uses module-scope extractWebcamFeeds (mirrors webcam-config-loader.ts pure logic).
+
+  // ── Caltrans CWWP2 (d01–d12 fan-out) ──
+  if (requestUrl.pathname === '/api/webcams/caltrans') {
+    const cacheKey = 'webcams-caltrans';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const districts = Array.from({ length: 12 }, (_, i) => {
+      const nn = String(i + 1).padStart(2, '0');
+      return `https://cwwp2.dot.ca.gov/data/d${nn}/cctv/cctvStatusD${nn}.json`;
+    });
+
+    const settled = await Promise.allSettled(districts.map(async (url) => {
+      const r = await fetchWithTimeout(url, {}, 15000);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }));
+
+    const payloads = settled.flatMap(r => r.status === 'fulfilled' ? [r.value] : []);
+
+    const CALTRANS_MAP = {
+      id: (row) => {
+        const district = row?.cctv?.location?.district ?? 'UNK';
+        const idx = row?.cctv?.index ?? 'UNK';
+        return `d${district}:${idx}`;
+      },
+      name: 'cctv.location.locationName',
+      lat: 'cctv.location.latitude',
+      lon: 'cctv.location.longitude',
+      snapshotUrl: 'cctv.imageData.static.currentImageURL',
+      streamUrl: 'cctv.imageData.streamingVideoURL',
+    };
+
+    const raw = extractWebcamFeeds('CALTRANS', 'data', CALTRANS_MAP, 'traffic', 60, null, { attribution: 'Caltrans CWWP2', country: 'US', state: 'CA' }, payloads);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:caltrans:valid', 5 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── TfL JamCams (single GET) ──
+  if (requestUrl.pathname === '/api/webcams/tfl') {
+    const cacheKey = 'webcams-tfl';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://api.tfl.gov.uk/Place/Type/JamCam', {}, 20000);
+    if (!r.ok) throw new Error(`TfL HTTP ${r.status}`);
+    const payload = await r.json();
+
+    const TFL_MAP = {
+      id: (row) => row.id ?? '',
+      name: 'commonName',
+      lat: 'lat',
+      lon: 'lon',
+      snapshotUrl: (row) => row.additionalProperties?.find((p) => p.key === 'imageUrl')?.value ?? '',
+    };
+
+    const raw = extractWebcamFeeds('TFL', null, TFL_MAP, 'traffic', 60, null, { attribution: 'Transport for London JamCams', country: 'GB', city: 'London' }, [payload]);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:tfl:valid', 5 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── Singapore LTA Traffic Images (single GET, images expire ~5 min) ──
+  if (requestUrl.pathname === '/api/webcams/singapore') {
+    const cacheKey = 'webcams-singapore';
+    const cached = getCached(cacheKey, 3 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://api.data.gov.sg/v1/transport/traffic-images', {}, 20000);
+    if (!r.ok) throw new Error(`Singapore LTA HTTP ${r.status}`);
+    const payload = await r.json();
+
+    const SG_MAP = {
+      id: (row) => row.camera_id ?? '',
+      name: (row) => `Singapore Cam ${row.camera_id ?? ''}`,
+      lat: 'location.latitude',
+      lon: 'location.longitude',
+      snapshotUrl: 'image',
+    };
+
+    const raw = extractWebcamFeeds('SINGAPORE', 'items.0.cameras', SG_MAP, 'traffic', 60, null, { attribution: 'Singapore LTA Traffic Images', country: 'SG', city: 'Singapore' }, [payload]);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:singapore:valid', 3 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── GeoNet NZ volcano cams (all.json = list of FeatureCollections; [lat,lon] order) ──
+  if (requestUrl.pathname === '/api/webcams/geonet') {
+    const cacheKey = 'webcams-geonet';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://images.geonet.org.nz/volcano/cameras/all.json', {}, 15000);
+    if (!r.ok) throw new Error(`GeoNet HTTP ${r.status}`);
+    const allJson = await r.json();
+    const payloads = Array.isArray(allJson) ? allJson : [allJson];
+
+    const GEONET_IMAGE_BASE = 'https://images.geonet.org.nz/volcano/cameras/';
+    const GEONET_MAP = {
+      id: (row) => {
+        const img = row?.properties?.['latest-image-large'] ?? '';
+        return img.replace(/^latest\//, '').replace(/\.jpg$/, '') || 'cam';
+      },
+      name: 'properties.title',
+      lat: 'geometry.coordinates.0',
+      lon: 'geometry.coordinates.1',
+      snapshotUrl: (row) => {
+        const img = row?.properties?.['latest-image-large'] ?? '';
+        return img ? `${GEONET_IMAGE_BASE}${img}` : '';
+      },
+    };
+
+    const raw = extractWebcamFeeds('GEONET', 'features', GEONET_MAP, 'volcano', 300, null, { attribution: 'GeoNet NZ (CC-BY 3.0 NZ)', country: 'NZ' }, payloads);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:geonet:valid', 5 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── USFS webcams (fire lookouts + recreation, validated catalog) ──
+  // Public snapshot URLs from USFS region pages and well-known forest/mountain cams.
+  // validateWebcamCatalog HEAD-checks each URL and drops dead ones (some may be stale).
+  if (requestUrl.pathname === '/api/webcams/usfs') {
+ const USFS_CAMS = [
+ { id: 'usfs-shasta-avalanche', name: 'Mt. Shasta — Avalanche Gulch', lat: 41.4092, lon: -122.1948, snapshotUrl: 'https://www.mtshastaskipark.com/cams/summit.jpg', category: 'nature' },
+ { id: 'usfs-crater-lake-rim', name: 'Crater Lake — Rim Village', lat: 42.9116, lon: -122.148, snapshotUrl: 'https://www.nps.gov/webcams-crla/rimvillagevc.jpg', category: 'nature' },
+ { id: 'usfs-olympic-hurricane-ridge', name: 'Olympic NF — Hurricane Ridge', lat: 47.9694, lon: -123.4983, snapshotUrl: 'https://www.nps.gov/webcams-olym/hurricaneridgevc.jpg', category: 'weather' },
+ { id: 'usfs-coconino-flagstaff', name: 'Coconino NF — Flagstaff Fire Lookout', lat: 35.2066, lon: -111.7263, snapshotUrl: 'https://forecast.weather.gov/meteocams/images/flagstaff.jpg', category: 'fire' },
+ { id: 'usfs-pike-pikes-peak', name: 'Pike NF — Pikes Peak Summit', lat: 38.8405, lon: -105.0441, snapshotUrl: 'https://www.pikespeakcolorado.com/webcam/current.jpg', category: 'nature' },
+ { id: 'usfs-deschutes-bachelor', name: 'Deschutes NF — Mt. Bachelor', lat: 43.9789, lon: -121.6878, snapshotUrl: 'https://www.mtbachelor.com/webcam/summit.jpg', category: 'weather' },
+ { id: 'usfs-sequoia-moro-rock', name: 'Sequoia NF — Moro Rock', lat: 36.5453, lon: -118.7703, snapshotUrl: 'https://www.nps.gov/webcams-seki/morovc.jpg', category: 'nature' },
+ { id: 'usfs-tahoe-heavenly', name: 'Lake Tahoe Basin — Heavenly Ridge', lat: 38.9353, lon: -119.9396, snapshotUrl: 'https://www.skiheavenly.com/webcam/main.jpg', category: 'weather' },
+ { id: 'usfs-white-mt-washington', name: 'White Mountain NF — Mt. Washington', lat: 44.2705, lon: -71.3033, snapshotUrl: 'https://www.mountwashington.org/uploads/webcam/1.jpg', category: 'weather' },
+ { id: 'usfs-gifford-pinchot-adams', name: 'Gifford Pinchot NF — Mt. Adams', lat: 46.2024, lon: -121.4905, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/cvo/ADAMSLZ.jpg', category: 'nature' },
+ { id: 'usfs-nez-perce-clearwater-lolo', name: 'Nez Perce-Clearwater NF — Lolo Pass', lat: 46.6339, lon: -114.8194, snapshotUrl: 'https://www.511.idaho.gov/api/get/cameras/image/lolo-pass', category: 'weather' },
+ { id: 'usfs-angeles-mt-wilson', name: 'Angeles NF — Mt. Wilson', lat: 34.2257, lon: -118.0573, snapshotUrl: 'https://www.mtwilson.edu/wp-content/webcam/current.jpg', category: 'fire' },
+ { id: 'usfs-uinta-wasatch-alta', name: 'Uinta-Wasatch-Cache NF — Alta Ski', lat: 40.5881, lon: -111.6378, snapshotUrl: 'https://www.alta.com/webcam/summit.jpg', category: 'weather' },
+ ];
+ const valid = await validateWebcamCatalog(USFS_CAMS, 'webcams:usfs', 30 * 60 * 1000);
+ const feeds = valid.map(c => ({
+ id: `USFS:${c.id}`,
+ source: 'USFS',
+ name: c.name,
+ lat: c.lat,
+ lon: c.lon,
+ snapshotUrl: c.snapshotUrl,
+ refreshIntervalSec: 300,
+ category: c.category,
+ metadata: { agency: 'USFS' },
+ streamType: 'snapshot',
+ }));
+ return json({ feeds, count: feeds.length });
   }
 
   // ── Extended DOT adapters: OH, AZ, ID, GA, OR, NC, NSW, UK, ROAD511 ──
@@ -16048,7 +16718,8 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  const port = process.env.SIDECAR_PORT ?? '46123';
  try {
- const r = await fetchWithTimeout(`http://127.0.0.1:${port}/api/webcams`, { headers: { Accept: 'application/json' } }, 20000);
+ // Same LOCAL_API_TOKEN gate as the master aggregator — forward the token.
+ const r = await fetchWithTimeout(`http://127.0.0.1:${port}/api/webcams`, { headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20000);
  if (!r.ok) return json({ feeds: [], error: `master HTTP ${r.status}` }, 502);
  const data = await r.json();
  const all = Array.isArray(data?.feeds) ? data.feeds : [];
@@ -16108,6 +16779,304 @@ async function dispatch(requestUrl, req, routes, context) {
  const cutoff = Date.now() - 30 * 60 * 1000;
  const active = events.filter(e => e.triggeredAt >= cutoff);
  return json({ active, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
+  // ── Intel Expansion Cluster 1 ─────────────────────────────────────────────
+  // abuse.ch cyber trio + Frankfurter FX — all keyless, loopback-only proxies.
+  // Cache keys are short strings that don't collide with existing entries.
+  // Only successful fetches are cached; error responses are NOT persisted so
+  // the next caller retries rather than serving a stale failure for the TTL.
+
+  // GET /api/cyber-c2 — Feodo Tracker C2 IP blocklist (10 min cache)
+  if (requestUrl.pathname === '/api/cyber-c2' && req.method === 'GET') {
+ const FEODO_TTL = 10 * 60 * 1000;
+ const FEODO_URL = 'https://feodotracker.abuse.ch/downloads/ipblocklist.json';
+ const cached = getCached('feodo-c2', FEODO_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(FEODO_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `feodo upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const entries = parseFeodoIpBlocklist(raw);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('feodo-c2', result, FEODO_TTL);
+ return json(result);
+  }
+
+  // GET /api/cyber-iocs — ThreatFox recent IOCs (10 min cache)
+  if (requestUrl.pathname === '/api/cyber-iocs' && req.method === 'GET') {
+ const TFOX_TTL = 10 * 60 * 1000;
+ const TFOX_URL = 'https://threatfox.abuse.ch/export/csv/recent/';
+ const cached = getCached('threatfox-iocs', TFOX_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(TFOX_URL, { headers: { Accept: 'text/csv, text/plain', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `threatfox upstream ${r.status}` }, 502);
+ const text = await r.text();
+ const entries = parseThreatFoxCsv(text);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('threatfox-iocs', result, TFOX_TTL);
+ return json(result);
+  }
+
+  // GET /api/malware-urls — URLhaus recent malware URLs (10 min cache)
+  if (requestUrl.pathname === '/api/malware-urls' && req.method === 'GET') {
+ const URLHAUS_TTL = 10 * 60 * 1000;
+ const URLHAUS_URL = 'https://urlhaus.abuse.ch/downloads/csv_recent/';
+ const cached = getCached('urlhaus-urls', URLHAUS_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(URLHAUS_URL, { headers: { Accept: 'text/csv, text/plain', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `urlhaus upstream ${r.status}` }, 502);
+ const text = await r.text();
+ const entries = parseUrlhausCsv(text);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('urlhaus-urls', result, URLHAUS_TTL);
+ return json(result);
+  }
+
+  // GET /api/fx-rates — Frankfurter FX latest rates (~12h cache)
+  // Accepts ?base=USD&symbols=EUR,GBP (forwarded to upstream).
+  // Default base is USD when not specified.
+  if (requestUrl.pathname === '/api/fx-rates' && req.method === 'GET') {
+ const FX_TTL = 12 * 60 * 60 * 1000;
+ const base = requestUrl.searchParams.get('base') || 'USD';
+ const symbols = requestUrl.searchParams.get('symbols') || '';
+ // Cache key per base+symbols combo so different callers get their own slot.
+ const cacheKey = `frankfurter-fx:${base}:${symbols}`;
+ const cached = getCached(cacheKey, FX_TTL);
+ if (cached) return json(cached);
+ let upstreamUrl = `https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(base)}`;
+ if (symbols) upstreamUrl += `&symbols=${encodeURIComponent(symbols)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ base, date: null, rates: {}, fetchedAt: Date.now(), degraded: true, reason: `frankfurter upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const parsed = parseFrankfurterRates(raw);
+ if (!parsed) return json({ base, date: null, rates: {}, fetchedAt: Date.now(), degraded: true, reason: 'frankfurter parse error' }, 502);
+ const result = { ...parsed, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, FX_TTL);
+ return json(result);
+  }
+
+  // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
+  // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
+  if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {
+ const PW_TTL = 6 * 60 * 60 * 1000;
+ const PW_URL = 'https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=1%3D1&outFields=*&orderByFields=date%20DESC&resultRecordCount=500&f=json';
+ const cached = getCached('imf-portwatch', PW_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(PW_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ chokepoints: [], updatedAt: null, degraded: true, reason: `portwatch upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const chokepoints = parsePortwatchChokepoints(raw);
+ const result = { chokepoints, updatedAt: new Date().toISOString(), degraded: false };
+ setCached('imf-portwatch', result, PW_TTL);
+ return json(result);
+  }
+
+  // ── Intel Expansion Cluster 3 ─────────────────────────────────────────────
+  // IODA + openFDA + ORNL ODIN + Copernicus EMS + GLEIF — all keyless.
+
+  // GET /api/internet-outages — IODA internet outage alerts (~15 min cache)
+  // Query params: from, until (unix seconds). Defaults to 24h window ending now.
+  if (requestUrl.pathname === '/api/internet-outages' && req.method === 'GET') {
+ const IODA_TTL = 15 * 60 * 1000;
+ const nowSec = Math.floor(Date.now() / 1000);
+ const from = requestUrl.searchParams.get('from') || String(nowSec - 86400);
+ const until = requestUrl.searchParams.get('until') || String(nowSec);
+ const limit = requestUrl.searchParams.get('limit') || '50';
+ const cacheKey = `ioda-outages:${from}:${until}`;
+ const cached = getCached(cacheKey, IODA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ioda upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const alerts = parseIodaAlerts(raw);
+ const result = { alerts, count: alerts.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, IODA_TTL);
+ return json(result);
+  }
+
+  // GET /api/pharma-shortages — openFDA drug shortage database (~6h cache)
+  if (requestUrl.pathname === '/api/pharma-shortages' && req.method === 'GET') {
+ const FDA_TTL = 6 * 60 * 60 * 1000;
+ const limit = requestUrl.searchParams.get('limit') || '20';
+ const cacheKey = `openfda-shortages:${limit}`;
+ const cached = getCached(cacheKey, FDA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.fda.gov/drug/shortages.json?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ shortages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `openfda shortages upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const shortages = parseFdaShortages(raw);
+ const result = { shortages, count: shortages.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, FDA_TTL);
+ return json(result);
+  }
+
+  // GET /api/recalls — openFDA enforcement recalls (~6h cache)
+  // Accepts ?type=drug|food (default drug)
+  if (requestUrl.pathname === '/api/recalls' && req.method === 'GET') {
+ const RECALL_TTL = 6 * 60 * 60 * 1000;
+ const type = requestUrl.searchParams.get('type') === 'food' ? 'food' : 'drug';
+ const limit = requestUrl.searchParams.get('limit') || '20';
+ const cacheKey = `openfda-recalls:${type}:${limit}`;
+ const cached = getCached(cacheKey, RECALL_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.fda.gov/${encodeURIComponent(type)}/enforcement.json?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ recalls: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `openfda recalls upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const recalls = parseFdaRecalls(raw);
+ const result = { recalls, count: recalls.length, type, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, RECALL_TTL);
+ return json(result);
+  }
+
+  // GET /api/grid-outages — ORNL ODIN real-time power outages by county (~15 min cache)
+  if (requestUrl.pathname === '/api/grid-outages' && req.method === 'GET') {
+ const ODIN_TTL = 15 * 60 * 1000;
+ const limit = requestUrl.searchParams.get('limit') || '50';
+ const cacheKey = `ornl-odin:${limit}`;
+ const cached = getCached(cacheKey, ODIN_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://ornl.opendatasoft.com/api/explore/v2.1/catalog/datasets/odin-real-time-outages-county/records?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ outages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ornl-odin upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const outages = parseOdinOutages(raw);
+ const result = { outages, count: outages.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, ODIN_TTL);
+ return json(result);
+  }
+
+  // GET /api/ems-activations — Copernicus Emergency Management Service activations (~30 min cache)
+  if (requestUrl.pathname === '/api/ems-activations' && req.method === 'GET') {
+ const EMS_TTL = 30 * 60 * 1000;
+ const cached = getCached('copernicus-ems', EMS_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = 'https://mapping.emergency.copernicus.eu/activations/api/activations/?format=json';
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ activations: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `copernicus-ems upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const activations = parseCopernicusActivations(raw);
+ const result = { activations, count: activations.length, fetchedAt: Date.now(), degraded: false };
+ setCached('copernicus-ems', result, EMS_TTL);
+ return json(result);
+  }
+
+  // GET /api/entity-lei — GLEIF LEI entity lookup (24h cache, keyed by name)
+  // Accepts ?name= (entity legal name to search)
+  if (requestUrl.pathname === '/api/entity-lei' && req.method === 'GET') {
+ const GLEIF_TTL = 24 * 60 * 60 * 1000;
+ const name = requestUrl.searchParams.get('name') || '';
+ if (!name.trim()) return json({ entities: [], count: 0, fetchedAt: Date.now(), degraded: false, reason: 'name param required' }, 400);
+ const cacheKey = `gleif-lei:${name.trim().toLowerCase()}`;
+ const cached = getCached(cacheKey, GLEIF_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=${encodeURIComponent(name.trim())}&page%5Bsize%5D=5`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/vnd.api+json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entities: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `gleif upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const entities = parseGleifLeiRecords(raw);
+ const result = { entities, count: entities.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, GLEIF_TTL);
+ return json(result);
+  }
+
+  // ── Intel Expansion Cluster 4 ─────────────────────────────────────────────
+  // GDELT GKG + SWPC aurora/solar-regions + AviationWeather hazards
+  // + FAA NAS Status + BfS ODL radiation — all keyless.
+
+  // GET /api/gdelt-geo — GDELT GKG geocoded events (~15 min cache)
+  // Accepts ?query= (default "protest") and ?timespan= (minutes, default 60)
+  if (requestUrl.pathname === '/api/gdelt-geo' && req.method === 'GET') {
+ const GDELT_TTL = 15 * 60 * 1000;
+ const query = requestUrl.searchParams.get('query') || 'protest';
+ const timespan = requestUrl.searchParams.get('timespan') || '60';
+ const cacheKey = `gdelt-geo:${query}:${timespan}`;
+ const cached = getCached(cacheKey, GDELT_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.gdeltproject.org/api/v1/gkg_geojson?QUERY=${encodeURIComponent(query)}&TIMESPAN=${encodeURIComponent(timespan)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 20_000);
+ if (!r.ok) return json({ events: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `gdelt upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const events = parseGdeltGkgEvents(raw);
+ const result = { events, count: events.length, query, timespan, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, GDELT_TTL);
+ return json(result);
+  }
+
+  // GET /api/spaceweather-extra — SWPC OVATION aurora + solar active regions (~15 min cache)
+  if (requestUrl.pathname === '/api/spaceweather-extra' && req.method === 'GET') {
+ const SW_TTL = 15 * 60 * 1000;
+ const cached = getCached('spaceweather-extra', SW_TTL);
+ if (cached) return json(cached);
+ const [auroraRes, solarRes] = await Promise.allSettled([
+   fetchWithTimeout('https://services.swpc.noaa.gov/json/ovation_aurora_latest.json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://services.swpc.noaa.gov/json/solar_regions.json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+ ]);
+ const auroraRaw = auroraRes.status === 'fulfilled' && auroraRes.value.ok ? await auroraRes.value.json() : null;
+ const solarRaw = solarRes.status === 'fulfilled' && solarRes.value.ok ? await solarRes.value.json() : null;
+ const aurora = parseSwpcAurora(auroraRaw);
+ const solarRegions = parseSwpcSolarRegions(solarRaw);
+ const degraded = !auroraRaw && !solarRaw;
+ const result = { aurora, solarRegions, solarRegionCount: solarRegions.length, fetchedAt: Date.now(), degraded };
+ setCached('spaceweather-extra', result, SW_TTL);
+ return json(result);
+  }
+
+  // GET /api/aviation-hazards — AviationWeather SIGMET/G-AIRMET airspace hazards (~10 min cache)
+  if (requestUrl.pathname === '/api/aviation-hazards' && req.method === 'GET') {
+ const AVHAZ_TTL = 10 * 60 * 1000;
+ const cached = getCached('aviation-hazards', AVHAZ_TTL);
+ if (cached) return json(cached);
+ const [isigmetRes, airsigmetRes, gairmetRes] = await Promise.allSettled([
+   fetchWithTimeout('https://aviationweather.gov/api/data/isigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://aviationweather.gov/api/data/airsigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://aviationweather.gov/api/data/gairmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+ ]);
+ const isigmetRaw = isigmetRes.status === 'fulfilled' && isigmetRes.value.ok ? await isigmetRes.value.json() : [];
+ const airsigmetRaw = airsigmetRes.status === 'fulfilled' && airsigmetRes.value.ok ? await airsigmetRes.value.json() : [];
+ const gairmetRaw = gairmetRes.status === 'fulfilled' && gairmetRes.value.ok ? await gairmetRes.value.json() : [];
+ const hazards = [
+   ...parseAviationHazards(isigmetRaw, 'isigmet'),
+   ...parseAviationHazards(airsigmetRaw, 'airsigmet'),
+   ...parseAviationHazards(gairmetRaw, 'gairmet'),
+ ];
+ const result = { hazards, count: hazards.length, fetchedAt: Date.now(), degraded: false };
+ setCached('aviation-hazards', result, AVHAZ_TTL);
+ return json(result);
+  }
+
+  // GET /api/faa-nas-status — FAA NAS airport ground stops / delays (~5 min cache)
+  if (requestUrl.pathname === '/api/faa-nas-status' && req.method === 'GET') {
+ const FAA_TTL = 5 * 60 * 1000;
+ const cached = getCached('faa-nas-status', FAA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = 'https://nasstatus.faa.gov/api/airport-events';
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ events: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `faa-nas upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const events = parseFaaNasEvents(raw);
+ const result = { events, count: events.length, fetchedAt: Date.now(), degraded: false };
+ setCached('faa-nas-status', result, FAA_TTL);
+ return json(result);
+  }
+
+  // GET /api/radiation-grid — BfS ODL German gamma-dose monitoring stations (~60 min cache)
+  if (requestUrl.pathname === '/api/radiation-grid' && req.method === 'GET') {
+ const BFS_TTL = 60 * 60 * 1000;
+ const count = requestUrl.searchParams.get('count') || '50';
+ const cacheKey = `bfs-odl:${count}`;
+ const cached = getCached(cacheKey, BFS_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://www.imis.bfs.de/ogc/opendata/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=opendata:odlinfo_odl_1h_latest&outputFormat=application/json&count=${encodeURIComponent(count)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 20_000);
+ if (!r.ok) return json({ stations: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `bfs-odl upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const stations = parseBfsOdlStations(raw);
+ const result = { stations, count: stations.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, BFS_TTL);
+ return json(result);
   }
 
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
@@ -16407,6 +17376,496 @@ export function recentEventsSidecar(features, nowMs, days) {
   return filterRecentM45PlusSidecar(features, nowMs, days);
 }
 
+// ── Intel Expansion Cluster 1: abuse.ch trio + Frankfurter FX ───────────────
+//
+// Shared quoted-CSV parser used by ThreatFox and URLhaus.
+// Handles:
+//   • \r\n and \n line endings.
+//   • Lines beginning with '#' (comment/header) — skipped.
+//   • RFC 4180-style quoted fields: commas inside quotes, doubled quotes.
+//   • Optional whitespace between comma and quote (ThreatFox `, "field"` style).
+//   • Both quoted and unquoted header lines inside # comments (URLhaus uses
+//     unquoted: `# id,dateadded,...`; ThreatFox uses quoted: `# "col","col"`).
+// Returns an array of objects keyed by the column names from the first
+// non-comment line that starts with '#' and contains a comma.
+export function parseAbuseCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const dataLines = [];
+  let headerLine = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#')) {
+      // The abuse.ch data header is a comment containing the column names.
+      // ThreatFox: # "first_seen_utc","ioc_id",...   (quoted)
+      // URLhaus:   # id,dateadded,...                 (unquoted)
+      // Detect by: starts with '#' AND contains a comma.
+      const inner = trimmed.slice(1).trim();
+      if (inner.includes(',') && headerLine === null) {
+        headerLine = inner;
+      }
+      continue;
+    }
+    dataLines.push(trimmed);
+  }
+
+  if (!headerLine && dataLines.length > 0) {
+    // No comment-header found; treat first data line as the header.
+    headerLine = dataLines.shift();
+  }
+  if (!headerLine) return [];
+
+  const headers = parseCsvRow(headerLine).map(h => h.trim());
+  return dataLines.map(line => {
+    const values = parseCsvRow(line);
+    const obj = {};
+    for (const [i, header] of headers.entries()) {
+      obj[header] = values[i] ?? '';
+    }
+    return obj;
+  });
+}
+
+// Parse one CSV row into an array of field strings, respecting RFC 4180 quoting.
+// Also handles optional whitespace before a quoted field (ThreatFox style: `, "val"`).
+// A trailing comma produces a trailing empty string field.
+export function parseCsvRow(line) {
+  const fields = [];
+  let i = 0;
+  while (i <= line.length) {
+    // Skip optional whitespace before field (handles `, "value"` style)
+    let j = i;
+    while (j < line.length && line[j] === ' ') j++;
+
+    if (j < line.length && line[j] === '"') {
+      // Quoted field — start after opening quote
+      i = j + 1;
+      let val = '';
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            val += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          val += line[i++];
+        }
+      }
+      fields.push(val);
+      // skip optional whitespace then comma
+      while (i < line.length && line[i] === ' ') i++;
+      if (i < line.length && line[i] === ',') i++;
+      else break; // end of line
+    } else {
+      // Unquoted field (also handles trailing comma → empty field)
+      const end = line.indexOf(',', i);
+      if (end === -1) {
+        fields.push(line.slice(i));
+        break;
+      } else {
+        fields.push(line.slice(i, end));
+        i = end + 1;
+        // If comma was the last char, push trailing empty field
+        if (i === line.length) {
+          fields.push('');
+          break;
+        }
+      }
+    }
+  }
+  return fields;
+}
+
+// ── Feodo Tracker (C2 IP blocklist) parser ───────────────────────────────────
+// Input: parsed JSON array from feodotracker.abuse.ch/downloads/ipblocklist.json
+// Output: normalized array; entries missing ip_address are dropped.
+export function parseFeodoIpBlocklist(rawArray) {
+  if (!Array.isArray(rawArray)) return [];
+  return rawArray
+    .filter(e => typeof e?.ip_address === 'string' && e.ip_address.length > 0)
+    .map(e => ({
+      ip: e.ip_address,
+      port: typeof e.port === 'number' ? e.port : (parseInt(e.port, 10) || null),
+      malware: e.malware ?? null,
+      asn: e.as_number ?? null,
+      asName: e.as_name ?? null,
+      country: e.country ?? null,
+      status: e.status ?? null,
+      firstSeen: e.first_seen ?? null,
+      lastOnline: e.last_online ?? null,
+    }));
+}
+
+// ── ThreatFox (IOC feed) parser ──────────────────────────────────────────────
+// Input: raw CSV text from threatfox.abuse.ch/export/csv/recent/
+// Output: normalized array.
+export function parseThreatFoxCsv(csvText) {
+  const rows = parseAbuseCsv(csvText);
+  return rows.map(r => ({
+    id: r['ioc_id'] ?? r['id'] ?? '',
+    iocValue: r['ioc_value'] ?? '',
+    iocType: r['ioc_type'] ?? '',
+    threatType: r['threat_type'] ?? '',
+    malware: r['malware_printable'] ?? r['fk_malware'] ?? '',
+    confidence: parseInt(r['confidence_level'] ?? '0', 10) || 0,
+    firstSeen: r['first_seen_utc'] ?? '',
+    tags: (r['tags'] ?? '').split(',').map(t => t.trim()).filter(Boolean),
+  }));
+}
+
+// ── URLhaus (malware URL feed) parser ────────────────────────────────────────
+// Input: raw CSV text from urlhaus.abuse.ch/downloads/csv_recent/
+// Output: normalized array.
+export function parseUrlhausCsv(csvText) {
+  const rows = parseAbuseCsv(csvText);
+  return rows.map(r => ({
+    id: r['id'] ?? '',
+    url: r['url'] ?? '',
+    status: r['url_status'] ?? '',
+    threat: r['threat'] ?? '',
+    tags: (r['tags'] ?? '').split(',').map(t => t.trim()).filter(Boolean),
+    dateAdded: r['dateadded'] ?? '',
+    reporter: r['reporter'] ?? '',
+  }));
+}
+
+// ── Frankfurter FX parser ────────────────────────────────────────────────────
+// Input: parsed JSON from api.frankfurter.dev/v1/latest?base=USD
+// Output: normalized { base, date, rates } or null if malformed.
+export function parseFrankfurterRates(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.base !== 'string' || typeof raw.rates !== 'object') return null;
+  return {
+    base: raw.base,
+    date: raw.date ?? null,
+    rates: raw.rates,
+  };
+}
+
+// ── IMF PortWatch parser ──────────────────────────────────────────────────────
+// Input: ArcGIS FeatureServer JSON { features: [{ attributes: {...} }] }
+// Output: latest-per-portid normalized array (drops rows missing portid).
+// Caller orders by date DESC so the first occurrence of each portid is newest.
+export function parsePortwatchChokepoints(arcgisJson) {
+  if (!arcgisJson || !Array.isArray(arcgisJson.features)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const feature of arcgisJson.features) {
+    const a = feature?.attributes;
+    if (!a || typeof a.portid !== 'string' || !a.portid) continue;
+    if (seen.has(a.portid)) continue; // keep first (newest) occurrence
+    seen.add(a.portid);
+    result.push({
+      id: a.portid,
+      name: a.portname ?? null,
+      date: a.date ?? null,
+      vessels: {
+        container: a.n_container ?? null,
+        dryBulk: a.n_dry_bulk ?? null,
+        generalCargo: a.n_general_cargo ?? null,
+        roro: a.n_roro ?? null,
+        tanker: a.n_tanker ?? null,
+        cargo: a.n_cargo ?? null,
+        total: a.n_total ?? null,
+      },
+      capacityTons: {
+        container: a.capacity_container ?? null,
+        dryBulk: a.capacity_dry_bulk ?? null,
+        generalCargo: a.capacity_general_cargo ?? null,
+        roro: a.capacity_roro ?? null,
+        tanker: a.capacity_tanker ?? null,
+        cargo: a.capacity_cargo ?? null,
+        total: a.capacity ?? null,
+      },
+    });
+  }
+  return result;
+}
+
+// ── Intel Expansion Cluster 3: IODA + openFDA + ORNL ODIN + Copernicus EMS + GLEIF ──
+
+// ── IODA internet outage alerts parser ───────────────────────────────────────
+// Input: parsed JSON from api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts
+// Output: normalized array of alert objects.
+export function parseIodaAlerts(raw) {
+  if (!raw || !Array.isArray(raw.data)) return [];
+  return raw.data.map(alert => ({
+    entityType: alert?.entity?.type ?? null,
+    entityCode: alert?.entity?.code ?? null,
+    entityName: alert?.entity?.name ?? null,
+    datasource: alert?.datasource ?? null,
+    score: typeof alert?.value === 'number' ? alert.value : null,
+    historyValue: typeof alert?.historyValue === 'number' ? alert.historyValue : null,
+    from: typeof alert?.time === 'number' ? alert.time : null,
+    until: typeof alert?.time === 'number' ? alert.time : null,
+    level: alert?.level ?? null,
+    condition: alert?.condition ?? null,
+    method: alert?.method ?? null,
+  }));
+}
+
+// ── openFDA drug shortage parser ─────────────────────────────────────────────
+// Input: parsed JSON from api.fda.gov/drug/shortages.json
+// Output: normalized array.
+export function parseFdaShortages(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    genericName: r.generic_name ?? null,
+    status: r.availability ?? null,
+    therapeuticCategory: r.openfda?.product_type?.[0] ?? null,
+    updateDate: r.update_type ?? null,
+    initialPostingDate: r.initial_posting_date ?? null,
+    packageNdc: r.package_ndc ?? null,
+  }));
+}
+
+// ── openFDA enforcement recall parser ────────────────────────────────────────
+// Input: parsed JSON from api.fda.gov/drug/enforcement.json or food/enforcement.json
+// Output: normalized array.
+export function parseFdaRecalls(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    product: r.product_description ?? null,
+    reason: r.reason_for_recall ?? null,
+    classification: r.classification ?? null,
+    state: r.state ?? null,
+    distributionPattern: r.distribution_pattern ?? null,
+    status: r.status ?? null,
+    recallDate: r.recall_initiation_date ?? null,
+    voluntaryMandated: r.voluntary_mandated ?? null,
+  }));
+}
+
+// ── ORNL ODIN power outage parser ────────────────────────────────────────────
+// Input: parsed JSON from ornl.opendatasoft.com API (Socrata-compatible)
+// Real fields: name, county, state, metersaffected, communitydescriptor
+export function parseOdinOutages(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    fips: r.communitydescriptor ?? null,
+    county: r.county ?? null,
+    state: r.state ?? null,
+    customersOut: typeof r.metersaffected === 'number' ? r.metersaffected : null,
+    customersRestored: typeof r.customersrestored === 'number' ? r.customersrestored : null,
+    utilityName: r.name ?? null,
+    utilityId: r.utility_id ?? null,
+    updated: r.reportedstarttime ?? null,
+  }));
+}
+
+// ── Copernicus EMS activation parser ─────────────────────────────────────────
+// Input: parsed JSON from mapping.emergency.copernicus.eu DRF paginated response
+// Real fields: code, name, category.slug, countries, activationTime, centroid
+export function parseCopernicusActivations(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    code: r.code ?? null,
+    title: r.name ?? null,
+    category: r.category?.slug ?? null,
+    categoryName: r.category?.name ?? null,
+    country: r.countries?.[0]?.short_name ?? null,
+    activationTime: r.activationTime ?? null,
+    lastUpdate: r.lastUpdate ?? null,
+    closed: r.closed ?? null,
+    drmPhase: r.drmPhase ?? null,
+    centroid: r.centroid ?? null,
+  }));
+}
+
+// ── GLEIF LEI entity parser ───────────────────────────────────────────────────
+// Input: parsed JSON:API from api.gleif.org/api/v1/lei-records
+// Real fields: id (LEI), attributes.entity.legalName.name, attributes.entity.legalAddress.country,
+//   attributes.entity.status, attributes.entity.legalForm.id, attributes.entity.jurisdiction
+export function parseGleifLeiRecords(raw) {
+  if (!raw || !Array.isArray(raw.data)) return [];
+  return raw.data.map(rec => {
+    const entity = rec?.attributes?.entity ?? {};
+    return {
+      lei: rec?.id ?? null,
+      name: entity?.legalName?.name ?? null,
+      country: entity?.legalAddress?.country ?? null,
+      jurisdiction: entity?.jurisdiction ?? null,
+      status: entity?.status ?? null,
+      legalForm: entity?.legalForm?.id ?? null,
+    };
+  });
+}
+
+// ── Intel Expansion Cluster 4 parsers ────────────────────────────────────────
+
+// ── GDELT GKG geocoded events parser ─────────────────────────────────────────
+// Input: GeoJSON FeatureCollection from api.gdeltproject.org/api/v1/gkg_geojson
+// Real properties: urlpubtimedate, name, urltone, url, mentionedthemes
+export function parseGdeltGkgEvents(raw) {
+  if (!raw || !Array.isArray(raw.features)) return [];
+  return raw.features.map(f => {
+    const coords = f?.geometry?.coordinates;
+    const props = f?.properties ?? {};
+    return {
+      name: props.name ?? null,
+      lat: Array.isArray(coords) ? coords[1] ?? null : null,
+      lon: Array.isArray(coords) ? coords[0] ?? null : null,
+      tone: typeof props.urltone === 'number' ? props.urltone : null,
+      url: props.url ?? null,
+      publishedAt: props.urlpubtimedate ?? null,
+      themes: typeof props.mentionedthemes === 'string'
+        ? props.mentionedthemes.split(';').map(t => t.trim()).filter(Boolean)
+        : [],
+    };
+  });
+}
+
+// ── SWPC OVATION aurora summary parser ───────────────────────────────────────
+// Input: { 'Forecast Time', coordinates:[[lon,lat,aurora%],...] }
+// Output: { forecastTime, maxAuroraPercent, highLatitudeBand } summary.
+export function parseSwpcAurora(raw) {
+  if (!raw || !Array.isArray(raw.coordinates)) {
+    return { forecastTime: null, observationTime: null, maxAuroraPercent: 0, highLatitudeBand: false };
+  }
+  let maxPct = 0;
+  for (const coord of raw.coordinates) {
+    const pct = coord[2];
+    if (typeof pct === 'number' && pct > maxPct) maxPct = pct;
+  }
+  return {
+    forecastTime: raw['Forecast Time'] ?? null,
+    observationTime: raw['Observation Time'] ?? null,
+    maxAuroraPercent: maxPct,
+    highLatitudeBand: maxPct >= 30,
+  };
+}
+
+// ── SWPC solar active regions parser ─────────────────────────────────────────
+// Input: array of active region records with flare probabilities
+// Real fields: region, latitude, longitude, location, mag_class, spot_class,
+//   c_flare_probability, m_flare_probability, x_flare_probability, observed_date
+export function parseSwpcSolarRegions(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => ({
+    region: r.region ?? null,
+    location: r.location ?? null,
+    lat: typeof r.latitude === 'number' ? r.latitude : null,
+    lon: typeof r.longitude === 'number' ? r.longitude : null,
+    magClass: r.mag_class ?? null,
+    spotClass: r.spot_class ?? null,
+    cFlareProbability: typeof r.c_flare_probability === 'number' ? r.c_flare_probability : null,
+    mFlareProbability: typeof r.m_flare_probability === 'number' ? r.m_flare_probability : null,
+    xFlareProbability: typeof r.x_flare_probability === 'number' ? r.x_flare_probability : null,
+    observedDate: r.observed_date ?? null,
+  }));
+}
+
+// ── AviationWeather SIGMET / G-AIRMET hazard parser ──────────────────────────
+// Handles isigmet, airsigmet, and gairmet record shapes.
+// isigmet fields: icaoId, firName, hazard, qualifier, validTimeFrom, validTimeTo, coords, rawSigmet
+// airsigmet fields: icaoId, airSigmetType, hazard, severity, validTimeFrom, validTimeTo, coords, rawAirSigmet
+// gairmet fields: tag, hazard, severity, due_to, validTime, expireTime, coords
+export function parseAviationHazards(raw, source) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => {
+    let hazardType, rawText, validFrom, validTo, coords;
+    if (source === 'isigmet') {
+      hazardType = r.hazard ?? null;
+      rawText = r.rawSigmet ?? null;
+      validFrom = r.validTimeFrom ?? null;
+      validTo = r.validTimeTo ?? null;
+      coords = r.coords ?? null;
+    } else if (source === 'airsigmet') {
+      hazardType = r.hazard ?? null;
+      rawText = r.rawAirSigmet ?? null;
+      validFrom = r.validTimeFrom ?? null;
+      validTo = r.validTimeTo ?? null;
+      coords = r.coords ?? null;
+    } else {
+      // gairmet
+      hazardType = r.hazard ?? null;
+      rawText = r.product ?? null;
+      validFrom = r.validTime ?? null;
+      validTo = r.expireTime ?? null;
+      coords = r.coords ?? null;
+    }
+    return {
+      hazardType,
+      source,
+      severity: r.severity ?? r.qualifier ?? null,
+      raw: rawText,
+      coords: coords ?? null,
+      validFrom,
+      validTo,
+    };
+  });
+}
+
+// ── FAA NAS airport event parser ─────────────────────────────────────────────
+// Input: array of airport-events records
+// Real fields: airportId, airportLongName, latitude, longitude,
+//   groundStop, groundDelay, arrivalDelay, departureDelay, airportClosure, freeForm
+export function parseFaaNasEvents(raw) {
+  if (!Array.isArray(raw)) return [];
+  const events = [];
+  for (const rec of raw) {
+    const airport = rec.airportId ?? null;
+    const airportName = rec.airportLongName ?? null;
+    const lat = rec.latitude != null ? Number(rec.latitude) : null;
+    const lon = rec.longitude != null ? Number(rec.longitude) : null;
+    const base = { airport, airportName, lat, lon };
+
+    if (rec.groundStop) {
+      events.push({ ...base, eventType: 'ground_stop', reason: rec.groundStop.reason ?? null,
+        start: rec.groundStop.startTime ?? null, end: rec.groundStop.endTime ?? null });
+    }
+    if (rec.groundDelay) {
+      events.push({ ...base, eventType: 'ground_delay', reason: rec.groundDelay.impactingCondition ?? null,
+        start: rec.groundDelay.startTime ?? null, end: rec.groundDelay.endTime ?? null });
+    }
+    if (rec.arrivalDelay) {
+      events.push({ ...base, eventType: 'arrival_delay', reason: rec.arrivalDelay.reason ?? null,
+        start: rec.arrivalDelay.updateTime ?? null, end: null });
+    }
+    if (rec.departureDelay) {
+      events.push({ ...base, eventType: 'departure_delay', reason: rec.departureDelay.reason ?? null,
+        start: rec.departureDelay.updateTime ?? null, end: null });
+    }
+    if (rec.airportClosure) {
+      events.push({ ...base, eventType: 'closure', reason: rec.airportClosure.text ?? null,
+        start: rec.airportClosure.startTime ?? null, end: rec.airportClosure.endTime ?? null });
+    }
+    if (rec.freeForm && !rec.groundStop && !rec.groundDelay && !rec.arrivalDelay && !rec.departureDelay && !rec.airportClosure) {
+      events.push({ ...base, eventType: 'notam', reason: rec.freeForm.text ?? null,
+        start: rec.freeForm.startTime ?? null, end: rec.freeForm.endTime ?? null });
+    }
+  }
+  return events;
+}
+
+// ── BfS ODL radiation station parser ─────────────────────────────────────────
+// Input: GeoJSON FeatureCollection from BfS IMIS WFS
+// Real property names: id, kenn, plz, name, site_status, start_measure, value, unit
+export function parseBfsOdlStations(raw) {
+  if (!raw || !Array.isArray(raw.features)) return [];
+  return raw.features
+    .map(f => {
+      const coords = f?.geometry?.coordinates;
+      const p = f?.properties ?? {};
+      return {
+        id: p.id ?? null,
+        kenn: p.kenn ?? null,
+        name: p.name ?? null,
+        lat: Array.isArray(coords) ? coords[1] ?? null : null,
+        lon: Array.isArray(coords) ? coords[0] ?? null : null,
+        doseRate: typeof p.value === 'number' ? p.value : null,
+        unit: p.unit ?? null,
+        measuredAt: p.start_measure ?? null,
+        siteStatus: p.site_status_text ?? null,
+      };
+    })
+    .filter(s => s.doseRate !== null);
+}
+
 export async function createLocalApiServer(options = {}) {
   if (!process.env.LOCAL_API_TOKEN) {
     console.error('[sidecar] FATAL: LOCAL_API_TOKEN not set — refusing to start');
@@ -16441,6 +17900,14 @@ export async function createLocalApiServer(options = {}) {
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
+ // DNS-rebinding guard: reject any request whose Host header doesn't name
+ // loopback on our own port, before routing or auth. Closes the rebinding
+ // path to every route, including the unauthenticated loopback-only mirrors.
+ if (!isAllowedHost(req.headers.host, context.port)) {
+ res.writeHead(403, { 'content-type': 'application/json' });
+ res.end(JSON.stringify({ error: 'Forbidden host' }));
+ return;
+ }
  // Rewrite alias paths to their canonical handlers (see ROUTE_ALIASES).
  const aliasTarget = ROUTE_ALIASES[requestUrl.pathname];
  if (aliasTarget) requestUrl.pathname = aliasTarget;
@@ -16510,7 +17977,11 @@ export async function createLocalApiServer(options = {}) {
  return;
  }
 
- if (!requestUrl.pathname.startsWith('/api/')) {
+ // The Patreon OAuth callback is a non-/api browser redirect handled inside
+ // dispatch() (pre-auth, above the global gate). Let it through the 404 gate
+ // like /gps/nmea; without this exemption the connect flow 404s and can never
+ // complete despite /api/patreon/authorize-url handing out the redirect URI.
+ if (!requestUrl.pathname.startsWith('/api/') && requestUrl.pathname !== '/oauth/patreon/callback') {
  res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Not found' }));
  return;
@@ -16527,9 +17998,13 @@ export async function createLocalApiServer(options = {}) {
  // webhook) must fall through.
  const PUBLIC_API_ROUTES = new Set([
  '/api/service-status',
+ '/api/health',
+ '/api/spaceweather/status',
+ '/api/spaceweather/alerts',
  '/api/youtube-embed',
  '/api/patreon/authorize-url',
  '/api/sms/command',
+ '/oauth/patreon/callback',
  ]);
  // Answer CORS preflight for every inline /api/ route here. Preflight
  // (OPTIONS) carries no Authorization header, and the inline handlers below
@@ -16559,43 +18034,6 @@ export async function createLocalApiServer(options = {}) {
    const feedId = requestUrl.pathname.slice('/api/feeds/health/'.length);
    if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return sendJson({ error: 'invalid feedId' }, 400);
    return sendJson(getFeedStatus(feedId));
- }
-
- // ── /api/health — lightweight liveness probe ──────────────────────
- if (requestUrl.pathname === '/api/health') {
- {
- const authHeader = req.headers['authorization'] || '';
- if (!isValidToken(authHeader)) {
- res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
- res.end(JSON.stringify({ error: 'Unauthorized' }));
- return;
- }
- }
- const mem = process.memoryUsage();
- const missing = wmMissingKeys();
- // Reflect the AIS connection state into the feed-health tracker so
- // FeedHealthPanel can render it without per-message instrumentation.
- if (aisState.socket?.readyState === 1) {
-   recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
- } else if (aisState.lastSnapshotAt > 0) {
-   recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
- }
- res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
- res.end(JSON.stringify({
- ok: true,
- pid: process.pid,
- uptime_ms: Date.now() - SIDECAR_START_MS,
- port: context.port,
- rss_mb: Math.round(mem.rss / 1024 / 1024),
- heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
- ais_connected: aisState.socket?.readyState === 1,
- ais_vessels: aisState.vessels.size,
- keys_configured: EXPECTED_API_KEYS.length - missing.length,
- keys_total: EXPECTED_API_KEYS.length,
- keys_missing: missing,
- feeds: getFeedSnapshots(),
- }));
- return;
  }
 
  // ── /api/diagnostics/self-test — fan-out probe across 10 domain routes ──

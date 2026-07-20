@@ -42,7 +42,7 @@ export class StablecoinPanel extends Panel {
  // Try sidecar first (CoinGecko), fall back to cloud API
  let sidecarOk = false;
  try {
- const sr = await fetch(`${getApiBaseUrl()}/api/stablecoin-markets`);
+ const sr = await fetch(`${getApiBaseUrl()}/api/stablecoin-markets`, { signal: AbortSignal.timeout(10_000) });
  if (sr.ok) {
  const sd = await sr.json() as ListStablecoinMarketsResponse;
  if (sd && typeof sd === 'object' && Array.isArray(sd.stablecoins) && sd.stablecoins.length > 0) {

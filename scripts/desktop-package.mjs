@@ -239,36 +239,51 @@ if (targetOs === 'macos') {
   // build gets a new cdhash, which resets both). Applied to ALL local builds
   // (not just when tauri's signature fails verification) so the identity is
   // never silently skipped.
-  const stableIdentity = (process.env.CRYSTALBALL_SIGN_IDENTITY || '').trim();
-  if (stableIdentity && !sign) {
+  // Default to the well-known local dev identity so a developer only has to
+  // create the "Crystal Ball Dev" self-signed cert once — no env var needed.
+  // Override with CRYSTALBALL_SIGN_IDENTITY. `--options runtime` matches
+  // tauri.conf `hardenedRuntime: true`; the sidecar's V8 JIT is covered by the
+  // allow-jit entitlements in Entitlements.plist.
+  const DEFAULT_LOCAL_SIGN_IDENTITY = 'Crystal Ball Dev';
+  const stableIdentity = (process.env.CRYSTALBALL_SIGN_IDENTITY || DEFAULT_LOCAL_SIGN_IDENTITY).trim();
+  if (sign) {
+ // Tauri already signed with the developer identity; just verify.
+ try {
+ verifyMacCodeSignature(appPath, 'App bundle');
+ } catch (error) {
+ console.error(`[desktop-package] Signed app bundle failed verification: ${error.message}`);
+ process.exit(1);
+ }
+  } else {
  const entitlementsPath = path.join('src-tauri', 'Entitlements.plist');
  const hasEntitlements = existsSync(entitlementsPath);
- console.log(`[desktop-package] Re-signing macOS app bundle with stable identity "${stableIdentity}" (CRYSTALBALL_SIGN_IDENTITY) — keychain/location grants persist across rebuilds`);
+ let stableSigned = false;
+ if (stableIdentity) {
+ try {
+ console.log(`[desktop-package] Signing macOS app bundle with stable identity "${stableIdentity}" (hardened runtime) — keychain/location grants persist across rebuilds`);
  run('codesign', [
  '--force',
  '--deep',
+ '--options',
+ 'runtime',
  '--sign',
  stableIdentity,
  ...(hasEntitlements ? ['--entitlements', entitlementsPath] : []),
  appPath,
  ]);
  verifyMacCodeSignature(appPath, 'App bundle');
-  } else {
- try {
- verifyMacCodeSignature(appPath, 'App bundle');
+ stableSigned = true;
  } catch (error) {
- if (sign) {
- console.error(`[desktop-package] Signed app bundle failed verification: ${error.message}`);
- process.exit(1);
+ const bar = '='.repeat(78);
+ console.warn(`\n${bar}\n[desktop-package] ⚠️  STABLE SIGNING FAILED — falling back to AD-HOC.\n  Identity "${stableIdentity}" not found in the keychain (or codesign error:\n  ${error.message}).\n  Ad-hoc builds get a NEW cdhash every rebuild, so macOS RE-PROMPTS for all\n  ~29 keychain keys AND re-asks for Location Services after each install.\n  Fix (one-time): create a self-signed "Crystal Ball Dev" Code Signing cert in\n  Keychain Access (Certificate Assistant → Create a Certificate), then rebuild.\n${bar}\n`);
  }
-
+ }
+ if (!stableSigned) {
+ // Ad-hoc fallback (unchanged behavior). Keep the codesign flags as an
+ // inline array literal — the desktop-package-signing.test.mjs regression
+ // test grep-matches on the literal flag sequence so any dynamic
+ // `signArgs.push()` style hides the intent from the contract check.
  console.log('[desktop-package] Re-signing macOS app bundle with ad-hoc signature for local packaging');
- const entitlementsPath = path.join('src-tauri', 'Entitlements.plist');
- const hasEntitlements = existsSync(entitlementsPath);
- // Keep the codesign flags as an inline array literal — the
- // desktop-package-signing.test.mjs regression test grep-matches on the
- // literal flag sequence so any dynamic `signArgs.push()` style hides the
- // intent from the contract check.
  run('codesign', [
  '--force',
  '--deep',

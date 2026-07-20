@@ -1,167 +1,144 @@
-/**
- * Pinned Webcams Panel — shows up to 4 user-pinned webcams as live iframes.
- * Webcams can be pinned via the map context menu (right-click a webcam marker).
- * Ported from bradleybond512/crystal-ball upstream.
- */
-
+/* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
-import { t } from '../services/i18n';
-import {
-  getPinnedWebcams,
-  getActiveWebcams,
-  unpinWebcam,
-  toggleWebcam,
-  onPinnedChange,
-} from '../services/webcams/pinned-store';
-
-const MAX_SLOTS = 4;
-const PLAYER_FALLBACK = 'https://webcams.windy.com/webcams/public/embed/player';
-
-function buildPlayerUrl(webcamId: string, playerUrl?: string): string {
-  if (playerUrl) return playerUrl;
-  return `${PLAYER_FALLBACK}/${encodeURIComponent(webcamId)}/day`;
-}
+import { fetchUnifiedWebcams } from '@/services/webcams/fetcher';
+import { getPinnedIds, unpinFeed, onPinnedChange } from '@/services/webcams/pinned-store';
+import type { WebcamFeed } from '@/services/webcams/webcam-types';
+import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 
 export class PinnedWebcamsPanel extends Panel {
-  private unsubscribe: (() => void) | null = null;
+  private feeds: WebcamFeed[] = [];
+  private loaded = false;
+  private readonly unsubscribe: () => void;
 
   constructor() {
- super({
- id: 'pinned-webcams',
- title: t('panels.pinnedWebcams') || 'Pinned Webcams',
- trackActivity: false,
- });
- this.unsubscribe = onPinnedChange(() => this.render());
- this.render();
+    super({ id: 'pinned-webcams', title: 'Pinned Webcams', className: 'panel-wide' });
+    this.unsubscribe = onPinnedChange(() => this.render());
+    void this.load();
   }
 
-  private render(): void {
- while (this.content.firstChild) this.content.firstChild.remove();
- this.content.className = 'panel-content pinned-webcams-content';
-
- const active = getActiveWebcams();
- const allPinned = getPinnedWebcams();
-
- const grid = document.createElement('div');
- grid.className = 'pinned-webcams-grid';
-
- for (let i = 0; i < MAX_SLOTS; i++) {
- const slot = document.createElement('div');
- slot.className = 'pinned-webcam-slot';
-
- const cam = active[i];
- if (cam) {
- const iframe = document.createElement('iframe');
- iframe.className = 'pinned-webcam-iframe';
- iframe.src = buildPlayerUrl(cam.webcamId, cam.playerUrl);
- iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
- iframe.setAttribute('frameborder', '0');
- iframe.title = cam.title || cam.webcamId;
- iframe.allow = 'autoplay; encrypted-media';
- iframe.allowFullscreen = true;
- iframe.setAttribute('loading', 'lazy');
- slot.append(iframe);
-
- const labelBar = document.createElement('div');
- labelBar.className = 'pinned-webcam-label';
-
- const titleSpan = document.createElement('span');
- titleSpan.className = 'pinned-webcam-title';
- titleSpan.textContent = cam.title || cam.webcamId;
- labelBar.append(titleSpan);
-
- const toggleBtn = document.createElement('button');
- toggleBtn.className = 'pinned-webcam-toggle';
- toggleBtn.title = 'Hide stream';
- toggleBtn.textContent = '⏸';
- toggleBtn.addEventListener('click', () => toggleWebcam(cam.webcamId));
- labelBar.append(toggleBtn);
-
- const unpinBtn = document.createElement('button');
- unpinBtn.className = 'pinned-webcam-unpin';
- unpinBtn.title = 'Unpin';
- unpinBtn.textContent = '✖';
- unpinBtn.addEventListener('click', () => unpinWebcam(cam.webcamId));
- labelBar.append(unpinBtn);
-
- slot.append(labelBar);
- } else {
- slot.classList.add('pinned-webcam-slot--empty');
- const placeholder = document.createElement('div');
- placeholder.className = 'pinned-webcam-placeholder';
- placeholder.textContent = 'Right-click a webcam on the map to pin it here';
- slot.append(placeholder);
- }
-
- grid.append(slot);
- }
-
- this.content.append(grid);
-
- // Show overflow list when more than MAX_SLOTS webcams are pinned
- if (allPinned.length > MAX_SLOTS) {
- const listSection = document.createElement('div');
- listSection.className = 'pinned-webcams-list';
-
- const listHeader = document.createElement('div');
- listHeader.className = 'pinned-webcams-list-header';
- listHeader.textContent = `All pinned (${allPinned.length})`;
- listSection.append(listHeader);
-
- allPinned.forEach(cam => {
- const row = document.createElement('div');
- row.className = 'pinned-webcam-row' + (cam.active ? ' pinned-webcam-row--active' : '');
-
- const name = document.createElement('span');
- name.className = 'pinned-webcam-row-name';
- name.textContent = cam.title || cam.webcamId;
- row.append(name);
-
- const country = document.createElement('span');
- country.className = 'pinned-webcam-row-country';
- country.textContent = cam.country;
- row.append(country);
-
- const toggleBtn = document.createElement('button');
- toggleBtn.className = 'pinned-webcam-row-toggle';
- toggleBtn.textContent = cam.active ? 'ON' : 'OFF';
- toggleBtn.addEventListener('click', () => toggleWebcam(cam.webcamId));
- row.append(toggleBtn);
-
- const removeBtn = document.createElement('button');
- removeBtn.className = 'pinned-webcam-row-remove';
- removeBtn.textContent = '✖';
- removeBtn.title = 'Unpin';
- removeBtn.addEventListener('click', () => unpinWebcam(cam.webcamId));
- row.append(removeBtn);
-
- listSection.append(row);
- });
-
- this.content.append(listSection);
- }
-
- // Empty state when nothing pinned yet
- if (allPinned.length === 0) {
- const empty = document.createElement('div');
- empty.className = 'pinned-webcams-empty';
- empty.innerHTML = '<div class="pinned-webcams-empty-icon">📷</div>' +
- '<div class="pinned-webcams-empty-text">No webcams pinned yet.<br>Right-click a webcam marker on the map to pin it.</div>';
- this.content.append(empty);
- }
+  public destroy(): void {
+    this.unsubscribe();
+    super.destroy();
   }
 
   public refresh(): void {
- this.render();
+    void this.load();
   }
 
-  public override destroy(): void {
- this.unsubscribe?.();
- this.unsubscribe = null;
- this.content.querySelectorAll('iframe').forEach(f => {
- f.src = 'about:blank';
- f.remove();
- });
- super.destroy();
+  private async load(): Promise<void> {
+    try {
+      const catalog = await fetchUnifiedWebcams();
+      this.feeds = catalog.feeds;
+    } catch {
+      // fetcher already falls back to an empty catalog; nothing to surface here.
+    } finally {
+      this.loaded = true;
+      this.render();
+    }
+  }
+
+  private get pinned(): WebcamFeed[] {
+    const ids = new Set(getPinnedIds());
+    return this.feeds.filter((f) => ids.has(f.id));
+  }
+
+  private render(): void {
+    const el = this.getContentElement();
+    while (el.firstChild) el.firstChild.remove();
+    el.className = 'panel-content pinned-webcams-content';
+
+    const pinnedIds = getPinnedIds();
+    if (pinnedIds.length === 0) {
+      const empty = document.createElement('p');
+      empty.style.padding = '12px';
+      empty.style.opacity = '0.7';
+      empty.style.fontSize = '13px';
+      empty.textContent = 'Pin a cam from the Webcams panel (📌) to keep it here.';
+      el.append(empty);
+      return;
+    }
+
+    if (!this.loaded) {
+      const loading = document.createElement('p');
+      loading.style.padding = '12px';
+      loading.textContent = 'Loading pinned cams…';
+      el.append(loading);
+      return;
+    }
+
+    const pinned = this.pinned;
+    const grid = document.createElement('div');
+    grid.className = 'pinned-webcams-grid';
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(220px, 1fr))';
+    grid.style.gap = '8px';
+    grid.style.padding = '8px';
+    for (const f of pinned) grid.append(this.buildCard(f));
+    el.append(grid);
+
+    const unresolved = pinnedIds.length - pinned.length;
+    if (unresolved > 0) {
+      const note = document.createElement('p');
+      note.style.padding = '4px 8px';
+      note.style.opacity = '0.6';
+      note.style.fontSize = '11px';
+      note.textContent = `${unresolved} pinned cam${unresolved === 1 ? '' : 's'} currently unavailable.`;
+      el.append(note);
+    }
+  }
+
+  private buildCard(f: WebcamFeed): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'pinned-webcam-card';
+    card.style.border = '1px solid #333';
+    card.style.borderRadius = '4px';
+    card.style.overflow = 'hidden';
+    card.style.position = 'relative';
+
+    const img = document.createElement('img');
+    // FAA feeds carry a /api/ resolver URL that returns JSON, not image bytes —
+    // resolve to the real https image before setting src (see frame-resolver).
+    void resolveFrameUrl(f.snapshotUrl).then((url) => {
+      if (url) img.src = url;
+      else { img.style.opacity = '0.3'; img.style.background = '#222'; }
+    });
+    img.alt = f.name;
+    img.loading = 'lazy';
+    img.style.width = '100%';
+    img.style.aspectRatio = '16 / 9';
+    img.style.objectFit = 'cover';
+    img.style.background = '#111';
+    img.addEventListener('error', () => {
+      img.style.opacity = '0.3';
+      img.style.background = '#222';
+    });
+
+    const unpin = document.createElement('button');
+    unpin.textContent = '📌✕';
+    unpin.title = 'Unpin';
+    unpin.style.position = 'absolute';
+    unpin.style.top = '4px';
+    unpin.style.right = '4px';
+    unpin.style.background = 'rgba(0,0,0,0.6)';
+    unpin.style.color = '#fff';
+    unpin.style.border = 'none';
+    unpin.style.borderRadius = '3px';
+    unpin.style.padding = '2px 6px';
+    unpin.style.cursor = 'pointer';
+    unpin.addEventListener('click', () => unpinFeed(f.id));
+
+    const name = document.createElement('div');
+    name.textContent = f.name;
+    name.style.padding = '6px 8px';
+    name.style.fontSize = '12px';
+    name.style.fontWeight = '600';
+    name.style.overflow = 'hidden';
+    name.style.textOverflow = 'ellipsis';
+    name.style.whiteSpace = 'nowrap';
+
+    card.append(img);
+    card.append(unpin);
+    card.append(name);
+    return card;
   }
 }

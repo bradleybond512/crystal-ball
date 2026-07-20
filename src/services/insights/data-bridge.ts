@@ -26,6 +26,7 @@ import { actionsForEarthquake } from '../action-guidance/earthquake-action-guida
 import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provider-redundancy';
 import { getProviderDefinition } from '../providers/provider-registry';
 import { recordProviderFetchOutcome, getProviderHealthState } from '../providers/providers-state';
+import { getFusionProviderSnapshots } from '../providers/fusion-publish';
 // ── Public API ──────────────────────────────────────────────────────────
 
 /** A subset of the `WeatherAlert` shape from `services/weather.ts` —
@@ -87,7 +88,14 @@ export function bridgeWeatherAlertsToInsights(
   const log = options.log ?? _noop;
   const places = options.savedPlaces ?? getPersonalProfile().savedPlaces;
   const events: IncomingEvent[] = alerts.map((a) => alertToEvent(a));
-  setRecentEvents(events);
+  // Replace only the weather-alert slice — mirror the earthquake bridge.
+  // Events published by other bridges (earthquakes, the smoke callout's
+  // `smoke-*` event which also carries domain 'weather') must survive a
+  // weather refresh or they flicker out between their own refresh ticks.
+  const preserved = getRecentEvents().filter(
+    (e) => e.domain !== 'weather' || e.eventId.startsWith('smoke-'),
+  );
+  setRecentEvents([...preserved, ...events]);
 
   const situation = pickActiveSituation(alerts, places);
   setActiveSituation(situation);
@@ -232,7 +240,8 @@ function quakeToEvent(q: EarthquakeLike): IncomingEvent {
 }
 
 function quakeTitle(q: EarthquakeLike): string {
-  return `M${q.magnitude.toFixed(1)} earthquake${q.place ? ` near ${q.place}` : ''}`;
+  const where = q.place ? ` near ${q.place}` : '';
+  return `M${q.magnitude.toFixed(1)} earthquake${where}`;
 }
 
 function magnitudeToScore(magnitude: number): number {
@@ -328,7 +337,13 @@ export function bridgeSourcesToProviderRedundancy(
     }
   }
 
-  const snapshots = [...registrySnapshots, ...legacy];
+  const base = [...registrySnapshots, ...legacy];
+  // Overlay live fusion snapshots — they carry recentFactFingerprint, so a
+  // fused domain (e.g. disasters: USGS + EMSC) can read 'redundant_agreement'
+  // instead of 'redundant_unverified'. Fusion wins by providerId.
+  const fusion = getFusionProviderSnapshots(now);
+  const fusionIds = new Set(fusion.map((f) => f.providerId));
+  const snapshots = [...base.filter((s) => !fusionIds.has(s.providerId)), ...fusion];
   setProviderSnapshots(snapshots);
   return snapshots;
 }

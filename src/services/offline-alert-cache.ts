@@ -15,6 +15,8 @@
  * const alerts = await withOfflineCache('nws-alerts', fetchNwsAlerts, 4 * 3600_000);
  */
 
+import { safeSetItem } from '@/utils/safe-storage';
+
 export interface CachedSnapshot<T> {
   data: T;
   cachedAt: number; // unix ms
@@ -22,6 +24,32 @@ export interface CachedSnapshot<T> {
   isStale: boolean; // true when served from offline cache
   staleDurationMs: number; // how long since last live fetch
   source: 'network' | 'offline-cache';
+}
+
+export interface FeedFreshnessDisposition {
+  /** True only for a live (network) fetch. False when served from offline cache. */
+  fresh: boolean;
+  /** Human-readable staleness reason when !fresh (for dataFreshness.recordError + the feed status). */
+  staleReason: string | null;
+  /** The real "last live fetch" timestamp to record when stale (cachedAt), so the
+   *  staleness clock reflects the actual age — never advanced to now. */
+  staleTimestamp: number | null;
+}
+
+/**
+ * Decide how a feed should record its freshness from a CachedSnapshot.
+ *
+ * Consumers MUST advance freshness (recordUpdate / recordSourceUpdate(now)) only
+ * when `fresh` — a snapshot served from the offline cache (a failed live fetch)
+ * must be recorded as an ERROR, otherwise a stale snapshot renders as a fresh
+ * live update and a safety feed's StalenessBanner stays green during an outage.
+ */
+export function feedFreshnessFromSnapshot<T>(snapshot: CachedSnapshot<T>): FeedFreshnessDisposition {
+  if (snapshot.isStale) {
+    const ageMin = Math.round(snapshot.staleDurationMs / 60_000);
+    return { fresh: false, staleReason: `served from offline cache (~${ageMin}m stale)`, staleTimestamp: snapshot.cachedAt };
+  }
+  return { fresh: true, staleReason: null, staleTimestamp: null };
 }
 
 export interface OfflineCacheEntry<T> {
@@ -56,7 +84,7 @@ function writeEntry<T>(serviceId: string, data: T): void {
  cachedAt: Date.now(),
  version: CACHE_VERSION,
  };
- localStorage.setItem(storageKey(serviceId), JSON.stringify(entry));
+ safeSetItem(storageKey(serviceId), JSON.stringify(entry));
   } catch {
  // localStorage might be full — fail silently
   }
@@ -81,10 +109,30 @@ function clearEntry(serviceId: string): void {
  * @param fetchFn The actual network fetch function
  * @param staleMs How long to trust cached data (default: 4 hours)
  */
-export async function withOfflineCache<T>(
+// Coalesce concurrent callers for the same serviceId onto one in-flight fetch,
+// so N panels/tasks requesting the same feed at once don't each hit the network.
+const inFlightOfflineFetch = new Map<string, Promise<CachedSnapshot<unknown>>>();
+
+export function withOfflineCache<T>(
   serviceId: string,
   fetchFn: () => Promise<T>,
   staleMs = 4 * 3_600_000
+): Promise<CachedSnapshot<T>> {
+  const existing = inFlightOfflineFetch.get(serviceId);
+  if (existing) return existing as Promise<CachedSnapshot<T>>;
+  const run = runWithOfflineCache(serviceId, fetchFn, staleMs);
+  inFlightOfflineFetch.set(serviceId, run as Promise<CachedSnapshot<unknown>>);
+  return run.finally(() => {
+ if (inFlightOfflineFetch.get(serviceId) === (run as Promise<CachedSnapshot<unknown>>)) {
+ inFlightOfflineFetch.delete(serviceId);
+ }
+  });
+}
+
+async function runWithOfflineCache<T>(
+  serviceId: string,
+  fetchFn: () => Promise<T>,
+  staleMs: number
 ): Promise<CachedSnapshot<T>> {
   try {
  const data = await fetchFn();

@@ -90,7 +90,7 @@ export class SupplyChainDisruptionPanel extends Panel {
   /** Pull the live Baltic Dry Index from the sidecar; degraded = FRED proxy. */
   private async _fetchBdi(): Promise<void> {
     try {
-      const resp = await fetch('/api/supplychain/bdi', { headers: { Accept: 'application/json' } });
+      const resp = await fetch('/api/supplychain/bdi', { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
       if (!resp.ok) { this.bdi = null; this.bdiDegraded = true; this.render(); return; }
       const data = (await resp.json()) as { bdi?: number; date?: string; degraded?: boolean };
       this.bdi = typeof data.bdi === 'number' ? data.bdi : null;

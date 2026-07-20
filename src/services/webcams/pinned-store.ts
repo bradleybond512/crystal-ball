@@ -1,112 +1,55 @@
-/**
- * Pinned webcam store — localStorage-backed, event-driven.
- * Ported from bradleybond512/crystal-ball upstream.
- */
+import { safeSetItem } from '@/utils/safe-storage';
 
-const STORAGE_KEY = 'wm-pinned-webcams';
-const CHANGE_EVENT = 'wm-pinned-webcams-changed';
-const MAX_ACTIVE = 4;
+const PINNED_KEY = 'crystalball-pinned-webcams';
+const listeners = new Set<() => void>();
 
-export interface PinnedWebcam {
-  webcamId: string;
-  title: string;
-  lat: number;
-  lng: number;
-  category: string;
-  country: string;
-  playerUrl: string;
-  active: boolean;
-  pinnedAt: number;
-}
-
-let _cachedList: PinnedWebcam[] | null = null;
-let _cacheFrame: number | null = null;
-
-function load(): PinnedWebcam[] {
-  if (_cachedList !== null) return _cachedList;
+export function getPinnedIds(): string[] {
   try {
- const raw = localStorage.getItem(STORAGE_KEY);
- _cachedList = raw ? (JSON.parse(raw) as PinnedWebcam[]) : [];
+    const raw = localStorage.getItem(PINNED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
   } catch {
- _cachedList = [];
+    return [];
   }
-  if (_cacheFrame === null) {
- _cacheFrame = requestAnimationFrame(() => { _cachedList = null; _cacheFrame = null; });
+}
+
+export function isPinned(id: string): boolean {
+  return getPinnedIds().includes(id);
+}
+
+function persist(ids: string[]): void {
+  safeSetItem(PINNED_KEY, JSON.stringify(ids));
+  for (const cb of listeners) cb();
+}
+
+export function pinFeed(id: string): void {
+  const current = getPinnedIds();
+  if (current.includes(id)) return;
+  persist([...current, id]);
+}
+
+export function unpinFeed(id: string): void {
+  const current = getPinnedIds();
+  if (!current.includes(id)) return;
+  persist(current.filter((x) => x !== id));
+}
+
+/** Toggle pinned state for a feed id. Returns the new pinned state. */
+export function togglePin(id: string): boolean {
+  const current = getPinnedIds();
+  if (current.includes(id)) {
+    persist(current.filter((x) => x !== id));
+    return false;
   }
-  return _cachedList;
+  persist([...current, id]);
+  return true;
 }
 
-function showToast(msg: string): void {
-  const el = document.createElement('div');
-  el.className = 'wm-toast';
-  el.textContent = msg;
-  document.body.append(el);
-  setTimeout(() => el.remove(), 3000);
-}
-
-function save(webcams: PinnedWebcam[]): void {
-  try {
- localStorage.setItem(STORAGE_KEY, JSON.stringify(webcams));
-  } catch (error) {
- console.warn('[pinned-webcams] localStorage save failed:', error);
- showToast('Could not save pinned webcams — storage full');
-  }
-  _cachedList = null;
-  window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
-}
-
-export function getPinnedWebcams(): PinnedWebcam[] {
-  return load();
-}
-
-export function getActiveWebcams(): PinnedWebcam[] {
-  return load()
- .filter(w => w.active)
- .sort((a, b) => a.pinnedAt - b.pinnedAt)
- .slice(0, MAX_ACTIVE);
-}
-
-export function isPinned(webcamId: string): boolean {
-  return load().some(w => w.webcamId === webcamId);
-}
-
-export function pinWebcam(webcam: Omit<PinnedWebcam, 'active' | 'pinnedAt'>): void {
-  const list = load();
-  if (list.some(w => w.webcamId === webcam.webcamId)) return;
-  const activeCount = list.filter(w => w.active).length;
-  list.push({
- ...webcam,
- active: activeCount < MAX_ACTIVE,
- pinnedAt: Date.now(),
-  });
-  save(list);
-}
-
-export function unpinWebcam(webcamId: string): void {
-  const list = load().filter(w => w.webcamId !== webcamId);
-  save(list);
-}
-
-export function toggleWebcam(webcamId: string): void {
-  const list = load();
-  const target = list.find(w => w.webcamId === webcamId);
-  if (!target) return;
-  if (target.active) {
- target.active = false;
-  } else {
- const activeList = list
- .filter(w => w.active)
- .sort((a, b) => a.pinnedAt - b.pinnedAt);
- if (activeList.length >= MAX_ACTIVE && activeList[0]) {
- activeList[0].active = false;
- }
- target.active = true;
-  }
-  save(list);
-}
-
-export function onPinnedChange(handler: () => void): () => void {
-  const wrapped = () => handler();
-  window.addEventListener(CHANGE_EVENT, wrapped);
-  return () => window.removeEventListener(CHANGE_EVENT, wrapped);
+/** Subscribe to pin/unpin changes. Returns an unsubscribe function. */
+export function onPinnedChange(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }

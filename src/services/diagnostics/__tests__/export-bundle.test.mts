@@ -6,6 +6,7 @@ import {
   exportBundleToJson,
   exportBundleToMarkdown,
   redactDetail,
+  redactString,
   type SelfTestReportShape,
 } from '../export-bundle.ts';
 import { createDiagnosticEventBus } from '../diagnostic-events.ts';
@@ -166,6 +167,22 @@ test('redactDetail: api keys, tokens, and emails are stripped from detail object
   assert.equal(nested.authToken, '[redacted]');
   assert.match(String(nested.message), /\[redacted\]/);
   assert.equal(obj.safe, 'visible');
+});
+
+test('redactString: scrubs the OS username from home-directory paths', () => {
+  // The raw log/breadcrumb appendix is the main carrier of these.
+  assert.match(redactString('at file:///Users/bradleybond/Developer/app.ts:5'), /\/Users\/\[redacted\]\/Developer/);
+  assert.match(redactString('error in /home/alice/src/x.js'), /\/home\/\[redacted\]\/src/);
+  assert.match(redactString('C:\\Users\\Bob\\app\\main.js'), /C:\\Users\\\[redacted\]\\app/);
+  // A non-home path is left intact.
+  assert.equal(redactString('/usr/local/bin/node'), '/usr/local/bin/node');
+});
+
+test('redactString: scrubs credentials, tokens, and URL query secrets', () => {
+  assert.match(redactString('Authorization: Bearer abcd1234efgh5678'), /Bearer \[redacted\]/);
+  assert.match(redactString('key sk-ABCDEFGHIJKLMNOP123'), /\[redacted\]/);
+  assert.match(redactString('GET /api/x?token=supersecretvalue&z=1'), /token=\[redacted\]/);
+  assert.match(redactString('contact me@example.com'), /\[redacted\]/);
 });
 
 test('redactDetail: lat/lng coordinates are coarsened to ~10 km grid', () => {

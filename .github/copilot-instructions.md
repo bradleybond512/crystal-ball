@@ -11,7 +11,7 @@ Deployment: static SPA on Vercel CDN + 60+ Vercel Edge Functions + optional Taur
 ## Repository Layout
 
 ```
-src/components/ UI components — Panel subclasses, map, modals (~50 panels)
+src/components/ UI components — Panel subclasses, map, modals (~400 panels)
 src/services/ Data fetching modules — sebuf clients, AI, signal analysis
 src/config/ Static data and variant configs (feeds, geo, military, pipelines)
 src/generated/ Auto-generated sebuf client + server stubs (do NOT edit by hand)

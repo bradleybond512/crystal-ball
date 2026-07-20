@@ -29,7 +29,7 @@ function ctTrendArrow(trend: RegionRisk['trend']): string {
 }
 
 function ctTrendColor(trend: RegionRisk['trend']): string {
-  if (trend === 'increasing') return '#f44336';
+  if (trend === 'increasing') return '#ef4444';
   if (trend === 'decreasing') return '#4caf50';
   return '#9e9e9e';
 }
@@ -61,7 +61,7 @@ export class CounterterrorismPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -116,8 +116,8 @@ export class CounterterrorismPanel extends Panel {
     const critRegions = data.regions.filter((r) => r.tier === 'critical');
     if (critRegions.length > 0) {
       const names = critRegions.map((r) => escapeHtmlSimple(r.region)).join(', ');
-      alertBar = `<div style="padding:5px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);
-        font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+      alertBar = `<div style="padding:5px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);
+        font-size:11px;font-weight:700;color:#ff453a;letter-spacing:0.04em;">
         &#9888; CRITICAL THREAT: ${names}
       </div>`;
     }

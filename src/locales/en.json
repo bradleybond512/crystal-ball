@@ -378,6 +378,12 @@
  },
  "openSettings": "Open Settings",
  "skipSetup": "Skip the setup — configure individual API keys below for free access to all data sources.",
+ "reloadKeychain": {
+  "button": "Reload keys from Keychain",
+  "reading": "Reading Keychain…",
+  "loaded": "Loaded {{count}} keys",
+  "none": "No keys found in Keychain"
+ },
  "summary": {
  "desktop": "Desktop mode",
  "web": "Web mode (read-only, server-managed credentials)",
@@ -2095,6 +2101,9 @@
  "ago": "{{time}} ago",
  "retrying": "Retrying...",
  "failedToLoad": "Failed to load data",
+ "sourceUnreachable": "Source unreachable",
+ "retry": "Retry",
+ "waitingOnKey": "Waiting on API key — add it in Settings → API Keys",
  "noDataShort": "No data",
  "upstreamUnavailable": "Upstream API unavailable — will retry automatically",
  "loadingUcdpEvents": "Loading UCDP events",

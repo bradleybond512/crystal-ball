@@ -134,6 +134,21 @@ export function createAlgorithmEvaluationLedger(
     if (records.has(id)) {
       throw new Error(`Evaluation "${id}" already exists`);
     }
+    // Score-sanity gate: a non-finite score (NaN / ±Infinity) permanently
+    // poisons every mean-based hit-rate and weighted-accuracy aggregate that
+    // reads this ledger — one bad record makes the whole algorithm's stats NaN
+    // forever, with no visible cause. SANITIZE rather than throw: drop the score
+    // (so it can't enter any aggregate) but keep the record, and note the
+    // rejection so it stays visible. Throwing here would crash the tracked-*
+    // wrappers, which call this with no try/catch on a live cadence. Range (0..1)
+    // is left unenforced by design: some algorithms log on other scales.
+    let sanitizedScore = input.score;
+    let notes = input.notes;
+    if (input.score !== undefined && !Number.isFinite(input.score)) {
+      const prefix = input.notes ? `${input.notes} ` : '';
+      notes = `${prefix}[non-finite score ${String(input.score)} rejected]`;
+      sanitizedScore = undefined;
+    }
     const record: EvaluationRecord = {
       id,
       algorithmId: input.algorithmId,
@@ -142,9 +157,9 @@ export function createAlgorithmEvaluationLedger(
       at: input.at,
       durationMs: input.durationMs,
       inputHash: input.inputHash,
-      score: input.score,
+      score: sanitizedScore,
       label: input.label,
-      notes: input.notes,
+      notes,
       detail: input.detail ? { ...input.detail } : undefined,
     };
     records.set(id, record);

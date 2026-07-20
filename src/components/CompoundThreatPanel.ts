@@ -30,7 +30,7 @@ const DOMAIN_ICONS: Record<ThreatDomain, string> = {
 };
 
 function getScoreColor(score: number): string {
-  if (score >= 75) return '#f44336';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#4caf50';
@@ -53,7 +53,7 @@ export class CompoundThreatPanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 45_000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 45_000);
   }
 
   private render(): void {

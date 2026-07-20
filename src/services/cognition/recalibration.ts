@@ -34,13 +34,16 @@
 
 import type { PredictionRecord } from '@/services/intelligence/forecast-calibration';
 import type { FactDomain } from '@/services/intelligence/types';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Number of equal-width bins across [0, 1]. */
 export const BIN_COUNT = 10;
 
-/** Laplace shrinkage pseudo-count: n_bin / (n_bin + SHRINK_PRIOR) */
+/** Laplace shrinkage pseudo-count: n_bin / (n_bin + SHRINK_PRIOR).
+ *  Historical hardcoded default — the live value is the PR 12 tunable
+ *  'recalibration:shrinkPrior' (bounds [5, 20]), read at curve-build time. */
 export const SHRINK_PRIOR = 10;
 
 /** Minimum resolved records for a per-domain curve (else fall back). */
@@ -193,6 +196,7 @@ export function buildCurve(
   }
 
   // Build raw bins with shrinkage on the correction term.
+  const shrinkPrior = getTunedParam('recalibration', 'shrinkPrior', SHRINK_PRIOR);
   const pavItems: PavItem[] = [];
   const bins: ReliabilityBin[] = [];
 
@@ -204,7 +208,7 @@ export function buildCurve(
     const rawObservedRate = n > 0 ? binTrueCount[i]! / n : predictedMean;
 
     // Laplace-style shrinkage: pull correction toward 0 when n is small.
-    const shrinkage = n / (n + SHRINK_PRIOR);
+    const shrinkage = n / (n + shrinkPrior);
     const rawCorrection = rawObservedRate - predictedMean;
     const correction = rawCorrection * shrinkage;
     const calibratedValue = predictedMean + correction;

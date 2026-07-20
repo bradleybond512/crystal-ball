@@ -39,6 +39,36 @@ export function getBreadcrumbs(): readonly Breadcrumb[] {
   return breadcrumbs;
 }
 
+// ─── Synchronous freeze-surviving boot trace ────────────────────────────────
+// The console→desktop.log bridge forwards over async IPC, so a mark emitted
+// right before a main-thread freeze never flushes before the watchdog reloads
+// the webview — the file log loses exactly the lines that bracket the stall.
+// localStorage.setItem is SYNCHRONOUS and durable, so a breadcrumb written just
+// before a heavy op survives even if the very next line wedges the thread, and
+// is readable after the reload. Keep it tiny (a short ring in one key) so it
+// never contributes to the localStorage-quota pressure it's diagnosing.
+const BOOT_TRACE_KEY = 'cb-boot-trace';
+const BOOT_TRACE_MAX = 60;
+const bootT0 = typeof performance === 'undefined' ? 0 : performance.now();
+
+export function bootTrace(label: string): void {
+  try {
+    const ls = (globalThis as { localStorage?: Storage }).localStorage;
+    if (!ls) return;
+    const ms = typeof performance === 'undefined' ? 0 : Math.round(performance.now() - bootT0);
+    const prev = ls.getItem(BOOT_TRACE_KEY) ?? '';
+    const lines = prev ? prev.split('\n') : [];
+    lines.push(`${ms}\t${label}`);
+    while (lines.length > BOOT_TRACE_MAX) lines.shift();
+    ls.setItem(BOOT_TRACE_KEY, lines.join('\n'));
+  } catch { /* trace must never throw into the boot path */ }
+}
+
+/** Clear the boot trace at the very start of a boot so each run is self-contained. */
+export function resetBootTrace(): void {
+  try { (globalThis as { localStorage?: Storage }).localStorage?.setItem(BOOT_TRACE_KEY, ''); } catch { /* ignore */ }
+}
+
 function fmtArg(a: unknown): string {
   if (a instanceof Error) return a.stack ?? a.message;
   if (a !== null && typeof a === 'object') {
@@ -122,6 +152,71 @@ function installLongTaskObserver(): void {
 }
 
 /**
+ * BOOT-TTI probe (permanent). Logs `[BOOT-TTI] <ms>` when the FIRST input event
+ * is dispatched after launch — `performance.now()` is relative to timeOrigin
+ * (≈ launch), so a main thread wedged through boot (input queues, dispatches
+ * late) shows up as a large TTI. One line per boot ⇒ the trend is trackable.
+ */
+function installBootTtiProbe(): void {
+  if (typeof document === 'undefined') return;
+  let logged = false;
+  const types = ['pointerdown', 'keydown', 'click'] as const;
+  const onFirstInput = (e: Event): void => {
+    if (logged) return;
+    logged = true;
+    const ms = typeof performance === 'undefined' ? 0 : Math.round(performance.now());
+    for (const t of types) document.removeEventListener(t, onFirstInput, true);
+    logToDesktop('INFO', `[BOOT-TTI] first input at ${ms}ms since launch (${e.type} on ${describeEventTarget(e.target)})`);
+  };
+  for (const t of types) document.addEventListener(t, onFirstInput, true);
+}
+
+const INPUT_LATENCY_THRESHOLD_MS = 500;
+let eventTimingObserver: PerformanceObserver | null = null;
+
+/** Short human descriptor of the interacted element, as a "what was slow" hint
+ *  (the Event Timing API exposes the target node, not the JS handler name). */
+function describeEventTarget(target: unknown): string {
+  const el = target as (Element & { dataset?: DOMStringMap }) | null;
+  if (!el || typeof el.tagName !== 'string') return 'unknown';
+  const tag = el.tagName.toLowerCase();
+  if (el.id) return `${tag}#${el.id}`;
+  const data = el.dataset ? Object.entries(el.dataset)[0] : undefined;
+  if (data) return `${tag}[data-${data[0]}=${String(data[1]).slice(0, 24)}]`;
+  const cls = typeof el.className === 'string' && el.className ? `.${el.className.split(/\s+/)[0]}` : '';
+  const text = (el.textContent ?? '').trim().slice(0, 24);
+  const textPart = text ? ` "${text}"` : '';
+  return `${tag}${cls}${textPart}`;
+}
+
+/**
+ * Input-latency probe (permanent). WebKit supports the Event Timing API, which
+ * reports input events whose dispatch→handlers-complete exceeded a threshold.
+ * Warns to the file log with the event type, latency, and target — so a slow
+ * interaction is named in evidence the day it regresses.
+ */
+function installInputLatencyProbe(): void {
+  if (typeof PerformanceObserver === 'undefined') return;
+  if (!PerformanceObserver.supportedEntryTypes?.includes('event')) return;
+  try {
+    eventTimingObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const e = entry as PerformanceEntry & { processingStart?: number; processingEnd?: number; target?: unknown };
+        if (entry.duration < INPUT_LATENCY_THRESHOLD_MS) continue;
+        const handlerMs = (e.processingEnd ?? 0) - (e.processingStart ?? 0);
+        const where = describeEventTarget(e.target);
+        recordBreadcrumb('PERF', 'input-latency', `${entry.name} ${Math.round(entry.duration)}ms on ${where}`, {});
+        logToDesktop('WARN', `[INPUT-LATENCY] ${entry.name} ${Math.round(entry.duration)}ms (handlers ${Math.round(handlerMs)}ms) on ${where}`);
+      }
+    });
+    // durationThreshold floors at 16ms; the loop filters to >=500ms.
+    eventTimingObserver.observe({ type: 'event', durationThreshold: INPUT_LATENCY_THRESHOLD_MS, buffered: true } as PerformanceObserverInit);
+  } catch {
+    eventTimingObserver = null;
+  }
+}
+
+/**
  * Time an async operation and emit a breadcrumb/log if it exceeds the slow
  * threshold. Returns the operation's result or error unchanged.
  *
@@ -191,6 +286,88 @@ function installMemoryWatchdog(): void {
  }
  setTimeout(tick, intervalMs);
   }, intervalMs + jitter);
+}
+
+// ─── Main-thread stall detector (WebKit-viable long-task substitute) ────────
+// WKWebView doesn't support the 'longtask' PerformanceObserver, so
+// installLongTaskObserver() no-ops on desktop. A self-rescheduling timer works
+// everywhere: an oversized gap between fires means the main thread was blocked
+// (a long task / stall). This won't fire DURING a total hang (the timer stops
+// too — that's the Rust renderer watchdog's job), but it leaves a breadcrumb +
+// log line for recoverable jank and the leading edge of a stall.
+//
+// IMPORTANT: this uses setTimeout, NOT requestAnimationFrame. A rAF loop runs
+// the callback every frame (~60fps), and each serviced rAF forces WebKit to run
+// the WHOLE rendering-update pipeline (style/layout flush + compositing-overlap
+// recompute + event-region recompute + observer servicing) every frame — so the
+// detector meant to catch idle stalls was itself pinning the render pipeline at
+// 60fps and burning ~80% CPU on an idle dashboard. setTimeout is queued on the
+// main thread just like rAF (so a blocked thread delays it identically), but it
+// does NOT schedule a rendering update, so the pipeline stays quiet at idle.
+const FRAME_STALL_THRESHOLD_MS = 5000;
+// Poll once a second: fine-grained enough to catch the leading edge of a ≥5s
+// stall, coarse enough to cost nothing.
+const STALL_PROBE_INTERVAL_MS = 1000;
+
+function installFrameStallDetector(): void {
+  if (typeof setTimeout !== 'function') return;
+  let last = performance.now();
+  // Timers keep firing (throttled to ≥1s) while hidden/blurred, and the gap
+  // then reflects throttling rather than a real stall. Rebaseline on unhide and
+  // refocus and only log when the window is visible AND focused, so a resume
+  // never reads as a stall.
+  let skipNext = false;
+  const rebaseline = (): void => { skipNext = true; last = performance.now(); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') rebaseline();
+  });
+  window.addEventListener('focus', rebaseline);
+  const probe = (): void => {
+    const now = performance.now();
+    // Total time since the previous probe. Healthy ≈ STALL_PROBE_INTERVAL_MS; a
+    // blocked main thread delays this probe, inflating the gap. Threshold on the
+    // whole gap (NOT gap-minus-interval): a block that begins mid-interval hides
+    // up to one interval's worth of delay, so subtracting the interval could let
+    // a real ≥5s stall slip under the bar. Since the healthy gap (~1s) is far
+    // below the 5s threshold, thresholding the raw gap can't false-positive.
+    const gap = now - last;
+    last = now;
+    if (skipNext) { skipNext = false; setTimeout(probe, STALL_PROBE_INTERVAL_MS); return; }
+    if (gap >= FRAME_STALL_THRESHOLD_MS && document.visibilityState === 'visible' && document.hasFocus()) {
+      recordBreadcrumb('PERF', 'frame-stall', `${Math.round(gap)}ms main-thread stall`, {});
+      logToDesktop('WARN', `frame stall ${Math.round(gap)}ms — main thread blocked between probes`);
+    }
+    setTimeout(probe, STALL_PROBE_INTERVAL_MS);
+  };
+  setTimeout(probe, STALL_PROBE_INTERVAL_MS);
+}
+
+// ─── Renderer heartbeat (paired with the Rust-side renderer watchdog) ───────
+// Beat every 3s. A hung main thread (e.g. the Defect-A infinite JS loop) stops
+// these beats; the Rust watchdog notices the silence, logs it, and reloads the
+// webview to recover — the only thing that helps when JS itself is wedged, and
+// exactly the freeze that previously required a manual kill -9.
+function beatRendererHeartbeat(): void {
+  void invokeTauri<void>('renderer_heartbeat', {
+    visible: document.visibilityState === 'visible',
+  }).catch(noop);
+}
+
+function installRendererHeartbeat(): void {
+  if (!isDesktopRuntime()) return;
+  beatRendererHeartbeat();
+  setInterval(beatRendererHeartbeat, 3000);
+}
+
+// After a watchdog reload the renderer boots fresh; ask the Rust side once
+// whether this boot followed a stall reload and, if so, surface a recovery
+// toast. The flag is consumed atomically so the toast shows exactly once.
+async function checkWatchdogRecovery(): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  try {
+    const recovered = await invokeTauri<boolean>('take_watchdog_recovery');
+    if (recovered) showToast('Renderer recovered — reloaded after a stall');
+  } catch { /* command unavailable — ignore */ }
 }
 
 function installVisibilityBreadcrumbs(): void {
@@ -348,6 +525,11 @@ export function installLogBridge(): void {
   };
 
   installLongTaskObserver();
+  installInputLatencyProbe();
+  installBootTtiProbe();
+  installFrameStallDetector();
+  installRendererHeartbeat();
+  void checkWatchdogRecovery();
   installInteractionLatencyObserver();
   installMemoryWatchdog();
   installVisibilityBreadcrumbs();

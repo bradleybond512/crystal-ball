@@ -50,7 +50,7 @@ export function fsiTierColor(t: FragilityTier): string {
   switch (t) {
     case 'very_high_alert': { return '#b71c1c'; }
     case 'high_alert':      { return '#d32f2f'; }
-    case 'alert':           { return '#f44336'; }
+    case 'alert':           { return '#ff453a'; }
     case 'high_warning':    { return '#ff7043'; }
     case 'elevated_warning':{ return '#ff9800'; }
     case 'warning':         { return '#ffc107'; }
@@ -228,7 +228,7 @@ export function severityColor(s: FragilitySeverity): string {
   switch (s) {
     case 1: { return '#ffc107'; }
     case 2: { return '#ff9800'; }
-    case 3: { return '#f44336'; }
+    case 3: { return '#ff453a'; }
     case 4: { return '#b71c1c'; }
   }
 }
@@ -258,7 +258,7 @@ export function formatDelta(d: number): string {
 }
 
 export function deltaColor(d: number): string {
-  if (d >= 2) return '#f44336';
+  if (d >= 2) return '#ff453a';
   if (d >= 0.5) return '#ff9800';
   if (d <= -2) return '#4caf50';
   if (d <= -0.5) return '#8bc34a';

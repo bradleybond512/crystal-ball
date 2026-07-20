@@ -72,7 +72,7 @@ export class RepairRecommendationsPanel extends Panel {
         'Actionable, step-by-step recommendations generated when safety properties fail or domain scorecards drop. Track open / in-progress / resolved.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getRepairEngine().subscribe(() => this.render());
     this.attachHandlers();
   }

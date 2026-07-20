@@ -33,7 +33,7 @@ const HISTORY_TICKS = 10;
 const STATUS_COLOR: Record<SafetyPropertyStatus, string> = {
   pass: '#4caf50',
   warn: '#ffb74d',
-  fail: '#f44336',
+  fail: '#ff453a',
 };
 
 const STATUS_LABEL: Record<SafetyPropertyStatus, string> = {

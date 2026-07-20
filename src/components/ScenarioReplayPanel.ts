@@ -26,7 +26,7 @@ interface ScenarioState {
 
 function statusAccentColor(status: ScenarioStatus): string {
   if (status === 'pass') return '#4caf50';
-  if (status === 'fail') return '#d50000';
+  if (status === 'fail') return '#ff453a';
   if (status === 'running') return '#ffeb3b';
   return 'rgba(255,255,255,0.12)';
 }
@@ -117,7 +117,7 @@ export class ScenarioReplayPanel extends Panel {
       return '<span style="opacity:0.6;">No replays run yet.</span>';
     }
     const failSegment = failCount > 0
-      ? ` · <span style="color:#d50000;">${failCount} fail</span>`
+      ? ` · <span style="color:#ff453a;">${failCount} fail</span>`
       : '';
     return `<span style="color:#4caf50;">${passCount} pass</span>${failSegment}`;
   }
@@ -160,7 +160,7 @@ export class ScenarioReplayPanel extends Panel {
       const hit = !report.result.missedSituations.includes(exp);
       return this.renderExpectationRow(hit, exp.domain, exp.titleContains);
     }).join('');
-    const summaryColor = report.validation.ok ? '#4caf50' : '#d50000';
+    const summaryColor = report.validation.ok ? '#4caf50' : '#ff453a';
     const summary = `<div style="font-size:11px;margin-top:6px;color:${summaryColor};">${escapeHtml(report.validation.summary)}</div>`;
     return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">
       <div style="font-size:10px;text-transform:uppercase;opacity:0.65;margin-bottom:3px;">Alerts</div>
@@ -172,7 +172,7 @@ export class ScenarioReplayPanel extends Panel {
   }
 
   private renderExpectationRow(hit: boolean, label: string, detail: string): string {
-    const color = hit ? '#4caf50' : '#d50000';
+    const color = hit ? '#4caf50' : '#ff453a';
     const mark = hit ? '✓' : '✗';
     return `<div style="display:flex;gap:6px;font-size:11px;padding:2px 0;">
       <span style="color:${color};font-weight:700;width:12px;">${mark}</span>

@@ -1,6 +1,7 @@
 /* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { fetchUnifiedWebcams, getFavoriteIds, toggleFavorite } from '@/services/webcams/fetcher';
+import { isPinned, togglePin, onPinnedChange } from '@/services/webcams/pinned-store';
 import {
   CATEGORY_MARKER_COLOR,
   OFFLINE_PROBE_TIMEOUT_MS,
@@ -12,7 +13,11 @@ import {
   type OfflineStatus,
 } from '@/services/webcams/panel-extras';
 import { runSmokeDetection, type SmokeAnalysis } from '@/services/webcams/smoke-detector';
-import type { WebcamCategory, WebcamFeed, WebcamSource } from '@/services/webcams/webcam-types';
+import { healthSummary } from '@/services/webcams/health-view';
+import { nextProbeDelay } from '@/services/webcams/probe-backoff';
+import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
+import { openExternalSafe } from '@/utils/safe-open';
+import type { WebcamCategory, WebcamFeed, WebcamSource, WebcamSourceHealth } from '@/services/webcams/webcam-types';
 
 const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -28,6 +33,10 @@ const SOURCE_LABELS: Record<WebcamSource, string> = {
   USFS: 'USFS',
   USGS_STREAM: 'Stream',
   NOAA_COASTAL: 'Coastal',
+  CALTRANS: 'Caltrans',
+  TFL: 'TfL',
+  SINGAPORE: 'Singapore',
+  GEONET: 'GeoNet',
 };
 
 const CATEGORY_COLORS: Record<WebcamCategory, string> = {
@@ -42,6 +51,7 @@ const CATEGORY_COLORS: Record<WebcamCategory, string> = {
 
 export class UnifiedWebcamPanel extends Panel {
   private feeds: WebcamFeed[] = [];
+  private sourceHealth: WebcamSourceHealth[] | undefined;
   private viewMode: ViewMode = 'grid';
   private sourceFilter: WebcamSource | 'ALL' | 'FAVORITES' = 'ALL';
   private categoryFilter: WebcamCategory | 'ALL' = 'ALL';
@@ -51,33 +61,53 @@ export class UnifiedWebcamPanel extends Panel {
   private loading = false;
   private lastError: string | null = null;
   private offlineStatus = new Map<string, { status: OfflineStatus; checkedAt: number }>();
-  private offlineProbeTimer: ReturnType<typeof setInterval> | null = null;
+  private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  private probeFailRounds = 0;
   private smokeDetectTimer: ReturnType<typeof setInterval> | null = null;
   private smokeStatus = new Map<string, { analysis: SmokeAnalysis; ranAt: number }>();
   private smokeDetectEnabled = true;
   private toastEl: HTMLElement | null = null;
+  private unsubscribePinned: (() => void) | null = null;
+  // Lazily resolves + loads each card's frame as it scrolls into view, so we
+  // don't fire hundreds of FAA JSON-resolve lookups at once on panel open.
+  private frameObserver: IntersectionObserver | null = null;
+  private frameEpoch = 0;
+  /** Teardown for the active viewer's media element (snapshot refresh timer /
+   *  paused video). Called when the viewed feed changes or on destroy. */
+  private viewerCleanup: (() => void) | null = null;
+  /** Resume hook for the cached viewer's `<video>` after it's re-attached to the
+   *  DOM (a full re-render detaches and pauses it). */
+  private viewerResume: (() => void) | null = null;
+  /** The built viewer element + its feed id, cached so periodic re-renders
+   *  (probe/smoke timers) reuse the live media instead of rebuilding it. */
+  private viewerEl: HTMLElement | null = null;
+  private viewerFeedId: string | null = null;
 
   constructor() {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
     void this.load();
     window.addEventListener('webcam:select', this.handleGlobeSelect as EventListener);
-    this.offlineProbeTimer = setInterval(() => {
-      void this.probeVisibleFeeds();
-    }, OFFLINE_REPROBE_INTERVAL_MS);
+    this.scheduleNextProbe();
     this.smokeDetectTimer = setInterval(() => {
       void this.runSmokeDetectForFireCams();
     }, SMOKE_DETECT_INTERVAL_MS);
+    this.unsubscribePinned = onPinnedChange(() => this.render());
   }
 
   public destroy(): void {
-    if (this.offlineProbeTimer != null) {
-      clearInterval(this.offlineProbeTimer);
-      this.offlineProbeTimer = null;
+    if (this.probeTimer != null) {
+      clearTimeout(this.probeTimer);
+      this.probeTimer = null;
     }
     if (this.smokeDetectTimer != null) {
       clearInterval(this.smokeDetectTimer);
       this.smokeDetectTimer = null;
     }
+    this.unsubscribePinned?.();
+    this.unsubscribePinned = null;
+    this.frameObserver?.disconnect();
+    this.frameObserver = null;
+    this.teardownViewer();
     window.removeEventListener('webcam:select', this.handleGlobeSelect as EventListener);
     super.destroy();
   }
@@ -104,6 +134,7 @@ export class UnifiedWebcamPanel extends Panel {
     try {
       const catalog = await fetchUnifiedWebcams();
       this.feeds = catalog.feeds;
+      this.sourceHealth = catalog.sourceHealth;
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -142,10 +173,13 @@ export class UnifiedWebcamPanel extends Panel {
     const el = this.getContentElement();
     while (el.firstChild) el.firstChild.remove();
     el.className = 'panel-content unified-webcams-content';
+    this.resetFrameObserver();
 
     el.append(this.buildToolbar());
     el.append(this.buildSourceChips());
     el.append(this.buildCategoryChips());
+    const strip = this.buildHealthStrip();
+    if (strip) el.append(strip);
 
     if (this.loading) {
       const loading = document.createElement('p');
@@ -164,7 +198,7 @@ export class UnifiedWebcamPanel extends Panel {
       return;
     }
 
-    if (this.selectedFeed) el.append(this.buildViewer(this.selectedFeed));
+    this.appendViewer(el);
 
     const list = this.displayed;
     if (list.length === 0) {
@@ -180,6 +214,45 @@ export class UnifiedWebcamPanel extends Panel {
     if (this.viewMode === 'grid') el.append(this.buildGrid(list));
     else if (this.viewMode === 'list') el.append(this.buildList(list));
     else el.append(this.buildMap(list));
+  }
+
+  private buildHealthStrip(): HTMLElement | null {
+    if (!this.sourceHealth?.length) return null;
+    const summary = healthSummary(this.sourceHealth);
+    const wrap = document.createElement('div');
+    wrap.className = 'webcams-health-strip';
+    wrap.style.padding = '4px 8px';
+    wrap.style.fontSize = '11px';
+
+    const statusLine = document.createElement('div');
+    statusLine.style.opacity = '0.7';
+    const okText = document.createTextNode(`${summary.ok} source${summary.ok === 1 ? '' : 's'} live`);
+    statusLine.append(okText);
+
+    if (summary.degraded.length > 0) {
+      const degradedSpan = document.createElement('span');
+      degradedSpan.style.color = '#f85149';
+      degradedSpan.style.marginLeft = '8px';
+      const parts = summary.degraded.map(d => `${d.source} (${d.status})`).join(', ');
+      degradedSpan.append(document.createTextNode(`— ${parts}`));
+      statusLine.append(degradedSpan);
+    }
+
+    wrap.append(statusLine);
+
+    for (const msg of summary.cta) {
+      const banner = document.createElement('div');
+      banner.style.background = 'rgba(210, 153, 34, 0.15)';
+      banner.style.border = '1px solid #d29922';
+      banner.style.borderRadius = '3px';
+      banner.style.padding = '3px 8px';
+      banner.style.marginTop = '3px';
+      banner.style.color = '#d29922';
+      banner.append(document.createTextNode(msg));
+      wrap.append(banner);
+    }
+
+    return wrap;
   }
 
   private buildToolbar(): HTMLElement {
@@ -268,6 +341,10 @@ export class UnifiedWebcamPanel extends Panel {
       'FAVORITES',
       'FAA',
       'DOT511',
+      'CALTRANS',
+      'TFL',
+      'SINGAPORE',
+      'GEONET',
       'ALERTWILDFIRE',
       'USGS_VOLCANO',
       'NPS',
@@ -354,6 +431,37 @@ export class UnifiedWebcamPanel extends Panel {
     return grid;
   }
 
+  /** Disconnect any prior observer (render() rebuilds the card DOM). Bumps the
+   *  render epoch so in-flight loadFrame() calls from a prior render bail out
+   *  instead of writing src onto a detached <img>. */
+  private resetFrameObserver(): void {
+    this.frameObserver?.disconnect();
+    this.frameEpoch += 1;
+    const epoch = this.frameEpoch;
+    this.frameObserver = new IntersectionObserver((entries, obs) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const img = entry.target as HTMLImageElement;
+        obs.unobserve(img);
+        void this.loadFrame(img, img.dataset.snapshotUrl, false, epoch);
+      }
+    }, { rootMargin: '200px' });
+  }
+
+  /** Resolve a feed's frame URL (FAA needs a JSON lookup) and set it on the
+   *  <img>. Dims the tile on failure — matches the old error handler. */
+  private async loadFrame(img: HTMLImageElement, snapshotUrl: string | undefined, cacheBust = false, epoch = this.frameEpoch): Promise<void> {
+    const resolved = await resolveFrameUrl(snapshotUrl);
+    if (epoch !== this.frameEpoch) return; // superseded by a re-render — don't touch a stale img
+    if (!resolved) {
+      img.style.opacity = '0.3';
+      img.style.background = '#222';
+      return;
+    }
+    const sep = resolved.includes('?') ? '&' : '?';
+    img.src = cacheBust ? `${resolved}${sep}t=${Date.now()}` : resolved;
+  }
+
   private buildCard(f: WebcamFeed): HTMLElement {
     const card = document.createElement('div');
     card.className = 'webcam-card';
@@ -364,13 +472,16 @@ export class UnifiedWebcamPanel extends Panel {
     card.style.position = 'relative';
 
     const img = document.createElement('img');
-    img.src = f.snapshotUrl;
+    // Frame is resolved + loaded lazily when the card scrolls into view (FAA
+    // feeds need a JSON lookup first — see resolveFrameUrl / frameObserver).
+    img.dataset.snapshotUrl = f.snapshotUrl;
     img.alt = f.name;
     img.loading = 'lazy';
     img.style.width = '100%';
     img.style.aspectRatio = '16 / 9';
     img.style.objectFit = 'cover';
     img.style.background = '#111';
+    this.frameObserver?.observe(img);
     img.addEventListener('error', () => {
       img.style.opacity = '0.3';
       img.style.background = '#222';
@@ -393,6 +504,25 @@ export class UnifiedWebcamPanel extends Panel {
       const isFav = toggleFavorite(f.id);
       if (isFav) this.favorites.add(f.id);
       else this.favorites.delete(f.id);
+      this.render();
+    });
+
+    const pin = document.createElement('button');
+    pin.textContent = '📌';
+    pin.title = isPinned(f.id) ? 'Unpin' : 'Pin to Pinned Webcams';
+    pin.style.position = 'absolute';
+    pin.style.top = '4px';
+    pin.style.right = '32px';
+    pin.style.background = 'rgba(0,0,0,0.6)';
+    pin.style.border = 'none';
+    pin.style.borderRadius = '50%';
+    pin.style.width = '24px';
+    pin.style.height = '24px';
+    pin.style.cursor = 'pointer';
+    pin.style.opacity = isPinned(f.id) ? '1' : '0.45';
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePin(f.id);
       this.render();
     });
 
@@ -474,6 +604,7 @@ export class UnifiedWebcamPanel extends Panel {
 
     card.append(img);
     card.append(star);
+    card.append(pin);
     card.append(info);
 
     card.addEventListener('click', () => {
@@ -569,6 +700,34 @@ export class UnifiedWebcamPanel extends Panel {
     return wrap;
   }
 
+  /** Append the feed viewer, reusing the cached element (and its live media)
+   *  when the selected feed hasn't changed — so periodic re-renders don't
+   *  restart the video or reload the stream from scratch. */
+  private appendViewer(host: HTMLElement): void {
+    const feed = this.selectedFeed;
+    if (!feed) {
+      this.teardownViewer();
+      return;
+    }
+    if (this.viewerEl && this.viewerFeedId === feed.id) {
+      host.append(this.viewerEl); // re-attach the live element (render() detached it)
+      this.viewerResume?.(); // resume the <video> that detaching paused
+      return;
+    }
+    this.teardownViewer();
+    this.viewerFeedId = feed.id;
+    this.viewerEl = this.buildViewer(feed);
+    host.append(this.viewerEl);
+  }
+
+  private teardownViewer(): void {
+    this.viewerCleanup?.();
+    this.viewerCleanup = null;
+    this.viewerResume = null;
+    this.viewerEl = null;
+    this.viewerFeedId = null;
+  }
+
   private buildViewer(f: WebcamFeed): HTMLElement {
     const div = document.createElement('div');
     div.className = 'webcam-viewer';
@@ -601,14 +760,16 @@ export class UnifiedWebcamPanel extends Panel {
     header.append(close);
     div.append(header);
 
-    const img = document.createElement('img');
-    img.src = `${f.snapshotUrl}${f.snapshotUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
-    img.alt = f.name;
-    img.style.width = '100%';
-    img.style.maxWidth = '900px';
-    img.style.borderRadius = '4px';
-    img.style.background = '#111';
-    div.append(img);
+    const media = this.buildMediaElement(f);
+    div.append(media.el);
+
+    const caption = document.createElement('div');
+    caption.style.fontSize = '12px';
+    caption.style.marginTop = '6px';
+    caption.style.fontWeight = '600';
+    caption.style.color = media.playingInline ? 'var(--sev-low, #3fb950)' : 'var(--text-tertiary, #8b949e)';
+    caption.textContent = media.label;
+    div.append(caption);
 
     const meta = document.createElement('div');
     meta.style.fontSize = '12px';
@@ -619,7 +780,6 @@ export class UnifiedWebcamPanel extends Panel {
       `Coords: ${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}`,
     ];
     for (const [k, v] of Object.entries(f.metadata)) lines.push(`${k}: ${v}`);
-    if (f.streamUrl) lines.push(`Stream: ${f.streamUrl}`);
     for (const line of lines) {
       const p = document.createElement('div');
       p.textContent = line;
@@ -627,36 +787,133 @@ export class UnifiedWebcamPanel extends Panel {
     }
     div.append(meta);
 
-    const snapBtn = document.createElement('button');
-    snapBtn.textContent = '📷 Snapshot';
-    snapBtn.style.marginTop = '8px';
-    snapBtn.style.padding = '4px 10px';
-    snapBtn.style.background = '#1f6feb';
-    snapBtn.style.color = '#fff';
-    snapBtn.style.border = 'none';
-    snapBtn.style.borderRadius = '3px';
-    snapBtn.style.cursor = 'pointer';
-    snapBtn.addEventListener('click', () => {
-      void this.saveSnapshot(f, img);
-    });
-    div.append(snapBtn);
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.marginTop = '8px';
 
+    if (media.capture) {
+      const capture = media.capture;
+      const snapBtn = this.viewerButton('📷 Snapshot');
+      snapBtn.addEventListener('click', () => {
+        void this.saveSnapshot(f, capture);
+      });
+      actions.append(snapBtn);
+    }
+
+    // When the live stream can't play inline (embed/YouTube, or HLS without
+    // native support), offer to open it in the real browser — the CSP frame-src
+    // blocks arbitrary embeds, so this is the honest way to reach those feeds.
+    if (f.streamUrl && !media.playingInline) {
+      const streamUrl = f.streamUrl;
+      const openBtn = this.viewerButton('▶ Open live stream ↗');
+      openBtn.addEventListener('click', () => openExternalSafe(streamUrl));
+      actions.append(openBtn);
+    }
+
+    div.append(actions);
     return div;
+  }
+
+  private viewerButton(label: string): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.style.padding = '4px 10px';
+    btn.style.background = 'var(--accent, #1f6feb)';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '3px';
+    btn.style.cursor = 'pointer';
+    return btn;
+  }
+
+  /** Choose the best in-app media element for a feed, honoring the app CSP:
+   *  - `hls`   → native `<video>` (WKWebView/Safari play HLS; `media-src https:`
+   *              allows it; hls.js is not viable because `connect-src` is locked)
+   *  - `mjpeg` → `<img>` (multipart motion renders directly; `img-src https:`)
+   *  - else    → auto-refreshing snapshot `<img>` on the feed's cadence, which is
+   *              also the fallback for embed/YouTube and HLS-without-native.
+   *  Sets `this.viewerCleanup` to stop the timer / tear down the video. */
+  private buildMediaElement(f: WebcamFeed): {
+    el: HTMLElement;
+    capture: HTMLImageElement | HTMLVideoElement | null;
+    playingInline: boolean;
+    label: string;
+  } {
+    const stream = f.streamUrl;
+    const styleMedia = (m: HTMLElement): void => {
+      m.style.width = '100%';
+      m.style.maxWidth = '900px';
+      m.style.borderRadius = '4px';
+      m.style.background = 'var(--surface-1, #111)';
+      m.style.aspectRatio = '16 / 9';
+      m.style.objectFit = 'contain';
+    };
+
+    if (stream && f.streamType === 'hls') {
+      const video = document.createElement('video');
+      // hls.js needs `connect-src` for segment fetches, which the CSP locks
+      // down — so rely on native HLS only, and fall through to snapshot when
+      // the engine can't play it (e.g. Chrome/Firefox web builds).
+      if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
+        video.src = stream;
+        video.autoplay = true;
+        video.muted = true;
+        video.controls = true;
+        video.playsInline = true;
+        styleMedia(video);
+        const play = (): void => { void video.play().catch(() => undefined); };
+        play();
+        this.viewerResume = play;
+        this.viewerCleanup = () => {
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+        };
+        return { el: video, capture: video, playingInline: true, label: '🔴 Live HLS video' };
+      }
+    }
+
+    if (stream && f.streamType === 'mjpeg') {
+      const img = document.createElement('img');
+      img.src = stream;
+      img.alt = f.name;
+      styleMedia(img);
+      this.viewerCleanup = () => { img.src = ''; };
+      return { el: img, capture: img, playingInline: true, label: '🔴 Live MJPEG stream' };
+    }
+
+    // Snapshot (default) — auto-refresh so the still stays live. Each tick goes
+    // through loadFrame → resolveFrameUrl, so FAA /api/ resolver feeds get their
+    // real (and rotating) https frame instead of the JSON endpoint.
+    const img = document.createElement('img');
+    img.alt = f.name;
+    styleMedia(img);
+    const reload = (): void => {
+      void this.loadFrame(img, f.snapshotUrl, true);
+    };
+    reload();
+    const periodSec = Math.max(5, f.refreshIntervalSec || 15);
+    const timer = setInterval(reload, periodSec * 1000);
+    this.viewerCleanup = () => clearInterval(timer);
+    return { el: img, capture: img, playingInline: false, label: `🔄 Auto-refreshing snapshot (every ${periodSec}s)` };
   }
 
   // ── Snapshot to Downloads ────────────────────────────────────────────
 
-  private async saveSnapshot(f: WebcamFeed, img: HTMLImageElement): Promise<void> {
+  private async saveSnapshot(f: WebcamFeed, source: HTMLImageElement | HTMLVideoElement): Promise<void> {
     try {
+      const srcW = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
+      const srcH = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || 1280;
-      canvas.height = img.naturalHeight || 720;
+      canvas.width = srcW || 1280;
+      canvas.height = srcH || 720;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         this.showToast('Snapshot failed: canvas unavailable');
         return;
       }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
       const blob: Blob | null = await new Promise((resolve) =>
         canvas.toBlob(resolve, 'image/jpeg', 0.92),
       );
@@ -839,15 +1096,35 @@ export class UnifiedWebcamPanel extends Panel {
 
   // ── Offline probing ──────────────────────────────────────────────────
 
-  private async probeVisibleFeeds(): Promise<void> {
-    if (this.viewMode === 'map') return; // map view doesn't need per-card status
+  private scheduleNextProbe(): void {
+    const delay = nextProbeDelay(
+      this.probeFailRounds,
+      OFFLINE_REPROBE_INTERVAL_MS,
+      15 * 60 * 1000,
+      // eslint-disable-next-line sonarjs/pseudo-random -- non-crypto jitter to de-sync probe storms
+      Math.random(),
+    );
+    this.probeTimer = setTimeout(() => {
+      void this.runProbeRound();
+    }, delay);
+  }
+
+  private async runProbeRound(): Promise<void> {
+    const offline = await this.probeVisibleFeeds();
+    if (offline > 0) this.probeFailRounds += 1;
+    else this.probeFailRounds = 0;
+    this.scheduleNextProbe();
+  }
+
+  private async probeVisibleFeeds(): Promise<number> {
+    if (this.viewMode === 'map') return 0; // map view doesn't need per-card status
     const list = this.displayed.slice(0, 60);
     const now = Date.now();
     const stale = list.filter((f) => {
       const cached = this.offlineStatus.get(f.id);
       return !cached || now - cached.checkedAt > OFFLINE_REPROBE_INTERVAL_MS;
     });
-    if (stale.length === 0) return;
+    if (stale.length === 0) return 0;
     const promises = stale.map(async (f) => {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), OFFLINE_PROBE_TIMEOUT_MS);
@@ -864,6 +1141,11 @@ export class UnifiedWebcamPanel extends Panel {
       }
     });
     await Promise.allSettled(promises);
+    const offlineCount = stale.reduce(
+      (n, f) => n + (this.offlineStatus.get(f.id)?.status === 'offline' ? 1 : 0),
+      0,
+    );
     this.render();
+    return offlineCount;
   }
 }

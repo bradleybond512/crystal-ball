@@ -55,7 +55,7 @@ export class TemporalAnomalyDetectorPanel extends Panel {
         'Detects when events happen at anomalous times relative to per-domain hourly/daily/weekly baselines. Reports z-score, expected vs observed rate, and the bucket that fired.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getTemporalAnomalyDetectorService().subscribe(() => this.render());
     this.attachHandlers();
   }

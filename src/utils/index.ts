@@ -113,29 +113,19 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
   return defaultValue;
 }
 
-let _storageQuotaExceeded = false;
-
-export function isStorageQuotaExceeded(): boolean {
-  return _storageQuotaExceeded;
-}
-
-export function isQuotaError(e: unknown): boolean {
-  return e instanceof DOMException && e.name === 'QuotaExceededError';
-}
-
-export function markStorageQuotaExceeded(): void {
-  _storageQuotaExceeded = true;
-}
+export {
+  isStorageQuotaExceeded,
+  isIndexedDbQuotaExceeded,
+  isQuotaError,
+  markStorageQuotaExceeded,
+  markIndexedDbQuotaExceeded,
+  _resetStorageQuotaForTest,
+} from './storage-quota';
+export { safeSetItem, EVICTABLE_CACHE_PREFIXES } from './safe-storage';
+import { safeSetItem } from './safe-storage';
 
 export function saveToStorage<T>(key: string, value: T): void {
-  if (_storageQuotaExceeded) return;
-  try {
- localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
- if (isQuotaError(error)) {
- markStorageQuotaExceeded();
- }
-  }
+  safeSetItem(key, JSON.stringify(value));
 }
 
 export function generateId(): string {
@@ -143,13 +133,7 @@ export function generateId(): string {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** Breakpoint (px): below this width the app uses the simplified mobile layout. Must match CSS @media (max-width: …). */
-export const MOBILE_BREAKPOINT_PX = 768;
-
-/** True when viewport is below mobile breakpoint. Touch-capable notebooks keep desktop layout. */
-export function isMobileDevice(): boolean {
-  return window.innerWidth <= MOBILE_BREAKPOINT_PX;
-}
+export { MOBILE_BREAKPOINT_PX, isMobileDevice } from './breakpoint';
 
 export function chunkArray<T>(items: T[], size: number): T[][] {
   const chunkSize = Math.max(1, size);
@@ -173,5 +157,6 @@ export type { Theme } from './theme-manager';
 export { createConcurrencyLimiter } from './concurrency-limiter';
 export type { ConcurrencyLimiter } from './concurrency-limiter';
 export { escapeHtml, sanitizeUrl, escapeAttr } from './sanitize';
+export { formatDurationMinutes, formatDurationMs } from './format-duration';
 
 import { getCurrentLanguage } from '../services/i18n';

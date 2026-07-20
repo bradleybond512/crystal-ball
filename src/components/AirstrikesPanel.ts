@@ -27,6 +27,9 @@ export class AirstrikesPanel extends Panel {
  trackActivity: true,
  infoTooltip: 'Air/drone strikes and missile attacks from ACLED (last 30 days). Requires ACLED API key + email in API Keys settings.',
  });
+ // Keyed source: if the fetch never resolves the panel, the loading budget
+ // resolves to "waiting on API key" rather than a misleading "unreachable".
+ this.requiredFeature = 'acledAirstrikes';
  this.showLoading('Fetching airstrike data…');
 
  this.element.addEventListener('click', () => {

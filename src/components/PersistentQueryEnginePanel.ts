@@ -68,7 +68,7 @@ export class PersistentQueryEnginePanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getPersistentQueryEngineService().subscribe(() => this.render());
   }
 
@@ -248,7 +248,7 @@ function renderQueryRow(q: SavedQuery): string {
     </div>
     <span style="font-family:ui-monospace,monospace;text-align:right;">${q.matchCount} hits</span>
     <span style="font-family:ui-monospace,monospace;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(last)}</span>
-    <button data-pqe-delete="${escapeHtml(q.id)}" style="padding:3px 8px;font-size:10px;background:#f4433626;color:#f44336;border:1px solid #f4433655;border-radius:3px;cursor:pointer;">Delete</button>
+    <button data-pqe-delete="${escapeHtml(q.id)}" style="padding:3px 8px;font-size:10px;background:#ff453a26;color:#ff453a;border:1px solid #ff453a55;border-radius:3px;cursor:pointer;">Delete</button>
   </li>`;
 }
 
@@ -263,7 +263,7 @@ function renderConditionRow(c: FormCondition, idx: number): string {
     <select data-pqe-cond-field="${idx}" style="padding:4px 6px;background:var(--surface-3,#222);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">${fieldOpts}</select>
     <select data-pqe-cond-op="${idx}" style="padding:4px 6px;background:var(--surface-3,#222);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">${opOpts}</select>
     <input data-pqe-cond-value="${idx}" type="text" value="${escapeHtml(c.value)}" placeholder="value" style="padding:4px 6px;background:var(--surface-3,#222);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;" />
-    <button data-pqe-cond-remove="${idx}" title="Remove" style="padding:2px 6px;font-size:11px;background:transparent;color:#f44336;border:1px solid #f4433655;border-radius:3px;cursor:pointer;">×</button>
+    <button data-pqe-cond-remove="${idx}" title="Remove" style="padding:2px 6px;font-size:11px;background:transparent;color:#ff453a;border:1px solid #ff453a55;border-radius:3px;cursor:pointer;">×</button>
   </div>`;
 }
 

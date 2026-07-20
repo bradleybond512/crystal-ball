@@ -29,6 +29,13 @@ import {
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
 import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
+import { diagnosticsHeartbeatAgeMs } from '@/services/diagnostics/diagnostics-heartbeat';
+import { getApiBaseUrl } from '@/services/runtime';
+import { getSavedPlaces } from '@/services/saved-places';
+import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
+import { PROVIDER_DEFINITIONS } from '@/services/providers/provider-registry';
+import { getProviderRedundancyReport } from '@/services/insights/insights-state';
+import { buildRedundancyView, corroborationSummary, type RedundancyTone } from '@/services/diagnostics/provider-redundancy-view';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import {
   auditFeeds,
@@ -39,6 +46,10 @@ import {
   standardSelfTestDefinitions,
   type SelfTestReport,
 } from '@/services/diagnostics/self-test';
+import { runReplay } from '@/services/ops/replay-harness';
+import { buildCatalogReplayFixtures } from '@/services/ops/replay-fixtures-catalog';
+import { compareReplayReportToBaseline } from '@/services/ops/replay-baseline';
+import replayBaseline from '@/services/ops/replay-baseline.json';
 import {
   VERDICT_BADGE,
   fetchSidecarSelfTest,
@@ -111,7 +122,7 @@ export class SystemDiagnosticPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'system-diagnostic');
     this.unsubscribeDisclosure = disclosureService.subscribe('system-diagnostic', () => this.render());
   }
@@ -446,13 +457,48 @@ export class SystemDiagnosticPanel extends Panel {
   }
 
   private renderFeeds(ctx: DiagnosticContext): string {
+    const corroboration = this.renderSourceCorroboration();
     if (ctx.feedAudit.entries.length === 0) {
-      return `<div style="padding:12px;color:var(--text-secondary,#aaa);">No feeds configured.</div>`;
+      return `${corroboration}<div style="padding:12px;color:var(--text-secondary,#aaa);">No feeds configured.</div>`;
     }
     const rows = [...ctx.feedAudit.entries]
       .sort((a, b) => Number(b.safetyCritical) - Number(a.safetyCritical) || severityRankFeed(b.level) - severityRankFeed(a.level))
       .map((e) => this.renderFeedRow(e));
-    return `<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;">${rows.join('')}</div>`;
+    return `${corroboration}<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;">${rows.join('')}</div>`;
+  }
+
+  /** Per-domain source-corroboration verdicts from the provider-redundancy
+   *  report — "verified by N independent sources" vs "single source / disagree". */
+  private renderSourceCorroboration(): string {
+    let vm;
+    try {
+      vm = buildRedundancyView(getProviderRedundancyReport());
+    } catch {
+      return '';
+    }
+    if (vm.rows.length === 0) return '';
+    const rows = vm.rows.map((r) => {
+      const color = redundancyToneColor(r.tone);
+      const corro = corroborationSummary(r);
+      const remediation = r.remediation
+        ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(r.remediation)}</div>`
+        : '';
+      return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:${color};font-weight:600;">${escapeHtml(r.label)}</span>
+            <span style="font-weight:600;">${escapeHtml(r.domain)}</span>
+          </div>
+          <span style="font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(corro)} · conf ${r.confidencePct}%</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:4px;">${escapeHtml(r.detail)}</div>
+        ${remediation}
+      </div>`;
+    }).join('');
+    return `<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;">Source corroboration — ${escapeHtml(vm.headline)}</div>
+      ${rows}
+    </div>`;
   }
 
   private renderFeedRow(e: FeedAuditEntry): string {
@@ -630,6 +676,57 @@ export class SystemDiagnosticPanel extends Panel {
       this.render();
       try {
         const defs = standardSelfTestDefinitions({
+          // Sidecar reachability — fetch /api/diag (relative on web).
+          fetchSidecarDiag: async () => {
+            try {
+              const r = await fetch(`${getApiBaseUrl()}/api/diag`);
+              if (!r.ok) return { ok: false, reason: `/api/diag returned ${r.status}` };
+              const detail = (await r.json().catch(() => undefined)) as Record<string, unknown> | undefined;
+              return { ok: true, detail };
+            } catch (error) {
+              return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+            }
+          },
+          // SAFETY: "can critical alerts reach me?" — the headline probe.
+          checkNotificationPermission: () => {
+            if (typeof Notification === 'undefined') return Promise.resolve('unsupported' as const);
+            const p = Notification.permission;
+            let state: 'granted' | 'denied' | 'default';
+            if (p === 'granted') state = 'granted';
+            else if (p === 'denied') state = 'denied';
+            else state = 'default';
+            return Promise.resolve(state);
+          },
+          countSavedPlaces: () => getSavedPlaces().length,
+          // Proves the NWS point-in-polygon matcher actually works.
+          runNwsPolygonFixture: () => Promise.resolve(runNwsPolygonSelfTestFixture()),
+          // Static provider catalog (not live health — empty pre-fetch would false-fail).
+          countProviderRegistry: () => PROVIDER_DEFINITIONS.length,
+          isStorageAvailable: () => ({
+            indexedDb: typeof indexedDB !== 'undefined',
+            localStorage: (() => {
+              try {
+                const k = '__cb_selftest__';
+                localStorage.setItem(k, '1');
+                localStorage.removeItem(k);
+                return true;
+              } catch {
+                return false;
+              }
+            })(),
+          }),
+          probeDataSources: () => {
+            const sources = getLiveDiagnosticsSnapshot().sources;
+            let healthy = 0;
+            let degraded = 0;
+            let failing = 0;
+            for (const s of sources) {
+              if (s.status === 'healthy') healthy++;
+              else if (s.status === 'degraded' || s.status === 'stale') degraded++;
+              else if (s.status === 'failing' || s.status === 'unsafe' || s.status === 'blind') failing++;
+            }
+            return Promise.resolve({ healthy, degraded, failing, detail: { total: sources.length } });
+          },
           countMountedPanels: () => {
             const all = getPanelHealthRegistry().all();
             return { mounted: all.filter((p) => p.mounted).length, total: all.length };
@@ -642,6 +739,89 @@ export class SystemDiagnosticPanel extends Panel {
             ).length;
           },
         });
+        // Deadman: the registries above are only trustworthy while the 60s
+        // degradation tick keeps refreshing them. If it stops, they freeze on
+        // their last value and read green — so fail loudly when the heartbeat
+        // is stale (> 3× the 60s tick).
+        defs.push(
+          {
+            id: 'diagnostics_liveness',
+            label: 'Diagnostics liveness',
+            probe: () => {
+              const ageMs = diagnosticsHeartbeatAgeMs();
+              if (!Number.isFinite(ageMs)) {
+                return { status: 'warn' as const, reason: 'Diagnostics tick has not run yet (still booting).' };
+              }
+              if (ageMs > 180_000) {
+                return {
+                  status: 'fail' as const,
+                  reason: `Diagnostics tick last ran ${Math.round(ageMs / 1000)}s ago — health registries may be frozen (their green is stale).`,
+                };
+              }
+              return { status: 'pass' as const, reason: `Diagnostics tick fresh (${Math.round(ageMs / 1000)}s ago).` };
+            },
+          },
+          {
+            id: 'webcam_sources',
+            label: 'Webcam sources',
+            probe: async () => {
+              let json: { sourceHealth?: { source: string; status: string }[] };
+              try {
+                const res = await fetch(`${getApiBaseUrl()}/api/webcams`);
+                if (!res.ok) {
+                  return { status: 'fail' as const, reason: `/api/webcams returned ${res.status}` };
+                }
+                json = (await res.json()) as typeof json;
+              } catch (error) {
+                return {
+                  status: 'fail' as const,
+                  reason: error instanceof Error ? error.message : String(error),
+                };
+              }
+              const sources = json.sourceHealth ?? [];
+              const ok = sources.filter((s) => s.status === 'ok');
+              const degraded = sources.filter(
+                (s) => s.status === 'missing_key' || s.status === 'down' || s.status === 'rate_limited',
+              );
+              if (ok.length >= 1) {
+                return {
+                  status: 'pass' as const,
+                  reason: `${ok.length} webcam source${ok.length === 1 ? '' : 's'} healthy.`,
+                };
+              }
+              if (degraded.length > 0) {
+                return {
+                  status: 'warn' as const,
+                  reason: `Degraded webcam sources: ${degraded.map((s) => `${s.source}(${s.status})`).join(', ')}.`,
+                };
+              }
+              return { status: 'fail' as const, reason: 'All webcam sources are down or none reported.' };
+            },
+          },
+          // Replay baseline: run the committed missed-event fixture catalog
+          // through the replay harness and compare against the committed
+          // baseline (the same check CI's smoke tier 1 makes). The catalog
+          // fixtures are intentionally-failing regression cases, so baseline
+          // equality — not a pass verdict — is the honest check.
+          {
+            id: 'replay_baseline',
+            label: 'Replay baseline',
+            probe: () => {
+              const report = runReplay({ fixtures: buildCatalogReplayFixtures(), generatedAt: 0 });
+              const { ok, mismatches, fixtureCount } = compareReplayReportToBaseline(report, replayBaseline);
+              if (ok) {
+                return {
+                  status: 'pass' as const,
+                  reason: `${fixtureCount} replay fixture${fixtureCount === 1 ? '' : 's'} match the committed baseline.`,
+                };
+              }
+              return {
+                status: 'fail' as const,
+                reason: `${mismatches.length} baseline mismatch(es): ${mismatches.join('; ')}`,
+              };
+            },
+          },
+        );
         this.selfTestReport = await runSelfTests(defs);
       } finally {
         this.selfTestRunning = false;
@@ -692,6 +872,19 @@ function feedColor(level: keyof typeof FEED_RANK): string {
     case 'silent': {  return 'var(--severity-critical)';
     }
     case 'unknown': { return 'var(--severity-info)';
+    }
+  }
+}
+
+function redundancyToneColor(tone: RedundancyTone): string {
+  switch (tone) {
+    case 'good': { return 'var(--severity-ok)';
+    }
+    case 'warn': { return 'var(--severity-high)';
+    }
+    case 'bad': {  return 'var(--severity-critical)';
+    }
+    case 'neutral': { return 'var(--severity-info)';
     }
   }
 }

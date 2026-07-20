@@ -87,7 +87,7 @@ export class HistoricalPlaybackPanel extends Panel {
         'Scrub through past WorldSnapshots. Inspect per-domain severity at any captured moment + compare against now. Bookmark with notes.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public override destroy(): void {

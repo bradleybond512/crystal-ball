@@ -18,6 +18,7 @@ import type { Hypothesis } from './analyst-loop';
 import { entitiesForHypothesis, type EntityMention } from './hypothesis-entities';
 import { signatureFor } from './hypothesis-feedback';
 import { generateText } from './llm-adapter';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { getMemory, putMemory } from './reasoning-memory';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -149,6 +150,20 @@ export function getCachedAnswer(
   return cache.get(cacheKey(signatureFor(h), question)) ?? null;
 }
 
+// Build the ask-the-data prompt. Feed-derived h.statement + the (chip-derived or
+// operator) question are sanitized so neither can forge a new instruction line.
+// Exported for the llm-prompt-injection regression test.
+export function buildAskQuestionPrompt(h: Hypothesis, question: string): string {
+  return (
+    `Analyst hypothesis (${h.kind}, ${h.risk} risk, ${(h.confidence * 100).toFixed(0)}% confidence):\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n\n` +
+    `Question from the operator: ${sanitizeForPrompt(question, 300)}\n\n` +
+    `Answer in 2-4 sentences. Be specific, declarative, and cite concrete ` +
+    `mechanisms or entities where applicable. If the question is speculative, ` +
+    `say what would need to happen for it to be true.`
+  );
+}
+
 /**
  * Run `question` through the LLM adapter in the context of hypothesis `h`.
  * Caches + emits cb:question-answered on completion.
@@ -159,15 +174,7 @@ export async function askQuestion(h: Hypothesis, question: string): Promise<Ques
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const prompt =
-    `Analyst hypothesis (${h.kind}, ${h.risk} risk, ${(h.confidence * 100).toFixed(0)}% confidence):\n` +
-    `"${h.statement}"\n\n` +
-    `Question from the operator: ${question}\n\n` +
-    `Answer in 2-4 sentences. Be specific, declarative, and cite concrete ` +
-    `mechanisms or entities where applicable. If the question is speculative, ` +
-    `say what would need to happen for it to be true.`;
-
-  const res = await generateText(prompt, { maxTokens: 350 });
+  const res = await generateText(buildAskQuestionPrompt(h, question), { maxTokens: 350 });
   const answer: QuestionAnswer = {
     question,
     text: res.text || '(no response)',

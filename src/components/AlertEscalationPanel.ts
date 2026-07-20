@@ -53,7 +53,7 @@ export class AlertEscalationPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.tickTimer = setInterval(() => { this.service.tick(); }, TICK_MS);
     this.unsubscribe = this.service.subscribe(() => this.render());
   }
@@ -161,7 +161,7 @@ function renderEscalatedRow(r: EscalationRecord): string {
   const sevColor = SEVERITY_COLOR[r.severity] ?? 'var(--text-secondary,#888)';
   const lvlColor = LEVEL_COLOR[r.escalationLevel] ?? 'var(--severity-critical,#ef4444)';
   const since = r.escalatedAt ? formatDuration(Date.now() - r.escalatedAt) : '—';
-  return `<li style="padding:8px 10px;background:rgba(255,68,68,0.05);border-left:3px solid ${sevColor};border-radius:3px;">
+  return `<li style="padding:8px 10px;background:rgba(255, 69, 58,0.05);border-left:3px solid ${sevColor};border-radius:3px;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
       <div style="display:flex;gap:8px;align-items:baseline;">
         <span style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;color:${sevColor};">[${escapeHtml(r.severity)}]</span>

@@ -1,6 +1,6 @@
 # Crystal Ball — API Keys & Data Sources
 
-Crystal Ball supports **All 77 secret keys** wired through the Tauri desktop runtime
+Crystal Ball supports **all 77 secret keys** (every one documented below) wired through the Tauri desktop runtime
 (see [`src-tauri/src/main.rs`](../src-tauri/src/main.rs) — `SUPPORTED_SECRET_KEYS`). Most
 features work out of the box with free public APIs; the keys below unlock additional
 sources or higher rate limits. Keys are entered via **Settings (gear icon) → API Keys**
@@ -72,6 +72,14 @@ These keys unlock the most impactful features and are free with simple registrat
 | `PULSEDIVE_API_KEY` | Free (limited) | Threat indicator scoring | [pulsedive.com](https://pulsedive.com/api/) |
 | `GREYNOISE_API_KEY` | Free (50/day) | Internet noise classification | [greynoise.io](https://www.greynoise.io/plans/community) |
 | `HIBP_API_KEY` | Free/Paid | Data breach lookups | [haveibeenpwned.com](https://haveibeenpwned.com/API/Key) |
+| `CENSYS_API_ID` | Free (250/mo) | OSINT on internet-connected hosts & certificates | [search.censys.io](https://search.censys.io/account/api) |
+| `CENSYS_API_SECRET` | Free (250/mo) | Paired secret for the Censys API ID | [search.censys.io](https://search.censys.io/account/api) |
+| `SECURITYTRAILS_API_KEY` | Free (limited) | Passive DNS & domain history for attribution | [securitytrails.com](https://securitytrails.com/app/signup) |
+| `WHOISXML_API_KEY` | Free (limited) | Domain / DNS / IP data for infrastructure mapping | [whoisxmlapi.com](https://whois.whoisxmlapi.com/) |
+| `MISP_URL` | Self-hosted | Base URL of your MISP indicator-sharing instance | [misp-project.org](https://www.misp-project.org/) |
+| `MISP_API_KEY` | Self-hosted | API key paired with `MISP_URL` (events & indicators) | [misp-project.org](https://www.misp-project.org/) |
+| `OPENCTI_URL` | Self-hosted | Base URL of your OpenCTI threat-intel instance | [opencti.io](https://www.opencti.io/) |
+| `OPENCTI_API_KEY` | Self-hosted | API key paired with `OPENCTI_URL` (STIX 2.1 GraphQL) | [opencti.io](https://www.opencti.io/) |
 
 ### Economics & Markets
 
@@ -90,6 +98,11 @@ These keys unlock the most impactful features and are free with simple registrat
 | `NEWSAPI_KEY` | Free (limited) | 150k+ news sources | [newsapi.org](https://newsapi.org/register) |
 | `NEWSDATA_API_KEY` | Free (limited) | 95k+ news sources | [newsdata.io](https://newsdata.io/register) |
 | `MEDIASTACK_API_KEY` | Free (500 req/mo) | 7,500+ news sources | [mediastack.com](https://mediastack.com/signup/free) |
+| `PATREON_OAUTH_CLIENT_ID` | Patron | Registers Crystal Ball as a Patreon app to connect your account | [patreon.com](https://www.patreon.com/portal/registration/register-clients) |
+| `PATREON_OAUTH_CLIENT_SECRET` | Patron | Paired secret for the Patreon OAuth client | [patreon.com](https://www.patreon.com/portal/registration/register-clients) |
+| `PATREON_ACCESS_TOKEN` | Patron | Short-lived token, saved automatically after you connect Patreon | _(auto on connect)_ |
+| `PATREON_REFRESH_TOKEN` | Patron | Renews the access token, saved automatically on connect | _(auto on connect)_ |
+| `PATREON_AUDIO_RSS_URL` | Patron | Supporter-only Patreon audio RSS for S2 Underground briefings | [patreon.com](https://www.patreon.com/) |
 
 ### Geolocation, Air Quality & Infrastructure
 

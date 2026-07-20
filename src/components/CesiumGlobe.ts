@@ -17,11 +17,20 @@ import {
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { initCesium } from '@/config/cesium-init';
+import { ensureFrameCoherence } from '@/services/globe/time-coherent-radius';
 
 export interface CesiumGlobeOptions {
   container: HTMLElement;
   ionToken?: string;
 }
+
+/** DataSource names whose entities are intentionally above the ellipsoid, so the
+ *  floating-entity auditor must not flag them. Flights/aircraft/satellites carry
+ *  real altitude; arc and 4d-* layers are trajectory curves through the air. The
+ *  military-flight layer's dataSource is named `aviationIntel` (GlobeDataManager
+ *  registerLayer id), so `aviation` must be in the allowlist too — `aircraft`
+ *  alone does not match it. */
+const ALTITUDE_EXPECTED_SOURCE = /flight|aircraft|aviation|satellite|orbit|reentry|arcs?|^4d-|trajector/i;
 
 export class CesiumGlobe {
   private viewer: Viewer | null = null;
@@ -74,6 +83,12 @@ export class CesiumGlobe {
 
  const scene = this.viewer.scene;
  const globe = scene.globe;
+
+ // Drive the shared per-frame counter that timeCoherentRadius keys on, so the
+ // pulsing ellipses in every God's Eye layer (pulses, alert clusters, reactor
+ // beacons, space-weather flares, seismic waves) animate even though the Cesium
+ // clock is frozen (shouldAnimate=false at rest). One scene, one registration.
+ ensureFrameCoherence(scene);
 
  // ── Resolution ──────────────────────────────────────
  this.viewer.resolutionScale = Math.min(window.devicePixelRatio, 2);
@@ -265,6 +280,12 @@ export class CesiumGlobe {
 
  for (let ds = 0; ds < viewer.dataSources.length; ds++) {
  const source = viewer.dataSources.get(ds);
+ // Skip layers whose entities are INTENTIONALLY airborne — flights, aircraft
+ // and satellites carry real altitude (fromDegrees(lon,lat,altMeters)), and
+ // 4d/arc trajectories arc through the air by design. The auditor exists to
+ // catch ground-clamped regressions (cables, markers floating off terrain),
+ // so flagging cruising aircraft at h=4846m was a false-positive ERROR spam.
+ if (ALTITUDE_EXPECTED_SOURCE.test(source.name ?? '')) continue;
  for (const entity of source.entities.values) {
  this.auditPoint(entity, source.name, now, stats);
  this.auditPolyline(entity, source.name, now, stats);

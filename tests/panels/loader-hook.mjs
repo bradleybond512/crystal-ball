@@ -9,10 +9,15 @@
  */
 
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(here, '..', '..');
+
+const ASSET_QUERY_RE = /\?(worker|url|inline|raw)\b/;
+const assetStubPath = path.join(projectRoot, 'tests', 'panels', 'stubs', 'asset-stub.mjs');
+let assetStubSource;
 
 const STUBS = {
   [path.join(projectRoot, 'src', 'services', 'i18n.ts')]:
@@ -31,6 +36,15 @@ const STUBS = {
 const VITE_ENV_PROBE_RE = /\bimport\s*\.\s*meta\s*\.\s*env\b/g;
 
 export async function load(url, context, nextLoad) {
+  // Vite asset/worker queries can reach load() without passing through our
+  // resolve() below: tsx ≥4.22 registers sync in-thread hooks
+  // (module.registerHooks) that resolve the `@/` alias and short-circuit
+  // before async register() hooks see the specifier. The final URL still
+  // carries the query, so intercepting here works under either ordering.
+  if (ASSET_QUERY_RE.test(url)) {
+    assetStubSource ??= readFileSync(assetStubPath, 'utf8');
+    return { source: assetStubSource, format: 'module', shortCircuit: true };
+  }
   // Only rewrite project source. Skip node_modules and our own stubs.
   if (!url.startsWith('file://')) return nextLoad(url, context);
   const abs = fileURLToPath(url);
@@ -46,7 +60,9 @@ export async function load(url, context, nextLoad) {
   let source = typeof result.source === 'string'
     ? result.source
     : Buffer.from(result.source).toString('utf8');
+  VITE_ENV_PROBE_RE.lastIndex = 0; // /g regex: .test() advances lastIndex across calls
   if (!VITE_ENV_PROBE_RE.test(source)) return result;
+  VITE_ENV_PROBE_RE.lastIndex = 0;
 
   // Replace `import.meta.env` with our global fallback so reads work in node.
   source = source.replace(VITE_ENV_PROBE_RE, '(globalThis.__viteImportMetaEnv||{})');

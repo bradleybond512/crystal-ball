@@ -1,0 +1,128 @@
+[
+  {
+    "icaoId": "KKCI",
+    "alphaChar": "W",
+    "seriesId": "25W",
+    "receiptTime": "2026-07-01T13:56:58.832Z",
+    "creationTime": "2026-07-01T13:55:00.000Z",
+    "validTimeFrom": 1782914100,
+    "validTimeTo": 1782921300,
+    "airSigmetType": "SIGMET",
+    "hazard": "CONVECTIVE",
+    "altitudeHi1": 33000,
+    "altitudeHi2": 33000,
+    "altitudeLow1": null,
+    "altitudeLow2": null,
+    "movementDir": 240,
+    "movementSpd": 40,
+    "rawAirSigmet": "WSUS33 KKCI 011355\nSIGW \nCONVECTIVE SIGMET 25W\nVALID UNTIL 1555Z\nID\nFROM 30SW LKT-50ESE BOI-30WSW BOI-20SSW DNJ-30SW LKT\nAREA TS MOV FROM 24040KT. TOPS TO FL330.\n\nOUTLOOK VALID 011555-011955\nFROM 60W GGW-40S BIL-BPI-BOI-30NW DNJ-60S MLP-60WNW GTF-60W GGW\nWST ISSUANCES POSS. REFER TO MOST RECENT ACUS01 KWNS FROM STORM\nPREDICTION CENTER FOR SYNOPSIS AND METEOROLOGICAL DETAILS.",
+    "postProcessFlag": 0,
+    "severity": 5,
+    "coords": [
+      {
+        "lat": 44.663,
+        "lon": -114.58
+      },
+      {
+        "lat": 43.225,
+        "lon": -115.131
+      },
+      {
+        "lat": 43.356,
+        "lon": -116.829
+      },
+      {
+        "lat": 44.463,
+        "lon": -116.388
+      },
+      {
+        "lat": 44.663,
+        "lon": -114.58
+      }
+    ]
+  },
+  {
+    "icaoId": "KKCI",
+    "alphaChar": "E",
+    "seriesId": "81E",
+    "receiptTime": "2026-07-01T13:56:59.445Z",
+    "creationTime": "2026-07-01T13:55:00.000Z",
+    "validTimeFrom": 1782914100,
+    "validTimeTo": 1782921300,
+    "airSigmetType": "SIGMET",
+    "hazard": "CONVECTIVE",
+    "altitudeHi1": 28000,
+    "altitudeHi2": 28000,
+    "altitudeLow1": null,
+    "altitudeLow2": null,
+    "movementDir": 280,
+    "movementSpd": 30,
+    "rawAirSigmet": "WSUS31 KKCI 011355\nSIGE \nCONVECTIVE SIGMET 81E\nVALID UNTIL 1555Z\nMA RI NY CSTL WTRS\nFROM 20W ACK-80SSE ACK-130SSE HTO-80SSE HTO-20W ACK\nAREA DMSHG TS MOV FROM 28030KT. TOPS TO FL280.\n\nOUTLOOK VALID 011555-011955\nAREA 1...FROM 30SW BKW-40SW LYH-IRQ-50SE PZD-210ENE OMN-210ENE\nPBI-70ENE PBI-110SE MIA-160SE MIA-80WSW EYW-180W EYW-180ESE\nLEV-30NW BNA-30SW BKW\nWST ISSUANCES POSS. REFER TO MOST RECENT ACUS01 KWNS FROM STORM\nPREDICTION CENTER FOR SYNOPSIS AND METEOROLOGICAL DETAILS.\n\nAREA 2...FROM 90WNW BGR-PVD-ETX-SLT-40NNE BUF-MSS-90WNW BGR\nWST ISSUANCES POSS. REFER TO MOST RECENT ACUS01 KWNS FROM STORM\nPREDICTION CENTER FOR SYNOPSIS AND METEOROLOGICAL DETAILS.",
+    "postProcessFlag": 0,
+    "severity": 5,
+    "coords": [
+      {
+        "lat": 41.279,
+        "lon": -70.472
+      },
+      {
+        "lat": 40.05,
+        "lon": -69.365
+      },
+      {
+        "lat": 38.915,
+        "lon": -71.255
+      },
+      {
+        "lat": 39.69,
+        "lon": -71.659
+      },
+      {
+        "lat": 41.279,
+        "lon": -70.472
+      }
+    ]
+  },
+  {
+    "icaoId": "KKCI",
+    "alphaChar": "E",
+    "seriesId": "82E",
+    "receiptTime": "2026-07-01T13:56:59.478Z",
+    "creationTime": "2026-07-01T13:55:00.000Z",
+    "validTimeFrom": 1782914100,
+    "validTimeTo": 1782921300,
+    "airSigmetType": "SIGMET",
+    "hazard": "CONVECTIVE",
+    "altitudeHi1": 45000,
+    "altitudeHi2": 45000,
+    "altitudeLow1": null,
+    "altitudeLow2": null,
+    "movementDir": 90,
+    "movementSpd": 10,
+    "rawAirSigmet": "WSUS31 KKCI 011355\nSIGE \nCONVECTIVE SIGMET 82E\nVALID UNTIL 1555Z\nFL AL CSTL WTRS\nFROM 90SSE SJI-40S CTY-90WSW SRQ-130ESE LEV-90SSE SJI\nAREA TS MOV FROM 09010KT. TOPS TO FL450.\n\nOUTLOOK VALID 011555-011955\nAREA 1...FROM 30SW BKW-40SW LYH-IRQ-50SE PZD-210ENE OMN-210ENE\nPBI-70ENE PBI-110SE MIA-160SE MIA-80WSW EYW-180W EYW-180ESE\nLEV-30NW BNA-30SW BKW\nWST ISSUANCES POSS. REFER TO MOST RECENT ACUS01 KWNS FROM STORM\nPREDICTION CENTER FOR SYNOPSIS AND METEOROLOGICAL DETAILS.\n\nAREA 2...FROM 90WNW BGR-PVD-ETX-SLT-40NNE BUF-MSS-90WNW BGR\nWST ISSUANCES POSS. REFER TO MOST RECENT ACUS01 KWNS FROM STORM\nPREDICTION CENTER FOR SYNOPSIS AND METEOROLOGICAL DETAILS.",
+    "postProcessFlag": 0,
+    "severity": 5,
+    "coords": [
+      {
+        "lat": 29.342,
+        "lon": -87.701
+      },
+      {
+        "lat": 28.935,
+        "lon": -83.05
+      },
+      {
+        "lat": 26.817,
+        "lon": -84.103
+      },
+      {
+        "lat": 28.332,
+        "lon": -87.828
+      },
+      {
+        "lat": 29.342,
+        "lon": -87.701
+      }
+    ]
+  }
+]

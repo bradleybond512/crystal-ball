@@ -167,7 +167,7 @@ export function summariseUrlscan(threats: readonly UrlscanThreat[]): UrlscanStat
 }
 
 const VERDICT_HEX: Record<UrlscanVerdict, string> = {
-  malicious: '#d50000',
+  malicious: '#ff453a',
   suspicious: '#ff9800',
   clean: '#4caf50',
   unknown: '#9e9e9e',

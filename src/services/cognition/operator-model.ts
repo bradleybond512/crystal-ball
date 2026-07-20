@@ -27,6 +27,7 @@
 
 import { getMemory, putMemory } from '@/services/reasoning-memory';
 import { isGhostMode } from '@/services/mode-manager';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -103,13 +104,25 @@ const MAX_INTERESTS = 200;
 const MIN_TERM_LEN = 4;
 const TOP_TERMS_PER_CONTENT = 8;
 
-/** Weekly half-life: weight halves after 7 days without reinforcement. */
+/** Weekly half-life: weight halves after 7 days without reinforcement.
+ *  PR 12 (self-tuning): the live value is the declared tunable
+ *  'operator-ranking:interestHalfLifeHours' (bounds [72, 336]); this
+ *  constant (168h) is the get-with-default fallback. */
 const INTEREST_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+/** Tuned interest half-life in ms, read at decay time. */
+function interestHalfLifeMs(): number {
+  return getTunedParam('operator-ranking', 'interestHalfLifeHours', INTEREST_HALF_LIFE_MS / MS_PER_HOUR) * MS_PER_HOUR;
+}
 
 /** Interest weight step sizes. */
 const POSITIVE_STEP = 0.3;
 const NEGATIVE_STEP = 0.15;
 const WEIGHT_CLAMP = 5;
+
+/** Onboarding seed step: stronger than a single engagement, still well inside WEIGHT_CLAMP. */
+const SEED_STEP = POSITIVE_STEP * 2.5;
 
 /** EWMA alpha for domain affinity updates (recent engagement weighted at ~10%). */
 const AFFINITY_ALPHA = 0.1;
@@ -231,7 +244,7 @@ function extractTerms(text: string): string[] {
  */
 export function decayWeight(weight: number, lastReinforced: number, nowMs: number): number {
   const ageMs = Math.max(0, nowMs - lastReinforced);
-  const halfLives = ageMs / INTEREST_HALF_LIFE_MS;
+  const halfLives = ageMs / interestHalfLifeMs();
   return weight * Math.pow(0.5, halfLives);
 }
 
@@ -409,15 +422,15 @@ export function interestMultiplier(text: string, domain?: string): number {
   // Blend in humanEdge if available for this domain.
   // humanEdge ∈ [-1, 1] (systemBrier − operatorBrier); normalize to [0, 1].
   // Positive humanEdge (operator better) → boost; negative → pull back.
-  const edge = domain !== undefined ? (_model.humanEdge?.[domain] ?? null) : null;
+  const edge = domain === undefined ? null : (_model.humanEdge?.[domain] ?? null);
   let combinedScore: number;
-  if (edge !== null) {
+  if (edge === null) {
+    combinedScore = interestScoreVal;
+  } else {
     // Normalize: edge of +0.25 (operator quite a bit better) → edgeNorm ≈ 1.0
     // edge of -0.25 (system better) → edgeNorm ≈ 0.0; clamp to [0, 1].
     const edgeNorm = Math.max(0, Math.min(1, (edge + 0.25) / 0.5));
     combinedScore = 0.7 * interestScoreVal + 0.3 * edgeNorm;
-  } else {
-    combinedScore = interestScoreVal;
   }
 
   // Hard clamp to [0.8, 1.2] — the ±20% personalization bound is inviolable.
@@ -436,7 +449,7 @@ export function interestMultiplier(text: string, domain?: string): number {
 export function updateHumanEdge(edge: Record<string, number>): void {
   if (isGhostMode()) return;
   ensureLoaded();
-  _model.humanEdge = { ...(_model.humanEdge ?? {}), ...edge };
+  _model.humanEdge = { ..._model.humanEdge, ...edge };
   save();
 }
 
@@ -496,6 +509,26 @@ export function nextActiveHour(
     if (w >= threshold) return candidateTs;
   }
   return undefined;
+}
+
+/**
+ * Seed initial interest weights from explicit user input (onboarding).
+ *
+ * Applies each term at SEED_STEP — stronger than a single engagement so a
+ * fresh interest immediately tilts ranking, but still far inside WEIGHT_CLAMP
+ * so it decays and blends with organic engagement over time rather than
+ * pinning the model. Re-seeding the same term is bounded by the same clamp
+ * bumpInterest already enforces, so it can't be used to force weight past 5.
+ *
+ * Ghost Mode: no-op, matching recordEngagement.
+ */
+export function seedInterests(terms: string[]): void {
+  if (isGhostMode()) return;
+  ensureLoaded();
+  const cleaned = terms.map(t => t.toLowerCase().trim()).filter(t => t.length >= MIN_TERM_LEN);
+  if (cleaned.length === 0) return;
+  bumpInterest(cleaned, SEED_STEP, Date.now());
+  save();
 }
 
 /**

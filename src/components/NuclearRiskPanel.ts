@@ -13,7 +13,7 @@ import { escapeHtml } from '@/utils/sanitize';
 const RISK_COLORS: Record<NuclearRiskData['riskLevel'], string> = {
   low: '#4caf50',
   elevated: '#ff9800',
-  high: '#f44336',
+  high: '#ff453a',
   critical: '#b71c1c',
 };
 
@@ -27,7 +27,7 @@ const RISK_LABELS: Record<NuclearRiskData['riskLevel'], string> = {
 const STATUS_COLORS: Record<NuclearRiskData['treatyStatus'][number]['status'], string> = {
   active: '#4caf50',
   suspended: '#ff9800',
-  withdrawn: '#f44336',
+  withdrawn: '#ff453a',
 };
 
 export class NuclearRiskPanel extends Panel {

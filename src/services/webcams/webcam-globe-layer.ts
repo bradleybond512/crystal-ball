@@ -1,17 +1,22 @@
 import {
+  BoundingSphere,
   Cartesian2,
   Cartesian3,
   Color,
+  ConstantProperty,
   CustomDataSource,
   DistanceDisplayCondition,
   Entity,
   HeightReference,
+  JulianDate,
   NearFarScalar,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   type Viewer,
 } from 'cesium';
+import { escapeHtml } from '@/utils/sanitize';
 import type { WebcamFeed } from './webcam-types';
+import { resolveFrameUrl, needsFrameResolve } from './frame-resolver';
 
 const HIGH_SALIENCE_CATEGORIES = ['fire', 'volcano', 'coastal'] as const;
 
@@ -37,7 +42,9 @@ const CATEGORY_GLYPH: Record<string, string> = {
 
 export interface WebcamGlobeLayerOptions {
   fetchFeeds?: () => Promise<WebcamFeed[]>;
-  highSalienceOnly?: boolean;
+  /** When true, only fire/volcano/coastal categories are plotted.
+   *  Defaults to false (all feeds shown). */
+  salientOnly?: boolean;
 }
 
 export class GlobeWebcamLayer {
@@ -48,12 +55,12 @@ export class GlobeWebcamLayer {
   private clickHandler: ScreenSpaceEventHandler | null = null;
   private feedById = new Map<string, WebcamFeed>();
   private fetchFeeds: () => Promise<WebcamFeed[]>;
-  private highSalienceOnly: boolean;
+  private salientOnly: boolean;
 
   constructor(viewer: Viewer, options: WebcamGlobeLayerOptions = {}) {
     this.viewer = viewer;
     this.fetchFeeds = options.fetchFeeds ?? (() => Promise.resolve([]));
-    this.highSalienceOnly = options.highSalienceOnly ?? true;
+    this.salientOnly = options.salientOnly ?? false;
   }
 
   async mount(): Promise<void> {
@@ -62,11 +69,37 @@ export class GlobeWebcamLayer {
     this.dataSource = new CustomDataSource('webcam-pins');
     await this.viewer.dataSources.add(this.dataSource);
 
+    // With all categories plotted this can be thousands of pins — cluster
+    // nearby ones into a counted bubble so the globe stays legible/performant.
+    // Zooming in declusters down to the individually-clickable pins.
+    const clustering = this.dataSource.clustering;
+    clustering.enabled = true;
+    clustering.pixelRange = 42;
+    clustering.minimumClusterSize = 4;
+    clustering.clusterEvent.addEventListener((clustered, cluster) => {
+      cluster.billboard.show = false;
+      cluster.point.show = true;
+      cluster.point.color = Color.fromCssColorString('#1f6feb');
+      cluster.point.outlineColor = Color.BLACK;
+      cluster.point.outlineWidth = 1;
+      cluster.point.pixelSize = Math.min(30, 14 + String(clustered.length).length * 5);
+      cluster.label.show = true;
+      cluster.label.text = String(clustered.length);
+      cluster.label.font = 'bold 12px sans-serif';
+      cluster.label.fillColor = Color.WHITE;
+    });
+
     this.clickHandler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
     this.clickHandler.setInputAction((event: { position: Cartesian2 }) => {
       const picked: unknown = this.viewer.scene.pick(event.position);
       if (!picked || typeof picked !== 'object') return;
       const entityId = (picked as { id?: unknown }).id;
+      // A clustered pin picks as an array of its entities — zoom in to expand it
+      // instead of dead-clicking, so the individual cams become reachable.
+      if (Array.isArray(entityId)) {
+        this.zoomToCluster(entityId);
+        return;
+      }
       if (entityId instanceof Entity && typeof entityId.id === 'string') {
         const feed = this.feedById.get(entityId.id);
         if (feed) this.dispatchSelect(feed);
@@ -94,7 +127,7 @@ export class GlobeWebcamLayer {
   async refresh(): Promise<void> {
     if (!this.dataSource) return;
     const allFeeds = await this.fetchFeeds();
-    const feeds = this.highSalienceOnly
+    const feeds = this.salientOnly
       ? allFeeds.filter((f) => HIGH_SALIENCE_CATEGORIES.includes(f.category as typeof HIGH_SALIENCE_CATEGORIES[number]))
       : allFeeds;
     this.dataSource.entities.removeAll();
@@ -125,20 +158,52 @@ export class GlobeWebcamLayer {
       });
       this.dataSource.entities.add(entity);
       this.entities.set(feed.id, entity);
+      // FAA feeds carry a /api/ resolver URL (JSON, not an image) — resolve it
+      // and swap the real https image into the info box once available.
+      if (needsFrameResolve(feed.snapshotUrl)) {
+        void resolveFrameUrl(feed.snapshotUrl).then((url) => {
+          if (url && this.entities.get(feed.id) === entity) {
+            entity.description = new ConstantProperty(this.buildDescription(feed, url));
+          }
+        });
+      }
     }
   }
 
-  setHighSalienceOnly(value: boolean): void {
-    this.highSalienceOnly = value;
+  setSalientOnly(value: boolean): void {
+    this.salientOnly = value;
     void this.refresh();
   }
 
-  private buildDescription(feed: WebcamFeed): string {
+  private buildDescription(feed: WebcamFeed, imageUrl: string = feed.snapshotUrl): string {
+    // Only embed an <img> for a directly-loadable URL — a /api/ resolver path
+    // would render as a broken image (it returns JSON, not bytes). FAA feeds get
+    // their real image swapped in asynchronously after resolveFrameUrl().
+    const imgTag = imageUrl && !needsFrameResolve(imageUrl)
+      ? `<img src="${escapeHtml(imageUrl)}" style="max-width:200px;margin-top:4px;border-radius:3px;"/>`
+      : '';
     return `<div style="font-family:sans-serif;padding:6px;">
-      <strong>${feed.name}</strong><br/>
-      <small>${feed.source} · ${feed.category}</small><br/>
-      <img src="${feed.snapshotUrl}" style="max-width:200px;margin-top:4px;border-radius:3px;"/>
+      <strong>${escapeHtml(feed.name)}</strong><br/>
+      <small>${escapeHtml(feed.source)} · ${escapeHtml(feed.category)}</small><br/>
+      ${imgTag}
     </div>`;
+  }
+
+  /** Fly the camera to frame a clicked cluster so it declusters into its
+   *  individually-clickable pins. */
+  private zoomToCluster(entities: readonly unknown[]): void {
+    const now = JulianDate.now();
+    const positions: Cartesian3[] = [];
+    for (const e of entities) {
+      if (e instanceof Entity && e.position) {
+        const p = e.position.getValue(now);
+        if (p) positions.push(p);
+      }
+    }
+    if (positions.length === 0) return;
+    this.viewer.camera.flyToBoundingSphere(BoundingSphere.fromPoints(positions), {
+      duration: 0.8,
+    });
   }
 
   private dispatchSelect(feed: WebcamFeed): void {

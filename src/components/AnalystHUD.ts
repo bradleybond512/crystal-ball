@@ -11,6 +11,7 @@
  */
 
 import { replaceChildren } from '@/utils/dom-utils';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import { isGhostMode } from '@/services/mode-manager';
 import { jumpToPanel, flashPanel } from '@/services/alert-reactions';
 import { subscribeAnalyst, getAnalystSnapshot, type Hypothesis, type HypothesisEvidence, type AnalystSnapshot } from '@/services/analyst-loop';
@@ -29,16 +30,27 @@ import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archiv
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
 import { getBudgetStatus, subscribeBudget, setCloudCap, resetBudget } from '@/services/llm-budget';
-import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
+import { getTotalErrorCount, subscribeDebug, logDebug } from '@/services/reasoning-debug';
 import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocalModelOnly, subscribeLlmEgressChange } from '@/services/ai-flow-settings';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
+import { requestSuperforecast, getCachedSuperforecast } from '@/services/cognition/superforecast-state';
+import { buildForecastProvenanceLines, buildSuperforecastLines } from './forecast-provenance-view';
+import { buildCheckNextItems } from '@/services/cognition/evoi-surface';
+import type { CollectionAction } from '@/services/cognition/evoi-planner';
+import { recall, type Recall } from '@/services/cognition/episodic-memory';
+import { subscribeCognitionFlags } from '@/services/cognition/cognition-settings';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
 
 const MAX_VISIBLE = 5;
+
+/** Re-run episodic recall for a hypothesis at most every 5 minutes. */
+const ANALOG_CACHE_TTL_MS = 5 * 60_000;
+/** Hard cap on cached analog recalls (hypothesis ids churn across cycles). */
+const ANALOG_CACHE_MAX = 40;
 
 const RISK_COLORS: Record<Hypothesis['risk'], string> = {
   critical: '#c0392b',
@@ -54,8 +66,18 @@ const DOMAIN_GLYPH = {
 function ageLabel(ms: number): string {
   const mins = Math.max(0, Math.round(ms / 60_000));
   if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m`;
-  return `${Math.floor(mins / 60)}h`;
+  return formatDurationMinutes(mins);
+}
+
+/**
+ * Replay-scrubber label. When the snapshot is current, `ageLabel` returns
+ * "now" — appending " ago" produced the "now ago · 120/120" bug, so suppress
+ * the suffix for the live case. `ageMs === null` (no snapshot) is also "now".
+ */
+export function formatScrubberLabel(ageMs: number | null, oneBasedIdx: number, total: number): string {
+  const ago = ageMs === null ? 'now' : ageLabel(ageMs);
+  const rel = ago === 'now' ? 'now' : `${ago} ago`;
+  return `${rel} · ${oneBasedIdx}/${total}`;
 }
 
 function simButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
@@ -70,6 +92,18 @@ function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolea
   return expanded ? 'hide ▾' : 'perspectives ▾';
 }
 
+function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
+  if (loading) return 'forecasting…';
+  if (!cached) return 'deep forecast ▸';
+  return expanded ? 'hide ▾' : 'deep forecast ▾';
+}
+
+/**
+ * True when a non-global key should be swallowed because the user is typing
+ * in a field. Escape and Tab never route through this — they must work even
+ * when focus sits on the replay-scrubber range input or a settings checkbox
+ * (the live-repro cause of "Esc sometimes doesn't close the HUD").
+ */
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
   const target = e.target as HTMLElement | null;
   if (!target) return false;
@@ -78,6 +112,11 @@ function shouldIgnoreKey(e: KeyboardEvent): boolean {
 
 export class AnalystHUD {
   private readonly root: HTMLElement;
+  /** localStorage key for remembering the HUD's open/closed state across boots
+   *  so it doesn't surprise-open — only user-initiated show/hide persist; the
+   *  egress-disclosure auto-show passes persist:false so it never sticks. */
+  private static readonly OPEN_STATE_KEY = 'cb:analyst-hud-open';
+
   private snapshot: AnalystSnapshot | null = null;
   private forecast: ForecastSnapshot | null = null;
   private briefs: Record<string, AutoBrief | undefined> = {};
@@ -91,8 +130,19 @@ export class AnalystHUD {
   private expandedProjection = new Set<string>();
   private loadingEnsemble = new Set<string>();
   private expandedEnsemble = new Set<string>();
+  private loadingSuperforecast = new Set<string>();
+  private expandedSuperforecast = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
   private outcomeSubmitted = new Set<string>();
+  // ── Cognition surfacing (Wave 5a) ─────────────────────────────────────────
+  /** EVOI "What to check next" memo — recomputed when the snapshot changes. */
+  private evoiMemo: { key: string; items: CollectionAction[] } | null = null;
+  /** Episodic analog recalls keyed by hypothesis id (async, size-capped). */
+  private readonly analogCache = new Map<string, { recalls: Recall[]; loadedAt: number }>();
+  private readonly loadingAnalogs = new Set<string>();
+  private readonly expandedAnalogs = new Set<string>();
+  /** `${hypId}||${episodeId}` keys with the detail disclosure open. */
+  private readonly expandedAnalogDetail = new Set<string>();
   // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
   // Index-based replay drifts silently when the archive evicts the oldest
   // snapshots (120-slot ring buffer): what the user had as index 5 before
@@ -103,14 +153,96 @@ export class AnalystHUD {
   private selectedHypothesisIndex = 0;
   private settingsOpen = false;
   private renderScheduled = false;
-  private readonly _cleanups: Array<() => void> = [];
+  /** Wall-clock ms of the last show/hide transition — used to debounce
+   *  double-fired toggle events that would re-open right after a close. */
+  private lastVisibilityChangeAt = 0;
+  /** Element focused before the HUD opened; restored on close. */
+  private previouslyFocused: HTMLElement | null = null;
+  private readonly _cleanups: (() => void)[] = [];
+
+  private readonly onExportCopied = (e: Event): void => {
+    const ce = e as CustomEvent<{ hypothesisId: string }>;
+    this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
+    this.scheduleRender();
+  };
+
+  // When llm-adapter blocks a cloud call because disclosure hasn't been
+  // acknowledged yet, show the disclosure banner in the HUD.
+  private readonly onEgressDisclosure = (): void => {
+    // NEVER force-open the HUD. auto-brief / analyst-loop call generateText on
+    // cadences, and every blocked cloud call (egress undisclosed) fires this;
+    // force-opening re-opened the HUD immediately after the user closed it, so
+    // Esc/X looked dead. The banner still renders (render() gates on
+    // isLlmEgressDisclosed) whenever the user opens the HUD via ⌘⇧A / toggle.
+    if (this.visible) this.scheduleRender();
+  };
+
+  private persistOpenState(open: boolean): void {
+    try { localStorage.setItem(AnalystHUD.OPEN_STATE_KEY, open ? '1' : '0'); } catch { /* best effort */ }
+  }
+
+  private readonly onToggle = (e: Event): void => {
+    // Guard against double-fire re-open races: a second toggle landing
+    // within 250ms of an open/close transition would instantly undo it
+    // (user closes HUD → stray duplicate event re-opens it).
+    const sinceTransition = Date.now() - this.lastVisibilityChangeAt;
+    if (sinceTransition < 250) {
+      const source = (e as CustomEvent<{ source?: string }>).detail?.source ?? 'unknown';
+      logDebug({
+        level: 'warn',
+        category: 'hud',
+        source: 'AnalystHUD',
+        message: `ignored toggle ${sinceTransition}ms after last visibility transition`,
+        data: { source },
+      });
+      return;
+    }
+    this.toggle();
+  };
+
+  private readonly onFeedback = (): void => { if (this.visible) this.render(); };
+
+  private readonly onKeydown = (e: KeyboardEvent): void => this.handleKeydown(e);
 
   constructor() {
     this.root = document.createElement('div');
     this.root.className = 'analyst-hud';
     this.root.hidden = true;
+    // Dialog semantics + focusable container so Esc lands here after open.
+    this.root.tabIndex = -1;
+    this.root.setAttribute('role', 'dialog');
+    this.root.setAttribute('aria-modal', 'true');
+    this.root.setAttribute('aria-label', 'Analyst HUD');
     this.root.addEventListener('click', (e) => {
-      if (e.target === this.root) this.hide();
+      if (e.target === this.root) { this.hide(); return; }
+      // Delegated close: the header is rebuilt on every render, and a
+      // re-render between pointerdown and pointerup swallows clicks bound
+      // directly to the (replaced) button. The root element persists.
+      const target = e.target as HTMLElement;
+      if (target.closest?.('.analyst-hud-close')) { this.hide(); return; }
+      // Cognition surfaces (Wave 5a) — delegated on the stable root so the
+      // per-render replaceChildren never orphans a click in flight.
+      const evoiRow = target.closest?.<HTMLElement>('[data-evoi-panel]');
+      if (evoiRow?.dataset.evoiPanel) {
+        jumpToPanel(evoiRow.dataset.evoiPanel);
+        this.hide();
+        return;
+      }
+      const analogToggle = target.closest?.<HTMLElement>('[data-analog-toggle]');
+      if (analogToggle?.dataset.analogToggle) {
+        const id = analogToggle.dataset.analogToggle;
+        if (this.expandedAnalogs.has(id)) this.expandedAnalogs.delete(id);
+        else this.expandedAnalogs.add(id);
+        this.render();
+        return;
+      }
+      const analogDetail = target.closest?.<HTMLElement>('[data-analog-detail]');
+      if (analogDetail?.dataset.analogDetail) {
+        const key = analogDetail.dataset.analogDetail;
+        if (this.expandedAnalogDetail.has(key)) this.expandedAnalogDetail.delete(key);
+        else this.expandedAnalogDetail.add(key);
+        this.render();
+      }
     });
     this.snapshot = getAnalystSnapshot();
     this.forecast = getForecastSnapshot();
@@ -123,69 +255,86 @@ export class AnalystHUD {
     // All event-driven re-renders go through scheduleRender() to coalesce
     // bursts (e.g. analyst-hypotheses + auto-brief + question-answered all
     // arriving in the same tick) into a single rAF-aligned render.
-    this._cleanups.push(subscribeAnalyst((snap) => {
+    const unsubAnalyst = subscribeAnalyst((snap) => {
       this.snapshot = snap;
       // Record recurrence ONCE per snapshot (not once per render) —
       // otherwise event bursts cause recurrenceCount to balloon by 10-30×
       // per actual cycle, polluting playbooks + hammering IDB writes.
       for (const h of snap.hypotheses.slice(0, MAX_VISIBLE)) noteRecurrence(h);
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeModeAdvisory((f) => {
+    });
+    const unsubModeAdvisory = subscribeModeAdvisory((f) => {
       this.forecast = f;
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeAutoBrief((brief) => {
+    });
+    const unsubAutoBrief = subscribeAutoBrief((brief) => {
       this.briefs[brief.domain] = brief;
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribePressureHistory((h) => {
+    });
+    const unsubPressureHistory = subscribePressureHistory((h) => {
       this.pressure = h;
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeSkeptic(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeAlternatives(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeQuestionAnswered(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeBriefingArchive(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeProjection(() => { this.scheduleRender(); }));
-    const onExportCopied = (e: Event) => {
-      const ce = e as CustomEvent<{ hypothesisId: string }>;
-      this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
-      this.scheduleRender();
-    };
-    document.addEventListener('cb:hypothesis-export-copied', onExportCopied);
-    this._cleanups.push(() => document.removeEventListener('cb:hypothesis-export-copied', onExportCopied));
-    this._cleanups.push(subscribeBudget(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeDebug((entry) => {
+    });
+    const unsubSkeptic = subscribeSkeptic(() => { this.scheduleRender(); });
+    const unsubAlternatives = subscribeAlternatives(() => { this.scheduleRender(); });
+    const unsubQuestionAnswered = subscribeQuestionAnswered(() => { this.scheduleRender(); });
+    const unsubBriefingArchive = subscribeBriefingArchive(() => { this.scheduleRender(); });
+    const unsubProjection = subscribeProjection(() => { this.scheduleRender(); });
+    document.addEventListener('cb:hypothesis-export-copied', this.onExportCopied);
+    const unsubBudget = subscribeBudget(() => { this.scheduleRender(); });
+    const unsubDebug = subscribeDebug((entry) => {
       // Only re-render on errors (to refresh the footer counter) — info
       // and warn entries are too chatty.
       if (entry.level === 'error') this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeSnapshotArchive(() => {
+    });
+    const unsubSnapshotArchive = subscribeSnapshotArchive(() => {
       // Only scroll the view on new archived snapshots when we're live.
       // When replayed, the user's anchor timestamp resolves to the same
       // snapshot regardless, so no re-render is needed.
       if (this.replayAtTimestamp === null) this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeEnsemble(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeLlmEgressChange(() => { this.scheduleRender(); }));
-    // When llm-adapter blocks a cloud call because disclosure hasn't been
-    // acknowledged yet, show the disclosure banner in the HUD.
-    const onEgressDisclosure = () => {
-      if (this.visible) this.scheduleRender();
-      else this.show();
-    };
-    document.addEventListener('cb:llm-egress-disclosure-needed', onEgressDisclosure);
-    this._cleanups.push(() => document.removeEventListener('cb:llm-egress-disclosure-needed', onEgressDisclosure));
-    const onToggle = () => this.toggle();
-    document.addEventListener('cb:toggle-analyst-hud', onToggle);
-    this._cleanups.push(() => document.removeEventListener('cb:toggle-analyst-hud', onToggle));
-    const onFeedback = () => { if (this.visible) this.render(); };
-    document.addEventListener('cb:hypothesis-feedback', onFeedback);
-    this._cleanups.push(() => document.removeEventListener('cb:hypothesis-feedback', onFeedback));
-    const onKeydown = (e: KeyboardEvent) => this.handleKeydown(e);
-    document.addEventListener('keydown', onKeydown);
-    this._cleanups.push(() => document.removeEventListener('keydown', onKeydown));
+    });
+    const unsubEnsemble = subscribeEnsemble(() => { this.scheduleRender(); });
+    const unsubCognitionFlags = subscribeCognitionFlags(() => {
+      // Kill-switch flips must reflect immediately: drop the EVOI memo and
+      // analog caches so disabled surfaces empty on the next render.
+      this.evoiMemo = null;
+      this.analogCache.clear();
+      this.scheduleRender();
+    });
+    const unsubLlmEgressChange = subscribeLlmEgressChange(() => { this.scheduleRender(); });
+    document.addEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure);
+    document.addEventListener('cb:toggle-analyst-hud', this.onToggle);
+    document.addEventListener('cb:hypothesis-feedback', this.onFeedback);
+    document.addEventListener('keydown', this.onKeydown);
+    this._cleanups.push(
+      unsubAnalyst,
+      unsubModeAdvisory,
+      unsubAutoBrief,
+      unsubPressureHistory,
+      unsubSkeptic,
+      unsubAlternatives,
+      unsubQuestionAnswered,
+      unsubBriefingArchive,
+      unsubProjection,
+      unsubCognitionFlags,
+      () => document.removeEventListener('cb:hypothesis-export-copied', this.onExportCopied),
+      unsubBudget,
+      unsubDebug,
+      unsubSnapshotArchive,
+      unsubEnsemble,
+      unsubLlmEgressChange,
+      () => document.removeEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure),
+      () => document.removeEventListener('cb:toggle-analyst-hud', this.onToggle),
+      () => document.removeEventListener('cb:hypothesis-feedback', this.onFeedback),
+      () => document.removeEventListener('keydown', this.onKeydown),
+    );
+
+    // Remember last state: reopen only if the user had it open when they quit.
+    // A HUD they closed stays closed on boot (no surprise auto-open); the only
+    // thing that can still auto-show is a pending egress disclosure (persist:false).
+    let wasOpen = false;
+    try { wasOpen = localStorage.getItem(AnalystHUD.OPEN_STATE_KEY) === '1'; } catch { /* default closed */ }
+    if (wasOpen) this.show();
   }
 
   destroy(): void {
@@ -197,6 +346,12 @@ export class AnalystHUD {
 
   private handleKeydown(e: KeyboardEvent): void {
     if (!this.visible) return;
+    // Escape + Tab are global while the HUD is open — they must work even
+    // when focus sits inside an input (scrubber slider, settings toggles).
+    if (e.key === 'Escape' || e.key === 'Tab') {
+      this.handleGlobalKey(e);
+      return;
+    }
     if (shouldIgnoreKey(e)) return;
     if (this.handleGlobalKey(e)) return;
     this.handleNavigationKey(e);
@@ -209,6 +364,10 @@ export class AnalystHUD {
       e.preventDefault();
       return true;
     }
+    if (e.key === 'Tab') {
+      this.trapFocus(e);
+      return true;
+    }
     if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
       this.settingsOpen = !this.settingsOpen;
       this.render();
@@ -216,6 +375,27 @@ export class AnalystHUD {
       return true;
     }
     return false;
+  }
+
+  /** Minimal focus trap: Tab cycles within the HUD while it's open. */
+  private trapFocus(e: KeyboardEvent): void {
+    const focusables = [...this.root.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex="-1"])',
+    )].filter((el) => el.offsetParent !== null);
+    if (focusables.length === 0) return;
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    const active = document.activeElement as HTMLElement | null;
+    // Treat focus on the dialog root itself (show() parks focus there) as
+    // "not inside a control", so the first Tab / Shift+Tab wraps to first/last
+    // instead of escaping behind the modal.
+    const inside = active !== null && active !== this.root && this.root.contains(active);
+    if (e.shiftKey) {
+      if (!inside || active === first) { last.focus(); e.preventDefault(); }
+    } else if (!inside || active === last) {
+      first.focus();
+      e.preventDefault();
+    }
   }
 
   private handleNavigationKey(e: KeyboardEvent): void {
@@ -269,17 +449,32 @@ export class AnalystHUD {
     });
   }
 
-  show(): void {
+  show(persist = true): void {
+    if (this.visible) return;
     this.visible = true;
+    if (persist) this.persistOpenState(true);
+    this.lastVisibilityChangeAt = Date.now();
+    this.previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.root.hidden = false;
     this.render();
+    // Focus the dialog container (tabindex=-1) so Esc/Tab land inside it
+    // immediately, regardless of what was focused before.
+    this.root.focus({ preventScroll: true });
     document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: true } }));
   }
 
-  hide(): void {
+  hide(persist = true): void {
+    if (!this.visible) return;
     this.visible = false;
+    if (persist) this.persistOpenState(false);
+    this.lastVisibilityChangeAt = Date.now();
     this.root.hidden = true;
     document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: false } }));
+    // Restore focus to wherever the user was before opening.
+    if (this.previouslyFocused?.isConnected) {
+      this.previouslyFocused.focus({ preventScroll: true });
+    }
+    this.previouslyFocused = null;
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────
@@ -292,6 +487,7 @@ export class AnalystHUD {
       this.buildAdvisorySection(),
       this.buildHotEntitiesSection(),
       this.buildHypothesesSection(),
+      this.buildCheckNextSection(),
       this.buildBriefsSection(),
       this.buildTimelineSection(),
       this.buildFooter(),
@@ -327,9 +523,11 @@ export class AnalystHUD {
 
     const close = document.createElement('button');
     close.className = 'analyst-hud-close';
-    close.textContent = 'x';
+    close.type = 'button';
+    close.textContent = '×';
     close.title = 'Close (Esc)';
-    close.addEventListener('click', () => this.hide());
+    close.setAttribute('aria-label', 'Close');
+    // Click handling is delegated on this.root (survives re-renders).
 
     header.append(title, aiBadge, settings, close);
     return header;
@@ -479,6 +677,73 @@ export class AnalystHUD {
     return sec;
   }
 
+  /**
+   * "What to check next" — top EVOI-ranked collection actions across the
+   * visible hypotheses. Rows navigate to the relevant panel when the action
+   * carries a panelId (delegated on this.root via data-evoi-panel).
+   */
+  private buildCheckNextSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'analyst-hud-section';
+
+    const h = document.createElement('h3');
+    h.textContent = 'What to check next';
+    sec.append(h);
+
+    const items = this.checkNextItems();
+    if (items.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'analyst-hud-empty';
+      empty.textContent = 'No high-value checks right now.';
+      sec.append(empty);
+      return sec;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'analyst-hud-evoi-list';
+    for (const action of items) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'analyst-hud-evoi-row';
+      row.title = action.explanation;
+      const bits = action.expectedInfoGainBits.toFixed(2);
+      row.setAttribute('aria-label', `${action.label} — expected gain ${bits} bits`);
+      if (action.panelId) {
+        row.dataset.evoiPanel = action.panelId;
+      } else {
+        row.disabled = true;
+        row.classList.add('analyst-hud-evoi-row-static');
+      }
+      const label = document.createElement('span');
+      label.className = 'analyst-hud-evoi-label';
+      label.textContent = action.label;
+      const badge = document.createElement('span');
+      badge.className = 'analyst-hud-evoi-badge';
+      badge.textContent = `+${bits} bits`;
+      row.append(label, badge);
+      list.append(row);
+    }
+    sec.append(list);
+    return sec;
+  }
+
+  /** Memoized EVOI items for the currently displayed snapshot. */
+  private checkNextItems(): CollectionAction[] {
+    const snap = this.effectiveSnapshot();
+    const visible = (snap?.hypotheses ?? []).slice(0, MAX_VISIBLE);
+    const key = `${snap?.timestamp ?? 0}|${visible.length}`;
+    if (this.evoiMemo?.key === key) return this.evoiMemo.items;
+    const forecasts = visible.length > 0 ? forecastAll(visible, getLatestPCI()) : [];
+    const byId = new Map(forecasts.map(f => [f.hypothesisId, f] as const));
+    const items = buildCheckNextItems(visible.map(h => ({
+      kind: h.kind,
+      statement: h.statement,
+      probability: byId.get(h.id)?.probability ?? h.confidence,
+    })));
+    this.evoiMemo = { key, items };
+    return items;
+  }
+
   private buildSettingsOverlay(): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'analyst-hud-settings';
@@ -615,8 +880,9 @@ export class AnalystHUD {
     const label = document.createElement('span');
     label.className = 'analyst-hud-scrubber-label';
     const snap = history[currentIdx];
-    const ago = snap ? ageLabel(Date.now() - snap.timestamp) : 'now';
-    label.textContent = `${ago} ago · ${currentIdx + 1}/${max + 1}`;
+    label.textContent = formatScrubberLabel(
+      snap ? Date.now() - snap.timestamp : null, currentIdx + 1, max + 1,
+    );
 
     wrap.append(slider, label, live);
     return wrap;
@@ -638,10 +904,12 @@ export class AnalystHUD {
       this.buildHypPlaybook(h),
       this.buildHypEntities(h),
       this.buildHypEvidence(h),
+      this.buildHypAnalogs(h),
       this.buildHypQuestions(h),
       this.buildHypSkeptic(h),
       this.buildHypAlternatives(h),
       this.buildHypProjection(h),
+      this.buildHypSuperforecast(h),
       this.buildHypEnsemble(h),
       this.buildHypActions(h),
     );
@@ -689,6 +957,20 @@ export class AnalystHUD {
         `Cascade sim: ${projection.cascade.triggerName} — ${projection.cascade.effects.length} effects, ` +
         `~${projection.cascade.estimatedRecoveryHours}h recovery, risk ${projection.cascade.riskScore}/100.`;
       wrap.append(cas);
+    }
+    return wrap;
+  }
+
+  private buildHypSuperforecast(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-superforecast';
+    const sf = getCachedSuperforecast(h);
+    if (!sf || !this.expandedSuperforecast.has(h.id)) return wrap;
+    for (const text of buildSuperforecastLines(sf)) {
+      const line = document.createElement('p');
+      line.className = 'analyst-hud-superforecast-line';
+      line.textContent = text;
+      wrap.append(line);
     }
     return wrap;
   }
@@ -859,6 +1141,20 @@ export class AnalystHUD {
     track.append(fill);
 
     wrap.append(label, track);
+
+    const details = document.createElement('details');
+    details.className = 'analyst-hud-forecast-why';
+    const summary = document.createElement('summary');
+    summary.textContent = 'why';
+    details.append(summary);
+    for (const line of buildForecastProvenanceLines(forecast)) {
+      const row = document.createElement('div');
+      row.className = 'analyst-hud-forecast-why-row';
+      row.textContent = line;
+      details.append(row);
+    }
+    wrap.append(details);
+
     return wrap;
   }
 
@@ -946,6 +1242,126 @@ export class AnalystHUD {
     return wrap;
   }
 
+  /**
+   * "Historical analogs" — up to 3 episodic-memory recalls for this
+   * hypothesis (title/date + similarity %), each with a details disclosure.
+   * Loads async on first render; hidden entirely when there are no analogs
+   * (episodic recall off → recall() returns [] → nothing renders).
+   * All clicks are delegated on this.root via data-analog-* attributes.
+   */
+  private buildHypAnalogs(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-analogs';
+
+    const cached = this.analogCache.get(h.id);
+    const stale = cached !== undefined && Date.now() - cached.loadedAt > ANALOG_CACHE_TTL_MS;
+    if ((!cached || stale) && !this.loadingAnalogs.has(h.id)) {
+      this.loadingAnalogs.add(h.id);
+      this.pruneAnalogCache();
+      void recall(h.statement, { k: 3, kinds: ['hypothesis', 'situation'] })
+        .then((recalls) => { this.analogCache.set(h.id, { recalls, loadedAt: Date.now() }); })
+        .catch(() => {
+          // Cache the miss so a failing recall isn't retried every render.
+          this.analogCache.set(h.id, { recalls: [], loadedAt: Date.now() });
+        })
+        .finally(() => {
+          this.loadingAnalogs.delete(h.id);
+          this.scheduleRender();
+        });
+    }
+
+    if (!cached) {
+      if (this.loadingAnalogs.has(h.id)) {
+        const loading = document.createElement('span');
+        loading.className = 'analyst-hud-analogs-loading';
+        loading.textContent = 'analogs…';
+        wrap.append(loading);
+      }
+      return wrap;
+    }
+    const recalls = cached.recalls.slice(0, 3);
+    if (recalls.length === 0) return wrap;
+
+    const expanded = this.expandedAnalogs.has(h.id);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'analyst-hud-analogs-toggle';
+    toggle.dataset.analogToggle = h.id;
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-label', `Historical analogs for this hypothesis (${recalls.length})`);
+    toggle.textContent = expanded
+      ? `Historical analogs (${recalls.length}) ▾`
+      : `Historical analogs (${recalls.length}) ▸`;
+    wrap.append(toggle);
+
+    if (!expanded) return wrap;
+
+    const list = document.createElement('div');
+    list.className = 'analyst-hud-analog-list';
+    for (const r of recalls) {
+      list.append(this.buildAnalogItem(h.id, r));
+    }
+    wrap.append(list);
+    return wrap;
+  }
+
+  private buildAnalogItem(hypId: string, r: Recall): HTMLElement {
+    const item = document.createElement('div');
+    item.className = 'analyst-hud-analog-item';
+    const key = `${hypId}||${r.episode.id}`;
+    const detailOpen = this.expandedAnalogDetail.has(key);
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'analyst-hud-analog-head';
+    head.dataset.analogDetail = key;
+    head.setAttribute('aria-expanded', String(detailOpen));
+    const summary = r.episode.summary.length > 90
+      ? `${r.episode.summary.slice(0, 90)}…`
+      : r.episode.summary;
+    const date = new Date(r.episode.createdAt).toLocaleDateString();
+    const simPct = `${Math.round(r.similarity * 100)}%`;
+    head.setAttribute('aria-label', `Analog episode from ${date}, similarity ${simPct}`);
+    head.title = detailOpen ? 'Hide details' : 'Show details';
+
+    const title = document.createElement('span');
+    title.className = 'analyst-hud-analog-title';
+    title.textContent = summary;
+    const meta = document.createElement('span');
+    meta.className = 'analyst-hud-analog-meta';
+    meta.textContent = `${date} · ${simPct}`;
+    head.append(title, meta);
+    item.append(head);
+
+    if (detailOpen) {
+      const detail = document.createElement('div');
+      detail.className = 'analyst-hud-analog-detail';
+      const age = ageLabel(Date.now() - r.episode.createdAt);
+      const outcome = r.episode.outcome ?? 'pending';
+      const lines = [
+        `${r.explanation} · ${age} ago · outcome: ${outcome}`,
+        ...(r.episode.outcomeNote ? [`→ ${r.episode.outcomeNote}`] : []),
+      ];
+      for (const text of lines) {
+        const p = document.createElement('p');
+        p.className = 'analyst-hud-analog-detail-line';
+        p.textContent = text;
+        detail.append(p);
+      }
+      item.append(detail);
+    }
+    return item;
+  }
+
+  /** Keep the analog cache bounded — evict the oldest loads beyond the cap. */
+  private pruneAnalogCache(): void {
+    if (this.analogCache.size < ANALOG_CACHE_MAX) return;
+    const entries = [...this.analogCache.entries()].sort((a, b) => a[1].loadedAt - b[1].loadedAt);
+    for (const [id] of entries.slice(0, entries.length - ANALOG_CACHE_MAX + 1)) {
+      this.analogCache.delete(id);
+    }
+  }
+
   private buildHypActions(h: Hypothesis): HTMLElement {
     const actions = document.createElement('div');
     actions.className = 'analyst-hud-hyp-actions';
@@ -970,10 +1386,11 @@ export class AnalystHUD {
 
     const simulate = this.buildSimulateButton(h);
     const perspectives = this.buildEnsembleButton(h);
+    const deepForecast = this.buildSuperforecastButton(h);
     const copy = this.buildCopyButton(h);
 
     const outcomeButtons = this.buildOutcomeButtons(h);
-    actions.append(up, down, ...outcomeButtons, simulate, perspectives, copy);
+    actions.append(up, down, ...outcomeButtons, simulate, perspectives, deepForecast, copy);
     return actions;
   }
 
@@ -1063,6 +1480,40 @@ export class AnalystHUD {
       void projectHypothesis(h).finally(() => {
         this.loadingProjection.delete(h.id);
         this.expandedProjection.add(h.id);
+        this.render();
+      });
+    });
+    return btn;
+  }
+
+  private buildSuperforecastButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-superforecast-btn';
+    if (isGhostMode()) {
+      btn.style.display = 'none';
+    }
+    const loading = this.loadingSuperforecast.has(h.id);
+    const cached = getCachedSuperforecast(h);
+    const expanded = this.expandedSuperforecast.has(h.id);
+    btn.textContent = superforecastButtonLabel(loading, Boolean(cached), expanded);
+    btn.title = cached
+      ? 'Toggle the stored deep forecast'
+      : 'Run the calibrated superforecaster pipeline on this hypothesis';
+    btn.disabled = loading;
+    btn.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedSuperforecast.delete(h.id);
+        else this.expandedSuperforecast.add(h.id);
+        this.render();
+        return;
+      }
+      this.loadingSuperforecast.add(h.id);
+      this.render();
+      // Swallow pipeline rejections: the finally-block resets the loading
+      // state and the un-cached button lets the user retry.
+      void requestSuperforecast(h).catch(() => { /* retry via re-click */ }).finally(() => {
+        this.loadingSuperforecast.delete(h.id);
+        this.expandedSuperforecast.add(h.id);
         this.render();
       });
     });

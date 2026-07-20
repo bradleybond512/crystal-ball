@@ -208,3 +208,18 @@ test('search ranks navigation > panel when tied on raw match', () => {
   // navigation (2.5) beats panel (2) at equal raw match
   assert.equal(out[0]!.command.category, 'navigation');
 });
+
+test('negative weight demotes a command below an otherwise-equal match', () => {
+  // Discriminating fixture: identical titles-modulo-alphabet with the DEMOTED
+  // command alphabetically FIRST — the alphabetical tie-break alone would rank
+  // it on top, so only the weight mechanism can produce the asserted order.
+  const reg = createCommandRegistry();
+  reg.register({ id: 'panel:demoted', title: 'Aardvark Feed', keywords: ['feed'], category: 'panel', weight: -1.5, action: () => {} });
+  reg.register({ id: 'panel:normal', title: 'Zebra Feed', keywords: ['feed'], category: 'panel', action: () => {} });
+  const results = reg.search('feed', 8);
+  const ids = results.map((r) => r.command.id);
+  assert.ok(
+    ids.indexOf('panel:normal') < ids.indexOf('panel:demoted'),
+    `expected normal before demoted, got ${ids.join(',')}`,
+  );
+});

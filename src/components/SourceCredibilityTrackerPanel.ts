@@ -51,7 +51,7 @@ export class SourceCredibilityTrackerPanel extends Panel {
         'Tracks historical accuracy per intelligence source. Confirm/refute feedback updates each source\'s credibility score; the score drives downstream weighting and tier classification.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getSourceCredibilityTrackerService().subscribe(() => this.render());
     this.attachHandlers();
   }

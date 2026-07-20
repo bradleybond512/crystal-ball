@@ -429,7 +429,7 @@ export function initLiveChannelsWindow(containerEl?: HTMLElement): void {
  if (!resolvedName) {
  try {
  const baseUrl = isDesktopRuntime() ? getRemoteApiBaseUrl() : '';
- const res = await fetch(`${baseUrl}/api/youtube/live?videoId=${encodeURIComponent(videoId)}`);
+ const res = await fetch(`${baseUrl}/api/youtube/live?videoId=${encodeURIComponent(videoId)}`, { signal: AbortSignal.timeout(8_000) });
  if (res.ok) {
  const data = await res.json();
  resolvedName = data.channelName || data.title || '';
@@ -477,7 +477,7 @@ export function initLiveChannelsWindow(containerEl?: HTMLElement): void {
  let resolvedName = '';
  try {
  const baseUrl = isDesktopRuntime() ? getRemoteApiBaseUrl() : '';
- const res = await fetch(`${baseUrl}/api/youtube/live?channel=${encodeURIComponent(handle)}`);
+ const res = await fetch(`${baseUrl}/api/youtube/live?channel=${encodeURIComponent(handle)}`, { signal: AbortSignal.timeout(8_000) });
  if (res.ok) {
  const data = await res.json();
  if (data.channelExists === false && !data.error) {

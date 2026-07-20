@@ -32,7 +32,7 @@ const TREND_ARROW: Record<TrendDirection, string> = {
 
 const TREND_COLOR: Record<TrendDirection, string> = {
   rising:  '#4caf50',
-  falling: '#f44336',
+  falling: '#ff453a',
   stable:  '#9e9e9e',
 };
 
@@ -40,7 +40,7 @@ function scoreColor(score: number): string {
   if (score >= 80) return '#4caf50';
   if (score >= 60) return '#ffeb3b';
   if (score >= 40) return '#ff9800';
-  return '#f44336';
+  return '#ff453a';
 }
 
 const DOMAIN_LABELS: Record<string, string> = {
@@ -82,7 +82,7 @@ export class GreatPowerCompetitionPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -195,10 +195,10 @@ export class GreatPowerCompetitionPanel extends Panel {
         <span style="color:#4caf50;">■</span> ≥80 Strong&nbsp;
         <span style="color:#ffeb3b;">■</span> 60-79 Competitive&nbsp;
         <span style="color:#ff9800;">■</span> 40-59 Moderate&nbsp;
-        <span style="color:#f44336;">■</span> &lt;40 Weak&nbsp;&nbsp;
+        <span style="color:#ff453a;">■</span> &lt;40 Weak&nbsp;&nbsp;
         <span style="color:#4caf50;">↑</span> Rising&nbsp;
         <span style="color:#9e9e9e;">→</span> Stable&nbsp;
-        <span style="color:#f44336;">↓</span> Falling
+        <span style="color:#ff453a;">↓</span> Falling
       </div>
     `;
   }

@@ -77,6 +77,14 @@ export interface ForeignPresenceAlert {
 
 const activeForeignPresence = new Map<string, ForeignPresenceAlert>();
 const seenForeignAlerts = new Set<string>();
+// The 2-hour bucket index whose keys currently populate seenForeignAlerts.
+// When the bucket rolls over we clear the set so stale buckets aren't retained
+// for the whole session (the keys embed the bucket index and were never pruned).
+let seenForeignAlertsBucket = -1;
+// Evict a foreign-presence entry once its operator/region pair hasn't been
+// re-detected within this window (firstDetected is refreshed on every
+// re-detection), so the map doesn't retain stale pairs + flight arrays.
+const FOREIGN_PRESENCE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface MilitaryTheater {
   id: string;
@@ -511,6 +519,15 @@ function getOperatorCountry(operator: MilitaryOperator): string {
   return config?.country ?? 'Unknown';
 }
 
+// Drop foreign-presence entries whose operator/region pair hasn't been
+// re-detected within the TTL, so the map doesn't retain stale flight arrays.
+function pruneStaleForeignPresence(): void {
+  const cutoff = Date.now() - FOREIGN_PRESENCE_TTL_MS;
+  for (const [key, alert] of activeForeignPresence) {
+ if (alert.firstDetected.getTime() < cutoff) activeForeignPresence.delete(key);
+  }
+}
+
 export function detectForeignMilitaryPresence(flights: MilitaryFlight[]): ForeignPresenceAlert[] {
   const newAlerts: ForeignPresenceAlert[] = [];
 
@@ -533,13 +550,23 @@ export function detectForeignMilitaryPresence(flights: MilitaryFlight[]): Foreig
  }
   }
 
+  // Dedup window: keys are bucketed by 2-hour window. Drop the prior bucket's
+  // keys on rollover so the set stays bounded over a long session.
+  const currentBucket = Math.floor(Date.now() / (2 * 60 * 60 * 1000));
+  if (currentBucket !== seenForeignAlertsBucket) {
+ seenForeignAlerts.clear();
+ seenForeignAlertsBucket = currentBucket;
+  }
+
+  pruneStaleForeignPresence();
+
   // Check for concentrations above threshold
   for (const [key, presence] of presenceMap) {
  const threshold = getOperatorThreshold(presence.operator);
  if (presence.flights.length < threshold) continue;
 
  // Check if we've already alerted on this (within last 2 hours)
- const alertKey = `${key}-${Math.floor(Date.now() / (2 * 60 * 60 * 1000))}`;
+ const alertKey = `${key}-${currentBucket}`;
  if (seenForeignAlerts.has(alertKey)) continue;
  seenForeignAlerts.add(alertKey);
 
@@ -1277,7 +1304,10 @@ export function detectMultiTheaterCoordination(surges: SurgeAlert[]): MultiTheat
   const dedupeKey = theaterIds.join('+');
   if (seenMultiTheaterAlerts.has(dedupeKey)) return [];
   seenMultiTheaterAlerts.add(dedupeKey);
-  setTimeout(() => seenMultiTheaterAlerts.delete(dedupeKey), COORDINATION_WINDOW_MS);
+  const dedupeTimer = setTimeout(() => seenMultiTheaterAlerts.delete(dedupeKey), COORDINATION_WINDOW_MS);
+  // Don't hold the Node event loop open in tests (4h delay would hang the process).
+  const t = dedupeTimer as unknown as { unref?: () => void };
+  if (typeof t?.unref === 'function') t.unref();
 
   let score = 50;
   score += Math.min(20, (theaterIds.length - 2) * 10);

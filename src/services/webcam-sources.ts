@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { dataFreshness } from '@/services/data-freshness';
+import { safeSetItem } from '@/utils/safe-storage';
 
 export type WebcamSource = 'windy' | 'youtube' | 'dot' | 'custom';
 export type WebcamRegion = 'iran' | 'middle-east' | 'europe' | 'asia' | 'americas';
@@ -201,12 +202,12 @@ export function addCustomWebcam(url: string, title: string, city: string, countr
     lastVerified: Date.now(),
     sourceId: url,
   };
-  localStorage.setItem(CUSTOM_WEBCAMS_KEY, JSON.stringify([...existing, feed]));
+  safeSetItem(CUSTOM_WEBCAMS_KEY, JSON.stringify([...existing, feed]));
 }
 
 export function removeCustomWebcam(id: string): void {
   const existing = getCustomWebcams();
-  localStorage.setItem(CUSTOM_WEBCAMS_KEY, JSON.stringify(existing.filter(f => f.id !== id)));
+  safeSetItem(CUSTOM_WEBCAMS_KEY, JSON.stringify(existing.filter(f => f.id !== id)));
 }
 
 export async function getWebcamFeeds(region?: WebcamRegion, limit = 24): Promise<WebcamFeed[]> {

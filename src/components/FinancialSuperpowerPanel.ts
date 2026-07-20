@@ -100,7 +100,7 @@ function safe<T>(fn: () => T): T | undefined {
 const RISK_COLOR: Record<string, string> = {
   low:      '#4caf50',
   medium:   '#ff9800',
-  high:     '#f44336',
+  high:     '#ef4444',
   critical: '#b71c1c',
 };
 
@@ -147,7 +147,7 @@ export class FinancialSuperpowerPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -238,7 +238,7 @@ export class FinancialSuperpowerPanel extends Panel {
       .filter((s) => s.severity === 'high' || s.severity === 'critical')
       .slice(0, 3)
       .map((s) => {
-        const sevColor = s.severity === 'critical' ? '#d50000' : '#ff9800';
+        const sevColor = s.severity === 'critical' ? '#ff453a' : '#ff9800';
         return `<tr>
           <td style="padding:3px 6px;font-size:12px">${escapeHtml(s.name)}</td>
           <td style="padding:3px 6px;font-size:11px;color:#9e9e9e">${escapeHtml(s.domain)}</td>
@@ -335,12 +335,12 @@ export class FinancialSuperpowerPanel extends Panel {
       const isHigh   = c.depreciation30d > 2.5;
 
       let fgColor: string;
-      if (isCrisis) fgColor = '#d50000';
+      if (isCrisis) fgColor = '#ff453a';
       else if (isHigh) fgColor = '#ff9800';
       else fgColor = '#9e9e9e';
 
       const crisisBadge = isCrisis
-        ? '<span style="font-size:9px;background:#d50000;color:#fff;border-radius:2px;padding:1px 3px;margin-left:4px">CRISIS</span>'
+        ? '<span style="font-size:9px;background:#ff453a;color:#fff;border-radius:2px;padding:1px 3px;margin-left:4px">CRISIS</span>'
         : '';
       const pegBadge = c.pegged && c.depreciation30d > 0.5
         ? '<span style="font-size:9px;background:#ff9800;color:#fff;border-radius:2px;padding:1px 3px;margin-left:4px">PEG STRESS</span>'

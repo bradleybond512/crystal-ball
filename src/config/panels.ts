@@ -23,7 +23,10 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'strategic-risk': { name: 'Strategic Risk Overview', enabled: true, priority: 1 },
   'strategic-posture': { name: 'AI Strategic Posture', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
-  'maritime-intel': { name: 'Maritime Intel', enabled: true, priority: 1 },
+  // Out of the default layout: overlaps 'maritime-superpower' (Maritime
+  // Intelligence), which now hosts the freight-stress section. The component
+  // stays registered so saved user layouts and the Settings toggle keep working.
+  'maritime-intel': { name: 'Maritime Intel', enabled: false, priority: 1 },
   'maritime-superpower': { name: 'Maritime Intelligence', enabled: true, priority: 1 },
   'health-superpower': { name: 'Health Intelligence', enabled: true, priority: 1 },
   'personal-resilience': { name: 'Personal Resilience', enabled: true, priority: 1 },
@@ -132,6 +135,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'nws-alerts': { name: 'NWS Hazard Alerts', enabled: true, priority: 1 },
   'faa-weather-cams': { name: 'FAA Weather Cams', enabled: true, priority: 1 },
   'unified-webcams': { name: 'Webcams', enabled: true, priority: 1 },
+  'pinned-webcams': { name: 'Pinned Webcams', enabled: true, priority: 2 },
   'tsunami-alerts': { name: 'Tsunami Alerts', enabled: true, priority: 2 },
   'tropical-cyclones': { name: 'Tropical Cyclones', enabled: true, priority: 2 },
   'food-insecurity': { name: 'Food Insecurity', enabled: true, priority: 2 },
@@ -249,6 +253,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'global-risk-heatmap': { name: 'Global Risk Heatmap', enabled: true, priority: 1 },
   'command-center': { name: 'Command Center', enabled: true, priority: 1 },
   'algorithm-diagnostic': { name: 'Algorithm Diagnostic', enabled: true, priority: 3 },
+  'source-confidence': { name: 'Source Confidence', enabled: true, priority: 2 },
   'event-store': { name: 'Event Store', enabled: true, priority: 3 },
   'belief-calibration': { name: 'Belief Calibration', enabled: true, priority: 3 },
   'outcome-ledger': { name: 'Outcome Ledger', enabled: true, priority: 3 },
@@ -314,6 +319,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'tech-competition': { name: 'Tech Competition', enabled: true, priority: 1 },
   'shortage-radar': { name: 'Shortage Radar', enabled: true, priority: 1 },
   'storm-posture': { name: 'Storm Posture', enabled: true, priority: 1 },
+  'air-smoke': { name: 'Air & Smoke', enabled: true, priority: 1 },
+  'survival-guide': { name: 'Survival Guide', enabled: true, priority: 1 },
   'shortage-detail-wheat': { name: 'Wheat Shortage', enabled: true, priority: 2 },
   'shortage-detail-corn': { name: 'Corn Shortage', enabled: true, priority: 2 },
   'shortage-detail-rice': { name: 'Rice Shortage', enabled: true, priority: 2 },
@@ -441,6 +448,7 @@ const FULL_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: true,
   airstrikes: true,
@@ -525,6 +533,7 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -647,6 +656,7 @@ const TECH_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -729,6 +739,7 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -848,6 +859,7 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -930,6 +942,7 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -1028,6 +1041,7 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -1110,6 +1124,7 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -1187,6 +1202,7 @@ export const LAYER_TO_SOURCE: Partial<Record<keyof MapLayers, DataSourceId[]>> =
   ucdpEvents: ['ucdp_events'],
   displacement: ['unhcr'],
   climate: ['climate'],
+  airSmoke: ['smoke_forecast'],
   faaWeatherCams: ['faa_weather_cams'],
   adsb: ['adsb'],
   acledEvents: ['acled'],
@@ -1205,13 +1221,13 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // All variants — essential panels
   core: {
  labelKey: 'header.panelCatCore',
- panelKeys: ['map', 'insights', 'strategic-posture', 'live-news', 'live-webcams', 'unified-webcams'],
+ panelKeys: ['map', 'insights', 'strategic-posture', 'live-news', 'live-webcams', 'unified-webcams', 'pinned-webcams'],
   },
 
   // Full (geopolitical) variant
   intelligence: {
  labelKey: 'header.panelCatIntelligence',
- panelKeys: ['threat-dashboard', 'global-risk-heatmap', 'command-center', 'competitive-hypothesis', 'competitive-hypothesis-engine', 'meta-confidence', 'meta-confidence-calibration', 'system-diagnostic', 'assumption-tracker', 'assumption-tracker-v2', 'counterfactual', 'causal-chain', 'domain-scorecard', 'behavioral-response', 'world-narrative', 'civilization-pulse', 'situation-lifecycle-tracker', 'compound-event-detector', 'mission-control-dashboard', 'alert-escalation', 'quality-debt', 'operational-playbook', 'failure-prediction', 'self-test', 'self-test-runner', 'operator-mode', 'operator-shift-report', 'intelligence-feed', 'intelligence-timeline', 'algorithm-diagnostic', 'event-store', 'belief-calibration', 'outcome-ledger', 'active-learning', 'active-learning-queue', 'improvement-scheduler', 'model-governance', 'recovery-modeling', 'bias-detection', 'contradiction-detector', 'cross-domain-contradiction-detector', 'crisis-trajectory', 'intelligence-digest', 'regional-resilience', 'algo-eval', 'backtest', 'backtest-gate', 'global-rhythm', 'temporal-anomaly-detector', 'threat-horizon', 'shadow-mode', 'shadow-comparison', 'cognitive-bias-detector', 'crisis-signature', 'predictive-crisis-index', 'collection-gap', 'safety-case', 'safety-case-dashboard', 'experiment-manager', 'domain-scorecards', 'geopolitical-event-calendar', 'signal-enrichment', 'threat-correlation-matrix', 'geospatial-clustering', 'intelligence-briefing-export', 'intelligence-index', 'situation-timeline', 'domain-dependency', 'multi-agent-review', 'repair-recommendations', 'mission-ledger-bridge', 'counterfactual-replay', 'counterfactual-reasoning', 'situation-priority-queue', 'intelligence-health-monitor', 'intelligence-loop-orchestrator', 'analyst-notebook', 'persistent-query-engine', 'evidence-graph', 'evidence-chain-builder', 'entity-registry', 'alert-trace', 'alert-rules-tuning', 'intelligence-quality-debt', 'alert-explanation', 'scenario-replay', 'playbook', 'aviation-intel', 'aviation-superpower', 'energy-superpower', 'shortage-radar', 'storm-posture', 'shortage-detail-wheat', 'shortage-detail-corn', 'shortage-detail-rice', 'shortage-detail-soybeans', 'shortage-detail-diesel', 'shortage-detail-gasoline', 'shortage-detail-natural-gas', 'shortage-detail-jet-fuel', 'maritime-intel', 'maritime-superpower', 'trade-route-risk-scorer', 'trade-disruption', 'supply-chain-disruption', 'watchlist', 'saved-places', 'saved-places-filter', 'watchlist-locations', 'watch-area-alerting', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'alert-deduplication', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'gdelt-monitor', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'notification-settings', 'notification-preferences', 'notification-history', 'notification-audit', 'notification-provenance', 'trust-budget', 'intelligence-trust-budget', 'personal-relevance', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'correlation-map', 'mediastack-news', 'situations', 'observation-rules', 'what-changed', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'feed-health', 'feed-health-dashboard', 'feed-watchdog', 'source-credibility-tracker', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'sanctions-intel', 'infra-risk-matrix', 'earthquake-super', 'seismic-superpower', 'world-state-comparator', 'health-superpower', 'cyber-superpower', 'geopolitical-superpower', 'critical-minerals', 'alert-fatigue-dashboard', 'infrastructure-superpower', 'organized-crime-superpower', 'historical-playback', 'election-monitoring', 'nuclear-superpower', 'cyber-incident-response', 'threat-convergence', 'urban-security', 'climate-superpower', 'disaster-response', 'personal-resilience', 'geopolitical-risk', 'currency-warfare', 'signal-noise-filter', 'supply-chain-resilience', 'alliance-cohesion', 'sanctions-tracker', 'economic-coercion', 'energy-security', 'arms-proliferation', 'narcotics-trafficking', 'terrorism-superpower', 'space-militarization', 'state-fragility', 'state-capacity', 'information-operations', 'maritime-boundary', 'tech-competition', 'sms-command-interface', 'political-risk-superpower', 'global-migration-crisis', 'water-security', 'arctic-monitoring', 'climate-security-nexus', 'arctic-competition', 'urban-instability', 'cyber-espionage', 'territorial-disputes', 'great-power-competition', 'regime-stability', 'coup-risk', 'arms-sales', 'global-logistics-chokepoints', 'transnational-repression', 'corruption-index', 'electric-grid-vulnerability', 'maritime-piracy', 'conflict-escalation', 'insurgency-tracker', 'nuclear-nonproliferation', 'food-systems-geopolitics', 'drone-warfare', 'space-debris', 'border-incidents', 'disinformation-networks', 'warlord-economics', 'ai-governance', 'cyber-norms', 'digital-currency-geopolitics', 'foreign-aid-weaponization', 'debt-trap-diplomacy', 'media-freedom', 'military-exercises', 'hostage-diplomacy', 'sovereign-wealth-funds', 'tech-transfer-risk', 'global-military-spending', 'foreign-fighters', 'escalation-ladder', 'resource-nationalism', 'coercive-diplomacy', 'diplomatic-signals', 'treaty-surveillance', 'seabed-warfare', 'intl-law-violations', 'intelligence-cooperation', 'energy-weaponization', 'propaganda-tracking', 'digital-autocracy', 'foreign-investment-risk', 'gray-zone-conflict', 'nuclear-deterrence', 'travel-safety', 'global-conflict', 'strategic-deception', 'economic-espionage', 'space-weaponization', 'psychological-operations', 'mercenary-ecosystem', 'quantum-tech-race', 'semiconductor-geopolitics', 'election-interference', 'migration-crisis', 'organized-crime', 'human-rights-abuses', 'energy-geopolitics', 'sovereign-debt-crisis', 'critical-infra-attack', 'pandemic-preparedness', 'democratic-backsliding', 'financial-crimes', 'private-military', 'hybrid-warfare', 'resource-competition', 'diplomatic-crisis', 'digital-infrastructure', 'global-health-security', 'food-security-superpower', 'state-capitalism', 'coalition-dynamics', 'datacenter-readiness', 'watchboards'],  },
+ panelKeys: ['threat-dashboard', 'global-risk-heatmap', 'command-center', 'competitive-hypothesis', 'competitive-hypothesis-engine', 'meta-confidence', 'meta-confidence-calibration', 'system-diagnostic', 'assumption-tracker', 'assumption-tracker-v2', 'counterfactual', 'causal-chain', 'domain-scorecard', 'behavioral-response', 'world-narrative', 'civilization-pulse', 'situation-lifecycle-tracker', 'compound-event-detector', 'mission-control-dashboard', 'alert-escalation', 'quality-debt', 'operational-playbook', 'failure-prediction', 'self-test', 'self-test-runner', 'operator-mode', 'operator-shift-report', 'intelligence-feed', 'intelligence-timeline', 'algorithm-diagnostic', 'source-confidence', 'event-store', 'belief-calibration', 'outcome-ledger', 'active-learning', 'active-learning-queue', 'improvement-scheduler', 'model-governance', 'recovery-modeling', 'bias-detection', 'contradiction-detector', 'cross-domain-contradiction-detector', 'crisis-trajectory', 'intelligence-digest', 'regional-resilience', 'algo-eval', 'backtest', 'backtest-gate', 'global-rhythm', 'temporal-anomaly-detector', 'threat-horizon', 'shadow-mode', 'shadow-comparison', 'cognitive-bias-detector', 'crisis-signature', 'predictive-crisis-index', 'collection-gap', 'safety-case', 'safety-case-dashboard', 'experiment-manager', 'domain-scorecards', 'geopolitical-event-calendar', 'signal-enrichment', 'threat-correlation-matrix', 'geospatial-clustering', 'intelligence-briefing-export', 'intelligence-index', 'situation-timeline', 'domain-dependency', 'multi-agent-review', 'repair-recommendations', 'mission-ledger-bridge', 'counterfactual-replay', 'counterfactual-reasoning', 'situation-priority-queue', 'intelligence-health-monitor', 'intelligence-loop-orchestrator', 'analyst-notebook', 'persistent-query-engine', 'evidence-graph', 'evidence-chain-builder', 'entity-registry', 'alert-trace', 'alert-rules-tuning', 'intelligence-quality-debt', 'alert-explanation', 'scenario-replay', 'playbook', 'aviation-intel', 'aviation-superpower', 'energy-superpower', 'shortage-radar', 'storm-posture', 'air-smoke', 'survival-guide', 'shortage-detail-wheat', 'shortage-detail-corn', 'shortage-detail-rice', 'shortage-detail-soybeans', 'shortage-detail-diesel', 'shortage-detail-gasoline', 'shortage-detail-natural-gas', 'shortage-detail-jet-fuel', 'maritime-intel', 'maritime-superpower', 'trade-route-risk-scorer', 'trade-disruption', 'supply-chain-disruption', 'watchlist', 'saved-places', 'saved-places-filter', 'watchlist-locations', 'watch-area-alerting', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'alert-deduplication', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'gdelt-monitor', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'notification-settings', 'notification-preferences', 'notification-history', 'notification-audit', 'notification-provenance', 'trust-budget', 'intelligence-trust-budget', 'personal-relevance', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'correlation-map', 'mediastack-news', 'situations', 'observation-rules', 'what-changed', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'feed-health', 'feed-health-dashboard', 'feed-watchdog', 'source-credibility-tracker', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'sanctions-intel', 'infra-risk-matrix', 'earthquake-super', 'seismic-superpower', 'world-state-comparator', 'health-superpower', 'cyber-superpower', 'geopolitical-superpower', 'critical-minerals', 'alert-fatigue-dashboard', 'infrastructure-superpower', 'organized-crime-superpower', 'historical-playback', 'election-monitoring', 'nuclear-superpower', 'cyber-incident-response', 'threat-convergence', 'urban-security', 'climate-superpower', 'disaster-response', 'personal-resilience', 'geopolitical-risk', 'currency-warfare', 'signal-noise-filter', 'supply-chain-resilience', 'alliance-cohesion', 'sanctions-tracker', 'economic-coercion', 'energy-security', 'arms-proliferation', 'narcotics-trafficking', 'terrorism-superpower', 'space-militarization', 'state-fragility', 'state-capacity', 'information-operations', 'maritime-boundary', 'tech-competition', 'sms-command-interface', 'political-risk-superpower', 'global-migration-crisis', 'water-security', 'arctic-monitoring', 'climate-security-nexus', 'arctic-competition', 'urban-instability', 'cyber-espionage', 'territorial-disputes', 'great-power-competition', 'regime-stability', 'coup-risk', 'arms-sales', 'global-logistics-chokepoints', 'transnational-repression', 'corruption-index', 'electric-grid-vulnerability', 'maritime-piracy', 'conflict-escalation', 'insurgency-tracker', 'nuclear-nonproliferation', 'food-systems-geopolitics', 'drone-warfare', 'space-debris', 'border-incidents', 'disinformation-networks', 'warlord-economics', 'ai-governance', 'cyber-norms', 'digital-currency-geopolitics', 'foreign-aid-weaponization', 'debt-trap-diplomacy', 'media-freedom', 'military-exercises', 'hostage-diplomacy', 'sovereign-wealth-funds', 'tech-transfer-risk', 'global-military-spending', 'foreign-fighters', 'escalation-ladder', 'resource-nationalism', 'coercive-diplomacy', 'diplomatic-signals', 'treaty-surveillance', 'seabed-warfare', 'intl-law-violations', 'intelligence-cooperation', 'energy-weaponization', 'propaganda-tracking', 'digital-autocracy', 'foreign-investment-risk', 'gray-zone-conflict', 'nuclear-deterrence', 'travel-safety', 'global-conflict', 'strategic-deception', 'economic-espionage', 'space-weaponization', 'psychological-operations', 'mercenary-ecosystem', 'quantum-tech-race', 'semiconductor-geopolitics', 'election-interference', 'migration-crisis', 'organized-crime', 'human-rights-abuses', 'energy-geopolitics', 'sovereign-debt-crisis', 'critical-infra-attack', 'pandemic-preparedness', 'democratic-backsliding', 'financial-crimes', 'private-military', 'hybrid-warfare', 'resource-competition', 'diplomatic-crisis', 'digital-infrastructure', 'global-health-security', 'food-security-superpower', 'state-capitalism', 'coalition-dynamics', 'datacenter-readiness', 'watchboards'],  },
   regionalNews: {
  labelKey: 'header.panelCatRegionalNews',
  panelKeys: ['politics', 'us', 'europe', 'middleeast', 'africa', 'latam', 'asia'],
@@ -1309,7 +1325,7 @@ export const MONITOR_COLORS = [
   '#4488ff',
   '#ff44ff',
   '#ffff44',
-  '#ff4444',
+  '#ff453a',
   '#44ffff',
   '#88ff44',
   '#ff88ff',
@@ -1321,4 +1337,5 @@ export const STORAGE_KEYS = {
   monitors: 'crystalball-monitors',
   mapLayers: 'crystalball-layers',
   disabledFeeds: 'crystalball-disabled-feeds',
+  deckPins: 'crystalball-deck-pins',
 } as const;

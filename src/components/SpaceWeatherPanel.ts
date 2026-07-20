@@ -195,7 +195,7 @@ export class SpaceWeatherPanel extends Panel {
     const gpsSub = gpsRiskBlurb(gps);
 
     const hfBlackout = this.status?.hfRadioBlackout ?? false;
-    const hfColor = hfBlackout ? '#d50000' : '#4caf50';
+    const hfColor = hfBlackout ? '#ff453a' : '#4caf50';
     const hfLabel = hfBlackout ? 'BLACKOUT' : 'Nominal';
     const hfSub = hfBlackout ? 'X-ray flux ≥ 1e-4 W/m²' : 'HF propagation OK';
 

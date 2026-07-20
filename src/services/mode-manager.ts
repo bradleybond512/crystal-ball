@@ -5,11 +5,6 @@
  * stay intact but no longer drive mode transitions.
  */
 
-import type { CorrelationSignal } from '@/services/correlation';
-import type { MarketData, CryptoData } from '@/types';
-import type { GDACSEvent } from '@/services/gdacs';
-import type { Earthquake } from '@/services/earthquakes';
-import type { StormPreparednessSummary } from '@/services/storm-preparedness';
 import { buildPrimaryCommsMessage } from '@/services/comms-plan';
 
 /**
@@ -53,18 +48,6 @@ export function initMode(): AppMode | null {
   } catch { /* ignore */ }
   return currentMode;
 }
-
-// All former auto-trigger evaluators kept as no-ops for compatibility.
-export function evaluateWarThreat(_signals: CorrelationSignal[]): void { /* no-op */ }
-export function evaluateFinanceTrigger(_markets: MarketData[], _crypto: CryptoData[]): void { /* no-op */ }
-export function checkFinanceAutoTriggerTimeout(): void { /* no-op */ }
-export function evaluateCommodityTrigger(_commodities: MarketData[]): void { /* no-op */ }
-export function evaluateDisasterTrigger(
-  _gdacs: GDACSEvent[],
-  _earthquakes: Earthquake[],
-  _stormSummary?: StormPreparednessSummary | null,
-): void { /* no-op */ }
-export function reloadConflictBaselines(): void { /* no-op */ }
 
 export function alertFamily(): void {
   navigator.clipboard.writeText(buildPrimaryCommsMessage('safe')).catch(() => { /* ignore */ });

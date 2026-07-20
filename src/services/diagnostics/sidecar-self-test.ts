@@ -38,7 +38,7 @@ export interface SidecarSelfTestResponse {
 export const VERDICT_BADGE: Record<SidecarSelfTestVerdict, { icon: string; color: string; label: string }> = {
   ok:       { icon: '✓', color: '#4caf50', label: 'PASS' },
   degraded: { icon: '⚠', color: '#ff9800', label: 'DEGRADED' },
-  fail:     { icon: '✗', color: '#d50000', label: 'FAIL' },
+  fail:     { icon: '✗', color: '#ff453a', label: 'FAIL' },
 };
 
 export async function fetchSidecarSelfTest(): Promise<SidecarSelfTestResponse> {

@@ -39,8 +39,8 @@ const REFRESH_MS = 15_000;
 const STATUS_COLOR: Record<AlgorithmHealthStatus, string> = {
   healthy: '#4caf50',
   degraded: '#ffeb3b',
-  failing: '#f44336',
-  unsafe: '#d50000',
+  failing: '#ef4444',
+  unsafe: '#ff453a',
   unknown: '#9e9e9e',
 };
 
@@ -72,8 +72,8 @@ const POLICY_DISPLAY: Record<PolicyDecision, PolicyVerdictDisplay> = {
   },
   deny: {
     label: 'Denied',
-    color: '#f44336',
-    background: 'rgba(244,67,54,0.10)',
+    color: '#ff453a',
+    background: 'rgba(255, 69, 58,0.10)',
     helper: 'Safety-critical or fact-assertion change — never auto-applied.',
   },
 };
@@ -95,7 +95,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {
@@ -208,7 +208,7 @@ function renderPredictionAccuracy(): string {
       const total = stats.hits + stats.misses;
       const hitRate = total > 0 ? stats.hits / total : 0;
       const pct = (hitRate * 100).toFixed(0);
-      let color = '#f44336';
+      let color = '#ff453a';
       if (hitRate >= 0.7) color = '#4caf50';
       else if (hitRate >= 0.4) color = '#ffb74d';
       return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border-subtle,#333);">
@@ -293,7 +293,7 @@ function formatTuningValue(value: number): string {
 
 function renderCriticalityBadge(criticality: string): string {
   if (criticality === 'safety') {
-    return `<span style="font-size:9px;padding:1px 4px;background:#d50000;color:#fff;border-radius:2px;margin-left:6px;">SAFETY</span>`;
+    return `<span style="font-size:9px;padding:1px 4px;background:#ff453a;color:#fff;border-radius:2px;margin-left:6px;">SAFETY</span>`;
   }
   if (criticality === 'high') {
     return `<span style="font-size:9px;padding:1px 4px;background:#ff9800;color:#000;border-radius:2px;margin-left:6px;">HIGH</span>`;

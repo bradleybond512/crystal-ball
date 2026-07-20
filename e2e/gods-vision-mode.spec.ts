@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 test.describe("God's Eye Mode", () => {
   test.beforeEach(async ({ page }) => {
+ // This spec exercises the classic UI — opt out of the default-on Home Shell.
+ await page.addInitScript(() => localStorage.setItem('crystalball-classic-view', '1'));
  await page.goto('/');
  await page.waitForSelector('.mac-sidebar, .header', { timeout: 10000 });
   });

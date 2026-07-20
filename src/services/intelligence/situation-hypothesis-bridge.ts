@@ -40,6 +40,8 @@ const SEVERITY_RANK: Record<string, number> = {
   INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4,
 };
 
+const perfNow = (): number => (typeof performance === 'undefined' ? 0 : performance.now());
+
 function isSeverityDecreasing(prev: string, current: string): boolean {
   return (SEVERITY_RANK[prev] ?? 0) > (SEVERITY_RANK[current] ?? 0);
 }
@@ -115,6 +117,8 @@ export function classifyAlignment(
 // ── Bridge ────────────────────────────────────────────────────────────────
 
 let _unsubscribe: (() => void) | null = null;
+/** Cancels an in-flight drain queue on stop (set by startSituationHypothesisBridge). */
+let _cancelQueue: (() => void) | null = null;
 
 interface SituationTrackingState {
   startTimeMs: number;
@@ -122,6 +126,19 @@ interface SituationTrackingState {
   prevSeverity: string | undefined;
   obsCount: number;
   evaluated: boolean;
+}
+
+/** Fired once per non-leading hypothesis when a set resolves (PR 14 memory
+ *  hygiene hook). Intentionally decoupled from cognition/episodic-memory —
+ *  this module stays a pure intelligence-layer bridge with no dependency on
+ *  the cognition layer built on top of it; callers (panel-layout.ts) wire
+ *  the two together. */
+export interface RefutedHypothesisEvent {
+  situationId: string;
+  domain: string;
+  entityIds: string[];
+  claim: string;
+  hypothesisType: HypothesisType;
 }
 
 export interface BridgeOptions {
@@ -132,6 +149,17 @@ export interface BridgeOptions {
   recorder?: typeof recordAlgorithmEvaluation;
   /** Injected observation bus; defaults to `onIngest` from observation-store. */
   observationBus?: (listener: (event: ObservationEvent) => void) => (() => void);
+  /** Called once per refuted (non-leading) hypothesis when a set resolves. */
+  onHypothesisRefuted?: (event: RefutedHypothesisEvent) => void;
+  /**
+   * Schedules the next queued-event drain. Defaults to SYNCHRONOUS (`cb => cb()`)
+   * so tests and non-boot callers keep exact per-event ordering. The boot wiring
+   * (panel-layout) injects `cb => setTimeout(cb, 0)` so a burst of observations
+   * (e.g. the boot data-load, which ingests every feed's events at once) yields
+   * the main thread between events — the renderer heartbeat + input interleave
+   * instead of being starved through a 30s+ situation/hypothesis storm.
+   */
+  schedule?: (cb: () => void) => void;
 }
 
 function seedSituation(
@@ -173,8 +201,10 @@ function maybeEmitEvaluation(
   state: SituationTrackingState,
   sitId: string,
   sitDomain: string,
+  sitEntityIds: readonly string[],
   sitStatus: string,
   nowMs: number,
+  onHypothesisRefuted?: (event: RefutedHypothesisEvent) => void,
 ): void {
   const updatedSet = engine.getSet(sitId);
   if (!updatedSet) return;
@@ -186,7 +216,19 @@ function maybeEmitEvaluation(
 
   state.evaluated = true;
   for (const h of updatedSet.hypotheses) {
-    engine.updateStatus(h.id, h.id === leader.id ? 'supported' : 'refuted');
+    const isLeader = h.id === leader.id;
+    engine.updateStatus(h.id, isLeader ? 'supported' : 'refuted');
+    if (!isLeader && onHypothesisRefuted) {
+      try {
+        onHypothesisRefuted({
+          situationId: sitId,
+          domain: sitDomain,
+          entityIds: [...sitEntityIds],
+          claim: h.claim,
+          hypothesisType: h.type,
+        });
+      } catch { /* hygiene hook is best-effort — never break the bridge */ }
+    }
   }
 
   try {
@@ -209,7 +251,9 @@ function maybeEmitEvaluation(
  */
 export function stopSituationHypothesisBridge(): void {
   _unsubscribe?.();
+  _cancelQueue?.();
   _unsubscribe = null;
+  _cancelQueue = null;
 }
 
 export function startSituationHypothesisBridge(options: BridgeOptions = {}): () => void {
@@ -219,12 +263,29 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const clock = options.clock ?? (() => Date.now());
   const recorder = options.recorder ?? recordAlgorithmEvaluation;
   const bus = options.observationBus ?? onIngest;
+  const onHypothesisRefuted = options.onHypothesisRefuted;
+  const schedule = options.schedule ?? ((cb: () => void): void => { cb(); });
 
   const tracked = new Map<string, SituationTrackingState>();
 
-  _unsubscribe = bus((event: ObservationEvent) => {
+  // Per-settle phase timings → the file log (desktop.log). Aggregated across a
+  // drain batch and emitted when the queue empties, so the settle-tail cost is
+  // attributable (ingest fan-out vs the situation loop) in the field.
+  const stats = { events: 0, ingestMs: 0, loopMs: 0, seeded: 0, evidence: 0 };
+
+  // Route each observation through the situation/hypothesis chain. Ingesting an
+  // event runs the correlate engine + a full SituationStoreV2 notify fan-out
+  // (meta-confidence, counterfactuals, bias, panels…), so this is expensive; a
+  // boot burst of events run synchronously here wedged the main thread for 30s+
+  // (renderer-watchdog reload loop). The queue below drives this one event per
+  // `schedule()` tick so the work yields between events.
+  const processEvent = (event: ObservationEvent): void => {
+    stats.events += 1;
+    const t0 = perfNow();
     const beforeIds = new Set(store.list().map((s) => s.id));
     store.ingest([event]);
+    const t1 = perfNow();
+    stats.ingestMs += t1 - t0;
     const now = clock();
 
     for (const sit of store.list()) {
@@ -233,11 +294,13 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
 
       if (isNew && !state) {
         seedSituation(engine, tracked, event, sit.id, sit.domain, sit.severity, now);
+        stats.seeded += 1;
         continue;
       }
 
       if (!isNew && state) {
         if (!sit.observations.some((o) => o.id === event.id)) continue;
+        stats.evidence += 1;
 
         const ctx: AlignmentContext = {
           seenSourceIds: new Set(state.seenSourceIds),
@@ -253,10 +316,46 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
         state.obsCount += 1;
 
         if (!state.evaluated) {
-          maybeEmitEvaluation(engine, recorder, state, sit.id, sit.domain, sit.status, now);
+          maybeEmitEvaluation(
+            engine, recorder, state, sit.id, sit.domain, sit.entityIds, sit.status, now,
+            onHypothesisRefuted,
+          );
         }
       }
     }
+    stats.loopMs += perfNow() - t1;
+  };
+
+  const logSettleStats = (): void => {
+    if (stats.events === 0) return;
+    // eslint-disable-next-line no-console
+    console.warn(`[SETTLE-TIMING] bridge drained ${stats.events} obs in ${Math.round(stats.ingestMs + stats.loopMs)}ms `
+      + `(ingest/notify ${Math.round(stats.ingestMs)}ms, situation-loop ${Math.round(stats.loopMs)}ms; `
+      + `seeded ${stats.seeded}, evidence ${stats.evidence})`);
+    stats.events = 0; stats.ingestMs = 0; stats.loopMs = 0; stats.seeded = 0; stats.evidence = 0;
+  };
+
+  // Drain queue: one event per `schedule()` tick. With the synchronous default
+  // scheduler this processes each event inline (identical to the old behaviour);
+  // with the boot-injected setTimeout scheduler it yields between events. The
+  // `draining` guard also serialises re-entrant ingests (a downstream listener
+  // that ingests another observation just appends to the queue).
+  const queue: ObservationEvent[] = [];
+  let draining = false;
+  let stopped = false;
+  const drain = (): void => {
+    if (stopped) { draining = false; return; }
+    const event = queue.shift();
+    if (event === undefined) { draining = false; logSettleStats(); return; }
+    try { processEvent(event); } finally { schedule(drain); }
+  };
+
+  _cancelQueue = (): void => { stopped = true; queue.length = 0; draining = false; };
+
+  _unsubscribe = bus((event: ObservationEvent) => {
+    if (stopped) return;
+    queue.push(event);
+    if (!draining) { draining = true; schedule(drain); }
   });
 
   return stopSituationHypothesisBridge;

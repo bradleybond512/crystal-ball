@@ -25,34 +25,25 @@
  * Events: cb:episodic-recall (window, on recall with results)
  */
 
-import { embed, maybeUpgradeEmbedding } from './embedding-provider';
+import { maybeUpgradeEmbedding } from './embedding-provider';
+import { cachedEmbed } from './embedding-cache';
 import { topK } from './vector-index';
 import type { IndexedVector } from './vector-index';
+import { isCognitionEnabled } from './cognition-settings';
 import { isGhostMode } from '@/services/mode-manager';
+import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
-// getMemory/putMemory are IDB-backed and may not be available in pure Node.js
-// tests. The injectible storage option below lets tests bypass them.
+// getMemory/putMemory are IDB-backed. Statically imported (not require()) so the
+// persistence path survives the Vite browser bundle; reasoning-memory itself
+// degrades to no-op when IndexedDB is unavailable (pure Node tests).
 let _getMemory: (<T>(key: string) => Promise<T | null>) | null = null;
 let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
 
 function lazyLoadIdb(): void {
   if (_getMemory !== null) return;
-  // Dynamic import so tests can run without IDB globals.
-  try {
-    // This is a synchronous require in practice because the module is already
-    // bundled — but we wrap in try/catch so pure Node tests don't crash.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      getMemory: <T>(key: string) => Promise<T | null>;
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    _getMemory = mod.getMemory;
-    _putMemory = mod.putMemory;
-  } catch {
-    // In test environments without IDB, fall back to no-op implementations.
-    _getMemory = () => Promise.resolve(null);
-    _putMemory = () => Promise.resolve();
-  }
+  _getMemory = idbGetMemory;
+  _putMemory = idbPutMemory;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -76,6 +67,14 @@ export interface Episode {
   /** Serialized Float32Array as plain number[]. */
   vector: number[];
   tier: 'neural' | 'hashed';
+  /**
+   * Set when the explanatory hypothesis backing this episode was refuted by
+   * competitive-hypothesis resolution (PR 14 memory hygiene). The episode
+   * remains fully retrievable via recall() — it is excluded only from
+   * analogScoreFor's *supportive* weighted average. Plan invariant:
+   * contradictions surface, never silently dropped.
+   */
+  contradicted?: { reason: string; markedAt: number };
 }
 
 export interface Recall {
@@ -111,6 +110,13 @@ const MAX_EPISODES = 2000;
 const DEFAULT_K = 5;
 const MIN_SIM = 0.45;
 const MIN_RECALLS_FOR_ANALOG = 3;
+
+/** Tuned minimum analog similarity (PR 12 self-tuning): reads the declared
+ *  'episodic-analog:minSim' knob, falling back to the historical hardcoded
+ *  MIN_SIM = 0.45. Bounds [0.30, 0.60] are enforced by the store. */
+function tunedMinSim(): number {
+  return getTunedParam('episodic-analog', 'minSim', MIN_SIM);
+}
 const EVENT_NAME = 'cb:episodic-recall';
 
 // ── Module-level singleton state ──────────────────────────────────────────────
@@ -253,10 +259,15 @@ function buildExplanation(
 
   const simPct = (similarity * 100).toFixed(0);
   const outcomeStr = episode.outcome ? `; outcome: ${episode.outcome}` : '';
+  // Contradictions surface, never silently dropped (plan invariant): a
+  // contradicted episode stays retrievable but its explanation says so.
+  const contradictedStr = episode.contradicted
+    ? `; flagged contradictory: ${episode.contradicted.reason}`
+    : '';
   if (parts.length === 0) {
-    return `${simPct}% semantic similarity${outcomeStr}`;
+    return `${simPct}% semantic similarity${outcomeStr}${contradictedStr}`;
   }
-  return `matched on: ${parts.join('; ')} (${simPct}% similarity${outcomeStr})`;
+  return `matched on: ${parts.join('; ')} (${simPct}% similarity${outcomeStr}${contradictedStr})`;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -270,7 +281,9 @@ function buildExplanation(
 export async function recordEpisode(
   input: Omit<Episode, 'id' | 'vector' | 'tier'>,
 ): Promise<Episode> {
-  if (isGhostMode()) {
+  // Kill-switch (Settings → Cognition): same non-persisted stub as Ghost
+  // Mode so callers don't crash. Fail-safe ON when the setting is unreadable.
+  if (isGhostMode() || !isCognitionEnabled('episodic-recall')) {
     // Return a non-persisted stub so callers don't crash.
     return {
       ...input,
@@ -283,7 +296,11 @@ export async function recordEpisode(
   load();
 
   const summary = input.summary.slice(0, 500);
-  const embResult = await embed(summary);
+  // Content-hash memoized (PR 14): a standing pending hypothesis re-records
+  // the same summary text every analyst cycle only to be discarded by the
+  // signature-dedupe check below — cachedEmbed() means that no longer costs
+  // a real embed() call once the text has been seen once.
+  const embResult = await cachedEmbed(summary);
 
   const nowMs = _nowFn();
   const episode: Episode = {
@@ -341,6 +358,90 @@ export function resolveEpisode(
   return Promise.resolve();
 }
 
+// ── Contradiction flagging (PR 14 memory hygiene) ─────────────────────────────
+
+/**
+ * Flag a single episode as contradicted by name. The episode remains fully
+ * retrievable via recall() — see analogScoreFor() and buildExplanation()
+ * for how the flag is surfaced rather than hidden. No-op (returns false)
+ * when Ghost Mode is active, the episode doesn't exist, or it is already
+ * flagged (first refutation wins; reason is not overwritten).
+ */
+export function markEpisodeContradictory(episodeId: string, reason: string): boolean {
+  if (isGhostMode()) return false;
+  load();
+  const ep = episodes.find(e => e.id === episodeId);
+  if (!ep || ep.contradicted !== undefined) return false;
+  ep.contradicted = { reason, markedAt: _nowFn() };
+  save();
+  return true;
+}
+
+/** Context passed from situation-hypothesis-bridge.ts when it refutes an
+ *  explanatory hypothesis (competitive-hypothesis engine, status → 'refuted'). */
+export interface RefutedHypothesisContext {
+  situationId: string;
+  domain: string;
+  entityIds: string[];
+  claim: string;
+  hypothesisType: string;
+}
+
+/** Cap the blast radius of a single refutation event — a bad match should
+ *  never be able to flag a large fraction of the corpus at once. */
+const MAX_CONTRADICTED_PER_REFUTATION = 10;
+
+/**
+ * Best-effort contradiction marking driven by a competitive-hypothesis
+ * refutation. Matches episodes that share at least one entity AND at least
+ * one domain with the refuted explanation's situation (case-insensitive
+ * entities; the domain check guards against an entity name that happens to
+ * be shared across unrelated domains — e.g. a country appearing in both a
+ * weather episode and an unrelated finance episode — from cross-flagging
+ * each other) and have not already been flagged; the most recently created
+ * matches are preferred when more than MAX_CONTRADICTED_PER_REFUTATION
+ * qualify.
+ *
+ * Known limitation (documented, not hidden): situation-store-v2's
+ * `entityIds` (free-form slugs like 'suez-canal') and the entities recorded
+ * on episodic-memory episodes (whatever the producer supplies — e.g.
+ * hypothesis-entities' ISO3/ticker/CVE/region extraction) are two
+ * independently-evolved vocabularies with no guaranteed overlap today. This
+ * function is correct and cheap to call unconditionally (an empty match is
+ * a fast no-op), and starts producing real matches for any producer that
+ * aligns its `entities` field with situation entityIds — no changes needed
+ * here when that alignment lands.
+ *
+ * Returns the ids of episodes newly flagged.
+ */
+export function contradictEpisodesForRefutation(ctx: RefutedHypothesisContext): string[] {
+  if (isGhostMode() || !isCognitionEnabled('episodic-recall')) return [];
+  load();
+
+  const wantedEntities = new Set(ctx.entityIds.map(e => e.toLowerCase()));
+  if (wantedEntities.size === 0) return [];
+  const wantedDomain = ctx.domain.toLowerCase();
+
+  const candidates = episodes
+    .filter(ep =>
+      ep.contradicted === undefined &&
+      ep.domains.some(d => d.toLowerCase() === wantedDomain) &&
+      ep.entities.some(e => wantedEntities.has(e.toLowerCase())),
+    )
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, MAX_CONTRADICTED_PER_REFUTATION);
+
+  if (candidates.length === 0) return [];
+
+  const reason = `competitive-hypothesis refuted "${ctx.claim}" (${ctx.hypothesisType}, domain ${ctx.domain}) for situation ${ctx.situationId}`;
+  const nowMs = _nowFn();
+  for (const ep of candidates) {
+    ep.contradicted = { reason, markedAt: nowMs };
+  }
+  save();
+  return candidates.map(ep => ep.id);
+}
+
 /**
  * Recall top-K semantically similar past episodes to the given text.
  * Emits a `cb:episodic-recall` event on window when results are non-empty.
@@ -353,10 +454,15 @@ export async function recall(
   text: string,
   opts?: { k?: number; kinds?: Episode['kind'][] },
 ): Promise<Recall[]> {
+  // Kill-switch (Settings → Cognition): no recalls while episodic recall is
+  // off. Downstream analog scores resolve to null (analog boost disabled).
+  if (!isCognitionEnabled('episodic-recall')) return [];
   load();
 
   const k = opts?.k ?? DEFAULT_K;
-  const embResult = await embed(text.slice(0, 500));
+  // Content-hash memoized (PR 14): analyst-loop calls recall() with the same
+  // still-unresolved hypothesis statement every ~5-minute cycle.
+  const embResult = await cachedEmbed(text.slice(0, 500));
 
   const queryVec: IndexedVector = {
     id: '__query__',
@@ -376,7 +482,7 @@ export async function recall(
     tier: ep.tier,
   }));
 
-  const results = topK(queryVec, corpusVecs, k, MIN_SIM);
+  const results = topK(queryVec, corpusVecs, k, tunedMinSim());
 
   // Extract query entities/domains for explanation (heuristic: parse from text).
   // In real wiring these come from hypothesis-entities; here we approximate.
@@ -411,10 +517,12 @@ export async function recallWithContext(
   queryDomains: string[],
   opts?: { k?: number; kinds?: Episode['kind'][] },
 ): Promise<Recall[]> {
+  // Kill-switch (Settings → Cognition) — see recall().
+  if (!isCognitionEnabled('episodic-recall')) return [];
   load();
 
   const k = opts?.k ?? DEFAULT_K;
-  const embResult = await embed(text.slice(0, 500));
+  const embResult = await cachedEmbed(text.slice(0, 500));
 
   const queryVec: IndexedVector = {
     id: '__query__',
@@ -434,7 +542,7 @@ export async function recallWithContext(
     tier: ep.tier,
   }));
 
-  const results = topK(queryVec, corpusVecs, k, MIN_SIM);
+  const results = topK(queryVec, corpusVecs, k, tunedMinSim());
 
   const recalls: Recall[] = results.flatMap(({ id, similarity }) => {
     const ep = episodes.find(e => e.id === id);
@@ -474,8 +582,21 @@ function materializationWeight(outcome: Episode['outcome']): number {
   return 0; // fizzled | unknown → 0
 }
 
-export function analogScoreFor(recalls: readonly Recall[]): number | null {
-  const qualified = recalls.filter(r => r.similarity >= MIN_SIM && r.episode.outcome !== undefined);
+export function analogScoreFor(
+  recalls: readonly Recall[],
+  opts?: { minSim?: number },
+): number | null {
+  const minSim = opts?.minSim ?? tunedMinSim();
+  // PR 14 memory hygiene: episodes whose backing explanation was refuted by
+  // competitive-hypothesis resolution are excluded from *supportive* analog
+  // scoring — they stay fully visible via recall()'s explanation string
+  // (contradictions surface, never silently dropped), they just don't get
+  // to vote in the "how often did similar situations materialize" average.
+  const qualified = recalls.filter(r =>
+    r.similarity >= minSim &&
+    r.episode.outcome !== undefined &&
+    r.episode.contradicted === undefined,
+  );
   if (qualified.length < MIN_RECALLS_FOR_ANALOG) return null;
 
   let weightedSum = 0;

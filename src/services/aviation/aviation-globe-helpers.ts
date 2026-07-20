@@ -41,9 +41,9 @@ export interface SigmetStyle {
 
 export function notamStyle(notam: AviationNotam): NotamCircleStyle {
   if (notam.presidential) {
-    return { outlineHex: '#d50000', fillHex: '#d50000', fillAlpha: 0.2 };
+    return { outlineHex: '#ff453a', fillHex: '#ff453a', fillAlpha: 0.2 };
   }
-  return { outlineHex: '#f44336', fillHex: '#f44336', fillAlpha: 0 };
+  return { outlineHex: '#ef4444', fillHex: '#ef4444', fillAlpha: 0 };
 }
 
 // SIGMET styling
@@ -52,7 +52,7 @@ const SIGMET_HEX: Record<AviationSigmet['hazard'], string> = {
   volcanic_ash: '#ff9800',
   turbulence: '#ffeb3b',
   icing: '#4a9eff',
-  thunderstorm: '#f44336',
+  thunderstorm: '#ef4444',
   mountain_obscuration: '#9e9e9e',
   ifr: '#9c27b0',
   other: '#607d8b',
@@ -108,7 +108,7 @@ const AIRCRAFT_TYPE_HEX: Record<MilitaryAircraft['type'], string> = {
 };
 
 export function aircraftStyle(ac: MilitaryAircraft): { hex: string; emergency: boolean } {
-  if (ac.emergency) return { hex: '#d50000', emergency: true };
+  if (ac.emergency) return { hex: '#ff453a', emergency: true };
   return { hex: AIRCRAFT_TYPE_HEX[ac.type], emergency: false };
 }
 
@@ -140,7 +140,7 @@ export function notamDescriptionHtml(n: AviationNotam): string {
   const escape = htmlEscape;
   const parts: (string | false)[] = [
     `<h3>${escape(n.notamNumber || n.id)}</h3>`,
-    n.presidential && `<strong style="color:#d50000;">PRESIDENTIAL TFR</strong>`,
+    n.presidential && `<strong style="color:#ff453a;">PRESIDENTIAL TFR</strong>`,
     n.icaoId !== null && `<div>ICAO: ${escape(n.icaoId ?? '')}</div>`,
     n.center !== undefined &&
       `<div>Center: ${n.center.lat.toFixed(3)}°, ${n.center.lon.toFixed(3)}° • radius ${n.center.radiusNm} NM</div>`,
@@ -173,7 +173,7 @@ export function aircraftDescriptionHtml(ac: MilitaryAircraft): string {
     ac.velocityKts !== null && `<div>Speed: ${Math.round(ac.velocityKts)} kt</div>`,
     ac.heading !== null && `<div>Heading: ${Math.round(ac.heading)}°</div>`,
     ac.emergency &&
-      `<strong style="color:#d50000;">EMERGENCY squawk ${escape(ac.squawk ?? '')}</strong>`,
+      `<strong style="color:#ff453a;">EMERGENCY squawk ${escape(ac.squawk ?? '')}</strong>`,
   ];
   return parts.filter(Boolean).join('\n');
 }

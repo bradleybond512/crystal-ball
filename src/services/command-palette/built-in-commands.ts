@@ -6,6 +6,7 @@
  */
 
 import { DEFAULT_PANELS } from '@/config/panels';
+import { PANEL_METADATA } from '@/config/panel-metadata';
 import type { PaletteCommand } from './command-registry';
 
 /**
@@ -54,15 +55,35 @@ export function buildBuiltinCommands(deps: BuiltinDeps): PaletteCommand[] {
     });
   }
 
+  out.push({
+    id: 'navigation:library',
+    title: 'Open Library',
+    keywords: ['library', 'catalog', 'browse', 'panels', 'domains'],
+    category: 'navigation',
+    icon: '📚',
+    action: () => deps.dispatch('cb:toggle-library'),
+  });
+
   // ── One command per registered panel ──────────────────────────────────────
   for (const [panelKey, cfg] of Object.entries(panels)) {
     if (!cfg) continue;
+    const meta = PANEL_METADATA[panelKey];
     out.push({
       id: `panel:${panelKey}`,
       title: `Open ${cfg.name}`,
       subtitle: panelKey,
-      keywords: [panelKey.replace(/-/g, ' '), cfg.name.toLowerCase(), 'panel', 'open'],
+      keywords: [
+        ...new Set([
+          panelKey.replace(/-/g, ' '),
+          cfg.name.toLowerCase(),
+          'panel',
+          'open',
+          ...(meta?.tags ?? []),
+        ]),
+      ],
       category: 'panel',
+      icon: meta?.icon,
+      weight: meta?.tier === 'system' ? -1.5 : 0,
       action: () => deps.dispatch('cb:navigate-panel', { panelKey }),
     });
   }

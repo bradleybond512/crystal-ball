@@ -162,6 +162,11 @@ export class MapComponent {
   private lastRenderTime = 0;
   private readonly MIN_RENDER_INTERVAL_MS = 100;
   private healthCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private boundThemeChange!: () => void;
+  private boundPanMouseMove: ((e: MouseEvent) => void) | null = null;
+  private boundPanMouseUp: (() => void) | null = null;
+  private inertiaRaf = 0;
 
   constructor(container: HTMLElement, initialState: MapState) {
  this.container = container;
@@ -204,16 +209,17 @@ export class MapComponent {
  this.loadMapData();
  this.setupResizeObserver();
 
- window.addEventListener('theme-changed', () => {
+ this.boundThemeChange = () => {
  this.baseRendered = false;
  this.render();
- });
+ };
+ window.addEventListener('theme-changed', this.boundThemeChange);
   }
 
   private setupResizeObserver(): void {
  let lastWidth = 0;
  let lastHeight = 0;
- const resizeObserver = new ResizeObserver((entries) => {
+ this.resizeObserver = new ResizeObserver((entries) => {
  if (this.isResizing) return;
  for (const entry of entries) {
  const { width, height } = entry.contentRect;
@@ -224,7 +230,7 @@ export class MapComponent {
  }
  }
  });
- resizeObserver.observe(this.container);
+ this.resizeObserver.observe(this.container);
 
  // Re-render when page becomes visible again (after browser throttling)
  this.boundVisibilityHandler = () => {
@@ -245,10 +251,22 @@ export class MapComponent {
 
   public destroy(): void {
  document.removeEventListener('visibilitychange', this.boundVisibilityHandler);
+ window.removeEventListener('theme-changed', this.boundThemeChange);
+ if (this.boundPanMouseMove) {
+ document.removeEventListener('mousemove', this.boundPanMouseMove);
+ this.boundPanMouseMove = null;
+ }
+ if (this.boundPanMouseUp) {
+ document.removeEventListener('mouseup', this.boundPanMouseUp);
+ this.boundPanMouseUp = null;
+ }
+ cancelAnimationFrame(this.inertiaRaf);
  if (this.healthCheckIntervalId) {
  clearInterval(this.healthCheckIntervalId);
  this.healthCheckIntervalId = null;
  }
+ this.resizeObserver?.disconnect();
+ this.resizeObserver = null;
   }
 
   private createControls(): HTMLElement {
@@ -700,7 +718,7 @@ export class MapComponent {
  }
  });
 
- const onPanMouseMove = rafSchedule((e: MouseEvent) => {
+ this.boundPanMouseMove = rafSchedule((e: MouseEvent) => {
  if (!isDragging) return;
 
  const dx = e.clientX - lastPos.x;
@@ -713,25 +731,25 @@ export class MapComponent {
  lastPos = { x: e.clientX, y: e.clientY };
  this.applyTransform();
  });
- document.addEventListener('mousemove', onPanMouseMove);
+ document.addEventListener('mousemove', this.boundPanMouseMove);
 
- document.addEventListener('mouseup', () => {
+ this.boundPanMouseUp = () => {
  if (isDragging) {
  isDragging = false;
  this.container.style.cursor = 'grab';
  }
- });
+ };
+ document.addEventListener('mouseup', this.boundPanMouseUp);
 
  let touchStartPos = { x: 0, y: 0 };
  let touchDragActive = false;
  let lastDragEndTime = 0;
  const TOUCH_DRAG_THRESHOLD = 8;
  const touchHistory: { x: number; y: number; t: number }[] = [];
- let inertiaRaf = 0;
 
  this.container.addEventListener('touchstart', (e) => {
  if (shouldIgnoreInteractionStart(e.target)) return;
- cancelAnimationFrame(inertiaRaf);
+ cancelAnimationFrame(this.inertiaRaf);
  const touch1 = e.touches[0];
  const touch2 = e.touches[1];
 
@@ -824,9 +842,9 @@ export class MapComponent {
  this.state.pan.x += (vx / 60) * panSpeed;
  this.state.pan.y += (vy / 60) * panSpeed;
  this.applyTransform();
- inertiaRaf = requestAnimationFrame(animate);
+ this.inertiaRaf = requestAnimationFrame(animate);
  };
- inertiaRaf = requestAnimationFrame(animate);
+ this.inertiaRaf = requestAnimationFrame(animate);
  }
  }
  isDragging = false;

@@ -52,11 +52,17 @@ export function diffOverlays(
   next: readonly GlobeSeismicOverlay[],
 ): OverlayDiff {
   const prevIds = new Set(prev.map((o) => o.eventId));
-  const nextIds = new Set(next.map((o) => o.eventId));
 
   const added: GlobeSeismicOverlay[] = [];
   const updated: GlobeSeismicOverlay[] = [];
+  // Dedup by eventId WITHIN next: a live feed can list the same event twice, and
+  // without this both copies would land in `added`, so the second entities.add()
+  // throws "An entity with id ... already exists" and halts that overlay. First
+  // occurrence wins; `seen` doubles as the deduped next-id set for removals.
+  const seen = new Set<string>();
   for (const overlay of next) {
+    if (seen.has(overlay.eventId)) continue;
+    seen.add(overlay.eventId);
     if (prevIds.has(overlay.eventId)) {
       updated.push(overlay);
     } else {
@@ -66,7 +72,7 @@ export function diffOverlays(
 
   const removedIds: string[] = [];
   for (const id of prevIds) {
-    if (!nextIds.has(id)) removedIds.push(id);
+    if (!seen.has(id)) removedIds.push(id);
   }
 
   return { added, updated, removedIds };

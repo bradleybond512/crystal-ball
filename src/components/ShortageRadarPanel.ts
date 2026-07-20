@@ -44,14 +44,14 @@ const REFRESH_MS = 5 * 60 * 1000; // 5 minutes per spec
 // ── Risk level palette ─────────────────────────────────────────────────────
 
 const RISK_COLOR: Record<RiskLevel, string> = {
-  CRITICAL: '#d50000',
+  CRITICAL: '#ff453a',
   HIGH:     '#ff9800',
   MODERATE: '#ffeb3b',
   LOW:      '#4caf50',
 };
 
 const TREND_COLOR: Record<OverviewRow['trendArrow'], string> = {
-  '↑': '#f44336',
+  '↑': '#ef4444',
   '↓': '#4caf50',
   '→': '#9e9e9e',
 };
@@ -132,7 +132,7 @@ export class ShortageRadarPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     if (typeof document !== 'undefined') {
       document.addEventListener('click', this.onRowToggle);
       document.addEventListener('keydown', this.onRowKey);
@@ -214,7 +214,7 @@ export class ShortageRadarPanel extends Panel {
     if (counts.CRITICAL > 0) bits.push(`${counts.CRITICAL} CRITICAL`);
     if (counts.HIGH > 0)     bits.push(`${counts.HIGH} HIGH`);
     const text = bits.join(' · ');
-    return `<div style="padding:6px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+    return `<div style="padding:6px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);font-size:11px;font-weight:700;color:#ff453a;letter-spacing:0.04em;">
       ⚠ SHORTAGE ALERTS: ${escapeHtml(text)}
     </div>`;
   }

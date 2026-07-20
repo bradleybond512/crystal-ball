@@ -105,7 +105,7 @@ export class EconomicCoercionPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -418,9 +418,9 @@ export class EconomicCoercionPanel extends Panel {
       const sColor = weaponisationStageColor(cw.stage);
       const sLabel = weaponisationStageLabel(cw.stage);
       const cLabel = commodityClassLabel(cw.commodityClass);
-      const timeStr = cw.timeToAlternativeYears != null
-        ? `${cw.timeToAlternativeYears}yr to alt`
-        : 'No timeline';
+      const timeStr = cw.timeToAlternativeYears == null
+        ? 'No timeline'
+        : `${cw.timeToAlternativeYears}yr to alt`;
 
       tbody.append(
         h('tr',

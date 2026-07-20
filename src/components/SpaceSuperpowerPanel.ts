@@ -58,7 +58,7 @@ export const G_LEVEL_COLOR: Record<GeomagStormLevel, string> = {
   G1: '#8bc34a',
   G2: '#ffc107',
   G3: '#ff9800',
-  G4: '#f44336',
+  G4: '#ff453a',
   G5: '#b71c1c',
 };
 
@@ -67,21 +67,21 @@ const FLARE_COLOR: Record<string, string> = {
   B: '#4caf50',
   C: '#8bc34a',
   M: '#ffc107',
-  X: '#f44336',
+  X: '#ff453a',
 };
 
 const GRID_RISK_COLOR: Record<RegionGridRisk['riskLevel'], string> = {
   low:      '#4caf50',
   moderate: '#ffc107',
   high:     '#ff9800',
-  extreme:  '#f44336',
+  extreme:  '#ff453a',
 };
 
 const GIC_RISK_COLOR: Record<SpaceSuperState['gicRisk'], string> = {
   low:      '#4caf50',
   moderate: '#ffc107',
   high:     '#ff9800',
-  extreme:  '#f44336',
+  extreme:  '#ff453a',
 };
 
 // ── Pure helpers (exported for unit tests) ────────────────────────────
@@ -257,9 +257,9 @@ export function renderSatelliteRisk(state: SpaceSuperState): string {
         <div style="font-size:10px;opacity:0.7;text-transform:uppercase">GPS Risk</div>
         <div style="font-size:14px;font-weight:600;color:${gpsColor};text-transform:capitalize">${escapeHtml(state.gpsRisk)}</div>
       </div>
-      <div style="padding:6px 12px;border-radius:4px;background:${state.hfBlackout ? '#f4433622' : '#4caf5022'};border:1px solid ${state.hfBlackout ? '#f44336' : '#4caf50'}">
+      <div style="padding:6px 12px;border-radius:4px;background:${state.hfBlackout ? '#ff453a22' : '#4caf5022'};border:1px solid ${state.hfBlackout ? '#ff453a' : '#4caf50'}">
         <div style="font-size:10px;opacity:0.7;text-transform:uppercase">HF Radio</div>
-        <div style="font-size:14px;font-weight:600;color:${state.hfBlackout ? '#f44336' : '#4caf50'}">${state.hfBlackout ? 'BLACKOUT' : 'Clear'}</div>
+        <div style="font-size:14px;font-weight:600;color:${state.hfBlackout ? '#ff453a' : '#4caf50'}">${state.hfBlackout ? 'BLACKOUT' : 'Clear'}</div>
       </div>
     </div>${blackoutHtml}`);
 }

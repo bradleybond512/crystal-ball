@@ -24,7 +24,7 @@ const DISPLAY_LIMIT = 50;
 const TYPE_COLOR: Record<CounterfactualType, string> = {
   'data-quality': '#4a9eff',
   'missing-signal': '#ffb74d',
-  'model-bias': '#f44336',
+  'model-bias': '#ff453a',
   'scope-error': '#9c27b0',
   'timing-error': '#9e9e9e',
 };
@@ -33,7 +33,7 @@ const STATUS_COLOR: Record<CounterfactualStatus, string> = {
   open: '#ffb74d',
   investigated: '#4a9eff',
   refuted: '#4caf50',
-  'confirmed-valid': '#f44336',
+  'confirmed-valid': '#ff453a',
 };
 
 interface PanelState {
@@ -65,7 +65,7 @@ export class CounterfactualReasoningPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getCounterfactualReasoningService().subscribe(() => this.render());
   }
 
@@ -196,7 +196,7 @@ function renderSummaryRow(summary: CounterfactualSummary): string {
   return `<div style="display:flex;gap:18px;font-size:12px;font-family:ui-monospace,monospace;flex-wrap:wrap;">
     <span><strong>${summary.total}</strong> total</span>
     <span><strong style="color:${STATUS_COLOR.open};">${summary.open}</strong> open</span>
-    <span><strong style="color:#f44336;">${summary.highPlausibility}</strong> high-plausibility</span>
+    <span><strong style="color:#ff453a;">${summary.highPlausibility}</strong> high-plausibility</span>
     <span>refuted rate <strong>${refutedPct}%</strong></span>
   </div>`;
 }
@@ -242,7 +242,7 @@ function renderActions(c: Counterfactual, isTerminal: boolean): string {
   return `<div style="display:flex;gap:8px;margin-top:4px;">
         ${investigateBtn}
         <button data-cfr-refute="${escapeHtml(c.id)}" style="padding:4px 10px;font-size:11px;background:#4caf5026;color:#4caf50;border:1px solid #4caf5055;border-radius:3px;cursor:pointer;">Refute</button>
-        <button data-cfr-confirm="${escapeHtml(c.id)}" style="padding:4px 10px;font-size:11px;background:#f4433626;color:#f44336;border:1px solid #f4433655;border-radius:3px;cursor:pointer;">Confirm valid</button>
+        <button data-cfr-confirm="${escapeHtml(c.id)}" style="padding:4px 10px;font-size:11px;background:#ff453a26;color:#ff453a;border:1px solid #ff453a55;border-radius:3px;cursor:pointer;">Confirm valid</button>
       </div>`;
 }
 

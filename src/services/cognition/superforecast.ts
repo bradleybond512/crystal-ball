@@ -46,6 +46,7 @@ import { signatureFor } from '@/services/hypothesis-feedback';
 import { recall, analogScoreFor } from '@/services/cognition/episodic-memory';
 import { matchReferenceClass, blendWithEpisodic } from './base-rates';
 import { decomposeHypothesis } from './decomposition';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { aggregate } from './probability-aggregation';
 import type { Estimate } from './probability-aggregation';
 import { getRecalibrator } from '@/services/intelligence/forecast-calibration-adapter';
@@ -113,14 +114,14 @@ const PERSONA_PROBABILITY_SYSTEMS: Record<PersonaKind, string> = {
 export function buildPersonaPrompt(h: Hypothesis, persona: PersonaKind): string {
   const evidenceLines = h.evidence
     .slice(0, 6)
-    .map(e => `  - [${e.source}] ${e.label}`)
+    .map(e => `  - [${sanitizeForPrompt(e.source, 40)}] ${sanitizeForPrompt(e.label, 200)}`)
     .join('\n');
 
   return (
     `${PERSONA_PROBABILITY_SYSTEMS[persona]}\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk):\n` +
     `<evidence>\n` +
-    `"${h.statement}"\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n` +
     `</evidence>\n\n` +
     `Supporting evidence:\n` +
     `<evidence>\n` +
@@ -142,7 +143,7 @@ interface PersonaResponse {
 function isPersonaResponse(x: unknown): x is PersonaResponse {
   if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
   const o = x as Record<string, unknown>;
-  const p = Number(o['probability']);
+  const p = Number(o.probability);
   return Number.isFinite(p) && p >= 0 && p <= 1;
 }
 
@@ -182,7 +183,7 @@ export function buildAggregateReviewPrompt(
     `Do NOT change the probability unless there is a clear error — conservative reviews are preferred.\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk):\n` +
     `<evidence>\n` +
-    `"${h.statement}"\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n` +
     `</evidence>\n\n` +
     `Individual estimates:\n` +
     `<evidence>\n` +
@@ -210,7 +211,7 @@ interface AggregateReviewResponse {
 function isAggregateReviewResponse(x: unknown): x is AggregateReviewResponse {
   if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
   const o = x as Record<string, unknown>;
-  return typeof o['keep'] === 'boolean';
+  return typeof o.keep === 'boolean';
 }
 
 /**
@@ -225,7 +226,7 @@ export function applyAggregateReview(
   const p = Number(review.adjustedP);
   if (!Number.isFinite(p)) return aggregateP;
   // Hard clamp: ±0.10 of the aggregate. Documented in this function.
-  const MAX_DELTA = 0.10;
+  const MAX_DELTA = 0.1;
   const clamped = Math.max(aggregateP - MAX_DELTA, Math.min(aggregateP + MAX_DELTA, p));
   return Math.max(0.02, Math.min(0.98, clamped));
 }
@@ -257,12 +258,10 @@ export function medianOf(samples: readonly number[]): number {
 // ── Persona cache ──────────────────────────────────────────────────────────────
 // Reuses the 60-min signature cache pattern from hypothesis-ensemble.ts.
 
-interface PersonaProbabilityCache {
-  [signature: string]: {
+type PersonaProbabilityCache = Record<string, {
     probabilities: Partial<Record<PersonaKind, number>>;
     generatedAt: number;
-  };
-}
+  }>;
 
 const _personaCache: PersonaProbabilityCache = {};
 const PERSONA_CACHE_MS = 60 * 60 * 1000; // 60 minutes
@@ -374,20 +373,20 @@ async function buildDeterministicEstimates(
   const { rate: outsideRate, explanation: outsideExplanation } = rc
     ? blendWithEpisodic(rc, analogScore, analogN)
     : {
-        rate: analogScore !== null ? analogScore : 0.28, // fallback prior
-        explanation: analogScore !== null
-          ? `no reference class matched; using episodic analog score (${(analogScore * 100).toFixed(0)}% from ${analogN} analog(s))`
-          : 'no reference class matched; no episodic analogs — using 28% uninformative prior (superforecasting literature meta-analysis)',
+        rate: analogScore ?? 0.28, // fallback prior
+        explanation: analogScore === null
+          ? 'no reference class matched; no episodic analogs — using 28% uninformative prior (superforecasting literature meta-analysis)'
+          : `no reference class matched; using episodic analog score (${(analogScore * 100).toFixed(0)}% from ${analogN} analog(s))`,
       };
 
   const estimates: Estimate[] = [
-    { source: 'base-rate', p: outsideRate, weight: 1.0 },
+    { source: 'base-rate', p: outsideRate, weight: 1 },
   ];
 
   // Model forecast from existing forecastHypothesis().
   try {
     const modelForecast = forecastHypothesis(h, null, analogScore);
-    estimates.push({ source: 'model-forecast', p: modelForecast.probability, weight: 1.0 });
+    estimates.push({ source: 'model-forecast', p: modelForecast.probability, weight: 1 });
   } catch {
     // forecastHypothesis not available in test/isolated environments — skip.
   }
@@ -411,6 +410,14 @@ async function buildDeterministicEstimates(
  *
  * Never throws: all errors are caught and the pipeline degrades to the next rung.
  */
+// The orchestrator is intentionally one linear degradation ladder (base-rate →
+// decomposition → personas → aggregate → review → recalibrate → log); every rung
+// is budget-gated and wrapped in its own try/catch that falls through to the
+// next, sharing the explanation + estimate accumulators. Splitting it to satisfy
+// the complexity threshold would scatter that shared state across helpers and
+// obscure the ladder it exists to express. Behavior is pinned by the 492-test
+// cognition suite; a structural decomposition is tracked separately.
+// eslint-disable-next-line sonarjs/cognitive-complexity -- see justification above
 export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
   const sig = signatureFor(h);
   const explanationParts: string[] = [];
@@ -436,7 +443,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
       try {
         const decomp = await decomposeHypothesis(h, generate);
         if (decomp !== null) {
-          allEstimates.push({ source: 'decomposition', p: decomp.pInside, weight: 1.0 });
+          allEstimates.push({ source: 'decomposition', p: decomp.pInside, weight: 1 });
           explanationParts.push(`[inside] ${decomp.explanation}`);
           llmTier = 'partial';
         }
@@ -523,7 +530,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
             allEstimates.push({
               source: personaSourceMap[persona],
               p,
-              weight: 1.0,
+              weight: 1,
             });
           }
         }
@@ -579,13 +586,14 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
         const review = parseStrictJson<AggregateReviewResponse>(res.text, isAggregateReviewResponse);
         if (review !== null) {
           reviewedP = applyAggregateReview(aggregatedP, review);
-          if (reviewedP !== aggregatedP) {
+          const reviewReasonSuffix = review.reason ? `: ${review.reason}` : '';
+          if (reviewedP === aggregatedP) {
+            explanationParts.push(`[review] kept aggregate${reviewReasonSuffix}`);
+          } else {
             explanationParts.push(
               `[review] adjusted ${(aggregatedP * 100).toFixed(0)}% → ${(reviewedP * 100).toFixed(0)}%` +
-              (review.reason ? `: ${review.reason}` : ''),
+              reviewReasonSuffix,
             );
-          } else {
-            explanationParts.push(`[review] kept aggregate${review.reason ? `: ${review.reason}` : ''}`);
           }
         }
       }

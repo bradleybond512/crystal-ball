@@ -14,6 +14,7 @@ import {
 import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
 import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
 import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
+import { fetchJsonCached } from '@/utils/point-fetch-cache';
 import {
   fetchCategoryFeeds,
   getFeedFailures,
@@ -66,12 +67,10 @@ import {
   fetchBuoyAlerts,
   fetchHurricaneRecon,
   getStormPreparednessContext,
-  getStormPreparednessSummary,
   updateStormPreparednessContext,
 } from '@/services';
 import { refreshStormPosture } from '@/services/survival/storm-posture-state';
 import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
-import { evaluateWarThreat, evaluateFinanceTrigger, evaluateCommodityTrigger, evaluateDisasterTrigger, checkFinanceAutoTriggerTimeout } from '@/services/mode-manager';
 import { reportElevatedPanel } from '@/services/panel-correlation';
 import { fetchGDACSEvents } from '@/services/gdacs';
 import { normalizeNaturalEventToAlert } from '@/services/eonet';
@@ -161,7 +160,8 @@ import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
-import type { NwsAlertMinimal } from '@/services/weather/weather-threat-types';
+import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
+import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { fetchAdsbSnapshot } from '@/services/adsb';
@@ -187,7 +187,7 @@ import { fetchAllPositiveTopicIntelligence } from '@/services/gdelt-intel';
 import { fetchPositiveGeoEvents, geocodePositiveNewsItems } from '@/services/positive-events-geo';
 import { fetchKindnessData } from '@/services/kindness-data';
 import { getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
-import { withOfflineCache, registerCriticalSources } from '@/services/offline-alert-cache';
+import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot } from '@/services/offline-alert-cache';
 import {
   ingestCyberToIoc, ingestCisaKevToIoc,
   ingestAisToDarkVessel, ingestMilVesselsToDarkVessel,
@@ -298,6 +298,7 @@ import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
 import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import type { PowerContext } from '@/services/infrastructure/osm-power';
 import {
   fetchOpenMeteoConditions,
   fetchSite24hForecast,
@@ -322,7 +323,15 @@ import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
-import { aisDisruptionsToObservations } from '@/services/intelligence/adapters/ais-adapter';
+import { recordDomainObservations } from '@/services/providers/fusion-publish';
+import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
+import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
+import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
+import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
+import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
+import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
 import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/services/intelligence/adapters/river-discharge-adapter';
@@ -338,6 +347,37 @@ const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_HIGH: 'high',
   THREAT_LEVEL_CRITICAL: 'critical',
 };
+
+// Stable dedupe key for an NWS alert. Prefers the official alert id (unique
+// per issuance — an updated/re-issued warning gets a fresh id and re-notifies);
+// Convert an NWS GeoJSON geometry (Polygon / MultiPolygon) to an AlertPolygon's
+// ring list so the saved-place matcher can run point-in-polygon. Returns
+// undefined for missing / non-polygon / degenerate geometry.
+function alertPolygonFromGeoJson(geometry: { type: string; coordinates: unknown } | null | undefined): AlertPolygon | undefined {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return undefined;
+  let rings: unknown;
+  if (geometry.type === 'Polygon') rings = geometry.coordinates;
+  else if (geometry.type === 'MultiPolygon') rings = (geometry.coordinates as unknown[]).flat();
+  else return undefined;
+  if (!Array.isArray(rings) || rings.length === 0) return undefined;
+  const first = rings[0];
+  if (!Array.isArray(first) || first.length < 3) return undefined;
+  return { rings: rings as AlertPolygon['rings'] };
+}
+
+// falls back to a hash of headline+area when the id is missing so a long-lived
+// warning still maps to one stable key across refreshes.
+function weatherAlertDedupeKey(alert: { id?: string; headline?: string; event?: string; areaDesc?: string }): string {
+  if (alert.id) return `nws-${alert.id}`;
+  const basis = `${alert.headline ?? alert.event ?? ''}|${alert.areaDesc ?? ''}`;
+  let hash = 5381;
+  for (const ch of basis) hash = (hash * 33 + (ch.codePointAt(0) ?? 0)) % 2_147_483_647;
+  return `nws-h${hash.toString(36)}`;
+}
+
+// A long-lived NWS warning keeps reappearing in every fetch. Re-notify at most
+// once per this window so the user gets a periodic reminder, not spam each cycle.
+const WEATHER_NOTIFY_DEDUPE_WINDOW_MS = 60 * 60 * 1000;
 
 function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
   const level = PROTO_TO_CLIENT_LEVEL[p.threat?.level ?? 'THREAT_LEVEL_UNSPECIFIED'];
@@ -364,6 +404,25 @@ const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
 // loop resolves a site's forecast/county zones once instead of hitting NWS
 // `/points` on every weather refresh.
 const _siteUgcZoneCache = new Map<string, string[]>();
+
+// Cache OSM grid infrastructure per `${lat},${lon}` — Overpass is rate-limited,
+// so the datacenter loop reuses a site's plants/substations/lines for 6h rather
+// than refetching on every weather refresh.
+const _siteGridInfraCache = new Map<string, { ctx: PowerContext; at: number }>();
+const GRID_INFRA_TTL_MS = 6 * 60 * 60 * 1000;
+async function resolveGridInfrastructure(lat: number, lon: number): Promise<PowerContext | null> {
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const cached = _siteGridInfraCache.get(key);
+  if (cached && Date.now() - cached.at < GRID_INFRA_TTL_MS) return cached.ctx;
+  try {
+    const { fetchSitePowerContext } = await import('@/services/infrastructure/osm-power-source');
+    const ctx = await fetchSitePowerContext(lat, lon, 25);
+    _siteGridInfraCache.set(key, { ctx, at: Date.now() });
+    return ctx;
+  } catch {
+    return cached?.ctx ?? null;
+  }
+}
 
 export interface DataLoaderCallbacks {
   renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
@@ -458,7 +517,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const resp = await fetch(
  `/api/news/v1/list-feed-digest?variant=${SITE_VARIANT}&lang=${getCurrentLanguage()}`,
- { signal: AbortSignal.timeout(3000) },
+ // 1.5s (was 3s): on a cold/keyless boot this fetch fails; the breaker + cached
+ // digest take over, so a shorter wait gets the "what changed" view on screen
+ // faster instead of stalling the news load for 3s × 2 attempts.
+ { signal: AbortSignal.timeout(1500) },
  );
  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
  const data = await resp.json() as ListFeedDigestResponse;
@@ -1268,8 +1330,6 @@ export class DataLoaderManager implements AppModule {
  if (mapped.some(d => d.price !== null)) {
  commoditiesPanel.renderCommodities(mapped);
  commoditiesLoaded = true;
- // Auto-trigger Finance Mode on large Oil or Gold moves
- evaluateCommodityTrigger(commoditiesResult.data);
  }
  }
  if (!commoditiesLoaded) {
@@ -1277,10 +1337,6 @@ export class DataLoaderManager implements AppModule {
  }
  } catch {
  this.ctx.statusPanel?.updateApi('Finnhub', { status: 'error' });
- // Finnhub is down — market data unavailable. Still check whether an
- // auto-triggered Finance Mode has exceeded its quiet window so it can
- // de-escalate back to Peace without needing live market data.
- checkFinanceAutoTriggerTimeout();
  }
 
  try {
@@ -1292,13 +1348,21 @@ export class DataLoaderManager implements AppModule {
  }
  (this.ctx.panels.crypto as CryptoPanel).renderCrypto(crypto);
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: crypto.length > 0 ? 'ok' : 'error' });
- // Auto-trigger Finance Mode if S&P 500 or BTC makes a significant move
- if (this.ctx.latestMarkets.length > 0 || crypto.length > 0) {
- evaluateFinanceTrigger(this.ctx.latestMarkets, crypto);
- }
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
  }
+ // Crypto price fusion: CoinGecko + Coinbase, matched by symbol. Dedicated
+ // fail-closed fetches (NOT the panel's cached fetchCrypto) so a down source
+ // records a failing outcome instead of corroborating against stale prices.
+ const cg = await fetchCoingeckoPrices();
+ recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices), cg.ok);
+ const coinbase = await fetchCoinbasePrices();
+ recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices), coinbase.ok);
+ // Stock price fusion: Yahoo (no-key) + Finnhub (keyed), matched by ticker. Fail-closed.
+ const yahoo = await fetchYahooPrices();
+ recordDomainObservations('yahoo-finance', exchangePricesToObservations('yahoo-finance', yahoo.prices), yahoo.ok);
+ const finnhub = await fetchFinnhubPrices();
+ recordDomainObservations('finnhub', exchangePricesToObservations('finnhub', finnhub.prices), finnhub.ok);
   }
 
   async loadPredictions(): Promise<void> {
@@ -1348,12 +1412,14 @@ export class DataLoaderManager implements AppModule {
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
+ recordDomainObservations('usgs-earthquakes', usgsEarthquakesToObservations(earthquakeResult.value), true);
  } else {
  this.ctx.intelligenceCache.earthquakes = [];
  this.ctx.map?.setEarthquakes([]);
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update([]);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'error' });
  dataFreshness.recordError('usgs', String(earthquakeResult.reason));
+ recordDomainObservations('usgs-earthquakes', [], false);
  }
 
  if (eonetResult.status === 'fulfilled') {
@@ -1392,7 +1458,6 @@ export class DataLoaderManager implements AppModule {
  }
 
  withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
- evaluateDisasterTrigger(gdacs, earthquakes);
  if (gdacs.some(e => e.alertLevel === 'Red')) {
  reportElevatedPanel('gdacs-alerts', 'GDACS Disaster Alerts');
  }
@@ -1461,12 +1526,22 @@ export class DataLoaderManager implements AppModule {
 
   async loadWeatherAlerts(): Promise<void> {
  try {
- const { data: alerts } = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
+ const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
+ const alerts = snapshot.data;
  this.ctx.map?.setWeatherAlerts(alerts);
  this.ctx.map?.setLayerReady('weather', alerts.length > 0);
+ const freshness = feedFreshnessFromSnapshot(snapshot);
+ if (freshness.fresh) {
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
  dataFreshness.recordUpdate('weather', alerts.length);
  void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', Date.now()); });
+ } else {
+ // Live NWS fetch failed and we're serving the offline cache — do NOT advance
+ // freshness; a stale weather snapshot must never read as a fresh all-clear.
+ this.ctx.statusPanel?.updateFeed('Weather', { status: 'error', itemCount: alerts.length, errorMessage: freshness.staleReason ?? 'offline cache' });
+ dataFreshness.recordError('weather', freshness.staleReason ?? 'offline cache');
+ void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', freshness.staleTimestamp ?? Date.now()); });
+ }
  updateStormPreparednessContext({ weatherAlerts: alerts });
 
  // Refresh the survival "Storm Posture" engine on the weather tick. The
@@ -1546,6 +1621,7 @@ export class DataLoaderManager implements AppModule {
      place: eq.place,
      occurredAt: eq.occurredAt,
    }));
+ const gridInfrastructure = await resolveGridInfrastructure(site.lat, site.lon);
  recomputeDatacenterPosture({
    gridStatus,
    weatherAlerts: nwsAlerts,
@@ -1555,6 +1631,7 @@ export class DataLoaderManager implements AppModule {
    airQuality: aqResult.status === 'fulfilled' ? aqResult.value : null,
    seismicNearby: nearbySeismic,
    connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
+   gridInfrastructure,
  });
  }
 
@@ -1590,12 +1667,14 @@ export class DataLoaderManager implements AppModule {
  { getNotificationTraceRegistry, getPipelineTraceRegistry },
  { recordAlgorithmEvaluation },
  { annotateModelOutput: annotateWeatherOutput },
+ { getNotificationPreferencesService },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
  import('@/services/diagnostics/diagnostics-state'),
  import('@/services/algorithms/record-evaluation'),
  import('@/services/intelligence/assumption-producers'),
+ import('@/services/notifications/notification-preferences'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1608,6 +1687,15 @@ export class DataLoaderManager implements AppModule {
  silent: null,
  };
  const registry = getNotificationTraceRegistry();
+ // Real quiet-hours state + the user's per-domain bypass, instead of hardcoding
+ // them off. Non-safety weather alerts are now suppressible during quiet hours;
+ // safety-critical (emergency/critical tier) events still override via the
+ // ladder's safety path. Computed once per batch (same instant for all alerts).
+ const notifPrefs = getNotificationPreferencesService();
+ const quietHoursActive = notifPrefs.isQuietHour();
+ const weatherQuietHoursBypass = notifPrefs
+ .getPreferences()
+ .domains.find((d) => d.domain === 'weather')?.quietHoursOverride ?? false;
  const severeAlerts = alerts.filter(
  (a) => a.severity === 'Extreme' || a.severity === 'Severe',
  );
@@ -1664,13 +1752,28 @@ export class DataLoaderManager implements AppModule {
    continue;
  }
  pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: true, tier: bigEventResult.tier } });
+ // Dedupe: a stable per-alert key lets us detect a warning we already
+ // notified for. The trace candidateId stays unique per occurrence (the
+ // registry rejects duplicate ids), while situationId groups occurrences
+ // of the same alert so dedupeMatch can fire on a recent prior dispatch.
+ const dispatchAt = Date.now();
+ const dedupeKey = weatherAlertDedupeKey(alert);
+ const dedupeMatch = registry
+   .bySituation(dedupeKey)
+   .some((e) => {
+     if (e.decision !== 'dispatched') return false;
+     const lastAt = e.events[e.events.length - 1]?.at ?? e.candidate.createdAt;
+     return dispatchAt - lastAt < WEATHER_NOTIFY_DEDUPE_WINDOW_MS;
+   });
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
+ candidateId: `${dedupeKey}-${dispatchAt}`,
+ situationId: dedupeKey,
  domain: 'weather',
  headline: alert.headline || alert.event,
  summary: alert.areaDesc ? `${alert.event} — ${alert.areaDesc}` : alert.event,
- quietHoursActive: false,
- quietHoursBypassEnabled: true,
- dedupeMatch: false,
+ quietHoursActive,
+ quietHoursBypassEnabled: weatherQuietHoursBypass,
+ dedupeMatch,
  });
  pipelineTrace.record(alert.id, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });
  const action = RUNG_ACTION[decision.rung] ?? null;
@@ -1751,12 +1854,6 @@ export class DataLoaderManager implements AppModule {
  // Feed correlation matrix global score into anomaly detection for trend monitoring
  ingestMatrixScoreSignal(getMatrixGlobalScore());
 
- void evaluateDisasterTrigger(
- this.ctx.intelligenceCache.gdacsAlerts ?? [],
- this.ctx.intelligenceCache.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
-
  // Multi-source weather intelligence: fetch Open-Meteo hourly forecast
  // for each saved place and ingest as observations alongside NWS alerts.
  // When both sources flag the same area, truth-score corroboration applies.
@@ -1767,9 +1864,10 @@ export class DataLoaderManager implements AppModule {
  await Promise.allSettled(places.map(async (place) => {
  if (!place.lat || !place.lon) return;
  const url = `${getApiBaseUrl()}/api/weather/local-forecast?lat=${place.lat}&lon=${place.lon}`;
- const r = await fetch(url);
- if (!r.ok) return;
- const forecast = await r.json() as OpenMeteoHourlyForecast;
+ // Hourly-updated forecast; cache per lat,lon for 30m to avoid refetching the
+ // full payload every weather cycle (supplementary data, not safety alerts).
+ const forecast = await fetchJsonCached<OpenMeteoHourlyForecast>(url, 30 * 60_000);
+ if (!forecast) return;
  const obs = forecastToObservations(forecast, place.lat, place.lon, place.name ?? 'Saved Place');
  if (obs.length > 0) ingestObservations(obs);
  }));
@@ -1946,7 +2044,6 @@ export class DataLoaderManager implements AppModule {
  const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
  addToSignalHistory(surgeSignals);
  situationEngine.observeSignals(surgeSignals);
- evaluateWarThreat(surgeSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(surgeSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(surgeSignals);
  }
@@ -1955,7 +2052,6 @@ export class DataLoaderManager implements AppModule {
  const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
  addToSignalHistory(foreignSignals);
  situationEngine.observeSignals(foreignSignals);
- evaluateWarThreat(foreignSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(foreignSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(foreignSignals);
  }
@@ -2273,14 +2369,24 @@ export class DataLoaderManager implements AppModule {
 
   async evaluateCompoundThreats(): Promise<void> {
  try {
- const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts] = await Promise.allSettled([
+ const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts, openaqReadings] = await Promise.allSettled([
  fetchInciwebIncidents(),
  fetchGlobalAirQuality(),
  fetchHazmatIncidents(),
  fetchFloodGauges(),
  fetchDamSafetyAlerts(),
  fetchPowerGridAlerts(),
+ fetchOpenaqWorstReadings(),
  ]);
+
+ // Second air-quality source for fusion (OpenAQ ground stations). Fail-closed:
+ // a degraded/failed fetch records ok=false so the provider health drops.
+ if (openaqReadings.status === 'fulfilled') {
+ const r = openaqReadings.value;
+ recordDomainObservations('openaq-v3', openaqToObservations(r.readings), r.ok);
+ } else {
+ recordDomainObservations('openaq-v3', [], false);
+ }
 
  const signals = [];
 
@@ -2295,11 +2401,14 @@ export class DataLoaderManager implements AppModule {
 
  // Air quality signals — unhealthy or worse
  if (aqReadings.status === 'fulfilled') {
+ recordDomainObservations('open-meteo-aqi', openMeteoAqToObservations(aqReadings.value), true);
  for (const r of aqReadings.value) {
  if (r.aqiLevel === 'good' || r.aqiLevel === 'moderate' || r.aqiLevel === 'sensitive') continue;
  const sev = r.aqiLevel === 'hazardous' ? 'critical' : r.aqiLevel === 'very_unhealthy' ? 'high' : 'medium';
  signals.push(toHazardSignal(`aq-${r.city}`, 'air_quality', sev, r.lat, r.lon, `${r.city} AQI ${r.aqi}`, 'air-quality'));
  }
+ } else {
+ recordDomainObservations('open-meteo-aqi', [], false);
  }
 
  // Hazmat signals
@@ -2407,17 +2516,6 @@ export class DataLoaderManager implements AppModule {
  const domain = (event.eventType === 'TC' || event.eventType === 'FL' || event.eventType === 'DR') ? 'weather' : 'infrastructure';
  ingestCorrelationMatrix(lat, lon, domain, severity);
  }
- // Note: intelligenceCache.earthquakes is only populated when the natural
- // events map layer is enabled. When that layer is disabled the array will
- // be empty, so the M≥6.5 earthquake trigger path is unavailable — the
- // GDACS Red/Orange alert path (first argument) still works normally.
- // The earthquake trigger remains reachable via loadNatural() when the
- // natural layer is active.
- void evaluateDisasterTrigger(
- events,
- this.ctx.intelligenceCache?.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
  } catch (error) {
  console.warn('[gdacs-alerts] fetch failed', error);
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update([]);
@@ -2433,18 +2531,23 @@ export class DataLoaderManager implements AppModule {
       const places = getSavedPlaces().slice(0, 3);
       await Promise.allSettled(places.map(async (place) => {
         if (!place.lat || !place.lon) return;
-        // Source 1: NOAA CO-OPS current water level
+        // The two sources are independent — fetch them concurrently rather than
+        // serializing the river-discharge call behind the CO-OPS call.
         const coopsUrl = `${getApiBaseUrl()}/api/flood-gauges/noaa-coops?lat=${place.lat}&lon=${place.lon}`;
-        const cr = await fetch(coopsUrl);
-        if (cr.ok) {
-          const obs = floodGaugesToObservations(await cr.json() as NOAACoopsResponse, place.name ?? 'Saved Place');
+        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
+        // Independent + slow-changing — fetch concurrently, cache per lat,lon 30m.
+        const [coops, discharge] = await Promise.all([
+          fetchJsonCached<NOAACoopsResponse>(coopsUrl, 30 * 60_000),
+          fetchJsonCached<OpenMeteoFloodForecast>(dischargeUrl, 30 * 60_000),
+        ]);
+        // Source 1: NOAA CO-OPS current water level
+        if (coops) {
+          const obs = floodGaugesToObservations(coops, place.name ?? 'Saved Place');
           if (obs.length > 0) ingestObservations(obs);
         }
         // Source 2: Open-Meteo GloFAS river discharge forecast (7-day predictive)
-        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
-        const dr = await fetch(dischargeUrl);
-        if (dr.ok) {
-          const obs = riverDischargeToObservations(await dr.json() as OpenMeteoFloodForecast, place.lat, place.lon, place.name ?? 'Saved Place');
+        if (discharge) {
+          const obs = riverDischargeToObservations(discharge, place.lat, place.lon, place.name ?? 'Saved Place');
           if (obs.length > 0) ingestObservations(obs);
         }
       }));
@@ -2464,26 +2567,31 @@ export class DataLoaderManager implements AppModule {
       await Promise.allSettled(places.map(async (place) => {
         if (!place.lat || !place.lon) return;
         const url = `${getApiBaseUrl()}/api/marine-forecast?lat=${place.lat}&lon=${place.lon}`;
-        const r = await fetch(url);
-        if (!r.ok) return;
-        const obs = marineForecastToObservations(await r.json() as OpenMeteoMarineForecast, place.lat, place.lon, place.name ?? 'Saved Place');
+        const marine = await fetchJsonCached<OpenMeteoMarineForecast>(url, 30 * 60_000);
+        if (!marine) return;
+        const obs = marineForecastToObservations(marine, place.lat, place.lon, place.name ?? 'Saved Place');
         if (obs.length > 0) ingestObservations(obs);
       }));
 
       // FEWS NET IPC food-security packages (global)
       const fewsUrl = `${getApiBaseUrl()}/api/fews-net/food-security?country_code=all`;
-      const fr = await fetch(fewsUrl);
+      const fr = await fetch(fewsUrl, { signal: AbortSignal.timeout(15_000) });
       if (fr.ok) {
         const obs = fewsNetToObservations(await fr.json() as FEWSNETResponse);
         if (obs.length > 0) ingestObservations(obs);
       }
 
       // HDX HAPI food-security rows (global IPC-coded)
-      const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
-      const hr = await fetch(hdxUrl);
-      if (hr.ok) {
-        const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
-        if (obs.length > 0) ingestObservations(obs);
+      // Gate behind the shared circuit breaker — when the sebuf HAPI RPC path
+      // (fetchHapiSummary) is on cooldown, this direct fetch would also fail
+      // and generate redundant errors / heat.
+      if (!getCircuitBreakerCooldownInfo('HDX HAPI').onCooldown) {
+        const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
+        const hr = await fetch(hdxUrl, { signal: AbortSignal.timeout(15_000) });
+        if (hr.ok) {
+          const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
+          if (obs.length > 0) ingestObservations(obs);
+        }
       }
 
       // Assumption tracking — annotate once per batch (not per observation).
@@ -2530,7 +2638,8 @@ export class DataLoaderManager implements AppModule {
  // Route alerts through Personal Storm Mode — find the highest-priority
  // decision across all alerts × saved places and broadcast it so the
  // PersonalStormMode component can show/hide the storm banner.
- // NWSAlert doesn't carry polygon data so matches fall back to UGC zones.
+ // Polygon (when present) + UGC zones are threaded into the minimal so the
+ // matcher can do point-in-polygon and fall back to zone matching.
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
  const places = getSavedPlaces();
@@ -2545,10 +2654,20 @@ export class DataLoaderManager implements AppModule {
  sent: raw.onset ?? raw.expires,
  expires: raw.expires,
  severity: (raw.severity?.toLowerCase() ?? 'unknown') as NwsAlertMinimal['severity'],
+ // Extract the GeoJSON polygon so routeWeatherAlert can do point-in-polygon
+ // against saved places. NWSAlert carries no UGC zones, so polygon-free alerts
+ // still won't match — but polygon-bearing alerts now do (they previously ALL
+ // resolved to no_match, leaving Personal Storm Mode structurally dead).
+ polygon: alertPolygonFromGeoJson(raw.geometry),
+ headline: raw.headline,
  };
  const decision = routeWeatherAlert(minimal, weatherPlaces);
- if (decision.payload?.activation !== 'inactive' && (!bestDecision ||
- (decision.urgency?.priority ?? 0) > (bestDecision.urgency?.priority ?? 0))) {
+ // Require a real Storm Mode payload (the router only builds one at
+ // banner+ priority) — `payload?.activation !== 'inactive'` alone would
+ // let payload-less digest/watch decisions activate the strip.
+ if (decision.payload && decision.payload.activation !== 'inactive' && (!bestDecision ||
+ deliveryPriorityRank(decision.urgency?.priority ?? 'background')
+ > deliveryPriorityRank(bestDecision.urgency?.priority ?? 'background'))) {
  bestDecision = decision;
  }
  }
@@ -2563,11 +2682,6 @@ export class DataLoaderManager implements AppModule {
  winterWeatherOutlooks,
  marineHazards,
  });
- void evaluateDisasterTrigger(
- this.ctx.intelligenceCache.gdacsAlerts ?? [],
- this.ctx.intelligenceCache.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
  } catch (error) {
  console.warn('[nws-alerts] fetch failed', error);
  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update([]);
@@ -2644,7 +2758,6 @@ export class DataLoaderManager implements AppModule {
  }));
  addToSignalHistory(signals);
  situationEngine.observeSignals(signals);
- evaluateWarThreat(signals);
  }
   }
 
@@ -2907,7 +3020,6 @@ export class DataLoaderManager implements AppModule {
  const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
  addToSignalHistory(surgeSignals);
  situationEngine.observeSignals(surgeSignals);
- evaluateWarThreat(surgeSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(surgeSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(surgeSignals);
  }
@@ -2916,7 +3028,6 @@ export class DataLoaderManager implements AppModule {
  const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
  addToSignalHistory(foreignSignals);
  situationEngine.observeSignals(foreignSignals);
- evaluateWarThreat(foreignSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(foreignSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(foreignSignals);
  }
@@ -3218,7 +3329,6 @@ export class DataLoaderManager implements AppModule {
  if (allSignals.length > 0) {
  addToSignalHistory(allSignals);
  situationEngine.observeSignals(allSignals);
- evaluateWarThreat(allSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(allSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(allSignals);
  }
@@ -3530,11 +3640,6 @@ export class DataLoaderManager implements AppModule {
  buoyAlerts,
  reconFixes,
  });
- void evaluateDisasterTrigger(
- this.ctx.intelligenceCache.gdacsAlerts ?? [],
- this.ctx.intelligenceCache.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
  } catch (error) {
  console.error('[App] Tropical cyclones fetch failed:', error);
  }
@@ -3556,6 +3661,14 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setAdsbFlights(snapshot.flights);
  this.ctx.map?.setLayerReady?.('adsb', snapshot.flights.length > 0);
  (this.ctx.panels['air-traffic'] as AirTrafficPanel | undefined)?.update(snapshot);
+ // Feed the confidence-scored multi-provider tracks into the intelligence layer
+ // (low-confidence / stale ADS-B tracks become observations). Aggregate path only.
+ if (snapshot.aggregate?.tracks?.length) {
+ const obs = snapshot.aggregate.tracks
+ .map((t) => adsbTrackToObservation(t))
+ .filter((o): o is NonNullable<typeof o> => o != null);
+ if (obs.length > 0) ingestObservations(obs);
+ }
  } catch (error) {
  this.ctx.map?.setLayerReady?.('adsb', false);
  dataFreshness.recordError('adsb', error instanceof Error ? error.message : 'Unknown error');
@@ -3682,9 +3795,11 @@ export class DataLoaderManager implements AppModule {
  try {
  const events = await fetchEmscSeismic();
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents(events);
+ recordDomainObservations('emsc-seismic', emscEventsToObservations(events), true);
  } catch (error) {
  console.warn('[emsc-seismic] fetch failed', error);
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
+ recordDomainObservations('emsc-seismic', [], false);
  }
   }
 
@@ -3949,8 +4064,8 @@ export class DataLoaderManager implements AppModule {
   async loadFloodMonitor(): Promise<void> {
  try {
  const [gaugesRes, warningsRes] = await Promise.allSettled([
- fetch('/api/floods/gauges').then(r => r.ok ? r.json() : null),
- fetch('/api/floods/warnings').then(r => r.ok ? r.json() : null),
+ fetch('/api/floods/gauges', { signal: AbortSignal.timeout(10_000) }).then(r => r.ok ? r.json() : null),
+ fetch('/api/floods/warnings', { signal: AbortSignal.timeout(10_000) }).then(r => r.ok ? r.json() : null),
  ]);
  const panel = this.ctx.panels['flood-monitor'] as FloodMonitorPanel | undefined;
  if (gaugesRes.status === 'fulfilled' && gaugesRes.value) panel?.updateGauges(gaugesRes.value);
@@ -3962,7 +4077,7 @@ export class DataLoaderManager implements AppModule {
 
   async loadIntelligenceFeed(): Promise<void> {
  try {
- const r = await fetch('/api/intelligence/prioritized?limit=100');
+ const r = await fetch('/api/intelligence/prioritized?limit=100', { signal: AbortSignal.timeout(10_000) });
  if (!r.ok) return;
  const data = await r.json() as { events?: ObservationEvent[] };
  const events = data?.events;

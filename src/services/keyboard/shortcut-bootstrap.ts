@@ -11,13 +11,13 @@
  * Kept thin: this is glue, not logic. All logic lives in shortcut-registry.ts.
  */
 
-import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
 import {
   createShortcutRegistry,
   parseChord,
   buildPanelFocusBindings,
   type ShortcutRegistry,
 } from './shortcut-registry';
+import { isHomeShellAvailable } from '@/services/home-shell/shell-gate';
 
 const HINT_CLASS = 'mac-sidebar-panel-hint';
 const SIDEBAR_SELECTOR = '.mac-sidebar-panel-item[data-panel-key]';
@@ -61,6 +61,20 @@ export function installShortcuts(): BootstrapHandles {
     chord: parseChord('Cmd+/'),
     run: () => document.dispatchEvent(new CustomEvent('cb:toggle-help')),
   });
+  // Registers whenever the shell CAN mount (full desktop) — NOT only when it's
+  // the default view. Gating on the default would unregister ⌘⇧O the moment the
+  // user opts into classic, stranding them there with no way back. Still avoids
+  // swallowing Ctrl+Shift+O on web/mobile variants where the shell never boots.
+  if (isHomeShellAvailable()) {
+    reg.register({
+      id: 'cmd-shift-o',
+      label: 'Toggle Home Shell',
+      group: 'Navigation',
+      display: '⌘⇧O',
+      chord: parseChord('Cmd+Shift+O'),
+      run: () => document.dispatchEvent(new CustomEvent('cb:toggle-home-shell')),
+    });
+  }
 
   // ⌘1…⌘9 — bound to the *current* sidebar order at registration time, and
   // re-bound whenever refreshPanelHints() runs (so reorders take effect).
@@ -71,8 +85,11 @@ export function installShortcuts(): BootstrapHandles {
       if (b.id.startsWith('panel-focus-')) reg.unregister(b.id);
     }
     const bindings = buildPanelFocusBindings(keys, (key) => {
-      jumpToPanel(key);
-      flashPanel(key);
+      // Route through cb:navigate-panel → navigateToPanel (lazy-mounts + always
+      // gives visible feedback) instead of the silent jumpToPanel/flashPanel,
+      // which no-op on unmounted/disabled panels — the cause of "dead" ⌘-number
+      // keys while sidebar clicks worked (Defect B2).
+      document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: key } }));
     });
     for (const b of bindings) reg.register(b);
     paintHintBadges(keys.slice(0, 9));
@@ -83,18 +100,34 @@ export function installShortcuts(): BootstrapHandles {
   // Re-paint badges when the sidebar re-renders. We watch for child additions
   // / removals on the sidebar panel list; debounce via rAF so a batch of
   // mutations only triggers one repaint.
+  //
+  // refreshPanelHints() → paintHintBadges() removes and re-appends badge <span>s
+  // INSIDE this observed subtree. With the observer still attached, those self-
+  // inflicted mutations retrigger onMutate → rAF → repaint → mutate … a runaway
+  // feedback loop that repainted the badges every frame and pinned the whole
+  // WebKit rendering pipeline at ~60fps on an idle dashboard. Disconnect while
+  // we mutate, then re-observe, so only genuine sidebar changes (panel add /
+  // remove / reorder) schedule a repaint.
+  const OBSERVE_OPTS: MutationObserverInit = { childList: true, subtree: true };
+  const observers: { obs: MutationObserver; target: Node }[] = [];
+  const observeAll = (): void => {
+    for (const { obs, target } of observers) obs.observe(target, OBSERVE_OPTS);
+  };
   let scheduled = false;
   const onMutate = () => {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(() => { scheduled = false; refreshPanelHints(); });
+    requestAnimationFrame(() => {
+      scheduled = false;
+      for (const { obs } of observers) obs.disconnect();
+      refreshPanelHints();
+      observeAll();
+    });
   };
-  const observers: MutationObserver[] = [];
   for (const list of document.querySelectorAll('.mac-sidebar-panels, .mac-sidebar-panel-list, aside.mac-sidebar, #sidebar, .mac-sidebar')) {
-    const obs = new MutationObserver(onMutate);
-    obs.observe(list, { childList: true, subtree: true });
-    observers.push(obs);
+    observers.push({ obs: new MutationObserver(onMutate), target: list });
   }
+  observeAll();
 
   const listener = (e: KeyboardEvent) => {
     const matched = reg.dispatch({
@@ -115,7 +148,7 @@ export function installShortcuts(): BootstrapHandles {
     refreshPanelHints,
     destroy: () => {
       document.removeEventListener('keydown', listener);
-      for (const o of observers) o.disconnect();
+      for (const { obs } of observers) obs.disconnect();
       if (activeRegistry === reg) activeRegistry = null;
       if (activeListener === listener) activeListener = null;
     },

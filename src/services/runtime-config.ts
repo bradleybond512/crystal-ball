@@ -1,6 +1,7 @@
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { invokeTauri } from './tauri-bridge';
 import { keychainService } from './keychain';
+import { safeSetItem } from '../utils/safe-storage';
 import {
   isVaultUnlocked as isWebVaultUnlocked,
   listSecrets as listWebVaultSecrets,
@@ -1103,7 +1104,7 @@ export function getEffectiveSecrets(feature: RuntimeFeatureDefinition): RuntimeS
 
 export function setFeatureToggle(featureId: RuntimeFeatureId, enabled: boolean): void {
   runtimeConfig.featureToggles[featureId] = enabled;
-  localStorage.setItem(TOGGLES_STORAGE_KEY, JSON.stringify(runtimeConfig.featureToggles));
+  safeSetItem(TOGGLES_STORAGE_KEY, JSON.stringify(runtimeConfig.featureToggles));
   notifyConfigChanged();
 }
 
@@ -1325,8 +1326,10 @@ export async function verifySecretWithApi(
   }
 }
 
-export async function loadDesktopSecrets(): Promise<void> {
+export async function loadDesktopSecrets(options?: { syncToSidecar?: boolean }): Promise<void> {
   if (!isDesktopRuntime()) return;
+
+  const syncToSidecar = options?.syncToSidecar ?? true;
 
   try {
  const keys = await keychainService.listSupportedKeys();
@@ -1343,6 +1346,7 @@ export async function loadDesktopSecrets(): Promise<void> {
  .filter((r): r is PromiseFulfilledResult<{ key: string; value: string | null }> => r.status === 'fulfilled' && r.value.value != null && r.value.value.trim().length > 0)
  .map(async ({ value: { key, value } }) => {
  runtimeConfig.secrets[key as RuntimeSecretKey] = { value: value!, source: 'vault' };
+ if (!syncToSidecar) return;
  try {
  await pushSecretToSidecar(key as RuntimeSecretKey, value!);
  } catch {
@@ -1365,4 +1369,26 @@ export async function loadDesktopSecrets(): Promise<void> {
   } finally {
  secretsReadyResolve();
   }
+}
+
+/**
+ * Boot-time desktop secret load that waits for the native keychain read to
+ * finish first. The keychain is now read asynchronously (so a slow Touch ID
+ * never freezes the window), so loading immediately would read an empty cache
+ * and memoize a null for every key for the whole session. We wait for the
+ * `secrets_ready` signal, drop any nulls a stray early read may have cached,
+ * then load. On web this is just `loadDesktopSecrets` (a no-op there).
+ */
+export async function loadDesktopSecretsWhenReady(): Promise<void> {
+  if (isDesktopRuntime()) {
+ await keychainService.waitUntilLoaded();
+ keychainService.invalidateAll();
+  }
+  // Skip the JS→sidecar push at boot: the native Rust injector has already
+  // delivered every loaded secret to the *confirmed* sidecar port. The JS path
+  // builds its URL from getApiBaseUrl(), which falls back to the default 46123
+  // until resolveLocalApiPort() runs — so if a foreign process is squatting
+  // 46123 while our sidecar listens on an OS-assigned fallback port, this push
+  // would leak every secret and the bearer token to that process.
+  await loadDesktopSecrets({ syncToSidecar: false });
 }

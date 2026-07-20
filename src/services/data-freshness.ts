@@ -33,6 +33,7 @@ export type DataSourceId =
   | 'ucdp_events' // UCDP georeferenced conflict events
   | 'unhcr' // UNHCR displacement data
   | 'climate' // Climate anomaly data (Open-Meteo)
+  | 'smoke_forecast' // Open-Meteo air-quality forecast (smoke engine)
   | 'worldpop' // WorldPop population exposure
   | 'giving' // Global giving activity data
   | 'bis' // BIS central bank data
@@ -70,6 +71,7 @@ export type DataSourceId =
     | "faa-nas-status"
     | "phmsa-pipeline"
     | "air-quality"
+    | "openaq-aqi"
     | "radiation-monitoring"
     | "dam-safety"
     | "nrc-nuclear"
@@ -136,10 +138,26 @@ export interface DataSourceState {
   name: string;
   lastUpdate: Date | null;
   lastError: string | null;
+  lastErrorAt: number | null;
   itemCount: number;
+  /** Items delivered by the MOST RECENT refresh (set, not accumulated, unlike
+   *  itemCount). Lets diagnostics distinguish "fresh and delivering" from
+   *  "fresh but the latest fetch came back empty" — an empty 200 OK that would
+   *  otherwise read as healthy. 0 with a non-null lastUpdate + no error =
+   *  delivered-empty (see isDeliveringEmpty). */
+  lastBatchItemCount: number;
   enabled: boolean;
   status: FreshnessStatus;
   requiredForRisk: boolean; // Is this source important for risk assessment?
+}
+
+/**
+ * True when a source looks fresh (recently updated, no error) but its most
+ * recent refresh delivered zero items — a silently-empty feed that age-based
+ * freshness alone reports as healthy. Pure; no side effects.
+ */
+export function isDeliveringEmpty(source: DataSourceState): boolean {
+  return source.lastUpdate !== null && !source.lastError && source.lastBatchItemCount === 0;
 }
 
 export interface DataFreshnessSummary {
@@ -190,6 +208,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   ucdp_events: { name: 'UCDP Conflict Events', requiredForRisk: false, panelId: 'ucdp-events' },
   unhcr: { name: 'UNHCR Displacement', requiredForRisk: false, panelId: 'displacement' },
   climate: { name: 'Climate Anomalies', requiredForRisk: false, panelId: 'climate' },
+  smoke_forecast: { name: 'Smoke Forecast (Open-Meteo AQ)', requiredForRisk: false, panelId: 'air-smoke' },
   worldpop: { name: 'Population Exposure', requiredForRisk: false, panelId: 'population-exposure' },
   giving: { name: 'Global Giving Activity', requiredForRisk: false, panelId: 'giving' },
   bis: { name: 'BIS Central Banks', requiredForRisk: false, panelId: 'economic' },
@@ -228,6 +247,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   "faa-nas-status": { name: "Faa Nas Status", requiredForRisk: false },
   "phmsa-pipeline": { name: "Phmsa Pipeline", requiredForRisk: false },
   "air-quality": { name: "Air Quality", requiredForRisk: false },
+  "openaq-aqi": { name: "OpenAQ Air Quality", requiredForRisk: false },
   "radiation-monitoring": { name: "Radiation Monitoring", requiredForRisk: false },
   "dam-safety": { name: "Dam Safety", requiredForRisk: false },
   "nrc-nuclear": { name: "Nrc Nuclear", requiredForRisk: false },
@@ -299,7 +319,9 @@ class DataFreshnessTracker {
  name: meta.name,
  lastUpdate: null,
  lastError: null,
+ lastErrorAt: null,
  itemCount: 0,
+ lastBatchItemCount: 0,
  enabled: true, // Assume enabled by default
  status: 'no_data',
  requiredForRisk: meta.requiredForRisk,
@@ -315,7 +337,9 @@ class DataFreshnessTracker {
  if (source) {
  source.lastUpdate = new Date();
  source.itemCount += itemCount;
+ source.lastBatchItemCount = itemCount;
  source.lastError = null;
+ source.lastErrorAt = null;
  source.status = this.calculateStatus(source);
  this.notifyListeners();
  }
@@ -328,9 +352,28 @@ class DataFreshnessTracker {
  const source = this.sources.get(sourceId);
  if (source) {
  source.lastError = error;
+ source.lastErrorAt = Date.now();
  source.status = 'error';
  this.notifyListeners();
  }
+  }
+
+  /**
+ * True when any source recorded an error within the given window.
+ * Used by the offline-staleness banner so a feed that is actively
+ * failing surfaces as stale even when other feeds are refreshing
+ * successfully (a failing feed stops writing cb-source-updates, so
+ * the age-only check alone reports false-fresh).
+ */
+  hasRecentError(windowMs = 10 * 60 * 1000): boolean {
+ const now = Date.now();
+ for (const source of this.sources.values()) {
+ if (!source.enabled) continue;
+ if (source.lastError && source.lastErrorAt !== null && now - source.lastErrorAt <= windowMs) {
+ return true;
+ }
+ }
+ return false;
   }
 
   /**
@@ -365,6 +408,16 @@ class DataFreshnessTracker {
  ...source,
  status: source.enabled ? this.calculateStatus(source) : 'disabled',
  }));
+  }
+
+  /**
+ * Enabled sources whose most recent refresh succeeded but returned zero items
+ * (delivered-empty). These read as `fresh` by age alone — this is the only way
+ * to tell "working and delivering" from "working but silently empty". Pure
+ * read; does not mutate status or affect risk aggregation.
+ */
+  getEmptyDeliverySources(): DataSourceState[] {
+ return this.getAllSources().filter((s) => s.enabled && isDeliveringEmpty(s));
   }
 
   /**
@@ -552,6 +605,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   ucdp_events: 'UCDP event-level conflict data unavailable',
   unhcr: 'UNHCR displacement data unavailable—refugee flows unknown',
   climate: 'Climate anomaly data unavailable—extreme weather patterns undetected',
+  smoke_forecast: 'Air-quality forecast unavailable—wildfire smoke conditions and safe windows unknown',
   worldpop: 'Population exposure data unavailable—affected population unknown',
   giving: 'Global giving activity data unavailable',
   bis: 'Central bank policy data may be stale—BIS feed unavailable',
@@ -592,6 +646,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   "faa-nas-status": "FAA NAS status unavailable",
   "phmsa-pipeline": "PHMSA pipeline data unavailable",
   "air-quality": "Air-quality data unavailable",
+  "openaq-aqi": "OpenAQ air-quality data unavailable",
   "radiation-monitoring": "Radiation monitoring data unavailable",
   "dam-safety": "Dam-safety data unavailable",
   "nrc-nuclear": "NRC nuclear data unavailable",

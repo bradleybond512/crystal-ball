@@ -54,6 +54,8 @@ let ctx2d: CanvasRenderingContext2D | null = null;
 let projectFn: ProjectFn | null = null;
 let rafId: number | null = null;
 let currentCenter: { lat: number; lon: number } = { lat: 20, lon: 0 };
+// Module-level ref so destroyArrivalChoreography() can disconnect it.
+let canvasResizeObserver: ResizeObserver | null = null;
 
 const wavefronts: WavefrontParticle[] = [];
 const coronas: CoronaTarget[] = [];
@@ -74,8 +76,9 @@ function ensureCanvas(wrapper: HTMLElement): void {
  'pointer-events:none;z-index:10;';
   wrapper.append(canvas);
 
-  const ro = new ResizeObserver(() => resizeCanvas(wrapper));
-  ro.observe(wrapper);
+  canvasResizeObserver?.disconnect();
+  canvasResizeObserver = new ResizeObserver(() => resizeCanvas(wrapper));
+  canvasResizeObserver.observe(wrapper);
   resizeCanvas(wrapper);
 
   ctx2d = canvas.getContext('2d');
@@ -356,6 +359,8 @@ export function destroyArrivalChoreography(): void {
   coronas.length = 0;
   flares.length = 0;
   if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  canvasResizeObserver?.disconnect();
+  canvasResizeObserver = null;
   canvas?.remove();
   canvas = null;
   ctx2d = null;

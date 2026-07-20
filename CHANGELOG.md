@@ -6,6 +6,130 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Home Shell UI re-imagination, Phases 3-4** (#1402 + follow-up): the
+  situation dossier drawer (`src/components/SituationDossier.ts`) — evidence
+  grid composed from `evidenceFor` panel metadata, honest "why this surfaced"
+  from pipeline/notification traces, action brief + timeline rail — and the
+  panel focus view (`src/components/PanelFocusHost.ts`) — deck cards, dossier
+  evidence tiles, and Library rows now open the real panel inside the shell
+  by reparenting it from the classic grid, with classic navigation as the
+  fallback for unknown/disabled panels.
+- **Source Confidence Panel (Redundancy + Prediction Enhancement Program,
+  Phase 1 UI slice)**: a new dedicated diagnostics surface
+  (`src/components/SourceConfidencePanel.ts`, panel id `source-confidence`)
+  showing per-domain source redundancy at a glance — which domains are
+  multi-source "FUSED" and agreeing, which are actively disagreeing, which
+  are single-provider "SPOF"s, and which are fully down — plus a per-provider
+  drill-down (health level, rolling success rate, last-success age, fact
+  fingerprint, and a fetch-outcome timeline sparkline). Built on two new pure
+  view-model modules: `src/services/providers/provider-health-timeline-view.ts`
+  (windows a provider's fetch-outcome ring buffer into a renderable timeline)
+  and `src/services/diagnostics/source-confidence-view.ts` (composes the
+  existing `assessProviderRedundancy()` engine + the timeline view into the
+  panel's exact shape, flagging the odd-fingerprint-out provider in a live
+  disagreement — only when a fingerprint holds a strict majority; a 3-way
+  split or an even tie has no verified "correct" provider to exempt, so
+  every fingerprinted provider is flagged instead). No new scoring math —
+  both modules reshape the already-tested `provider-redundancy.ts` /
+  `provider-health.ts` / `fusion-publish.ts` engines. 14 new fixture tests.
+  Registered in
+  `panels.ts` and instantiated in `panel-layout.ts` under the `intelligence`
+  category. Workstream A widening (fusion beyond the current 4 domains) and
+  Workstream B (closing the cataloged single-source-of-failure domains) are
+  explicitly out of scope for this UI-focused slice — the panel surfaces
+  today's real gaps (`single_source` / `redundant_unverified`) rather than
+  papering over them.
+- **Cognition benchmark + CI gate (Cognitive Enhancement PR 16 — final PR of
+  the 16-PR stack)**: `npm run bench:cognition` replays a frozen 12-window
+  fixture corpus (`cognition/__bench__/golden-windows.ts`, spanning conflict /
+  markets / cyber / weather / shortage / maritime / aviation / general) through
+  the full deterministic pipeline — episodic recall → base rate → aggregation
+  → recalibration → conformal interval, plus a held-out schema-matching stage
+  reusing PR 8's consolidation clustering — and prints Brier score, conformal
+  coverage, analog-recall precision@5, schema true-positive rate, and p50/p95
+  latency (`cognition/bench-cognition.ts`). A committed baseline
+  (`cognition/bench-baseline.json`) gates regressions: fails on Brier
+  regression > 0.02 absolute or conformal coverage dropping more than 5 points
+  below target (`cognition/bench-baseline.ts`). Wired as a new step in
+  `.github/workflows/smoke.yml`, fully offline and fixed-seed — runs in
+  single-digit milliseconds, so it cannot become a slow or hanging CI step.
+  17 new tests in `bench-cognition.test.mts`. (PR #1373)
+- **Self-tuning cognition (Cognitive Enhancement PR 12)**: the cognition
+  layer is now plugged into the self-improvement machinery. Eight cognition
+  constants became bounded tunables (episodic minSim, analog blend
+  pseudo-count, calibration shrinkage prior, extremization k, spread-skip
+  threshold, entity heat half-life, interest decay half-life, consolidation
+  cluster threshold) read via the tunable-params store with the historical
+  values as defaults. Five cognition outputs (episodic-analog,
+  recalibration, superforecast, operator-ranking, entity-trajectory) are
+  registered algorithms with deterministic outcome grading
+  (`cognition/self-tuning.ts`: resolved episodes, resolved calibration
+  records, retrospective trajectory replay, hypothesis-resolution operator
+  grading) and a Page-Hinkley drift watch (`cb:cognition-drift`) on a
+  6-hour cadence. Below-floor cognition algorithms get bounded
+  safe-adjustment proposals gated by a new episodic-analog minSim
+  safety-fixture suite; every other cognition knob fails closed to
+  operator approval. (PR #1357; compute-placement/hygiene follow-up
+  landed as PR #1372)
+- **Weather PR 5 — Personal Storm Mode UI**: the persistent severe-weather
+  strip + Storm Mode card now honors the full plan contract — acknowledge and
+  snooze persist to localStorage (`crystalball-storm-mode-ui-v1`) so an acked
+  threat stays dismissed across reloads until it materially changes
+  (escalation, outside → inside polygon, or polygon edge ≥ 5 km closer,
+  mirroring `weather-urgency.ts`), the strip self-clears at alert expiry, and
+  only payload-bearing (banner+) decisions activate it. Pure show/hide +
+  display logic extracted to `src/components/personal-storm-mode-view.ts`
+  (24 tests, wired into `npm run test:weather`), with a desktop-native
+  restyle in `macos-native.css` under `body.is-desktop-macos`. (PR #1374)
+- **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
+  calibration report, and booting the learning loops (PR #1339).
+- **Ask the data in Command Center**: the deterministic ask-the-data engine is
+  now user-reachable — question input, grounded answer packet, evidence rows,
+  and follow-up chips, fed by the live feature/panel/mission registries
+  (`insights/ask-context.ts`).
+- **Superforecast on demand in AnalystHUD**: "∑ Superforecast" runs the
+  superforecaster pipeline per hypothesis (budget-gated, hidden in Ghost Mode)
+  and shows probability, conformal interval, and estimate provenance; each run
+  pushes a live-vs-shadow pair so `cognition:shadow-report` gets real data.
+- **Replay baseline self-test probe**: the System Diagnostic Self-Test tab now
+  runs the missed-event replay catalog against the committed baseline — the
+  same guarantee CI's smoke tier 1 gives, now visible in-app.
+
+### Performance
+
+- **Cognition compute placement + memory hygiene (Cognitive Enhancement
+  PR 14)**: consolidation's periodic clustering pass now runs via
+  `requestIdleCallback` with a visibility guard (`cognition/idle-scheduler.ts`)
+  instead of synchronously on its cadence timer, so it never competes with a
+  rendered frame and is skipped outright while the tab is hidden. A new
+  content-hash embedding memo (`cognition/embedding-cache.ts`, cap 5,000,
+  persisted to `reasoning_memory`) means episodic-memory's `recall()` and
+  `recordEpisode()` no longer re-embed identical text every analyst cycle —
+  including a real pre-existing waste where a standing pending hypothesis
+  was re-embedding its own summary every ~5 minutes only to be discarded by
+  the signature-dedupe check. Episodic memory also gained contradiction
+  flagging: episodes whose backing explanation is refuted by
+  competitive-hypothesis resolution are excluded from *supportive* analog
+  scoring while remaining fully retrievable with the contradiction surfaced
+  in their explanation string (`markEpisodeContradictory`,
+  `contradictEpisodesForRefutation`, wired via a new injectable
+  `onHypothesisRefuted` hook on `situation-hypothesis-bridge.ts`). (PR #1372)
+- **CI: unref the multi-theater dedupe timer** — `military-surge.ts` scheduled
+  a dedupe-cache cleanup via a 4-hour `setTimeout` that was never unrefed,
+  keeping any Node test process alive for the full 4 hours once a test
+  exercised that path. This had been silently hanging the `Smoke` workflow's
+  `test:renderer` step for weeks (~4h/run, ~40% failure rate). Fixed with the
+  same typeof-guarded unref pattern used elsewhere in the codebase; the full
+  536-file/11,900+-test `test:renderer` suite now completes in under a
+  minute. (PR #1371)
+
+### Removed
+
+- **No-op mode evaluators**: deleted the six dead auto-trigger evaluator stubs
+  (`evaluateWarThreat`, `evaluateFinanceTrigger`, `evaluateCommodityTrigger`,
+  `evaluateDisasterTrigger`, `checkFinanceAutoTriggerTimeout`,
+  `reloadConflictBaselines`) and their 14 dead call sites in the data loader.
+
 - **Phase 4B — Epistemic intelligence wiring**: bias scan cadence, the epistemic
   calibration loop (outcome-graded, wired to boot), and the epistemic bridge
   connecting meta-confidence, counterfactuals, and the bias detector to the live
@@ -29,6 +153,15 @@ All notable changes to Crystal Ball are documented here.
 
 ### Security
 
+- **AppImage WebKit sandbox posture (R2-SEC-008)**: disabling the bubblewrap
+  sandbox inside an AppImage now logs a loud stderr warning and can be refused
+  with `CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1`.
+- **cargo-deny in CI (R2-SEC-001)**: new `cargo-deny` job enforcing a
+  crates.io-only source policy and duplicate-version visibility
+  (`src-tauri/deny.toml`); advisories remain owned by cargo-audit.
+- **Wildcard-CORS policy test (R2-SEC-010)**: any literal
+  `Access-Control-Allow-Origin: *` in `api/` without a `PUBLIC_WILDCARD_CORS`
+  justification comment now fails CI.
 - **Security sprint (2026-06-12)**: Privacy Fix 1 — secret-in-query tripwire that
   warns when an API key would be sent in a query string to a non-allowlisted host
   — and removal of the `RELAY_ALLOW_ANON` anonymous-relay bypass (PRs #1138, #1144).

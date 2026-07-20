@@ -59,6 +59,8 @@ import {
   McKennaQuotePanel,
   DailyWisdomPanel,
 } from '@/components';
+import type { Panel } from '@/components/Panel';
+import { findInsertBeforeKey } from '@/app/lazy-panel-order';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { FirmsPanel } from '@/components/FirmsPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
@@ -67,13 +69,25 @@ import { notificationStack } from '@/components/NotificationStack';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
 import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
 import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
+import { showToast } from '@/components/Toast';
+import type { CompositeStatusInputs } from '@/services/seismic/eew-status-bar-helpers';
+import { getSafetyCaseService } from '@/services/intelligence/safety-case';
+import { getFeatureHealthRegistry } from '@/services/diagnostics/diagnostics-state';
+import { aggregateSystemHealth, contextFromSnapshots } from '@/services/diagnostics/system-health';
+import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
+import type { HealthStatus } from '@/services/diagnostics/system-health-types';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalettePanel } from '@/components/CommandPalettePanel';
+import { HomeShellOverlay } from '@/components/HomeShellOverlay';
+import { LibraryOverlay } from '@/components/LibraryOverlay';
+import { isHomeShellDefaultOn, isHomeShellAvailable, CLASSIC_VIEW_KEY } from '@/services/home-shell/shell-gate';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
+import { installPlaceCommands } from '@/services/command-palette/place-commands';
+import { installGuideCommands } from '@/services/command-palette/guide-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
 import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
 import { startDockBadge } from '@/services/native/dock-badge';
@@ -84,11 +98,18 @@ import { startPredictiveCrisisIndex } from '@/services/intelligence/predictive-c
 import { startCrisisTrajectory } from '@/services/intelligence/crisis-trajectory';
 import { startActiveLearningQueue } from '@/services/intelligence/active-learning-queue';
 import { startSituationHypothesisBridge } from '@/services/intelligence/situation-hypothesis-bridge';
+import { contradictEpisodesForRefutation } from '@/services/cognition/episodic-memory';
 import { startEpistemicBridge } from '@/services/intelligence/epistemic-bridge';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
 import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
 import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence';
+import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
+import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
+import { startPredictionResolutionCadence } from '@/services/intelligence/prediction-resolution-cadence';
+import { installBatteryMonitor } from '@/services/adaptive-cadence';
+import { startCognitionSelfTuningCadence } from '@/services/cognition/self-tuning';
+import { startRegimeMonitor } from '@/services/cognition/regime-monitor';
 import { startEpistemicCalibration } from '@/services/intelligence/epistemic-calibration';
 import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
 import { expirePendingPredictions } from '@/services/intelligence/forecast-calibration-adapter';
@@ -129,7 +150,7 @@ import { StatusOverlay } from '@/components/StatusOverlay';
 import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
-import { startAlertReactions, flashPanel, jumpToPanel } from '@/services/alert-reactions';
+import { startAlertReactions } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
 import { startModeForecast } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
@@ -234,6 +255,7 @@ import { ForeignMilNewsPanel } from '@/components/ForeignMilNewsPanel';
 import { SpcMesoscalePanel } from '@/components/SpcMesoscalePanel';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { UnifiedWebcamPanel } from '@/components/UnifiedWebcamPanel';
+import { PinnedWebcamsPanel } from '@/components/PinnedWebcamsPanel';
 import { CommsHealthPanel } from '@/components/CommsHealthPanel';
 import { PowerGridPanel } from '@/components/PowerGridPanel';
 import { FearGreedPanel } from '@/components/FearGreedPanel';
@@ -258,6 +280,8 @@ import { WaterQualityPanel } from '@/components/WaterQualityPanel';
 import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
+import { AirSmokePanel } from '@/components/AirSmokePanel';
+import { startSmokeCalloutBridge } from '@/services/smoke/smoke-callout-bridge';
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
 import { NotificationProvenancePanel } from '@/components/NotificationProvenancePanel';
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
@@ -335,6 +359,7 @@ import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { SourceConfidencePanel } from '@/components/SourceConfidencePanel';
 import { EventStorePanel } from '@/components/EventStorePanel';
 import { BeliefCalibrationPanel } from '@/components/BeliefCalibrationPanel';
 import { WatchboardPanel } from '@/components/WatchboardPanel';
@@ -400,6 +425,7 @@ import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
 import { SignalNoiseFilterPanel } from '@/components/SignalNoiseFilterPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { SurvivalGuidePanel } from '@/components/SurvivalGuidePanel';
 import { StormPosturePanel } from '@/components/StormPosturePanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
 import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
@@ -448,7 +474,6 @@ import { MaritimePiracyPanel } from '@/components/MaritimePiracyPanel';
 import { TechCompetitionPanel } from '@/components/TechCompetitionPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
-import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { MaritimeSuperpowerPanel } from '@/components/MaritimeSuperpowerPanel';
 import { HealthSuperpowerPanel } from '@/components/HealthSuperpowerPanel';
 
@@ -473,7 +498,6 @@ import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';import { Nuclea
 import { RadiationDecayPanel } from '@/components/RadiationDecayPanel';
 import { ResourceInventoryPanel } from '@/components/ResourceInventoryPanel';
 import { WorldClockPanel } from '@/components/WorldClockPanel';
-import { PinnedWebcamsPanel } from '@/components/PinnedWebcamsPanel';
 import { PositiveNewsFeedPanel } from '@/components/PositiveNewsFeedPanel';
 import { CountersPanel } from '@/components/CountersPanel';
 import { ProgressChartsPanel } from '@/components/ProgressChartsPanel';
@@ -523,6 +547,7 @@ import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlac
 import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
 import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
+import { SummaryStrip } from '@/components/SummaryStrip';
 import { setDatacenterSite } from '@/services/datacenter/datacenter-state';
 import { resolveSiteConfig } from '@/services/datacenter/site-resolver';
 import { SavedPlaceModal } from '@/components/SavedPlaceModal';
@@ -597,6 +622,63 @@ import { GlobalHealthSecurityPanel } from '@/components/GlobalHealthSecurityPane
 import { FoodSecuritySuperpowerPanel } from '@/components/FoodSecuritySuperpowerPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
+import { icon } from '@/components/ui/icons';
+
+/**
+ * Gather the non-EEW inputs for the title-bar composite status chip.
+ * Reads the same singletons the Safety Case panel and Command Center
+ * use, so the chip can never say ALL CLEAR while those surfaces show
+ * SAFETY REVIEW REQUIRED / risk CRITICAL. Every read is fault-isolated:
+ * a diagnostics failure degrades to "unknown" rather than breaking the bar.
+ */
+function collectCompositeStatusInputs(): CompositeStatusInputs {
+  let safetyCaseSafeToOperate: boolean | null = null;
+  try {
+    safetyCaseSafeToOperate = getSafetyCaseService().getLatest()?.safeToOperate ?? null;
+  } catch { safetyCaseSafeToOperate = null; }
+
+  let readinessStatus: HealthStatus | null = null;
+  try {
+    const snapshot = getLiveDiagnosticsSnapshot();
+    const ctx = contextFromSnapshots({
+      panels: snapshot.panels,
+      sources: snapshot.sources,
+      providers: snapshot.providers,
+    });
+    const features = getFeatureHealthRegistry().all(ctx);
+    readinessStatus = aggregateSystemHealth({
+      panels: snapshot.panels,
+      features,
+      sources: snapshot.sources,
+      providers: snapshot.providers,
+      notifications: snapshot.notificationSummary,
+      sidecar: snapshot.sidecar,
+    }).status;
+  } catch { readinessStatus = null; }
+
+  return { safetyCaseSafeToOperate, readinessStatus };
+}
+
+/** CSS class driving the brief accent pulse on a navigated-to panel
+ *  (keyframes in main.css; disabled under prefers-reduced-motion). */
+const PANEL_NAV_FLASH_CLASS = 'panel-nav-flash';
+
+/** Pulse the target panel's border twice so the user sees where the
+ *  scroll landed. No-op when the user prefers reduced motion. */
+function flashPanelHighlight(el: HTMLElement): void {
+  try {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  } catch { /* matchMedia unavailable — still safe to animate */ }
+  el.classList.remove(PANEL_NAV_FLASH_CLASS);
+  requestAnimationFrame(() => {
+    el.classList.add(PANEL_NAV_FLASH_CLASS);
+  });
+  el.addEventListener(
+    'animationend',
+    () => el.classList.remove(PANEL_NAV_FLASH_CLASS),
+    { once: true },
+  );
+}
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -610,11 +692,30 @@ export interface PanelLayoutCallbacks {
 export class PanelLayoutManager implements AppModule {
   private ctx: AppContext;
   private callbacks: PanelLayoutCallbacks;
+  /** Lazy panels: id → factory that dynamically imports + constructs the panel.
+   *  Registered panels are only built when enabled (at boot or on toggle), so
+   *  disabled panels cost neither a module download nor a synchronous construct. */
+  private lazyFactories = new Map<string, () => Promise<Panel>>();
+  /** In-flight mounts, so concurrent enables of the same panel build it once. */
+  private mountingPanels = new Map<string, Promise<Panel | null>>();
   private panelDragCleanupHandlers: (() => void)[] = [];
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
+  private summaryStrip: SummaryStrip | null = null;
+  private triageBar: TriageBar | null = null;
+  private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
+  private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
+  private homeShell: HomeShellOverlay | null = null;
+  private _onHomeShellToggle: (() => void) | null = null;
+  private libraryOverlay: LibraryOverlay | null = null;
+  private _onLibraryToggle: (() => void) | null = null;
+  private _uninstallPlaceCommands: (() => void) | null = null;
+  private _onFocusPlace: ((e: Event) => void) | null = null;
+  private _onMapFocus: ((e: Event) => void) | null = null;
+  private cmdkPanel: CommandPalettePanel | null = null;
+  private _onCmdkToggle: (() => void) | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
@@ -684,6 +785,8 @@ export class PanelLayoutManager implements AppModule {
  document.removeEventListener('wm:update-state', this._onUpdateState);
  this.panelDragCleanupHandlers.forEach((cleanup) => cleanup());
  this.panelDragCleanupHandlers = [];
+ this.safetyCaseUnsub?.();
+ this.safetyCaseUnsub = null;
  if (this.criticalBannerEl) {
  this.criticalBannerEl.remove();
  this.criticalBannerEl = null;
@@ -693,12 +796,23 @@ export class PanelLayoutManager implements AppModule {
  this.stalenessBanner = null;
  }
  if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
+ if (this.homeShell) { this.homeShell.destroy(); this.homeShell = null; }
+ if (this._onHomeShellToggle) { document.removeEventListener('cb:toggle-home-shell', this._onHomeShellToggle); this._onHomeShellToggle = null; }
+ if (this.libraryOverlay) { this.libraryOverlay.destroy(); this.libraryOverlay = null; }
+ if (this._onLibraryToggle) { document.removeEventListener('cb:toggle-library', this._onLibraryToggle); this._onLibraryToggle = null; }
+ if (this._uninstallPlaceCommands) { this._uninstallPlaceCommands(); this._uninstallPlaceCommands = null; }
+ if (this._onFocusPlace) { document.removeEventListener('cb:focus-place', this._onFocusPlace); this._onFocusPlace = null; }
+ if (this._onMapFocus) { document.removeEventListener('cb:map-focus', this._onMapFocus); this._onMapFocus = null; }
+ if (this._onCmdkToggle) { document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle); this._onCmdkToggle = null; }
+ this.cmdkPanel = null;
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
+ if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
+ if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
  // Clean up happy variant panels
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
@@ -709,6 +823,14 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.digestPanel?.destroy();
  this.ctx.speciesPanel?.destroy();
  this.ctx.renewablePanel?.destroy();
+ // The map owns a MapLibre + deck.gl GPU context; without an explicit
+ // destroy it (and its ResizeObserver) outlive teardown and can't be GC'd.
+ this.ctx.map?.destroy();
+ this.ctx.map = null;
+ if (this.expirePredictionsTimer) {
+ clearInterval(this.expirePredictionsTimer);
+ this.expirePredictionsTimer = null;
+ }
   }
 
   renderLayout(): void {
@@ -722,10 +844,44 @@ export class PanelLayoutManager implements AppModule {
  if (this.ctx.isDesktopApp) {
  document.title = `Crystal Ball v${__APP_VERSION__}`;
  }
+ // A throwing panel/bootstrap constructor must not abort the whole boot.
+ // Without this guard the error unwinds through init() and is swallowed by
+ // main.ts's .catch behind the vault intro — the user sees a half-rendered
+ // grid with no map, no data, and no error. Catching here keeps the map
+ // (created early in createPanels) and lets init() reach Phase 6 data
+ // loading. Per-panel isolation of the ~450 constructors is a follow-up.
+ try {
  this.createPanels();
+ } catch (error) {
+ console.error('[panel-layout] createPanels failed — booting in degraded mode', error);
+ this.showBootDegradedBanner(error);
+ }
  if (this.ctx.isDesktopApp) {
  this.renderSidebarUpdateBtn();
  }
+  }
+
+  /** Visible, dismissible banner shown when panel construction partially fails
+   *  during boot — so a degraded boot is never silent behind the vault intro. */
+  private showBootDegradedBanner(error: unknown): void {
+ if (document.getElementById('cb-boot-degraded')) return;
+ const banner = document.createElement('div');
+ banner.id = 'cb-boot-degraded';
+ banner.setAttribute('role', 'alert');
+ banner.style.cssText =
+ 'position:fixed;top:0;left:0;right:0;z-index:99999;padding:8px 40px 8px 12px;'
+ + 'background:#7f1d1d;color:#fff;font:13px/1.4 system-ui,sans-serif;text-align:center;';
+ const msg = error instanceof Error ? error.message : String(error);
+ banner.textContent = `Some panels failed to load — running in degraded mode. ${msg}`;
+ const close = document.createElement('button');
+ close.textContent = '×';
+ close.setAttribute('aria-label', 'Dismiss');
+ close.style.cssText =
+ 'position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;'
+ + 'border:none;color:#fff;font-size:18px;cursor:pointer;';
+ close.addEventListener('click', () => banner.remove());
+ banner.appendChild(close);
+ document.body.appendChild(banner);
   }
 
   renderSidebarUpdateBtn(): void {
@@ -848,7 +1004,12 @@ export class PanelLayoutManager implements AppModule {
  return;
  }
  const panel = this.ctx.panels[key];
- panel?.toggle(config.enabled);
+ if (panel) {
+ panel.toggle(config.enabled);
+ } else if (config.enabled && this.lazyFactories.has(key)) {
+ // Enabling a not-yet-built lazy panel: construct + insert on demand.
+ void this.mountLazyPanel(key);
+ }
  });
  // Sync sidebar dot states when panels are toggled
  document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
@@ -863,8 +1024,19 @@ export class PanelLayoutManager implements AppModule {
  const panelsGrid = document.getElementById('panelsGrid')!;
 
  // Mount the EEW status bar at top of body — the anchor (z:9000).
+ // The chip is a composite worst-of across EEW alerts, the Safety Case
+ // safe-to-operate flag, and system readiness — never "ALL CLEAR" while
+ // the Safety Case panel says "SAFETY REVIEW REQUIRED" or the Command
+ // Center risk is CRITICAL. Inputs are gathered here so the derive
+ // helper stays pure (see eew-status-bar-helpers.ts).
  const eewStatusBar = new EEWStatusBar();
+ eewStatusBar.setCompositeStatusProvider(collectCompositeStatusInputs);
  eewStatusBar.mount(document.body);
+ // Safety-case re-evaluations should update the chip immediately rather
+ // than waiting for the next 30 s EEW poll.
+ try {
+ this.safetyCaseUnsub = getSafetyCaseService().subscribe(() => eewStatusBar.refreshCompositeStatus());
+ } catch { /* diagnostics optional */ }
  startSpaceWeatherStatusBarPoller(eewStatusBar);
 
  // Mount the notification stack directly below the EEW bar. All secondary
@@ -890,8 +1062,23 @@ export class PanelLayoutManager implements AppModule {
  correlationBanner.mount(document.body);
 
  // Mount the triage bar into the notification stack (last row — below staleness).
- const triageBar = new TriageBar();
- triageBar.mount(notificationStack.element);
+ this.triageBar = new TriageBar();
+ this.triageBar.mount(notificationStack.element);
+
+ // "At a glance" summary strip — one sticky line above the panels grid
+ // (inside the scroll container, so it inherits the same
+ // --notification-stack-h offset as the grid). Reuses the EEW status
+ // bar's derived composite state; every segment clicks through to its
+ // owning surface. Settings → General → Overview can turn it off.
+ this.summaryStrip = new SummaryStrip({
+ subscribeStatus: (cb) => eewStatusBar.subscribeState(cb),
+ onStatusClick: () => { void this.navigateToPanel('safety-case'); },
+ onAlertsClick: () => { void this.navigateToPanel('unified-alert-inbox'); },
+ onFreshnessClick: () => this.ctx.unifiedSettings?.open('status'),
+ onRegimeClick: () => document.dispatchEvent(new CustomEvent('cb:toggle-analyst-hud')),
+ });
+ const gridForSummary = document.getElementById('panelsGrid');
+ gridForSummary?.parentElement?.insertBefore(this.summaryStrip.getElement(), gridForSummary);
  const justInRail = new JustInRail();
  justInRail.mount(document.body);
  startPanelNarrator();
@@ -909,10 +1096,41 @@ export class PanelLayoutManager implements AppModule {
  startTuningApplyCadence();
  startLlmGradingCadence();
  startBiasScanCadence();
+ startLearnedCascadeCadence();
+ startConsolidationCadence();
+ startCognitionSelfTuningCadence();
+ startPredictionResolutionCadence();
+ installBatteryMonitor();
+ // BOCPD regime monitor — TriageBar chip reads the cache; the notify
+ // callback shows a toast once per new detection (regime-monitor dedupes
+ // by detectedAt, Toast dedupes identical on-screen copies).
+ startRegimeMonitor({
+ notify: ({ domain, shift }) => {
+ showToast({
+ title: `Regime shift: ${domain} (${Math.round(shift.changeProbability * 100)}%)`,
+ message: shift.explanation,
+ severity: 'elevated',
+ });
+ },
+ });
  startEpistemicCalibration();
  startAssumptionExpirySweep();
- setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
- startSituationHypothesisBridge();
+ this.expirePredictionsTimer = setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
+ // PR 14 memory hygiene: flag episodic-memory episodes whose backing
+ // explanation was refuted by competitive-hypothesis resolution. Best-effort
+ // entity-overlap match (see contradictEpisodesForRefutation doc) — never
+ // throws into the bridge.
+ startSituationHypothesisBridge({
+ onHypothesisRefuted: (event) => {
+ try { contradictEpisodesForRefutation(event); } catch { /* hygiene is best-effort */ }
+ },
+ // Yield the main thread between observation events. Ingesting an observation
+ // runs the correlate engine + a full situation-store notify fan-out; a boot
+ // burst (every feed's events at once) processed synchronously wedged the
+ // renderer for 30s+ → watchdog reload loop. Draining one event per macrotask
+ // keeps the heartbeat + input alive while the pipeline catches up.
+ schedule: (cb) => { setTimeout(cb, 0); },
+ });
  startEpistemicBridge();
  startNotificationRouter();
  startSilenceDetector();
@@ -1008,15 +1226,20 @@ export class PanelLayoutManager implements AppModule {
  startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);
- // Proactive digest — once per 8h, after data has had a chance to load.
+ // Proactive digest — once per 8h. Dashboard is interactive first: defer to an
+ // idle callback (setTimeout fallback) so digest generation never competes with
+ // boot, and it simply appears when ready.
  if (shouldShowDigest()) {
- window.setTimeout(() => {
+ const runDigest = (): void => {
  void generateDigest().then(text => {
  if (!text) return;
  markDigestShown();
  digestOverlay.show(text);
  });
- }, 30_000);
+ };
+ const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+ if (typeof ric === 'function') ric(runDigest, { timeout: 60_000 });
+ else window.setTimeout(runDigest, 30_000);
  }
  // On-demand digest (triggered from Cmd+K "brief").
  document.addEventListener('cb:show-digest', () => {
@@ -1043,15 +1266,73 @@ export class PanelLayoutManager implements AppModule {
      document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
    },
  });
- const cmdk = new CommandPalettePanel();
- cmdk.mount(document.body);
- document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+ this._uninstallPlaceCommands = installPlaceCommands(getCommandRegistry(), {
+   getPlaces: () => getSavedPlaces().map((p) => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, primary: p.primary })),
+   subscribe: (listener) => subscribeSavedPlaces(() => listener()),
+   dispatch: (name, detail) => {
+     document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
+   },
+ });
+ installGuideCommands(getCommandRegistry(), (name, detail) =>
+   document.dispatchEvent(new CustomEvent(name, { detail })),
+ );
+ this._onFocusPlace = (e: Event) => {
+   const detail = (e as CustomEvent<{ lat?: number; lon?: number }>).detail;
+   void this.navigateToPanel('map');
+   if (detail?.lat !== undefined && detail?.lon !== undefined) {
+     this.ctx.map?.setCenter(detail.lat, detail.lon, 8);
+     this.ctx.map?.flashLocation(detail.lat, detail.lon, 3000);
+   }
+ };
+ document.addEventListener('cb:focus-place', this._onFocusPlace);
+ this._onMapFocus = (e: Event) => {
+   const detail = (e as CustomEvent<{ lat?: number; lon?: number }>).detail;
+   if (detail?.lat !== undefined && detail?.lon !== undefined) {
+     this.ctx.map?.setCenter(detail.lat, detail.lon, 8);
+     this.ctx.map?.flashLocation(detail.lat, detail.lon, 3000);
+   }
+ };
+ document.addEventListener('cb:map-focus', this._onMapFocus);
+ this.cmdkPanel = new CommandPalettePanel();
+ this.cmdkPanel.mount(document.body);
+ this._onCmdkToggle = () => this.cmdkPanel?.toggle();
+ document.addEventListener('cb:toggle-cmdk', this._onCmdkToggle);
+
+ // Library (Phase 2 UI re-imagination) — browsable panel catalog. Mounted
+ // unconditionally (before the Home Shell flag gate below); today only the
+ // Home Shell topbar button dispatches cb:toggle-library — the classic-view
+ // entry point is the ⌘K "Open Library" command (Task 5 wiring).
+ this.libraryOverlay = new LibraryOverlay();
+ this.libraryOverlay.mount(document.body);
+ this._onLibraryToggle = () => this.libraryOverlay?.toggle();
+ document.addEventListener('cb:toggle-library', this._onLibraryToggle);
+
+ // Home Shell — default-on opening surface for the full desktop variant
+ // (Phase 2). See src/services/home-shell/shell-gate.ts for the decision core.
+ // Wire the toggle whenever the shell CAN mount (not only when it's the
+ // default), so ⌘⇧O and the classic "New view" button always bring it back —
+ // otherwise opting into classic once strands the user with no way back.
+ if (isHomeShellAvailable()) {
+ this._onHomeShellToggle = () => {
+ const shell = this.ensureHomeShell();
+ if (shell.isVisible()) { shell.hide(); return; }
+ // Returning to the shell clears the persisted classic opt-out so the
+ // choice sticks across relaunches.
+ try { localStorage.removeItem(CLASSIC_VIEW_KEY); } catch { /* ignore */ }
+ shell.show();
+ };
+ document.addEventListener('cb:toggle-home-shell', this._onHomeShellToggle);
+ if (isHomeShellDefaultOn()) this.ensureHomeShell().show();
+ }
  document.addEventListener('cb:navigate-panel', (e) => {
    const detail = (e as CustomEvent<{ panelKey?: string }>).detail;
    const key = detail?.panelKey;
    if (!key) return;
-   jumpToPanel(key);
-   flashPanel(key);
+   // Route through navigateToPanel (lazy-mounts + always gives visible
+   // feedback) rather than jumpToPanel/flashPanel, which silently no-op on an
+   // unmounted or disabled panel — the "dead ⌘-number / palette nav" cause
+   // even though sidebar clicks worked (Defect B2).
+   void this.navigateToPanel(key);
  });
 
  // Install the centralized shortcut registry (⌘K, ⌘/, ⌘1–9 + sidebar badges)
@@ -1090,7 +1371,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map = new MapContainer(mapContainer, {
  zoom: this.ctx.isMobile ? 2.5 : 1,
  pan: { x: 0, y: 0 },
- view: this.ctx.isMobile ? this.ctx.resolvedLocation : 'global',
+ view: this.ctx.isMobile ? this.ctx.resolvedLocation : 'america',
  layers: this.ctx.mapLayers,
  timeRange: '7d',
  });
@@ -1421,12 +1702,22 @@ export class PanelLayoutManager implements AppModule {
  const sanctionsIntelPanel = new SanctionsPanel();
  this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
 
- // Lazy-load all OSINT panels. They appear in the dataTracking category
- // but most users never open them at boot. The dynamic imports below let
- // Vite emit a shared `panels-osint` chunk that loads in parallel with
- // the first paint. Panel objects are attached to ctx.panels as soon as
- // each module resolves — Panel rendering itself is async-tolerant.
- void this.loadOsintPanels();
+ // Register lazy panels (OSINT) and mount the enabled ones now; disabled
+ // ones are built on demand when toggled on. Vite code-splits each factory's
+ // dynamic import, and mountLazyPanel inserts them at their canonical grid
+ // position once resolved (fixing the prior orphaned-off-DOM bug).
+ this.registerOsintPanels();
+ // 'maritime-intel' is retired (superseded by 'maritime-superpower', which now
+ // owns the freight-stress section). Register it lazily like the OSINT panels
+ // so it is never constructed while it ships disabled: a constructed
+ // MaritimeIntelPanel starts a 60s poll loop (dark-vessels, freight-stress,
+ // acled, ais) with no visibility guard, which otherwise ran invisibly forever
+ // and double-fetched /api/freight-stress. Enabling it in settings mounts it on
+ // demand at its canonical grid slot via mountLazyPanel.
+ this.lazyFactories.set('maritime-intel', () => import('@/components/MaritimeIntelPanel').then((m) => new m.MaritimeIntelPanel()));
+ for (const id of this.lazyFactories.keys()) {
+ if (this.ctx.panelSettings[id]?.enabled ?? true) void this.mountLazyPanel(id);
+ }
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
@@ -1542,6 +1833,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['faa-weather-cams'] = new FAAWeatherCamsPanel();
  this.ctx.panels['unified-webcams'] = new UnifiedWebcamPanel();
+ this.ctx.panels['pinned-webcams'] = new PinnedWebcamsPanel();
 
  this.ctx.panels['tsunami-alerts'] = new TsunamiAlertsPanel();
  this.ctx.panels['tropical-cyclones'] = new TropicalCyclonesPanel();
@@ -1580,6 +1872,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['nuclear-monitor'] = new NuclearMonitorPanel();
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
+ this.ctx.panels['air-smoke'] = new AirSmokePanel();
+ startSmokeCalloutBridge();
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();
  this.ctx.panels['notification-provenance'] = new NotificationProvenancePanel();
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();
@@ -1643,6 +1937,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['meta-confidence'] = new MetaConfidencePanel();
  this.ctx.panels['meta-confidence-calibration'] = new MetaConfidenceCalibrationPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['source-confidence'] = new SourceConfidencePanel();
  this.ctx.panels['event-store'] = new EventStorePanel();
  this.ctx.panels['belief-calibration'] = new BeliefCalibrationPanel();
  this.ctx.panels['watchboards'] = new WatchboardPanel();
@@ -1759,6 +2054,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel(); this.ctx.panels['maritime-piracy'] = new MaritimePiracyPanel();
  this.ctx.panels['tech-competition'] = new TechCompetitionPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['survival-guide'] = new SurvivalGuidePanel();
  this.ctx.panels['storm-posture'] = new StormPosturePanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
@@ -1795,7 +2091,6 @@ export class PanelLayoutManager implements AppModule {
  );
  });
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
- this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  this.ctx.panels['maritime-superpower'] = new MaritimeSuperpowerPanel();
  this.ctx.panels['health-superpower'] = new HealthSuperpowerPanel();
 
@@ -1881,7 +2176,7 @@ export class PanelLayoutManager implements AppModule {
  // Mount the pinned strip above the panel grid so it floats outside
  // the scroll region. The callback scrolls to the full panel.
  this.dcStrip = new DataCenterPinnedStrip(() => {
-   datacenterPanel.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
+   void this.navigateToPanel('datacenter-readiness');
  });
  const panelsGridForStrip = document.getElementById('panelsGrid');
  panelsGridForStrip?.parentElement?.insertBefore(this.dcStrip.getElement(), panelsGridForStrip);
@@ -1930,9 +2225,12 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/insights/big-event-detector'),
  import('@/services/structured-log'),
  import('@/services/diagnostics/recurring-loops'),
+ import('@/services/diagnostics/live-diagnostics-snapshot'),
+ import('@/services/diagnostics/diagnostics-heartbeat'),
  ]).then(([{ detectDegradations }, {
    getFeatureHealthRegistry, getPanelHealthRegistry, getNotificationTraceRegistry,
- }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop }]) => {
+ }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop },
+   { getLiveDiagnosticsSnapshot }, { recordDiagnosticsHeartbeat }]) => {
     
    let prevReport: any = null;
    const alertedIds = new Set();
@@ -1940,19 +2238,25 @@ export class PanelLayoutManager implements AppModule {
      'degradation-alerting',
      () => {
        try {
+         // Heartbeat: prove this tick is still running so the diagnostics-liveness
+         // deadman can tell "all green" from "frozen on last value".
+         recordDiagnosticsHeartbeat();
          // Build a minimal SystemHealthReport from registry snapshots.
          const featureReg = getFeatureHealthRegistry();
          const panelReg = getPanelHealthRegistry();
          const ntReg = getNotificationTraceRegistry();
          const ntSummary = ntReg.summary();
+         // Live source/provider health so degradation alerts fire on the most
+         // common real failure (a feed going down), not just feature transitions.
+         const liveSnap = getLiveDiagnosticsSnapshot();
          const curr = {
            generatedAt: Date.now(),
            status: 'unknown' as import('@/services/diagnostics/system-health-types').HealthStatus,
            summary: '',
            features: featureReg.all(),
            panels: panelReg.all(),
-           sources: [],
-           providers: [],
+           sources: liveSnap.sources,
+           providers: liveSnap.providers,
            notifications: ntSummary,
            sidecar: { status: 'unknown' as import('@/services/diagnostics/system-health-types').HealthStatus, authenticated: false, reason: '' },
            recommendations: [],
@@ -2069,7 +2373,6 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['radiation-decay'] = new RadiationDecayPanel();
  this.ctx.panels['resource-inventory'] = new ResourceInventoryPanel();
  this.ctx.panels['world-clock'] = new WorldClockPanel();
- this.ctx.panels['pinned-webcams'] = new PinnedWebcamsPanel();
 
  const displacementPanel = new DisplacementPanel();
  displacementPanel.setCountryClickHandler((lat, lon) => {
@@ -2276,28 +2579,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels.renewable = this.ctx.renewablePanel;
  }
 
- const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
- const savedOrder = this.getSavedPanelOrder();
- let panelOrder = defaultOrder;
- if (savedOrder.length > 0) {
- const missing = defaultOrder.filter(k => !savedOrder.includes(k));
- const valid = savedOrder.filter(k => defaultOrder.includes(k));
- const monitorsIdx = valid.indexOf('monitors');
- if (monitorsIdx !== -1) valid.splice(monitorsIdx, 1);
- const insertIdx = valid.indexOf('politics') + 1 || 0;
- const newPanels = missing.filter(k => k !== 'monitors');
- valid.splice(insertIdx, 0, ...newPanels);
- if (SITE_VARIANT !== 'happy') {
- valid.push('monitors');
- }
- panelOrder = valid;
- }
-
- if (SITE_VARIANT !== 'happy') {
- const anchors = PanelLayoutManager.MODE_ANCHORS.filter((key) => panelOrder.includes(key));
- const rest = panelOrder.filter((key) => !anchors.includes(key));
- panelOrder = [...anchors, ...rest];
- }
+ const panelOrder = this.computePanelOrder();
 
  panelOrder.forEach((key: string) => {
  const panel = this.ctx.panels[key];
@@ -2308,15 +2590,18 @@ export class PanelLayoutManager implements AppModule {
  }
  });
 
- // Wire sidebar panel items → scroll to panel
+ // Wire sidebar panel items → scroll to panel.
  if (this.ctx.isDesktopApp) {
- document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
- item.addEventListener('click', () => {
- const key = item.dataset.panelKey;
- if (!key) return;
- const panel = this.ctx.panels[key];
- panel?.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
- });
+ // Delegate on the persistent .mac-sidebar-nav so nav clicks survive any
+ // later sidebar re-render — the old per-node listeners were orphaned the
+ // moment the sidebar was rebuilt (Defect B2). closest() also resolves
+ // clicks on an item's inner dot / ⌘-hint children. navigateToPanel mounts
+ // on demand and always gives visible feedback (scroll + flash, or a toast).
+ const sidebarNav = document.querySelector('.mac-sidebar-nav');
+ sidebarNav?.addEventListener('click', (e) => {
+ const item = (e.target as HTMLElement).closest<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]');
+ const key = item?.dataset.panelKey;
+ if (key) void this.navigateToPanel(key);
  });
 
  // Wire mode selector buttons
@@ -2351,14 +2636,138 @@ export class PanelLayoutManager implements AppModule {
  this.applyInitialUrlState();
  this.restoreLastViewedPanel();
  this.startLastViewedTracker();
+ this.maybeShowOnboarding();
+  }
+
+  /** Mount the WelcomeFlow on first run and seed operator-model from the user's choices. */
+  private maybeShowOnboarding(): void {
+ void import('@/components/WelcomeFlow').then(({ WelcomeFlow }) => {
+ if (!WelcomeFlow.shouldShow()) return;
+ const flow = new WelcomeFlow({
+ onLocationSet: (lat, lng) => {
+ void import('@/services/saved-places').then(({ addSavedPlace }) => {
+ addSavedPlace({ name: 'My Location', lat, lon: lng, tags: ['home'], source: 'gps' });
+ }).catch((error) => { console.error('[boot] onboarding location save failed:', error); });
+ },
+ onInterestsSet: (interests) => {
+ Promise.all([
+ import('@/services/cognition/operator-model'),
+ import('@/app/onboarding-interests'),
+ ]).then(([{ seedInterests }, { mapInterestsToTerms }]) => {
+ seedInterests(mapInterestsToTerms(interests));
+ }).catch((error) => { console.error('[boot] onboarding interest seed failed:', error); });
+ },
+ });
+ flow.show();
+ }).catch((error) => { console.error('[boot] WelcomeFlow failed to mount:', error); });
+  }
+
+  /** Mount a panel (if lazy/unbuilt) WITHOUT scrolling or flashing the
+   *  classic grid — the Home Shell focus host's entry point. Returns
+   *  null when the key is unknown, the factory fails, or the panel is
+   *  disabled and not already mounted. (Already-mounted disabled panels
+   *  are returned as-is — hosts may still show them.) */
+  /** Lazily construct + mount the Home Shell overlay (once). Lets the toggle
+   *  bring it back even from a classic-opted-out boot without paying the mount
+   *  cost up front. */
+  private ensureHomeShell(): HomeShellOverlay {
+ if (!this.homeShell) {
+ this.homeShell = new HomeShellOverlay({
+ getPanel: (id) => this.ctx.panels[id],
+ ensurePanel: (id) => this.ensurePanelMounted(id),
+ });
+ this.homeShell.mount(document.body);
+ }
+ return this.homeShell;
+  }
+
+  public async ensurePanelMounted(key: string): Promise<Panel | null> {
+ const existing = this.ctx.panels[key];
+ if (existing) return existing;
+ // Mirror navigateToPanel's gate: don't construct a disabled panel just
+ // to focus it — constructing it starts its background work (e.g. a
+ // poll loop) that disabling the panel was meant to stop.
+ if (!(this.ctx.panelSettings[key]?.enabled ?? true)) return null;
+ await this.mountLazyPanel(key);
+ return this.ctx.panels[key] ?? null;
+  }
+
+  /**
+   * Navigate to a panel by key — this must ALWAYS respond visibly.
+   *
+   * Resolution ladder:
+   *   1. Already-constructed panel → use it.
+   *   2. Registered lazy factory → build + insert via mountLazyPanel().
+   *   3. Constructed but never placed in the grid (e.g. key missing from
+   *      the ordering pass) → insert at its canonical position now.
+   * After resolving: scroll + brief accent flash on the target. If the
+   * panel is hidden (disabled) or can't be resolved at all, surface a
+   * toast instead of silently doing nothing.
+   */
+  private async navigateToPanel(
+    key: string,
+    opts: { behavior?: ScrollBehavior; flash?: boolean; toastOnFail?: boolean } = {},
+  ): Promise<boolean> {
+ const { behavior = 'smooth', flash = true, toastOnFail = true } = opts;
+ const panelName = DEFAULT_PANELS[key]?.name ?? key;
+ let panel = this.ctx.panels[key] ?? null;
+ if (!panel) {
+ // Don't construct a disabled panel just to navigate to it — constructing it
+ // starts its background work (e.g. retired maritime-intel's 60s poll loop),
+ // which would resurrect the very double-fetch this retirement removed.
+ // Already-constructed panels fall through and scroll/toast as before.
+ if (!(this.ctx.panelSettings[key]?.enabled ?? true)) {
+ if (toastOnFail) {
+ showToast({ title: `${panelName} is turned off`, message: 'Enable it in Settings → Panels to view it.', severity: 'normal' });
+ }
+ return false;
+ }
+ panel = await this.mountLazyPanel(key);
+ }
+ const el = panel?.getElement() ?? null;
+
+ if (el) {
+ if (!el.isConnected) {
+ // Constructed but never appended to the grid — place it now so
+ // sidebar navigation still lands somewhere real.
+ this.insertPanelInOrder(key, el);
+ }
+ if (el.isConnected && el.offsetParent !== null) {
+ el.scrollIntoView({ behavior, block: 'start' });
+ if (flash) flashPanelHighlight(el);
+ return true;
+ }
+ if (el.isConnected && toastOnFail) {
+ // In the DOM but not rendered → the panel is toggled off.
+ showToast({
+ title: `${panelName} is turned off`,
+ message: 'Enable it in Settings → Panels to view it.',
+ severity: 'normal',
+ });
+ return false;
+ }
+ }
+
+ if (toastOnFail) {
+ showToast({
+ title: `Can't open ${panelName}`,
+ message: 'The panel is unavailable in this build.',
+ severity: 'normal',
+ });
+ }
+ return false;
   }
 
   /** Scroll to the last-viewed panel on boot, defaulting to command-center. */
   private restoreLastViewedPanel(): void {
  const key = localStorage.getItem(PanelLayoutManager.LAST_VIEWED_KEY) ?? 'command-center';
  requestAnimationFrame(() => {
- const panel = this.ctx.panels[key] ?? this.ctx.panels['command-center'];
- panel?.getElement().scrollIntoView({ behavior: 'instant', block: 'start' });
+ void this.navigateToPanel(key, { behavior: 'instant', flash: false, toastOnFail: false })
+ .then((ok) => {
+ if (!ok && key !== 'command-center') {
+ void this.navigateToPanel('command-center', { behavior: 'instant', flash: false, toastOnFail: false });
+ }
+ });
  });
   }
 
@@ -2396,6 +2805,12 @@ export class PanelLayoutManager implements AppModule {
  }
  });
 
+ // "New view" — return to the Home Shell from classic. The only other way
+ // back is the ⌘⇧O shortcut, which is undiscoverable; this makes it visible.
+ document.getElementById('homeShellReturnBtn')?.addEventListener('click', () => {
+ document.dispatchEvent(new CustomEvent('cb:toggle-home-shell'));
+ });
+
  // Ghost Mode button + Tauri menu event
  document.getElementById('ghostModeBtn')?.addEventListener('click', () => {
  toggleGhostMode();
@@ -2414,10 +2829,11 @@ export class PanelLayoutManager implements AppModule {
  if (!btn) return;
  const ctx = getSavedPlacesFilterService().getContext();
  if (ctx.isActive && ctx.activePlaceName) {
- btn.textContent = `📍 ${ctx.activePlaceName}`;
+ // safe-html: icon() is a static SVG string; the place name is escaped.
+ btn.innerHTML = `${icon('pin', { size: 14 })} ${escapeHtml(ctx.activePlaceName)}`;
  btn.classList.add('mac-ghost-mode-active');
  } else {
- btn.textContent = '📍 Proximity: OFF';
+ btn.innerHTML = `${icon('pin', { size: 14 })} Proximity: OFF`;
  btn.classList.remove('mac-ghost-mode-active');
  }
  };
@@ -2588,6 +3004,10 @@ export class PanelLayoutManager implements AppModule {
  const target = e.target as Element | null;
  if (target?.closest(NO_DRAG_SELECTOR)) return;
  }
+ // Suppress the native text selection the browser starts on this mousedown
+ // before the OS window-drag takes over — that half-formed selection is what
+ // froze on screen as a page-wide highlight (Defect C).
+ e.preventDefault();
  tryInvokeTauri('plugin:window|start_dragging').catch(() => {/* silent */});
  });
  };
@@ -2745,16 +3165,93 @@ export class PanelLayoutManager implements AppModule {
  localStorage.setItem(this.ctx.PANEL_ORDER_KEY, JSON.stringify(order));
   }
 
+  /** Canonical panel display order: DEFAULT_PANELS overlaid with the user's
+   *  saved order (new panels re-inserted after `politics`), then mode anchors
+   *  pulled to the front. Shared by boot layout and lazy insertion so a panel
+   *  mounted later lands in the same place it would have at boot. */
+  private computePanelOrder(): string[] {
+ const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
+ const savedOrder = this.getSavedPanelOrder();
+ let panelOrder = defaultOrder;
+ if (savedOrder.length > 0) {
+ const missing = defaultOrder.filter(k => !savedOrder.includes(k));
+ const valid = savedOrder.filter(k => defaultOrder.includes(k));
+ const monitorsIdx = valid.indexOf('monitors');
+ if (monitorsIdx !== -1) valid.splice(monitorsIdx, 1);
+ const insertIdx = valid.indexOf('politics') + 1 || 0;
+ const newPanels = missing.filter(k => k !== 'monitors');
+ valid.splice(insertIdx, 0, ...newPanels);
+ if (SITE_VARIANT !== 'happy') valid.push('monitors');
+ panelOrder = valid;
+ }
+ if (SITE_VARIANT !== 'happy') {
+ const anchors = PanelLayoutManager.MODE_ANCHORS.filter((key) => panelOrder.includes(key));
+ const rest = panelOrder.filter((key) => !anchors.includes(key));
+ panelOrder = [...anchors, ...rest];
+ }
+ return panelOrder;
+  }
+
+  /** Insert a lazily-built panel element at its canonical grid position
+   *  (before the nearest already-present later panel), or append if none. */
+  private insertPanelInOrder(key: string, el: HTMLElement): void {
+ const grid = document.getElementById('panelsGrid');
+ if (!grid) return;
+ const present = new Set<string>();
+ for (const child of Array.from(grid.children)) {
+ const k = (child as HTMLElement).dataset.panel;
+ if (k) present.add(k);
+ }
+ const beforeKey = findInsertBeforeKey(this.computePanelOrder(), present, key);
+ const ref = beforeKey
+ ? Array.from(grid.children).find(c => (c as HTMLElement).dataset.panel === beforeKey) ?? null
+ : null;
+ if (ref) ref.before(el);
+ else grid.append(el);
+  }
+
   /**
-   * Dynamic-import the seven OSINT panels in parallel so Vite splits them
-   * into their own chunk. Each panel is registered on ctx.panels as soon
-   * as its module resolves; the panel grid will display a placeholder for
-   * any not-yet-loaded panel until the chunk arrives (sub-100ms on modern
-   * hardware). Errors per-panel are swallowed so a single failed import
-   * cannot wedge the rest.
+   * Build + mount a registered lazy panel: dynamically import its module,
+   * construct it, insert its element at the correct grid position, and apply
+   * the current enabled state. Idempotent and concurrency-safe — repeated or
+   * parallel calls for the same key resolve to the single constructed instance.
    */
-  private async loadOsintPanels(): Promise<void> {
- const slots = [
+  private mountLazyPanel(key: string): Promise<Panel | null> {
+ const existing = this.ctx.panels[key];
+ if (existing) return Promise.resolve(existing);
+ const inflight = this.mountingPanels.get(key);
+ if (inflight) return inflight;
+ const factory = this.lazyFactories.get(key);
+ if (!factory) return Promise.resolve(null);
+ const p = (async (): Promise<Panel | null> => {
+ try {
+ const panel = await factory();
+ this.ctx.panels[key] = panel;
+ const el = panel.getElement();
+ this.makeDraggable(el, key);
+ this.insertPanelInOrder(key, el);
+ panel.toggle(this.ctx.panelSettings[key]?.enabled ?? true);
+ return panel;
+ } catch (error) {
+ console.warn(`[panel-layout] lazy panel '${key}' failed to load`, error);
+ return null;
+ } finally {
+ this.mountingPanels.delete(key);
+ }
+ })();
+ this.mountingPanels.set(key, p);
+ return p;
+  }
+
+  /**
+   * Register the seven OSINT panels as lazy factories (Vite splits each into
+   * the shared osint chunk). Previously these were constructed at boot but
+   * resolved *after* the ordering loop, so they never got placed in the grid;
+   * routing them through mountLazyPanel both fixes placement and skips
+   * constructing them at boot when disabled.
+   */
+  private registerOsintPanels(): void {
+ const slots: Array<[string, () => Promise<Panel>]> = [
  ['hibp-breaches',   () => import('@/components/HibpBreachesPanel').then((m) => new m.HibpBreachesPanel())],
  ['ipinfo-lookup',   () => import('@/components/IpInfoPanel').then((m) => new m.IpInfoPanel())],
  ['bitcoin-abuse',   () => import('@/components/BitcoinAbusePanel').then((m) => new m.BitcoinAbusePanel())],
@@ -2762,14 +3259,8 @@ export class PanelLayoutManager implements AppModule {
  ['phishstats-feed', () => import('@/components/PhishstatsFeedPanel').then((m) => new m.PhishstatsFeedPanel())],
  ['urlscan-threats', () => import('@/components/UrlscanThreatsPanel').then((m) => new m.UrlscanThreatsPanel())],
  ['pulsedive-intel', () => import('@/components/PulsediveIntelPanel').then((m) => new m.PulsediveIntelPanel())],
- ] as const;
- await Promise.all(slots.map(async ([id, load]) => {
- try {
- this.ctx.panels[id] = await load();
- } catch (error) {
- console.warn(`[panel-layout] OSINT panel '${id}' failed to load`, error);
- }
- }));
+ ];
+ for (const [id, factory] of slots) this.lazyFactories.set(id, factory);
   }
 
   private attachRelatedAssetHandlers(panel: NewsPanel): void {

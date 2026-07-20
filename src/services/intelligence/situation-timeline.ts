@@ -186,8 +186,10 @@ export class SituationTimelineService {
     if (!options.source) {
       try {
         this.unsubStore = getSituationStoreV2().subscribe(() => {
-          // Rebuild the cache from the fresh store snapshot and fan out.
-          this.buildTimeline();
+          // Coalesce a burst of store notifies (e.g. the boot data-load ingests
+          // every feed's observations) into ONE rebuild on the next macrotask,
+          // instead of a full O(situations) rebuild + fan-out per notify.
+          this.scheduleRebuild();
         });
       } catch {
         // Store unavailable at import — fine. Hydrate-on-demand.
@@ -211,6 +213,16 @@ export class SituationTimelineService {
     }
   }
 
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
+  }
+
   private persist(): void {
     const store = safeStorage();
     if (!store) return;
@@ -228,13 +240,31 @@ export class SituationTimelineService {
     }
   }
 
+  private rebuildScheduled = false;
+  /** Coalesce a burst of store notifies into ONE buildTimeline on the next
+   *  microtask (in-memory cache stays fresh for cache reads). */
+  private scheduleRebuild(): void {
+    if (this.rebuildScheduled) return;
+    this.rebuildScheduled = true;
+    if (typeof queueMicrotask === 'function') queueMicrotask(() => this.flushRebuild());
+    else this.flushRebuild();
+  }
+
+  private flushRebuild(): void {
+    this.rebuildScheduled = false;
+    this.buildTimeline();
+  }
+
   /** Build a fresh timeline from the situation source, apply the
    *  optional filter, sort by startedAt DESC, cache up to MAX_ENTRIES,
    *  and notify subscribers. */
   buildTimeline(filter?: TimelineFilter): TimelineEntry[] {
     this.ensureHydrated();
+    const p = (typeof performance !== 'undefined') && performance.now() < 180_000;
+    const t0 = p ? performance.now() : 0;
     const now = this.clock();
     const situations = this.readSituations();
+    const t1 = p ? performance.now() : 0;
     const built: TimelineEntry[] = [];
     for (const s of situations) built.push(timelineEntryFor(s, now));
     built.sort((a, b) => b.startedAt - a.startedAt);
@@ -242,8 +272,16 @@ export class SituationTimelineService {
     // `getStats` / `getDomainBreakdown` calls see the full picture even
     // if the caller asked for a narrow filter slice.
     this.cache = built.slice(0, MAX_ENTRIES).map((e) => ({ ...e }));
-    this.persist();
+    const t2 = p ? performance.now() : 0;
+    this.schedulePersist();
     this.notify();
+    if (p) {
+      const t3 = performance.now();
+      if (t3 - t0 >= 300) {
+        // eslint-disable-next-line no-console
+        console.warn(`[TIMELINE-PHASE] buildTimeline ${Math.round(t3 - t0)}ms (read ${Math.round(t1 - t0)}ms, entries ${Math.round(t2 - t1)}ms, notify ${Math.round(t3 - t2)}ms; n=${situations.length})`);
+      }
+    }
     return built.filter((e) => matchesFilter(e, filter)).map((e) => ({ ...e }));
   }
 
@@ -313,6 +351,18 @@ export class SituationTimelineService {
   getCache(): TimelineEntry[] {
     this.ensureHydrated();
     return this.cache.map((e) => ({ ...e }));
+  }
+
+  /**
+   * Read the current cache with a filter applied — WITHOUT rebuilding or
+   * notifying. Renderers must use this (not buildTimeline) on every repaint:
+   * buildTimeline re-runs the full O(situations) build AND fans out to
+   * listeners, so a subscriber that called buildTimeline in its own render
+   * re-entered the build on every store notify (the settle-tail storm).
+   */
+  getFiltered(filter?: TimelineFilter): TimelineEntry[] {
+    this.ensureHydrated();
+    return this.cache.filter((e) => matchesFilter(e, filter)).map((e) => ({ ...e }));
   }
 
   subscribe(listener: TimelineListener): () => void {

@@ -32,7 +32,7 @@ const CATEGORY_ICONS: Record<BroadcastCategory, string> = {
 
 const SEVERITY_COLORS: Record<string, string> = {
   extreme: '#b71c1c',
-  severe: '#f44336',
+  severe: '#ff453a',
   moderate: '#ff9800',
   minor: '#ffc107',
   unknown: '#9e9e9e',
@@ -55,7 +55,7 @@ export class EmergencyBroadcastPanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 30_000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 30_000);
   }
 
   private render(): void {

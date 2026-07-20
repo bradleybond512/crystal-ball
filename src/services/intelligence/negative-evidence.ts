@@ -129,7 +129,11 @@ export function evaluateNegativeEvidence(
     if (elapsed < signal.windowEndMs) {
       pending.push({ signal, msUntilWindowEnd: signal.windowEndMs - elapsed });
     } else {
-      missing.push({ signal, appliedPenalty: signal.absencePenalty });
+      // Default to the documented 0.1 per-signal penalty if a caller passes a
+      // non-finite absencePenalty — a single undefined/NaN here would otherwise
+      // make rawPenalty (and totalAbsencePenalty) NaN and poison the score.
+      const penalty = Number.isFinite(signal.absencePenalty) ? signal.absencePenalty : 0.1;
+      missing.push({ signal, appliedPenalty: penalty });
     }
   }
 

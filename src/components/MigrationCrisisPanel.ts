@@ -5,7 +5,7 @@ import type { MigrationRoute, DisplacementEvent, PushFactor } from './migration-
 const REFRESH_MS = 5 * 60_000;
 
 const RISK_COLOR: Record<'high' | 'med' | 'low', string> = {
-  high: '#d50000',
+  high: '#ff453a',
   med: '#ff9800',
   low: '#4caf50',
 };
@@ -25,7 +25,7 @@ const TREND_ARROW: Record<'increasing' | 'stable' | 'decreasing', string> = {
 };
 
 const TREND_COLOR: Record<'increasing' | 'stable' | 'decreasing', string> = {
-  increasing: '#d50000',
+  increasing: '#ff453a',
   stable: '#ffeb3b',
   decreasing: '#4caf50',
 };
@@ -120,7 +120,7 @@ export class MigrationCrisisPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {

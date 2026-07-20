@@ -29,7 +29,9 @@ function resolveRetentionMonths(explicit) {
 }
 
 // Escape SQL LIKE metacharacters (\ % _) so a caller-supplied token matches
-// literally under an `ESCAPE '\'` clause. Backslash is escaped first.
+// literally under an `ESCAPE '\'` clause. A single regex pass prefixes each
+// metacharacter (including backslash itself) with a backslash — independent,
+// no ordering, so an escaped backslash is never double-counted.
 const LIKE_ESCAPE_CHAR = String.fromCodePoint(92); // single backslash
 function escapeLikePattern(s) {
   return String(s).replace(/[\\%_]/g, (c) => LIKE_ESCAPE_CHAR + c);
@@ -95,6 +97,18 @@ export class EventStore {
         (id, event_type, occurred_at, domain, entity_ids, source_id, severity, payload, partition_key)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
+    this._existsById = this.db.prepare('SELECT 1 FROM events WHERE id = ? LIMIT 1');
+  }
+
+  /**
+   * True when an event with this id already exists. Lets ingestion callers do
+   * an idempotent insert (check-then-append) instead of hitting the append-only
+   * throw on every re-seen record — e.g. USGS earthquakes that reappear in the
+   * feed on each poll keep their stable id and should be inserted only once.
+   */
+  hasEvent(id) {
+    if (typeof id !== 'string' || id.length === 0) return false;
+    return this._existsById.get(id) != null;
   }
 
   journalMode() {

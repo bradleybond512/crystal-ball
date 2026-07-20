@@ -53,17 +53,42 @@ export interface ResourceItem {
 // ── IndexedDB helpers ──────────────────────────────────────────────────────
 
 let _db: IDBDatabase | null = null;
+/** In-flight open dedup — prevents multiple parallel indexedDB.open() requests
+ *  when openDB() is called concurrently before _db is set. Without this, two
+ *  racing callers can both probe the DB and both call openWithUpgrade, causing
+ *  a version bump storm and the second upgrade to block with no handler. */
+let _openPromise: Promise<IDBDatabase> | null = null;
 
-async function openDB(): Promise<IDBDatabase> {
-  if (_db) return _db;
-  return new Promise((resolve, reject) => {
- const req = indexedDB.open(DB_NAME, DB_VERSION);
- req.onupgradeneeded = () => {
- req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
- };
- req.onsuccess = () => { _db = req.result; resolve(req.result); };
- req.onerror = () => reject(req.error);
+function openDB(): Promise<IDBDatabase> {
+  if (_db) return Promise.resolve(_db);
+  if (_openPromise) return _openPromise;
+  _openPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    // A stale connection in another tab is blocking this version open.
+    req.addEventListener('blocked', () => reject(new Error('[resource-db] open blocked by another connection')));
+    req.onupgradeneeded = () => {
+      // Guard prevents a throw if onupgradeneeded fires on an already-populated DB.
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      _db = db;
+      // Null the cached handle when the browser force-closes the connection
+      // (e.g. storage eviction) so the next openDB() opens a fresh one.
+      db.addEventListener('close', () => { _db = null; });
+      // Another module bumping the DB version fires versionchange here; close
+      // so the upgrade isn't blocked, then reopen on next access.
+      db.addEventListener('versionchange', () => { db.close(); _db = null; });
+      resolve(db);
+    };
+    req.onerror = () => reject(req.error);
   });
+  // Clear the in-flight promise after settlement so future calls start fresh
+  // rather than returning a permanently-rejected promise.
+  _openPromise.finally(() => { _openPromise = null; }).catch(() => { /* handled by caller */ });
+  return _openPromise;
 }
 
 const MAX_ITEMS = 5000; // hard cap — prevents OOM on runaway imports
@@ -71,32 +96,39 @@ const MAX_ITEMS = 5000; // hard cap — prevents OOM on runaway imports
 async function getAllItems(): Promise<ResourceItem[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readonly');
- // Pass undefined as the key query (no filter) and MAX_ITEMS as count cap.
- // IDBObjectStore.getAll(query?, count?) — count prevents unbounded memory load.
- const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
- req.onsuccess = () => resolve(req.result as ResourceItem[]);
- req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    // Pass undefined as the key query (no filter) and MAX_ITEMS as count cap.
+    // IDBObjectStore.getAll(query?, count?) — count prevents unbounded memory load.
+    const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
+    req.onsuccess = () => resolve(req.result as ResourceItem[]);
+    req.onerror = () => reject(req.error);
+    tx.addEventListener('error', () => reject(tx.error));
+    tx.addEventListener('abort', () => reject(new Error('[resource-db] read tx aborted')));
   });
 }
 
 async function putItem(item: ResourceItem): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readwrite');
- const req = tx.objectStore(STORE_NAME).put(item);
- req.onsuccess = () => resolve();
- req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(item);
+    // Resolve on tx.oncomplete (durable commit) not req.onsuccess (buffered
+    // accept) — the write is not guaranteed on disk until oncomplete fires.
+    tx.addEventListener('complete', () => resolve());
+    tx.addEventListener('error', () => reject(tx.error));
+    tx.addEventListener('abort', () => reject(new Error('[resource-db] put tx aborted')));
   });
 }
 
 async function deleteItem(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readwrite');
- const req = tx.objectStore(STORE_NAME).delete(id);
- req.onsuccess = () => resolve();
- req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    // Same durability rationale as putItem — wait for tx.oncomplete.
+    tx.addEventListener('complete', () => resolve());
+    tx.addEventListener('error', () => reject(tx.error));
+    tx.addEventListener('abort', () => reject(new Error('[resource-db] delete tx aborted')));
   });
 }
 

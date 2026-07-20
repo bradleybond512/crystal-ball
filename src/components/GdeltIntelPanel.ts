@@ -61,7 +61,7 @@ export class GdeltIntelPanel extends Panel {
  this.showLoading();
 
  try {
- const res = await fetch(`${getApiBaseUrl()}/api/gdelt-intel`);
+ const res = await fetch(`${getApiBaseUrl()}/api/gdelt-intel`, { signal: AbortSignal.timeout(15_000) });
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const json = await res.json() as GdeltIntelResponse;
  if (!json || typeof json !== 'object' || !Array.isArray(json.events)) {

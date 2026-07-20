@@ -27,6 +27,9 @@ const ALL_SOURCES: WebcamSource[] = [
   'USFS',
   'USGS_STREAM',
   'NOAA_COASTAL',
+  'CALTRANS',
+  'TFL',
+  'SINGAPORE',
 ];
 
 function normalizeName(name: string): string {

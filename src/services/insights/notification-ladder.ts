@@ -110,7 +110,11 @@ export function routeBigEventToLadder(
   const at = now();
   const candidateId = options.candidateId ?? `bigEvent-${at}-${nextAutoId++}`;
   const urgency = mapTierToUrgency(result.tier);
-  const safetyCritical = result.tier === 'emergency' || result.tier === 'critical';
+  // Use a Set so adding a new SituationTier that warrants safety-critical
+  // treatment requires an explicit update here rather than silently passing
+  // through a two-term OR and inheriting non-critical behaviour.
+  const SAFETY_CRITICAL_TIERS = new Set<SituationTier>(['emergency', 'critical']);
+  const safetyCritical = SAFETY_CRITICAL_TIERS.has(result.tier);
 
   registry.register({
     candidateId,
@@ -276,7 +280,12 @@ function pickRung(priority: DeliveryPriority, safetyCritical: boolean): Notifica
       return safetyCritical ? 'announcement' : 'critical';
     }
     case 'notify_now': {
-      return 'banner_sound';
+      // Safety-critical (emergency/critical tier) events top out at 'notify_now'
+      // from the confidence×urgency matrix — nothing ever produces
+      // 'critical_persistent'. Escalate them to the DND-bypassing 'critical' rung
+      // so a genuine emergency is NOT delivered at the same rung as an ordinary
+      // notification. (Non-safety events stay at 'banner_sound'.)
+      return safetyCritical ? 'critical' : 'banner_sound';
     }
     case 'watch_window': {
       return 'banner';

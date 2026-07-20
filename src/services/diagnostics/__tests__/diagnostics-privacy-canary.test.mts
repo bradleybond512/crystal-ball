@@ -109,6 +109,12 @@ describe('Diagnostics privacy canary — bundle JSON', () => {
     const { bundleJson } = buildExportWithCanaries();
     assert.doesNotMatch(bundleJson, /\+?1\s*\(?555\)?[\s.\-]+867[\s.\-]+5309/);
   });
+
+  it('redacts high-precision coordinates in free-text fields', () => {
+    const { bundleJson } = buildExportWithCanaries();
+    assert.doesNotMatch(bundleJson, /41\.6105/);
+    assert.doesNotMatch(bundleJson, /86\.7234/);
+  });
 });
 
 describe('Diagnostics privacy canary — final markdown payload', () => {
@@ -123,6 +129,8 @@ describe('Diagnostics privacy canary — final markdown payload', () => {
     assert.doesNotMatch(jsonOnly, /Bearer\s+xxxxYYYY/);
     assert.doesNotMatch(jsonOnly, /a1b2c3d4e5f6/);
     assert.doesNotMatch(jsonOnly, /p@ssw0rd-canary/);
+    assert.doesNotMatch(jsonOnly, /41\.6105/);
+    assert.doesNotMatch(jsonOnly, /86\.7234/);
   });
 
   it('the bundle remains valid JSON after redaction', () => {
@@ -151,6 +159,18 @@ describe('Diagnostics privacy canary — schema completeness gate', () => {
       'improvementPlan',
       'scenarioCoverage',
       'truncations',
+      // Phase-2 diagnostic sections. Classification (confirmed against
+      // frontend-export-composer + export-bundle):
+      //  - Safe primitives only (ids / enums / numbers / timestamps, no free text):
+      'missionState',     // { state, staleFeedCount, criticalStaleFeedCount }
+      'feedHealth',       // { id, name(static catalog), status, lastUpdateIso }
+      'algorithmState',   // { algorithmId, domain, graded, hitRate, ... } — numbers
+      'systemInfo',       // { appVersion, buildHash, uptimeMs, memoryUsedBytes }
+      'algorithmTrace',   // ids + numbers; evidence summaries → redactString
+      //  - Carry free text, all run through redactString in export-bundle:
+      'panelHealthSummary', // entries[].reason (panel lastError) redacted
+      'situations',         // name + summary + tags redacted
+      'correlations',       // title redacted
     ]);
     const { bundleJson } = buildExportWithCanaries();
     const bundle = JSON.parse(bundleJson) as Record<string, unknown>;

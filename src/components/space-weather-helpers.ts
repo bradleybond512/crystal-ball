@@ -46,7 +46,7 @@ export function alertSeverityClass(sev: string): string {
 export function xrayBadgeColor(cls: string | null): string {
   if (!cls) return '#9e9e9e';
   const head = cls.charAt(0).toUpperCase();
-  if (head === 'X') return '#d50000';
+  if (head === 'X') return '#ff453a';
   if (head === 'M') return '#ff5722';
   if (head === 'C') return '#ffeb3b';
   if (head === 'B') return '#4caf50';
@@ -58,7 +58,7 @@ export const G_LEVEL_COLOR: Record<GeomagStormLevel, string> = {
   G1: '#ffeb3b',
   G2: '#ff9800',
   G3: '#ff5722',
-  G4: '#d50000',
+  G4: '#ff453a',
   G5: '#b71c1c',
 };
 
@@ -66,7 +66,7 @@ export const RISK_COLOR: Record<RiskBand, string> = {
   none: '#9e9e9e',
   low: '#ffeb3b',
   moderate: '#ff9800',
-  high: '#d50000',
+  high: '#ff453a',
 };
 
 export interface ArrivalCountdown {

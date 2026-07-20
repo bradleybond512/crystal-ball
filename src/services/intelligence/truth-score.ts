@@ -77,7 +77,7 @@ const DEFAULT_TTL_MS: Record<NormalizedFact['domain'], number> = {
 /** Linear freshness decay: 1.0 at observation, 0.5 at 1× TTL,
  *  0.0 at ≥2× TTL. Mirrors providers/fusion.scoreFreshness. */
 export function freshnessScore(latestObservedAt: number, ttlMs: number, now: number): number {
-  if (!Number.isFinite(latestObservedAt) || ttlMs <= 0) return 0.5;
+  if (!Number.isFinite(latestObservedAt) || !Number.isFinite(ttlMs) || ttlMs <= 0) return 0.5;
   const age = Math.max(0, now - latestObservedAt);
   if (age >= 2 * ttlMs) return 0;
   if (age <= 0) return 1;
@@ -133,8 +133,11 @@ export function sourceDiversityScore(fact: NormalizedFact): number {
   return Math.max(0.4, ratio);
 }
 
-/** Geographic precision multiplier from LocationPrecision. */
-export function precisionScore(precision: LocationPrecision): number {
+/** Geographic precision multiplier from LocationPrecision. Returns a coarse
+ *  default for a missing/unknown precision — the field is typed non-optional but
+ *  facts built from external data can arrive without it, and an undefined here
+ *  would make the whole truth-score NaN and silently poison the ledger. */
+export function precisionScore(precision: LocationPrecision | undefined): number {
   switch (precision) {
     case 'point': { return 1;
     }
@@ -145,6 +148,8 @@ export function precisionScore(precision: LocationPrecision): number {
     case 'country': { return 0.55;
     }
     case 'global': { return 0.3;
+    }
+    default: { return 0.55;
     }
   }
 }
@@ -204,9 +209,14 @@ export function scoreFact(fact: NormalizedFact, ctx: TruthScoreContext = default
   const label = labelFor(final, disputed);
 
   const providers = [...new Set(fact.sources.map((s) => s.providerId))];
+  // Stamp the belief with the ctx clock so scoreFact is fully deterministic —
+  // createBelief otherwise defaults updatedAt to the wall clock, which made
+  // "same inputs → same output" flaky (two calls a millisecond apart differed).
+  const belief = createBelief(round3(final), { provenance: providers });
+  belief.updatedAt = new Date(now).toISOString();
   return {
     score: round3(final),
-    belief: createBelief(round3(final), { provenance: providers }),
+    belief,
     label,
     components: roundComponents(components),
     contributingProviders: providers,
@@ -230,7 +240,10 @@ export function labelFor(score: number, disputed: boolean): TruthLabel {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-function clamp01(x: number): number { return Math.max(0, Math.min(1, x)); }
+// NaN-safe: Math.max(0, Math.min(1, NaN)) is NaN, which would propagate into the
+// final score. A NaN component (e.g. a custom context's reliabilityFor returning
+// NaN) clamps to 0 so scoreFact stays finite for ANY context, not just the default.
+function clamp01(x: number): number { return Number.isNaN(x) ? 0 : Math.max(0, Math.min(1, x)); }
 function round3(x: number): number { return Math.round(x * 1000) / 1000; }
 function roundComponents(c: TruthScoreComponents): TruthScoreComponents {
   return {

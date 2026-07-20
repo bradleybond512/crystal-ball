@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-nested-template-literals, sonarjs/no-nested-conditional */
+/* eslint-disable sonarjs/no-nested-conditional */
 /**
  * Maritime Intelligence Panel — PR D in the maritime stack.
  *
@@ -12,6 +12,7 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { renderPanelEmpty, renderPanelError } from './ui/PanelStates';
 import {
   filterAcledMaritimeIncidents,
   WAR_RISK_ZONES,
@@ -32,7 +33,7 @@ const VESSEL_CATEGORY_COLOR: Record<VesselCategory, string> = {
   tanker: '#ff5722',
   bulk_carrier: '#ffeb3b',
   container: '#2196f3',
-  military: '#d50000',
+  military: '#ff453a',
   other: '#9e9e9e',
 };
 
@@ -94,7 +95,7 @@ interface DarkVesselsResponse {
   asOf?: string;
 }
 
-interface FreightStressComponent {
+export interface FreightStressComponent {
   series: string;
   current: number | null;
   avg12m: number | null;
@@ -107,7 +108,7 @@ interface FreightStressComponent {
   error?: string;
 }
 
-interface FreightStressResponse {
+export interface FreightStressResponse {
   components?: FreightStressComponent[];
   overallScore?: number;
   overallLevel?: 'low' | 'medium' | 'high' | 'critical';
@@ -120,21 +121,21 @@ const DAY_MS = 24 * HOUR_MS;
 type ThreatLevel = 'green' | 'yellow' | 'orange' | 'red';
 
 function riskScoreColor(score: number): string {
-  if (score >= 75) return '#d50000';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#9e9e9e';
 }
 
 function threatRowColor(t: MaritimeIncident): string {
-  if (t.fatalities >= 5) return '#d50000';
+  if (t.fatalities >= 5) return '#ff453a';
   if (t.fatalities >= 1) return '#ff9800';
   if (t.warRiskZones.length > 0) return '#ffeb3b';
   return '#9e9e9e';
 }
 
 function warZoneCategoryColor(category: 'piracy' | 'state_conflict' | 'missile_drone' | 'mixed'): string {
-  if (category === 'state_conflict' || category === 'missile_drone') return '#d50000';
+  if (category === 'state_conflict' || category === 'missile_drone') return '#ff453a';
   if (category === 'piracy') return '#ff9800';
   return '#ffeb3b';
 }
@@ -150,20 +151,22 @@ const THREAT_COLOR: Record<ThreatLevel, string> = {
   green: '#4caf50',
   yellow: '#ffeb3b',
   orange: '#ff9800',
-  red: '#d50000',
+  red: '#ff453a',
 };
 
 const STRESS_COLOR: Record<FreightStressComponent['stressLevel'], string> = {
   low: '#4caf50',
   medium: '#ffeb3b',
   high: '#ff9800',
-  critical: '#d50000',
+  critical: '#ff453a',
 };
 
 export class MaritimeIntelPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private darkEvents: DarkVesselGapEvent[] = [];
   private freightStress: FreightStressResponse | null = null;
+  /** Technical failure detail for the last freight fetch (tooltip/console only). */
+  private freightError: string | null = null;
   private threats: MaritimeIncident[] = [];
   private liveVessels: ZoneVessel[] = [];
   private liveSummary: VesselSummary | null = null;
@@ -192,6 +195,8 @@ export class MaritimeIntelPanel extends Panel {
   }
 
   private start(): void {
+    // Retry button in the freight error state (see renderFreightStress).
+    this.content.addEventListener('maritime-intel:freight-retry', () => void this.refresh());
     void this.refresh();
     this.refreshTimer = setInterval(() => void this.refresh(), REFRESH_MS);
   }
@@ -226,11 +231,17 @@ export class MaritimeIntelPanel extends Panel {
   private async refreshFreight(): Promise<boolean> {
     try {
       const resp = await fetch('/api/freight-stress', { headers: { Accept: 'application/json' } });
-      if (!resp.ok) return false;
+      if (!resp.ok) {
+        // Status codes stay in the tooltip detail, never in visible copy.
+        this.freightError = `HTTP ${resp.status}`;
+        return false;
+      }
       this.freightStress = (await resp.json()) as FreightStressResponse;
+      this.freightError = null;
       return true;
     } catch {
       this.freightStress = null;
+      this.freightError = 'network unreachable';
       return false;
     }
   }
@@ -407,10 +418,23 @@ export class MaritimeIntelPanel extends Panel {
 
   private renderFreightStress(): string {
     const fs = this.freightStress;
+    if (this.freightError !== null) {
+      return `<div>
+        <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Freight Cost Stress</div>
+        ${renderPanelError({
+          title: 'Freight data temporarily unavailable',
+          detail: `${this.freightError} from the freight-stress endpoint`,
+          onRetryEventName: 'maritime-intel:freight-retry',
+        })}
+      </div>`;
+    }
     if (!fs?.components || fs.components.length === 0) {
       return `<div>
         <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Freight Cost Stress</div>
-        <div style="font-size:11px;color:var(--text-secondary,#aaa);">No freight signal yet — \`/api/freight-stress\` returned no data.</div>
+        ${renderPanelEmpty({
+          message: 'No freight-stress data yet',
+          hint: 'The freight monitor may still be warming up',
+        })}
       </div>`;
     }
     const overallLevel = fs.overallLevel ?? 'low';
@@ -481,7 +505,10 @@ export class MaritimeIntelPanel extends Panel {
     if (this.darkEvents.length === 0) {
       return `<div>
         <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Dark Vessel Alerts</div>
-        <div style="font-size:11px;color:var(--text-secondary,#aaa);">No active dark-vessel events from \`/api/dark-vessels\`.</div>
+        ${renderPanelEmpty({
+          message: 'No active dark-vessel events',
+          hint: 'Alerts appear when a tracked vessel goes silent near a chokepoint',
+        })}
       </div>`;
     }
     const rows = this.darkEvents.slice(0, 10).map((e) => {

@@ -34,7 +34,7 @@ const STAGE_LABEL: Record<PipelineStage, string> = {
 function stageColor(rate: number): string {
   if (rate >= 0.8) return '#4caf50';
   if (rate >= 0.5) return '#ffb74d';
-  return '#f44336';
+  return '#ff453a';
 }
 
 export class IntelligenceLoopOrchestratorPanel extends Panel {
@@ -55,7 +55,7 @@ export class IntelligenceLoopOrchestratorPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getIntelligenceLoopOrchestrator().subscribe(() => this.render());
   }
 
@@ -156,7 +156,7 @@ function renderStageBox(stage: PipelineStage, rate: number, last: StageResult | 
     statusColor = '#4caf50';
   } else {
     statusGlyph = '✗';
-    statusColor = '#f44336';
+    statusColor = '#ff453a';
   }
   return `<div style="flex:1;min-width:90px;padding:8px;border:1px solid ${color}66;border-radius:4px;background:var(--surface-2,#1a1a1a);display:flex;flex-direction:column;gap:3px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -181,7 +181,7 @@ function renderRunsTable(runs: readonly PipelineRun[]): string {
 
 function renderRunRow(run: PipelineRun): string {
   const success = run.overallSuccess;
-  const color = success ? '#4caf50' : '#f44336';
+  const color = success ? '#4caf50' : '#ff453a';
   const glyph = success ? '✓' : '✗';
   return `<li style="display:grid;grid-template-columns:18px 1fr 80px 60px;gap:8px;align-items:center;padding:6px 10px;border:1px solid var(--border-subtle,#333);border-radius:3px;background:var(--surface-2,#1a1a1a);font-size:11px;">
     <span style="color:${color};font-weight:600;">${glyph}</span>

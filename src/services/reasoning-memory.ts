@@ -35,7 +35,9 @@ interface StoredRecord<T> {
 
 function createOtherStoresIfMissing(db: IDBDatabase): void {
   // Preserve stores that other modules expect so their upgradeneeded paths
-  // still work when we bump the version from here.
+  // still work when we bump the version from here. Creating all stores
+  // up-front in whichever module wins the first-boot upgrade race prevents
+  // every other module from needing an additional version bump of its own.
   if (!db.objectStoreNames.contains('baselines')) {
     db.createObjectStore('baselines', { keyPath: 'key' });
   }
@@ -50,6 +52,13 @@ function createOtherStoresIfMissing(db: IDBDatabase): void {
     s.createIndex('source', 'source', { unique: false });
     s.createIndex('situationId', 'situationId', { unique: false });
     s.createIndex('acknowledged', 'acknowledged', { unique: false });
+  }
+  // notification-history-service uses a plain KV store (out-of-line keys,
+  // no keyPath) for the notification ring.  Creating it here means the
+  // service finds the store on first probe without needing a second version
+  // bump that would trigger a versionchange / blocked cycle on all peers.
+  if (!db.objectStoreNames.contains('kv')) {
+    db.createObjectStore('kv');
   }
 }
 

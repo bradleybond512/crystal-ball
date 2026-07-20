@@ -25,21 +25,21 @@ const REFRESH_MS = 30 * 60 * 1000; // 30 minutes
 const ACTIVE_WINDOW_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 const SEVERITY_COLOR: Record<InfraAttackEvent['severity'], string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff9800',
   medium: '#ffeb3b',
   low: '#4caf50',
 };
 
 const RECOVERY_COLOR: Record<InfraAttackEvent['recoveryStatus'], string> = {
-  ongoing: '#d50000',
+  ongoing: '#ff453a',
   recovering: '#ff9800',
   contained: '#4caf50',
   unknown: '#9e9e9e',
 };
 
 const RISK_LABEL_COLOR: Record<InfraAttackSummary['riskLabel'], string> = {
-  Severe: '#d50000',
+  Severe: '#ff453a',
   High: '#ff9800',
   Elevated: '#ffeb3b',
   Guarded: '#4caf50',
@@ -81,7 +81,7 @@ export class CriticalInfrastructureAttackPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -106,7 +106,7 @@ export class CriticalInfrastructureAttackPanel extends Panel {
     const bits: string[] = [];
     if (summary.criticalCount > 0) bits.push(`${summary.criticalCount} CRITICAL`);
     if (summary.ongoingCount > 0) bits.push(`${summary.ongoingCount} ONGOING`);
-    return `<div style="padding:6px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+    return `<div style="padding:6px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);font-size:11px;font-weight:700;color:#ff453a;letter-spacing:0.04em;">
       ⚠ INFRA ALERTS: ${escapeHtml(bits.join(' · '))}
     </div>`;
   }
@@ -127,7 +127,7 @@ export class CriticalInfrastructureAttackPanel extends Panel {
         <div style="width:1px;height:36px;background:var(--border-subtle,#333);"></div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
           ${this.buildStatPill(String(summary.totalAttacks), 'Total')}
-          ${this.buildStatPill(String(summary.criticalCount), 'Critical', '#d50000')}
+          ${this.buildStatPill(String(summary.criticalCount), 'Critical', '#ff453a')}
           ${this.buildStatPill(String(summary.ongoingCount), 'Ongoing', '#ff9800')}
         </div>
       </div>

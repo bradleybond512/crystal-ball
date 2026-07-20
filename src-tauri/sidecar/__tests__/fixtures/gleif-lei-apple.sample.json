@@ -1,0 +1,85 @@
+{
+  "data": [
+    {
+      "id": "HWUPKR0MPOU8FGXBT394",
+      "type": "lei-records",
+      "attributes": {
+        "entity": {
+          "legalName": {
+            "name": "Apple Inc.",
+            "language": "en"
+          },
+          "legalAddress": {
+            "country": "US",
+            "city": "Glendale"
+          },
+          "jurisdiction": "US-CA",
+          "status": "ACTIVE",
+          "legalForm": {
+            "id": "H1UM",
+            "other": null
+          }
+        },
+        "registration": {
+          "status": "ISSUED",
+          "initialRegistrationDate": "2012-06-06T15:53:00Z"
+        }
+      }
+    },
+    {
+      "id": "254900KZR24L5GN8TE52",
+      "type": "lei-records",
+      "attributes": {
+        "entity": {
+          "legalName": {
+            "name": "Apple Ford, Inc.",
+            "language": "en"
+          },
+          "legalAddress": {
+            "country": "US",
+            "city": "WILMINGTON"
+          },
+          "jurisdiction": "US-DE",
+          "status": "ACTIVE",
+          "legalForm": {
+            "id": "XTIQ",
+            "other": null
+          }
+        },
+        "registration": {
+          "status": "LAPSED",
+          "initialRegistrationDate": "2020-04-08T19:09:41Z"
+        }
+      }
+    },
+    {
+      "id": "254900TWD71M3MX9I453",
+      "type": "lei-records",
+      "attributes": {
+        "entity": {
+          "legalName": {
+            "name": "APPLE MANAGEMENT INC.",
+            "language": "es"
+          },
+          "legalAddress": {
+            "country": "PA",
+            "city": "Panama"
+          },
+          "jurisdiction": "PA",
+          "status": "ACTIVE",
+          "legalForm": {
+            "id": "6TPA",
+            "other": null
+          }
+        },
+        "registration": {
+          "status": "ISSUED",
+          "initialRegistrationDate": "2019-07-29T17:39:45Z"
+        }
+      }
+    }
+  ],
+  "meta": {
+    "total": 3
+  }
+}

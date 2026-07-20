@@ -4,6 +4,8 @@ import './styles/happy-theme.css';
 import './styles/gods-eye-4d.css';
 import './styles/modes.css';
 import './styles/window-chrome.css';
+import './styles/home-shell.css';
+import './styles/library.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';
@@ -163,10 +165,12 @@ window.addEventListener('unhandledrejection', (e) => {
 
 import { debugGetCells, getCellCount } from '@/services/geo-convergence';
 import { initMetaTags } from '@/services/meta-tags';
+import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
-import { loadDesktopSecrets } from '@/services/runtime-config';
+import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
 import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme } from '@/utils/theme-manager';
+import { installLocalStoragePatch } from '@/utils/safe-storage';
 import { SITE_VARIANT } from '@/config/variant';
 import { clearChunkReloadGuard, installChunkReloadGuard } from '@/bootstrap/chunk-reload';
 
@@ -274,11 +278,14 @@ Promise.all([
 }).catch((error: unknown) => console.warn('[boot] OfflineStalenessBanner failed to mount', error));
 import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 
+// Catch QuotaExceededError from any bare localStorage.setItem across the
+// codebase and auto-evict disposable cache entries instead of throwing.
+installLocalStoragePatch();
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();
 // In web production, route RPC calls through api.crystalball.app (Cloudflare edge).
 installWebApiRedirect();
-loadDesktopSecrets().then(async () => {
+loadDesktopSecretsWhenReady().then(async () => {
   await initAnalytics();
   trackApiKeysSnapshot();
 }).catch(() => {});
@@ -345,12 +352,12 @@ if (urlParams.get('settings') === '1') {
  const unlocked = await runVaultIntro(appInitPromise.catch(() => {}));
  if (!unlocked) return;
  appInitPromise
- .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); })
+ .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
  .catch(console.error);
  } else {
  app
  .init()
- .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); })
+ .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
  .catch(console.error);
  }
   };
@@ -376,6 +383,36 @@ Object.defineProperty(window, 'beta', {
  if (v) localStorage.setItem('crystalball-beta-mode', 'true');
  else localStorage.removeItem('crystalball-beta-mode');
  location.reload();
+  },
+});
+
+// Home Shell (default-on since Phase 2): `homeShell=false` opts back to the
+// classic UI (persisted); `homeShell=true` clears the opt-out. `classicView`
+// is the inverse alias.
+Object.defineProperty(window, 'homeShell', {
+  get() {
+    const off = localStorage.getItem('crystalball-classic-view') === '1';
+    const on = isHomeShellDefaultOn();
+    const status = on ? 'ON (default)' : (off ? 'OFF (classic view)' : 'OFF (unavailable on this variant/viewport)');
+    console.log(`[HomeShell] ${status}`);
+    return on;
+  },
+  set(v: boolean) {
+    if (v) localStorage.removeItem('crystalball-classic-view');
+    else localStorage.setItem('crystalball-classic-view', '1');
+    // Drive-by: clear the Phase-1 opt-in key so residue doesn't linger.
+    localStorage.removeItem('crystalball-home-shell');
+    location.reload();
+  },
+});
+Object.defineProperty(window, 'classicView', {
+  get() {
+    return localStorage.getItem('crystalball-classic-view') === '1';
+  },
+  set(v: boolean) {
+    if (v) localStorage.setItem('crystalball-classic-view', '1');
+    else localStorage.removeItem('crystalball-classic-view');
+    location.reload();
   },
 });
 

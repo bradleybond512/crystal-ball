@@ -49,7 +49,7 @@ Integrity is verified BEFORE any keychain writes:
 - **Bundle ID**: `com.bradleybond.crystalball`
 - **Stack**: Tauri 2 + TypeScript + Vite + DeckGL + Node.js sidecar (port 46123)
 - **Algorithm intelligence plan**: `docs/ALGORITHM_INTELLIGENCE_ENHANCEMENT_PLAN.md` — implemented 7-PR stack under `src/services/intelligence/` (truth scoring, evidence graph, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance).
-- **Weather warning remediation**: `docs/WEATHER_WARNING_REMEDIATION_PLAN.md` — implemented 4-PR stack under `src/services/weather/` (NWS polygon matching, urgency ladder, Personal Storm Mode payload, miss diagnostics). PR 5 (UI) deferred.
+- **Weather warning remediation**: `docs/WEATHER_WARNING_REMEDIATION_PLAN.md` — implemented 5-PR stack under `src/services/weather/` (NWS polygon matching, urgency ladder, Personal Storm Mode payload, miss diagnostics) + the PR 5 Storm Mode strip (`src/components/PersonalStormMode.ts`, persistent ack/snooze, expiry self-clear).
 - **Insights/notifications plan**: `docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md` — implemented 4-PR stack under `src/services/insights/` (Big Event Detector + Confidence/Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export). PRs 4 (notification ladder wiring) + 5 (UI) deferred.
 - **Shortage forecast plan**: `docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md` — implemented 4 batches under `src/services/shortage/` covering 8 commodities (wheat, corn, rice, soybeans on the food side; diesel, gasoline, natural gas, jet fuel on the energy side).
 - **Cognitive enhancement plan**: `docs/COGNITIVE_ENHANCEMENT_PLAN.md` — **ACTIVE** 16-PR stack for `src/services/cognition/` (episodic memory, closed calibration loop, superforecaster pipeline, operator model, entity dossiers, conformal intervals, consolidation, EVOI planner, self-tuning + benchmark). The doc contains its own Progress Tracker + Session Protocol — implementing sessions must read it first and update the tracker in the same commit.
@@ -65,7 +65,7 @@ Four panels stitch the foundation services into product surfaces:
 - **`src/components/CommandCenterPanel.ts`** — gameplan's top-of-app surface. Shows current personal risk, top 3 things that matter (sorted by criticality + severity), what to watch next, and recommended actions. Reads from `getFeatureHealthRegistry()` + `getPanelHealthRegistry()` + `getNotificationTraceRegistry()` and feeds them through `aggregateSystemHealth()`.
 - **`src/components/SystemDiagnosticPanel.ts`** — tabbed Overview / Features / Panels / Notifications / Feeds / Self-Test surface. The Self-Test tab fires `runSelfTests(standardSelfTestDefinitions(...))` and renders pass/warn/fail/skipped per probe. Auto-refresh 5 s.
 - **`src/components/AlgorithmDiagnosticPanel.ts`** — per-algorithm hit rate, weighted hit rate, latency, and Safe Adjustment proposal (apply / noop / at_bound / manual_review / no_tunable). Reads from `getAlgorithmEvaluationLedger()` + `getAlgorithmDefinitions()`.
-- **`src/components/ShortageRadarPanel.ts`** — sorted-by-risk view across the 7 commodity models (wheat, corn, diesel, gasoline, sugar, coffee, cocoa). Each card shows tier, confidence, top 3 drivers, data gaps, horizon. Hosts can call `panel.setRequests(...)` to inject live inputs.
+- **`src/components/ShortageRadarPanel.ts`** — sorted-by-risk view across the 8 commodity models (wheat, corn, rice, soybeans, diesel, gasoline, natural-gas, jet-fuel). Each card shows tier, confidence, top 3 drivers, data gaps, horizon. Hosts can call `panel.setRequests(...)` to inject live inputs.
 
 Singleton state lives in `src/services/diagnostics/diagnostics-state.ts` and `src/services/algorithms/algorithms-state.ts` — every panel reads the same registries.
 
@@ -78,7 +78,7 @@ Replay fixtures (`src/services/ops/replay-fixtures-catalog.ts`) ship five missed
 Five additional pure-deterministic services close the gameplan's product-experience gaps:
 
 - **`src/services/personal/personal-impact.ts`** — Personal Impact Engine. Maps incoming events to the user's saved-places, watchlist, portfolio, travel routes, and utility dependencies. Produces `PersonalImpact` rows across five categories (`immediate_risk` / `financial` / `travel` / `utility` / `family_place`) plus a `dormant` bucket for sub-floor signals.
-- **`src/services/diagnostics/provider-redundancy.ts`** — Provider Redundancy Health. Per-domain verdict (`redundant_agreement` / `redundant_disagreement` / `single_source` / `primary_down_with_backup` / `all_down`) with a `confidenceMultiplier` downstream scoring should apply.
+- **`src/services/diagnostics/provider-redundancy.ts`** — Provider Redundancy Health. Per-domain verdict (`redundant_agreement` / `redundant_disagreement` / `single_source` / `primary_down_with_backup` / `all_down`) with a `confidenceMultiplier` downstream scoring should apply. `provider-redundancy-view.ts` builds a renderable view-model (label/tone/corroborating-source count) — surfaced in the SystemDiagnostic **Feeds** tab as the "Source corroboration" section.
 - **`src/services/insights/share-packet.ts`** — Shareable Intelligence Packets. Wraps the existing presentation-export helpers (markdown / clipboard / share-sheet / Claude debug) into one `buildSharePacket()` call that bundles provenance + diagnostics appendices.
 - **`src/services/insights/ask-the-data.ts`** — Ask-The-Data structured query. Six recognized intents (why_high_risk / what_changed / who_disagrees / what_raises_confidence / what_to_watch / late_warning) each return a deterministic answer + structured evidence rows + follow-up questions.
 - **`src/services/insights/insights-state.ts`** — singleton wiring for the active situation, personal profile, recent events, and provider snapshots so Command Center reads them through one entry point.
@@ -101,6 +101,47 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 - `npm run cross-check` (alias `cross-agent:check`) runs `scripts/cross-agent-check.mjs` to identify the required cross-agent reviewer for the current branch (Claude → Codex, Codex → Claude). The `.github/workflows/cross-agent-review.yml` workflow blocks merge of `claude/*` / `codex/*` / `copilot/*` branches without a recorded cross-agent review.
 - `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.
 - `src/services/diagnostics/degradation-alerts.ts` — pure detector: compares two `SystemHealthReport` snapshots, emits `DegradationAlert` for feature healthy→degraded/unsafe, panel →stale/failing, and unsafeSuppressions increase. Safety-critical alerts have `safetyCritical: true`.
+
+### Home Shell (Phases 1-4 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
+
+`src/components/HomeShellOverlay.ts` — the DEFAULT opening surface since Phase 2 for the full
+desktop variant: reparented map canvas + three briefing bands + pinned panel Deck + status
+ribbon. Gate: `src/services/home-shell/shell-gate.ts` (non-full variants and ≤768px viewports
+always classic; opt out with `classicView=true` in console → `crystalball-classic-view=1`; the
+Phase-1 key `crystalball-home-shell` is no longer consulted). ⌘⇧O toggles whenever the gate is
+on; Esc exits to classic view. Read-only consumer of the what-changed store (CommandCenterPanel
+is the single snapshot writer). Phase 2 added `src/config/panel-metadata.ts` (406 panels → 12 Library domains
+(global-intel split 2026-07-14: conflict-military / security-crime / news-osint /
+analysis-situations carved out; label now 'Geopolitics & Statecraft'),
+seeded by `scripts/generate-panel-metadata.mjs`, hand-curated since — note
+`panels.ts:80` defines two panels on one line, defeating line-anchored counting),
+`src/components/LibraryOverlay.ts` (`cb:toggle-library`, 📚 topbar button, available in classic
+too), and ⌘K v2 (metadata tags, weighted ranking, `place:<id>` commands via
+`src/services/command-palette/place-commands.ts`). Deck pins persist at `crystalball-deck-pins`.
+Phase 3 added the situation dossier (`src/components/SituationDossier.ts`, `cb:open-dossier`):
+evidence composed via `evidenceFor` metadata (PlaybookCategory-keyed), honest why-surfaced from
+pipeline/notification traces, action brief + timeline rail, context-free ask bar. Entry:
+critical-band briefing rows, ⌘K 'Dossier: <title>', map fly via `cb:map-focus`.
+Phase 4 added the focus view (`src/components/PanelFocusHost.ts`): deck cards, dossier evidence
+tiles, and Library rows open the real panel inside the shell by REPARENTING it out of
+`#panelsGrid` (comment placeholder marks its home; restore on close + `resize` dispatch).
+`panel-layout.ts` exposes `ensurePanelMounted(key)` — lazy-mounts without classic scroll, null
+for unknown/failed/disabled panels → callers fall back to classic navigation (toast). Esc
+layering: cmdk > Library > focus host > dossier > shell. Classic view remains the fallback
+surface — full retirement deferred pending soak; mobile + bespoke S-cards also deferred.
+The 2026-07 Apple design-language restyle (Cupertino Glass + Graphite; spec
+docs/superpowers/specs/2026-07-13-apple-design-language-design.md) landed Phase A: DL tokens
+in tokens.css (--r-*/--e-*/--mat-*/--font-ui/--dur-*), SF body font, glass scoped to
+body.is-desktop-macos on the six-surface budget (bands/ribbon/dossier/focus/Library/⌘K —
+never per-card), sentence-cased shell labels at the TS source. Phase B landed classic chrome: the --mac-*/
+--aid-* token dialects in macos-native.css now re-point at the DL tokens (desktop panels/
+sidebar/toolbar converge without touching consumers), .panel gained radius+elevation,
+panel headers are Title Case, and ALL critical-red literals were swept onto systemRed
+(#ff453a; CSS → var(--sev-critical)/rgba(var(--sev-critical-rgb),a), TS → literal hue).
+Phase C completed the program: Graphite accent flip (System Blue survives only as the
+setup-wizard signup link + semantic info blues), light-theme dark-alpha accent overrides,
+final micro-label caps removed, all macos-native transitions on the --dur-*/--ease-out
+tokens, God's Eye chrome micro-radii. Restyle Phases A-C are COMPLETE.
 
 ## Foundation Intelligence Layers
 
@@ -242,6 +283,11 @@ src/                        # TypeScript frontend (Vite)
     intelligence/compound-risk.ts            # cross-domain compound score with cascade-pair table
     intelligence/forecast-calibration.ts     # Brier scoring + per-domain accuracy + per-source multipliers
     intelligence/watchlist-relevance.ts      # "Should I care?" filter + feedback-adjusted thresholds
+    intelligence/momentum.ts                 # rate-of-change / slope / volatility — fast shock scores higher than slow climb
+    intelligence/learned-cascades.ts         # mine (domainA→domainB, lag) from event history; registerLearnedCascadePairs() augments compound-risk
+    intelligence/proxy-outcomes.ts           # infer resolved_true/false from downstream proxy signals → resolve calibration where ground truth is scarce
+    intelligence/ood-decay.ts                # out-of-distribution confidence decay (distance-from-training + sparse-coverage penalty)
+    shortage/cross-domain-coupling.ts        # active intelligence cascades → shortage cross_domain drivers (war→port-closure boosts grain export risk)
     # ── Weather warning remediation (see docs/WEATHER_WARNING_REMEDIATION_PLAN.md) ──
     weather/weather-threat-types.ts          # 16-hazard taxonomy, AlertPolygon, NwsAlertMinimal, SavedPlace, PolygonMatchResult
     weather/nws-polygon-match.ts             # ray-casting + UGC zone fallback + threat-level escalation
@@ -283,8 +329,20 @@ src/                        # TypeScript frontend (Vite)
     providers/provider-registry.ts           # static catalog (live sources + P0 expansion batch), independence groups
     providers/provider-health.ts             # pure record/derive: ring buffer → healthy/stale/degraded/down + quota detection
     providers/source-fusion.ts               # freshness × reliability × independence-aware corroboration; disagreements surface, capped at 0.6
-    providers/provider-bridge.ts             # snapshotsFromRegistry → provider-redundancy ProviderSnapshot contract
+    providers/provider-bridge.ts             # snapshotsFromRegistry (+ optional fingerprints) → provider-redundancy ProviderSnapshot contract
     providers/providers-state.ts             # singleton: recordProviderFetchOutcome / getProviderHealthState
+    providers/provider-domain-map.ts         # fact-type → provider ids + tolerance + match window (FUSION_DOMAINS). matchBy: 'spatial'|'key'; toleranceMode: 'absolute'|'relative'
+    providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
+    providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
+    providers/provider-health-timeline-view.ts # pure: ProviderHealthState.outcomes[id] ring buffer → windowed timeline (dots + windowed success rate) for the SourceConfidencePanel provider-health strip
+    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), 2nd fused domain
+    market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
+    market/coingecko-fetch.ts + coinbase-fetch.ts # no-key fail-closed fetches — the 2 crypto sources (Coinbase, not Binance: 451 in US)
+    market/stock-fetch.ts                    # fail-closed Yahoo (no-key) + Finnhub (keyed) fetches — the 2 stock sources (4th fused domain, own 'equities' domain)
+    diagnostics/source-confidence-view.ts    # pure: composes assessProviderRedundancy() + provider-health-timeline-view into per-domain cards (fusion-active vs SPOF, live disagreement flags, per-provider health) for SourceConfidencePanel
+    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Coinbase) + stocks (Yahoo+Finnhub), the last two key/relative. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
+    # `src/components/SourceConfidencePanel.ts` (Phase 1 UI, panel id `source-confidence`) is the dedicated per-domain redundancy surface — SystemDiagnostic's Feeds tab still shows the compact "Source corroboration" summary, this panel is the full drill-down (per-provider health timeline + live disagreement flags + FUSED/SPOF tags). Widening fusion to more domains + closing the cataloged SPOFs (Workstream B) is still open — see the spec's "Phase 1 status" note.
+    # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
                                 # /api/analyst-state + /api/analyst-commands
@@ -344,10 +402,9 @@ Four basemaps (`dark | light | satellite | terrain`) selected by the `wm-basemap
 Mode is **manual only**. `AppMode` is `'ghost' | 'gods-vision'`; `null` is the
 default (no special mode) state. The former auto-triggered modes
 (peace/finance/war/disaster) have been removed — their behaviors are inlined
-into the default state. The old evaluators (`evaluateWarThreat`,
-`evaluateFinanceTrigger`, `evaluateDisasterTrigger`, etc.) remain as **no-ops**
-for call-site compatibility; data feeds still flow but no longer drive mode
-transitions.
+into the default state. The old no-op evaluators (`evaluateWarThreat`,
+`evaluateFinanceTrigger`, `evaluateDisasterTrigger`, etc.) have been deleted
+entirely; data feeds still flow but no longer drive mode transitions.
 
 | Mode | Trigger |
 |------|---------|
@@ -376,7 +433,7 @@ Ghost Mode: polling ×5 (`getGhostRefreshMultiplier()`), analytics suppressed, n
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. Almost all of the 76 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
+API keys entered via gear icon → API Keys tab. Almost all of the 77 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
 
 ## Secret Scan Guardrail
 

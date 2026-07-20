@@ -25,26 +25,19 @@
  */
 
 import { isGhostMode } from '@/services/mode-manager';
+import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
 
 // ── IDB lazy loader (same pattern as episodic-memory.ts) ─────────────────────
+// Statically imported (not require()) so persistence survives the Vite browser
+// bundle; reasoning-memory degrades to no-op without IndexedDB (Node tests).
 
 let _getMemory: (<T>(key: string) => Promise<T | null>) | null = null;
 let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
 
 function lazyLoadIdb(): void {
   if (_getMemory !== null) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      getMemory: <T>(key: string) => Promise<T | null>;
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    _getMemory = mod.getMemory;
-    _putMemory = mod.putMemory;
-  } catch {
-    _getMemory = () => Promise.resolve(null);
-    _putMemory = () => Promise.resolve();
-  }
+  _getMemory = idbGetMemory;
+  _putMemory = idbPutMemory;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────

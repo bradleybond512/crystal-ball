@@ -20,7 +20,7 @@ const MAX_EVENTS = 50;
 
 const STATUS_COLOR: Record<AlertTraceStageStatus, string> = {
   pass: '#4caf50',
-  fail: '#f44336',
+  fail: '#ff453a',
   skip: '#9e9e9e',
 };
 
@@ -32,7 +32,7 @@ const STATUS_LABEL: Record<AlertTraceStageStatus, string> = {
 
 const OUTCOME_COLOR: Record<AlertTrace['outcome'], string> = {
   delivered: '#4caf50',
-  suppressed: '#f44336',
+  suppressed: '#ff453a',
   'not-evaluated': '#9e9e9e',
 };
 
@@ -62,7 +62,7 @@ export class AlertTracePanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     // Re-render when notification settings change so the trace reflects
     // the freshest threshold / quiet-hours / channel configuration.
     this.onChange = () => this.render();

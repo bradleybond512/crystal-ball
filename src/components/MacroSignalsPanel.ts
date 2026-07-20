@@ -97,7 +97,7 @@ function donutGaugeSvg(value: number | null, size = 48): string {
   const r = (size - 6) / 2;
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (v / 100) * circumference;
-  let color = '#f44336';
+  let color = '#ff453a';
   if (v >= 75) color = '#4caf50';
   else if (v >= 50) color = '#ff9800';
   else if (v >= 25) color = '#ff5722';
@@ -148,7 +148,7 @@ export class MacroSignalsPanel extends Panel {
  // Try sidecar first (Fear & Greed + Yahoo Finance), fall back to cloud API
  let res: GetMacroSignalsResponse | null = null;
  try {
- const sr = await fetch(`${getApiBaseUrl()}/api/macro-signals`);
+ const sr = await fetch(`${getApiBaseUrl()}/api/macro-signals`, { signal: AbortSignal.timeout(10_000) });
  if (sr.ok) {
  const sd = await sr.json() as GetMacroSignalsResponse;
  if (sd && typeof sd === 'object' && !sd.unavailable && typeof sd.totalCount === 'number' && sd.totalCount > 0) res = sd;

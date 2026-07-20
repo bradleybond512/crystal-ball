@@ -162,6 +162,108 @@ test('TIER_5 + disabled → badge visible with disabled status', () => {
   assert.equal(state.imessage.status, 'disabled');
 });
 
+// ── Composite worst-of (safety case + readiness) ───────────────────────
+
+test('composite: all inputs clear → ALL CLEAR / source none', () => {
+  const state = deriveStatusBarState(null, {
+    safetyCaseSafeToOperate: true,
+    readinessStatus: 'healthy',
+  });
+  assert.equal(state.allClear, true);
+  assert.equal(state.source, 'none');
+  assert.equal(state.label, 'ALL CLEAR');
+  assert.equal(state.color, 'gray');
+});
+
+test('composite: safety review alone → red SAFETY REVIEW, not all-clear', () => {
+  const state = deriveStatusBarState(null, { safetyCaseSafeToOperate: false });
+  assert.equal(state.allClear, false);
+  assert.equal(state.color, 'red');
+  assert.equal(state.label, 'SAFETY REVIEW');
+  assert.equal(state.source, 'safety');
+  assert.equal(state.tier, null);
+  assert.equal(state.lastAlert, null);
+});
+
+test('composite: readiness unsafe alone → red READINESS: CRITICAL', () => {
+  const state = deriveStatusBarState(null, { readinessStatus: 'unsafe' });
+  assert.equal(state.allClear, false);
+  assert.equal(state.color, 'red');
+  assert.equal(state.label, 'READINESS: CRITICAL');
+  assert.equal(state.source, 'readiness');
+});
+
+test('composite: readiness degraded (not unsafe) does not trip the chip', () => {
+  const state = deriveStatusBarState(null, { readinessStatus: 'degraded' });
+  assert.equal(state.allClear, true);
+  assert.equal(state.source, 'none');
+});
+
+test('composite: unknown inputs (null) treated as clear', () => {
+  const state = deriveStatusBarState(null, {
+    safetyCaseSafeToOperate: null,
+    readinessStatus: null,
+  });
+  assert.equal(state.allClear, true);
+});
+
+test('composite: TIER_5 EEW outranks safety review + readiness critical', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_5_EXTREME' })],
+    highestTier: 'TIER_5_EXTREME', lastEventId: 'a', asOf: NOW,
+  }, { safetyCaseSafeToOperate: false, readinessStatus: 'unsafe' });
+  assert.equal(state.source, 'eew');
+  assert.equal(state.color, 'crimson');
+  assert.match(state.label, /TIER 5/);
+});
+
+test('composite: EEW TIER_4 ties with safety → EEW wins (live hazard first)', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_4_SEVERE' })],
+    highestTier: 'TIER_4_SEVERE', lastEventId: 'a', asOf: NOW,
+  }, { safetyCaseSafeToOperate: false });
+  assert.equal(state.source, 'eew');
+  assert.equal(state.color, 'red');
+});
+
+test('composite: safety outranks EEW TIER_2', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_2_WATCH' })],
+    highestTier: 'TIER_2_WATCH', lastEventId: 'a', asOf: NOW,
+  }, { safetyCaseSafeToOperate: false });
+  assert.equal(state.source, 'safety');
+  assert.equal(state.label, 'SAFETY REVIEW');
+  assert.equal(state.lastAlert, null);
+  assert.equal(state.imessage.visible, false);
+});
+
+test('composite: readiness unsafe outranks EEW TIER_1', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_1_INFO' })],
+    highestTier: 'TIER_1_INFO', lastEventId: 'a', asOf: NOW,
+  }, { readinessStatus: 'unsafe' });
+  assert.equal(state.source, 'readiness');
+  assert.equal(state.label, 'READINESS: CRITICAL');
+});
+
+test('composite: safety + readiness both critical → safety wins the tie', () => {
+  const state = deriveStatusBarState(null, {
+    safetyCaseSafeToOperate: false,
+    readinessStatus: 'unsafe',
+  });
+  assert.equal(state.source, 'safety');
+});
+
+test('composite omitted → EEW-only behaviour preserved', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_3_WARNING' })],
+    highestTier: 'TIER_3_WARNING', lastEventId: 'a', asOf: NOW,
+  });
+  assert.equal(state.source, 'eew');
+  assert.equal(state.color, 'orange');
+  assert.equal(state.allClear, false);
+});
+
 // ── S-wave countdown ───────────────────────────────────────────────────
 
 test('countdown null when no arrival time', () => {

@@ -75,6 +75,18 @@ class SatellitePropagator {
  }
  });
 
+ // If the SGP4 worker crashes (e.g. malformed TLE data, OOM), position updates
+ // stop silently without this handler — callers keep seeing stale coordinates.
+ // Restart the worker so listeners recover on the next TLE refresh cycle.
+ this.worker.addEventListener('error', (e: ErrorEvent) => {
+ console.error('[SatProp] Worker crashed — restarting on next TLE load:', e.message);
+ if (this.worker) {
+ this.worker.terminate();
+ this.worker = null;
+ }
+ this.latestPositions = [];
+ });
+
  this.worker.postMessage({
  type: 'loadTLEs',
  tles: catalog.map(s => ({

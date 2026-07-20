@@ -59,7 +59,7 @@ export class TradeRouteRiskScorerPanel extends Panel {
         'Tracks risk scores for 12 strategic global trade routes (maritime / land / air). Each new HIGH or CRITICAL situation nearby pushes the route up; scores decay after 7 days.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getTradeRouteRiskScorerService().subscribe(() => this.render());
     this.attachHandlers();
   }

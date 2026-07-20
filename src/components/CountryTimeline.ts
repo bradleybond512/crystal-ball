@@ -14,7 +14,7 @@ const LANES: TimelineEvent['lane'][] = ['protest', 'conflict', 'natural', 'milit
 
 const LANE_COLORS: Record<TimelineEvent['lane'], string> = {
   protest: '#ffaa00',
-  conflict: '#ff4444',
+  conflict: '#ff453a',
   natural: '#b478ff',
   military: '#64b4ff',
 };
@@ -36,6 +36,7 @@ export class CountryTimeline {
   private tooltip: HTMLDivElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private currentEvents: TimelineEvent[] = [];
+  private readonly onThemeChange: () => void;
 
   constructor(container: HTMLElement) {
  this.container = container;
@@ -45,7 +46,7 @@ export class CountryTimeline {
  });
  this.resizeObserver.observe(this.container);
 
- window.addEventListener('theme-changed', () => {
+ this.onThemeChange = () => {
  // Re-create tooltip with new theme colors
  if (this.tooltip) {
  this.tooltip.remove();
@@ -54,7 +55,8 @@ export class CountryTimeline {
  this.createTooltip();
  // Re-render chart with new colors
  if (this.currentEvents.length > 0) this.render(this.currentEvents);
- });
+ };
+ window.addEventListener('theme-changed', this.onThemeChange);
   }
 
   private createTooltip(): void {
@@ -171,7 +173,7 @@ export class CountryTimeline {
  .attr('fill', (d: TimelineEvent['lane']) => LANE_COLORS[d])
  .attr('font-size', '11px')
  .attr('font-weight', '500')
- .text((d: TimelineEvent['lane']) => laneLabels[d] || d);
+ .text((d: TimelineEvent['lane']) => laneLabels[d] ?? d);
   }
 
   private drawNowMarker(
@@ -268,6 +270,7 @@ export class CountryTimeline {
   }
 
   destroy(): void {
+ window.removeEventListener('theme-changed', this.onThemeChange);
  if (this.resizeObserver) {
  this.resizeObserver.disconnect();
  this.resizeObserver = null;

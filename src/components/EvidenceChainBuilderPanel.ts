@@ -61,7 +61,7 @@ export class EvidenceChainBuilderPanel extends Panel {
         'Walks each conclusion back to the raw observations that support it. Each chain is a DAG (observation → correlation → situation → assessment) annotated with depth and overall-confidence along the critical path.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getEvidenceChainBuilderService().subscribe(() => this.render());
     this.attachHandlers();
   }

@@ -13,7 +13,7 @@ function safeHtml(t: string): string {
 }
 
 const DOMAIN_COLOR: Record<OperationalDomain, string> = {
-  military: '#d50000',
+  military: '#ff453a',
   hybrid: '#ff5722',
   diplomatic: '#ff9800',
   information: '#ffeb3b',
@@ -22,7 +22,7 @@ const DOMAIN_COLOR: Record<OperationalDomain, string> = {
 };
 
 function threatColor(score: number): string {
-  if (score >= 75) return '#d50000';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#9e9e9e';
@@ -33,7 +33,7 @@ function renderOperationRow(op: DeceptionOperation): string {
   const color = threatColor(score);
   const domainColor = DOMAIN_COLOR[op.domain];
   const activeTag = op.active
-    ? `<span style="font-size:10px;font-weight:700;color:#d50000;text-transform:uppercase;">ACTIVE</span>`
+    ? `<span style="font-size:10px;font-weight:700;color:#ff453a;text-transform:uppercase;">ACTIVE</span>`
     : `<span style="font-size:10px;color:var(--text-secondary,#aaa);">historical</span>`;
   return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;padding:6px 8px;font-size:11px;">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
@@ -55,7 +55,7 @@ function renderOperationRow(op: DeceptionOperation): string {
 }
 
 function renderIndicatorRow(ind: DeceptionIndicator): string {
-  const confColor = ind.confidence >= 80 ? '#d50000' : (ind.confidence >= 65 ? '#ff9800' : '#ffeb3b');
+  const confColor = ind.confidence >= 80 ? '#ff453a' : (ind.confidence >= 65 ? '#ff9800' : '#ffeb3b');
   return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${confColor};border-radius:3px;padding:5px 8px;font-size:11px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">${safeHtml(ind.type)}</span>
@@ -119,7 +119,7 @@ export class StrategicDeceptionPanel extends Panel {
     return `<div style="display:flex;gap:12px;flex-wrap:wrap;">
       <div style="flex:1;min-width:120px;padding:8px 12px;border:1px solid var(--border-subtle,#333);border-radius:4px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Active Operations</div>
-        <div style="font-size:20px;font-weight:700;color:#d50000;">${data.activeCount}</div>
+        <div style="font-size:20px;font-weight:700;color:#ff453a;">${data.activeCount}</div>
       </div>
       <div style="flex:1;min-width:120px;padding:8px 12px;border:1px solid var(--border-subtle,#333);border-radius:4px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Most Active Actor</div>

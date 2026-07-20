@@ -9,19 +9,42 @@
  *   - A persistent critical strip (always visible while active)
  *   - An expandable Storm Mode card with hazard, arrival window,
  *     confidence, matched place, and the time-budget-aware action list
- *   - Acknowledge + snooze controls
+ *   - Acknowledge + snooze controls, persisted to localStorage so an
+ *     acked threat stays dismissed across reloads until it materially
+ *     changes (meaningful-change rules mirror `weather-urgency.ts`)
+ *   - Auto-hide at alert expiry ("persistent in-app status until the
+ *     threat expires or is acknowledged")
  *   - A "Why did I get this?" link that opens the diagnostic packet
  *
- * Vanilla TypeScript + DOM. No framework. No fetch in this module — it
- * renders whatever decision the caller hands it. The caller (router /
- * dispatcher / sidecar push) is responsible for re-rendering when the
- * decision changes.
+ * Vanilla TypeScript + DOM, textContent-only rendering (no HTML strings).
+ * No fetch in this module — it renders whatever decision the caller hands
+ * it. The caller (data-loader → 'cb:storm-decision' event) is responsible
+ * for re-rendering when the decision changes. Show/hide + display-string
+ * logic lives in `personal-storm-mode-view.ts` so it is unit-testable.
  *
  * Plan invariant: "Every weather notification should say why."
  */
 
 import { h, replaceChildren } from '../utils/dom-utils';
 import type { WeatherDispatchDecision } from '../services/weather/weather-warning-router';
+import { guideForWeatherHazard } from '../services/survival-guide/guide-links';
+import {
+  STORM_MODE_UI_STORAGE_KEY,
+  ackRecordFor,
+  computeStormModeVisibility,
+  emptyStormModeUiState,
+  nextVisibilityTransitionAt,
+  parseStormModeUiState,
+  pruneStormModeUiState,
+  serializeStormModeUiState,
+  snoozeRecordFor,
+  stormMetaPairs,
+  stormStripTitle,
+  stormTierLabel,
+  withAck,
+  withSnooze,
+  type StormModeUiState,
+} from './personal-storm-mode-view';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -44,24 +67,27 @@ export interface PersonalStormModeOptions {
   callbacks?: PersonalStormModeCallbacks;
 }
 
+const SNOOZE_MINUTES = 15;
+
 export class PersonalStormMode {
   private readonly mount: HTMLElement;
   private readonly callbacks: PersonalStormModeCallbacks;
   private current?: WeatherDispatchDecision;
-  private acknowledged = new Set<string>();
-  private snoozedUntil = new Map<string, number>();
+  private uiState: StormModeUiState;
+  private transitionTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: PersonalStormModeOptions) {
     this.mount = options.mount;
     this.callbacks = options.callbacks ?? {};
     this.mount.classList.add('cb-storm-mode-host');
+    this.uiState = this.loadUiState();
     this.render();
   }
 
   /** Update the displayed decision. Pass `undefined` to clear. */
   update(decision: WeatherDispatchDecision | undefined, now: number = Date.now()): void {
     this.current = decision;
-    this.pruneSnoozes(now);
+    this.uiState = pruneStormModeUiState(this.uiState, now);
     this.render(now);
   }
 
@@ -73,32 +99,57 @@ export class PersonalStormMode {
 
   /** Programmatic acknowledge — useful for keyboard shortcuts. */
   acknowledge(alertId: string): void {
-    this.acknowledged.add(alertId);
     if (this.current?.alertId === alertId) {
+      this.recordAcknowledge(this.current);
       this.callbacks.onAcknowledge?.(alertId);
       this.render();
     }
   }
 
+  // ── Persistence ──────────────────────────────────────────────────────
+
+  private loadUiState(): StormModeUiState {
+    try {
+      return pruneStormModeUiState(
+        parseStormModeUiState(localStorage.getItem(STORM_MODE_UI_STORAGE_KEY)),
+        Date.now(),
+      );
+    } catch {
+      return emptyStormModeUiState();
+    }
+  }
+
+  private saveUiState(): void {
+    try {
+      localStorage.setItem(STORM_MODE_UI_STORAGE_KEY, serializeStormModeUiState(this.uiState));
+    } catch { /* storage unavailable (private mode / quota) — session-only state */ }
+  }
+
+  private recordAcknowledge(decision: WeatherDispatchDecision, now: number = Date.now()): void {
+    const ack = ackRecordFor(decision, now);
+    if (!ack) return;
+    this.uiState = withAck(this.uiState, ack);
+    this.saveUiState();
+  }
+
+  private recordSnooze(decision: WeatherDispatchDecision, now: number = Date.now()): void {
+    this.uiState = withSnooze(this.uiState, snoozeRecordFor(decision, SNOOZE_MINUTES, now));
+    this.saveUiState();
+  }
+
   // ── Render ────────────────────────────────────────────────────────────
 
   private render(now: number = Date.now()): void {
+    this.scheduleVisibilityTransition(now);
     const decision = this.current;
-    if (!decision || decision.shouldSuppress || !decision.urgency) {
-      replaceChildren(this.mount);
-      return;
-    }
-    if (this.acknowledged.has(decision.alertId)) {
-      replaceChildren(this.mount);
-      return;
-    }
-    if ((this.snoozedUntil.get(decision.alertId) ?? 0) > now) {
+    const visibility = computeStormModeVisibility(decision, this.uiState, now);
+    if (!visibility.visible || !decision) {
       replaceChildren(this.mount);
       return;
     }
 
-    const tier = decision.urgency.threatLevel;
-    const persistent = decision.urgency.persistentInApp;
+    const tier = decision.urgency!.threatLevel;
+    const persistent = decision.urgency!.persistentInApp;
 
     const root = h('div', {
       className: `cb-storm-mode cb-storm-mode--${tier}${persistent ? ' cb-storm-mode--persistent' : ''}`,
@@ -114,14 +165,26 @@ export class PersonalStormMode {
     replaceChildren(this.mount, root);
   }
 
-  private renderStrip(decision: WeatherDispatchDecision): HTMLElement {
-    const tier = decision.urgency!.threatLevel.toUpperCase();
-    const placeLabel = decision.matchedPlaceLabel ?? 'your area';
-    const hazard = decision.payload?.mainThreatLabel ?? decision.urgency!.hazardKind;
+  /** Re-render on the next timed boundary (alert expiry or snooze end)
+   *  so the strip honors "until the threat expires" even when no data
+   *  refresh lands in the meantime. */
+  private scheduleVisibilityTransition(now: number): void {
+    if (this.transitionTimer !== undefined) {
+      clearTimeout(this.transitionTimer);
+      this.transitionTimer = undefined;
+    }
+    const at = nextVisibilityTransitionAt(this.current, this.uiState, now);
+    if (at === undefined || at <= now) return;
+    // Cap so a multi-day expiry doesn't overflow the timer; the regular
+    // data refresh will re-arm long horizons.
+    const delay = Math.min(at - now, 6 * 60 * 60 * 1000) + 250;
+    this.transitionTimer = setTimeout(() => { this.render(); }, delay);
+  }
 
+  private renderStrip(decision: WeatherDispatchDecision): HTMLElement {
     const strip = h('div', { className: 'cb-storm-mode__strip' },
-      h('span', { className: 'cb-storm-mode__tier' }, tier),
-      h('span', { className: 'cb-storm-mode__title' }, `${capitalizeFirst(hazard)} near ${placeLabel}`),
+      h('span', { className: 'cb-storm-mode__tier' }, stormTierLabel(decision)),
+      h('span', { className: 'cb-storm-mode__title' }, stormStripTitle(decision)),
       this.renderQuickActions(decision),
     );
     return strip;
@@ -134,7 +197,7 @@ export class PersonalStormMode {
       'aria-label': 'Acknowledge alert',
     }, 'Acknowledge');
     ack.addEventListener('click', () => {
-      this.acknowledged.add(decision.alertId);
+      this.recordAcknowledge(decision);
       this.callbacks.onAcknowledge?.(decision.alertId);
       this.render();
     });
@@ -142,11 +205,11 @@ export class PersonalStormMode {
     const snooze = h('button', {
       className: 'cb-storm-mode__btn cb-storm-mode__btn--snooze',
       type: 'button',
-      'aria-label': 'Snooze for 15 minutes',
-    }, 'Snooze 15m');
+      'aria-label': `Snooze for ${SNOOZE_MINUTES} minutes`,
+    }, `Snooze ${SNOOZE_MINUTES}m`);
     snooze.addEventListener('click', () => {
-      this.snoozedUntil.set(decision.alertId, Date.now() + 15 * 60 * 1000);
-      this.callbacks.onSnooze?.(decision.alertId, 15);
+      this.recordSnooze(decision);
+      this.callbacks.onSnooze?.(decision.alertId, SNOOZE_MINUTES);
       this.render();
     });
 
@@ -171,7 +234,7 @@ export class PersonalStormMode {
       decision.urgency?.watchWindow && decision.urgency.watchWindow.confirming.length > 0
         ? this.renderWatchWindow(decision.urgency.watchWindow)
         : null,
-      h('div', { className: 'cb-storm-mode__footer' }, whyLink),
+      h('div', { className: 'cb-storm-mode__footer' }, whyLink, this.renderFullGuideLink(decision)),
     );
   }
 
@@ -187,13 +250,10 @@ export class PersonalStormMode {
   }
 
   private renderMeta(decision: WeatherDispatchDecision): HTMLElement {
-    const payload = decision.payload;
     const meta = h('dl', { className: 'cb-storm-mode__meta' });
-    const matched = decision.matchedPlaceLabel;
-    if (matched) meta.append(metaPair('Place', matched));
-    if (payload?.arrivalWindow?.label) meta.append(metaPair('Arrival', payload.arrivalWindow.label));
-    meta.append(metaPair('Confidence', capitalizeFirst(payload?.confidenceLabel ?? 'medium')));
-    if (payload?.nextUpdateLabel) meta.append(metaPair('Next update', payload.nextUpdateLabel));
+    for (const pair of stormMetaPairs(decision)) {
+      meta.append(h('dt', null, pair.label), h('dd', null, pair.value));
+    }
     return meta;
   }
 
@@ -231,24 +291,18 @@ export class PersonalStormMode {
     return btn;
   }
 
-  private pruneSnoozes(now: number): void {
-    for (const [id, until] of this.snoozedUntil) {
-      if (until <= now) this.snoozedUntil.delete(id);
-    }
+  private renderFullGuideLink(decision: WeatherDispatchDecision): HTMLElement | null {
+    const hazard = decision.payload?.primaryHazard;
+    const guideId = hazard ? guideForWeatherHazard(hazard) : undefined;
+    if (!guideId) return null;
+    const btn = h('button', {
+      className: 'cb-storm-mode__guide',
+      type: 'button',
+      'aria-label': 'Open the full survival guide for this hazard',
+    }, 'Full guide →');
+    btn.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('cb:open-survival-guide', { detail: { guideId } }));
+    });
+    return btn;
   }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function metaPair(label: string, value: string): DocumentFragment {
-  const frag = document.createDocumentFragment();
-  frag.append(
-    h('dt', null, label),
-    h('dd', null, value),
-  );
-  return frag;
-}
-
-function capitalizeFirst(s: string): string {
-  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
 }

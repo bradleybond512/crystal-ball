@@ -15,6 +15,7 @@ on:
       - 'vite.config.ts'
       - 'scripts/check-bundle-size.mjs'
       - '.github/workflows/bundle-size.yml'
+  merge_group:
 
 permissions:
   contents: read

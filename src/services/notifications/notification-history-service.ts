@@ -202,9 +202,9 @@ export function __reset(): void {
 // ── IndexedDB persistence ─────────────────────────────────────────────────
 
 const DB_NAME = 'crystalball_db';
-const DB_VERSION = 1;
 const STORE = 'kv';
 
+let _db: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
 let _persistTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -215,27 +215,60 @@ function isIndexedDbAvailable(): boolean {
 
 function openDb(): Promise<IDBDatabase> {
   if (!isIndexedDbAvailable()) return Promise.reject(new Error('IndexedDB unavailable'));
+  // Fast-path: reuse the already-open connection handle. Without this, the
+  // .finally() below (which clears _dbPromise on every settle) would cause
+  // every persistNow() / hydrateFromIdb() call to open a fresh connection,
+  // leaking one IDBDatabase handle per notification write.
+  if (_db) return Promise.resolve(_db);
   if (_dbPromise) return _dbPromise;
   _dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.addEventListener('error', () => reject(req.error ?? new Error('Failed to open IndexedDB')));
-    req.addEventListener('upgradeneeded', () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE);
-      }
-    });
-    req.addEventListener('success', () => {
-      const db = req.result;
-      db.addEventListener('close', () => { _dbPromise = null; });
+    const attach = (db: IDBDatabase): void => {
+      _db = db;
+      db.addEventListener('close', () => { _db = null; _dbPromise = null; });
+      // Yield to another module (reasoning-memory / alert-store) bumping the
+      // shared crystalball_db version — otherwise this open connection blocks
+      // their upgrade. Reopened lazily on the next openDb() call.
+      db.addEventListener('versionchange', () => {
+        db.close();
+        _db = null;
+        _dbPromise = null;
+      });
       resolve(db);
+    };
+
+    const openWithUpgrade = (currentVersion: number): void => {
+      const up = indexedDB.open(DB_NAME, currentVersion + 1);
+      up.addEventListener('error', () => reject(up.error ?? new Error('Failed to upgrade IndexedDB')));
+      up.addEventListener('blocked', () => reject(new Error('IndexedDB upgrade blocked')));
+      up.addEventListener('upgradeneeded', () => {
+        if (!up.result.objectStoreNames.contains(STORE)) up.result.createObjectStore(STORE);
+      });
+      up.addEventListener('success', () => attach(up.result));
+    };
+
+    // Open without a version first so we never request a version *lower* than
+    // what alert-store / reasoning-memory may have already bumped the shared
+    // crystalball_db to (which throws a VersionError and silently disabled
+    // notification-history persistence on already-upgraded databases).
+    const probe = indexedDB.open(DB_NAME);
+    probe.addEventListener('error', () => reject(probe.error ?? new Error('Failed to open IndexedDB')));
+    // Fires only when the DB does not exist yet — create our store in the fresh v1.
+    probe.addEventListener('upgradeneeded', () => {
+      if (!probe.result.objectStoreNames.contains(STORE)) probe.result.createObjectStore(STORE);
     });
-    req.addEventListener('blocked', () => {
-      // Another connection is preventing the upgrade — fall through
-      // gracefully so the panel doesn't block on a stuck DB.
-      reject(new Error('IndexedDB upgrade blocked'));
+    probe.addEventListener('success', () => {
+      const db = probe.result;
+      if (db.objectStoreNames.contains(STORE)) { attach(db); return; }
+      const currentVersion = db.version;
+      db.close();
+      openWithUpgrade(currentVersion);
     });
   });
+  // Clear _dbPromise on rejection so the next openDb() call starts a fresh
+  // probe instead of returning a permanently-rejected promise (sticky rejection
+  // bug: a blocked upgrade or open error would disable notification-history
+  // persistence for the entire session with no recovery path).
+  _dbPromise.finally(() => { _dbPromise = null; }).catch(() => { /* handled by callers */ });
   return _dbPromise;
 }
 
@@ -256,6 +289,9 @@ async function persistNow(): Promise<void> {
       const tx = db.transaction(STORE, 'readwrite');
       tx.addEventListener('complete', () => resolve());
       tx.addEventListener('error', () => reject(tx.error ?? new Error('IDB tx error')));
+      // An explicit tx.abort() fires 'abort', not 'error' — without this the
+      // promise would hang indefinitely on an unexpected transaction abort.
+      tx.addEventListener('abort', () => reject(new Error('[notification-history] write tx aborted')));
       tx.objectStore(STORE).put(snapshot(), HISTORY_IDB_KEY);
     });
   } catch {
@@ -273,6 +309,9 @@ export async function hydrateFromIdb(): Promise<void> {
       const req = tx.objectStore(STORE).get(HISTORY_IDB_KEY);
       req.addEventListener('success', () => resolve(req.result));
       req.addEventListener('error', () => reject(req.error ?? new Error('IDB read error')));
+      // An explicit tx.abort() fires 'abort', not 'error' — without this the
+      // promise would hang indefinitely on an unexpected transaction abort.
+      tx.addEventListener('abort', () => reject(new Error('[notification-history] read tx aborted')));
     });
     if (snap) loadFromSnapshot(snap);
   } catch {

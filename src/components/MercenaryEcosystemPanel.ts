@@ -11,13 +11,13 @@ const REFRESH_MS = 3_600_000;
 
 const STATUS_COLOR: Record<PMCGroup['status'], string> = {
   active: '#ff9800',
-  sanctioned: '#d50000',
+  sanctioned: '#ff453a',
   disbanded: '#9e9e9e',
   rebranded: '#2196f3',
 };
 
 const INCIDENT_TYPE_COLOR: Record<PMCIncident['type'], string> = {
-  atrocity: '#d50000',
+  atrocity: '#ff453a',
   'combat-loss': '#ff9800',
   mutiny: '#ffeb3b',
   sanction: '#2196f3',
@@ -25,7 +25,7 @@ const INCIDENT_TYPE_COLOR: Record<PMCIncident['type'], string> = {
 };
 
 function threatColor(score: number): string {
-  if (score >= 75) return '#d50000';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#4caf50';
@@ -44,7 +44,7 @@ export class MercenaryEcosystemPanel extends Panel {
         'Tracks private military companies (PMCs) and mercenary groups worldwide. Shows threat scores, active theaters, human rights flags, and recent incidents. Data sourced from open intelligence.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {
@@ -89,9 +89,9 @@ export class MercenaryEcosystemPanel extends Panel {
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Most Active Theater</div>
         <div style="font-size:13px;font-weight:600;">${escapeHtml(data.mostActiveTheater)}</div>
       </div>
-      <div style="flex:1;min-width:120px;padding:8px 10px;border:1px solid #d50000;border-radius:4px;">
+      <div style="flex:1;min-width:120px;padding:8px 10px;border:1px solid #ff453a;border-radius:4px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">HR Violators</div>
-        <div style="font-size:16px;font-weight:700;color:#d50000;font-family:ui-monospace,monospace;">${data.humanRightsViolators.length}</div>
+        <div style="font-size:16px;font-weight:700;color:#ff453a;font-family:ui-monospace,monospace;">${data.humanRightsViolators.length}</div>
       </div>
     </div>`;
   }
@@ -126,7 +126,7 @@ export class MercenaryEcosystemPanel extends Panel {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;white-space:nowrap;">
           <div style="font-size:12px;font-weight:700;color:${color};font-family:ui-monospace,monospace;">T:${score}</div>
           <div style="font-size:10px;font-weight:600;color:${statusColor};text-transform:uppercase;">${escapeHtml(g.status)}</div>
-          <div style="font-size:10px;color:${g.humanRightsFlags >= 5 ? '#d50000' : 'var(--text-secondary,#aaa)'};">HR ${g.humanRightsFlags}/10</div>
+          <div style="font-size:10px;color:${g.humanRightsFlags >= 5 ? '#ff453a' : 'var(--text-secondary,#aaa)'};">HR ${g.humanRightsFlags}/10</div>
         </div>
       </div>
     </div>`;

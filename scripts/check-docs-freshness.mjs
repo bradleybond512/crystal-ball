@@ -66,7 +66,7 @@ function checkReadme() {
   if (!readme) return [];
   const issues = [];
 
-  const panelMatch = readme.match(/Default panel inventory\s*\|\s*(\d+)\s*full\s*\/\s*(\d+)\s*tech\s*\/\s*(\d+)\s*finance\s*\/\s*(\d+)\s*happy/);
+  const panelMatch = readme.match(/Default panel inventory\s*\|\s*`?\s*(\d+)\s*full\s*\/\s*(\d+)\s*tech\s*\/\s*(\d+)\s*finance\s*\/\s*(\d+)\s*happy/);
   if (panelMatch) {
     const stated = { full: +panelMatch[1], tech: +panelMatch[2], finance: +panelMatch[3], happy: +panelMatch[4] };
     const actual = {
@@ -82,7 +82,7 @@ function checkReadme() {
     }
   }
 
-  const layerMatch = readme.match(/God's Eye data layers\s*\|\s*(\d+)/);
+  const layerMatch = readme.match(/God's Vision map layers\s*\|\s*(\d+)/);
   if (layerMatch) {
     const stated = +layerMatch[1];
     const actual = countMapLayers();
@@ -112,6 +112,14 @@ function checkReadme() {
   return issues;
 }
 
+function secretKeyNames() {
+  const src = read('src-tauri/src/main.rs');
+  if (!src) return [];
+  const block = src.match(/SUPPORTED_SECRET_KEYS[^=]*=\s*\[([\s\S]*?)\];/);
+  if (!block) return [];
+  return [...block[1].matchAll(/"([A-Z0-9_]+)"/g)].map((m) => m[1]);
+}
+
 function checkApiKeysDocs() {
   const issues = [];
   const apiKeysDoc = read('docs/API_KEYS.md');
@@ -126,6 +134,12 @@ function checkApiKeysDocs() {
       issues.push(`docs/API_KEYS.md references ${stated} keys, main.rs has ${actual}`);
     }
   }
+
+  // Coverage: every SUPPORTED_SECRET_KEYS entry must appear somewhere in the doc.
+  const undocumented = secretKeyNames().filter((k) => !new RegExp(String.raw`\b${k}\b`).test(apiKeysDoc));
+  if (undocumented.length) {
+    issues.push(`docs/API_KEYS.md is missing ${undocumented.length} key(s): ${undocumented.join(', ')}`);
+  }
   return issues;
 }
 
@@ -139,7 +153,9 @@ function checkChangelog() {
       cwd: root, encoding: 'utf8',
     });
     for (const line of recent.split('\n').filter(Boolean)) {
-      const prMatch = line.match(/#(\d+)/);
+      // Only the trailing squash-merge suffix "(#1234)" is a real PR number;
+      // an in-subject "#8" (e.g. "round-2 #8") is a cross-reference, not a PR.
+      const prMatch = line.match(/\(#(\d+)\)\s*$/);
       if (prMatch && !changelog.includes(`#${prMatch[1]}`)) {
         issues.push(`PR #${prMatch[1]} not in CHANGELOG: ${line.trim()}`);
       }

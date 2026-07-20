@@ -261,13 +261,30 @@ export function installRuntimeFetchPatch(): void {
   let tokenFetchedAt = 0;
   // Serialise concurrent token refreshes so parallel 401s don't each trigger a fresh IPC call.
   let tokenRefreshPromise: Promise<void> | null = null;
+  // Back off when IPC repeatedly fails to avoid hammering tryInvokeTauri on
+  // every fetch when the bridge is broken. Resets on first success.
+  let tokenFailCount = 0;
+  let tokenNextRetryAt = 0;
 
   async function refreshToken(): Promise<void> {
  if (tokenRefreshPromise) return tokenRefreshPromise;
+ if (tokenFailCount > 0 && Date.now() < tokenNextRetryAt) return;
  tokenRefreshPromise = (async () => {
  try {
- localApiToken = await tryInvokeTauri<string>('get_local_api_token');
+ const result = await tryInvokeTauri<string>('get_local_api_token');
+ if (result) {
+ localApiToken = result;
  tokenFetchedAt = Date.now();
+ tokenFailCount = 0;
+ tokenNextRetryAt = 0;
+ } else {
+ // IPC returned null (bridge unavailable / token not yet generated).
+ // Back off: 2s, 4s, 8s, ... capped at 30s so we recover quickly
+ // once the bridge is ready, without hammering it in the meantime.
+ tokenFailCount++;
+ const backoffMs = Math.min(2000 * (2 ** (tokenFailCount - 1)), 30_000);
+ tokenNextRetryAt = Date.now() + backoffMs;
+ }
  } catch {
  localApiToken = null;
  tokenFetchedAt = 0;
@@ -283,6 +300,15 @@ export function installRuntimeFetchPatch(): void {
   }
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+ // Default timeout: ~100 data feeds route through this patched fetch with no
+ // timeout of their own, so a hung connection would otherwise stall forever.
+ // Honor a caller-supplied signal; otherwise give EACH fetch attempt its own
+ // fresh 15s timeout. We must not share one AbortSignal across the local
+ // attempt and the cloud fallback — once the local timeout fires, a reused
+ // signal would abort the fallback immediately and break it.
+ const callerSignal = init?.signal;
+ const withTimeout = (base?: RequestInit): RequestInit =>
+ callerSignal ? { ...base } : { ...base, signal: AbortSignal.timeout(15_000) };
  const target = getApiTargetFromRequestInput(input);
  const debug = localStorage.getItem('wm-debug-log') === '1';
 
@@ -291,7 +317,7 @@ export function installRuntimeFetchPatch(): void {
  const raw = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url);
  console.log(`[fetch] passthrough → ${raw.slice(0, 120)}`);
  }
- return nativeFetch(input, init);
+ return nativeFetch(input, withTimeout(init));
  }
 
  // Resolve dynamic sidecar port on first API call
@@ -308,7 +334,7 @@ export function installRuntimeFetchPatch(): void {
  if (localApiToken) {
  headers.set('Authorization', `Bearer ${localApiToken}`);
  }
- const localInit = { ...init, headers };
+ const localInit = withTimeout({ ...init, headers });
 
  const localUrl = `${getApiBaseUrl()}${target}`;
  if (debug) console.log(`[fetch] intercept → ${target}`);
@@ -329,7 +355,7 @@ export function installRuntimeFetchPatch(): void {
  });
  }
  cloudHeaders.set('X-CrystalBall-Key', cloudApiKey);
- return nativeFetch(cloudUrl, { ...init, headers: cloudHeaders });
+ return nativeFetch(cloudUrl, withTimeout({ ...init, headers: cloudHeaders }));
  };
 
  try {
@@ -347,7 +373,7 @@ export function installRuntimeFetchPatch(): void {
  if (localApiToken) {
  const retryHeaders = new Headers(init?.headers);
  retryHeaders.set('Authorization', `Bearer ${localApiToken}`);
- response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, { ...init, headers: retryHeaders });
+ response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, withTimeout({ ...init, headers: retryHeaders }));
  if (debug) console.log(`[fetch] retry ${target} → ${response.status}`);
  }
  }

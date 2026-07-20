@@ -499,7 +499,7 @@ export function severityColor(severity: DebrisSeverity): string {
     }
     case 3: { return '#ff9800';
     }
-    case 4: { return '#d50000';
+    case 4: { return '#ff453a';
     }
   }
 }

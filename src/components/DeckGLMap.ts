@@ -6,6 +6,20 @@
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
+import { getSmokeSnapshots, subscribeSmoke } from '@/services/smoke/smoke-state';
+import { categorizeUsAqi } from '@/services/smoke/aqi-category';
+import type { AqiCategory } from '@/services/smoke/smoke-types';
+
+/** EPA category colors as deck.gl RGBA — mirrors AirSmokePanel's palette. */
+const AQI_MAP_COLOR: Record<AqiCategory, [number, number, number, number]> = {
+  good: [63, 185, 80, 200],
+  moderate: [212, 167, 44, 200],
+  usg: [240, 136, 62, 210],
+  unhealthy: [255, 69, 58, 220],
+  very_unhealthy: [143, 63, 151, 220],
+  hazardous: [126, 0, 35, 230],
+  unknown: [139, 148, 158, 150],
+};
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import type {
@@ -118,7 +132,7 @@ import type { TechHubActivity } from '@/services/tech-activity';
 import { getSigintPoints, getSigintClusters, type SigintEvent, type SigintConvergenceCluster } from '@/services/sigint-convergence';
 import { getRadarTileUrl, type RadarState } from '@/services/rainviewer-radar';
 import { strikeColor, strikeOpacity, type LightningStrike } from '@/services/lightning';
-import { getGoesWmsTileUrl } from '@/services/satellite-weather';
+import { getGoesWmsTileUrl, gibsHourTimestamp } from '@/services/satellite-weather';
 import { getOwmTileUrl, type OwmTileLayer } from '@/services/owm-weather-tiles';
 import type { RedFlagWarning } from '@/services/red-flag-warnings';
 import type { SatellitePosition, OrbitPath } from '@/services/satellite-propagator';
@@ -520,6 +534,14 @@ export class DeckGLMap {
   private serverBasesLoaded = false;
   private naturalEvents: NaturalEvent[] = [];
   private firmsFireData: { lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string }[] = [];
+  // Smoke & Air overlay (PR 4 of the smoke program): AQI sample dots come
+  // synchronously from the smoke engine snapshot; perimeters + HMS plume load
+  // lazily on first toggle (service-level caches handle refresh).
+  private smokeOverlayPerimeters: import('@/services/wildfires/fire-intel-service').ActiveFirePerimeter[] = [];
+  private smokeOverlayPlumes: import('@/services/wildfire-smoke').SmokePolygon[] = [];
+  private smokeOverlayLoadedAt = 0;
+  private smokeOverlayLoading = false;
+  private smokeOverlayUnsub: (() => void) | null = null;
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
   private faaCameras: ScoredFAACamera[] = [];
@@ -571,7 +593,12 @@ export class DeckGLMap {
 
   private renderScheduled = false;
   private renderPaused = false;
-  private renderPending = false;
+  private _pausedByView = false;   // manual pause (country-detail overlay)
+  private _pausedByHidden = false; // window hidden
+  // Temporary idle-repaint instrumentation counters (see installMapFpsDebug).
+  private _mapFpsRenderCount = 0;
+  private _mapFpsAppRepaintCount = 0;
+  private _mapFpsTimerId: number | null = null;
   private webglLost = false;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -601,6 +628,21 @@ export class DeckGLMap {
   private theaterUnsubscribe: (() => void) | null = null;
   private convergenceSeenAlerts = new Set<string>();
   private radarState: RadarState | null = null;
+  // GIBS GOES GeoColor publishes each hourly frame with a ~15–40 min latency,
+  // so the latest top-of-hour is often a 404. Start one hour back and step
+  // further on tile errors (see recoverSatelliteTiles).
+  private satelliteHourOffset = 1;
+  // MapLibre emits one error per failed *tile*, so an unavailable hour fires a
+  // burst. A self-rescheduling timer coalesces the burst into one hour-step
+  // per rebuild and keeps stepping while the rebuilt hour also fails.
+  private satelliteRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private satelliteErrorSinceRebuild = false;
+  // The tile URL currently applied to the wm-satellite source, and the base
+  // UTC hour it was computed for — used to rebuild on hour-rollover/recovery.
+  private satelliteAppliedUrl: string | null = null;
+  private satelliteBaseHour: string | null = null;
+  private static readonly MAX_SATELLITE_HOUR_OFFSET = 6;
+  private static readonly SATELLITE_RECOVERY_COOLDOWN_MS = 8000;
   private lightningStrikes: LightningStrike[] = [];
   private redFlagWarnings: RedFlagWarning[] = [];
   private satellitePositions: SatellitePosition[] = [];
@@ -615,6 +657,7 @@ export class DeckGLMap {
   private rafUpdateLayersPending = false;
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private _themeChangedHandler: ((e: Event) => void) | null = null;
+  private _visibilityHandler: (() => void) | null = null;
   private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
@@ -635,6 +678,7 @@ export class DeckGLMap {
  });
  this.rafUpdateLayers = () => {
  this.rafUpdateLayersPending = true;
+ this._mapFpsAppRepaintCount++;
  rafFn();
  };
 
@@ -653,6 +697,16 @@ export class DeckGLMap {
  };
  window.addEventListener('theme-changed', this._themeChangedHandler);
 
+ // Suspend ALL map rendering (pulse/cable/day-night timers + the render loop)
+ // while the window is hidden — otherwise the 1s pulse setIntervals keep firing
+ // and each repaint commits the whole 185-panel + map layer tree to Core
+ // Animation, burning CPU/battery for a view nobody can see. setRenderPaused
+ // stops the timers; on unhide it resumes them and flushes any pending render.
+ this._visibilityHandler = () => {
+ this.setRenderPausedByHidden(document.visibilityState === 'hidden');
+ };
+ document.addEventListener('visibilitychange', this._visibilityHandler);
+
  this.initMapLibre();
 
  this.maplibreMap?.on('load', () => {
@@ -662,6 +716,7 @@ export class DeckGLMap {
  this.loadCountryBoundaries();
  this.fetchServerBases();
  this.render();
+ this.installMapFpsDebug();
 
  this.applyDarkMapEnhancements();
 
@@ -688,6 +743,28 @@ export class DeckGLMap {
  if (this.state.layers.theaterPolygons) {
  this.startTheaterPolygons();
  }
+  }
+
+  /**
+   * TEMPORARY idle-repaint instrumentation, gated behind
+   * localStorage['cb-debug-map-fps']. Counts actual MapLibre GL frames ('render'
+   * event) + app-initiated deck repaints, and every 2s logs frames/sec alongside
+   * which standing requester is active — so we can confirm the map is repainting
+   * at idle and attribute it. Left behind the flag (off by default); enable with
+   *   localStorage.setItem('cb-debug-map-fps','1')
+   */
+  private installMapFpsDebug(): void {
+ let enabled = false;
+ try { enabled = localStorage.getItem('cb-debug-map-fps') === '1'; } catch { enabled = false; }
+ if (!enabled || !this.maplibreMap) return;
+ this.maplibreMap.on('render', () => { this._mapFpsRenderCount++; });
+ this._mapFpsTimerId = window.setInterval(() => {
+ const glfps = (this._mapFpsRenderCount / 2).toFixed(1);
+ const app = (this._mapFpsAppRepaintCount / 2).toFixed(1);
+ this._mapFpsRenderCount = 0;
+ this._mapFpsAppRepaintCount = 0;
+ console.warn(`[MAP-FPS] gl=${glfps}/s appRepaint=${app}/s alertPulses=${this.alertPulses.length} newsPulse=${this.newsPulseIntervalId !== null} cablePulse=${this.cablePulseIntervalId !== null} dayNight=${this.dayNightIntervalId !== null} paused=${this.renderPaused}`);
+ }, 2000) as unknown as number;
   }
 
   private startDayNightTimer(): void {
@@ -849,7 +926,15 @@ export class DeckGLMap {
  const err = (e as { error?: unknown }).error;
  const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
  const sourceId = (e as { sourceId?: string }).sourceId;
- console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
+ // Satellite is an optional overlay (not the basemap) and GIBS GOES tiles
+ // for the latest hour are often not published yet — handle its errors via
+ // hourly fallback and never escalate them to the basemap error overlay.
+ // Suppress per-tile logging since recoverSatelliteTiles handles recovery.
+ if (sourceId === 'wm-satellite-src') {
+ this.recoverSatelliteTiles();
+ return;
+ }
+ console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId }); // eslint-disable-line no-console
  mapErrorCount += 1;
  if (mapErrorCount === mapErrorThreshold) {
  this.showMapErrorOverlay(msg, sourceId);
@@ -1426,6 +1511,12 @@ export class DeckGLMap {
  layers.push(this.createFiresLayer());
  }
 
+ // Smoke & Air overlay — AQI field + HMS plume + NIFC fire perimeters
+ if (mapLayers.airSmoke) {
+ this.ensureSmokeOverlayData();
+ layers.push(...this.createAirSmokeLayers());
+ }
+
  // Iran events layer
  if (mapLayers.iranAttacks && this.iranEvents.length > 0) {
  layers.push(this.createIranEventsLayer());
@@ -1495,8 +1586,10 @@ export class DeckGLMap {
  },
  updateTriggers: { getRadius: t, getLineColor: t },
  }));
- // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop
- if (!this.rafUpdateLayersPending) {
+ // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF
+ // loop. Suppressed while paused/hidden so it can't keep rebuilding layers for
+ // a view nobody can see (the loop that spiked idle CPU when alerts were live).
+ if (!this.rafUpdateLayersPending && !this.renderPaused) {
  setTimeout(() => this.rafUpdateLayers(), 250);
  }
  }
@@ -2261,6 +2354,96 @@ export class DeckGLMap {
  },
  pickable: true,
  });
+  }
+
+  private ensureSmokeOverlayData(): void {
+ // AQI dots track the smoke engine — re-render whenever it refreshes.
+ this.smokeOverlayUnsub ??= subscribeSmoke(() => this.updateLayers());
+ // Re-read plume + perimeters when our copy is older than the service
+ // cache windows; a failed load leaves the timestamp unset so the next
+ // layer build retries instead of sticking stale-forever.
+ const RELOAD_MS = 10 * 60 * 1000;
+ if (this.smokeOverlayLoading || Date.now() - this.smokeOverlayLoadedAt < RELOAD_MS) return;
+ this.smokeOverlayLoading = true;
+ void Promise.all([
+ import('@/services/wildfires/fire-intel-service').then((m) => m.fetchActivePerimeters()),
+ import('@/services/wildfire-smoke').then((m) => m.fetchWildfireSmoke()),
+ ])
+ .then(([perimeters, smoke]) => {
+ this.smokeOverlayPerimeters = perimeters;
+ this.smokeOverlayPlumes = smoke.polygons ?? [];
+ // The services fail SOFT (resolve empty on upstream errors), so a
+ // both-empty result is treated as not-loaded and retried on the next
+ // build — ~150 fires are always active nationally, so genuinely-empty
+ // is implausible and the cost of re-asking the cached services is nil.
+ if (perimeters.length > 0 || this.smokeOverlayPlumes.length > 0) {
+ this.smokeOverlayLoadedAt = Date.now();
+ }
+ this.updateLayers();
+ })
+ .catch(() => { /* retry on a later layer build; freshness feed records the error */ })
+ .finally(() => { this.smokeOverlayLoading = false; });
+  }
+
+  private createAirSmokeLayers(): (ScatterplotLayer | PolygonLayer)[] {
+ const layers: (ScatterplotLayer | PolygonLayer)[] = [];
+
+ // HMS smoke plume polygons — density-shaded gray.
+ if (this.smokeOverlayPlumes.length > 0) {
+ layers.push(new PolygonLayer({
+ id: 'air-smoke-plume-layer',
+ data: this.smokeOverlayPlumes,
+ getPolygon: (d: (typeof this.smokeOverlayPlumes)[0]) => d.coordinates,
+ getFillColor: (d: (typeof this.smokeOverlayPlumes)[0]) => {
+ if (d.density === 'Heavy') return [90, 90, 100, 110] as [number, number, number, number];
+ if (d.density === 'Medium') return [120, 120, 130, 80] as [number, number, number, number];
+ return [150, 150, 160, 55] as [number, number, number, number];
+ },
+ stroked: false,
+ pickable: true,
+ }));
+ }
+
+ // NIFC active fire perimeter centroids — sized by acreage.
+ if (this.smokeOverlayPerimeters.length > 0) {
+ layers.push(new ScatterplotLayer({
+ id: 'air-smoke-perimeter-layer',
+ data: this.smokeOverlayPerimeters,
+ getPosition: (d: (typeof this.smokeOverlayPerimeters)[0]) => [d.lon, d.lat],
+ getRadius: (d: (typeof this.smokeOverlayPerimeters)[0]) => 4000 + Math.min((d.acres ?? 0) * 2, 60_000),
+ getFillColor: [255, 69, 58, 170] as [number, number, number, number],
+ getLineColor: [255, 255, 255, 200] as [number, number, number, number],
+ lineWidthMinPixels: 1,
+ stroked: true,
+ radiusMinPixels: 4,
+ radiusMaxPixels: 26,
+ pickable: true,
+ }));
+ }
+
+ // AQI sample dots (home + cleaner-air compass ring), EPA category colors.
+ const snap = getSmokeSnapshots()[0];
+ if (snap) {
+ const samples: { lat: number; lon: number; aqi: number | null; label: string }[] = [
+ { lat: snap.lat, lon: snap.lon, aqi: snap.current.usAqi, label: snap.placeName },
+ ...snap.compass.map((c) => ({ lat: c.lat, lon: c.lon, aqi: c.avgAqi6h, label: `${c.direction} ${c.radiusMi} mi` })),
+ ];
+ layers.push(new ScatterplotLayer({
+ id: 'air-smoke-aqi-layer',
+ data: samples,
+ getPosition: (d: (typeof samples)[0]) => [d.lon, d.lat],
+ getRadius: 6000,
+ radiusMinPixels: 5,
+ radiusMaxPixels: 14,
+ getFillColor: (d: (typeof samples)[0]) => AQI_MAP_COLOR[categorizeUsAqi(d.aqi)],
+ getLineColor: [255, 255, 255, 220] as [number, number, number, number],
+ lineWidthMinPixels: 1,
+ stroked: true,
+ pickable: true,
+ }));
+ }
+
+ return layers;
   }
 
   private createIranEventsLayer(): ScatterplotLayer {
@@ -4218,6 +4401,7 @@ export class DeckGLMap {
  { key: 'techEvents', label: t('components.deckgl.layers.techEvents'), icon: '&#128197;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
+ { key: 'airSmoke', label: 'Air & Smoke', icon: '💨' },
  { key: 'dayNight', label: t('components.deckgl.layers.dayNight'), icon: '&#127763;' },
  ]
  : SITE_VARIANT === 'finance'
@@ -4287,6 +4471,7 @@ export class DeckGLMap {
  { key: 'cyberThreats', label: t('components.deckgl.layers.cyberThreats'), icon: '&#128737;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
+ { key: 'airSmoke', label: 'Air & Smoke', icon: '💨' },
  { key: 'waterways', label: t('components.deckgl.layers.strategicWaterways'), icon: '&#9875;' },
  { key: 'economic', label: t('components.deckgl.layers.economicCenters'), icon: '&#128176;' },
  { key: 'minerals', label: t('components.deckgl.layers.criticalMinerals'), icon: '&#128142;' },
@@ -4625,12 +4810,12 @@ export class DeckGLMap {
 
   // Public API methods (matching MapComponent interface)
   public render(): void {
- if (this.renderPaused) {
- this.renderPending = true;
- return;
- }
+ // Paused: skip. applyRenderPause() issues a fresh render() on resume, so a
+ // render requested while paused is never lost.
+ if (this.renderPaused) return;
  if (this.renderScheduled) return;
  this.renderScheduled = true;
+ this._mapFpsAppRepaintCount++;
 
  requestAnimationFrame(() => {
  this.renderScheduled = false;
@@ -4638,12 +4823,31 @@ export class DeckGLMap {
  });
   }
 
+  /** External/manual pause (e.g. country-detail overlay covers the map). */
   public setRenderPaused(paused: boolean): void {
+ this._pausedByView = paused;
+ this.applyRenderPause();
+  }
+
+  /** Visibility pause — driven by the window hidden/visible state. */
+  private setRenderPausedByHidden(hidden: boolean): void {
+ this._pausedByHidden = hidden;
+ this.applyRenderPause();
+  }
+
+  /**
+   * Effective render-pause = paused by ANY reason (manual view OR window hidden),
+   * so the two callers can't fight over a single boolean: resuming requires every
+   * reason to clear. Only touches the timers when the effective state flips.
+   */
+  private applyRenderPause(): void {
+ const paused = this._pausedByView || this._pausedByHidden;
  if (this.renderPaused === paused) return;
  this.renderPaused = paused;
  if (paused) {
  this.stopPulseAnimation();
  this.stopDayNightTimer();
+ this.stopCablePulse();
  return;
  }
 
@@ -4651,10 +4855,12 @@ export class DeckGLMap {
  if (this.state.layers.dayNight) this.startDayNightTimer();
  if (this.state.layers.cables) this.startCablePulse();
  if (this.state.layers.theaterPolygons) this.startTheaterPolygons();
- if (!paused && this.renderPending) {
- this.renderPending = false;
+ // Always refresh once on resume. Besides flushing any render deferred while
+ // paused, this re-arms the alert-pulse loop: that loop is a self-scheduling
+ // setTimeout chain (not a named timer), so if the window hid mid-cycle its
+ // chain broke — a fresh render()→buildLayers() re-schedules it when alert
+ // pulses are still active.
  this.render();
- }
   }
 
   private updateLayers(): void {
@@ -5686,10 +5892,16 @@ export class DeckGLMap {
  .then((geojson) => {
  if (!this.maplibreMap || !geojson) return;
  this.countriesGeoJsonData = geojson;
+ // Guard each add: rapid basemap switches reset countryGeoJsonLoaded
+ // synchronously, so two loads can race past the entry guard and both
+ // reach here after the await — re-adding throws "already a source/layer".
+ if (!this.maplibreMap.getSource('country-boundaries')) {
  this.maplibreMap.addSource('country-boundaries', {
  type: 'geojson',
  data: geojson,
  });
+ }
+ if (!this.maplibreMap.getLayer('country-interactive')) {
  this.maplibreMap.addLayer({
  id: 'country-interactive',
  type: 'fill',
@@ -5699,6 +5911,8 @@ export class DeckGLMap {
  'fill-opacity': 0,
  },
  });
+ }
+ if (!this.maplibreMap.getLayer('country-hover-fill')) {
  this.maplibreMap.addLayer({
  id: 'country-hover-fill',
  type: 'fill',
@@ -5709,6 +5923,8 @@ export class DeckGLMap {
  },
  filter: ['==', ['get', 'name'], ''],
  });
+ }
+ if (!this.maplibreMap.getLayer('country-highlight-fill')) {
  this.maplibreMap.addLayer({
  id: 'country-highlight-fill',
  type: 'fill',
@@ -5719,6 +5935,8 @@ export class DeckGLMap {
  },
  filter: ['==', ['get', 'ISO3166-1-Alpha-2'], ''],
  });
+ }
+ if (!this.maplibreMap.getLayer('country-highlight-border')) {
  this.maplibreMap.addLayer({
  id: 'country-highlight-border',
  type: 'line',
@@ -5730,6 +5948,7 @@ export class DeckGLMap {
  },
  filter: ['==', ['get', 'ISO3166-1-Alpha-2'], ''],
  });
+ }
 
  if (!this.countryHoverSetup) this.setupCountryHover();
  this.updateCountryLayerPaint(getCurrentTheme());
@@ -5918,9 +6137,19 @@ export class DeckGLMap {
   }
 
   public destroy(): void {
+ this.smokeOverlayUnsub?.();
+ this.smokeOverlayUnsub = null;
+ if (this._mapFpsTimerId !== null) {
+ clearInterval(this._mapFpsTimerId);
+ this._mapFpsTimerId = null;
+ }
  if (this.moveTimeoutId) {
  clearTimeout(this.moveTimeoutId);
  this.moveTimeoutId = null;
+ }
+ if (this.satelliteRetryTimer) {
+ clearTimeout(this.satelliteRetryTimer);
+ this.satelliteRetryTimer = null;
  }
 
  this.stopPulseAnimation();
@@ -5931,6 +6160,10 @@ export class DeckGLMap {
  if (this._themeChangedHandler) {
  window.removeEventListener('theme-changed', this._themeChangedHandler);
  this._themeChangedHandler = null;
+ }
+ if (this._visibilityHandler) {
+ document.removeEventListener('visibilitychange', this._visibilityHandler);
+ this._visibilityHandler = null;
  }
 
  // Remove all MapLibre event listeners to prevent leaks
@@ -6209,6 +6442,47 @@ export class DeckGLMap {
 
   // ── Weather Raster Tile Layers (MapLibre GL native) ──────────────
 
+  /**
+   * Note that the current GIBS GOES hour failed and ensure a recovery timer is
+   * armed. MapLibre fires one `error` per failed tile, so a single unavailable
+   * hour produces a burst (plus late in-flight failures from the removed
+   * source). Rather than step per error, we flag the failure and let a
+   * self-rescheduling timer (scheduleSatelliteRetry) drive the actual
+   * hour-step — coalescing the burst and continuing to step while each rebuilt
+   * hour also fails, without depending on MapLibre re-emitting after the burst.
+   * The base hour resets the offset each new UTC hour (see syncWeatherRasterLayers),
+   * so an exhausted lookback retries the freshest frame on the next hour.
+   */
+  private recoverSatelliteTiles(): void {
+ if (!this.maplibreMap) return;
+ this.satelliteErrorSinceRebuild = true;
+ if (this.satelliteRetryTimer === null
+ && this.satelliteHourOffset < DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) {
+ this.scheduleSatelliteRetry();
+ }
+  }
+
+  private scheduleSatelliteRetry(): void {
+ this.satelliteRetryTimer = setTimeout(() => {
+ this.satelliteRetryTimer = null;
+ // Rebuilt hour loaded cleanly (no errors since) — settled.
+ if (!this.satelliteErrorSinceRebuild) return;
+ if (!this.maplibreMap) return;
+ // Exhausted the lookback budget — surface a diagnostic and stop; the
+ // hour-rollover reset retries the freshest frame on the next UTC hour.
+ if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) {
+ console.warn('[DeckGLMap] GOES satellite imagery unavailable after exhausting GIBS hourly fallback (up to 6h back); will retry on the next UTC hour.');
+ return;
+ }
+ this.satelliteErrorSinceRebuild = false;
+ this.satelliteHourOffset += 1;
+ // syncWeatherRasterLayers rebuilds the source because the URL now differs.
+ this.syncWeatherRasterLayers();
+ // Re-arm to check whether this hour also fails.
+ this.scheduleSatelliteRetry();
+ }, DeckGLMap.SATELLITE_RECOVERY_COOLDOWN_MS);
+  }
+
   private syncWeatherRasterLayers(): void {
  if (!this.maplibreMap) return;
  const map = this.maplibreMap;
@@ -6221,12 +6495,28 @@ export class DeckGLMap {
  return url ? [url] : null;
  }, 0.6);
 
- // Satellite imagery (NOAA GOES geocolor)
+ // Satellite imagery (NOAA GOES geocolor) — time-stamped GIBS WMTS.
+ // The TIME segment advances each UTC hour, so reset the recovery offset on
+ // hour-rollover (retry the freshest frame) and rebuild the source whenever
+ // the computed URL changes — syncRasterTileLayer otherwise keeps the source
+ // pinned to the URL it was first created with.
+ const satelliteBaseHour = gibsHourTimestamp(0);
+ if (this.satelliteBaseHour !== null && this.satelliteBaseHour !== satelliteBaseHour) {
+ this.satelliteHourOffset = 1;
+ this.satelliteErrorSinceRebuild = false;
+ }
+ this.satelliteBaseHour = satelliteBaseHour;
+ const satelliteUrl = getGoesWmsTileUrl('geocolor', this.satelliteHourOffset);
+ if (ml.weatherSatellite
+ && this.satelliteAppliedUrl !== null
+ && this.satelliteAppliedUrl !== satelliteUrl) {
+ if (map.getLayer('wm-satellite-layer')) map.removeLayer('wm-satellite-layer');
+ if (map.getSource('wm-satellite-src')) map.removeSource('wm-satellite-src');
+ }
  // GoogleMapsCompatible_Level7 tiles only exist at zoom 0–7; pass maxzoom
  // so MapLibre overzooms at z8+ instead of requesting out-of-bounds tiles.
- this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => {
- return [getGoesWmsTileUrl('geocolor')];
- }, 0.5, 7);
+ this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => [satelliteUrl], 0.5, 7);
+ if (ml.weatherSatellite) this.satelliteAppliedUrl = satelliteUrl;
 
  // OWM tile layers (require API key)
  const owmLayers: [string, boolean, OwmTileLayer][] = [

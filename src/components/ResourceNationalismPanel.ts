@@ -41,7 +41,7 @@ export class ResourceNationalismPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -179,7 +179,7 @@ export class ResourceNationalismPanel extends Panel {
     const companies = escapeHtml(ev.affectedCompanies.join(', '));
     let severityColor: string;
     if (ev.severity >= 9) {
-      severityColor = '#d50000';
+      severityColor = '#ff453a';
     } else if (ev.severity >= 7) {
       severityColor = '#ff9800';
     } else {

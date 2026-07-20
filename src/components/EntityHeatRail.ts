@@ -1,4 +1,4 @@
- 
+
 /**
  * EntityHeatRail — shows the top-entities mentioned across all feeds in the
  * last 6h as compact chips. Clicking a chip filters to alerts mentioning
@@ -8,13 +8,12 @@
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { computeEntityHeat, type EntityMention } from '@/services/entity-heat';
 import { getAnomalies } from '@/services/anomaly-baselines';
+import { rafSchedule } from '@/utils';
 
 const MAX_CHIPS = 8;
-const REFRESH_MS = 30_000;
 
 export class EntityHeatRail {
   private element: HTMLElement;
-  private timer: number | null = null;
   private unsub: (() => void) | null = null;
 
   constructor() {
@@ -26,13 +25,18 @@ export class EntityHeatRail {
   mount(parent: HTMLElement): void {
     parent.append(this.element);
     this.render();
-    this.timer = window.setInterval(() => this.render(), REFRESH_MS);
-    this.unsub = unifiedAlertStore.subscribe(() => this.render());
+    // Subscribe to alert store changes and coalesce rapid-fire updates into
+    // one render per animation frame.  The previous implementation also ran
+    // a setInterval(30 s) alongside the subscribe — the interval was fully
+    // redundant because every alert change (the only reason the rail would
+    // differ between renders) already triggers the subscribe callback.
+    const scheduledRender = rafSchedule(() => this.render());
+    this.unsub = unifiedAlertStore.subscribe(scheduledRender);
   }
 
   destroy(): void {
-    if (this.timer != null) window.clearInterval(this.timer);
     this.unsub?.();
+    this.unsub = null;
     this.element.remove();
   }
 

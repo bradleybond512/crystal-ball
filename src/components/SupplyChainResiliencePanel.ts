@@ -89,7 +89,7 @@ export class SupplyChainResiliencePanel extends Panel {
         'Composite stress index, semiconductor shortages, critical-goods scarcity, factory shutdowns, freight anomalies, JIT inventory risk, and nearshoring trend. Refreshes every 10 minutes.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {

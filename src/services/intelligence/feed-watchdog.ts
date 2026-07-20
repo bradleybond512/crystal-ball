@@ -16,6 +16,8 @@
  * `wm-feed-watchdog-alerts` (LIFO ring, max 1000).
  */
 
+import { formatDurationMinutes } from '../../utils/format-duration';
+
 // ── Public types ──────────────────────────────────────────────────────
 
 export type FeedStatus = 'healthy' | 'degraded' | 'stale' | 'offline';
@@ -350,8 +352,8 @@ export class FeedWatchdogService {
   private ageDescription(h: FeedHealth): string {
     const seconds = Math.round((this.clock() - h.lastSeenAt) / 1000);
     if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-    return `${Math.round(seconds / 3600)}h`;
+    // Shared formatter: "45m", "3h 20m", "5d 7h" — never "120h".
+    return formatDurationMinutes(seconds / 60);
   }
 
   private offlineReason(h: FeedHealth): string {

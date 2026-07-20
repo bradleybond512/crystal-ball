@@ -30,12 +30,16 @@ test('initial: registers all live algorithms (orphaned algos with no call sites 
   // fire for them; keeping them would only pollute the ledger with fabricated entries.
   // Cognitive Enhancement work registered 4 new live algorithms (2026-06):
   // bias-detector, cognitive-bias-detector, counterfactual-reasoning, meta-confidence.
+  // Cognition PR 12 registered 5 more, graded deterministically by
+  // cognition/self-tuning.ts: episodic-analog, recalibration, superforecast,
+  // operator-ranking, entity-trajectory.
   const expected = [
     'bias-detector', 'big-event-detector', 'cognitive-bias-detector', 'competitive-hypothesis',
     'compound-risk', 'confidence-urgency-matrix', 'correlation-feedback', 'counterfactual-reasoning',
-    'hypothesis-accuracy', 'meta-confidence', 'negative-evidence', 'nws-polygon-match',
-    'personal-storm-mode', 'relevance-learner', 'shortage-diesel', 'shortage-wheat',
-    'source-feedback', 'threat-classifier', 'truth-score', 'weather-urgency',
+    'entity-trajectory', 'episodic-analog', 'hypothesis-accuracy', 'meta-confidence',
+    'negative-evidence', 'nws-polygon-match', 'operator-ranking', 'personal-storm-mode',
+    'recalibration', 'relevance-learner', 'shortage-diesel', 'shortage-wheat',
+    'source-feedback', 'superforecast', 'threat-classifier', 'truth-score', 'weather-urgency',
   ];
   assert.deepEqual(ids, expected);
 });

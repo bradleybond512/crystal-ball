@@ -148,6 +148,122 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     description: 'Number of self-consistency samples per persona probability elicitation (k=1 = legacy, k=3 = default).',
     affectsNotifications: false,
   },
+
+  // ── PR 12: Self-tuning cognition ──────────────────────────────────────
+  // Every cognition constant becomes a declared tunable with bounds
+  // (docs/COGNITIVE_ENHANCEMENT_PLAN.md Part D PR 12). The cognition
+  // modules read these via getTunedParam with the old hardcoded value as
+  // the fallback default, so an empty store is byte-identical to the
+  // pre-PR-12 behavior.
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'minSim',
+    default: 0.45,
+    min: 0.3,
+    max: 0.6,
+    step: 0.05,
+    // Misses mean noisy analogs are qualifying (weak matches driving the
+    // analog score the wrong way) → raise the similarity bar.
+    fixDirection: 'increase',
+    description: 'Minimum cosine similarity for a past episode to qualify as an analog.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'analogBlendK',
+    default: 5,
+    min: 3,
+    max: 10,
+    step: 1,
+    // Misses mean thin episodic history is moving the blended base rate
+    // too far → require more analogs before episodic evidence dominates.
+    fixDirection: 'increase',
+    description: 'Bayesian pseudo-count in the episodic blend weight analogN/(analogN+k).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'recalibration',
+    parameterId: 'shrinkPrior',
+    default: 10,
+    min: 5,
+    max: 20,
+    step: 1,
+    // Misses mean the reliability curve is overcorrecting on thin bins →
+    // shrink corrections harder toward identity.
+    fixDirection: 'increase',
+    description: 'Laplace shrinkage pseudo-count pulling per-bin calibration corrections toward 0.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'extremizeK',
+    default: 1.3,
+    min: 1,
+    max: 1.8,
+    step: 0.1,
+    // Misses mean the aggregate is over-sharpened → move k back toward
+    // the identity (k=1, no extremization).
+    fixDirection: 'decrease',
+    description: 'Satopää extremization exponent applied to the geometric-mean-of-odds aggregate.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'spreadSkipThreshold',
+    default: 0.25,
+    min: 0.15,
+    max: 0.4,
+    step: 0.05,
+    // Misses mean contested estimates are still being sharpened → skip
+    // extremization at lower disagreement.
+    fixDirection: 'decrease',
+    description: 'Persona-estimate spread above which extremization is skipped (disagreement guard).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'entity-trajectory',
+    parameterId: 'heatHalfLifeHours',
+    default: 72,
+    min: 24,
+    max: 168,
+    step: 12,
+    // Misses mean stale entities still read as hot → decay heat faster.
+    fixDirection: 'decrease',
+    description: 'Exponential half-life (hours) of the entity dossier heat score.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'operator-ranking',
+    parameterId: 'interestHalfLifeHours',
+    default: 168,
+    min: 72,
+    max: 336,
+    step: 24,
+    // Misses mean stale interests are still boosting rankings → forget
+    // unreinforced interest terms faster.
+    fixDirection: 'decrease',
+    description: 'Half-life (hours) of operator interest-term weights without reinforcement.',
+    affectsNotifications: false,
+  },
+  {
+    // MANUAL-ONLY knob: 'consolidation' is not a registered algorithm (it
+    // is not one of the five graded cognition outputs), so the safe-
+    // adjustment loop never proposes for it, and it has no safety-fixture
+    // suite (fail-closed if that ever changes). It is declared here so the
+    // consolidation module reads a bounded, operator-editable value instead
+    // of a hardcoded constant.
+    algorithmId: 'consolidation',
+    parameterId: 'clusterSimThreshold',
+    default: 0.6,
+    min: 0.5,
+    max: 0.75,
+    step: 0.05,
+    // Bad learned schemas mean clusters are too loose → require tighter
+    // cosine similarity before episodes consolidate into a schema.
+    fixDirection: 'increase',
+    description: 'Cosine similarity threshold for episode clustering during memory consolidation.',
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value
@@ -166,7 +282,26 @@ function clampToBound(decl: TunableDeclaration | undefined, value: number, fallb
   return Math.min(decl.max, Math.max(decl.min, value));
 }
 
+/**
+ * Short-TTL parsed-store memo. PR 12 put `getTunedParam` on hot paths
+ * (per-term interest decay, heat computation, analog recall), and each
+ * uncached call re-parses localStorage JSON. The memo caches the parsed
+ * store for a few seconds; any write THROUGH THIS MODULE invalidates it
+ * immediately, so the only staleness window is an out-of-band
+ * localStorage edit (another tab), bounded by the TTL.
+ */
+const LOAD_MEMO_TTL_MS = 5000;
+let _loadMemo: { store: Store; at: number } | null = null;
+
 function load(): Store {
+  const nowMs = Date.now();
+  if (_loadMemo !== null && nowMs - _loadMemo.at < LOAD_MEMO_TTL_MS) return _loadMemo.store;
+  const store = loadUncached();
+  _loadMemo = { store, at: nowMs };
+  return store;
+}
+
+function loadUncached(): Store {
   try {
     if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -184,6 +319,9 @@ function load(): Store {
 }
 
 function save(store: Store): void {
+  // Invalidate before the write so a storage failure can never leave a
+  // stale memo claiming the old value.
+  _loadMemo = null;
   try {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));

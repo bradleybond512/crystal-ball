@@ -9,8 +9,11 @@ body.is-desktop-macos {
   --mac-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
   --mac-font-mono: "SF Mono", ui-monospace, "Cascadia Code", monospace;
 
-  /* Sidebar dimensions */
-  --mac-sidebar-width: 155px;
+  /* Sidebar dimensions — 180px so panel labels ("Improvement Schedule",
+     "Cross-Domain Conflict") stop hard-clipping at the ellipsis. Everything
+     keyed to the sidebar edge (replay scrubber, notification stack) reads
+     this variable, so no other layout math changes. */
+  --mac-sidebar-width: 180px;
   --mac-toolbar-height: 44px;
   --mac-traffic-lights-height: 44px; /* safe area below traffic lights */
 
@@ -19,10 +22,11 @@ body.is-desktop-macos {
      use this value, not --eew-bar-h. */
   --below-eew: var(--mac-toolbar-height);
 
-  /* Dark-mode macOS system colors (approximated) */
-  --mac-window-bg: #1c1c1e;
-  --mac-sidebar-bg: rgba(44, 44, 46, 0.72);
-  --mac-surface: #2c2c2e;
+  /* Dark-mode surfaces — re-pointed at the Apple DL near-black palette
+     (2026-07 restyle Phase B); light-theme block below keeps system values. */
+  --mac-window-bg: var(--hs-bg-base);
+  --mac-sidebar-bg: var(--mat-chrome-bg);
+  --mac-surface: var(--mat-solid-2);
   --mac-surface-hover: #3a3a3c;
   --mac-surface-active: #48484a;
   --mac-label: rgba(255, 255, 255, 0.85);
@@ -44,10 +48,10 @@ body.is-desktop-macos {
   --mac-pink: #ff375f;
 
   /* Card / panel appearance */
-  --mac-card-bg: #2c2c2e;
-  --mac-card-border: rgba(255, 255, 255, 0.1);
-  --mac-card-radius: 12px;
-  --mac-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --mac-card-bg: var(--mat-solid-2);
+  --mac-card-border: rgba(255, 255, 255, 0.06);
+  --mac-card-radius: var(--r-md);
+  --mac-card-shadow: var(--e-2), var(--edge-highlight);
 }
 
 /* Light-mode macOS overrides */
@@ -65,6 +69,11 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *) {
   --mac-card-bg: #ffffff;
   --mac-card-border: rgba(0, 0, 0, 0.08);
   --mac-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  /* Graphite accent inverts on light surfaces — near-white fills would
+     vanish, so light theme gets dark-alpha equivalents. */
+  --accent-fill: rgba(0, 0, 0, 0.85);
+  --accent-selection: rgba(0, 0, 0, 0.1);
+  --text-on-selection: rgba(0, 0, 0, 0.9);
 }
 
 /* ── Root layout ────────────────────────────────────────────── */
@@ -140,8 +149,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   font-size: 11px;
   font-weight: 600;
   color: var(--mac-secondary-label);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: normal;
   padding: 0 12px 3px;
   display: block;
 }
@@ -159,7 +167,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   color: var(--mac-label);
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.1s ease, color 0.1s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
   white-space: nowrap;
   overflow: hidden;
@@ -171,8 +179,8 @@ body.has-staleness-banner .mac-sidebar-nav {
 }
 
 .mac-sidebar-item.active {
-  background: var(--mac-accent);
-  color: #fff;
+  background: var(--accent-selection);
+  color: var(--text-on-selection);
 }
 
 .mac-sidebar-item-icon {
@@ -191,11 +199,10 @@ body.has-staleness-banner .mac-sidebar-nav {
 }
 
 .mac-mode-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: normal;
   color: var(--mac-tertiary-label);
-  text-transform: uppercase;
   margin-bottom: 4px;
 }
 
@@ -211,12 +218,12 @@ body.has-staleness-banner .mac-sidebar-nav {
   border-radius: 5px;
   background: transparent;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: var(--mac-font);
   cursor: pointer;
   text-align: center;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
   white-space: nowrap;
   position: relative;
 }
@@ -273,7 +280,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   top: -4px;
   right: -4px;
   background: var(--mac-red);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
@@ -293,12 +300,12 @@ body.has-staleness-banner .mac-sidebar-nav {
   border-radius: 5px;
   background: rgba(255, 159, 10, 0.12);
   color: var(--mac-orange);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   font-family: var(--mac-font);
   cursor: pointer;
   text-align: center;
-  transition: background 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .mac-alert-family-btn:hover {
@@ -554,12 +561,12 @@ body.is-desktop-macos[data-app-mode="peace"] .mac-toolbar-title {
   border-radius: 5px;
   background: transparent;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: var(--mac-font);
   cursor: pointer;
   text-align: center;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .mac-ghost-mode-btn:hover {
@@ -646,7 +653,7 @@ body.is-desktop-macos[data-app-mode="ghost"] .mac-mode-section {
   color: var(--mac-secondary-label);
   cursor: pointer;
   padding: 0;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   font-family: var(--mac-font);
 }
 
@@ -699,14 +706,14 @@ button.mac-sidebar-version {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: var(--mac-accent);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--mac-window-bg);
   border: none;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   font-family: var(--mac-font);
-  transition: opacity 0.12s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .mac-sidebar-update-btn:hover {
@@ -729,8 +736,8 @@ button.mac-sidebar-version {
 
 /* ── Sidebar collapse ───────────────────────────────────────── */
 body.is-desktop-macos .mac-sidebar {
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
- border-right-color 0.22s ease;
+  transition: width var(--dur-base) var(--ease-out),
+ border-right-color var(--dur-base) var(--ease-out);
 }
 
 body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
@@ -757,10 +764,10 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   cursor: pointer;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s ease, color 0.12s ease, width 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), width var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -788,7 +795,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-collapse-tab {
   cursor: pointer;
   padding: 0;
   margin-left: auto;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   font-size: 13px;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -813,7 +820,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-collapse-tab {
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -824,12 +831,16 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-collapse-tab {
 }
 
 body.is-desktop-macos.sidebar-collapsed .mac-sidebar-toggle-btn {
-  color: var(--mac-accent);
-  background: rgba(10, 132, 255, 0.1);
+  color: var(--mac-label);
+  background: var(--accent-selection);
 }
 
 body.is-desktop-macos.sidebar-collapsed .mac-sidebar-toggle-btn:hover {
-  background: rgba(10, 132, 255, 0.18);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+body.is-desktop-macos.sidebar-collapsed:where([data-theme="light"], [data-theme="light"] *) .mac-sidebar-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 /* When sidebar is collapsed, mac-content fills full window width.
@@ -838,6 +849,18 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-toggle-btn:hover {
  them so the sidebar toggle button is always reachable. */
 body.is-desktop-macos.sidebar-collapsed .mac-content-toolbar {
   padding-left: 80px;
+}
+
+/* Notification stack (staleness / offline / "Reset cache" banners) must start
+   where the sidebar ends so its banners stay scoped to the content area and
+   don't overlap the sidebar. Mirrors the .replay-scrubber treatment. The stack
+   anchors left:0 via inline styles, so !important is required to override.
+   When the sidebar is collapsed the content fills the window, so reset to 0. */
+body.is-desktop-macos #cb-notification-stack {
+  left: var(--mac-sidebar-width) !important;
+}
+body.is-desktop-macos.sidebar-collapsed #cb-notification-stack {
+  left: 0 !important;
 }
 
 /* Toolbar overflow controls — shown when sidebar is collapsed */
@@ -866,7 +889,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-toolbar-sidebar-overflow {
   font-size: 12px;
   font-family: var(--mac-font);
   white-space: nowrap;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -920,7 +943,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
 }
 
 .mac-toolbar-version {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--mac-secondary-label);
   letter-spacing: 0.02em;
@@ -979,7 +1002,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
 }
 
 .mac-content-toolbar .region-select:focus {
-  border-color: var(--mac-accent);
+  border-color: var(--accent-fill);
 }
 
 /* Clock in toolbar — override main.css absolute positioning so it's a normal flex child */
@@ -1010,7 +1033,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .mac-content-toolbar .search-btn:hover {
@@ -1065,8 +1088,7 @@ body.is-desktop-macos .panel-header .panel-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--mac-secondary-label);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: normal;
 }
 
 /* ── Panel cards ─────────────────────────────────────────────── */
@@ -1083,7 +1105,7 @@ body.is-desktop-macos .panels-grid > * {
   border: 1px solid var(--mac-card-border);
   box-shadow: var(--mac-card-shadow);
   overflow: hidden;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .panels-grid > *:hover {
@@ -1103,8 +1125,7 @@ body.is-desktop-macos .panels-grid .panel-header .panel-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--mac-secondary-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: normal;
 }
 
 /* ── Global typography overrides ────────────────────────────── */
@@ -1175,9 +1196,9 @@ body.is-desktop-macos [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.50);
 }
 
-/* ── Focus rings — macOS blue outline ───────────────────────── */
+/* ── Focus rings — Graphite outline ─────────────────────────── */
 body.is-desktop-macos *:focus-visible {
-  outline: 2px solid var(--mac-accent);
+  outline: 2px solid var(--accent-fill);
   outline-offset: 1px;
 }
 
@@ -1243,7 +1264,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background 0.1s ease;
+  transition: background var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -1256,8 +1277,8 @@ body.is-desktop-macos #unifiedSettingsMount {
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--mac-accent);
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+  background: var(--accent-fill);
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 /* Disabled panel: dimmed row, hollow dot */
@@ -1297,8 +1318,8 @@ body.is-desktop-macos #unifiedSettingsMount {
 /* MacBook Pro 14" (1512×982 logical @ 2× Retina, default scale) */
 /* ============================================================ */
 @media screen and (max-width: 1520px) and (min-width: 1400px) {
-  :root { --mac-sidebar-width: 148px; }
-  .mac-sidebar-panel-item { font-size: 10.5px; padding: 3px 6px; }
+  :root { --mac-sidebar-width: 172px; }
+  .mac-sidebar-panel-item { font-size: 11px; padding: 3px 6px; }
 }
 
 /* ── God's Eye Time Machine ─────────────────────────────── */
@@ -1372,7 +1393,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   border-radius: 8px;
   font: inherit;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .godsvision-time-machine .gtm-btn:hover,
 .godsvision-time-machine .gtm-pill:hover {
@@ -1382,7 +1403,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .godsvision-time-machine .gtm-pill-active {
   background: rgba(96, 165, 250, 0.25);
   border-color: rgba(96, 165, 250, 0.60);
-  color: #fff;
+  color: var(--text-primary);
 }
 .godsvision-time-machine .gtm-slider {
   flex: 1;
@@ -1420,12 +1441,12 @@ body.is-desktop-macos #unifiedSettingsMount {
 
 /* ── GlobeHUD enhancements ──────────────────────────────── */
 .ge-hud-ctx {
-  font: 10px/1 'SF Mono', monospace;
+  font: 11px/1 'SF Mono', monospace;
   color: rgba(230, 237, 243, 0.78);
   letter-spacing: 0.5px;
 }
 .ge-hud-sun {
-  font: 9px/1 'SF Mono', monospace;
+  font: 11px/1 'SF Mono', monospace;
   padding: 2px 6px;
   border-radius: 999px;
   letter-spacing: 0.6px;
@@ -1436,7 +1457,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .ge-sun-twilight { background: rgba(99,  102, 241, 0.20); color: #c7d2fe; }
 .ge-sun-night { background: rgba(30,  41,  59, 0.55); color: #94a3b8; }
 .ge-hud-nearest {
-  font: 10px/1.3 'SF Mono', monospace;
+  font: 11px/1.3 'SF Mono', monospace;
   color: rgba(230, 237, 243, 0.85);
   margin-top: 4px;
   padding: 3px 6px;
@@ -1461,11 +1482,11 @@ body.is-desktop-macos #unifiedSettingsMount {
   max-width: 100%;
 }
 .ge-hud-ticker-label {
-  font: 9px/1 'SF Mono', monospace;
+  font: 11px/1 'SF Mono', monospace;
   letter-spacing: 1px;
   padding: 3px 7px;
   background: rgba(239, 68, 68, 0.85);
-  color: #fff;
+  color: var(--text-primary);
   border-radius: 999px;
   flex-shrink: 0;
 }
@@ -1503,8 +1524,8 @@ body.is-desktop-macos #unifiedSettingsMount {
 
 .key-dashboard { display: flex; flex-direction: column; gap: 12px; }
 .key-dashboard-header { display: flex; justify-content: space-between; align-items: center; }
-.key-dashboard-progress { width: 100%; height: 6px; background: var(--mac-control-bg, #e5e5ea); border-radius: 3px; overflow: hidden; }
-.key-dashboard-progress-bar { height: 100%; background: var(--mac-accent, #007aff); transition: width .3s; }
+.key-dashboard-progress { width: 100%; height: 6px; background: var(--mac-fill, #e5e5ea); border-radius: 3px; overflow: hidden; }
+.key-dashboard-progress-bar { height: 100%; background: var(--accent-fill); transition: width var(--dur-base) var(--ease-out); }
 .key-dashboard-run-wizard { padding: 6px 14px; font-weight: 500; }
 
 .key-tier { border: 1px solid var(--mac-divider, #d8d8db); border-radius: 8px; padding: 8px 12px; }
@@ -1570,8 +1591,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .setup-wizard-tier {
   font-size: 11px;
   color: var(--mac-text-secondary, rgba(235, 235, 245, 0.6));
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: normal;
   font-weight: 600;
 }
 .setup-wizard-step {
@@ -1590,6 +1610,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .setup-wizard-signup {
   display: inline-block;
   margin-bottom: 14px;
+  /* deliberate: link affordance — white link would vanish into body text */
   color: var(--mac-accent, #0a84ff);
   font-size: 13px;
   text-decoration: none;
@@ -1605,11 +1626,11 @@ body.is-desktop-macos #unifiedSettingsMount {
   border-radius: 8px;
   color: var(--mac-text-primary, #f5f5f7);
   outline: none;
-  transition: border-color 120ms, box-shadow 120ms;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 .setup-wizard-input:focus {
-  border-color: var(--mac-accent, #0a84ff);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+  border-color: var(--accent-fill);
+  box-shadow: 0 0 0 3px var(--accent-selection);
 }
 .setup-wizard-feedback {
   margin: 10px 0 4px; min-height: 1.2em;
@@ -1631,20 +1652,21 @@ body.is-desktop-macos #unifiedSettingsMount {
   background: rgba(255, 255, 255, 0.06);
   color: var(--mac-text-primary, #f5f5f7);
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .setup-wizard-footer button:hover {
   background: rgba(255, 255, 255, 0.10);
   border-color: rgba(255, 255, 255, 0.18);
 }
 .setup-wizard-footer button.primary {
-  background: var(--mac-accent, #0a84ff);
-  border-color: var(--mac-accent, #0a84ff);
-  color: #fff;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--mac-window-bg);
 }
 .setup-wizard-footer button.primary:hover {
-  background: var(--mac-accent-hover, #409cff);
-  border-color: var(--mac-accent-hover, #409cff);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  opacity: 0.85;
 }
 
 /* ============================================================
@@ -1692,7 +1714,7 @@ body.is-desktop-macos .syd-tabs .syd-tab {
   background: transparent !important;
   color: var(--mac-secondary-label) !important;
   font-weight: 500;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .syd-tabs .syd-tab[style*="border-bottom"] {
@@ -1718,7 +1740,7 @@ body.is-desktop-macos .syd-self-test {
   border: 0.5px solid var(--mac-card-border) !important;
   background: var(--mac-fill) !important;
   color: var(--mac-label) !important;
-  transition: background 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .syd-refresh:hover,
@@ -1727,14 +1749,15 @@ body.is-desktop-macos .syd-self-test:not([disabled]):hover {
 }
 
 body.is-desktop-macos .syd-self-test:not([disabled]) {
-  background: var(--mac-accent) !important;
-  border-color: var(--mac-accent) !important;
-  color: #fff !important;
+  background: var(--accent-fill) !important;
+  border-color: var(--accent-fill) !important;
+  color: var(--mac-window-bg) !important;
 }
 
 body.is-desktop-macos .syd-self-test:not([disabled]):hover {
-  background: var(--mac-accent-hover) !important;
-  border-color: var(--mac-accent-hover) !important;
+  background: var(--accent-fill) !important;
+  border-color: var(--accent-fill) !important;
+  opacity: 0.85 !important;
 }
 
 /* Inspector-drawer feel for the per-row panel rows. */
@@ -1744,7 +1767,7 @@ body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-content > di
   background: var(--mac-surface) !important;
   border-color: var(--mac-card-border) !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-  transition: background 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-content > div > div[style*="border:1px solid"]:hover,
@@ -1827,17 +1850,17 @@ body.is-desktop-macos,
   --aid-space-4: 16px;
   --aid-space-5: 24px;
 
-  /* Card geometry — plan: 8px radius, thin border. */
-  --aid-radius-sm: 4px;
-  --aid-radius-md: 6px;
-  --aid-radius-lg: 8px;
-  --aid-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-  --aid-shadow-elevated: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  /* Card geometry — converged onto the Apple DL tokens (Phase B). */
+  --aid-radius-sm: var(--r-xs);
+  --aid-radius-md: var(--r-sm);
+  --aid-radius-lg: var(--r-md);
+  --aid-shadow-card: var(--e-2), var(--edge-highlight);
+  --aid-shadow-elevated: var(--e-3), var(--edge-highlight);
 
-  /* Motion — plan: under 200ms. */
-  --aid-motion-fast: 100ms;
-  --aid-motion-base: 140ms;
-  --aid-motion-slow: 180ms;
+  /* Motion — converged onto the DL motion tokens. */
+  --aid-motion-fast: var(--dur-fast);
+  --aid-motion-base: var(--dur-base);
+  --aid-motion-slow: var(--dur-slow);
 }
 
 /* Light-mode parity. */
@@ -1867,8 +1890,7 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   font-family: var(--aid-font);
   font-size: var(--aid-text-size-xs);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: normal;
   line-height: 1.4;
   background: rgba(255, 255, 255, 0.08);
   color: var(--aid-text-secondary);
@@ -1983,8 +2005,7 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
 .mac-event-card__meta-label {
   font-size: var(--aid-text-size-xs);
   font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: normal;
   color: var(--aid-text-tertiary);
 }
 .mac-event-card__meta-value {
@@ -2154,6 +2175,82 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1);
 }
 
+/* ── Personal Storm Mode strip (src/components/PersonalStormMode.ts) ──
+ * Weather Remediation PR 5: retreat the persistent severe-weather strip
+ * to the native toolbar language when the desktop chrome is active —
+ * window-tinted backdrop-blur surface, aid tokens for text/borders, and
+ * accent chips per threat tier. Base (web) styling lives in alerts.css.
+ */
+
+body.is-desktop-macos .cb-storm-mode {
+  font-family: var(--aid-font);
+  color: var(--aid-text);
+  background: color-mix(in srgb, var(--aid-window) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border-bottom: 1px solid var(--aid-border-strong);
+  box-shadow: var(--aid-shadow-elevated);
+}
+body.is-desktop-macos .cb-storm-mode__strip {
+  padding: var(--aid-space-2) var(--aid-space-4);
+  font-size: var(--aid-text-size-md);
+}
+body.is-desktop-macos .cb-storm-mode__tier {
+  border-radius: var(--aid-radius-sm);
+  font-size: var(--aid-text-size-xs);
+}
+body.is-desktop-macos .cb-storm-mode--warning   { border-bottom-color: rgba(255, 159, 10, 0.55); }
+body.is-desktop-macos .cb-storm-mode--emergency { border-bottom-color: rgba(255, 69, 58, 0.7); }
+body.is-desktop-macos .cb-storm-mode--warning   .cb-storm-mode__tier { background: rgba(255, 159, 10, 0.16); color: var(--aid-amber); }
+body.is-desktop-macos .cb-storm-mode--emergency .cb-storm-mode__tier { background: rgba(255, 69, 58, 0.18); color: var(--aid-red); }
+body.is-desktop-macos .cb-storm-mode__btn {
+  border: 1px solid var(--aid-border);
+  border-radius: var(--aid-radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: var(--aid-text-size-sm);
+  transition: background var(--aid-motion-fast) ease;
+}
+body.is-desktop-macos .cb-storm-mode__btn:hover { background: rgba(255, 255, 255, 0.10); }
+body.is-desktop-macos .cb-storm-mode__btn--ack {
+  background: var(--aid-blue);
+  border-color: var(--aid-blue);
+  color: #fff;
+}
+body.is-desktop-macos .cb-storm-mode__btn--ack:hover {
+  background: color-mix(in srgb, var(--aid-blue) 85%, #fff);
+}
+body.is-desktop-macos .cb-storm-mode__card {
+  padding: var(--aid-space-1) var(--aid-space-4) var(--aid-space-4);
+  font-size: var(--aid-text-size-md);
+}
+body.is-desktop-macos .cb-storm-mode__reason {
+  background: var(--aid-surface);
+  border-left: 2px solid var(--aid-border-strong);
+  border-radius: 0 var(--aid-radius-md) var(--aid-radius-md) 0;
+  color: var(--aid-text-secondary);
+  font-size: var(--aid-text-size-sm);
+}
+body.is-desktop-macos .cb-storm-mode__meta dt {
+  color: var(--aid-text-tertiary);
+  font-size: var(--aid-text-size-xs);
+}
+body.is-desktop-macos .cb-storm-mode__actions-heading,
+body.is-desktop-macos .cb-storm-mode__watch-heading {
+  color: var(--aid-text-secondary);
+  font-size: var(--aid-text-size-xs);
+}
+body.is-desktop-macos .cb-storm-mode__action {
+  background: var(--aid-surface);
+  border-radius: 0 var(--aid-radius-md) var(--aid-radius-md) 0;
+}
+body.is-desktop-macos .cb-storm-mode__action--p1 { border-left-color: var(--aid-red);   background: rgba(255, 69, 58, 0.08); }
+body.is-desktop-macos .cb-storm-mode__action--p2 { border-left-color: var(--aid-amber); }
+body.is-desktop-macos .cb-storm-mode__action-time,
+body.is-desktop-macos .cb-storm-mode__action-rationale { color: var(--aid-text-tertiary); }
+body.is-desktop-macos .cb-storm-mode__watch-list { color: var(--aid-text-secondary); }
+body.is-desktop-macos .cb-storm-mode__footer { border-top-color: var(--aid-border); }
+body.is-desktop-macos .cb-storm-mode__why { color: var(--aid-blue); }
+
 /* ── Reduced motion ──────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -2163,7 +2260,9 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   .mac-inspector-drawer,
   .mac-status-pill,
   .mac-segmented-control,
-  .mac-segmented-control__option {
+  .mac-segmented-control__option,
+  body.is-desktop-macos .cb-storm-mode,
+  body.is-desktop-macos .cb-storm-mode__btn {
     animation: none !important;
     transition: none !important;
     transform: none !important;

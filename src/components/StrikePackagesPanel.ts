@@ -45,7 +45,7 @@ export class StrikePackagesPanel extends Panel {
  // Summary header with pill badges
  const headerHtml = `<div style="padding:8px 12px;border-bottom:1px solid var(--border-subtle,#333);">
  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
- ${summary.critical > 0 ? `<span style="background:#f44336;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${summary.critical} CRITICAL</span>` : ''}
+ ${summary.critical > 0 ? `<span style="background:#ff453a;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${summary.critical} CRITICAL</span>` : ''}
  ${summary.high > 0 ? `<span style="background:#ff9800;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${summary.high} HIGH</span>` : ''}
  ${summary.inSensitiveAirspace > 0 ? `<span style="background:#8b0000;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${summary.inSensitiveAirspace} SENSITIVE</span>` : ''}
  </div>
@@ -56,9 +56,9 @@ export class StrikePackagesPanel extends Panel {
 
  // Package rows
  const rowsHtml = packages.slice(0, 15).map(pkg => {
- const threatColor = pkg.threatLevel === 'critical' ? '#f44336' : pkg.threatLevel === 'high' ? '#ff9800' : pkg.threatLevel === 'elevated' ? '#ffeb3b' : '#4caf50';
+ const threatColor = pkg.threatLevel === 'critical' ? '#ff453a' : pkg.threatLevel === 'high' ? '#ff9800' : pkg.threatLevel === 'elevated' ? '#ffeb3b' : '#4caf50';
  const rolesText = pkg.roles.slice(0, 4).map(r => `${r.count}\u00D7 ${escapeHtml(r.type)}`).join(' \u00B7 ');
- const sensitiveBadge = pkg.inSensitiveAirspace ? `<span style="background:rgba(244,67,54,0.2);color:#f44336;padding:1px 5px;border-radius:3px;font-size:9px;margin-left:6px;">SENSITIVE</span>` : '';
+ const sensitiveBadge = pkg.inSensitiveAirspace ? `<span style="background:rgba(255, 69, 58,0.2);color:#ff453a;padding:1px 5px;border-radius:3px;font-size:9px;margin-left:6px;">SENSITIVE</span>` : '';
  return `<div style="padding:8px 12px;border-bottom:1px solid var(--border-subtle,#333);">
  <div style="display:flex;justify-content:space-between;align-items:center;">
  <div>

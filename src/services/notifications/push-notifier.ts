@@ -11,6 +11,7 @@ import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { isDesktopRuntime } from '@/services/runtime';
 import { tierForMagnitude } from './eew-tiers';
 import { loadThresholds, type ThresholdConfig } from '@/services/config/alert-thresholds';
+import { fireVoiceForEvent, getVoiceSettings } from './voice-alerter';
 import {
   record as recordHistory,
   domainForThreatType,
@@ -487,6 +488,9 @@ export async function firePushForEvent(
   }
   const send = opts.send ?? defaultSend;
   await send(decision.payload);
+  try {
+    await fireVoiceForEvent(event, getVoiceSettings());
+  } catch { /* voice is best-effort; never break the notification path */ }
   let entry: NotificationLedgerEntry | undefined;
   if (opts.ledger) {
     entry = opts.ledger.append({

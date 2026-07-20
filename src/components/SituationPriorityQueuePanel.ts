@@ -19,7 +19,7 @@ const REFRESH_MS = 30_000;
 const DISPLAY_LIMIT = 50;
 
 const SEVERITY_BADGE: Record<string, string> = {
-  critical: '#f44336',
+  critical: '#ff453a',
   high: '#ff9800',
   medium: '#ffb74d',
   low: '#9e9e9e',
@@ -51,7 +51,7 @@ export class SituationPriorityQueuePanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsub = getSituationPriorityQueueService().subscribe(() => this.render());
   }
 

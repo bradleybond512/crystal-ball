@@ -1,5 +1,6 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getGhostRefreshMultiplier } from '@/services/mode-manager';
+import { getContextCadenceMultiplier } from '@/services/adaptive-cadence';
 import { isAlwaysOn } from '@/services/always-on';
 
 /** Hidden-window slowdown factor. Always-on disables the slowdown entirely. */
@@ -17,7 +18,7 @@ export interface RefreshRegistration {
 
 // Anything slower than this gets a console.warn that log-bridge captures as a
 // perf breadcrumb. Chosen to trip on clear regressions, not noisy batch work.
-const SLOW_REFRESH_THRESHOLD_MS = 2500;
+const SLOW_REFRESH_THRESHOLD_MS = 15_000;
 
 export class RefreshScheduler implements AppModule {
   private ctx: AppContext;
@@ -66,7 +67,7 @@ export class RefreshScheduler implements AppModule {
 
  const computeDelay = (baseMs: number, isHidden: boolean) => {
  const ghostMultiplier = getGhostRefreshMultiplier();
- const adjusted = baseMs * ghostMultiplier * hiddenMultiplier(isHidden, isAlwaysOn());
+ const adjusted = baseMs * ghostMultiplier * getContextCadenceMultiplier() * hiddenMultiplier(isHidden, isAlwaysOn());
  const jitterRange = adjusted * JITTER_FRACTION;
  // eslint-disable-next-line sonarjs/pseudo-random
  const jittered = adjusted + (Math.random() * 2 - 1) * jitterRange;
@@ -80,6 +81,15 @@ export class RefreshScheduler implements AppModule {
  const run = async () => {
  if (this.ctx.isDestroyed) return;
  const isHidden = document.visibilityState === 'hidden';
+ // Pause network refreshes while the window is hidden. WKWebView suspends the
+ // underlying fetch regardless, so running them just accumulates in-flight
+ // awaits that ALL settle in one burst on resume — the stampede that pegged
+ // the main thread into a freeze (Defect A). flushStaleRefreshes() catches up
+ // on resume with bounded concurrency (6 at a time, staggered).
+ if (isHidden) {
+ scheduleNext(computeDelay(intervalMs * currentMultiplier, true));
+ return;
+ }
  if (condition && !condition()) {
  scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));
  return;
@@ -91,6 +101,11 @@ export class RefreshScheduler implements AppModule {
  this.ctx.inFlight.add(name);
  const refreshStart = performance.now();
  try {
+ // No artificial race-timeout here: pause-while-hidden (above) already
+ // prevents the mass hidden-suspension stampede, and a wrapping timeout only
+ // orphans fn()'s side effects and leaks timers without being able to cancel
+ // the underlying fetch (per cross-agent review). Runners self-heal on resume
+ // when the suspended fetch settles.
  const changed = await fn();
  const elapsed = performance.now() - refreshStart;
  if (elapsed >= SLOW_REFRESH_THRESHOLD_MS) {

@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
-import type { WebcamCatalog, WebcamFeed, WebcamSource } from './webcam-types';
+import type { WebcamCatalog, WebcamFeed, WebcamSource, WebcamSourceHealth } from './webcam-types';
 
 const FAVORITES_KEY = 'crystalball-webcam-favorites';
 const CATALOG_TTL_MS = 5 * 60 * 1000;
@@ -11,6 +11,28 @@ interface FetchOpts {
   category?: string;
   bbox?: { minLat: number; minLon: number; maxLat: number; maxLon: number };
   signal?: AbortSignal;
+}
+
+export function catalogFromResponse(data: {
+  feeds?: WebcamFeed[];
+  sourceHealth?: WebcamSourceHealth[];
+  updatedAt?: number;
+}): WebcamCatalog {
+  const feeds = Array.isArray(data.feeds) ? data.feeds : [];
+  const bySource = feeds.reduce<Record<WebcamSource, WebcamFeed[]>>(
+    (acc, feed) => {
+      if (!acc[feed.source]) acc[feed.source] = [];
+      acc[feed.source].push(feed);
+      return acc;
+    },
+    {} as Record<WebcamSource, WebcamFeed[]>,
+  );
+  return {
+    feeds,
+    bySource,
+    lastUpdated: (data.updatedAt ?? Math.floor(Date.now() / 1000)) * 1000,
+    sourceHealth: Array.isArray(data.sourceHealth) ? data.sourceHealth : undefined,
+  };
 }
 
 export async function fetchUnifiedWebcams(opts: FetchOpts = {}): Promise<WebcamCatalog> {
@@ -31,21 +53,8 @@ export async function fetchUnifiedWebcams(opts: FetchOpts = {}): Promise<WebcamC
     if (cache) return cache.catalog;
     return emptyCatalog();
   }
-  const data = (await res.json()) as { feeds?: WebcamFeed[]; updatedAt?: number };
-  const feeds = Array.isArray(data.feeds) ? data.feeds : [];
-  const bySource = feeds.reduce<Record<WebcamSource, WebcamFeed[]>>(
-    (acc, feed) => {
-      if (!acc[feed.source]) acc[feed.source] = [];
-      acc[feed.source].push(feed);
-      return acc;
-    },
-    {} as Record<WebcamSource, WebcamFeed[]>,
-  );
-  const catalog: WebcamCatalog = {
-    feeds,
-    bySource,
-    lastUpdated: (data.updatedAt ?? Math.floor(Date.now() / 1000)) * 1000,
-  };
+  const data = (await res.json()) as { feeds?: WebcamFeed[]; sourceHealth?: WebcamSourceHealth[]; updatedAt?: number };
+  const catalog = catalogFromResponse(data);
   if (!opts.sources && !opts.category && !opts.bbox) {
     cache = { catalog, ts: Date.now() };
   }

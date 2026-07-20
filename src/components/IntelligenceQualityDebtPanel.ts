@@ -62,7 +62,7 @@ export class IntelligenceQualityDebtPanel extends Panel {
         'Operator surface for the intelligence-pipeline quality-debt tracker. Shows overall quality score (with trend), open debt items, weekly resolution rate, and per-domain letter grade.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {

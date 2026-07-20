@@ -60,7 +60,7 @@ export class GdeltPanel extends Panel {
 
   private async refresh(): Promise<void> {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/gdelt/summary`);
+      const res = await fetch(`${getApiBaseUrl()}/api/gdelt/summary`, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as unknown;
       this.summary = normalizeSummary(json as Partial<GdeltSummary>);

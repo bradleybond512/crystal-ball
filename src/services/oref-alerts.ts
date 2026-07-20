@@ -1,24 +1,7 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { translateText } from '@/services/summarization';
 import { dataFreshness } from '@/services/data-freshness';
-
-export interface OrefAlert {
-  id: string;
-  cat: string;
-  title: string;
-  data: string[];
-  desc: string;
-  alertDate: string;
-}
-
-export interface OrefAlertsResponse {
-  configured: boolean;
-  alerts: OrefAlert[];
-  historyCount24h: number;
-  totalHistoryCount?: number;
-  timestamp: string;
-  error?: string;
-}
+import { isValidOrefAlertsResponse, type OrefAlert, type OrefAlertsResponse } from './oref-validate';
 
 export interface OrefHistoryEntry {
   alerts: OrefAlert[];
@@ -235,6 +218,7 @@ export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
 
   try {
  const res = await fetch(getOrefApiUrl(), {
+ signal: AbortSignal.timeout(10_000),
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
@@ -242,6 +226,13 @@ export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
  return { configured: false, alerts: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: `HTTP ${res.status}` };
  }
  const data = (await res.json()) as OrefAlertsResponse;
+ if (!isValidOrefAlertsResponse(data)) {
+ // A 200 with a malformed body (e.g. the relay returned an alerts-less object /
+ // HTML) must not poison the cache and read as a fresh "no sirens" — record the
+ // error and re-fetch next time instead of serving the bad object from cache.
+ dataFreshness.recordError('oref-alerts', 'malformed response (missing alerts array)');
+ return { configured: false, alerts: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: 'malformed response' };
+ }
  cachedResponse = data;
  lastFetchAt = now;
  dataFreshness.recordUpdate('oref-alerts', data.alerts.length);
@@ -265,9 +256,11 @@ export async function fetchOrefHistory(): Promise<OrefHistoryResponse> {
   await ensureLocationMapLoaded();
   try {
  const res = await fetch(getOrefApiUrl('history'), {
+ signal: AbortSignal.timeout(10_000),
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
+ dataFreshness.recordError('oref-alerts', `History HTTP ${res.status}`);
  // eslint-disable-next-line no-console -- diagnostic warning for upstream failure
  console.warn('[OREF History] HTTP', res.status);
  return { configured: false, history: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: `HTTP ${res.status}` };
@@ -286,6 +279,7 @@ export async function fetchOrefHistory(): Promise<OrefHistoryResponse> {
 
  return data;
   } catch (error) {
+ dataFreshness.recordError('oref-alerts', String(error));
  return { configured: false, history: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: String(error) };
   }
 }
@@ -299,9 +293,11 @@ export function onOrefAlertsUpdate(cb: (data: OrefAlertsResponse) => void): void
 
 export function startOrefPolling(): void {
   if (pollingInterval) return;
-  pollingInterval = setInterval(async () => {
+  pollingInterval = setInterval(() => {
+ void (async () => {
  const data = await fetchOrefAlerts();
  for (const cb of updateCallbacks) cb(data);
+ })();
   }, 120_000);
 }
 
@@ -312,3 +308,7 @@ export function stopOrefPolling(): void {
   }
   updateCallbacks = [];
 }
+
+// Re-exported so this module's public API (consumed by OrefSirensPanel et al.)
+// is unchanged after the worker-free split into oref-validate.ts.
+export { isValidOrefAlertsResponse, type OrefAlert, type OrefAlertsResponse } from './oref-validate';

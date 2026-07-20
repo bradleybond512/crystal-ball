@@ -38,6 +38,13 @@ const NS = 'http://www.w3.org/2000/svg';
 const BIOMETRY_ENABLED_KEY = 'cb:vault-biometry-enabled';
 const CRASH_SENTINEL_KEY = 'cb:vault-biometry-crash-sentinel';
 const FAKE_AUTH_DELAY_MS = 600;
+// Hard ceiling on the native biometry call. The tauri-plugin-biometry
+// authenticate path can wedge (not crash, not resolve) when its keychain
+// item is in a bad state, which would otherwise freeze the vault door
+// forever. Bound it so a wedged prompt becomes a recoverable error — 6s is
+// ample for a real Touch ID / password prompt while a wedge falls back fast
+// (was 30s, which left the unlock screen frozen for half a minute on a wedge).
+const BIOMETRY_NATIVE_TIMEOUT_MS = 6000;
 
 function safeGetItem(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -78,9 +85,18 @@ async function attemptAuth(): Promise<AuthOutcome> {
     await new Promise<void>(r => setTimeout(r, FAKE_AUTH_DELAY_MS));
     return 'success';
   }
+  // Only the native path needs the Tauri invoke bridge. On a cold first
+  // launch the bridge can lag behind the tauri:// location that already
+  // marks us as a desktop runtime, so wait for it here (not before the
+  // bridge-free fake path) and degrade to a recoverable error if it never
+  // shows rather than dead-ending the whole gate.
+  if (!(await waitForBridge())) return 'error';
   safeSetItem(CRASH_SENTINEL_KEY, String(Date.now()));
   try {
-    await invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } });
+    await Promise.race([
+      invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } }),
+      sleep(BIOMETRY_NATIVE_TIMEOUT_MS).then(() => { throw new Error('biometry-timeout'); }),
+    ]);
     safeRemoveItem(CRASH_SENTINEL_KEY);
     return 'success';
   } catch (error) {
@@ -1039,7 +1055,7 @@ async function playOpenSequence(
   appReady?: Promise<void>,
 ): Promise<void> {
   setScannerSuccess(p);
-  await sleep(400);
+  await sleep(260);
 
   const ctx = newCtx();
   if (ctx) {
@@ -1048,14 +1064,14 @@ async function playOpenSequence(
   }
 
   p.boltPins.forEach((pin, i) => {
- pin.style.animation = `vi-bolt-retract .32s cubic-bezier(0.5,0,1,0.8) ${i * 0.06}s both`;
+ pin.style.animation = `vi-bolt-retract .24s cubic-bezier(0.5,0,1,0.8) ${i * 0.045}s both`;
   });
-  await sleep(840);
+  await sleep(540);
 
   if (appReady) {
  p.statusText.textContent = 'INITIALIZING…';
  p.statusText.setAttribute('fill', 'rgba(40,200,100,0.55)');
- await Promise.race([appReady, sleep(2500)]);
+ await Promise.race([appReady, sleep(1700)]);
  p.statusText.textContent = 'READY';
  await sleep(200);
   }
@@ -1069,27 +1085,27 @@ async function playOpenSequence(
 
   // Interior vault light floods through the opening
   Object.assign(p.interior.style, {
- transition: 'opacity 2.2s ease 0.15s',
+ transition: 'opacity 1.2s ease 0.1s',
  opacity: '1',
   });
 
   // Door swings on left hinges — right edge comes toward viewer (opens outward)
   // Perspective from scene parent gives correct foreshortening against the static frame
   Object.assign(p.root.style, {
- transition: 'transform 3.2s cubic-bezier(0.45, 0, 0.25, 1)',
+ transition: 'transform 1.7s cubic-bezier(0.45, 0, 0.25, 1)',
  transformOrigin: 'left center',
  transform: 'rotateY(82deg)',
   });
-  await sleep(900);
+  await sleep(520);
 
   // Camera dollies forward into the opening while overlay fades
   p.overlay.style.animation = 'none';
   Object.assign(p.overlay.style, {
- transition: 'transform 3.0s cubic-bezier(0.2,0,0.4,1), opacity 2.0s ease 0.1s',
+ transition: 'transform 1.6s cubic-bezier(0.2,0,0.4,1), opacity 1.1s ease 0.05s',
  transform: 'scale(1.06)',
  opacity: '0',
   });
-  await sleep(2200);
+  await sleep(1150);
 }
 
 // ── Biometric flow ─────────────────────────────────────────────────────────────
@@ -1117,18 +1133,15 @@ async function runBiometricFlow(
  if (settled || inFlight) return;
  inFlight = true;
 
- const ready = await waitForBridge();
- if (!ready || settled) { inFlight = false; return; }
-
  if (!manual) {
  setScannerWarmup(refs);
  await sleep(700);
- if (settled) return;
+ if (settled) { inFlight = false; return; }
  }
 
  setScannerPeak(refs);
  await sleep(600);
- if (settled) return;
+ if (settled) { inFlight = false; return; }
 
  // Native biometry is opt-in (see BIOMETRY_ENABLED_KEY comment up top).
  // When disabled — current default while the plugin's keychain item is

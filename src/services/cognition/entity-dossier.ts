@@ -39,6 +39,8 @@ import {
   type EntityEdge,
 } from './entity-graph';
 import { isGhostMode } from '@/services/mode-manager';
+import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── IDB lazy loader (same pattern as episodic-memory.ts) ─────────────────────
 
@@ -47,18 +49,8 @@ let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
 
 function lazyLoadIdb(): void {
   if (_getMemory !== null) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      getMemory: <T>(key: string) => Promise<T | null>;
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    _getMemory = mod.getMemory;
-    _putMemory = mod.putMemory;
-  } catch {
-    _getMemory = () => Promise.resolve(null);
-    _putMemory = () => Promise.resolve();
-  }
+  _getMemory = idbGetMemory;
+  _putMemory = idbPutMemory;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -161,9 +153,21 @@ const MAX_ASSOCIATES = 5;
 /**
  * 72-hour exponential half-life for heat decay.
  * λ = ln(2) / halfLifeMs
+ *
+ * PR 12 (self-tuning): the heat half-life is the declared tunable
+ * 'entity-trajectory:heatHalfLifeHours' (bounds [24, 168]); the 72h
+ * constant below is the get-with-default fallback. The associate-strength
+ * normalization intentionally keeps the fixed 72h constant so it stays in
+ * lockstep with entity-graph's edge half-life.
  */
 const HALF_LIFE_MS = 72 * 60 * 60 * 1000;
-const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_MS;
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+/** Tuned heat-decay λ, recomputed at call time from the tunable store. */
+function heatDecayLambda(): number {
+  const halfLifeHours = getTunedParam('entity-trajectory', 'heatHalfLifeHours', HALF_LIFE_MS / MS_PER_HOUR);
+  return Math.LN2 / (halfLifeHours * MS_PER_HOUR);
+}
 
 /**
  * Normalization ceiling: sum of weights for a perfectly-fresh entity with
@@ -187,6 +191,13 @@ const COOLING_RATIO_THRESHOLD = 0.67;
 const dossiers = new Map<string, EntityDossier>();
 let loaded = false;
 let writtenSinceLoad = false;
+/**
+ * Monotonic counter bumped on every in-memory mutation (each save()). The async
+ * IDB hydrate captures this at read-start and only commits if it hasn't moved —
+ * so a hydrate whose async read began before a fresh ingest can't clobber the
+ * newer in-memory data with the stale snapshot it read.
+ */
+let mutationVersion = 0;
 
 // Injected overrides (populated via configure() for tests).
 let _storage: DossierStorageLike | null | undefined = undefined;
@@ -206,6 +217,7 @@ export function configure(opts: EntityDossierOptions): void {
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
   dossiers.clear();
+  mutationVersion++;
   // Mark as already loaded so subsequent reads do NOT reload from the injected
   // storage (which may still contain data from a prior test run). Tests that
   // want to pre-seed the store should do so via ingestFromHypotheses() after
@@ -264,14 +276,18 @@ function load(): void {
     _getMemoryOverride
       ? (key) => (_getMemoryOverride as (k: string) => Promise<EntityDossier[] | null>)(key)
       : (key) => { lazyLoadIdb(); return _getMemory!<EntityDossier[]>(key); };
+  const versionAtReadStart = mutationVersion;
   void getMemFn(STORAGE_KEY).then((arr) => {
-    if (writtenSinceLoad) return;
+    // If any write landed while this async read was in flight, the in-memory
+    // state is fresher than the snapshot we just read — don't clobber it.
+    if (writtenSinceLoad || mutationVersion !== versionAtReadStart) return;
     applyLoaded(arr);
   });
 }
 
 function save(): void {
   writtenSinceLoad = true;
+  mutationVersion++;
   const arr = [...dossiers.values()];
   const stor = resolveStorage();
   if (stor) {
@@ -292,10 +308,11 @@ function save(): void {
  * Exported for tests to verify the half-life math.
  */
 export function computeHeat(timeline: readonly DossierEvent[], nowMs: number): number {
+  const lambda = heatDecayLambda();
   let sum = 0;
   for (const ev of timeline) {
     const ageMs = Math.max(0, nowMs - ev.ts);
-    sum += Math.exp(-DECAY_LAMBDA * ageMs);
+    sum += Math.exp(-lambda * ageMs);
   }
   return Math.min(1, sum / MAX_HEAT);
 }
@@ -573,6 +590,7 @@ export function resetEntityDossiers(): void {
   dossiers.clear();
   loaded = false;
   writtenSinceLoad = false;
+  mutationVersion++;
 }
 
 /** Export all dossiers as an array (for testing / diagnostics). */

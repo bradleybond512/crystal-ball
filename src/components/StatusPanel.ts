@@ -42,6 +42,25 @@ const WORLD_APIS = new Set([
   'Cyber Threats API', 'BIS', 'WTO', 'SupplyChain'
 ]);
 
+/**
+ * Human display names for feed keys whose canonical id doesn't read well.
+ * Keys stay untouched — the allowlists above, updateFeed(name) callers and
+ * all source logic keep using the canonical key; this map is applied at
+ * render time only.
+ */
+export const FEED_DISPLAY_NAMES: Record<string, string> = {
+  Middleeast: 'Middle East',
+  Ai: 'AI',
+  Vcblogs: 'VC Blogs',
+  RegionalStartups: 'Regional Startups',
+  Producthunt: 'Product Hunt',
+  Thinktanks: 'Think Tanks',
+};
+
+export function feedDisplayName(key: string): string {
+  return FEED_DISPLAY_NAMES[key] ?? key;
+}
+
 import { t } from '../services/i18n';
 import { Panel } from './Panel';
 
@@ -79,14 +98,14 @@ export class StatusPanel extends Panel {
 
   public updateFeed(name: string, status: Partial<FeedStatus>): void {
  if (!this.allowedFeeds.has(name)) return;
- const existing = this.feeds.get(name) || { name, lastUpdate: null, status: 'ok' as const, itemCount: 0 };
+ const existing = this.feeds.get(name) ?? { name, lastUpdate: null, status: 'ok' as const, itemCount: 0 };
  this.feeds.set(name, { ...existing, ...status, lastUpdate: new Date() });
  this.onUpdate?.();
   }
 
   public updateApi(name: string, status: Partial<ApiStatus>): void {
  if (!this.allowedApis.has(name)) return;
- const existing = this.apis.get(name) || { name, status: 'ok' as const };
+ const existing = this.apis.get(name) ?? { name, status: 'ok' as const };
  this.apis.set(name, { ...existing, ...status });
  this.onUpdate?.();
   }
@@ -112,7 +131,14 @@ export class StatusPanel extends Panel {
  const diff = now - date.getTime();
  if (diff < 60_000) return 'just now';
  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
- return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+ const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+ // A bare clock time implies "today". Once the timestamp is from a
+ // different calendar day (or >24h old), prepend the date so days-old
+ // data can never masquerade as fresh: "Jun 30 · 10:30 PM".
+ const sameCalendarDay = new Date(now).toDateString() === date.toDateString();
+ if (diff < 86_400_000 && sameCalendarDay) return time;
+ const day = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+ return `${day} · ${time}`;
   }
 
   public getElement(): HTMLElement {

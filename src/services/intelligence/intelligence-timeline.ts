@@ -116,7 +116,8 @@ const DEFAULT_PANEL_FOR_DOMAIN: Record<string, string> = {
   weather: 'weather-radar',
   hurricane: 'tropical-cyclones',
   cyber: 'cyber-threats',
-  maritime: 'maritime-intel',
+  // 'maritime-intel' left the default layout; its surviving twin hosts the content.
+  maritime: 'maritime-superpower',
   aviation: 'aviation-intel',
   conflict: 'ucdp-events',
   wildfire: 'wildfire-intel',

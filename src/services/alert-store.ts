@@ -13,8 +13,17 @@ import type { UnifiedAlert, AlertSource, AlertSeverity } from './unified-alerts'
 const DB_NAME = 'crystalball_db';
 const STORE_NAME = 'unified_alerts';
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+/** Two-week window used by getStats() — covers thisWeek + lastWeek buckets. */
+const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+/** Seven-day window used by search() to cap the full-text scan working set. */
+const SEARCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 let dbInstance: IDBDatabase | null = null;
+/** In-flight open dedup — prevents multiple parallel indexedDB.open() probes
+ *  when openDB() is called concurrently before dbInstance is set. Without this,
+ *  two racing callers can both fall through to openWithUpgrade(), causing the
+ *  second upgrade request to be blocked with no handler and hang forever. */
+let dbOpenPromise: Promise<IDBDatabase> | null = null;
 
 /** True when running in an environment without IndexedDB (smoke
  *  harness under happy-dom, certain Node test environments).
@@ -50,33 +59,39 @@ function createAlertIndexes(store: IDBObjectStore): void {
 /** Handle the upgrade when the DB already exists but needs the unified_alerts store. */
 function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
- const upgrade = indexedDB.open(DB_NAME, currentVersion + 1);
+    const upgrade = indexedDB.open(DB_NAME, currentVersion + 1);
 
- upgrade.addEventListener('error', () => {
- reject(upgrade.error ?? new Error('[alert-store] Upgrade open failed'));
- });
+    upgrade.addEventListener('error', () => {
+      reject(upgrade.error ?? new Error('[alert-store] Upgrade open failed'));
+    });
 
- upgrade.addEventListener('upgradeneeded', (event) => {
- const db = (event.target as IDBOpenDBRequest).result;
+    // A stale open connection (from another module or tab) is blocking this
+    // version bump. Without this handler the upgrade request hangs forever.
+    upgrade.addEventListener('blocked', () => {
+      reject(new Error('[alert-store] upgrade blocked by another connection'));
+    });
 
- if (!db.objectStoreNames.contains(STORE_NAME)) {
- const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
- createAlertIndexes(store);
- }
- });
+    upgrade.addEventListener('upgradeneeded', (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
 
- upgrade.addEventListener('success', () => {
- dbInstance = upgrade.result;
- upgrade.result.addEventListener('close', () => { dbInstance = null; });
- // Allow another module (reasoning-memory bumping to a higher version)
- // to upgrade the shared `crystalball_db` without being blocked by this
- // open connection.
- upgrade.result.addEventListener('versionchange', () => {
- upgrade.result.close();
- dbInstance = null;
- });
- resolve(upgrade.result);
- });
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        createAlertIndexes(store);
+      }
+    });
+
+    upgrade.addEventListener('success', () => {
+      dbInstance = upgrade.result;
+      upgrade.result.addEventListener('close', () => { dbInstance = null; });
+      // Allow another module (reasoning-memory bumping to a higher version)
+      // to upgrade the shared `crystalball_db` without being blocked by this
+      // open connection.
+      upgrade.result.addEventListener('versionchange', () => {
+        upgrade.result.close();
+        dbInstance = null;
+      });
+      resolve(upgrade.result);
+    });
   });
 }
 
@@ -89,57 +104,68 @@ function openDB(): Promise<IDBDatabase> {
   if (!isIndexedDbAvailable()) {
     return Promise.reject(new IndexedDbUnavailableError());
   }
+  // Deduplicate concurrent openDB() calls — a single in-flight probe is reused
+  // so we never spin up multiple parallel indexedDB.open() requests. Without
+  // this, two racing callers can both fall through to openWithUpgrade(), causing
+  // the second upgrade to be blocked with no handler and hang forever.
+  if (dbOpenPromise) return dbOpenPromise;
 
-  return new Promise<IDBDatabase>((resolve, reject) => {
- // First, open without specifying a version to get the current version.
- const probe = indexedDB.open(DB_NAME);
+  dbOpenPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    // First, open without specifying a version to get the current version.
+    const probe = indexedDB.open(DB_NAME);
 
- probe.addEventListener('error', () => {
- reject(probe.error ?? new Error('[alert-store] Probe open failed'));
- });
+    probe.addEventListener('error', () => {
+      reject(probe.error ?? new Error('[alert-store] Probe open failed'));
+    });
 
- probe.addEventListener('success', () => {
- const currentDB = probe.result;
- const currentVersion = currentDB.version;
+    probe.addEventListener('success', () => {
+      const currentDB = probe.result;
+      const currentVersion = currentDB.version;
 
- if (currentDB.objectStoreNames.contains(STORE_NAME)) {
- // Store already exists — reuse this connection.
- dbInstance = currentDB;
- currentDB.addEventListener('close', () => { dbInstance = null; });
- // Let reasoning-memory (or any future module) upgrade the shared
- // crystalball_db without this connection blocking them.
- currentDB.addEventListener('versionchange', () => {
- currentDB.close();
- dbInstance = null;
- });
- resolve(currentDB);
- return;
- }
+      if (currentDB.objectStoreNames.contains(STORE_NAME)) {
+        // Store already exists — reuse this connection.
+        dbInstance = currentDB;
+        currentDB.addEventListener('close', () => { dbInstance = null; });
+        // Let reasoning-memory (or any future module) upgrade the shared
+        // crystalball_db without this connection blocking them.
+        currentDB.addEventListener('versionchange', () => {
+          currentDB.close();
+          dbInstance = null;
+        });
+        resolve(currentDB);
+        return;
+      }
 
- // Need to create the store — close and reopen with bumped version.
- currentDB.close();
+      // Need to create the store — close and reopen with bumped version.
+      currentDB.close();
 
- openWithUpgrade(currentVersion).then(resolve, reject);
- });
+      openWithUpgrade(currentVersion).then(resolve, reject);
+    });
 
- // Handle the case where the DB doesn't exist at all yet.
- probe.addEventListener('upgradeneeded', (event) => {
- const db = (event.target as IDBOpenDBRequest).result;
+    // Handle the case where the DB doesn't exist at all yet.
+    probe.addEventListener('upgradeneeded', (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
 
- // Preserve existing stores that storage.ts would create.
- if (!db.objectStoreNames.contains('baselines')) {
- db.createObjectStore('baselines', { keyPath: 'key' });
- }
- if (!db.objectStoreNames.contains('snapshots')) {
- const store = db.createObjectStore('snapshots', { keyPath: 'timestamp' });
- store.createIndex('by_time', 'timestamp');
- }
- if (!db.objectStoreNames.contains(STORE_NAME)) {
- const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
- createAlertIndexes(store);
- }
- });
+      // Preserve existing stores that storage.ts would create.
+      if (!db.objectStoreNames.contains('baselines')) {
+        db.createObjectStore('baselines', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('snapshots')) {
+        const store = db.createObjectStore('snapshots', { keyPath: 'timestamp' });
+        store.createIndex('by_time', 'timestamp');
+      }
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        createAlertIndexes(store);
+      }
+    });
   });
+
+  // Clear the in-flight promise after settlement so future calls start fresh
+  // rather than returning a permanently-rejected promise (sticky rejection
+  // would disable alert-store persistence for the entire session).
+  dbOpenPromise.finally(() => { dbOpenPromise = null; }).catch(() => { /* handled by callers */ });
+  return dbOpenPromise;
 }
 
 /**
@@ -282,7 +308,21 @@ class AlertDB {
  try {
  all = await withStore<UnifiedAlert[]>(
  'readonly',
- (store) => store.getAll(),
+ (store) => {
+ // Use IDB indexes to push filtering into the engine and avoid loading
+ // the full store into memory.
+ //
+ // Priority: `since` (timestamp index) is chosen over `source` when both
+ // are present because a time cutoff typically excludes more rows than a
+ // per-source filter.  Remaining predicates are applied in JS below.
+ if (opts?.since != null) {
+ return store.index('timestamp').getAll(IDBKeyRange.lowerBound(opts.since));
+ }
+ if (opts?.source != null) {
+ return store.index('source').getAll(IDBKeyRange.only(opts.source));
+ }
+ return store.getAll();
+ },
  true,
  );
  } catch (error) {
@@ -292,14 +332,16 @@ class AlertDB {
 
  let results = all ?? [];
 
- if (opts?.since != null) {
- results = results.filter((a) => a.timestamp >= opts.since!);
- }
- if (opts?.source != null) {
- results = results.filter((a) => a.source === opts.source);
+ // JS-side refinement for predicates not covered by the chosen IDB index.
+ // When `since` drove the index read, source/severity still need JS checks.
+ // When `source` drove the read, only severity needs a JS check.
+ if (opts?.since != null && opts.source != null) {
+ const src = opts.source;
+ results = results.filter((a) => a.source === src);
  }
  if (opts?.severity != null) {
- results = results.filter((a) => a.severity === opts.severity);
+ const sev = opts.severity;
+ results = results.filter((a) => a.severity === sev);
  }
 
  // Sort newest first
@@ -312,16 +354,21 @@ class AlertDB {
  return results;
   }
 
-  /** Full-text search across title and body (case-insensitive). */
+  /** Full-text search across title and body (case-insensitive).
+   *  Scoped to the last 7 days — the store holds 30 days of alerts, and a
+   *  full-text JS scan over the complete set can load thousands of records.
+   *  Older alerts are still queryable via getAll({ since }) + manual filter.
+   */
   async search(text: string): Promise<UnifiedAlert[]> {
  if (!this.isAvailable()) return [];
  await this.ensureReady();
 
  let all: UnifiedAlert[] | undefined;
  try {
+ const searchSince = Date.now() - SEARCH_WINDOW_MS;
  all = await withStore<UnifiedAlert[]>(
  'readonly',
- (store) => store.getAll(),
+ (store) => store.index('timestamp').getAll(IDBKeyRange.lowerBound(searchSince)),
  true,
  );
  } catch (error) {
@@ -375,7 +422,10 @@ class AlertDB {
  }
   }
 
-  /** Aggregate statistics for the alert store. */
+  /** Aggregate statistics for the alert store.
+   *  Scoped to the last 14 days — covers both thisWeek and lastWeek buckets
+   *  without loading the full 30-day store.  `total` reflects the 14-day window.
+   */
   async getStats(): Promise<AlertStats> {
  if (!this.isAvailable()) {
  return { total: 0, bySource: {}, bySeverity: {}, thisWeek: 0, lastWeek: 0 };
@@ -384,9 +434,10 @@ class AlertDB {
 
  let all: UnifiedAlert[] | undefined;
  try {
+ const statsSince = Date.now() - TWO_WEEKS_MS;
  all = await withStore<UnifiedAlert[]>(
  'readonly',
- (store) => store.getAll(),
+ (store) => store.index('timestamp').getAll(IDBKeyRange.lowerBound(statsSince)),
  true,
  );
  } catch (error) {
@@ -507,6 +558,9 @@ export async function getAlertTrendStats(windowMs: number = SEVEN_DAYS_MS): Prom
 
 /** Delete archived alerts older than the given age in ms. Returns count deleted. */
 export async function pruneOldAlerts(olderThanMs: number): Promise<number> {
+  // Guard matches alertDB.prune() — prevents IndexedDbUnavailableError from
+  // propagating to callers that only expect a numeric return value.
+  if (!isIndexedDbAvailable()) return 0;
   const cutoff = Date.now() - olderThanMs;
   const db = await openDB();
   return new Promise<number>((resolve, reject) => {

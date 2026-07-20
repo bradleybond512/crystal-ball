@@ -28,6 +28,7 @@ import {
 import { detectCompoundThreats, type CompoundThreat, type HazardSignal } from './compound-threat';
 import { getMode, type AppMode } from './mode-manager';
 import { runClaudeAgent } from './claude-agent';
+import { coarseCoordPair } from './geo-privacy';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,30 +89,52 @@ const STORE_NAME = 'items';
 const DB_VERSION = 1;
 const MAX_ITEMS = 5000;
 
-async function openResourceDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
- const req = indexedDB.open(DB_NAME, DB_VERSION);
- req.onupgradeneeded = () => {
- if (!req.result.objectStoreNames.contains(STORE_NAME)) {
- req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
- }
- };
- req.onsuccess = () => resolve(req.result);
- req.onerror = () => reject(req.error);
+/** Cached connection to the resources DB — reused across calls to avoid
+ *  opening a new IDBDatabase handle on every loadResourceItems() invocation
+ *  (connection leak: the old code opened a fresh handle each call and never
+ *  closed it, so handles accumulated without bound). */
+let _resourceDB: IDBDatabase | null = null;
+/** In-flight open dedup — prevents parallel indexedDB.open() races when
+ *  multiple callers invoke openResourceDB() before _resourceDB is set. */
+let _resourceDBPromise: Promise<IDBDatabase> | null = null;
+
+function openResourceDB(): Promise<IDBDatabase> {
+  if (_resourceDB) return Promise.resolve(_resourceDB);
+  if (_resourceDBPromise) return _resourceDBPromise;
+  _resourceDBPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.addEventListener('blocked', () => reject(new Error('[survival-advisor] resource DB open blocked')));
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      _resourceDB = db;
+      db.addEventListener('close', () => { _resourceDB = null; });
+      db.addEventListener('versionchange', () => { db.close(); _resourceDB = null; });
+      resolve(db);
+    };
+    req.onerror = () => reject(req.error);
   });
+  _resourceDBPromise.finally(() => { _resourceDBPromise = null; }).catch(() => { /* handled by caller */ });
+  return _resourceDBPromise;
 }
 
 async function loadResourceItems(): Promise<ResourceItem[]> {
   try {
- const db = await openResourceDB();
- return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readonly');
- const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
- req.onsuccess = () => resolve(req.result as ResourceItem[]);
- req.onerror = () => reject(req.error);
- });
+    const db = await openResourceDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
+      req.onsuccess = () => resolve(req.result as ResourceItem[]);
+      req.onerror = () => reject(req.error);
+      tx.addEventListener('error', () => reject(tx.error));
+      tx.addEventListener('abort', () => reject(new Error('[survival-advisor] read tx aborted')));
+    });
   } catch {
- return [];
+    return [];
   }
 }
 
@@ -240,7 +263,7 @@ function buildPrompt(ctx: SurvivalContext): string {
 
   // Location
   if (ctx.location.location) {
- parts.push(`USER LOCATION: ${ctx.location.location.label} (${ctx.location.location.lat.toFixed(4)}, ${ctx.location.location.lon.toFixed(4)})`);
+ parts.push(`USER LOCATION: ${ctx.location.location.label} (${coarseCoordPair(ctx.location.location.lat, ctx.location.location.lon)})`);
   } else {
  parts.push('USER LOCATION: Not set');
   }
@@ -275,7 +298,7 @@ function buildPrompt(ctx: SurvivalContext): string {
   if (ctx.family.length > 0) {
  parts.push(`\nFAMILY MEMBERS (${ctx.family.length}):`);
  for (const m of ctx.family) {
- const loc = m.lastLocation ? `at ${m.lastLocation.lat.toFixed(4)}, ${m.lastLocation.lon.toFixed(4)}` : 'location unknown';
+ const loc = m.lastLocation ? `near ${coarseCoordPair(m.lastLocation.lat, m.lastLocation.lon)}` : 'location unknown';
  const age = m.lastUpdate ? `${Math.round((Date.now() - m.lastUpdate) / 60_000)} min ago` : 'never updated';
  parts.push(`  - ${m.icon} ${m.name}: ${m.status ?? 'unknown'} (${loc}, ${age})`);
  }

@@ -27,8 +27,8 @@ existing BOCPD (`cognition/regime-detection.ts`), existing `PostureContributor` 
 | 2 | `claude/corr-nextgen-pr2-outcomes` | Correlation outcome ledger → per-rule reliability multipliers | **DONE (merged)** | #1476 |
 | 3 | `claude/corr-nextgen-pr3-leadlag` | Statistical lead-lag miner + learned-rule generation | **DONE (merged)** | #1477 |
 | 4 | `claude/corr-nextgen-pr4-regime` | Regime-aware modulation (BOCPD coupling) | **DONE (merged)** | #1479 |
-| 5 | `claude/corr-nextgen-pr5-emission` | Emission unification: pair persistence + live compound risk + survival contributor | in review | — |
-| 6 | `claude/corr-nextgen-pr6-retire` | Retire dead correlators v1/v2, migrate diagnostics exports, docs | pending | — |
+| 5 | `claude/corr-nextgen-pr5-emission` | Emission unification: pair persistence + live compound risk + survival contributor | **DONE (merged)** | #1480 |
+| 6 | `claude/corr-nextgen-pr6-retire` | Retire dead correlators v1/v2, migrate diagnostics exports, docs | in review | — |
 
 ### Session Protocol
 
@@ -328,13 +328,16 @@ explanation carries note; determinism with injected now.
 
 ### PR 6 — Retirement + docs
 
-Delete `correlator.ts`, `correlator-v2.ts`, `observation-types.ts`; migrate
-`diagnostics/export-bundle.ts` + `frontend-export-composer.ts` to compose their
-correlation sections from `getCorrelationStore()` + `SituationStoreV2` (same JSON section
-names, values from the live path — diff the export shape in tests). Update CLAUDE.md
-(Architecture list + this plan's pointer), `docs/reasoning-layer.md` if it references the
-dead files. Tests ≥10: export bundle golden shape, no dangling imports (typecheck is the
-real gate), correlation-store-backed sections populated from a seeded store.
+Delete `correlator.ts` + `correlator-v2.ts` (+ their tests); migrate
+`frontend-export-composer.ts` to compose its chain section from the LIVE
+`getCausalChainBuilder()` (the dead correlator-v2 singleton was never started and always
+exported an empty list); update `export-bundle.ts` doc comments. **Deviation from the
+original spec:** `observation-types.ts` is RETAINED — recon during implementation found
+the live `intelligence-loop-orchestrator.ts` + its panel consume the slim type; deleting
+it is a larger refactor with no dead code to justify it. Update CLAUDE.md (Architecture
+list + program pointer) and this tracker. Tests ≥10: pure chain→summary mapping (shape,
+titles, dedup, determinism), retired-modules-gone assertions, live-module survivals;
+typecheck is the real dangling-import gate.
 
 ## 5. Invariants (inherited from the intelligence layers — enforced in review)
 

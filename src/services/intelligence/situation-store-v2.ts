@@ -489,6 +489,8 @@ export class SituationStoreV2 {
   private engine: CorrelateEngine;
   private clock: () => number;
   private idCounter = 0;
+  private pairListener?: (pairs: readonly CorrelatedPair[]) => void;
+  private reliabilityProvider?: (ruleId: string) => number;
 
   constructor(options: SituationStoreV2Options = {}) {
     this.engine = options.engine ?? this.defaultEngine();
@@ -496,9 +498,32 @@ export class SituationStoreV2 {
   }
 
   private defaultEngine(): CorrelateEngine {
-    const engine = new CorrelateEngine();
+    // Late-bound provider so the calibration loop can be wired after
+    // construction (bootstrap order independence).
+    const engine = new CorrelateEngine({
+      reliabilityFor: (ruleId) => this.reliabilityProvider?.(ruleId) ?? 1,
+    });
     for (const rule of builtInCorrelationRules) engine.registerRule(rule);
     return engine;
+  }
+
+  /** Observe every CorrelatedPair batch the engine emits during ingest —
+   *  the correlation calibration loop records them as predictions.
+   *  Listener errors are isolated. */
+  setPairListener(listener?: (pairs: readonly CorrelatedPair[]) => void): void {
+    this.pairListener = listener;
+  }
+
+  /** Install the per-rule learned reliability multiplier consulted by the
+   *  default engine's confidence model. Undefined → neutral. */
+  setReliabilityProvider(provider?: (ruleId: string) => number): void {
+    this.reliabilityProvider = provider;
+  }
+
+  /** The live engine — used by the learned-rule cadence to sync mined
+   *  `learned:*` rules. Built-in rules are managed here, not by callers. */
+  getEngine(): CorrelateEngine {
+    return this.engine;
   }
 
   private ensureHydrated(): void {
@@ -560,6 +585,9 @@ export class SituationStoreV2 {
       return;
     }
     const result = this.engine.correlate(observations, new Date(this.clock()));
+    if (result.pairs.length > 0 && this.pairListener) {
+      try { this.pairListener(result.pairs); } catch { /* listener crash isolation */ }
+    }
     const drafts = groupPairsByConnectivity(observations, result.pairs);
     for (const draft of drafts) this.mergeOrCreate(draft);
     this.autoResolveStale();

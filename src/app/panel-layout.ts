@@ -106,6 +106,7 @@ import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
 import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence';
 import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
 import { startCorrelationCalibration } from '@/services/correlation/correlation-calibration';
+import { startRegimeCoupling } from '@/services/correlation/regime-coupling-bridge';
 import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
 import { startPredictionResolutionCadence } from '@/services/intelligence/prediction-resolution-cadence';
 import { installBatteryMonitor } from '@/services/adaptive-cadence';
@@ -1106,6 +1107,7 @@ export class PanelLayoutManager implements AppModule {
  startBiasScanCadence();
  startLearnedCascadeCadence();
  startCorrelationCalibration();
+ startRegimeCoupling();
  startConsolidationCadence();
  startCognitionSelfTuningCadence();
  startPredictionResolutionCadence();

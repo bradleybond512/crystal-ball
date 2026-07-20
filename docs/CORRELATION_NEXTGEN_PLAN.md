@@ -25,8 +25,8 @@ existing BOCPD (`cognition/regime-detection.ts`), existing `PostureContributor` 
 |----|--------|-------|--------|------|
 | 1 | `claude/correlation-nextgen` | Plan doc + calibrated edge-confidence core + engine adoption | **DONE (merged)** | #1474 |
 | 2 | `claude/corr-nextgen-pr2-outcomes` | Correlation outcome ledger → per-rule reliability multipliers | **DONE (merged)** | #1476 |
-| 3 | `claude/corr-nextgen-pr3-leadlag` | Statistical lead-lag miner + learned-rule generation | in review | — |
-| 4 | `claude/corr-nextgen-pr4-regime` | Regime-aware modulation (BOCPD coupling) | pending | — |
+| 3 | `claude/corr-nextgen-pr3-leadlag` | Statistical lead-lag miner + learned-rule generation | **DONE (merged)** | #1477 |
+| 4 | `claude/corr-nextgen-pr4-regime` | Regime-aware modulation (BOCPD coupling) | in review | — |
 | 5 | `claude/corr-nextgen-pr5-emission` | Emission unification: pair persistence + live compound risk + survival contributor | pending | — |
 | 6 | `claude/corr-nextgen-pr6-retire` | Retire dead correlators v1/v2, migrate diagnostics exports, docs | pending | — |
 

@@ -17,6 +17,22 @@ test('wireModeForecastCalibration resolves then records via injected fns', () =>
   assert.deepEqual(calls, ['resolve:finance:0.7', 'record:1']);
 });
 
+test('wireModeForecastCalibration resolves each advisory then records one batch', () => {
+  const calls: string[] = [];
+  wireModeForecastCalibration(
+    { advisories: [
+      { domain: 'a', pressure: 0.1 } as never,
+      { domain: 'b', pressure: 0.2 } as never,
+    ] },
+    {
+      resolveFromObservation: (d, p) => { calls.push(`resolve:${d}:${p}`); return 0; },
+      recordPredictions: (a) => { calls.push(`record:${a.length}`); },
+      enabled: () => true,
+    },
+  );
+  assert.deepEqual(calls, ['resolve:a:0.1', 'resolve:b:0.2', 'record:2']);
+});
+
 test('disabled switch is a no-op', () => {
   const calls: string[] = [];
   wireModeForecastCalibration({ advisories: [] }, {
@@ -36,6 +52,19 @@ test('settleCalibrationBridges runs both settlers before generic expiry', () => 
     enabled: () => true,
   });
   assert.deepEqual(order, ['shortage', 'advisory', 'expire']);
+});
+
+test('settleShortage throws — expirePending still called', () => {
+  const order: string[] = [];
+  assert.throws(() => {
+    settleCalibrationBridges({
+      settleShortage: () => { order.push('shortage'); throw new Error('boom'); },
+      settleAdvisory: () => { order.push('advisory'); return 0; },
+      expirePending: () => { order.push('expire'); return 0; },
+      enabled: () => true,
+    });
+  });
+  assert.deepEqual(order, ['shortage', 'expire']);
 });
 
 test('settle with disabled switch still calls expirePending only', () => {

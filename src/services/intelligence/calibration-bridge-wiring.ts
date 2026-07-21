@@ -75,10 +75,14 @@ const LIVE_SETTLE_DEPS: SettleDeps = {
 /** Hourly settle cadence: bridge-owned window-close negatives run first (so
  *  their overdue records resolve false, not just 'expired'), then the
  *  generic expiry sweep for every other domain. The generic sweep always
- *  runs, even with the switch off — it is not bridge-specific. */
+ *  runs, even with the switch off, and even if a settler throws — it is not
+ *  bridge-specific and must never stop. */
 export function settleCalibrationBridges(deps: SettleDeps = LIVE_SETTLE_DEPS): void {
   if (!deps.enabled()) { deps.expirePending(); return; }
-  deps.settleShortage();   // bridges settle their own records FALSE first
-  deps.settleAdvisory();   // (their comment mandates running before generic expiry)
-  deps.expirePending();
+  try {
+    deps.settleShortage();   // bridges settle their own records FALSE first
+    deps.settleAdvisory();   // (their comment mandates running before generic expiry)
+  } finally {
+    deps.expirePending();
+  }
 }

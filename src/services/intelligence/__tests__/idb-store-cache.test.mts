@@ -189,6 +189,45 @@ describe('preloadIdbBackedStores — orphaned localStorage cleanup (quota drain)
   });
 });
 
+describe('persistThenDrain — TOCTOU guard (#1370)', () => {
+  it('does NOT free the slot when a concurrent writer replaced the value mid-migration', async () => {
+    // Migration path (IDB miss → persist → drain). A concurrent writer lands a
+    // NEWER localStorage value during the async persist window, AFTER we read
+    // the value we migrated. The drain must not clobber that newer value.
+    const idb = new Map<string, unknown>();
+    _setMemoryBackendForTest({
+      getMemory: async (k: string) => (idb.has(k) ? idb.get(k) : null),
+      putMemory: async (k: string, v: unknown) => {
+        idb.set(k, v);
+        // Simulate the concurrent write landing between migration-read and drain.
+        if (k === 'store-cache/' + BACKED) store.set(BACKED, 'NEWER-CONCURRENT');
+      },
+      deleteMemory: async (k: string) => { idb.delete(k); },
+    });
+    store.set(BACKED, 'MIGRATED-VALUE');
+
+    await preloadIdbBackedStores();
+
+    assert.equal(store.get(BACKED), 'NEWER-CONCURRENT', 'concurrent newer value must survive the drain');
+    assert.equal(idb.get('store-cache/' + BACKED), 'MIGRATED-VALUE', 'migrated value is durable in IDB');
+  });
+
+  it('DOES free the slot after a clean migration when the value is unchanged (guard does not over-block)', async () => {
+    const idb = new Map<string, unknown>();
+    _setMemoryBackendForTest({
+      getMemory: async (k: string) => (idb.has(k) ? idb.get(k) : null),
+      putMemory: async (k: string, v: unknown) => { idb.set(k, v); },
+      deleteMemory: async (k: string) => { idb.delete(k); },
+    });
+    store.set(BACKED, 'CLEAN');
+
+    await preloadIdbBackedStores();
+
+    assert.equal(store.has(BACKED), false, 'unchanged value drains normally');
+    assert.equal(idb.get('store-cache/' + BACKED), 'CLEAN', 'value persisted to IDB');
+  });
+});
+
 describe('idb-store-cache — extension keys (quota headroom)', () => {
   it('backs the large, still-growing, lazily-hydrated stores', () => {
     for (const k of ['wm-algo-eval-ledger', 'crystalball-notification-digests', 'crystalball-alert-lifecycle-v1']) {

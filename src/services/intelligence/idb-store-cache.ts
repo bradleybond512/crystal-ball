@@ -133,7 +133,16 @@ function readLegacy(ls: Storage | null, key: string): string | null {
  * an IDB write error would drop the only durable copy (Codex review P1).
  * putMemory swallows its own errors, so confirm with a read-back rather than
  * trusting it not to throw; on failure the mirror still serves it this session
- * and the drain retries next boot. Returns the (now-durable) value.
+ * and the drain retries next boot.
+ *
+ * TOCTOU: a concurrent writer can replace the slot between `legacy` being read
+ * and this drain (a direct native-localStorage write for a backed key before
+ * routing is installed). Guard so we never delete a value we didn't migrate,
+ * and — since these are re-derivable caches — adopt the newer value as
+ * authoritative: re-persist it and RETURN it so the mirror serves current data
+ * this session, not the stale migrated copy. The slot is left for the next
+ * boot's byte-identical drain rather than racing a delete against an even-newer
+ * write (Codex review P2). Returns the value the mirror should hold.
  */
 async function persistThenDrain(key: string, ls: Storage | null, legacy: string): Promise<string> {
   let persisted = false;
@@ -142,10 +151,16 @@ async function persistThenDrain(key: string, ls: Storage | null, legacy: string)
     persisted = (await backend.getMemory(CACHE_PREFIX + key)) === legacy;
   } catch { persisted = false; }
   if (persisted) {
-    // TOCTOU guard (Codex review P2): only free the slot if localStorage still
-    // holds the exact value we migrated — a concurrent writer could have put a
-    // newer value there since readLegacy(), which we must not drop.
-    try { if (ls?.getItem(key) === legacy) ls.removeItem(key); } catch { /* best effort */ }
+    const current = readLegacy(ls, key);
+    if (current === legacy || current === null) {
+      // Unchanged (or the writer cleared it): safe to free the slot.
+      try { ls?.removeItem(key); } catch { /* best effort */ }
+    } else {
+      // Concurrent writer replaced the slot mid-migration. Adopt the newer value
+      // as authoritative: persist it and serve it from the mirror this session.
+      try { await backend.putMemory(CACHE_PREFIX + key, current); } catch { /* best effort */ }
+      return current;
+    }
   }
   return legacy;
 }

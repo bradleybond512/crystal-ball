@@ -190,17 +190,23 @@ describe('preloadIdbBackedStores — orphaned localStorage cleanup (quota drain)
 });
 
 describe('persistThenDrain — TOCTOU guard (#1370)', () => {
-  it('does NOT free the slot when a concurrent writer replaced the value mid-migration', async () => {
+  it('adopts a concurrent newer value instead of clobbering it or serving stale (mid-migration write)', async () => {
     // Migration path (IDB miss → persist → drain). A concurrent writer lands a
     // NEWER localStorage value during the async persist window, AFTER we read
-    // the value we migrated. The drain must not clobber that newer value.
+    // the value we migrated. The drain must (a) not clobber the newer value and
+    // (b) serve the newer value from the mirror this session, not the stale one.
+    let firstPut = true;
     const idb = new Map<string, unknown>();
     _setMemoryBackendForTest({
       getMemory: async (k: string) => (idb.has(k) ? idb.get(k) : null),
       putMemory: async (k: string, v: unknown) => {
         idb.set(k, v);
-        // Simulate the concurrent write landing between migration-read and drain.
-        if (k === 'store-cache/' + BACKED) store.set(BACKED, 'NEWER-CONCURRENT');
+        // Simulate the concurrent write landing between migration-read and drain,
+        // only on the first (stale-value) persist.
+        if (firstPut && k === 'store-cache/' + BACKED) {
+          firstPut = false;
+          store.set(BACKED, 'NEWER-CONCURRENT');
+        }
       },
       deleteMemory: async (k: string) => { idb.delete(k); },
     });
@@ -208,8 +214,12 @@ describe('persistThenDrain — TOCTOU guard (#1370)', () => {
 
     await preloadIdbBackedStores();
 
+    // Newer native value survives (not deleted)…
     assert.equal(store.get(BACKED), 'NEWER-CONCURRENT', 'concurrent newer value must survive the drain');
-    assert.equal(idb.get('store-cache/' + BACKED), 'MIGRATED-VALUE', 'migrated value is durable in IDB');
+    // …the mirror serves the NEWER value this session, not the stale migrated one…
+    assert.equal(_mirrorGetForTest(BACKED), 'NEWER-CONCURRENT', 'mirror must adopt the newer value, not serve stale');
+    // …and the newer value is what got re-persisted to IDB.
+    assert.equal(idb.get('store-cache/' + BACKED), 'NEWER-CONCURRENT', 'newer value re-persisted to IDB');
   });
 
   it('DOES free the slot after a clean migration when the value is unchanged (guard does not over-block)', async () => {

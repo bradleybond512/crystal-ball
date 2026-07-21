@@ -604,3 +604,45 @@ test('contradictEpisodesForRefutation: does not re-flag already-contradicted epi
   const found = getAllEpisodes().find(e => e.id === ep.id);
   assert.equal(found!.contradicted?.reason, 'earlier reason', 'original reason should be preserved');
 });
+
+test('contradictEpisodesForRefutation: slug-form episode entity matches raw-form situation entityIds', async () => {
+  // The producer (analyst-loop.ts, PR A4) now writes episode entities already
+  // slugified — verify the raw situation-side vocabulary still matches.
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'slug-producer-1', entities: ['suez-canal'], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-5',
+    domain: 'maritime',
+    entityIds: ['Suez Canal'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [ep.id], 'slugified episode entity should match raw situation entityId');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.ok(found!.contradicted !== undefined);
+});
+
+test('contradictEpisodesForRefutation: raw-form (legacy) episode entity matches slug-form situation entityIds', async () => {
+  // Pre-A4 episodes stored whatever raw form their producer supplied —
+  // verify a slugified incoming situation entityId still matches those.
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'legacy-raw-1', entities: ['Suez Canal'], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-6',
+    domain: 'maritime',
+    entityIds: ['suez-canal'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [ep.id], 'raw legacy episode entity should match slugified situation entityId');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.ok(found!.contradicted !== undefined);
+});

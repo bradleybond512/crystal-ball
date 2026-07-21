@@ -271,7 +271,7 @@ Flagged for Bradley during implementation (each shapes behavior, ~5–10 lines):
 | A1 | Wire both calibration bridges live | ✅ | claude/uplift-a1-calibration-bridges | Merged #1495 — resolve-before-record wiring, live-input gate (Codex P1), isolated settlers (Codex P2) |
 | A2 | CorrelationMapPanel → live engine | ✅ | claude/uplift-a2-live-pair-surface | Merged #1498 — live pairs section (view-model + panel glue), Codex P2 malformed-entry guard included |
 | A3 | Cognition PR 6 leftovers | 🔄 | claude/uplift-a3-pr6-leftovers | committed locally, not yet merged |
-| A4 | Entity vocabulary alignment | 🔲 | | |
+| A4 | Entity vocabulary alignment | 🔄 | claude/uplift-a4-entity-vocab | Shared `slugifyEntity` normalizer + analyst-loop episode entities populated from hypothesis-entities extraction + contradiction matcher slug-normalized on both sides; awaiting cross-agent review |
 | B1 | Resolver framework + market resolver | 🔲 | | |
 | B2 | Weather verification resolver | 🔲 | | |
 | B3 | Conflict confirmation resolver | 🔲 | | |

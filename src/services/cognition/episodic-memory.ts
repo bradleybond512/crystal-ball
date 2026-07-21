@@ -33,6 +33,7 @@ import { isCognitionEnabled } from './cognition-settings';
 import { isGhostMode } from '@/services/mode-manager';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
 import { getTunedParam } from '@/services/algorithms/tunable-params-store';
+import { slugifyEntity } from '@/services/intelligence/entity-slug';
 
 // getMemory/putMemory are IDB-backed. Statically imported (not require()) so the
 // persistence path survives the Vite browser bundle; reasoning-memory itself
@@ -394,23 +395,20 @@ const MAX_CONTRADICTED_PER_REFUTATION = 10;
 /**
  * Best-effort contradiction marking driven by a competitive-hypothesis
  * refutation. Matches episodes that share at least one entity AND at least
- * one domain with the refuted explanation's situation (case-insensitive
- * entities; the domain check guards against an entity name that happens to
- * be shared across unrelated domains — e.g. a country appearing in both a
- * weather episode and an unrelated finance episode — from cross-flagging
- * each other) and have not already been flagged; the most recently created
- * matches are preferred when more than MAX_CONTRADICTED_PER_REFUTATION
- * qualify.
+ * one domain with the refuted explanation's situation (entities compared via
+ * `slugifyEntity` so the two independently-evolved vocabularies converge —
+ * situation-store-v2's free-form `entityIds` slugs like 'suez-canal' vs
+ * whatever the episode producer supplies, e.g. hypothesis-entities' raw
+ * 'Suez Canal' extraction; the domain check guards against an entity name
+ * that happens to be shared across unrelated domains — e.g. a country
+ * appearing in both a weather episode and an unrelated finance episode —
+ * from cross-flagging each other) and have not already been flagged; the
+ * most recently created matches are preferred when more than
+ * MAX_CONTRADICTED_PER_REFUTATION qualify.
  *
- * Known limitation (documented, not hidden): situation-store-v2's
- * `entityIds` (free-form slugs like 'suez-canal') and the entities recorded
- * on episodic-memory episodes (whatever the producer supplies — e.g.
- * hypothesis-entities' ISO3/ticker/CVE/region extraction) are two
- * independently-evolved vocabularies with no guaranteed overlap today. This
- * function is correct and cheap to call unconditionally (an empty match is
- * a fast no-op), and starts producing real matches for any producer that
- * aligns its `entities` field with situation entityIds — no changes needed
- * here when that alignment lands.
+ * Note: only the comparison is normalized here — neither side's stored
+ * vocabulary is rewritten, so there's no store churn for existing episodes
+ * or situations.
  *
  * Returns the ids of episodes newly flagged.
  */
@@ -418,7 +416,7 @@ export function contradictEpisodesForRefutation(ctx: RefutedHypothesisContext): 
   if (isGhostMode() || !isCognitionEnabled('episodic-recall')) return [];
   load();
 
-  const wantedEntities = new Set(ctx.entityIds.map(e => e.toLowerCase()));
+  const wantedEntities = new Set(ctx.entityIds.map(e => slugifyEntity(e)));
   if (wantedEntities.size === 0) return [];
   const wantedDomain = ctx.domain.toLowerCase();
 
@@ -426,7 +424,7 @@ export function contradictEpisodesForRefutation(ctx: RefutedHypothesisContext): 
     .filter(ep =>
       ep.contradicted === undefined &&
       ep.domains.some(d => d.toLowerCase() === wantedDomain) &&
-      ep.entities.some(e => wantedEntities.has(e.toLowerCase())),
+      ep.entities.some(e => wantedEntities.has(slugifyEntity(e))),
     )
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, MAX_CONTRADICTED_PER_REFUTATION);

@@ -24,6 +24,7 @@ test('rows carry learned badge, regime flag, factor chips', () => {
   assert.equal(rows[0].reliabilityLearned, true);
   assert.equal(rows[0].ageMs, 60_000);
   assert.ok(rows[0].factorChips.some((c) => c.key === 'regime' && c.value === 1.1));
+  assert.equal(rows[0].factorChips.length, 4);
 });
 
 test('sorted newest-first and capped at 30', () => {
@@ -37,4 +38,9 @@ test('missing confidenceDetail degrades gracefully', () => {
   const rows = buildLivePairRows([pair({ confidenceDetail: undefined }) as never], 100_000);
   assert.equal(rows[0].factorChips.length, 0);
   assert.equal(rows[0].regimeBoosted, false);
+});
+
+test('future-dated detectedAt clamps age to zero', () => {
+  const rows = buildLivePairRows([pair({ detectedAt: new Date(200_000) }) as never], 100_000);
+  assert.equal(rows[0].ageMs, 0);
 });

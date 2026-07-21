@@ -41,6 +41,7 @@ test('maps id, causal chainType, root title, confidence and builtAt', () => {
 
 test('events: root first, then leaves time-ordered, severities numeric', () => {
   const p = causalChainToPanelChain(chain({
+    links: [],
     leafEffects: [
       obs('late', { timestamp: T0 + 3 * HOUR, severity: 'LOW' }),
       obs('early', { timestamp: T0 + HOUR, severity: 'HIGH' }),
@@ -54,7 +55,7 @@ test('events: root first, then leaves time-ordered, severities numeric', () => {
 });
 
 test('a leaf duplicating the root id is not emitted twice', () => {
-  const p = causalChainToPanelChain(chain({ leafEffects: [obs('root')] }));
+  const p = causalChainToPanelChain(chain({ links: [], leafEffects: [obs('root')] }));
   assert.equal(p.events.length, 1);
 });
 
@@ -79,4 +80,30 @@ test('empty input yields an empty list', () => {
 
 test('deterministic mapping', () => {
   assert.deepEqual(causalChainToPanelChain(chain()), causalChainToPanelChain(chain()));
+});
+
+function multiHop(): CausalChain {
+  return chain({
+    links: [
+      { causeId: 'root', effectId: 'mid', mechanism: 'shaking', confidence: 0.7, delayHours: 1, evidenceObservationIds: [] },
+      { causeId: 'mid', effectId: 'leaf', mechanism: 'outage', confidence: 0.6, delayHours: 2, evidenceObservationIds: [] },
+    ],
+    leafEffects: [obs('leaf', { domain: 'cyber', timestamp: T0 + 3 * HOUR })],
+  });
+}
+
+test('REGRESSION: multi-hop chains render every hop, resolved from the observation lookup', () => {
+  const midObs = obs('mid', { domain: 'infra', timestamp: T0 + HOUR, severity: 'MEDIUM' });
+  const p = causalChainToPanelChain(multiHop(), (id) => (id === 'mid' ? midObs : undefined));
+  assert.deepEqual(p.events.map((e) => e.id), ['root', 'mid', 'leaf']);
+  assert.equal(p.events[1]!.domain, 'infra');
+  assert.equal(p.events[1]!.severity, 55);
+});
+
+test('REGRESSION: an aged-out intermediate degrades to a mechanism placeholder, not omission', () => {
+  const p = causalChainToPanelChain(multiHop());
+  assert.deepEqual(p.events.map((e) => e.id), ['root', 'mid', 'leaf']);
+  const mid = p.events[1]!;
+  assert.equal(mid.domain, 'unknown');
+  assert.match(mid.title, /via shaking/);
 });

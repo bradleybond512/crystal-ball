@@ -47,19 +47,50 @@ function toPanelEvent(o: ObservationEvent): PanelChainEvent {
 }
 
 /**
- * One chain → panel shape. Events are the root cause followed by the
- * leaf effects, time-ordered (the chain only materializes observations
- * at its endpoints; intermediate hops exist as link ids only).
+ * One chain → panel shape. The visible path walks the links in causal
+ * order (root → intermediates → leaves), so multi-hop chains show every
+ * hop, not just endpoints. The chain only materializes observations at
+ * its endpoints; intermediate nodes resolve through the injected lookup
+ * (typically the observation store) and degrade to a mechanism-labeled
+ * placeholder when the observation has aged out of the ring buffer.
  */
-export function causalChainToPanelChain(chain: CausalChain): PanelCorrelationChain {
-  const seen = new Set<string>([chain.rootCause.id]);
-  const events: PanelChainEvent[] = [toPanelEvent(chain.rootCause)];
-  const leaves = [...chain.leafEffects].sort((a, b) => a.timestamp - b.timestamp);
-  for (const leaf of leaves) {
-    if (seen.has(leaf.id)) continue;
-    seen.add(leaf.id);
-    events.push(toPanelEvent(leaf));
+export function causalChainToPanelChain(
+  chain: CausalChain,
+  resolveObservation?: (id: string) => ObservationEvent | undefined,
+): PanelCorrelationChain {
+  const materialized = new Map<string, ObservationEvent>([[chain.rootCause.id, chain.rootCause]]);
+  for (const leaf of chain.leafEffects) materialized.set(leaf.id, leaf);
+
+  const events: PanelChainEvent[] = [];
+  const seen = new Set<string>();
+  const push = (nodeId: string, mechanism?: string): void => {
+    if (seen.has(nodeId)) return;
+    seen.add(nodeId);
+    const known = materialized.get(nodeId) ?? resolveObservation?.(nodeId);
+    if (known) {
+      events.push(toPanelEvent(known));
+      return;
+    }
+    events.push({
+      id: nodeId,
+      domain: 'unknown',
+      title: mechanism ? `(via ${mechanism})` : '(intermediate event)',
+      severity: 30,
+      occurredAt: chain.builtAt,
+    });
+  };
+
+  push(chain.rootCause.id);
+  // Links were collected root-outward (BFS); array order is causal order.
+  for (const link of chain.links) {
+    push(link.causeId, link.mechanism);
+    push(link.effectId, link.mechanism);
   }
+  // Leaves not reachable through links (defensive) still render.
+  for (const leaf of [...chain.leafEffects].sort((a, b) => a.timestamp - b.timestamp)) {
+    push(leaf.id);
+  }
+
   return {
     id: chain.id,
     chainType: 'causal',
@@ -71,8 +102,11 @@ export function causalChainToPanelChain(chain: CausalChain): PanelCorrelationCha
 }
 
 /** Newest-first, confidence-tiebroken list for the panel. */
-export function chainsForPanel(chains: readonly CausalChain[]): PanelCorrelationChain[] {
+export function chainsForPanel(
+  chains: readonly CausalChain[],
+  resolveObservation?: (id: string) => ObservationEvent | undefined,
+): PanelCorrelationChain[] {
   return chains
-    .map((c) => causalChainToPanelChain(c))
+    .map((c) => causalChainToPanelChain(c, resolveObservation))
     .sort((a, b) => b.detectedAt - a.detectedAt || b.confidence - a.confidence);
 }

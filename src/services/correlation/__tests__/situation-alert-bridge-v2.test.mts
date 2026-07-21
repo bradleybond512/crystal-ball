@@ -221,3 +221,40 @@ test('REGRESSION: resolved-in-store then reactivated situation alerts again', ()
   assert.equal(ingested.length, 2, 'reactivation after in-store resolution alerts again');
   cleanup();
 });
+
+test('REGRESSION: a backwards wall clock cannot make an escalation stamp older than its predecessor', () => {
+  const ingested: UnifiedAlert[][] = [];
+  const store = fakeStore([situation()]);
+  let clock = T0 + 2 * HOUR;
+  const cleanup = createSituationV2AlertBridge(store, {
+    ingest: (b) => ingested.push(b),
+    now: () => clock,
+  });
+  const first = ingested[0]![0]!.timestamp;
+  clock = T0; // clock rewinds two hours
+  store.items = [situation({ severity: 'critical' })];
+  store.listeners[0]!(store.items);
+  assert.equal(ingested.length, 2);
+  assert.ok(
+    ingested[1]![0]!.timestamp > first,
+    `escalation stamp ${ingested[1]![0]!.timestamp} must beat prior ${first}`,
+  );
+  cleanup();
+});
+
+test('REGRESSION: a persisted store alert with a future timestamp is cleared by the emit stamp', () => {
+  const ingested: UnifiedAlert[][] = [];
+  const store = fakeStore([situation()]);
+  const persistedFutureTs = T0 + 5 * HOUR;
+  const cleanup = createSituationV2AlertBridge(store, {
+    ingest: (b) => ingested.push(b),
+    now: () => T0,
+    existingTimestampFor: () => persistedFutureTs,
+  });
+  assert.equal(ingested.length, 1);
+  assert.ok(
+    ingested[0]![0]!.timestamp > persistedFutureTs,
+    'stamp must clear the persisted alert so the store accepts the update',
+  );
+  cleanup();
+});

@@ -109,6 +109,7 @@ import { startCorrelationCalibration } from '@/services/correlation/correlation-
 import { startRegimeCoupling } from '@/services/correlation/regime-coupling-bridge';
 import { startPairPersistence } from '@/services/correlation/pair-persistence';
 import { startCompoundRiskCadence } from '@/services/correlation/compound-risk-cadence';
+import { startSituationV2AlertBridge } from '@/services/correlation/situation-alert-bridge-v2';
 import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
 import { startPredictionResolutionCadence } from '@/services/intelligence/prediction-resolution-cadence';
 import { installBatteryMonitor } from '@/services/adaptive-cadence';
@@ -1112,6 +1113,7 @@ export class PanelLayoutManager implements AppModule {
  startRegimeCoupling();
  startPairPersistence();
  startCompoundRiskCadence();
+ startSituationV2AlertBridge();
  startConsolidationCadence();
  startCognitionSelfTuningCadence();
  startPredictionResolutionCadence();

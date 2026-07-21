@@ -2524,7 +2524,7 @@ export class DeckGLMap {
  if (!this.smokeScrubberEl) {
  const wrap = document.createElement('div');
  wrap.className = 'smoke-forecast-scrubber';
- wrap.style.cssText = 'position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;background:rgba(15,17,22,0.82);border:1px solid rgba(255,255,255,0.14);font-size:11px;color:#e6e8ec;backdrop-filter:blur(4px);';
+ wrap.style.cssText = 'position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;background:var(--surface-3, rgba(15,17,22,0.82));border:1px solid var(--surface-border, rgba(255,255,255,0.14));font-size:11px;color:var(--text-primary, #e6e8ec);backdrop-filter:blur(4px);';
  const title = document.createElement('span');
  title.textContent = '💨 Forecast';
  title.style.cssText = 'font-weight:600;opacity:0.85;white-space:nowrap;';

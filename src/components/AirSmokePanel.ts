@@ -228,10 +228,11 @@ export class AirSmokePanel extends Panel {
       incoming: '⏱',
       not_expected: '↗',
     };
+    // Reuse the EPA palette above — the color ratchet forbids new literals.
     const STATUS_COLOR: Record<SmokeArrivalEstimate['status'], string> = {
-      overhead: '#ff453a',
-      incoming: '#f0883e',
-      not_expected: '#8b949e',
+      overhead: CATEGORY_COLOR.unhealthy,
+      incoming: CATEGORY_COLOR.usg,
+      not_expected: CATEGORY_COLOR.unknown,
     };
     for (const a of arrivals) {
       const row = el('div', 'display:flex;align-items:baseline;gap:8px;');

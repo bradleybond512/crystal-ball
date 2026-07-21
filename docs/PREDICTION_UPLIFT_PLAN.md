@@ -268,7 +268,7 @@ Flagged for Bradley during implementation (each shapes behavior, ~5–10 lines):
 
 | PR | Feature | Status | Branch | Notes |
 |----|---------|--------|--------|-------|
-| A1 | Wire both calibration bridges live | 🔲 | | |
+| A1 | Wire both calibration bridges live | 🔄 | claude/uplift-a1-calibration-bridges | committed locally, not yet merged |
 | A2 | CorrelationMapPanel → live engine | 🔲 | | |
 | A3 | Cognition PR 6 leftovers | 🔲 | | |
 | A4 | Entity vocabulary alignment | 🔲 | | |

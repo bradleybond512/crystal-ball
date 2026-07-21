@@ -24,7 +24,8 @@ export type CognitionSwitchKey =
   | 'episodic-recall'
   | 'bocpd'
   | 'consolidation'
-  | 'shadow-algorithms';
+  | 'shadow-algorithms'
+  | 'calibration-bridges';
 
 export const COGNITION_SWITCHES: readonly CognitionSwitchKey[] = [
   'evoi-planner',
@@ -32,6 +33,7 @@ export const COGNITION_SWITCHES: readonly CognitionSwitchKey[] = [
   'bocpd',
   'consolidation',
   'shadow-algorithms',
+  'calibration-bridges',
 ];
 
 const STORAGE_KEY = 'crystalball-cognition-flags-v2';
@@ -52,6 +54,7 @@ function loadFlags(): Partial<Record<CognitionSwitchKey, boolean>> {
     // points consult this on every cycle.
     if (!warnedReadError) {
       warnedReadError = true;
+      // eslint-disable-next-line no-console -- fail-safe path must surface even with logger unavailable
       console.warn('[cognition-settings] flag read failed — treating all switches as ON', error);
     }
     return {};
@@ -70,6 +73,7 @@ export function setCognitionEnabled(key: CognitionSwitchKey, value: boolean): vo
     flags[key] = value;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(flags));
   } catch (error) {
+    // eslint-disable-next-line no-console -- fail-safe path must surface even with logger unavailable
     console.warn('[cognition-settings] flag write failed', error);
   }
   try {

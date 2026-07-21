@@ -34,6 +34,12 @@ import {
   severityFromScore,
 } from '@/services/shortage/shortage-alert-emitter';
 import type { ShortageInputBag } from '@/services/shortage/shortage-types';
+import {
+  forecastsWithLiveInputs,
+  recordShortagePredictions,
+  resolveShortageFromObservation,
+} from '@/services/shortage/shortage-calibration-bridge';
+import { isCognitionEnabled } from '@/services/cognition/cognition-settings';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { shouldNotify } from '@/services/notifications/notification-settings-service';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -165,6 +171,23 @@ export class ShortageRadarPanel extends Panel {
 
   private render(): void {
     const entries = computeShortageFullSet(this.inputs);
+
+    // Calibration bridge: log + resolve shortage predictions against the
+    // ledger (roadmap PR A1). Gated to commodities with a live input bag —
+    // the constructor's first render() fires before setInputs() ever runs,
+    // and computeShortageFullSet({}) still produces a no-data baseline
+    // forecast for every commodity; logging those would poison the whole
+    // day's dedupe bucket and silently skip the real forecast once live data
+    // arrives. Resolve BEFORE record so a fresh record can't self-resolve in
+    // the same tick. Never allowed to break the panel.
+    try {
+      if (isCognitionEnabled('calibration-bridges')) {
+        const live = forecastsWithLiveInputs(entries, this.inputs);
+        for (const f of live) resolveShortageFromObservation(f);
+        recordShortagePredictions(live);
+      }
+    } catch { /* calibration must never break the panel */ }
+
     const rows = buildOverviewRows(entries);
     const counts = countByRiskLevel(rows);
     this.setCount(counts.CRITICAL + counts.HIGH);

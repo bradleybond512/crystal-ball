@@ -117,7 +117,10 @@ import { startCognitionSelfTuningCadence } from '@/services/cognition/self-tunin
 import { startRegimeMonitor } from '@/services/cognition/regime-monitor';
 import { startEpistemicCalibration } from '@/services/intelligence/epistemic-calibration';
 import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
-import { expirePendingPredictions } from '@/services/intelligence/forecast-calibration-adapter';
+import {
+  wireModeForecastCalibration,
+  settleCalibrationBridges,
+} from '@/services/intelligence/calibration-bridge-wiring';
 import { startNotificationRouter } from '@/services/notification-router';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
@@ -157,7 +160,7 @@ import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
-import { startModeForecast } from '@/services/mode-forecast';
+import { startModeForecast, subscribeModeAdvisory } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
 import { startHypothesisAccuracy } from '@/services/hypothesis-accuracy';
 import { startAutoBrief } from '@/services/auto-brief';
@@ -713,6 +716,7 @@ export class PanelLayoutManager implements AppModule {
   private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
+  private modeAdvisoryUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
   private homeShell: HomeShellOverlay | null = null;
   private _onHomeShellToggle: (() => void) | null = null;
@@ -795,6 +799,8 @@ export class PanelLayoutManager implements AppModule {
  this.panelDragCleanupHandlers = [];
  this.safetyCaseUnsub?.();
  this.safetyCaseUnsub = null;
+ this.modeAdvisoryUnsub?.();
+ this.modeAdvisoryUnsub = null;
  if (this.criticalBannerEl) {
  this.criticalBannerEl.remove();
  this.criticalBannerEl = null;
@@ -1105,6 +1111,14 @@ export class PanelLayoutManager implements AppModule {
  startCrisisTrajectory();
  startActiveLearningQueue();
  startOutcomeGradingCadence();
+ // Calibration bridge wiring (roadmap PR A1): log + resolve mode-forecast
+ // advisory predictions against the ledger every forecast cycle. Use the
+ // snapshot delivered by the subscription directly — a getForecastSnapshot()
+ // re-read would be a localStorage read+parse that can be stale or null
+ // under quota exhaustion (a recurring incident in this app).
+ this.modeAdvisoryUnsub = subscribeModeAdvisory((snap) => {
+ try { wireModeForecastCalibration(snap); } catch { /* never break the forecast cycle */ }
+ });
  startTuningApplyCadence();
  startLlmGradingCadence();
  startBiasScanCadence();
@@ -1132,7 +1146,7 @@ export class PanelLayoutManager implements AppModule {
  });
  startEpistemicCalibration();
  startAssumptionExpirySweep();
- this.expirePredictionsTimer = setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
+ this.expirePredictionsTimer = setInterval(() => { try { settleCalibrationBridges(); } catch { /* noop */ } }, 60 * 60 * 1000);
  // PR 14 memory hygiene: flag episodic-memory episodes whose backing
  // explanation was refuted by competitive-hypothesis resolution. Best-effort
  // entity-overlap match (see contradictEpisodesForRefutation doc) — never

@@ -12,6 +12,7 @@
  * (extremism-tracking-helpers.ts) so the panel is a pure render of it.
  */
 
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from './Panel';
 import {
   buildRenderData,
@@ -62,13 +63,6 @@ const IDEOLOGY_LABEL: Record<ExtremistGroup['ideology'], string> = {
   anarchist: 'Anarchist',
 };
 
-function safeHtml(t: string): string {
-  return t
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function safe<T>(fn: () => T): T | null {
   try {
@@ -156,8 +150,8 @@ export class ExtremismTrackingPanel extends Panel {
       h(
         'div',
         { style: 'display:flex;flex-direction:column;gap:2px;' },
-        h('span', { style: 'font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);' }, safeHtml(label)),
-        h('span', { style: `font-size:18px;font-weight:700;font-family:ui-monospace,monospace;color:${color};` }, safeHtml(value)),
+        h('span', { style: 'font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);' }, escapeHtml(label)),
+        h('span', { style: `font-size:18px;font-weight:700;font-family:ui-monospace,monospace;color:${color};` }, escapeHtml(value)),
       );
     return h(
       'div',
@@ -195,12 +189,12 @@ export class ExtremismTrackingPanel extends Panel {
     const tColor = TREND_COLOR[g.trend];
     return `<div class="${threatLevelClass(g.threatLevel)}" style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;font-size:11px;gap:8px;">
       <div style="min-width:0;flex:1;">
-        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeHtml(g.name)}</div>
+        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(g.name)}</div>
         <div style="color:var(--text-secondary,#aaa);font-size:10px;">
-          <span class="${ideologyClass(g.ideology)}">${safeHtml(IDEOLOGY_LABEL[g.ideology])}</span> · ${safeHtml(g.primaryRegion)}
+          <span class="${ideologyClass(g.ideology)}">${escapeHtml(IDEOLOGY_LABEL[g.ideology])}</span> · ${escapeHtml(g.primaryRegion)}
         </div>
       </div>
-      <span style="font-size:9px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${safeHtml(g.threatLevel)}</span>
+      <span style="font-size:9px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(g.threatLevel)}</span>
       <div style="text-align:right;white-space:nowrap;">
         <div style="font-weight:700;color:${color};font-family:ui-monospace,monospace;">${g.recentAttacks12Mo} atk/12mo</div>
         <div style="font-size:9px;color:var(--text-secondary,#aaa);">~${formatThousands(g.estimatedMembers)} members</div>
@@ -230,10 +224,10 @@ export class ExtremismTrackingPanel extends Panel {
     const sigColor = e.significance === 'major' ? THREAT_COLOR.critical : THREAT_COLOR.high;
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${sigColor};border-radius:3px;padding:6px 8px;font-size:11px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <div style="font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeHtml(e.country)} · ${safeHtml(e.group)} · ${safeHtml(e.date)}</div>
+        <div style="font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(e.country)} · ${escapeHtml(e.group)} · ${escapeHtml(e.date)}</div>
         <div style="font-size:9px;font-weight:700;color:${sigColor};text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">${e.fatalities} killed</div>
       </div>
-      <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${safeHtml(e.attackType)} · ${e.injured} injured · ${safeHtml(e.description)}</div>
+      <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(e.attackType)} · ${e.injured} injured · ${escapeHtml(e.description)}</div>
     </div>`;
   }
 }

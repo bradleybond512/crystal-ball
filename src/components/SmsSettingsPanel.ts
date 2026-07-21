@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-base-to-string, unicorn/catch-error-name -- Pre-existing violations surfaced by the changed-file linter when this PR added a res.json() shape guard here; not introduced by this change, and refactoring unrelated logic is out of scope for a security fix. */
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from '@/components/Panel';
 
 type Tier = 'admin' | 'readonly';
@@ -28,10 +29,6 @@ interface SmsStatus {
   rateLimit?: RateLimitEntry[];
 }
 
-function escapeHtml(s: string): string {
-  return String(s ?? '').replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
-}
 
 export class SmsSettingsPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;

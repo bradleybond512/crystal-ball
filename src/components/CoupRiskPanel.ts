@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from './Panel';
 import {
   buildRenderData,
@@ -25,13 +26,6 @@ const TREND_COLOR: Record<CoupRiskCountry['trend'], string> = {
   falling: '#4caf50',
 };
 
-function safeHtml(t: string): string {
-  return t
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function safe<T>(fn: () => T): T | null {
   try {
@@ -109,8 +103,8 @@ export class CoupRiskPanel extends Panel {
       h(
         'div',
         { style: 'display:flex;flex-direction:column;gap:2px;' },
-        h('span', { style: 'font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);' }, safeHtml(label)),
-        h('span', { style: `font-size:18px;font-weight:700;font-family:ui-monospace,monospace;color:${color};` }, safeHtml(value)),
+        h('span', { style: 'font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);' }, escapeHtml(label)),
+        h('span', { style: `font-size:18px;font-weight:700;font-family:ui-monospace,monospace;color:${color};` }, escapeHtml(value)),
       );
     return h(
       'div',
@@ -144,10 +138,10 @@ export class CoupRiskPanel extends Panel {
     const tColor = TREND_COLOR[c.trend];
     return `<div class="${riskLevelClass(c.riskLevel)}" style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;font-size:11px;gap:8px;">
       <div style="min-width:0;flex:1;">
-        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeHtml(c.country)}</div>
-        <div style="color:var(--text-secondary,#aaa);font-size:10px;">${safeHtml(c.region)}</div>
+        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.country)}</div>
+        <div style="color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(c.region)}</div>
       </div>
-      <span style="font-size:9px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${safeHtml(c.riskLevel)}</span>
+      <span style="font-size:9px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(c.riskLevel)}</span>
       <div style="text-align:right;white-space:nowrap;">
         <div style="font-weight:700;color:${color};font-family:ui-monospace,monospace;">${c.riskScore}</div>
         <div style="font-size:9px;color:var(--text-secondary,#aaa);">Mil ${c.militaryInfluence} · Econ ${c.economicCrisis}</div>
@@ -175,10 +169,10 @@ export class CoupRiskPanel extends Panel {
     const typeColor = c.type === 'attempted' ? RISK_COLOR.medium : RISK_COLOR.critical;
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${typeColor};border-radius:3px;padding:6px 8px;font-size:11px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-weight:600;">${safeHtml(c.country)} · ${c.year}</div>
-        <div style="font-size:9px;font-weight:700;color:${typeColor};text-transform:uppercase;letter-spacing:0.05em;">${safeHtml(c.type)}</div>
+        <div style="font-weight:600;">${escapeHtml(c.country)} · ${c.year}</div>
+        <div style="font-size:9px;font-weight:700;color:${typeColor};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(c.type)}</div>
       </div>
-      <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${safeHtml(c.outcome)}</div>
+      <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(c.outcome)}</div>
     </div>`;
   }
 }

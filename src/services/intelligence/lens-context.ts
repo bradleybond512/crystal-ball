@@ -12,6 +12,7 @@
  * long-term preference.
  */
 
+import { escapeHtml } from "@/utils/sanitize";
 import type { Situation } from './situation-store-v2';
 import type { ObservationEvent } from '@/types/intelligence';
 import { getSituationStoreV2 } from './situation-store-v2';
@@ -80,11 +81,6 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return EARTH_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c] ?? c));
-}
 
 function resolveSessionStorage(storage?: StorageLike | null): StorageLike | null {
   if (storage !== undefined) return storage;

@@ -867,3 +867,56 @@ body.gods-vision-lock {
   opacity: 0.85;
   margin: 6px 0;
 }
+
+/* ── World Stage time scrubber (E4) ─────────────────────────────────────── */
+.time-scrubber-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  min-width: 420px;
+  max-width: 68vw;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: var(--ge-blur, blur(12px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  font-family: var(--ge-font, monospace);
+  color: rgba(255, 255, 255, 0.9);
+  pointer-events: auto;
+}
+.time-scrubber-hud__play {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.time-scrubber-hud__play:hover { background: rgba(255, 255, 255, 0.14); }
+.time-scrubber-hud__zone {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  min-width: 62px;
+}
+.time-scrubber-hud__zone[data-zone="replay"] { color: var(--ge-amber, #fbbf24); }
+.time-scrubber-hud__zone[data-zone="projected"] { color: var(--ge-cyan, #22d3ee); }
+.time-scrubber-hud__track { flex: 1 1 auto; accent-color: var(--ge-blue, #60a5fa); cursor: pointer; }
+.time-scrubber-hud__cursor {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+  opacity: 0.9;
+}

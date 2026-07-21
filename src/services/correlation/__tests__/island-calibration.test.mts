@@ -207,3 +207,12 @@ test('namespace: island: prefix is reserved — no built-in or learned rule can 
   assert.ok(!LEARNED_RULE_PREFIX.startsWith('island:'));
   assert.ok(!'island:'.startsWith(LEARNED_RULE_PREFIX));
 });
+
+test('REGRESSION: startup expires overdue predictions even with a silent alert store', () => {
+  recordIslandPrediction('quiet1', 'x|y', 'x', 0.7, T0);
+  const store = fakeAlertStore([]);
+  // Tracker starts 25h later; no store notify ever fires.
+  const stop = startIslandOutcomeTracking(store, () => T0 + 25 * HOUR);
+  assert.equal(getCorrelationCalibrationStore().get(islandPredictionId('quiet1'))!.status, 'expired');
+  stop();
+});

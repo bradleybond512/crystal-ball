@@ -355,7 +355,12 @@ function detectChains(leaders: UnifiedAlert[], now: number): UnifiedAlert[] {
 function ruleEnabled(r: CausalRule): boolean {
   // Read the tuned threshold from the store (falls back to 0.55 when unset).
   const threshold = getTunedParam('correlation-feedback', 'feedbackThreshold', 0.55);
-  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= threshold;
+  // Same crossfade policy as confidence: once the shared ledger has
+  // evidence for this pair, IT governs eligibility — the legacy
+  // pair-feedback multiplier learns from the same gestures.
+  const pairKey = `${r.cause}|${r.effect}`;
+  const mult = islandLedgerMult(pairKey) ?? getPairFeedbackMult(pairKey);
+  return mult >= threshold;
 }
 
 const distanceCache = new Map<string, number>();

@@ -15,6 +15,7 @@ import {
   createShortcutRegistry,
   parseChord,
   buildPanelFocusBindings,
+  isTypingTarget,
   type ShortcutRegistry,
 } from './shortcut-registry';
 import { isHomeShellAvailable } from '@/services/home-shell/shell-gate';
@@ -143,11 +144,15 @@ export function installShortcuts(): BootstrapHandles {
   document.addEventListener('keydown', listener);
   activeListener = listener;
 
+  // Capture-phase safety net for the command palette (see paletteCaptureNet).
+  window.addEventListener('keydown', paletteCaptureNet, true);
+
   return {
     registry: reg,
     refreshPanelHints,
     destroy: () => {
       document.removeEventListener('keydown', listener);
+      window.removeEventListener('keydown', paletteCaptureNet, true);
       for (const { obs } of observers) obs.disconnect();
       if (activeRegistry === reg) activeRegistry = null;
       if (activeListener === listener) activeListener = null;
@@ -157,6 +162,22 @@ export function installShortcuts(): BootstrapHandles {
 
 export function getActiveRegistry(): ShortcutRegistry | null {
   return activeRegistry;
+}
+
+/**
+ * Capture-phase safety net for ⌘K. The main shortcut listener is on `document`
+ * (bubble phase), so any element between the focused target and document can
+ * swallow ⌘K first — which is what makes it go dead in the Home Shell, where the
+ * reparented, focusable map canvas is the keydown target and its map-library
+ * keyboard handler stops propagation. Catching ⌘K at capture on `window` fires
+ * before any element handler, so the palette always opens. Exported for tests.
+ */
+export function paletteCaptureNet(e: KeyboardEvent): void {
+  if (e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'k' || e.key === 'K') && !isTypingTarget(e.target)) {
+    e.preventDefault();
+    e.stopImmediatePropagation(); // we handle it — don't let the bubble listener toggle it twice
+    document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));
+  }
 }
 
 function readPanelKeysFromSidebar(): string[] {

@@ -238,8 +238,12 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
 
 .hs-deck-sub { font-size: var(--text-xs); font-weight: 400; color: var(--hs-fg-faint); }
 
-.hs-deck-add {
+/* Filterable pin picker (replaces the misfiring native <select>). */
+.hs-pin-picker {
   margin-left: auto;
+  position: relative;
+}
+.hs-pin-input {
   background: var(--mat-thin);
   color: var(--hs-fg-muted);
   border: none;
@@ -247,8 +251,36 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   padding: 4px 12px;
-  cursor: pointer;
+  cursor: text;
+  width: 160px;
+  outline: none;
 }
+.hs-pin-input:focus { color: var(--hs-fg); box-shadow: 0 0 0 1px var(--hs-accent, #1f6feb); }
+.hs-pin-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: rgba(var(--hs-base-rgb), 0.98);
+  border: 1px solid var(--mat-thin);
+  border-radius: var(--r-md, 8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.hs-pin-item {
+  padding: 5px 10px;
+  border-radius: var(--r-sm, 4px);
+  font-size: var(--text-xs);
+  color: var(--hs-fg-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hs-pin-item:hover { background: var(--mat-thin); color: var(--hs-fg); }
 
 .hs-deck-grid {
   display: grid;

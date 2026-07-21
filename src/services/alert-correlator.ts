@@ -24,6 +24,11 @@ import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluati
 import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { runIntel } from './intel-provider';
 import { getEnabledCustomRules } from './custom-correlation-rules';
+import {
+  islandReliability,
+  recordIslandPrediction,
+  startIslandOutcomeTracking,
+} from '@/services/correlation/island-calibration';
 
 const WINDOW_MS = 30 * 60_000;            // widened so chain links can catch up
 const SCAN_INTERVAL_MS = 60_000;
@@ -523,7 +528,11 @@ function scan(): void {
     const pairKey = `${rule.cause}|${rule.effect}`;
     const _t0 = Date.now();
     const feedbackMult = getPairFeedbackMult(pairKey);
-    const confidence = Math.max(0.1, Math.min(1, baseConfidence * feedbackMult));
+    // Shared calibration spine (correlation next-gen): learned per-rule
+    // reliability from ledger outcomes — bounded [0.5, 1.5], neutral
+    // until ≥5 resolved, so behavior only shifts with evidence.
+    const reliabilityMult = islandReliability(pairKey, now);
+    const confidence = Math.max(0.1, Math.min(1, baseConfidence * feedbackMult * reliabilityMult));
     try {
       recordAlgorithmEvaluation('correlation-feedback', {
         durationMs: Date.now() - _t0,
@@ -535,6 +544,9 @@ function scan(): void {
 
     const sources = [...new Set(members.map(m => m.source))];
     synthesized.set(id, { ts: now, alertId: id, memberIds: members.map(m => m.id) });
+    try {
+      recordIslandPrediction(id, pairKey, rule.cause, confidence, now);
+    } catch { /* ledger unavailable — never block synthesis */ }
     synthetic.push({
       id,
       source: 'correlation',
@@ -613,6 +625,7 @@ let _scanTimer: number | null = null;
 let _pruneTimer: number | null = null;
 let _initialScanTimer: number | null = null;
 let _unsubStore: (() => void) | null = null;
+let _stopOutcomeTracking: (() => void) | null = null;
 
 export function startAlertCorrelator(): void {
   if (started) return;
@@ -621,6 +634,7 @@ export function startAlertCorrelator(): void {
   _scanTimer = window.setInterval(scan, SCAN_INTERVAL_MS);
   _pruneTimer = window.setInterval(pruneSynth, PRUNE_INTERVAL_MS);
   _unsubStore = unifiedAlertStore.subscribe(decayAcked);
+  _stopOutcomeTracking = startIslandOutcomeTracking(unifiedAlertStore);
   _initialScanTimer = window.setTimeout(scan, 5000);
 }
 
@@ -631,5 +645,7 @@ export function stopAlertCorrelator(): void {
   // Drop the store subscription so stop/start doesn't stack decayAcked subscribers.
   _unsubStore?.();
   _unsubStore = null;
+  _stopOutcomeTracking?.();
+  _stopOutcomeTracking = null;
   started = false;
 }

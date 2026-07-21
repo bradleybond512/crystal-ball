@@ -33,6 +33,7 @@ import { GlobeHeatmapRenderer } from '@/components/globe/GlobeHeatmapRenderer';
 import { coerceTimestampMs, opacityForEntity } from '@/components/globe/cursor-opacity';
 import { escapeHtml } from '@/utils/sanitize';
 import { modelLoader } from '@/services/model-loader';
+import { boardEntityId } from '@/services/survival/board-events';
 import { BuildingTileManager } from '@/services/building-tiles';
 import { fetchSatelliteCatalog, filterNotable, type SatelliteTLE } from '@/services/satellite-catalog';
 import { satellitePropagator, type SatellitePosition } from '@/services/satellite-propagator';
@@ -1077,6 +1078,10 @@ export class GlobeDataManager {
  // empty in-progress map.
  const nextForecasts = new Map<string, AftershockForecast>();
 
+ // Idempotent rebuild: clear before re-adding so explicit board ids (below) can't
+ // collide on a reload/retry (mirrors the maritime refresh pattern).
+ layer.source.entities.removeAll();
+
  for (const eq of quakes) {
  const lat = eq.location?.latitude;
  const lon = eq.location?.longitude;
@@ -1094,6 +1099,9 @@ export class GlobeDataManager {
  const scale = Math.max(0.25, eq.magnitude * 0.08);
 
  const eqEntity = layer.source.entities.add({
+ // Stable board id so the personal lens can style this marker (E4). Quakes
+ // without an upstream id fall back to Cesium's auto-generated unique id.
+ ...(eq.id ? { id: boardEntityId('earthquake', eq.id) } : {}),
  position: Cartesian3.fromDegrees(lon, lat),
  billboard: {
  image: ICON_EARTHQUAKE,

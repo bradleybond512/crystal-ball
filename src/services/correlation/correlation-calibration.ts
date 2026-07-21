@@ -99,6 +99,33 @@ export function reliabilityForRule(ruleId: string, now: number = Date.now()): nu
   return reliabilityCache.byRule.get(ruleId) ?? 1;
 }
 
+/** Resolve one prediction by id (used by non-situation producers such
+ *  as the alert-correlator island) — persists and refreshes reliability. */
+export function resolveCalibrationPrediction(
+  id: string,
+  outcome: boolean,
+  when: number = Date.now(),
+): boolean {
+  const store = getCorrelationCalibrationStore();
+  const ok = store.resolve(id, outcome, when);
+  if (ok) {
+    persist(store);
+    reliabilityCache = null;
+  }
+  return ok;
+}
+
+/** Record an arbitrary prediction (id/sourceId chosen by the caller) —
+ *  persists and refreshes reliability. Skips duplicates. */
+export function recordCalibrationPrediction(prediction: PredictionRecord): boolean {
+  const store = getCorrelationCalibrationStore();
+  if (store.get(prediction.id)) return false;
+  store.record(prediction);
+  persist(store);
+  reliabilityCache = null;
+  return true;
+}
+
 // ── Resolution ───────────────────────────────────────────────────────────
 
 function toLite(situations: readonly Situation[]): SituationLite[] {

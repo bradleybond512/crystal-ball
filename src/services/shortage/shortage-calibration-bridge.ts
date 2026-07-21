@@ -130,6 +130,21 @@ export function toPredictionRecord(f: ShortageForecast, now: number): Prediction
   };
 }
 
+/** Filters full-set entries down to only those commodities with a live
+ *  input bag injected. `computeShortageFullSet({})` still runs every
+ *  commodity through its model with an empty bag (e.g. the panel's
+ *  constructor render, before `setInputs()` is ever called) and produces a
+ *  no-data baseline forecast — logging that would fill the day's dedupe
+ *  bucket with baseline noise, silently skipping the real forecast for the
+ *  rest of the day once live data arrives. Presence of the commodity key in
+ *  `inputs` (regardless of the bag's own contents) is what counts as "live". */
+export function forecastsWithLiveInputs<C extends string>(
+  entries: readonly { commodity: C; forecast: ShortageForecast }[],
+  inputs: Partial<Record<C, unknown>>,
+): ShortageForecast[] {
+  return entries.filter((e) => e.commodity in inputs).map((e) => e.forecast);
+}
+
 /** Log a batch of forecasts as pending predictions, skipping any already
  *  logged in the current daily window. */
 export function recordShortagePredictions(

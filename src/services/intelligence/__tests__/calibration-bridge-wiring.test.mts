@@ -54,17 +54,26 @@ test('settleCalibrationBridges runs both settlers before generic expiry', () => 
   assert.deepEqual(order, ['shortage', 'advisory', 'expire']);
 });
 
-test('settleShortage throws — expirePending still called', () => {
+test('settleShortage throws — advisory and expire still run, error swallowed', () => {
   const order: string[] = [];
-  assert.throws(() => {
-    settleCalibrationBridges({
-      settleShortage: () => { order.push('shortage'); throw new Error('boom'); },
-      settleAdvisory: () => { order.push('advisory'); return 0; },
-      expirePending: () => { order.push('expire'); return 0; },
-      enabled: () => true,
-    });
+  settleCalibrationBridges({
+    settleShortage: () => { order.push('shortage'); throw new Error('boom'); },
+    settleAdvisory: () => { order.push('advisory'); return 0; },
+    expirePending: () => { order.push('expire'); return 0; },
+    enabled: () => true,
   });
-  assert.deepEqual(order, ['shortage', 'expire']);
+  assert.deepEqual(order, ['shortage', 'advisory', 'expire']);
+});
+
+test('settleAdvisory throws — shortage and expire still run, error swallowed', () => {
+  const order: string[] = [];
+  settleCalibrationBridges({
+    settleShortage: () => { order.push('shortage'); return 0; },
+    settleAdvisory: () => { order.push('advisory'); throw new Error('boom'); },
+    expirePending: () => { order.push('expire'); return 0; },
+    enabled: () => true,
+  });
+  assert.deepEqual(order, ['shortage', 'advisory', 'expire']);
 });
 
 test('settle with disabled switch still calls expirePending only', () => {

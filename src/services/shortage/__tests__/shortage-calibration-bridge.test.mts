@@ -20,6 +20,7 @@ import {
   shortageKeyPrefix,
   domainForShortage,
   sourceIdForShortage,
+  forecastsWithLiveInputs,
   CONFIDENCE_WEIGHT,
   SHORTAGE_ELEVATED_THRESHOLD,
 } from '../shortage-calibration-bridge.ts';
@@ -235,6 +236,36 @@ test('settleExpiredShortagePredictions is scoped to shortage-owned records', () 
   recordShortagePredictions([forecast({ commodity: 'wheat', region: 'r1', horizonDays: 1 })], NOW);
   settleExpiredShortagePredictions(NOW + 10 * DAY_MS);
   assert.equal(getCalibrationStore().all().find((r) => r.id === 'analyst:x:1')!.status, 'pending');
+});
+
+// ── forecastsWithLiveInputs (P1 gate: first-render baseline poisoning) ─────
+
+test('forecastsWithLiveInputs: an entirely-empty inputs map records nothing', () => {
+  const entries = [
+    { commodity: 'wheat', forecast: forecast({ commodity: 'wheat' }) },
+    { commodity: 'corn', forecast: forecast({ commodity: 'corn' }) },
+  ];
+  assert.deepEqual(forecastsWithLiveInputs(entries, {}), []);
+});
+
+test('forecastsWithLiveInputs: partial inputs pass only the matching commodities', () => {
+  const wheat = forecast({ commodity: 'wheat' });
+  const corn = forecast({ commodity: 'corn' });
+  const entries = [
+    { commodity: 'wheat', forecast: wheat },
+    { commodity: 'corn', forecast: corn },
+  ];
+  assert.deepEqual(forecastsWithLiveInputs(entries, { wheat: {} }), [wheat]);
+});
+
+test('forecastsWithLiveInputs: every commodity keyed in inputs passes through', () => {
+  const wheat = forecast({ commodity: 'wheat' });
+  const corn = forecast({ commodity: 'corn' });
+  const entries = [
+    { commodity: 'wheat', forecast: wheat },
+    { commodity: 'corn', forecast: corn },
+  ];
+  assert.deepEqual(forecastsWithLiveInputs(entries, { wheat: {}, corn: {} }), [wheat, corn]);
 });
 
 test('resolved shortage predictions feed the store Brier score', () => {

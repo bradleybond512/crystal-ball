@@ -99,6 +99,29 @@ export function reliabilityForRule(ruleId: string, now: number = Date.now()): nu
   return reliabilityCache.byRule.get(ruleId) ?? 1;
 }
 
+/** Expire overdue pending predictions — persists and refreshes
+ *  reliability. Safe to call from any producer's cadence. */
+export function expireCalibrationPredictions(now: number = Date.now()): number {
+  const store = getCorrelationCalibrationStore();
+  const expired = store.expirePending(now);
+  if (expired > 0) {
+    persist(store);
+    reliabilityCache = null;
+  }
+  return expired;
+}
+
+/** Resolved-outcome count for one rule — lets callers gate on whether
+ *  ledger evidence exists before trusting the multiplier. */
+export function resolvedCountForRule(ruleId: string): number {
+  const sourceId = `${CORR_RULE_SOURCE_PREFIX}${ruleId}`;
+  let n = 0;
+  for (const r of getCorrelationCalibrationStore().all()) {
+    if (r.sourceId === sourceId && (r.status === 'resolved_true' || r.status === 'resolved_false')) n += 1;
+  }
+  return n;
+}
+
 /** Resolve one prediction by id (used by non-situation producers such
  *  as the alert-correlator island) — persists and refreshes reliability. */
 export function resolveCalibrationPrediction(

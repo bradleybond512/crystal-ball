@@ -35,6 +35,7 @@ import { registerRecurringLoop } from '@/services/diagnostics/recurring-loops';
 import type { LoopHandle } from '@/services/diagnostics/recurring-loops';
 import { buildBriefingView } from '@/services/home-shell/briefing-view';
 import type { BriefingBandView, BriefingView } from '@/services/home-shell/briefing-view';
+import { matchPinnablePanels } from '@/services/home-shell/pin-picker-filter';
 import {
   buildDeckCards,
   movePin,
@@ -188,7 +189,18 @@ export class HomeShellOverlay {
     document.addEventListener('cb:open-panel', this._onOpenPanel);
 
     root.addEventListener('click', (e) => this.onClick(e));
-    root.addEventListener('change', (e) => this.onChange(e));
+    // Pin-picker: filter as the user types, open on focus.
+    const onPinInput = (e: Event): void => {
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement && t.dataset.action === 'pin-filter') this.renderPinList(t);
+    };
+    root.addEventListener('input', onPinInput);
+    root.addEventListener('focusin', onPinInput);
+    // Close the list when focus/clicks leave the picker.
+    root.addEventListener('focusout', (e) => {
+      const to = (e as FocusEvent).relatedTarget as Node | null;
+      if (!to || !this.deckEl?.querySelector('.hs-pin-picker')?.contains(to)) this.closePinList();
+    });
     parent.append(root);
     this.root = root;
   }
@@ -316,7 +328,7 @@ export class HomeShellOverlay {
     );
     this.renderBriefing(briefing);
     // Skip the deck rebuild while focus is inside it — a 10 s re-render
-    // would yank an open pin <select> shut mid-pick. Direct calls from
+    // would yank the open pin picker shut mid-filter. Direct calls from
     // setPins still render unconditionally, which releases the guard.
     if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(now);
     this.renderRibbon(now);
@@ -372,7 +384,7 @@ export class HomeShellOverlay {
     header.append(
       el('span', undefined, 'Your Deck'),
       el('span', 'hs-deck-sub', `${cards.length} pinned · click a card to open`),
-      this.buildPinSelect(),
+      this.buildPinPicker(),
     );
 
     const grid = el('div', 'hs-deck-grid');
@@ -380,24 +392,49 @@ export class HomeShellOverlay {
     this.deckEl.replaceChildren(header, grid);
   }
 
-  private buildPinSelect(): HTMLSelectElement {
-    const select = document.createElement('select');
-    select.className = 'hs-deck-add';
-    select.dataset.action = 'pin-select';
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '+ pin a panel…';
-    select.append(placeholder);
-    Object.entries(DEFAULT_PANELS)
-      .filter(([key]) => !this.pins.includes(key))
-      .sort((a, b) => a[1].name.localeCompare(b[1].name))
-      .forEach(([key, cfg]) => {
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = cfg.name;
-        select.append(opt);
-      });
-    return select;
+  /** Filterable pin picker. Replaces a 185-item native <select> whose
+   *  type-to-jump fired `change` on every matching keystroke and pinned the
+   *  wrong panel. This input+list commits ONLY on an explicit item click. */
+  private buildPinPicker(): HTMLElement {
+    const wrap = el('div', 'hs-pin-picker');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'hs-pin-input';
+    input.placeholder = '+ pin a panel…';
+    input.dataset.action = 'pin-filter';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-expanded', 'false');
+    input.autocomplete = 'off';
+    const list = el('ul', 'hs-pin-list');
+    list.hidden = true;
+    // Keep the input focused while clicking an item, or the focusout handler
+    // would hide the list before the click lands (combobox blur race).
+    list.addEventListener('mousedown', (e) => e.preventDefault());
+    wrap.append(input, list);
+    return wrap;
+  }
+
+  private renderPinList(input: HTMLInputElement): void {
+    const list = input.parentElement?.querySelector<HTMLElement>('.hs-pin-list');
+    if (!list) return;
+    const matches = matchPinnablePanels(input.value, Object.entries(DEFAULT_PANELS), this.pins);
+    list.replaceChildren(
+      ...matches.map(([key, name]) => {
+        const li = el('li', 'hs-pin-item', name);
+        li.dataset.action = 'pin-add';
+        li.dataset.panelKey = key;
+        li.setAttribute('role', 'option');
+        return li;
+      }),
+    );
+    const open = matches.length > 0;
+    list.hidden = !open;
+    input.setAttribute('aria-expanded', String(open));
+  }
+
+  private closePinList(): void {
+    this.deckEl?.querySelector<HTMLElement>('.hs-pin-list')?.setAttribute('hidden', '');
+    this.deckEl?.querySelector<HTMLElement>('.hs-pin-input')?.setAttribute('aria-expanded', 'false');
   }
 
   private renderRibbon(now: number): void {
@@ -473,6 +510,11 @@ export class HomeShellOverlay {
     }
     const key = target.closest<HTMLElement>('[data-panel-key]')?.dataset.panelKey;
     if (!key) return;
+    if (action === 'pin-add') {
+      // Explicit pick from the filter list — the only way a pin commits now.
+      this.setPins(togglePin(this.pins, key)); // renderDeck rebuilds a fresh, empty picker
+      return;
+    }
     if (action === 'unpin') {
       this.setPins(togglePin(this.pins, key));
       return;
@@ -487,13 +529,6 @@ export class HomeShellOverlay {
     }
     // Plain card click → open the panel in the focus host.
     this.openInFocus(key);
-  }
-
-  private onChange(e: Event): void {
-    const sel = e.target as HTMLSelectElement;
-    if (sel.dataset.action === 'pin-select' && sel.value) {
-      this.setPins(togglePin(this.pins, sel.value));
-    }
   }
 
   private setPins(pins: string[]): void {

@@ -1,23 +1,11 @@
 import { Panel } from './Panel';
-import { getApiBaseUrl } from '@/services/runtime';
 import { escapeHtml } from '@/utils/sanitize';
-
-interface ChainEvent {
-  id: string;
-  domain: string;
-  title: string;
-  severity: number;
-  occurredAt: number;
-}
-
-interface CorrelationChain {
-  id: string;
-  chainType: string;
-  title: string;
-  confidence: number;
-  detectedAt: number;
-  events: ChainEvent[];
-}
+import { getCausalChainBuilder } from '@/services/intelligence/causal-chain';
+import { query as queryObservations } from '@/services/intelligence/observation-store';
+import {
+  chainsForPanel,
+  type PanelCorrelationChain,
+} from '@/services/correlation/causal-chain-view';
 
 const DOMAIN_ICONS: Record<string, string> = {
   earthquake:      '🌋',
@@ -40,6 +28,7 @@ const DOMAIN_ICONS: Record<string, string> = {
 };
 
 const CHAIN_LABELS: Record<string, string> = {
+  causal:              'Causal Chain',
   'seismic-cascade':   'Seismic Cascade',
   'wildfire-cascade':  'Wildfire Cascade',
   'hurricane-cascade': 'Hurricane Cascade',
@@ -62,7 +51,7 @@ function confidenceColor(c: number): string {
 
 export class CorrelationMapPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
-  private chains: CorrelationChain[] = [];
+  private chains: PanelCorrelationChain[] = [];
   private expandedId: string | null = null;
   private error: string | null = null;
 
@@ -72,7 +61,7 @@ export class CorrelationMapPanel extends Panel {
       title: 'Correlation Map',
       showCount: false,
       trackActivity: true,
-      infoTooltip: 'Active cross-domain causal chains detected by the v2 correlation engine. Shows seismic, wildfire, hurricane, cyber, and conflict cascades.',
+      infoTooltip: 'Active cross-domain causal chains from the live causal-chain builder — root cause, downstream effects, and chain confidence.',
     });
     this.showLoading('Loading correlation chains…');
     this.start();
@@ -80,8 +69,8 @@ export class CorrelationMapPanel extends Panel {
   }
 
   private start(): void {
-    void this.fetchAndRender();
-    this.refreshTimer = setInterval(() => void this.fetchAndRender(), 30_000);
+    this.loadAndRender();
+    this.refreshTimer = setInterval(() => this.loadAndRender(), 30_000);
   }
 
   override destroy(): void {
@@ -102,15 +91,22 @@ export class CorrelationMapPanel extends Panel {
     });
   }
 
-  private async fetchAndRender(): Promise<void> {
+  private loadAndRender(): void {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/intelligence/correlations/chains`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { chains: CorrelationChain[] };
-      this.chains = Array.isArray(data?.chains) ? data.chains : [];
+      // Read the live causal-chain builder directly — no sidecar hop.
+      // (The old /api/intelligence/correlations/chains mirror had no
+      // producer since correlator-v2 was retired; the route remains for
+      // external posters but this panel no longer depends on it.)
+      // Intermediate chain hops resolve against the observation ring
+      // buffer; aged-out ones degrade to mechanism placeholders.
+      const byId = new Map(queryObservations({ limit: 1000 }).map((o) => [o.id, o]));
+      this.chains = chainsForPanel(
+        getCausalChainBuilder().getChains(),
+        (id) => byId.get(id),
+      );
       this.error = null;
     } catch (error) {
-      this.error = error instanceof Error ? error.message : 'fetch failed';
+      this.error = error instanceof Error ? error.message : 'chain read failed';
     }
     this.render();
   }
@@ -132,7 +128,7 @@ export class CorrelationMapPanel extends Panel {
     return `<div class="cm2-list" style="display:flex;flex-direction:column;gap:4px;padding:8px;">${rows}</div>`;
   }
 
-  private buildChainRow(chain: CorrelationChain): string {
+  private buildChainRow(chain: PanelCorrelationChain): string {
     const expanded = this.expandedId === chain.id;
     const label = escapeHtml(CHAIN_LABELS[chain.chainType] ?? chain.chainType);
     const pct = Math.round(chain.confidence * 100);

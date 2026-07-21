@@ -14,13 +14,24 @@ import type { HourlyWind, SmokeTransportSource } from '../smoke-types.ts';
 const HOME = { lat: 41.6, lon: -86.7 }; // La Porte, IN
 const T0 = Date.UTC(2026, 6, 20, 12); // 2026-07-20T12:00Z
 
-/** n hourly samples from T0, constant wind. */
-function winds(n: number, directionDeg: number | null, speedMph: number | null): HourlyWind[] {
-  return Array.from({ length: n }, (_, i) => ({
-    time: new Date(T0 + i * 3_600_000).toISOString(),
-    speedMph,
-    directionDeg,
-  }));
+/** n hourly samples from T0, constant wind. Mirrors production: `time` is a
+ *  place-local wall string (for a place at UTC+offsetHours, no Z suffix) and
+ *  `timeMs` is the true epoch — the estimator must index by the epoch. */
+function winds(
+  n: number,
+  directionDeg: number | null,
+  speedMph: number | null,
+  offsetHours = 0,
+): HourlyWind[] {
+  return Array.from({ length: n }, (_, i) => {
+    const epoch = T0 + i * 3_600_000;
+    return {
+      time: new Date(epoch + offsetHours * 3_600_000).toISOString().slice(0, 16),
+      timeMs: epoch,
+      speedMph,
+      directionDeg,
+    };
+  });
 }
 
 /** A plume centroid ~90 mi due north of home (comfortably under the 100 mi
@@ -55,7 +66,7 @@ test('steady north wind carries a 90 mi upwind plume in ~5 h, high confidence', 
   assert.equal(est.direction, 'N');
   assert.ok(Math.abs(est.distanceMi - 90) <= 2);
   // 20 mph aligned → 90 mi crossed inside the 5th hourly sample.
-  assert.equal(est.etaStartIso, new Date(T0 + 4 * 3_600_000).toISOString());
+  assert.equal(est.etaStartIso, winds(12, 0, 20)[4]!.time);
   assert.equal(est.confidence, 'high');
   assert.ok(est.etaLabel && est.etaEndIso);
   assert.match(est.summary, /Heavy smoke plume 90 mi N/);
@@ -125,4 +136,19 @@ test('summarizeArrivals picks the first actionable estimate; null when none', ()
   const stalled = estimateArrivals({ home: HOME, sources: [NORTH_PLUME], winds: winds(12, 180, 20), now: T0 });
   assert.equal(summarizeArrivals(stalled), null);
   assert.equal(summarizeArrivals(undefined), null);
+});
+
+test('device timezone never skews the ETA: indexing is by epoch, not wall string', () => {
+  // A place at UTC-7 whose wall strings lag the epoch by 7 h. If the
+  // estimator parsed the strings against the device clock (the bug the
+  // independent review caught), startIdx would shift and the arrival hour
+  // with it. With timeMs it must land on exactly the same sample as the
+  // offset-0 run.
+  const w = winds(12, 0, 20, -7);
+  const [est] = estimateArrivals({ home: HOME, sources: [NORTH_PLUME], winds: w, now: T0 });
+  assert.ok(est);
+  assert.equal(est.status, 'incoming');
+  assert.equal(est.etaStartIso, w[4]!.time);
+  // And the wall label reads the PLACE's clock (T0+4h at UTC-7 = 09:00 wall).
+  assert.match(est.etaLabel ?? '', /9 AM/);
 });

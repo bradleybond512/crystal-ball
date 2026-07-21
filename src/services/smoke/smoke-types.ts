@@ -95,8 +95,12 @@ export interface SmokeSourceStatus {
 }
 
 export interface HourlyWind {
-  /** ISO timestamp (Open-Meteo hourly time, local to the place). */
+  /** Place-local wall time (Open-Meteo hourly time, no offset) — for labels. */
   time: string;
+  /** True epoch ms for this sample (derived via utc_offset_seconds) — for
+   *  all time comparisons. Null when the payload carried no usable offset;
+   *  consumers then fall back to device-local parsing of `time`. */
+  timeMs: number | null;
   speedMph: number | null;
   /** Meteorological convention: degrees the wind blows FROM. */
   directionDeg: number | null;

@@ -39,19 +39,29 @@ export function hasAqData(parsed: ParsedAq): boolean {
   return parsed.hourly.some((s) => s.usAqi !== null) || parsed.current.usAqi !== null;
 }
 
-/** Parse an Open-Meteo weather-forecast payload's hourly 10 m winds. */
+/** Parse an Open-Meteo weather-forecast payload's hourly 10 m winds.
+ *  Hourly times are place-local wall times WITHOUT an offset; the payload's
+ *  utc_offset_seconds recovers the true epoch (epoch = wall-as-UTC − offset)
+ *  so consumers never compare place-local strings against device epochs. */
 export function parseOpenMeteoWinds(raw: unknown): HourlyWind[] {
   const r = raw as {
+    utc_offset_seconds?: unknown;
     hourly?: { time?: unknown[]; wind_speed_10m?: unknown[]; wind_direction_10m?: unknown[] };
   } | null;
   const times = Array.isArray(r?.hourly?.time) ? r.hourly.time : [];
   const speeds = Array.isArray(r?.hourly?.wind_speed_10m) ? r.hourly.wind_speed_10m : [];
   const dirs = Array.isArray(r?.hourly?.wind_direction_10m) ? r.hourly.wind_direction_10m : [];
-  return times.map((t, i) => ({
-    time: String(t),
-    speedMph: num(speeds[i]),
-    directionDeg: num(dirs[i]),
-  }));
+  const offsetSec = num(r?.utc_offset_seconds);
+  return times.map((t, i) => {
+    const time = String(t);
+    const wallAsUtc = Date.parse(`${time}Z`);
+    return {
+      time,
+      timeMs: offsetSec !== null && Number.isFinite(wallAsUtc) ? wallAsUtc - offsetSec * 1000 : null,
+      speedMph: num(speeds[i]),
+      directionDeg: num(dirs[i]),
+    };
+  });
 }
 
 /** Parse one Open-Meteo AQ response fetched with timeformat=unixtime into

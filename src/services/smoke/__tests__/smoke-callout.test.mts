@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { mergeSmokeEvent } from '../smoke-callout-bridge.ts';
+import { mergeSmokeEvent, settleEdge } from '../smoke-callout-bridge.ts';
 import { buildSnapshot } from '../smoke-snapshot.ts';
 import type { ParsedAq } from '../smoke-parse.ts';
 import type { IncomingEvent } from '@/services/personal/personal-impact';
@@ -41,4 +41,15 @@ test('no snapshot → other events untouched, smoke removed', () => {
   const seeded: IncomingEvent[] = [OTHER, { eventId: 'smoke-home', description: 'x', domain: 'weather', severity: 80, at: 0 }];
   const out = mergeSmokeEvent(seeded, undefined, 0, 1000);
   assert.deepEqual(out.events.map((e) => e.eventId), ['w1']);
+});
+
+test('edge policy: a live advisory ratchets the edge DOWN so the next episode notifies', () => {
+  // Unhealthy episode delivered (edge 3), then air clears to good while the
+  // incoming-smoke advisory keeps the headline non-null: the edge must fall
+  // to 0 so the predicted episode's Unhealthy crossing notifies again
+  // (independent-review finding #2 — advisory must not swallow it).
+  assert.equal(settleEdge(0, 3), 0);
+  // Steady state and worsening never move the edge via settle.
+  assert.equal(settleEdge(3, 3), 3);
+  assert.equal(settleEdge(2, 1), 1);
 });

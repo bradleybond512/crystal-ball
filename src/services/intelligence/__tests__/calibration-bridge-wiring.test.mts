@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { wireModeForecastCalibration, settleCalibrationBridges }
   from '../calibration-bridge-wiring';
 
-test('wireModeForecastCalibration records then resolves via injected fns', () => {
+test('wireModeForecastCalibration resolves then records via injected fns', () => {
   const calls: string[] = [];
   wireModeForecastCalibration(
     { advisories: [{ domain: 'finance', pressure: 0.7 } as never] },

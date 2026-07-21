@@ -44,3 +44,21 @@ test('future-dated detectedAt clamps age to zero', () => {
   const rows = buildLivePairRows([pair({ detectedAt: new Date(200_000) }) as never], 100_000);
   assert.equal(rows[0].ageMs, 0);
 });
+
+test('a corrupted persisted entry is dropped, not thrown, alongside a valid pair', () => {
+  const corrupt = pair({ ruleId: 42, detectedAt: new Date('nonsense') });
+  const valid = pair({ ruleId: 'quake-infra-2' });
+  assert.doesNotThrow(() => buildLivePairRows([corrupt as never, valid as never], 100_000));
+  const rows = buildLivePairRows([corrupt as never, valid as never], 100_000);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].ruleId, 'quake-infra-2');
+});
+
+test('malformed eventA/eventB and non-finite confidence are dropped', () => {
+  const badEvent = pair({ eventA: 'not-an-object' });
+  const badConfidence = pair({ confidence: Number.NaN });
+  const valid = pair({ ruleId: 'quake-infra-3' });
+  const rows = buildLivePairRows([badEvent as never, badConfidence as never, valid as never], 100_000);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].ruleId, 'quake-infra-3');
+});

@@ -32,8 +32,27 @@ export interface LivePairRow {
 
 const MAX_ROWS = 30;
 
+/** True if a value has the minimum shape buildLivePairRows can safely render.
+ *  The correlation store hydrates persisted pairs from localStorage, so a
+ *  corrupted/stale entry can reach here after a reload — drop it silently
+ *  rather than throwing and blanking the whole panel. */
+function isRenderablePair(p: unknown): p is CorrelatedPair {
+  if (typeof p !== 'object' || p === null) return false;
+  const c = p as Record<string, unknown>;
+  if (typeof c.ruleId !== 'string') return false;
+  if (!(c.detectedAt instanceof Date) || !Number.isFinite(c.detectedAt.getTime())) return false;
+  if (typeof c.confidence !== 'number' || !Number.isFinite(c.confidence)) return false;
+  if (!isEventLike(c.eventA) || !isEventLike(c.eventB)) return false;
+  return true;
+}
+
+function isEventLike(e: unknown): e is { domain: string; title: unknown } {
+  return typeof e === 'object' && e !== null && typeof (e as Record<string, unknown>).domain === 'string';
+}
+
 export function buildLivePairRows(pairs: readonly CorrelatedPair[], now: number): LivePairRow[] {
-  return [...pairs]
+  return pairs
+    .filter((p) => isRenderablePair(p))
     .sort((a, b) => b.detectedAt.getTime() - a.detectedAt.getTime())
     .slice(0, MAX_ROWS)
     .map((p) => {
@@ -49,8 +68,8 @@ export function buildLivePairRows(pairs: readonly CorrelatedPair[], now: number)
         edgeType: p.edgeType,
         fromDomain: p.eventA.domain,
         toDomain: p.eventB.domain,
-        fromTitle: p.eventA.title,
-        toTitle: p.eventB.title,
+        fromTitle: typeof p.eventA.title === 'string' ? p.eventA.title : '',
+        toTitle: typeof p.eventB.title === 'string' ? p.eventB.title : '',
         confidence: p.confidence,
         ageMs: Math.max(0, now - p.detectedAt.getTime()),
         regimeBoosted: (f?.regime ?? 1) > 1,

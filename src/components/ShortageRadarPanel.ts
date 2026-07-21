@@ -34,6 +34,11 @@ import {
   severityFromScore,
 } from '@/services/shortage/shortage-alert-emitter';
 import type { ShortageInputBag } from '@/services/shortage/shortage-types';
+import {
+  recordShortagePredictions,
+  resolveShortageFromObservation,
+} from '@/services/shortage/shortage-calibration-bridge';
+import { isCognitionEnabled } from '@/services/cognition/cognition-settings';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { shouldNotify } from '@/services/notifications/notification-settings-service';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -165,6 +170,19 @@ export class ShortageRadarPanel extends Panel {
 
   private render(): void {
     const entries = computeShortageFullSet(this.inputs);
+
+    // Calibration bridge: log + resolve shortage predictions against the
+    // ledger (roadmap PR A1). Resolve BEFORE record so a fresh record can't
+    // self-resolve in the same tick; the bridge's own daily prediction-id
+    // bucket makes the 5-minute render cadence flood-proof. Never allowed to
+    // break the panel.
+    try {
+      if (isCognitionEnabled('calibration-bridges')) {
+        for (const f of entries) resolveShortageFromObservation(f.forecast);
+        recordShortagePredictions(entries.map((e) => e.forecast));
+      }
+    } catch { /* calibration must never break the panel */ }
+
     const rows = buildOverviewRows(entries);
     const counts = countByRiskLevel(rows);
     this.setCount(counts.CRITICAL + counts.HIGH);

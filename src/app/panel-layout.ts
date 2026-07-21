@@ -117,7 +117,10 @@ import { startCognitionSelfTuningCadence } from '@/services/cognition/self-tunin
 import { startRegimeMonitor } from '@/services/cognition/regime-monitor';
 import { startEpistemicCalibration } from '@/services/intelligence/epistemic-calibration';
 import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
-import { expirePendingPredictions } from '@/services/intelligence/forecast-calibration-adapter';
+import {
+  wireModeForecastCalibration,
+  settleCalibrationBridges,
+} from '@/services/intelligence/calibration-bridge-wiring';
 import { startNotificationRouter } from '@/services/notification-router';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
@@ -157,7 +160,7 @@ import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
-import { startModeForecast } from '@/services/mode-forecast';
+import { startModeForecast, subscribeModeAdvisory, getForecastSnapshot } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
 import { startHypothesisAccuracy } from '@/services/hypothesis-accuracy';
 import { startAutoBrief } from '@/services/auto-brief';
@@ -1105,6 +1108,12 @@ export class PanelLayoutManager implements AppModule {
  startCrisisTrajectory();
  startActiveLearningQueue();
  startOutcomeGradingCadence();
+ // Calibration bridge wiring (roadmap PR A1): log + resolve mode-forecast
+ // advisory predictions against the ledger every forecast cycle.
+ subscribeModeAdvisory(() => {
+ const snap = getForecastSnapshot();
+ if (snap) wireModeForecastCalibration(snap);
+ });
  startTuningApplyCadence();
  startLlmGradingCadence();
  startBiasScanCadence();
@@ -1132,7 +1141,7 @@ export class PanelLayoutManager implements AppModule {
  });
  startEpistemicCalibration();
  startAssumptionExpirySweep();
- this.expirePredictionsTimer = setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
+ this.expirePredictionsTimer = setInterval(() => { try { settleCalibrationBridges(); } catch { /* noop */ } }, 60 * 60 * 1000);
  // PR 14 memory hygiene: flag episodic-memory episodes whose backing
  // explanation was refuted by competitive-hypothesis resolution. Best-effort
  // entity-overlap match (see contradictEpisodesForRefutation doc) — never

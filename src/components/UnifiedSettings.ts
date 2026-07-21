@@ -81,6 +81,12 @@ const COGNITION_TOGGLES: readonly { id: string; key: CognitionSwitchKey; label: 
     label: 'Shadow algorithm comparison',
     desc: 'Off stops recording shadow A/B pairs — the Shadow Comparison panel receives no new data.',
   },
+  {
+    id: 'us-cog-calibration-bridges',
+    key: 'calibration-bridges',
+    label: 'Calibration bridge wiring',
+    desc: 'Off stops the shortage and mode-forecast bridges from logging or resolving predictions against the calibration ledger.',
+  },
 ];
 
 export interface UnifiedSettingsConfig {

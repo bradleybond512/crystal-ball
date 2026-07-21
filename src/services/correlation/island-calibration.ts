@@ -19,10 +19,12 @@
 import type { UnifiedAlert } from '../unified-alerts';
 import type { PredictionRecord } from '../intelligence/forecast-calibration';
 import {
+  expireCalibrationPredictions,
   getCorrelationCalibrationStore,
   recordCalibrationPrediction,
   reliabilityForRule,
   resolveCalibrationPrediction,
+  resolvedCountForRule,
 } from './correlation-calibration';
 import { CORR_RULE_SOURCE_PREFIX, factDomainFor, shouldRecordPair } from './correlation-outcomes';
 
@@ -63,8 +65,22 @@ export function recordIslandPrediction(
   return recordCalibrationPrediction(prediction);
 }
 
+/** Minimum resolved outcomes before the ledger multiplier governs. */
+export const MIN_RESOLVED_FOR_LEDGER = 5;
+
 /** Learned reliability for an island rule, [0.5, 1.5], neutral <5 resolved. */
 export function islandReliability(pairKey: string, now: number = Date.now()): number {
+  return reliabilityForRule(islandRuleId(pairKey), now);
+}
+
+/**
+ * The ledger multiplier once it has real evidence, else null. Callers
+ * CROSSFADE: use this INSTEAD of the legacy pair-feedback multiplier
+ * when non-null — the two learn from the same user gestures, and
+ * multiplying them would double-count (5 fast dismissals ≈ 0.5 × 0.5).
+ */
+export function islandLedgerMult(pairKey: string, now: number = Date.now()): number | null {
+  if (resolvedCountForRule(islandRuleId(pairKey)) < MIN_RESOLVED_FOR_LEDGER) return null;
   return reliabilityForRule(islandRuleId(pairKey), now);
 }
 
@@ -121,12 +137,30 @@ export function startIslandOutcomeTracking(
         prevPinned.delete(id);
       }
     }
+    // Island predictions past their horizon expire here — this tracker
+    // owns its ledger hygiene rather than relying on the situation-store
+    // cadence happening to run.
+    expireCalibrationPredictions(t);
   };
 
+  // Seed from current state WITHOUT resolving: alerts already
+  // acknowledged/pinned before this tracker started (persisted from a
+  // prior session) are not fresh user gestures — treating a pre-acked
+  // alert as a "fast dismissal" at startup would poison reliability.
+  const seed = (): void => {
+    const t = now();
+    for (const a of store.getAll()) {
+      if (a.source !== 'correlation' || !a.correlationPair) continue;
+      firstSeen.set(a.id, t);
+      if (a.acknowledged) prevAcked.add(a.id);
+      if (a.pinned) prevPinned.add(a.id);
+    }
+  };
+
+  try { seed(); } catch { /* seed isolation */ }
   const unsubscribe = store.subscribe(() => {
     try { scan(); } catch { /* tracking crash isolation */ }
   });
-  try { scan(); } catch { /* initial scan isolation */ }
   return () => {
     unsubscribe();
     firstSeen.clear();

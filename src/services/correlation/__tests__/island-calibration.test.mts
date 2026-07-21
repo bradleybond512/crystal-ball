@@ -1,6 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  islandLedgerMult,
   islandPredictionId,
   islandReliability,
   islandRuleId,
@@ -159,4 +160,50 @@ test('islandRuleId and islandPredictionId are stable and namespaced', () => {
   assert.equal(islandRuleId('a|b'), 'island:a|b');
   assert.equal(islandPredictionId('corr-3-xyz'), 'island|corr-3-xyz');
   assert.match(islandPredictionId('weird|id'), /^island\|weird%7Cid$/);
+});
+
+test('REGRESSION: pre-acked/pre-pinned alerts at startup are seeded, never resolved', () => {
+  recordIslandPrediction('pre1', 'x|y', 'x', 0.7, T0);
+  recordIslandPrediction('pre2', 'x|y', 'x', 0.7, T0 + 1000);
+  const store = fakeAlertStore([
+    islandAlert('pre1', { acknowledged: true }),
+    islandAlert('pre2', { pinned: true }),
+  ]);
+  const stop = startIslandOutcomeTracking(store, () => T0 + HOUR);
+  store.listeners[0]!();
+  assert.equal(getCorrelationCalibrationStore().get(islandPredictionId('pre1'))!.status, 'pending');
+  assert.equal(getCorrelationCalibrationStore().get(islandPredictionId('pre2'))!.status, 'pending');
+  stop();
+});
+
+test('REGRESSION: islandLedgerMult crossfades — null below 5 resolved, value at 5+', () => {
+  const store = getCorrelationCalibrationStore();
+  for (let i = 0; i < 4; i++) {
+    recordIslandPrediction(`x${i}`, 'cf|pair', 'cf', 0.9, T0 + i * 2 * HOUR);
+    store.resolve(islandPredictionId(`x${i}`), false, T0 + i * 2 * HOUR + 1000);
+  }
+  assert.equal(islandLedgerMult('cf|pair', T0 + 24 * HOUR), null, 'below threshold → legacy governs');
+  recordIslandPrediction('x4', 'cf|pair', 'cf', 0.9, T0 + 10 * HOUR);
+  store.resolve(islandPredictionId('x4'), false, T0 + 11 * HOUR);
+  const mult = islandLedgerMult('cf|pair', T0 + 48 * HOUR);
+  assert.ok(mult !== null && mult < 1, `ledger governs at 5 resolved, got ${mult}`);
+});
+
+test('REGRESSION: tracker scan expires overdue island predictions itself', () => {
+  recordIslandPrediction('exp1', 'x|y', 'x', 0.7, T0);
+  const store = fakeAlertStore([islandAlert('other-live')]);
+  const stop = startIslandOutcomeTracking(store, () => T0 + 25 * HOUR);
+  store.listeners[0]!();
+  assert.equal(getCorrelationCalibrationStore().get(islandPredictionId('exp1'))!.status, 'expired');
+  stop();
+});
+
+test('namespace: island: prefix is reserved — no built-in or learned rule can collide', async () => {
+  const { builtInCorrelationRules } = await import('../../intelligence/built-in-correlation-rules');
+  const { LEARNED_RULE_PREFIX } = await import('../learned-rules');
+  for (const rule of builtInCorrelationRules) {
+    assert.ok(!rule.id.startsWith('island:'), `built-in ${rule.id} collides with island namespace`);
+  }
+  assert.ok(!LEARNED_RULE_PREFIX.startsWith('island:'));
+  assert.ok(!'island:'.startsWith(LEARNED_RULE_PREFIX));
 });

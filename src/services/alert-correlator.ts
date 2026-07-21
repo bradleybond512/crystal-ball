@@ -25,7 +25,7 @@ import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { runIntel } from './intel-provider';
 import { getEnabledCustomRules } from './custom-correlation-rules';
 import {
-  islandReliability,
+  islandLedgerMult,
   recordIslandPrediction,
   startIslandOutcomeTracking,
 } from '@/services/correlation/island-calibration';
@@ -528,16 +528,20 @@ function scan(): void {
     const pairKey = `${rule.cause}|${rule.effect}`;
     const _t0 = Date.now();
     const feedbackMult = getPairFeedbackMult(pairKey);
-    // Shared calibration spine (correlation next-gen): learned per-rule
-    // reliability from ledger outcomes — bounded [0.5, 1.5], neutral
-    // until ≥5 resolved, so behavior only shifts with evidence.
-    const reliabilityMult = islandReliability(pairKey, now);
-    const confidence = Math.max(0.1, Math.min(1, baseConfidence * feedbackMult * reliabilityMult));
+    // Shared calibration spine (correlation next-gen): once the ledger
+    // has ≥5 resolved outcomes for this rule, its bounded [0.5, 1.5]
+    // reliability REPLACES the legacy pair-feedback multiplier — both
+    // learn from the same user gestures, and multiplying them would
+    // double-count (5 fast dismissals ≈ 0.5 × 0.5). Until then the
+    // legacy multiplier governs alone.
+    const ledgerMult = islandLedgerMult(pairKey, now);
+    const learnedMult = ledgerMult ?? feedbackMult;
+    const confidence = Math.max(0.1, Math.min(1, baseConfidence * learnedMult));
     try {
       recordAlgorithmEvaluation('correlation-feedback', {
         durationMs: Date.now() - _t0,
         score: confidence,
-        label: feedbackMult >= 1 ? 'boosted' : 'suppressed',
+        label: learnedMult >= 1 ? 'boosted' : 'suppressed',
         detail: { cause: rule.cause, effect: rule.effect, members: members.length },
       });
     } catch { /* ledger unavailable */ }

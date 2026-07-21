@@ -94,6 +94,8 @@ interface AlertStoreLike {
  * Pure-DI: the store is injected; production wiring passes the
  * unifiedAlertStore singleton from startAlertCorrelator.
  */
+const EXPIRY_TICK_MS = 60 * 60_000;
+
 export function startIslandOutcomeTracking(
   store: AlertStoreLike,
   now: () => number = () => Date.now(),
@@ -158,10 +160,17 @@ export function startIslandOutcomeTracking(
   };
 
   try { seed(); } catch { /* seed isolation */ }
+  // Expiry must not depend on alert-store churn: run at startup and on
+  // an hourly tick so a quiet store still sheds overdue predictions.
+  try { expireCalibrationPredictions(now()); } catch { /* expiry isolation */ }
+  const expiryTimer = setInterval(() => {
+    try { expireCalibrationPredictions(now()); } catch { /* expiry isolation */ }
+  }, EXPIRY_TICK_MS);
   const unsubscribe = store.subscribe(() => {
     try { scan(); } catch { /* tracking crash isolation */ }
   });
   return () => {
+    clearInterval(expiryTimer);
     unsubscribe();
     firstSeen.clear();
     prevAcked.clear();

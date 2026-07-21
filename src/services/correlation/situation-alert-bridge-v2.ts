@@ -109,6 +109,10 @@ export interface SituationAlertBridgeDeps {
   ingest(alerts: UnifiedAlert[]): void;
   registry?: Pick<NotificationTraceRegistry, 'register' | 'dispatch'> | null;
   now?: () => number;
+  /** Current timestamp of the alert with this id in the target store,
+   *  if any — lets emit stamps clear a persisted alert even when the
+   *  wall clock went backwards across sessions. */
+  existingTimestampFor?: (id: string) => number | undefined;
 }
 
 let started = false;
@@ -123,7 +127,22 @@ export function createSituationV2AlertBridge(
   deps: SituationAlertBridgeDeps,
 ): () => void {
   const lastEmitted = new Map<string, EmitRecord>();
+  const lastStamp = new Map<string, number>();
   const now = deps.now ?? (() => Date.now());
+
+  // The store's ingest drops updates whose timestamp is older than the
+  // existing alert's. Wall clocks can go backwards (NTP, manual
+  // adjustment, cross-session skew against the persisted alert store) —
+  // stamps must therefore be monotonic per id, never raw now().
+  const stampFor = (id: string, at: number): number => {
+    const floor = Math.max(
+      (lastStamp.get(id) ?? Number.NEGATIVE_INFINITY) + 1,
+      (deps.existingTimestampFor?.(id) ?? Number.NEGATIVE_INFINITY) + 1,
+    );
+    const stamp = Math.max(at, floor);
+    lastStamp.set(id, stamp);
+    return stamp;
+  };
 
   const sync = (situations: readonly Situation[]): void => {
     const live = new Set<string>();
@@ -137,16 +156,19 @@ export function createSituationV2AlertBridge(
         continue;
       }
       live.add(s.id);
-      const alert = situationToAlert(s, at);
-      if (!alert) continue;
       if (!shouldReemit(lastEmitted.get(s.id), s)) continue;
+      const alert = situationToAlert(s, stampFor(s.id, at));
+      if (!alert) continue;
       lastEmitted.set(s.id, toEmitRecord(s));
       out.push(alert);
       recordTrace(deps.registry, s, at);
     }
     // Evicted situations shed their emit records too.
     for (const id of lastEmitted.keys()) {
-      if (!live.has(id)) lastEmitted.delete(id);
+      if (!live.has(id)) {
+        lastEmitted.delete(id);
+        lastStamp.delete(id);
+      }
     }
     if (out.length > 0) deps.ingest(out);
   };
@@ -198,6 +220,8 @@ export function startSituationV2AlertBridge(): () => void {
     createSituationV2AlertBridge(getSituationStoreV2(), {
       ingest: (batch) => alerts.unifiedAlertStore.ingest(batch),
       registry: diag.getNotificationTraceRegistry(),
+      existingTimestampFor: (id) =>
+        alerts.unifiedAlertStore.getAll().find((a) => a.id === id)?.timestamp,
     }),
   ).catch(() => {
     // Transient import/init failure must not permanently disable the

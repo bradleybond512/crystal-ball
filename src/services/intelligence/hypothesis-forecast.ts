@@ -41,10 +41,13 @@ function kindToDomain(): string {
 // ── Shadow wiring: recalibrated-vs-legacy pair (Prediction Uplift PR A3) ────
 //
 // forecastHypothesis() is the only point where both probability legs exist —
-// the recalibrated (live) value and the pre-recalibration legacy value. Push
-// site is compute time, not render time, so a flood cap (1 push per
-// signature per hour) bounds shadow-ledger churn regardless of how often the
-// HUD re-renders the same hypothesis.
+// the recalibrated (live) value and the pre-recalibration legacy value.
+// forecastHypothesis is reached from HUD render paths via forecastAll
+// (AnalystHUD.ts calls forecastAll from its render flow), so the flood cap
+// below is load-bearing — it is what decouples push frequency from render
+// frequency (1 push per signature per hour) rather than pushes firing on
+// every re-render. Do not remove the cap on the assumption pushes are
+// render-decoupled.
 
 const RECAL_PUSH_INTERVAL_MS = 3_600_000;
 const lastRecalPush = new Map<string, number>();

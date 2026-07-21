@@ -44,11 +44,11 @@ function situation(overrides: Partial<Situation> = {}): Situation {
 // ── gates ────────────────────────────────────────────────────────────────
 
 test('a correlated active situation maps to an alert with stable id + source correlation', () => {
-  const a = situationToAlert(situation())!;
+  const a = situationToAlert(situation(), T0 + 2 * HOUR)!;
   assert.equal(a.id, 'sit-v2-abc-1');
   assert.equal(a.source, 'correlation');
   assert.equal(a.severity, 'high');
-  assert.equal(a.timestamp, T0 + HOUR);
+  assert.equal(a.timestamp, T0 + 2 * HOUR, 'stamped with emit time, not updatedAt');
   assert.equal(a.relevanceScore, 72);
   assert.ok(a.location);
   assert.match(a.body, /2 correlated signals across weather, infra — confidence 72%/);
@@ -57,24 +57,24 @@ test('a correlated active situation maps to an alert with stable id + source cor
 });
 
 test('gate: watching (singleton) situations never alert', () => {
-  assert.equal(situationToAlert(situation({ status: 'watching' })), null);
-  assert.equal(situationToAlert(situation({ status: 'resolved' })), null);
+  assert.equal(situationToAlert(situation({ status: 'watching' }), T0), null);
+  assert.equal(situationToAlert(situation({ status: 'resolved' }), T0), null);
 });
 
 test('gate: fewer than 2 observations or zero edges never alert', () => {
-  assert.equal(situationToAlert(situation({ observations: [obs('a')] })), null);
-  assert.equal(situationToAlert(situation({ edges: [] as never })), null);
+  assert.equal(situationToAlert(situation({ observations: [obs('a')] }), T0), null);
+  assert.equal(situationToAlert(situation({ edges: [] as never }), T0), null);
 });
 
 test('gate: severity floor medium, confidence floor 0.5', () => {
-  assert.equal(situationToAlert(situation({ severity: 'low' })), null);
-  assert.equal(situationToAlert(situation({ confidence: 0.49 })), null);
-  assert.equal(situationToAlert(situation({ confidence: Number.NaN })), null);
-  assert.ok(situationToAlert(situation({ severity: 'medium', confidence: 0.5 })));
+  assert.equal(situationToAlert(situation({ severity: 'low' }), T0), null);
+  assert.equal(situationToAlert(situation({ confidence: 0.49 }), T0), null);
+  assert.equal(situationToAlert(situation({ confidence: Number.NaN }), T0), null);
+  assert.ok(situationToAlert(situation({ severity: 'medium', confidence: 0.5 }), T0));
 });
 
 test('unlocated situations alert without a location (global domains)', () => {
-  const a = situationToAlert(situation({ location: undefined }))!;
+  const a = situationToAlert(situation({ location: undefined }), T0)!;
   assert.equal(a.location, undefined);
 });
 
@@ -129,16 +129,18 @@ test('bridge: initial sync emits once, unchanged notify does not re-emit', () =>
 test('bridge: meaningful change re-emits with newer timestamp (update-in-place contract)', () => {
   const store = fakeStore([situation()]);
   const ingested: UnifiedAlert[][] = [];
+  let clock = T0;
   const cleanup = createSituationV2AlertBridge(store, {
     ingest: (b) => ingested.push(b),
-    now: () => T0,
+    now: () => clock,
   });
-  const escalated = situation({ severity: 'critical', updatedAt: new Date(T0 + 2 * HOUR) });
+  clock = T0 + 2 * HOUR;
+  const escalated = situation({ severity: 'critical' });
   store.items = [escalated];
   store.listeners[0]!(store.items);
   assert.equal(ingested.length, 2);
   assert.equal(ingested[1]![0]!.id, 'sit-v2-abc-1', 'same id → store updates in place');
-  assert.equal(ingested[1]![0]!.timestamp, T0 + 2 * HOUR);
+  assert.equal(ingested[1]![0]!.timestamp, T0 + 2 * HOUR, 'monotonic emit-time stamp');
   cleanup();
 });
 
@@ -203,4 +205,56 @@ test('traceDomainFor maps live domains and falls back to other', () => {
   assert.equal(traceDomainFor('infra'), 'energy');
   assert.equal(traceDomainFor('macro'), 'market');
   assert.equal(traceDomainFor('maritime'), 'other');
+});
+
+test('REGRESSION: resolved-in-store then reactivated situation alerts again', () => {
+  const ingested: UnifiedAlert[][] = [];
+  const store = fakeStore([situation()]);
+  const cleanup = createSituationV2AlertBridge(store, { ingest: (b) => ingested.push(b), now: () => T0 });
+  assert.equal(ingested.length, 1);
+  // Same id flips to resolved but REMAINS in the store.
+  store.items = [situation({ status: 'resolved' })];
+  store.listeners[0]!(store.items);
+  // Reactivation with identical severity/confidence/obs must re-alert.
+  store.items = [situation()];
+  store.listeners[0]!(store.items);
+  assert.equal(ingested.length, 2, 'reactivation after in-store resolution alerts again');
+  cleanup();
+});
+
+test('REGRESSION: a backwards wall clock cannot make an escalation stamp older than its predecessor', () => {
+  const ingested: UnifiedAlert[][] = [];
+  const store = fakeStore([situation()]);
+  let clock = T0 + 2 * HOUR;
+  const cleanup = createSituationV2AlertBridge(store, {
+    ingest: (b) => ingested.push(b),
+    now: () => clock,
+  });
+  const first = ingested[0]![0]!.timestamp;
+  clock = T0; // clock rewinds two hours
+  store.items = [situation({ severity: 'critical' })];
+  store.listeners[0]!(store.items);
+  assert.equal(ingested.length, 2);
+  assert.ok(
+    ingested[1]![0]!.timestamp > first,
+    `escalation stamp ${ingested[1]![0]!.timestamp} must beat prior ${first}`,
+  );
+  cleanup();
+});
+
+test('REGRESSION: a persisted store alert with a future timestamp is cleared by the emit stamp', () => {
+  const ingested: UnifiedAlert[][] = [];
+  const store = fakeStore([situation()]);
+  const persistedFutureTs = T0 + 5 * HOUR;
+  const cleanup = createSituationV2AlertBridge(store, {
+    ingest: (b) => ingested.push(b),
+    now: () => T0,
+    existingTimestampFor: () => persistedFutureTs,
+  });
+  assert.equal(ingested.length, 1);
+  assert.ok(
+    ingested[0]![0]!.timestamp > persistedFutureTs,
+    'stamp must clear the persisted alert so the store accepts the update',
+  );
+  cleanup();
 });

@@ -24,6 +24,11 @@ import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluati
 import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { runIntel } from './intel-provider';
 import { getEnabledCustomRules } from './custom-correlation-rules';
+import {
+  islandLedgerMult,
+  recordIslandPrediction,
+  startIslandOutcomeTracking,
+} from '@/services/correlation/island-calibration';
 
 const WINDOW_MS = 30 * 60_000;            // widened so chain links can catch up
 const SCAN_INTERVAL_MS = 60_000;
@@ -350,7 +355,12 @@ function detectChains(leaders: UnifiedAlert[], now: number): UnifiedAlert[] {
 function ruleEnabled(r: CausalRule): boolean {
   // Read the tuned threshold from the store (falls back to 0.55 when unset).
   const threshold = getTunedParam('correlation-feedback', 'feedbackThreshold', 0.55);
-  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= threshold;
+  // Same crossfade policy as confidence: once the shared ledger has
+  // evidence for this pair, IT governs eligibility — the legacy
+  // pair-feedback multiplier learns from the same gestures.
+  const pairKey = `${r.cause}|${r.effect}`;
+  const mult = islandLedgerMult(pairKey) ?? getPairFeedbackMult(pairKey);
+  return mult >= threshold;
 }
 
 const distanceCache = new Map<string, number>();
@@ -523,18 +533,29 @@ function scan(): void {
     const pairKey = `${rule.cause}|${rule.effect}`;
     const _t0 = Date.now();
     const feedbackMult = getPairFeedbackMult(pairKey);
-    const confidence = Math.max(0.1, Math.min(1, baseConfidence * feedbackMult));
+    // Shared calibration spine (correlation next-gen): once the ledger
+    // has ≥5 resolved outcomes for this rule, its bounded [0.5, 1.5]
+    // reliability REPLACES the legacy pair-feedback multiplier — both
+    // learn from the same user gestures, and multiplying them would
+    // double-count (5 fast dismissals ≈ 0.5 × 0.5). Until then the
+    // legacy multiplier governs alone.
+    const ledgerMult = islandLedgerMult(pairKey, now);
+    const learnedMult = ledgerMult ?? feedbackMult;
+    const confidence = Math.max(0.1, Math.min(1, baseConfidence * learnedMult));
     try {
       recordAlgorithmEvaluation('correlation-feedback', {
         durationMs: Date.now() - _t0,
         score: confidence,
-        label: feedbackMult >= 1 ? 'boosted' : 'suppressed',
+        label: learnedMult >= 1 ? 'boosted' : 'suppressed',
         detail: { cause: rule.cause, effect: rule.effect, members: members.length },
       });
     } catch { /* ledger unavailable */ }
 
     const sources = [...new Set(members.map(m => m.source))];
     synthesized.set(id, { ts: now, alertId: id, memberIds: members.map(m => m.id) });
+    try {
+      recordIslandPrediction(id, pairKey, rule.cause, confidence, now);
+    } catch { /* ledger unavailable — never block synthesis */ }
     synthetic.push({
       id,
       source: 'correlation',
@@ -613,6 +634,7 @@ let _scanTimer: number | null = null;
 let _pruneTimer: number | null = null;
 let _initialScanTimer: number | null = null;
 let _unsubStore: (() => void) | null = null;
+let _stopOutcomeTracking: (() => void) | null = null;
 
 export function startAlertCorrelator(): void {
   if (started) return;
@@ -621,6 +643,7 @@ export function startAlertCorrelator(): void {
   _scanTimer = window.setInterval(scan, SCAN_INTERVAL_MS);
   _pruneTimer = window.setInterval(pruneSynth, PRUNE_INTERVAL_MS);
   _unsubStore = unifiedAlertStore.subscribe(decayAcked);
+  _stopOutcomeTracking = startIslandOutcomeTracking(unifiedAlertStore);
   _initialScanTimer = window.setTimeout(scan, 5000);
 }
 
@@ -631,5 +654,7 @@ export function stopAlertCorrelator(): void {
   // Drop the store subscription so stop/start doesn't stack decayAcked subscribers.
   _unsubStore?.();
   _unsubStore = null;
+  _stopOutcomeTracking?.();
+  _stopOutcomeTracking = null;
   started = false;
 }

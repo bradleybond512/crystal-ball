@@ -52,8 +52,12 @@ export function traceDomainFor(domain: string): NotificationDomain {
   return 'other';
 }
 
-/** Pure gate + mapping: null when the situation must not alert. */
-export function situationToAlert(s: Situation): UnifiedAlert | null {
+/** Pure gate + mapping: null when the situation must not alert.
+ *  `nowMs` stamps the alert: emit time is monotonic, so the store's
+ *  timestamp guard can never drop a legitimate update (re-emit control
+ *  lives entirely in shouldReemit) — situation/alert persistence clocks
+ *  can skew across reloads. */
+export function situationToAlert(s: Situation, nowMs: number): UnifiedAlert | null {
   if (s.status !== 'active') return null;
   if (s.observations.length < MIN_OBSERVATIONS) return null;
   if (s.edges.length < 1) return null;
@@ -67,7 +71,7 @@ export function situationToAlert(s: Situation): UnifiedAlert | null {
     severity: s.severity,
     title: s.name,
     body: `${s.observations.length} correlated signals across ${domains.join(', ')} — confidence ${Math.round(s.confidence * 100)}%`,
-    timestamp: s.updatedAt.getTime(),
+    timestamp: nowMs,
     location: s.location ? { lat: s.location.lat, lon: s.location.lon } : undefined,
     relevanceScore: Math.round(s.confidence * 100),
     acknowledged: false,
@@ -124,16 +128,23 @@ export function createSituationV2AlertBridge(
   const sync = (situations: readonly Situation[]): void => {
     const live = new Set<string>();
     const out: UnifiedAlert[] = [];
+    const at = now();
     for (const s of situations) {
+      // A situation that left 'active' sheds its emit record even while
+      // still in the store — a later reactivation must alert again.
+      if (s.status !== 'active') {
+        lastEmitted.delete(s.id);
+        continue;
+      }
       live.add(s.id);
-      const alert = situationToAlert(s);
+      const alert = situationToAlert(s, at);
       if (!alert) continue;
       if (!shouldReemit(lastEmitted.get(s.id), s)) continue;
       lastEmitted.set(s.id, toEmitRecord(s));
       out.push(alert);
-      recordTrace(deps.registry, s, now());
+      recordTrace(deps.registry, s, at);
     }
-    // Resolved/evicted situations shed their emit records.
+    // Evicted situations shed their emit records too.
     for (const id of lastEmitted.keys()) {
       if (!live.has(id)) lastEmitted.delete(id);
     }
@@ -188,7 +199,12 @@ export function startSituationV2AlertBridge(): () => void {
       ingest: (batch) => alerts.unifiedAlertStore.ingest(batch),
       registry: diag.getNotificationTraceRegistry(),
     }),
-  ).catch(() => noop);
+  ).catch(() => {
+    // Transient import/init failure must not permanently disable the
+    // bridge — allow a later start to retry.
+    started = false;
+    return noop;
+  });
   return () => {
     started = false;
     void cleanupPromise.then((cleanup) => cleanup());

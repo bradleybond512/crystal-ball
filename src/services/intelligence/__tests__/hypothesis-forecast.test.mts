@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { forecastHypothesis, forecastAll } from '../hypothesis-forecast.ts';
+import {
+  forecastHypothesis,
+  forecastAll,
+  maybePushRecalibrationPair,
+  _resetRecalPushForTests,
+} from '../hypothesis-forecast.ts';
 import type { Hypothesis } from '../../analyst-loop.ts';
 import type { PCIScore } from '../predictive-crisis-index.ts';
 
@@ -103,6 +108,71 @@ test('providerMultiplier defaults to 1.0 (no effect)', () => {
   const withExplicit = forecastHypothesis(h, null, null, 1.0);
   assert.strictEqual(withDefault.probability, withExplicit.probability);
   assert.strictEqual(withDefault.components.providerMultiplier, 1.0);
+});
+
+// ── maybePushRecalibrationPair flood control (Prediction Uplift PR A3) ──────
+
+test('a second push within the hourly window for the same signature is suppressed', () => {
+  _resetRecalPushForTests();
+  const calls: Array<[unknown, number, number]> = [];
+  const push = (input: unknown, liveP: number, shadowP: number) => { calls.push([input, liveP, shadowP]); };
+
+  maybePushRecalibrationPair('sig-a', 0.6, 0.5, 1_000, push);
+  maybePushRecalibrationPair('sig-a', 0.65, 0.55, 1_000 + 60_000, push); // 1 min later — still within the hour
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], ['sig-a', 0.6, 0.5]);
+});
+
+test('different signatures each get their own push', () => {
+  _resetRecalPushForTests();
+  const calls: Array<[unknown, number, number]> = [];
+  const push = (input: unknown, liveP: number, shadowP: number) => { calls.push([input, liveP, shadowP]); };
+
+  maybePushRecalibrationPair('sig-a', 0.6, 0.5, 1_000, push);
+  maybePushRecalibrationPair('sig-b', 0.7, 0.4, 1_000, push);
+  assert.equal(calls.length, 2);
+});
+
+test('after the cooldown window elapses, a push fires again for the same signature', () => {
+  _resetRecalPushForTests();
+  const calls: Array<[unknown, number, number]> = [];
+  const push = (input: unknown, liveP: number, shadowP: number) => { calls.push([input, liveP, shadowP]); };
+
+  maybePushRecalibrationPair('sig-a', 0.6, 0.5, 1_000, push);
+  maybePushRecalibrationPair('sig-a', 0.62, 0.52, 1_000 + 3_600_000, push); // exactly at the boundary — still suppressed (< strictly)
+  maybePushRecalibrationPair('sig-a', 0.63, 0.53, 1_000 + 3_600_001, push); // one ms past — fires
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1], ['sig-a', 0.63, 0.53]);
+});
+
+test('_resetRecalPushForTests clears the cooldown so a push fires again immediately', () => {
+  const calls: Array<[unknown, number, number]> = [];
+  const push = (input: unknown, liveP: number, shadowP: number) => { calls.push([input, liveP, shadowP]); };
+
+  maybePushRecalibrationPair('sig-reset', 0.6, 0.5, 1_000, push);
+  _resetRecalPushForTests();
+  maybePushRecalibrationPair('sig-reset', 0.6, 0.5, 1_001, push);
+  assert.equal(calls.length, 2);
+});
+
+test('a throwing push function never propagates out of maybePushRecalibrationPair', () => {
+  _resetRecalPushForTests();
+  const push = () => { throw new Error('boom'); };
+  assert.doesNotThrow(() => {
+    maybePushRecalibrationPair('sig-throw', 0.6, 0.5, 1_000, push);
+  });
+});
+
+test('forecastHypothesis wires its shadow push at the real call site without affecting its own output or throwing', () => {
+  _resetRecalPushForTests();
+  const h = makeHypothesis({ confidence: 0.55 });
+  // The call site uses the real pushRecalibrationPair (fail-safe, kill-switch
+  // gated) — this is a smoke test that wiring it in did not change forecast
+  // output determinism or leak an exception through forecastHypothesis.
+  const first = forecastHypothesis(h, null, null);
+  const second = forecastHypothesis(h, null, null);
+  assert.strictEqual(first.probability, second.probability);
+  assert.strictEqual(first.components.recalibratedP, second.components.recalibratedP);
 });
 
 test('forecastAll returns one forecast per hypothesis with analogBoost=0', () => {

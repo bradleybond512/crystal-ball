@@ -270,7 +270,7 @@ Flagged for Bradley during implementation (each shapes behavior, ~5–10 lines):
 |----|---------|--------|--------|-------|
 | A1 | Wire both calibration bridges live | 🔄 | claude/uplift-a1-calibration-bridges | committed locally, not yet merged |
 | A2 | CorrelationMapPanel → live engine | 🔄 | claude/uplift-a2-live-pair-surface | Live pairs section (view-model + panel glue) added; awaiting cross-agent review |
-| A3 | Cognition PR 6 leftovers | 🔲 | | |
+| A3 | Cognition PR 6 leftovers | 🔄 | claude/uplift-a3-pr6-leftovers | committed locally, not yet merged |
 | A4 | Entity vocabulary alignment | 🔲 | | |
 | B1 | Resolver framework + market resolver | 🔲 | | |
 | B2 | Weather verification resolver | 🔲 | | |

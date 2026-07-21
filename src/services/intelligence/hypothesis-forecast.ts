@@ -8,6 +8,7 @@ import { assessProviderRedundancy } from '@/services/diagnostics/provider-redund
 import { getBoostMultiplier, getRecalibrator } from './forecast-calibration-adapter';
 import { getCachedAnalogScore } from '@/services/cognition/episodic-memory';
 import { signatureFor } from '@/services/hypothesis-feedback';
+import { pushRecalibrationPair } from '@/services/cognition/shadow-rollout';
 
 export interface HypothesisForecast {
   hypothesisId: string;
@@ -35,6 +36,50 @@ function clamp(v: number, min: number, max: number): number {
 
 function kindToDomain(): string {
   return 'general';
+}
+
+// ── Shadow wiring: recalibrated-vs-legacy pair (Prediction Uplift PR A3) ────
+//
+// forecastHypothesis() is the only point where both probability legs exist —
+// the recalibrated (live) value and the pre-recalibration legacy value. Push
+// site is compute time, not render time, so a flood cap (1 push per
+// signature per hour) bounds shadow-ledger churn regardless of how often the
+// HUD re-renders the same hypothesis.
+
+const RECAL_PUSH_INTERVAL_MS = 3_600_000;
+const lastRecalPush = new Map<string, number>();
+
+/**
+ * Push a recalibrated-vs-legacy probability pair into the shadow-rollout
+ * ledger, capped at one push per signature per RECAL_PUSH_INTERVAL_MS. The
+ * push itself (`pushRecalibrationPair`) already fails closed on the
+ * `shadow-algorithms` kill-switch and swallows its own errors; the try/catch
+ * here is a second belt for the injected `push` used in tests.
+ */
+export function maybePushRecalibrationPair(
+  sig: string,
+  recalibrated: number,
+  legacy: number,
+  now: number,
+  push: (input: unknown, liveP: number, shadowP: number) => void = pushRecalibrationPair,
+): void {
+  const last = lastRecalPush.get(sig);
+  if (last !== undefined && now - last <= RECAL_PUSH_INTERVAL_MS) return;
+  lastRecalPush.set(sig, now);
+  if (lastRecalPush.size > 500) {
+    const oldest = [...lastRecalPush.entries()].sort((a, b) => a[1] - b[1])[0];
+    if (oldest) lastRecalPush.delete(oldest[0]);
+  }
+  try {
+    push(sig, recalibrated, legacy);
+  } catch {
+    // Shadow accounting must never break forecasting.
+  }
+}
+
+/** Clear the per-signature push cooldown map (for tests). */
+export function _resetRecalPushForTests(): void {
+  lastRecalPush.clear();
 }
 
 export function forecastHypothesis(
@@ -67,6 +112,10 @@ export function forecastHypothesis(
 
   // Final probability: the calibrated value (already clamped to [0.02, 0.98] by recalibrate()).
   const probability = calibratedP;
+
+  // Shadow wiring (PR A3): both legs exist right here — push a flood-controlled
+  // recalibrated-vs-legacy pair. Fire-and-forget; never affects `probability`.
+  maybePushRecalibrationPair(signatureFor(hypothesis), calibratedP, rawProbability, Date.now());
 
   const diff = probability - baseConfidence;
   let trend: HypothesisForecast['trend'] = 'stable';

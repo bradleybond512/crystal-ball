@@ -20,6 +20,7 @@ import { signatureFor } from './hypothesis-feedback';
 import { generateText } from './llm-adapter';
 import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { getMemory, putMemory } from './reasoning-memory';
+import { buildCheckNextItems } from './cognition/evoi-surface';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,49 @@ export function suggestQuestions(h: Hypothesis): string[] {
   }
 
   return out.slice(0, 3);
+}
+
+// ── EVOI-ranked chips (Prediction Uplift PR A3) ─────────────────────────────
+
+/** Prior weight assigned to a heuristic chip so a real EVOI action (computed
+ *  expected-information-gain bits) outranks it whenever one is available. */
+const HEURISTIC_PRIOR_BITS = 0.1;
+
+export interface RankedQuestion {
+  question: string;
+  bits: number;
+  fromEvoi: boolean;
+}
+
+/**
+ * Merge the cheap heuristic chips with EVOI-ranked "check next" actions
+ * (`evoi-surface.ts`, already kill-switch gated) into one deduped, ranked
+ * list capped at 3. EVOI actions carry a real expectedInfoGainBits score;
+ * heuristic chips get a flat low prior so they only surface when EVOI has
+ * nothing (or less) to offer for this hypothesis.
+ */
+export function suggestQuestionsRanked(
+  h: Hypothesis,
+  deps: {
+    heuristics?: (h: Hypothesis) => string[];
+    evoiActions?: (h: Hypothesis) => readonly { label: string; expectedInfoGainBits: number }[];
+  } = {},
+): RankedQuestion[] {
+  const heuristic = (deps.heuristics ?? suggestQuestions)(h)
+    .map((q) => ({ question: q, bits: HEURISTIC_PRIOR_BITS, fromEvoi: false }));
+  const evoi = (deps.evoiActions ?? ((hh: Hypothesis) => buildCheckNextItems([
+    { kind: hh.kind, statement: hh.statement, probability: hh.confidence },
+  ])))(h).map((a) => ({ question: a.label, bits: a.expectedInfoGainBits, fromEvoi: true }));
+  const seen = new Set<string>();
+  return [...evoi, ...heuristic]
+    .filter((r) => {
+      const k = r.question.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, b) => b.bits - a.bits)
+    .slice(0, 3);
 }
 
 function describeEntity(m: EntityMention): string {

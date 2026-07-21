@@ -25,7 +25,7 @@ import { getSkepticNote, isSkepticEnabled, setSkepticEnabled, subscribeSkeptic }
 import { getAlternativeView, isAlternativesEnabled, setAlternativesEnabled, subscribeAlternatives } from '@/services/hypothesis-alternatives';
 import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from '@/services/pressure-history';
 import { getPlaybookFor, summarizePlaybook, recordAction, noteRecurrence } from '@/services/action-memory';
-import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswered } from '@/services/question-suggester';
+import { suggestQuestionsRanked, getCachedAnswer, askQuestion, subscribeQuestionAnswered } from '@/services/question-suggester';
 import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archive';
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
@@ -990,22 +990,27 @@ export class AnalystHUD {
   private buildHypQuestions(h: Hypothesis): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'analyst-hud-hyp-questions';
-    const questions = suggestQuestions(h);
-    for (const q of questions) wrap.append(this.buildQuestionChip(h, q));
+    const questions = suggestQuestionsRanked(h);
+    for (const q of questions) {
+      wrap.append(this.buildQuestionChip(h, q.question, q.fromEvoi ? q.bits : null));
+    }
     return wrap;
   }
 
-  private buildQuestionChip(h: Hypothesis, question: string): HTMLElement {
+  private buildQuestionChip(h: Hypothesis, question: string, evoiBits: number | null): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'analyst-hud-question';
     const key = `${h.id}||${question}`;
     const cached = getCachedAnswer(h, question);
     const loading = this.loadingQuestion.has(key);
     const expanded = this.expandedQuestion.has(key);
+    // textContent below is auto-escaping (no innerHTML) — safe for the
+    // EVOI-derived bits suffix same as the rest of this chip's text.
+    const suffix = evoiBits === null ? '' : ` +${evoiBits.toFixed(1)} bits`;
 
     const chip = document.createElement('button');
     chip.className = 'analyst-hud-question-chip';
-    chip.textContent = loading ? `? ${question} …` : `? ${question}`;
+    chip.textContent = loading ? `? ${question}${suffix} …` : `? ${question}${suffix}`;
     chip.disabled = loading;
     chip.title = cached
       ? 'Cached answer — click to toggle'

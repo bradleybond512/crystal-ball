@@ -28,8 +28,8 @@ import {
 } from './belief-helpers';
 import type { BeliefValue, ProbabilityLabel } from '@/types/belief';
 import { escapeHtml } from '@/utils/sanitize';
-import { buildCalibrationReport } from './calibration-report-view';
-import type { CalibrationReportView } from './calibration-report-view';
+import { buildCalibrationReport, buildDomainReportCard } from './calibration-report-view';
+import type { CalibrationReportView, DomainReportCard } from './calibration-report-view';
 import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
 import { brierScore } from '@/services/intelligence/forecast-calibration';
 import { buildCurve } from '@/services/cognition/recalibration';
@@ -98,6 +98,7 @@ export class BeliefCalibrationPanel extends Panel {
 
   private buildCalibrationReportSection(): string {
     let view: CalibrationReportView;
+    let domainCard: DomainReportCard = { rows: [] };
     try {
       const records = getCalibrationStore().all();
       const curve = buildCurve(records);
@@ -120,6 +121,7 @@ export class BeliefCalibrationPanel extends Panel {
       } catch { /* operator journal unavailable — fall back to system-only */ }
 
       view = buildCalibrationReport({ curve, coveragePct, comparison });
+      domainCard = buildDomainReportCard(records);
     } catch {
       view = { headline: 'Calibration report unavailable', rows: [], hasOperatorData: false };
     }
@@ -153,6 +155,44 @@ export class BeliefCalibrationPanel extends Panel {
       ? `<p style="margin:8px 0 0;font-size:11px;opacity:0.8;">${escapeHtml(view.operatorLine!)}</p>`
       : `<p style="margin:8px 0 0;font-size:11px;opacity:0.6;">Log your own forecasts to compare (coming soon).</p>`;
 
+    const domainRows = domainCard.rows
+      .map(
+        (r) => `
+        <tr>
+          <td style="text-align:left;">${escapeHtml(r.domain)}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${escapeHtml(String(r.total))}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${escapeHtml(String(r.resolved))}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${
+            r.brier === null
+              ? '<span title="needs ≥5 resolved">—</span>'
+              : escapeHtml(r.brier.toFixed(4))
+          }</td>
+        </tr>`,
+      )
+      .join('');
+
+    const domainReportCard = domainCard.rows.length > 0
+      ? `
+      <section style="margin-bottom:18px;">
+        <h3 style="margin:0 0 6px;font-size:13px;">Per-domain report card</h3>
+        <p style="margin:0 0 8px;font-size:11px;opacity:0.7;">
+          Predictions logged and resolved per domain, with the resolved-set Brier
+          score once there is enough evidence to trust it.
+        </p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="opacity:0.6;text-align:left;">
+              <th>Domain</th>
+              <th style="text-align:right;">Predictions</th>
+              <th style="text-align:right;">Resolved</th>
+              <th style="text-align:right;">Brier</th>
+            </tr>
+          </thead>
+          <tbody>${domainRows}</tbody>
+        </table>
+      </section>`
+      : '';
+
     return `
       <section style="margin-bottom:18px;">
         <h3 style="margin:0 0 6px;font-size:13px;">${escapeHtml(view.headline)}</h3>
@@ -162,7 +202,8 @@ export class BeliefCalibrationPanel extends Panel {
         </p>
         ${rowsTable}
         ${operatorRow}
-      </section>`;
+      </section>
+      ${domainReportCard}`;
   }
 
   private buildLexiconSection(): string {

@@ -429,7 +429,7 @@ export function buildDomainReportCard(records: readonly PredictionRecord[]): Dom
 
 - [ ] **Step 5: Wire `pushRecalibrationPair` with flood control**
 
-In `hypothesis-forecast.ts`, immediately after `calibratedP` is computed (~line 66) — both legs in hand, matching the superforecast-state push-at-compute pattern (`superforecast-state.ts:106-113`), with a per-signature hourly cap:
+In `hypothesis-forecast.ts`, immediately after `calibratedP` is computed (~line 66). **Deliberate deviation from the spec's original "push at resolution time" (Codex P2, accepted):** the hypothesis prediction bridge stores a single probability per record, so at grade time only one leg survives — forecast-compute time is the only point where BOTH legacy and recalibrated legs exist without stamping extra state onto `PendingHypothesis`. This matches the superforecast-state push-at-compute precedent (`superforecast-state.ts:106-113`); the per-signature hourly cap bounds shadow-ledger churn. The spec was amended to match.
 
 ```ts
 const RECAL_PUSH_INTERVAL_MS = 3_600_000;
@@ -789,7 +789,7 @@ registerRecurringLoop('outcome-resolvers', () => {
 
 - [ ] **Step 1: Failing bridge tests**
 
-Cover: (a) only warning-class events recorded (`Tornado Warning`, `Severe Thunderstorm Warning`, `Flash Flood Warning`); (b) id `nwswarn:<alert.id>` dedupes re-ingest; (c) polygon simplified to ≤32 points per ring (localStorage-quota protection — the shared store persists to `crystalball-forecast-calibration-v1`); (d) `resolveBy = expires + 30min`; (e) alerts without polygons are skipped.
+Cover: (a) only warning-class events recorded (`Tornado Warning`, `Severe Thunderstorm Warning`, `Flash Flood Warning`); (b) id `nwswarn:<alert.id>` dedupes re-ingest; (c) polygon simplified to ≤32 points per ring (localStorage-quota protection — the shared store persists to `crystalball-forecast-calibration-v1`); (d) `resolveBy = expires + 30min`; (e) alerts without polygons are skipped; (f) recording stops at `MAX_OPEN_WARNING_RECORDS = 50` open pending warning records (Codex P2 — nationwide volume must not evict other predictions from the 500-cap store).
 
 ```ts
 test('records a tornado warning with simplified polygon and grace window', () => {
@@ -799,7 +799,8 @@ test('records a tornado warning with simplified polygon and grace window', () =>
     id: 'NWS-1', event: 'Tornado Warning', sent: '2026-07-21T00:00:00Z',
     expires: '2026-07-21T01:00:00Z', polygon: { rings: [ring] },
   } as never], Date.parse('2026-07-21T00:05:00Z'),
-  { get: (id) => store.get(id), record: (p) => store.record(p) });
+  { get: (id) => store.get(id), record: (p) => store.record(p),
+    openWarningCount: () => 0 });
   const rec = store.get('nwswarn:NWS-1');
   assert.ok(rec);
   assert.equal(rec.criteria?.kind, 'warning_verification');
@@ -825,6 +826,9 @@ export const VERIFIABLE_EVENTS: Record<string, readonly StormReport['type'][]> =
 const GRACE_MS = 30 * 60_000;
 const WARNING_BASE_P = 0.7;   // short-fuse warnings verify roughly this often
 const MAX_RING_POINTS = 32;
+// Codex P2: nationwide warning volume must not evict higher-value predictions
+// from the 500-cap shared store or bloat crystalball-forecast-calibration-v1.
+const MAX_OPEN_WARNING_RECORDS = 50;
 
 export function simplifyPolygon(polygon: AlertPolygon): AlertPolygon {
   return { rings: polygon.rings.map((ring) => {
@@ -837,12 +841,16 @@ export function simplifyPolygon(polygon: AlertPolygon): AlertPolygon {
 interface WarningRecordDeps {
   get: ForecastCalibrationStore['get'];
   record: (p: PredictionRecord) => void;
+  /** Count of currently-pending nwswarn: records (for the open cap). */
+  openWarningCount: () => number;
 }
 // Default deps hit the live singleton; tests inject a local store's get/record
 // so assertions and writes target the SAME store.
 const liveWarningDeps = (): WarningRecordDeps => ({
   get: (id) => getCalibrationStore().get(id),
   record: recordPrediction,
+  openWarningCount: () => getCalibrationStore().all()
+    .filter((r) => r.id.startsWith('nwswarn:') && r.status === 'pending').length,
 });
 
 export function recordWarningPredictions(
@@ -851,7 +859,9 @@ export function recordWarningPredictions(
   deps: WarningRecordDeps = liveWarningDeps(),
 ): number {
   let recorded = 0;
+  let open = deps.openWarningCount();
   for (const a of alerts) {
+    if (open >= MAX_OPEN_WARNING_RECORDS) break;
     const types = VERIFIABLE_EVENTS[a.event];
     if (!types || !a.polygon) continue;
     const id = `nwswarn:${a.id}`;
@@ -866,6 +876,7 @@ export function recordWarningPredictions(
                   reportTypes: types, sentAt: Date.parse(a.sent) || now },
     });
     recorded += 1;
+    open += 1;
   }
   return recorded;
 }
@@ -1000,7 +1011,24 @@ export function runCorrelationBenchmark(opts: {
 }
 ```
 
-Use the REAL `mineLeadLag` + `significantEdges` with production defaults — zero test doubles. (Engine-level pair scoring is exercised implicitly via `strength`; a full `CorrelateEngine` replay stage is deliberately out of scope — the miner is what C1–C3 change.)
+Use the REAL `mineLeadLag` + `significantEdges` with production defaults — zero test doubles.
+
+**Kernel-scoring stage (Codex P1 — the gate must protect what D2 tunes).** `confidenceSeparation` comes from the real `CorrelateEngine`, not miner `strength`. Add to `golden-streams.ts`:
+
+```ts
+export interface ScoringFixture {
+  id: string;
+  truePair: boolean;           // planted-genuine vs planted-noise pairing
+  rule: { id: string; domains: [string, string]; timeWindowMs: number };
+  obsA: ObservationEvent;      // controlled gap / distance / shared entities
+  obsB: ObservationEvent;
+}
+export const SCORING_FIXTURES: readonly ScoringFixture[];  // 12 fixtures:
+// 6 true pairs (tight gap ≤ half-window, distance ≤ 100km, ≥1 shared entity)
+// 6 noise pairs (gap near window edge, distance ≥ 600km, 0 shared entities)
+```
+
+Bench stage: for each fixture, construct `new CorrelateEngine()` (neutral providers), `registerRule({ ...fixture.rule, matchFn: () => true, edgeType: 'causal-candidate', name: fixture.id, description: '' })`, run `correlate([obsA, obsB])`, take `pairs[0].confidence`. `confidenceSeparation = mean(conf | truePair) − mean(conf | !truePair)`. A bad D2 knob excursion (e.g. `valueFloor` → 0.3, `spatialDecayKm` → 800) collapses the separation and fails the gate — this is the backstop the spec requires.
 
 - [ ] **Step 4: Baseline comparison + committed JSON**
 
@@ -1013,6 +1041,7 @@ export interface CorrBenchBaseline {
 }
 export const PRECISION_DROP_TOLERANCE = 0.05;
 export const RECALL_DROP_TOLERANCE = 0.05;
+export const SEPARATION_DROP_TOLERANCE = 0.05;   // guards the D2 kernel knobs
 export function compareCorrBenchToBaseline(
   report: CorrBenchReport, baseline: CorrBenchBaseline,
 ): { ok: boolean; reasons: string[] } {
@@ -1025,6 +1054,8 @@ export function compareCorrBenchToBaseline(
     reasons.push(`recall regression ${report.pairRecall} vs ${baseline.pairRecall}`);
   if (report.falsePositiveCount > baseline.falsePositiveCount)
     reasons.push(`false positives rose ${report.falsePositiveCount} vs ${baseline.falsePositiveCount}`);
+  if (baseline.confidenceSeparation - report.confidenceSeparation > SEPARATION_DROP_TOLERANCE)
+    reasons.push(`kernel separation regression ${report.confidenceSeparation} vs ${baseline.confidenceSeparation}`);
   return { ok: reasons.length === 0, reasons };
 }
 ```
@@ -1122,7 +1153,7 @@ export function mineInhibitoryEdges(
 ): LeadLagEdge[]
 ```
 
-Per ordered pair: same `followRate`/`expectedRate`/`lift`/`z` math as `minePair`; keep the edge iff `antecedents ≥ 5 && expectedRate ≥ 0.2 && lift ≤ 0.5 && z ≤ −max(2, bonferroniZ(comparisons))·(−1)` — i.e. `z ≤ -zFloor`. `explanation` states the suppression plainly ("b follows a at 0.10 vs expected 0.45").
+Per ordered pair: same `followRate`/`expectedRate`/`lift`/`z` math as `minePair`; compute `const zFloor = Math.max(2, options.comparisons ? bonferroniZ(options.comparisons) : 2)` and keep the edge iff `antecedents >= 5 && expectedRate >= 0.2 && lift <= 0.5 && z <= -zFloor` (note the sign: the z must be at or BELOW the negated floor — Codex P1 caught an inverted formulation of this gate in an earlier draft). `explanation` states the suppression plainly ("b follows a at 0.10 vs expected 0.45").
 
 - [ ] **Step 5: Dampener provider + wiring (`inhibition.ts`)**
 

@@ -91,7 +91,8 @@ A1 → A2 → A3 → A4 → B1 → B2 → D1 → C1 → C2 → C3 → C4 → B3 
   (data-loader), so price/inventory reversals resolve open predictions.
 - Same treatment for `mode-forecast-prediction-bridge.ts` at the mode-forecast
   EWMA update site.
-- Kill-switch: one `calibrationBridges` flag covering both.
+- Kill-switch: one `'calibration-bridges'` flag covering both (kebab-case,
+  matching the existing cognition switch keys).
 - Tests: call-site wiring tests with fake stores (the bridges themselves are
   already tested); dedupe-under-refresh regression test.
 
@@ -114,9 +115,13 @@ A1 → A2 → A3 → A4 → B1 → B2 → D1 → C1 → C2 → C3 → C4 → B3 
   a per-domain report card (reliability curve summary, n, Brier trend) in the
   AnalystHUD or SystemDiagnostic — decide placement at implementation time by
   where the existing report already renders.
-- `pushRecalibrationPair` wiring with flood control: push only at forecast
-  *resolution* time (not render time), capped 1-per-signature-per-hour.
-  This resolves the deferral reason (render-path flood) structurally.
+- `pushRecalibrationPair` wiring with flood control: push at forecast-compute
+  time — the only point where both the legacy and recalibrated legs exist
+  (the prediction bridge stores a single probability, so resolution time has
+  only one leg) — capped 1-per-signature-per-hour, matching the
+  superforecast-state push-at-compute precedent. This resolves the deferral
+  reason (render-path flood) structurally: compute time is not render time,
+  and the cap bounds shadow-ledger churn. (Amended per Codex review.)
 
 ### PR A4 — Entity vocabulary alignment
 
@@ -153,11 +158,13 @@ duplicate.
 
 ### PR B2 — Weather verification resolver
 
-- NWS warnings are verifiable: matched-place warnings resolve by whether a
-  corresponding observation/report (or a superseding upgrade) occurred inside
-  the polygon + window, using the existing weather pipeline types. Expired
-  without verification → resolved_false (proxy-marked, since absence of a
-  report is weaker evidence than presence).
+- NWS warnings are verifiable: warning-class alerts (nationwide, capped at 50
+  open records with ≤32-point simplified polygons so the 500-cap shared store
+  and localStorage never bloat — Codex review) resolve by whether a matching
+  LSR storm report occurred inside the polygon + window, using the existing
+  weather pipeline types and the SPC/LSR feed already fetched in the same
+  loader tick. Expired without verification → resolved_false (proxy-noted,
+  since absence of a report is weaker evidence than presence).
 - Feeds the weather domain — currently one of the highest-volume prediction
   producers with the weakest resolution coverage.
 

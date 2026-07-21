@@ -1,6 +1,7 @@
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { getCausalChainBuilder } from '@/services/intelligence/causal-chain';
+import { query as queryObservations } from '@/services/intelligence/observation-store';
 import {
   chainsForPanel,
   type PanelCorrelationChain,
@@ -96,7 +97,13 @@ export class CorrelationMapPanel extends Panel {
       // (The old /api/intelligence/correlations/chains mirror had no
       // producer since correlator-v2 was retired; the route remains for
       // external posters but this panel no longer depends on it.)
-      this.chains = chainsForPanel(getCausalChainBuilder().getChains());
+      // Intermediate chain hops resolve against the observation ring
+      // buffer; aged-out ones degrade to mechanism placeholders.
+      const byId = new Map(queryObservations({ limit: 1000 }).map((o) => [o.id, o]));
+      this.chains = chainsForPanel(
+        getCausalChainBuilder().getChains(),
+        (id) => byId.get(id),
+      );
       this.error = null;
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'chain read failed';

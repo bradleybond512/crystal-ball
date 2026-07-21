@@ -21,9 +21,13 @@ Audit findings (2026-07-21, verified against `origin/main` @ `ba5c100e`):
   / `settleExpiredShortagePredictions` API. **Zero live call sites.**
 - `src/services/intelligence/mode-forecast-prediction-bridge.ts` — same:
   pure, mirrors the shortage bridge design. **Zero live call sites.**
-- `src/components/CorrelationMapPanel.ts` — fetches sidecar data only; the live
-  `CorrelateEngine` (calibrated edge confidence, `learned:*` rules, regime
-  boosts) has no map surface.
+- `src/components/CorrelationMapPanel.ts` — reads the in-process causal-chain
+  builder and renders chains as a list (the old sidecar route is producerless);
+  the kernel-scored pairs (`correlation-store`, edge-confidence factor
+  breakdowns, `learned:*` rules, regime boosts) have no surface at all.
+- `significantEdges()` in `lead-lag.ts` applies fixed thresholds only
+  (`lift≥2 && z≥2 && support≥3`) — the "Bonferroni-corrected" claim in
+  CLAUDE.md/older docs is NOT in the code. C1 adds a real correction.
 - Cognition PR 6 explicit leftovers: EVOI question-suggester re-ranking,
   calibration report card, `pushRecalibrationPair` wiring (parked on
   render-path flood risk).
@@ -128,12 +132,13 @@ A1 → A2 → A3 → A4 → B1 → B2 → D1 → C1 → C2 → C3 → C4 → B3 
 ## Workstream B — Ground-truth expansion (3 PRs)
 
 Design principle: **resolvability is declared at emit time, not guessed at
-resolve time.** `PredictionRecord` gains optional structured
-`resolutionCriteria` (metric, comparator, threshold, deadline, scope). A
+resolve time.** `PredictionRecord` gains optional structured `criteria`
+(typed per resolver kind) plus a `resolutionNote` written at resolve time. A
 resolver only touches predictions that declared criteria it can evaluate.
-Resolutions produced from indirect signals go through the existing
-`proxy-outcomes.ts` conventions (marked proxy, confidence-weighted) — extend,
-never duplicate.
+Indirect-evidence resolutions carry a `proxy:`-prefixed note (verified:
+`proxy-outcomes.ts` stores NO marker on records today — the proxy nature
+lives in the caller; the note field makes it durable) — extend, never
+duplicate.
 
 ### PR B1 — Resolver framework + market-move resolver
 
@@ -173,7 +178,9 @@ metrics moving the intended direction (or provably unchanged) in its PR body.
 
 - Extend `lead-lag.ts`: for pairs with sufficient A-support, test
   UNDER-representation of B-follows (`lift ≤ 0.5 && z ≤ −2 && support(A) ≥ 5`,
-  Bonferroni-corrected like the positive path).
+  plus a base-rate floor — absence is only informative when B was likely).
+  Same PR adds a real multiple-comparison floor (union-bound z) to BOTH the
+  positive and inhibitory paths, making the docs' correction claim true.
 - Emit `inhibits:` edges consumed as confidence *dampeners* in compound risk /
   negative evidence — never as firing rules, never touching delivery rungs
   (safety asymmetry above).
@@ -182,19 +189,21 @@ metrics moving the intended direction (or provably unchanged) in its PR body.
 
 - From the significant pairwise edge set: for A→B and B→C, compute conditional
   lift of A→C partitioned on interposed-B. If `lift(A→C | ¬B)` collapses to
-  ~1, A→C is mediated: suppress the direct `learned:` rule and emit a chain
-  candidate into `causal-chain.ts` (the live chain system) instead.
+  ~1, A→C is mediated: suppress the direct `learned:` rule and surface the
+  triple ("A→C explained by B") on the map panel. (`causal-chain.ts` has no
+  domain-level candidate queue — its `buildChain` API is observation-level, so
+  the A→B/B→C rules compose into chains naturally at the pair level instead.)
 - Deterministic, corrected across the (small) candidate set; capped like the
   existing 12-rule learned cap.
 
 ### PR C3 — Hawkes-lite self-exciting base rates
 
-- Bursty domains (quakes, cyber) violate the Poisson base-rate assumption and
+- Bursty domains (quakes, cyber) violate the Poisson variance assumption and
   inflate false "significant" edges beyond what de-clustered trials already
-  absorb. Add a self-excitation-aware base rate: post-event elevated hazard
-  with exponential decay, single per-domain decay parameter fit by
-  method-of-moments from inter-event times. Fall back to Poisson under a
-  minimum-event floor.
+  absorb. Fix: dispersion-corrected z (quasi-Poisson) — measure the
+  variance-to-mean ratio of consequent counts over window-sized bins and
+  deflate `z` by `√dispersion`. Deterministic, no process fitting; falls back
+  to uncorrected under a minimum-event floor.
 - Acceptance: on D1's planted-confounder bursty fixture, the false-edge count
   drops; accepted true edges unchanged.
 

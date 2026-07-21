@@ -803,11 +803,11 @@ body.gods-vision-lock {
   pointer-events: auto;
 }
 .webcam-snapshot-viewer {
-  background: rgba(10, 25, 41, 0.94);
-  border: 1px solid #1f6feb;
+  background: var(--gv-snapshot-bg, rgba(10, 25, 41, 0.94));
+  border: 1px solid var(--accent, #1f6feb);
   border-radius: 8px;
   padding: 10px;
-  color: #e6edf3;
+  color: var(--gv-snapshot-fg, #e6edf3);
   font-family: var(--font-ui, sans-serif);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(6px);
@@ -831,7 +831,7 @@ body.gods-vision-lock {
   display: block;
   width: 100%;
   border-radius: 4px;
-  background: #0a1929;
+  background: var(--gv-snapshot-well, #0a1929);
   min-height: 40px;
 }
 .webcam-snapshot-viewer__controls {
@@ -842,7 +842,7 @@ body.gods-vision-lock {
   padding: 3px 10px;
   font-size: 12px;
   background: var(--accent, #1f6feb);
-  color: #fff;
+  color: var(--gv-snapshot-btn-fg, #fff);
   border: none;
   border-radius: 3px;
   cursor: pointer;

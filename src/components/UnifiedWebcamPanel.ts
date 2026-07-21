@@ -414,11 +414,11 @@ export class UnifiedWebcamPanel extends Panel {
     visChip.title = 'AirNow haze / visibility cameras';
     visChip.style.fontSize = '11px';
     visChip.style.padding = '3px 8px';
-    visChip.style.border = '1px solid #444';
+    visChip.style.border = '1px solid var(--surface-border-strong, #444)';
     visChip.style.borderRadius = '12px';
     visChip.style.cursor = 'pointer';
-    visChip.style.background = this.visibilityOnly ? '#8a6d3b' : 'transparent';
-    visChip.style.color = this.visibilityOnly ? '#fff' : 'inherit';
+    visChip.style.background = this.visibilityOnly ? 'var(--webcam-visibility-active, #8a6d3b)' : 'transparent';
+    visChip.style.color = this.visibilityOnly ? 'var(--webcam-chip-fg, #fff)' : 'inherit';
     visChip.addEventListener('click', () => {
       this.visibilityOnly = !this.visibilityOnly;
       this.render();
@@ -449,7 +449,7 @@ export class UnifiedWebcamPanel extends Panel {
       link.title = `${p.agency}${regionSuffix}`;
       link.style.fontSize = '11px';
       link.style.padding = '3px 8px';
-      link.style.border = '1px solid #444';
+      link.style.border = '1px solid var(--surface-border-strong, #444)';
       link.style.borderRadius = '12px';
       link.style.cursor = 'pointer';
       link.style.background = 'transparent';

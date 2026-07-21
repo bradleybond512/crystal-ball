@@ -116,7 +116,7 @@ export class SurvivalGuidePanel extends Panel {
     const ring = readiness
       ? `<span style="font-variant-numeric:tabular-nums;font-size:12px;opacity:0.85;">${readiness.percent}%</span>`
       : '';
-    return `<button type="button" data-guide-open="${g.id}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:1px solid var(--border-subtle,#333);border-radius:8px;background:rgba(255,255,255,0.02);cursor:pointer;color:inherit;width:100%;">
+    return `<button type="button" data-guide-open="${g.id}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:1px solid var(--border-subtle,#333);border-radius:8px;background:var(--surface-raise, rgba(255,255,255,0.02));cursor:pointer;color:inherit;width:100%;">
       <span><span style="font-weight:600;">${esc(g.title)}</span><br><span style="font-size:12px;opacity:0.7;">${esc(g.summary.slice(0, 90))}${g.summary.length > 90 ? '…' : ''}</span></span>
       ${ring}
     </button>`;
@@ -131,7 +131,7 @@ export class SurvivalGuidePanel extends Panel {
       : '';
 
     const mistakes = `
-      <div style="margin:14px 0;padding:10px 12px;border:1px solid var(--sev-critical,#ff453a);border-radius:8px;background:rgba(255,69,58,0.08);">
+      <div style="margin:14px 0;padding:10px 12px;border:1px solid var(--sev-critical,#ff453a);border-radius:8px;background:var(--guide-critical-bg, rgba(255,69,58,0.08));">
         <div style="font-weight:700;color:var(--sev-critical,#ff453a);margin-bottom:6px;">Deadly mistakes to avoid</div>
         <ul style="margin:0;padding-left:18px;display:grid;gap:4px;">${g.mistakes.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
       </div>`;

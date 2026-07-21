@@ -368,7 +368,7 @@ export class CommandCenterPanel extends Panel {
       const rules = s.matchingRules.length > 0
         ? `<div style="margin-top:2px;font-size:10px;color:var(--severity-medium);">Rules: ${s.matchingRules.map((name) => escapeHtml(name)).join(', ')}</div>`
         : '';
-      return `<div style="padding:6px 8px;border-radius:4px;background:rgba(255,255,255,0.04);">
+      return `<div style="padding:6px 8px;border-radius:4px;background:var(--surface-raise, rgba(255,255,255,0.04));">
         <div style="display:flex;align-items:baseline;gap:6px;">
           <span style="font-size:14px;">${s.domainIcon}</span>
           <strong style="font-size:13px;">${escapeHtml(s.name)}</strong>

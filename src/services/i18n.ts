@@ -12,10 +12,21 @@ const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
 const loadedLanguages = new Set<SupportedLanguage>();
 
 // Lazy-load only the locale that's actually needed — all others stay out of the bundle.
-const localeModules = import.meta.glob<TranslationDictionary>(
-  ['../locales/*.json', '!../locales/en.json'],
-  { import: 'default' },
-);
+// try/catch, not a typeof guard: Vite rewrites the literal call at build time
+// (so the try body always succeeds in the app), while under plain Node — the
+// tsx test runner imports this module transitively — import.meta.glob doesn't
+// exist and the throw degrades to "no lazy locales" (English stays eager).
+function globLocaleModules(): Record<string, () => Promise<TranslationDictionary>> {
+  try {
+    return import.meta.glob<TranslationDictionary>(
+      ['../locales/*.json', '!../locales/en.json'],
+      { import: 'default' },
+    );
+  } catch {
+    return {};
+  }
+}
+const localeModules = globLocaleModules();
 
 const RTL_LANGUAGES = new Set(['ar']);
 

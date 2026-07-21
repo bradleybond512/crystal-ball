@@ -126,7 +126,7 @@ export class StormPosturePanel extends Panel {
 
   private buildStaleBanner(weatherAgeMs: number): string {
     const mins = Math.round(weatherAgeMs / 60_000);
-    return `<div style="padding:6px 12px;background:rgba(255,159,10,0.12);border-bottom:1px solid rgba(255,159,10,0.3);font-size:11px;font-weight:600;color:#ff9f0a;letter-spacing:0.03em;">
+    return `<div style="padding:6px 12px;background:var(--storm-elevated-bg, rgba(255,159,10,0.12));border-bottom:1px solid var(--storm-elevated-border, rgba(255,159,10,0.3));font-size:11px;font-weight:600;color:var(--storm-elevated, #ff9f0a);letter-spacing:0.03em;">
       ⚠ Data is ${mins} min old — showing last known posture
     </div>`;
   }

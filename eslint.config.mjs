@@ -56,6 +56,14 @@ export default tseslint.config(
  selector: 'Literal[value=/localhost/]',
  message: 'Use 127.0.0.1 instead of localhost — WKWebView treats them as distinct origins.',
  },
+ {
+ selector: 'FunctionDeclaration[id.name=/^(escapeHtml|safeHtml|sanitizeHtml)$/]',
+ message: 'Do not reimplement HTML escaping locally — import escapeHtml from @/utils/sanitize (or sanitizeHtml from @/utils/safe-html for DOMPurify-backed rich HTML). Local reimplementations drift out of sync and have shipped with missing escape characters (SEC-007).',
+ },
+ {
+ selector: 'VariableDeclarator[id.name=/^(escapeHtml|safeHtml|sanitizeHtml)$/]',
+ message: 'Do not reimplement HTML escaping locally — import escapeHtml from @/utils/sanitize (or sanitizeHtml from @/utils/safe-html for DOMPurify-backed rich HTML). Local reimplementations drift out of sync and have shipped with missing escape characters (SEC-007).',
+ },
  ],
  // TODO: add a `no-unsafe-innerHTML` rule once the 125 existing
  // template-literal innerHTML sites have been audited and tagged with
@@ -87,6 +95,23 @@ export default tseslint.config(
  'unicorn/no-null': 'off', // codebase convention: null used for nullable DOM/library values
  'unicorn/no-array-sort': 'off', // Array#toSorted requires ES2022; tsconfig targets ES2020
  'unicorn/no-array-reverse': 'off', // Array#toReversed() requires ES2023; tsconfig targets ES2020
+ },
+  },
+
+  // Block 2b: the canonical HTML-escaping/sanitizing modules ARE the
+  // implementation, so they are exempt from the no-local-reimplementation guard
+  // above (dom-utils' safeHtml returns a sanitized DocumentFragment — a distinct
+  // DOM-level utility, not a string escaper).
+  {
+ files: ['src/utils/sanitize.ts', 'src/utils/dom-utils.ts', 'src/utils/safe-html.ts'],
+ rules: {
+ 'no-restricted-syntax': [
+ 'error',
+ {
+ selector: 'Literal[value=/localhost/]',
+ message: 'Use 127.0.0.1 instead of localhost — WKWebView treats them as distinct origins.',
+ },
+ ],
  },
   },
 

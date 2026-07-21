@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from './Panel';
 import {
   buildRenderData,
@@ -60,17 +61,10 @@ export class SemiconductorGeopoliticsPanel extends Panel {
 
 // ── Local HTML helpers ──────────────────────────────────────────────────────────
 
+/** Numeric-friendly wrapper around the canonical escapeHtml() — this file
+ *  interpolates both strings and numbers into templates. */
 function safe(s: string | number): string {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function safeHtml(strings: TemplateStringsArray, ...values: Array<string | number>): string {
-  return strings.reduce((acc, str, i) => acc + str + (i < values.length ? safe(values[i]!) : ''), '');
+  return escapeHtml(String(s));
 }
 
 function h(tag: string, attrs: Record<string, string>, inner = ''): string {
@@ -188,7 +182,7 @@ function renderControlsTable(controls: ExportControl[]): string {
         <tr style="border-bottom:1px solid #2a2a2a;">
           <td style="padding:5px 6px;font-size:var(--text-sm,13px);color:#e5e5e5;font-weight:600;">
             ${safe(c.enforcedBy)}
-            <div style="font-size:10px;color:#888;font-weight:400;">${safeHtml`→ ${c.targetCountry}`}</div>
+            <div style="font-size:10px;color:#888;font-weight:400;">→ ${safe(c.targetCountry)}</div>
           </td>
           <td style="padding:5px 6px;font-size:var(--text-xs,11px);color:#aaa;text-align:center;">${safe(c.implementedYear)}</td>
           <td style="padding:5px 6px;font-size:var(--text-xs,11px);color:#ccc;">${safe(c.keyRestrictions)}</td>

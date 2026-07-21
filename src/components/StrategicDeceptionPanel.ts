@@ -1,4 +1,5 @@
 /* eslint-disable sonarjs/no-nested-conditional */
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from './Panel';
 import {
   buildRenderData,
@@ -8,9 +9,6 @@ import {
   type OperationalDomain,
 } from './strategic-deception-helpers';
 
-function safeHtml(t: string): string {
-  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 const DOMAIN_COLOR: Record<OperationalDomain, string> = {
   military: '#ff453a',
@@ -37,19 +35,19 @@ function renderOperationRow(op: DeceptionOperation): string {
     : `<span style="font-size:10px;color:var(--text-secondary,#aaa);">historical</span>`;
   return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;padding:6px 8px;font-size:11px;">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
-      <div style="font-weight:600;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeHtml(op.name)}</div>
+      <div style="font-weight:600;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(op.name)}</div>
       <div style="font-family:ui-monospace,monospace;font-weight:700;color:${color};">${score}</div>
     </div>
     <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${safeHtml(op.actor)}</span>
+      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(op.actor)}</span>
       <span style="font-size:10px;color:var(--text-secondary,#aaa);">&middot;</span>
-      <span style="font-size:10px;color:${domainColor};text-transform:uppercase;">${safeHtml(op.domain)}</span>
+      <span style="font-size:10px;color:${domainColor};text-transform:uppercase;">${escapeHtml(op.domain)}</span>
       <span style="font-size:10px;color:var(--text-secondary,#aaa);">&middot;</span>
-      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${safeHtml(op.type)}</span>
+      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(op.type)}</span>
       <span style="margin-left:auto;">${activeTag}</span>
     </div>
     <div style="margin-top:2px;font-size:10px;color:var(--text-secondary,#aaa);">
-      ${safeHtml(op.strategicObjective)}
+      ${escapeHtml(op.strategicObjective)}
     </div>
   </div>`;
 }
@@ -58,11 +56,11 @@ function renderIndicatorRow(ind: DeceptionIndicator): string {
   const confColor = ind.confidence >= 80 ? '#ff453a' : (ind.confidence >= 65 ? '#ff9800' : '#ffeb3b');
   return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${confColor};border-radius:3px;padding:5px 8px;font-size:11px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">${safeHtml(ind.type)}</span>
+      <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">${escapeHtml(ind.type)}</span>
       <span style="font-family:ui-monospace,monospace;font-size:10px;font-weight:700;color:${confColor};">${ind.confidence}%</span>
     </div>
-    <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${safeHtml(ind.description)}</div>
-    <div style="margin-top:2px;font-size:10px;color:var(--text-secondary,#aaa);font-family:ui-monospace,monospace;">${safeHtml(ind.detectedDate)}</div>
+    <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(ind.description)}</div>
+    <div style="margin-top:2px;font-size:10px;color:var(--text-secondary,#aaa);font-family:ui-monospace,monospace;">${escapeHtml(ind.detectedDate)}</div>
   </div>`;
 }
 
@@ -123,7 +121,7 @@ export class StrategicDeceptionPanel extends Panel {
       </div>
       <div style="flex:1;min-width:120px;padding:8px 12px;border:1px solid var(--border-subtle,#333);border-radius:4px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Most Active Actor</div>
-        <div style="font-size:14px;font-weight:700;">${safeHtml(data.mostActiveActor)}</div>
+        <div style="font-size:14px;font-weight:700;">${escapeHtml(data.mostActiveActor)}</div>
       </div>
       <div style="flex:1;min-width:120px;padding:8px 12px;border:1px solid var(--border-subtle,#333);border-radius:4px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">High-Confidence Indicators</div>
@@ -165,7 +163,7 @@ export class StrategicDeceptionPanel extends Panel {
     const sortedEntries = [...entries].sort(([, a], [, b]) => b - a);
     const chips = sortedEntries
       .map(([type, count]) =>
-        `<span style="display:inline-block;padding:2px 8px;border:1px solid var(--border-subtle,#333);border-radius:8px;font-size:10px;margin-right:4px;margin-bottom:4px;">${safeHtml(type)} <strong>${count}</strong></span>`
+        `<span style="display:inline-block;padding:2px 8px;border:1px solid var(--border-subtle,#333);border-radius:8px;font-size:10px;margin-right:4px;margin-bottom:4px;">${escapeHtml(type)} <strong>${count}</strong></span>`
       )
       .join('');
     return `<div>

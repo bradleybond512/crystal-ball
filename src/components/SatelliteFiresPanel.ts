@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from './Panel';
 import type { FireRegionStats } from '@/services/wildfires';
 import type { InpeHotspot } from '@/services/inpe-fires';
@@ -92,9 +93,6 @@ export class SatelliteFiresPanel extends Panel {
   }
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 function timeSince(date: Date): string {
   const secs = Math.floor((Date.now() - date.getTime()) / 1000);

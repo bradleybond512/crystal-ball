@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/utils/sanitize";
 import { Panel } from './Panel';
 import {
   buildRenderData,
@@ -30,17 +31,11 @@ const AIS_COLOR: Record<AisStatus, string> = {
   active: '#4caf50',
 };
 
-function safe(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
-function safeHtml(s: string): string {
-  return safe(s);
-}
 
 function h(tag: string, attrs: Record<string, string>, ...children: string[]): string {
   const attrStr = Object.entries(attrs)
-    .map(([k, v]) => `${k}="${safe(v)}"`)
+    .map(([k, v]) => `${k}="${escapeHtml(v)}"`)
     .join(' ');
   return `<${tag}${attrStr ? ' ' + attrStr : ''}>${children.join('')}</${tag}>`;
 }
@@ -53,17 +48,17 @@ function statCard(label: string, value: string, color: string): string {
   return h(
     'div',
     { style: 'flex:1;min-width:0;padding:8px 10px;background:var(--surface-raised,#1a1a1a);border-radius:4px;border-left:3px solid ' + color + ';' },
-    h('div', { style: 'font-size:15px;font-weight:700;font-family:ui-monospace,monospace;white-space:nowrap;' }, safeHtml(value)),
-    h('div', { style: 'font-size:9px;text-transform:uppercase;color:var(--text-secondary,#aaa);letter-spacing:0.04em;margin-top:2px;' }, safeHtml(label)),
+    h('div', { style: 'font-size:15px;font-weight:700;font-family:ui-monospace,monospace;white-space:nowrap;' }, escapeHtml(value)),
+    h('div', { style: 'font-size:9px;text-transform:uppercase;color:var(--text-secondary,#aaa);letter-spacing:0.04em;margin-top:2px;' }, escapeHtml(label)),
   );
 }
 
 function statRow(s: ShadowFleetStat): string {
   return `<tr style="border-bottom:1px solid var(--border-subtle,#2a2a2a);font-size:11px;">
-    <td style="padding:4px 6px;font-weight:600;">${safeHtml(s.sanctionTarget)}</td>
+    <td style="padding:4px 6px;font-weight:600;">${escapeHtml(s.sanctionTarget)}</td>
     <td style="padding:4px 6px;text-align:right;font-family:ui-monospace,monospace;">${s.estimatedVessels}</td>
     <td style="padding:4px 6px;text-align:right;font-family:ui-monospace,monospace;">${fmtMbpd(s.estimatedBpdCapacity)}</td>
-    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);font-size:10px;">${safeHtml(s.primaryFlagStates.slice(0, 3).join(', '))}</td>
+    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(s.primaryFlagStates.slice(0, 3).join(', '))}</td>
   </tr>`;
 }
 
@@ -73,19 +68,19 @@ function vesselRow(v: ShadowVessel): string {
   const riskBadge = h(
     'span',
     { class: riskLevelClass(v.riskLevel), style: `display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;background:${riskColor};color:#000;` },
-    safeHtml(v.riskLevel),
+    escapeHtml(v.riskLevel),
   );
   const aisBadge = h(
     'span',
     { class: aisStatusClass(v.aisStatus), style: `color:${aisColor};font-weight:600;` },
-    safeHtml(AIS_LABEL[v.aisStatus]),
+    escapeHtml(AIS_LABEL[v.aisStatus]),
   );
   return `<tr style="border-bottom:1px solid var(--border-subtle,#2a2a2a);font-size:11px;">
-    <td style="padding:4px 6px;font-weight:600;">${safeHtml(v.name)}</td>
-    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);">${safeHtml(v.flagState)}</td>
-    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);">${safeHtml(v.sanctionTarget)}</td>
+    <td style="padding:4px 6px;font-weight:600;">${escapeHtml(v.name)}</td>
+    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);">${escapeHtml(v.flagState)}</td>
+    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);">${escapeHtml(v.sanctionTarget)}</td>
     <td style="padding:4px 6px;">${aisBadge}</td>
-    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);font-size:10px;">${safeHtml(v.estimatedCargoType)}</td>
+    <td style="padding:4px 6px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(v.estimatedCargoType)}</td>
     <td style="padding:4px 6px;text-align:right;font-family:ui-monospace,monospace;">${v.detectionEvents}</td>
     <td style="padding:4px 6px;text-align:right;">${riskBadge}</td>
   </tr>`;

@@ -546,6 +546,7 @@ export class DeckGLMap {
   private smokeForecastField: import('@/services/smoke/forecast-field').SmokeForecastField | null = null;
   private smokeForecastCenter: string | null = null;
   private smokeForecastLoading = false;
+  private smokeForecastFailedAt = 0;
   private smokeForecastHourIdx = 0;
   private smokeScrubberEl: HTMLElement | null = null;
   private smokeScrubberInput: HTMLInputElement | null = null;
@@ -2402,12 +2403,20 @@ export class DeckGLMap {
   private async ensureSmokeForecastField(): Promise<void> {
  const snap = getSmokeSnapshots()[0];
  if (!snap || this.smokeForecastLoading) return;
+ // Primary place changed → the cached field is another place's air. Drop
+ // it synchronously (this runs before createAirSmokeLayers in the same
+ // buildLayers pass) so the old field never renders under the new center
+ // while the refetch runs — even if that refetch fails.
+ if (this.smokeForecastField && this.smokeForecastCenter !== snap.placeId) {
+ this.smokeForecastField = null;
+ this.smokeForecastHourIdx = 0;
+ }
  const FIELD_RELOAD_MS = 30 * 60 * 1000;
- if (
- this.smokeForecastField &&
- this.smokeForecastCenter === snap.placeId &&
- Date.now() - this.smokeForecastField.generatedAt < FIELD_RELOAD_MS
- ) return;
+ const FIELD_RETRY_MS = 2 * 60 * 1000;
+ if (this.smokeForecastField && Date.now() - this.smokeForecastField.generatedAt < FIELD_RELOAD_MS) return;
+ // Outage cooldown: layer rebuilds fire on every pan/zoom — don't hammer
+ // a failing endpoint more than once per retry window.
+ if (Date.now() - this.smokeForecastFailedAt < FIELD_RETRY_MS) return;
  this.smokeForecastLoading = true;
  try {
  const [{ forecastGridPoints, assembleForecastField }, { fetchAqGrid }] = await Promise.all([
@@ -2420,9 +2429,12 @@ export class DeckGLMap {
  this.smokeForecastField = field;
  this.smokeForecastCenter = snap.placeId;
  this.smokeForecastHourIdx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
+ this.smokeForecastFailedAt = 0;
  this.updateLayers();
+ } else {
+ this.smokeForecastFailedAt = Date.now();
  }
- } catch { /* enhancement layer — dots/plume still render */ }
+ } catch { this.smokeForecastFailedAt = Date.now(); /* enhancement layer — dots/plume still render */ }
  finally { this.smokeForecastLoading = false; }
   }
 
@@ -2561,7 +2573,10 @@ export class DeckGLMap {
  const field = this.smokeForecastField;
  if (!field || !this.smokeScrubberLabel) return;
  const idx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
- this.smokeScrubberLabel.textContent = idx === 0
+ // "Now" only while hour 0 actually covers the present — a field kept
+ // alive through an outage must not claim an aged frame is current.
+ const hourIsNow = idx === 0 && Math.abs(field.hoursMs[0]! - Date.now()) < 90 * 60 * 1000;
+ this.smokeScrubberLabel.textContent = hourIsNow
  ? 'Now'
  : `+${idx}h · ${new Date(field.hoursMs[idx]!).toLocaleString([], { weekday: 'short', hour: 'numeric' })}`;
   }

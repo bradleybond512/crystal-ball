@@ -86,8 +86,27 @@ function hourLabel(iso: string): string {
   return `${display} ${ampm}`;
 }
 
-/** '' today, 'tomorrow ' next day, weekday name beyond that. */
-function dayQualifier(iso: string, now: number): string {
+/** Place-UTC offset recovered from one wind row (wall-as-UTC − epoch);
+ *  null when the row carries no epoch. */
+function placeOffsetMs(w: HourlyWind | undefined): number | null {
+  if (w?.timeMs === null || w?.timeMs === undefined) return null;
+  const wallAsUtc = Date.parse(`${w.time}Z`);
+  return Number.isFinite(wallAsUtc) ? wallAsUtc - w.timeMs : null;
+}
+
+/** '' today, 'tomorrow ' next day, weekday name beyond that. Day boundaries
+ *  are the PLACE's when its UTC offset is known (offsetMs non-null);
+ *  otherwise device-local — the legacy fallback. */
+function dayQualifier(iso: string, now: number, offsetMs: number | null): string {
+  if (offsetMs !== null) {
+    const targetDate = iso.slice(0, 10);
+    const nowPlaceDate = new Date(now + offsetMs).toISOString().slice(0, 10);
+    const dayDiff = Math.round((Date.parse(targetDate) - Date.parse(nowPlaceDate)) / (24 * HOUR_MS));
+    if (dayDiff <= 0) return '';
+    if (dayDiff === 1) return 'tomorrow ';
+    const noon = new Date(`${targetDate}T12:00:00Z`);
+    return `${noon.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })} `;
+  }
   const target = new Date(iso);
   const today = new Date(now);
   const dayDiff = Math.round(
@@ -172,9 +191,13 @@ export function estimateArrivals(inputs: ArrivalInputs): SmokeArrivalEstimate[] 
     maxResults = 5,
   } = inputs;
 
-  // First wind sample covering "now" (samples are hourly local times).
-  let startIdx = winds.findIndex((w) => new Date(w.time).getTime() >= now - HOUR_MS);
+  // First wind sample covering "now". Compare true epochs (timeMs) — the
+  // wall-time strings are place-local and MUST NOT be parsed against the
+  // device clock (a saved place two timezones away would shift every ETA).
+  // Rows without an epoch fall back to device parsing, the legacy behavior.
+  let startIdx = winds.findIndex((w) => (w.timeMs ?? new Date(w.time).getTime()) >= now - HOUR_MS);
   if (startIdx < 0) startIdx = 0;
+  const offsetMs = placeOffsetMs(winds[startIdx]);
   const haveWinds = winds.some((w) => w.speedMph !== null && w.directionDeg !== null);
 
   const out: SmokeArrivalEstimate[] = [];
@@ -226,8 +249,11 @@ export function estimateArrivals(inputs: ArrivalInputs): SmokeArrivalEstimate[] 
     } else {
       const etaStartIso = winds[arrivalIdx]!.time;
       const halfWidthH = Math.max(1, Math.round(hoursOut * 0.3));
+      // Same wall-clock arithmetic convention as safe-windows' toWindow():
+      // naive-parse + width round-trips through the same runtime, so the
+      // label pair always reads as place wall-clock + width.
       const etaEndIso = new Date(new Date(etaStartIso).getTime() + halfWidthH * HOUR_MS).toISOString();
-      const etaLabel = `${dayQualifier(etaStartIso, now)}${hourLabel(etaStartIso)}–${hourLabel(etaEndIso)}`;
+      const etaLabel = `${dayQualifier(etaStartIso, now, offsetMs)}${hourLabel(etaStartIso)}–${hourLabel(etaEndIso)}`;
       out.push({
         ...base,
         status: 'incoming',

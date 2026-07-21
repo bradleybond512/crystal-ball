@@ -40,8 +40,9 @@ test('hasAqData: all-null rows are structure without data (fail-closed)', async 
   assert.equal(hasAqData(parseOpenMeteoAq({ current: { us_aqi: 42 } })), true);
 });
 
-test('parseOpenMeteoWinds: hourly winds with nulls preserved, malformed \u2192 []', () => {
+test('parseOpenMeteoWinds: winds with true epochs from utc_offset_seconds', () => {
   const winds = parseOpenMeteoWinds({
+    utc_offset_seconds: -25_200, // UTC-7
     hourly: {
       time: ['2026-07-20T12:00', '2026-07-20T13:00'],
       wind_speed_10m: [14.2, null],
@@ -52,7 +53,16 @@ test('parseOpenMeteoWinds: hourly winds with nulls preserved, malformed \u2192 [
   assert.equal(winds[0]!.speedMph, 14.2);
   assert.equal(winds[0]!.directionDeg, 320);
   assert.equal(winds[1]!.speedMph, null);
+  // epoch = wall-as-UTC − offset: 12:00 wall at UTC-7 is 19:00Z.
+  assert.equal(winds[0]!.timeMs, Date.parse('2026-07-20T19:00:00Z'));
   assert.deepEqual(parseOpenMeteoWinds({}), []);
+});
+
+test('parseOpenMeteoWinds: missing utc_offset_seconds \u2192 timeMs null (legacy fallback)', () => {
+  const winds = parseOpenMeteoWinds({
+    hourly: { time: ['2026-07-20T12:00'], wind_speed_10m: [10], wind_direction_10m: [0] },
+  });
+  assert.equal(winds[0]!.timeMs, null);
 });
 
 test('parseOpenMeteoAqUnix: epoch seconds \u2192 ms, null when empty', () => {

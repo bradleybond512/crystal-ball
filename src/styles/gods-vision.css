@@ -883,10 +883,10 @@ body.gods-vision-lock {
   max-width: 68vw;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: var(--ge-blur, blur(12px));
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--ge-hud-border, rgba(255, 255, 255, 0.12));
   border-radius: 12px;
   font-family: var(--ge-font, monospace);
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--ge-hud-fg, rgba(255, 255, 255, 0.9));
   pointer-events: auto;
 }
 .time-scrubber-hud__play {
@@ -894,13 +894,13 @@ body.gods-vision-lock {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ge-hud-border-strong, rgba(255, 255, 255, 0.2));
+  background: var(--ge-hud-btn-bg, rgba(255, 255, 255, 0.06));
   color: inherit;
   font-size: 13px;
   cursor: pointer;
 }
-.time-scrubber-hud__play:hover { background: rgba(255, 255, 255, 0.14); }
+.time-scrubber-hud__play:hover { background: var(--ge-hud-btn-bg-hover, rgba(255, 255, 255, 0.14)); }
 .time-scrubber-hud__zone {
   flex: 0 0 auto;
   font-size: 11px;

@@ -8,6 +8,7 @@ import {
 import { CesiumGlobe } from '@/components/CesiumGlobe';
 import { GlobeDataManager } from '@/components/GlobeDataManager';
 import { GlobeHUD } from '@/components/GlobeHUD';
+import { TimeScrubberHud } from '@/components/TimeScrubberHud';
 import { GlobeTimeMachine } from '@/components/GlobeTimeMachine';
 import { AutoFollowEngine } from '@/components/gods-vision/AutoFollowEngine';
 import { Globe4DManager } from '@/components/gods-vision/Globe4DManager';
@@ -77,6 +78,7 @@ export class GodsVisionView {
   private globe: CesiumGlobe | null = null;
   private dataManager: GlobeDataManager | null = null;
   private hud: GlobeHUD | null = null;
+  private timeScrubber: TimeScrubberHud | null = null;
   private timeMachine: GlobeTimeMachine | null = null;
   private timelineSync: GlobeTimelineSync | null = null;
   private heatmapToggle: GlobeHeatmapToggle | null = null;
@@ -273,6 +275,8 @@ export class GodsVisionView {
 
  // HUD overlay
  this.hud = new GlobeHUD(this.container);
+ // World Stage time scrubber (E4): replay ⟵ now ⟶ projected, render-gated.
+ this.timeScrubber = new TimeScrubberHud(this.container);
  this.hud.setOnExit(() => this.exit());
  this.hud.setOnLayerToggle((key, enabled) => {
  if (key === 'autoFollow') {
@@ -444,6 +448,8 @@ export class GodsVisionView {
 
  this.hud?.destroy();
  this.hud = null;
+ this.timeScrubber?.destroy();
+ this.timeScrubber = null;
  this.dataManager?.destroy();
  this.dataManager = null;
  this.globe?.destroy();

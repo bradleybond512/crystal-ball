@@ -64,6 +64,7 @@ export interface HomeShellOptions {
 export class HomeShellOverlay {
   private root: HTMLElement | null = null;
   private mapSlot: HTMLElement | null = null;
+  private topbarEl: HTMLElement | null = null;
   private briefingEl: HTMLElement | null = null;
   private deckEl: HTMLElement | null = null;
   private ribbonEl: HTMLElement | null = null;
@@ -107,6 +108,7 @@ export class HomeShellOverlay {
     const viewport = el('section', 'home-shell-viewport');
 
     const topbar = el('header', 'home-shell-topbar');
+    this.topbarEl = topbar;
     topbar.append(
       el('span', 'home-shell-brand', '🔮 Crystal Ball'),
       button('home-shell-cmdk', 'cmdk', '⌘K — panels, places, situations…'),
@@ -133,11 +135,15 @@ export class HomeShellOverlay {
     deckHint.addEventListener('click', () => {
       this.deckEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    viewport.append(topbar, this.briefingEl, deckHint);
+    viewport.append(this.briefingEl, deckHint);
 
     this.deckEl = el('section', 'home-shell-deck');
     this.ribbonEl = el('footer', 'home-shell-ribbon');
-    scroll.append(viewport, this.deckEl, this.ribbonEl);
+    // Topbar is a direct child of the scroll container (not the viewport) so its
+    // sticky containing block spans the whole scroll — it stays pinned even when
+    // the viewport scrolls past to reach the deck. (Nested in the viewport it
+    // unstuck the moment the viewport left the scrollport — the vanishing-header bug.)
+    scroll.append(topbar, viewport, this.deckEl, this.ribbonEl);
     root.append(this.mapSlot, scroll);
 
     this.dossier = new SituationDossier({
@@ -207,6 +213,11 @@ export class HomeShellOverlay {
     this.visible = true;
     this.root.hidden = false;
     document.body.classList.add('home-shell-active');
+    // The sticky topbar lives above the 100dvh viewport in the scroll flow, so
+    // publish its measured height to CSS (--hs-topbar-h) — now that the shell is
+    // visible it can be measured — keeping the "Your Deck" button on the fold.
+    const topH = this.topbarEl?.offsetHeight;
+    if (topH && topH > 0) this.root.style.setProperty('--hs-topbar-h', `${topH}px`);
     document.addEventListener('keydown', this.onKeydown);
     this.adoptMap();
     this.loop = registerRecurringLoop('home-shell-refresh', () => this.refresh(), REFRESH_MS, {

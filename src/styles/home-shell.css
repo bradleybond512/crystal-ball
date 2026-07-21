@@ -68,7 +68,10 @@ body.home-shell-active #panelsGrid {
 
 .home-shell-viewport {
   position: relative;
-  min-height: 100vh;
+  /* Subtract the (sticky, now out-of-viewport) topbar's height so the first
+     screen still fits topbar + bands + the "Your Deck" button without pushing
+     the button below the fold. --hs-topbar-h is measured in show(); 48px fallback. */
+  min-height: calc(100dvh - var(--hs-topbar-h, 48px));
   display: flex;
   flex-direction: column;
   pointer-events: none; /* backdrop-only: empty-area clicks land on the scroll container */
@@ -83,7 +86,15 @@ body.home-shell-active #panelsGrid {
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  background: linear-gradient(rgba(var(--hs-base-rgb), 0.9), transparent);
+  /* Pin the header so scrolling to the deck (the "Your Deck" button) can't
+     carry it off-screen — the scroll container has pointer-events:none, so a
+     header that scrolls away is unrecoverable (no scrollbar to grab, wheel
+     zooms the map). Sticky keeps ⌘K / Library / Classic-view always reachable. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  pointer-events: auto; /* direct child of the pointer-events:none scroll container */
+  background: linear-gradient(rgba(var(--hs-base-rgb), 0.95), rgba(var(--hs-base-rgb), 0.82));
 }
 
 /* In the desktop app the macOS traffic-light buttons (close/min/zoom) float over

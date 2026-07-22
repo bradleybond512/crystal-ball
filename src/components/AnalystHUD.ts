@@ -213,48 +213,13 @@ export class AnalystHUD {
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-modal', 'true');
     this.root.setAttribute('aria-label', 'Analyst HUD');
-    this.root.addEventListener('click', (e) => {
-      if (e.target === this.root) { this.hide(); return; }
-      // Delegated close: the header is rebuilt on every render, and a
-      // re-render between pointerdown and pointerup swallows clicks bound
-      // directly to the (replaced) button. The root element persists.
-      const target = e.target as HTMLElement;
-      if (target.closest?.('.analyst-hud-close')) { this.hide(); return; }
-      // Hypothesis action row (thumbs / outcome / simulate / perspectives /
-      // deep forecast / copy) — delegated on the stable root for the same
-      // reason as close: a background re-render between pointerdown and
-      // pointerup replaces the per-render button node and swallows a click
-      // bound directly to it. The hypothesis is re-resolved by id at click
-      // time from the effective snapshot.
-      const actionBtn = target.closest?.<HTMLElement>('[data-hyp-action]');
-      if (actionBtn?.dataset.hypAction && actionBtn.dataset.hypId) {
-        this.handleHypAction(actionBtn.dataset.hypAction, actionBtn.dataset.hypId, actionBtn);
-        return;
-      }
-      // Cognition surfaces (Wave 5a) — delegated on the stable root so the
-      // per-render replaceChildren never orphans a click in flight.
-      const evoiRow = target.closest?.<HTMLElement>('[data-evoi-panel]');
-      if (evoiRow?.dataset.evoiPanel) {
-        jumpToPanel(evoiRow.dataset.evoiPanel);
-        this.hide();
-        return;
-      }
-      const analogToggle = target.closest?.<HTMLElement>('[data-analog-toggle]');
-      if (analogToggle?.dataset.analogToggle) {
-        const id = analogToggle.dataset.analogToggle;
-        if (this.expandedAnalogs.has(id)) this.expandedAnalogs.delete(id);
-        else this.expandedAnalogs.add(id);
-        this.render();
-        return;
-      }
-      const analogDetail = target.closest?.<HTMLElement>('[data-analog-detail]');
-      if (analogDetail?.dataset.analogDetail) {
-        const key = analogDetail.dataset.analogDetail;
-        if (this.expandedAnalogDetail.has(key)) this.expandedAnalogDetail.delete(key);
-        else this.expandedAnalogDetail.add(key);
-        this.render();
-      }
-    });
+    // Every control here is delegated on the stable root: render() rebuilds
+    // each card via replaceChildren on every one of the HUD's ~16
+    // subscriptions, so a background re-render between pointerdown and
+    // pointerup orphans a directly-bound node and the browser never
+    // synthesizes the click. State travels in data-* attributes read back at
+    // click time. Split across helpers to keep each dispatcher legible.
+    this.root.addEventListener('click', (e) => this.onRootClick(e));
     this.snapshot = getAnalystSnapshot();
     this.forecast = getForecastSnapshot();
     this.briefs = getLatestBriefs();
@@ -881,12 +846,9 @@ export class AnalystHUD {
 
     const live = document.createElement('button');
     live.className = 'analyst-hud-scrubber-live';
+    live.dataset.scrubberLive = '1';
     live.textContent = this.replayAtTimestamp === null ? 'live' : 'go live';
     live.disabled = this.replayAtTimestamp === null;
-    live.addEventListener('click', () => {
-      this.replayAtTimestamp = null;
-      this.render();
-    });
 
     const label = document.createElement('span');
     label.className = 'analyst-hud-scrubber-label';
@@ -1021,26 +983,13 @@ export class AnalystHUD {
 
     const chip = document.createElement('button');
     chip.className = 'analyst-hud-question-chip';
+    chip.dataset.questionHypId = h.id;
+    chip.dataset.questionText = question;
     chip.textContent = loading ? `? ${question}${suffix} …` : `? ${question}${suffix}`;
     chip.disabled = loading;
     chip.title = cached
       ? 'Cached answer — click to toggle'
       : 'Ask Claude (local if configured) and cache the answer';
-    chip.addEventListener('click', () => {
-      if (cached) {
-        if (expanded) this.expandedQuestion.delete(key);
-        else this.expandedQuestion.add(key);
-        this.render();
-        return;
-      }
-      this.loadingQuestion.add(key);
-      this.render();
-      void askQuestion(h, question).finally(() => {
-        this.loadingQuestion.delete(key);
-        this.expandedQuestion.add(key);
-        this.render();
-      });
-    });
     wrap.append(chip);
     if (cached && expanded) {
       const body = document.createElement('p');
@@ -1211,13 +1160,9 @@ export class AnalystHUD {
     const expanded = this.expandedSkeptic.has(note.signature);
     const btn = document.createElement('button');
     btn.className = 'analyst-hud-skeptic-toggle';
+    btn.dataset.skepticToggle = note.signature;
     btn.textContent = expanded ? `[skeptic ▼] ${note.summary}` : `[skeptic ▶] ${note.summary.slice(0, 80)}…`;
     btn.title = 'Click to expand the skeptic\'s full critique';
-    btn.addEventListener('click', () => {
-      if (expanded) this.expandedSkeptic.delete(note.signature);
-      else this.expandedSkeptic.add(note.signature);
-      this.render();
-    });
     wrap.append(btn);
     if (expanded && note.text) {
       const full = document.createElement('p');
@@ -1237,13 +1182,9 @@ export class AnalystHUD {
     const summary = `alt: ${view.alternative.slice(0, 80)}${view.alternative.length > 80 ? '…' : ''}`;
     const btn = document.createElement('button');
     btn.className = 'analyst-hud-alternatives-toggle';
+    btn.dataset.alternativesToggle = view.signature;
     btn.textContent = expanded ? `[alt ▼] ${summary}` : `[alt ▶] ${summary}`;
     btn.title = 'Click to expand the alternative explanation and pre-mortem';
-    btn.addEventListener('click', () => {
-      if (expanded) this.expandedAlternative.delete(view.signature);
-      else this.expandedAlternative.add(view.signature);
-      this.render();
-    });
     wrap.append(btn);
     if (expanded) {
       const altRow = document.createElement('p');
@@ -1378,6 +1319,75 @@ export class AnalystHUD {
     }
   }
 
+  private onRootClick(e: Event): void {
+    if (e.target === this.root) { this.hide(); return; }
+    const target = e.target as HTMLElement;
+    if (target.closest?.('.analyst-hud-close')) { this.hide(); return; }
+    // Hypothesis action row (thumbs / outcome / simulate / perspectives /
+    // deep forecast / copy). The hypothesis is re-resolved by id at click time.
+    const actionBtn = target.closest?.<HTMLElement>('[data-hyp-action]');
+    if (actionBtn?.dataset.hypAction && actionBtn.dataset.hypId) {
+      this.handleHypAction(actionBtn.dataset.hypAction, actionBtn.dataset.hypId, actionBtn);
+      return;
+    }
+    if (this.handleToggleClick(target)) return;
+    this.handleNavClick(target);
+  }
+
+  // Controls that just flip a Set keyed by a data attribute and re-render:
+  // analog cards, analog detail, skeptic + alternatives toggles.
+  private handleToggleClick(target: HTMLElement): boolean {
+    const toggles: readonly (readonly [string, Set<string>])[] = [
+      ['data-analog-toggle', this.expandedAnalogs],
+      ['data-analog-detail', this.expandedAnalogDetail],
+      ['data-skeptic-toggle', this.expandedSkeptic],
+      ['data-alternatives-toggle', this.expandedAlternative],
+    ];
+    for (const [attr, set] of toggles) {
+      const key = target.closest?.<HTMLElement>(`[${attr}]`)?.getAttribute(attr);
+      if (key) {
+        if (set.has(key)) set.delete(key);
+        else set.add(key);
+        this.render();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Controls that navigate/act: EVOI + evidence panel jumps, question chips,
+  // and the replay scrubber's live button.
+  private handleNavClick(target: HTMLElement): void {
+    const evoiRow = target.closest?.<HTMLElement>('[data-evoi-panel]');
+    if (evoiRow?.dataset.evoiPanel) {
+      jumpToPanel(evoiRow.dataset.evoiPanel);
+      this.hide();
+      return;
+    }
+    const evidenceChip = target.closest?.<HTMLElement>('[data-evidence-panel]');
+    if (evidenceChip?.dataset.evidencePanel) {
+      this.handleEvidenceJump(
+        evidenceChip.dataset.evidencePanel,
+        evidenceChip.dataset.evidenceId ?? '',
+        evidenceChip.dataset.evidenceSource ?? '',
+      );
+      return;
+    }
+    const questionChip = target.closest?.<HTMLElement>('[data-question-hyp-id]');
+    if (questionChip?.dataset.questionHypId) {
+      this.handleQuestionChip(
+        questionChip.dataset.questionHypId,
+        questionChip.dataset.questionText ?? '',
+      );
+      return;
+    }
+    const scrubberLive = target.closest?.<HTMLElement>('[data-scrubber-live]');
+    if (scrubberLive?.dataset.scrubberLive) {
+      this.replayAtTimestamp = null;
+      this.render();
+    }
+  }
+
   private hypothesisById(id: string): Hypothesis | undefined {
     return this.effectiveSnapshot()?.hypotheses.find((hyp) => hyp.id === id);
   }
@@ -1435,6 +1445,28 @@ export class AnalystHUD {
         return;
       }
     }
+  }
+
+  // Delegated question-chip dispatch. Re-resolves the hypothesis + cache state
+  // by id at click time so a background render() between pointerdown and
+  // pointerup can't orphan the click bound to the (replaced) chip node.
+  private handleQuestionChip(id: string, question: string): void {
+    const h = this.hypothesisById(id);
+    if (!h) return;
+    const key = `${id}||${question}`;
+    if (getCachedAnswer(h, question)) {
+      if (this.expandedQuestion.has(key)) this.expandedQuestion.delete(key);
+      else this.expandedQuestion.add(key);
+      this.render();
+      return;
+    }
+    this.loadingQuestion.add(key);
+    this.render();
+    void askQuestion(h, question).finally(() => {
+      this.loadingQuestion.delete(key);
+      this.expandedQuestion.add(key);
+      this.render();
+    });
   }
 
   private toggleOrRunProjection(h: Hypothesis): void {
@@ -1608,30 +1640,32 @@ export class AnalystHUD {
     chip.textContent = e.label.length > 40 ? `${e.label.slice(0, 40)}...` : e.label;
     chip.title = `${e.source} — ${e.id}`;
     if (e.panelId) {
-      chip.addEventListener('click', () => {
-        const h = this.findHypothesisForEvidence(e);
-        if (e.panelId) {
-          jumpToPanel(e.panelId);
-          flashPanel(e.panelId);
-          // Only record playbook actions on live-view clicks. In replay
-          // mode the user is reviewing past state, not acting on it, and
-          // mutating the playbook would pollute future recurrence hints.
-          if (h && this.replayAtTimestamp === null) recordAction(h, 'panel-jump', e.panelId);
-        }
-        this.hide();
-      });
+      chip.dataset.evidencePanel = e.panelId;
+      chip.dataset.evidenceId = e.id;
+      chip.dataset.evidenceSource = e.source;
     } else {
       chip.disabled = true;
     }
     return chip;
   }
 
-  private findHypothesisForEvidence(e: HypothesisEvidence): Hypothesis | null {
+  private handleEvidenceJump(panelId: string, id: string, source: string): void {
+    const h = this.findHypothesisForEvidence(id, source);
+    jumpToPanel(panelId);
+    flashPanel(panelId);
+    // Only record playbook actions on live-view clicks. In replay mode the
+    // user is reviewing past state, not acting on it, and mutating the
+    // playbook would pollute future recurrence hints.
+    if (h && this.replayAtTimestamp === null) recordAction(h, 'panel-jump', panelId);
+    this.hide();
+  }
+
+  private findHypothesisForEvidence(id: string, source: string): Hypothesis | null {
     // Use the effective snapshot (live OR replayed) so the found
     // hypothesis matches the row the user actually clicked from.
     const snap = this.effectiveSnapshot();
     if (!snap) return null;
-    return snap.hypotheses.find(h => h.evidence.some(ev => ev.id === e.id && ev.source === e.source)) ?? null;
+    return snap.hypotheses.find(h => h.evidence.some(ev => ev.id === id && ev.source === source)) ?? null;
   }
 
   private buildEgressDisclosureBanner(): HTMLElement {

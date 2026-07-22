@@ -36,6 +36,8 @@ import type { Situation } from './situation-types';
 import { recordEpisode, updateAnalogCache } from '@/services/cognition/episodic-memory';
 import { interestMultiplier } from '@/services/cognition/operator-model';
 import { ingestFromHypotheses } from '@/services/cognition/entity-dossier';
+import { entitiesFromHypothesis } from './hypothesis-entities';
+import { slugifyEntity } from '@/services/intelligence/entity-slug';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -396,7 +398,8 @@ export function runAnalystCycle(): AnalystSnapshot {
           signature: signatureFor(h),
           summary: h.statement.slice(0, 500),
           domains: [h.kind],
-          entities: [],
+          entities: [...new Set(entitiesFromHypothesis(h).map((m) => slugifyEntity(m.entity)))]
+            .filter(Boolean).slice(0, 10),
           region: h.region,
           createdAt: h.timestamp,
         });

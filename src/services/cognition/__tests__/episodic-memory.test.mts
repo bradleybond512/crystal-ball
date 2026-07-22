@@ -604,3 +604,88 @@ test('contradictEpisodesForRefutation: does not re-flag already-contradicted epi
   const found = getAllEpisodes().find(e => e.id === ep.id);
   assert.equal(found!.contradicted?.reason, 'earlier reason', 'original reason should be preserved');
 });
+
+test('contradictEpisodesForRefutation: slug-form episode entity matches raw-form situation entityIds', async () => {
+  // The producer (analyst-loop.ts, PR A4) now writes episode entities already
+  // slugified — verify the raw situation-side vocabulary still matches.
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'slug-producer-1', entities: ['suez-canal'], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-5',
+    domain: 'maritime',
+    entityIds: ['Suez Canal'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [ep.id], 'slugified episode entity should match raw situation entityId');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.ok(found!.contradicted !== undefined);
+});
+
+test('contradictEpisodesForRefutation: raw-form (legacy) episode entity matches slug-form situation entityIds', async () => {
+  // Pre-A4 episodes stored whatever raw form their producer supplied —
+  // verify a slugified incoming situation entityId still matches those.
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'legacy-raw-1', entities: ['Suez Canal'], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-6',
+    domain: 'maritime',
+    entityIds: ['suez-canal'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [ep.id], 'raw legacy episode entity should match slugified situation entityId');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.ok(found!.contradicted !== undefined);
+});
+
+test('contradictEpisodesForRefutation: empty-normalizing entities never cross-flag (no wildcard)', async () => {
+  // All-punctuation / non-Latin input slugifies to '' on both sides. An empty
+  // slug must NOT act as a wildcard that flags every same-domain episode whose
+  // entity also normalizes to '' (Codex P1, uplift A4).
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'empty-slug-1', entities: ['???'], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-7',
+    domain: 'maritime',
+    entityIds: ['!!!'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [], 'empty-normalizing entity must not match anything');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.equal(found!.contradicted, undefined, 'episode must stay uncontradicted');
+});
+
+test('contradictEpisodesForRefutation: a real refutation entity does not flag an empty-slug episode', async () => {
+  // A legitimate situation entityId must not spuriously flag an episode whose
+  // only entity normalizes to '' — the episode-side empty guard covers this.
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'empty-slug-2', entities: ['   '], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-8',
+    domain: 'maritime',
+    entityIds: ['Suez Canal'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [], 'real entity must not match an empty-slug episode');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.equal(found!.contradicted, undefined, 'episode must stay uncontradicted');
+});

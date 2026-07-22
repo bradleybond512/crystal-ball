@@ -416,7 +416,10 @@ export function contradictEpisodesForRefutation(ctx: RefutedHypothesisContext): 
   if (isGhostMode() || !isCognitionEnabled('episodic-recall')) return [];
   load();
 
-  const wantedEntities = new Set(ctx.entityIds.map(e => slugifyEntity(e)));
+  // Drop entities that normalize to '' (all-punctuation / non-Latin input):
+  // an empty slug must never become a wildcard that matches every episode
+  // entity that also normalizes to '' within the same domain.
+  const wantedEntities = new Set(ctx.entityIds.map(e => slugifyEntity(e)).filter(Boolean));
   if (wantedEntities.size === 0) return [];
   const wantedDomain = ctx.domain.toLowerCase();
 
@@ -424,7 +427,10 @@ export function contradictEpisodesForRefutation(ctx: RefutedHypothesisContext): 
     .filter(ep =>
       ep.contradicted === undefined &&
       ep.domains.some(d => d.toLowerCase() === wantedDomain) &&
-      ep.entities.some(e => wantedEntities.has(slugifyEntity(e))),
+      ep.entities.some(e => {
+        const slug = slugifyEntity(e);
+        return slug !== '' && wantedEntities.has(slug);
+      }),
     )
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, MAX_CONTRADICTED_PER_REFUTATION);

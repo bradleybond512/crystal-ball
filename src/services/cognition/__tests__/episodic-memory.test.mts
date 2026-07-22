@@ -646,3 +646,46 @@ test('contradictEpisodesForRefutation: raw-form (legacy) episode entity matches 
   const found = getAllEpisodes().find(e => e.id === ep.id);
   assert.ok(found!.contradicted !== undefined);
 });
+
+test('contradictEpisodesForRefutation: empty-normalizing entities never cross-flag (no wildcard)', async () => {
+  // All-punctuation / non-Latin input slugifies to '' on both sides. An empty
+  // slug must NOT act as a wildcard that flags every same-domain episode whose
+  // entity also normalizes to '' (Codex P1, uplift A4).
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'empty-slug-1', entities: ['???'], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-7',
+    domain: 'maritime',
+    entityIds: ['!!!'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [], 'empty-normalizing entity must not match anything');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.equal(found!.contradicted, undefined, 'episode must stay uncontradicted');
+});
+
+test('contradictEpisodesForRefutation: a real refutation entity does not flag an empty-slug episode', async () => {
+  // A legitimate situation entityId must not spuriously flag an episode whose
+  // only entity normalizes to '' — the episode-side empty guard covers this.
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    signature: 'empty-slug-2', entities: ['   '], domains: ['maritime'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-8',
+    domain: 'maritime',
+    entityIds: ['Suez Canal'],
+    claim: 'Vessel traffic resumed near the canal',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [], 'real entity must not match an empty-slug episode');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.equal(found!.contradicted, undefined, 'episode must stay uncontradicted');
+});

@@ -220,6 +220,17 @@ export class AnalystHUD {
       // directly to the (replaced) button. The root element persists.
       const target = e.target as HTMLElement;
       if (target.closest?.('.analyst-hud-close')) { this.hide(); return; }
+      // Hypothesis action row (thumbs / outcome / simulate / perspectives /
+      // deep forecast / copy) — delegated on the stable root for the same
+      // reason as close: a background re-render between pointerdown and
+      // pointerup replaces the per-render button node and swallows a click
+      // bound directly to it. The hypothesis is re-resolved by id at click
+      // time from the effective snapshot.
+      const actionBtn = target.closest?.<HTMLElement>('[data-hyp-action]');
+      if (actionBtn?.dataset.hypAction && actionBtn.dataset.hypId) {
+        this.handleHypAction(actionBtn.dataset.hypAction, actionBtn.dataset.hypId, actionBtn);
+        return;
+      }
       // Cognition surfaces (Wave 5a) — delegated on the stable root so the
       // per-render replaceChildren never orphans a click in flight.
       const evoiRow = target.closest?.<HTMLElement>('[data-evoi-panel]');
@@ -1367,6 +1378,115 @@ export class AnalystHUD {
     }
   }
 
+  private hypothesisById(id: string): Hypothesis | undefined {
+    return this.effectiveSnapshot()?.hypotheses.find((hyp) => hyp.id === id);
+  }
+
+  // Single dispatch for every delegated hypothesis action-row button. Runs on
+  // the stable root, so it survives the per-render replaceChildren that would
+  // otherwise swallow a click bound to the (replaced) button node.
+  private handleHypAction(action: string, id: string, btn: HTMLElement): void {
+    const h = this.hypothesisById(id);
+    if (!h) return;
+    switch (action) {
+      case 'thumbs-up': {
+        thumbsUp(h);
+        recordAction(h, 'thumbs-up');
+        btn.classList.add('analyst-hud-thumb-done');
+        return;
+      }
+      case 'thumbs-down': {
+        thumbsDown(h);
+        recordAction(h, 'thumbs-down');
+        btn.classList.add('analyst-hud-thumb-done');
+        return;
+      }
+      case 'outcome-confirmed': {
+        if (this.outcomeSubmitted.has(h.id)) return;
+        thumbsUp(h);
+        recordAction(h, 'thumbs-up');
+        this.outcomeSubmitted.add(h.id);
+        this.render();
+        return;
+      }
+      case 'outcome-wrong': {
+        if (this.outcomeSubmitted.has(h.id)) return;
+        thumbsDown(h);
+        recordAction(h, 'thumbs-down');
+        this.outcomeSubmitted.add(h.id);
+        this.render();
+        return;
+      }
+      case 'simulate': {
+        this.toggleOrRunProjection(h);
+        return;
+      }
+      case 'ensemble': {
+        this.toggleOrRunEnsemble(h);
+        return;
+      }
+      case 'superforecast': {
+        this.toggleOrRunSuperforecast(h);
+        return;
+      }
+      case 'copy': {
+        void exportHypothesisToClipboard(h);
+        recordAction(h, 'export');
+        return;
+      }
+    }
+  }
+
+  private toggleOrRunProjection(h: Hypothesis): void {
+    if (getCachedProjection(h)) {
+      if (this.expandedProjection.has(h.id)) this.expandedProjection.delete(h.id);
+      else this.expandedProjection.add(h.id);
+      this.render();
+      return;
+    }
+    this.loadingProjection.add(h.id);
+    this.render();
+    void projectHypothesis(h).finally(() => {
+      this.loadingProjection.delete(h.id);
+      this.expandedProjection.add(h.id);
+      this.render();
+    });
+  }
+
+  private toggleOrRunEnsemble(h: Hypothesis): void {
+    if (getCachedEnsemble(h)) {
+      if (this.expandedEnsemble.has(h.id)) this.expandedEnsemble.delete(h.id);
+      else this.expandedEnsemble.add(h.id);
+      this.render();
+      return;
+    }
+    this.loadingEnsemble.add(h.id);
+    this.render();
+    void runEnsemble(h).finally(() => {
+      this.loadingEnsemble.delete(h.id);
+      this.expandedEnsemble.add(h.id);
+      this.render();
+    });
+  }
+
+  private toggleOrRunSuperforecast(h: Hypothesis): void {
+    if (getCachedSuperforecast(h)) {
+      if (this.expandedSuperforecast.has(h.id)) this.expandedSuperforecast.delete(h.id);
+      else this.expandedSuperforecast.add(h.id);
+      this.render();
+      return;
+    }
+    this.loadingSuperforecast.add(h.id);
+    this.render();
+    // Swallow pipeline rejections: the finally-block resets the loading
+    // state and the un-cached button lets the user retry.
+    void requestSuperforecast(h).catch(() => { /* retry via re-click */ }).finally(() => {
+      this.loadingSuperforecast.delete(h.id);
+      this.expandedSuperforecast.add(h.id);
+      this.render();
+    });
+  }
+
   private buildHypActions(h: Hypothesis): HTMLElement {
     const actions = document.createElement('div');
     actions.className = 'analyst-hud-hyp-actions';
@@ -1374,20 +1494,14 @@ export class AnalystHUD {
     up.className = 'analyst-hud-thumb';
     up.textContent = '+';
     up.title = 'Useful';
-    up.addEventListener('click', () => {
-      thumbsUp(h);
-      recordAction(h, 'thumbs-up');
-      up.classList.add('analyst-hud-thumb-done');
-    });
+    up.dataset.hypAction = 'thumbs-up';
+    up.dataset.hypId = h.id;
     const down = document.createElement('button');
     down.className = 'analyst-hud-thumb';
     down.textContent = '-';
     down.title = 'Noise';
-    down.addEventListener('click', () => {
-      thumbsDown(h);
-      recordAction(h, 'thumbs-down');
-      down.classList.add('analyst-hud-thumb-done');
-    });
+    down.dataset.hypAction = 'thumbs-down';
+    down.dataset.hypId = h.id;
 
     const simulate = this.buildSimulateButton(h);
     const perspectives = this.buildEnsembleButton(h);
@@ -1408,24 +1522,16 @@ export class AnalystHUD {
     confirmed.textContent = '✓ Confirmed';
     confirmed.title = 'Mark this hypothesis as correct';
     confirmed.disabled = already;
-    confirmed.addEventListener('click', () => {
-      thumbsUp(h);
-      recordAction(h, 'thumbs-up');
-      this.outcomeSubmitted.add(h.id);
-      this.render();
-    });
+    confirmed.dataset.hypAction = 'outcome-confirmed';
+    confirmed.dataset.hypId = h.id;
 
     const wrong = document.createElement('button');
     wrong.className = 'analyst-hud-outcome analyst-hud-outcome-wrong';
     wrong.textContent = '✗ Wrong';
     wrong.title = 'Mark this hypothesis as incorrect';
     wrong.disabled = already;
-    wrong.addEventListener('click', () => {
-      thumbsDown(h);
-      recordAction(h, 'thumbs-down');
-      this.outcomeSubmitted.add(h.id);
-      this.render();
-    });
+    wrong.dataset.hypAction = 'outcome-wrong';
+    wrong.dataset.hypId = h.id;
 
     return [confirmed, wrong];
   }
@@ -1441,21 +1547,8 @@ export class AnalystHUD {
       ? 'Toggle the stored ensemble perspectives'
       : '3 personas (analyst / skeptic / pragmatist) take on this hypothesis';
     btn.disabled = loading;
-    btn.addEventListener('click', () => {
-      if (cached) {
-        if (expanded) this.expandedEnsemble.delete(h.id);
-        else this.expandedEnsemble.add(h.id);
-        this.render();
-        return;
-      }
-      this.loadingEnsemble.add(h.id);
-      this.render();
-      void runEnsemble(h).finally(() => {
-        this.loadingEnsemble.delete(h.id);
-        this.expandedEnsemble.add(h.id);
-        this.render();
-      });
-    });
+    btn.dataset.hypAction = 'ensemble';
+    btn.dataset.hypId = h.id;
     return btn;
   }
 
@@ -1473,21 +1566,8 @@ export class AnalystHUD {
       ? 'Toggle the stored projection'
       : 'Project 24/48h rollout via local LLM (cloud fallback)';
     btn.disabled = loading;
-    btn.addEventListener('click', () => {
-      if (cached) {
-        if (expanded) this.expandedProjection.delete(h.id);
-        else this.expandedProjection.add(h.id);
-        this.render();
-        return;
-      }
-      this.loadingProjection.add(h.id);
-      this.render();
-      void projectHypothesis(h).finally(() => {
-        this.loadingProjection.delete(h.id);
-        this.expandedProjection.add(h.id);
-        this.render();
-      });
-    });
+    btn.dataset.hypAction = 'simulate';
+    btn.dataset.hypId = h.id;
     return btn;
   }
 
@@ -1505,23 +1585,8 @@ export class AnalystHUD {
       ? 'Toggle the stored deep forecast'
       : 'Run the calibrated superforecaster pipeline on this hypothesis';
     btn.disabled = loading;
-    btn.addEventListener('click', () => {
-      if (cached) {
-        if (expanded) this.expandedSuperforecast.delete(h.id);
-        else this.expandedSuperforecast.add(h.id);
-        this.render();
-        return;
-      }
-      this.loadingSuperforecast.add(h.id);
-      this.render();
-      // Swallow pipeline rejections: the finally-block resets the loading
-      // state and the un-cached button lets the user retry.
-      void requestSuperforecast(h).catch(() => { /* retry via re-click */ }).finally(() => {
-        this.loadingSuperforecast.delete(h.id);
-        this.expandedSuperforecast.add(h.id);
-        this.render();
-      });
-    });
+    btn.dataset.hypAction = 'superforecast';
+    btn.dataset.hypId = h.id;
     return btn;
   }
 
@@ -1532,10 +1597,8 @@ export class AnalystHUD {
       && Date.now() - this.exportedFlash.at < 3000;
     btn.textContent = flashed ? 'copied ✓' : 'copy ⎘';
     btn.title = 'Copy this hypothesis thread as markdown to the clipboard';
-    btn.addEventListener('click', () => {
-      void exportHypothesisToClipboard(h);
-      recordAction(h, 'export');
-    });
+    btn.dataset.hypAction = 'copy';
+    btn.dataset.hypId = h.id;
     return btn;
   }
 

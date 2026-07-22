@@ -52,6 +52,10 @@ export interface ResourceItem {
 // ── IndexedDB helpers ──────────────────────────────────────────────────────
 
 let _db: IDBDatabase | null = null;
+/** Deduplicates concurrent openDB() calls before _db is set.
+ *  Without this a burst of getAllItems() calls on first render each start their
+ *  own indexedDB.open() probe, racing to set _db and leaking the losers. */
+let _dbOpenPromise: Promise<IDBDatabase> | null = null;
 
 function attachConn(conn: IDBDatabase, resolve: (db: IDBDatabase) => void): void {
   _db = conn;
@@ -75,9 +79,11 @@ function openWithUpgradeRI(currentVersion: number): Promise<IDBDatabase> {
   });
 }
 
-async function openDB(): Promise<IDBDatabase> {
-  if (_db) return _db;
-  return new Promise((resolve, reject) => {
+function openDB(): Promise<IDBDatabase> {
+  if (_db) return Promise.resolve(_db);
+  if (_dbOpenPromise) return _dbOpenPromise;
+
+  _dbOpenPromise = new Promise((resolve, reject) => {
     // Open without a version first — never request a version lower than what
     // survival-advisor may have already bumped crystalball-resources to.
     const probe = indexedDB.open(DB_NAME);
@@ -98,6 +104,9 @@ async function openDB(): Promise<IDBDatabase> {
       openWithUpgradeRI(version).then(resolve, reject);
     });
   });
+  // Clear the in-flight promise on rejection so the next openDB() retries.
+  _dbOpenPromise.finally(() => { _dbOpenPromise = null; }).catch(() => { /* handled by callers */ });
+  return _dbOpenPromise;
 }
 
 const MAX_ITEMS = 5000; // hard cap — prevents OOM on runaway imports
@@ -105,32 +114,38 @@ const MAX_ITEMS = 5000; // hard cap — prevents OOM on runaway imports
 async function getAllItems(): Promise<ResourceItem[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readonly');
- // Pass undefined as the key query (no filter) and MAX_ITEMS as count cap.
- // IDBObjectStore.getAll(query?, count?) — count prevents unbounded memory load.
- const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
- req.onsuccess = () => resolve(req.result as ResourceItem[]);
- req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    // Pass undefined as the key query (no filter) and MAX_ITEMS as count cap.
+    // IDBObjectStore.getAll(query?, count?) — count prevents unbounded memory load.
+    const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
+    req.onsuccess = () => resolve(req.result as ResourceItem[]);
+    req.onerror = () => reject(req.error ?? new Error('[resource-db] getAll failed'));
+    tx.addEventListener('error', () => reject(tx.error ?? new Error('[resource-db] getAll tx failed')));
   });
 }
 
 async function putItem(item: ResourceItem): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readwrite');
- const req = tx.objectStore(STORE_NAME).put(item);
- req.onsuccess = () => resolve();
- req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(item);
+    // Resolve on tx.oncomplete (durable commit), not req.onsuccess (engine-buffered accept).
+    // A browser crash between req.onsuccess and tx.oncomplete would silently lose the write.
+    tx.addEventListener('complete', () => resolve());
+    tx.addEventListener('error', () => reject(tx.error ?? new Error('[resource-db] put failed')));
+    tx.addEventListener('abort', () => reject(new Error('[resource-db] put aborted')));
   });
 }
 
 async function deleteItem(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readwrite');
- const req = tx.objectStore(STORE_NAME).delete(id);
- req.onsuccess = () => resolve();
- req.onerror = () => reject(req.error);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    // Same durability fix: resolve on tx.oncomplete, not req.onsuccess.
+    tx.addEventListener('complete', () => resolve());
+    tx.addEventListener('error', () => reject(tx.error ?? new Error('[resource-db] delete failed')));
+    tx.addEventListener('abort', () => reject(new Error('[resource-db] delete aborted')));
   });
 }
 

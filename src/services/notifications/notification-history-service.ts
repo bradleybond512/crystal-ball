@@ -276,6 +276,9 @@ async function persistNow(): Promise<void> {
       const tx = db.transaction(STORE, 'readwrite');
       tx.addEventListener('complete', () => resolve());
       tx.addEventListener('error', () => reject(tx.error ?? new Error('IDB tx error')));
+      // 'abort' fires on an explicit tx.abort() but does NOT bubble as 'error';
+      // without this the promise hangs indefinitely on an unexpected abort.
+      tx.addEventListener('abort', () => reject(new Error('[notification-history] write tx aborted')));
       tx.objectStore(STORE).put(snapshot(), HISTORY_IDB_KEY);
     });
   } catch {
@@ -293,6 +296,9 @@ export async function hydrateFromIdb(): Promise<void> {
       const req = tx.objectStore(STORE).get(HISTORY_IDB_KEY);
       req.addEventListener('success', () => resolve(req.result));
       req.addEventListener('error', () => reject(req.error ?? new Error('IDB read error')));
+      // Guard against an unexpected transaction abort (e.g. storage pressure)
+      // that fires 'abort' rather than propagating through req.error.
+      tx.addEventListener('abort', () => reject(new Error('[notification-history] read tx aborted')));
     });
     if (snap) loadFromSnapshot(snap);
   } catch {

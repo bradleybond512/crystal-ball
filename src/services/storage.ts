@@ -12,6 +12,11 @@ interface BaselineEntry {
 }
 
 let db: IDBDatabase | null = null;
+/** Deduplicates concurrent initDB() calls before db is set.
+ *  Without this, two simultaneous callers (e.g. updateBaseline + saveSnapshot
+ *  at boot) both start a probe, both close it, and both call openWithUpgrade
+ *  at the same version — the second upgrade fires `blocked` with no handler. */
+let dbOpenPromise: Promise<IDBDatabase> | null = null;
 
 function createStores(database: IDBDatabase): void {
   if (!database.objectStoreNames.contains('baselines')) {
@@ -55,41 +60,47 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   });
 }
 
-export async function initDB(): Promise<IDBDatabase> {
-  if (db) return db;
+export function initDB(): Promise<IDBDatabase> {
+  if (db) return Promise.resolve(db);
+  if (dbOpenPromise) return dbOpenPromise;
 
-  return new Promise((resolve, reject) => {
- // Open without a version first so we never request a version *lower* than
- // what alert-store / reasoning-memory may have already bumped the shared
- // crystalball_db to. Requesting a lower version throws "open ... using a
- // lower version than the existing version", which rejected initDB() and
- // broke every baseline/snapshot caller on boot.
- const probe = indexedDB.open(DB_NAME);
+  dbOpenPromise = new Promise((resolve, reject) => {
+    // Open without a version first so we never request a version *lower* than
+    // what alert-store / reasoning-memory may have already bumped the shared
+    // crystalball_db to. Requesting a lower version throws "open ... using a
+    // lower version than the existing version", which rejected initDB() and
+    // broke every baseline/snapshot caller on boot.
+    const probe = indexedDB.open(DB_NAME);
 
- probe.addEventListener('error', () => reject(idbError(probe.error, 'IndexedDB probe failed')));
+    probe.addEventListener('error', () => reject(idbError(probe.error, 'IndexedDB probe failed')));
 
- // Fires only when the DB does not exist yet (fresh DB created at v1) —
- // seed our stores immediately.
- probe.onupgradeneeded = (event) => {
- createStores((event.target as IDBOpenDBRequest).result);
- };
+    // Fires only when the DB does not exist yet (fresh DB created at v1) —
+    // seed our stores immediately.
+    probe.onupgradeneeded = (event) => {
+      createStores((event.target as IDBOpenDBRequest).result);
+    };
 
- probe.onsuccess = () => {
- const conn = probe.result;
- if (
- conn.objectStoreNames.contains('baselines') &&
- conn.objectStoreNames.contains('snapshots')
- ) {
- attachConn(conn, resolve);
- return;
- }
- // Stores missing on an existing (possibly already-bumped) DB — reopen
- // one version higher to add them, never requesting a lower version.
- const currentVersion = conn.version;
- conn.close();
- openWithUpgrade(currentVersion).then(resolve, reject);
- };
+    probe.onsuccess = () => {
+      const conn = probe.result;
+      if (
+        conn.objectStoreNames.contains('baselines') &&
+        conn.objectStoreNames.contains('snapshots')
+      ) {
+        attachConn(conn, resolve);
+        return;
+      }
+      // Stores missing on an existing (possibly already-bumped) DB — reopen
+      // one version higher to add them, never requesting a lower version.
+      const currentVersion = conn.version;
+      conn.close();
+      openWithUpgrade(currentVersion).then(resolve, reject);
+    };
   });
+  // Clear on rejection so the next initDB() retries rather than returning a
+  // permanently-rejected promise (sticky-rejection bug would break all
+  // baseline/snapshot callers for the rest of the session).
+  dbOpenPromise.finally(() => { dbOpenPromise = null; }).catch(() => { /* handled by withTransaction */ });
+  return dbOpenPromise;
 }
 
 async function withTransaction<T>(

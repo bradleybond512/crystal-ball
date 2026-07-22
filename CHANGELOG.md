@@ -6,6 +6,11 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Grand-Strategy Survival OS, E4c — unified time control** (#1475): a single
+  past←now→future time scrubber (`src/services/survival/time-scrubber.ts`) over
+  the survival axes, with a `shouldTick` render-gate so the timeline only
+  advances when it is actually visible. Pure, fixture-tested seam
+  (`scrubber-loop`); renderer mount lands with the rest of the E4 apply glue.
 - **Home Shell UI re-imagination, Phases 3-4** (#1402 + follow-up): the
   situation dossier drawer (`src/components/SituationDossier.ts`) — evidence
   grid composed from `evidenceFor` panel metadata, honest "why this surfaced"

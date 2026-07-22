@@ -15,6 +15,11 @@ const STORE_NAME = 'unified_alerts';
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 let dbInstance: IDBDatabase | null = null;
+/** Deduplicates concurrent openDB() calls before dbInstance is set.
+ *  Without this, two callers racing before the probe settles each start their
+ *  own indexedDB.open() — both can fall through to openWithUpgrade(), which
+ *  makes the second upgrade request blocked with no handler, hanging forever. */
+let dbOpenPromise: Promise<IDBDatabase> | null = null;
 
 /** True when running in an environment without IndexedDB (smoke
  *  harness under happy-dom, certain Node test environments).
@@ -93,8 +98,9 @@ function openDB(): Promise<IDBDatabase> {
   if (!isIndexedDbAvailable()) {
     return Promise.reject(new IndexedDbUnavailableError());
   }
+  if (dbOpenPromise) return dbOpenPromise;
 
-  return new Promise<IDBDatabase>((resolve, reject) => {
+  dbOpenPromise = new Promise<IDBDatabase>((resolve, reject) => {
  // First, open without specifying a version to get the current version.
  const probe = indexedDB.open(DB_NAME);
 
@@ -144,6 +150,11 @@ function openDB(): Promise<IDBDatabase> {
  }
  });
   });
+  // Clear the in-flight promise after settlement so future calls start fresh
+  // rather than returning a permanently-rejected promise (sticky rejection
+  // would silently disable alert-store persistence for the entire session).
+  dbOpenPromise.finally(() => { dbOpenPromise = null; }).catch(() => { /* handled by callers */ });
+  return dbOpenPromise;
 }
 
 /**

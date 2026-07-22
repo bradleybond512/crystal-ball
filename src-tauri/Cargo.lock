@@ -717,7 +717,7 @@ dependencies = [
 
 [[package]]
 name = "crystalball"
-version = "2.25.147"
+version = "2.25.148"
 dependencies = [
  "aes-gcm",
  "getrandom 0.4.2",

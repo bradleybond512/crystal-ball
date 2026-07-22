@@ -89,6 +89,8 @@ const STORE_NAME = 'items';
 const MAX_ITEMS = 5000;
 
 let _resourceDb: IDBDatabase | null = null;
+/** Deduplicates concurrent openResourceDB() calls before _resourceDb is set. */
+let _resourceDbOpenPromise: Promise<IDBDatabase> | null = null;
 
 function attachResourceConn(conn: IDBDatabase, resolve: (db: IDBDatabase) => void): void {
   _resourceDb = conn;
@@ -113,9 +115,11 @@ function openResourceDbWithUpgrade(currentVersion: number): Promise<IDBDatabase>
   });
 }
 
-async function openResourceDB(): Promise<IDBDatabase> {
-  if (_resourceDb) return _resourceDb;
-  return new Promise((resolve, reject) => {
+function openResourceDB(): Promise<IDBDatabase> {
+  if (_resourceDb) return Promise.resolve(_resourceDb);
+  if (_resourceDbOpenPromise) return _resourceDbOpenPromise;
+
+  _resourceDbOpenPromise = new Promise((resolve, reject) => {
     // Open without a version first — never request a version lower than what
     // ResourceInventoryPanel may have already bumped crystalball-resources to.
     const probe = indexedDB.open(DB_NAME);
@@ -136,19 +140,25 @@ async function openResourceDB(): Promise<IDBDatabase> {
       openResourceDbWithUpgrade(version).then(resolve, reject);
     });
   });
+  // Clear on rejection so the next call retries rather than returning a
+  // permanently-rejected promise.
+  _resourceDbOpenPromise.finally(() => { _resourceDbOpenPromise = null; }).catch(() => { /* handled by loadResourceItems */ });
+  return _resourceDbOpenPromise;
 }
 
 async function loadResourceItems(): Promise<ResourceItem[]> {
   try {
- const db = await openResourceDB();
- return new Promise((resolve, reject) => {
- const tx = db.transaction(STORE_NAME, 'readonly');
- const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
- req.onsuccess = () => resolve(req.result as ResourceItem[]);
- req.onerror = () => reject(req.error);
- });
+    const db = await openResourceDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).getAll(undefined, MAX_ITEMS);
+      req.onsuccess = () => resolve(req.result as ResourceItem[]);
+      req.onerror = () => reject(req.error ?? new Error('[survival-advisor] getAll failed'));
+      // Catch tx-level aborts (e.g. quota errors) that don't surface via req.onerror.
+      tx.addEventListener('error', () => reject(tx.error ?? new Error('[survival-advisor] getAll tx failed')));
+    });
   } catch {
- return [];
+    return [];
   }
 }
 

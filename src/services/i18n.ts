@@ -12,10 +12,20 @@ const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
 const loadedLanguages = new Set<SupportedLanguage>();
 
 // Lazy-load only the locale that's actually needed — all others stay out of the bundle.
-const localeModules = import.meta.glob<TranslationDictionary>(
-  ['../locales/*.json', '!../locales/en.json'],
-  { import: 'default' },
-);
+// `import.meta.glob` is a Vite build-time macro: at build it is statically replaced
+// with a module map, so this call still tree-shakes the locales. Under plain Node
+// (unit tests import this module transitively) the macro is never transformed and
+// calling it throws — fall back to an empty map so the module stays importable;
+// English is bundled eagerly and remains the fallback.
+let localeModules: Record<string, () => Promise<TranslationDictionary>> = {};
+try {
+  localeModules = import.meta.glob<TranslationDictionary>(
+    ['../locales/*.json', '!../locales/en.json'],
+    { import: 'default' },
+  );
+} catch {
+  localeModules = {};
+}
 
 const RTL_LANGUAGES = new Set(['ar']);
 

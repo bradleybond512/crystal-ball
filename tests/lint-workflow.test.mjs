@@ -20,17 +20,17 @@ test('markdown lint workflow only lints markdown files changed in the pull reque
  // the recorded base.sha directly.
  assert.match(
  workflow,
- /git diff --name-only "(origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"|\$\{\{ github\.event\.pull_request\.base\.sha \}\}" HEAD) -- '\*\.md'/,
+ /git diff --name-only --diff-filter=ACMRT "(origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"|\$\{\{ github\.event\.pull_request\.base\.sha \}\}" HEAD) -- '\*\.md'/,
  'lint workflow should resolve the changed markdown file set from the pull request diff',
   );
   assert.match(
  workflow,
- /xargs -0 npx markdownlint-cli2 < "\$RUNNER_TEMP\/markdown-files\.txt"/,
+ /xargs -0 node scripts\/lint-markdown\.mjs < "\$RUNNER_TEMP\/markdown-files\.txt"/,
  'lint workflow should lint only the changed markdown files',
   );
-  assert.doesNotMatch(
+  assert.match(
  workflow,
- /run: npm run lint:md/,
- 'lint workflow should not lint the entire repository on every markdown-touching pull request',
+ /if: github\.event_name == 'merge_group'\s+run: npm run lint:md/,
+ 'merge groups should lint the complete repository after combining changes',
   );
 });

@@ -173,3 +173,37 @@ test('buildAlgorithmDiagnosticsSnapshot bounds recent evaluations and omits raw 
   assert.equal('notes' in snapshot.recentEvaluations[0]!, false);
   assert.equal('inputHash' in snapshot.recentEvaluations[0]!, false);
 });
+
+test('runtime diagnostics isolate the active algorithm version from historical latency', () => {
+  const input = baseInput();
+  input.definitions = [{
+    ...input.definitions[0]!,
+    version: '2.0.0',
+  }];
+  input.records = [
+    {
+      id: 'legacy',
+      algorithmId: 'fast-algo',
+      domain: 'other',
+      version: '1.0.0',
+      at: NOW - 2_000,
+      durationMs: 120_000,
+    },
+    {
+      id: 'current',
+      algorithmId: 'fast-algo',
+      domain: 'other',
+      version: '2.0.0',
+      at: NOW - 1_000,
+      durationMs: 8,
+    },
+  ];
+
+  const snapshot = buildAlgorithmDiagnosticsSnapshot(input);
+  const runtime = snapshot.runtime[0]!;
+
+  assert.equal(runtime.version, '2.0.0');
+  assert.equal(runtime.totalRuns, 1);
+  assert.equal(runtime.historicalRuns, 1);
+  assert.equal(runtime.latencyMs.p95, 8);
+});

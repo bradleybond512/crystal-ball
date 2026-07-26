@@ -57,8 +57,8 @@ function stubRecord(algorithmId: string, input: RecordEvaluationInput): Evaluati
   };
 }
 
-function makeDeps(clockMs = BASE_TIME) {
-  const clock = () => clockMs;
+function makeDeps(clockInput: number | (() => number) = BASE_TIME) {
+  const clock = typeof clockInput === 'function' ? clockInput : () => clockInput;
   const store = new SituationStoreV2({ clock });
   const engine = new CompetitiveHypothesisEngine({ storage: nullStorage, clock });
 
@@ -195,6 +195,39 @@ test('consensus flips statuses and emits exactly one recordAlgorithmEvaluation',
     1,
     'should not emit a second evaluation after consensus',
   );
+});
+
+test('consensus records processing latency separately from time to consensus', () => {
+  __internals.reset();
+  let wallClock = BASE_TIME;
+  let runtimeClock = 0;
+  const { store, engine, opts, fireEvent, recorderCalls } = makeDeps(() => wallClock);
+  startSituationHypothesisBridge({
+    ...opts,
+    runtimeClock: () => {
+      runtimeClock += 2;
+      return runtimeClock;
+    },
+  } as BridgeOptions);
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'src-1' }));
+  const sitId = store.list()[0]!.id;
+
+  for (let i = 2; i <= 20; i++) {
+    if (engine.getSet(sitId)?.consensusReached) break;
+    wallClock += 60_000;
+    fireEvent(makeEvent({
+      id: `eq-${i}`,
+      severity: 'HIGH',
+      sourceId: `src-corroborate-${i}`,
+      timestamp: wallClock,
+    }));
+  }
+
+  const evaluation = recorderCalls.find((call) => call.algorithmId === 'competitive-hypothesis');
+  assert.ok(evaluation);
+  assert.equal(evaluation.input.durationMs, 2);
+  assert.equal(evaluation.input.detail?.timeToConsensusMs, wallClock - BASE_TIME);
 });
 
 // ── onHypothesisRefuted hook (PR 14 memory hygiene) ───────────────────────

@@ -214,6 +214,30 @@ test('a proposal with replay pass + evidence auto-applies and logs', () => {
   assert.equal(log[0]?.ruleId, 'algo_tuning_gate_lowmed_ready');
 });
 
+test('historical algorithm versions cannot drive tuning of the active version', () => {
+  _resetTuningDecisionsForTests();
+  const ledger = degradedLedger();
+  const current = ledger.recordEvaluation({
+    algorithmId: 'test-knob-algo',
+    domain: 'reasoning_hypothesis',
+    version: '2.0.0',
+    at: 21,
+    durationMs: 5,
+  });
+  ledger.recordOutcome(current.id, 'miss', 'current-version fixture', 21);
+
+  const res = runTuningApply({
+    ledger,
+    definitions: [{ ...KNOB_DEF, version: '2.0.0' }],
+    tunings: [KNOB_TUNING],
+    replayPassed: true,
+    apply: () => { throw new Error('insufficient current-version evidence must not tune'); },
+  });
+
+  assert.deepEqual(res, { proposed: 0, applied: 0, heldForApproval: 0 });
+  assert.equal(getTuningDecisions().length, 0);
+});
+
 // ── Backtest-before-apply gate (Phase 4) ───────────────────────────────────
 
 /** High-criticality, non-notification knob with a degraded calibration over
@@ -344,6 +368,24 @@ function regressingBedLedger() {
   return ledger;
 }
 
+function mixedVersionBedLedger() {
+  const ledger = regressingBedLedger();
+  for (let i = 0; i < 30; i += 1) {
+    const hit = i < 26;
+    const record = ledger.recordEvaluation({
+      algorithmId: 'big-event-detector',
+      domain: 'reasoning_hypothesis',
+      version: '2.0.0',
+      at: BT_NOW - DAY,
+      durationMs: 5,
+      score: hit ? 0.5 : 0.42,
+      label: 'big-event',
+    });
+    ledger.recordOutcome(record.id, hit ? 'hit' : 'miss', 'current-version test', BT_NOW - DAY);
+  }
+  return ledger;
+}
+
 test('a LOW-criticality backtestable knob that regresses is hard-held before the gate', () => {
   _resetTuningDecisionsForTests();
   const captured: Array<[string, string, number]> = [];
@@ -365,6 +407,21 @@ test('a LOW-criticality backtestable knob that regresses is hard-held before the
   assert.equal(log[0]?.kind, 'held_for_approval');
   assert.equal(log[0]?.ruleId, 'backtest_blocked');
   assert.match(log[0]?.reason ?? '', /regress|blocked/);
+});
+
+test('historical versions cannot contaminate an active-version backtest', () => {
+  _resetTuningDecisionsForTests();
+  const result = runTuningApply({
+    ledger: mixedVersionBedLedger(),
+    definitions: [{ ...BED_LOW_DEF, version: '2.0.0' }],
+    tunings: [BED_THRESHOLD_TUNING],
+    replayPassed: true,
+    now: () => BT_NOW,
+    apply: () => {},
+  });
+
+  assert.equal(result.proposed, 1);
+  assert.notEqual(getTuningDecisions()[0]?.ruleId, 'backtest_blocked');
 });
 
 test('a LOW-criticality backtestable knob that does NOT regress is not hard-held', () => {

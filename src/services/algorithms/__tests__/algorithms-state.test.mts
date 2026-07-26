@@ -36,6 +36,7 @@ test('getAlgorithmDefinitions: ids are stable (no hidden -v1 suffix)', () => {
   const truth = defs.find((d) => d.algorithmId === 'truth-score');
   assert.ok(truth, 'truth-score should be present');
   assert.equal(truth?.domain, 'truth_score');
+  assert.equal(truth?.version, '1.0.0');
 });
 
 test('getAlgorithmDefinitions: every entry has a non-empty label + valid criticality', () => {
@@ -76,6 +77,7 @@ test('toHealthDefinition: registry entry without healthDomain projects to "other
   const proj = toHealthDefinition(reg!);
   assert.equal(proj.domain, 'other');
   assert.equal(proj.algorithmId, 'experimental-ranker');
+  assert.equal(proj.version, '0.1.0');
 });
 
 test('regression: all previously-tracked health domains are still represented', () => {

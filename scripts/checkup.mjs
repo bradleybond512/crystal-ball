@@ -14,6 +14,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { summarizeSidecarHealth } from './sidecar-health-contract.mjs';
+import {
+  latestSessionLines,
+  parseInjectedKeyCount,
+  unrecoveredHeartbeatStaleAge,
+} from './checkup-log-audit.mjs';
 
 const { resolve, dirname } = path;
 
@@ -106,13 +111,10 @@ if (existsSync(LOG_FILE)) {
     addWarn('log', `Could not read desktop log — ${LOG_FILE}`);
     raw = null;
   }
-  const lines = raw ? raw.split('\n') : [];
+  const lines = raw ? latestSessionLines(raw.split('\n')) : [];
 
   // Key count from the most recent session start
-  const keyLines = lines.filter((l) => l.includes('injected') && l.includes('keychain secrets'));
-  const lastKeyLine = keyLines.at(-1) ?? '';
-  const keyMatch = lastKeyLine.match(/injected (\d+) keychain secrets/);
-  const keyCount = keyMatch ? Number.parseInt(keyMatch[1], 10) : null;
+  const keyCount = parseInjectedKeyCount(lines);
 
   if (keyCount === null) {
     addWarn('log: key count', 'Could not find keychain-secrets line — app may not have been launched yet');
@@ -123,11 +125,9 @@ if (existsSync(LOG_FILE)) {
   }
 
   // Sidecar heartbeat staleness
-  const heartbeatLines = lines.filter((l) => l.includes('sidecar heartbeat stale'));
-  const recentHb = heartbeatLines.at(-1) ?? '';
-  const ageMatch = recentHb.match(/age=(\d+)s/);
-  if (ageMatch && Number.parseInt(ageMatch[1], 10) > 300) {
-    addWarn('log: sidecar', `Heartbeat stale by ${ageMatch[1]}s in last session — check sidecar restart`);
+  const heartbeatStaleAge = unrecoveredHeartbeatStaleAge(lines);
+  if (heartbeatStaleAge !== null && heartbeatStaleAge > 300) {
+    addWarn('log: sidecar', `Heartbeat stale by ${heartbeatStaleAge}s in last session — check sidecar restart`);
   }
 
   // Fatal errors in recent 200 lines.

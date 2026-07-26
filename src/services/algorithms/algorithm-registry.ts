@@ -254,7 +254,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
   {
     id: 'competitive-hypothesis',
     label: 'Competitive hypothesis engine',
-    version: '1.0.0',
+    version: '1.1.0',
     domain: 'reasoning',
     healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'analyst',

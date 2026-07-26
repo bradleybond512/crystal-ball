@@ -16,7 +16,11 @@
 
 import { getAlgorithmEvaluationLedger, getAlgorithmDefinitions } from './algorithms-state';
 import { summarizeCalibration, type AlgorithmEvaluationLedger } from './algorithm-evaluation-ledger';
-import { aggregateAlgorithmHealth, type AlgorithmDefinition } from './algorithm-health';
+import {
+  aggregateAlgorithmHealth,
+  filterCurrentVersionRecords,
+  type AlgorithmDefinition,
+} from './algorithm-health';
 import { proposeAdjustments } from './safe-adjustment';
 import { gateAdjustmentProposal } from '@/services/governance/policy-gate';
 import { getTunings, setTunedParam, tunableAffectsNotifications } from './tunable-params-store';
@@ -106,7 +110,8 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
   const tunings = deps.tunings ?? getTunings();
   const safetyCheck = deps.safetyCheck ?? proposeTuningSafety;
   const now = deps.now ?? (() => Date.now());
-  const calibrations = summarizeCalibration(ledger.all());
+  const currentRecords = filterCurrentVersionRecords(ledger.all(), definitions);
+  const calibrations = summarizeCalibration(currentRecords);
   const report = aggregateAlgorithmHealth({ definitions, calibrations });
   const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings });
 
@@ -133,15 +138,15 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
     // doesn't hurt accuracy. (The result is surfaced when it blocks a change.)
     let backtestResult: BacktestResult | undefined;
     let backtestPassed: boolean;
-    if (deps.backtestPassed !== undefined) {
-      backtestPassed = deps.backtestPassed;
-    } else {
+    if (deps.backtestPassed === undefined) {
       backtestResult = backtestChange(
         { algorithmId: p.algorithmId, parameterId: p.parameterId, priorValue: prior, nextValue: p.nextValue },
-        ledger.byAlgorithm(p.algorithmId),
+        currentRecords.filter((record) => record.algorithmId === p.algorithmId),
         { now: now() },
       );
       backtestPassed = backtestResult.verdict === 'pass';
+    } else {
+      backtestPassed = deps.backtestPassed;
     }
     // Hard backtest enforcement, independent of criticality. The policy gate
     // only consults `backtestPassed` for high-criticality tunings and promotes,
@@ -152,7 +157,7 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
     // the gate ever sees it. Non-backtestable knobs are NOT short-circuited
     // here: they fall through to the gate (which fails them closed only where it
     // requires a backtest), so the live loop is never frozen by this guard.
-    if (backtestResult && backtestResult.verdict === 'fail' && isBacktestable(p.algorithmId, p.parameterId)) {
+    if (backtestResult?.verdict === 'fail' && isBacktestable(p.algorithmId, p.parameterId)) {
       heldForApproval += 1;
       recordTuningDecision({
         at: p.generatedAt,

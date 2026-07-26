@@ -4,6 +4,7 @@ import {
 } from './algorithm-evaluation-ledger';
 import {
   aggregateAlgorithmHealth,
+  filterCurrentVersionRecords,
   type AlgorithmDefinition,
   type AlgorithmHealthReport,
 } from './algorithm-health';
@@ -28,8 +29,10 @@ const FORECAST_RESOLUTION_GRACE_MS = 15 * 60 * 1000;
 
 export interface AlgorithmRuntimeDiagnostics {
   algorithmId: string;
+  version: string | null;
   domain: string;
   totalRuns: number;
+  historicalRuns: number;
   graded: number;
   pending: number;
   errors: number;
@@ -109,7 +112,8 @@ export function buildAlgorithmDiagnosticsSnapshot(
 ): AlgorithmDiagnosticsSnapshot {
   const generatedAt = input.generatedAt ?? Date.now();
   const records = [...input.records].sort((a, b) => a.at - b.at);
-  const calibrations = summarizeCalibration(records);
+  const currentRecords = filterCurrentVersionRecords(records, input.definitions);
+  const calibrations = summarizeCalibration(currentRecords);
   const health = aggregateAlgorithmHealth({
     generatedAt,
     definitions: input.definitions,
@@ -203,16 +207,23 @@ function buildRuntimeRows(
   return [...ids]
     .map((algorithmId) => {
       const rows = recordsByAlgorithm.get(algorithmId) ?? [];
-      const durations = rows.map((record) => record.durationMs).sort((a, b) => a - b);
-      const last = rows.length > 0 ? rows[rows.length - 1] : undefined;
       const definition = definitions.find((candidate) => candidate.algorithmId === algorithmId);
+      const currentRows = definition?.version === undefined
+        ? rows
+        : rows.filter((record) => record.version === definition.version);
+      const durations = currentRows
+        .map((record) => record.durationMs)
+        .sort((a, b) => a - b);
+      const last = currentRows.length > 0 ? currentRows[currentRows.length - 1] : undefined;
       return {
         algorithmId,
+        version: definition?.version ?? last?.version ?? null,
         domain: definition?.domain ?? last?.domain ?? 'other',
-        totalRuns: rows.length,
-        graded: rows.filter((record) => record.outcome !== undefined).length,
-        pending: rows.filter((record) => record.outcome === undefined).length,
-        errors: rows.filter((record) => record.label === 'error').length,
+        totalRuns: currentRows.length,
+        historicalRuns: rows.length - currentRows.length,
+        graded: currentRows.filter((record) => record.outcome !== undefined).length,
+        pending: currentRows.filter((record) => record.outcome === undefined).length,
+        errors: currentRows.filter((record) => record.label === 'error').length,
         lastRunAt: last?.at ?? null,
         latencyMs: {
           p50: percentile(durations, 50),

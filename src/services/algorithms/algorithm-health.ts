@@ -18,7 +18,11 @@
  *   - Output is JSON-serializable for the diagnostics export bundle
  */
 
-import type { CalibrationSummary, AlgorithmDomain } from './algorithm-evaluation-ledger';
+import type {
+  AlgorithmDomain,
+  CalibrationSummary,
+  EvaluationRecord,
+} from './algorithm-evaluation-ledger';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -34,6 +38,7 @@ export type AlgorithmHealthStatus =
 export interface AlgorithmDefinition {
   algorithmId: string;
   label: string;
+  version?: string;
   domain: AlgorithmDomain;
   criticality: AlgorithmCriticality;
   /** Lower bound on the weighted hit rate before we flag the algorithm.
@@ -52,6 +57,7 @@ export interface AlgorithmDefinition {
 export interface AlgorithmHealth {
   algorithmId: string;
   label: string;
+  version?: string;
   domain: AlgorithmDomain;
   criticality: AlgorithmCriticality;
   status: AlgorithmHealthStatus;
@@ -130,11 +136,28 @@ function computeAlgorithmHealth(
   return {
     algorithmId: def.algorithmId,
     label: def.label,
+    version: def.version,
     domain: def.domain,
     criticality: def.criticality,
     ...verdict,
     calibration: cal,
   };
+}
+
+export function filterCurrentVersionRecords(
+  records: readonly EvaluationRecord[],
+  definitions: readonly AlgorithmDefinition[],
+): EvaluationRecord[] {
+  const currentVersions = new Map<string, string>();
+  for (const definition of definitions) {
+    if (definition.version !== undefined) {
+      currentVersions.set(definition.algorithmId, definition.version);
+    }
+  }
+  return records.filter((record) => {
+    const currentVersion = currentVersions.get(record.algorithmId);
+    return currentVersion === undefined || record.version === currentVersion;
+  });
 }
 
 interface AlgorithmVerdict {

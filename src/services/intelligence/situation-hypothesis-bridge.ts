@@ -145,6 +145,7 @@ export interface BridgeOptions {
   store?: SituationStoreV2;
   engine?: CompetitiveHypothesisEngine;
   clock?: () => number;
+  runtimeClock?: () => number;
   /** Injected recorder; defaults to the real recordAlgorithmEvaluation. */
   recorder?: typeof recordAlgorithmEvaluation;
   /** Injected observation bus; defaults to `onIngest` from observation-store. */
@@ -204,6 +205,8 @@ function maybeEmitEvaluation(
   sitEntityIds: readonly string[],
   sitStatus: string,
   nowMs: number,
+  processingStartedAtMs: number,
+  runtimeClock: () => number,
   onHypothesisRefuted?: (event: RefutedHypothesisEvent) => void,
 ): void {
   const updatedSet = engine.getSet(sitId);
@@ -235,8 +238,13 @@ function maybeEmitEvaluation(
     recorder('competitive-hypothesis', {
       score: leader.confidence,
       label: leader.type,
-      durationMs: nowMs - state.startTimeMs,
-      detail: { situationId: sitId, domain: sitDomain, consensus: updatedSet.consensusReached },
+      durationMs: Math.max(0, runtimeClock() - processingStartedAtMs),
+      detail: {
+        situationId: sitId,
+        domain: sitDomain,
+        consensus: updatedSet.consensusReached,
+        timeToConsensusMs: Math.max(0, nowMs - state.startTimeMs),
+      },
     });
   } catch { /* ledger unavailable — skip silently */ }
 }
@@ -261,6 +269,7 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const store = options.store ?? getSituationStoreV2();
   const engine = options.engine ?? getCompetitiveHypothesisEngine();
   const clock = options.clock ?? (() => Date.now());
+  const runtimeClock = options.runtimeClock ?? perfNow;
   const recorder = options.recorder ?? recordAlgorithmEvaluation;
   const bus = options.observationBus ?? onIngest;
   const onHypothesisRefuted = options.onHypothesisRefuted;
@@ -300,6 +309,7 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
 
       if (!isNew && state) {
         if (!sit.observations.some((o) => o.id === event.id)) continue;
+        const processingStartedAtMs = runtimeClock();
         stats.evidence += 1;
 
         const ctx: AlignmentContext = {
@@ -318,6 +328,7 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
         if (!state.evaluated) {
           maybeEmitEvaluation(
             engine, recorder, state, sit.id, sit.domain, sit.entityIds, sit.status, now,
+            processingStartedAtMs, runtimeClock,
             onHypothesisRefuted,
           );
         }

@@ -50,6 +50,7 @@ export function toHealthDefinition(reg: RegistryDefinition): HealthDefinition {
   return {
     algorithmId: reg.id,
     label: reg.label,
+    version: reg.version,
     domain: (reg.healthDomain ?? 'other') as AlgorithmDomain,
     criticality: reg.criticality,
   };

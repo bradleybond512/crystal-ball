@@ -1996,8 +1996,8 @@ body.panel-resize-active iframe {
 }
 
 .live-channel-btn.active {
-  background: var(--red);
-  border-color: var(--red);
+  background: var(--severity-critical);
+  border-color: var(--severity-critical);
   color: white;
 }
 

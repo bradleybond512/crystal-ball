@@ -1204,7 +1204,7 @@ The review found strong foundations that should not be weakened:
 - Renderer fetches receive a global timeout and desktop fallback behavior.
 - `RefreshScheduler` supports visibility pause, backoff, jitter, and bounded flush
   concurrency.
-- Secrets scan passed across 4,156 tracked files.
+- Secrets scan passed across the tracked repository.
 - Lockfile and version consistency checks passed.
 - TypeScript application/API checks passed.
 - `cargo check` passed with only dead-code warnings.
@@ -1258,7 +1258,9 @@ outside this review if it contains credentials. Do not print or commit its value
 | `npm run test:data` | Pass, including release, bundle, and feature-registry contracts |
 | `npm run lint:strict` | Pass |
 | `npm run lockfile:check` | Pass |
-| `npm run secrets:scan` | Pass; 4,180 files |
+| `npm run secrets:scan` | Pass; 4,176 files |
+| GitHub Dependabot package versions | All 21 disclosed alerts moved to patched versions in the branch lockfiles |
+| Root dependency install | Pass; Sharp 0.35.3 completed a PNG encode/decode smoke test |
 | Variant Playwright identity matrix | Pass; full, tech, finance, happy |
 | Playwright axe baseline | Pass; 8/8 scopes |
 | Lighthouse snapshot | Accessibility 100; 35/35 checks |
@@ -1270,10 +1272,15 @@ The live provider failures above are expected in a Vite-only browser session
 without deployed API routes and credentials. The relevant regression is that
 they are now visible and no longer summarized as healthy.
 
-The dependency audit was not re-run during implementation because the execution
-safety layer requires explicit operator approval before sending dependency
-metadata to the npm registry. The baseline audit remained inconclusive because
-the registry advisory response was malformed.
+GitHub disclosed 21 open Dependabot alerts on `main`. The implementation updates
+all affected lockfile entries to GitHub's first-patched version or newer:
+`fast-uri`, `sharp`, `dompurify`, `protobufjs`, both `brace-expansion` lines,
+`js-yaml`, `hono`, `@hono/node-server`, `body-parser`, and `serde_with`. The MCP
+install now reports zero known vulnerabilities. The root `npm ci` summary still
+reports 11 high-severity npm-registry advisories; their details were not queried
+because the execution safety layer requires explicit operator approval before
+sending the dependency tree to the npm audit service. Treat those registry
+advisories as unresolved until an approved detailed audit identifies them.
 
 ## Remaining Claude PR plan
 

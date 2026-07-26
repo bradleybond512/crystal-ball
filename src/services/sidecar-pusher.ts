@@ -25,6 +25,18 @@ import { getHotEntities, getEntityMentions } from './hypothesis-entities';
 import { dumpDebug, getErrorCounts, type DebugEntry } from './reasoning-debug';
 import { getMetricsSnapshot, type MetricsSnapshot } from './reasoning-metrics';
 import { getPipelineTraceRegistry } from './diagnostics/diagnostics-state';
+import { registerRecurringLoop } from './diagnostics/recurring-loops';
+import {
+  getAlgorithmDefinitions,
+  getAlgorithmEvaluationLedger,
+} from './algorithms/algorithms-state';
+import { getAlgorithmLedgerPersistenceStatus } from './algorithms/algorithm-ledger-persistence';
+import { getTunings } from './algorithms/tunable-params-store';
+import { getTuningDecisions } from './algorithms/tuning-decision-log';
+import {
+  buildAlgorithmDiagnosticsSnapshot,
+  type AlgorithmDiagnosticsSnapshot,
+} from './algorithms/algorithm-diagnostics';
 
 const ENDPOINT = '/api/analyst-state';
 
@@ -59,6 +71,8 @@ interface PushPayload {
   metrics?: MetricsSnapshot;
   /** Pipeline trace registry snapshot (fact lifecycle). */
   pipelineTrace?: ReturnType<ReturnType<typeof getPipelineTraceRegistry>['snapshot']>;
+  /** Compact algorithm health, latency, tuning, and evaluation snapshot. */
+  algorithmDiagnostics?: AlgorithmDiagnosticsSnapshot;
 }
 
 let lastPushAt = 0;
@@ -99,7 +113,12 @@ function hasPendingPayload(): boolean {
     || pendingPayload.forecast !== undefined
     || (pendingPayload.accuracy?.length ?? 0) > 0
     || (pendingPayload.threads?.length ?? 0) > 0
-    || (pendingPayload.hotEntities?.length ?? 0) > 0;
+    || (pendingPayload.hotEntities?.length ?? 0) > 0
+    || pendingPayload.debugLog !== undefined
+    || pendingPayload.debugErrorCounts !== undefined
+    || pendingPayload.metrics !== undefined
+    || pendingPayload.pipelineTrace !== undefined
+    || pendingPayload.algorithmDiagnostics !== undefined;
 }
 
 function schedule(): void {
@@ -146,6 +165,20 @@ function summarizeEntities(): { hot: PushPayload['hotEntities']; total: number }
   return { hot, total: all.length };
 }
 
+function refreshDiagnosticPayload(): void {
+  pendingPayload.debugLog = dumpDebug().slice(-50);
+  pendingPayload.debugErrorCounts = { ...getErrorCounts() };
+  pendingPayload.metrics = getMetricsSnapshot();
+  pendingPayload.pipelineTrace = getPipelineTraceRegistry().snapshot();
+  pendingPayload.algorithmDiagnostics = buildAlgorithmDiagnosticsSnapshot({
+    definitions: getAlgorithmDefinitions(),
+    records: getAlgorithmEvaluationLedger().all(),
+    persistence: getAlgorithmLedgerPersistenceStatus(),
+    tunings: getTunings(),
+    tuningDecisions: getTuningDecisions(),
+  });
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 let started = false;
@@ -155,6 +188,16 @@ export function startSidecarPusher(): void {
   started = true;
   if (!isDesktopRuntime()) return;
 
+  registerRecurringLoop(
+    'sidecar-diagnostics-mirror',
+    () => {
+      refreshDiagnosticPayload();
+      schedule();
+    },
+    15_000,
+    { priority: 'normal', runImmediately: true },
+  );
+
   document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
     const ce = e as CustomEvent<AnalystSnapshot>;
     pendingPayload.analyst = ce.detail;
@@ -163,10 +206,7 @@ export function startSidecarPusher(): void {
     const ent = summarizeEntities();
     pendingPayload.hotEntities = ent.hot;
     pendingPayload.entityCount = ent.total;
-    pendingPayload.debugLog = dumpDebug().slice(-50);
-    pendingPayload.debugErrorCounts = { ...getErrorCounts() };
-    pendingPayload.metrics = getMetricsSnapshot();
-    pendingPayload.pipelineTrace = getPipelineTraceRegistry().snapshot();
+    refreshDiagnosticPayload();
     schedule();
   });
 
@@ -175,8 +215,7 @@ export function startSidecarPusher(): void {
     pendingPayload.forecast = ce.detail;
     // Keep metrics fresh on every cycle — useful for watching forecast op
     // latencies from MCP without waiting for the next analyst cycle.
-    pendingPayload.metrics = getMetricsSnapshot();
-    pendingPayload.pipelineTrace = getPipelineTraceRegistry().snapshot();
+    refreshDiagnosticPayload();
     schedule();
   });
 
@@ -185,8 +224,7 @@ export function startSidecarPusher(): void {
   document.addEventListener('cb:reasoning-debug-event', (e: Event) => {
     const ce = e as CustomEvent<DebugEntry>;
     if (ce.detail?.level !== 'error') return;
-    pendingPayload.debugLog = dumpDebug().slice(-50);
-    pendingPayload.debugErrorCounts = { ...getErrorCounts() };
+    refreshDiagnosticPayload();
     schedule();
   });
 }

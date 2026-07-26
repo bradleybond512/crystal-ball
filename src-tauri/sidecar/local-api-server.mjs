@@ -6027,6 +6027,12 @@ async function dispatch(requestUrl, req, routes, context) {
           debugLog: Array.isArray(body.debugLog) ? body.debugLog.slice(-100) : [],
           debugErrorCounts: stripProtoKeys(body.debugErrorCounts),
           metrics: body.metrics && typeof body.metrics === 'object' ? stripProtoKeys(body.metrics) : null,
+          pipelineTrace: body.pipelineTrace && typeof body.pipelineTrace === 'object'
+            ? stripProtoKeys(body.pipelineTrace)
+            : null,
+          algorithmDiagnostics: body.algorithmDiagnostics && typeof body.algorithmDiagnostics === 'object'
+            ? stripProtoKeys(body.algorithmDiagnostics)
+            : null,
         };
         context._analystState = safe;
         return json({ ok: true });

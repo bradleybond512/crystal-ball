@@ -195,11 +195,13 @@ The HUD footer (`Cmd+Shift+A`) shows a live error counter (turns red when > 0). 
 
 `window.cbReasoningDebug.dump()` and `window.cbReasoningMetrics.snapshot()` work from the DevTools console too.
 
+For terminal triage, run `npm run doctor`. It discovers the live sidecar port, checks the current app session, and ranks likely causes with next actions. Add `-- --deep` for the ten-route self-test or `-- --deep --json` for a redacted agent handoff. See [docs/DIAGNOSTICS_WORKBENCH.md](docs/DIAGNOSTICS_WORKBENCH.md).
+
 ---
 
 ## MCP Server -- Claude Code Integration
 
-Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds and the in-app reasoning state. 41 tools across 8 categories registered automatically when you open a session in this repo. Call `help()` for full documentation.
+Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds and the in-app reasoning state. 56 tools are registered automatically when you open a session in this repo. Call `help()` for full documentation.
 
 **Aggregate tools** (broad awareness):
 
@@ -223,7 +225,7 @@ Crystal Ball ships an MCP server that gives Claude Code direct access to all int
 
 **Analyst tools** (reasoning-layer read + write): `get_analyst_hypotheses` (top ranked hypotheses with thread enrichment), `get_mode_forecast` (per-domain pressure + advisories), `get_analyst_accuracy` (hit/miss ratio per kind), `get_hot_entities` (cross-cutting entities). Write-back via `submit_hypothesis_feedback`, `dismiss_hypothesis`, `run_skeptic_now` — these post to a sidecar queue the renderer drains every ~10s.
 
-**Diagnostic tools**: `check_feed_health` (sidecar + key feed preflight), `sitrep_bundle` (pre-filtered multi-domain bundle), `get_reasoning_debug_log` (filterable ring buffer), `get_reasoning_metrics` (latency histograms + counters).
+**Diagnostic tools**: `diagnose_runtime` (ranked live triage with optional deep probes), `get_algorithm_diagnostics` (health, evaluation coverage, latency, bounded tunings, proposals, decisions), `get_pipeline_trace` (fact-lifecycle and stalled-stage inspection), `check_feed_health` (sidecar + key feed preflight), `sitrep_bundle` (pre-filtered multi-domain bundle), `get_reasoning_debug_log` (filterable ring buffer), `get_reasoning_metrics` (latency histograms + counters).
 
 **Help**: `help()` returns full tool index; `help({ tool: "correlate" })` returns man page; `help({ topic: "getting-started" })` for guides; `help({ examples: "cross-domain" })` for cookbooks.
 
@@ -341,7 +343,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Algorithm intelligence | Pure-deterministic scoring foundation — `intelligence/` (evidence graph, truth scoring, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance) |
 | Domain engines | `weather/` (NWS polygon matching, urgency ladder, Storm Mode, miss diagnostics), `shortage/` (8 commodity forecast models with seasonal multipliers), `insights/` (Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs, Presentation Export) |
 | Reasoning  | Analyst HUD, hypothesis-threads / accuracy / dedupe / entities / skeptic / projection / ensemble, IDB reasoning_memory, local-first LLM adapter with daily budget |
-| MCP server | @modelcontextprotocol/sdk, 41 tools (aggregate / granular / foundation / intelligence / stateful / analyst / diagnostic / help), sidecar port/token discovery |
+| MCP server | @modelcontextprotocol/sdk, 56 tools (aggregate / granular / foundation / intelligence / stateful / analyst / diagnostic / help), sidecar port/token discovery |
 | Correlation | Unified event schema, directional rules, temporal chains, situation clustering |
 | Alerts | Unified inbox, composite relevance scoring, IndexedDB persistence, custom rules |
 | Audio | Procedural Web Audio synthesis, per-layer spatial mixing |
@@ -358,7 +360,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | God's Vision map layers | Generated from the full map-layer catalog | `src/config/panels.ts` FULL_MAP_LAYERS |
 | Panel categories | Generated from the panel category map | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 41 | `tools/mcp-server/index.mjs` |
+| MCP tools | 56 | `tools/mcp-server/index.mjs` |
 | Supported secret keys | 77 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
@@ -416,6 +418,7 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
 | [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How Claude Code gathers intelligence via MCP -- pipeline, auth, tools |
+| [docs/DIAGNOSTICS_WORKBENCH.md](docs/DIAGNOSTICS_WORKBENCH.md) | Fast runtime triage, agent handoffs, pipeline tracing, and safe algorithm-tuning workflow |
 | [docs/ALERTS_ENHANCEMENT_ROADMAP.md](docs/ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture and enhancement roadmap |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflow, checks, PR expectations |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and scope |

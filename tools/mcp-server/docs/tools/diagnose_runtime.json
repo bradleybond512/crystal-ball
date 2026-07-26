@@ -1,0 +1,19 @@
+{
+  "name": "diagnose_runtime",
+  "synopsis": "diagnose_runtime({ deep? })",
+  "description": "Runs a fast live diagnostic pass across the local API sidecar, feed health, renderer mirror, and algorithm health. Findings are ranked by operational impact and include a concrete next action. Set deep=true to include the ten-route sidecar self-test.",
+  "parameters": {
+    "deep": "boolean (optional, default false) — Run the slower ten-route self-test in parallel with the normal probes."
+  },
+  "examples": [
+    {
+      "description": "Triage the running app quickly",
+      "call": "diagnose_runtime({})"
+    },
+    {
+      "description": "Include route-level provider probes",
+      "call": "diagnose_runtime({ deep: true })"
+    }
+  ],
+  "see_also": ["get_algorithm_diagnostics", "get_pipeline_trace", "get_reasoning_debug_log"]
+}

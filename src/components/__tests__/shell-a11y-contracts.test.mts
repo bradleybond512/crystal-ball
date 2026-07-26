@@ -15,8 +15,16 @@ const summarySource = readFileSync(
   new URL('../SummaryStrip.ts', import.meta.url),
   'utf8',
 );
+const liveNewsSource = readFileSync(
+  new URL('../LiveNewsPanel.ts', import.meta.url),
+  'utf8',
+);
 const cssSource = readFileSync(
   new URL('../../styles/main.css', import.meta.url),
+  'utf8',
+);
+const tokenSource = readFileSync(
+  new URL('../../styles/tokens.css', import.meta.url),
   'utf8',
 );
 
@@ -35,6 +43,24 @@ test('compact ACTIVE badge uses a WCAG-AA foreground color', () => {
   assert.match(cssSource, /\.cbs-badge-active\s*\{[^}]*color:\s*#ff8f8f/s);
   assert.match(cssSource, /\.cbs-removed\s*\{[^}]*opacity:\s*0\.6/s);
   assert.match(cssSource, /\.cbs-scenario-removed\s*\{[^}]*opacity:\s*0\.6/s);
+});
+
+test('live news exposes its scroll region and active channel accessibly', () => {
+  assert.match(liveNewsSource, /this\.content\.tabIndex = 0/);
+  assert.match(liveNewsSource, /this\.content\.setAttribute\('role', 'region'\)/);
+  assert.match(liveNewsSource, /this\.content\.setAttribute\('aria-label', t\('panels\.liveNews'\)\)/);
+  assert.match(
+    cssSource,
+    /\.live-channel-btn\.active\s*\{[^}]*background:\s*var\(--severity-critical\);[^}]*border-color:\s*var\(--severity-critical\)/s,
+  );
+
+  const color = /--severity-critical:\s*(#[\da-f]{6})/i.exec(tokenSource)?.[1];
+  assert.ok(color);
+  const channels = color.slice(1).match(/[\da-f]{2}/gi)!.map(channel => Number.parseInt(channel, 16) / 255);
+  const luminance = channels
+    .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+    .reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index]!, 0);
+  assert.ok(1.05 / (luminance + 0.05) >= 4.5);
 });
 
 test('analytics consent dialog takes focus and traps Tab within its choices', async () => {

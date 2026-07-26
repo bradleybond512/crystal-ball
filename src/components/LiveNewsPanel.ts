@@ -323,6 +323,9 @@ export class LiveNewsPanel extends Panel {
 
   constructor() {
  super({ id: 'live-news', title: t('panels.liveNews'), className: 'panel-wide' });
+ this.content.tabIndex = 0;
+ this.content.setAttribute('role', 'region');
+ this.content.setAttribute('aria-label', t('panels.liveNews'));
  this.youtubeOrigin = LiveNewsPanel.resolveYouTubeOrigin();
  this.playerElementId = `live-news-player-${Date.now()}`;
  this.channels = loadChannelsFromStorage();

@@ -88,9 +88,16 @@ export interface AlgorithmLedgerPersistenceStatus {
   /** Records currently held in the in-memory ledger after the last
    *  hydrate / persist / trim pass. */
   recordCount: number;
+  gradedRecordCount: number;
+  pendingRecordCount: number;
+  oldestPendingAt: number | null;
+  /** Span between the oldest and newest retained pending samples. */
+  pendingCoverageMs: number;
   /** Total records dropped by the most recent
    *  `trimAndPersistAlgorithmLedger` call. Resets each trim. */
   trimmedCount: number;
+  trimmedGradedCount: number;
+  trimmedPendingCount: number;
   /** Cumulative records dropped due to corrupt-payload rejection across
    *  the lifetime of this process. */
   rejectedCount: number;
@@ -135,7 +142,13 @@ function freshStatus(): AlgorithmLedgerPersistenceStatus {
     lastSaveStatus: 'idle',
     lastSavedAt: null,
     recordCount: 0,
+    gradedRecordCount: 0,
+    pendingRecordCount: 0,
+    oldestPendingAt: null,
+    pendingCoverageMs: 0,
     trimmedCount: 0,
+    trimmedGradedCount: 0,
+    trimmedPendingCount: 0,
     rejectedCount: 0,
     lastError: null,
   };
@@ -193,11 +206,12 @@ export async function hydrateAlgorithmLedger(
   }
 
   if (raw == null) {
+    const metrics = recordMetrics(ledger.all());
     status = {
       ...status,
       lastLoadStatus: 'ok',
       lastLoadedAt: now(),
-      recordCount: ledger.all().length,
+      ...metrics,
       lastError: null,
     };
     return getAlgorithmLedgerPersistenceStatus();
@@ -222,11 +236,12 @@ export async function hydrateAlgorithmLedger(
   }
 
   ledger.loadJson(validated.records);
+  const metrics = recordMetrics(validated.records);
   status = {
     ...status,
     lastLoadStatus: 'ok',
     lastLoadedAt: now(),
-    recordCount: ledger.all().length,
+    ...metrics,
     lastError: null,
   };
   return getAlgorithmLedgerPersistenceStatus();
@@ -248,11 +263,12 @@ export async function persistAlgorithmLedger(
   } catch (error) {
     return failSave(error, emit, now, records.length);
   }
+  const savedAt = now();
   status = {
     ...status,
     lastSaveStatus: 'ok',
-    lastSavedAt: now(),
-    recordCount: records.length,
+    lastSavedAt: savedAt,
+    ...recordMetrics(records),
     lastError: null,
   };
   return getAlgorithmLedgerPersistenceStatus();
@@ -272,23 +288,34 @@ export async function trimAndPersistAlgorithmLedger(
   const before = ledger.all();
   const kept = applyTrimPolicy(before, { maxRecords, maxAgeMs, nowMs: now() });
   const trimmedCount = before.length - kept.length;
+  const keptIds = new Set(kept.map((record) => record.id));
+  const trimmed = before.filter((record) => !keptIds.has(record.id));
+  const trimmedGradedCount = trimmed.filter((record) => record.outcome !== undefined).length;
+  const trimmedPendingCount = trimmed.length - trimmedGradedCount;
 
   if (trimmedCount > 0) {
     ledger.loadJson(kept);
   }
 
-  status = { ...status, trimmedCount };
+  status = {
+    ...status,
+    trimmedCount,
+    trimmedGradedCount,
+    trimmedPendingCount,
+  };
   return persistAlgorithmLedger({ ...deps, ledger });
 }
 
 /** Deterministic trim used by `trimAndPersistAlgorithmLedger`. Exposed
- *  for unit tests. Pending (ungraded) records are preserved unless
- *  pending alone exceeds the count cap. */
+ *  for unit tests. The bounded store reserves three cohorts: graded
+ *  outcomes, old pending samples that can survive to the grading horizon,
+ *  and recent pending samples for current runtime diagnostics. */
 export function applyTrimPolicy(
   records: readonly EvaluationRecord[],
   options: { maxRecords: number; maxAgeMs: number; nowMs: number },
 ): EvaluationRecord[] {
   const { maxRecords, maxAgeMs, nowMs } = options;
+  if (maxRecords <= 0) return [];
   const ageCutoff = nowMs - maxAgeMs;
 
   // Phase A: drop graded records older than the age cutoff. Preserve
@@ -302,20 +329,109 @@ export function applyTrimPolicy(
     return [...phaseA].sort((a, b) => a.at - b.at);
   }
 
-  // Phase B: still over the cap. Drop oldest graded first; only drop
-  // pending records if pending alone exceeds the cap.
+  // Phase B: still over the cap. Reserve enough graded history to keep
+  // calibration observable, then split pending capacity between an old
+  // outcome-horizon cohort and current runtime evidence.
   const sorted = [...phaseA].sort((a, b) => a.at - b.at);
   const pending = sorted.filter((r) => r.outcome === undefined);
   const graded = sorted.filter((r) => r.outcome !== undefined);
-
-  if (pending.length >= maxRecords) {
-    // Pending records alone over the cap — keep newest pending only.
-    return pending.slice(pending.length - maxRecords);
+  let gradedTarget = maxRecords;
+  if (pending.length > 0) {
+    gradedTarget = maxRecords > 1
+      ? Math.max(1, Math.floor(maxRecords * 0.4))
+      : 0;
+  }
+  let gradedSlots = Math.min(graded.length, gradedTarget);
+  let pendingSlots = maxRecords - gradedSlots;
+  if (pending.length < pendingSlots) {
+    gradedSlots = Math.min(graded.length, gradedSlots + pendingSlots - pending.length);
+    pendingSlots = maxRecords - gradedSlots;
   }
 
-  const gradedSlots = maxRecords - pending.length;
-  const keptGraded = graded.slice(graded.length - gradedSlots);
-  return [...pending, ...keptGraded].sort((a, b) => a.at - b.at);
+  const keptGraded = graded.slice(Math.max(0, graded.length - gradedSlots));
+  if (pendingSlots === 0) return [...keptGraded].sort(byTimeThenId);
+
+  const horizonSlots = Math.min(
+    pendingSlots,
+    Math.max(1, Math.floor(maxRecords * 0.25)),
+  );
+  const horizon = selectBalanced(pending, horizonSlots, 'oldest');
+  const horizonIds = new Set(horizon.map((record) => record.id));
+  const recentCandidates = pending.filter((record) => !horizonIds.has(record.id));
+  const recent = selectBalanced(recentCandidates, pendingSlots - horizon.length, 'newest');
+  return [...keptGraded, ...horizon, ...recent].sort(byTimeThenId);
+}
+
+function selectBalanced(
+  records: readonly EvaluationRecord[],
+  count: number,
+  direction: 'oldest' | 'newest',
+): EvaluationRecord[] {
+  if (count <= 0) return [];
+  const queues = buildBalancedQueues(records, direction);
+  return takeRoundRobin(queues, count);
+}
+
+function buildBalancedQueues(
+  records: readonly EvaluationRecord[],
+  direction: 'oldest' | 'newest',
+): EvaluationRecord[][] {
+  const groups = new Map<string, EvaluationRecord[]>();
+  for (const record of records) {
+    const key = `${record.algorithmId}\u0000${record.domain}\u0000${record.version ?? ''}`;
+    const group = groups.get(key) ?? [];
+    group.push(record);
+    groups.set(key, group);
+  }
+  const entries = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const queues: EvaluationRecord[][] = [];
+  for (const [, group] of entries) {
+    const queue = [...group].sort(byTimeThenId);
+    if (direction === 'newest') queue.reverse();
+    queues.push(queue);
+  }
+  return queues;
+}
+
+function takeRoundRobin(
+  queues: EvaluationRecord[][],
+  count: number,
+): EvaluationRecord[] {
+  const selected: EvaluationRecord[] = [];
+  while (selected.length < count) {
+    let advanced = false;
+    for (const queue of queues) {
+      const next = queue.shift();
+      if (!next) continue;
+      selected.push(next);
+      advanced = true;
+      if (selected.length === count) break;
+    }
+    if (!advanced) break;
+  }
+  return selected;
+}
+
+function byTimeThenId(a: EvaluationRecord, b: EvaluationRecord): number {
+  return a.at - b.at || a.id.localeCompare(b.id);
+}
+
+function recordMetrics(records: readonly EvaluationRecord[]): Pick<
+  AlgorithmLedgerPersistenceStatus,
+  'recordCount' | 'gradedRecordCount' | 'pendingRecordCount' | 'oldestPendingAt' | 'pendingCoverageMs'
+> {
+  const pending = records
+    .filter((record) => record.outcome === undefined)
+    .sort(byTimeThenId);
+  return {
+    recordCount: records.length,
+    gradedRecordCount: records.length - pending.length,
+    pendingRecordCount: pending.length,
+    oldestPendingAt: pending[0]?.at ?? null,
+    pendingCoverageMs: pending.length > 1
+      ? (pending[pending.length - 1]!.at - pending[0]!.at)
+      : 0,
+  };
 }
 
 // ── Validation ──────────────────────────────────────────────────────────

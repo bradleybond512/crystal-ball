@@ -69,6 +69,7 @@ export function buildDoctorReport(input) {
       available: algorithmDiagnostics !== null,
       health: objectOrNull(algorithmDiagnostics?.health),
       ledger: objectOrNull(algorithmDiagnostics?.ledger),
+      forecastCalibration: objectOrNull(algorithmDiagnostics?.forecastCalibration),
       runtime: Array.isArray(algorithmDiagnostics?.runtime) ? algorithmDiagnostics.runtime : [],
       proposals: Array.isArray(algorithmDiagnostics?.proposals) ? algorithmDiagnostics.proposals : [],
       tunings: Array.isArray(algorithmDiagnostics?.tunings) ? algorithmDiagnostics.tunings : [],
@@ -219,6 +220,7 @@ function inspectAlgorithms(snapshot, findings) {
   if (!snapshot) return;
   inspectAlgorithmHealth(snapshot, findings);
   inspectAlgorithmPersistence(snapshot, findings);
+  inspectForecastCalibration(snapshot, findings);
   inspectAlgorithmRuntimes(snapshot, findings);
 }
 
@@ -266,6 +268,35 @@ function inspectAlgorithmPersistence(snapshot, findings) {
       summary: 'Algorithm evaluations are active, but ledger persistence has not completed.',
       evidence: `records=${total}; load=${persistence.lastLoadStatus}; save=${persistence.lastSaveStatus}`,
       nextAction: 'Confirm the algorithm-ledger-persistence recurring loop is registered and rerun the doctor after its next one-minute save.',
+    });
+  }
+}
+
+function inspectForecastCalibration(snapshot, findings) {
+  const summary = objectOrNull(snapshot.forecastCalibration?.summary);
+  if (!summary) return;
+  const overdue = finiteOrNull(summary.overduePending) ?? 0;
+  if (overdue > 0) {
+    addFinding(findings, {
+      id: 'forecast.outcomes_overdue',
+      severity: 'yellow',
+      priority: 28,
+      summary: `${overdue} forecast outcome(s) are overdue for resolution.`,
+      evidence: `pending=${summary.pending ?? 0}; oldestPendingAt=${summary.oldestPendingAt ?? 'unknown'}`,
+      nextAction: 'Inspect the forecast target resolver and its upstream observation cadence before changing model weights.',
+    });
+  }
+
+  const resolved = finiteOrNull(summary.resolved) ?? 0;
+  const brier = finiteOrNull(summary.brierScore);
+  if (resolved >= 10 && brier !== null && brier > 0.35) {
+    addFinding(findings, {
+      id: 'forecast.calibration_poor',
+      severity: 'yellow',
+      priority: 29,
+      summary: `Forecast calibration is poor (Brier ${brier.toFixed(3)} across ${resolved} resolved predictions).`,
+      evidence: `brierScore=${brier}; resolved=${resolved}`,
+      nextAction: 'Compare bySource and byDomain Brier scores, then recalibrate or replace only the underperforming model/domain pair.',
     });
   }
 }

@@ -67,3 +67,33 @@ test('no-op on an empty ledger', async () => {
   const res = await runOutcomeGrading({ ledger, llmFn: acceptingLlm, now: T0 });
   assert.deepEqual(res, { eligible: 0, graded: 0 });
 });
+
+test('bounds each LLM grading pass so a retained cohort cannot exhaust the provider', async () => {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => T0 });
+  for (let index = 0; index < 5; index += 1) {
+    ledger.recordEvaluation({
+      algorithmId: 'test-algo',
+      domain: 'other',
+      at: T0 + index,
+      durationMs: 2,
+      label: `row-${index}`,
+    });
+  }
+  let calls = 0;
+  const countingLlm: LlmFn = async () => {
+    calls += 1;
+    return JSON.stringify({ grade: 'TRUE_POSITIVE', confidence: 0.95, reasoning: 'confirmed' });
+  };
+
+  const result = await runOutcomeGrading({
+    ledger,
+    llmFn: countingLlm,
+    now: T0 + 49 * HOUR,
+    timeoutMs: 48 * HOUR,
+    maxBatchSize: 2,
+  });
+
+  assert.deepEqual(result, { eligible: 2, graded: 2 });
+  assert.equal(calls, 2);
+  assert.equal(ledger.pending().length, 3);
+});

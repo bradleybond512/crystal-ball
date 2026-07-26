@@ -9,11 +9,22 @@ const mem = new Map<string, string>();
 };
 
 import {
+  claimForHypothesisOutcome,
+  domainForHypothesis,
+  factDomainForAlertSource,
+  factDomainForSignalSource,
+  factDomainForSituationDomain,
+  HYPOTHESIS_OUTCOME_HORIZON_MS,
   recordHypothesisPredictions,
   resolveHypothesisPrediction,
   predictionIdFor,
+  targetKeyForHypothesis,
 } from '../hypothesis-prediction-bridge.ts';
-import { getCalibrationStore, _resetCalibrationForTests } from '../forecast-calibration-adapter.ts';
+import {
+  getCalibrationStore,
+  recordPrediction,
+  _resetCalibrationForTests,
+} from '../forecast-calibration-adapter.ts';
 
 beforeEach(() => { mem.clear(); _resetCalibrationForTests(); });
 
@@ -36,10 +47,25 @@ test('records one pending prediction per hypothesis, idempotent within a window'
   assert.equal(all[0]!.status, 'pending');
   assert.equal(all[0]!.probability, 0.8);
   assert.equal(all[0]!.sourceId, 'analyst-loop');
+  assert.equal(all[0]!.targetKey, targetKeyForHypothesis(h));
+  assert.equal(all[0]!.claim, claimForHypothesisOutcome(h));
 });
 
 test('prediction id is stable for a signature+window', () => {
   assert.equal(predictionIdFor(h, 1000), predictionIdFor(h, 1000));
+});
+
+test('uses a hypothesis single-domain attribution and keeps mixed hypotheses separate', () => {
+  assert.equal(domainForHypothesis({ ...h, domains: ['cyber'] }), 'cyber');
+  assert.equal(domainForHypothesis({ ...h, domains: ['weather', 'infra'] }), 'other');
+  assert.equal(domainForHypothesis(h), 'other');
+});
+
+test('maps upstream domain vocabularies without inferring from free text', () => {
+  assert.equal(factDomainForSituationDomain('military'), 'conflict');
+  assert.equal(factDomainForAlertSource('power-grid'), 'infra');
+  assert.equal(factDomainForSignalSource('finance:volatility'), 'markets');
+  assert.equal(factDomainForSignalSource('unknown:signal'), 'other');
 });
 
 test('different window bucket produces a new record', () => {
@@ -51,10 +77,32 @@ test('different window bucket produces a new record', () => {
 
 test('resolveHypothesisPrediction marks the matching pending record', () => {
   recordHypothesisPredictions([h], 1000);
-  const ok = resolveHypothesisPrediction(h, true, 5000);
+  const ok = resolveHypothesisPrediction(h, true, 1000 + HYPOTHESIS_OUTCOME_HORIZON_MS);
   assert.equal(ok, true);
   const rec = getCalibrationStore().all()[0]!;
   assert.equal(rec.status, 'resolved_true');
+});
+
+test('resolves every open forecast source for the same objective target', () => {
+  recordHypothesisPredictions([h], 1000);
+  recordPrediction({
+    id: 'sf:h-1:1',
+    sourceId: 'superforecast',
+    targetKey: targetKeyForHypothesis(h),
+    domain: 'other',
+    claim: h.statement,
+    probability: 0.7,
+    predictedAt: 1100,
+    resolveBy: 1000 + HYPOTHESIS_OUTCOME_HORIZON_MS,
+    status: 'pending',
+  });
+
+  const ok = resolveHypothesisPrediction(h, true, 1000 + HYPOTHESIS_OUTCOME_HORIZON_MS);
+  assert.equal(ok, true);
+  assert.deepEqual(
+    getCalibrationStore().all().map((r) => r.status),
+    ['resolved_true', 'resolved_true'],
+  );
 });
 
 test('resolveHypothesisPrediction returns false when no pending record exists', () => {

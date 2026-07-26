@@ -19,22 +19,89 @@ import {
 import type { FactDomain } from './types';
 
 const WINDOW_MS = 6 * 60 * 60 * 1000;        // dedupe bucket
-const RESOLVE_HORIZON_MS = 24 * 60 * 60 * 1000; // grading window
+export const HYPOTHESIS_OUTCOME_HORIZON_MS = 2 * 60 * 60 * 1000;
+
+type PredictionIdentityHypothesis = Pick<Hypothesis, 'kind' | 'evidence' | 'region'>;
 
 export function predictionIdFor(
-  h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>,
+  h: PredictionIdentityHypothesis,
   now: number,
 ): string {
   const bucket = Math.floor(now / WINDOW_MS);
   return `hyp:${signatureFor(h)}:${bucket}`;
 }
 
-/** Map a hypothesis to the calibration ledger's FactDomain. Hypotheses
- *  don't carry a domain field, so everything falls to 'other'. The domain
- *  multiplier still accumulates useful signal: "analyst is well-calibrated
- *  on its cross-domain cluster hypotheses overall." */
-export function domainForHypothesis(_h: Hypothesis): FactDomain {
+const SITUATION_DOMAIN_MAP: Readonly<Record<string, FactDomain>> = {
+  military: 'conflict',
+  economic: 'markets',
+  natural_hazard: 'weather',
+  cyber: 'cyber',
+  infrastructure: 'infra',
+  health: 'humanitarian',
+  civil_unrest: 'conflict',
+  compound: 'other',
+};
+
+const ALERT_SOURCE_DOMAIN_MAP: Readonly<Record<string, FactDomain>> = {
+  nws: 'weather',
+  gdacs: 'humanitarian',
+  tsunami: 'weather',
+  volcano: 'weather',
+  oref: 'conflict',
+  cyber: 'cyber',
+  earthquake: 'weather',
+  fire: 'weather',
+  cyclone: 'weather',
+  'power-grid': 'infra',
+  'comms-health': 'infra',
+  'space-weather': 'space',
+  spc: 'weather',
+  disease: 'humanitarian',
+  maritime: 'maritime',
+  'air-quality': 'weather',
+  'aviation-hazard': 'aviation',
+};
+
+export function factDomainForSituationDomain(domain: string): FactDomain {
+  return SITUATION_DOMAIN_MAP[domain] ?? 'other';
+}
+
+export function factDomainForAlertSource(source: string): FactDomain {
+  return ALERT_SOURCE_DOMAIN_MAP[source] ?? 'other';
+}
+
+export function factDomainForSignalSource(source: string): FactDomain {
+  const prefix = source.split(':', 1)[0]?.toLowerCase() ?? '';
+  if (prefix in SITUATION_DOMAIN_MAP) return factDomainForSituationDomain(prefix);
+  if (prefix in ALERT_SOURCE_DOMAIN_MAP) return factDomainForAlertSource(prefix);
+  if (['market', 'markets', 'finance'].includes(prefix)) return 'markets';
+  if (['macro', 'economy'].includes(prefix)) return 'macro';
+  if (['aviation', 'flight'].includes(prefix)) return 'aviation';
+  if (['maritime', 'shipping'].includes(prefix)) return 'maritime';
+  if (['infra', 'power', 'grid', 'comms'].includes(prefix)) return 'infra';
   return 'other';
+}
+
+/** Only use a domain-specific calibration curve when upstream evidence agrees
+ *  on one domain. Mixed-domain hypotheses stay in the explicit `other` pool
+ *  instead of contaminating one domain's reliability history. */
+export function domainForHypothesis(
+  h: Pick<Hypothesis, 'domains'>,
+): FactDomain {
+  const domains = [...new Set(h.domains)];
+  return domains.length === 1 ? domains[0]! : 'other';
+}
+
+export function targetKeyForHypothesis(
+  h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>,
+): string {
+  return `hypothesis:${signatureFor(h)}`;
+}
+
+export function claimForHypothesisOutcome(
+  h: Pick<Hypothesis, 'statement'>,
+): string {
+  return `Within the next 2 hours, supporting evidence will remain hot or escalate for: ${h.statement}`;
 }
 
 export function recordHypothesisPredictions(
@@ -48,13 +115,14 @@ export function recordHypothesisPredictions(
     recordPrediction({
       id,
       sourceId: 'analyst-loop',
+      targetKey: targetKeyForHypothesis(h),
       domain: domainForHypothesis(h),
-      claim: h.statement,
+      claim: claimForHypothesisOutcome(h),
       probability: Math.max(0, Math.min(1, h.confidence)),
       predictedAt: now,
-      resolveBy: now + RESOLVE_HORIZON_MS,
+      resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
-      algorithmVersion: 'analyst-loop-v1',
+      algorithmVersion: 'analyst-loop-v2',
     });
   }
 }
@@ -77,11 +145,17 @@ export function resolveHypothesisPredictionBySig(
   now: number = Date.now(),
 ): boolean {
   const store = getCalibrationStore();
+  const targetKey = `hypothesis:${sig}`;
   const sigPrefix = `hyp:${sig}:`;
-  const pending = store.all()
-    .filter((r) => r.id.startsWith(sigPrefix) && r.status === 'pending')
-    .sort((a, b) => b.predictedAt - a.predictedAt);
-  const target = pending[0];
-  if (!target) return false;
-  return resolvePrediction(target.id, hit, now);
+  const due = store.all()
+    .filter((r) =>
+      r.status === 'pending'
+      && (r.targetKey === targetKey || r.id.startsWith(sigPrefix))
+      && r.resolveBy <= now)
+    .sort((a, b) => a.predictedAt - b.predictedAt);
+  let resolved = false;
+  for (const target of due) {
+    resolved = resolvePrediction(target.id, hit, now) || resolved;
+  }
+  return resolved;
 }

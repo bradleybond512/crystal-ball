@@ -28,6 +28,9 @@ export interface PredictionRecord {
   id: string;
   /** Source / model that made the prediction. */
   sourceId: string;
+  /** Stable objective outcome key shared by independent models forecasting
+   *  the same event. Lets one observed outcome grade every comparable model. */
+  targetKey?: string;
   /** Domain the claim sits in. */
   domain: FactDomain;
   /** Free-text claim ("S&P -2σ drawdown within 24h", "Wheat shortage

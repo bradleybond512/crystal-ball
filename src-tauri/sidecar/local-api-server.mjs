@@ -11907,13 +11907,14 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── ISW (Institute for the Study of War) daily situation reports ─────────
   // RSS feed (understandingwar.org/feed) 301s to homepage as of 2026-06.
-  // Use the WordPress REST API instead — same data, no redirect.
+  // The WordPress API also redirects when a query string is present, so use
+  // its default first page (10 posts) without query parameters.
   if (requestUrl.pathname === '/api/isw-reports') {
  const cached = getCached('isw-reports');
  if (cached) return json(cached);
  try {
  const r = await fetchWithTimeout(
- 'https://understandingwar.org/wp-json/wp/v2/posts?per_page=10&_fields=id,date,title,link,excerpt,categories',
+ 'https://understandingwar.org/wp-json/wp/v2/posts',
  { headers: { 'User-Agent': 'CrystalBall/1.0 (conflict intelligence aggregation)' } },
  12000,
  );

@@ -241,10 +241,12 @@ export function setSpatialVolume(v: number): void {
 
 export type SpatialLayer = 'ambient' | 'drone' | 'pings' | 'radar' | 'ticker' | 'ghost';
 
-/** Whether a spatial layer is enabled. Drone and radar default OFF; others default ON. */
+/** Whether a spatial layer is enabled. Drone, radar, and ticker default OFF; others default ON. */
 export function isSpatialLayerEnabled(layer: SpatialLayer): boolean {
   const key = _spatialKey(layer);
-  if (layer === 'drone' || layer === 'radar') return localStorage.getItem(key) === '1';
+  if (layer === 'drone' || layer === 'radar' || layer === 'ticker') {
+ return localStorage.getItem(key) === '1';
+  }
   return localStorage.getItem(key) !== '0';
 }
 

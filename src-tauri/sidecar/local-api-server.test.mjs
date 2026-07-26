@@ -83,9 +83,10 @@ async function postJsonViaHttp(url, payload) {
   });
 }
 
-function mockHttpsRequestOnce({ statusCode, headers, body }) {
+function mockHttpsRequestOnce({ statusCode, headers, body, onRequest }) {
   const original = https.request;
-  https.request = (_options, onResponse) => {
+  https.request = (options, onResponse) => {
+ onRequest?.(options);
  const req = new EventEmitter();
  req.setTimeout = () => {};
  req.write = () => {};
@@ -109,6 +110,39 @@ function mockHttpsRequestOnce({ statusCode, headers, body }) {
  https.request = original;
   };
 }
+
+test('ISW reports use the redirect-free WordPress endpoint', async () => {
+  let requestedPath = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify([{
+ id: 1,
+ date: '2026-07-26T12:00:00',
+ title: { rendered: 'Test assessment' },
+ link: 'https://understandingwar.org/research/test-assessment',
+ excerpt: { rendered: '<p>Assessment body</p>' },
+ categories: [],
+ }]),
+ onRequest(options) {
+ requestedPath = options.path;
+ },
+  });
+  const app = await createLocalApiServer({
+ port: 0,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+ const response = await authFetch(`http://127.0.0.1:${port}/api/isw-reports`);
+ assert.equal(response.status, 200);
+ assert.equal(requestedPath, '/wp-json/wp/v2/posts');
+  } finally {
+ restoreHttps();
+ await app.close();
+  }
+});
 
 async function setupRemoteServer() {
   const hits = [];

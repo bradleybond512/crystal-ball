@@ -315,9 +315,9 @@ const acledTokenState = {
 const wmHostStats = new Map(); // host → { ok, fail, lastStatus, lastOkAt, lastFailAt, lastError }
 const WM_HOST_STATS_CAP = 100;
 const wmHostFailures = new Map(); // host → { count, lastError, lastAt }
-const EXPECTED_API_KEYS = [
+export const EXPECTED_API_KEYS = [
   'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'FRED_API_KEY', 'EIA_API_KEY',
-  'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
+  'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'UCDP_API_TOKEN',
   'PURPLEAIR_API_KEY',
   'OWM_API_KEY', 'FINNHUB_API_KEY', 'NEWSAPI_KEY', 'AVIATIONSTACK_API',
   'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY',
@@ -393,9 +393,9 @@ function wmRecordHostFailure(host, errorMsg) {
   wmHostFailures.set(host, entry);
 }
 
-function wmMissingKeys() {
+export function wmMissingKeys(env = process.env) {
   return EXPECTED_API_KEYS.filter((k) => {
- const v = process.env[k];
+ const v = env[k];
  return !v || !v.trim();
   });
 }

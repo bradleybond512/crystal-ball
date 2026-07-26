@@ -9,6 +9,7 @@ import {
   hydrateAlgorithmLedger,
   persistAlgorithmLedger,
   resetAlgorithmLedgerPersistence,
+  startAlgorithmLedgerPersistence,
   trimAndPersistAlgorithmLedger,
   validateRecords,
 } from '../algorithm-ledger-persistence.ts';
@@ -225,6 +226,62 @@ test('persistAlgorithmLedger: write throw reports an error and emits diagnostic'
   assert.equal(status.lastSaveStatus, 'error');
   assert.match(status.lastError ?? '', /quota/);
   assert.equal(adapter.events[0]?.severity, 'error');
+});
+
+test('startAlgorithmLedgerPersistence: hydrates before registering periodic saves', async () => {
+  const ledger = createAlgorithmEvaluationLedger();
+  const adapter = makeAdapter();
+  adapter.setStore([
+    record({ id: 'eval-7', at: NOW - 1, outcome: 'hit', outcomeAt: NOW, outcomeReason: 'persisted' }),
+  ]);
+  let registered: {
+    name: string;
+    fn: () => void;
+    intervalMs: number;
+    options: { priority?: string; runImmediately?: boolean };
+  } | null = null;
+
+  const status = await startAlgorithmLedgerPersistence({
+    ledger,
+    read: adapter.read,
+    write: adapter.write,
+    emitDiagnostic: adapter.emitDiagnostic,
+    now: () => NOW,
+    intervalMs: 1234,
+    registerLoop: (name, fn, intervalMs, options) => {
+      registered = { name, fn, intervalMs, options };
+      return {
+        cancel() {},
+        inspect: () => ({
+          name,
+          intervalMs,
+          priority: options.priority ?? 'normal',
+          registeredAt: NOW,
+          paused: false,
+          tickCount: 0,
+        }),
+      };
+    },
+  });
+
+  assert.equal(status.lastLoadStatus, 'ok');
+  assert.equal(status.lastSaveStatus, 'ok');
+  assert.equal(status.recordCount, 1);
+  assert.equal(ledger.get('eval-7')?.outcome, 'hit');
+  assert.equal(registered?.name, 'algorithm-ledger-persistence');
+  assert.equal(registered?.intervalMs, 1234);
+  assert.deepEqual(registered?.options, { priority: 'normal' });
+
+  ledger.recordEvaluation({
+    algorithmId: 'compound-risk',
+    domain: 'compound_risk',
+    at: NOW,
+    durationMs: 4,
+  });
+  registered?.fn();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(adapter.snapshotStore()?.length, 2);
+  assert.equal(getAlgorithmLedgerPersistenceStatus().lastSaveStatus, 'ok');
 });
 
 // ── Trim policy ────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@
  */
 
 import { getDefaultDiagnosticBus } from '../diagnostics/diagnostic-events';
+import { registerRecurringLoop } from '../diagnostics/recurring-loops';
 // NOTE: Do NOT import getAlgorithmEvaluationLedger at module scope here —
 // algorithms-state also imports from this file (resetAlgorithmLedgerPersistence),
 // creating a real runtime circular dependency. The lazy getter below breaks the
@@ -118,6 +119,11 @@ export interface TrimAndPersistOptions {
   maxAgeMs?: number;
 }
 
+export interface AlgorithmLedgerLifecycleDeps extends AlgorithmLedgerPersistenceDeps {
+  intervalMs?: number;
+  registerLoop?: typeof registerRecurringLoop;
+}
+
 // ── Module-level status singleton ───────────────────────────────────────
 
 let status: AlgorithmLedgerPersistenceStatus = freshStatus();
@@ -142,6 +148,31 @@ export function getAlgorithmLedgerPersistenceStatus(): AlgorithmLedgerPersistenc
 /** Reset module state. Tests use this; app code does not. */
 export function resetAlgorithmLedgerPersistence(): void {
   status = freshStatus();
+}
+
+export async function startAlgorithmLedgerPersistence(
+  deps: AlgorithmLedgerLifecycleDeps = {},
+): Promise<AlgorithmLedgerPersistenceStatus> {
+  const {
+    intervalMs = 60_000,
+    registerLoop = registerRecurringLoop,
+    ...persistenceDeps
+  } = deps;
+  const ledger = persistenceDeps.ledger ?? getDefaultLedger();
+  const scopedDeps = { ...persistenceDeps, ledger };
+  const hydrated = await hydrateAlgorithmLedger(scopedDeps);
+  const initial = hydrated.lastLoadStatus === 'ok'
+    ? await trimAndPersistAlgorithmLedger({}, scopedDeps)
+    : hydrated;
+
+  registerLoop(
+    'algorithm-ledger-persistence',
+    () => { void trimAndPersistAlgorithmLedger({}, scopedDeps); },
+    intervalMs,
+    { priority: 'normal' },
+  );
+
+  return initial;
 }
 
 // ── Hydrate ─────────────────────────────────────────────────────────────

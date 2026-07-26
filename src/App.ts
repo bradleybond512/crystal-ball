@@ -30,6 +30,8 @@ import { BETA_MODE } from '@/config/beta';
 import { trackEvent, trackDeeplinkOpened } from '@/services/analytics';
 import { preloadCountryGeometry, getCountryNameByCode } from '@/services/country-geometry';
 import { initI18n } from '@/services/i18n';
+import { getAlgorithmEvaluationLedger } from '@/services/algorithms/algorithms-state';
+import { startAlgorithmLedgerPersistence } from '@/services/algorithms/algorithm-ledger-persistence';
 
 import { fetchBootstrapData } from '@/services/bootstrap';
 import { preloadIdbBackedStores, installIdbStorageRouting } from '@/services/intelligence/idb-store-cache';
@@ -402,6 +404,11 @@ export class App {
  await preloadIdbBackedStores();
  installIdbStorageRouting();
  } catch { /* non-fatal */ }
+ try {
+ await startAlgorithmLedgerPersistence({ ledger: getAlgorithmEvaluationLedger() });
+ } catch (error) {
+ console.warn('[algorithm-ledger-persistence] startup wiring failed:', error);
+ }
  bootTrace('preload:stores:done');
 
  // Phase 1: Layout (creates map + panels — they'll find hydrated data)

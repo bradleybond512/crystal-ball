@@ -251,6 +251,22 @@ function inspectAlgorithmPersistence(snapshot, findings) {
       evidence: redactDiagnosticText(persistence.lastError ?? 'ledger persistence error'),
       nextAction: 'Repair the persistent-cache failure before tuning; otherwise calibration decisions will be based on incomplete history.',
     });
+    return;
+  }
+  const total = finiteOrNull(snapshot.ledger?.total) ?? 0;
+  if (
+    total > 0
+    && persistence
+    && (persistence.lastLoadStatus === 'idle' || persistence.lastSaveStatus === 'idle')
+  ) {
+    addFinding(findings, {
+      id: 'algorithm.ledger_persistence_idle',
+      severity: 'yellow',
+      priority: 31,
+      summary: 'Algorithm evaluations are active, but ledger persistence has not completed.',
+      evidence: `records=${total}; load=${persistence.lastLoadStatus}; save=${persistence.lastSaveStatus}`,
+      nextAction: 'Confirm the algorithm-ledger-persistence recurring loop is registered and rerun the doctor after its next one-minute save.',
+    });
   }
 }
 

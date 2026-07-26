@@ -39,7 +39,15 @@ function healthyInput() {
       algorithmDiagnostics: {
         health: { status: 'healthy', algorithms: [], recommendations: [] },
         runtime: [],
-        ledger: { total: 5, graded: 3, pending: 2 },
+        ledger: {
+          total: 5,
+          graded: 3,
+          pending: 2,
+          persistence: {
+            lastLoadStatus: 'ok',
+            lastSaveStatus: 'ok',
+          },
+        },
       },
     },
     selfTest: null,
@@ -83,6 +91,19 @@ test('buildDoctorReport ranks causal failures and points to a next action', () =
   assert.ok(report.findings.every((finding) => finding.nextAction.length > 0));
   assert.ok(report.findings.some((finding) => finding.id === 'algorithm.failing.correlator'));
   assert.ok(report.findings.some((finding) => finding.id === 'feed.ucdp'));
+});
+
+test('buildDoctorReport warns when active algorithm evidence is not persisted', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.ledger.persistence = {
+    lastLoadStatus: 'idle',
+    lastSaveStatus: 'idle',
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'yellow');
+  assert.ok(report.findings.some((finding) => finding.id === 'algorithm.ledger_persistence_idle'));
 });
 
 test('redactDiagnosticText removes secrets, email, query credentials, and the home username', () => {

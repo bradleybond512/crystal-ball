@@ -117,13 +117,22 @@ for (const panelId of PANELS_TO_SCAN) {
       return;
     }
 
-    // Fail if violations INCREASED vs baseline (regression)
-    expect(entry.violationCount).toBeLessThanOrEqual(previous.violationCount);
-
-    // Log new violation IDs that weren't in the baseline
     const newViolations = violationIds.filter(id => !previous.violationIds.includes(id));
-    if (newViolations.length > 0) {
-      console.warn(`[a11y] New violation types for ${panelId}: ${newViolations.join(', ')}`);
-    }
+    const violationDetails = results.violations.map(violation => {
+      const targets = violation.nodes
+        .flatMap(node => node.target)
+        .slice(0, 5)
+        .join(', ');
+      return `${violation.id} (${violation.impact ?? 'unknown'}): ${targets}`;
+    }).join('; ');
+
+    expect(
+      newViolations,
+      `[a11y] New violation types for ${panelId}: ${newViolations.join(', ')}. Current findings: ${violationDetails}`,
+    ).toEqual([]);
+    expect(
+      entry.violationCount,
+      `[a11y] Violation count increased for ${panelId}. Current findings: ${violationDetails}`,
+    ).toBeLessThanOrEqual(previous.violationCount);
   });
 }

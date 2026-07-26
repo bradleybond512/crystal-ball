@@ -1,6 +1,6 @@
 # Crystal Ball
 
-Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 407 interactive panels, a 3D Cesium globe with 77 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / seismic / aviation / space / cyber engines, AI-powered analysis, SMS and desktop notification workflows, and an MCP server that lets Claude Code query it all from the terminal.
+Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into a catalog of interactive panels, a 3D Cesium globe with configurable geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / seismic / aviation / space / cyber engines, AI-powered analysis, SMS and desktop notification workflows, and an MCP server that lets Claude Code query it all from the terminal.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -17,16 +17,16 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 
 ## What It Does
 
-Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, NOAA, NASA, OpenSanctions, RIPE, SEC EDGAR, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 407 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
+Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, NOAA, NASA, OpenSanctions, RIPE, SEC EDGAR, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, a variant-specific panel catalog, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
 
 Four product variants share one codebase:
 
-| Variant | Panels | Focus |
-|---------|--------|-------|
-| `full` | 404 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
-| `tech` | 35 | AI, startups, cloud, service health, developer ecosystems |
-| `finance` | 31 | Markets, forex, bonds, commodities, crypto, central banks |
-| `happy` | 10 | Positive news, progress, science, conservation |
+| Variant | Focus |
+|---------|-------|
+| `full` | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
+| `tech` | AI, startups, cloud, service health, developer ecosystems |
+| `finance` | Markets, forex, bonds, commodities, crypto, central banks |
+| `happy` | Positive news, progress, science, conservation |
 
 ---
 
@@ -34,7 +34,7 @@ Four product variants share one codebase:
 
 Full-viewport Cesium.js 3D globe. Press `G` or click the sidebar to enter.
 
-**77 data layers** -- military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, day/night terminator, and more. 32 enabled by default; toggle the rest from the layer bar.
+**Configurable data layers** -- military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, day/night terminator, and more. Toggle layers from the layer bar.
 
 **HUD overlay** -- real-time UTC clock, threat level assessment (NOMINAL through CRITICAL), camera altitude and coordinates, sun phase (DAY/GOLDEN/CIVIL/NAUTICAL/ASTRO/NIGHT), local time at camera longitude, nearest hotspot with haversine distance, scrolling alert ticker, top-5 active alerts, and layer toggle controls.
 
@@ -354,10 +354,9 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Panels (full variant) | 407 | `src/config/panels.ts` |
-| Default panel inventory | `407 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
-| God's Vision map layers | 77 (32 on by default) | `src/config/panels.ts` FULL_MAP_LAYERS |
-| Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
+| Panel inventory | Generated from the active variant catalog | `src/config/panels.ts` |
+| God's Vision map layers | Generated from the full map-layer catalog | `src/config/panels.ts` FULL_MAP_LAYERS |
+| Panel categories | Generated from the panel category map | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
 | MCP tools | 41 | `tools/mcp-server/index.mjs` |
 | Supported secret keys | 77 | `src-tauri/src/main.rs` |

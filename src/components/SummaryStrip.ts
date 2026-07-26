@@ -204,13 +204,14 @@ export class SummaryStrip {
     for (const sev of ['critical', 'high', 'medium'] as const) {
       const n = unacked.filter((a) => a.severity === sev).length;
       if (n > 0) {
-        parts.push(`<strong class="cb-stat-value" style="color:${ALERT_SEV_TOKEN[sev]};">${capCount(n)}</strong> ${sev === 'medium' ? 'med' : sev.slice(0, 4)}`);
+        const shortSeverity = sev === 'medium' ? 'med' : sev.slice(0, 4);
+        parts.push(`<strong class="cb-stat-value" style="color:${ALERT_SEV_TOKEN[sev]};">${capCount(n)}</strong> ${shortSeverity}`);
       }
     }
     const body = parts.length > 0
       ? parts.join('<span class="cb-stat-sep" aria-hidden="true">·</span>')
       : '<span class="cb-summary-strip-muted">no open alerts</span>';
-    return `<button type="button" class="cb-summary-strip-seg" data-seg="alerts" title="${unacked.length} unacknowledged alerts — open Alert Inbox" aria-label="${unacked.length} unacknowledged alerts. Open Alert Inbox.">${body}</button>`;
+    return `<button type="button" class="cb-summary-strip-seg" data-seg="alerts" title="${unacked.length} unacknowledged alerts — open Alert Inbox" aria-description="${unacked.length} unacknowledged alerts. Open Alert Inbox.">${body}</button>`;
   }
 
   private freshnessSegHtml(): string {
@@ -230,7 +231,7 @@ export class SummaryStrip {
         detail = `Data freshness across ${ages.length} sources — median ${median}, worst ${worst}. Open System Status.`;
       }
     } catch { /* freshness registry unavailable — keep the muted fallback */ }
-    return `<button type="button" class="cb-summary-strip-seg" data-seg="fresh" title="${escapeHtml(detail)}" aria-label="${escapeHtml(detail)}">${body}</button>`;
+    return `<button type="button" class="cb-summary-strip-seg" data-seg="fresh" title="${escapeHtml(detail)}" aria-description="${escapeHtml(detail)}">${body}</button>`;
   }
 
   private regimeSegHtml(): string {

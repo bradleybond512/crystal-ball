@@ -8,9 +8,12 @@ import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
 import { isSafetyFeedPath } from './src/utils/sw-safety-feeds';
+import { removeWebLoopbackCspSources } from './src/config/csp-policy';
 
 const isE2E = process.env.VITE_E2E === '1';
 const isDesktopBuild = process.env.VITE_DESKTOP_RUNTIME === '1';
+const BUILD_VARIANTS = ['full', 'tech', 'finance', 'happy'] as const;
+type BuildVariant = typeof BUILD_VARIANTS[number];
 
 const brotliCompressAsync = promisify(brotliCompress);
 const BROTLI_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.html', '.svg', '.json', '.txt', '.xml', '.wasm']);
@@ -40,7 +43,7 @@ function brotliPrecompressPlugin(): Plugin {
   };
 }
 
-const VARIANT_META: Record<string, {
+const VARIANT_META: Record<BuildVariant, {
   title: string;
   description: string;
   keywords: string;
@@ -54,7 +57,7 @@ const VARIANT_META: Record<string, {
 }> = {
   full: {
  title: 'Crystal Ball - Global Intelligence Dashboard',
- description: 'Real-time global intelligence dashboard with 264 panels, 75 geospatial layers, AI analysis, unified alerts, and cross-domain monitoring.',
+ description: 'Real-time global intelligence dashboard with AI analysis, unified alerts, and cross-domain monitoring.',
  keywords: 'AI intelligence, global intelligence dashboard, geopolitical dashboard, OSINT, real-time monitoring, situation awareness, threat intelligence, unified alerts, MCP server, Claude Code, 3D globe, Cesium, MapLibre, military tracking, AIS ships, ADS-B flights, cyber threats, earthquake monitor, space weather, infrastructure monitoring, market data, prediction markets',
  url: 'https://bradleybond512.github.io/crystal-ball/',
  siteName: 'Crystal Ball',
@@ -63,8 +66,8 @@ const VARIANT_META: Record<string, {
  classification: 'Intelligence Dashboard, OSINT Tool, News Aggregator',
  categories: ['news', 'productivity'],
  features: [
- '264 interactive intelligence panels',
- '75 geospatial 3D globe layers',
+ 'Interactive intelligence panels',
+ 'Geospatial 3D globe layers',
  'Unified alert inbox and traceability',
  'Real-time news aggregation',
  'Market and macro tracking',
@@ -79,10 +82,72 @@ const VARIANT_META: Record<string, {
  'MCP server for Claude Code intelligence workflows',
  ],
   },
+  tech: {
+ title: 'Tech Monitor - Technology Intelligence Dashboard',
+ description: 'Real-time technology intelligence for AI, startups, cloud services, developer ecosystems, and emerging technology.',
+ keywords: 'technology intelligence, AI monitoring, startup intelligence, cloud status, developer ecosystem, cybersecurity, tech news, artificial intelligence',
+ url: 'https://tech.crystalball.app/',
+ siteName: 'Tech Monitor',
+ shortName: 'TechMonitor',
+ subject: 'Real-Time Technology Intelligence',
+ classification: 'Technology Dashboard, AI Intelligence, News Aggregator',
+ categories: ['news', 'productivity', 'technology'],
+ features: [
+ 'AI and machine-learning intelligence',
+ 'Startup and venture monitoring',
+ 'Cloud and service-health tracking',
+ 'Developer ecosystem intelligence',
+ 'Technology news aggregation',
+ ],
+  },
+  finance: {
+ title: 'Finance Monitor - Global Markets Dashboard',
+ description: 'Real-time financial intelligence for markets, forex, bonds, commodities, crypto, and central banks.',
+ keywords: 'financial intelligence, markets dashboard, forex, bonds, commodities, crypto, central banks, economic indicators',
+ url: 'https://finance.crystalball.app/',
+ siteName: 'Finance Monitor',
+ shortName: 'FinanceMonitor',
+ subject: 'Real-Time Financial and Market Intelligence',
+ classification: 'Financial Dashboard, Market Intelligence, News Aggregator',
+ categories: ['finance', 'news', 'productivity'],
+ features: [
+ 'Global market monitoring',
+ 'Forex and fixed-income intelligence',
+ 'Commodity and crypto tracking',
+ 'Central-bank and macroeconomic signals',
+ 'Financial news aggregation',
+ ],
+  },
+  happy: {
+ title: 'Happy Monitor - Positive News Dashboard',
+ description: 'A calm dashboard for positive news, human progress, science, conservation, and renewable energy.',
+ keywords: 'positive news, human progress, conservation, renewable energy, science breakthroughs, good news dashboard',
+ url: 'https://happy.crystalball.app/',
+ siteName: 'Happy Monitor',
+ shortName: 'HappyMonitor',
+ subject: 'Positive News and Human Progress',
+ classification: 'Positive News Dashboard, Progress Tracker',
+ categories: ['news', 'lifestyle'],
+ features: [
+ 'Positive news aggregation',
+ 'Human progress indicators',
+ 'Science and conservation breakthroughs',
+ 'Renewable-energy progress',
+ 'Calm, focused presentation',
+ ],
+  },
 };
 
-const activeVariant = 'full';
-const activeMeta = VARIANT_META.full;
+function resolveBuildVariant(value: string | undefined): BuildVariant {
+  const candidate = value?.trim() || 'full';
+  if (!BUILD_VARIANTS.includes(candidate as BuildVariant)) {
+ throw new Error(`Unsupported VITE_VARIANT "${candidate}". Expected one of: ${BUILD_VARIANTS.join(', ')}`);
+  }
+  return candidate as BuildVariant;
+}
+
+const activeVariant = resolveBuildVariant(process.env.VITE_VARIANT);
+const activeMeta = VARIANT_META[activeVariant];
 
 function runGit(args: string[]): string {
   const result = spawnSync('git', args, { encoding: 'utf8' });
@@ -104,7 +169,7 @@ function htmlVariantPlugin(): Plugin {
  return html;
  }
 
- let result = html
+ let result = (isDesktopBuild ? html : removeWebLoopbackCspSources(html))
  .replace(/<title>.*?<\/title>/, `<title>${activeMeta.title}</title>`)
  .replace(/<meta name="title" content=".*?" \/>/, `<meta name="title" content="${activeMeta.title}" />`)
  .replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${activeMeta.description}" />`)
@@ -123,7 +188,7 @@ function htmlVariantPlugin(): Plugin {
  .replace(/"name": "Crystal Ball"/, `"name": "${activeMeta.siteName}"`)
  .replace(/"alternateName": "CrystalBall"/, `"alternateName": "${activeMeta.siteName.replace(' ', '')}"`)
  .replace(/"url": "https:\/\/crystalball\.app\/"/, `"url": "${activeMeta.url}"`)
- .replace(/"description": "Real-time global intelligence dashboard with live news, markets, military tracking, infrastructure monitoring, and geopolitical data."/, `"description": "${activeMeta.description}"`)
+ .replace(/"description": "[^"]*"/, `"description": "${activeMeta.description}"`)
  .replace(/"featureList": \[[\s\S]*?\]/, `"featureList": ${JSON.stringify(activeMeta.features, null, 8).replace(/\n/g, '\n ')}`);
 
  // Desktop CSP: inject loopback wildcard for the dynamic sidecar port so the
@@ -215,7 +280,7 @@ function polymarketPlugin(): Plugin {
 function sebufApiPlugin(): Plugin {
   // Cache router across requests (H-13 fix). Invalidated by Vite's module graph on HMR.
   let cachedRouter: Awaited<ReturnType<typeof buildRouter>> | null = null;
-  let cachedCorsMod: any = null;
+  let cachedCorsMod: typeof import('./server/cors') | null = null;
 
   async function buildRouter() {
  const [
@@ -335,7 +400,7 @@ function sebufApiPlugin(): Plugin {
  cachedRouter = await buildRouter();
  }
  const router = cachedRouter;
- const corsMod = cachedCorsMod;
+ const corsMod = cachedCorsMod!;
 
  // Convert Connect IncomingMessage to Web Standard Request
  const port = server.config.server.port || 3000;
@@ -574,11 +639,13 @@ function rssProxyPlugin(): Plugin {
  res.setHeader('Cache-Control', 'public, max-age=300');
  res.setHeader('Access-Control-Allow-Origin', '*');
  res.end(data);
- } catch (error: any) {
- console.error('[rss-proxy]', feedUrl, error.message);
- res.statusCode = error.name === 'AbortError' ? 504 : 502;
+ } catch (error: unknown) {
+ const errorName = error instanceof Error ? error.name : 'Error';
+ const errorMessage = error instanceof Error ? error.message : String(error);
+ console.error('[rss-proxy]', feedUrl, errorMessage);
+ res.statusCode = errorName === 'AbortError' ? 504 : 502;
  res.setHeader('Content-Type', 'application/json');
- res.end(JSON.stringify({ error: error.name === 'AbortError' ? 'Feed timeout' : 'Failed to fetch feed' }));
+ res.end(JSON.stringify({ error: errorName === 'AbortError' ? 'Feed timeout' : 'Failed to fetch feed' }));
  }
  });
  },
@@ -761,7 +828,7 @@ export default defineConfig({
 
  workbox: {
  globPatterns: ['**/*.{js,css,ico,png,svg,woff2,json}'],
- globIgnores: ['**/ml*.js', '**/onnx*.wasm', '**/locale-*.js'],
+ globIgnores: ['**/ml*.js', '**/onnx*.wasm', '**/locale-*.js', '**/vault-*-frames*.png'],
  maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MiB — CesiumJS adds ~2.4 MiB to panels bundle
  navigateFallback: null,
  skipWaiting: true,

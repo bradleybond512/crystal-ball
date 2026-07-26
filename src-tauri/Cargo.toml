@@ -16,7 +16,6 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "linux-
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json"] }
 sha2 = "0.11"
 getrandom = "0.4"
-tauri-plugin-biometry = "0.2.8"
 tauri-plugin-clipboard-manager = "2"
 aes-gcm = "0.10"
 

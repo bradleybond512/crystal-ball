@@ -56,6 +56,7 @@ export class AlertReplayScrubber {
     this.slider.max = String(SCRUB_RANGE_MS);
     this.slider.value = '0';
     this.slider.step = String(TICK_MS);
+    this.slider.setAttribute('aria-label', 'Replay time');
     this.slider.addEventListener('input', () => {
       this.currentOffsetMs = Number(this.slider!.value);
       this.updateLabel();
@@ -68,6 +69,7 @@ export class AlertReplayScrubber {
     const close = document.createElement('button');
     close.className = 'replay-close';
     close.textContent = '\u2715';
+    close.setAttribute('aria-label', 'Close alert replay');
     close.addEventListener('click', () => this.toggle());
 
     this.element.append(title, this.slider, this.label, close);

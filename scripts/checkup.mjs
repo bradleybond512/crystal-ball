@@ -13,6 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
+import { summarizeSidecarHealth } from './sidecar-health-contract.mjs';
 
 const { resolve, dirname } = path;
 
@@ -166,9 +167,17 @@ await new Promise((resolve_) => {
     res.on('end', () => {
       try {
         const data = JSON.parse(body);
-        const feedCount = data?.feed_health ? Object.keys(data.feed_health).length : null;
-        addOk('sidecar', feedCount === null ? 'responding' : `responding — ${feedCount} feed(s) tracked`);
-        process.stdout.write(`${GREEN}✓${RESET}\n`);
+        const summary = summarizeSidecarHealth(data);
+        if (summary) {
+          addOk(
+            'sidecar',
+            `responding — ${summary.feedCount} feed(s) tracked, ${summary.keysConfigured}/${summary.keysTotal} API keys configured`,
+          );
+          process.stdout.write(`${GREEN}✓${RESET}\n`);
+        } else {
+          addWarn('sidecar', 'Responded with an unexpected health schema');
+          process.stdout.write(`${YELLOW}–${RESET}\n`);
+        }
       } catch {
         addWarn('sidecar', 'Responded but returned non-JSON');
         process.stdout.write(`${YELLOW}–${RESET}\n`);

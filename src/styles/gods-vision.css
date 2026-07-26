@@ -28,7 +28,7 @@ body.gods-vision-lock {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: #050510;
+  background: var(--gv-canvas, #050510);
   opacity: 0;
   pointer-events: none;
   overflow: hidden;
@@ -203,7 +203,7 @@ body.gods-vision-lock {
 }
 
 .ge-exit-btn:hover {
-  color: #fff;
+  color: var(--text-on-critical, #fff);
   border-color: rgba(var(--ge-red), 0.5);
   background: rgba(var(--ge-red), 0.12);
   box-shadow: 0 0 20px rgba(var(--ge-red), 0.15);
@@ -443,9 +443,9 @@ body.gods-vision-lock {
 }
 
 .ge-mode-badge-ghost {
-  color: rgba(180, 120, 200, 1);
-  background: rgba(180, 120, 200, 0.1);
-  border: 1px solid rgba(180, 120, 200, 0.25);
+  color: var(--gv-purple, rgba(180, 120, 200, 1));
+  background: var(--gv-purple-muted, rgba(180, 120, 200, 0.1));
+  border: 1px solid var(--gv-purple-border, rgba(180, 120, 200, 0.25));
 }
 
 /* ── Mode-aware container tinting ──────────────── */
@@ -465,16 +465,16 @@ body.gods-vision-lock {
 }
 
 .gods-vision-container.ge-mode-ghost .ge-hud-card {
-  border-color: rgba(180, 120, 200, 0.15);
-  box-shadow: 0 0 20px rgba(180, 120, 200, 0.06);
+  border-color: var(--gv-purple-border-soft, rgba(180, 120, 200, 0.15));
+  box-shadow: 0 0 20px var(--gv-purple-glow, rgba(180, 120, 200, 0.06));
 }
 
 .gods-vision-container.ge-mode-war .ge-vignette {
   background: radial-gradient(
  ellipse at center,
  transparent 55%,
- rgba(200, 40, 40, 0.08) 85%,
- rgba(200, 40, 40, 0.2) 100%
+ var(--gv-critical-haze, rgba(200, 40, 40, 0.08)) 85%,
+ var(--gv-critical-edge, rgba(200, 40, 40, 0.2)) 100%
   );
 }
 
@@ -482,7 +482,7 @@ body.gods-vision-lock {
   background: radial-gradient(
  ellipse at center,
  transparent 55%,
- rgba(200, 150, 40, 0.08) 85%,
+ var(--gv-warning-haze, rgba(200, 150, 40, 0.08)) 85%,
  rgba(200, 150, 40, 0.2) 100%
   );
 }

@@ -2,11 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities for Crystal Ball trusted app windows",
-  "windows": ["main", "settings", "live-channels"],
+  "windows": ["main"],
   "permissions": [
  "core:default",
  "core:window:allow-start-dragging",
- "biometry:default",
  "clipboard-manager:allow-read-text"
   ]
 }

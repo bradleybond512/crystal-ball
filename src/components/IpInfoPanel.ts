@@ -30,6 +30,7 @@ import {
   renderHistory,
   renderBatchForm,
   renderBatchResults,
+  renderLookupNotice,
   parseBatchInput,
 } from './ipinfo-tab';
 
@@ -159,9 +160,9 @@ export class IpInfoPanel extends Panel {
     const form = renderSingleLookupForm(this.currentIp);
     let body = '';
     if (this.looking) {
-      body = `<div class="panel-empty" style="padding:14px;">Looking up ${this.currentIp}…</div>`;
+      body = renderLookupNotice(`Looking up ${this.currentIp}…`);
     } else if (this.currentError) {
-      body = `<div class="panel-empty" style="padding:14px;color:#fb923c;">${this.currentError}</div>`;
+      body = renderLookupNotice(this.currentError, 'error');
     } else if (this.currentResult) {
       body = renderResultCard(this.currentResult, this.currentThreat);
     }

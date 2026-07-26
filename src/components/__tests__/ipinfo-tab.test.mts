@@ -10,6 +10,7 @@ import {
   renderBatchResults,
   renderSingleLookupForm,
   renderBatchForm,
+  renderLookupNotice,
 } from '../ipinfo-tab.ts';
 import type { IpInfo, IpThreatContext, HistoryEntry } from '@/services/security/ipinfo-service';
 
@@ -58,6 +59,12 @@ test('renderBatchForm: textarea + submit button', () => {
   const html = renderBatchForm('1.1.1.1\n8.8.8.8');
   assert.match(html, /<textarea/);
   assert.match(html, /Look up batch/);
+});
+
+test('renderLookupNotice: escapes lookup and error text before HTML insertion', () => {
+  const html = renderLookupNotice('<img src=x onerror=alert(1)>', 'error');
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /&lt;img/);
 });
 
 // ── Result card ──────────────────────────────────────────────────────

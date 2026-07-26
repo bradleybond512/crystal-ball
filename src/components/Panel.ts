@@ -185,6 +185,7 @@ export class Panel {
   private static heartbeatTickerId: ReturnType<typeof setInterval> | null = null;
   private static _visibilityHandler: (() => void) | null = null;
   private static _narrativeHandler: ((ev: Event) => void) | null = null;
+  private baseDestroyed = false;
   public getPanelId(): string { return this.panelId; }
 
   /** Returns the panel's content element for external mounting (e.g. embedding in settings modal). */
@@ -1420,7 +1421,10 @@ export class Panel {
   }
 
   public destroy(): void {
+ if (this.baseDestroyed) return;
+ this.baseDestroyed = true;
  Panel.instances.delete(this);
+ if (Panel.instances.size === 0) Panel.stopHeartbeatTicker();
  this.intersectionObserver?.disconnect();
  this.intersectionObserver = null;
  if (this.freshFlashRafId !== null) {

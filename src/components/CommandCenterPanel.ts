@@ -372,7 +372,7 @@ export class CommandCenterPanel extends Panel {
         <div style="display:flex;align-items:baseline;gap:6px;">
           <span style="font-size:14px;">${s.domainIcon}</span>
           <strong style="font-size:13px;">${escapeHtml(s.name)}</strong>
-          <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${severityBackground(s.severity)};color:#000;text-transform:uppercase;">${escapeHtml(s.severity)}</span>
+          <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${severityBackground(s.severity)};color:var(--text-on-accent,#000);text-transform:uppercase;">${escapeHtml(s.severity)}</span>
           ${places}
         </div>
         <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:2px;">${escapeHtml(s.summary)} · ${s.observationCount} events</div>

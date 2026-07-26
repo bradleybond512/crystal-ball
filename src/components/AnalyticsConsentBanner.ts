@@ -19,11 +19,12 @@ import {
 
 const BANNER_ID = 'analytics-consent-banner';
 
-function decide(banner: HTMLElement, allow: boolean): void {
+function decide(banner: HTMLElement, allow: boolean, restoreFocus: HTMLElement | null): void {
   setAnalyticsConsent(allow);
   markConsentPromptSeen();
   if (allow) void initAnalytics();
   banner.remove();
+  restoreFocus?.focus();
 }
 
 export function mountAnalyticsConsentBanner(): void {
@@ -31,10 +32,14 @@ export function mountAnalyticsConsentBanner(): void {
   if (document.getElementById(BANNER_ID)) return;
 
   const banner = document.createElement('div');
+  const restoreFocus = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
   banner.id = BANNER_ID;
   banner.setAttribute('role', 'dialog');
+  banner.setAttribute('aria-modal', 'true');
   banner.setAttribute('aria-live', 'polite');
-  banner.setAttribute('aria-label', 'Analytics consent');
+  banner.setAttribute('aria-labelledby', `${BANNER_ID}-message`);
   Object.assign(banner.style, {
     position: 'fixed',
     bottom: '16px',
@@ -57,6 +62,7 @@ export function mountAnalyticsConsentBanner(): void {
   } as CSSStyleDeclaration);
 
   const text = document.createElement('span');
+  text.id = `${BANNER_ID}-message`;
   text.style.flex = '1 1 240px';
   text.textContent =
     'Share anonymous usage analytics? Aggregate counts only — no key names, no personal data. Off unless you opt in.';
@@ -76,7 +82,7 @@ export function mountAnalyticsConsentBanner(): void {
     font: 'inherit',
     cursor: 'pointer',
   } as CSSStyleDeclaration);
-  decline.addEventListener('click', () => decide(banner, false));
+  decline.addEventListener('click', () => decide(banner, false, restoreFocus));
 
   const accept = document.createElement('button');
   accept.type = 'button';
@@ -90,9 +96,26 @@ export function mountAnalyticsConsentBanner(): void {
     font: '600 13px/1.45 "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif',
     cursor: 'pointer',
   } as CSSStyleDeclaration);
-  accept.addEventListener('click', () => decide(banner, true));
+  accept.addEventListener('click', () => decide(banner, true, restoreFocus));
+
+  banner.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      decide(banner, false, restoreFocus);
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    if (event.shiftKey && document.activeElement === decline) {
+      event.preventDefault();
+      accept.focus();
+    } else if (!event.shiftKey && document.activeElement === accept) {
+      event.preventDefault();
+      decline.focus();
+    }
+  });
 
   actions.append(decline, accept);
   banner.append(text, actions);
   document.body.append(banner);
+  decline.focus();
 }

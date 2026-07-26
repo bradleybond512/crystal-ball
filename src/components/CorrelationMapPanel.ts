@@ -45,10 +45,10 @@ function domainIcon(domain: string): string {
 }
 
 function confidenceColor(c: number): string {
-  if (c >= 0.75) return '#ef4444';
-  if (c >= 0.55) return '#f97316';
-  if (c >= 0.4)  return '#eab308';
-  return '#6b7280';
+  if (c >= 0.75) return 'var(--sev-critical,#ef4444)';
+  if (c >= 0.55) return 'var(--sev-high,#f97316)';
+  if (c >= 0.4)  return 'var(--sev-medium,#eab308)';
+  return 'var(--text-muted,#6b7280)';
 }
 
 const LIVE_PAIR_WINDOW_MS = 24 * 3_600_000;

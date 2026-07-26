@@ -21,8 +21,6 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
-use tauri_plugin_biometry;
-
 mod corelocation;
 
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
@@ -3998,7 +3996,6 @@ fn main() {
  // can render immediately on launch.
  .manage(SecretsCache::empty())
  .manage(AlwaysOnGuard(std::sync::Mutex::new(None)))
- .plugin(tauri_plugin_biometry::init())
  .plugin(tauri_plugin_clipboard_manager::init())
  .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![

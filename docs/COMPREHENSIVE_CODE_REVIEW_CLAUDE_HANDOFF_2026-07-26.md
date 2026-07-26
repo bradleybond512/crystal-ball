@@ -2,11 +2,14 @@
 
 Claude implementation handoff
 
-**Review date:** 2026-07-26  
-**Reviewed commit:** `45e4d6ca62303d3f8c1df6303ccd284af0e95d38`  
-**Review branch:** `codex/crystalball-comprehensive-review`  
-**Risk tier:** High  
-**Release recommendation:** Do not release this commit until Phase 0 is green.
+**Review date:** 2026-07-26
+**Reviewed commit:** `45e4d6ca62303d3f8c1df6303ccd284af0e95d38`
+**Review branch:** `codex/crystalball-comprehensive-review`
+**Risk tier:** High
+**Baseline recommendation:** Do not release the reviewed commit until Phase 0 is green.
+
+**Implementation update:** 2026-07-26 on this branch; Phase 0 and all safely
+bounded fixes below are implemented and verified.
 
 ## Instructions for Claude
 
@@ -24,7 +27,7 @@ Before changing code:
    branch is evidence only and may be behind main.
 3. Reproduce each finding against the new base. Line numbers below refer to the
    reviewed commit and can move.
-4. Fix Phase 0 first. Do not combine the whole review into one large PR.
+4. Reproduce any remaining finding against the current `macos/main`.
 5. Use tests first for every bug. Each PR must include a focused regression test.
 6. Preserve the strong controls listed under "Controls to preserve."
 7. Run the repository's maximum QA/QC workflow and cross-agent review before
@@ -32,7 +35,76 @@ Before changing code:
 8. Mark finding IDs as resolved in the PR description. If a finding is rejected,
    record the evidence and tradeoff instead of silently skipping it.
 
-No application code was changed during this review.
+The original review changed no application code. This branch now includes the
+bounded remediation described below so Claude can concentrate on the remaining
+architectural migrations instead of repeating completed work.
+
+## Implementation status
+
+| Status | Findings |
+| --- | --- |
+| Resolved | CBR-001, CBR-002, CBR-004, CBR-005, CBR-006, CBR-007, CBR-008, CBR-009, CBR-012, CBR-014, CBR-015, CBR-016, CBR-017, CBR-021, CBR-023, CBR-024 |
+| Partially remediated | CBR-010, CBR-011, CBR-013, CBR-019, CBR-022 |
+| Architectural follow-up | CBR-003, CBR-018, CBR-020 |
+
+### Completed remediation
+
+- Product variants are validated from one build-time value, reject unknown
+  values, own their metadata, and pass browser identity checks for `full`,
+  `tech`, `finance`, and `happy`.
+- The vault is now explicitly a startup animation. Fake authentication and unused
+  biometric permissions/code were removed instead of preserving a misleading
+  security claim.
+- Panel and application teardown are idempotent, destroy owned panel instances,
+  clear late lazy mounts, and stop the shared heartbeat when its last owner exits.
+- Diagnostics distinguish `unknown` from `healthy` and cannot emit a false-green
+  recommendation. A live run reported 16 healthy, 14 failing, and 93 unknown
+  sources with an actionable degraded recommendation.
+- Calendar-dependent API tests, Node-incompatible renderer imports, and the
+  sidecar health-schema drift have focused regression coverage.
+- PR CI now runs API tests, the full sidecar suite, variant identity checks,
+  accessibility regression checks, a production build, and a PWA precache
+  budget.
+- Obsolete vault frame images are excluded from Workbox. The production service
+  worker contains 436 entries / 20.46 MiB and zero vault frame entries.
+- The verified IP lookup HTML injection path is escaped. YouTube frame messaging
+  validates both source and exact parent origin. Claude and Ollama prompt inputs
+  treat provider/tool content as untrusted records with explicit boundaries.
+- Browser CSP no longer grants loopback connections, shared policy fragments
+  cover generated Vite headers, and the deployment header retains the
+  non-overlapping navigation/frame restrictions.
+- Sentry retains actionable dynamic-import, storage, and runtime failures, tags
+  variant/runtime/reason, and deterministically samples only known noisy classes.
+- Core shell landmarks, controls, consent focus management, visible accessible
+  names, and contrast now pass Lighthouse 100/100 and all eight axe scopes.
+- Published metadata no longer embeds manually maintained panel/layer counts.
+- Clipboard permission is restricted to the main window; settings and live-news
+  windows use a separate capability without clipboard access.
+
+### Partial remediation and residual risk
+
+- CBR-010/011: `maritime-safety` now demonstrates a decoded
+  `fresh | stale | degraded` provider-result contract that distinguishes a
+  healthy empty response from failure. Other providers still need incremental
+  migration, beginning with alerting, personal exposure, and correlation inputs.
+- CBR-013: browser policy is centralized and deployment overlap is removed, but
+  desktop capability policy and web CSP remain separate policy systems by
+  design. Add drift tests when either system gains new origins or permissions.
+- CBR-019: the strict CI ratchet is green and the touched color debt was reduced.
+  The legacy full-repository ESLint backlog still requires staged mechanical
+  cleanup rather than an unsafe review-wide rewrite. The static listener/timer
+  imbalance baseline is also stale for 38 files; repair real lifecycle gaps and
+  account for element-owned listeners before re-baselining it.
+- CBR-022: clipboard scope is fixed, window/source validation is stronger, and
+  secret IPC keeps its trusted-window/key allowlist. The renderer still receives
+  a broad secret snapshot; replace it with provider-scoped, on-demand commands.
+- CBR-003/018: live measurement still shows 406 panels and 48,379 DOM nodes, and
+  production still emits multi-megabyte core chunks plus ineffective dynamic
+  import warnings. The next major project is a single manifest with truly lazy
+  factories and explicit startup budgets.
+- CBR-020: saved places, webhook definitions, and reasoning/operator data remain
+  plaintext at rest. Define data classes and a keychain-backed encryption and
+  migration design before changing storage formats.
 
 ## Executive assessment
 
@@ -126,8 +198,8 @@ work in CBR-018.
 
 ## CBR-001: All product variants compile as `full`
 
-**Priority:** P1  
-**Confidence:** Confirmed  
+**Priority:** P1
+**Confidence:** Confirmed
 **Affected features:** Full, Tech, Finance, Happy, desktop packaging, E2E matrix
 
 ### Evidence
@@ -176,8 +248,8 @@ selection and metadata. Remove file-rewrite assumptions from `variant.ts`.
 
 ## CBR-002: "Secure unlock" authenticates nobody by default
 
-**Priority:** P1  
-**Confidence:** Confirmed  
+**Priority:** P1
+**Confidence:** Confirmed
 **Affected features:** Desktop vault intro, biometrics, secrets, saved places,
 operator trust
 
@@ -222,8 +294,8 @@ Repair or replace the crashing plugin before re-enabling the secure path.
 
 ## CBR-003: Almost the entire feature catalog mounts at startup
 
-**Priority:** P1  
-**Confidence:** Confirmed by configuration and live runtime  
+**Priority:** P1
+**Confidence:** Confirmed by configuration and live runtime
 **Affected features:** Startup, memory, accessibility, polling, navigation,
 variant behavior
 
@@ -279,8 +351,8 @@ Do not instantiate a feature merely to make it discoverable.
 
 ## CBR-004: Main panel instances survive App teardown
 
-**Priority:** P1  
-**Confidence:** Confirmed by source  
+**Priority:** P1
+**Confidence:** Confirmed by source
 **Affected features:** Reload, HMR, tests, secondary windows, memory, timers
 
 ### Evidence
@@ -320,8 +392,8 @@ Make the panel registry an owner, not a loose dictionary. During
 
 ## CBR-005: Diagnostics can recommend "all healthy" with 35 failures
 
-**Priority:** P1  
-**Confidence:** Confirmed by live `window.cbDiag` output  
+**Priority:** P1
+**Confidence:** Confirmed by live `window.cbDiag` output
 **Affected features:** System status, safety case, operator decisions, support
 
 ### Evidence
@@ -381,8 +453,8 @@ aggregate=healthy implies every required source is healthy or explicitly optiona
 
 ## CBR-006: Required renderer suite is red
 
-**Priority:** P1  
-**Confidence:** Reproduced  
+**Priority:** P1
+**Confidence:** Reproduced
 **Affected features:** Command palette, i18n, PR smoke workflow
 
 ### Evidence
@@ -412,8 +484,8 @@ glob fixture. Avoid a test-only global that diverges from production behavior.
 
 ## CBR-007: API test expires as the calendar advances
 
-**Priority:** P1  
-**Confidence:** Reproduced  
+**Priority:** P1
+**Confidence:** Reproduced
 **Affected features:** Economic stress, OFR data, API reliability
 
 ### Evidence
@@ -438,8 +510,8 @@ test pass.
 
 ## CBR-008: Major test surfaces do not gate PRs
 
-**Priority:** P1  
-**Confidence:** Confirmed by workflow inspection  
+**Priority:** P1
+**Confidence:** Confirmed by workflow inspection
 **Affected features:** API, sidecar routes, desktop integration, E2E, variants
 
 ### Evidence
@@ -492,8 +564,8 @@ Keep the offline smoke and hardening suites.
 
 ## CBR-009: PWA precaches obsolete ignored vault frames
 
-**Priority:** P1  
-**Confidence:** Confirmed by build output  
+**Priority:** P1
+**Confidence:** Confirmed by build output
 **Affected features:** Web install, first load, updates, storage, bandwidth
 
 ### Evidence
@@ -532,8 +604,8 @@ from the build.
 
 ## CBR-010: Network failures masquerade as legitimate empty data
 
-**Priority:** P2  
-**Confidence:** Confirmed pattern; migrate provider by provider  
+**Priority:** P2
+**Confidence:** Confirmed pattern; migrate provider by provider
 **Affected features:** Panels, fusion, alerts, health, stale-data behavior
 
 ### Evidence
@@ -588,8 +660,8 @@ may be valid data, but it must not be the error channel.
 
 ## CBR-011: External JSON is trusted with compile-time assertions
 
-**Priority:** P2  
-**Confidence:** Confirmed pattern  
+**Priority:** P2
+**Confidence:** Confirmed pattern
 **Affected features:** 100+ provider and API response paths
 
 ### Evidence
@@ -625,8 +697,8 @@ schema-rejection metrics with redacted samples.
 
 ## CBR-012: Raw HTML sink has a verified user-input injection path
 
-**Priority:** P1  
-**Confidence:** Confirmed HTML injection; script execution not claimed  
+**Priority:** P1
+**Confidence:** Confirmed HTML injection; script execution not claimed
 **Affected features:** Panel rendering, IP Info, renderer trust boundary
 
 ### Evidence
@@ -663,8 +735,8 @@ behind a `TrustedHTML`-style API that requires sanitization or explicit review.
 
 ## CBR-013: Content Security Policy has three drifting sources
 
-**Priority:** P2  
-**Confidence:** Confirmed  
+**Priority:** P2
+**Confidence:** Confirmed
 **Affected features:** Web, Tauri, Vercel, analytics, WASM
 
 ### Evidence
@@ -697,8 +769,8 @@ assert effective directives for web and desktop.
 
 ## CBR-014: External content lacks semantic prompt-injection boundaries
 
-**Priority:** P2  
-**Confidence:** Confirmed architectural gap  
+**Priority:** P2
+**Confidence:** Confirmed architectural gap
 **Affected features:** Claude agent, summaries, forecasts, cognition integrity
 
 ### Evidence
@@ -733,8 +805,8 @@ false confidence, and misleading recommendations rather than direct mutation.
 
 ## CBR-015: Observability suppresses broad actionable errors
 
-**Priority:** P2  
-**Confidence:** Confirmed  
+**Priority:** P2
+**Confidence:** Confirmed
 **Affected features:** Sentry, support, provider outages, storage, map runtime
 
 ### Evidence
@@ -771,8 +843,8 @@ Replace blanket ignores with:
 
 ## CBR-016: Full-app accessibility baseline is 85/100
 
-**Priority:** P2  
-**Confidence:** Confirmed by Lighthouse and keyboard testing  
+**Priority:** P2
+**Confidence:** Confirmed by Lighthouse and keyboard testing
 **Affected features:** Core shell, replay, summary, consent, all-panel DOM
 
 ### Evidence
@@ -826,8 +898,8 @@ Fix the core shell first, then shared panel primitives:
 
 ## CBR-017: Accessibility regression tooling does not protect PRs
 
-**Priority:** P2  
-**Confidence:** Confirmed  
+**Priority:** P2
+**Confidence:** Confirmed
 **Affected features:** Axe, Playwright, shared UI
 
 ### Evidence
@@ -853,8 +925,8 @@ owners and expiry dates. Fail on any new rule or node.
 
 ## CBR-018: Core modules are too concentrated and barrels defeat splitting
 
-**Priority:** P2  
-**Confidence:** Confirmed  
+**Priority:** P2
+**Confidence:** Confirmed
 **Affected features:** Sidecar, map, data loader, panel layout, bundle graph
 
 ### Evidence
@@ -902,8 +974,8 @@ Refactor by seam, not by arbitrary file size:
 
 ## CBR-019: Full lint baseline is not actionable
 
-**Priority:** P2  
-**Confidence:** Reproduced  
+**Priority:** P2
+**Confidence:** Reproduced
 **Affected features:** Maintainability, refactors, contributor feedback
 
 ### Evidence
@@ -934,8 +1006,8 @@ make the number fall.
 
 ## CBR-020: Sensitive user-created data remains plaintext at rest
 
-**Priority:** P2  
-**Confidence:** Confirmed in current storage paths and prior privacy audit  
+**Priority:** P2
+**Confidence:** Confirmed in current storage paths and prior privacy audit
 **Affected features:** Saved places, geofences, webhooks, reasoning memory
 
 ### Evidence
@@ -970,8 +1042,8 @@ Add export, clear-data, retention, and migration behavior.
 
 ## CBR-021: Local YouTube bridge uses wildcard messaging
 
-**Priority:** P3  
-**Confidence:** Confirmed; current payload is low sensitivity  
+**Priority:** P3
+**Confidence:** Confirmed; current payload is low sensitivity
 **Affected features:** Live news, webcams, desktop embed bridge
 
 ### Evidence
@@ -995,8 +1067,8 @@ origin, and validate the message schema.
 
 ## CBR-022: Privilege and secret access are broader than feature need
 
-**Priority:** P2  
-**Confidence:** Confirmed architectural concern  
+**Priority:** P2
+**Confidence:** Confirmed architectural concern
 **Affected features:** Runtime config, settings, clipboard, renderer blast radius
 
 ### Evidence
@@ -1025,8 +1097,8 @@ verified feature requires it.
 
 ## CBR-023: Published product counts disagree with runtime
 
-**Priority:** P3  
-**Confidence:** Confirmed  
+**Priority:** P3
+**Confidence:** Confirmed
 **Affected features:** README, SEO metadata, operator expectations
 
 ### Evidence
@@ -1048,8 +1120,8 @@ manual numbers in multiple sources.
 
 ## CBR-024: `checkup` consumes a stale health contract
 
-**Priority:** P2  
-**Confidence:** Confirmed by CLI against the installed app  
+**Priority:** P2
+**Confidence:** Confirmed by CLI against the installed app
 **Affected features:** Developer checkup, support, release confidence
 
 ### Evidence
@@ -1143,7 +1215,7 @@ The review found strong foundations that should not be weakened:
 - An axe baseline and provider diagnostics system already exist; improve them
   rather than replacing them blindly.
 
-## Verification evidence
+## Baseline verification evidence
 
 | Check | Result |
 | --- | --- |
@@ -1172,22 +1244,52 @@ The local `.env.local` file was mode `0644`. The sidecar's plaintext credential
 loader has fail-closed checks, but the operator should change the file to `0600`
 outside this review if it contains credentials. Do not print or commit its values.
 
-## Claude PR plan
+## Implementation verification evidence
 
-Recommended PR boundaries:
+| Check | Result |
+| --- | --- |
+| `npm run typecheck:all` | Pass |
+| `cargo check --manifest-path src-tauri/Cargo.toml` | Pass; five existing dead-code warnings |
+| `npm run build` | Pass |
+| Production PWA budget | Pass; 436 entries / 20.46 MiB, zero vault frame entries |
+| `npm run test:renderer` | Pass; 12,629/12,629 |
+| `npm run test:api` | Pass; 224/224 |
+| `npm run test:sidecar` | Pass; 458/458 |
+| `npm run test:data` | Pass, including release, bundle, and feature-registry contracts |
+| `npm run lint:strict` | Pass |
+| `npm run lockfile:check` | Pass |
+| `npm run secrets:scan` | Pass; 4,180 files |
+| Variant Playwright identity matrix | Pass; full, tech, finance, happy |
+| Playwright axe baseline | Pass; 8/8 scopes |
+| Lighthouse snapshot | Accessibility 100; 35/35 checks |
+| MCP server tests | Pass; 99/99 |
+| `npm run checkup` | Yellow; 1,427 tests, 12 checks, 0 failures, 3 operator-runtime warnings |
+| Live `cbDiag.report()` | 16 healthy, 14 failing, 93 unknown; degraded recommendation |
 
-1. `fix/variant-source-of-truth`
-2. `fix/diagnostic-health-contract`
-3. `test/gate-api-sidecar-e2e`
-4. `fix/desktop-auth-boundary`
-5. `fix/panel-registry-lifecycle`
-6. `perf/lazy-mission-panel-factories`
-7. `security/safe-panel-rendering-csp`
-8. `reliability/provider-result-contract`
-9. `a11y/core-shell-zero-baseline`
-10. `chore/modularization-lint-metadata`
+The live provider failures above are expected in a Vite-only browser session
+without deployed API routes and credentials. The relevant regression is that
+they are now visible and no longer summarized as healthy.
 
-Keep security and lifecycle changes separate from mechanical lint cleanup.
+The dependency audit was not re-run during implementation because the execution
+safety layer requires explicit operator approval before sending dependency
+metadata to the npm registry. The baseline audit remained inconclusive because
+the registry advisory response was malformed.
+
+## Remaining Claude PR plan
+
+Recommended follow-up PR boundaries:
+
+1. `perf/lazy-mission-panel-factories`
+2. `reliability/provider-result-contract-alerting`
+3. `reliability/provider-result-contract-correlation`
+4. `security/provider-scoped-secret-ipc`
+5. `privacy/keychain-backed-user-data`
+6. `chore/core-module-boundaries`
+7. `chore/eslint-debt-slices`
+
+Keep security, storage migration, lifecycle, and mechanical lint cleanup in
+separate PRs. Preserve the regression tests and release gates added by this
+branch.
 
 ## Required verification for implementation
 

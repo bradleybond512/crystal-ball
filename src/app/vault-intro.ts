@@ -1,110 +1,9 @@
-// Single-window biometric vault door.
-// Calls the Tauri biometric plugin directly — no secondary overlay, one fingerprint prompt.
+// Single-window decorative vault door.
+// This visual intro is not an authentication or security boundary.
 // Door surface rendered via Canvas 2D for photorealistic brushed steel.
 // Opening sequence: full 3D vault scene choreography with concrete room environment.
 
-import { hasTauriInvokeBridge, invokeTauri } from '../services/tauri-bridge';
-
-const CMD = 'plugin:biometry|authenticate';
-const REASON = 'Unlock Crystal Ball';
-const BRIDGE_TIMEOUT_MS = 2500;
-const POLL_MS = 50;
 const NS = 'http://www.w3.org/2000/svg';
-
-// Biometry kill-switch.
-//
-// The macOS tauri-plugin-biometry's authenticate path SIGSEGVs inside
-// SecKeychainFindGenericPassword → CSSM_DecryptDataFinal → [NSString
-// stringWithUTF8String:] when the plugin's keychain item is corrupted
-// (likely residue from the 2026-05-08 keychain-loss incident
-// documented in CLAUDE.md). Diagnostic reports under
-// ~/Library/Logs/DiagnosticReports/crystalball-*.ips show this
-// crashing every startup attempt since 2026-05-19.
-//
-// We can't catch a native SIGSEGV from JS, and the project's absolute
-// keychain prohibition means we can't repair the corrupted item from
-// here. Until the user re-runs `npm run restore-keys` to rebuild the
-// plugin's keychain entry, the safest behavior is to skip the native
-// biometry call entirely and grant the unlock visually. The vault
-// overlay still plays for UX continuity.
-//
-// Default: OFF — biometry is disabled. Flip this localStorage key to
-// 'true' to re-enable once the keychain item is rebuilt:
-//
-//   localStorage.setItem('cb:vault-biometry-enabled', 'true');
-//
-// A crash sentinel is still tracked across runs so even if biometry
-// is re-enabled, a crash recovers on the next startup.
-const BIOMETRY_ENABLED_KEY = 'cb:vault-biometry-enabled';
-const CRASH_SENTINEL_KEY = 'cb:vault-biometry-crash-sentinel';
-const FAKE_AUTH_DELAY_MS = 600;
-// Hard ceiling on the native biometry call. The tauri-plugin-biometry
-// authenticate path can wedge (not crash, not resolve) when its keychain
-// item is in a bad state, which would otherwise freeze the vault door
-// forever. Bound it so a wedged prompt becomes a recoverable error — 6s is
-// ample for a real Touch ID / password prompt while a wedge falls back fast
-// (was 30s, which left the unlock screen frozen for half a minute on a wedge).
-const BIOMETRY_NATIVE_TIMEOUT_MS = 6000;
-
-function safeGetItem(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function safeSetItem(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* non-fatal */ }
-}
-function safeRemoveItem(key: string): void {
-  try { localStorage.removeItem(key); } catch { /* non-fatal */ }
-}
-
-/**
- * True iff the previous run crashed inside the biometry call. Side
- * effect: clears the sentinel so this only fires once per crash.
- */
-function consumePreviousBiometryCrash(): boolean {
-  const raw = safeGetItem(CRASH_SENTINEL_KEY);
-  if (!raw) return false;
-  safeRemoveItem(CRASH_SENTINEL_KEY);
-  return true;
-}
-
-/** True iff the native biometry call is enabled (opt-in). */
-function biometryEnabled(): boolean {
-  return safeGetItem(BIOMETRY_ENABLED_KEY) === 'true';
-}
-
-type AuthOutcome = 'success' | 'cancel' | 'error';
-
-/**
- * Perform the auth step. When native biometry is enabled, invokes the
- * Tauri plugin under a crash sentinel. When disabled — current default
- * while the plugin's keychain item is corrupt — just sleeps and
- * reports success, letting the visual unlock sequence proceed.
- */
-async function attemptAuth(): Promise<AuthOutcome> {
-  if (!biometryEnabled()) {
-    await new Promise<void>(r => setTimeout(r, FAKE_AUTH_DELAY_MS));
-    return 'success';
-  }
-  // Only the native path needs the Tauri invoke bridge. On a cold first
-  // launch the bridge can lag behind the tauri:// location that already
-  // marks us as a desktop runtime, so wait for it here (not before the
-  // bridge-free fake path) and degrade to a recoverable error if it never
-  // shows rather than dead-ending the whole gate.
-  if (!(await waitForBridge())) return 'error';
-  safeSetItem(CRASH_SENTINEL_KEY, String(Date.now()));
-  try {
-    await Promise.race([
-      invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } }),
-      sleep(BIOMETRY_NATIVE_TIMEOUT_MS).then(() => { throw new Error('biometry-timeout'); }),
-    ]);
-    safeRemoveItem(CRASH_SENTINEL_KEY);
-    return 'success';
-  } catch (error) {
-    safeRemoveItem(CRASH_SENTINEL_KEY);
-    const msg = error instanceof Error ? error.message : '';
-    return msg.toLowerCase().includes('cancel') ? 'cancel' : 'error';
-  }
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -118,16 +17,6 @@ function svgEl<T extends SVGElement>(tag: string): T {
 
 function attr(el: SVGElement, attrs: Record<string, string | number>): void {
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
-}
-
-async function waitForBridge(): Promise<boolean> {
-  if (hasTauriInvokeBridge()) return true;
-  const deadline = Date.now() + BRIDGE_TIMEOUT_MS;
-  while (Date.now() < deadline) {
- await sleep(POLL_MS);
- if (hasTauriInvokeBridge()) return true;
-  }
-  return false;
 }
 
 // Seeded LCG — deterministic grain every render
@@ -864,7 +753,7 @@ function buildDoor(): DoorParts {
  'font-size': '10', 'font-weight': '500', 'letter-spacing': '0.2em',
  fill: 'rgba(180,80,80,0.6)',
   });
-  statusText.textContent = 'BIOMETRIC SCAN READY';
+  statusText.textContent = 'STARTUP SEQUENCE READY';
   svg.append(statusText);
 
   // Status LED — red blinking (locked)
@@ -971,22 +860,6 @@ function buildOverlay(): OverlayRefs {
 
 // ── Scanner states ─────────────────────────────────────────────────────────────
 
-function setScannerIdle(p: DoorParts): void {
-  p.scannerRing.style.animation = 'vi-scan 2.8s ease-in-out infinite';
-  p.scannerGlow.style.animation = 'vi-glow 2.8s ease-in-out infinite';
-  p.scannerRing.style.transition = '';
-  p.scannerGlow.style.transition = '';
-  p.scannerRing.style.opacity = '';
-  p.scannerRing.style.strokeWidth = '';
-  p.scannerRing.setAttribute('stroke', '#8b1818');
-  p.scannerGlow.setAttribute('stroke', '#5c0c0c');
-  for (const fp of p.fpPaths) fp.setAttribute('stroke', '#7a2020');
-  p.padFill.setAttribute('fill', 'transparent');
-  p.statusText.setAttribute('fill', 'rgba(170,70,70,0.7)');
-  p.statusText.textContent = 'TAP TO RETRY';
-  p.scannerBtn.style.cursor = 'pointer';
-}
-
 function setScannerWarmup(p: DoorParts): void {
   p.scannerRing.style.animation = 'vi-warmup 0.85s ease-in-out infinite';
   p.scannerGlow.style.animation = 'vi-glowwarm 0.85s ease-in-out infinite';
@@ -994,7 +867,7 @@ function setScannerWarmup(p: DoorParts): void {
   p.scannerGlow.setAttribute('stroke', '#8f1515');
   p.padFill.setAttribute('fill', 'transparent');
   p.statusText.setAttribute('fill', 'rgba(210,90,90,0.85)');
-  p.statusText.textContent = 'SCANNING…';
+  p.statusText.textContent = 'INITIALIZING…';
 }
 
 function setScannerPeak(p: DoorParts): void {
@@ -1010,24 +883,7 @@ function setScannerPeak(p: DoorParts): void {
   for (const fp of p.fpPaths) fp.setAttribute('stroke', '#cc4040');
   p.padFill.setAttribute('fill', 'transparent');
   p.statusText.setAttribute('fill', 'rgba(240,130,130,0.95)');
-  p.statusText.textContent = 'PLACE FINGER ON SENSOR';
-}
-
-function setScannerError(p: DoorParts, msg: string): void {
-  p.scannerRing.style.transition = '';
-  p.scannerGlow.style.transition = '';
-  p.scannerRing.style.opacity = '';
-  p.scannerRing.style.strokeWidth = '';
-  p.scannerRing.style.animation = 'vi-scanerr 1.6s ease-in-out infinite';
-  p.scannerGlow.style.animation = 'vi-scanerr 1.6s ease-in-out infinite';
-  p.scannerRing.setAttribute('stroke', '#b83030');
-  p.scannerGlow.setAttribute('stroke', '#9e1818');
-  p.padFill.setAttribute('fill', 'rgba(160,24,24,0.09)');
-  for (const fp of p.fpPaths) fp.setAttribute('stroke', '#a83030');
-  p.statusText.setAttribute('fill', 'rgba(200,80,80,0.85)');
-  p.statusText.textContent = msg;
-  p.padFill.style.animation = 'vi-shake .4s ease both';
-  setTimeout(() => { p.padFill.style.animation = ''; }, 400);
+  p.statusText.textContent = 'PREPARING WORKSPACE';
 }
 
 function setScannerSuccess(p: DoorParts): void {
@@ -1042,7 +898,7 @@ function setScannerSuccess(p: DoorParts): void {
   p.padFill.setAttribute('fill', 'rgba(30,180,80,0.10)');
   for (const fp of p.fpPaths) fp.setAttribute('stroke', '#28c860');
   p.statusText.setAttribute('fill', 'rgba(40,200,100,0.9)');
-  p.statusText.textContent = 'ACCESS GRANTED';
+  p.statusText.textContent = 'CRYSTAL BALL READY';
   p.lockedLed.style.animation = '';
   p.lockedLed.setAttribute('fill', '#1a8a3e');
   p.lockedLed.setAttribute('stroke', '#0e5a24');
@@ -1108,9 +964,9 @@ async function playOpenSequence(
   await sleep(1150);
 }
 
-// ── Biometric flow ─────────────────────────────────────────────────────────────
+// ── Visual intro flow ──────────────────────────────────────────────────────────
 
-async function runBiometricFlow(
+async function runIntroFlow(
   refs: OverlayRefs,
   onQuit: () => void,
   appReady?: Promise<void>,
@@ -1129,33 +985,17 @@ async function runBiometricFlow(
  onQuit();
   });
 
-  const tryAuth = async (manual: boolean) => {
+  const play = async () => {
  if (settled || inFlight) return;
  inFlight = true;
 
- if (!manual) {
  setScannerWarmup(refs);
  await sleep(700);
  if (settled) { inFlight = false; return; }
- }
 
  setScannerPeak(refs);
  await sleep(600);
  if (settled) { inFlight = false; return; }
-
- // Native biometry is opt-in (see BIOMETRY_ENABLED_KEY comment up top).
- // When disabled — current default while the plugin's keychain item is
- // corrupt — `attemptAuth` just sleeps and reports success; the unlock
- // continues into the open-sequence below.
- const outcome = await attemptAuth();
- if (outcome === 'cancel' || outcome === 'error') {
- if (settled) return;
- inFlight = false;
- const text = outcome === 'cancel' ? 'CANCELLED — TAP TO RETRY' : 'TAP TO RETRY';
- setScannerError(refs, text);
- setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
- return;
- }
 
  if (settled) return;
  settled = true;
@@ -1163,8 +1003,8 @@ async function runBiometricFlow(
  resolveFlow(true);
   };
 
-  setTimeout(() => void tryAuth(false), 1200);
-  refs.scannerBtn.addEventListener('click', () => void tryAuth(true));
+  setTimeout(() => void play(), 1200);
+  refs.scannerBtn.addEventListener('click', () => void play());
 
   return result;
 }
@@ -1172,25 +1012,13 @@ async function runBiometricFlow(
 // ── Export ─────────────────────────────────────────────────────────────────────
 
 export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean> {
-  // If the previous run crashed inside the biometry call (sentinel still
-  // set), skip the gate this boot so the user can get into the app. A
-  // clean unlock on a later run clears the sentinel and restores normal
-  // behavior. This guards against a corrupted keychain entry inside the
-  // tauri-plugin-biometry SecKeychainFindGenericPassword → CSSM decrypt
-  // path that SIGSEGVs the renderer process before any JS catch fires.
-  if (consumePreviousBiometryCrash()) {
-    // eslint-disable-next-line no-console
-    console.warn('[vault] previous biometry attempt crashed; skipping gate this startup');
-    return true;
-  }
-
   const refs = buildOverlay();
   document.body.append(refs.overlay);
 
   let quitCalled = false;
-  const unlocked = await runBiometricFlow(refs, () => { quitCalled = true; }, appReady);
+  const completed = await runIntroFlow(refs, () => { quitCalled = true; }, appReady);
 
   refs.overlay.remove();
   if (quitCalled) window.close();
-  return unlocked;
+  return completed;
 }

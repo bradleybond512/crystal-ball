@@ -1,9 +1,8 @@
 {
   "note": "Per-file hardcoded-color counts. Managed by scripts/lint-colors.mjs --update. Counts may only decrease.",
   "files": {
-    "src/app/biometric-gate.ts": 15,
     "src/app/panel-layout.ts": 8,
-    "src/app/vault-intro.ts": 115,
+    "src/app/vault-intro.ts": 106,
     "src/components/ActiveLearningPanel.ts": 41,
     "src/components/ActiveLearningQueuePanel.ts": 4,
     "src/components/AerospaceReentryPanel.ts": 2,
@@ -154,7 +153,7 @@
     "src/components/InternetDisruptionsPanel.ts": 4,
     "src/components/InvestmentsPanel.ts": 7,
     "src/components/IocManagerPanel.ts": 5,
-    "src/components/IpInfoPanel.ts": 3,
+    "src/components/IpInfoPanel.ts": 2,
     "src/components/KillChainPanel.ts": 3,
     "src/components/LiveNewsPanel.ts": 1,
     "src/components/LiveWebcamsPanel.ts": 14,

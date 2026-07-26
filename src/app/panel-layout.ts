@@ -61,6 +61,7 @@ import {
 } from '@/components';
 import type { Panel } from '@/components/Panel';
 import { findInsertBeforeKey } from '@/app/lazy-panel-order';
+import { destroyUniquePanels } from '@/app/panel-lifecycle';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { FirmsPanel } from '@/components/FirmsPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
@@ -702,6 +703,7 @@ export interface PanelLayoutCallbacks {
 export class PanelLayoutManager implements AppModule {
   private ctx: AppContext;
   private callbacks: PanelLayoutCallbacks;
+  private destroyed = false;
   /** Lazy panels: id → factory that dynamically imports + constructs the panel.
    *  Registered panels are only built when enabled (at boot or on toggle), so
    *  disabled panels cost neither a module download nor a synchronous construct. */
@@ -794,6 +796,8 @@ export class PanelLayoutManager implements AppModule {
   }
 
   destroy(): void {
+ if (this.destroyed) return;
+ this.destroyed = true;
  document.removeEventListener('wm:update-state', this._onUpdateState);
  this.panelDragCleanupHandlers.forEach((cleanup) => cleanup());
  this.panelDragCleanupHandlers = [];
@@ -827,16 +831,32 @@ export class PanelLayoutManager implements AppModule {
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
  if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
- // Clean up happy variant panels
+ // Clean up happy variant controllers and every mounted panel exactly once.
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
- this.ctx.countersPanel?.destroy();
- this.ctx.progressPanel?.destroy();
- this.ctx.breakthroughsPanel?.destroy();
- this.ctx.heroPanel?.destroy();
- this.ctx.digestPanel?.destroy();
- this.ctx.speciesPanel?.destroy();
- this.ctx.renewablePanel?.destroy();
+ destroyUniquePanels([
+ ...Object.values(this.ctx.panels),
+ ...Object.values(this.ctx.newsPanels),
+ this.ctx.positivePanel,
+ this.ctx.countersPanel,
+ this.ctx.progressPanel,
+ this.ctx.breakthroughsPanel,
+ this.ctx.heroPanel,
+ this.ctx.digestPanel,
+ this.ctx.speciesPanel,
+ this.ctx.renewablePanel,
+ ]);
+ this.ctx.panels = {};
+ this.ctx.newsPanels = {};
+ this.ctx.positivePanel = null;
+ this.ctx.countersPanel = null;
+ this.ctx.progressPanel = null;
+ this.ctx.breakthroughsPanel = null;
+ this.ctx.heroPanel = null;
+ this.ctx.digestPanel = null;
+ this.ctx.speciesPanel = null;
+ this.ctx.renewablePanel = null;
+ this.lazyFactories.clear();
  // The map owns a MapLibre + deck.gl GPU context; without an explicit
  // destroy it (and its ResizeObserver) outlive teardown and can't be GC'd.
  this.ctx.map?.destroy();
@@ -3270,6 +3290,7 @@ export class PanelLayoutManager implements AppModule {
    * parallel calls for the same key resolve to the single constructed instance.
    */
   private mountLazyPanel(key: string): Promise<Panel | null> {
+ if (this.destroyed) return Promise.resolve(null);
  const existing = this.ctx.panels[key];
  if (existing) return Promise.resolve(existing);
  const inflight = this.mountingPanels.get(key);
@@ -3279,6 +3300,10 @@ export class PanelLayoutManager implements AppModule {
  const p = (async (): Promise<Panel | null> => {
  try {
  const panel = await factory();
+ if (this.destroyed) {
+ panel.destroy();
+ return null;
+ }
  this.ctx.panels[key] = panel;
  const el = panel.getElement();
  this.makeDraggable(el, key);

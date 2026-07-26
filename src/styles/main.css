@@ -19461,7 +19461,7 @@ body.gods-vision-lock .replay-scrubber { display: none; }
 .cbs-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .cbs-title { font-size: 11px; font-weight: 600; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .cbs-phase-badge { font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: var(--r-xs); }
-.cbs-badge-active { background: rgba(255, 60, 60, 0.3); color: #ff6666; }
+.cbs-badge-active { background: rgba(255, 60, 60, 0.3); color: #ff8f8f; }
 .cbs-badge-developing { background: rgba(255, 180, 0, 0.3); color: #ffbb33; }
 .cbs-badge-emerging { background: rgba(100, 200, 255, 0.3); color: #88ccff; }
 .cbs-confidence { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
@@ -19486,9 +19486,9 @@ body.gods-vision-lock .replay-scrubber { display: none; }
   margin-left: 6px; padding: 0 4px; border: 1px solid var(--mac-green, #32d74b); border-radius: var(--r-xs);
   vertical-align: middle;
 }
-.cbs-removed { text-decoration: line-through; opacity: 0.5; font-style: italic; padding: 4px 8px; }
+.cbs-removed { text-decoration: line-through; opacity: 0.6; font-style: italic; padding: 4px 8px; }
 .cbs-scenario-new { border-left: 2px solid var(--mac-green, #32d74b); padding-left: 4px; }
-.cbs-scenario-removed { text-decoration: line-through; opacity: 0.4; font-style: italic; }
+.cbs-scenario-removed { text-decoration: line-through; opacity: 0.6; font-style: italic; }
 .cbs-delta-up { color: var(--mac-red, #ff453a); font-weight: 700; margin-left: 2px; }
 .cbs-delta-down { color: var(--mac-green, #32d74b); font-weight: 700; margin-left: 2px; }
 

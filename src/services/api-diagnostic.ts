@@ -17,7 +17,7 @@
  * into issues, or shipped to a log collector. No external dependencies.
  */
 
-import { dataFreshness } from './data-freshness';
+import { dataFreshness, type DataSourceState } from './data-freshness';
 import { getCircuitBreakerStatus, getCircuitBreakerCooldownInfo } from '@/utils/circuit-breaker';
 import { getOfflineState, getSourceAge } from './offline-staleness';
 
@@ -58,6 +58,7 @@ export interface DiagnosticReport {
   degraded: number;
   failing: number;
   silent: number;
+  unknown: number;
   requiredSourcesFailing: string[];
   /** Circuit breakers that are currently open (tripped) */
   trippedBreakers: string[];
@@ -136,44 +137,88 @@ function notesForSource(src: SourceDiagnostic): string[] {
   return notes;
 }
 
+function diagnosticForSource(
+  source: DataSourceState,
+  now: number,
+  breakers: Record<string, string>,
+): SourceDiagnostic {
+  const ageSeconds = source.lastUpdate
+    ? Math.floor((now - source.lastUpdate.getTime()) / 1000)
+    : null;
+  const sourceId = source.id.toLowerCase();
+  const breaker = Object.entries(breakers)
+    .find(([name]) => name.toLowerCase().includes(sourceId) || sourceId.includes(name.toLowerCase()));
+  const breakerState = breaker?.[1] ?? null;
+  const cooldownInfo = breaker
+    ? getCircuitBreakerCooldownInfo(breaker[0])
+    : { onCooldown: false, remainingSeconds: 0 };
+  const status = classifyHealth(ageSeconds, Boolean(source.lastError), cooldownInfo.onCooldown);
+  const diagnostic: SourceDiagnostic = {
+    id: source.id,
+    name: source.name,
+    status,
+    lastUpdateMs: source.lastUpdate?.getTime() ?? null,
+    ageSeconds,
+    lastError: source.lastError,
+    itemCount: source.itemCount,
+    breakerState,
+    onCooldown: cooldownInfo.onCooldown,
+    cooldownRemainingSeconds: cooldownInfo.remainingSeconds,
+    requiredForRisk: source.requiredForRisk,
+    notes: [],
+  };
+  diagnostic.notes = notesForSource(diagnostic);
+  return diagnostic;
+}
+
+interface RecommendationContext {
+  isOnline: boolean;
+  sourceCount: number;
+  healthy: number;
+  degraded: number;
+  failing: number;
+  silent: number;
+  unknown: number;
+  requiredSourcesFailing: string[];
+  trippedBreakers: string[];
+}
+
+function recommendationsForReport(context: RecommendationContext): string[] {
+  const recommendations: string[] = [];
+  if (!context.isOnline) {
+    recommendations.push('Network is offline. Restore connectivity before troubleshooting individual sources.');
+  }
+  if (context.requiredSourcesFailing.length > 0) {
+    recommendations.push(`${context.requiredSourcesFailing.length} risk-critical source(s) failing: ${context.requiredSourcesFailing.slice(0, 3).join(', ')}. Risk scores may be degraded.`);
+  }
+  if (context.trippedBreakers.length >= 3) {
+    recommendations.push(`${context.trippedBreakers.length} circuit breakers tripped — likely a broad upstream outage rather than per-feed issues.`);
+  }
+  if (context.silent > 0) {
+    recommendations.push(`${context.silent} source(s) silent for 6h+. Verify the refresh scheduler is running and the panels that use these sources are enabled.`);
+  }
+  if (context.failing > 0) {
+    recommendations.push(`${context.failing} source(s) failing. Inspect per-source errors and retry the affected providers.`);
+  }
+  if (context.degraded > 0) {
+    recommendations.push(`${context.degraded} source(s) degraded. Confirm their refresh cadence and upstream availability.`);
+  }
+  if (context.unknown > 0) {
+    recommendations.push(`${context.unknown} source(s) have unknown health because no successful update has been recorded.`);
+  }
+  if (recommendations.length === 0 && context.healthy === context.sourceCount && context.sourceCount > 0) {
+    recommendations.push('All sources within expected freshness windows.');
+  }
+  return recommendations;
+}
+
 export function diagnoseAll(): DiagnosticReport {
   const now = Date.now();
   const freshness = dataFreshness.getAllSources();
   const breakers = getCircuitBreakerStatus();
   const offline = getOfflineState();
 
-  const sources: SourceDiagnostic[] = freshness.map((s) => {
-    const ageSeconds = s.lastUpdate ? Math.floor((now - s.lastUpdate.getTime()) / 1000) : null;
-    // Breaker names don't always match source IDs; do a fuzzy lookup.
-    let breakerState: string | null = null;
-    let cooldownInfo = { onCooldown: false, remainingSeconds: 0 };
-    for (const [name, state] of Object.entries(breakers)) {
-      if (name.toLowerCase().includes(s.id.toLowerCase()) || s.id.toLowerCase().includes(name.toLowerCase())) {
-        breakerState = state;
-        cooldownInfo = getCircuitBreakerCooldownInfo(name);
-        break;
-      }
-    }
-
-    const status = classifyHealth(ageSeconds, !!s.lastError, cooldownInfo.onCooldown);
-
-    const diagnostic: SourceDiagnostic = {
-      id: s.id,
-      name: s.name,
-      status,
-      lastUpdateMs: s.lastUpdate ? s.lastUpdate.getTime() : null,
-      ageSeconds,
-      lastError: s.lastError,
-      itemCount: s.itemCount,
-      breakerState,
-      onCooldown: cooldownInfo.onCooldown,
-      cooldownRemainingSeconds: cooldownInfo.remainingSeconds,
-      requiredForRisk: s.requiredForRisk,
-      notes: [],
-    };
-    diagnostic.notes = notesForSource(diagnostic);
-    return diagnostic;
-  });
+  const sources = freshness.map((source) => diagnosticForSource(source, now, breakers));
 
   // Offline-staleness supplemental ages (for sources wired via recordSourceUpdate)
   for (const src of sources) {
@@ -187,6 +232,7 @@ export function diagnoseAll(): DiagnosticReport {
   const degraded = sources.filter(s => s.status === 'degraded').length;
   const failing = sources.filter(s => s.status === 'failing').length;
   const silent = sources.filter(s => s.status === 'silent').length;
+  const unknown = sources.filter(s => s.status === 'unknown').length;
   const requiredSourcesFailing = sources
     .filter(s => s.requiredForRisk && (s.status === 'failing' || s.status === 'silent'))
     .map(s => s.name);
@@ -202,23 +248,17 @@ export function diagnoseAll(): DiagnosticReport {
     .slice(0, 5)
     .map(s => ({ id: s.id, name: s.name, ageSeconds: s.ageSeconds ?? 0 }));
 
-  // Recommendations
-  const recommendations: string[] = [];
-  if (!offline.isOnline) {
-    recommendations.push('Network is offline. Restore connectivity before troubleshooting individual sources.');
-  }
-  if (requiredSourcesFailing.length > 0) {
-    recommendations.push(`${requiredSourcesFailing.length} risk-critical source(s) failing: ${requiredSourcesFailing.slice(0, 3).join(', ')}. Risk scores may be degraded.`);
-  }
-  if (trippedBreakers.length >= 3) {
-    recommendations.push(`${trippedBreakers.length} circuit breakers tripped — likely a broad upstream outage rather than per-feed issues.`);
-  }
-  if (silent > 0) {
-    recommendations.push(`${silent} source(s) silent for 6h+. Verify the refresh scheduler is running and the panels that use these sources are enabled.`);
-  }
-  if (recommendations.length === 0 && healthy > 0) {
-    recommendations.push('All sources within expected freshness windows.');
-  }
+  const recommendations = recommendationsForReport({
+    isOnline: offline.isOnline,
+    sourceCount: sources.length,
+    healthy,
+    degraded,
+    failing,
+    silent,
+    unknown,
+    requiredSourcesFailing,
+    trippedBreakers,
+  });
 
   return {
     generatedAt: now,
@@ -229,6 +269,7 @@ export function diagnoseAll(): DiagnosticReport {
     degraded,
     failing,
     silent,
+    unknown,
     requiredSourcesFailing,
     trippedBreakers,
     sources,
@@ -304,7 +345,7 @@ export async function pingAllSources(): Promise<PingResult[]> {
  */
 export function formatReport(report: DiagnosticReport): string {
   const lines: string[] = [];
-  lines.push(`Crystal Ball Diagnostic — ${new Date(report.generatedAt).toISOString()}`, `Network: ${report.isOnline ? 'online' : 'OFFLINE'} (${report.offlineStatus})`, `Sources: ${report.healthy} healthy, ${report.degraded} degraded, ${report.failing} failing, ${report.silent} silent, ${report.totalSources} total`);
+  lines.push(`Crystal Ball Diagnostic — ${new Date(report.generatedAt).toISOString()}`, `Network: ${report.isOnline ? 'online' : 'OFFLINE'} (${report.offlineStatus})`, `Sources: ${report.healthy} healthy, ${report.degraded} degraded, ${report.failing} failing, ${report.silent} silent, ${report.unknown} unknown, ${report.totalSources} total`);
   if (report.requiredSourcesFailing.length > 0) {
     lines.push(`Risk-critical failures: ${report.requiredSourcesFailing.join(', ')}`);
   }

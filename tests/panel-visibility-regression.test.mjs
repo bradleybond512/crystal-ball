@@ -47,13 +47,13 @@ describe('full variant panel visibility regressions', () => {
  );
   });
 
-  it('enables every configured full-variant panel by default so a fresh install shows the whole inventory', () => {
+  it('keeps only explicitly retired full-variant panels disabled by default', () => {
  const disabled = extractDisabledPanelKeys(extractObjectBody(panelsSrc, 'FULL_PANELS')).filter((key) => key !== 'map');
 
  assert.deepEqual(
  disabled,
- [],
- `full variant should not ship with hidden panels by default, disabled: ${disabled.join(', ')}`,
+ ['maritime-intel'],
+ `unexpected default-disabled panels: ${disabled.join(', ')}`,
  );
   });
 
@@ -98,24 +98,11 @@ describe('full variant panel visibility regressions', () => {
  );
   });
 
-  it('keeps the README inventory count aligned with the live full-variant config', () => {
- // Derive live counts from src/config/panels.ts rather than hard-coding them
- // so the test doesn't flap every time a panel is added. README just has to
- // reference current numbers somewhere.
- const countVariant = (name) => {
- const m = panelsSrc.match(new RegExp(`const ${name}:[\\s\\S]*?= \\{([\\s\\S]*?)\\n\\};`));
- if (!m) return 0;
- return [...m[1].matchAll(/^\s*'?[a-zA-Z0-9-]+'?:\s*\{/gm)].length;
- };
- const full = countVariant('FULL_PANELS');
- const tech = countVariant('TECH_PANELS');
- const finance = countVariant('FINANCE_PANELS');
- const happy = countVariant('HAPPY_PANELS');
- const expected = new RegExp(`Default panel inventory\\s*\\|\\s*\`${full} full / ${tech} tech / ${finance} finance / ${happy} happy\``);
- assert.match(
+  it('keeps volatile panel and layer counts out of published README metadata', () => {
+ assert.doesNotMatch(
  readmeSrc,
- expected,
- `README should include "Default panel inventory | \`${full} full / ${tech} tech / ${finance} finance / ${happy} happy\`" row`,
+ /\b\d+\s+(?:interactive\s+)?(?:panels|geospatial(?: 3D globe)? layers)\b/i,
+ 'README should describe the generated feature catalog without hand-maintained counts',
  );
   });
 });

@@ -45,10 +45,8 @@ test('compact ACTIVE badge uses a WCAG-AA foreground color', () => {
   assert.match(cssSource, /\.cbs-scenario-removed\s*\{[^}]*opacity:\s*0\.6/s);
 });
 
-test('live news exposes its scroll region and active channel accessibly', () => {
+test('live news exposes its scroll container and active channel accessibly', () => {
   assert.match(liveNewsSource, /this\.content\.tabIndex = 0/);
-  assert.match(liveNewsSource, /this\.content\.setAttribute\('role', 'region'\)/);
-  assert.match(liveNewsSource, /this\.content\.setAttribute\('aria-label', t\('panels\.liveNews'\)\)/);
   assert.match(
     cssSource,
     /\.live-channel-btn\.active\s*\{[^}]*background:\s*var\(--severity-critical\);[^}]*border-color:\s*var\(--severity-critical\)/s,

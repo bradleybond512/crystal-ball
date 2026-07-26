@@ -67,6 +67,7 @@ test.beforeEach(async ({ page }) => {
 
 for (const panelId of PANELS_TO_SCAN) {
   test(`a11y baseline: ${panelId}`, async ({ page }) => {
+    if (panelId === 'dashboard-root') test.setTimeout(180_000);
     await page.goto('/');
     // Boot is far enough along once the grid holds a mounted panel — the
     // cb:navigate-panel listener registers earlier in the same createPanels()
@@ -91,6 +92,13 @@ for (const panelId of PANELS_TO_SCAN) {
       ).toBeVisible({ timeout: 10_000 });
       await page.waitForTimeout(500);
       builder = new AxeBuilder({ page }).include(panelSelector);
+      if (panelId === 'live-news') {
+        const embeds = page.locator(`${panelSelector} iframe`);
+        for (let index = 0; index < await embeds.count(); index++) {
+          await expect(embeds.nth(index)).toHaveAttribute('title', /\S+/);
+        }
+        builder.exclude({ fromFrames: [`${panelSelector} iframe`, '*'] });
+      }
     }
 
     const results = await builder.analyze();

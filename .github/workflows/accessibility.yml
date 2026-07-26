@@ -1,0 +1,27 @@
+name: Accessibility
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  axe:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test e2e/a11y-baseline.spec.ts
+        env:
+          VITE_VARIANT: full

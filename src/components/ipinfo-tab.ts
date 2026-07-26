@@ -104,6 +104,14 @@ export function renderBatchForm(currentValue: string): string {
   </form>`;
 }
 
+export function renderLookupNotice(
+  message: string,
+  tone: 'loading' | 'error' = 'loading',
+): string {
+  const color = tone === 'error' ? 'color:var(--color-warning,#fb923c);' : '';
+  return `<div class="panel-empty" style="padding:14px;${color}">${escapeHtml(message)}</div>`;
+}
+
 export function renderBatchResults(rows: readonly (IpInfo | null)[], originalInputs: readonly string[]): string {
   if (rows.length === 0) return '';
   const lines = rows.map((info, i) => {

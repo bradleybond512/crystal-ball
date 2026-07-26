@@ -72,12 +72,12 @@ secondary clone.
 Crystal Ball ships four product variants from one codebase. The variant is chosen at
 **build time** (not switchable at runtime):
 
-| Variant | Panels | Focus | Build |
-|---|---|---|---|
-| `full` | 264 | Geopolitics, conflict, cyber, infrastructure, disasters, markets | `npm run desktop:build:full` |
-| `tech` | 35 | AI, startups, cloud, service health, dev ecosystems | `npm run desktop:build:tech` |
-| `finance` | 31 | Markets, forex, bonds, commodities, crypto, central banks | `npm run desktop:build:finance` |
-| `happy` | 10 | Positive news, progress, science, conservation | `SITE_VARIANT=happy npm run dev` |
+| Variant | Focus | Build |
+|---|---|---|
+| `full` | Geopolitics, conflict, cyber, infrastructure, disasters, markets | `npm run desktop:build:full` |
+| `tech` | AI, startups, cloud, service health, dev ecosystems | `npm run desktop:build:tech` |
+| `finance` | Markets, forex, bonds, commodities, crypto, central banks | `npm run desktop:build:finance` |
+| `happy` | Positive news, progress, science, conservation | `SITE_VARIANT=happy npm run dev` |
 
 ### Your first 60 seconds
 
@@ -113,8 +113,8 @@ CSS `-webkit-app-region: drag` trick does not work in WKWebView, so that's expec
 
 ## 3. Working with Panels
 
-Panels are the modular cards that render each data domain. The full variant has 264 of
-them across 19 categories (situational awareness, conflict & military, cyber & threats,
+Panels are the modular cards that render each data domain. The full variant groups
+them into categories (situational awareness, conflict & military, cyber & threats,
 financial, weather & disasters, space, infrastructure, maritime, aviation, energy,
 health, and more).
 
@@ -139,7 +139,7 @@ is an explicit boundary; if one tier has no key or is unreachable, it falls to t
 ### Find a panel fast
 
 Press `Cmd+K` and type the panel name. The command palette jumps you straight there —
-faster than scrolling the sidebar, especially in the 264-panel full variant.
+faster than scrolling the sidebar, especially in the full variant.
 
 ---
 

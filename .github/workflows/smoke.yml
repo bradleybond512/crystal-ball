@@ -30,6 +30,12 @@ jobs:
       # 2026-06). Single-* globs (no globstar) so it's portable across the
       # CI shell + Node version.
       - run: npm run test:renderer
+      # Cloud API routes and the complete localhost-sidecar contract are
+      # separate Node suites; renderer globs cannot discover either tree.
+      - run: npm run test:api
+      - run: npm run test:sidecar
+      - run: npm run build
+      - run: npm run pwa:budget
       # PR 16 cognition CI gate: replays the frozen golden-window corpus
       # through the deterministic cognition pipeline and fails on Brier
       # regression / conformal coverage drop versus the committed baseline

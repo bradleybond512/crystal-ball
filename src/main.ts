@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, sonarjs/regex-complexity, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, unicorn/prefer-top-level-await */
+/* eslint-disable no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, unicorn/prefer-top-level-await */
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
 import './styles/gods-eye-4d.css';
@@ -10,6 +10,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';
 import { App } from './App';
+import { filterSentryEvent } from './services/sentry-filter';
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
 
@@ -32,16 +33,12 @@ Sentry.init({
  /NotAllowedError/,
  /InvalidAccessError/,
  /importScripts/,
- /^TypeError: Load failed( \(.*\))?$/,
- /^TypeError: Failed to fetch( \(.*\))?$/,
  /^TypeError: cancelled$/,
- /^TypeError: NetworkError/,
  /runtime\.sendMessage\(\)/,
  /Java object is gone/,
  /^Object captured as promise rejection with keys:/,
  /Unable to load image/,
  /Non-Error promise rejection captured with value:/,
- /Connection to Indexed Database server lost/,
  /webkit\.messageHandlers/,
  /(?:unsafe-eval.*Content Security Policy|Content Security Policy.*unsafe-eval)/,
  /Fullscreen request denied/,
@@ -58,11 +55,8 @@ Sentry.init({
  /invalid origin/,
  /\.data\.split is not a function/,
  /signal is aborted without reason/,
- /Failed to fetch dynamically imported module/,
- /Importing a module script failed/,
  /contentWindow\.postMessage/,
  /Could not compile vertex shader/,
- /objectStoreNames/,
  /Unexpected identifier 'https'/,
  /Can't find variable: _0x/,
  /WKWebView was deallocated/,
@@ -74,19 +68,15 @@ Sentry.init({
  /e\.toLowerCase is not a function/,
  /\.trim is not a function/,
  /\.(indexOf|findIndex) is not a function/,
- /QuotaExceededError/,
  /^TypeError: 已取消$/,
  /Maximum call stack size exceeded/,
- /^fetchError: Network request failed$/,
  /window\.ethereum/,
  /^SyntaxError: Unexpected token/,
- /^Operation timed out\.?$/,
  /setting 'luma'/,
  /ML request .* timed out/,
  /^Element not found$/,
  /(?:AbortError: )?The operation was aborted\.?\s*$/,
  /Unexpected end of script/,
- /error loading dynamically imported module/,
  /Style is not done loading/,
  /Event `CustomEvent`.*captured as promise rejection/,
  /getProgramInfoLog/,
@@ -106,8 +96,6 @@ Sentry.init({
  /evaluating 'elemFound\.value'/,
  /[Cc]an(?:'t|not) access (?:'\w+'|lexical declaration '\w+') before initialization/,
  /^Uint8Array$/,
- /createObjectStore/,
- /The database connection is closing/,
  /shortcut icon/,
  /Attempting to change value of a readonly property/,
  /reading 'nodeType'/,
@@ -122,7 +110,6 @@ Sentry.init({
  /\w+ is not a function.*\/uv\/service\//,
  /__isInQueue__/,
  /^(?:LIDNotify(?:Id)?|onWebViewAppeared|onGetWiFiBSSID) is not defined$/,
- /signal timed out/,
  /hybridExecute is not defined/,
  /reading 'postMessage'/,
  /NotSupportedError/,
@@ -138,16 +125,17 @@ Sentry.init({
  /this\.player\.\w+ is not a function/,
   ],
   beforeSend(event) {
+ event.tags = {
+ ...event.tags,
+ variant: SITE_VARIANT,
+ runtime: '__TAURI_INTERNALS__' in window ? 'desktop' : 'web',
+ };
+ const filteredEvent = filterSentryEvent(event);
+ if (!filteredEvent) return null;
+ event = filteredEvent;
  const msg = event.exception?.values?.[0]?.value ?? '';
  if (msg.length <= 3 && /^[a-zA-Z_$]+$/.test(msg)) return null;
  const frames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
- // Suppress maplibre internal null-access crashes (light, placement) only when stack is in map chunk
- if (/this\.style\._layers|reading '_layers'|this\.light is null|can't access property "(id|type|setFilter)", \w+ is (null|undefined)|Cannot read properties of null \(reading '(id|type|setFilter|_layers)'\)|null is not an object \(evaluating '\w{1,3}\.(id|style)|^\w{1,2} is null$/.test(msg) && frames.some(f => /\/(map|maplibre|deck-stack)-[A-Za-z0-9-]+\.js/.test(f.filename ?? ''))) return null;
- // Suppress any TypeError that happens entirely within maplibre or deck.gl internals
- if (msg.startsWith('TypeError:') && frames.length > 0) {
- const nonSentryFrames = frames.filter(f => f.filename && f.filename !== '<anonymous>' && !/\/sentry-[A-Za-z0-9-]+\.js/.test(f.filename));
- if (nonSentryFrames.length > 0 && nonSentryFrames.every(f => /\/(map|maplibre|deck-stack)-[A-Za-z0-9-]+\.js/.test(f.filename ?? ''))) return null;
- }
  // Suppress errors originating entirely from blob: URLs (browser extensions)
  if (frames.length > 0 && frames.every(f => (f.filename ?? '').startsWith('blob:'))) return null;
  // Suppress YouTube IFrame widget API internal errors
@@ -230,7 +218,7 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
 
   const banner = document.createElement('div');
   banner.id = 'desktop-runtime-debug-notice';
-  banner.textContent = `Desktop build skipped biometric gate because Tauri runtime never appeared. protocol=${snapshot.protocol || 'unknown'} host=${snapshot.host || 'unknown'} tauriGlobals=${snapshot.hasTauriGlobals ? 'yes' : 'no'}`;
+  banner.textContent = `Desktop runtime bridge unavailable; continuing with web-compatible startup. protocol=${snapshot.protocol || 'unknown'} host=${snapshot.host || 'unknown'} tauriGlobals=${snapshot.hasTauriGlobals ? 'yes' : 'no'}`;
   Object.assign(banner.style, {
  position: 'fixed',
  top: '16px',
@@ -253,7 +241,6 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
 // Initialize Vercel Analytics on web only. beforeSend gates every event at
 // send-time so consent revocation mid-session takes effect immediately without
 // a reload (inject() itself has no shutdown path).
-// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return -- @vercel/analytics inject()/beforeSend are untyped (any) in the published types
 if (!isDesktopRuntime()) inject({ beforeSend: (e) => isAnalyticsAllowed() ? e : null });
 
 // Migrate pre-consent-gate installs once, then surface a first-run opt-in banner
@@ -351,11 +338,11 @@ if (urlParams.get('settings') === '1') {
  const app = new App('app');
 
  if (desktopRuntime.detected || desktopRuntime.forcedDesktopBuild) {
- // Start loading the app behind the vault overlay so it's ready when the door opens.
+ // Start loading behind the visual intro so the workspace is ready when it finishes.
  const appInitPromise = app.init();
  const { runVaultIntro } = await import('./app/vault-intro');
- const unlocked = await runVaultIntro(appInitPromise.catch(() => {}));
- if (!unlocked) return;
+ const introCompleted = await runVaultIntro(appInitPromise.catch(() => {}));
+ if (!introCompleted) return;
  appInitPromise
  .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
  .catch(console.error);

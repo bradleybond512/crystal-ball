@@ -8,14 +8,6 @@
       "clearI": 0,
       "timerGap": 0
     },
-    "src/app/biometric-gate.ts": {
-      "add": 4,
-      "remove": 2,
-      "listenerGap": 2,
-      "setI": 1,
-      "clearI": 1,
-      "timerGap": 0
-    },
     "src/app/data-loader.ts": {
       "add": 2,
       "remove": 0,

@@ -199,7 +199,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  </div>
  <div class="mac-toolbar-spacer" data-tauri-drag-region></div>
  <div class="region-selector">
- <select id="regionSelect" class="region-select">
+ <select id="regionSelect" class="region-select" aria-label="Region">
  <option value="global">${t('components.deckgl.views.global')}</option>
  <option value="america">${t('components.deckgl.views.americas')}</option>
  <option value="mena">${t('components.deckgl.views.mena')}</option>
@@ -248,7 +248,7 @@ export function buildWebLayout(ctx: AppContext): string {
  <span>${t('header.live')}</span>
  </div>
  <div class="region-selector">
- <select id="regionSelect" class="region-select">
+ <select id="regionSelect" class="region-select" aria-label="Region">
  <option value="global">${t('components.deckgl.views.global')}</option>
  <option value="america">${t('components.deckgl.views.americas')}</option>
  <option value="mena">${t('components.deckgl.views.mena')}</option>

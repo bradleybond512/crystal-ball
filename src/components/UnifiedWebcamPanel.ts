@@ -32,10 +32,10 @@ const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
 type ViewMode = 'grid' | 'list' | 'map';
 
 const CATEGORY_COLORS: Record<WebcamCategory, string> = {
-  fire: '#f85149',
-  volcano: '#bc8cff',
-  weather: '#58a6ff',
-  coastal: '#3fb950',
+  fire: 'var(--sev-critical,#f85149)',
+  volcano: 'var(--category-volcano,#bc8cff)',
+  weather: 'var(--category-weather,#58a6ff)',
+  coastal: 'var(--sev-low,#3fb950)',
   stream: '#56d4dd',
   traffic: '#d29922',
   nature: '#7ee787',

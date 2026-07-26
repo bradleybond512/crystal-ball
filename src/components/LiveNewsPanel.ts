@@ -1016,6 +1016,7 @@ export class LiveNewsPanel extends Panel {
  videoId,
  autoplay: this.isPlaying ? '1' : '0',
  mute: this.isMuted ? '1' : '0',
+ parentOrigin: window.location.origin,
  });
  if (quality !== 'auto') params.set('vq', quality);
  // Use 127.0.0.1 not localhost — Tauri CSP frame-src allows http://127.0.0.1:* and

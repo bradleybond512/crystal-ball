@@ -44,9 +44,9 @@ const REFRESH_MS = 120_000;
 // ── Band palette ───────────────────────────────────────────────────────────
 
 const BAND_COLOR: Record<SurvivalBand, string> = {
-  secure: '#34c759',
-  guarded: '#a7c957',
-  elevated: '#ffd60a',
+  secure: 'var(--sev-low,#34c759)',
+  guarded: 'var(--status-guarded,#a7c957)',
+  elevated: 'var(--sev-medium,#ffd60a)',
   high: '#ff9f0a',
   critical: '#ff453a',
 };

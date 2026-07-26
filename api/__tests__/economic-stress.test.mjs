@@ -108,15 +108,19 @@ test('handler: missing FRED_API_KEY → FRED indicators degraded, OFR still atte
 test('handler: happy path bundles 4 FRED + 1 OFR indicators', async () => {
   __resetCacheForTests();
   process.env.FRED_API_KEY = 'fake-key';
+  const recentDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const previousDate = new Date(recentDate.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const recentDay = recentDate.toISOString().slice(0, 10);
+  const previousDay = previousDate.toISOString().slice(0, 10);
   const fredPayload = {
     observations: [
-      { date: '2026-04-01', value: '100.0' },
-      { date: '2026-04-15', value: '102.5' },
+      { date: previousDay, value: '100.0' },
+      { date: recentDay, value: '102.5' },
     ],
   };
   const restore = mockFetch(new Map([
     ['stlouisfed.org', { status: 200, json: fredPayload }],
-    ['financialresearch.gov', { status: 200, json: [[Date.parse('2026-04-15T00:00:00Z'), 0.5]] }],
+    ['financialresearch.gov', { status: 200, json: [[recentDate.getTime(), 0.5]] }],
   ]));
   try {
     const { res } = await invokeHandler(handler, {});

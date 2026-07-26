@@ -11,11 +11,17 @@ type TranslationDictionary = Record<string, unknown>;
 const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
 const loadedLanguages = new Set<SupportedLanguage>();
 
-// Lazy-load only the locale that's actually needed — all others stay out of the bundle.
-const localeModules = import.meta.glob<TranslationDictionary>(
-  ['../locales/*.json', '!../locales/en.json'],
-  { import: 'default' },
-);
+let localeModules: Record<string, () => Promise<TranslationDictionary>> | null = null;
+
+// Keep the Vite-only glob behind a lazy function. Node tests can import the
+// English fallback without executing it, while Vite still expands the call.
+function getLocaleModules(): Record<string, () => Promise<TranslationDictionary>> {
+  localeModules ??= import.meta.glob<TranslationDictionary>(
+    ['../locales/*.json', '!../locales/en.json'],
+    { import: 'default' },
+  );
+  return localeModules;
+}
 
 const RTL_LANGUAGES = new Set(['ar']);
 
@@ -47,7 +53,7 @@ async function ensureLanguageLoaded(lng: string): Promise<SupportedLanguage> {
   if (normalized === 'en') {
  translation = enTranslation as TranslationDictionary;
   } else {
- const loader = localeModules[`../locales/${normalized}.json`];
+ const loader = getLocaleModules()[`../locales/${normalized}.json`];
  if (loader) {
  translation = await loader();
  } else {

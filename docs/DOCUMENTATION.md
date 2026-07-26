@@ -21,14 +21,14 @@ Crystal Ball currently ships:
 
 - `4` web variants
 - `3` desktop build targets (`full`, `tech`, `finance`)
-- `264` panels in the full variant (see [src/config/panels.ts](../src/config/panels.ts))
-- `75` map layers on the 3D globe, with `31` enabled by default (see [src/config/panels.ts](../src/config/panels.ts) `FULL_MAP_LAYERS`)
+- a variant-specific panel catalog (see [src/config/panels.ts](../src/config/panels.ts))
+- a configurable 3D globe layer catalog (see [src/config/panels.ts](../src/config/panels.ts) `FULL_MAP_LAYERS`)
 - `21` generated OpenAPI specs
 - `19` locale bundles
 - `68` desktop secret slots backed by the OS keychain
 - `41` MCP tools for local intelligence workflows
 
-Those numbers come from the current codebase, not aspirational copy.
+Catalog sizes are intentionally derived from the current codebase instead of duplicated here.
 
 ## Architecture Reading Path
 

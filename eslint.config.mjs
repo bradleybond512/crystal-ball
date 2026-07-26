@@ -185,6 +185,22 @@ export default tseslint.config(
  },
   },
 
+  // Block 4c: TypeScript tooling outside src/ — syntax-aware baseline rules
+  // without requiring membership in the application tsconfig.
+  {
+ files: ['vite.config.ts', 'e2e/**/*.ts'],
+ extends: [
+ ...tseslint.configs.recommended,
+ ],
+ languageOptions: {
+ parser: tseslint.parser,
+ parserOptions: { sourceType: 'module' },
+ },
+ rules: {
+ 'no-console': 'off',
+ },
+  },
+
   // Block 5: Legacy large files — written before ESLint was added.
   // New files must be fully compliant; these are grandfathered.
   {

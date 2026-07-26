@@ -166,6 +166,12 @@ All notable changes to Crystal Ball are documented here.
   warns when an API key would be sent in a query string to a non-allowlisted host
   — and removal of the `RELAY_ALLOW_ANON` anonymous-relay bypass (PRs #1138, #1144).
 
+## [2.25.147] - 2026-07-26
+
+### Fixed
+
+- Synchronized the release documentation with the packaged desktop version.
+
 ## [2.25.143] - 2026-06-08
 
 ### Fixed

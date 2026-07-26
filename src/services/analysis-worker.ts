@@ -7,6 +7,8 @@ import type { NewsItem, ClusteredEvent, MarketData } from '@/types';
 import type { PredictionMarket } from '@/services/prediction';
 import type { CorrelationSignal } from './correlation';
 import { SOURCE_TIERS, SOURCE_TYPES, type SourceType } from '@/config/feeds';
+import { boundCorrelationClusters } from './analysis-input';
+import { slog } from './structured-log';
 
 // Import worker using Vite's worker syntax
 import AnalysisWorker from '@/workers/analysis.worker?worker';
@@ -58,7 +60,7 @@ class AnalysisWorkerManager {
  this.readyTimeout = setTimeout(() => {
  if (!this.isReady) {
  const error = new Error('Worker failed to become ready within timeout');
- console.error('[AnalysisWorker]', error.message);
+ slog('error', 'analysis-worker', error.message);
  this.readyReject?.(error);
  this.cleanup();
  }
@@ -67,13 +69,15 @@ class AnalysisWorkerManager {
  try {
  this.worker = new AnalysisWorker();
  } catch (error) {
- console.error('[AnalysisWorker] Failed to create worker:', error);
+ slog('error', 'analysis-worker', 'Failed to create worker', {
+ fields: { error: error instanceof Error ? error.message : String(error) },
+ });
  this.readyReject?.(error instanceof Error ? error : new Error(String(error)));
  this.cleanup();
  return;
  }
 
- this.worker.onmessage = (event: MessageEvent<WorkerResult>) => {
+ this.worker.addEventListener('message', (event: MessageEvent<WorkerResult>) => {
  const data = event.data;
 
  if (data.type === 'ready') {
@@ -124,10 +128,10 @@ class AnalysisWorkerManager {
  }
  }
  }
- };
+ });
 
- this.worker.onerror = (error) => {
- console.error('[AnalysisWorker] Error:', error);
+ this.worker.addEventListener('error', (error) => {
+ slog('error', 'analysis-worker', 'Worker error', { fields: { error: error.message } });
 
  // If not ready yet, reject the ready promise
  if (!this.isReady) {
@@ -142,7 +146,7 @@ class AnalysisWorkerManager {
  pending.reject(new Error(`Worker error: ${error.message}`));
  this.pendingRequests.delete(id);
  }
- };
+ });
   }
 
   /**
@@ -220,6 +224,7 @@ class AnalysisWorkerManager {
  markets: MarketData[]
   ): Promise<CorrelationSignal[]> {
  await this.waitForReady();
+ const boundedClusters = boundCorrelationClusters(clusters);
 
  return new Promise((resolve, reject) => {
  const id = this.generateId();
@@ -239,7 +244,7 @@ class AnalysisWorkerManager {
  this.worker!.postMessage({
  type: 'correlation',
  id,
- clusters,
+ clusters: boundedClusters,
  predictions,
  markets,
  sourceTypes: SOURCE_TYPES as Record<string, SourceType>,

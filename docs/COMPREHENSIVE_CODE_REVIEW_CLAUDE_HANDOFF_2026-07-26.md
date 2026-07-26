@@ -1276,11 +1276,14 @@ GitHub disclosed 21 open Dependabot alerts on `main`. The implementation updates
 all affected lockfile entries to GitHub's first-patched version or newer:
 `fast-uri`, `sharp`, `dompurify`, `protobufjs`, both `brace-expansion` lines,
 `js-yaml`, `hono`, `@hono/node-server`, `body-parser`, and `serde_with`. The MCP
-install now reports zero known vulnerabilities. The root `npm ci` summary still
-reports 11 high-severity npm-registry advisories; their details were not queried
-because the execution safety layer requires explicit operator approval before
-sending the dependency tree to the npm audit service. Treat those registry
-advisories as unresolved until an approved detailed audit identifies them.
+install now reports zero known vulnerabilities. The first root CI audit exposed
+newer npm-registry advisories in `brace-expansion`, `js-yaml`, and `postcss`;
+those paths were moved to `brace-expansion` 5.0.8, the unaffected
+`markdownlint-cli2` 0.22.1 / `js-yaml` 4.1.1 line, and `postcss` 8.5.23.
+`glob` was also moved to 13.0.6 because 11.1.0 is deprecated as vulnerable.
+The resulting local `npm ci` summary reports one high and two moderate
+advisories. Treat that remaining registry high as unresolved until the next CI
+audit log identifies its dependency path.
 
 ## Remaining Claude PR plan
 

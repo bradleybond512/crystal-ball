@@ -26,7 +26,13 @@ import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
 import { getHypothesisFeedbackMult, signatureFor } from './hypothesis-feedback';
 import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
 import { getDomainCalibrationMult } from './intelligence/forecast-calibration-adapter';
-import { recordHypothesisPredictions, domainForHypothesis } from './intelligence/hypothesis-prediction-bridge';
+import {
+  domainForHypothesis,
+  factDomainForAlertSource,
+  factDomainForSignalSource,
+  factDomainForSituationDomain,
+  recordHypothesisPredictions,
+} from './intelligence/hypothesis-prediction-bridge';
 import { isDismissed } from './analyst-command-listener';
 import { dedupeHypotheses } from './hypothesis-dedupe';
 import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
@@ -38,6 +44,7 @@ import { interestMultiplier } from '@/services/cognition/operator-model';
 import { ingestFromHypotheses } from '@/services/cognition/entity-dossier';
 import { entitiesFromHypothesis } from './hypothesis-entities';
 import { slugifyEntity } from '@/services/intelligence/entity-slug';
+import type { FactDomain } from '@/services/intelligence/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +81,8 @@ export interface Hypothesis {
   timestamp: number;
   /** Region label if one clearly dominates. */
   region?: string;
+  /** Canonical data domains supplied by the originating engines. */
+  domains?: FactDomain[];
 }
 
 export interface AnalystSnapshot {
@@ -142,6 +151,7 @@ function fromClusters(clusters: CrossDomainCluster[]): Hypothesis[] {
     confidence: c.confidence,
     risk: c.escalationRisk,
     region: c.region,
+    domains: [...new Set(c.domains.map((domain) => factDomainForSituationDomain(domain)))],
     timestamp: Date.now(),
     evidence: [
       ...c.situationIds.map((id): HypothesisEvidence => ({
@@ -183,6 +193,7 @@ function fromAnomalies(anomalies: Anomaly[]): Hypothesis[] {
         `${group.length} concurrent anomalies in ${prefix} domain (max z=${worstZ.toFixed(1)}): ${descriptions}`,
       confidence,
       risk: confidenceToRisk(confidence),
+      domains: [factDomainForSignalSource(prefix)],
       timestamp: Date.now(),
       evidence: group.map((a): HypothesisEvidence => ({
         source: 'anomaly-detection',
@@ -277,6 +288,7 @@ function fromAlertBurst(alerts: UnifiedAlert[]): Hypothesis[] {
         `Alert burst in ${panelId}: ${unique.length} distinct hot alerts within ${Math.round(BURST_WINDOW_MS / 60_000)}m, led by "${title.slice(0, 80)}".`,
       confidence,
       risk: confidenceToRisk(confidence),
+      domains: [factDomainForAlertSource(dominantSource ?? '')],
       timestamp: now,
       evidence: unique.slice(0, 8).map((a): HypothesisEvidence => ({
         source: 'unified-alerts',
@@ -301,6 +313,7 @@ function fromSituations(situations: Situation[]): Hypothesis[] {
     confidence: s.confidence,
     risk: confidenceToRisk(s.confidence),
     region: s.geo.label,
+    domains: [factDomainForSituationDomain(s.domain)],
     timestamp: Date.now(),
     evidence: [{
       source: 'situation-engine',
@@ -397,7 +410,7 @@ export function runAnalystCycle(): AnalystSnapshot {
           kind: 'hypothesis',
           signature: signatureFor(h),
           summary: h.statement.slice(0, 500),
-          domains: [h.kind],
+          domains: h.domains ?? [h.kind],
           entities: [...new Set(entitiesFromHypothesis(h).map((m) => slugifyEntity(m.entity)))]
             .filter(Boolean).slice(0, 10),
           region: h.region,

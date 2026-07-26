@@ -310,7 +310,7 @@ test('applyTrimPolicy: drops oldest graded first when over count cap', () => {
   assert.deepEqual(ids, ['eval-3', 'eval-4', 'eval-5'], 'pending preserved, oldest graded dropped first');
 });
 
-test('applyTrimPolicy: when pending alone exceeds cap, keeps newest pending', () => {
+test('applyTrimPolicy: when pending alone exceeds cap, keeps an outcome-horizon cohort plus current samples', () => {
   const records: EvaluationRecord[] = [
     record({ id: 'eval-1', at: NOW - 5 }),
     record({ id: 'eval-2', at: NOW - 4 }),
@@ -319,7 +319,44 @@ test('applyTrimPolicy: when pending alone exceeds cap, keeps newest pending', ()
   ];
   const kept = applyTrimPolicy(records, { maxRecords: 2, maxAgeMs: 1_000, nowMs: NOW });
   const ids = kept.map((r) => r.id).sort();
-  assert.deepEqual(ids, ['eval-3', 'eval-4'], 'newest 2 pending kept, oldest 2 dropped');
+  assert.deepEqual(ids, ['eval-1', 'eval-4'], 'oldest grading candidate and newest runtime sample are both kept');
+});
+
+test('applyTrimPolicy: balances the outcome-horizon cohort across algorithms', () => {
+  const records: EvaluationRecord[] = [
+    ...Array.from({ length: 6 }, (_, index) => record({
+      id: `alpha-${index}`,
+      algorithmId: 'alpha',
+      at: NOW - 20 + index,
+    })),
+    ...Array.from({ length: 6 }, (_, index) => record({
+      id: `beta-${index}`,
+      algorithmId: 'beta',
+      at: NOW - 20 + index,
+    })),
+  ];
+  const kept = applyTrimPolicy(records, { maxRecords: 8, maxAgeMs: 1_000, nowMs: NOW });
+  const ids = new Set(kept.map((r) => r.id));
+  assert.equal(kept.length, 8);
+  assert.equal(ids.has('alpha-0'), true);
+  assert.equal(ids.has('beta-0'), true);
+  assert.equal(ids.has('alpha-5'), true);
+  assert.equal(ids.has('beta-5'), true);
+});
+
+test('applyTrimPolicy: reserves history for graded outcomes even under pending pressure', () => {
+  const records: EvaluationRecord[] = [
+    record({ id: 'graded-1', at: NOW - 10, outcome: 'hit', outcomeAt: NOW - 5 }),
+    record({ id: 'graded-2', at: NOW - 9, outcome: 'miss', outcomeAt: NOW - 4 }),
+    ...Array.from({ length: 6 }, (_, index) => record({
+      id: `pending-${index}`,
+      at: NOW - 8 + index,
+    })),
+  ];
+  const kept = applyTrimPolicy(records, { maxRecords: 4, maxAgeMs: 1_000, nowMs: NOW });
+  assert.equal(kept.length, 4);
+  assert.ok(kept.some((r) => r.outcome !== undefined), 'at least one graded record survives');
+  assert.ok(kept.some((r) => r.outcome === undefined), 'pending runtime evidence also survives');
 });
 
 test('trimAndPersistAlgorithmLedger: writes the trimmed ledger and reports trimmedCount', async () => {
@@ -341,6 +378,10 @@ test('trimAndPersistAlgorithmLedger: writes the trimmed ledger and reports trimm
     },
   );
   assert.equal(status.trimmedCount, 1, 'eval-1 was dropped by age cutoff');
+  assert.equal(status.trimmedGradedCount, 1);
+  assert.equal(status.trimmedPendingCount, 0);
+  assert.equal(status.gradedRecordCount, 1);
+  assert.equal(status.pendingRecordCount, 1);
   assert.equal(status.recordCount, 2);
   assert.equal(status.lastSaveStatus, 'ok');
   const stored = adapter.snapshotStore();
@@ -379,6 +420,12 @@ test('getAlgorithmLedgerPersistenceStatus: starts idle', () => {
   assert.equal(status.lastSaveStatus, 'idle');
   assert.equal(status.recordCount, 0);
   assert.equal(status.trimmedCount, 0);
+  assert.equal(status.trimmedGradedCount, 0);
+  assert.equal(status.trimmedPendingCount, 0);
+  assert.equal(status.gradedRecordCount, 0);
+  assert.equal(status.pendingRecordCount, 0);
+  assert.equal(status.oldestPendingAt, null);
+  assert.equal(status.pendingCoverageMs, 0);
   assert.equal(status.rejectedCount, 0);
   assert.equal(status.lastError, null);
 });

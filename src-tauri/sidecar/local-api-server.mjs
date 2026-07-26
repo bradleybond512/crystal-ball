@@ -5953,7 +5953,9 @@ async function dispatch(requestUrl, req, routes, context) {
         // 400'ing every analyst-commands POST.
         const raw = await readBody(req);
         const body = raw ? JSON.parse(raw.toString()) : null;
-        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+          return json({ error: 'invalid body' }, 400);
+        }
         const kind = typeof body.kind === 'string' ? body.kind : '';
         const allowed = new Set(['thumbs_up', 'thumbs_down', 'dismiss', 'run_skeptic']);
         if (!allowed.has(kind)) return json({ error: 'unknown kind', allowed: [...allowed] }, 400);
@@ -5999,18 +6001,23 @@ async function dispatch(requestUrl, req, routes, context) {
         const raw = await readBody(req);
         const body = raw ? JSON.parse(raw.toString()) : null;
         if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
-        if (!context._analystState) context._analystState = {};
+        const previous = context._analystState || {};
+        const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
         // Cap payload size defensively (drop unknown deeply-nested fields).
         // analyst / forecast are validated to their known top-level shapes so
         // arbitrary renderer-supplied keys don't propagate into MCP responses.
-        const rawAnalyst = body.analyst && typeof body.analyst === 'object' ? body.analyst : null;
-        const analyst = rawAnalyst ? {
+        const rawAnalyst = has('analyst') && body.analyst && typeof body.analyst === 'object'
+          ? body.analyst
+          : null;
+        const analyst = !has('analyst') ? previous.analyst : rawAnalyst ? {
           timestamp: typeof rawAnalyst.timestamp === 'number' ? rawAnalyst.timestamp : Date.now(),
           hypotheses: Array.isArray(rawAnalyst.hypotheses) ? rawAnalyst.hypotheses.slice(0, 20) : [],
           aiEnriched: !!rawAnalyst.aiEnriched,
         } : null;
-        const rawForecast = body.forecast && typeof body.forecast === 'object' ? body.forecast : null;
-        const forecast = rawForecast ? {
+        const rawForecast = has('forecast') && body.forecast && typeof body.forecast === 'object'
+          ? body.forecast
+          : null;
+        const forecast = !has('forecast') ? previous.forecast : rawForecast ? {
           timestamp: typeof rawForecast.timestamp === 'number' ? rawForecast.timestamp : Date.now(),
           advisories: Array.isArray(rawForecast.advisories) ? rawForecast.advisories.slice(0, 20) : [],
           pressure: stripProtoKeys(rawForecast.pressure),
@@ -6019,20 +6026,38 @@ async function dispatch(requestUrl, req, routes, context) {
           timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
           analyst,
           forecast,
-          accuracy: Array.isArray(body.accuracy) ? body.accuracy.slice(0, 20) : [],
-          threads: Array.isArray(body.threads) ? body.threads.slice(0, 30) : [],
-          hotEntities: Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [],
-          entityCount: typeof body.entityCount === 'number' ? body.entityCount : 0,
-          ghostMode: !!body.ghostMode,
-          debugLog: Array.isArray(body.debugLog) ? body.debugLog.slice(-100) : [],
-          debugErrorCounts: stripProtoKeys(body.debugErrorCounts),
-          metrics: body.metrics && typeof body.metrics === 'object' ? stripProtoKeys(body.metrics) : null,
-          pipelineTrace: body.pipelineTrace && typeof body.pipelineTrace === 'object'
-            ? stripProtoKeys(body.pipelineTrace)
-            : null,
-          algorithmDiagnostics: body.algorithmDiagnostics && typeof body.algorithmDiagnostics === 'object'
-            ? stripProtoKeys(body.algorithmDiagnostics)
-            : null,
+          accuracy: has('accuracy')
+            ? (Array.isArray(body.accuracy) ? body.accuracy.slice(0, 20) : [])
+            : (previous.accuracy ?? []),
+          threads: has('threads')
+            ? (Array.isArray(body.threads) ? body.threads.slice(0, 30) : [])
+            : (previous.threads ?? []),
+          hotEntities: has('hotEntities')
+            ? (Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [])
+            : (previous.hotEntities ?? []),
+          entityCount: has('entityCount')
+            ? (typeof body.entityCount === 'number' ? body.entityCount : 0)
+            : (previous.entityCount ?? 0),
+          ghostMode: has('ghostMode') ? !!body.ghostMode : (previous.ghostMode ?? false),
+          debugLog: has('debugLog')
+            ? (Array.isArray(body.debugLog) ? body.debugLog.slice(-100) : [])
+            : (previous.debugLog ?? []),
+          debugErrorCounts: has('debugErrorCounts')
+            ? stripProtoKeys(body.debugErrorCounts)
+            : previous.debugErrorCounts,
+          metrics: has('metrics')
+            ? (body.metrics && typeof body.metrics === 'object' ? stripProtoKeys(body.metrics) : null)
+            : (previous.metrics ?? null),
+          pipelineTrace: has('pipelineTrace')
+            ? (body.pipelineTrace && typeof body.pipelineTrace === 'object'
+              ? stripProtoKeys(body.pipelineTrace)
+              : null)
+            : (previous.pipelineTrace ?? null),
+          algorithmDiagnostics: has('algorithmDiagnostics')
+            ? (body.algorithmDiagnostics && typeof body.algorithmDiagnostics === 'object'
+              ? stripProtoKeys(body.algorithmDiagnostics)
+              : null)
+            : (previous.algorithmDiagnostics ?? null),
         };
         context._analystState = safe;
         return json({ ok: true });

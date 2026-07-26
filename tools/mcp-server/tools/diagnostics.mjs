@@ -12,7 +12,7 @@ export const schemas = {
   },
   get_algorithm_diagnostics: {
     description:
-      'Current algorithm health, evaluation coverage, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
+      'Current algorithm health, forecast calibration/Brier coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
     inputSchema: z.object({}),
   },
 };
@@ -156,6 +156,10 @@ function summarizeFeeds(feeds) {
 
 function summarizeAlgorithms(snapshot) {
   const ledger = snapshot.ledger ?? {};
+  const forecasts = snapshot.forecastCalibration?.summary ?? {};
   const status = snapshot.health?.status ?? 'unknown';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} evaluations graded; ${ledger.pending ?? 0} pending.`;
+  const brier = typeof forecasts.brierScore === 'number'
+    ? `; Brier ${forecasts.brierScore.toFixed(3)}`
+    : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}; ${forecasts.overduePending ?? 0} overdue.`;
 }

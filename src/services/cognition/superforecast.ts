@@ -16,9 +16,9 @@
  *      (probability-aggregation.ts).
  *   5. Recalibration: final probability passes through PR 2's per-domain
  *      reliability curve (getRecalibrator from forecast-calibration-adapter.ts).
- *   6. Logging: every SuperForecast is recorded in the calibration store
- *      (getCalibrationStore().record(...), sourceId 'superforecast') so the
- *      system measurably self-improves over time.
+ *   6. Logging: every deduplicated SuperForecast is durably recorded in the
+ *      calibration store with the same objective target key used by the
+ *      analyst-loop forecast, so one observed outcome grades both models.
  *
  * Degradation ladder (budget-gated):
  *   full           — base rate + decomposition + 3 persona probabilities
@@ -49,8 +49,17 @@ import { decomposeHypothesis } from './decomposition';
 import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { aggregate } from './probability-aggregation';
 import type { Estimate } from './probability-aggregation';
-import { getRecalibrator } from '@/services/intelligence/forecast-calibration-adapter';
-import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
+import {
+  getCalibrationStore,
+  getRecalibrator,
+  recordPrediction,
+} from '@/services/intelligence/forecast-calibration-adapter';
+import {
+  domainForHypothesis,
+  HYPOTHESIS_OUTCOME_HORIZON_MS,
+  claimForHypothesisOutcome,
+  targetKeyForHypothesis,
+} from '@/services/intelligence/hypothesis-prediction-bridge';
 import { forecastHypothesis } from '@/services/intelligence/hypothesis-forecast';
 import type { GenerateTextFn } from './decomposition';
 import { conformalInterval } from './conformal';
@@ -321,37 +330,40 @@ async function isBudgetExhausted(): Promise<boolean> {
 
 // ── Calibration store logging ──────────────────────────────────────────────────
 
-let _recordIdCounter = 0;
+const SUPERFORECAST_WINDOW_MS = 6 * 60 * 60 * 1000;
 
-function genRecordId(hypothesisId: string): string {
-  _recordIdCounter += 1;
-  return `sf-${hypothesisId.slice(0, 12)}-${Date.now().toString(36)}-${_recordIdCounter}`;
+export function superforecastPredictionIdFor(
+  h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>,
+  now: number,
+): string {
+  return `sf:${signatureFor(h)}:${Math.floor(now / SUPERFORECAST_WINDOW_MS)}`;
 }
 
-function logToCalibrationStore(
-  hypothesisId: string,
-  probability: number,
+export function recordSuperforecastPrediction(
   h: Hypothesis,
-): void {
+  probability: number,
+  now: number = Date.now(),
+): string {
+  const id = superforecastPredictionIdFor(h, now);
   try {
     const store = getCalibrationStore();
-    const now = Date.now();
-    // Horizon: 7 days default (hypothesis-level forecast).
-    const resolveBy = now + 7 * 24 * 60 * 60 * 1000;
-    store.record({
-      id: genRecordId(hypothesisId),
+    if (store.get(id)) return id;
+    recordPrediction({
+      id,
       sourceId: 'superforecast',
-      domain: 'other', // Hypotheses don't have a typed FactDomain; use 'other'.
-      claim: h.statement.slice(0, 200),
+      targetKey: targetKeyForHypothesis(h),
+      domain: domainForHypothesis(h),
+      claim: claimForHypothesisOutcome(h).slice(0, 280),
       probability,
       predictedAt: now,
-      resolveBy,
+      resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
-      algorithmVersion: 'superforecast-v1',
+      algorithmVersion: 'superforecast-v2',
     });
   } catch {
     // Never let calibration logging crash the pipeline.
   }
+  return id;
 }
 
 // ── Deterministic floor ────────────────────────────────────────────────────────
@@ -419,13 +431,17 @@ async function buildDeterministicEstimates(
 // cognition suite; a structural decomposition is tracked separately.
 // eslint-disable-next-line sonarjs/cognitive-complexity -- see justification above
 export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
-  const sig = signatureFor(h);
+  const forecastTarget: Hypothesis = {
+    ...h,
+    statement: claimForHypothesisOutcome(h),
+  };
+  const sig = `${signatureFor(h)}:outcome-v2`;
   const explanationParts: string[] = [];
 
   // ── Step 1: Deterministic outside view (always runs) ─────────────────────
 
   const { estimates: baseEstimates, referenceClassId, outsideExplanation } =
-    await buildDeterministicEstimates(h);
+    await buildDeterministicEstimates(forecastTarget);
   explanationParts.push(`[outside] ${outsideExplanation}`);
 
   const allEstimates: Estimate[] = [...baseEstimates];
@@ -441,7 +457,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
     if (generate) {
       // Step 2a: Decomposition (inside view).
       try {
-        const decomp = await decomposeHypothesis(h, generate);
+        const decomp = await decomposeHypothesis(forecastTarget, generate);
         if (decomp !== null) {
           allEstimates.push({ source: 'decomposition', p: decomp.pInside, weight: 1 });
           explanationParts.push(`[inside] ${decomp.explanation}`);
@@ -483,7 +499,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
 
         // Self-consistency: collect up to k samples, stop early on budget exhaustion.
         const samples: number[] = [];
-        const prompt = buildPersonaPrompt(h, persona);
+        const prompt = buildPersonaPrompt(forecastTarget, persona);
 
         for (let sample = 0; sample < selfConsistencyK; sample++) {
           // For k=1: identical to the pre-PR-15 path (no extra budget checks, no median).
@@ -578,7 +594,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
 
     if (reviewBudgetOk && generate && hasPersonaEstimates) {
       // preferCloud: true — this is the one call allowed to use the cloud tier.
-      const res = await generate(buildAggregateReviewPrompt(h, aggregatedP, allEstimates), {
+      const res = await generate(buildAggregateReviewPrompt(forecastTarget, aggregatedP, allEstimates), {
         maxTokens: 150,
         preferCloud: true,
       });
@@ -606,7 +622,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
 
   let finalP = reviewedP;
   try {
-    const recalibrator = getRecalibrator();
+    const recalibrator = getRecalibrator(domainForHypothesis(h));
     const { p: recalibratedP, explanation: recalibrationExplanation } = recalibrator(reviewedP);
     finalP = recalibratedP;
     explanationParts.push(`[recalibrated] ${recalibrationExplanation}`);
@@ -617,7 +633,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
 
   // ── Step 5: Log to calibration store ────────────────────────────────────
 
-  logToCalibrationStore(h.id, finalP, h);
+  recordSuperforecastPrediction(h, finalP);
 
   // ── Step 6: Conformal prediction interval (PR 7) ─────────────────────────
 
@@ -625,8 +641,7 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
   try {
     const store = getCalibrationStore();
     const allRecords = store.all();
-    // Hypotheses are domain-agnostic ('other'); use the global pool.
-    interval = conformalInterval(finalP, 'other', allRecords);
+    interval = conformalInterval(finalP, domainForHypothesis(h), allRecords);
   } catch {
     // Never let interval computation crash the pipeline.
   }

@@ -39,6 +39,19 @@ function healthyInput() {
       algorithmDiagnostics: {
         health: { status: 'healthy', algorithms: [], recommendations: [] },
         runtime: [],
+        forecastCalibration: {
+          summary: {
+            total: 5,
+            resolved: 3,
+            pending: 2,
+            expired: 0,
+            overduePending: 0,
+            oldestPendingAt: NOW - 60_000,
+            brierScore: 0.18,
+          },
+          byDomain: [],
+          bySource: [],
+        },
         ledger: {
           total: 5,
           graded: 3,
@@ -104,6 +117,26 @@ test('buildDoctorReport warns when active algorithm evidence is not persisted', 
 
   assert.equal(report.status, 'yellow');
   assert.ok(report.findings.some((finding) => finding.id === 'algorithm.ledger_persistence_idle'));
+});
+
+test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loops', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.forecastCalibration.summary = {
+    total: 20,
+    resolved: 12,
+    pending: 6,
+    expired: 2,
+    overduePending: 3,
+    oldestPendingAt: NOW - 86_400_000,
+    brierScore: 0.41,
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'yellow');
+  assert.equal(report.algorithms.forecastCalibration.summary.overduePending, 3);
+  assert.ok(report.findings.some((finding) => finding.id === 'forecast.outcomes_overdue'));
+  assert.ok(report.findings.some((finding) => finding.id === 'forecast.calibration_poor'));
 });
 
 test('redactDiagnosticText removes secrets, email, query credentials, and the home username', () => {

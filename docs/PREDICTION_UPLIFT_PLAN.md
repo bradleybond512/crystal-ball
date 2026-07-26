@@ -44,6 +44,32 @@ Audit findings (2026-07-21, verified against `origin/main` @ `ba5c100e`):
   loop even though the correlation outcome ledger now grades exactly what they
   produce. Only `correlation-feedback` is in the algorithm registry.
 
+## Truth-spine stabilization (2026-07-26)
+
+Codex implemented a bounded prerequisite pass before Workstream B:
+
+- `PredictionRecord.targetKey` now links independent forecasts of the same
+  objective outcome. Analyst-loop confidence and the superforecaster share the
+  target “supporting evidence remains hot or escalates within two hours,” so one
+  deterministic hypothesis-accuracy observation grades both model records.
+- Hypotheses carry canonical upstream domains. Single-domain forecasts use that
+  domain's calibration curve; mixed-domain forecasts remain in `other` instead
+  of contaminating a domain-specific reliability history.
+- Superforecast records use the durable adapter, survive reload, dedupe by
+  signature/window, and use the same domain for recalibration, conformal
+  intervals, and outcome logging.
+- The high-volume runtime ledger retains a balanced outcome-horizon cohort, a
+  recent diagnostics cohort, and graded history. Fallback LLM grading is capped
+  at 20 records per hourly pass.
+- Doctor and MCP diagnostics now expose forecast resolution counts, Brier score,
+  per-domain/per-source calibration, overdue outcomes, and retention cohort
+  counts. Partial diagnostics pushes no longer erase the latest analyst or
+  mode-forecast snapshot.
+
+This does not replace Workstream B. The runtime evaluation ledger's LLM grader
+is fallback quality evidence, not API ground truth. B1-B3 still need explicit,
+target-specific resolvers against observed market, weather, and conflict data.
+
 ## Invariants (apply to every PR)
 
 - Pure, deterministic service cores: no DOM, no fetch, no globals, no

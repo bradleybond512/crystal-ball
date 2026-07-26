@@ -37,6 +37,7 @@ import {
   buildAlgorithmDiagnosticsSnapshot,
   type AlgorithmDiagnosticsSnapshot,
 } from './algorithms/algorithm-diagnostics';
+import { getCalibrationStore } from './intelligence/forecast-calibration-adapter';
 
 const ENDPOINT = '/api/analyst-state';
 
@@ -173,6 +174,7 @@ function refreshDiagnosticPayload(): void {
   pendingPayload.algorithmDiagnostics = buildAlgorithmDiagnosticsSnapshot({
     definitions: getAlgorithmDefinitions(),
     records: getAlgorithmEvaluationLedger().all(),
+    forecastPredictions: getCalibrationStore().all(),
     persistence: getAlgorithmLedgerPersistenceStatus(),
     tunings: getTunings(),
     tuningDecisions: getTuningDecisions(),

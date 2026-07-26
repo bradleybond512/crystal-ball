@@ -39,11 +39,16 @@ import type { Estimate } from '../probability-aggregation.js';
 // We test the orchestrator via its injectable _injectGenerateTextForTests API.
 import {
   superforecast,
+  recordSuperforecastPrediction,
   _injectGenerateTextForTests,
   _clearPersonaCacheForTests,
 } from '../superforecast.js';
 
 import type { Hypothesis } from '../../analyst-loop.js';
+import {
+  getCalibrationStore,
+  _resetCalibrationForTests,
+} from '../../intelligence/forecast-calibration-adapter.js';
 
 // ── Fixture helpers ───────────────────────────────────────────────────────────
 
@@ -372,5 +377,38 @@ describe('aggregate integration: full pipeline math', () => {
       result.explanation.includes('skipped') || result.explanation.includes('disagreement'),
       `high-spread explanation must mention skip/disagreement: ${result.explanation}`,
     );
+  });
+});
+
+describe('superforecast calibration logging', () => {
+  it('persists a domain-aware record that survives calibration-store reload', () => {
+    const memory = new Map<string, string>();
+    const previous = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => { memory.set(key, value); },
+      removeItem: (key: string) => { memory.delete(key); },
+    };
+
+    try {
+      _resetCalibrationForTests();
+      const h = makeHypothesis({ id: 'h-persisted', domains: ['conflict'] });
+      const id = recordSuperforecastPrediction(h, 0.72, 10_000);
+      _resetCalibrationForTests();
+
+      const record = getCalibrationStore().get(id);
+      assert.equal(record?.sourceId, 'superforecast');
+      assert.equal(record?.domain, 'conflict');
+      assert.equal(record?.probability, 0.72);
+      assert.ok(record?.targetKey?.startsWith('hypothesis:'));
+      assert.match(record?.claim ?? '', /within the next 2 hours/i);
+    } finally {
+      _resetCalibrationForTests();
+      if (previous === undefined) {
+        delete (globalThis as { localStorage?: unknown }).localStorage;
+      } else {
+        (globalThis as { localStorage?: unknown }).localStorage = previous;
+      }
+    }
   });
 });

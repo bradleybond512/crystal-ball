@@ -33,6 +33,9 @@ export interface ResolveOptions {
   llmFn?: LlmFn;
   /** Acceptance threshold passed through to the grader. */
   acceptanceThreshold?: number;
+  /** Maximum records to send to the LLM in one pass. Oldest eligible
+   *  records are processed first. */
+  maxRecords?: number;
 }
 
 export interface ResolutionEntry {
@@ -42,7 +45,7 @@ export interface ResolutionEntry {
   ledgerReason: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 48 * 60 * 60 * 1000;
+export const DEFAULT_OUTCOME_TIMEOUT_MS = 48 * 60 * 60 * 1000;
 
 // ── API ───────────────────────────────────────────────────────────────
 
@@ -52,7 +55,7 @@ export function pickEligibleForLlmGrading(
   records: readonly EvaluationRecord[],
   options: { timeoutMs?: number; now?: number } = {},
 ): EvaluationRecord[] {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_OUTCOME_TIMEOUT_MS;
   const now = options.now ?? Date.now();
   const cutoff = now - timeoutMs;
   return records.filter((r) => r.outcome === undefined && r.at <= cutoff);
@@ -66,7 +69,9 @@ export async function resolvePendingViaLlm(
   const eligible = pickEligibleForLlmGrading(records, {
     timeoutMs: options.timeoutMs,
     now: options.now,
-  });
+  })
+    .sort((a, b) => a.at - b.at)
+    .slice(0, Math.max(0, options.maxRecords ?? Number.POSITIVE_INFINITY));
   const llmFn: LlmFn = options.llmFn ?? unavailableLlmFn;
 
   const out: ResolutionEntry[] = [];

@@ -38,6 +38,7 @@ export interface OutcomeGradingDeps {
   llmFn?: LlmFn;
   now?: number;
   timeoutMs?: number;
+  maxBatchSize?: number;
 }
 
 export interface OutcomeGradingResult {
@@ -64,6 +65,7 @@ export async function runOutcomeGrading(deps: OutcomeGradingDeps = {}): Promise<
       llmFn: deps.llmFn ?? defaultLlmFn,
       now: deps.now,
       timeoutMs: deps.timeoutMs,
+      maxRecords: deps.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
     });
   } catch {
     // LLM unavailable / batch failed — leave records pending, retry next cycle.
@@ -89,6 +91,7 @@ export async function runOutcomeGrading(deps: OutcomeGradingDeps = {}): Promise<
 /** Default cadence. Eligibility is independently gated by the resolver's
  *  48h record-age timeout, so most ticks are cheap no-ops. */
 const DEFAULT_CADENCE_MS = 60 * 60 * 1000; // hourly
+const DEFAULT_MAX_BATCH_SIZE = 20;
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 let _running = false;

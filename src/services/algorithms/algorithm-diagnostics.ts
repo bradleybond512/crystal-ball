@@ -14,9 +14,17 @@ import {
 } from './safe-adjustment';
 import type { AlgorithmLedgerPersistenceStatus } from './algorithm-ledger-persistence';
 import type { TuningDecision } from './tuning-decision-log';
+import {
+  brierScore,
+  perDomainAccuracy,
+  perSourceMultipliers,
+  type PredictionRecord,
+  type SourceMultiplier,
+} from '../intelligence/forecast-calibration';
 
 const RECENT_EVALUATION_LIMIT = 20;
 const RECENT_TUNING_DECISION_LIMIT = 20;
+const FORECAST_RESOLUTION_GRACE_MS = 15 * 60 * 1000;
 
 export interface AlgorithmRuntimeDiagnostics {
   algorithmId: string;
@@ -58,6 +66,7 @@ export interface AlgorithmDiagnosticsSnapshot {
     persistence: AlgorithmLedgerPersistenceStatus;
   };
   health: AlgorithmHealthReport;
+  forecastCalibration: ForecastCalibrationDiagnostics;
   runtime: readonly AlgorithmRuntimeDiagnostics[];
   tunings: readonly AlgorithmAdjustmentTuning[];
   proposals: readonly AdjustmentProposal[];
@@ -69,9 +78,30 @@ export interface BuildAlgorithmDiagnosticsInput {
   generatedAt?: number;
   definitions: readonly AlgorithmDefinition[];
   records: readonly EvaluationRecord[];
+  forecastPredictions?: readonly PredictionRecord[];
   persistence: AlgorithmLedgerPersistenceStatus;
   tunings: readonly AlgorithmAdjustmentTuning[];
   tuningDecisions: readonly TuningDecision[];
+}
+
+export interface ForecastCalibrationDiagnostics {
+  summary: {
+    total: number;
+    resolved: number;
+    pending: number;
+    expired: number;
+    overduePending: number;
+    oldestPendingAt: number | null;
+    brierScore: number | null;
+  };
+  byDomain: readonly {
+    domain: PredictionRecord['domain'];
+    predictionCount: number;
+    resolvedCount: number;
+    brier: number | null;
+    calibrationError: number | null;
+  }[];
+  bySource: readonly SourceMultiplier[];
 }
 
 export function buildAlgorithmDiagnosticsSnapshot(
@@ -98,6 +128,10 @@ export function buildAlgorithmDiagnosticsSnapshot(
       persistence: { ...input.persistence },
     },
     health,
+    forecastCalibration: buildForecastCalibrationDiagnostics(
+      input.forecastPredictions ?? [],
+      generatedAt,
+    ),
     runtime: buildRuntimeRows(input.definitions, records),
     tunings: input.tunings.map((tuning) => copyTuning(tuning)),
     proposals: proposeAdjustments(
@@ -111,6 +145,44 @@ export function buildAlgorithmDiagnosticsSnapshot(
     recentTuningDecisions: input.tuningDecisions
       .slice(0, RECENT_TUNING_DECISION_LIMIT)
       .map((decision) => ({ ...decision })),
+  };
+}
+
+function buildForecastCalibrationDiagnostics(
+  predictions: readonly PredictionRecord[],
+  now: number,
+): ForecastCalibrationDiagnostics {
+  const resolved = predictions.filter(
+    (record) => record.status === 'resolved_true' || record.status === 'resolved_false',
+  );
+  const pending = predictions
+    .filter((record) => record.status === 'pending')
+    .sort((a, b) => a.predictedAt - b.predictedAt);
+  const domainRows = perDomainAccuracy(predictions);
+
+  return {
+    summary: {
+      total: predictions.length,
+      resolved: resolved.length,
+      pending: pending.length,
+      expired: predictions.filter((record) => record.status === 'expired').length,
+      overduePending: pending.filter(
+        (record) => record.resolveBy < now - FORECAST_RESOLUTION_GRACE_MS,
+      ).length,
+      oldestPendingAt: pending[0]?.predictedAt ?? null,
+      brierScore: resolved.length > 0 ? brierScore(resolved).score : null,
+    },
+    byDomain: domainRows.map((row) => {
+      const resolvedCount = resolved.filter((record) => record.domain === row.domain).length;
+      return {
+        domain: row.domain,
+        predictionCount: row.predictionCount,
+        resolvedCount,
+        brier: resolvedCount > 0 ? row.brier : null,
+        calibrationError: resolvedCount > 0 ? row.calibrationError : null,
+      };
+    }),
+    bySource: perSourceMultipliers(predictions),
   };
 }
 

@@ -45,6 +45,40 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         outcomeReason: 'rejected',
       },
     ],
+    forecastPredictions: [
+      {
+        id: 'forecast-1',
+        sourceId: 'superforecast',
+        domain: 'conflict',
+        claim: 'sensitive fixture claim',
+        probability: 0.8,
+        predictedAt: NOW - 10_000,
+        resolveBy: NOW - 5_000,
+        status: 'resolved_true',
+        resolvedAt: NOW - 4_000,
+      },
+      {
+        id: 'forecast-2',
+        sourceId: 'analyst-loop',
+        domain: 'cyber',
+        claim: 'another fixture claim',
+        probability: 0.6,
+        predictedAt: NOW - 8_000,
+        resolveBy: NOW - 20 * 60_000,
+        status: 'pending',
+      },
+      {
+        id: 'forecast-3',
+        sourceId: 'mode-forecast:cyber',
+        domain: 'cyber',
+        claim: 'expired fixture claim',
+        probability: 0.4,
+        predictedAt: NOW - 20_000,
+        resolveBy: NOW - 10_000,
+        status: 'expired',
+        resolvedAt: NOW - 9_000,
+      },
+    ],
     persistence: {
       lastLoadStatus: 'ok',
       lastLoadedAt: NOW - 10_000,
@@ -52,6 +86,12 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
       lastSavedAt: NOW - 500,
       recordCount: 2,
       trimmedCount: 0,
+      trimmedGradedCount: 0,
+      trimmedPendingCount: 0,
+      gradedRecordCount: 2,
+      pendingRecordCount: 0,
+      oldestPendingAt: null,
+      pendingCoverageMs: 0,
       rejectedCount: 0,
       lastError: null,
     },
@@ -97,6 +137,17 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
   assert.equal(snapshot.runtime[0]?.latencyMs.p50, 30);
   assert.equal(snapshot.runtime[0]?.latencyMs.p95, 30);
   assert.equal(snapshot.runtime[0]?.latencyMs.max, 30);
+  assert.deepEqual(snapshot.forecastCalibration.summary, {
+    total: 3,
+    resolved: 1,
+    pending: 1,
+    expired: 1,
+    overduePending: 1,
+    oldestPendingAt: NOW - 8_000,
+    brierScore: 0.04,
+  });
+  assert.equal(snapshot.forecastCalibration.bySource[0]?.sourceId, 'superforecast');
+  assert.doesNotMatch(JSON.stringify(snapshot.forecastCalibration), /sensitive fixture claim/);
   assert.equal(snapshot.tunings[0]?.parameters[0]?.current, 0.5);
   assert.equal(snapshot.recentTuningDecisions[0]?.kind, 'applied');
 });

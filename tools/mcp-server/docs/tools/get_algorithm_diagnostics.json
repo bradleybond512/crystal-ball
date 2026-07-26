@@ -1,0 +1,13 @@
+{
+  "name": "get_algorithm_diagnostics",
+  "synopsis": "get_algorithm_diagnostics({})",
+  "description": "Returns the running renderer's compact algorithm diagnostics snapshot: aggregate and per-algorithm health, evaluation-ledger coverage, p50/p95/max latency, runtime errors, bounded tuning parameters, adjustment proposals, recent evaluations, persistence status, and recent tuning decisions. Raw inputs, notes, details, and input hashes are intentionally omitted.",
+  "parameters": {},
+  "examples": [
+    {
+      "description": "Inspect calibration coverage and identify slow or failing algorithms before tuning",
+      "call": "get_algorithm_diagnostics({})"
+    }
+  ],
+  "see_also": ["diagnose_runtime", "get_pipeline_trace", "get_reasoning_metrics"]
+}

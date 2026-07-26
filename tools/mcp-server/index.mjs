@@ -8,6 +8,7 @@ import { makeFoundationTools, schemas as foundationSchemas } from './tools/found
 import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/intelligence.mjs';
 import { makeStatefulTools, schemas as statefulSchemas } from './tools/stateful.mjs';
 import { makeAnalystTools, schemas as analystSchemas } from './tools/analyst.mjs';
+import { makeDiagnosticsTools, schemas as diagnosticsSchemas } from './tools/diagnostics.mjs';
 import { makeHelpTools, schemas as helpSchemas } from './tools/help.mjs';
 import { makeIntelExpansionTools } from './tools/intel-expansion.mjs';
 import { createStorage } from './storage.mjs';
@@ -20,6 +21,7 @@ const foundation = makeFoundationTools(client);
 const intelligence = makeIntelligenceTools(client, storage);
 const stateful = makeStatefulTools(client, storage);
 const analyst = makeAnalystTools(client);
+const diagnostics = makeDiagnosticsTools(client);
 const helpTools = makeHelpTools();
 const intelExpansion = makeIntelExpansionTools(client);
 
@@ -230,6 +232,12 @@ server.registerTool('run_skeptic_now', analystSchemas.run_skeptic_now, async (ar
 server.registerTool('get_reasoning_debug_log', analystSchemas.get_reasoning_debug_log, async (args) => textResult(await analyst.get_reasoning_debug_log(args)));
 
 server.registerTool('get_reasoning_metrics', analystSchemas.get_reasoning_metrics, async (args) => textResult(await analyst.get_reasoning_metrics(args)));
+
+server.registerTool('get_pipeline_trace', analystSchemas.get_pipeline_trace, async (args) => textResult(await analyst.get_pipeline_trace(args)));
+
+server.registerTool('diagnose_runtime', diagnosticsSchemas.diagnose_runtime, async (args) => textResult(await diagnostics.diagnose_runtime(args)));
+
+server.registerTool('get_algorithm_diagnostics', diagnosticsSchemas.get_algorithm_diagnostics, async (args) => textResult(await diagnostics.get_algorithm_diagnostics(args)));
 
 // ---- Intel Expansion Tools (16 new sources) ----
 

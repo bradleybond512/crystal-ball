@@ -41,6 +41,57 @@ interface NWSResponse {
 const NWS_API = 'https://api.weather.gov/alerts/active';
 const breaker = createCircuitBreaker<WeatherAlert[]>({ name: 'NWS Weather', cacheTtlMs: 30 * 60 * 1000, persistCache: true });
 
+/** Cap on active alerts retained from the national feed. The feed is
+ *  sorted MOST-SEVERE-FIRST before this cap applies, so a busy severe-
+ *  weather outbreak can't push the user's own warning out of range. Set
+ *  well above a realistic simultaneous-warning count (the old value, 50,
+ *  was smaller than a single big outbreak). */
+export const MAX_ACTIVE_ALERTS = 200;
+
+/** Higher = more severe. Drives the pre-cap priority sort so Extreme/
+ *  Severe products always survive truncation. */
+const SEVERITY_RANK: Record<string, number> = {
+  Extreme: 4,
+  Severe: 3,
+  Moderate: 2,
+  Minor: 1,
+  Unknown: 0,
+};
+
+/**
+ * Filter → prioritize → cap → normalize the raw NWS feature list into
+ * `WeatherAlert[]`. Pure and deterministic (given feature timestamps) so
+ * the truncation policy is unit-testable without a live fetch.
+ *
+ * The sort is the safety-critical part: personalization happens
+ * DOWNSTREAM of this cap, so if a Severe/Extreme alert over the user is
+ * dropped here it can never warn them. Sorting most-severe-first (stable
+ * within a severity, so API order is preserved per tier) guarantees the
+ * cap only ever sheds the least-severe products.
+ */
+export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): WeatherAlert[] {
+  return [...features]
+    .filter((alert) => alert.properties.severity !== 'Unknown')
+    .sort((a, b) => (SEVERITY_RANK[b.properties.severity] ?? 0) - (SEVERITY_RANK[a.properties.severity] ?? 0))
+    .slice(0, MAX_ACTIVE_ALERTS)
+    .map((alert) => {
+      const coords = extractCoordinates(alert.geometry);
+      return {
+        id: alert.id,
+        event: alert.properties.event,
+        severity: alert.properties.severity as WeatherAlert['severity'],
+        headline: alert.properties.headline,
+        description: alert.properties.description?.slice(0, 500) ?? '',
+        areaDesc: alert.properties.areaDesc,
+        onset: new Date(alert.properties.onset),
+        expires: new Date(alert.properties.expires),
+        coordinates: coords,
+        centroid: calculateCentroid(coords),
+        ugcZones: alert.properties.geocode?.UGC ?? [],
+      };
+    });
+}
+
 export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
   return breaker.execute(async () => {
  const response = await fetch(NWS_API, {
@@ -52,25 +103,7 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
  const data = await response.json() as NWSResponse;
  if (!data || !Array.isArray(data.features)) return [];
 
- return data.features
- .filter(alert => alert.properties.severity !== 'Unknown')
- .slice(0, 50)
- .map(alert => {
- const coords = extractCoordinates(alert.geometry);
- return {
- id: alert.id,
- event: alert.properties.event,
- severity: alert.properties.severity as WeatherAlert['severity'],
- headline: alert.properties.headline,
- description: alert.properties.description?.slice(0, 500) ?? '',
- areaDesc: alert.properties.areaDesc,
- onset: new Date(alert.properties.onset),
- expires: new Date(alert.properties.expires),
- coordinates: coords,
- centroid: calculateCentroid(coords),
- ugcZones: alert.properties.geocode?.UGC ?? [],
- };
- });
+ return selectAndNormalizeWeatherAlerts(data.features);
   }, []);
 }
 

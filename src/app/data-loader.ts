@@ -163,6 +163,7 @@ import { fetchNWSAlerts, type NWSAlert } from '@/services/nws-alerts';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
 import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
 import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
+import type { WeatherThreatCandidate } from '@/services/weather/personal-weather-status';
 import { recordWarningPredictions } from '@/services/weather/warning-verification-bridge';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
@@ -1720,6 +1721,8 @@ export class DataLoaderManager implements AppModule {
  { getNotificationPreferencesService },
  { computeAlertExposure },
  { getSavedPlaces },
+ { resolveSavedPlaceZones, toMatcherPlace },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1729,6 +1732,8 @@ export class DataLoaderManager implements AppModule {
  import('@/services/notifications/notification-preferences'),
  import('@/services/weather/weather-exposure'),
  import('@/services/saved-places'),
+ import('@/services/weather/saved-place-adapter'),
+ import('@/services/weather/personal-weather-status'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1765,14 +1770,19 @@ export class DataLoaderManager implements AppModule {
  // near-polygon sensitivity buffer and only near-matches non-high-urgency
  // hazards when a place opts in via radiusKm. Dropping it shrank the user's
  // coverage to the 10 km hazard default — the opposite of what someone
- // asking "why wasn't I warned?" wants.
- const weatherPlaces = getSavedPlaces().map((p) => ({
- id: p.id,
- label: p.name,
- lat: p.lat,
- lon: p.lon,
- radiusKm: p.radiusKm,
- }));
+ // asking "why wasn't I warned?" wants. Resolve each place's own UGC zones
+ // too so geometry-free (zone-only) NWS products — ice/heat/flood are often
+ // issued by UGC zone, not polygon — match instead of reading as clear.
+ const savedPlaces = getSavedPlaces();
+ const placeZonesById = await resolveSavedPlaceZones(savedPlaces);
+ const weatherPlaces = savedPlaces.map((p) => toMatcherPlace(p, placeZonesById.get(p.id)));
+ // Exposure floor read once (same tuned value the detector uses) so the
+ // status-chip threat decision uses the identical "over the user" bar.
+ const exposureFloor = getTunedParam('big-event-detector', 'exposureFloor', 70);
+ // Personal weather threats for the title-bar status chip — collected as we
+ // iterate so the chip can stop showing "ALL CLEAR" during a storm actually
+ // over the user (see selectPersonalWeatherThreat). Personal, not national.
+ const weatherThreatCandidates: WeatherThreatCandidate[] = [];
  for (const alert of severeAlerts) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
  // With no saved place, exposure is genuinely unknown — keep the
@@ -1780,6 +1790,16 @@ export class DataLoaderManager implements AppModule {
  const userExposure = weatherPlaces.length > 0
  ? computeAlertExposure(alert, weatherPlaces).exposure
  : 50;
+ // Record this alert as a chip-threat candidate. Expiry falls back to a
+ // bounded window if the feed lacks a valid one, so a matched threat can
+ // never pin the chip on forever (getPersonalWeatherThreat self-clears).
+ const rawExpiry = alert.expires instanceof Date ? alert.expires.getTime() : NaN;
+ weatherThreatCandidates.push({
+ severity: alert.severity,
+ event: alert.event,
+ exposure: userExposure,
+ expiresAt: Number.isFinite(rawExpiry) ? rawExpiry : Date.now() + 60 * 60 * 1000,
+ });
  const ladderInput = {
  id: alert.id,
  domain: 'weather',
@@ -1797,7 +1817,7 @@ export class DataLoaderManager implements AppModule {
  const bigEventResult = detectBigEvent(ladderInput, {
  threshold: getTunedParam('big-event-detector', 'threshold', 40),
  rapidJumpDelta: getTunedParam('big-event-detector', 'rapidJumpDelta', 25),
- exposureFloor: getTunedParam('big-event-detector', 'exposureFloor', 70),
+ exposureFloor,
  });
  // B1 (self-improvement gameplan): feed the evaluation ledger so the
  // adaptive-tuner has data. Guarded — instrumentation must never break
@@ -1876,6 +1896,10 @@ export class DataLoaderManager implements AppModule {
  );
  }
  }
+ // Feed the title-bar status chip: the worst Extreme/Severe alert matched to
+ // a saved place (or null → chip clears). This is what stops the visible
+ // "ALL CLEAR" chip from lying during a storm actually over the user.
+ setPersonalWeatherThreat(selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor));
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);
  }
@@ -2747,10 +2771,14 @@ export class DataLoaderManager implements AppModule {
  // matcher can do point-in-polygon and fall back to zone matching.
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
+ const { resolveSavedPlaceZones, toMatcherPlace } = await import('@/services/weather/saved-place-adapter');
  const places = getSavedPlaces();
  if (places.length > 0) {
- // Adapt saved-places.SavedPlace to weather-threat-types.SavedPlace
- const weatherPlaces = places.map(p => ({ id: p.id, label: p.name, lat: p.lat, lon: p.lon }));
+ // Adapt saved-places.SavedPlace to weather-threat-types.SavedPlace via the
+ // shared adapter — carries radiusKm (near-polygon buffer) AND resolved UGC
+ // zones (zone fallback), which this site used to drop on both counts.
+ const placeZonesById = await resolveSavedPlaceZones(places);
+ const weatherPlaces = places.map(p => toMatcherPlace(p, placeZonesById.get(p.id)));
  let bestDecision = undefined;
  for (const minimal of minimalAlerts) {
  const decision = routeWeatherAlert(minimal, weatherPlaces);

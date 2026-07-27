@@ -226,6 +226,7 @@ import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-inte
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
+import { getPersonalWeatherThreat } from '@/services/weather/personal-weather-status';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -666,7 +667,12 @@ function collectCompositeStatusInputs(): CompositeStatusInputs {
     }).status;
   } catch { readinessStatus = null; }
 
-  return { safetyCaseSafeToOperate, readinessStatus };
+  let weatherSeverity: 'extreme' | 'severe' | null = null;
+  try {
+    weatherSeverity = getPersonalWeatherThreat()?.severity ?? null;
+  } catch { weatherSeverity = null; }
+
+  return { safetyCaseSafeToOperate, readinessStatus, weatherSeverity };
 }
 
 /** CSS class driving the brief accent pulse on a navigated-to panel

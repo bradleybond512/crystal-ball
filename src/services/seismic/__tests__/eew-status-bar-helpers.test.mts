@@ -264,6 +264,92 @@ test('composite omitted → EEW-only behaviour preserved', () => {
   assert.equal(state.allClear, false);
 });
 
+// ── Composite worst-of: personal weather ──────────────────────────────
+// The visible ALL CLEAR chip historically ignored weather entirely, so it
+// asserted "all clear" during an actual storm over the user. A PERSONAL
+// weather threat (an Extreme/Severe NWS alert matched to a saved place) now
+// feeds the composite. It must sit between EEW and safety in the tie-break
+// order: EEW > weather > safety > readiness.
+
+test('composite: weather extreme alone → crimson WEATHER: EXTREME, not all-clear', () => {
+  const state = deriveStatusBarState(null, { weatherSeverity: 'extreme' });
+  assert.equal(state.allClear, false);
+  assert.equal(state.color, 'crimson');
+  assert.equal(state.label, 'WEATHER: EXTREME');
+  assert.equal(state.source, 'weather');
+  assert.equal(state.tier, null);
+  assert.equal(state.lastAlert, null);
+  assert.equal(state.imessage.visible, false);
+});
+
+test('composite: weather severe alone → red SEVERE WEATHER', () => {
+  const state = deriveStatusBarState(null, { weatherSeverity: 'severe' });
+  assert.equal(state.allClear, false);
+  assert.equal(state.color, 'red');
+  assert.equal(state.label, 'SEVERE WEATHER');
+  assert.equal(state.source, 'weather');
+});
+
+test('composite: weather null treated as clear', () => {
+  const state = deriveStatusBarState(null, { weatherSeverity: null });
+  assert.equal(state.allClear, true);
+  assert.equal(state.source, 'none');
+});
+
+test('composite: weather extreme outranks EEW TIER_4 (rank 5 > 4)', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_4_SEVERE' })],
+    highestTier: 'TIER_4_SEVERE', lastEventId: 'a', asOf: NOW,
+  }, { weatherSeverity: 'extreme' });
+  assert.equal(state.source, 'weather');
+  assert.equal(state.color, 'crimson');
+  assert.equal(state.label, 'WEATHER: EXTREME');
+});
+
+test('composite: EEW TIER_5 outranks weather extreme (EEW wins the tie)', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_5_EXTREME' })],
+    highestTier: 'TIER_5_EXTREME', lastEventId: 'a', asOf: NOW,
+  }, { weatherSeverity: 'extreme' });
+  assert.equal(state.source, 'eew');
+  assert.match(state.label, /TIER 5/);
+});
+
+test('composite: EEW TIER_4 ties weather severe → EEW wins (live hazard first)', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_4_SEVERE' })],
+    highestTier: 'TIER_4_SEVERE', lastEventId: 'a', asOf: NOW,
+  }, { weatherSeverity: 'severe' });
+  assert.equal(state.source, 'eew');
+});
+
+test('composite: weather severe outranks safety review (weather wins the tie)', () => {
+  const state = deriveStatusBarState(null, {
+    weatherSeverity: 'severe',
+    safetyCaseSafeToOperate: false,
+  });
+  assert.equal(state.source, 'weather');
+  assert.equal(state.label, 'SEVERE WEATHER');
+});
+
+test('composite: weather severe outranks readiness unsafe', () => {
+  const state = deriveStatusBarState(null, {
+    weatherSeverity: 'severe',
+    readinessStatus: 'unsafe',
+  });
+  assert.equal(state.source, 'weather');
+});
+
+test('composite: weather extreme outranks safety + readiness together', () => {
+  const state = deriveStatusBarState(null, {
+    weatherSeverity: 'extreme',
+    safetyCaseSafeToOperate: false,
+    readinessStatus: 'unsafe',
+  });
+  assert.equal(state.source, 'weather');
+  assert.equal(state.color, 'crimson');
+});
+
 // ── S-wave countdown ───────────────────────────────────────────────────
 
 test('countdown null when no arrival time', () => {

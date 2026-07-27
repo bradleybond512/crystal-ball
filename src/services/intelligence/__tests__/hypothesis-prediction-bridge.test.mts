@@ -15,6 +15,7 @@ import {
   factDomainForSignalSource,
   factDomainForSituationDomain,
   HYPOTHESIS_OUTCOME_HORIZON_MS,
+  eventOccurrenceCriteriaFor,
   marketCriteriaFor,
   recordHypothesisPredictions,
   resolveHypothesisPrediction,
@@ -150,6 +151,98 @@ test('recorded market predictions carry their declared resolver criteria', () =>
   }));
 
   assert.equal(getCalibrationStore().all()[0]?.criteria?.kind, 'market_move');
+});
+
+test('stamps conservative event criteria only for structured conflict escalations', () => {
+  const criteria = eventOccurrenceCriteriaFor({
+    ...h,
+    kind: 'situation-escalation',
+    domains: ['conflict'],
+    region: 'Ukraine',
+    entitySlugs: ['UKR'],
+    signalTypes: ['hotspot_escalation', 'hotspot_escalation'],
+  });
+
+  assert.deepEqual(criteria, {
+    kind: 'event_occurrence',
+    domains: ['conflict', 'military', 'security'],
+    eventTypes: ['armed-conflict'],
+    entitySlugs: ['ukr'],
+    region: 'ukraine',
+    minEvidence: 2,
+  });
+});
+
+test('does not stamp event criteria without exact entity, region, or signal type', () => {
+  const base = {
+    ...h,
+    kind: 'situation-escalation',
+    domains: ['conflict'],
+    region: 'Ukraine',
+    entitySlugs: ['UKR'],
+    signalTypes: ['hotspot_escalation'],
+  };
+  assert.equal(eventOccurrenceCriteriaFor({
+    ...base,
+    entitySlugs: [],
+  }), undefined);
+  assert.equal(eventOccurrenceCriteriaFor({
+    ...base,
+    entitySlugs: ['UKR', 'RUS'],
+  }), undefined);
+  assert.equal(eventOccurrenceCriteriaFor({
+    ...base,
+    region: 'Global',
+  }), undefined);
+  assert.equal(eventOccurrenceCriteriaFor({
+    ...base,
+    signalTypes: ['unknown-signal'],
+  }), undefined);
+  assert.equal(eventOccurrenceCriteriaFor({
+    ...base,
+    kind: 'alert-burst',
+  }), undefined);
+  assert.equal(eventOccurrenceCriteriaFor({
+    ...base,
+    domains: ['weather'],
+  }), undefined);
+});
+
+test('recorded conflict predictions carry their declared resolver criteria', () => {
+  recordHypothesisPredictions([{
+    ...h,
+    kind: 'situation-escalation',
+    domains: ['conflict'],
+    region: 'Ukraine',
+    entitySlugs: ['UKR'],
+    signalTypes: ['hotspot_escalation'],
+  }], 5_000);
+
+  assert.equal(
+    getCalibrationStore().all()[0]?.criteria?.kind,
+    'event_occurrence',
+  );
+});
+
+test('legacy hypothesis grading cannot overwrite resolver-owned predictions', () => {
+  const conflictHypothesis = {
+    ...h,
+    kind: 'situation-escalation',
+    domains: ['conflict'],
+    region: 'Ukraine',
+    entitySlugs: ['UKR'],
+    signalTypes: ['hotspot_escalation'],
+  };
+  recordHypothesisPredictions([conflictHypothesis], 5_000);
+
+  const resolved = resolveHypothesisPrediction(
+    conflictHypothesis,
+    false,
+    5_000 + HYPOTHESIS_OUTCOME_HORIZON_MS,
+  );
+
+  assert.equal(resolved, false);
+  assert.equal(getCalibrationStore().all()[0]?.status, 'pending');
 });
 
 test('prediction id is stable for a signature+window', () => {

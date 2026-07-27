@@ -2297,7 +2297,7 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/cognition/cognition-settings'),
  import('@/services/diagnostics/recurring-loops'),
 ]).then(([
-   { marketMoveResolver, warningVerificationResolver },
+   { eventOccurrenceResolver, marketMoveResolver, warningVerificationResolver },
    { dispatchOutcomeResolvers },
    { getSpotPriceHistory },
    { query },
@@ -2317,7 +2317,11 @@ export class PanelLayoutManager implements AppModule {
          getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
        queryObservations: (queryInput) => query(queryInput),
        stormReportBatch: () => stormReports,
-     }, [marketMoveResolver, warningVerificationResolver]);
+     }, [
+       marketMoveResolver,
+       warningVerificationResolver,
+       eventOccurrenceResolver,
+     ]);
    },
    15 * 60_000,
    { priority: 'low', runImmediately: false },

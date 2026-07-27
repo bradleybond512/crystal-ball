@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-07-26
+> Updated: 2026-07-27
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -259,11 +259,13 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B2.
 
 ### ACC-103 — Conflict and geospatial event resolver
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
 Branch: `codex/acc-103-geospatial-resolver`
+
+Evidence: PR #1518
 
 Dependencies: ACC-101 and ACC-004
 
@@ -286,11 +288,17 @@ Verify:
 - `npm run test:intelligence`;
 - `npm run typecheck:all`.
 
+Verification: conflict, military, security, protest, and corroborated-news
+adapters feed a bounded resolver that requires exact target matching and two
+independent sources. Intelligence, cognition, renderer, reasoning, situations,
+news, algorithm, diagnostics, weather, security, strict lint, TypeScript,
+production build, lockfile, and secret-scan gates passed.
+
 Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 ### ACC-104 — Grade runtime algorithms from authoritative outcomes
 
-Status: `WAITING`
+Status: `TODO`
 
 Dependencies: ACC-101 through ACC-103
 

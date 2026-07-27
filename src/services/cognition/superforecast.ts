@@ -58,7 +58,7 @@ import {
   domainForHypothesis,
   HYPOTHESIS_OUTCOME_HORIZON_MS,
   claimForHypothesisOutcome,
-  marketCriteriaFor,
+  resolutionCriteriaForHypothesis,
   targetKeyForHypothesis,
 } from '@/services/intelligence/hypothesis-prediction-bridge';
 import { forecastHypothesis } from '@/services/intelligence/hypothesis-forecast';
@@ -359,7 +359,7 @@ export function recordSuperforecastPrediction(
       predictedAt: now,
       resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
-      criteria: marketCriteriaFor(h, now),
+      criteria: resolutionCriteriaForHypothesis(h, now),
       algorithmVersion: 'superforecast-v2',
     });
   } catch {

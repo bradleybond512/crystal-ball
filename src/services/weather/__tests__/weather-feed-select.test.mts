@@ -85,3 +85,36 @@ test('the cap is generous enough to keep a national severe-weather outbreak', ()
   // The old cap (50) was smaller than a realistic simultaneous-warning count.
   assert.ok(MAX_ACTIVE_ALERTS >= 200, `cap should be >= 200, got ${MAX_ACTIVE_ALERTS}`);
 });
+
+test('no Severe/Extreme alert is ever dropped, even beyond the cap', () => {
+  // A national outbreak can exceed MAX_ACTIVE_ALERTS in Severe products alone
+  // (hundreds of concurrent severe-thunderstorm / tornado / flash-flood
+  // warnings). Ranking by severity is not enough: if the user's Severe alert
+  // sorts behind MAX_ACTIVE_ALERTS other Severe alerts, a hard slice still
+  // drops it. The cap must shed only LESSER severities.
+  const flood: FeatureInput[] = [];
+  for (let i = 0; i < MAX_ACTIVE_ALERTS + 20; i += 1) flood.push(feature('Severe', i));
+  flood.push(feature('Severe', 999)); // the user's own warning, dead last
+  const out = selectAndNormalizeWeatherAlerts(flood);
+  assert.ok(
+    out.some((a) => a.id === 'nws-Severe-999'),
+    'a Severe alert must survive the cap no matter how many precede it',
+  );
+});
+
+test('the cap sheds only lesser severities, keeping every Severe/Extreme', () => {
+  const flood: FeatureInput[] = [];
+  for (let i = 0; i < MAX_ACTIVE_ALERTS + 10; i += 1) flood.push(feature('Severe', i));
+  for (let i = 0; i < 30; i += 1) flood.push(feature('Moderate', i));
+  const out = selectAndNormalizeWeatherAlerts(flood);
+  assert.equal(
+    out.filter((a) => a.severity === 'Severe').length,
+    MAX_ACTIVE_ALERTS + 10,
+    'all Severe alerts retained',
+  );
+  assert.equal(
+    out.filter((a) => a.severity === 'Moderate').length,
+    0,
+    'lesser alerts shed once the protected set fills the budget',
+  );
+});

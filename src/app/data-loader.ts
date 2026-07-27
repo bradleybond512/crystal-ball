@@ -1722,7 +1722,7 @@ export class DataLoaderManager implements AppModule {
  { computeAlertExposure },
  { getSavedPlaces },
  { resolveSavedPlaceZones, toMatcherPlace },
- { selectPersonalWeatherThreat, setPersonalWeatherThreat },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, resolveThreatExpiryMs },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1790,15 +1790,16 @@ export class DataLoaderManager implements AppModule {
  const userExposure = weatherPlaces.length > 0
  ? computeAlertExposure(alert, weatherPlaces).exposure
  : 50;
- // Record this alert as a chip-threat candidate. Expiry falls back to a
- // bounded window if the feed lacks a valid one, so a matched threat can
- // never pin the chip on forever (getPersonalWeatherThreat self-clears).
- const rawExpiry = alert.expires instanceof Date ? alert.expires.getTime() : NaN;
+ // Record this alert as a chip-threat candidate. `alert.expires` is a Date
+ // when freshly fetched but an ISO string after the offline cache round-trips
+ // it — resolveThreatExpiryMs parses both (and falls back to a bounded window
+ // only when the value is unusable) so a matched threat can never pin the chip
+ // on forever and an expired one self-clears on time.
  weatherThreatCandidates.push({
  severity: alert.severity,
  event: alert.event,
  exposure: userExposure,
- expiresAt: Number.isFinite(rawExpiry) ? rawExpiry : Date.now() + 60 * 60 * 1000,
+ expiresAt: resolveThreatExpiryMs(alert.expires),
  });
  const ladderInput = {
  id: alert.id,

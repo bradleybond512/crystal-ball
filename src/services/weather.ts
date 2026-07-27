@@ -58,6 +58,9 @@ const SEVERITY_RANK: Record<string, number> = {
   Unknown: 0,
 };
 
+/** Alerts at or above this rank (Severe, Extreme) are never shed by the cap. */
+const PROTECTED_SEVERITY_RANK = 3;
+
 /**
  * Filter → prioritize → cap → normalize the raw NWS feature list into
  * `WeatherAlert[]`. Pure and deterministic (given feature timestamps) so
@@ -70,10 +73,19 @@ const SEVERITY_RANK: Record<string, number> = {
  * cap only ever sheds the least-severe products.
  */
 export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): WeatherAlert[] {
-  return [...features]
+  const ranked = [...features]
     .filter((alert) => alert.properties.severity !== 'Unknown')
-    .sort((a, b) => (SEVERITY_RANK[b.properties.severity] ?? 0) - (SEVERITY_RANK[a.properties.severity] ?? 0))
-    .slice(0, MAX_ACTIVE_ALERTS)
+    .sort((a, b) => (SEVERITY_RANK[b.properties.severity] ?? 0) - (SEVERITY_RANK[a.properties.severity] ?? 0));
+  // Never shed a Severe/Extreme product — those are the ones that can be over
+  // the user, and personalization runs DOWNSTREAM of this cap. Because `ranked`
+  // is severe-first, the protected set is a prefix: extend the slice to cover
+  // it so the cap only ever trims the Moderate/Minor tail, even in an outbreak
+  // with more Severe/Extreme warnings than MAX_ACTIVE_ALERTS.
+  const protectedCount = ranked.filter(
+    (a) => (SEVERITY_RANK[a.properties.severity] ?? 0) >= PROTECTED_SEVERITY_RANK,
+  ).length;
+  return ranked
+    .slice(0, Math.max(MAX_ACTIVE_ALERTS, protectedCount))
     .map((alert) => {
       const coords = extractCoordinates(alert.geometry);
       return {

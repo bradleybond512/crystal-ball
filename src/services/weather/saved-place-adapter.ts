@@ -59,18 +59,30 @@ export async function resolveSavedPlaceZones(
   fetchZones: ZoneResolver = fetchUgcZonesForPoint,
 ): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
-  for (const place of places) {
-    const key = coordKey(place.lat, place.lon);
-    let zones = zoneCache.get(key);
-    if (!zones) {
-      try {
-        zones = await fetchZones(place.lat, place.lon);
-      } catch {
-        zones = [];
+  // Resolve places concurrently: each is an independent NWS /points lookup, so
+  // a serial loop stacks their latencies (8 places × ~1s each blocked the whole
+  // weather tick). Fault-isolated per place — one lookup's failure never rejects
+  // the batch.
+  await Promise.all(
+    places.map(async (place) => {
+      const key = coordKey(place.lat, place.lon);
+      let zones = zoneCache.get(key);
+      if (!zones) {
+        try {
+          zones = await fetchZones(place.lat, place.lon);
+        } catch {
+          zones = [];
+        }
+        // Cache ONLY a successful, non-empty resolve. An empty result (transient
+        // NWS failure or a genuinely zone-less point) must not poison the cache:
+        // caching [] here — which is truthy, so the guard above would treat it as
+        // a hit — would permanently disable zone-only matching for this place
+        // after a single hiccup. A place's zones never change, so one good
+        // resolve still serves every later tick.
+        if (zones.length > 0) zoneCache.set(key, zones);
       }
-      zoneCache.set(key, zones);
-    }
-    if (zones.length > 0) out.set(place.id, zones);
-  }
+      if (zones.length > 0) out.set(place.id, zones);
+    }),
+  );
   return out;
 }

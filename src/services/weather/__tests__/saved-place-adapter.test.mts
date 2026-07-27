@@ -62,6 +62,30 @@ test('resolveSavedPlaceZones omits places with no resolved zones', async () => {
   assert.equal(map.has('d'), false);
 });
 
+test('a transient empty/failed resolve is NOT cached — a later tick re-resolves', async () => {
+  // A single transient NWS /points failure (or an empty response) must not
+  // permanently disable zone-only matching for a place. If the first resolve
+  // yields no zones, the next weather tick must try again rather than serving
+  // an empty result from a poisoned negative cache. (Empty arrays are truthy
+  // in JS, so a naive `zoneCache.get(key)` guard treats a cached [] as a hit.)
+  let call = 0;
+  const fetchZones = async (): Promise<string[]> => {
+    call += 1;
+    return call === 1 ? [] : ['INZ042'];
+  };
+  const place = [stored({ id: 'flaky', lat: 47.1, lon: -122.2 })];
+
+  const first = await resolveSavedPlaceZones(place, fetchZones);
+  assert.equal(first.has('flaky'), false, 'first (empty) tick resolves nothing');
+
+  const second = await resolveSavedPlaceZones(place, fetchZones);
+  assert.deepEqual(
+    second.get('flaky'),
+    ['INZ042'],
+    'second tick must re-resolve, not serve a poisoned empty cache',
+  );
+});
+
 test('resolveSavedPlaceZones is best-effort: a throwing fetch does not break the batch', async () => {
   const places = [
     stored({ id: 'boom', lat: 1.1, lon: 1.1 }),

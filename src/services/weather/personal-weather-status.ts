@@ -25,9 +25,36 @@ export interface PersonalWeatherThreat {
 
 let current: PersonalWeatherThreat | null = null;
 
+/** Notified whenever the threat changes so the composite status chip can
+ *  refresh immediately instead of waiting for its next 30s poll. */
+type ThreatListener = () => void;
+const listeners = new Set<ThreatListener>();
+
+function notify(): void {
+  for (const listener of listeners) {
+    try {
+      listener();
+    } catch {
+      // Best-effort: one misbehaving subscriber must not stop the others (or
+      // strand the writer). The status bar refresh is the only real listener.
+    }
+  }
+}
+
+/**
+ * Subscribe to threat changes. Returns an unsubscribe function. The status bar
+ * subscribes so a mid-poll match (e.g. a Tornado Warning) repaints the chip at
+ * once rather than leaving "ALL CLEAR" up for up to 30 seconds.
+ */
+export function subscribePersonalWeatherThreat(listener: ThreatListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 /** Set (or clear, with `null`) the active personal weather threat. */
 export function setPersonalWeatherThreat(threat: PersonalWeatherThreat | null): void {
   current = threat;
+  notify();
 }
 
 /**
@@ -57,6 +84,37 @@ export interface WeatherThreatCandidate {
   exposure: number;
   /** Epoch ms the alert expires. */
   expiresAt: number;
+}
+
+/**
+ * Coerce an NWS alert's `expires` — which is a `Date` when freshly fetched but
+ * an ISO STRING after the offline cache JSON round-trips it (and defensively a
+ * number) — into an epoch-ms threat expiry. Falls back to `now + fallbackMs`
+ * only when the value is genuinely unusable, so a matched storm gets its real
+ * expiry (and can self-clear on time) instead of a blanket extra hour.
+ */
+export function resolveThreatExpiryMs(
+  expires: unknown,
+  now: number = Date.now(),
+  fallbackMs: number = 60 * 60 * 1000,
+): number {
+  const parsed = toEpochMs(expires);
+  return parsed ?? (now + fallbackMs);
+}
+
+function toEpochMs(expires: unknown): number | null {
+  if (expires instanceof Date) {
+    const ms = expires.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof expires === 'number') {
+    return Number.isFinite(expires) ? expires : null;
+  }
+  if (typeof expires === 'string') {
+    const ms = Date.parse(expires);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  return null;
 }
 
 const CANDIDATE_SEVERITY_RANK: Record<PersonalWeatherSeverity, number> = {

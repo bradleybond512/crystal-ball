@@ -226,7 +226,7 @@ import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-inte
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
-import { getPersonalWeatherThreat } from '@/services/weather/personal-weather-status';
+import { getPersonalWeatherThreat, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -723,6 +723,7 @@ export class PanelLayoutManager implements AppModule {
   private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
+  private personalWeatherUnsub: (() => void) | null = null;
   private modeAdvisoryUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
   private homeShell: HomeShellOverlay | null = null;
@@ -808,6 +809,8 @@ export class PanelLayoutManager implements AppModule {
  this.panelDragCleanupHandlers = [];
  this.safetyCaseUnsub?.();
  this.safetyCaseUnsub = null;
+ this.personalWeatherUnsub?.();
+ this.personalWeatherUnsub = null;
  this.modeAdvisoryUnsub?.();
  this.modeAdvisoryUnsub = null;
  if (this.criticalBannerEl) {
@@ -1079,6 +1082,12 @@ export class PanelLayoutManager implements AppModule {
  // than waiting for the next 30 s EEW poll.
  try {
  this.safetyCaseUnsub = getSafetyCaseService().subscribe(() => eewStatusBar.refreshCompositeStatus());
+ } catch { /* diagnostics optional */ }
+ // A personal weather threat matched between polls (e.g. a Tornado Warning
+ // arriving 5 s after the last tick) must repaint the chip at once rather
+ // than leaving "ALL CLEAR" up for the rest of the 30 s poll window.
+ try {
+ this.personalWeatherUnsub = subscribePersonalWeatherThreat(() => eewStatusBar.refreshCompositeStatus());
  } catch { /* diagnostics optional */ }
  startSpaceWeatherStatusBarPoller(eewStatusBar);
 

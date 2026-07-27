@@ -176,14 +176,16 @@ test('a subthreshold observation never resolves a claim false mid-window', () =>
   assert.equal(getCalibrationStore().all()[0]!.status, 'pending');
 });
 
-test('settleExpiredAdvisoryPredictions marks overdue pending records false, leaves in-window alone', () => {
+test('settleExpiredAdvisoryPredictions expires ambiguous overdue records, leaves in-window alone', () => {
   recordAdvisoryPredictions([advisory({ domain: 'finance' })], NOW);           // resolveBy NOW+24h
   recordAdvisoryPredictions([advisory({ domain: 'cyber' })], NOW + 20 * HOUR_MS); // resolveBy NOW+44h
   const n = settleExpiredAdvisoryPredictions(NOW + 30 * HOUR_MS);
   assert.equal(n, 1);
   const settled = getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:finance')!;
-  assert.equal(settled.status, 'resolved_false');
-  assert.equal(settled.resolutionProvenance?.kind, 'proxy');
+  assert.equal(settled.status, 'expired');
+  assert.equal(settled.resolutionProvenance, undefined);
+  assert.match(settled.resolutionNote ?? '', /^unresolved:mode-forecast-window-v1/);
+  assert.equal(getCalibrationStore().brier().evaluated, 0);
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:cyber')!.status, 'pending');
 });
 

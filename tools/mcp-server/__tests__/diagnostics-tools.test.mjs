@@ -92,6 +92,21 @@ test('diagnostics tools surface degraded weather ground-truth coverage', async (
         pending: 2,
         overduePending: 0,
       },
+      resolutionQuality: {
+        summary: {
+          total: 3,
+          resolved: 1,
+          resolutionCoverage: 0.333,
+          origins: { direct: 1, proxy: 0, manual: 0 },
+          malformed: 0,
+          labelLeakage: 0,
+          duplicateOutcomes: 0,
+          lateResolutions: 0,
+          contradictoryEvidence: 0,
+          uncertainProxy: 0,
+        },
+        byDomain: [],
+      },
       weatherReports: {
         status: 'stale',
         reportCount: 10,
@@ -124,4 +139,56 @@ test('diagnostics tools surface degraded weather ground-truth coverage', async (
     algorithms.summary,
     /runtime labels direct:1 proxy:0 manual:1 llm:0/,
   );
+  assert.match(
+    algorithms.summary,
+    /label quality direct:1 proxy:0 manual:0; invalid:0 uncertain-proxy:0 late:0/,
+  );
+});
+
+test('diagnostics tools rank invalid and uncertain resolution labels', async () => {
+  const algorithmDiagnostics = {
+    health: { status: 'healthy', algorithms: [] },
+    ledger: { total: 4, graded: 4, pending: 0 },
+    runtime: [],
+    forecastCalibration: {
+      summary: { total: 4, resolved: 4, pending: 0, overduePending: 0 },
+      resolutionQuality: {
+        summary: {
+          total: 4,
+          resolved: 4,
+          resolutionCoverage: 1,
+          origins: { direct: 1, proxy: 2, manual: 1 },
+          malformed: 0,
+          labelLeakage: 1,
+          duplicateOutcomes: 0,
+          lateResolutions: 1,
+          contradictoryEvidence: 0,
+          uncertainProxy: 1,
+        },
+        byDomain: [],
+      },
+    },
+  };
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/health': { ok: true },
+    '/api/feeds/health': { feeds: [] },
+    '/api/analyst-state': {
+      available: true,
+      stale: false,
+      algorithmDiagnostics,
+    },
+  }));
+
+  const runtime = await tools.diagnose_runtime({});
+
+  assert.equal(runtime.status, 'red');
+  assert.ok(runtime.findings.some(
+    (finding) => finding.id === 'forecast.resolution_quality_invalid',
+  ));
+  assert.ok(runtime.findings.some(
+    (finding) => finding.id === 'forecast.proxy_labels_uncertain',
+  ));
+  assert.ok(runtime.findings.some(
+    (finding) => finding.id === 'forecast.resolutions_late',
+  ));
 });

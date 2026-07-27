@@ -6,6 +6,23 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Resolution-label quality audit**: deterministic fixtures now guard against
+  label leakage, duplicate outcomes, late data, contradictory evidence, and
+  uncertain proxy labels. Structured resolutions fail closed unless bounded
+  evidence explicitly supports the outcome, ambiguous window closures expire
+  outside calibration, and privacy-safe app/doctor/MCP diagnostics expose
+  resolution coverage, origins, and quality defects by domain. (PR #1523)
+- **Authoritative runtime outcome grading**: emitted forecasts now link to
+  opaque algorithm-ledger evaluations with exact target, horizon, and version
+  attribution. Persisted forecasts backfill idempotently, non-LLM outcomes
+  grade linked evaluations automatically, and diagnostics distinguish direct,
+  proxy, manual, and LLM labels without exposing forecast identifiers.
+  (PR #1521)
+- **Corroborated conflict and geospatial outcome resolution**: structured
+  conflict forecasts now resolve against exact entity, region, event-type, and
+  time-window matches from independent providers. Ambiguous near-matches and
+  unsupported negative labels fail closed, while proxy provenance remains
+  bounded and inspectable. (PR #1518)
 - **Deterministic weather-warning ground truth**: active Tornado, Severe
   Thunderstorm, and Flash Flood warnings now create bounded, deduplicated
   calibration records and resolve against current Iowa State Local Storm

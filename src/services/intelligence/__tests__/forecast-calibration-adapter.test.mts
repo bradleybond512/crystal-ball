@@ -155,7 +155,12 @@ test('record and resolve bridge an exact authoritative algorithm evaluation', ()
     provenance: {
       resolverId: 'test-resolver-v1',
       kind: 'direct',
-      evidence: [],
+      evidence: [{
+        sourceIds: ['fixture-provider'],
+        observedAt: 1_500,
+        reference: 'fixture:linked-1',
+        supportsOutcome: true,
+      }],
     },
   }), true);
   const graded = ledger.graded()[0];

@@ -275,6 +275,7 @@ function inspectAlgorithmPersistence(snapshot, findings) {
 function inspectForecastCalibration(snapshot, findings) {
   const summary = objectOrNull(snapshot.forecastCalibration?.summary);
   if (!summary) return;
+  inspectResolutionQuality(snapshot.forecastCalibration, findings);
   inspectWeatherReportEvidence(snapshot.forecastCalibration, findings);
   const overdue = finiteOrNull(summary.overduePending) ?? 0;
   if (overdue > 0) {
@@ -298,6 +299,50 @@ function inspectForecastCalibration(snapshot, findings) {
       summary: `Forecast calibration is poor (Brier ${brier.toFixed(3)} across ${resolved} resolved predictions).`,
       evidence: `brierScore=${brier}; resolved=${resolved}`,
       nextAction: 'Compare bySource and byDomain Brier scores, then recalibrate or replace only the underperforming model/domain pair.',
+    });
+  }
+}
+
+function inspectResolutionQuality(forecastCalibration, findings) {
+  const quality = objectOrNull(forecastCalibration.resolutionQuality?.summary);
+  if (!quality) return;
+  const malformed = finiteOrNull(quality.malformed) ?? 0;
+  const leakage = finiteOrNull(quality.labelLeakage) ?? 0;
+  const duplicates = finiteOrNull(quality.duplicateOutcomes) ?? 0;
+  const contradictory = finiteOrNull(quality.contradictoryEvidence) ?? 0;
+  const invalid = malformed + leakage + duplicates + contradictory;
+  if (invalid > 0) {
+    addFinding(findings, {
+      id: 'forecast.resolution_quality_invalid',
+      severity: 'red',
+      priority: 23,
+      summary: `${invalid} invalid forecast resolution label issue(s) were detected.`,
+      evidence: `malformed=${malformed}; leakage=${leakage}; duplicates=${duplicates}; contradictory=${contradictory}`,
+      nextAction: 'Quarantine the affected domain labels and inspect resolutionQuality.byDomain plus the deterministic resolver fixtures before tuning any model.',
+    });
+  }
+
+  const uncertainProxy = finiteOrNull(quality.uncertainProxy) ?? 0;
+  if (uncertainProxy > 0) {
+    addFinding(findings, {
+      id: 'forecast.proxy_labels_uncertain',
+      severity: 'yellow',
+      priority: 24,
+      summary: `${uncertainProxy} proxy resolution label(s) lack strong corroboration.`,
+      evidence: `proxy=${quality.origins?.proxy ?? 0}; uncertainProxy=${uncertainProxy}`,
+      nextAction: 'Inspect resolutionQuality.byDomain, then require two independent supporting sources or replace the proxy with direct ground truth.',
+    });
+  }
+
+  const late = finiteOrNull(quality.lateResolutions) ?? 0;
+  if (late > 0) {
+    addFinding(findings, {
+      id: 'forecast.resolutions_late',
+      severity: 'yellow',
+      priority: 26,
+      summary: `${late} forecast resolution(s) arrived after their declared horizon.`,
+      evidence: `lateResolutions=${late}; resolved=${quality.resolved ?? 0}`,
+      nextAction: 'Compare resolver cadence and data timestamps by domain; keep late evidence distinct from in-window model performance.',
     });
   }
 }

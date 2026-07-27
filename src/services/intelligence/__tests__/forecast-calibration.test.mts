@@ -68,6 +68,7 @@ test('resolve: true outcome marks resolved_true', () => {
         sourceIds: ['yahoo-finance', 'finnhub'],
         observedAt: NOW + 1000,
         value: 103.2,
+        supportsOutcome: true,
       }],
     },
   });
@@ -97,6 +98,43 @@ test('resolve: refuses to re-resolve', () => {
   const second = s.resolve('p-1', false);
   assert.equal(second, false);
   assert.equal(s.get('p-1')?.status, 'resolved_true');
+});
+
+test('resolve: rejects malformed and contradictory structured evidence', () => {
+  const s = createForecastCalibrationStore();
+  s.record(pred());
+
+  assert.equal(s.resolve('p-1', true, NOW + 1000, {
+    note: 'proxy:conflicting providers',
+    provenance: {
+      resolverId: 'fixture-v1',
+      kind: 'proxy',
+      evidence: [
+        {
+          sourceIds: ['provider-a'],
+          observedAt: NOW + 500,
+          supportsOutcome: true,
+        },
+        {
+          sourceIds: ['provider-b'],
+          observedAt: NOW + 600,
+          supportsOutcome: false,
+        },
+      ],
+    },
+  }), false);
+  assert.equal(s.get('p-1')?.status, 'pending');
+});
+
+test('record: conflicting reuse of a prediction id fails closed', () => {
+  const s = createForecastCalibrationStore();
+  s.record(pred());
+  s.record(pred());
+  assert.throws(
+    () => s.record(pred({ targetKey: 'different-target' })),
+    /conflicting prediction id/i,
+  );
+  assert.equal(s.get('p-1')?.targetKey, undefined);
 });
 
 test('expirePending: marks past-resolveBy predictions as expired', () => {
@@ -296,7 +334,12 @@ test('toJson + loadJson roundtrip', () => {
     provenance: {
       resolverId: 'market-move-v1',
       kind: 'direct',
-      evidence: [{ sourceIds: ['yahoo-finance'], observedAt: NOW + 1, value: 103 }],
+      evidence: [{
+        sourceIds: ['yahoo-finance'],
+        observedAt: NOW + 1,
+        value: 103,
+        supportsOutcome: true,
+      }],
     },
   });
   const json = a.toJson();

@@ -57,7 +57,7 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         predictedAt: NOW - 10_000,
         resolveBy: NOW - 5_000,
         status: 'resolved_true',
-        resolvedAt: NOW - 4_000,
+        resolvedAt: NOW - 6_000,
         criteria: {
           kind: 'market_move',
           symbol: 'AAPL',
@@ -72,8 +72,9 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
           kind: 'direct',
           evidence: [{
             sourceIds: ['yahoo-finance', 'finnhub'],
-            observedAt: NOW - 4_000,
+            observedAt: NOW - 6_000,
             value: 104,
+            supportsOutcome: true,
           }],
         },
       },
@@ -197,13 +198,48 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
     unattributedResolved: 0,
     resolverExpired: 1,
   });
+  assert.deepEqual(snapshot.forecastCalibration.resolutionQuality.summary, {
+    total: 3,
+    resolved: 1,
+    resolutionCoverage: 0.333,
+    origins: {
+      direct: 1,
+      proxy: 0,
+      manual: 0,
+    },
+    malformed: 0,
+    labelLeakage: 0,
+    duplicateOutcomes: 0,
+    lateResolutions: 0,
+    contradictoryEvidence: 0,
+    uncertainProxy: 0,
+  });
+  assert.deepEqual(
+    snapshot.forecastCalibration.resolutionQuality.byDomain.map((row) => ({
+      domain: row.domain,
+      coverage: row.resolutionCoverage,
+      origins: row.origins,
+    })),
+    [
+      {
+        domain: 'cyber',
+        coverage: 0,
+        origins: { direct: 0, proxy: 0, manual: 0 },
+      },
+      {
+        domain: 'conflict',
+        coverage: 1,
+        origins: { direct: 1, proxy: 0, manual: 0 },
+      },
+    ],
+  );
   assert.deepEqual(snapshot.forecastCalibration.byResolver, [{
     resolverId: 'market-move-v1',
     resolved: 1,
     resolvedTrue: 1,
     resolvedFalse: 0,
     expired: 1,
-    lastResolvedAt: NOW - 4_000,
+    lastResolvedAt: NOW - 6_000,
   }]);
   assert.deepEqual(
     snapshot.forecastCalibration.marketSpots,

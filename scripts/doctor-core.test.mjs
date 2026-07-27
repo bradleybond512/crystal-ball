@@ -51,6 +51,21 @@ function healthyInput() {
           },
           byDomain: [],
           bySource: [],
+          resolutionQuality: {
+            summary: {
+              total: 5,
+              resolved: 3,
+              resolutionCoverage: 0.6,
+              origins: { direct: 1, proxy: 1, manual: 1 },
+              malformed: 0,
+              labelLeakage: 0,
+              duplicateOutcomes: 0,
+              lateResolutions: 0,
+              contradictoryEvidence: 0,
+              uncertainProxy: 0,
+            },
+            byDomain: [],
+          },
           weatherReports: {
             status: 'fresh',
             reportCount: 4,
@@ -171,6 +186,56 @@ test('buildDoctorReport exposes degraded warning-verification evidence', () => {
   assert.equal(report.status, 'yellow');
   assert.ok(report.findings.some(
     (finding) => finding.id === 'forecast.weather_reports_stale',
+  ));
+});
+
+test('buildDoctorReport fails red on invalid resolution labels', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.forecastCalibration.resolutionQuality.summary = {
+    total: 20,
+    resolved: 12,
+    resolutionCoverage: 0.6,
+    origins: { direct: 4, proxy: 3, manual: 5 },
+    malformed: 1,
+    labelLeakage: 2,
+    duplicateOutcomes: 3,
+    lateResolutions: 0,
+    contradictoryEvidence: 1,
+    uncertainProxy: 0,
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'red');
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.resolution_quality_invalid',
+  ));
+  assert.doesNotMatch(JSON.stringify(report.findings), /prediction-id|fixture claim/);
+});
+
+test('buildDoctorReport separates uncertain proxy and late labels', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.forecastCalibration.resolutionQuality.summary = {
+    total: 20,
+    resolved: 12,
+    resolutionCoverage: 0.6,
+    origins: { direct: 4, proxy: 3, manual: 5 },
+    malformed: 0,
+    labelLeakage: 0,
+    duplicateOutcomes: 0,
+    lateResolutions: 2,
+    contradictoryEvidence: 0,
+    uncertainProxy: 1,
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'yellow');
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.proxy_labels_uncertain',
+  ));
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.resolutions_late',
   ));
 });
 

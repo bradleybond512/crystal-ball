@@ -6,6 +6,14 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Hierarchical forecast base rate**: every eligible production forecast now
+  receives a versioned, same-target baseline after the ledger has 30
+  trustworthy resolved outcomes. The model uses a Beta-smoothed global rate,
+  conservative domain and horizon shrinkage, sparse-domain fallback, exact
+  outcome deduplication, and strict prediction-time evidence cutoffs. Frozen
+  walk-forward replay now names and gates the baseline, including a hard
+  failure if it trails the global Beta baseline; the reviewed corpus records
+  hierarchical Brier 0.238945 versus global 0.238997. (PR #1530)
 - **Time-ordered forecast replay benchmark**: `npm run bench:forecast`
   replays a frozen, privacy-safe 120-record forecast/outcome corpus through
   four expanding windows with strict prediction-time cutoffs. A committed
@@ -209,6 +217,9 @@ All notable changes to Crystal Ball are documented here.
 
 ### Fixed
 
+- **Stable delegated click handling**: seven render-rebuilding components now
+  delegate clicks from stable roots, preventing background renders between
+  pointer-down and pointer-up from swallowing user actions. (PR #1526)
 - **Performance sprint**: panel lifecycle teardown on `destroy()` and the Groq
   egress-disclosure gate (scoped to desktop, honors local-only in the sidecar)
   (PRs #1135, #1136).

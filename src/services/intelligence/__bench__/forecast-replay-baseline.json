@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "corpusId": "crystal-ball-forecast-replay-v1",
   "recordCount": 120,
+  "baselineModel": "hierarchical-base-rate@1.0.0",
   "metrics": {
-    "brierSkill": 0.005795,
+    "brierSkill": 0.005062,
     "logLoss": 0.698403,
     "resolutionCoverage": 0.8875,
     "highConfidenceMisses": 10

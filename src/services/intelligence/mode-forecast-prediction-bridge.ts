@@ -143,7 +143,12 @@ export function resolveAdvisoryPrediction(
 ): number {
   const store = getCalibrationStore();
   const prefix = advisoryKeyPrefix(domain);
-  const open = store.all().filter((r) => r.id.startsWith(prefix) && isOpenAt(r, now));
+  const targetKey = prefix.slice(0, -1);
+  const open = store.all().filter(
+    (r) =>
+      (r.id.startsWith(prefix) || r.targetKey === targetKey)
+      && isOpenAt(r, now),
+  );
   let n = 0;
   for (const r of open) {
     if (resolvePrediction(r.id, materialized, now, metadata)) n += 1;
@@ -185,7 +190,10 @@ export function settleExpiredAdvisoryPredictions(now: number = Date.now()): numb
   const store = getCalibrationStore();
   // Strict `<`: an on-the-deadline observation can still grade the prediction.
   const overdue = store.all().filter(
-    (r) => r.id.startsWith('mode:') && r.status === 'pending' && r.resolveBy < now,
+    (r) =>
+      (r.id.startsWith('mode:') || r.targetKey?.startsWith('mode:'))
+      && r.status === 'pending'
+      && r.resolveBy < now,
   );
   let n = 0;
   for (const r of overdue) {

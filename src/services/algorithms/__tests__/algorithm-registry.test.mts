@@ -38,7 +38,7 @@ test('initial: registers all live algorithms (orphaned algos with no call sites 
   const expected = [
     'analyst-loop', 'bias-detector', 'big-event-detector', 'cognitive-bias-detector', 'competitive-hypothesis',
     'compound-risk', 'confidence-urgency-matrix', 'correlation-feedback', 'counterfactual-reasoning',
-    'entity-trajectory', 'episodic-analog', 'hypothesis-accuracy', 'meta-confidence',
+    'entity-trajectory', 'episodic-analog', 'hierarchical-base-rate', 'hypothesis-accuracy', 'meta-confidence',
     'mode-forecast', 'negative-evidence', 'nws-polygon-match', 'operator-ranking', 'personal-storm-mode',
     'recalibration', 'relevance-learner', 'shortage-diesel', 'shortage-wheat',
     'source-feedback', 'superforecast', 'threat-classifier', 'truth-score', 'warning-verification',

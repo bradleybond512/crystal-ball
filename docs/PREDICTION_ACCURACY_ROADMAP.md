@@ -472,7 +472,11 @@ overflow.
 
 ### ACC-203 — Diagnostics and MCP evaluation export
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-203-evaluation-diagnostics`
 
 Dependencies: ACC-201
 
@@ -489,6 +493,22 @@ Deliver:
 - worst-performing source/domain/horizon pairs;
 - resolution backlog and label-origin counts;
 - no claims, evidence bodies, secrets, or high-precision locations in exports.
+
+Verification: PR #1527 adds a shared chronological 60/40 split, aggregate
+holdout Brier, log loss, base rate, Brier skill, equal-mass ECE, calibration
+fit, coverage, exclusions, resolution backlog, label origins, and the ten
+worst evidenced source/domain/horizon cohorts to renderer diagnostics, the
+doctor report, and the MCP tools. Cohorts below ACC-201's evidence floors stay
+explicitly `insufficient_evidence`; proxy labels remain excluded; agent
+boundaries allowlist the aggregate schema and strip injected raw fields.
+Privacy fixtures prove that claims, resolution notes, evidence references,
+target keys, scored records, and high-precision warning coordinates are
+absent. Twenty-four focused evaluator/diagnostic fixtures within 557
+intelligence and 304 algorithm tests, 396 diagnostic tests, 12,780 renderer
+tests, changed-file ESLint, strict lint, TypeScript, production build, offline
+smoke, bundle/precache/sidecar budgets, 69 security tests, dependency audit,
+lockfile, and secret-scan gates passed. The documentation freshness gate
+continues to report only the pre-existing main-branch omission for PR #1526.
 
 ### ACC-204 — Time-ordered replay corpus and benchmark
 

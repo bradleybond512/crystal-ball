@@ -192,6 +192,7 @@ const DEFAULT_LOG_LOSS_EPSILON = 1e-6;
 const DEFAULT_BOOTSTRAP_ITERATIONS = 2000;
 const DEFAULT_BOOTSTRAP_SEED = 0x43_52_59_53;
 const DEFAULT_MIN_PAIRS = 30;
+const DEFAULT_TRAINING_SHARE = 0.6;
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -563,6 +564,39 @@ export function horizonBucket(durationMs: number): string {
   if (duration < 7 * DAY) return '1d-7d';
   if (duration < 30 * DAY) return '7d-30d';
   return '30d+';
+}
+
+export function splitForecastRecordsChronologically(
+  records: readonly PredictionRecord[],
+  trainingShare = DEFAULT_TRAINING_SHARE,
+): {
+  training: PredictionRecord[];
+  evaluation: PredictionRecord[];
+} {
+  const ordered = [...records].sort((left, right) => {
+    const leftTime = Number.isFinite(left.predictedAt)
+      ? left.predictedAt
+      : Number.POSITIVE_INFINITY;
+    const rightTime = Number.isFinite(right.predictedAt)
+      ? right.predictedAt
+      : Number.POSITIVE_INFINITY;
+    return leftTime - rightTime || left.id.localeCompare(right.id);
+  });
+  if (ordered.length === 0) return { training: [], evaluation: [] };
+  if (ordered.length === 1) return { training: [], evaluation: ordered };
+  const share = Number.isFinite(trainingShare)
+    && trainingShare > 0
+    && trainingShare < 1
+    ? trainingShare
+    : DEFAULT_TRAINING_SHARE;
+  const splitIndex = Math.max(
+    1,
+    Math.min(ordered.length - 1, Math.floor(ordered.length * share)),
+  );
+  return {
+    training: ordered.slice(0, splitIndex),
+    evaluation: ordered.slice(splitIndex),
+  };
 }
 
 export function pairedBootstrapMeanDifference(

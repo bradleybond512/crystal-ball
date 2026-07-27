@@ -51,6 +51,83 @@ function healthyInput() {
           },
           byDomain: [],
           bySource: [],
+          evaluation: {
+            schemaVersion: 1,
+            split: {
+              strategy: 'chronological_60_40',
+              trainingRecords: 3,
+              evaluationRecords: 2,
+              evaluationWindowStart: NOW - 60_000,
+            },
+            resolutionBacklog: {
+              pending: 2,
+              overduePending: 0,
+              expired: 0,
+              oldestPendingAt: NOW - 60_000,
+            },
+            labelOrigins: {
+              direct: 1,
+              proxy: 1,
+              manual: 1,
+              unattributed: 0,
+            },
+            overall: {
+              coverage: {
+                total: 2,
+                resolved: 2,
+                expired: 0,
+                pending: 0,
+                overduePending: 0,
+                resolutionCoverage: 1,
+                expirationRate: 0,
+                closedCoverage: 1,
+              },
+              trainingSampleSize: 3,
+              exclusions: {
+                proxyLabels: 0,
+                invalidProbabilities: 0,
+                trainingWindowOverlap: 0,
+                trainingProxyLabels: 0,
+                trainingInvalidProbabilities: 0,
+              },
+              brier: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+              },
+              logLoss: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+              },
+              baseRate: {
+                status: 'insufficient_evidence',
+                sampleSize: 3,
+                minSampleSize: 20,
+              },
+              brierSkill: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+                reason: 'training_sample_floor',
+              },
+              equalMassEce: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+              },
+              calibrationFit: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 50,
+                reason: 'sample_floor',
+              },
+            },
+            worstCohorts: [],
+            cohortLimit: 10,
+            cohortCount: 0,
+            omittedCohortCount: 0,
+          },
           resolutionQuality: {
             summary: {
               total: 5,
@@ -157,6 +234,23 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
     oldestPendingAt: NOW - 86_400_000,
     brierScore: 0.41,
   };
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.overall.brier = {
+    status: 'ok',
+    sampleSize: 20,
+    value: 0.39,
+  };
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.worstCohorts = [{
+    sourceId: 'model-bad',
+    domain: 'cyber',
+    horizon: '1d-7d',
+    ...input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.overall,
+    brier: {
+      status: 'ok',
+      sampleSize: 20,
+      value: 0.64,
+    },
+  }];
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.cohortCount = 1;
 
   const report = buildDoctorReport(input);
 
@@ -164,6 +258,15 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
   assert.equal(report.algorithms.forecastCalibration.summary.overduePending, 3);
   assert.ok(report.findings.some((finding) => finding.id === 'forecast.outcomes_overdue'));
   assert.ok(report.findings.some((finding) => finding.id === 'forecast.calibration_poor'));
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.cohort_underperforming',
+  ));
+  assert.match(
+    report.findings.find(
+      (finding) => finding.id === 'forecast.cohort_underperforming',
+    )?.evidence ?? '',
+    /source=model-bad; domain=cyber; horizon=1d-7d; brier=0.64; sampleSize=20/,
+  );
 });
 
 test('buildDoctorReport exposes degraded warning-verification evidence', () => {

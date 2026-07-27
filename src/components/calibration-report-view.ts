@@ -5,11 +5,13 @@ import type { PredictionRecord } from '@/services/intelligence/forecast-calibrat
 import {
   brierContribution,
   evaluateForecastCohort,
+  forecastLossAttribution,
   horizonBucket,
   splitForecastRecordsChronologically,
   type EvidenceMetric,
   type EqualMassEceMetric,
   type ForecastCohortEvaluation,
+  type ForecastLossAttribution,
 } from '@/services/intelligence/forecast-evaluation';
 import type { ReliabilityPoint } from '@/services/intelligence/proper-scoring';
 
@@ -189,6 +191,7 @@ export interface ForecastWorkbenchView {
   rows: readonly ForecastWorkbenchRow[];
   worstErrors: readonly ForecastWorkbenchRow[];
   highConfidenceMisses: readonly ForecastWorkbenchRow[];
+  lossAttribution: ForecastLossAttribution;
   reliability: ForecastReliabilityView;
   comparison: {
     overall: ForecastCohortSummary;
@@ -287,6 +290,9 @@ export function buildForecastWorkbench(
         (right.brierContribution ?? 0) - (left.brierContribution ?? 0)
         || left.id.localeCompare(right.id))
       .slice(0, DRILLDOWN_LIMIT),
+    lossAttribution: forecastLossAttribution(
+      selectedCohortEvaluation.scoredRecords,
+    ),
     reliability: toReliabilityView(selectedCohortEvaluation.equalMassEce),
     comparison: {
       overall: toCohortSummary(overallEvaluation),

@@ -300,6 +300,15 @@ test('forecast workbench excludes proxy labels from holdout metrics', () => {
   assert.equal(view.comparison.selected.proxyLabelsExcluded, 1);
   assert.equal(view.comparison.selected.brier.status, 'ok');
   assert.deepEqual(view.worstErrors.map((row) => row.id), ['evaluation-direct']);
+  assert.equal(view.lossAttribution.sampleSize, 1);
+  assert.ok(Math.abs(view.lossAttribution.totalBrierLoss - 0.04) < 1e-12);
+  assert.deepEqual(view.lossAttribution.bySource.map((row) => row.key), ['test']);
+  assert.deepEqual(view.lossAttribution.byDomain.map((row) => row.key), ['weather']);
+  assert.deepEqual(view.lossAttribution.byHorizon.map((row) => row.key), ['1h-6h']);
+  assert.deepEqual(
+    view.lossAttribution.byAlgorithmVersion.map((row) => row.key),
+    ['v1'],
+  );
 });
 
 test('forecast workbench sorts numeric errors descending with unavailable values last', () => {

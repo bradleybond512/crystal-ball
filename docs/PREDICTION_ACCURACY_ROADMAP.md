@@ -512,11 +512,30 @@ continues to report only the pre-existing main-branch omission for PR #1526.
 
 ### ACC-204 — Time-ordered replay corpus and benchmark
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
 Branch: `codex/acc-204-replay-benchmark`
+
+Evidence: PR #1529
+
+Verification: `npm run bench:forecast` replays a privacy-safe frozen
+120-record corpus through four expanding windows with strict prediction-time
+cutoffs and passes committed Brier-skill, log-loss, resolution-coverage, and
+high-confidence-miss gates. The 80-record evaluation window resolves 71
+records and scores 65 direct/manual labels (88.75% resolution coverage),
+with Brier 0.237735, log loss 0.698403, and Brier skill 0.005795. Loss
+attribution identifies the analyst loop as 75.4% of total Brier loss
+(Brier 0.448, skill -0.906, eight high-confidence misses) while the security
+mode retains positive 0.796 Brier skill. The Belief Calibration panel, CLI
+doctor, and MCP diagnostics now expose bounded source/domain/horizon/version
+loss attribution. Five hundred sixty-two intelligence tests, 304 algorithm
+tests, 12,786 renderer tests, 106 MCP tests, diagnostics suites, strict lint,
+full TypeScript, production build, offline smoke, cognition and forecast
+benchmarks, bundle/precache/sidecar budgets, 69 security tests, dependency
+audit, lockfile, and secret-scan gates passed. Documentation freshness now
+reports only the pre-existing main-branch omission for PR #1526.
 
 Dependencies: ACC-201 and ACC-101
 

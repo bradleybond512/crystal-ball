@@ -50,6 +50,10 @@ jobs:
       # fixed-seed fixtures, no LLM calls — single-digit-millisecond runtime,
       # cannot hang or become a slow step.
       - run: npm run bench:cognition
+      # Frozen, privacy-safe forecast/outcome metadata replayed with expanding
+      # time windows. Fails on Brier-skill/log-loss/coverage/high-confidence
+      # miss regressions versus the reviewed baseline.
+      - run: npm run bench:forecast
       # Full MCP server suite (path-traversal sandbox, watchlist/alert tools,
       # trend/anomaly/correlate, sidecar client, etc.). It's a separate package
       # with its own deps (zod), so install + run it on its own — previously it

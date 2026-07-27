@@ -318,6 +318,7 @@ function inspectForecastCalibration(snapshot, findings) {
     });
   }
   inspectForecastEvaluationCohorts(snapshot.forecastCalibration, findings);
+  inspectForecastLossAttribution(snapshot.forecastCalibration, findings);
 }
 
 function inspectForecastEvaluationCohorts(forecastCalibration, findings) {
@@ -340,6 +341,31 @@ function inspectForecastEvaluationCohorts(forecastCalibration, findings) {
     summary: `${sourceId}/${domain}/${horizon} is the worst evidenced forecast cohort (Brier ${brier.toFixed(3)}, n=${sampleSize}).`,
     evidence: `source=${sourceId}; domain=${domain}; horizon=${horizon}; brier=${brier}; sampleSize=${sampleSize}`,
     nextAction: 'Replay this cohort against its chronological holdout before changing source weights or calibration parameters.',
+  });
+}
+
+function inspectForecastLossAttribution(forecastCalibration, findings) {
+  const attribution = objectOrNull(
+    forecastCalibration?.evaluation?.lossAttribution,
+  );
+  const rows = Array.isArray(attribution?.bySource)
+    ? attribution.bySource
+    : [];
+  const top = objectOrNull(rows[0]);
+  const totalSamples = finiteOrNull(attribution?.sampleSize) ?? 0;
+  const share = finiteOrNull(top?.shareOfBrierLoss);
+  if (!top || totalSamples < 20 || share === null || share < 0.5) return;
+  const sourceId = boundedDiagnosticLabel(top.key);
+  const sampleSize = finiteOrNull(top.sampleSize) ?? 0;
+  const highConfidenceMisses =
+    finiteOrNull(top.highConfidenceMisses) ?? 0;
+  addFinding(findings, {
+    id: 'forecast.loss_concentrated',
+    severity: 'yellow',
+    priority: 31,
+    summary: `${sourceId} contributes ${(share * 100).toFixed(1)}% of holdout Brier loss across ${sampleSize} scored forecasts.`,
+    evidence: `source=${sourceId}; shareOfBrierLoss=${share}; sampleSize=${sampleSize}; highConfidenceMisses=${highConfidenceMisses}`,
+    nextAction: 'Inspect evaluation.lossAttribution by domain, horizon, and algorithm version, then replay only the dominant loss slice.',
   });
 }
 

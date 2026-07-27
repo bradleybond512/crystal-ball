@@ -76,6 +76,15 @@ test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated 
 });
 
 test('get_algorithm_diagnostics bounds and strips unexpected cohort detail', async () => {
+  const lossRows = Array.from({ length: 12 }, (_, index) => ({
+    key: `source-${index}\u0000`,
+    sampleSize: index + 1,
+    totalBrierLoss: 12 - index,
+    meanBrier: 0.5,
+    shareOfBrierLoss: index === 0 ? 0.75 : 0.025,
+    highConfidenceMisses: index,
+    evidence: `SECRET-LOSS-EVIDENCE-${index}`,
+  }));
   const snapshot = {
     health: { status: 'healthy', algorithms: [] },
     ledger: { total: 30, graded: 30, pending: 0 },
@@ -154,6 +163,17 @@ test('get_algorithm_diagnostics bounds and strips unexpected cohort detail', asy
           },
           claim: 'SECRET-OVERALL-CLAIM',
         },
+        lossAttribution: {
+          sampleSize: 12,
+          totalBrierLoss: 6,
+          highConfidenceMisses: 3,
+          groupLimit: 10,
+          bySource: lossRows,
+          byDomain: lossRows.slice(0, 2),
+          byHorizon: lossRows.slice(0, 2),
+          byAlgorithmVersion: lossRows.slice(0, 2),
+          evidence: 'SECRET-LOSS-ROOT',
+        },
         worstCohorts: Array.from({ length: 12 }, (_, index) => ({
           sourceId: `model-${index}`,
           domain: 'cyber',
@@ -229,6 +249,19 @@ test('get_algorithm_diagnostics bounds and strips unexpected cohort detail', asy
   const evaluation = result.diagnostics.forecastCalibration.evaluation;
 
   assert.equal(evaluation.worstCohorts.length, 10);
+  assert.equal(evaluation.lossAttribution.bySource.length, 10);
+  assert.deepEqual(evaluation.lossAttribution.bySource[0], {
+    key: 'source-0',
+    sampleSize: 1,
+    totalBrierLoss: 12,
+    meanBrier: 0.5,
+    shareOfBrierLoss: 0.75,
+    highConfidenceMisses: 0,
+  });
+  assert.match(
+    result.summary,
+    /top Brier loss source-0 75\.0% \(0 high-confidence misses\)/,
+  );
   assert.doesNotMatch(
     JSON.stringify(evaluation),
     /SECRET|"(?:claim|evidence|reference)"/,

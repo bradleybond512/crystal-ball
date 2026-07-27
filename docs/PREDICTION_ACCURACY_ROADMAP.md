@@ -337,7 +337,11 @@ production build, offline smoke, lockfile, and secret-scan gates passed.
 
 ### ACC-105 — Resolution-quality audit
 
-Status: `TODO`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-105-resolution-quality-audit`
 
 Dependencies: ACC-101 through ACC-104
 
@@ -353,6 +357,18 @@ Phase exit:
 - market, weather, and conflict resolvers are live;
 - at least one direct outcome and one safe proxy outcome are proven end to end;
 - direct/proxy/LLM/manual label origin is visible in diagnostics.
+
+Verification: PR #1523 adds deterministic leakage, duplicate-outcome,
+late-data, contradictory-provider, and uncertain-proxy fixtures. Structured
+resolution metadata now fails closed unless bounded evidence explicitly
+supports the label, while ambiguous mode and shortage window closures expire
+without contaminating Brier scores. Privacy-safe diagnostics and the doctor/MCP
+tools report resolution coverage, label origins, and quality defects by domain.
+The live market, weather, and conflict resolvers retain direct and corroborated
+proxy paths established in ACC-103/104. Intelligence, shortage, algorithm,
+diagnostic, security, 12,732 renderer tests, strict/full lint, TypeScript,
+production build, bundle budgets, offline smoke, lockfile, dependency audit,
+and secret-scan gates passed.
 
 ## Phase 2 — Build the forecast evaluation workbench
 

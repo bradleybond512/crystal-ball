@@ -211,14 +211,16 @@ test('a subthreshold observation never resolves a claim false mid-window', () =>
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:jetfuel')!.status, 'pending');
 });
 
-test('settleExpiredShortagePredictions marks overdue pending records false, leaves in-window ones alone', () => {
+test('settleExpiredShortagePredictions expires ambiguous overdue records, leaves in-window ones alone', () => {
   recordShortagePredictions([forecast({ commodity: 'wheat', region: 'r1', horizonDays: 30 })], NOW);        // resolveBy NOW+30d
   recordShortagePredictions([forecast({ commodity: 'diesel', region: 'r2', horizonDays: 90 })], NOW);        // resolveBy NOW+90d
   const n = settleExpiredShortagePredictions(NOW + 45 * DAY_MS);
   assert.equal(n, 1);
   const settled = getCalibrationStore().all().find((r) => r.sourceId === 'shortage:wheat')!;
-  assert.equal(settled.status, 'resolved_false');
-  assert.equal(settled.resolutionProvenance?.kind, 'proxy');
+  assert.equal(settled.status, 'expired');
+  assert.equal(settled.resolutionProvenance, undefined);
+  assert.match(settled.resolutionNote ?? '', /^unresolved:shortage-window-v1/);
+  assert.equal(getCalibrationStore().brier().evaluated, 0);
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:diesel')!.status, 'pending');
 });
 

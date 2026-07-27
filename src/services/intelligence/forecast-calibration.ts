@@ -19,6 +19,7 @@
  */
 
 import type { FactDomain } from './types';
+import { validateResolutionMetadata } from './resolution-quality-audit';
 
 // ── Public types ─────────────────────────────────────────────────────────
 
@@ -59,6 +60,9 @@ export interface ResolutionEvidence {
   observedAt: number;
   value?: number;
   reference?: string;
+  /** Whether this evidence supports the recorded outcome. Structured
+   *  resolutions fail closed when evidence contradicts the proposed label. */
+  supportsOutcome?: boolean;
 }
 
 export interface ResolutionProvenance {
@@ -247,6 +251,13 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
   const store = new Map<string, PredictionRecord>();
 
   function record(prediction: PredictionRecord): void {
+    const existing = store.get(prediction.id);
+    if (existing) {
+      if (!samePredictionIdentity(existing, prediction)) {
+        throw new Error(`Conflicting prediction id "${prediction.id}"`);
+      }
+      return;
+    }
     store.set(prediction.id, cloneRecord(prediction));
   }
 
@@ -259,10 +270,14 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
     const prev = store.get(id);
     if (!prev) return false;
     if (prev.status !== 'pending') return false;
+    const resolvedAt = when ?? Date.now();
+    if (metadata && !validateResolutionMetadata(prev, resolvedAt, metadata).ok) {
+      return false;
+    }
     store.set(id, {
       ...prev,
       status: outcome ? 'resolved_true' : 'resolved_false',
-      resolvedAt: when ?? Date.now(),
+      resolvedAt,
       resolutionNote: metadata?.note,
       resolutionProvenance: metadata
         ? cloneResolutionProvenance(metadata.provenance)
@@ -376,6 +391,21 @@ function cloneRecord(record: PredictionRecord): PredictionRecord {
       ? cloneResolutionProvenance(record.resolutionProvenance)
       : undefined,
   };
+}
+
+function samePredictionIdentity(
+  left: PredictionRecord,
+  right: PredictionRecord,
+): boolean {
+  return left.sourceId === right.sourceId
+    && left.targetKey === right.targetKey
+    && left.domain === right.domain
+    && left.claim === right.claim
+    && left.probability === right.probability
+    && left.predictedAt === right.predictedAt
+    && left.resolveBy === right.resolveBy
+    && left.algorithmVersion === right.algorithmVersion
+    && JSON.stringify(left.criteria) === JSON.stringify(right.criteria);
 }
 
 function groupBy<T, K>(items: readonly T[], key: (t: T) => K): Map<K, T[]> {

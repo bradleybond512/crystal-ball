@@ -25,6 +25,10 @@ import {
   type PredictionRecord,
   type SourceMultiplier,
 } from '../intelligence/forecast-calibration';
+import {
+  auditResolutionQuality,
+  type ResolutionQualityAudit,
+} from '../intelligence/resolution-quality-audit';
 
 const RECENT_EVALUATION_LIMIT = 20;
 const RECENT_TUNING_DECISION_LIMIT = 20;
@@ -139,6 +143,7 @@ export interface ForecastCalibrationDiagnostics {
   }[];
   bySource: readonly SourceMultiplier[];
   byResolver: readonly ForecastResolverDiagnostics[];
+  resolutionQuality: ResolutionQualityAudit;
   marketSpots: SpotPriceDiagnostics | null;
   weatherReports: WeatherReportDiagnostics;
 }
@@ -251,6 +256,7 @@ function buildForecastCalibrationDiagnostics(
     }),
     bySource: perSourceMultipliers(predictions),
     byResolver: resolverDiagnostics.rows,
+    resolutionQuality: auditResolutionQuality(predictions, now),
     marketSpots: marketSpotPrices ? { ...marketSpotPrices } : null,
     weatherReports: buildWeatherReportDiagnostics(
       predictions,

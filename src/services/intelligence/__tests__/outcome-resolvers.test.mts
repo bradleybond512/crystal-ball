@@ -327,6 +327,7 @@ test('matching post-prediction storm report resolves a warning true', () => {
       sourceIds: ['iowa-state-lsr'],
       observedAt: 1_500,
       reference: 'lsr-1',
+      supportsOutcome: true,
     }],
   });
 });
@@ -445,11 +446,13 @@ test('corroborated conflict event resolves true with durable proxy provenance', 
         sourceIds: ['acled'],
         observedAt: 2_000,
         reference: 'observation:acled-1:armed-conflict',
+        supportsOutcome: true,
       },
       {
         sourceIds: ['news:reuters'],
         observedAt: 2_500,
         reference: 'observation:news-1:armed-conflict',
+        supportsOutcome: true,
       },
     ],
   });

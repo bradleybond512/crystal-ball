@@ -123,6 +123,18 @@ export function resolvePrediction(
   return ok;
 }
 
+/** Expire one prediction with a resolver note and persist it. */
+export function expirePrediction(
+  id: string,
+  when?: number,
+  note?: string,
+): boolean {
+  const store = getCalibrationStore();
+  const ok = store.expire(id, when, note);
+  if (ok) persist(store);
+  return ok;
+}
+
 /** Expire overdue pending predictions + persist. Returns expired count. */
 export function expirePendingPredictions(now?: number): number {
   const store = getCalibrationStore();

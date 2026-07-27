@@ -259,7 +259,11 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B2.
 
 ### ACC-103 — Conflict and geospatial event resolver
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-103-geospatial-resolver`
 
 Dependencies: ACC-101 and ACC-004
 

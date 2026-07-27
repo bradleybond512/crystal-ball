@@ -33,6 +33,8 @@ import type {
   AlgorithmEvaluationLedger,
   EvaluationOutcome,
   EvaluationRecord,
+  ForecastEvaluationTarget,
+  OutcomeLabelOrigin,
 } from './algorithm-evaluation-ledger';
 
 // Lazy getter to break the algorithms-state ↔ algorithm-ledger-persistence cycle.
@@ -464,14 +466,70 @@ export function validateRecords(raw: unknown): ValidationOk | ValidationFail {
 function isEvaluationRecord(value: unknown): value is EvaluationRecord {
   if (value === null || typeof value !== 'object') return false;
   const r = value as Record<string, unknown>;
-  if (typeof r.id !== 'string' || r.id.length === 0) return false;
-  if (typeof r.algorithmId !== 'string' || r.algorithmId.length === 0) return false;
-  if (!isAlgorithmDomain(r.domain)) return false;
-  if (typeof r.at !== 'number' || !Number.isFinite(r.at)) return false;
-  if (typeof r.durationMs !== 'number' || !Number.isFinite(r.durationMs)) return false;
-  if (r.outcome !== undefined && !isOutcome(r.outcome)) return false;
-  if (r.outcomeAt !== undefined && (typeof r.outcomeAt !== 'number' || !Number.isFinite(r.outcomeAt))) return false;
-  return true;
+  return hasValidEvaluationCore(r)
+    && hasValidForecastLink(r)
+    && hasValidOutcomeFields(r);
+}
+
+function hasValidEvaluationCore(record: Record<string, unknown>): boolean {
+  return typeof record.id === 'string'
+    && record.id.length > 0
+    && typeof record.algorithmId === 'string'
+    && record.algorithmId.length > 0
+    && isAlgorithmDomain(record.domain)
+    && typeof record.at === 'number'
+    && Number.isFinite(record.at)
+    && typeof record.durationMs === 'number'
+    && Number.isFinite(record.durationMs);
+}
+
+function hasValidForecastLink(record: Record<string, unknown>): boolean {
+  if (record.version !== undefined
+    && (typeof record.version !== 'string'
+      || record.version.length === 0
+      || record.version.length > 128)) {
+    return false;
+  }
+  if (record.forecastTarget === undefined) return true;
+  return record.version !== undefined && isForecastTarget(record.forecastTarget);
+}
+
+function hasValidOutcomeFields(record: Record<string, unknown>): boolean {
+  if (record.outcome !== undefined && !isOutcome(record.outcome)) return false;
+  if (record.outcomeAt !== undefined
+    && (typeof record.outcomeAt !== 'number'
+      || !Number.isFinite(record.outcomeAt))) {
+    return false;
+  }
+  if (record.outcomeOrigin !== undefined
+    && (!isOutcomeOrigin(record.outcomeOrigin)
+      || record.outcome === undefined)) {
+    return false;
+  }
+  if (record.forecastTarget !== undefined
+    && record.outcome !== undefined
+    && record.outcomeOrigin === undefined) {
+    return false;
+  }
+  return record.outcomeReference === undefined
+    || (typeof record.outcomeReference === 'string'
+      && record.outcomeReference.length <= 128);
+}
+
+function isForecastTarget(value: unknown): value is ForecastEvaluationTarget {
+  if (value === null || typeof value !== 'object') return false;
+  const target = value as Record<string, unknown>;
+  return typeof target.predictionId === 'string'
+    && target.predictionId.length > 0
+    && target.predictionId.length <= 768
+    && typeof target.targetKey === 'string'
+    && target.targetKey.length > 0
+    && target.targetKey.length <= 768
+    && typeof target.predictedAt === 'number'
+    && Number.isFinite(target.predictedAt)
+    && typeof target.resolveBy === 'number'
+    && Number.isFinite(target.resolveBy)
+    && target.resolveBy >= target.predictedAt;
 }
 
 const DOMAINS: ReadonlySet<AlgorithmDomain> = new Set([
@@ -497,6 +555,17 @@ function isAlgorithmDomain(value: unknown): value is AlgorithmDomain {
 const OUTCOMES: ReadonlySet<EvaluationOutcome> = new Set(['hit', 'miss', 'partial', 'inconclusive']);
 function isOutcome(value: unknown): value is EvaluationOutcome {
   return typeof value === 'string' && OUTCOMES.has(value as EvaluationOutcome);
+}
+
+const OUTCOME_ORIGINS: ReadonlySet<OutcomeLabelOrigin> = new Set([
+  'direct',
+  'proxy',
+  'manual',
+  'llm',
+]);
+function isOutcomeOrigin(value: unknown): value is OutcomeLabelOrigin {
+  return typeof value === 'string'
+    && OUTCOME_ORIGINS.has(value as OutcomeLabelOrigin);
 }
 
 // ── Defaults ────────────────────────────────────────────────────────────

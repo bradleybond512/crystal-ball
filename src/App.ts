@@ -31,7 +31,12 @@ import { trackEvent, trackDeeplinkOpened } from '@/services/analytics';
 import { preloadCountryGeometry, getCountryNameByCode } from '@/services/country-geometry';
 import { initI18n } from '@/services/i18n';
 import { getAlgorithmEvaluationLedger } from '@/services/algorithms/algorithms-state';
-import { startAlgorithmLedgerPersistence } from '@/services/algorithms/algorithm-ledger-persistence';
+import {
+  persistAlgorithmLedger,
+  startAlgorithmLedgerPersistence,
+} from '@/services/algorithms/algorithm-ledger-persistence';
+import { syncForecastEvaluations } from '@/services/algorithms/forecast-outcome-grading';
+import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
 
 import { fetchBootstrapData } from '@/services/bootstrap';
 import { preloadIdbBackedStores, installIdbStorageRouting } from '@/services/intelligence/idb-store-cache';
@@ -405,9 +410,15 @@ export class App {
  installIdbStorageRouting();
  } catch { /* non-fatal */ }
  try {
- await startAlgorithmLedgerPersistence({ ledger: getAlgorithmEvaluationLedger() });
+ const algorithmLedger = getAlgorithmEvaluationLedger();
+ await startAlgorithmLedgerPersistence({ ledger: algorithmLedger });
+ syncForecastEvaluations(
+ getCalibrationStore().all(),
+ algorithmLedger,
+ );
+ await persistAlgorithmLedger({ ledger: algorithmLedger });
  } catch (error) {
- console.warn('[algorithm-ledger-persistence] startup wiring failed:', error);
+ console.warn('[algorithm-outcome-grading] startup wiring failed:', error);
  }
  bootTrace('preload:stores:done');
 

@@ -58,7 +58,12 @@ export function pickEligibleForLlmGrading(
   const timeoutMs = options.timeoutMs ?? DEFAULT_OUTCOME_TIMEOUT_MS;
   const now = options.now ?? Date.now();
   const cutoff = now - timeoutMs;
-  return records.filter((r) => r.outcome === undefined && r.at <= cutoff);
+  return records.filter(
+    (r) =>
+      r.outcome === undefined
+      && r.forecastTarget === undefined
+      && r.at <= cutoff,
+  );
 }
 
 /** Resolve a batch of pending records via the LLM grader. */

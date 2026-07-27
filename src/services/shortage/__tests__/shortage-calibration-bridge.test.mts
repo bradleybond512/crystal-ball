@@ -133,7 +133,8 @@ test('toPredictionRecord builds a well-formed pending record', () => {
   assert.equal(rec.sourceId, 'shortage:corn');
   assert.equal(rec.predictedAt, NOW);
   assert.equal(rec.resolveBy, NOW + 90 * DAY_MS);
-  assert.equal(rec.algorithmVersion, 'shortage-corn-v1');
+  assert.equal(rec.algorithmVersion, '1.0.0');
+  assert.equal(rec.targetKey, 'shortage:corn:global');
   assert.equal(rec.probability, 0.7);
 });
 
@@ -197,7 +198,10 @@ test('resolveShortageFromObservation resolves true only above the threshold (str
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:natgas')!.status, 'pending');
   // above threshold → resolves true.
   assert.equal(resolveShortageFromObservation({ commodity: 'natgas', region: 'eu', riskScore: SHORTAGE_ELEVATED_THRESHOLD + 1 }, NOW + DAY_MS), 1);
-  assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:natgas')!.status, 'resolved_true');
+  const resolved = getCalibrationStore().all().find((r) => r.sourceId === 'shortage:natgas')!;
+  assert.equal(resolved.status, 'resolved_true');
+  assert.equal(resolved.resolutionProvenance?.kind, 'proxy');
+  assert.equal(resolved.resolutionProvenance?.resolverId, 'shortage-observation-v1');
 });
 
 test('a subthreshold observation never resolves a claim false mid-window', () => {
@@ -212,7 +216,9 @@ test('settleExpiredShortagePredictions marks overdue pending records false, leav
   recordShortagePredictions([forecast({ commodity: 'diesel', region: 'r2', horizonDays: 90 })], NOW);        // resolveBy NOW+90d
   const n = settleExpiredShortagePredictions(NOW + 45 * DAY_MS);
   assert.equal(n, 1);
-  assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:wheat')!.status, 'resolved_false');
+  const settled = getCalibrationStore().all().find((r) => r.sourceId === 'shortage:wheat')!;
+  assert.equal(settled.status, 'resolved_false');
+  assert.equal(settled.resolutionProvenance?.kind, 'proxy');
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:diesel')!.status, 'pending');
 });
 

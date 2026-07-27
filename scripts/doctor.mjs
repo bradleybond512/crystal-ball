@@ -134,8 +134,12 @@ function printHumanReport(report, deep) {
   const algorithmSummary = ledger
     ? `${ledger.graded ?? 0}/${ledger.total ?? 0} graded`
     : 'awaiting renderer snapshot';
+  const origins = ledger?.outcomeOrigins;
+  const originSummary = origins
+    ? ` · labels direct:${origins.direct ?? 0} proxy:${origins.proxy ?? 0} manual:${origins.manual ?? 0} llm:${origins.llm ?? 0}`
+    : '';
   const deepSummary = deep ? ' · deep self-test included' : '';
-  console.log(`Algorithms ${algorithmSummary}${deepSummary}`);
+  console.log(`Algorithms ${algorithmSummary}${originSummary}${deepSummary}`);
 
   if (report.findings.length === 0) {
     console.log('\nNo actionable runtime problems detected.');

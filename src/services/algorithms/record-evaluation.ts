@@ -29,7 +29,13 @@
  */
 
 import { getAlgorithm } from './algorithm-registry';
-import type { AlgorithmDomain, EvaluationRecord, EvaluationOutcome } from './algorithm-evaluation-ledger';
+import type {
+  AlgorithmDomain,
+  EvaluationOutcome,
+  EvaluationOutcomeAttribution,
+  EvaluationRecord,
+  ForecastEvaluationTarget,
+} from './algorithm-evaluation-ledger';
 import { getAlgorithmEvaluationLedger } from './algorithms-state';
 
 /** Bound the detail payload so a buggy caller can't inflate the
@@ -60,6 +66,8 @@ export interface RecordEvaluationInput {
   /** Override the registry healthDomain (rare; e.g. cross-cutting
    *  algorithms that emit into multiple health domains). */
   domain?: AlgorithmDomain;
+  /** Exact forecast target owned by the authoritative outcome bridge. */
+  forecastTarget?: ForecastEvaluationTarget;
 }
 
 export class UnknownAlgorithmError extends Error {
@@ -113,6 +121,7 @@ export function recordAlgorithmEvaluation(
     label: input.label,
     detail: input.detail,
     notes: clampNotes(input.notes),
+    forecastTarget: input.forecastTarget,
   });
 }
 
@@ -125,8 +134,15 @@ export function recordAlgorithmOutcome(
   outcome: EvaluationOutcome,
   reason: string,
   at?: number,
+  attribution?: EvaluationOutcomeAttribution,
 ): EvaluationRecord {
-  return getAlgorithmEvaluationLedger().recordOutcome(recordId, outcome, reason, at);
+  return getAlgorithmEvaluationLedger().recordOutcome(
+    recordId,
+    outcome,
+    reason,
+    at,
+    attribution,
+  );
 }
 
 /**

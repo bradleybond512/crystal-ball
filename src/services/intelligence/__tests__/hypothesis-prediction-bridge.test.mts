@@ -275,6 +275,8 @@ test('resolveHypothesisPrediction marks the matching pending record', () => {
   assert.equal(ok, true);
   const rec = getCalibrationStore().all()[0]!;
   assert.equal(rec.status, 'resolved_true');
+  assert.equal(rec.resolutionProvenance?.kind, 'proxy');
+  assert.equal(rec.resolutionProvenance?.resolverId, 'hypothesis-accuracy-v1');
 });
 
 test('resolves every open forecast source for the same objective target', () => {

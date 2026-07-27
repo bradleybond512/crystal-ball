@@ -31,6 +31,7 @@ import {
 } from '../intelligence/resolution-quality-audit';
 import {
   evaluateForecastCohort,
+  forecastLossAttribution,
   horizonBucket,
   splitForecastRecordsChronologically,
   type BrierSkillMetric,
@@ -39,6 +40,8 @@ import {
   type EvidenceMetric,
   type ForecastCohortEvaluation,
   type ForecastCoverage,
+  type ForecastLossAttribution,
+  type ForecastLossContribution,
 } from '../intelligence/forecast-evaluation';
 
 const RECENT_EVALUATION_LIMIT = 20;
@@ -209,6 +212,26 @@ export interface ForecastEvaluationCohortDiagnostics
   horizon: string;
 }
 
+export interface ForecastLossContributionDiagnostics {
+  key: string;
+  sampleSize: number;
+  totalBrierLoss: number;
+  meanBrier: number;
+  shareOfBrierLoss: number;
+  highConfidenceMisses: number;
+}
+
+export interface ForecastLossAttributionDiagnostics {
+  sampleSize: number;
+  totalBrierLoss: number;
+  highConfidenceMisses: number;
+  groupLimit: 10;
+  bySource: readonly ForecastLossContributionDiagnostics[];
+  byDomain: readonly ForecastLossContributionDiagnostics[];
+  byHorizon: readonly ForecastLossContributionDiagnostics[];
+  byAlgorithmVersion: readonly ForecastLossContributionDiagnostics[];
+}
+
 export interface ForecastEvaluationDiagnostics {
   schemaVersion: 1;
   split: {
@@ -230,6 +253,7 @@ export interface ForecastEvaluationDiagnostics {
     unattributed: number;
   };
   overall: ForecastCohortDiagnostics;
+  lossAttribution: ForecastLossAttributionDiagnostics;
   worstCohorts: readonly ForecastEvaluationCohortDiagnostics[];
   cohortLimit: 10;
   cohortCount: number;
@@ -418,10 +442,53 @@ function buildForecastEvaluationDiagnostics(
       ),
     },
     overall: toForecastCohortDiagnostics(overallEvaluation),
+    lossAttribution: toForecastLossAttributionDiagnostics(
+      forecastLossAttribution(overallEvaluation.scoredRecords),
+    ),
     worstCohorts: cohorts.slice(0, FORECAST_COHORT_LIMIT),
     cohortLimit: FORECAST_COHORT_LIMIT,
     cohortCount: cohorts.length,
     omittedCohortCount: Math.max(0, cohorts.length - FORECAST_COHORT_LIMIT),
+  };
+}
+
+function toForecastLossAttributionDiagnostics(
+  attribution: ForecastLossAttribution,
+): ForecastLossAttributionDiagnostics {
+  return {
+    sampleSize: attribution.sampleSize,
+    totalBrierLoss: roundedMetricValue(attribution.totalBrierLoss),
+    highConfidenceMisses: attribution.highConfidenceMisses,
+    groupLimit: FORECAST_COHORT_LIMIT,
+    bySource: attribution.bySource
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+    byDomain: attribution.byDomain
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+    byHorizon: attribution.byHorizon
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+    byAlgorithmVersion: attribution.byAlgorithmVersion
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+  };
+}
+
+function toForecastLossContributionDiagnostics(
+  contribution: ForecastLossContribution,
+): ForecastLossContributionDiagnostics {
+  return {
+    key: boundedCohortLabel(contribution.key),
+    sampleSize: contribution.sampleSize,
+    totalBrierLoss: roundedMetricValue(contribution.totalBrierLoss),
+    meanBrier: roundedMetricValue(contribution.meanBrier),
+    shareOfBrierLoss: roundedMetricValue(contribution.shareOfBrierLoss),
+    highConfidenceMisses: contribution.highConfidenceMisses,
   };
 }
 

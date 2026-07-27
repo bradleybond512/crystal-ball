@@ -246,6 +246,7 @@ export class BeliefCalibrationPanel extends Panel {
           ${controls}
         </div>
         ${this.renderCohortComparison(view)}
+        ${this.renderLossAttribution(view)}
         ${this.renderReliabilityChart(view.reliability)}
         ${this.renderDrilldowns(view)}
         <div style="overflow-x:auto;margin-top:10px;">
@@ -332,6 +333,50 @@ export class BeliefCalibrationPanel extends Panel {
         <td style="padding:4px 3px;text-align:right;font-variant-numeric:tabular-nums;">${escapeHtml(overall)}</td>
         <td style="padding:4px 3px;text-align:right;font-variant-numeric:tabular-nums;">${escapeHtml(selected)}</td>
       </tr>`;
+  }
+
+  private renderLossAttribution(view: ForecastWorkbenchView): string {
+    const attribution = view.lossAttribution;
+    if (attribution.sampleSize === 0) {
+      return `
+        <div data-brier-loss-attribution style="margin-bottom:10px;font-size:11px;opacity:0.7;">
+          Brier loss attribution needs resolved direct or manual holdout labels.
+        </div>`;
+    }
+    const dimensions = [
+      ['Source', attribution.bySource],
+      ['Domain', attribution.byDomain],
+      ['Horizon', attribution.byHorizon],
+      ['Version', attribution.byAlgorithmVersion],
+    ] as const;
+    const rows = dimensions.flatMap(([dimension, contributions]) =>
+      contributions.slice(0, 3).map((contribution) => `
+        <tr style="border-top:1px solid var(--border-subtle,#2a2a2a);">
+          <td style="padding:4px 3px;">${escapeHtml(dimension)}</td>
+          <th scope="row" style="padding:4px 3px;text-align:left;font-weight:500;">${escapeHtml(contribution.key)}</th>
+          <td style="padding:4px 3px;text-align:right;font-variant-numeric:tabular-nums;">${(contribution.shareOfBrierLoss * 100).toFixed(1)}%</td>
+          <td style="padding:4px 3px;text-align:right;font-variant-numeric:tabular-nums;">${contribution.meanBrier.toFixed(3)}</td>
+          <td style="padding:4px 3px;text-align:right;font-variant-numeric:tabular-nums;">${contribution.highConfidenceMisses}</td>
+        </tr>`),
+    ).join('');
+    return `
+      <div data-brier-loss-attribution style="overflow-x:auto;margin-bottom:10px;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <caption style="text-align:left;font-weight:600;margin-bottom:4px;">
+            Brier loss attribution (${attribution.sampleSize} scored)
+          </caption>
+          <thead>
+            <tr style="opacity:0.65;text-align:right;">
+              <th style="padding:3px;text-align:left;">Dimension</th>
+              <th style="padding:3px;text-align:left;">Slice</th>
+              <th style="padding:3px;">Loss share</th>
+              <th style="padding:3px;">Mean Brier</th>
+              <th style="padding:3px;">High-confidence misses</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }
 
   private formatWorkbenchMetric(metric: ForecastWorkbenchMetric): string {

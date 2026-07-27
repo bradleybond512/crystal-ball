@@ -250,6 +250,23 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
       value: 0.64,
     },
   }];
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.lossAttribution = {
+    sampleSize: 20,
+    totalBrierLoss: 7.8,
+    highConfidenceMisses: 8,
+    groupLimit: 10,
+    bySource: [{
+      key: 'model-bad',
+      sampleSize: 20,
+      totalBrierLoss: 6.24,
+      meanBrier: 0.312,
+      shareOfBrierLoss: 0.8,
+      highConfidenceMisses: 8,
+    }],
+    byDomain: [],
+    byHorizon: [],
+    byAlgorithmVersion: [],
+  };
   input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.cohortCount = 1;
 
   const report = buildDoctorReport(input);
@@ -261,11 +278,20 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
   assert.ok(report.findings.some(
     (finding) => finding.id === 'forecast.cohort_underperforming',
   ));
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.loss_concentrated',
+  ));
   assert.match(
     report.findings.find(
       (finding) => finding.id === 'forecast.cohort_underperforming',
     )?.evidence ?? '',
     /source=model-bad; domain=cyber; horizon=1d-7d; brier=0.64; sampleSize=20/,
+  );
+  assert.match(
+    report.findings.find(
+      (finding) => finding.id === 'forecast.loss_concentrated',
+    )?.evidence ?? '',
+    /source=model-bad; shareOfBrierLoss=0.8; sampleSize=20; highConfidenceMisses=8/,
   );
 });
 

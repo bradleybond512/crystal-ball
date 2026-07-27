@@ -10,6 +10,7 @@ import {
   equalMassExpectedCalibrationError,
   evaluateForecastCohort,
   evaluateForecastReport,
+  forecastLossAttribution,
   forecastCoverage,
   horizonBucket,
   meanBinaryLogLoss,
@@ -410,6 +411,72 @@ test('report groups evaluation cohorts by target, source, domain, horizon, and v
     'unversioned',
     'v1',
     'v2',
+  ]);
+});
+
+test('Brier loss attribution ranks exact source, domain, horizon, and version contributors', () => {
+  const evaluation = evaluateForecastCohort({
+    trainingRecords: [
+      resolved(0.5, 0, { predictedAt: 1, resolvedAt: 2 }),
+      resolved(0.5, 1, { predictedAt: 2, resolvedAt: 3 }),
+    ],
+    evaluationRecords: [
+      resolved(0.9, 0, {
+        sourceId: 'model-bad',
+        domain: 'weather',
+        algorithmVersion: 'bad-v1',
+        predictedAt: 10,
+        resolveBy: 10 + 2 * HOUR,
+      }),
+      resolved(0.8, 1, {
+        sourceId: 'model-good',
+        domain: 'cyber',
+        algorithmVersion: 'good-v1',
+        predictedAt: 11,
+        resolveBy: 11 + 2 * DAY,
+      }),
+      resolved(0.6, 0, {
+        sourceId: 'model-bad',
+        domain: 'weather',
+        algorithmVersion: 'bad-v1',
+        predictedAt: 12,
+        resolveBy: 12 + 2 * HOUR,
+      }),
+    ],
+  }, {
+    minResolved: 1,
+    minTrainingResolved: 1,
+  });
+
+  const attribution = forecastLossAttribution(evaluation.scoredRecords);
+
+  assert.equal(attribution.sampleSize, 3);
+  close(attribution.totalBrierLoss, 1.21);
+  assert.equal(attribution.highConfidenceMisses, 1);
+  assert.deepEqual(
+    attribution.bySource.map((row) => ({
+      key: row.key,
+      sampleSize: row.sampleSize,
+      highConfidenceMisses: row.highConfidenceMisses,
+    })),
+    [
+      { key: 'model-bad', sampleSize: 2, highConfidenceMisses: 1 },
+      { key: 'model-good', sampleSize: 1, highConfidenceMisses: 0 },
+    ],
+  );
+  close(attribution.bySource[0]!.totalBrierLoss, 1.17);
+  close(attribution.bySource[0]!.shareOfBrierLoss, 1.17 / 1.21);
+  assert.deepEqual(attribution.byDomain.map((row) => row.key), [
+    'weather',
+    'cyber',
+  ]);
+  assert.deepEqual(attribution.byHorizon.map((row) => row.key), [
+    '1h-6h',
+    '1d-7d',
+  ]);
+  assert.deepEqual(attribution.byAlgorithmVersion.map((row) => row.key), [
+    'bad-v1',
+    'good-v1',
   ]);
 });
 

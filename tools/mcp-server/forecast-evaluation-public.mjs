@@ -37,6 +37,9 @@ function publicForecastEvaluation(value) {
   const backlog = objectValue(evaluation?.resolutionBacklog);
   const origins = objectValue(evaluation?.labelOrigins);
   const overall = publicForecastCohort(evaluation?.overall);
+  const lossAttribution = publicForecastLossAttribution(
+    evaluation?.lossAttribution,
+  );
   if (!evaluation || !split || !backlog || !origins || !overall) return null;
   const worstCohorts = Array.isArray(evaluation.worstCohorts)
     ? evaluation.worstCohorts
@@ -65,10 +68,47 @@ function publicForecastEvaluation(value) {
       unattributed: nonNegativeCount(origins.unattributed),
     },
     overall,
+    ...(lossAttribution ? { lossAttribution } : {}),
     worstCohorts,
     cohortLimit: FORECAST_COHORT_LIMIT,
     cohortCount: nonNegativeCount(evaluation.cohortCount),
     omittedCohortCount: nonNegativeCount(evaluation.omittedCohortCount),
+  };
+}
+
+function publicForecastLossAttribution(value) {
+  const attribution = objectValue(value);
+  if (!attribution) return null;
+  const publicRows = (rows) => Array.isArray(rows)
+    ? rows
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map(publicForecastLossContribution)
+      .filter(Boolean)
+    : [];
+  return {
+    sampleSize: nonNegativeCount(attribution.sampleSize),
+    totalBrierLoss: nonNegativeNumber(attribution.totalBrierLoss),
+    highConfidenceMisses: nonNegativeCount(attribution.highConfidenceMisses),
+    groupLimit: FORECAST_COHORT_LIMIT,
+    bySource: publicRows(attribution.bySource),
+    byDomain: publicRows(attribution.byDomain),
+    byHorizon: publicRows(attribution.byHorizon),
+    byAlgorithmVersion: publicRows(attribution.byAlgorithmVersion),
+  };
+}
+
+function publicForecastLossContribution(value) {
+  const contribution = objectValue(value);
+  if (!contribution) return null;
+  return {
+    key: boundedLabel(contribution.key),
+    sampleSize: nonNegativeCount(contribution.sampleSize),
+    totalBrierLoss: nonNegativeNumber(contribution.totalBrierLoss),
+    meanBrier: nonNegativeNumber(contribution.meanBrier),
+    shareOfBrierLoss: boundedRatio(contribution.shareOfBrierLoss),
+    highConfidenceMisses: nonNegativeCount(
+      contribution.highConfidenceMisses,
+    ),
   };
 }
 
@@ -196,6 +236,11 @@ function boundedLabel(value) {
 function nonNegativeCount(value) {
   const finite = nullableFiniteNumber(value);
   return finite === null ? 0 : Math.max(0, Math.floor(finite));
+}
+
+function nonNegativeNumber(value) {
+  const finite = nullableFiniteNumber(value);
+  return finite === null ? 0 : Math.max(0, finite);
 }
 
 function boundedRatio(value) {

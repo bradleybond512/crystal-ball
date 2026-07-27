@@ -386,6 +386,74 @@ test('forecast evaluation diagnostics expose bounded leakage-safe holdout cohort
   assert.equal(diagnostics.cohortLimit, 10);
   assert.equal(diagnostics.cohortCount, 2);
   assert.equal(diagnostics.omittedCohortCount, 0);
+  assert.deepEqual(diagnostics.lossAttribution, {
+    sampleSize: 40,
+    totalBrierLoss: 16.4,
+    highConfidenceMisses: 20,
+    groupLimit: 10,
+    bySource: [
+      {
+        key: 'model-bad',
+        sampleSize: 20,
+        totalBrierLoss: 16.2,
+        meanBrier: 0.81,
+        shareOfBrierLoss: 0.987805,
+        highConfidenceMisses: 20,
+      },
+      {
+        key: 'model-good',
+        sampleSize: 20,
+        totalBrierLoss: 0.2,
+        meanBrier: 0.01,
+        shareOfBrierLoss: 0.012195,
+        highConfidenceMisses: 0,
+      },
+    ],
+    byDomain: [
+      {
+        key: 'cyber',
+        sampleSize: 20,
+        totalBrierLoss: 16.2,
+        meanBrier: 0.81,
+        shareOfBrierLoss: 0.987805,
+        highConfidenceMisses: 20,
+      },
+      {
+        key: 'weather',
+        sampleSize: 20,
+        totalBrierLoss: 0.2,
+        meanBrier: 0.01,
+        shareOfBrierLoss: 0.012195,
+        highConfidenceMisses: 0,
+      },
+    ],
+    byHorizon: [
+      {
+        key: '1d-7d',
+        sampleSize: 20,
+        totalBrierLoss: 16.2,
+        meanBrier: 0.81,
+        shareOfBrierLoss: 0.987805,
+        highConfidenceMisses: 20,
+      },
+      {
+        key: '1h-6h',
+        sampleSize: 20,
+        totalBrierLoss: 0.2,
+        meanBrier: 0.01,
+        shareOfBrierLoss: 0.012195,
+        highConfidenceMisses: 0,
+      },
+    ],
+    byAlgorithmVersion: [{
+      key: 'v1',
+      sampleSize: 40,
+      totalBrierLoss: 16.4,
+      meanBrier: 0.41,
+      shareOfBrierLoss: 1,
+      highConfidenceMisses: 20,
+    }],
+  });
 
   const serialized = JSON.stringify(diagnostics);
   assert.doesNotMatch(

@@ -1,7 +1,7 @@
 {
   "name": "get_algorithm_diagnostics",
   "synopsis": "get_algorithm_diagnostics({})",
-  "description": "Returns the running renderer's compact algorithm diagnostics snapshot: aggregate and per-algorithm health, evaluation-ledger coverage, forecast resolver coverage and provenance counts, fused market-price history health, weather report freshness/completeness/row validity, p50/p95/max latency, runtime errors, bounded tuning parameters, adjustment proposals, recent evaluations, persistence status, and recent tuning decisions. Raw inputs, notes, details, and input hashes are intentionally omitted.",
+  "description": "Returns the running renderer's compact algorithm diagnostics snapshot: aggregate and per-algorithm health, evaluation-ledger coverage, leakage-safe holdout metrics, bounded Brier-loss attribution by source/domain/horizon/version, forecast resolver coverage and provenance counts, fused market-price history health, weather report freshness/completeness/row validity, p50/p95/max latency, runtime errors, bounded tuning parameters, adjustment proposals, recent evaluations, persistence status, and recent tuning decisions. Raw inputs, notes, details, and input hashes are intentionally omitted.",
   "parameters": {},
   "examples": [
     {

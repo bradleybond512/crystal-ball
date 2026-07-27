@@ -6,6 +6,19 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Time-ordered forecast replay benchmark**: `npm run bench:forecast`
+  replays a frozen, privacy-safe 120-record forecast/outcome corpus through
+  four expanding windows with strict prediction-time cutoffs. A committed
+  baseline and CI gate cover Brier skill, log loss, resolution coverage, and
+  high-confidence misses, while source/domain/horizon/version loss attribution
+  in the Belief Calibration panel, CLI doctor, and MCP diagnostics identifies
+  the exact slices driving forecast error. (PR #1529)
+- **Leakage-safe forecast diagnostics**: renderer, CLI doctor, and MCP
+  diagnostics now expose bounded chronological holdout metrics, evidence
+  floors, resolution backlog, label origins, and worst
+  source/domain/horizon cohorts. Agent-facing boundaries strip raw claims,
+  criteria, target keys, evidence, notes, scored records, and precise
+  coordinates. (PR #1527)
 - **Leakage-safe forecast workbench**: the Belief Calibration panel now offers
   source, domain, horizon, version, and resolution-method filters; sortable
   per-forecast probability, outcome, Brier, evidence-age, target, and

@@ -155,6 +155,31 @@ export interface ForecastEvaluationReport {
   };
 }
 
+export type ForecastLossDimension =
+  | 'source'
+  | 'domain'
+  | 'horizon'
+  | 'algorithmVersion';
+
+export interface ForecastLossContribution {
+  key: string;
+  sampleSize: number;
+  totalBrierLoss: number;
+  meanBrier: number;
+  shareOfBrierLoss: number;
+  highConfidenceMisses: number;
+}
+
+export interface ForecastLossAttribution {
+  sampleSize: number;
+  totalBrierLoss: number;
+  highConfidenceMisses: number;
+  bySource: readonly ForecastLossContribution[];
+  byDomain: readonly ForecastLossContribution[];
+  byHorizon: readonly ForecastLossContribution[];
+  byAlgorithmVersion: readonly ForecastLossContribution[];
+}
+
 export interface PairedMetricSample {
   incumbent: number;
   challenger: number;
@@ -555,6 +580,83 @@ export function evaluateForecastReport(
   };
 }
 
+export function forecastLossAttribution(
+  records: readonly ScoredForecast[],
+  highConfidenceThreshold = 0.8,
+): ForecastLossAttribution {
+  const threshold = Number.isFinite(highConfidenceThreshold)
+    && highConfidenceThreshold > 0.5
+    && highConfidenceThreshold < 1
+    ? highConfidenceThreshold
+    : 0.8;
+  const totalBrierLoss = records.reduce(
+    (total, record) => total + record.brierContribution,
+    0,
+  );
+  const dimensions: readonly ForecastLossDimension[] = [
+    'source',
+    'domain',
+    'horizon',
+    'algorithmVersion',
+  ];
+  const grouped = new Map<
+    ForecastLossDimension,
+    ForecastLossContribution[]
+  >();
+  for (const dimension of dimensions) {
+    const groups = new Map<string, ScoredForecast[]>();
+    for (const record of records) {
+      const key = scoredRecordGroupKey(record, dimension);
+      const group = groups.get(key);
+      if (group) group.push(record);
+      else groups.set(key, [record]);
+    }
+    grouped.set(
+      dimension,
+      [...groups].map(([key, group]) => {
+        const groupLoss = group.reduce(
+          (total, record) => total + record.brierContribution,
+          0,
+        );
+        return {
+          key,
+          sampleSize: group.length,
+          totalBrierLoss: groupLoss,
+          meanBrier: groupLoss / group.length,
+          shareOfBrierLoss: ratio(groupLoss, totalBrierLoss),
+          highConfidenceMisses: group.filter(
+            (record) =>
+              (record.probability >= threshold && record.outcome === 0)
+              || (
+                record.probability <= 1 - threshold
+                && record.outcome === 1
+              ),
+          ).length,
+        };
+      }).sort(
+        (left, right) =>
+          right.totalBrierLoss - left.totalBrierLoss
+          || right.sampleSize - left.sampleSize
+          || compareGroupKeys(left.key, right.key, dimension),
+      ),
+    );
+  }
+
+  return {
+    sampleSize: records.length,
+    totalBrierLoss,
+    highConfidenceMisses: records.filter(
+      (record) =>
+        (record.probability >= threshold && record.outcome === 0)
+        || (record.probability <= 1 - threshold && record.outcome === 1),
+    ).length,
+    bySource: grouped.get('source') ?? [],
+    byDomain: grouped.get('domain') ?? [],
+    byHorizon: grouped.get('horizon') ?? [],
+    byAlgorithmVersion: grouped.get('algorithmVersion') ?? [],
+  };
+}
+
 export function horizonBucket(durationMs: number): string {
   if (!Number.isFinite(durationMs) || durationMs < 0) return 'invalid';
   const duration = durationMs;
@@ -740,6 +842,26 @@ function groupKey(
     case 'target': {
       return record.targetKey ?? 'unkeyed';
     }
+    case 'source': {
+      return record.sourceId;
+    }
+    case 'domain': {
+      return record.domain;
+    }
+    case 'horizon': {
+      return horizonBucket(record.resolveBy - record.predictedAt);
+    }
+    case 'algorithmVersion': {
+      return record.algorithmVersion ?? 'unversioned';
+    }
+  }
+}
+
+function scoredRecordGroupKey(
+  record: ScoredForecast,
+  dimension: ForecastLossDimension,
+): string {
+  switch (dimension) {
     case 'source': {
       return record.sourceId;
     }

@@ -13,7 +13,7 @@ export const schemas = {
   },
   get_algorithm_diagnostics: {
     description:
-      'Current algorithm health, leakage-safe chronological holdout metrics, bounded worst source/domain/horizon cohorts, resolution backlog and label origins, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
+      'Current algorithm health, leakage-safe chronological holdout metrics, bounded Brier-loss attribution and worst source/domain/horizon cohorts, resolution backlog and label origins, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
     inputSchema: z.object({}),
   },
 };
@@ -227,7 +227,13 @@ function summarizeAlgorithms(snapshot) {
   const worstCohort = worst
     ? `; worst cohort ${worst.sourceId}/${worst.domain}/${worst.horizon} Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize})`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${holdout}${worstCohort}${criteria}${resolverOutcomes}${labelQuality}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+  const topLoss = evaluation?.lossAttribution?.bySource?.[0];
+  const lossAttribution =
+    typeof topLoss?.key === 'string'
+    && typeof topLoss.shareOfBrierLoss === 'number'
+      ? `; top Brier loss ${topLoss.key} ${(topLoss.shareOfBrierLoss * 100).toFixed(1)}% (${topLoss.highConfidenceMisses ?? 0} high-confidence misses)`
+      : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${holdout}${worstCohort}${lossAttribution}${criteria}${resolverOutcomes}${labelQuality}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
 }
 
 function inspectForecastEvaluation(forecastCalibration, findings) {
@@ -254,13 +260,27 @@ function inspectForecastEvaluation(forecastCalibration, findings) {
   }
   const worst = evaluation.worstCohorts?.find((cohort) =>
     cohort?.brier?.status === 'ok');
-  if (!worst || finiteNumber(worst.brier.value) <= 0.35) return;
-  findings.push(finding(
-    'forecast.cohort_underperforming',
-    'yellow',
-    `${worst.sourceId}/${worst.domain}/${worst.horizon} has holdout Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize}).`,
-    'Replay this source/domain/horizon cohort before changing source weights or calibration parameters.',
-  ));
+  if (worst && finiteNumber(worst.brier.value) > 0.35) {
+    findings.push(finding(
+      'forecast.cohort_underperforming',
+      'yellow',
+      `${worst.sourceId}/${worst.domain}/${worst.horizon} has holdout Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize}).`,
+      'Replay this source/domain/horizon cohort before changing source weights or calibration parameters.',
+    ));
+  }
+  const attribution = evaluation.lossAttribution;
+  const topLoss = attribution?.bySource?.[0];
+  if (
+    finiteCount(attribution?.sampleSize) >= 20
+    && finiteNumber(topLoss?.shareOfBrierLoss) >= 0.5
+  ) {
+    findings.push(finding(
+      'forecast.loss_concentrated',
+      'yellow',
+      `${topLoss.key} contributes ${(topLoss.shareOfBrierLoss * 100).toFixed(1)}% of holdout Brier loss across ${topLoss.sampleSize} scored forecasts.`,
+      'Inspect the same source across evaluation.lossAttribution.byDomain, byHorizon, and byAlgorithmVersion before changing its calibration.',
+    ));
+  }
 }
 
 function inspectResolutionQuality(forecastCalibration, findings) {

@@ -6,6 +6,14 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Leakage-safe forecast evaluation workbench**: pure cohort metrics now expose
+  per-record and aggregate Brier scores, clipped log loss, training-only
+  empirical baselines and Brier skill, equal-mass calibration error,
+  calibration slope/intercept, resolution and expiration coverage, seeded
+  paired bootstrap intervals, and target/source/domain/horizon/version
+  rollups. Proxy labels are excluded unless explicitly requested, late-known
+  training outcomes cannot leak into evaluation, and undersized or degenerate
+  cohorts return `insufficient_evidence`. (PR #1524)
 - **Resolution-label quality audit**: deterministic fixtures now guard against
   label leakage, duplicate outcomes, late data, contradictory evidence, and
   uncertain proxy labels. Structured resolutions fail closed unless bounded

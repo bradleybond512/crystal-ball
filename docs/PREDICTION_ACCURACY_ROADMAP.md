@@ -377,7 +377,11 @@ driven by evidence instead of intuition.
 
 ### ACC-201 — Proper-scoring and cohort metrics
 
-Status: `TODO`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-201-forecast-evaluation`
 
 Dependencies: ACC-005
 
@@ -410,6 +414,20 @@ Verify:
 - seed-repeatability tests;
 - `npm run test:intelligence`;
 - `npm run typecheck:all`.
+
+Verification: PR #1524 adds a deterministic, wall-clock-independent evaluation
+contract with per-record Brier and clipped-log-loss contributions, empirical
+training baselines, Brier skill, equal-mass ECE, calibration slope/intercept,
+resolution and expiration coverage, and seeded paired bootstrap intervals.
+Training labels must be resolved before the evaluation window begins, proxy
+labels are excluded unless explicitly enabled, malformed horizons remain
+visible in an `invalid` cohort, and every aggregate returns
+`insufficient_evidence` below its declared floor. Target, source, domain,
+horizon, and version rollups share the same guardrails. Sixteen known-answer
+fixtures within 556 intelligence tests, plus 302 algorithm, 395 diagnostic,
+12,748 renderer, strict and changed-file lint, TypeScript, production build,
+offline smoke, bundle/precache/sidecar budgets, 114 security tests, dependency
+audit, lockfile, documentation, and secret-scan gates passed.
 
 ### ACC-202 — Per-forecast workbench UI
 

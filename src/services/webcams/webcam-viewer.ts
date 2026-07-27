@@ -190,6 +190,22 @@ export function buildSnapshotViewerCard(feed: WebcamFeed, opts: SnapshotViewerOp
     img.alt = model.title;
     img.style.maxWidth = '100%';
     img.addEventListener('load', () => { loadedAt = Date.now(); refreshAsOf(); });
+    // A dead frame must not sit on "Loading…" forever. Say so, offer the
+    // source page, and keep the auto-refresh timer running so a transient
+    // outage recovers on its own.
+    img.addEventListener('error', () => {
+      asOf.textContent = loadedAt === null
+        ? '⚠️ No image — camera may be offline (retrying automatically)'
+        : `⚠️ Latest frame failed — ${formatDataAsOf(loadedAt, Date.now())} (retrying)`;
+      if (loadedAt === null && model.pageUrl && opts.openExternal && !fellBack) {
+        fellBack = true;
+        const openBtn = document.createElement('button');
+        openBtn.textContent = 'Open camera page ↗';
+        const url = model.pageUrl;
+        openBtn.addEventListener('click', () => opts.openExternal?.(url));
+        card.append(openBtn);
+      }
+    });
     card.append(img);
 
     const loadFrame = async (): Promise<void> => {

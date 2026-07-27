@@ -281,7 +281,12 @@ export function resolveHypothesisPredictionBySig(
       provenance: {
         resolverId: 'hypothesis-accuracy-v1',
         kind: 'proxy',
-        evidence: [],
+        evidence: [{
+          sourceIds: ['hypothesis-accuracy'],
+          observedAt: now,
+          reference: sig.slice(0, 512),
+          supportsOutcome: true,
+        }],
       },
     }) || resolved;
   }

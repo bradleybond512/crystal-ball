@@ -23,6 +23,7 @@
 import { SHORTAGE_HIGH_THRESHOLD } from './shortage-alert-emitter';
 import type { ShortageConfidence, ShortageDomain, ShortageForecast } from './shortage-types';
 import {
+  expirePrediction,
   getCalibrationStore,
   recordPrediction,
   resolvePrediction,
@@ -213,38 +214,34 @@ export function resolveShortageFromObservation(
       provenance: {
         resolverId: 'shortage-observation-v1',
         kind: 'proxy',
-        evidence: [],
+        evidence: [{
+          sourceIds: ['shortage-model-observation'],
+          observedAt: now,
+          reference: `${observed.commodity}:${observed.region}`.slice(0, 512),
+          value: observed.riskScore,
+          supportsOutcome: true,
+        }],
       },
     },
   );
 }
 
-/** Window-close negatives. A shortage prediction whose horizon elapsed with no
- *  elevated observation resolves FALSE — the "no" outcome the Brier score needs
- *  so calibration sees false positives, not just hits. Scoped to shortage-owned
- *  records (id prefix "shortage:") so it never reinterprets another domain's
- *  expiry. Run this before the generic expirePendingPredictions cadence, which
- *  would otherwise mark the same records 'expired' (uncounted). Returns the
- *  count resolved false. */
+/** Expire elapsed shortage windows without complete observation coverage.
+ *  Absence of a recorded elevation is not proof that none occurred while the
+ *  app was suspended, so these records stay out of calibration. */
 export function settleExpiredShortagePredictions(now: number = Date.now()): number {
   const store = getCalibrationStore();
-  // Strict `<`: at exactly resolveBy the window is still open (isOpenAt treats
-  // `now <= resolveBy` as in-window), so an on-the-deadline elevated
-  // observation can still grade it TRUE. Only strictly past the deadline does
-  // an ungraded claim settle FALSE.
+  // Strict `<`: an on-the-deadline observation can still grade the prediction.
   const overdue = store.all().filter(
     (r) => r.id.startsWith('shortage:') && r.status === 'pending' && r.resolveBy < now,
   );
   let n = 0;
   for (const r of overdue) {
-    if (resolvePrediction(r.id, false, now, {
-      note: 'proxy:no observed shortage elevation before the forecast window closed',
-      provenance: {
-        resolverId: 'shortage-window-v1',
-        kind: 'proxy',
-        evidence: [],
-      },
-    })) n += 1;
+    if (expirePrediction(
+      r.id,
+      now,
+      'unresolved:shortage-window-v1 no complete observation coverage for a negative label',
+    )) n += 1;
   }
   return n;
 }

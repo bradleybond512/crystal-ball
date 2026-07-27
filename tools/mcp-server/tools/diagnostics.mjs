@@ -12,7 +12,7 @@ export const schemas = {
   },
   get_algorithm_diagnostics: {
     description:
-      'Current algorithm health, forecast calibration/Brier coverage, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
+      'Current algorithm health, forecast calibration/Brier coverage, resolution-label integrity and origins by domain, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
     inputSchema: z.object({}),
   },
 };
@@ -86,6 +86,10 @@ export function makeDiagnosticsTools(client) {
           'Check the Iowa State LSR feed and weatherReports coverage before tuning weather confidence.',
         ));
       }
+      inspectResolutionQuality(
+        analyst?.algorithmDiagnostics?.forecastCalibration,
+        findings,
+      );
 
       const failedSelfTests = Number(selfTest?.summary?.fail ?? selfTest?.summary?.failed ?? 0);
       const degradedSelfTests = Number(selfTest?.summary?.degraded ?? 0);
@@ -189,5 +193,56 @@ function summarizeAlgorithms(snapshot) {
   const weather = typeof weatherReports?.status === 'string'
     ? `; weather reports ${weatherReports.status} (${weatherReports.pendingWarningPredictions ?? 0} pending warnings)`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+  const quality = snapshot.forecastCalibration?.resolutionQuality?.summary;
+  const invalid = resolutionInvalidCount(quality);
+  const labelQuality = quality && typeof quality === 'object'
+    ? `; label quality direct:${quality.origins?.direct ?? 0} proxy:${quality.origins?.proxy ?? 0} manual:${quality.origins?.manual ?? 0}; invalid:${invalid} uncertain-proxy:${quality.uncertainProxy ?? 0} late:${quality.lateResolutions ?? 0}`
+    : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${labelQuality}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+}
+
+function inspectResolutionQuality(forecastCalibration, findings) {
+  const quality = forecastCalibration?.resolutionQuality?.summary;
+  if (!quality || typeof quality !== 'object') return;
+  const invalid = resolutionInvalidCount(quality);
+  if (invalid > 0) {
+    findings.push(finding(
+      'forecast.resolution_quality_invalid',
+      'red',
+      `${invalid} invalid forecast resolution label issue(s) were detected.`,
+      'Quarantine affected domain labels and inspect resolutionQuality.byDomain before tuning.',
+    ));
+  }
+  const uncertainProxy = finiteCount(quality.uncertainProxy);
+  if (uncertainProxy > 0) {
+    findings.push(finding(
+      'forecast.proxy_labels_uncertain',
+      'yellow',
+      `${uncertainProxy} proxy resolution label(s) lack strong corroboration.`,
+      'Require two independent supporting sources or replace the proxy with direct ground truth.',
+    ));
+  }
+  const late = finiteCount(quality.lateResolutions);
+  if (late > 0) {
+    findings.push(finding(
+      'forecast.resolutions_late',
+      'yellow',
+      `${late} forecast resolution(s) arrived after their declared horizon.`,
+      'Inspect resolver cadence and keep late evidence distinct from in-window model performance.',
+    ));
+  }
+}
+
+function resolutionInvalidCount(quality) {
+  if (!quality || typeof quality !== 'object') return 0;
+  return finiteCount(quality.malformed)
+    + finiteCount(quality.labelLeakage)
+    + finiteCount(quality.duplicateOutcomes)
+    + finiteCount(quality.contradictoryEvidence);
+}
+
+function finiteCount(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : 0;
 }

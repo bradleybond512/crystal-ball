@@ -431,7 +431,11 @@ audit, lockfile, documentation, and secret-scan gates passed.
 
 ### ACC-202 — Per-forecast workbench UI
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-202-forecast-workbench`
 
 Dependencies: ACC-201
 

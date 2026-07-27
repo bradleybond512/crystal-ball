@@ -74,3 +74,45 @@ test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated 
   assert.deepEqual(result.diagnostics, snapshot);
   assert.equal('analyst' in result, false);
 });
+
+test('diagnostics tools surface degraded weather ground-truth coverage', async () => {
+  const algorithmDiagnostics = {
+    health: { status: 'healthy', algorithms: [] },
+    ledger: { total: 2, graded: 2, pending: 0 },
+    runtime: [],
+    forecastCalibration: {
+      summary: {
+        total: 3,
+        resolved: 1,
+        pending: 2,
+        overduePending: 0,
+      },
+      weatherReports: {
+        status: 'stale',
+        reportCount: 10,
+        invalidReportCount: 1,
+        pendingWarningPredictions: 2,
+        ageMs: 1_900_000,
+        complete: false,
+      },
+    },
+  };
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/health': { ok: true },
+    '/api/feeds/health': { feeds: [] },
+    '/api/analyst-state': {
+      available: true,
+      stale: false,
+      algorithmDiagnostics,
+    },
+  }));
+
+  const runtime = await tools.diagnose_runtime({});
+  const algorithms = await tools.get_algorithm_diagnostics({});
+
+  assert.equal(runtime.status, 'yellow');
+  assert.ok(runtime.findings.some(
+    (finding) => finding.id === 'forecast.weather_reports_stale',
+  ));
+  assert.match(algorithms.summary, /weather reports stale/);
+});

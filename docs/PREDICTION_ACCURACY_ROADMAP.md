@@ -217,19 +217,29 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B1.
 
 ### ACC-102 — Weather verification resolver
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
 Branch: `codex/acc-102-weather-resolver`
 
+Evidence: PR #1515
+
+Verification: bounded warning-ingest, current IEM LSR code mapping, direct
+positive, no-lookahead, complete-coverage proxy, malformed-input,
+nationwide-cap, persistence-size, CLI doctor, and MCP diagnostics fixtures
+passed. Live NWS and IEM payloads were schema-checked; `npm run test:weather`,
+`npm run test:intelligence`, `npm run test:algorithms`,
+`npm run test:diagnostics`, and `npm run typecheck:all` passed.
+
 Dependencies: ACC-101
 
 Create or modify:
 
-- `src/services/weather/warning-prediction-bridge.ts`
+- `src/services/weather/warning-verification-bridge.ts`
 - `src/services/intelligence/outcome-resolvers.ts`
 - NWS/SPC loader wiring in `src/app/data-loader.ts`
+- algorithm, doctor, and MCP diagnostics
 
 Deliver:
 
@@ -249,7 +259,7 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B2.
 
 ### ACC-103 — Conflict and geospatial event resolver
 
-Status: `WAITING`
+Status: `TODO`
 
 Dependencies: ACC-101 and ACC-004
 

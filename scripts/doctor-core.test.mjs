@@ -51,6 +51,18 @@ function healthyInput() {
           },
           byDomain: [],
           bySource: [],
+          weatherReports: {
+            status: 'fresh',
+            reportCount: 4,
+            validReportCount: 4,
+            invalidReportCount: 0,
+            pendingWarningPredictions: 0,
+            fetchedAt: NOW - 1000,
+            ageMs: 1000,
+            coverageStart: NOW - 86_401_000,
+            coverageEnd: NOW - 1000,
+            complete: true,
+          },
         },
         ledger: {
           total: 5,
@@ -137,6 +149,29 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
   assert.equal(report.algorithms.forecastCalibration.summary.overduePending, 3);
   assert.ok(report.findings.some((finding) => finding.id === 'forecast.outcomes_overdue'));
   assert.ok(report.findings.some((finding) => finding.id === 'forecast.calibration_poor'));
+});
+
+test('buildDoctorReport exposes degraded warning-verification evidence', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.forecastCalibration.weatherReports = {
+    status: 'stale',
+    reportCount: 2,
+    validReportCount: 1,
+    invalidReportCount: 1,
+    pendingWarningPredictions: 3,
+    fetchedAt: NOW - 31 * 60_000,
+    ageMs: 31 * 60_000,
+    coverageStart: NOW - 25 * 60 * 60_000,
+    coverageEnd: NOW - 31 * 60_000,
+    complete: false,
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'yellow');
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.weather_reports_stale',
+  ));
 });
 
 test('redactDiagnosticText removes secrets, email, query credentials, and the home username', () => {

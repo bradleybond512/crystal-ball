@@ -4,11 +4,29 @@ import type {
   MarketMoveCriteria,
   PredictionRecord,
   ResolutionMetadata,
+  WarningVerificationCriteria,
 } from './forecast-calibration';
 import { RESOLVER_EXPIRY_GRACE_MS } from './forecast-calibration';
 import type { SpotPriceObservation } from '../market/spot-price-store';
+import { pointInPolygon } from '../weather/nws-polygon-match';
 
 export const MARKET_DEADLINE_COVERAGE_MS = 20 * 60 * 1000;
+
+export interface StormReportObservation {
+  id: string;
+  type: string;
+  lat: number;
+  lon: number;
+  reportedAt: number;
+}
+
+export interface StormReportBatch {
+  reports: readonly StormReportObservation[];
+  fetchedAt: number;
+  coverageStart: number;
+  coverageEnd: number;
+  complete: boolean;
+}
 
 export interface ResolverContext {
   now: number;
@@ -23,6 +41,7 @@ export interface ResolverContext {
     until?: number;
     limit?: number;
   }): readonly ObservationEvent[];
+  stormReportBatch?(): StormReportBatch | null;
 }
 
 export interface ResolverVerdict {
@@ -175,6 +194,182 @@ export const marketMoveResolver: OutcomeResolver = {
       return null;
     }
     return deadlineVerdict(criteria, samples, prediction.resolveBy);
+  },
+};
+
+const VALID_REPORT_TYPES = new Set([
+  'tornado',
+  'hail',
+  'wind',
+  'flooding',
+]);
+const ALL_STORM_REPORT_TYPES = new Set([...VALID_REPORT_TYPES, 'other']);
+const MAX_WARNING_POLYGON_RINGS = 8;
+const MAX_WARNING_RING_POINTS = 32;
+
+function warningRingHasArea(ring: readonly unknown[]): boolean {
+  let twiceArea = 0;
+  for (let index = 0; index < ring.length; index += 1) {
+    const current = ring[index] as readonly number[];
+    const next = ring[(index + 1) % ring.length] as readonly number[];
+    twiceArea += current[0]! * next[1]! - next[0]! * current[1]!;
+  }
+  return Math.abs(twiceArea) > 1e-10;
+}
+
+function validWarningCriteria(
+  prediction: PredictionRecord,
+  criteria: WarningVerificationCriteria,
+): boolean {
+  const polygon = criteria.polygon as unknown;
+  const rings = polygon !== null
+    && typeof polygon === 'object'
+    && Array.isArray((polygon as { rings?: unknown }).rings)
+      ? (polygon as { rings: unknown[] }).rings
+      : null;
+  if (
+    prediction.domain !== 'weather'
+    || !Number.isFinite(prediction.predictedAt)
+    || !Number.isFinite(prediction.resolveBy)
+    || prediction.resolveBy <= prediction.predictedAt
+    || !Number.isFinite(criteria.sentAt)
+    || criteria.sentAt > prediction.predictedAt
+    || !Array.isArray(criteria.reportTypes)
+    || criteria.reportTypes.length === 0
+    || !criteria.reportTypes.every((type: unknown) =>
+      typeof type === 'string' && VALID_REPORT_TYPES.has(type))
+    || !rings
+    || rings.length === 0
+    || rings.length > MAX_WARNING_POLYGON_RINGS
+  ) {
+    return false;
+  }
+  return rings.every((ring) =>
+    Array.isArray(ring)
+    && ring.length >= 3
+    && ring.length <= MAX_WARNING_RING_POINTS
+    && ring.every((coordinate) =>
+      Array.isArray(coordinate)
+      && coordinate.length >= 2
+      && Number.isFinite(coordinate[0])
+      && coordinate[0] >= -180
+      && coordinate[0] <= 180
+      && Number.isFinite(coordinate[1])
+      && coordinate[1] >= -90
+      && coordinate[1] <= 90)
+    && warningRingHasArea(ring));
+}
+
+function validStormReport(report: unknown): report is StormReportObservation {
+  if (report === null || typeof report !== 'object') return false;
+  const candidate = report as Partial<StormReportObservation>;
+  return typeof candidate.id === 'string'
+    && candidate.id.length > 0
+    && candidate.id.length <= 512
+    && !/[\u0000-\u001F\u007F]/.test(candidate.id)
+    && typeof candidate.type === 'string'
+    && ALL_STORM_REPORT_TYPES.has(candidate.type)
+    && Number.isFinite(candidate.lat)
+    && candidate.lat! >= -90
+    && candidate.lat! <= 90
+    && Number.isFinite(candidate.lon)
+    && candidate.lon! >= -180
+    && candidate.lon! <= 180
+    && Number.isFinite(candidate.reportedAt);
+}
+
+function warningDirectVerdict(
+  report: StormReportObservation,
+): ResolverVerdict {
+  return {
+    outcome: true,
+    metadata: {
+      note: `direct:warning_verification ${report.type} report ${report.id} at ${report.reportedAt} matched warning polygon`,
+      provenance: {
+        resolverId: 'warning-verification-v1',
+        kind: 'direct',
+        evidence: [{
+          sourceIds: ['iowa-state-lsr'],
+          observedAt: report.reportedAt,
+          reference: report.id,
+        }],
+      },
+    },
+  };
+}
+
+function hasCompleteStormReportCoverage(
+  batch: StormReportBatch,
+  prediction: PredictionRecord,
+  now: number,
+): boolean {
+  return batch.complete === true
+    && batch.reports.every((report) => validStormReport(report))
+    && Number.isFinite(batch.fetchedAt)
+    && Number.isFinite(batch.coverageStart)
+    && Number.isFinite(batch.coverageEnd)
+    && batch.fetchedAt >= prediction.resolveBy
+    && batch.fetchedAt <= now
+    && batch.coverageStart <= prediction.predictedAt
+    && batch.coverageEnd >= prediction.resolveBy
+    && batch.coverageEnd <= batch.fetchedAt;
+}
+
+export const warningVerificationResolver: OutcomeResolver = {
+  id: 'warning-verification-v1',
+  canResolve: (prediction) =>
+    prediction.criteria?.kind === 'warning_verification',
+  resolve(prediction, context) {
+    const criteria = prediction.criteria;
+    if (
+      criteria?.kind !== 'warning_verification'
+      || !validWarningCriteria(prediction, criteria)
+      || !Number.isFinite(context.now)
+    ) {
+      return null;
+    }
+    const batch = context.stormReportBatch?.();
+    if (!batch || !Array.isArray(batch.reports)) return null;
+
+    const eligibleReports: StormReportObservation[] = [];
+    for (const report of batch.reports) {
+      if (
+        !validStormReport(report)
+        || !criteria.reportTypes.includes(report.type)
+        || report.reportedAt < prediction.predictedAt
+        || report.reportedAt > prediction.resolveBy
+        || report.reportedAt > context.now
+      ) {
+        continue;
+      }
+      eligibleReports.push(report);
+    }
+    eligibleReports.sort((a, b) => a.reportedAt - b.reportedAt);
+    const match = eligibleReports.find((report) =>
+      pointInPolygon([report.lon, report.lat], criteria.polygon));
+    if (match) return warningDirectVerdict(match);
+
+    if (
+      context.now < prediction.resolveBy
+      || !hasCompleteStormReportCoverage(batch, prediction, context.now)
+    ) {
+      return null;
+    }
+    return {
+      outcome: false,
+      metadata: {
+        note: `proxy:warning_verification no matching ${criteria.reportTypes.join('/')} report from ${prediction.predictedAt} to ${prediction.resolveBy}; complete LSR coverage ${batch.coverageStart}-${batch.coverageEnd}`,
+        provenance: {
+          resolverId: 'warning-verification-v1',
+          kind: 'proxy',
+          evidence: [{
+            sourceIds: ['iowa-state-lsr'],
+            observedAt: batch.fetchedAt,
+            reference: `coverage:${batch.coverageStart}-${batch.coverageEnd}`,
+          }],
+        },
+      },
+    };
   },
 };
 

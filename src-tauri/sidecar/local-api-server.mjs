@@ -9070,6 +9070,7 @@ async function dispatch(requestUrl, req, routes, context) {
  severity: p.severity ?? 'Unknown',
  urgency: p.urgency ?? 'Unknown',
  areaDesc: p.areaDesc ?? '',
+ sent: p.sent ?? p.onset ?? '',
  onset: p.onset ?? '',
  expires: p.expires ?? '',
  status: p.status ?? '',

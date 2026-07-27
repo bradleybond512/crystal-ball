@@ -83,6 +83,10 @@ export interface Hypothesis {
   region?: string;
   /** Canonical data domains supplied by the originating engines. */
   domains?: FactDomain[];
+  /** Canonical entity slugs supplied by structured upstream records. */
+  entitySlugs?: string[];
+  /** Structured signal types used to declare resolvable event criteria. */
+  signalTypes?: string[];
 }
 
 export interface AnalystSnapshot {
@@ -152,6 +156,7 @@ function fromClusters(clusters: CrossDomainCluster[]): Hypothesis[] {
     risk: c.escalationRisk,
     region: c.region,
     domains: [...new Set(c.domains.map((domain) => factDomainForSituationDomain(domain)))],
+    entitySlugs: [...new Set(c.countries.map((country) => slugifyEntity(country)).filter(Boolean))],
     timestamp: Date.now(),
     evidence: [
       ...c.situationIds.map((id): HypothesisEvidence => ({
@@ -314,6 +319,8 @@ function fromSituations(situations: Situation[]): Hypothesis[] {
     risk: confidenceToRisk(s.confidence),
     region: s.geo.label,
     domains: [factDomainForSituationDomain(s.domain)],
+    entitySlugs: [...new Set(s.geo.countries.map((country) => slugifyEntity(country)).filter(Boolean))],
+    signalTypes: [...new Set(s.signals.map((signal) => signal.type))],
     timestamp: Date.now(),
     evidence: [{
       source: 'situation-engine',
@@ -411,7 +418,10 @@ export function runAnalystCycle(): AnalystSnapshot {
           signature: signatureFor(h),
           summary: h.statement.slice(0, 500),
           domains: h.domains ?? [h.kind],
-          entities: [...new Set(entitiesFromHypothesis(h).map((m) => slugifyEntity(m.entity)))]
+          entities: [...new Set([
+            ...(h.entitySlugs ?? []),
+            ...entitiesFromHypothesis(h).map((m) => slugifyEntity(m.entity)),
+          ])]
             .filter(Boolean).slice(0, 10),
           region: h.region,
           createdAt: h.timestamp,

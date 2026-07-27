@@ -36,8 +36,9 @@ export interface MarketMoveCriteria {
 export interface EventOccurrenceCriteria {
   kind: 'event_occurrence';
   domains: readonly string[];
+  eventTypes: readonly string[];
   entitySlugs: readonly string[];
-  region?: string;
+  region: string;
   minEvidence: number;
 }
 
@@ -348,6 +349,7 @@ function cloneResolutionCriteria(
       return {
         ...criteria,
         domains: [...criteria.domains],
+        eventTypes: [...criteria.eventTypes],
         entitySlugs: [...criteria.entitySlugs],
       };
     }

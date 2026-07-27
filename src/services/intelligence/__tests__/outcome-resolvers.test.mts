@@ -2,17 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createForecastCalibrationStore } from '../forecast-calibration.ts';
 import type {
+  EventOccurrenceCriteria,
   MarketMoveCriteria,
   PredictionRecord,
   WarningVerificationCriteria,
 } from '../forecast-calibration.ts';
 import {
+  eventOccurrenceResolver,
   MARKET_DEADLINE_COVERAGE_MS,
   marketMoveResolver,
   runOutcomeResolvers,
   warningVerificationResolver,
 } from '../outcome-resolvers.ts';
 import type { SpotPriceObservation } from '../../market/spot-price-store.ts';
+import type { ObservationEvent } from '../../../types/intelligence.ts';
 
 const HOUR = 60 * 60 * 1000;
 const RESOLVE_BY = 2 * HOUR;
@@ -116,6 +119,70 @@ function weatherContext(
       coverageEnd: coverage.coverageEnd ?? now,
       complete: coverage.complete ?? true,
     }),
+  };
+}
+
+function eventPrediction(
+  overrides: Partial<EventOccurrenceCriteria> = {},
+): PredictionRecord {
+  return {
+    id: 'hyp:ukraine:1',
+    sourceId: 'analyst-loop',
+    targetKey: 'hypothesis:ukraine',
+    domain: 'conflict',
+    claim: 'Escalation continues in Ukraine',
+    probability: 0.7,
+    predictedAt: 1_000,
+    resolveBy: 10_000,
+    status: 'pending',
+    criteria: {
+      kind: 'event_occurrence',
+      domains: ['conflict', 'military', 'security'],
+      eventTypes: ['armed-conflict'],
+      entitySlugs: ['ukr'],
+      region: 'ukraine',
+      minEvidence: 2,
+      ...overrides,
+    },
+  };
+}
+
+function eventObservation(
+  id: string,
+  sourceId: string,
+  overrides: Partial<ObservationEvent> = {},
+): ObservationEvent {
+  return {
+    id,
+    sourceId,
+    domain: 'conflict',
+    timestamp: 2_000,
+    severity: 'HIGH',
+    title: 'Confirmed fighting in Ukraine',
+    raw: null,
+    entityIds: ['UKR'],
+    tags: ['event-type:armed-conflict', 'region:ukraine'],
+    ...overrides,
+  };
+}
+
+function eventContext(
+  observations: readonly ObservationEvent[],
+  now: number,
+) {
+  return {
+    ...context([], now),
+    queryObservations: (query: {
+      domain?: string;
+      since?: number;
+      until?: number;
+      limit?: number;
+    }) => observations
+      .filter((observation) =>
+        (!query.domain || observation.domain === query.domain)
+        && (query.since === undefined || observation.timestamp >= query.since)
+        && (query.until === undefined || observation.timestamp <= query.until))
+      .slice(0, query.limit),
   };
 }
 
@@ -356,5 +423,154 @@ test('warning resolver rejects malformed criteria and report rows', () => {
       weatherContext(10_001, []),
     ),
     null,
+  );
+});
+
+test('corroborated conflict event resolves true with durable proxy provenance', () => {
+  const verdict = eventOccurrenceResolver.resolve(
+    eventPrediction(),
+    eventContext([
+      eventObservation('acled-1', 'acled', { timestamp: 2_000 }),
+      eventObservation('news-1', 'news:reuters', { timestamp: 2_500 }),
+    ], 3_000),
+  );
+
+  assert.equal(verdict?.outcome, true);
+  assert.match(verdict?.metadata.note ?? '', /^proxy:event_occurrence/);
+  assert.deepEqual(verdict?.metadata.provenance, {
+    resolverId: 'event-occurrence-v1',
+    kind: 'proxy',
+    evidence: [
+      {
+        sourceIds: ['acled'],
+        observedAt: 2_000,
+        reference: 'observation:acled-1:armed-conflict',
+      },
+      {
+        sourceIds: ['news:reuters'],
+        observedAt: 2_500,
+        reference: 'observation:news-1:armed-conflict',
+      },
+    ],
+  });
+});
+
+test('conflict resolver requires independent sources instead of duplicate rows', () => {
+  const verdict = eventOccurrenceResolver.resolve(
+    eventPrediction(),
+    eventContext([
+      eventObservation('acled-1', 'acled'),
+      eventObservation('acled-2', 'acled', { timestamp: 2_500 }),
+    ], 3_000),
+  );
+
+  assert.equal(verdict, null);
+});
+
+test('conflict resolver rejects near entity, region, event-type, and domain joins', () => {
+  const valid = eventObservation('valid', 'acled');
+  const falseJoins = [
+    eventObservation('near-entity', 'news:entity', { entityIds: ['UKR-east'] }),
+    eventObservation('near-region', 'news:region', {
+      tags: ['event-type:armed-conflict', 'region:eastern-ukraine'],
+    }),
+    eventObservation('wrong-type', 'news:type', {
+      tags: ['event-type:airstrike', 'region:ukraine'],
+    }),
+    eventObservation('wrong-domain', 'news:domain', { domain: 'humanitarian' }),
+  ];
+
+  for (const falseJoin of falseJoins) {
+    assert.equal(
+      eventOccurrenceResolver.resolve(
+        eventPrediction(),
+        eventContext([valid, falseJoin], 3_000),
+      ),
+      null,
+      falseJoin.id,
+    );
+  }
+});
+
+test('conflict resolver enforces prediction, horizon, and current-time boundaries', () => {
+  const valid = eventObservation('valid', 'acled');
+  const outOfWindow = [
+    eventObservation('before', 'news:before', { timestamp: 999 }),
+    eventObservation('at-prediction', 'news:at', { timestamp: 1_000 }),
+    eventObservation('after-horizon', 'news:late', { timestamp: 10_001 }),
+  ];
+
+  for (const observation of outOfWindow) {
+    assert.equal(
+      eventOccurrenceResolver.resolve(
+        eventPrediction(),
+        eventContext([valid, observation], 11_000),
+      ),
+      null,
+      observation.id,
+    );
+  }
+  assert.equal(
+    eventOccurrenceResolver.resolve(
+      eventPrediction(),
+      eventContext([
+        valid,
+        eventObservation('future', 'news:future', { timestamp: 3_001 }),
+      ], 3_000),
+    ),
+    null,
+  );
+});
+
+test('conflict resolver fails closed on malformed criteria and observations', () => {
+  const malformedObservation = eventObservation('malformed', 'news:bad', {
+    entityIds: null as unknown as string[],
+  });
+  assert.equal(
+    eventOccurrenceResolver.resolve(
+      eventPrediction(),
+      eventContext([
+        eventObservation('valid', 'acled'),
+        malformedObservation,
+      ], 3_000),
+    ),
+    null,
+  );
+  assert.equal(
+    eventOccurrenceResolver.resolve(
+      eventPrediction({ minEvidence: 1 }),
+      eventContext([
+        eventObservation('a', 'acled'),
+        eventObservation('b', 'news:reuters'),
+      ], 3_000),
+    ),
+    null,
+  );
+});
+
+test('conflict misses stay unresolved at the deadline and expire without a false label', () => {
+  assert.equal(
+    eventOccurrenceResolver.resolve(
+      eventPrediction(),
+      eventContext([], 10_001),
+    ),
+    null,
+  );
+
+  const store = createForecastCalibrationStore();
+  store.record(eventPrediction());
+  const now = 10_000 + 31 * 60_000;
+  assert.equal(
+    runOutcomeResolvers(
+      store,
+      eventContext([], now),
+      [eventOccurrenceResolver],
+    ),
+    0,
+  );
+  assert.equal(store.get('hyp:ukraine:1')?.status, 'expired');
+  assert.match(
+    store.get('hyp:ukraine:1')?.resolutionNote ?? '',
+    /^unresolved:event-occurrence-v1/,
   );
 });

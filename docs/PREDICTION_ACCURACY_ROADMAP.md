@@ -298,7 +298,7 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 ### ACC-104 — Grade runtime algorithms from authoritative outcomes
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
@@ -325,9 +325,19 @@ Acceptance:
 - the production algorithm ledger begins accumulating non-LLM graded records;
 - no outcome can grade a different target, horizon, or version.
 
+Verification: PR #1521 links emitted forecasts to opaque ledger evaluations,
+requires exact target, horizon, and algorithm-version attribution at grade time,
+and backfills persisted forecasts idempotently at startup. Direct, proxy, manual,
+and LLM origins are persisted and reported separately while diagnostics omit raw
+forecast identifiers and input hashes. One bounded LLM runner remains
+(five labels per 12 hours, after 48 hours), and authoritative-linked records are
+ineligible for it. Algorithm, intelligence, cognition, shortage, weather,
+diagnostics, security, 12,722 renderer tests, strict/full lint, TypeScript,
+production build, offline smoke, lockfile, and secret-scan gates passed.
+
 ### ACC-105 — Resolution-quality audit
 
-Status: `WAITING`
+Status: `TODO`
 
 Dependencies: ACC-101 through ACC-104
 

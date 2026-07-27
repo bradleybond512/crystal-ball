@@ -242,7 +242,7 @@ export function recordHypothesisPredictions(
       resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
       criteria: resolutionCriteriaForHypothesis(h, now, spotFor),
-      algorithmVersion: 'analyst-loop-v2',
+      algorithmVersion: '2.0.0',
     });
   }
 }
@@ -276,7 +276,14 @@ export function resolveHypothesisPredictionBySig(
     .sort((a, b) => a.predictedAt - b.predictedAt);
   let resolved = false;
   for (const target of due) {
-    resolved = resolvePrediction(target.id, hit, now) || resolved;
+    resolved = resolvePrediction(target.id, hit, now, {
+      note: `proxy:hypothesis-accuracy ${hit ? 'panned out' : 'fizzled'}`,
+      provenance: {
+        resolverId: 'hypothesis-accuracy-v1',
+        kind: 'proxy',
+        evidence: [],
+      },
+    }) || resolved;
   }
   return resolved;
 }

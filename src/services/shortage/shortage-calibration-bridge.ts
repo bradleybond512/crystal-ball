@@ -28,7 +28,10 @@ import {
   resolvePrediction,
 } from '../intelligence/forecast-calibration-adapter';
 import type { FactDomain } from '../intelligence/types';
-import type { PredictionRecord } from '../intelligence/forecast-calibration';
+import type {
+  PredictionRecord,
+  ResolutionMetadata,
+} from '../intelligence/forecast-calibration';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Dedupe bucket. Shortage forecasts move over days, not minutes, so one
@@ -120,13 +123,14 @@ export function toPredictionRecord(f: ShortageForecast, now: number): Prediction
   return {
     id: shortagePredictionId(f, now),
     sourceId: sourceIdForShortage(f.commodity),
+    targetKey: shortageKeyPrefix(f.commodity, f.region).slice(0, -1),
     domain: domainForShortage(f.domain),
     claim: shortagePredictionClaim(f),
     probability: shortagePredictionProbability(f),
     predictedAt: now,
     resolveBy: now + f.horizonDays * DAY_MS,
     status: 'pending',
-    algorithmVersion: `shortage-${normalize(f.commodity)}-v1`,
+    algorithmVersion: '1.0.0',
   };
 }
 
@@ -177,12 +181,15 @@ export function resolveShortagePrediction(
   region: string,
   materialized: boolean,
   now: number = Date.now(),
+  metadata?: ResolutionMetadata,
 ): number {
   const store = getCalibrationStore();
   const prefix = shortageKeyPrefix(commodity, region);
   const open = store.all().filter((r) => r.id.startsWith(prefix) && isOpenAt(r, now));
   let n = 0;
-  for (const r of open) if (resolvePrediction(r.id, materialized, now)) n += 1;
+  for (const r of open) {
+    if (resolvePrediction(r.id, materialized, now, metadata)) n += 1;
+  }
   return n;
 }
 
@@ -196,7 +203,20 @@ export function resolveShortageFromObservation(
   now: number = Date.now(),
 ): number {
   if (!isElevated(observed.riskScore)) return 0;
-  return resolveShortagePrediction(observed.commodity, observed.region, true, now);
+  return resolveShortagePrediction(
+    observed.commodity,
+    observed.region,
+    true,
+    now,
+    {
+      note: 'proxy:later shortage-model observation crossed the elevated threshold',
+      provenance: {
+        resolverId: 'shortage-observation-v1',
+        kind: 'proxy',
+        evidence: [],
+      },
+    },
+  );
 }
 
 /** Window-close negatives. A shortage prediction whose horizon elapsed with no
@@ -216,6 +236,15 @@ export function settleExpiredShortagePredictions(now: number = Date.now()): numb
     (r) => r.id.startsWith('shortage:') && r.status === 'pending' && r.resolveBy < now,
   );
   let n = 0;
-  for (const r of overdue) if (resolvePrediction(r.id, false, now)) n += 1;
+  for (const r of overdue) {
+    if (resolvePrediction(r.id, false, now, {
+      note: 'proxy:no observed shortage elevation before the forecast window closed',
+      provenance: {
+        resolverId: 'shortage-window-v1',
+        kind: 'proxy',
+        evidence: [],
+      },
+    })) n += 1;
+  }
   return n;
 }

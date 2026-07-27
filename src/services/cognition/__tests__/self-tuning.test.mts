@@ -396,6 +396,29 @@ describe('runCognitionGradingPass', () => {
     assert.equal(rec.evaluations.length, 1);
   });
 
+  it('leaves exact target/version forecasts to authoritative grading', () => {
+    const rec = makeRecorder();
+    const result = runCognitionGradingPass({
+      calibrationRecords: [makePrediction({
+        id: 'structured',
+        targetKey: 'hypothesis:structured',
+        algorithmVersion: '2.0.0',
+        status: 'resolved_true',
+        resolvedAt: 100,
+      })],
+      recalibratorFor: () => (p: number) => ({ p }),
+      dossiers: [],
+      recordEvaluation: rec.recordEvaluation,
+      recordOutcome: rec.recordOutcome,
+      storage: makeStorage(),
+      now: () => 1_000_000,
+    });
+
+    assert.equal(result.graded['recalibration'], 0);
+    assert.equal(result.graded['superforecast'], 0);
+    assert.equal(rec.evaluations.length, 0);
+  });
+
   it('retries failed grades: the watermark only advances past recorded samples', () => {
     const storage = makeStorage();
     const records = [makePrediction({ id: 'p1', probability: 0.8, status: 'resolved_true' as const, resolvedAt: 100 })];

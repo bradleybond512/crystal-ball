@@ -181,9 +181,13 @@ function summarizeAlgorithms(snapshot) {
   const resolverOutcomes = typeof forecasts.directResolved === 'number'
     ? `; resolver outcomes direct:${forecasts.directResolved} proxy:${forecasts.proxyResolved ?? 0} expired:${forecasts.resolverExpired ?? 0}`
     : '';
+  const origins = ledger.outcomeOrigins;
+  const runtimeLabels = origins && typeof origins === 'object'
+    ? `; runtime labels direct:${origins.direct ?? 0} proxy:${origins.proxy ?? 0} manual:${origins.manual ?? 0} llm:${origins.llm ?? 0}`
+    : '';
   const weatherReports = snapshot.forecastCalibration?.weatherReports;
   const weather = typeof weatherReports?.status === 'string'
     ? `; weather reports ${weatherReports.status} (${weatherReports.pendingWarningPredictions ?? 0} pending warnings)`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
 }

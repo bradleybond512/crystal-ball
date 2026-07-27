@@ -105,7 +105,8 @@ test('toPredictionRecord builds a well-formed pending record', () => {
   assert.equal(rec.sourceId, 'mode-forecast:cyber');
   assert.equal(rec.predictedAt, NOW);
   assert.equal(rec.resolveBy, NOW + DAY_MS);
-  assert.equal(rec.algorithmVersion, 'mode-forecast-cyber-v1');
+  assert.equal(rec.algorithmVersion, '1.0.0');
+  assert.equal(rec.targetKey, 'mode:cyber');
   assert.equal(rec.probability, 0.8);
 });
 
@@ -162,7 +163,10 @@ test('resolveAdvisoryFromObservation resolves true only at/above the escalation 
   assert.equal(resolveAdvisoryFromObservation('finance', MODE_ESCALATION_THRESHOLD - 0.01, NOW + HOUR_MS), 0);
   assert.equal(getCalibrationStore().all()[0]!.status, 'pending');
   assert.equal(resolveAdvisoryFromObservation('finance', MODE_ESCALATION_THRESHOLD, NOW + HOUR_MS), 1);
-  assert.equal(getCalibrationStore().all()[0]!.status, 'resolved_true');
+  const resolved = getCalibrationStore().all()[0]!;
+  assert.equal(resolved.status, 'resolved_true');
+  assert.equal(resolved.resolutionProvenance?.kind, 'proxy');
+  assert.equal(resolved.resolutionProvenance?.resolverId, 'mode-forecast-observation-v1');
 });
 
 test('a subthreshold observation never resolves a claim false mid-window', () => {
@@ -177,7 +181,9 @@ test('settleExpiredAdvisoryPredictions marks overdue pending records false, leav
   recordAdvisoryPredictions([advisory({ domain: 'cyber' })], NOW + 20 * HOUR_MS); // resolveBy NOW+44h
   const n = settleExpiredAdvisoryPredictions(NOW + 30 * HOUR_MS);
   assert.equal(n, 1);
-  assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:finance')!.status, 'resolved_false');
+  const settled = getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:finance')!;
+  assert.equal(settled.status, 'resolved_false');
+  assert.equal(settled.resolutionProvenance?.kind, 'proxy');
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:cyber')!.status, 'pending');
 });
 

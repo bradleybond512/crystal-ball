@@ -1,6 +1,7 @@
 import {
   summarizeCalibration,
   type EvaluationRecord,
+  type OutcomeLabelOrigin,
 } from './algorithm-evaluation-ledger';
 import {
   aggregateAlgorithmHealth,
@@ -66,7 +67,12 @@ export interface RecentAlgorithmEvaluation {
   label?: string;
   outcome?: EvaluationRecord['outcome'];
   outcomeAt?: number;
+  version?: string;
+  outcomeOrigin?: OutcomeLabelOrigin;
+  forecastLinked: boolean;
 }
+
+export type OutcomeOriginCounts = Record<OutcomeLabelOrigin, number>;
 
 export interface AlgorithmDiagnosticsSnapshot {
   schemaVersion: 1;
@@ -76,6 +82,7 @@ export interface AlgorithmDiagnosticsSnapshot {
     graded: number;
     pending: number;
     lastEvaluationAt: number | null;
+    outcomeOrigins: OutcomeOriginCounts;
     persistence: AlgorithmLedgerPersistenceStatus;
   };
   health: AlgorithmHealthReport;
@@ -171,6 +178,7 @@ export function buildAlgorithmDiagnosticsSnapshot(
       graded: records.filter((record) => record.outcome !== undefined).length,
       pending: records.filter((record) => record.outcome === undefined).length,
       lastEvaluationAt: lastRecord?.at ?? null,
+      outcomeOrigins: countOutcomeOrigins(records),
       persistence: { ...input.persistence },
     },
     health,
@@ -479,5 +487,31 @@ function toRecentEvaluation(record: EvaluationRecord): RecentAlgorithmEvaluation
     label: record.label,
     outcome: record.outcome,
     outcomeAt: record.outcomeAt,
+    version: record.version,
+    outcomeOrigin: record.outcome === undefined
+      ? undefined
+      : outcomeOriginFor(record),
+    forecastLinked: record.forecastTarget !== undefined,
   };
+}
+
+function countOutcomeOrigins(
+  records: readonly EvaluationRecord[],
+): OutcomeOriginCounts {
+  const counts: OutcomeOriginCounts = {
+    direct: 0,
+    proxy: 0,
+    manual: 0,
+    llm: 0,
+  };
+  for (const record of records) {
+    if (record.outcome === undefined) continue;
+    counts[outcomeOriginFor(record)] += 1;
+  }
+  return counts;
+}
+
+function outcomeOriginFor(record: EvaluationRecord): OutcomeLabelOrigin {
+  if (record.outcomeOrigin) return record.outcomeOrigin;
+  return record.outcomeReason?.startsWith('llm-grader:') ? 'llm' : 'manual';
 }

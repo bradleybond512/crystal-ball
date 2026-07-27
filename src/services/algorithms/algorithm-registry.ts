@@ -111,8 +111,30 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     outputs: ['brief'],
     criticality: 'safety',
   },
+  {
+    id: 'warning-verification',
+    label: 'NWS warning verification',
+    version: '1.0.0',
+    domain: 'weather',
+    healthDomain: 'forecast_calibration',
+    ownerFeature: 'weather_warning',
+    dependencies: { sources: ['weather'], providers: ['nws-alerts', 'iem-lsr'], services: ['nws-polygon-match'] },
+    outputs: ['forecast'],
+    criticality: 'safety',
+  },
 
   // Insights / notifications layer.
+  {
+    id: 'analyst-loop',
+    label: 'Analyst loop forecast',
+    version: '2.0.0',
+    domain: 'intelligence',
+    healthDomain: 'forecast_calibration',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['hypothesis-accuracy'] },
+    outputs: ['forecast'],
+    criticality: 'high',
+  },
   {
     id: 'big-event-detector',
     label: 'Big Event Detector',
@@ -192,6 +214,17 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     dependencies: { sources: ['shortage'], providers: ['eia', 'cme'], services: [] },
     outputs: ['forecast', 'risk_score'],
     criticality: 'medium',
+  },
+  {
+    id: 'mode-forecast',
+    label: 'Cross-domain posture forecast',
+    version: '1.0.0',
+    domain: 'intelligence',
+    healthDomain: 'forecast_calibration',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['mode-forecast'] },
+    outputs: ['forecast'],
+    criticality: 'high',
   },
 
   // Feedback / learning loops (the targets of the safe adjustment engine
@@ -337,7 +370,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
   {
     id: 'superforecast',
     label: 'Superforecaster pipeline',
-    version: '1.0.0',
+    version: '2.0.0',
     domain: 'cognition',
     healthDomain: 'forecast_calibration',
     ownerFeature: 'analyst',

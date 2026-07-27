@@ -42,6 +42,32 @@ export type AlgorithmDomain =
 
 export type EvaluationOutcome = 'hit' | 'miss' | 'partial' | 'inconclusive';
 
+export type OutcomeLabelOrigin = 'direct' | 'proxy' | 'manual' | 'llm';
+
+export interface ForecastEvaluationTarget {
+  predictionId: string;
+  targetKey: string;
+  predictedAt: number;
+  resolveBy: number;
+}
+
+export interface EvaluationLabelAttribution {
+  origin: OutcomeLabelOrigin;
+  /** Bounded resolver/model identifier. Raw provider evidence is excluded. */
+  reference?: string;
+}
+
+export interface ForecastOutcomeAttribution extends EvaluationLabelAttribution {
+  /** Exact version copied from the forecast at emit time. */
+  algorithmVersion: string;
+  /** Exact target and horizon copied from the forecast at emit time. */
+  forecastTarget: ForecastEvaluationTarget;
+}
+
+export type EvaluationOutcomeAttribution =
+  | EvaluationLabelAttribution
+  | ForecastOutcomeAttribution;
+
 export interface EvaluationRecord {
   /** Stable id for this evaluation. */
   id: string;
@@ -66,6 +92,9 @@ export interface EvaluationRecord {
   notes?: string;
   /** Optional structured detail for replay fixtures. */
   detail?: Record<string, unknown>;
+  /** Exact forecast identity owned by an authoritative outcome bridge.
+   *  Linked records are excluded from generic LLM grading. */
+  forecastTarget?: ForecastEvaluationTarget;
   /** Ground truth — populated later, once the outcome is observable. */
   outcome?: EvaluationOutcome;
   /** ms timestamp of the outcome record. */
@@ -73,15 +102,31 @@ export interface EvaluationRecord {
   /** Free-text outcome reason ("warning fired 22 min before tornado",
    *  "alert never escalated"). */
   outcomeReason?: string;
+  /** How the outcome label was established. Historical unmarked outcomes
+   *  are treated as manual by diagnostics. */
+  outcomeOrigin?: OutcomeLabelOrigin;
+  /** Bounded resolver/model identifier; never raw evidence or a provider URL. */
+  outcomeReference?: string;
 }
+
+type EvaluationInput = Omit<
+  EvaluationRecord,
+  'id' | 'outcome' | 'outcomeAt' | 'outcomeReason' | 'outcomeOrigin' | 'outcomeReference'
+> & { id?: string };
 
 export interface AlgorithmEvaluationLedger {
   /** Record an algorithm decision. Returns the recorded record with
    *  id assigned (when not provided). */
-  recordEvaluation: (input: Omit<EvaluationRecord, 'id' | 'outcome' | 'outcomeAt' | 'outcomeReason'> & { id?: string }) => EvaluationRecord;
+  recordEvaluation: (input: EvaluationInput) => EvaluationRecord;
   /** Append the ground-truth outcome to a recorded evaluation. Throws
    *  when the id is unknown. Throws when an outcome is already present. */
-  recordOutcome: (id: string, outcome: EvaluationOutcome, reason: string, at?: number) => EvaluationRecord;
+  recordOutcome: (
+    id: string,
+    outcome: EvaluationOutcome,
+    reason: string,
+    at?: number,
+    attribution?: EvaluationOutcomeAttribution,
+  ) => EvaluationRecord;
   get: (id: string) => EvaluationRecord | undefined;
   /** All records, oldest first by `at`. */
   all: () => EvaluationRecord[];
@@ -126,9 +171,7 @@ export function createAlgorithmEvaluationLedger(
   }
 
   function recordEvaluation(
-    input: Omit<EvaluationRecord, 'id' | 'outcome' | 'outcomeAt' | 'outcomeReason'> & {
-      id?: string;
-    },
+    input: EvaluationInput,
   ): EvaluationRecord {
     const id = input.id ?? freshId();
     if (records.has(id)) {
@@ -161,6 +204,9 @@ export function createAlgorithmEvaluationLedger(
       label: input.label,
       notes,
       detail: input.detail ? { ...input.detail } : undefined,
+      forecastTarget: input.forecastTarget
+        ? cloneForecastTarget(input.forecastTarget)
+        : undefined,
     };
     records.set(id, record);
     return cloneRecord(record);
@@ -171,17 +217,21 @@ export function createAlgorithmEvaluationLedger(
     outcome: EvaluationOutcome,
     reason: string,
     at?: number,
+    attribution?: EvaluationOutcomeAttribution,
   ): EvaluationRecord {
     const existing = records.get(id);
     if (!existing) throw new Error(`Evaluation "${id}" not found`);
     if (existing.outcome) {
       throw new Error(`Evaluation "${id}" already graded as ${existing.outcome}`);
     }
+    assertOutcomeAttributionMatches(existing, attribution);
     const updated: EvaluationRecord = {
       ...existing,
       outcome,
       outcomeAt: at ?? now(),
       outcomeReason: reason,
+      outcomeOrigin: attribution?.origin,
+      outcomeReference: attribution?.reference,
     };
     records.set(id, updated);
     return cloneRecord(updated);
@@ -342,5 +392,43 @@ function cloneRecord(r: EvaluationRecord): EvaluationRecord {
   return {
     ...r,
     detail: r.detail ? { ...r.detail } : undefined,
+    forecastTarget: r.forecastTarget
+      ? cloneForecastTarget(r.forecastTarget)
+      : undefined,
   };
+}
+
+function cloneForecastTarget(target: ForecastEvaluationTarget): ForecastEvaluationTarget {
+  return { ...target };
+}
+
+function sameForecastTarget(
+  left: ForecastEvaluationTarget,
+  right: ForecastEvaluationTarget,
+): boolean {
+  return left.predictionId === right.predictionId
+    && left.targetKey === right.targetKey
+    && left.predictedAt === right.predictedAt
+    && left.resolveBy === right.resolveBy;
+}
+
+function assertOutcomeAttributionMatches(
+  record: EvaluationRecord,
+  attribution: EvaluationOutcomeAttribution | undefined,
+): void {
+  if (!record.forecastTarget) {
+    if (attribution && 'forecastTarget' in attribution) {
+      throw new Error(`Evaluation "${record.id}" is not linked to a forecast target`);
+    }
+    return;
+  }
+  if (!attribution || !('forecastTarget' in attribution)) {
+    throw new Error(`Evaluation "${record.id}" requires exact forecast attribution`);
+  }
+  if (
+    attribution.algorithmVersion !== record.version
+    || !sameForecastTarget(attribution.forecastTarget, record.forecastTarget)
+  ) {
+    throw new Error(`Outcome attribution does not match evaluation "${record.id}"`);
+  }
 }

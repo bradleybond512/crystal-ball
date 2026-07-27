@@ -32,6 +32,7 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         outcome: 'hit',
         outcomeAt: NOW - 1_000,
         outcomeReason: 'confirmed',
+        outcomeOrigin: 'direct',
       },
       {
         id: 'eval-2',
@@ -43,6 +44,7 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         outcome: 'miss',
         outcomeAt: NOW,
         outcomeReason: 'rejected',
+        outcomeOrigin: 'llm',
       },
     ],
     forecastPredictions: [
@@ -167,6 +169,12 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
     graded: 2,
     pending: 0,
     lastEvaluationAt: NOW - 1_000,
+    outcomeOrigins: {
+      direct: 1,
+      proxy: 0,
+      manual: 0,
+      llm: 1,
+    },
     persistence: baseInput().persistence,
   });
   assert.equal(snapshot.health.status, 'healthy');
@@ -239,6 +247,40 @@ test('buildAlgorithmDiagnosticsSnapshot bounds recent evaluations and omits raw 
   assert.equal('detail' in snapshot.recentEvaluations[0]!, false);
   assert.equal('notes' in snapshot.recentEvaluations[0]!, false);
   assert.equal('inputHash' in snapshot.recentEvaluations[0]!, false);
+});
+
+test('diagnostics report label origins and linked state without exposing forecast identifiers', () => {
+  const input = baseInput();
+  input.records = [{
+    id: 'opaque-evaluation-id',
+    algorithmId: 'fast-algo',
+    domain: 'other',
+    version: '2.0.0',
+    at: NOW - 1_000,
+    durationMs: 4,
+    forecastTarget: {
+      predictionId: 'private-prediction-id',
+      targetKey: 'private-target-key',
+      predictedAt: NOW - 2_000,
+      resolveBy: NOW + 2_000,
+    },
+    outcome: 'hit',
+    outcomeAt: NOW,
+    outcomeReason: 'confirmed',
+    outcomeOrigin: 'proxy',
+  }];
+
+  const snapshot = buildAlgorithmDiagnosticsSnapshot(input);
+  assert.deepEqual(snapshot.ledger.outcomeOrigins, {
+    direct: 0,
+    proxy: 1,
+    manual: 0,
+    llm: 0,
+  });
+  assert.equal(snapshot.recentEvaluations[0]?.forecastLinked, true);
+  assert.equal(snapshot.recentEvaluations[0]?.version, '2.0.0');
+  assert.equal(snapshot.recentEvaluations[0]?.outcomeOrigin, 'proxy');
+  assert.doesNotMatch(JSON.stringify(snapshot), /private-prediction-id|private-target-key/);
 });
 
 test('runtime diagnostics isolate the active algorithm version from historical latency', () => {

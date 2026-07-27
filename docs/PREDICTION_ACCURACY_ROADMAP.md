@@ -431,7 +431,7 @@ audit, lockfile, documentation, and secret-scan gates passed.
 
 ### ACC-202 — Per-forecast workbench UI
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
@@ -455,6 +455,20 @@ Deliver:
 - explicit insufficient-sample states.
 
 No new panel is needed unless the existing panel becomes unusably dense.
+
+Verification: PR #1525 turns the existing Belief Calibration panel into a
+wide, interactive forecast workbench without creating another panel. Five
+cohort filters, deterministic sorting, explicit training/proxy/unscored metric
+exclusions, a Wilson-interval reliability chart, overall-versus-selected
+holdout metrics, and bounded error drilldowns all share ACC-201's fixed 60/40
+chronological evaluation contract. Seventeen focused component fixtures within
+12,756 renderer tests, plus 556 intelligence, 302 algorithm, 395 diagnostic,
+strict and changed-file lint, TypeScript, production build, offline smoke,
+bundle/precache/sidecar budgets, 114 security tests, dependency audit,
+lockfile, documentation, and secret-scan gates passed. Live browser checks
+also exercised all filters, sorting, proxy exclusions, insufficient-evidence
+rendering, chart accessibility, and the wide-panel layout without root
+overflow.
 
 ### ACC-203 — Diagnostics and MCP evaluation export
 

@@ -6,6 +6,14 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Leakage-safe forecast workbench**: the Belief Calibration panel now offers
+  source, domain, horizon, version, and resolution-method filters; sortable
+  per-forecast probability, outcome, Brier, evidence-age, target, and
+  resolution audit fields; holdout cohort comparisons; a reliability chart
+  with uncertainty intervals; and worst-error/high-confidence-miss
+  drilldowns. Training, proxy, unresolved, and invalid records stay visible
+  but are explicitly excluded from aggregate metrics, while undersized
+  cohorts render an honest insufficient-evidence state. (PR #1525)
 - **Leakage-safe forecast evaluation workbench**: pure cohort metrics now expose
   per-record and aggregate Brier scores, clipped log loss, training-only
   empirical baselines and Brier skill, equal-mass calibration error,

@@ -302,12 +302,15 @@ import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
 import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import { toIsoString } from '@/services/weather/weather-exposure';
 import type { PowerContext } from '@/services/infrastructure/osm-power';
 import {
   fetchOpenMeteoConditions,
   fetchSite24hForecast,
   fetchSiteAirQuality,
   fetchConnectivitySignal,
+  getWeatherAlertsFeedState,
+  isWeatherFeedFresh,
 } from '@/services/weather';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
@@ -688,7 +691,10 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'firms', task: () => runGuarded('firms', () => this.loadFirmsData()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'inpeFires', task: () => runGuarded('inpeFires', () => this.loadInpeFires()) });
  if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: () => runGuarded('natural', () => this.loadNatural()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.weather) tasks.push({ name: 'weather', task: () => runGuarded('weather', () => this.loadWeatherAlerts()) });
+ // Weather is safety-critical: it drives the status chip + storm posture, not
+ // just the map overlay. Never gate the fetch on the cosmetic `mapLayers.weather`
+ // toggle — turning the layer off must not blind the user to a live storm.
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'weather', task: () => runGuarded('weather', () => this.loadWeatherAlerts()) });
  if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: () => runGuarded('ais', () => this.loadAisSignals()) });
  if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.adsb) tasks.push({ name: 'adsb', task: () => runGuarded('adsb', () => this.loadAdsb()) });
  if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cables', task: () => runGuarded('cables', () => this.loadCableActivity()) });
@@ -1603,6 +1609,11 @@ export class DataLoaderManager implements AppModule {
  // Feed weather alerts + grid status into the datacenter posture engine.
  // Only runs when the user has a saved place tagged data_center.
  if (getDatacenterSite()) {
+ // Contain the datacenter posture computation: it runs many awaits and
+ // timestamp coercions, and a throw here must never abort the weather tick's
+ // downstream status-chip publication — otherwise a single malformed alert
+ // could strand a stale "ALL CLEAR" over a live storm.
+ try {
  let site = getDatacenterSite()!;
  // Resolve the site's own UGC zones once (forecast zone + county) so
  // zone-only NWS products (ice/heat/flood are often issued by UGC zone,
@@ -1635,8 +1646,8 @@ export class DataLoaderManager implements AppModule {
  const nwsAlerts = alerts.map((a) => ({
  id: a.id,
  event: a.event,
- sent: a.onset instanceof Date ? a.onset.toISOString() : String(a.onset),
- expires: a.expires instanceof Date ? a.expires.toISOString() : String(a.expires),
+ sent: toIsoString(a.onset),
+ expires: toIsoString(a.expires),
  severity: (a.severity?.toLowerCase() as import('@/services/weather/weather-threat-types').WeatherSeverity | undefined),
  polygon: a.coordinates.length >= 3 ? { rings: [a.coordinates] } : undefined,
  ugcZones: a.ugcZones,
@@ -1684,6 +1695,9 @@ export class DataLoaderManager implements AppModule {
    connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
    gridInfrastructure,
  });
+ } catch (error) {
+ console.warn('[Datacenter] posture recompute failed; skipping this tick:', error);
+ }
  }
 
  // Wire weather alerts into the insights state singleton so Command
@@ -1721,8 +1735,8 @@ export class DataLoaderManager implements AppModule {
  { getNotificationPreferencesService },
  { computeAlertExposure },
  { getSavedPlaces },
- { resolveSavedPlaceZones, toMatcherPlace },
- { selectPersonalWeatherThreat, setPersonalWeatherThreat, resolveThreatExpiryMs, decideThreatPublication },
+ { resolveSavedPlaceZonesWithHealth, toMatcherPlace },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, resolveThreatExpiryMs, decideThreatPublication },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1774,7 +1788,12 @@ export class DataLoaderManager implements AppModule {
  // too so geometry-free (zone-only) NWS products — ice/heat/flood are often
  // issued by UGC zone, not polygon — match instead of reading as clear.
  const savedPlaces = getSavedPlaces();
- const placeZonesById = await resolveSavedPlaceZones(savedPlaces);
+ // Resolve zones AND capture whether any place's /points lookup failed. A
+ // degraded zone picture (some place's zones unknown) must withhold the
+ // confirmed-clear below: a geometry-free zone-only severe alert could match
+ // an unresolved place and go unseen, so we can't honestly assert "all clear".
+ const { zonesByPlace: placeZonesById, degraded: zonesDegraded } =
+ await resolveSavedPlaceZonesWithHealth(savedPlaces);
  const weatherPlaces = savedPlaces.map((p) => toMatcherPlace(p, placeZonesById.get(p.id)));
  // Exposure floor read once (same tuned value the detector uses) so the
  // status-chip threat decision uses the identical "over the user" bar.
@@ -1916,16 +1935,24 @@ export class DataLoaderManager implements AppModule {
  // Feed the title-bar status chip: the worst Extreme/Severe alert matched to
  // a saved place (or null → chip clears). This is what stops the visible
  // "ALL CLEAR" chip from lying during a storm actually over the user.
- // Gate the CLEAR on feed freshness: a stale/offline snapshot that predates a
- // new warning yields an empty candidate set, and publishing that null would
- // assert "ALL CLEAR" over a live storm (the reported bug, offline path). A
- // real match always publishes; a clear is only honored on a fresh read, so a
- // stale feed leaves the prior threat in place to self-expire.
+ // Gate the CLEAR on an HONEST feed-currency read: `freshness.fresh` comes
+ // from the offline-cache wrapper, which always reports success because the
+ // NWS circuit breaker never throws — so that gate was inert in production.
+ // `getWeatherAlertsFeedState()` reads the breaker's real mode; a clear is
+ // only authorized on a live (or still-fresh cached) read AND when no saved
+ // place's zone lookup failed (a degraded zone picture could hide a zone-only
+ // warning). A real match always publishes. When the clear can't be trusted
+ // the prior threat stays put to self-expire, and the chip shows the neutral
+ // "CHECKING WEATHER" state (clear not confirmed) rather than a false ALL CLEAR.
+ const feedIsCurrent = isWeatherFeedFresh(getWeatherAlertsFeedState());
  const chipDecision = decideThreatPublication(
  selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
- freshness.fresh,
+ feedIsCurrent && !zonesDegraded,
  );
- if (chipDecision.write) setPersonalWeatherThreat(chipDecision.value);
+ if (chipDecision.write) {
+ if (chipDecision.value) setPersonalWeatherThreat(chipDecision.value);
+ else confirmPersonalWeatherClear();
+ }
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);
  }

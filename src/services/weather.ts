@@ -123,6 +123,56 @@ export function getWeatherStatus(): string {
   return breaker.getStatus();
 }
 
+/** Live | recent-cache | nothing-usable — the breaker's own read of the last
+ *  fetch outcome. Mirrors `BreakerDataMode` but narrowed to what the weather
+ *  clear decision needs. */
+export type WeatherFeedMode = 'live' | 'cached' | 'unavailable';
+
+/** Honest snapshot of the NWS feed's currency, taken straight from the circuit
+ *  breaker (not the offline-cache wrapper, which always reports success because
+ *  the breaker never throws). `timestamp` is when the underlying data was last
+ *  refreshed (epoch ms), or null when nothing has been fetched. */
+export interface WeatherFeedState {
+  mode: WeatherFeedMode;
+  timestamp: number | null;
+}
+
+/** The freshness window for a CACHED read to still authorize a clear. Matches
+ *  the breaker's `cacheTtlMs` above: cache older than this is too stale to
+ *  prove "all clear" over a possible new storm. */
+export const WEATHER_FEED_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * The current NWS-alerts feed state, read from the circuit breaker's last
+ * fetch outcome. The data-loader reads this RIGHT AFTER awaiting the weather
+ * fetch so it reflects THIS tick, then feeds it to `isWeatherFeedFresh` to
+ * decide whether an empty candidate set is a real "all clear" or just a failed
+ * feed that must not clear the chip.
+ */
+export function getWeatherAlertsFeedState(): WeatherFeedState {
+  const { mode, timestamp } = breaker.getDataState();
+  return { mode, timestamp };
+}
+
+/**
+ * Whether the weather feed is current enough to PROVE a clear (drop the
+ * personal weather threat). A genuine live read always qualifies; a cached
+ * read qualifies only while it is still within `ttlMs`; an `unavailable` feed
+ * (failed fetch with no usable cache) never does — clearing off it would
+ * re-introduce the "all clear during a storm" fail-open on the failure path.
+ */
+export function isWeatherFeedFresh(
+  state: WeatherFeedState,
+  now: number = Date.now(),
+  ttlMs: number = WEATHER_FEED_TTL_MS,
+): boolean {
+  if (state.mode === 'live') return true;
+  if (state.mode === 'cached' && state.timestamp !== null) {
+    return now - state.timestamp <= ttlMs;
+  }
+  return false;
+}
+
 interface NWSPointZones {
   properties?: { forecastZone?: string; county?: string };
 }

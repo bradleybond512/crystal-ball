@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { toMatcherPlace, resolveSavedPlaceZones } from '../saved-place-adapter.ts';
+import {
+  toMatcherPlace,
+  resolveSavedPlaceZones,
+  resolveSavedPlaceZonesWithHealth,
+} from '../saved-place-adapter.ts';
 import type { SavedPlace as StoredPlace } from '../../saved-places.ts';
 
 function stored(overrides: Partial<StoredPlace> = {}): StoredPlace {
@@ -98,6 +102,63 @@ test('resolveSavedPlaceZones is best-effort: a throwing fetch does not break the
   const map = await resolveSavedPlaceZones(places, fetchZones);
   assert.equal(map.has('boom'), false);
   assert.deepEqual(map.get('ok'), ['INZ002']);
+});
+
+// ── resolveSavedPlaceZonesWithHealth: honest zone-currency signal (P0 #3) ──
+// The clear decision must never assert "no threat" on top of a DEGRADED zone
+// resolution. If a saved place's /points lookup THREW, we don't know that
+// place's UGC zones — so a geometry-free (zone-only) severe alert could match
+// and we'd never see it. That is degradation: the batch must report it so the
+// caller withholds the confirmed-clear. Crucially, an HONEST empty resolve (a
+// genuinely zone-less coordinate that returned []) is NOT degradation — it is a
+// truthful "this place has no zones", and must not block a clear. Conflating
+// "threw" with "returned empty" would either strand CHECKING forever (if empty
+// counted as degraded) or clear over an unknown zone (if a throw were ignored).
+
+test('resolveSavedPlaceZonesWithHealth reports degraded:false when every resolve succeeds', async () => {
+  const places = [
+    stored({ id: 'h1', lat: 61.1, lon: 61.1 }),
+    stored({ id: 'h2', lat: 62.2, lon: 62.2 }),
+  ];
+  const { zonesByPlace, degraded } = await resolveSavedPlaceZonesWithHealth(
+    places,
+    async (lat) => [`Z${lat}`],
+  );
+  assert.equal(degraded, false);
+  assert.deepEqual(zonesByPlace.get('h1'), ['Z61.1']);
+  assert.deepEqual(zonesByPlace.get('h2'), ['Z62.2']);
+});
+
+test('resolveSavedPlaceZonesWithHealth: an HONEST empty resolve is NOT degraded', async () => {
+  // A genuinely zone-less point returns [] without throwing. That is truthful,
+  // not a failure — it must never withhold a clear. degraded stays false.
+  const places = [stored({ id: 'empty', lat: 63.3, lon: 63.3 })];
+  const { zonesByPlace, degraded } = await resolveSavedPlaceZonesWithHealth(
+    places,
+    async () => [],
+  );
+  assert.equal(degraded, false, 'an honest empty resolve is not degradation');
+  assert.equal(zonesByPlace.has('empty'), false);
+});
+
+test('resolveSavedPlaceZonesWithHealth reports degraded:true when any resolve throws', async () => {
+  // A throwing /points lookup means we do NOT know this place's zones. A
+  // zone-only severe alert could match and go unseen, so the caller must
+  // withhold the confirmed-clear. The other place still resolves normally.
+  const places = [
+    stored({ id: 'threw', lat: 64.4, lon: 64.4 }),
+    stored({ id: 'fine', lat: 65.5, lon: 65.5 }),
+  ];
+  const { zonesByPlace, degraded } = await resolveSavedPlaceZonesWithHealth(
+    places,
+    async (lat) => {
+      if (lat === 64.4) throw new Error('points lookup down');
+      return ['INZ065'];
+    },
+  );
+  assert.equal(degraded, true, 'a thrown zone resolve degrades the batch');
+  assert.equal(zonesByPlace.has('threw'), false);
+  assert.deepEqual(zonesByPlace.get('fine'), ['INZ065']);
 });
 
 test('concurrent same-coordinate resolves share ONE in-flight fetch (no duplicate /points)', async () => {

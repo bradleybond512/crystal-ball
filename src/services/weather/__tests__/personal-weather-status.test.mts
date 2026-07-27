@@ -9,6 +9,8 @@ import {
   subscribePersonalWeatherThreat,
   resolveThreatExpiryMs,
   decideThreatPublication,
+  confirmPersonalWeatherClear,
+  isPersonalWeatherClearConfirmed,
   type WeatherThreatCandidate,
 } from '../personal-weather-status.ts';
 
@@ -243,4 +245,48 @@ test('an expired threat notifies subscribers when it self-clears on read', () =>
   assert.equal(getPersonalWeatherThreat(11_000), null);
   assert.equal(hits, 1, 'no repeat notify once already cleared');
   unsub();
+});
+
+// ── confirmed-clear tri-state (P0 #2/#5) ─────────────────────────────────
+// `getPersonalWeatherThreat() === null` is AMBIGUOUS: it means both "no storm
+// (proven clear by a fresh feed)" AND "we have not evaluated weather yet".
+// The status chip painted BOTH as a green "ALL CLEAR", so at boot — before the
+// first weather read — the chip asserted safety it had not verified. This
+// tri-state separates the two: a clear is only "confirmed" once a fresh feed
+// actually proved no matched threat. Until then the chip must stay neutral.
+
+test('a fresh threat means the clear is NOT confirmed', () => {
+  // A non-null set forces the un-confirmed state regardless of prior test order.
+  setPersonalWeatherThreat({ severity: 'severe', label: 'x', expiresAt: Number.MAX_SAFE_INTEGER });
+  assert.equal(isPersonalWeatherClearConfirmed(0), false, 'an active threat is never a confirmed clear');
+});
+
+test('confirmPersonalWeatherClear drops any active threat and confirms the clear', () => {
+  setPersonalWeatherThreat({ severity: 'extreme', label: 'x', expiresAt: Number.MAX_SAFE_INTEGER });
+  confirmPersonalWeatherClear(5_000);
+  assert.equal(getPersonalWeatherThreat(6_000), null, 'a confirmed clear drops the active threat');
+  assert.equal(isPersonalWeatherClearConfirmed(6_000), true, 'and marks the clear as proven');
+});
+
+test('confirmPersonalWeatherClear notifies subscribers so the chip repaints now', () => {
+  setPersonalWeatherThreat({ severity: 'severe', label: 'x', expiresAt: Number.MAX_SAFE_INTEGER });
+  let hits = 0;
+  const unsub = subscribePersonalWeatherThreat(() => { hits += 1; });
+  confirmPersonalWeatherClear(1_000);
+  assert.equal(hits, 1, 'proving a clear must fire subscribers so the chip leaves CHECKING');
+  unsub();
+});
+
+test('a new matched threat un-confirms a prior confirmed clear', () => {
+  confirmPersonalWeatherClear(1_000);
+  assert.equal(isPersonalWeatherClearConfirmed(2_000), true);
+  setPersonalWeatherThreat({ severity: 'severe', label: 'storm', expiresAt: Number.MAX_SAFE_INTEGER });
+  assert.equal(isPersonalWeatherClearConfirmed(2_000), false, 'a new storm resets confirmed-clear to unknown');
+});
+
+test('a self-expired threat is NOT a confirmed clear (expiry ≠ proof)', () => {
+  setPersonalWeatherThreat({ severity: 'severe', label: 'x', expiresAt: 10_000 });
+  // The threat lapses on its own timer; no fresh feed re-proved the area clear.
+  assert.equal(isPersonalWeatherClearConfirmed(10_000), false, 'a lapsed threat leaves the clear unconfirmed');
+  assert.equal(getPersonalWeatherThreat(10_000), null, 'the lapsed threat is gone from state');
 });

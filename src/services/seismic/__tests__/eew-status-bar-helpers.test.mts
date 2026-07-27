@@ -350,6 +350,50 @@ test('composite: weather extreme outranks safety + readiness together', () => {
   assert.equal(state.color, 'crimson');
 });
 
+// ── Composite: weather not yet evaluated (CHECKING, P0 #5) ─────────────
+// `weatherSeverity: null` conflated two states the chip must tell apart:
+// "a fresh feed proved no storm" (real ALL CLEAR) and "weather has not been
+// evaluated yet" (boot, or a stale/failed feed). Painting both green made the
+// chip assert safety it had not verified. `weatherClearConfirmed` disambiguates:
+// only a proven clear may go green; an unproven one shows a neutral CHECKING.
+
+test('composite: weather unconfirmed + all else clear → neutral CHECKING, not ALL CLEAR', () => {
+  const state = deriveStatusBarState(null, { weatherClearConfirmed: false });
+  assert.equal(state.allClear, false, 'unconfirmed weather must not claim all-clear');
+  assert.equal(state.color, 'gray', 'neutral, not a scary red');
+  assert.equal(state.label, 'CHECKING WEATHER');
+  assert.equal(state.source, 'none');
+  assert.equal(state.tier, null);
+  assert.equal(state.imessage.visible, false);
+});
+
+test('composite: weatherClearConfirmed true → real ALL CLEAR', () => {
+  const state = deriveStatusBarState(null, { weatherClearConfirmed: true });
+  assert.equal(state.allClear, true);
+  assert.equal(state.label, 'ALL CLEAR');
+  assert.equal(state.source, 'none');
+});
+
+test('composite: weatherClearConfirmed omitted → ALL CLEAR (backward compatible)', () => {
+  assert.equal(deriveStatusBarState(null, {}).allClear, true);
+  assert.equal(deriveStatusBarState(null).allClear, true);
+});
+
+test('composite: an active weather threat wins over CHECKING (real hazard first)', () => {
+  const state = deriveStatusBarState(null, { weatherSeverity: 'severe', weatherClearConfirmed: false });
+  assert.equal(state.source, 'weather');
+  assert.equal(state.label, 'SEVERE WEATHER');
+});
+
+test('composite: a live EEW alert wins over CHECKING (unconfirmed weather does not hide it)', () => {
+  const state = deriveStatusBarState({
+    activeAlerts: [alert({ eventId: 'a', tier: 'TIER_3_WARNING' })],
+    highestTier: 'TIER_3_WARNING', lastEventId: 'a', asOf: NOW,
+  }, { weatherClearConfirmed: false });
+  assert.equal(state.source, 'eew');
+  assert.equal(state.allClear, false);
+});
+
 // ── S-wave countdown ───────────────────────────────────────────────────
 
 test('countdown null when no arrival time', () => {

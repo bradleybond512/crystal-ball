@@ -1,12 +1,39 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { computeAlertExposure, exposureFromMatch } from '../weather-exposure.ts';
+import { computeAlertExposure, exposureFromMatch, toIsoString } from '../weather-exposure.ts';
 import { detectBigEvent } from '../../insights/big-event-detector.ts';
 import type { PolygonMatchResult, SavedPlace } from '../weather-threat-types.ts';
 import type { WeatherAlert } from '../../weather.ts';
 
 const NOW = 1_745_000_000_000;
+
+// ── toIsoString: crash-safe timestamp coercion (P0 #6) ───────────────────
+// The datacenter mapping in data-loader coerced alert timestamps with
+// `a.onset instanceof Date ? a.onset.toISOString() : String(a.onset)`. An
+// INVALID Date (`new Date('garbage')`) still passes `instanceof Date`, and its
+// `.toISOString()` throws RangeError('Invalid time value'). That block has no
+// inner try/catch, so one malformed NWS timestamp aborted the whole weather
+// tick — including the status-chip publication downstream, which could leave a
+// stale "ALL CLEAR" up during a live storm. This shared guard makes an invalid
+// Date coerce to '' instead of throwing, and passes real values through.
+
+test('toIsoString: an invalid Date coerces to empty string, never throws', () => {
+  assert.equal(toIsoString(new Date('garbage')), '');
+});
+
+test('toIsoString: a real Date becomes its ISO form', () => {
+  assert.equal(toIsoString(new Date('2026-07-27T18:00:00Z')), '2026-07-27T18:00:00.000Z');
+});
+
+test('toIsoString: a cache-hydrated ISO string passes straight through', () => {
+  assert.equal(toIsoString('2026-07-27T18:00:00Z'), '2026-07-27T18:00:00Z');
+});
+
+test('toIsoString: null / undefined coerce to empty string', () => {
+  assert.equal(toIsoString(null), '');
+  assert.equal(toIsoString(undefined), '');
+});
 
 // ── Fixtures: La Porte, IN (the user's saved home) ───────────────────────
 

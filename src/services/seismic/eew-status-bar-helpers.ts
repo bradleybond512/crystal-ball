@@ -65,6 +65,16 @@ export interface CompositeStatusInputs {
    * "SEVERE WEATHER" (rank 4). null / undefined = no personal threat.
    */
   weatherSeverity?: 'extreme' | 'severe' | null;
+  /**
+   * Whether a FRESH weather read has actually PROVEN no matched threat
+   * (isPersonalWeatherClearConfirmed()). `weatherSeverity: null` alone is
+   * ambiguous — it means both "proven clear" and "not evaluated yet" — so the
+   * chip used to paint boot/stale states as a green ALL CLEAR it had not
+   * verified. `false` → the chip stays neutral (CHECKING WEATHER) instead of
+   * claiming all-clear. `true` / undefined → a clear may show as ALL CLEAR
+   * (undefined keeps legacy callers backward-compatible).
+   */
+  weatherClearConfirmed?: boolean;
 }
 
 const TIER_LABELS: Record<EewTier, string> = {
@@ -143,6 +153,20 @@ const ALL_CLEAR_STATE: StatusBarState = {
   imessage: { visible: false, status: null },
 };
 
+/** Neutral "we have not verified weather yet" state. Shown instead of ALL CLEAR
+ *  when nothing else is alarming but a fresh weather read has not yet proven the
+ *  area clear (boot, or a stale/failed feed). Deliberately NOT allClear and NOT
+ *  red: honest uncertainty, neither a false all-clear nor a false alarm. */
+const CHECKING_STATE: StatusBarState = {
+  allClear: false,
+  color: 'gray',
+  label: 'CHECKING WEATHER',
+  source: 'none',
+  tier: null,
+  lastAlert: null,
+  imessage: { visible: false, status: null },
+};
+
 /**
  * Map a status payload (+ optional composite inputs) into the visual
  * state for the bar.
@@ -210,6 +234,13 @@ export function deriveStatusBarState(
   // meta signals, and safety beats readiness. "ALL CLEAR" only when all zero.
   const maxRank = Math.max(eewRank, weatherRank, safetyRank, readinessRank);
   if (maxRank === 0) {
+    // Nothing is alarming — but only claim ALL CLEAR once a fresh weather read
+    // has actually proven no matched threat. An explicit `false` means weather
+    // is unevaluated (boot / stale feed): stay neutral rather than assert a
+    // safety we have not verified. undefined keeps legacy callers all-clear.
+    if (composite?.weatherClearConfirmed === false) {
+      return { ...CHECKING_STATE, imessage: { visible: false, status: null } };
+    }
     return { ...ALL_CLEAR_STATE, imessage: { visible: false, status: null } };
   }
   if (lead && tier && eewRank === maxRank) {

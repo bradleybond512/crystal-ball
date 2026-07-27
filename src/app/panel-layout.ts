@@ -226,7 +226,8 @@ import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-inte
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
-import { getPersonalWeatherThreat, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
+import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
+import { getWeatherAlertsFeedState, isWeatherFeedFresh } from '@/services/weather';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -672,7 +673,20 @@ function collectCompositeStatusInputs(): CompositeStatusInputs {
     weatherSeverity = getPersonalWeatherThreat()?.severity ?? null;
   } catch { weatherSeverity = null; }
 
-  return { safetyCaseSafeToOperate, readinessStatus, weatherSeverity };
+  // Only let the chip assert "ALL CLEAR" when a FRESH weather read has actually
+  // proven no threat over a saved place — AND that proof is still current. Two
+  // honest signals must agree: the store's confirmed-clear flag (false at boot,
+  // before the first tick, and after a threat that merely self-expired) and a
+  // still-fresh feed (a clear proven before the feed went unavailable must not
+  // linger as ALL CLEAR). When either is false the chip shows the neutral
+  // "CHECKING WEATHER" state instead of a premature/false all-clear.
+  let weatherClearConfirmed = true;
+  try {
+    weatherClearConfirmed =
+      isPersonalWeatherClearConfirmed() && isWeatherFeedFresh(getWeatherAlertsFeedState());
+  } catch { weatherClearConfirmed = true; }
+
+  return { safetyCaseSafeToOperate, readinessStatus, weatherSeverity, weatherClearConfirmed };
 }
 
 /** CSS class driving the brief accent pulse on a navigated-to panel

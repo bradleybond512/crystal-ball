@@ -25,6 +25,16 @@ export interface PersonalWeatherThreat {
 
 let current: PersonalWeatherThreat | null = null;
 
+/**
+ * Epoch ms at which a FRESH weather read last PROVED no matched threat — i.e.
+ * the clear is confirmed, not merely unknown. `null` means we have never proven
+ * clear (boot, or a stale/failed feed that could not authorize a clear). The
+ * status chip uses this to tell apart "confirmed all-clear" (green) from "not
+ * yet evaluated" (neutral CHECKING), so it never asserts safety it has not
+ * verified. Invariant: whenever this is non-null, `current` is null.
+ */
+let clearConfirmedAt: number | null = null;
+
 /** Notified whenever the threat changes so the composite status chip can
  *  refresh immediately instead of waiting for its next 30s poll. */
 type ThreatListener = () => void;
@@ -51,9 +61,12 @@ export function subscribePersonalWeatherThreat(listener: ThreatListener): () => 
   return () => listeners.delete(listener);
 }
 
-/** Set (or clear, with `null`) the active personal weather threat. */
+/** Set (or clear, with `null`) the active personal weather threat. Setting a
+ *  real threat un-confirms any prior clear: a new storm over the user means the
+ *  earlier "all clear" no longer holds. */
 export function setPersonalWeatherThreat(threat: PersonalWeatherThreat | null): void {
   current = threat;
+  if (threat !== null) clearConfirmedAt = null;
   notify();
 }
 
@@ -74,11 +87,40 @@ export function getPersonalWeatherThreat(now: number = Date.now()): PersonalWeat
 
 /** Explicitly clear the active threat. Notifies subscribers so the chip clears
  *  immediately, but only when there was actually a threat to clear (a redundant
- *  clear must not churn the status bar). */
+ *  clear must not churn the status bar). Does NOT confirm the clear — an
+ *  explicit clear is not the same as a fresh feed proving the area safe. */
 export function clearPersonalWeatherThreat(): void {
   if (current === null) return;
   current = null;
   notify();
+}
+
+/**
+ * Record that a FRESH weather read proved no matched threat: drop any active
+ * threat AND mark the clear as confirmed so the chip may show a real "all
+ * clear". Only the data-loader publication path (on a genuinely current feed)
+ * calls this — a stale/failed feed must never prove clear. Notifies subscribers
+ * when the state actually changes so the chip leaves the neutral CHECKING look.
+ */
+export function confirmPersonalWeatherClear(now: number = Date.now()): void {
+  const changed = current !== null || clearConfirmedAt === null;
+  current = null;
+  clearConfirmedAt = now;
+  if (changed) notify();
+}
+
+/**
+ * Whether the personal weather clear is CONFIRMED (a fresh feed proved no
+ * matched threat) versus merely unevaluated. Reads self-heal like
+ * `getPersonalWeatherThreat`: a lapsed threat is expired here too, but expiry
+ * alone never fabricates a confirmed clear — only `confirmPersonalWeatherClear`
+ * does. The status chip uses this to stay neutral until weather is proven.
+ */
+export function isPersonalWeatherClearConfirmed(now: number = Date.now()): boolean {
+  // Trigger the expiry self-heal so this read is consistent regardless of the
+  // order the chip reads threat vs. confirmed-clear.
+  getPersonalWeatherThreat(now);
+  return clearConfirmedAt !== null;
 }
 
 /** One severe/extreme alert with its computed PERSONAL exposure — the input

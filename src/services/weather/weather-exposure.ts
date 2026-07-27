@@ -54,7 +54,7 @@ const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
  * invalid Date as unusable ('') rather than throwing; the timestamp is
  * non-essential to the spatial match.
  */
-function toIsoString(value: Date | string | null | undefined): string {
+export function toIsoString(value: Date | string | null | undefined): string {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString();
   return typeof value === 'string' ? value : '';
 }

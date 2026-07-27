@@ -51,28 +51,41 @@ const zoneCache = new Map<string, string[]>();
  *  the other matched. Sharing the in-flight promise makes concurrent callers
  *  observe one identical result. Evicted on settle so a transient empty/failed
  *  resolve isn't sticky — only a non-empty result persists (in `zoneCache`). */
-const inFlightZones = new Map<string, Promise<string[]>>();
+const inFlightZones = new Map<string, Promise<ZoneResolveOutcome>>();
 
 function coordKey(lat: number, lon: number): string {
   return `${lat},${lon}`;
 }
 
+/** Outcome of one coordinate's zone resolve. `failed` is true ONLY when the
+ *  resolver threw — i.e. we do not know this coordinate's zones. An honest
+ *  empty resolve (a genuinely zone-less point) has `failed: false` with
+ *  `zones: []`; it is truthful, not a degradation. */
+interface ZoneResolveOutcome {
+  zones: string[];
+  failed: boolean;
+}
+
 /** Resolve one coordinate's zones, sharing a single in-flight fetch across
  *  concurrent callers and caching only a non-empty (stable) result. Not `async`
- *  so cache/in-flight hits return the very same promise instance. */
-function resolveZonesForCoord(lat: number, lon: number, fetchZones: ZoneResolver): Promise<string[]> {
+ *  so cache/in-flight hits return the very same promise instance. Carries a
+ *  `failed` flag so callers can tell "resolver threw (zones unknown)" apart
+ *  from "resolved to no zones (honest empty)". */
+function resolveZonesForCoord(lat: number, lon: number, fetchZones: ZoneResolver): Promise<ZoneResolveOutcome> {
   const key = coordKey(lat, lon);
   const cached = zoneCache.get(key);
-  if (cached) return Promise.resolve(cached);
+  if (cached) return Promise.resolve({ zones: cached, failed: false });
   const pending = inFlightZones.get(key);
   if (pending) return pending;
 
   const started = (async () => {
     let zones: string[];
+    let failed = false;
     try {
       zones = await fetchZones(lat, lon);
     } catch {
       zones = [];
+      failed = true;
     }
     // Cache ONLY a successful, non-empty resolve. An empty result (transient
     // NWS failure or a genuinely zone-less point) must not poison the cache:
@@ -80,7 +93,7 @@ function resolveZonesForCoord(lat: number, lon: number, fetchZones: ZoneResolver
     // matching for this place after a single hiccup. A place's zones never
     // change, so one good resolve still serves every later tick.
     if (zones.length > 0) zoneCache.set(key, zones);
-    return zones;
+    return { zones, failed };
   })();
 
   inFlightZones.set(key, started);
@@ -92,28 +105,56 @@ function resolveZonesForCoord(lat: number, lon: number, fetchZones: ZoneResolver
   return started;
 }
 
+/** Result of resolving a whole batch of saved places' zones. `degraded` is
+ *  true when AT LEAST ONE place's resolve threw — i.e. some place's zones are
+ *  unknown this tick. The clear decision must withhold a confirmed-clear while
+ *  degraded, because a geometry-free (zone-only) severe alert could match an
+ *  unresolved place and go unseen. An all-empty batch (every place honestly
+ *  zone-less) is NOT degraded. */
+export interface SavedPlaceZonesHealth {
+  zonesByPlace: Map<string, string[]>;
+  degraded: boolean;
+}
+
 /**
  * Resolve each saved place's own UGC zones (forecast zone + county) so the
- * matcher's zone fallback can fire for polygon-free NWS products. Returns a
- * `Map<placeId, zones>` containing only places with at least one resolved
- * zone. Cached by coordinate, deduped across concurrent callers, and
- * fault-isolated per place: a failing lookup degrades that place to
- * polygon-only matching without breaking the batch.
+ * matcher's zone fallback can fire for polygon-free NWS products, AND report
+ * whether any resolve failed. Returns `zonesByPlace` (only places with at
+ * least one resolved zone) plus a `degraded` flag. Cached by coordinate,
+ * deduped across concurrent callers, and fault-isolated per place: a failing
+ * lookup degrades that place to polygon-only matching without breaking the
+ * batch — but it DOES flip `degraded` so the caller knows the zone picture is
+ * incomplete and can withhold an "all clear".
+ */
+export async function resolveSavedPlaceZonesWithHealth(
+  places: readonly StoredPlace[],
+  fetchZones: ZoneResolver = fetchUgcZonesForPoint,
+): Promise<SavedPlaceZonesHealth> {
+  const zonesByPlace = new Map<string, string[]>();
+  let degraded = false;
+  // Resolve places concurrently: each is an independent NWS /points lookup, so
+  // a serial loop stacks their latencies (8 places × ~1s each blocked the whole
+  // weather tick). Fault-isolated per place — one lookup's failure never rejects
+  // the batch, but it does mark the batch degraded.
+  await Promise.all(
+    places.map(async (place) => {
+      const { zones, failed } = await resolveZonesForCoord(place.lat, place.lon, fetchZones);
+      if (failed) degraded = true;
+      if (zones.length > 0) zonesByPlace.set(place.id, zones);
+    }),
+  );
+  return { zonesByPlace, degraded };
+}
+
+/**
+ * Convenience wrapper around {@link resolveSavedPlaceZonesWithHealth} that
+ * returns only the `zonesByPlace` map. Kept for call sites (Personal Storm
+ * Mode routing) that don't need the degradation signal.
  */
 export async function resolveSavedPlaceZones(
   places: readonly StoredPlace[],
   fetchZones: ZoneResolver = fetchUgcZonesForPoint,
 ): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>();
-  // Resolve places concurrently: each is an independent NWS /points lookup, so
-  // a serial loop stacks their latencies (8 places × ~1s each blocked the whole
-  // weather tick). Fault-isolated per place — one lookup's failure never rejects
-  // the batch.
-  await Promise.all(
-    places.map(async (place) => {
-      const zones = await resolveZonesForCoord(place.lat, place.lon, fetchZones);
-      if (zones.length > 0) out.set(place.id, zones);
-    }),
-  );
-  return out;
+  const { zonesByPlace } = await resolveSavedPlaceZonesWithHealth(places, fetchZones);
+  return zonesByPlace;
 }

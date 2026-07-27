@@ -377,7 +377,11 @@ driven by evidence instead of intuition.
 
 ### ACC-201 — Proper-scoring and cohort metrics
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-201-forecast-evaluation`
 
 Dependencies: ACC-005
 

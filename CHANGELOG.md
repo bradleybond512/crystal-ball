@@ -217,6 +217,11 @@ All notable changes to Crystal Ball are documented here.
 
 ### Fixed
 
+- **Fail-closed macOS relaunches**: the local installer now waits for the prior
+  Crystal Ball process to exit before replacing the bundle, checks `open`
+  failures, waits for the replacement process to start, and records local-build
+  state only after a requested relaunch succeeds. Main sync can no longer report
+  an installed release while the desktop app is not running.
 - **Stable delegated click handling**: seven render-rebuilding components now
   delegate clicks from stable roots, preventing background renders between
   pointer-down and pointer-up from swallowing user actions. (PR #1526)

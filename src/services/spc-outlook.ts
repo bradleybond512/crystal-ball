@@ -2,10 +2,11 @@
  * NOAA Storm Prediction Center (SPC) Convective Outlooks + Iowa State LSR Storm Reports
  * SPC Day 1 GeoJSON: https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson
  * SPC Day 2 GeoJSON: https://www.spc.noaa.gov/products/outlook/day2otlk_cat.nolyr.geojson
- * Iowa State LSR: https://mesonet.agron.iastate.edu/api/1/lsrs.geojson?inc_ts=1&hours=24
+ * Iowa State LSR: https://mesonet.agron.iastate.edu/geojson/lsr.geojson?hours=24
  */
 
 import { dataFreshness } from '@/services/data-freshness';
+import type { StormReportBatch } from './intelligence/outcome-resolvers';
 
 export type ConvectiveRisk = 'TSTM' | 'MRGL' | 'SLGT' | 'ENH' | 'MDT' | 'HIGH';
 
@@ -37,18 +38,32 @@ export interface StormReport {
 export interface SpcSummary {
   outlooks: ConvectiveOutlook[];
   reports: StormReport[];
+  reportCoverage: StormReportCoverage;
   fetchedAt: Date;
   maxRisk: ConvectiveRisk | null;
 }
 
+export interface StormReportCoverage {
+  fetchedAt: number;
+  coverageStart: number;
+  coverageEnd: number;
+  complete: boolean;
+}
+
+export interface StormReportParseResult extends StormReportCoverage {
+  items: StormReport[];
+}
+
 const SPC_DAY1_URL = 'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson';
 const SPC_DAY2_URL = 'https://www.spc.noaa.gov/products/outlook/day2otlk_cat.nolyr.geojson';
-const LSR_URL = 'https://mesonet.agron.iastate.edu/api/1/lsrs.geojson?inc_ts=1&hours=24';
+const LSR_URL = 'https://mesonet.agron.iastate.edu/geojson/lsr.geojson?hours=24';
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const LSR_COVERAGE_MS = 24 * 60 * 60 * 1000;
+export const MAX_STORM_REPORT_ROWS = 2000;
 
 let outlooksCache: { items: ConvectiveOutlook[]; fetchedAt: number } | null = null;
-let reportsCache: { items: StormReport[]; fetchedAt: number } | null = null;
+let reportsCache: StormReportParseResult | null = null;
 
 // Risk rank for ordering/severity
 const RISK_RANK: Record<ConvectiveRisk, number> = {
@@ -157,11 +172,12 @@ export async function fetchSpcOutlooks(): Promise<ConvectiveOutlook[]> {
 }
 
 function lsrTypeName(typeCode: string): StormReport['type'] {
+  // Current IEM codes are defined in pyiem.reference.lsr_events.
   const c = typeCode.trim().toUpperCase();
-  if (c === 'T' || c === 'TO') return 'tornado';
-  if (c === 'H' || c === 'G' || c === 'GH') return 'hail';
-  if (c === 'W' || c === 'DS' || c === 'WS') return 'wind';
-  if (c === 'F' || c === 'FL' || c === 'IB' || c === 'IS') return 'flooding';
+  if (c === 'T' || c === 'W') return 'tornado';
+  if (c === 'H') return 'hail';
+  if (c === 'B' || c === 'D' || c === 'G' || c === 'M') return 'wind';
+  if (c === 'E' || c === 'F') return 'flooding';
   return 'other';
 }
 
@@ -172,73 +188,197 @@ function lsrSeverity(type: StormReport['type']): StormReport['severity'] {
   return 'low';
 }
 
-export async function fetchStormReports(): Promise<StormReport[]> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function boundedText(value: unknown, maxLength: number): string {
+  return typeof value === 'string' ? value.slice(0, maxLength) : '';
+}
+
+function parseStormReportFeature(
+  value: unknown,
+  index: number,
+  fetchedAt: number,
+): StormReport | null {
+  if (!isRecord(value) || value.type !== 'Feature') return null;
+  const properties = value.properties;
+  const geometry = value.geometry;
+  if (!isRecord(properties) || !isRecord(geometry) || geometry.type !== 'Point') {
+    return null;
+  }
+  const coordinates = geometry.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const lon: unknown = coordinates[0];
+  const lat: unknown = coordinates[1];
+  if (
+    typeof lon !== 'number'
+    || !Number.isFinite(lon)
+    || lon < -180
+    || lon > 180
+    || typeof lat !== 'number'
+    || !Number.isFinite(lat)
+    || lat < -90
+    || lat > 90
+  ) {
+    return null;
+  }
+  const typeCode = properties.type;
+  const valid = properties.valid;
+  if (
+    typeof typeCode !== 'string'
+    || typeCode.length === 0
+    || typeCode.length > 32
+    || typeof valid !== 'string'
+  ) {
+    return null;
+  }
+  const reportedAtMs = Date.parse(valid);
+  if (
+    !Number.isFinite(reportedAtMs)
+    || reportedAtMs > fetchedAt + 5 * 60 * 1000
+  ) {
+    return null;
+  }
+  const type = lsrTypeName(typeCode);
+  const magnitudeValue = properties.magnitude;
+  let magnitude = '';
+  if (typeof magnitudeValue === 'string') {
+    magnitude = magnitudeValue.slice(0, 64);
+  } else if (
+    typeof magnitudeValue === 'number'
+    && Number.isFinite(magnitudeValue)
+  ) {
+    magnitude = String(magnitudeValue);
+  }
+  return {
+    id: `lsr-${index}-${lat.toFixed(3)}-${lon.toFixed(3)}`,
+    type,
+    magnitude,
+    location: boundedText(properties.city, 128),
+    county: boundedText(properties.county, 128),
+    state: boundedText(properties.state, 32),
+    lat,
+    lon,
+    reportedAt: new Date(reportedAtMs),
+    remarks: boundedText(properties.remark, 1000),
+    severity: lsrSeverity(type),
+  };
+}
+
+export function parseStormReportPayload(
+  payload: unknown,
+  fetchedAt: number,
+  coverageEnd: number = fetchedAt,
+): StormReportParseResult {
+  const safeFetchedAt = Number.isFinite(fetchedAt) ? fetchedAt : 0;
+  const safeCoverageEnd = Number.isFinite(coverageEnd)
+    && coverageEnd <= safeFetchedAt
+    ? coverageEnd
+    : safeFetchedAt;
+  const base = {
+    fetchedAt: safeFetchedAt,
+    coverageStart: safeCoverageEnd - LSR_COVERAGE_MS,
+    coverageEnd: safeCoverageEnd,
+  };
+  if (
+    !Number.isFinite(fetchedAt)
+    || !isRecord(payload)
+    || payload.type !== 'FeatureCollection'
+    || !Array.isArray(payload.features)
+  ) {
+    return { items: [], ...base, complete: false };
+  }
+  const truncated = payload.features.length > MAX_STORM_REPORT_ROWS;
+  let complete = !truncated;
+  const items: StormReport[] = [];
+  for (const [index, feature] of payload.features
+    .slice(0, MAX_STORM_REPORT_ROWS)
+    .entries()) {
+    const report = parseStormReportFeature(feature, index, fetchedAt);
+    if (report) items.push(report);
+    else complete = false;
+  }
+  const severityOrder: Record<StormReport['severity'], number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
+  items.sort((a, b) =>
+    severityOrder[a.severity] - severityOrder[b.severity]
+    || a.reportedAt.getTime() - b.reportedAt.getTime());
+  return { items, ...base, complete };
+}
+
+export function toStormReportBatch(
+  snapshot: StormReportParseResult,
+): StormReportBatch {
+  return {
+    reports: snapshot.items.map((report) => ({
+      id: report.id,
+      type: report.type,
+      lat: report.lat,
+      lon: report.lon,
+      reportedAt: report.reportedAt.getTime(),
+    })),
+    fetchedAt: snapshot.fetchedAt,
+    coverageStart: snapshot.coverageStart,
+    coverageEnd: snapshot.coverageEnd,
+    complete: snapshot.complete,
+  };
+}
+
+export function getLatestStormReportBatch(): StormReportBatch | null {
+  return reportsCache ? toStormReportBatch(reportsCache) : null;
+}
+
+async function fetchStormReportSnapshot(): Promise<StormReportParseResult> {
   if (reportsCache && Date.now() - reportsCache.fetchedAt < CACHE_TTL_MS) {
- return reportsCache.items;
+    return reportsCache;
   }
 
   try {
- const res = await fetch(LSR_URL, { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return reportsCache?.items ?? [];
- const json = await res.json() as {
- features?: {
- properties?: {
- type?: string;
- magnitude?: string | number;
- city?: string;
- county?: string;
- state?: string;
- valid?: string;
- remark?: string;
- };
- geometry?: { coordinates?: [number, number] };
- }[];
- };
- if (!json || typeof json !== 'object') return reportsCache?.items ?? [];
- const features = json.features ?? [];
- const items: StormReport[] = [];
- for (const [i, f] of features.entries()) {
- if (!f) continue;
- const props = f.properties ?? {};
- const coords = f.geometry?.coordinates;
- if (!coords) continue;
- const [lon, lat] = coords;
- const typeCode = props.type ?? '';
- const type = lsrTypeName(typeCode);
- const magnitude = props.magnitude == null ? '' : String(props.magnitude);
- const reportedAt = props.valid ? new Date(props.valid) : new Date();
- items.push({
- id: `lsr-${i}-${lat.toFixed(3)}-${lon.toFixed(3)}`,
- type,
- magnitude,
- location: props.city ?? '',
- county: props.county ?? '',
- state: props.state ?? '',
- lat,
- lon,
- reportedAt,
- remarks: props.remark ?? '',
- severity: lsrSeverity(type),
- });
- }
-
- // Sort: critical first
- const sOrder: Record<StormReport['severity'], number> = { critical: 0, high: 1, medium: 2, low: 3 };
- items.sort((a, b) => sOrder[a.severity] - sOrder[b.severity]);
-
- reportsCache = { items, fetchedAt: Date.now() };
- dataFreshness.recordUpdate('spc-outlook', items.length);
- return items;
+    const coverageEnd = Date.now();
+    const res = await fetch(LSR_URL, { signal: AbortSignal.timeout(12_000) });
+    if (!res.ok) {
+      dataFreshness.recordError('spc-outlook', `LSR HTTP ${res.status}`);
+      return reportsCache ?? incompleteStormReportSnapshot(Date.now());
+    }
+    const fetchedAt = Date.now();
+    const parsed = parseStormReportPayload(
+      await res.json(),
+      fetchedAt,
+      coverageEnd,
+    );
+    reportsCache = parsed;
+    dataFreshness.recordUpdate('spc-outlook', parsed.items.length);
+    return parsed;
   } catch (error) {
- dataFreshness.recordError('spc-outlook', String(error));
- return reportsCache?.items ?? [];
+    dataFreshness.recordError('spc-outlook', String(error));
+    return reportsCache ?? incompleteStormReportSnapshot(Date.now());
   }
 }
 
+function incompleteStormReportSnapshot(now: number): StormReportParseResult {
+  return {
+    items: [],
+    fetchedAt: now,
+    coverageStart: now,
+    coverageEnd: now,
+    complete: false,
+  };
+}
+
+export async function fetchStormReports(): Promise<StormReport[]> {
+  const snapshot = await fetchStormReportSnapshot();
+  return snapshot.items;
+}
+
 export async function fetchSpcSummary(): Promise<SpcSummary> {
-  const [outlooks, reports] = await Promise.all([
+  const [outlooks, reportSnapshot] = await Promise.all([
  fetchSpcOutlooks(),
- fetchStormReports(),
+ fetchStormReportSnapshot(),
   ]);
 
   let maxRisk: ConvectiveRisk | null = null;
@@ -248,9 +388,15 @@ export async function fetchSpcSummary(): Promise<SpcSummary> {
  }
   }
 
-  return {
+ return {
  outlooks,
- reports,
+ reports: reportSnapshot.items,
+ reportCoverage: {
+ fetchedAt: reportSnapshot.fetchedAt,
+ coverageStart: reportSnapshot.coverageStart,
+ coverageEnd: reportSnapshot.coverageEnd,
+ complete: reportSnapshot.complete,
+ },
  fetchedAt: new Date(),
  maxRisk,
   };

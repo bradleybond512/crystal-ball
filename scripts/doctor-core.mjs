@@ -275,6 +275,7 @@ function inspectAlgorithmPersistence(snapshot, findings) {
 function inspectForecastCalibration(snapshot, findings) {
   const summary = objectOrNull(snapshot.forecastCalibration?.summary);
   if (!summary) return;
+  inspectWeatherReportEvidence(snapshot.forecastCalibration, findings);
   const overdue = finiteOrNull(summary.overduePending) ?? 0;
   if (overdue > 0) {
     addFinding(findings, {
@@ -299,6 +300,21 @@ function inspectForecastCalibration(snapshot, findings) {
       nextAction: 'Compare bySource and byDomain Brier scores, then recalibrate or replace only the underperforming model/domain pair.',
     });
   }
+}
+
+function inspectWeatherReportEvidence(forecastCalibration, findings) {
+  const reports = objectOrNull(forecastCalibration.weatherReports);
+  const pending = finiteOrNull(reports?.pendingWarningPredictions) ?? 0;
+  const status = typeof reports?.status === 'string' ? reports.status : 'missing';
+  if (pending === 0 || status === 'fresh') return;
+  addFinding(findings, {
+    id: `forecast.weather_reports_${status}`,
+    severity: 'yellow',
+    priority: 27,
+    summary: `${pending} warning forecast(s) are waiting on ${status} storm-report evidence.`,
+    evidence: `reports=${reports?.reportCount ?? 0}; invalid=${reports?.invalidReportCount ?? 0}; complete=${reports?.complete === true}; ageMs=${reports?.ageMs ?? 'unknown'}`,
+    nextAction: 'Check the Iowa State LSR fetch and algorithm weatherReports diagnostics; restore complete coverage before interpreting warning misses or tuning weather confidence.',
+  });
 }
 
 function inspectAlgorithmRuntimes(snapshot, findings) {

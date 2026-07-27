@@ -39,6 +39,7 @@ import {
 } from './algorithms/algorithm-diagnostics';
 import { getCalibrationStore } from './intelligence/forecast-calibration-adapter';
 import { getSpotPriceDiagnostics } from './market/spot-price-store';
+import { getLatestStormReportBatch } from './spc-outlook';
 
 const ENDPOINT = '/api/analyst-state';
 
@@ -177,6 +178,7 @@ function refreshDiagnosticPayload(): void {
     records: getAlgorithmEvaluationLedger().all(),
     forecastPredictions: getCalibrationStore().all(),
     marketSpotPrices: getSpotPriceDiagnostics(),
+    weatherReportBatch: getLatestStormReportBatch(),
     persistence: getAlgorithmLedgerPersistenceStatus(),
     tunings: getTunings(),
     tuningDecisions: getTuningDecisions(),

@@ -159,10 +159,11 @@ import { fetchInciwebIncidents } from '@/services/inciweb';
 import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
 import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
-import { fetchNWSAlerts } from '@/services/nws-alerts';
+import { fetchNWSAlerts, type NWSAlert } from '@/services/nws-alerts';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
 import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
 import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
+import { recordWarningPredictions } from '@/services/weather/warning-verification-bridge';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { fetchAdsbSnapshot } from '@/services/adsb';
@@ -368,6 +369,25 @@ function alertPolygonFromGeoJson(geometry: { type: string; coordinates: unknown 
   const first = rings[0];
   if (!Array.isArray(first) || first.length < 3) return undefined;
   return { rings: rings as AlertPolygon['rings'] };
+}
+
+function nwsAlertMinimal(alert: NWSAlert): NwsAlertMinimal {
+  const messageType = alert.messageType?.trim().toLowerCase();
+  return {
+    id: alert.id,
+    event: alert.event,
+    sent: alert.sent ?? alert.onset ?? alert.expires,
+    expires: alert.expires,
+    severity: (alert.severity?.toLowerCase() ?? 'unknown') as NwsAlertMinimal['severity'],
+    messageType:
+      messageType === 'alert'
+      || messageType === 'update'
+      || messageType === 'cancel'
+        ? messageType
+        : messageType ? 'unknown' : undefined,
+    polygon: alertPolygonFromGeoJson(alert.geometry),
+    headline: alert.headline,
+  };
 }
 
 // falls back to a hash of headline+area when the id is missing so a long-lived
@@ -2646,8 +2666,10 @@ export class DataLoaderManager implements AppModule {
  const winterWeatherOutlooks = winterResult.status === 'fulfilled'
  ? winterResult.value
  : stormContext.winterWeatherOutlooks;
+ const minimalAlerts = alerts.map(nwsAlertMinimal);
  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);
  unifiedAlertStore.ingest(alerts.map(normalizeNWSAlert));
+ recordWarningPredictions(minimalAlerts);
 
  // Route alerts through Personal Storm Mode — find the highest-priority
  // decision across all alerts × saved places and broadcast it so the
@@ -2661,20 +2683,7 @@ export class DataLoaderManager implements AppModule {
  // Adapt saved-places.SavedPlace to weather-threat-types.SavedPlace
  const weatherPlaces = places.map(p => ({ id: p.id, label: p.name, lat: p.lat, lon: p.lon }));
  let bestDecision = undefined;
- for (const raw of alerts) {
- const minimal: NwsAlertMinimal = {
- id: raw.id,
- event: raw.event,
- sent: raw.onset ?? raw.expires,
- expires: raw.expires,
- severity: (raw.severity?.toLowerCase() ?? 'unknown') as NwsAlertMinimal['severity'],
- // Extract the GeoJSON polygon so routeWeatherAlert can do point-in-polygon
- // against saved places. NWSAlert carries no UGC zones, so polygon-free alerts
- // still won't match — but polygon-bearing alerts now do (they previously ALL
- // resolved to no_match, leaving Personal Storm Mode structurally dead).
- polygon: alertPolygonFromGeoJson(raw.geometry),
- headline: raw.headline,
- };
+ for (const minimal of minimalAlerts) {
  const decision = routeWeatherAlert(minimal, weatherPlaces);
  // Require a real Storm Mode payload (the router only builds one at
  // banner+ priority) — `payload?.activation !== 'inactive'` alone would

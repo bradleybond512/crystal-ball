@@ -104,6 +104,19 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
       latestObservedAt: NOW - 1_000,
       staleSymbolCount: 0,
     },
+    weatherReportBatch: {
+      reports: [{
+        id: 'lsr-1',
+        type: 'tornado',
+        lat: 35.2,
+        lon: -97.4,
+        reportedAt: NOW - 2_000,
+      }],
+      fetchedAt: NOW - 1_000,
+      coverageStart: NOW - 24 * 60 * 60_000,
+      coverageEnd: NOW - 1_000,
+      complete: true,
+    },
     persistence: {
       lastLoadStatus: 'ok',
       lastLoadedAt: NOW - 10_000,
@@ -188,6 +201,18 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
     snapshot.forecastCalibration.marketSpots,
     baseInput().marketSpotPrices,
   );
+  assert.deepEqual(snapshot.forecastCalibration.weatherReports, {
+    status: 'fresh',
+    reportCount: 1,
+    validReportCount: 1,
+    invalidReportCount: 0,
+    pendingWarningPredictions: 0,
+    fetchedAt: NOW - 1_000,
+    ageMs: 1_000,
+    coverageStart: NOW - 24 * 60 * 60_000,
+    coverageEnd: NOW - 1_000,
+    complete: true,
+  });
   assert.equal(snapshot.forecastCalibration.bySource[0]?.sourceId, 'superforecast');
   assert.doesNotMatch(JSON.stringify(snapshot.forecastCalibration), /sensitive fixture claim/);
   assert.equal(snapshot.tunings[0]?.parameters[0]?.current, 0.5);
@@ -248,4 +273,55 @@ test('runtime diagnostics isolate the active algorithm version from historical l
   assert.equal(runtime.totalRuns, 1);
   assert.equal(runtime.historicalRuns, 1);
   assert.equal(runtime.latencyMs.p95, 8);
+});
+
+test('weather verification diagnostics expose stale and malformed report evidence', () => {
+  const input = baseInput();
+  input.forecastPredictions = [{
+    id: 'nwswarn:test',
+    sourceId: 'nws-warning',
+    domain: 'weather',
+    claim: 'warning fixture',
+    probability: 0.7,
+    predictedAt: NOW - 60_000,
+    resolveBy: NOW + 60_000,
+    status: 'pending',
+    criteria: {
+      kind: 'warning_verification',
+      polygon: {
+        rings: [[[-98, 34], [-96, 34], [-97, 36]]],
+      },
+      reportTypes: ['tornado'],
+      sentAt: NOW - 120_000,
+    },
+  }];
+  input.weatherReportBatch = {
+    reports: [{
+      id: 'bad',
+      type: 'tornado',
+      lat: Number.NaN,
+      lon: -97,
+      reportedAt: NOW - 60_000,
+    }],
+    fetchedAt: NOW - 31 * 60_000,
+    coverageStart: NOW - 25 * 60 * 60_000,
+    coverageEnd: NOW - 31 * 60_000,
+    complete: false,
+  };
+
+  assert.deepEqual(
+    buildAlgorithmDiagnosticsSnapshot(input).forecastCalibration.weatherReports,
+    {
+      status: 'stale',
+      reportCount: 1,
+      validReportCount: 0,
+      invalidReportCount: 1,
+      pendingWarningPredictions: 1,
+      fetchedAt: NOW - 31 * 60_000,
+      ageMs: 31 * 60_000,
+      coverageStart: NOW - 25 * 60 * 60_000,
+      coverageEnd: NOW - 31 * 60_000,
+      complete: false,
+    },
+  );
 });

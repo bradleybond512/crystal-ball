@@ -2293,13 +2293,15 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/intelligence/forecast-calibration-adapter'),
  import('@/services/market/spot-price-store'),
  import('@/services/intelligence/observation-store'),
+ import('@/services/spc-outlook'),
  import('@/services/cognition/cognition-settings'),
  import('@/services/diagnostics/recurring-loops'),
- ]).then(([
-   { marketMoveResolver },
+]).then(([
+   { marketMoveResolver, warningVerificationResolver },
    { dispatchOutcomeResolvers },
    { getSpotPriceHistory },
    { query },
+   { getLatestStormReportBatch },
    { isCognitionEnabled },
    { registerRecurringLoop },
  ]) => {
@@ -2308,12 +2310,14 @@ export class PanelLayoutManager implements AppModule {
    () => {
      if (!isCognitionEnabled('outcome-resolvers')) return;
      const now = Date.now();
+     const stormReports = getLatestStormReportBatch();
      dispatchOutcomeResolvers({
        now,
        spotHistoryFor: (symbol, sinceExclusive, untilInclusive) =>
          getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
        queryObservations: (queryInput) => query(queryInput),
-     }, [marketMoveResolver]);
+       stormReportBatch: () => stormReports,
+     }, [marketMoveResolver, warningVerificationResolver]);
    },
    15 * 60_000,
    { priority: 'low', runImmediately: false },

@@ -16,6 +16,7 @@ import {
 import type { AlgorithmLedgerPersistenceStatus } from './algorithm-ledger-persistence';
 import type { TuningDecision } from './tuning-decision-log';
 import type { SpotPriceDiagnostics } from '../market/spot-price-store';
+import type { StormReportBatch } from '../intelligence/outcome-resolvers';
 import {
   brierScore,
   perDomainAccuracy,
@@ -27,6 +28,14 @@ import {
 const RECENT_EVALUATION_LIMIT = 20;
 const RECENT_TUNING_DECISION_LIMIT = 20;
 const FORECAST_RESOLUTION_GRACE_MS = 15 * 60 * 1000;
+const WEATHER_REPORT_STALE_MS = 30 * 60 * 1000;
+const WEATHER_REPORT_TYPES = new Set([
+  'tornado',
+  'hail',
+  'wind',
+  'flooding',
+  'other',
+]);
 
 export interface AlgorithmRuntimeDiagnostics {
   algorithmId: string;
@@ -84,6 +93,7 @@ export interface BuildAlgorithmDiagnosticsInput {
   records: readonly EvaluationRecord[];
   forecastPredictions?: readonly PredictionRecord[];
   marketSpotPrices?: SpotPriceDiagnostics;
+  weatherReportBatch?: StormReportBatch | null;
   persistence: AlgorithmLedgerPersistenceStatus;
   tunings: readonly AlgorithmAdjustmentTuning[];
   tuningDecisions: readonly TuningDecision[];
@@ -123,6 +133,20 @@ export interface ForecastCalibrationDiagnostics {
   bySource: readonly SourceMultiplier[];
   byResolver: readonly ForecastResolverDiagnostics[];
   marketSpots: SpotPriceDiagnostics | null;
+  weatherReports: WeatherReportDiagnostics;
+}
+
+export interface WeatherReportDiagnostics {
+  status: 'missing' | 'fresh' | 'incomplete' | 'stale' | 'invalid';
+  reportCount: number;
+  validReportCount: number;
+  invalidReportCount: number;
+  pendingWarningPredictions: number;
+  fetchedAt: number | null;
+  ageMs: number | null;
+  coverageStart: number | null;
+  coverageEnd: number | null;
+  complete: boolean;
 }
 
 export function buildAlgorithmDiagnosticsSnapshot(
@@ -154,6 +178,7 @@ export function buildAlgorithmDiagnosticsSnapshot(
       input.forecastPredictions ?? [],
       generatedAt,
       input.marketSpotPrices,
+      input.weatherReportBatch,
     ),
     runtime: buildRuntimeRows(input.definitions, records),
     tunings: input.tunings.map((tuning) => copyTuning(tuning)),
@@ -175,6 +200,7 @@ function buildForecastCalibrationDiagnostics(
   predictions: readonly PredictionRecord[],
   now: number,
   marketSpotPrices?: SpotPriceDiagnostics,
+  weatherReportBatch?: StormReportBatch | null,
 ): ForecastCalibrationDiagnostics {
   const resolved = predictions.filter(
     (record) => record.status === 'resolved_true' || record.status === 'resolved_false',
@@ -218,6 +244,75 @@ function buildForecastCalibrationDiagnostics(
     bySource: perSourceMultipliers(predictions),
     byResolver: resolverDiagnostics.rows,
     marketSpots: marketSpotPrices ? { ...marketSpotPrices } : null,
+    weatherReports: buildWeatherReportDiagnostics(
+      predictions,
+      weatherReportBatch,
+      now,
+    ),
+  };
+}
+
+function buildWeatherReportDiagnostics(
+  predictions: readonly PredictionRecord[],
+  batch: StormReportBatch | null | undefined,
+  now: number,
+): WeatherReportDiagnostics {
+  const pendingWarningPredictions = predictions.filter((record) =>
+    record.status === 'pending'
+    && record.criteria?.kind === 'warning_verification').length;
+  if (!batch) {
+    return {
+      status: 'missing',
+      reportCount: 0,
+      validReportCount: 0,
+      invalidReportCount: 0,
+      pendingWarningPredictions,
+      fetchedAt: null,
+      ageMs: null,
+      coverageStart: null,
+      coverageEnd: null,
+      complete: false,
+    };
+  }
+  const validReportCount = batch.reports.filter((report) =>
+    typeof report.id === 'string'
+    && report.id.length > 0
+    && report.id.length <= 512
+    && !/[\u0000-\u001F\u007F]/.test(report.id)
+    && WEATHER_REPORT_TYPES.has(report.type)
+    && Number.isFinite(report.lat)
+    && report.lat >= -90
+    && report.lat <= 90
+    && Number.isFinite(report.lon)
+    && report.lon >= -180
+    && report.lon <= 180
+    && Number.isFinite(report.reportedAt)).length;
+  const timestampsValid = Number.isFinite(batch.fetchedAt)
+    && batch.fetchedAt <= now
+    && Number.isFinite(batch.coverageStart)
+    && Number.isFinite(batch.coverageEnd)
+    && batch.coverageStart <= batch.coverageEnd
+    && batch.coverageEnd <= batch.fetchedAt;
+  const ageMs = timestampsValid ? now - batch.fetchedAt : null;
+  const invalidReportCount = batch.reports.length - validReportCount;
+  let status: WeatherReportDiagnostics['status'];
+  if (timestampsValid && ageMs! > WEATHER_REPORT_STALE_MS) status = 'stale';
+  else if (!timestampsValid || invalidReportCount > 0) status = 'invalid';
+  else if (batch.complete) status = 'fresh';
+  else status = 'incomplete';
+  return {
+    status,
+    reportCount: batch.reports.length,
+    validReportCount,
+    invalidReportCount,
+    pendingWarningPredictions,
+    fetchedAt: Number.isFinite(batch.fetchedAt) ? batch.fetchedAt : null,
+    ageMs,
+    coverageStart: Number.isFinite(batch.coverageStart)
+      ? batch.coverageStart
+      : null,
+    coverageEnd: Number.isFinite(batch.coverageEnd) ? batch.coverageEnd : null,
+    complete: batch.complete === true,
   };
 }
 

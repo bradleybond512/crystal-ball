@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 
 const mem = new Map<string, string>();
+let storageWrites = 0;
 (globalThis as any).localStorage = {
   getItem: (k: string) => mem.get(k) ?? null,
-  setItem: (k: string, v: string) => { mem.set(k, v); },
+  setItem: (k: string, v: string) => {
+    storageWrites += 1;
+    mem.set(k, v);
+  },
   removeItem: (k: string) => { mem.delete(k); },
 };
 
@@ -17,6 +21,7 @@ import {
   dispatchOutcomeResolvers,
   getCalibrationStore,
   recordPrediction,
+  recordPredictions,
   getDomainCalibrationMult,
   _resetCalibrationForTests,
 } from '../forecast-calibration-adapter.ts';
@@ -89,7 +94,11 @@ test('5+ poor records (Brier > 0.30) returns 0.4', () => {
 
 // ── Persistence tests ─────────────────────────────────────────────────────
 
-beforeEach(() => { mem.clear(); _resetCalibrationForTests(); });
+beforeEach(() => {
+  mem.clear();
+  storageWrites = 0;
+  _resetCalibrationForTests();
+});
 
 test('recordPrediction persists and reloads', () => {
   recordPrediction({
@@ -99,6 +108,24 @@ test('recordPrediction persists and reloads', () => {
   });
   _resetCalibrationForTests();
   assert.equal(getCalibrationStore().get('p1')?.claim, 'test claim');
+});
+
+test('recordPredictions persists a batch with one storage write', () => {
+  recordPredictions([
+    {
+      id: 'batch-1', sourceId: 'test', domain: 'weather',
+      claim: 'first', probability: 0.7,
+      predictedAt: 1000, resolveBy: 2000, status: 'pending',
+    },
+    {
+      id: 'batch-2', sourceId: 'test', domain: 'weather',
+      claim: 'second', probability: 0.7,
+      predictedAt: 1000, resolveBy: 2000, status: 'pending',
+    },
+  ]);
+
+  assert.equal(storageWrites, 1);
+  assert.equal(getCalibrationStore().all().length, 2);
 });
 
 test('outcome resolver dispatch persists direct store mutations before reload', () => {

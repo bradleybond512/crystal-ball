@@ -103,6 +103,14 @@ export class SituationPanel extends Panel {
 
  this._unsub = situationEngine.subscribe(() => this.render());
  situationEngine.start();
+
+ // Delegate every card interaction onto the stable content root. render()
+ // rebuilds the card list (innerHTML='') on each engine notify (signal
+ // ingestion + 5-min reassess), so a listener bound to a per-render button
+ // would be torn down between pointerdown and pointerup and the click
+ // swallowed. The content root is created once by Panel and never replaced.
+ this.getContentElement()?.addEventListener('click', (e) => this.handleContentClick(e), { signal: this.signal });
+
  this.render();
   }
 
@@ -110,6 +118,44 @@ export class SituationPanel extends Panel {
  this._unsub();
  situationEngine.stop();
  super.destroy();
+  }
+
+  /**
+   * One delegated click handler for the whole card list. Because render()
+   * rebuilds every card on each engine notify, state is re-resolved by id at
+   * event time rather than captured in a per-render closure.
+   */
+  private handleContentClick(e: Event): void {
+ const target = e.target as HTMLElement;
+ const card = target.closest<HTMLElement>('.sit-card');
+ const sitId = card?.dataset.sitId;
+ if (!sitId) return;
+ // Most-specific controls first — they previously stopped propagation to
+ // beat the header toggle; this ordering reproduces that precedence.
+ if (target.closest('.sit-map-btn')) {
+ e.stopPropagation();
+ const sit = situationEngine.getSituations().find(s => s.id === sitId);
+ if (sit) this.focusOnMap(sit);
+ return;
+ }
+ const dismiss = target.closest<HTMLElement>('.sit-act-dismiss');
+ if (dismiss) {
+ e.stopPropagation();
+ const sit = situationEngine.getSituations().find(s => s.id === sitId);
+ const act = sit?.actions.find(a => a.id === dismiss.dataset.actId);
+ if (act) { act.dismissed = true; this.render(); }
+ return;
+ }
+ if (target.closest('.sit-verif-badge')) {
+ e.stopPropagation();
+ this._expandedSitId = this._expandedSitId === sitId ? null : sitId;
+ this.render();
+ return;
+ }
+ if (target.closest('.sit-header')) {
+ this._expandedSitId = this._expandedSitId === sitId ? null : sitId;
+ this.render();
+ }
   }
 
   private render(): void {
@@ -157,17 +203,9 @@ export class SituationPanel extends Panel {
  mapBtn.className = 'sit-map-btn';
  mapBtn.title = 'Show on map';
  mapBtn.textContent = '\u{1F5FA}\uFE0F'; // 🗺️
- mapBtn.addEventListener('click', (e) => {
- e.stopPropagation();
- this.focusOnMap(sit);
- });
  header.append(mapBtn);
  }
 
- header.addEventListener('click', () => {
- this._expandedSitId = isExpanded ? null : sit.id;
- this.render();
- });
  card.append(header);
 
  // Confidence bar + verification badge
@@ -192,11 +230,6 @@ export class SituationPanel extends Panel {
  badgeEl.style.borderColor = badge.color;
  badgeEl.textContent = `${badge.icon} ${badge.label}`;
  badgeEl.title = this.verificationTooltip(vd);
- badgeEl.addEventListener('click', (e) => {
- e.stopPropagation();
- this._expandedSitId = this._expandedSitId === sit.id ? null : sit.id;
- this.render();
- });
  confRow.append(badgeEl);
  }
 
@@ -324,11 +357,7 @@ export class SituationPanel extends Panel {
  const dismissBtn = document.createElement('button');
  dismissBtn.className = 'sit-act-dismiss';
  dismissBtn.textContent = 'Dismiss';
- dismissBtn.addEventListener('click', (e) => {
- e.stopPropagation();
- ac.dismissed = true;
- this.render();
- });
+ dismissBtn.dataset.actId = ac.id;
  el.append(dismissBtn);
 
  return el;

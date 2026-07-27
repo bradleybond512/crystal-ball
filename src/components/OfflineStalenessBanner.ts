@@ -178,6 +178,7 @@ export class OfflineStalenessBanner {
   private unsub: (() => void) | null = null;
   private dismissed = false;
   private lastStatus = '';
+  private clickAbort: AbortController | null = null;
 
   mount(parent: HTMLElement = document.body): void {
     if (this.el) return;
@@ -189,10 +190,30 @@ export class OfflineStalenessBanner {
     el.style.display = 'none';
     parent.append(el);
     this.el = el;
+
+    // Delegate on the stable root. render() calls replaceChildren() on every
+    // offline-state emit (30s cadence + per-source updates), so a listener
+    // bound to a per-render button would be torn down mid-gesture: a background
+    // emit landing between pointerdown and pointerup replaces the node and the
+    // browser never synthesizes the click. One listener on `el` (created once,
+    // never replaced) is immune to that swallowed-click race.
+    this.clickAbort = new AbortController();
+    el.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
+      if (!btn || !el.contains(btn)) return;
+      if (btn.dataset.action === 'reset') {
+        window.location.reload();
+      } else if (btn.dataset.action === 'dismiss') {
+        this.dismissed = true;
+        el.style.display = 'none';
+      }
+    }, { signal: this.clickAbort.signal });
+
     this.unsub = subscribeOfflineState((state) => { this.render(state); });
   }
 
   destroy(): void {
+    if (this.clickAbort) { this.clickAbort.abort(); this.clickAbort = null; }
     if (this.unsub) { this.unsub(); this.unsub = null; }
     if (this.el?.parentElement) this.el.remove();
     this.el = null;
@@ -228,18 +249,9 @@ export class OfflineStalenessBanner {
     const icon = STATUS_ICON[state.status] ?? '⚠';
     const canDismiss = state.status !== 'offline';
 
+    // Buttons carry data-action; clicks are routed by the delegated listener
+    // bound once on `el` in mount() (survives these replaceChildren rebuilds).
     el.replaceChildren(buildRow(state.bannerLabel, state.bannerSubtext, icon, canDismiss));
-
-    el.querySelector<HTMLButtonElement>('[data-action="reset"]')?.addEventListener('click', () => {
-      window.location.reload();
-    });
-
-    if (canDismiss) {
-      el.querySelector<HTMLButtonElement>('[data-action="dismiss"]')?.addEventListener('click', () => {
-        this.dismissed = true;
-        el.style.display = 'none';
-      });
-    }
   }
 }
 

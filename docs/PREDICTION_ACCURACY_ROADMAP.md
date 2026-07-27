@@ -568,7 +568,11 @@ well-calibrated alternatives.
 
 ### ACC-301 — Hierarchical base-rate model
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-301-hierarchical-base-rate`
 
 Dependencies: ACC-201 and ACC-204
 

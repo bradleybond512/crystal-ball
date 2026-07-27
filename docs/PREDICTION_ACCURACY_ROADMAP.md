@@ -217,7 +217,11 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B1.
 
 ### ACC-102 — Weather verification resolver
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-102-weather-resolver`
 
 Dependencies: ACC-101
 

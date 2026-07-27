@@ -1,3 +1,5 @@
+import { publicForecastCalibration } from '../tools/mcp-server/forecast-evaluation-public.mjs';
+
 const REDACTION_PATTERNS = [
   [/\bBearer\s+\S+/gi, 'Bearer [REDACTED]'],
   [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[EMAIL]'],
@@ -69,7 +71,9 @@ export function buildDoctorReport(input) {
       available: algorithmDiagnostics !== null,
       health: objectOrNull(algorithmDiagnostics?.health),
       ledger: objectOrNull(algorithmDiagnostics?.ledger),
-      forecastCalibration: objectOrNull(algorithmDiagnostics?.forecastCalibration),
+      forecastCalibration: publicForecastCalibration(
+        algorithmDiagnostics?.forecastCalibration,
+      ),
       runtime: Array.isArray(algorithmDiagnostics?.runtime) ? algorithmDiagnostics.runtime : [],
       proposals: Array.isArray(algorithmDiagnostics?.proposals) ? algorithmDiagnostics.proposals : [],
       tunings: Array.isArray(algorithmDiagnostics?.tunings) ? algorithmDiagnostics.tunings : [],
@@ -289,18 +293,54 @@ function inspectForecastCalibration(snapshot, findings) {
     });
   }
 
-  const resolved = finiteOrNull(summary.resolved) ?? 0;
-  const brier = finiteOrNull(summary.brierScore);
+  const holdoutBrier = objectOrNull(
+    snapshot.forecastCalibration?.evaluation?.overall?.brier,
+  );
+  const legacyResolved = finiteOrNull(summary.resolved) ?? 0;
+  const legacyBrier = finiteOrNull(summary.brierScore);
+  const holdoutReady = holdoutBrier?.status === 'ok'
+    && finiteOrNull(holdoutBrier.value) !== null;
+  const resolved = holdoutReady
+    ? finiteOrNull(holdoutBrier.sampleSize) ?? 0
+    : legacyResolved;
+  const brier = holdoutReady
+    ? finiteOrNull(holdoutBrier.value)
+    : legacyBrier;
   if (resolved >= 10 && brier !== null && brier > 0.35) {
+    const window = holdoutReady ? 'holdout ' : '';
     addFinding(findings, {
       id: 'forecast.calibration_poor',
       severity: 'yellow',
       priority: 29,
-      summary: `Forecast calibration is poor (Brier ${brier.toFixed(3)} across ${resolved} resolved predictions).`,
-      evidence: `brierScore=${brier}; resolved=${resolved}`,
-      nextAction: 'Compare bySource and byDomain Brier scores, then recalibrate or replace only the underperforming model/domain pair.',
+      summary: `Forecast ${window}calibration is poor (Brier ${brier.toFixed(3)} across ${resolved} scored predictions).`,
+      evidence: `${holdoutReady ? 'holdoutBrier' : 'brierScore'}=${brier}; scored=${resolved}`,
+      nextAction: 'Inspect evaluation.worstCohorts, then recalibrate or replace only the underperforming source/domain/horizon cohort.',
     });
   }
+  inspectForecastEvaluationCohorts(snapshot.forecastCalibration, findings);
+}
+
+function inspectForecastEvaluationCohorts(forecastCalibration, findings) {
+  const cohorts = Array.isArray(forecastCalibration?.evaluation?.worstCohorts)
+    ? forecastCalibration.evaluation.worstCohorts
+    : [];
+  const worst = cohorts.find((cohort) =>
+    cohort?.brier?.status === 'ok'
+    && finiteOrNull(cohort.brier.value) !== null);
+  const brier = finiteOrNull(worst?.brier?.value);
+  if (!worst || brier === null || brier <= 0.35) return;
+  const sampleSize = finiteOrNull(worst.brier.sampleSize) ?? 0;
+  const sourceId = boundedDiagnosticLabel(worst.sourceId);
+  const domain = boundedDiagnosticLabel(worst.domain);
+  const horizon = boundedDiagnosticLabel(worst.horizon);
+  addFinding(findings, {
+    id: 'forecast.cohort_underperforming',
+    severity: 'yellow',
+    priority: 30,
+    summary: `${sourceId}/${domain}/${horizon} is the worst evidenced forecast cohort (Brier ${brier.toFixed(3)}, n=${sampleSize}).`,
+    evidence: `source=${sourceId}; domain=${domain}; horizon=${horizon}; brier=${brier}; sampleSize=${sampleSize}`,
+    nextAction: 'Replay this cohort against its chronological holdout before changing source weights or calibration parameters.',
+  });
 }
 
 function inspectResolutionQuality(forecastCalibration, findings) {
@@ -509,6 +549,14 @@ function publicFinding(finding) {
     evidence: finding.evidence,
     nextAction: finding.nextAction,
   };
+}
+
+function boundedDiagnosticLabel(value) {
+  const bounded = String(value ?? 'unknown')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .slice(0, 80);
+  return redactDiagnosticText(bounded || 'unknown');
 }
 
 function redactDiagnosticValue(value) {

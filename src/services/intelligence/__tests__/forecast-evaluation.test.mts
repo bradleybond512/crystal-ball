@@ -15,6 +15,7 @@ import {
   meanBinaryLogLoss,
   meanBrierScore,
   pairedBootstrapMeanDifference,
+  splitForecastRecordsChronologically,
   type EvaluationForecast,
 } from '../forecast-evaluation.ts';
 import type { PredictionRecord } from '../forecast-calibration.ts';
@@ -320,6 +321,32 @@ test('horizon buckets have stable, non-overlapping boundaries', () => {
   assert.equal(horizonBucket(30 * DAY), '30d+');
   assert.equal(horizonBucket(-1), 'invalid');
   assert.equal(horizonBucket(Number.NaN), 'invalid');
+});
+
+test('chronological forecast split is stable and keeps invalid timestamps out of training', () => {
+  const records = [
+    record({ id: 'same-b', predictedAt: 200 }),
+    record({ id: 'invalid', predictedAt: Number.NaN }),
+    record({ id: 'oldest', predictedAt: 100 }),
+    record({ id: 'same-a', predictedAt: 200 }),
+    record({ id: 'newest', predictedAt: 300 }),
+  ];
+
+  const split = splitForecastRecordsChronologically(records);
+
+  assert.deepEqual(split.training.map((item) => item.id), [
+    'oldest',
+    'same-a',
+    'same-b',
+  ]);
+  assert.deepEqual(split.evaluation.map((item) => item.id), [
+    'newest',
+    'invalid',
+  ]);
+  assert.deepEqual(
+    splitForecastRecordsChronologically([records[0]!]),
+    { training: [], evaluation: [records[0]!] },
+  );
 });
 
 test('report groups evaluation cohorts by target, source, domain, horizon, and version', () => {

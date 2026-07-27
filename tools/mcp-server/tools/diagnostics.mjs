@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { publicAlgorithmDiagnostics } from '../forecast-evaluation-public.mjs';
 
 const HEALTHY = new Set(['healthy', 'ok', 'fresh', 'up', 'operational']);
 
@@ -12,7 +13,7 @@ export const schemas = {
   },
   get_algorithm_diagnostics: {
     description:
-      'Current algorithm health, forecast calibration/Brier coverage, resolution-label integrity and origins by domain, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
+      'Current algorithm health, leakage-safe chronological holdout metrics, bounded worst source/domain/horizon cohorts, resolution backlog and label origins, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
     inputSchema: z.object({}),
   },
 };
@@ -25,6 +26,9 @@ export function makeDiagnosticsTools(client) {
       const responses = await Promise.all(routes.map((route) => client.get(route)));
       const [health, feeds, analyst, selfTest = null] = responses;
       const findings = [];
+      const algorithmDiagnostics = publicAlgorithmDiagnostics(
+        analyst?.algorithmDiagnostics,
+      );
 
       if (health?.ok !== true) {
         findings.push(finding(
@@ -63,7 +67,7 @@ export function makeDiagnosticsTools(client) {
         ));
       }
 
-      for (const algorithm of analyst?.algorithmDiagnostics?.health?.algorithms ?? []) {
+      for (const algorithm of algorithmDiagnostics?.health?.algorithms ?? []) {
         if (!['unsafe', 'failing', 'degraded'].includes(algorithm.status)) continue;
         findings.push(finding(
           `algorithm.${algorithm.status}.${algorithm.algorithmId}`,
@@ -72,7 +76,7 @@ export function makeDiagnosticsTools(client) {
           algorithm.recommendedAdjustment || 'Replay recent evaluations before changing a tuning parameter.',
         ));
       }
-      const weatherReports = analyst?.algorithmDiagnostics
+      const weatherReports = algorithmDiagnostics
         ?.forecastCalibration?.weatherReports;
       const pendingWarnings = Number(
         weatherReports?.pendingWarningPredictions ?? 0,
@@ -87,7 +91,11 @@ export function makeDiagnosticsTools(client) {
         ));
       }
       inspectResolutionQuality(
-        analyst?.algorithmDiagnostics?.forecastCalibration,
+        algorithmDiagnostics?.forecastCalibration,
+        findings,
+      );
+      inspectForecastEvaluation(
+        algorithmDiagnostics?.forecastCalibration,
         findings,
       );
 
@@ -125,7 +133,7 @@ export function makeDiagnosticsTools(client) {
         renderer: analyst?.available === true
           ? { available: true, stale: analyst.stale === true, ageMs: analyst.ageMs ?? null }
           : { available: false },
-        algorithms: analyst?.algorithmDiagnostics ?? null,
+        algorithms: algorithmDiagnostics,
         selfTest,
         findings,
         timestamp: new Date().toISOString(),
@@ -149,11 +157,20 @@ export function makeDiagnosticsTools(client) {
           timestamp: new Date().toISOString(),
         };
       }
+      const diagnostics = publicAlgorithmDiagnostics(state.algorithmDiagnostics);
+      if (!diagnostics) {
+        return {
+          available: false,
+          summary: 'The running app returned an invalid algorithm diagnostics snapshot.',
+          stale: state.stale === true,
+          timestamp: new Date().toISOString(),
+        };
+      }
       return {
         available: true,
-        summary: summarizeAlgorithms(state.algorithmDiagnostics),
+        summary: summarizeAlgorithms(diagnostics),
         stale: state.stale === true,
-        diagnostics: state.algorithmDiagnostics,
+        diagnostics,
         timestamp: new Date().toISOString(),
       };
     },
@@ -198,7 +215,52 @@ function summarizeAlgorithms(snapshot) {
   const labelQuality = quality && typeof quality === 'object'
     ? `; label quality direct:${quality.origins?.direct ?? 0} proxy:${quality.origins?.proxy ?? 0} manual:${quality.origins?.manual ?? 0}; invalid:${invalid} uncertain-proxy:${quality.uncertainProxy ?? 0} late:${quality.lateResolutions ?? 0}`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${labelQuality}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+  const evaluation = snapshot.forecastCalibration?.evaluation;
+  const holdoutMetric = evaluation?.overall?.brier;
+  const holdout = holdoutMetric?.status === 'ok'
+    ? `; holdout Brier ${holdoutMetric.value.toFixed(3)} (n=${holdoutMetric.sampleSize})`
+    : holdoutMetric?.status === 'insufficient_evidence'
+      ? `; holdout evidence ${holdoutMetric.sampleSize}/${holdoutMetric.minSampleSize}`
+      : '';
+  const worst = evaluation?.worstCohorts?.find((cohort) =>
+    cohort?.brier?.status === 'ok');
+  const worstCohort = worst
+    ? `; worst cohort ${worst.sourceId}/${worst.domain}/${worst.horizon} Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize})`
+    : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${holdout}${worstCohort}${criteria}${resolverOutcomes}${labelQuality}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+}
+
+function inspectForecastEvaluation(forecastCalibration, findings) {
+  const evaluation = forecastCalibration?.evaluation;
+  if (!evaluation || typeof evaluation !== 'object') return;
+  const backlog = evaluation.resolutionBacklog;
+  const overdue = finiteCount(backlog?.overduePending);
+  if (overdue > 0) {
+    findings.push(finding(
+      'forecast.outcomes_overdue',
+      'yellow',
+      `${overdue} forecast outcome(s) are overdue for resolution.`,
+      'Inspect the resolver backlog and upstream observation cadence before changing model weights.',
+    ));
+  }
+  const overall = evaluation.overall?.brier;
+  if (overall?.status === 'ok' && finiteNumber(overall.value) > 0.35) {
+    findings.push(finding(
+      'forecast.calibration_poor',
+      'yellow',
+      `Forecast holdout Brier is ${overall.value.toFixed(3)} across ${overall.sampleSize} scored predictions.`,
+      'Inspect evaluation.worstCohorts and replay the affected cohort before recalibrating.',
+    ));
+  }
+  const worst = evaluation.worstCohorts?.find((cohort) =>
+    cohort?.brier?.status === 'ok');
+  if (!worst || finiteNumber(worst.brier.value) <= 0.35) return;
+  findings.push(finding(
+    'forecast.cohort_underperforming',
+    'yellow',
+    `${worst.sourceId}/${worst.domain}/${worst.horizon} has holdout Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize}).`,
+    'Replay this source/domain/horizon cohort before changing source weights or calibration parameters.',
+  ));
 }
 
 function inspectResolutionQuality(forecastCalibration, findings) {
@@ -245,4 +307,8 @@ function finiteCount(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? value
     : 0;
+}
+
+function finiteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

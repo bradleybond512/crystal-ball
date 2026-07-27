@@ -178,7 +178,11 @@ target-specific outcomes from data Crystal Ball already ingests.
 
 ### ACC-101 — Resolver contract and market-move resolver
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-101-market-resolver`
 
 Dependencies: ACC-005
 

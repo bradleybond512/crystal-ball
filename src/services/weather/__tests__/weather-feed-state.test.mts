@@ -20,13 +20,31 @@ import {
 // personal weather threat. `mode:'unavailable'` (fetch failed, nothing usable)
 // must never count as fresh.
 
-test('a live read is fresh', () => {
+test('a live read with a recent timestamp is fresh', () => {
   const state: WeatherFeedState = { mode: 'live', timestamp: 1_000 };
   assert.equal(isWeatherFeedFresh(state, 2_000, WEATHER_FEED_TTL_MS), true);
 });
 
-test('live is fresh regardless of timestamp (even null)', () => {
-  assert.equal(isWeatherFeedFresh({ mode: 'live', timestamp: null }, 2_000, WEATHER_FEED_TTL_MS), true);
+test('a live read with NO timestamp is NOT fresh (cannot prove recency)', () => {
+  // mode:'live' alone is not proof of currency — the breaker could report a
+  // months-old live read that has never refreshed. Without a finite timestamp
+  // we cannot bound its age, so it must not authorize a clear.
+  assert.equal(isWeatherFeedFresh({ mode: 'live', timestamp: null }, 2_000, WEATHER_FEED_TTL_MS), false);
+});
+
+test('a live read OLDER than TTL is NOT fresh (stale live never proves clear)', () => {
+  const now = 1_000_000;
+  const state: WeatherFeedState = { mode: 'live', timestamp: now - (WEATHER_FEED_TTL_MS + 1) };
+  assert.equal(isWeatherFeedFresh(state, now, WEATHER_FEED_TTL_MS), false);
+});
+
+test('a read with a FUTURE timestamp (negative age) is NOT fresh', () => {
+  // A clock skew or corrupted timestamp ahead of `now` yields a negative age.
+  // Treating that as fresh would let a nonsense timestamp authorize a clear;
+  // reject it for both live and cached.
+  const now = 1_000_000;
+  assert.equal(isWeatherFeedFresh({ mode: 'live', timestamp: now + 5_000 }, now, WEATHER_FEED_TTL_MS), false);
+  assert.equal(isWeatherFeedFresh({ mode: 'cached', timestamp: now + 5_000 }, now, WEATHER_FEED_TTL_MS), false);
 });
 
 test('an unavailable feed is NOT fresh (fetch failed, no cache — never prove clear)', () => {
@@ -55,8 +73,12 @@ test('a cached read with no timestamp is NOT fresh (cannot prove recency)', () =
   assert.equal(isWeatherFeedFresh({ mode: 'cached', timestamp: null }, 2_000, WEATHER_FEED_TTL_MS), false);
 });
 
-test('now and ttl are optional (defaults apply); a live feed is fresh', () => {
-  assert.equal(isWeatherFeedFresh({ mode: 'live', timestamp: null }), true);
+test('now and ttl are optional (defaults apply); a just-now live read is fresh', () => {
+  assert.equal(isWeatherFeedFresh({ mode: 'live', timestamp: Date.now() }), true);
+});
+
+test('now and ttl are optional; a null-timestamp live read is NOT fresh under defaults', () => {
+  assert.equal(isWeatherFeedFresh({ mode: 'live', timestamp: null }), false);
 });
 
 test('getWeatherAlertsFeedState returns the breaker data-state shape', () => {

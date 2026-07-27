@@ -680,11 +680,14 @@ function collectCompositeStatusInputs(): CompositeStatusInputs {
   // still-fresh feed (a clear proven before the feed went unavailable must not
   // linger as ALL CLEAR). When either is false the chip shows the neutral
   // "CHECKING WEATHER" state instead of a premature/false all-clear.
-  let weatherClearConfirmed = true;
+  // Fail CLOSED: the default AND the catch are both `false`. If the check can't
+  // even run (either singleton throws), we have NOT proven it clear, so the chip
+  // must stay neutral — never fall back to asserting ALL CLEAR on an error.
+  let weatherClearConfirmed = false;
   try {
     weatherClearConfirmed =
       isPersonalWeatherClearConfirmed() && isWeatherFeedFresh(getWeatherAlertsFeedState());
-  } catch { weatherClearConfirmed = true; }
+  } catch { weatherClearConfirmed = false; }
 
   return { safetyCaseSafeToOperate, readinessStatus, weatherSeverity, weatherClearConfirmed };
 }

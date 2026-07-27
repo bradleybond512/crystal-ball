@@ -1585,6 +1585,15 @@ export class DataLoaderManager implements AppModule {
  try {
  const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
  const alerts = snapshot.data;
+ // Capture the feed's currency ATOMICALLY with `alerts`, on this same
+ // synchronous turn. The breaker's data-state is a mutable global that a
+ // fire-and-forget stale-while-revalidate refresh can flip to mode:'live'
+ // AFTER this await resolves. Reading it LATE — after the zone/exposure
+ // awaits below, at chip-publication time — is a TOCTOU: the background
+ // refresh could report 'live' while `alerts` is still the stale (empty)
+ // set, proving a false "all clear". Snapshot it now so freshness matches
+ // the dataset it describes.
+ const weatherFeedFresh = isWeatherFeedFresh(getWeatherAlertsFeedState());
  this.ctx.map?.setWeatherAlerts(alerts);
  this.ctx.map?.setLayerReady('weather', alerts.length > 0);
  const freshness = feedFreshnessFromSnapshot(snapshot);
@@ -1639,20 +1648,27 @@ export class DataLoaderManager implements AppModule {
  const grid = await fetchGridStatus().catch(() => null);
  const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
  // Map WeatherAlert[] → NwsAlertMinimal[]. Shapes differ (severity casing,
- // Date vs ISO). WeatherAlert carries its polygon as a flat [lon,lat] ring
- // under `coordinates`; map it into polygon.rings so matchAlertToPlace can
- // do point-in-polygon against the site. UGC zones thread through so the
- // matcher's zone fallback fires for polygon-free alerts.
- const nwsAlerts = alerts.map((a) => ({
+ // Date vs ISO). Carry EVERY outer ring of the warning into polygon.rings so
+ // matchAlertToPlace does point-in-polygon over the union — a MultiPolygon
+ // warning whose 2nd+ sub-polygon covers the site must still match here, the
+ // same way the personal-exposure path matches it (weather-exposure.ts). Fall
+ // back to the legacy single `coordinates` ring when `polygonRings` is absent.
+ // UGC zones thread through so the matcher's zone fallback fires for
+ // polygon-free alerts.
+ const nwsAlerts = alerts.map((a) => {
+ const rings = (a.polygonRings && a.polygonRings.length > 0 ? a.polygonRings : [a.coordinates])
+ .filter((ring) => ring.length >= 3);
+ return {
  id: a.id,
  event: a.event,
  sent: toIsoString(a.onset),
  expires: toIsoString(a.expires),
  severity: (a.severity?.toLowerCase() as import('@/services/weather/weather-threat-types').WeatherSeverity | undefined),
- polygon: a.coordinates.length >= 3 ? { rings: [a.coordinates] } : undefined,
+ polygon: rings.length > 0 ? { rings } : undefined,
  ugcZones: a.ugcZones,
  headline: a.headline,
- }));
+ };
+ });
  const [condResult, forecastResult, aqResult, connResult] = await Promise.allSettled([
    fetchOpenMeteoConditions(site.lat, site.lon),
    fetchSite24hForecast(site.lat, site.lon),
@@ -1802,6 +1818,12 @@ export class DataLoaderManager implements AppModule {
  // iterate so the chip can stop showing "ALL CLEAR" during a storm actually
  // over the user (see selectPersonalWeatherThreat). Personal, not national.
  const weatherThreatCandidates: WeatherThreatCandidate[] = [];
+ // Did any alert's exposure match THROW? A crash leaves that alert's exposure
+ // at the conservative default (50) — below the floor — so a warning genuinely
+ // over the user could be scored as "not over you" and the chip could clear.
+ // Treat any match failure as a reason to withhold "all clear" (fail closed),
+ // the same way an unresolved UGC zone (zonesDegraded) does.
+ let matchingDegraded = false;
  for (const alert of severeAlerts) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
  // With no saved place, exposure is genuinely unknown — keep the
@@ -1816,6 +1838,7 @@ export class DataLoaderManager implements AppModule {
  userExposure = computeAlertExposure(alert, weatherPlaces).exposure;
  } catch (error) {
  console.warn('[data-loader] weather exposure failed for', alert.id, error);
+ matchingDegraded = true;
  }
  }
  // Record this alert as a chip-threat candidate. `alert.expires` is a Date
@@ -1938,16 +1961,20 @@ export class DataLoaderManager implements AppModule {
  // Gate the CLEAR on an HONEST feed-currency read: `freshness.fresh` comes
  // from the offline-cache wrapper, which always reports success because the
  // NWS circuit breaker never throws — so that gate was inert in production.
- // `getWeatherAlertsFeedState()` reads the breaker's real mode; a clear is
+ // `weatherFeedFresh` was captured from the breaker's real mode ATOMICALLY
+ // with `alerts` at fetch time (see the note there); reading it late here
+ // would race a background stale-while-revalidate refresh that could flip the
+ // mode to 'live' while `alerts` is still the stale empty set. A clear is
  // only authorized on a live (or still-fresh cached) read AND when no saved
  // place's zone lookup failed (a degraded zone picture could hide a zone-only
- // warning). A real match always publishes. When the clear can't be trusted
- // the prior threat stays put to self-expire, and the chip shows the neutral
- // "CHECKING WEATHER" state (clear not confirmed) rather than a false ALL CLEAR.
- const feedIsCurrent = isWeatherFeedFresh(getWeatherAlertsFeedState());
+ // warning) AND when no exposure match crashed (a match failure leaves that
+ // alert scored below the floor, which could mask a warning over the user). A
+ // real match always publishes. When the clear can't be trusted the prior
+ // threat stays put to self-expire, and the chip shows the neutral "CHECKING
+ // WEATHER" state (clear not confirmed) rather than a false ALL CLEAR.
  const chipDecision = decideThreatPublication(
  selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
- feedIsCurrent && !zonesDegraded,
+ weatherFeedFresh && !zonesDegraded && !matchingDegraded,
  );
  if (chipDecision.write) {
  if (chipDecision.value) setPersonalWeatherThreat(chipDecision.value);

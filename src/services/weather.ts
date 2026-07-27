@@ -10,6 +10,13 @@ export interface WeatherAlert {
   onset: Date;
   expires: Date;
   coordinates: [number, number][];
+  /** All outer rings of the alert geometry (one per sub-polygon of a
+   *  MultiPolygon; a single ring for a Polygon). Present ONLY when the alert
+   *  has more than one outer ring — `coordinates` legacy-carries just the
+   *  first ring for the map/DeckGL consumers, but personal matching must union
+   *  over every ring or a warning whose 2nd+ sub-polygon covers the user reads
+   *  as clear. Consumers that do point-in-polygon prefer this when set. */
+  polygonRings?: [number, number][][];
   centroid?: [number, number];
   /** UGC zone/county codes the alert applies to (from properties.geocode.UGC).
    *  Used as the geometry-free fallback when an alert has no polygon. */
@@ -87,7 +94,8 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
   return ranked
     .slice(0, Math.max(MAX_ACTIVE_ALERTS, protectedCount))
     .map((alert) => {
-      const coords = extractCoordinates(alert.geometry);
+      const rings = extractPolygonRings(alert.geometry);
+      const coords = rings[0] ?? [];
       return {
         id: alert.id,
         event: alert.properties.event,
@@ -98,6 +106,9 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
         onset: new Date(alert.properties.onset),
         expires: new Date(alert.properties.expires),
         coordinates: coords,
+        // Only carry the multi-ring array when there is genuinely more than the
+        // first ring — single-ring alerts stay lean and read `coordinates`.
+        polygonRings: rings.length > 1 ? rings : undefined,
         centroid: calculateCentroid(coords),
         ugcZones: alert.properties.geocode?.UGC ?? [],
       };
@@ -156,21 +167,24 @@ export function getWeatherAlertsFeedState(): WeatherFeedState {
 
 /**
  * Whether the weather feed is current enough to PROVE a clear (drop the
- * personal weather threat). A genuine live read always qualifies; a cached
- * read qualifies only while it is still within `ttlMs`; an `unavailable` feed
- * (failed fetch with no usable cache) never does — clearing off it would
- * re-introduce the "all clear during a storm" fail-open on the failure path.
+ * personal weather threat). Requires an in-window read for BOTH live and
+ * cached modes: a finite timestamp whose age is within `[0, ttlMs]`. `mode`
+ * alone is never proof of currency — the breaker can report a `live` read
+ * whose timestamp is hours old (no fetch has refreshed it), and a bare
+ * `mode:'live'` clear off that stale read re-introduces the "all clear during
+ * a storm" fail-open. An `unavailable` feed (failed fetch, no usable cache),
+ * a missing/non-finite timestamp, or a future timestamp (clock skew → negative
+ * age) all fail closed.
  */
 export function isWeatherFeedFresh(
   state: WeatherFeedState,
   now: number = Date.now(),
   ttlMs: number = WEATHER_FEED_TTL_MS,
 ): boolean {
-  if (state.mode === 'live') return true;
-  if (state.mode === 'cached' && state.timestamp !== null) {
-    return now - state.timestamp <= ttlMs;
-  }
-  return false;
+  if (state.mode === 'unavailable') return false;
+  if (state.timestamp === null || !Number.isFinite(state.timestamp)) return false;
+  const age = now - state.timestamp;
+  return age >= 0 && age <= ttlMs;
 }
 
 interface NWSPointZones {
@@ -178,37 +192,58 @@ interface NWSPointZones {
 }
 
 /** Derive a location's own UGC codes (forecast zone + county) from NWS
- *  `/points/{lat},{lon}`. Best-effort: returns `[]` on any failure so
- *  callers can degrade to polygon-only matching. The codes are the last
- *  path segment of the `forecastZone` / `county` URLs (e.g. `INZ001`). */
+ *  `/points/{lat},{lon}`. The codes are the last path segment of the
+ *  `forecastZone` / `county` URLs (e.g. `INZ001`).
+ *
+ *  Failure semantics matter: this resolver is the DEFAULT behind
+ *  `resolveSavedPlaceZonesWithHealth`, whose `degraded` flag lets the clear
+ *  decision withhold "all clear" while a place's zones are UNKNOWN. That flag
+ *  only flips when the resolver THROWS, so a swallow-and-return-`[]` here would
+ *  make `degraded` permanently false and re-open the fail-open it exists to
+ *  close. Therefore: THROW on an ambiguous failure (network/timeout/5xx —
+ *  zones unknown), and return `[]` ONLY on an honest empty (404 = NWS has no
+ *  point here, or a 200 that carries no zone codes). Callers that want the old
+ *  best-effort behavior wrap this in their own try/catch (the adapter does). */
 export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<string[]> {
-  try {
-    const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
-      headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-    const payload = await res.json() as NWSPointZones;
-    const zones = [payload.properties?.forecastZone, payload.properties?.county]
-      .map((url) => url?.split('/').pop() ?? '')
-      .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
-    return [...new Set(zones)];
-  } catch {
-    return [];
-  }
+  const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
+    headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  // 404 → this coordinate genuinely has no NWS point (e.g. offshore): an honest
+  // empty, not a degradation. Any other non-OK status (5xx, throttling) leaves
+  // the zones UNKNOWN — propagate so the caller marks the batch degraded.
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const payload = await res.json() as NWSPointZones;
+  const zones = [payload.properties?.forecastZone, payload.properties?.county]
+    .map((url) => url?.split('/').pop() ?? '')
+    .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
+  return [...new Set(zones)];
 }
 
-function extractCoordinates(geometry?: NWSAlert['geometry']): [number, number][] {
+/**
+ * Every OUTER ring of the alert geometry: one ring for a Polygon, one ring per
+ * sub-polygon for a MultiPolygon. NWS issues MultiPolygon warnings routinely (a
+ * single product covering disjoint areas). The old single-ring extraction kept
+ * only `coords[0][0]` — the FIRST sub-polygon — so a warning whose 2nd+
+ * sub-polygon covered the user matched nothing and read as clear. Interior
+ * holes (rings after index 0 within a polygon) are ignored: a warning applies
+ * to its whole outer boundary, and honoring holes would only shrink coverage.
+ */
+function extractPolygonRings(geometry?: NWSAlert['geometry']): [number, number][][] {
   if (!geometry) return [];
 
   try {
  if (geometry.type === 'Polygon') {
  const coords = geometry.coordinates as unknown as number[][][];
- return coords[0]?.map(c => [c[0], c[1]] as [number, number]) ?? [];
+ const ring = coords[0]?.map(c => [c[0], c[1]] as [number, number]);
+ return ring ? [ring] : [];
  }
  if (geometry.type === 'MultiPolygon') {
  const coords = geometry.coordinates as unknown as number[][][][];
- return coords[0]?.[0]?.map(c => [c[0], c[1]] as [number, number]) ?? [];
+ return coords
+ .map((poly) => poly[0]?.map(c => [c[0], c[1]] as [number, number]))
+ .filter((ring): ring is [number, number][] => Array.isArray(ring) && ring.length > 0);
  }
   } catch {
  return [];

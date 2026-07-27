@@ -75,19 +75,35 @@ export function exposureFromMatch(match: PolygonMatchResult): number {
 }
 
 /**
+ * All valid outer rings (≥3 vertices) of a `WeatherAlert` for matching. Prefers
+ * `polygonRings` (every sub-polygon of a MultiPolygon) so a warning whose 2nd+
+ * ring covers the user still matches; falls back to the legacy single
+ * `coordinates` ring when `polygonRings` is absent (the common single-polygon
+ * case). Returns `undefined` when the alert has no usable geometry, so the
+ * matcher relies on the UGC-zone fallback.
+ */
+function alertMatchRings(alert: WeatherAlert): [number, number][][] | undefined {
+  const source = alert.polygonRings && alert.polygonRings.length > 0
+    ? alert.polygonRings
+    : [alert.coordinates];
+  const rings = source
+    .filter((ring) => ring.length >= 3)
+    .map((ring) => ring.map(([lng, lat]) => [lng, lat] as [number, number]));
+  return rings.length > 0 ? rings : undefined;
+}
+
+/**
  * Adapt the renderer's `WeatherAlert` to the matcher's
- * `NwsAlertMinimal`, carrying BOTH the polygon ring and the UGC zone
+ * `NwsAlertMinimal`, carrying BOTH the polygon rings and the UGC zone
  * codes so zone-only alerts (no geometry) still match via the county
  * fallback.
  */
 export function weatherAlertToNwsMinimal(alert: WeatherAlert): NwsAlertMinimal {
-  const ring = alert.coordinates.length >= 3
-    ? alert.coordinates.map(([lng, lat]) => [lng, lat] as [number, number])
-    : undefined;
+  const rings = alertMatchRings(alert);
   return {
     id: alert.id,
     event: alert.event,
-    polygon: ring ? { rings: [ring] } : undefined,
+    polygon: rings ? { rings } : undefined,
     ugcZones: alert.ugcZones,
     sent: toIsoString(alert.onset),
     expires: toIsoString(alert.expires),

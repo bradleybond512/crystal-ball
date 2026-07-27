@@ -3,11 +3,17 @@ import type {
   PredictionRecord,
   PredictionStatus,
 } from './forecast-calibration';
+import {
+  estimateHierarchicalBaseRate,
+  HIERARCHICAL_BASE_RATE_SOURCE_ID,
+  HIERARCHICAL_BASE_RATE_VERSION,
+} from './hierarchical-base-rate';
 
 export type ForecastReplayLabelOrigin = 'direct' | 'manual' | 'proxy';
 
 export interface ForecastReplayFixture {
   id: string;
+  targetKey?: string;
   sourceId: string;
   domain: PredictionRecord['domain'];
   probability: number;
@@ -42,6 +48,8 @@ export interface ForecastReplayFold {
   logLoss: number | null;
   baselineProbability: number | null;
   baselineBrier: number | null;
+  globalBaselineProbability: number | null;
+  globalBaselineBrier: number | null;
   brierSkill: number | null;
   highConfidenceMisses: number;
 }
@@ -68,6 +76,7 @@ export interface ForecastReplayReport {
     lastPredictedAt: number | null;
   };
   config: {
+    baselineModel: string;
     initialTrainingRecords: number;
     evaluationWindowRecords: number;
     minTrainingResolved: number;
@@ -84,6 +93,7 @@ export interface ForecastReplayReport {
     brier: number | null;
     logLoss: number | null;
     baselineBrier: number | null;
+    globalBaselineBrier: number | null;
     brierSkill: number | null;
     highConfidenceMisses: number;
   };
@@ -99,6 +109,7 @@ export interface ForecastReplayBaseline {
   schemaVersion: 1;
   corpusId: string;
   recordCount: number;
+  baselineModel: string;
   metrics: {
     brierSkill: number;
     logLoss: number;
@@ -116,6 +127,8 @@ export interface ForecastReplayBaseline {
 export type ForecastReplayRegressionMetric =
   | 'corpusId'
   | 'recordCount'
+  | 'baselineModel'
+  | 'baselineVsGlobal'
   | 'brierSkill'
   | 'logLoss'
   | 'resolutionCoverage'
@@ -142,7 +155,10 @@ interface ReplayScore {
   outcome: 0 | 1;
   brier: number;
   logLoss: number;
+  baselineProbability: number;
   baselineBrier: number;
+  globalBaselineProbability: number;
+  globalBaselineBrier: number;
   highConfidenceMiss: boolean;
 }
 
@@ -159,6 +175,8 @@ const DEFAULT_EVALUATION_WINDOW_RECORDS = 20;
 const DEFAULT_MIN_TRAINING_RESOLVED = 20;
 const DEFAULT_HIGH_CONFIDENCE_THRESHOLD = 0.8;
 const LOG_LOSS_EPSILON = 1e-6;
+const BASELINE_MODEL =
+  `${HIERARCHICAL_BASE_RATE_SOURCE_ID}@${HIERARCHICAL_BASE_RATE_VERSION}`;
 
 export function runForecastReplayBenchmark(
   fixtures: readonly ForecastReplayFixture[],
@@ -207,12 +225,10 @@ export function runForecastReplayBenchmark(
       training,
       evaluationWindowStart,
     );
-    const baselineProbability = trainingResolved.length >= minTrainingResolved
-      ? mean(trainingResolved.map((fixture) => outcomeOf(fixture)!))
-      : null;
     const projection = projectEvaluationWindow(
       evaluation,
-      baselineProbability,
+      trainingResolved,
+      minTrainingResolved,
       highConfidenceThreshold,
     );
     scores.push(...projection.scores);
@@ -234,9 +250,17 @@ export function runForecastReplayBenchmark(
       resolutionCoverage: ratio(projection.resolved, evaluation.length),
       brier: meanOrNull(projection.scores.map((score) => score.brier)),
       logLoss: meanOrNull(projection.scores.map((score) => score.logLoss)),
-      baselineProbability,
+      baselineProbability: meanOrNull(
+        projection.scores.map((score) => score.baselineProbability),
+      ),
       baselineBrier: meanOrNull(
         projection.scores.map((score) => score.baselineBrier),
+      ),
+      globalBaselineProbability: meanOrNull(
+        projection.scores.map((score) => score.globalBaselineProbability),
+      ),
+      globalBaselineBrier: meanOrNull(
+        projection.scores.map((score) => score.globalBaselineBrier),
       ),
       brierSkill: brierSkill(projection.scores),
       highConfidenceMisses:
@@ -255,6 +279,7 @@ export function runForecastReplayBenchmark(
       lastPredictedAt: ordered[ordered.length - 1]?.predictedAt ?? null,
     },
     config: {
+      baselineModel: BASELINE_MODEL,
       initialTrainingRecords,
       evaluationWindowRecords,
       minTrainingResolved,
@@ -271,6 +296,9 @@ export function runForecastReplayBenchmark(
       brier: meanOrNull(scores.map((score) => score.brier)),
       logLoss: meanOrNull(scores.map((score) => score.logLoss)),
       baselineBrier: meanOrNull(scores.map((score) => score.baselineBrier)),
+      globalBaselineBrier: meanOrNull(
+        scores.map((score) => score.globalBaselineBrier),
+      ),
       brierSkill: brierSkill(scores),
       highConfidenceMisses:
         scores.filter((score) => score.highConfidenceMiss).length,
@@ -303,7 +331,8 @@ function availableTrainingLabels(
 
 function projectEvaluationWindow(
   fixtures: readonly ForecastReplayFixture[],
-  baselineProbability: number | null,
+  trainingFixtures: readonly ForecastReplayFixture[],
+  minTrainingResolved: number,
   highConfidenceThreshold: number,
 ): ReplayWindowProjection {
   const projection: ReplayWindowProjection = {
@@ -312,6 +341,9 @@ function projectEvaluationWindow(
     proxyLabelsExcluded: 0,
     invalidProbabilitiesExcluded: 0,
   };
+  const trainingRecords = trainingFixtures.map(
+    (fixture) => replayHistoryRecord(fixture),
+  );
   for (const fixture of fixtures) {
     const outcome = outcomeOf(fixture);
     if (outcome !== null) projection.resolved += 1;
@@ -324,11 +356,17 @@ function projectEvaluationWindow(
       projection.invalidProbabilitiesExcluded += 1;
       continue;
     }
-    if (baselineProbability === null) continue;
+    const baseline = estimateHierarchicalBaseRate(
+      replayTargetRecord(fixture),
+      trainingRecords,
+      { minGlobalResolved: minTrainingResolved },
+    );
+    if (!baseline) continue;
     projection.scores.push(buildReplayScore(
       fixture,
       outcome,
-      baselineProbability,
+      baseline.probability,
+      baseline.globalProbability,
       highConfidenceThreshold,
     ));
   }
@@ -339,6 +377,7 @@ function buildReplayScore(
   fixture: ForecastReplayFixture,
   outcome: 0 | 1,
   baselineProbability: number,
+  globalBaselineProbability: number,
   highConfidenceThreshold: number,
 ): ReplayScore {
   const probability = clamp01(fixture.probability);
@@ -351,7 +390,10 @@ function buildReplayScore(
     outcome,
     brier: (probability - outcome) ** 2,
     logLoss: binaryLogLoss(probability, outcome),
+    baselineProbability,
     baselineBrier: (baselineProbability - outcome) ** 2,
+    globalBaselineProbability,
+    globalBaselineBrier: (globalBaselineProbability - outcome) ** 2,
     highConfidenceMiss: isHighConfidenceMiss(
       probability,
       outcome,
@@ -360,11 +402,56 @@ function buildReplayScore(
   };
 }
 
+function replayTargetRecord(
+  fixture: ForecastReplayFixture,
+): PredictionRecord {
+  return {
+    id: fixture.id,
+    sourceId: fixture.sourceId,
+    targetKey: fixture.targetKey ?? `replay:${fixture.id}`,
+    domain: fixture.domain,
+    claim: 'frozen replay target',
+    probability: fixture.probability,
+    predictedAt: fixture.predictedAt,
+    resolveBy: fixture.resolveBy,
+    status: 'pending',
+    algorithmVersion: fixture.algorithmVersion,
+  };
+}
+
+function replayHistoryRecord(
+  fixture: ForecastReplayFixture,
+): PredictionRecord {
+  return {
+    ...replayTargetRecord(fixture),
+    status: fixture.status,
+    resolvedAt: fixture.resolvedAt,
+    resolutionProvenance: fixture.labelOrigin === 'proxy'
+      ? {
+          resolverId: 'frozen-replay-proxy',
+          kind: 'proxy',
+          evidence: [],
+        }
+      : undefined,
+  };
+}
+
 export function compareForecastReplayToBaseline(
   report: ForecastReplayReport,
   baseline: ForecastReplayBaseline,
 ): ForecastReplayComparison {
   const regressions: ForecastReplayRegression[] = [];
+  if (report.config.baselineModel !== baseline.baselineModel) {
+    regressions.push({
+      metric: 'baselineModel',
+      baseline: baseline.baselineModel,
+      actual: report.config.baselineModel,
+      message:
+        'baseline model changed: '
+        + `baseline=${baseline.baselineModel} `
+        + `actual=${report.config.baselineModel}`,
+    });
+  }
   if (report.corpus.id !== baseline.corpusId) {
     regressions.push({
       metric: 'corpusId',
@@ -381,6 +468,22 @@ export function compareForecastReplayToBaseline(
       actual: report.corpus.recordCount,
       message:
         `record count changed: baseline=${baseline.recordCount} actual=${report.corpus.recordCount}`,
+    });
+  }
+  if (
+    report.overall.baselineBrier !== null
+    && report.overall.globalBaselineBrier !== null
+    && report.overall.baselineBrier
+      > report.overall.globalBaselineBrier + Number.EPSILON
+  ) {
+    regressions.push({
+      metric: 'baselineVsGlobal',
+      baseline: report.overall.globalBaselineBrier,
+      actual: report.overall.baselineBrier,
+      message:
+        'hierarchical baseline trails the global Beta-smoothed base rate: '
+        + `global=${report.overall.globalBaselineBrier} `
+        + `hierarchical=${report.overall.baselineBrier}`,
     });
   }
   compareLowerIsRegression({

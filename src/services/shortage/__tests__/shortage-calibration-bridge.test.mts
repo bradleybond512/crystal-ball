@@ -168,6 +168,32 @@ test('resolveShortagePrediction resolves the in-window pending record and return
   assert.equal(rec.resolvedAt, NOW + DAY_MS);
 });
 
+test('resolveShortagePrediction grades a paired baseline on the shared target key', () => {
+  recordShortagePredictions([
+    forecast({ commodity: 'rice', region: 'asia' }),
+  ], NOW);
+  recordPrediction({
+    id: 'base-rate:rice-asia',
+    sourceId: 'hierarchical-base-rate',
+    targetKey: 'shortage:rice:asia',
+    domain: 'macro',
+    claim: 'rice shortage risk elevated in asia within 60d',
+    probability: 0.4,
+    predictedAt: NOW,
+    resolveBy: NOW + 60 * DAY_MS,
+    status: 'pending',
+    algorithmVersion: '1.0.0',
+  });
+
+  const n = resolveShortagePrediction('rice', 'asia', true, NOW + DAY_MS);
+
+  assert.equal(n, 2);
+  assert.equal(
+    getCalibrationStore().get('base-rate:rice-asia')?.status,
+    'resolved_true',
+  );
+});
+
 test('resolveShortagePrediction returns 0 when nothing is pending', () => {
   assert.equal(resolveShortagePrediction('soybeans', 'brazil', true, NOW), 0);
 });
@@ -222,6 +248,32 @@ test('settleExpiredShortagePredictions expires ambiguous overdue records, leaves
   assert.match(settled.resolutionNote ?? '', /^unresolved:shortage-window-v1/);
   assert.equal(getCalibrationStore().brier().evaluated, 0);
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:diesel')!.status, 'pending');
+});
+
+test('settleExpiredShortagePredictions expires a paired baseline with its target', () => {
+  recordShortagePredictions([
+    forecast({ commodity: 'wheat', region: 'r1', horizonDays: 30 }),
+  ], NOW);
+  recordPrediction({
+    id: 'base-rate:wheat-r1',
+    sourceId: 'hierarchical-base-rate',
+    targetKey: 'shortage:wheat:r1',
+    domain: 'macro',
+    claim: 'wheat shortage risk elevated in r1 within 30d',
+    probability: 0.4,
+    predictedAt: NOW,
+    resolveBy: NOW + 30 * DAY_MS,
+    status: 'pending',
+    algorithmVersion: '1.0.0',
+  });
+
+  const n = settleExpiredShortagePredictions(NOW + 31 * DAY_MS);
+
+  assert.equal(n, 2);
+  assert.equal(
+    getCalibrationStore().get('base-rate:wheat-r1')?.status,
+    'expired',
+  );
 });
 
 test('settleExpiredShortagePredictions leaves a claim open at exactly resolveBy (boundary matches isOpenAt)', () => {

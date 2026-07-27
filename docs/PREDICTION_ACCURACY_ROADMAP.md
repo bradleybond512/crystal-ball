@@ -568,7 +568,33 @@ well-calibrated alternatives.
 
 ### ACC-301 — Hierarchical base-rate model
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-301-hierarchical-base-rate`
+
+Evidence: PR #1530
+
+Verification: `hierarchical-base-rate@1.0.0` requires 30 direct/manual
+resolved outcomes, deduplicates shared target/window labels, rejects proxy and
+future-known evidence and malformed forecast windows, applies a Beta(1,1)
+global prior, falls back globally below 20 domain outcomes, and shrinks
+domain/horizon cells only after 10 matching outcomes. Eligible production
+forecasts emit one versioned baseline on the same target and horizon;
+hypothesis, mode, shortage, market, and warning resolution paths grade or
+expire the pair together. The frozen four-fold walk-forward corpus reports
+hierarchical baseline Brier 0.238945 versus 0.238997 for the global Beta
+baseline, with a hard regression gate if the hierarchy trails global. The
+incumbent forecast remains only narrowly positive against the stronger
+baseline (Brier skill 0.005062); this task does not promote a learned model.
+Final verification passed `typecheck:all`, strict repository linters, scoped
+ESLint, 12,801 renderer tests, the intelligence, algorithm, shortage,
+diagnostics, and security suites, production build, offline smoke, both
+deterministic benchmarks, dependency and secret scans, scenario coverage, and
+bundle/PWA/sidecar budgets. Repository-wide `npm run lint` still reports the
+pre-existing legacy/generated-file baseline (1,577 findings); no finding is in
+the ACC-301 change set.
 
 Dependencies: ACC-201 and ACC-204
 

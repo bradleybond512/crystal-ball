@@ -70,6 +70,76 @@ test('walk-forward replay is chronological and excludes outcomes unavailable at 
   );
 });
 
+test('walk-forward replay uses the versioned hierarchical domain-horizon baseline', () => {
+  const fixtures = Array.from({ length: 32 }, (_, index) => {
+    const sequence = index + 1;
+    if (index < 20) {
+      return fixture(sequence, {
+        domain: 'weather',
+        status: index < 15 ? 'resolved_true' : 'resolved_false',
+        resolveBy: sequence * DAY + (index < 10 ? 2 * DAY : 10 * DAY),
+      });
+    }
+    if (index < 30) {
+      return fixture(sequence, {
+        domain: 'markets',
+        status: 'resolved_false',
+      });
+    }
+    return fixture(sequence, {
+      domain: 'weather',
+      resolveBy: sequence * DAY + 2 * DAY,
+    });
+  });
+
+  const report = runForecastReplayBenchmark(fixtures, {
+    initialTrainingRecords: 30,
+    evaluationWindowRecords: 2,
+    minTrainingResolved: 30,
+  });
+
+  assert.equal(
+    (report.config as Record<string, unknown>).baselineModel,
+    'hierarchical-base-rate@1.0.0',
+  );
+  assert.ok(
+    Math.abs(report.folds[0]!.baselineProbability! - 37 / 44) < 1e-12,
+  );
+});
+
+test('hierarchical and global replay baselines share the deduplicated outcome set', () => {
+  const fixtures = [
+    fixture(1, {
+      targetKey: 'shared:true',
+      status: 'resolved_true',
+      resolveBy: 4 * DAY,
+    }),
+    fixture(2, {
+      targetKey: 'shared:true',
+      status: 'resolved_true',
+      resolveBy: 4 * DAY,
+    }),
+    fixture(3, {
+      targetKey: 'unique:false-1',
+      status: 'resolved_false',
+    }),
+    fixture(4, {
+      targetKey: 'unique:false-2',
+      status: 'resolved_false',
+    }),
+    fixture(5),
+  ];
+
+  const report = runForecastReplayBenchmark(fixtures, {
+    initialTrainingRecords: 4,
+    evaluationWindowRecords: 1,
+    minTrainingResolved: 2,
+  });
+
+  assert.equal(report.folds[0]!.baselineProbability, 0.4);
+  assert.equal(report.folds[0]!.globalBaselineProbability, 0.4);
+});
+
 test('replay excludes proxy labels and reports loss by source, domain, horizon, and version', () => {
   const fixtures = Array.from({ length: 12 }, (_, index) => fixture(index + 1));
   fixtures[8] = fixture(9, {
@@ -136,6 +206,7 @@ test('forecast replay regression gate covers every required metric', () => {
     schemaVersion: 1,
     corpusId: 'gate-fixture',
     recordCount: 10,
+    baselineModel: 'hierarchical-base-rate@1.0.0',
     metrics: {
       brierSkill: 0.1,
       logLoss: 0.5,
@@ -190,6 +261,86 @@ test('forecast replay regression gate covers every required metric', () => {
   );
 });
 
+test('forecast replay gate rejects a hierarchical baseline that trails global', () => {
+  const report = runForecastReplayBenchmark(
+    Array.from({ length: 10 }, (_, index) => fixture(index + 1)),
+    {
+      initialTrainingRecords: 6,
+      evaluationWindowRecords: 4,
+      minTrainingResolved: 2,
+    },
+  );
+  const comparison = compareForecastReplayToBaseline(
+    {
+      ...report,
+      overall: {
+        ...report.overall,
+        baselineBrier: 0.3,
+        globalBaselineBrier: 0.2,
+      },
+    },
+    {
+      schemaVersion: 1,
+      corpusId: report.corpus.id,
+      recordCount: report.corpus.recordCount,
+      baselineModel: report.config.baselineModel,
+      metrics: {
+        brierSkill: report.overall.brierSkill!,
+        logLoss: report.overall.logLoss!,
+        resolutionCoverage: report.overall.resolutionCoverage,
+        highConfidenceMisses: report.overall.highConfidenceMisses,
+      },
+      tolerances: {
+        brierSkillDrop: 0,
+        logLossIncrease: 0,
+        resolutionCoverageDrop: 0,
+        highConfidenceMissIncrease: 0,
+      },
+    },
+  );
+
+  assert.deepEqual(
+    comparison.regressions.map((regression) => regression.metric),
+    ['baselineVsGlobal'],
+  );
+});
+
+test('forecast replay gate rejects an unreviewed baseline model version', () => {
+  const report = runForecastReplayBenchmark(
+    Array.from({ length: 10 }, (_, index) => fixture(index + 1)),
+    {
+      initialTrainingRecords: 6,
+      evaluationWindowRecords: 4,
+      minTrainingResolved: 2,
+    },
+  );
+  const baseline = {
+    schemaVersion: 1 as const,
+    corpusId: report.corpus.id,
+    recordCount: report.corpus.recordCount,
+    baselineModel: 'global-base-rate@0.0.0',
+    metrics: {
+      brierSkill: report.overall.brierSkill!,
+      logLoss: report.overall.logLoss!,
+      resolutionCoverage: report.overall.resolutionCoverage,
+      highConfidenceMisses: report.overall.highConfidenceMisses,
+    },
+    tolerances: {
+      brierSkillDrop: 0,
+      logLossIncrease: 0,
+      resolutionCoverageDrop: 0,
+      highConfidenceMissIncrease: 0,
+    },
+  };
+
+  const comparison = compareForecastReplayToBaseline(report, baseline);
+
+  assert.deepEqual(
+    comparison.regressions.map((regression) => regression.metric),
+    ['baselineModel'],
+  );
+});
+
 test('committed replay corpus is privacy-safe and matches its reviewed baseline', () => {
   const serialized = JSON.stringify(FORECAST_REPLAY_CORPUS);
   assert.doesNotMatch(
@@ -212,4 +363,12 @@ test('committed replay corpus is privacy-safe and matches its reviewed baseline'
   assert.ok(report.groups.bySource.length >= 2);
   assert.ok(report.groups.byDomain.length >= 3);
   assert.ok(report.overall.scored >= 40);
+  const globalBaselineBrier = (
+    report.overall as Record<string, unknown>
+  ).globalBaselineBrier;
+  assert.equal(typeof globalBaselineBrier, 'number');
+  assert.ok(
+    report.overall.baselineBrier! <= (globalBaselineBrier as number),
+    `hierarchical ${report.overall.baselineBrier} must not trail global ${globalBaselineBrier}`,
+  );
 });

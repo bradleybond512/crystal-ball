@@ -337,7 +337,11 @@ production build, offline smoke, lockfile, and secret-scan gates passed.
 
 ### ACC-105 — Resolution-quality audit
 
-Status: `TODO`
+Status: `IN PROGRESS`
+
+Owner: Codex
+
+Branch: `codex/acc-105-resolution-quality-audit`
 
 Dependencies: ACC-101 through ACC-104
 

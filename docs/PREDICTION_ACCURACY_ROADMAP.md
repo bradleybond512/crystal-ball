@@ -167,7 +167,7 @@ historical versions cannot contaminate current health or tuning.
 | ACC-004 | DONE | Align episode and situation entity vocabularies | PR #1500 |
 | ACC-005 | DONE | Durable shared-target analyst/superforecast truth spine | PR #1510, main `3a34c1e7` |
 | ACC-006 | DONE | Separate runtime from lifecycle and isolate algorithm versions | PR #1511, main `081d9db3` |
-| ACC-007 | IN REVIEW | Establish this shared execution roadmap and agent pointers | `codex/prediction-accuracy-roadmap` |
+| ACC-007 | DONE | Establish this shared execution roadmap and agent pointers | PR #1512 |
 
 Phase exit: ACC-001 through ACC-007 are on `main`.
 

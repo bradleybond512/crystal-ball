@@ -1,5 +1,13 @@
 # Crystal Ball Agent Rules
 
+## Active Roadmap
+
+- Prediction, calibration, correlation, or self-tuning work must start with
+  `docs/PREDICTION_ACCURACY_ROADMAP.md`.
+- Claim one `ACC-NNN` task through a draft PR before implementation and update
+  its status and evidence in the same PR that completes the work.
+- `docs/PREDICTION_UPLIFT_PLAN.md` is a reference design, not the live tracker.
+
 ## Delivery Path
 
 - `main` is the only merge target.

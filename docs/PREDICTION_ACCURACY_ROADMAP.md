@@ -512,7 +512,11 @@ continues to report only the pre-existing main-branch omission for PR #1526.
 
 ### ACC-204 — Time-ordered replay corpus and benchmark
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-204-replay-benchmark`
 
 Dependencies: ACC-201 and ACC-101
 

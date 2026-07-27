@@ -25,7 +25,11 @@ import {
   createForecastCalibrationStore,
   perDomainAccuracy,
 } from './forecast-calibration';
-import type { ForecastCalibrationStore, PredictionRecord } from './forecast-calibration';
+import type {
+  ForecastCalibrationStore,
+  PredictionRecord,
+  ResolutionMetadata,
+} from './forecast-calibration';
 import {
   buildCurve,
   pooledCurve,
@@ -37,6 +41,11 @@ import {
 import type { ReliabilityCurve, RecalibrationResult } from '@/services/cognition/recalibration';
 import type { FactDomain } from './types';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import {
+  runOutcomeResolvers,
+  type OutcomeResolver,
+  type ResolverContext,
+} from './outcome-resolvers';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -81,9 +90,14 @@ export function recordPrediction(p: PredictionRecord): void {
 }
 
 /** Resolve + persist. Returns false when the id is unknown/already resolved. */
-export function resolvePrediction(id: string, outcome: boolean, when?: number): boolean {
+export function resolvePrediction(
+  id: string,
+  outcome: boolean,
+  when?: number,
+  metadata?: ResolutionMetadata,
+): boolean {
   const store = getCalibrationStore();
-  const ok = store.resolve(id, outcome, when);
+  const ok = store.resolve(id, outcome, when, metadata);
   if (ok) persist(store);
   return ok;
 }
@@ -94,6 +108,18 @@ export function expirePendingPredictions(now?: number): number {
   const n = store.expirePending(now);
   if (n > 0) persist(store);
   return n;
+}
+
+/** Run pure outcome resolvers against the singleton and durably flush every
+ *  resulting resolution or resolver-owned expiry before returning. */
+export function dispatchOutcomeResolvers(
+  context: ResolverContext,
+  resolvers: readonly OutcomeResolver[],
+): number {
+  const store = getCalibrationStore();
+  const resolved = runOutcomeResolvers(store, context, resolvers);
+  persist(store);
+  return resolved;
 }
 
 const MIN_RESOLVED_FOR_DOMAIN_MULT = 10;

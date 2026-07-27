@@ -17,6 +17,14 @@ function healthyBoth(): ProviderHealthState {
   return s;
 }
 
+function healthyStocks(): ProviderHealthState {
+  let s = emptyProviderHealthState();
+  for (const id of ['yahoo-finance', 'finnhub']) {
+    s = recordFetchOutcome(s, id, { ok: true, latencyMs: 100, at: NOW });
+  }
+  return s;
+}
+
 function obs(providerId: string, o: Partial<DomainObservation> = {}): DomainObservation {
   return { providerId, value: 6.0, lat: 35.0, lon: 139.0, occurredAt: NOW, ...o };
 }
@@ -98,6 +106,18 @@ test('unknown fact-type returns empty', () => {
   const r = ingestDomain('nope', [obs('usgs-earthquakes')], healthyBoth(), NOW);
   assert.equal(r.facts.length, 0);
   assert.deepEqual(r.providerFingerprints, {});
+});
+
+test('key-matched fused facts retain their symbol and consensus price', () => {
+  const r = ingestDomain('stocks', [
+    obs('finnhub', { key: 'AAPL', value: 200.5, lat: 0, lon: 0 }),
+    obs('yahoo-finance', { key: 'AAPL', value: 200, lat: 0, lon: 0 }),
+  ], healthyStocks(), NOW);
+
+  assert.equal(r.facts.length, 1);
+  assert.equal(r.facts[0]?.key, 'AAPL');
+  assert.equal(r.facts[0]?.value, 200.25);
+  assert.equal(r.facts[0]?.fusion.independentSourceCount, 2);
 });
 
 test('end to end: agreeing quakes → redundant_agreement for disasters', () => {

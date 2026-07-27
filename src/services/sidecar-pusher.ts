@@ -38,6 +38,7 @@ import {
   type AlgorithmDiagnosticsSnapshot,
 } from './algorithms/algorithm-diagnostics';
 import { getCalibrationStore } from './intelligence/forecast-calibration-adapter';
+import { getSpotPriceDiagnostics } from './market/spot-price-store';
 
 const ENDPOINT = '/api/analyst-state';
 
@@ -175,6 +176,7 @@ function refreshDiagnosticPayload(): void {
     definitions: getAlgorithmDefinitions(),
     records: getAlgorithmEvaluationLedger().all(),
     forecastPredictions: getCalibrationStore().all(),
+    marketSpotPrices: getSpotPriceDiagnostics(),
     persistence: getAlgorithmLedgerPersistenceStatus(),
     tunings: getTunings(),
     tuningDecisions: getTuningDecisions(),

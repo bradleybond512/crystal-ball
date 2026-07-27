@@ -14,11 +14,13 @@ import {
 } from '../forecast-calibration.ts';
 import type { PredictionRecord } from '../forecast-calibration.ts';
 import {
+  dispatchOutcomeResolvers,
   getCalibrationStore,
   recordPrediction,
   getDomainCalibrationMult,
   _resetCalibrationForTests,
 } from '../forecast-calibration-adapter.ts';
+import { marketMoveResolver } from '../outcome-resolvers.ts';
 
 function makeRecord(id: string, probability: number, outcome: boolean, domain = 'other'): PredictionRecord {
   return {
@@ -97,6 +99,46 @@ test('recordPrediction persists and reloads', () => {
   });
   _resetCalibrationForTests();
   assert.equal(getCalibrationStore().get('p1')?.claim, 'test claim');
+});
+
+test('outcome resolver dispatch persists direct store mutations before reload', () => {
+  recordPrediction({
+    id: 'market-1',
+    sourceId: 'analyst-loop',
+    domain: 'markets',
+    claim: 'AAPL rallies',
+    probability: 0.7,
+    predictedAt: 1_000,
+    resolveBy: 10_000,
+    status: 'pending',
+    criteria: {
+      kind: 'market_move',
+      symbol: 'AAPL',
+      direction: 'up',
+      minAbsPct: 3,
+      basisPrice: 100,
+      basisObservedAt: 900,
+    },
+  });
+  dispatchOutcomeResolvers({
+    now: 2_000,
+    spotHistoryFor: () => [{
+      symbol: 'AAPL',
+      price: 104,
+      observedAt: 1_500,
+      providerIds: ['yahoo-finance'],
+      independentSourceCount: 1,
+      confidence: 0.5,
+    }],
+    queryObservations: () => [],
+  }, [marketMoveResolver]);
+
+  _resetCalibrationForTests();
+  assert.equal(getCalibrationStore().get('market-1')?.status, 'resolved_true');
+  assert.equal(
+    getCalibrationStore().get('market-1')?.resolutionProvenance?.resolverId,
+    'market-move-v1',
+  );
 });
 
 test('store caps at 500 records, oldest dropped', () => {

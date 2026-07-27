@@ -30,6 +30,8 @@ export interface DomainObservation {
 
 export interface FusedFact {
   providerIds: string[];
+  /** Identity key for key-matched domains such as stocks and crypto. */
+  key?: string;
   value: number;
   lat: number;
   lon: number;
@@ -90,7 +92,7 @@ export function ingestDomain(
     // that straddle a bucket boundary must NOT read as a disagreement.
     const disagreeIds = new Set(fusion.disagreements.flatMap((d) => d.providerIds));
     const consensusObs = cluster.filter((o) => !disagreeIds.has(o.providerId));
-    const consensusValue = (consensusObs[0] ?? cluster[0]!).value;
+    const consensusValue = medianValue(consensusObs.length > 0 ? consensusObs : cluster);
     const consensusFp = `c:${bucket(consensusValue, effectiveTol)}`;
     const fingerprints: Record<string, string> = {};
     for (const o of cluster) {
@@ -101,7 +103,8 @@ export function ingestDomain(
     const rep = cluster[0]!;
     return {
       providerIds: cluster.map((o) => o.providerId),
-      value: rep.value,
+      key: rep.key,
+      value: consensusValue,
       lat: rep.lat,
       lon: rep.lon,
       occurredAt: rep.occurredAt,
@@ -164,6 +167,13 @@ function referenceMagnitude(cluster: readonly DomainObservation[]): number {
   let m = 0;
   for (const o of cluster) m = Math.max(m, Math.abs(o.value));
   return m;
+}
+
+function medianValue(observations: readonly DomainObservation[]): number {
+  const values = observations.map((observation) => observation.value).sort((a, b) => a - b);
+  const middle = Math.floor(values.length / 2);
+  if (values.length % 2 === 1) return values[middle]!;
+  return (values[middle - 1]! + values[middle]!) / 2;
 }
 
 /** Pick the fact with the most independent providers, breaking ties by value. */

@@ -24,6 +24,53 @@ import type { FactDomain } from './types';
 
 export type PredictionStatus = 'pending' | 'resolved_true' | 'resolved_false' | 'expired';
 
+export interface MarketMoveCriteria {
+  kind: 'market_move';
+  symbol: string;
+  direction: 'up' | 'down';
+  minAbsPct: number;
+  basisPrice: number;
+  basisObservedAt: number;
+}
+
+export interface EventOccurrenceCriteria {
+  kind: 'event_occurrence';
+  domains: readonly string[];
+  entitySlugs: readonly string[];
+  region?: string;
+  minEvidence: number;
+}
+
+export interface WarningVerificationCriteria {
+  kind: 'warning_verification';
+  polygon: { rings: readonly (readonly [number, number])[][] };
+  reportTypes: readonly string[];
+  sentAt: number;
+}
+
+export type ResolutionCriteria =
+  | MarketMoveCriteria
+  | EventOccurrenceCriteria
+  | WarningVerificationCriteria;
+
+export interface ResolutionEvidence {
+  sourceIds: readonly string[];
+  observedAt: number;
+  value?: number;
+  reference?: string;
+}
+
+export interface ResolutionProvenance {
+  resolverId: string;
+  kind: 'direct' | 'proxy';
+  evidence: readonly ResolutionEvidence[];
+}
+
+export interface ResolutionMetadata {
+  note: string;
+  provenance: ResolutionProvenance;
+}
+
 export interface PredictionRecord {
   id: string;
   /** Source / model that made the prediction. */
@@ -45,8 +92,16 @@ export interface PredictionRecord {
   resolveBy: number;
   /** Status — pending until resolution. */
   status: PredictionStatus;
+  /** Machine-evaluable criteria declared when the forecast is emitted.
+   *  Legacy records omit this field and are skipped by outcome resolvers. */
+  criteria?: ResolutionCriteria;
   /** ms timestamp the prediction was resolved (or expired). */
   resolvedAt?: number;
+  /** Human-readable resolution explanation. Direct evidence begins with
+   *  `direct:`; indirect evidence begins with `proxy:`. */
+  resolutionNote?: string;
+  /** Structured resolver and evidence references for diagnostics and audit. */
+  resolutionProvenance?: ResolutionProvenance;
   /** Free-form algorithm version string ("truth-score-v1",
    *  "wheat-model-v2"). Tracked so a re-tuning campaign can be
    *  evaluated against its own predictions, not the prior version's. */
@@ -168,8 +223,15 @@ export function perSourceMultipliers(
 
 export interface ForecastCalibrationStore {
   record: (prediction: PredictionRecord) => void;
-  resolve: (id: string, outcome: boolean, when?: number) => boolean;
-  /** Auto-mark all pending predictions whose resolveBy < now as expired. */
+  resolve: (
+    id: string,
+    outcome: boolean,
+    when?: number,
+    metadata?: ResolutionMetadata,
+  ) => boolean;
+  expire: (id: string, when?: number, note?: string) => boolean;
+  /** Auto-mark overdue legacy predictions without criteria as expired.
+   *  Criteria-bearing records are transitioned by their owning resolver. */
   expirePending: (now?: number) => number;
   get: (id: string) => PredictionRecord | undefined;
   all: () => PredictionRecord[];
@@ -184,10 +246,15 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
   const store = new Map<string, PredictionRecord>();
 
   function record(prediction: PredictionRecord): void {
-    store.set(prediction.id, { ...prediction });
+    store.set(prediction.id, cloneRecord(prediction));
   }
 
-  function resolve(id: string, outcome: boolean, when?: number): boolean {
+  function resolve(
+    id: string,
+    outcome: boolean,
+    when?: number,
+    metadata?: ResolutionMetadata,
+  ): boolean {
     const prev = store.get(id);
     if (!prev) return false;
     if (prev.status !== 'pending') return false;
@@ -195,6 +262,10 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
       ...prev,
       status: outcome ? 'resolved_true' : 'resolved_false',
       resolvedAt: when ?? Date.now(),
+      resolutionNote: metadata?.note,
+      resolutionProvenance: metadata
+        ? cloneResolutionProvenance(metadata.provenance)
+        : undefined,
     });
     return true;
   }
@@ -203,7 +274,7 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
     const t = now ?? Date.now();
     let count = 0;
     for (const [id, r] of store) {
-      if (r.status === 'pending' && r.resolveBy < t) {
+      if (r.status === 'pending' && !r.criteria && r.resolveBy < t) {
         store.set(id, { ...r, status: 'expired', resolvedAt: t });
         count += 1;
       }
@@ -211,18 +282,31 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
     return count;
   }
 
+  function expire(id: string, when?: number, note?: string): boolean {
+    const prev = store.get(id);
+    if (prev?.status !== 'pending') return false;
+    store.set(id, {
+      ...prev,
+      status: 'expired',
+      resolvedAt: when ?? Date.now(),
+      resolutionNote: note,
+    });
+    return true;
+  }
+
   function get(id: string): PredictionRecord | undefined {
     const r = store.get(id);
-    return r ? { ...r } : undefined;
+    return r ? cloneRecord(r) : undefined;
   }
 
   function all(): PredictionRecord[] {
-    return [...store.values()].map((r) => ({ ...r }));
+    return [...store.values()].map((record) => cloneRecord(record));
   }
 
   return {
     record,
     resolve,
+    expire,
     expirePending,
     get,
     all,
@@ -232,12 +316,65 @@ export function createForecastCalibrationStore(): ForecastCalibrationStore {
     toJson() { return all(); },
     loadJson(records) {
       store.clear();
-      for (const r of records) store.set(r.id, { ...r });
+      for (const r of records) store.set(r.id, cloneRecord(r));
     },
   };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
+
+export const RESOLVER_EXPIRY_GRACE_MS = 30 * 60 * 1000;
+
+function cloneResolutionProvenance(
+  provenance: ResolutionProvenance,
+): ResolutionProvenance {
+  return {
+    ...provenance,
+    evidence: provenance.evidence.map((item) => ({
+      ...item,
+      sourceIds: [...item.sourceIds],
+    })),
+  };
+}
+
+function cloneResolutionCriteria(
+  criteria: ResolutionCriteria,
+): ResolutionCriteria {
+  switch (criteria.kind) {
+    case 'market_move': {
+      return { ...criteria };
+    }
+    case 'event_occurrence': {
+      return {
+        ...criteria,
+        domains: [...criteria.domains],
+        entitySlugs: [...criteria.entitySlugs],
+      };
+    }
+    case 'warning_verification': {
+      return {
+        ...criteria,
+        polygon: {
+          rings: criteria.polygon.rings.map((ring) =>
+            ring.map(([lon, lat]) => [lon, lat] as const)),
+        },
+        reportTypes: [...criteria.reportTypes],
+      };
+    }
+  }
+}
+
+function cloneRecord(record: PredictionRecord): PredictionRecord {
+  return {
+    ...record,
+    criteria: record.criteria
+      ? cloneResolutionCriteria(record.criteria)
+      : undefined,
+    resolutionProvenance: record.resolutionProvenance
+      ? cloneResolutionProvenance(record.resolutionProvenance)
+      : undefined,
+  };
+}
 
 function groupBy<T, K>(items: readonly T[], key: (t: T) => K): Map<K, T[]> {
   const out = new Map<K, T[]>();

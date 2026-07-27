@@ -33,13 +33,49 @@ test('record + get', () => {
   assert.equal(s.get('p-1')?.claim, 'Wheat shortage rising in Black Sea');
 });
 
+test('record + get isolates resolver criteria from caller mutation', () => {
+  const s = createForecastCalibrationStore();
+  s.record(pred({
+    criteria: {
+      kind: 'market_move',
+      symbol: 'AAPL',
+      direction: 'up',
+      minAbsPct: 3,
+      basisPrice: 100,
+      basisObservedAt: NOW,
+    },
+  }));
+  const read = s.get('p-1');
+  if (read?.criteria?.kind === 'market_move') read.criteria.basisPrice = 0;
+
+  assert.equal(
+    s.get('p-1')?.criteria?.kind === 'market_move'
+      ? s.get('p-1')?.criteria.basisPrice
+      : undefined,
+    100,
+  );
+});
+
 test('resolve: true outcome marks resolved_true', () => {
   const s = createForecastCalibrationStore();
   s.record(pred());
-  const ok = s.resolve('p-1', true, NOW + 1000);
+  const ok = s.resolve('p-1', true, NOW + 1000, {
+    note: 'direct:market_move AAPL crossed +3%',
+    provenance: {
+      resolverId: 'market-move-v1',
+      kind: 'direct',
+      evidence: [{
+        sourceIds: ['yahoo-finance', 'finnhub'],
+        observedAt: NOW + 1000,
+        value: 103.2,
+      }],
+    },
+  });
   assert.equal(ok, true);
   assert.equal(s.get('p-1')?.status, 'resolved_true');
   assert.equal(s.get('p-1')?.resolvedAt, NOW + 1000);
+  assert.equal(s.get('p-1')?.resolutionNote, 'direct:market_move AAPL crossed +3%');
+  assert.equal(s.get('p-1')?.resolutionProvenance?.resolverId, 'market-move-v1');
 });
 
 test('resolve: false outcome marks resolved_false', () => {
@@ -71,6 +107,33 @@ test('expirePending: marks past-resolveBy predictions as expired', () => {
   assert.equal(expired, 1);
   assert.equal(s.get('old')?.status, 'expired');
   assert.equal(s.get('new')?.status, 'pending');
+});
+
+test('expirePending: leaves criteria-owned records to their resolver', () => {
+  const s = createForecastCalibrationStore();
+  s.record(pred({
+    id: 'market',
+    resolveBy: NOW,
+    criteria: {
+      kind: 'market_move',
+      symbol: 'AAPL',
+      direction: 'up',
+      minAbsPct: 3,
+      basisPrice: 100,
+      basisObservedAt: NOW - 60_000,
+    },
+  }));
+
+  assert.equal(s.expirePending(NOW + 29 * 60_000), 0);
+  assert.equal(s.get('market')?.status, 'pending');
+  assert.equal(s.expirePending(NOW + 31 * 60_000), 0);
+  assert.equal(s.get('market')?.status, 'pending');
+  assert.equal(s.expire('market', NOW + 31 * 60_000, 'unresolved:market-move-v1 insufficient coverage'), true);
+  assert.equal(s.get('market')?.status, 'expired');
+  assert.equal(
+    s.get('market')?.resolutionNote,
+    'unresolved:market-move-v1 insufficient coverage',
+  );
 });
 
 // ── Brier score ────────────────────────────────────────────────────────
@@ -218,12 +281,30 @@ test('store: brier + byDomain + bySource roll up correctly', () => {
 
 test('toJson + loadJson roundtrip', () => {
   const a = createForecastCalibrationStore();
-  a.record(pred());
-  a.resolve('p-1', true);
+  a.record(pred({
+    criteria: {
+      kind: 'market_move',
+      symbol: 'AAPL',
+      direction: 'up',
+      minAbsPct: 3,
+      basisPrice: 100,
+      basisObservedAt: NOW,
+    },
+  }));
+  a.resolve('p-1', true, NOW + 1, {
+    note: 'direct:market_move fixture',
+    provenance: {
+      resolverId: 'market-move-v1',
+      kind: 'direct',
+      evidence: [{ sourceIds: ['yahoo-finance'], observedAt: NOW + 1, value: 103 }],
+    },
+  });
   const json = a.toJson();
   const b = createForecastCalibrationStore();
   b.loadJson(json);
   assert.equal(b.get('p-1')?.status, 'resolved_true');
+  assert.equal(b.get('p-1')?.criteria?.kind, 'market_move');
+  assert.equal(b.get('p-1')?.resolutionProvenance?.evidence[0]?.value, 103);
 });
 
 // ── Determinism ────────────────────────────────────────────────────────

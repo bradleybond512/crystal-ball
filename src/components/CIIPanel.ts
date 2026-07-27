@@ -19,6 +19,22 @@ export class CIIPanel extends Panel {
  infoTooltip: t('components.cii.infoTooltip'),
  });
  this.syncWatchedCodes();
+ // Delegated click on the STABLE content container. buildCountry()'s share
+ // buttons are torn down and rebuilt by replaceChildren on every refresh(),
+ // which the watchlist subscription below (and the panel refresh cadence)
+ // fire in the background; binding click per-button let a re-render between
+ // pointerdown and pointerup swallow the click (dead click). One listener on
+ // this.content — created once by the Panel base and never replaced —
+ // survives every teardown; each button already carries data-code/data-name.
+ this.content.addEventListener('click', (e) => {
+ const target = e.target as HTMLElement;
+ const btn = target.closest<HTMLElement>('.cii-share-btn');
+ if (!btn || !this.content.contains(btn)) return;
+ e.stopPropagation();
+ const code = btn.dataset.code ?? '';
+ const name = btn.dataset.name ?? '';
+ if (code && name) this.onShareStory?.(code, name);
+ }, { signal: this.signal });
  this.unsubscribeWatchlist = subscribeWatchlist(() => {
  this.syncWatchedCodes();
  if (this.focalPointsReady) void this.refresh();
@@ -111,19 +127,6 @@ export class CIIPanel extends Panel {
  );
   }
 
-  private bindShareButtons(): void {
- if (!this.onShareStory) return;
- this.content.querySelectorAll('.cii-share-btn').forEach(btn => {
- btn.addEventListener('click', (e) => {
- e.stopPropagation();
- const el = e.currentTarget as HTMLElement;
- const code = el.dataset.code ?? '';
- const name = el.dataset.name ?? '';
- if (code && name) this.onShareStory!(code, name);
- });
- });
-  }
-
   // eslint-disable-next-line @typescript-eslint/require-await
   public async refresh(forceLocal = false): Promise<void> {
  if (!this.focalPointsReady && !forceLocal) {
@@ -172,7 +175,6 @@ export class CIIPanel extends Panel {
 
  const listEl = h('div', { className: 'cii-list' }, ...listChildren);
  replaceChildren(this.content, listEl);
- this.bindShareButtons();
  } catch (error) {
  // eslint-disable-next-line no-console
  console.error('[CIIPanel] Refresh error:', error);

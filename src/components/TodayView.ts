@@ -50,6 +50,36 @@ export class TodayView {
     this.overlay.addEventListener('click', e => {
       if (e.target === this.overlay) this.hide();
     });
+    // Delegated click on the STABLE overlay. render() rebuilds the header, rows
+    // and Ack buttons via replaceChildren, and it fires in the background from
+    // the unifiedAlertStore + activity-log subscriptions (see show()); binding
+    // click per-row/button let a re-render between pointerdown and pointerup
+    // orphan the node so the click was swallowed (dead click). One listener on
+    // this.overlay — created once here and never replaced — survives every
+    // teardown; nodes carry data-today-action (+ data-alert-id) re-read here.
+    this.overlay.addEventListener('click', e => {
+      const target = e.target as HTMLElement;
+      const actionEl = target.closest<HTMLElement>('[data-today-action]');
+      if (!actionEl || !this.overlay.contains(actionEl)) return;
+      const action = actionEl.dataset.todayAction;
+      if (action === 'close') { this.hide(); return; }
+      if (action === 'ack') {
+        e.stopPropagation();
+        const id = actionEl.dataset.alertId;
+        if (id) unifiedAlertStore.acknowledge(id);
+        return;
+      }
+      if (action === 'jump') {
+        const id = actionEl.dataset.alertId;
+        const alert = id ? unifiedAlertStore.getAll().find(x => x.id === id) : undefined;
+        this.hide();
+        if (alert) {
+          const pid = panelForAlert(alert);
+          jumpToPanel(pid);
+          flashPanel(pid);
+        }
+      }
+    });
   }
 
   mount(parent: HTMLElement): void {
@@ -91,7 +121,7 @@ export class TodayView {
     const close = document.createElement('button');
     close.className = 'today-view-close';
     close.textContent = '✕';
-    close.addEventListener('click', () => this.hide());
+    close.dataset.todayAction = 'close';
     header.append(title, close);
 
     const body = document.createElement('div');
@@ -165,17 +195,17 @@ export class TodayView {
     const ack = document.createElement('button');
     ack.className = 'today-row-ack';
     ack.textContent = 'Ack';
-    ack.addEventListener('click', e => {
-      e.stopPropagation();
-      unifiedAlertStore.acknowledge(a.id);
-    });
+    ack.dataset.todayAction = 'ack';
+    ack.dataset.alertId = a.id;
     row.append(dot, title, ack);
-    row.addEventListener('click', () => {
-      const pid = panelForAlert(a);
-      this.hide();
-      jumpToPanel(pid);
-      flashPanel(pid);
-    });
+    // The row jumps to the alert's panel; the Ack button (nested inside it)
+    // acknowledges. Both carry data-today-action so the single delegated
+    // listener on the stable overlay handles them — closest() resolves to the
+    // Ack button first when it is the target, preserving the old
+    // stopPropagation semantics without a per-node listener that a background
+    // render() could tear down mid-click.
+    row.dataset.todayAction = 'jump';
+    row.dataset.alertId = a.id;
     return row;
   }
 }

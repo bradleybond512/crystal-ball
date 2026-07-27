@@ -99,3 +99,30 @@ test('resolveSavedPlaceZones is best-effort: a throwing fetch does not break the
   assert.equal(map.has('boom'), false);
   assert.deepEqual(map.get('ok'), ['INZ002']);
 });
+
+test('concurrent same-coordinate resolves share ONE in-flight fetch (no duplicate /points)', async () => {
+  // The initial full-app wave runs the `weather` and `nwsAlerts` tasks
+  // concurrently and both resolve the SAME saved places. `zoneCache` only holds
+  // COMPLETED results, so without in-flight dedup both callers see a miss and
+  // fire duplicate /points requests. Worse, under throttling an asymmetric
+  // failure could hand the weather-status leg `[]` and clear a geometry-free
+  // warning the other leg matched. Coalesce concurrent resolves per coordinate.
+  let calls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const fetchZones = async (): Promise<string[]> => {
+    calls += 1;
+    await gate; // hold both callers in-flight at once
+    return ['INZ900'];
+  };
+  const place = [stored({ id: 'dup', lat: 12.5, lon: -98.3 })];
+
+  const a = resolveSavedPlaceZones(place, fetchZones);
+  const b = resolveSavedPlaceZones(place, fetchZones);
+  release();
+  const [ra, rb] = await Promise.all([a, b]);
+
+  assert.equal(calls, 1, 'concurrent same-coordinate resolves must share one in-flight fetch');
+  assert.deepEqual(ra.get('dup'), ['INZ900']);
+  assert.deepEqual(rb.get('dup'), ['INZ900']);
+});

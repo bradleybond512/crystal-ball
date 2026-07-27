@@ -47,9 +47,15 @@ const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
  * data-loader's per-batch try/catch) would drop EVERY severe alert that
  * cycle. The matcher only needs a `Date.parse`-able string, so pass a
  * string straight through and stringify a real Date.
+ *
+ * A malformed NWS timestamp also yields an *invalid* Date object
+ * (`new Date('garbage')`), whose `.toISOString()` throws RangeError('Invalid
+ * time value') — a second path to the same batch-aborting crash. Treat an
+ * invalid Date as unusable ('') rather than throwing; the timestamp is
+ * non-essential to the spatial match.
  */
 function toIsoString(value: Date | string | null | undefined): string {
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString();
   return typeof value === 'string' ? value : '';
 }
 

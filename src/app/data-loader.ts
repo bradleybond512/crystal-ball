@@ -1722,7 +1722,7 @@ export class DataLoaderManager implements AppModule {
  { computeAlertExposure },
  { getSavedPlaces },
  { resolveSavedPlaceZones, toMatcherPlace },
- { selectPersonalWeatherThreat, setPersonalWeatherThreat, resolveThreatExpiryMs },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, resolveThreatExpiryMs, decideThreatPublication },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1787,9 +1787,18 @@ export class DataLoaderManager implements AppModule {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
  // With no saved place, exposure is genuinely unknown — keep the
  // conservative default rather than fabricating a location match.
- const userExposure = weatherPlaces.length > 0
- ? computeAlertExposure(alert, weatherPlaces).exposure
- : 50;
+ // Guarded: a single malformed alert (e.g. an unparseable NWS timestamp)
+ // must not abort the whole severe-alert batch and strand the status-chip
+ // publication after the loop. weather-exposure also hardens the known
+ // invalid-Date crash; this is defense in depth.
+ let userExposure = 50;
+ if (weatherPlaces.length > 0) {
+ try {
+ userExposure = computeAlertExposure(alert, weatherPlaces).exposure;
+ } catch (error) {
+ console.warn('[data-loader] weather exposure failed for', alert.id, error);
+ }
+ }
  // Record this alert as a chip-threat candidate. `alert.expires` is a Date
  // when freshly fetched but an ISO string after the offline cache round-trips
  // it — resolveThreatExpiryMs parses both (and falls back to a bounded window
@@ -1801,6 +1810,10 @@ export class DataLoaderManager implements AppModule {
  exposure: userExposure,
  expiresAt: resolveThreatExpiryMs(alert.expires),
  });
+ // Route this alert through the ladder in an ISOLATED try: the chip
+ // candidate above is already collected, so one malformed alert failing to
+ // route must not abort the batch and strand the publication after the loop.
+ try {
  const ladderInput = {
  id: alert.id,
  domain: 'weather',
@@ -1896,11 +1909,23 @@ export class DataLoaderManager implements AppModule {
  action,
  );
  }
+ } catch (error) {
+ console.warn('[data-loader] weather alert routing failed for', alert.id, error);
+ }
  }
  // Feed the title-bar status chip: the worst Extreme/Severe alert matched to
  // a saved place (or null → chip clears). This is what stops the visible
  // "ALL CLEAR" chip from lying during a storm actually over the user.
- setPersonalWeatherThreat(selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor));
+ // Gate the CLEAR on feed freshness: a stale/offline snapshot that predates a
+ // new warning yields an empty candidate set, and publishing that null would
+ // assert "ALL CLEAR" over a live storm (the reported bug, offline path). A
+ // real match always publishes; a clear is only honored on a fresh read, so a
+ // stale feed leaves the prior threat in place to self-expire.
+ const chipDecision = decideThreatPublication(
+ selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
+ freshness.fresh,
+ );
+ if (chipDecision.write) setPersonalWeatherThreat(chipDecision.value);
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);
  }

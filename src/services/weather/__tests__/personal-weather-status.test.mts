@@ -8,6 +8,7 @@ import {
   selectPersonalWeatherThreat,
   subscribePersonalWeatherThreat,
   resolveThreatExpiryMs,
+  decideThreatPublication,
   type WeatherThreatCandidate,
 } from '../personal-weather-status.ts';
 
@@ -177,4 +178,69 @@ test('resolveThreatExpiryMs: an unparseable value falls back to now + window', (
   assert.equal(resolveThreatExpiryMs(undefined, 1_000, 60_000), 61_000);
   assert.equal(resolveThreatExpiryMs(null, 1_000, 60_000), 61_000);
   assert.equal(resolveThreatExpiryMs(new Date('nope'), 1_000, 60_000), 61_000);
+});
+
+// ── decideThreatPublication ──────────────────────────────────────────────
+// The data-loader derives the chip threat from whatever weather snapshot it
+// has this tick — which may be a STALE offline-cache fallback when NWS is
+// unreachable. A stale snapshot that predates a new storm yields an empty
+// candidate set; naively publishing that would call setPersonalWeatherThreat(
+// null) and assert "ALL CLEAR" over a live warning (the reported bug, on the
+// offline path). This pure decision gates the publish: a real match always
+// wins, but a CLEAR is only honored when the feed was a fresh live read.
+
+test('decideThreatPublication: a real match publishes even when the feed is stale', () => {
+  const threat = { severity: 'severe' as const, label: 'Tornado Warning', expiresAt: 10_000 };
+  assert.deepEqual(decideThreatPublication(threat, false), { write: true, value: threat });
+});
+
+test('decideThreatPublication: a real match publishes on a fresh feed', () => {
+  const threat = { severity: 'extreme' as const, label: 'PDS Tornado', expiresAt: 1 };
+  assert.deepEqual(decideThreatPublication(threat, true), { write: true, value: threat });
+});
+
+test('decideThreatPublication: a clear IS honored on a fresh feed (storm passed)', () => {
+  assert.deepEqual(decideThreatPublication(null, true), { write: true, value: null });
+});
+
+test('decideThreatPublication: a clear is SUPPRESSED on a stale feed (never prove clear)', () => {
+  // write:false → the caller leaves the prior threat in place; it self-expires.
+  assert.deepEqual(decideThreatPublication(null, false), { write: false, value: null });
+});
+
+// ── clear / expiry must notify (P2) ──────────────────────────────────────
+// setPersonalWeatherThreat notifies, but the OTHER two state transitions —
+// an explicit clearPersonalWeatherThreat() and the read-time expiry self-heal —
+// mutated `current` without firing subscribers. A subscribed status chip would
+// then keep a passed storm on screen until its next 30s poll happened to read.
+
+test('clearPersonalWeatherThreat notifies subscribers so the chip clears now', () => {
+  setPersonalWeatherThreat({ severity: 'extreme', label: 'x', expiresAt: Number.MAX_SAFE_INTEGER });
+  let hits = 0;
+  const unsub = subscribePersonalWeatherThreat(() => { hits += 1; });
+  clearPersonalWeatherThreat();
+  assert.equal(hits, 1, 'an explicit clear must fire subscribers, not wait for the next poll');
+  unsub();
+});
+
+test('clearPersonalWeatherThreat does NOT notify when already clear (no churn)', () => {
+  clearPersonalWeatherThreat();
+  let hits = 0;
+  const unsub = subscribePersonalWeatherThreat(() => { hits += 1; });
+  clearPersonalWeatherThreat();
+  assert.equal(hits, 0, 'a redundant clear must not fire subscribers');
+  unsub();
+});
+
+test('an expired threat notifies subscribers when it self-clears on read', () => {
+  clearPersonalWeatherThreat();
+  setPersonalWeatherThreat({ severity: 'severe', label: 'x', expiresAt: 10_000 });
+  let hits = 0;
+  const unsub = subscribePersonalWeatherThreat(() => { hits += 1; });
+  assert.equal(getPersonalWeatherThreat(10_000), null, 'at/after expiry the read reports null');
+  assert.equal(hits, 1, 'expiry self-clear must notify so the chip drops the stale storm');
+  // A second read after the clear must not re-notify (state already null).
+  assert.equal(getPersonalWeatherThreat(11_000), null);
+  assert.equal(hits, 1, 'no repeat notify once already cleared');
+  unsub();
 });

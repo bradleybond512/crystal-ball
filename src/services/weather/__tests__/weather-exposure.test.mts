@@ -86,6 +86,25 @@ test('cache-hydrated alerts (string dates) do not throw and still match', () => 
   assert.equal(match?.matchKind, 'inside_polygon');
 });
 
+// ── Regression: an INVALID Date must not throw ───────────────────────────
+// A malformed NWS timestamp yields `new Date('…')` → an *invalid* Date object
+// (getTime() is NaN). `toISOString()` on an invalid Date throws
+// RangeError('Invalid time value'). Because computeAlertExposure runs inside
+// data-loader's severe-alert batch, that RangeError would abort the whole batch
+// and strand the personal-status chip publication — a second, sneakier path to
+// the same "no warning" outcome as the string-date bug above. An unusable Date
+// must degrade to '' (the matcher only needs a parseable string), never throw.
+
+test('an alert with an invalid onset/expires Date does not throw and still matches', () => {
+  const alert = tornadoWarning(COVERS_HOME);
+  (alert as unknown as { onset: Date }).onset = new Date('not a real date');
+  (alert as unknown as { expires: Date }).expires = new Date('also bad');
+  assert.doesNotThrow(() => computeAlertExposure(alert, [HOME], { now: NOW }));
+  const { exposure, match } = computeAlertExposure(alert, [HOME], { now: NOW });
+  assert.ok(exposure >= 70, `a covering polygon still matches; got ${exposure}`);
+  assert.equal(match?.matchKind, 'inside_polygon');
+});
+
 test('exposure is zero when the user has no saved places', () => {
   const { exposure } = computeAlertExposure(tornadoWarning(COVERS_HOME), [], { now: NOW });
   assert.equal(exposure, 0);

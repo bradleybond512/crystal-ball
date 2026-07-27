@@ -63,13 +63,22 @@ export function setPersonalWeatherThreat(threat: PersonalWeatherThreat | null): 
  * `null` so a stale storm can never keep the chip lit.
  */
 export function getPersonalWeatherThreat(now: number = Date.now()): PersonalWeatherThreat | null {
-  if (current && now >= current.expiresAt) current = null;
+  if (current && now >= current.expiresAt) {
+    current = null;
+    // Notify AFTER nulling so a subscriber re-reading here sees the cleared
+    // state and the guard above is already false (no re-entrant notify).
+    notify();
+  }
   return current;
 }
 
-/** Explicitly clear the active threat. */
+/** Explicitly clear the active threat. Notifies subscribers so the chip clears
+ *  immediately, but only when there was actually a threat to clear (a redundant
+ *  clear must not churn the status bar). */
 export function clearPersonalWeatherThreat(): void {
+  if (current === null) return;
   current = null;
+  notify();
 }
 
 /** One severe/extreme alert with its computed PERSONAL exposure — the input
@@ -115,6 +124,32 @@ function toEpochMs(expires: unknown): number | null {
     return Number.isNaN(ms) ? null : ms;
   }
   return null;
+}
+
+/**
+ * Decide whether — and with what value — to publish the chip threat this weather
+ * tick, given the freshly-selected threat and whether the underlying feed was a
+ * FRESH live read (vs a stale/offline-cache fallback).
+ *
+ * The data-loader derives the threat from whatever snapshot it has this tick. On
+ * a stale offline snapshot that predates a new storm the candidate set is empty,
+ * so a naive publish would `setPersonalWeatherThreat(null)` and assert "ALL
+ * CLEAR" over a live warning — the reported bug, on the offline path.
+ *
+ * - A real MATCH always publishes: a warning matched over the user wins
+ *   regardless of feed freshness.
+ * - A CLEAR (`null`) is honored ONLY on a fresh read (`write: true, value: null`)
+ *   so the chip drops a genuinely-passed storm. On a stale/failed feed the clear
+ *   is SUPPRESSED (`write: false`); the caller leaves the prior threat in place
+ *   and it self-expires on its own. A stale feed must never PROVE clear.
+ */
+export function decideThreatPublication(
+  next: PersonalWeatherThreat | null,
+  feedIsFresh: boolean,
+): { write: boolean; value: PersonalWeatherThreat | null } {
+  if (next) return { write: true, value: next };
+  if (feedIsFresh) return { write: true, value: null };
+  return { write: false, value: null };
 }
 
 const CANDIDATE_SEVERITY_RANK: Record<PersonalWeatherSeverity, number> = {

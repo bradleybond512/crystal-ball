@@ -1,6 +1,6 @@
 # Crystal Ball — Enhancement Roadmap
 
-> Last updated: 2026-06-01 | Current version: v2.25.x
+> Last updated: 2026-07-26 | Current version: v2.25.x
 
 This file is the canonical to-do list across all build sessions. Update status markers as work completes.
 
@@ -74,7 +74,7 @@ This file is the canonical to-do list across all build sessions. Update status m
 
 | Status | Feature | Notes |
 |--------|---------|-------|
-| 🔄 | AI predictive threat modeling | Substantial infra exists (`prediction/index.ts`, `forecast-engine.ts`, `financial-contagion.ts`, analyst-loop / llm-adapter Ollama routing). No single completion criterion — refine probability forecasts |
+| 🔄 | AI predictive threat modeling | Active execution and measurable completion criteria: `docs/PREDICTION_ACCURACY_ROADMAP.md`. Current focus is authoritative outcomes, evaluation baselines, and champion/challenger promotion before complex models. |
 | 🔲 | Satellite imagery on demand | Sentinel-2 / Planet Labs optical imagery. Zero implementation (only a "not done" note in `satellite-change.ts`) |
 | 🔲 | Voice command interface | Whisper STT + TTS, hands-free. Zero implementation |
 | 🔲 | Team collaboration mode | Shared watchlists, annotations, sync. Local annotation primitives exist (`alert-annotations.ts`); no shared/sync layer |

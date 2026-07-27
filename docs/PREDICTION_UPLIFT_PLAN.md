@@ -1,6 +1,7 @@
 # Prediction & Correlation Uplift Plan
 
-> Status: **ACTIVE** — 13-PR program across 4 workstreams.
+> Status: **REFERENCE DESIGN** — live execution, ownership, and completion
+> evidence moved to `docs/PREDICTION_ACCURACY_ROADMAP.md`.
 > Created 2026-07-21. Successor to `CORRELATION_NEXTGEN_PLAN.md` (COMPLETE) and
 > `COGNITIVE_ENHANCEMENT_PLAN.md` (COMPLETE — all 16 PRs merged; tracker marks on
 > PRs 12/14/16 are stale, see #1357/#1372/#1373).
@@ -287,34 +288,10 @@ Flagged for Bradley during implementation (each shapes behavior, ~5–10 lines):
    `bench-baseline.json` set how hard CI pushes back on engine evolution.
 3. **A3 report-card placement** — AnalystHUD vs SystemDiagnostic tab.
 
-## Progress Tracker — UPDATE THIS EVERY SESSION
+## Execution status
 
-> Status markers (house convention): 🔲 Pending · 🔄 In progress / partial ·
-> ✅ Done (merged to main) · ❌ Blocked
-
-| PR | Feature | Status | Branch | Notes |
-|----|---------|--------|--------|-------|
-| A1 | Wire both calibration bridges live | ✅ | claude/uplift-a1-calibration-bridges | Merged #1495 — resolve-before-record wiring, live-input gate (Codex P1), isolated settlers (Codex P2) |
-| A2 | CorrelationMapPanel → live engine | ✅ | claude/uplift-a2-live-pair-surface | Merged #1498 — live pairs section (view-model + panel glue), Codex P2 malformed-entry guard included |
-| A3 | Cognition PR 6 leftovers | 🔄 | claude/uplift-a3-pr6-leftovers | committed locally, not yet merged |
-| A4 | Entity vocabulary alignment | 🔄 | claude/uplift-a4-entity-vocab | Shared `slugifyEntity` normalizer + analyst-loop episode entities populated from hypothesis-entities extraction + contradiction matcher slug-normalized on both sides; awaiting cross-agent review |
-| B1 | Resolver framework + market resolver | 🔲 | | |
-| B2 | Weather verification resolver | 🔲 | | |
-| B3 | Conflict confirmation resolver | 🔲 | | |
-| C1 | Inhibitory edge mining | 🔲 | | |
-| C2 | Multi-hop chains + confounder control | 🔲 | | |
-| C3 | Hawkes-lite base rates | 🔲 | | |
-| C4 | Per-regime rule reliability | 🔲 | | |
-| D1 | Correlation benchmark + CI gate | 🔲 | | ⚠ must merge before C1–C4 |
-| D2 | Tunable kernel weights | 🔲 | | last PR of the program |
-
-## Session Protocol
-
-1. Read this doc first; take the lowest-numbered 🔲 PR whose dependencies are
-   ✅ (respect the ordering diagram — D1 before any C).
-2. Work in an isolated worktree (`.worktrees/<feature>`), branch `claude/*`.
-3. Verify claims against the current tree before building — this doc's audit
-   was accurate as of `ba5c100e` (2026-07-21) but seams move.
-4. Update the Progress Tracker row in the same commit as the work.
-5. Cross-agent (Codex) review before merge; `typecheck:all` zero; relevant
-   `test:*` scripts green.
+This document is retained for the detailed B1-B3, C1-C4, D1, and D2 technical
+designs. A1-A4 merged in PRs #1495, #1498, #1499, and #1500. Current status,
+task ownership, dependencies, verification, and completion evidence are tracked
+only in `docs/PREDICTION_ACCURACY_ROADMAP.md`. Do not claim work from a tracker
+in this reference document.

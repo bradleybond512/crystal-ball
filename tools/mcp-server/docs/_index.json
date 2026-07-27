@@ -75,7 +75,7 @@
       "description": "Live runtime triage, renderer reasoning evidence, pipeline traces, and algorithm tuning health.",
       "tools": {
         "diagnose_runtime": "Ranked live runtime findings with optional deep route probes.",
-        "get_algorithm_diagnostics": "Algorithm health, latency, evaluation coverage, bounded tunings, and recent tuning decisions.",
+        "get_algorithm_diagnostics": "Algorithm health, latency, evaluation coverage, market/weather ground truth, bounded tunings, and recent tuning decisions.",
         "get_pipeline_trace": "Fact-lifecycle traces with domain and stalled-pipeline filters.",
         "get_reasoning_debug_log": "Filterable renderer reasoning errors and events.",
         "get_reasoning_metrics": "Renderer latency histograms and named counters."

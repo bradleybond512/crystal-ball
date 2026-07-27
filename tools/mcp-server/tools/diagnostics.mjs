@@ -12,7 +12,7 @@ export const schemas = {
   },
   get_algorithm_diagnostics: {
     description:
-      'Current algorithm health, forecast calibration/Brier coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
+      'Current algorithm health, forecast calibration/Brier coverage, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
     inputSchema: z.object({}),
   },
 };
@@ -70,6 +70,20 @@ export function makeDiagnosticsTools(client) {
           algorithm.status === 'degraded' ? 'yellow' : 'red',
           `${algorithm.algorithmId} is ${algorithm.status}: ${algorithm.reason ?? ''}`.trim(),
           algorithm.recommendedAdjustment || 'Replay recent evaluations before changing a tuning parameter.',
+        ));
+      }
+      const weatherReports = analyst?.algorithmDiagnostics
+        ?.forecastCalibration?.weatherReports;
+      const pendingWarnings = Number(
+        weatherReports?.pendingWarningPredictions ?? 0,
+      );
+      const weatherStatus = String(weatherReports?.status ?? 'missing');
+      if (pendingWarnings > 0 && weatherStatus !== 'fresh') {
+        findings.push(finding(
+          `forecast.weather_reports_${weatherStatus}`,
+          'yellow',
+          `${pendingWarnings} warning forecast(s) are waiting on ${weatherStatus} storm-report evidence.`,
+          'Check the Iowa State LSR feed and weatherReports coverage before tuning weather confidence.',
         ));
       }
 
@@ -167,5 +181,9 @@ function summarizeAlgorithms(snapshot) {
   const resolverOutcomes = typeof forecasts.directResolved === 'number'
     ? `; resolver outcomes direct:${forecasts.directResolved} proxy:${forecasts.proxyResolved ?? 0} expired:${forecasts.resolverExpired ?? 0}`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}; ${forecasts.overduePending ?? 0} overdue.`;
+  const weatherReports = snapshot.forecastCalibration?.weatherReports;
+  const weather = typeof weatherReports?.status === 'string'
+    ? `; weather reports ${weatherReports.status} (${weatherReports.pendingWarningPredictions ?? 0} pending warnings)`
+    : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
 }

@@ -6,6 +6,23 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Deterministic weather-warning ground truth**: active Tornado, Severe
+  Thunderstorm, and Flash Flood warnings now create bounded, deduplicated
+  calibration records and resolve against current Iowa State Local Storm
+  Reports by event class, polygon, and post-prediction time window. Direct
+  matches carry structured provenance; absence labels are proxy-marked and
+  require a complete 24-hour report snapshot that covers the entire forecast
+  window. The implementation repairs the retired IEM endpoint and obsolete
+  event-code mapping, caps nationwide record/polygon/report volume, rejects
+  malformed external data, and exposes report freshness, completeness,
+  invalid-row counts, and pending warning forecasts through the CLI doctor and
+  MCP algorithm diagnostics. (PR #1515)
+- **Deterministic market forecast ground truth**: analyst-loop and
+  superforecast market predictions can now declare typed direction/threshold
+  criteria against retained fused stock and crypto prices. A bounded,
+  no-lookahead resolver records direct or proxy-marked outcomes with evidence
+  provenance, while live diagnostics expose resolver coverage, expirations,
+  and market-history health. (PR #1514)
 - **Home Shell UI re-imagination, Phases 3-4** (#1402 + follow-up): the
   situation dossier drawer (`src/components/SituationDossier.ts`) — evidence
   grid composed from `evidenceFor` panel metadata, honest "why this surfaced"

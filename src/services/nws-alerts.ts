@@ -14,6 +14,7 @@ export interface NWSAlert {
   severity: 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
   urgency: 'Immediate' | 'Expected' | 'Future' | 'Past' | 'Unknown';
   areaDesc: string;
+  sent?: string;
   onset: string;
   expires: string;
   status: string;

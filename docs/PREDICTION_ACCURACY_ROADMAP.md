@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-07-26
+> Updated: 2026-07-27
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -217,15 +217,29 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B1.
 
 ### ACC-102 — Weather verification resolver
 
-Status: `TODO`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-102-weather-resolver`
+
+Evidence: PR #1515
+
+Verification: bounded warning-ingest, current IEM LSR code mapping, direct
+positive, no-lookahead, complete-coverage proxy, malformed-input,
+nationwide-cap, persistence-size, CLI doctor, and MCP diagnostics fixtures
+passed. Live NWS and IEM payloads were schema-checked; `npm run test:weather`,
+`npm run test:intelligence`, `npm run test:algorithms`,
+`npm run test:diagnostics`, and `npm run typecheck:all` passed.
 
 Dependencies: ACC-101
 
 Create or modify:
 
-- `src/services/weather/warning-prediction-bridge.ts`
+- `src/services/weather/warning-verification-bridge.ts`
 - `src/services/intelligence/outcome-resolvers.ts`
 - NWS/SPC loader wiring in `src/app/data-loader.ts`
+- algorithm, doctor, and MCP diagnostics
 
 Deliver:
 
@@ -245,7 +259,13 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B2.
 
 ### ACC-103 — Conflict and geospatial event resolver
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-103-geospatial-resolver`
+
+Evidence: PR #1518
 
 Dependencies: ACC-101 and ACC-004
 
@@ -268,11 +288,17 @@ Verify:
 - `npm run test:intelligence`;
 - `npm run typecheck:all`.
 
+Verification: conflict, military, security, protest, and corroborated-news
+adapters feed a bounded resolver that requires exact target matching and two
+independent sources. Intelligence, cognition, renderer, reasoning, situations,
+news, algorithm, diagnostics, weather, security, strict lint, TypeScript,
+production build, lockfile, and secret-scan gates passed.
+
 Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 ### ACC-104 — Grade runtime algorithms from authoritative outcomes
 
-Status: `WAITING`
+Status: `TODO`
 
 Dependencies: ACC-101 through ACC-103
 

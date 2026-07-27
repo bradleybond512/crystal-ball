@@ -89,6 +89,14 @@ export function recordPrediction(p: PredictionRecord): void {
   persist(store);
 }
 
+/** Record a snapshot batch and persist once. */
+export function recordPredictions(predictions: readonly PredictionRecord[]): void {
+  if (predictions.length === 0) return;
+  const store = getCalibrationStore();
+  for (const prediction of predictions) store.record(prediction);
+  persist(store);
+}
+
 /** Resolve + persist. Returns false when the id is unknown/already resolved. */
 export function resolvePrediction(
   id: string,

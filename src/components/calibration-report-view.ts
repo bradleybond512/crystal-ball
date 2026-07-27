@@ -6,6 +6,7 @@ import {
   brierContribution,
   evaluateForecastCohort,
   horizonBucket,
+  splitForecastRecordsChronologically,
   type EvidenceMetric,
   type EqualMassEceMetric,
   type ForecastCohortEvaluation,
@@ -214,7 +215,6 @@ export interface ForecastWorkbenchOptions {
 }
 
 const ALL_FILTERS = 'all';
-const WORKBENCH_TRAINING_SHARE = 0.6;
 const DRILLDOWN_LIMIT = 5;
 const HORIZON_ORDER = ['<1h', '1h-6h', '6h-24h', '1d-7d', '7d-30d', '30d+', 'invalid'];
 const RESOLUTION_ORDER: readonly ForecastResolutionMethod[] = [
@@ -245,7 +245,7 @@ export function buildForecastWorkbench(
   state: ForecastWorkbenchState = createForecastWorkbenchState(),
   options: ForecastWorkbenchOptions = {},
 ): ForecastWorkbenchView {
-  const split = splitForecastRecords(records);
+  const split = splitForecastRecordsChronologically(records);
   const matches = (record: PredictionRecord): boolean =>
     recordMatchesFilters(record, state.filters);
   const selectedTraining = split.training.filter((record) => matches(record));
@@ -357,31 +357,6 @@ function resolvedOutcome(record: PredictionRecord): ForecastObservedOutcome {
   if (record.status === 'resolved_true') return 1;
   if (record.status === 'resolved_false') return 0;
   return null;
-}
-
-function splitForecastRecords(records: readonly PredictionRecord[]): {
-  training: PredictionRecord[];
-  evaluation: PredictionRecord[];
-} {
-  const ordered = [...records].sort((left, right) => {
-    const leftTime = Number.isFinite(left.predictedAt)
-      ? left.predictedAt
-      : Number.POSITIVE_INFINITY;
-    const rightTime = Number.isFinite(right.predictedAt)
-      ? right.predictedAt
-      : Number.POSITIVE_INFINITY;
-    return leftTime - rightTime || left.id.localeCompare(right.id);
-  });
-  if (ordered.length === 0) return { training: [], evaluation: [] };
-  if (ordered.length === 1) return { training: [], evaluation: ordered };
-  const splitIndex = Math.max(
-    1,
-    Math.min(ordered.length - 1, Math.floor(ordered.length * WORKBENCH_TRAINING_SHARE)),
-  );
-  return {
-    training: ordered.slice(0, splitIndex),
-    evaluation: ordered.slice(splitIndex),
-  };
 }
 
 function recordMatchesFilters(

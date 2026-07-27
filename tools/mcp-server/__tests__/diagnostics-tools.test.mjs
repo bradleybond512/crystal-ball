@@ -75,6 +75,166 @@ test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated 
   assert.equal('analyst' in result, false);
 });
 
+test('get_algorithm_diagnostics bounds and strips unexpected cohort detail', async () => {
+  const snapshot = {
+    health: { status: 'healthy', algorithms: [] },
+    ledger: { total: 30, graded: 30, pending: 0 },
+    runtime: [],
+    forecastCalibration: {
+      evaluation: {
+        schemaVersion: 1,
+        split: {
+          strategy: 'chronological_60_40',
+          trainingRecords: 18,
+          evaluationRecords: 12,
+          evaluationWindowStart: 200,
+        },
+        resolutionBacklog: {
+          pending: 0,
+          overduePending: 0,
+          expired: 0,
+          oldestPendingAt: null,
+        },
+        labelOrigins: {
+          direct: 30,
+          proxy: 0,
+          manual: 0,
+          unattributed: 0,
+        },
+        overall: {
+          coverage: {
+            total: 12,
+            resolved: 12,
+            expired: 0,
+            pending: 0,
+            overduePending: 0,
+            resolutionCoverage: 1,
+            expirationRate: 0,
+            closedCoverage: 1,
+          },
+          trainingSampleSize: 18,
+          exclusions: {
+            proxyLabels: 0,
+            invalidProbabilities: 0,
+            trainingWindowOverlap: 0,
+            trainingProxyLabels: 0,
+            trainingInvalidProbabilities: 0,
+          },
+          brier: {
+            status: 'insufficient_evidence',
+            sampleSize: 12,
+            minSampleSize: 20,
+          },
+          logLoss: {
+            status: 'insufficient_evidence',
+            sampleSize: 12,
+            minSampleSize: 20,
+          },
+          baseRate: {
+            status: 'insufficient_evidence',
+            sampleSize: 18,
+            minSampleSize: 20,
+          },
+          brierSkill: {
+            status: 'insufficient_evidence',
+            sampleSize: 12,
+            minSampleSize: 20,
+            reason: 'training_sample_floor',
+          },
+          equalMassEce: {
+            status: 'insufficient_evidence',
+            sampleSize: 12,
+            minSampleSize: 20,
+          },
+          calibrationFit: {
+            status: 'insufficient_evidence',
+            sampleSize: 12,
+            minSampleSize: 50,
+            reason: 'sample_floor',
+          },
+          claim: 'SECRET-OVERALL-CLAIM',
+        },
+        worstCohorts: Array.from({ length: 12 }, (_, index) => ({
+          sourceId: `model-${index}`,
+          domain: 'cyber',
+          horizon: '1d-7d',
+          coverage: {
+            total: 1,
+            resolved: 1,
+            expired: 0,
+            pending: 0,
+            overduePending: 0,
+            resolutionCoverage: 1,
+            expirationRate: 0,
+            closedCoverage: 1,
+          },
+          trainingSampleSize: 1,
+          exclusions: {
+            proxyLabels: 0,
+            invalidProbabilities: 0,
+            trainingWindowOverlap: 0,
+            trainingProxyLabels: 0,
+            trainingInvalidProbabilities: 0,
+          },
+          brier: {
+            status: 'insufficient_evidence',
+            sampleSize: 1,
+            minSampleSize: 20,
+          },
+          logLoss: {
+            status: 'insufficient_evidence',
+            sampleSize: 1,
+            minSampleSize: 20,
+          },
+          baseRate: {
+            status: 'insufficient_evidence',
+            sampleSize: 1,
+            minSampleSize: 20,
+          },
+          brierSkill: {
+            status: 'insufficient_evidence',
+            sampleSize: 1,
+            minSampleSize: 20,
+            reason: 'training_sample_floor',
+          },
+          equalMassEce: {
+            status: 'insufficient_evidence',
+            sampleSize: 1,
+            minSampleSize: 20,
+          },
+          calibrationFit: {
+            status: 'insufficient_evidence',
+            sampleSize: 1,
+            minSampleSize: 50,
+            reason: 'sample_floor',
+          },
+          claim: `SECRET-COHORT-CLAIM-${index}`,
+          evidence: { reference: `SECRET-EVIDENCE-${index}` },
+        })),
+        cohortLimit: 10,
+        cohortCount: 12,
+        omittedCohortCount: 2,
+      },
+    },
+  };
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/analyst-state': {
+      available: true,
+      stale: false,
+      algorithmDiagnostics: snapshot,
+    },
+  }));
+
+  const result = await tools.get_algorithm_diagnostics({});
+  const evaluation = result.diagnostics.forecastCalibration.evaluation;
+
+  assert.equal(evaluation.worstCohorts.length, 10);
+  assert.doesNotMatch(
+    JSON.stringify(evaluation),
+    /SECRET|"(?:claim|evidence|reference)"/,
+  );
+});
+
 test('diagnostics tools surface degraded weather ground-truth coverage', async () => {
   const algorithmDiagnostics = {
     health: { status: 'healthy', algorithms: [] },

@@ -1718,6 +1718,8 @@ export class DataLoaderManager implements AppModule {
  { recordAlgorithmEvaluation },
  { annotateModelOutput: annotateWeatherOutput },
  { getNotificationPreferencesService },
+ { computeAlertExposure },
+ { getSavedPlaces },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1725,6 +1727,8 @@ export class DataLoaderManager implements AppModule {
  import('@/services/algorithms/record-evaluation'),
  import('@/services/intelligence/assumption-producers'),
  import('@/services/notifications/notification-preferences'),
+ import('@/services/weather/weather-exposure'),
+ import('@/services/saved-places'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1749,8 +1753,22 @@ export class DataLoaderManager implements AppModule {
  const severeAlerts = alerts.filter(
  (a) => a.severity === 'Extreme' || a.severity === 'Severe',
  );
+ // Personal exposure: match each alert's polygon (or UGC zones, for
+ // geometry-free alerts) against the user's saved places so an official
+ // warning sitting over the user clears the Big Event Detector's
+ // exposureFloor (70). Before this, userExposure was hardcoded to 50 —
+ // below the floor — so a lone NWS warning fired only the weight-35
+ // high_confidence_high_impact trigger (< threshold 40) and was silently
+ // dropped: the "all clear during a severe storm" bug. Adapted to the
+ // matcher's SavedPlace shape (same mapping the storm-decision path uses).
+ const weatherPlaces = getSavedPlaces().map((p) => ({ id: p.id, label: p.name, lat: p.lat, lon: p.lon }));
  for (const alert of severeAlerts) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
+ // With no saved place, exposure is genuinely unknown — keep the
+ // conservative default rather than fabricating a location match.
+ const userExposure = weatherPlaces.length > 0
+ ? computeAlertExposure(alert, weatherPlaces).exposure
+ : 50;
  const ladderInput = {
  id: alert.id,
  domain: 'weather',
@@ -1759,7 +1777,7 @@ export class DataLoaderManager implements AppModule {
  sourceCount: 1,
  hasOfficialSource: true,
  overlappingDomains: ['weather'] as const,
- userExposure: 50, // conservative default; polygon match refines this
+ userExposure,
  potentialImpact: severityScore,
  };
  const _bedStart = performance.now();

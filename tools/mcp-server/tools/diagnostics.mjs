@@ -161,5 +161,11 @@ function summarizeAlgorithms(snapshot) {
   const brier = typeof forecasts.brierScore === 'number'
     ? `; Brier ${forecasts.brierScore.toFixed(3)}`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}; ${forecasts.overduePending ?? 0} overdue.`;
+  const criteria = typeof forecasts.criteriaDeclared === 'number'
+    ? `; ${forecasts.criteriaDeclared} criteria-declared`
+    : '';
+  const resolverOutcomes = typeof forecasts.directResolved === 'number'
+    ? `; resolver outcomes direct:${forecasts.directResolved} proxy:${forecasts.proxyResolved ?? 0} expired:${forecasts.resolverExpired ?? 0}`
+    : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}; ${forecasts.overduePending ?? 0} overdue.`;
 }

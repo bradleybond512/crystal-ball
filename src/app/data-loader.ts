@@ -324,13 +324,17 @@ import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
-import { recordDomainObservations } from '@/services/providers/fusion-publish';
+import {
+  getLatestFusion,
+  recordDomainObservations,
+} from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
 import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
 import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
+import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
@@ -1357,14 +1361,20 @@ export class DataLoaderManager implements AppModule {
  // fail-closed fetches (NOT the panel's cached fetchCrypto) so a down source
  // records a failing outcome instead of corroborating against stale prices.
  const cg = await fetchCoingeckoPrices();
- recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices), cg.ok);
+ const cgObservedAt = Date.now();
+ recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices, cgObservedAt), cg.ok, cgObservedAt);
  const coinbase = await fetchCoinbasePrices();
- recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices), coinbase.ok);
+ const coinbaseObservedAt = Date.now();
+ recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices, coinbaseObservedAt), coinbase.ok, coinbaseObservedAt);
+ recordFusedSpotPrices(getLatestFusion('crypto', coinbaseObservedAt).facts);
  // Stock price fusion: Yahoo (no-key) + Finnhub (keyed), matched by ticker. Fail-closed.
  const yahoo = await fetchYahooPrices();
- recordDomainObservations('yahoo-finance', exchangePricesToObservations('yahoo-finance', yahoo.prices), yahoo.ok);
+ const yahooObservedAt = Date.now();
+ recordDomainObservations('yahoo-finance', exchangePricesToObservations('yahoo-finance', yahoo.prices, yahooObservedAt), yahoo.ok, yahooObservedAt);
  const finnhub = await fetchFinnhubPrices();
- recordDomainObservations('finnhub', exchangePricesToObservations('finnhub', finnhub.prices), finnhub.ok);
+ const finnhubObservedAt = Date.now();
+ recordDomainObservations('finnhub', exchangePricesToObservations('finnhub', finnhub.prices, finnhubObservedAt), finnhub.ok, finnhubObservedAt);
+ recordFusedSpotPrices(getLatestFusion('stocks', finnhubObservedAt).facts);
   }
 
   async loadPredictions(): Promise<void> {

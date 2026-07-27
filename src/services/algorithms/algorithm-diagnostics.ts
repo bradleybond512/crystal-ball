@@ -15,6 +15,7 @@ import {
 } from './safe-adjustment';
 import type { AlgorithmLedgerPersistenceStatus } from './algorithm-ledger-persistence';
 import type { TuningDecision } from './tuning-decision-log';
+import type { SpotPriceDiagnostics } from '../market/spot-price-store';
 import {
   brierScore,
   perDomainAccuracy,
@@ -82,9 +83,19 @@ export interface BuildAlgorithmDiagnosticsInput {
   definitions: readonly AlgorithmDefinition[];
   records: readonly EvaluationRecord[];
   forecastPredictions?: readonly PredictionRecord[];
+  marketSpotPrices?: SpotPriceDiagnostics;
   persistence: AlgorithmLedgerPersistenceStatus;
   tunings: readonly AlgorithmAdjustmentTuning[];
   tuningDecisions: readonly TuningDecision[];
+}
+
+interface ForecastResolverDiagnostics {
+  resolverId: string;
+  resolved: number;
+  resolvedTrue: number;
+  resolvedFalse: number;
+  expired: number;
+  lastResolvedAt: number | null;
 }
 
 export interface ForecastCalibrationDiagnostics {
@@ -96,6 +107,11 @@ export interface ForecastCalibrationDiagnostics {
     overduePending: number;
     oldestPendingAt: number | null;
     brierScore: number | null;
+    criteriaDeclared: number;
+    directResolved: number;
+    proxyResolved: number;
+    unattributedResolved: number;
+    resolverExpired: number;
   };
   byDomain: readonly {
     domain: PredictionRecord['domain'];
@@ -105,6 +121,8 @@ export interface ForecastCalibrationDiagnostics {
     calibrationError: number | null;
   }[];
   bySource: readonly SourceMultiplier[];
+  byResolver: readonly ForecastResolverDiagnostics[];
+  marketSpots: SpotPriceDiagnostics | null;
 }
 
 export function buildAlgorithmDiagnosticsSnapshot(
@@ -135,6 +153,7 @@ export function buildAlgorithmDiagnosticsSnapshot(
     forecastCalibration: buildForecastCalibrationDiagnostics(
       input.forecastPredictions ?? [],
       generatedAt,
+      input.marketSpotPrices,
     ),
     runtime: buildRuntimeRows(input.definitions, records),
     tunings: input.tunings.map((tuning) => copyTuning(tuning)),
@@ -155,6 +174,7 @@ export function buildAlgorithmDiagnosticsSnapshot(
 function buildForecastCalibrationDiagnostics(
   predictions: readonly PredictionRecord[],
   now: number,
+  marketSpotPrices?: SpotPriceDiagnostics,
 ): ForecastCalibrationDiagnostics {
   const resolved = predictions.filter(
     (record) => record.status === 'resolved_true' || record.status === 'resolved_false',
@@ -163,6 +183,7 @@ function buildForecastCalibrationDiagnostics(
     .filter((record) => record.status === 'pending')
     .sort((a, b) => a.predictedAt - b.predictedAt);
   const domainRows = perDomainAccuracy(predictions);
+  const resolverDiagnostics = buildForecastResolverDiagnostics(predictions, resolved);
 
   return {
     summary: {
@@ -175,6 +196,14 @@ function buildForecastCalibrationDiagnostics(
       ).length,
       oldestPendingAt: pending[0]?.predictedAt ?? null,
       brierScore: resolved.length > 0 ? brierScore(resolved).score : null,
+      criteriaDeclared: predictions.filter((record) => record.criteria !== undefined).length,
+      directResolved: resolverDiagnostics.directResolved,
+      proxyResolved: resolverDiagnostics.proxyResolved,
+      unattributedResolved:
+        resolved.length
+        - resolverDiagnostics.directResolved
+        - resolverDiagnostics.proxyResolved,
+      resolverExpired: resolverDiagnostics.resolverExpired,
     },
     byDomain: domainRows.map((row) => {
       const resolvedCount = resolved.filter((record) => record.domain === row.domain).length;
@@ -187,7 +216,92 @@ function buildForecastCalibrationDiagnostics(
       };
     }),
     bySource: perSourceMultipliers(predictions),
+    byResolver: resolverDiagnostics.rows,
+    marketSpots: marketSpotPrices ? { ...marketSpotPrices } : null,
   };
+}
+
+function buildForecastResolverDiagnostics(
+  predictions: readonly PredictionRecord[],
+  resolved: readonly PredictionRecord[],
+): {
+  directResolved: number;
+  proxyResolved: number;
+  resolverExpired: number;
+  rows: ForecastResolverDiagnostics[];
+} {
+  const directResolved = resolved.filter((record) =>
+    record.resolutionProvenance?.kind === 'direct'
+    || (!record.resolutionProvenance && record.resolutionNote?.startsWith('direct:'))).length;
+  const proxyResolved = resolved.filter((record) =>
+    record.resolutionProvenance?.kind === 'proxy'
+    || (!record.resolutionProvenance && record.resolutionNote?.startsWith('proxy:'))).length;
+  const resolverRows = new Map<string, ForecastResolverDiagnostics>();
+  addResolvedResolverRows(resolved, resolverRows);
+  const resolverExpired = addExpiredResolverRows(predictions, resolverRows);
+
+  return {
+    directResolved,
+    proxyResolved,
+    resolverExpired,
+    rows: [...resolverRows.values()].sort(
+      (a, b) => b.resolved - a.resolved || a.resolverId.localeCompare(b.resolverId),
+    ),
+  };
+}
+
+function resolverRowFor(
+  resolverRows: ReadonlyMap<string, ForecastResolverDiagnostics>,
+  resolverId: string,
+): ForecastResolverDiagnostics {
+  return resolverRows.get(resolverId) ?? {
+    resolverId,
+    resolved: 0,
+    resolvedTrue: 0,
+    resolvedFalse: 0,
+    expired: 0,
+    lastResolvedAt: null,
+  };
+}
+
+function addResolvedResolverRows(
+  resolved: readonly PredictionRecord[],
+  resolverRows: Map<string, ForecastResolverDiagnostics>,
+): void {
+  for (const record of resolved) {
+    const resolverId = record.resolutionProvenance?.resolverId;
+    if (!resolverId) continue;
+    const row = resolverRowFor(resolverRows, resolverId);
+    row.resolved += 1;
+    row.resolvedTrue += record.status === 'resolved_true' ? 1 : 0;
+    row.resolvedFalse += record.status === 'resolved_false' ? 1 : 0;
+    if (record.resolvedAt !== undefined) {
+      row.lastResolvedAt = row.lastResolvedAt === null
+        ? record.resolvedAt
+        : Math.max(row.lastResolvedAt, record.resolvedAt);
+    }
+    resolverRows.set(resolverId, row);
+  }
+}
+
+function addExpiredResolverRows(
+  predictions: readonly PredictionRecord[],
+  resolverRows: Map<string, ForecastResolverDiagnostics>,
+): number {
+  let resolverExpired = 0;
+  for (const record of predictions) {
+    if (record.status !== 'expired') continue;
+    const match = /^unresolved:([a-z0-9][a-z0-9.-]{0,63})\b/i.exec(
+      record.resolutionNote ?? '',
+    );
+    const resolverId = match?.[1];
+    if (!resolverId) continue;
+    resolverExpired += 1;
+    const row = resolverRowFor(resolverRows, resolverId);
+    row.expired += 1;
+    resolverRows.set(resolverId, row);
+  }
+  return resolverExpired;
 }
 
 function buildRuntimeRows(

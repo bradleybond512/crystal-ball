@@ -56,6 +56,24 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         resolveBy: NOW - 5_000,
         status: 'resolved_true',
         resolvedAt: NOW - 4_000,
+        criteria: {
+          kind: 'market_move',
+          symbol: 'AAPL',
+          direction: 'up',
+          minAbsPct: 3,
+          basisPrice: 100,
+          basisObservedAt: NOW - 10_000,
+        },
+        resolutionNote: 'direct:market_move fixture',
+        resolutionProvenance: {
+          resolverId: 'market-move-v1',
+          kind: 'direct',
+          evidence: [{
+            sourceIds: ['yahoo-finance', 'finnhub'],
+            observedAt: NOW - 4_000,
+            value: 104,
+          }],
+        },
       },
       {
         id: 'forecast-2',
@@ -77,8 +95,15 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         resolveBy: NOW - 10_000,
         status: 'expired',
         resolvedAt: NOW - 9_000,
+        resolutionNote: 'unresolved:market-move-v1 no in-window verdict after resolver grace',
       },
     ],
+    marketSpotPrices: {
+      symbolCount: 4,
+      sampleCount: 48,
+      latestObservedAt: NOW - 1_000,
+      staleSymbolCount: 0,
+    },
     persistence: {
       lastLoadStatus: 'ok',
       lastLoadedAt: NOW - 10_000,
@@ -145,7 +170,24 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
     overduePending: 1,
     oldestPendingAt: NOW - 8_000,
     brierScore: 0.04,
+    criteriaDeclared: 1,
+    directResolved: 1,
+    proxyResolved: 0,
+    unattributedResolved: 0,
+    resolverExpired: 1,
   });
+  assert.deepEqual(snapshot.forecastCalibration.byResolver, [{
+    resolverId: 'market-move-v1',
+    resolved: 1,
+    resolvedTrue: 1,
+    resolvedFalse: 0,
+    expired: 1,
+    lastResolvedAt: NOW - 4_000,
+  }]);
+  assert.deepEqual(
+    snapshot.forecastCalibration.marketSpots,
+    baseInput().marketSpotPrices,
+  );
   assert.equal(snapshot.forecastCalibration.bySource[0]?.sourceId, 'superforecast');
   assert.doesNotMatch(JSON.stringify(snapshot.forecastCalibration), /sensitive fixture claim/);
   assert.equal(snapshot.tunings[0]?.parameters[0]?.current, 0.5);

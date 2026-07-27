@@ -10,16 +10,26 @@
  */
 
 import { signatureFor } from '@/services/hypothesis-feedback';
+import { entitiesFromHypothesis } from '@/services/hypothesis-entities';
 import type { Hypothesis } from '@/services/analyst-loop';
+import {
+  getLatestSpotPrice,
+  type SpotPriceObservation,
+} from '@/services/market/spot-price-store';
 import {
   getCalibrationStore,
   recordPrediction,
   resolvePrediction,
 } from './forecast-calibration-adapter';
+import type { MarketMoveCriteria } from './forecast-calibration';
 import type { FactDomain } from './types';
 
 const WINDOW_MS = 6 * 60 * 60 * 1000;        // dedupe bucket
 export const HYPOTHESIS_OUTCOME_HORIZON_MS = 2 * 60 * 60 * 1000;
+export const MARKET_CRITERIA_MIN_ABS_PCT = 3;
+const MAX_MARKET_BASIS_AGE_MS = 20 * 60 * 1000;
+const UP_CUE = /\b(?:rally|rallies|surge|surges|spike|spikes|soar|soars|rebound|rebounds|jump|jumps)\b/i;
+const DOWN_CUE = /\b(?:drop|drops|fall|falls|sell-off|selloff|crash|crashes|plunge|plunges|slump|slumps|decline|declines)\b/i;
 
 type PredictionIdentityHypothesis = Pick<Hypothesis, 'kind' | 'evidence' | 'region'>;
 
@@ -104,9 +114,60 @@ export function claimForHypothesisOutcome(
   return `Within the next 2 hours, supporting evidence will remain hot or escalate for: ${h.statement}`;
 }
 
+type SpotPriceLookup = (
+  symbol: string,
+  asOf: number,
+) => SpotPriceObservation | null;
+
+function spotSymbolFor(entity: string): string {
+  const normalized = entity.toUpperCase();
+  if (/^(?:BTC|ETH|SOL|XRP)-USD$/.test(normalized)) {
+    return normalized.slice(0, -4);
+  }
+  return normalized;
+}
+
+export function marketCriteriaFor(
+  hypothesis: Hypothesis,
+  predictedAt: number,
+  spotFor: SpotPriceLookup = getLatestSpotPrice,
+): MarketMoveCriteria | undefined {
+  if (domainForHypothesis(hypothesis) !== 'markets') return undefined;
+  const tickers = [...new Set(
+    entitiesFromHypothesis(hypothesis)
+      .filter((mention) => mention.kind === 'ticker')
+      .map((mention) => spotSymbolFor(mention.entity)),
+  )];
+  if (tickers.length !== 1) return undefined;
+  const hasUpCue = UP_CUE.test(hypothesis.statement);
+  const hasDownCue = DOWN_CUE.test(hypothesis.statement);
+  if (hasUpCue === hasDownCue) return undefined;
+  const symbol = tickers[0]!;
+  const basis = spotFor(symbol, predictedAt);
+  if (
+    !basis
+    || !Number.isFinite(basis.price)
+    || basis.price <= 0
+    || !Number.isFinite(basis.observedAt)
+    || basis.observedAt > predictedAt
+    || predictedAt - basis.observedAt > MAX_MARKET_BASIS_AGE_MS
+  ) {
+    return undefined;
+  }
+  return {
+    kind: 'market_move',
+    symbol,
+    direction: hasUpCue ? 'up' : 'down',
+    minAbsPct: MARKET_CRITERIA_MIN_ABS_PCT,
+    basisPrice: basis.price,
+    basisObservedAt: basis.observedAt,
+  };
+}
+
 export function recordHypothesisPredictions(
   hypotheses: readonly Hypothesis[],
   now: number = Date.now(),
+  spotFor: SpotPriceLookup = getLatestSpotPrice,
 ): void {
   const store = getCalibrationStore();
   for (const h of hypotheses) {
@@ -122,6 +183,7 @@ export function recordHypothesisPredictions(
       predictedAt: now,
       resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
+      criteria: marketCriteriaFor(h, now, spotFor),
       algorithmVersion: 'analyst-loop-v2',
     });
   }

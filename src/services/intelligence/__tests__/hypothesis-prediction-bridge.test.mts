@@ -15,6 +15,7 @@ import {
   factDomainForSignalSource,
   factDomainForSituationDomain,
   HYPOTHESIS_OUTCOME_HORIZON_MS,
+  marketCriteriaFor,
   recordHypothesisPredictions,
   resolveHypothesisPrediction,
   predictionIdFor,
@@ -49,6 +50,106 @@ test('records one pending prediction per hypothesis, idempotent within a window'
   assert.equal(all[0]!.sourceId, 'analyst-loop');
   assert.equal(all[0]!.targetKey, targetKeyForHypothesis(h));
   assert.equal(all[0]!.claim, claimForHypothesisOutcome(h));
+});
+
+test('stamps deterministic market criteria from one ticker, one direction, and an as-of basis', () => {
+  const marketHypothesis = {
+    ...h,
+    statement: 'AAPL could surge as demand accelerates',
+    domains: ['markets'],
+  };
+  const criteria = marketCriteriaFor(
+    marketHypothesis,
+    5_000,
+    (symbol, asOf) => symbol === 'AAPL' && asOf === 5_000
+      ? {
+          symbol: 'AAPL',
+          price: 200,
+          observedAt: 4_000,
+          providerIds: ['yahoo-finance', 'finnhub'],
+          independentSourceCount: 2,
+          confidence: 0.8,
+        }
+      : null,
+  );
+
+  assert.deepEqual(criteria, {
+    kind: 'market_move',
+    symbol: 'AAPL',
+    direction: 'up',
+    minAbsPct: 3,
+    basisPrice: 200,
+    basisObservedAt: 4_000,
+  });
+});
+
+test('normalizes supported USD crypto pairs to the fused base symbol', () => {
+  const criteria = marketCriteriaFor({
+    ...h,
+    statement: 'SOL-USD could plunge on market stress',
+    domains: ['markets'],
+  }, 5_000, (symbol) => symbol === 'SOL'
+    ? {
+        symbol,
+        price: 150,
+        observedAt: 4_000,
+        providerIds: ['coingecko', 'coinbase'],
+        independentSourceCount: 2,
+        confidence: 0.8,
+      }
+    : null);
+
+  assert.equal(criteria?.symbol, 'SOL');
+  assert.equal(criteria?.direction, 'down');
+});
+
+test('does not stamp ambiguous, contradictory, non-market, or unsupported criteria', () => {
+  const latest = () => ({
+    symbol: 'AAPL',
+    price: 200,
+    observedAt: 4_000,
+    providerIds: ['yahoo-finance'],
+    independentSourceCount: 1,
+    confidence: 0.5,
+  });
+  assert.equal(marketCriteriaFor({
+    ...h,
+    statement: 'AAPL and MSFT surge',
+    domains: ['markets'],
+  }, 5_000, latest), undefined);
+  assert.equal(marketCriteriaFor({
+    ...h,
+    statement: 'AAPL could surge then plunge',
+    domains: ['markets'],
+  }, 5_000, latest), undefined);
+  assert.equal(marketCriteriaFor({
+    ...h,
+    statement: 'AAPL could surge',
+    domains: ['cyber'],
+  }, 5_000, latest), undefined);
+  assert.equal(marketCriteriaFor({
+    ...h,
+    statement: 'AAPL could surge',
+    domains: ['markets'],
+  }, 5_000, () => null), undefined);
+});
+
+test('recorded market predictions carry their declared resolver criteria', () => {
+  const marketHypothesis = {
+    ...h,
+    statement: 'AAPL could surge as demand accelerates',
+    domains: ['markets'],
+  };
+  recordHypothesisPredictions([marketHypothesis], 5_000, (_symbol, _asOf) => ({
+    symbol: 'AAPL',
+    price: 200,
+    observedAt: 4_000,
+    providerIds: ['yahoo-finance'],
+    independentSourceCount: 1,
+    confidence: 0.5,
+  }));
+
+  assert.equal(getCalibrationStore().all()[0]?.criteria?.kind, 'market_move');
 });
 
 test('prediction id is stable for a signature+window', () => {

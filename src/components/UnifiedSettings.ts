@@ -87,6 +87,12 @@ const COGNITION_TOGGLES: readonly { id: string; key: CognitionSwitchKey; label: 
     label: 'Calibration bridge wiring',
     desc: 'Off stops the shortage and mode-forecast bridges from logging or resolving predictions against the calibration ledger.',
   },
+  {
+    id: 'us-cog-outcome-resolvers',
+    key: 'outcome-resolvers',
+    label: 'Deterministic outcome resolvers',
+    desc: 'Off pauses market, weather, and event ground-truth resolvers without deleting forecasts or prior outcomes.',
+  },
 ];
 
 export interface UnifiedSettingsConfig {

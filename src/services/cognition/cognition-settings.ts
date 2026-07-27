@@ -25,7 +25,8 @@ export type CognitionSwitchKey =
   | 'bocpd'
   | 'consolidation'
   | 'shadow-algorithms'
-  | 'calibration-bridges';
+  | 'calibration-bridges'
+  | 'outcome-resolvers';
 
 export const COGNITION_SWITCHES: readonly CognitionSwitchKey[] = [
   'evoi-planner',
@@ -34,6 +35,7 @@ export const COGNITION_SWITCHES: readonly CognitionSwitchKey[] = [
   'consolidation',
   'shadow-algorithms',
   'calibration-bridges',
+  'outcome-resolvers',
 ];
 
 const STORAGE_KEY = 'crystalball-cognition-flags-v2';

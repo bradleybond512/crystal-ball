@@ -178,11 +178,13 @@ target-specific outcomes from data Crystal Ball already ingests.
 
 ### ACC-101 — Resolver contract and market-move resolver
 
-Status: `IN REVIEW`
+Status: `DONE`
 
-Owner: Codex
+Evidence: PR #1514
 
-Branch: `codex/acc-101-market-resolver`
+Verification: 503 intelligence tests and 12,675 renderer tests passed;
+provider, algorithm, cognition, MCP diagnostics, strict lint, full TypeScript,
+production build, and no-lookahead/continuous-coverage checks passed.
 
 Dependencies: ACC-005
 
@@ -191,7 +193,10 @@ Create or modify:
 - `src/services/intelligence/forecast-calibration.ts`
 - `src/services/intelligence/outcome-resolvers.ts`
 - `src/services/market/spot-price-store.ts`
-- `src/services/intelligence/situation-hypothesis-bridge.ts`
+- `src/services/intelligence/hypothesis-prediction-bridge.ts`
+- `src/services/cognition/superforecast.ts`
+- `src/services/providers/fusion-ingest.ts`
+- `src/services/algorithms/algorithm-diagnostics.ts`
 - the existing slow dispatch cadence in `src/app/panel-layout.ts`
 
 Deliver:
@@ -212,7 +217,7 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B1.
 
 ### ACC-102 — Weather verification resolver
 
-Status: `WAITING`
+Status: `TODO`
 
 Dependencies: ACC-101
 

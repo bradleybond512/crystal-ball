@@ -50,7 +50,8 @@ const KNOWN_COUNTRIES = new Set([
 // Known ticker allowlist so we don't match every uppercase token as a ticker.
 const KNOWN_TICKERS = new Set([
   'SPY', 'QQQ', 'DIA', 'VIX', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA',
-  'BTC-USD', 'ETH-USD', 'XAU-USD', 'CL=F', 'GC=F', 'BTC', 'ETH', 'DXY',
+  'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'XAU-USD', 'CL=F', 'GC=F',
+  'BTC', 'ETH', 'SOL', 'XRP', 'DXY',
 ]);
 
 // Common false-positive tokens to skip when matching country/ticker shapes.

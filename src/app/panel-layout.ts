@@ -2286,6 +2286,41 @@ export class PanelLayoutManager implements AppModule {
  { priority: 'normal', runImmediately: true },
  );
  }).catch((error) => { console.error('[boot] provider bridge failed:', error); });
+ // Deterministic forecast outcomes use the retained fused-price timeline.
+ // The slower cadence keeps this off rendering and feed hot paths.
+ void Promise.all([
+ import('@/services/intelligence/outcome-resolvers'),
+ import('@/services/intelligence/forecast-calibration-adapter'),
+ import('@/services/market/spot-price-store'),
+ import('@/services/intelligence/observation-store'),
+ import('@/services/cognition/cognition-settings'),
+ import('@/services/diagnostics/recurring-loops'),
+ ]).then(([
+   { marketMoveResolver },
+   { dispatchOutcomeResolvers },
+   { getSpotPriceHistory },
+   { query },
+   { isCognitionEnabled },
+   { registerRecurringLoop },
+ ]) => {
+ registerRecurringLoop(
+   'outcome-resolvers',
+   () => {
+     if (!isCognitionEnabled('outcome-resolvers')) return;
+     const now = Date.now();
+     dispatchOutcomeResolvers({
+       now,
+       spotHistoryFor: (symbol, sinceExclusive, untilInclusive) =>
+         getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
+       queryObservations: (queryInput) => query(queryInput),
+     }, [marketMoveResolver]);
+   },
+   15 * 60_000,
+   { priority: 'low', runImmediately: false },
+ );
+ }).catch((error) => {
+ console.error('[boot] outcome resolver wiring failed:', error);
+ });
  // 60 s degradation alerting — compare consecutive system-health snapshots
  // and route transitions through the notification trace registry.
  void Promise.all([

@@ -298,7 +298,11 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 ### ACC-104 — Grade runtime algorithms from authoritative outcomes
 
-Status: `TODO`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-104-authoritative-grading`
 
 Dependencies: ACC-101 through ACC-103
 

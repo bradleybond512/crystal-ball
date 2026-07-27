@@ -33,6 +33,7 @@ test('grades pending records past the timeout and writes outcomes back', async (
   assert.equal(res.graded, 2);
   assert.equal(ledger.pending().length, 0);
   assert.equal(ledger.graded().length, 2);
+  assert.ok(ledger.graded().every((record) => record.outcomeOrigin === 'llm'));
 });
 
 test('does not grade records that have not aged past the timeout', async () => {
@@ -46,6 +47,39 @@ test('does not grade records that have not aged past the timeout', async () => {
   assert.equal(res.eligible, 0);
   assert.equal(res.graded, 0);
   assert.equal(ledger.pending().length, 2);
+});
+
+test('LLM fallback never grades records owned by an exact forecast outcome link', async () => {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => T0 });
+  ledger.recordEvaluation({
+    algorithmId: 'analyst-loop',
+    domain: 'forecast_calibration',
+    version: '2.0.0',
+    at: T0,
+    durationMs: 0,
+    score: 0.7,
+    forecastTarget: {
+      predictionId: 'prediction-1',
+      targetKey: 'target-1',
+      predictedAt: T0,
+      resolveBy: T0 + HOUR,
+    },
+  });
+  let calls = 0;
+
+  const result = await runOutcomeGrading({
+    ledger,
+    llmFn: async () => {
+      calls += 1;
+      return acceptingLlm('');
+    },
+    now: T0 + 49 * HOUR,
+    timeoutMs: 48 * HOUR,
+  });
+
+  assert.deepEqual(result, { eligible: 0, graded: 0 });
+  assert.equal(calls, 0);
+  assert.equal(ledger.pending().length, 1);
 });
 
 test('leaves records pending when the LLM is unavailable (no false inconclusive)', async () => {
@@ -95,5 +129,32 @@ test('bounds each LLM grading pass so a retained cohort cannot exhaust the provi
 
   assert.deepEqual(result, { eligible: 2, graded: 2 });
   assert.equal(calls, 2);
+  assert.equal(ledger.pending().length, 3);
+});
+
+test('default LLM fallback batch is capped at five records', async () => {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => T0 });
+  for (let index = 0; index < 8; index += 1) {
+    ledger.recordEvaluation({
+      algorithmId: 'test-algo',
+      domain: 'other',
+      at: T0 + index,
+      durationMs: 1,
+    });
+  }
+  let calls = 0;
+
+  const result = await runOutcomeGrading({
+    ledger,
+    llmFn: async () => {
+      calls += 1;
+      return acceptingLlm('');
+    },
+    now: T0 + 49 * HOUR,
+    timeoutMs: 48 * HOUR,
+  });
+
+  assert.deepEqual(result, { eligible: 5, graded: 5 });
+  assert.equal(calls, 5);
   assert.equal(ledger.pending().length, 3);
 });

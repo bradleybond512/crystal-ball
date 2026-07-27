@@ -360,7 +360,7 @@ export function recordSuperforecastPrediction(
       resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
       criteria: resolutionCriteriaForHypothesis(h, now),
-      algorithmVersion: 'superforecast-v2',
+      algorithmVersion: '2.0.0',
     });
   } catch {
     // Never let calibration logging crash the pipeline.

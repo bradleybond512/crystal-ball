@@ -99,6 +99,58 @@ test('recordOutcome: throws when the record id is unknown', () => {
   assert.throws(() => ledger.recordOutcome('missing', 'hit', 'x'), /not found/);
 });
 
+test('recordOutcome: forecast-linked records require an exact target, horizon, and version match', () => {
+  const { ledger } = makeLedger();
+  const forecastTarget = {
+    predictionId: 'prediction-1',
+    targetKey: 'target-1',
+    predictedAt: NOW,
+    resolveBy: NOW + 60_000,
+  };
+  const record = ledger.recordEvaluation({
+    ...baseEval({ version: '2.0.0' }),
+    forecastTarget,
+  });
+
+  assert.throws(
+    () => ledger.recordOutcome(record.id, 'hit', 'missing attribution'),
+    /exact forecast attribution/,
+  );
+  assert.throws(
+    () => ledger.recordOutcome(record.id, 'hit', 'wrong target', NOW + 1, {
+      origin: 'direct',
+      algorithmVersion: '2.0.0',
+      forecastTarget: { ...forecastTarget, targetKey: 'different-target' },
+    }),
+    /does not match/,
+  );
+  assert.throws(
+    () => ledger.recordOutcome(record.id, 'hit', 'wrong horizon', NOW + 1, {
+      origin: 'direct',
+      algorithmVersion: '2.0.0',
+      forecastTarget: { ...forecastTarget, resolveBy: forecastTarget.resolveBy + 1 },
+    }),
+    /does not match/,
+  );
+  assert.throws(
+    () => ledger.recordOutcome(record.id, 'hit', 'wrong version', NOW + 1, {
+      origin: 'direct',
+      algorithmVersion: '2.0.1',
+      forecastTarget,
+    }),
+    /does not match/,
+  );
+
+  const updated = ledger.recordOutcome(record.id, 'hit', 'exact match', NOW + 1, {
+    origin: 'direct',
+    algorithmVersion: '2.0.0',
+    forecastTarget,
+    reference: 'resolver-v1',
+  });
+  assert.equal(updated.outcomeOrigin, 'direct');
+  assert.equal(updated.outcomeReference, 'resolver-v1');
+});
+
 // ── Filters ────────────────────────────────────────────────────────────
 
 test('byAlgorithm / byDomain / graded / pending', () => {

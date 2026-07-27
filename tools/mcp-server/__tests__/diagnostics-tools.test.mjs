@@ -78,7 +78,12 @@ test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated 
 test('diagnostics tools surface degraded weather ground-truth coverage', async () => {
   const algorithmDiagnostics = {
     health: { status: 'healthy', algorithms: [] },
-    ledger: { total: 2, graded: 2, pending: 0 },
+    ledger: {
+      total: 2,
+      graded: 2,
+      pending: 0,
+      outcomeOrigins: { direct: 1, proxy: 0, manual: 1, llm: 0 },
+    },
     runtime: [],
     forecastCalibration: {
       summary: {
@@ -115,4 +120,8 @@ test('diagnostics tools surface degraded weather ground-truth coverage', async (
     (finding) => finding.id === 'forecast.weather_reports_stale',
   ));
   assert.match(algorithms.summary, /weather reports stale/);
+  assert.match(
+    algorithms.summary,
+    /runtime labels direct:1 proxy:0 manual:1 llm:0/,
+  );
 });

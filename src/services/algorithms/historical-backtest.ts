@@ -110,7 +110,19 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * should-not-fire). The recorded label is the stable, threshold-independent
  * truth signal. big-event-detector records `isBigEvent ? 'big-event' : 'quiet'`.
  */
-const BACKTESTABLE_KNOBS: Record<string, { compare: 'score_ge' | 'score_lt'; recordedScoreScale: number; firedLabel: string }> = {
+interface BacktestableKnob {
+  compare: 'score_ge' | 'score_lt';
+  recordedScoreScale: number;
+  firedLabel: string;
+}
+
+interface LabelledBacktestRecord {
+  score: number;
+  shouldFire: boolean;
+  weight: number;
+}
+
+const BACKTESTABLE_KNOBS: Record<string, BacktestableKnob> = {
   'big-event-detector:threshold': { compare: 'score_ge', recordedScoreScale: 100, firedLabel: 'big-event' },
 };
 
@@ -125,6 +137,62 @@ export function isBacktestable(algorithmId: string, parameterId: string): boolea
 
 function fired(score: number, threshold: number, compare: 'score_ge' | 'score_lt'): boolean {
   return compare === 'score_ge' ? score >= threshold : score < threshold;
+}
+
+function toLabelledRecord(
+  record: EvaluationRecord,
+  change: BacktestChange,
+  knob: BacktestableKnob,
+  windowStart: number,
+  now: number,
+): LabelledBacktestRecord | null {
+  if (record.algorithmId !== change.algorithmId) return null;
+  if (record.at < windowStart || record.at > now) return null;
+  if (typeof record.score !== 'number' || !Number.isFinite(record.score)) return null;
+  if (record.outcome === undefined || record.outcome === 'inconclusive') return null;
+  if (record.label === undefined) return null;
+
+  const score = record.score * knob.recordedScoreScale;
+  const firedActual = record.label === knob.firedLabel;
+  if (record.outcome === 'miss') {
+    return { score, shouldFire: !firedActual, weight: 1 };
+  }
+  return {
+    score,
+    shouldFire: firedActual,
+    weight: record.outcome === 'partial' ? 0.5 : 1,
+  };
+}
+
+function buildLabelledRecords(
+  records: readonly EvaluationRecord[],
+  change: BacktestChange,
+  knob: BacktestableKnob,
+  windowStart: number,
+  now: number,
+): LabelledBacktestRecord[] {
+  const labelled: LabelledBacktestRecord[] = [];
+  for (const record of records) {
+    const item = toLabelledRecord(record, change, knob, windowStart, now);
+    if (item) labelled.push(item);
+  }
+  return labelled;
+}
+
+function accuracyAt(
+  records: readonly LabelledBacktestRecord[],
+  threshold: number,
+  compare: BacktestableKnob['compare'],
+): number {
+  let correct = 0;
+  let total = 0;
+  for (const record of records) {
+    total += record.weight;
+    if (fired(record.score, threshold, compare) === record.shouldFire) {
+      correct += record.weight;
+    }
+  }
+  return total === 0 ? Number.NaN : correct / total;
 }
 
 /**
@@ -152,45 +220,13 @@ export function backtestChange(
   const windowDays = options.windowDays ?? DEFAULT_WINDOW_DAYS;
   const windowStart = options.now - windowDays * MS_PER_DAY;
 
-  // Build the labelled set: in-window, decisive outcome, finite score.
-  const labelled: { score: number; shouldFire: boolean; weight: number }[] = [];
-  for (const r of records) {
-    if (r.algorithmId !== change.algorithmId) continue;
-    if (r.at < windowStart || r.at > options.now) continue;
-    if (typeof r.score !== 'number' || !Number.isFinite(r.score)) continue;
-    if (r.outcome === undefined || r.outcome === 'inconclusive') continue;
-    // Ground truth is anchored to the recorded decision label (see `firedLabel`).
-    // Without a label we cannot establish what the algorithm actually did, so
-    // the record can't be honestly replayed — exclude it rather than guess.
-    if (r.label === undefined) continue;
-
-    // Bring the recorded score onto the knob's own scale before comparing to
-    // the threshold (the ledger may record a normalized score — see the knob's
-    // `recordedScoreScale`).
-    const comparableScore = r.score * knob.recordedScoreScale;
-    // The decision the algorithm ACTUALLY made at record time, read from the
-    // recorded label — not reconstructed from today's threshold (which may have
-    // moved since this record was graded).
-    const firedActual = r.label === knob.firedLabel;
-    // Derive reality from that actual decision and the observed outcome:
-    //  - a 'hit' means the decision matched reality, so reality == firedActual;
-    //  - a 'miss' means the decision was wrong, so reality == !firedActual;
-    //  - a 'partial' leans correct but counts half.
-    let shouldFire: boolean;
-    let weight: number;
-    if (r.outcome === 'hit') {
-      shouldFire = firedActual;
-      weight = 1;
-    } else if (r.outcome === 'miss') {
-      shouldFire = !firedActual;
-      weight = 1;
-    } else {
-      // partial
-      shouldFire = firedActual;
-      weight = 0.5;
-    }
-    labelled.push({ score: comparableScore, shouldFire, weight });
-  }
+  const labelled = buildLabelledRecords(
+    records,
+    change,
+    knob,
+    windowStart,
+    options.now,
+  );
 
   if (labelled.length < MIN_DECISIVE_SAMPLES) {
     return failClosed(
@@ -199,18 +235,8 @@ export function backtestChange(
     );
   }
 
-  const accuracyAt = (threshold: number): number => {
-    let correct = 0;
-    let total = 0;
-    for (const ex of labelled) {
-      total += ex.weight;
-      if (fired(ex.score, threshold, knob.compare) === ex.shouldFire) correct += ex.weight;
-    }
-    return total === 0 ? Number.NaN : correct / total;
-  };
-
-  const currentScore = accuracyAt(change.priorValue);
-  const backtestScore = accuracyAt(change.nextValue);
+  const currentScore = accuracyAt(labelled, change.priorValue, knob.compare);
+  const backtestScore = accuracyAt(labelled, change.nextValue, knob.compare);
   const delta = backtestScore - currentScore;
   const regresses = delta < -REGRESSION_EPSILON;
 

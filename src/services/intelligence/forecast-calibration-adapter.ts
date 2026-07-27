@@ -46,6 +46,11 @@ import {
   type OutcomeResolver,
   type ResolverContext,
 } from './outcome-resolvers';
+import {
+  ensureForecastEvaluation,
+  gradeForecastOutcome,
+  syncForecastEvaluations,
+} from '@/services/algorithms/forecast-outcome-grading';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -87,13 +92,17 @@ export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
   persist(store);
+  ensureForecastEvaluation(p);
 }
 
 /** Record a snapshot batch and persist once. */
 export function recordPredictions(predictions: readonly PredictionRecord[]): void {
   if (predictions.length === 0) return;
   const store = getCalibrationStore();
-  for (const prediction of predictions) store.record(prediction);
+  for (const prediction of predictions) {
+    store.record(prediction);
+    ensureForecastEvaluation(prediction);
+  }
   persist(store);
 }
 
@@ -106,7 +115,11 @@ export function resolvePrediction(
 ): boolean {
   const store = getCalibrationStore();
   const ok = store.resolve(id, outcome, when, metadata);
-  if (ok) persist(store);
+  if (ok) {
+    persist(store);
+    const resolved = store.get(id);
+    if (resolved) gradeForecastOutcome(resolved);
+  }
   return ok;
 }
 
@@ -127,6 +140,7 @@ export function dispatchOutcomeResolvers(
   const store = getCalibrationStore();
   const resolved = runOutcomeResolvers(store, context, resolvers);
   persist(store);
+  syncForecastEvaluations(store.all());
   return resolved;
 }
 

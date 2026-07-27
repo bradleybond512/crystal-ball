@@ -141,7 +141,7 @@ function alertRecord(
       reportTypes: [...reportTypes],
       sentAt,
     },
-    algorithmVersion: 'warning-verification-v1',
+    algorithmVersion: '1.0.0',
   };
 }
 

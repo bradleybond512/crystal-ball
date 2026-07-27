@@ -22,10 +22,15 @@ import {
   getCalibrationStore,
   recordPrediction,
   recordPredictions,
+  resolvePrediction,
   getDomainCalibrationMult,
   _resetCalibrationForTests,
 } from '../forecast-calibration-adapter.ts';
 import { marketMoveResolver } from '../outcome-resolvers.ts';
+import {
+  getAlgorithmEvaluationLedger,
+  resetAlgorithmsState,
+} from '../../algorithms/algorithms-state.ts';
 
 function makeRecord(id: string, probability: number, outcome: boolean, domain = 'other'): PredictionRecord {
   return {
@@ -98,6 +103,7 @@ beforeEach(() => {
   mem.clear();
   storageWrites = 0;
   _resetCalibrationForTests();
+  resetAlgorithmsState();
 });
 
 test('recordPrediction persists and reloads', () => {
@@ -126,6 +132,37 @@ test('recordPredictions persists a batch with one storage write', () => {
 
   assert.equal(storageWrites, 1);
   assert.equal(getCalibrationStore().all().length, 2);
+});
+
+test('record and resolve bridge an exact authoritative algorithm evaluation', () => {
+  recordPrediction({
+    id: 'linked-1',
+    sourceId: 'analyst-loop',
+    targetKey: 'hypothesis:linked-1',
+    domain: 'conflict',
+    claim: 'linked fixture',
+    probability: 0.8,
+    predictedAt: 1_000,
+    resolveBy: 2_000,
+    status: 'pending',
+    algorithmVersion: '2.0.0',
+  });
+
+  const ledger = getAlgorithmEvaluationLedger();
+  assert.equal(ledger.pending().length, 1);
+  assert.equal(resolvePrediction('linked-1', true, 1_500, {
+    note: 'direct:test',
+    provenance: {
+      resolverId: 'test-resolver-v1',
+      kind: 'direct',
+      evidence: [],
+    },
+  }), true);
+  const graded = ledger.graded()[0];
+  assert.equal(graded?.outcome, 'hit');
+  assert.equal(graded?.outcomeOrigin, 'direct');
+  assert.equal(graded?.version, '2.0.0');
+  assert.equal(graded?.forecastTarget?.targetKey, 'hypothesis:linked-1');
 });
 
 test('outcome resolver dispatch persists direct store mutations before reload', () => {

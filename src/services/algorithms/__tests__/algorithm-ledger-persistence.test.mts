@@ -80,6 +80,9 @@ function record(overrides: Partial<EvaluationRecord> & { id: string; at: number 
     outcomeReason: overrides.outcomeReason,
     inputHash: overrides.inputHash,
     version: overrides.version,
+    forecastTarget: overrides.forecastTarget,
+    outcomeOrigin: overrides.outcomeOrigin,
+    outcomeReference: overrides.outcomeReference,
   };
 }
 
@@ -134,6 +137,69 @@ test('hydrateAlgorithmLedger: round-trips records through serialize/load', async
   const loaded = ledger.get(r.id);
   assert.equal(loaded?.outcome, 'hit');
   assert.equal(loaded?.outcomeReason, 'matched');
+});
+
+test('hydrateAlgorithmLedger: preserves exact forecast linkage and label origin', async () => {
+  const source = createAlgorithmEvaluationLedger();
+  const target = {
+    predictionId: 'prediction-1',
+    targetKey: 'target-1',
+    predictedAt: NOW,
+    resolveBy: NOW + 60_000,
+  };
+  const row = source.recordEvaluation({
+    algorithmId: 'analyst-loop',
+    domain: 'forecast_calibration',
+    version: '2.0.0',
+    at: NOW,
+    durationMs: 0,
+    forecastTarget: target,
+  });
+  source.recordOutcome(row.id, 'hit', 'matched', NOW + 30_000, {
+    origin: 'direct',
+    algorithmVersion: '2.0.0',
+    forecastTarget: target,
+    reference: 'market-move-v1',
+  });
+
+  const ledger = createAlgorithmEvaluationLedger();
+  const adapter = makeAdapter();
+  adapter.setStore(source.toJson());
+  const status = await hydrateAlgorithmLedger({
+    ledger,
+    read: adapter.read,
+    emitDiagnostic: adapter.emitDiagnostic,
+    now: () => NOW,
+  });
+
+  assert.equal(status.lastLoadStatus, 'ok');
+  assert.deepEqual(ledger.get(row.id)?.forecastTarget, target);
+  assert.equal(ledger.get(row.id)?.outcomeOrigin, 'direct');
+  assert.equal(ledger.get(row.id)?.outcomeReference, 'market-move-v1');
+});
+
+test('validateRecords rejects malformed or unattributed forecast links', () => {
+  const base = record({
+    id: 'linked',
+    at: NOW,
+    version: '2.0.0',
+    forecastTarget: {
+      predictionId: 'prediction-1',
+      targetKey: 'target-1',
+      predictedAt: NOW,
+      resolveBy: NOW + 60_000,
+    },
+  });
+  assert.equal(validateRecords([base]).ok, true);
+  assert.equal(validateRecords([{
+    ...base,
+    forecastTarget: { ...base.forecastTarget!, resolveBy: NOW - 1 },
+  }]).ok, false);
+  assert.equal(validateRecords([{
+    ...base,
+    outcome: 'hit',
+    outcomeAt: NOW + 1,
+  }]).ok, false);
 });
 
 test('hydrateAlgorithmLedger: corrupt payload fails closed and emits a diagnostic', async () => {

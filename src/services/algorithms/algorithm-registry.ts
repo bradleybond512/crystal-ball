@@ -136,6 +136,21 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     criticality: 'high',
   },
   {
+    id: 'hierarchical-base-rate',
+    label: 'Hierarchical base-rate forecast',
+    version: '1.0.0',
+    domain: 'intelligence',
+    healthDomain: 'forecast_calibration',
+    ownerFeature: 'analyst',
+    dependencies: {
+      sources: [],
+      providers: [],
+      services: ['forecast-calibration'],
+    },
+    outputs: ['forecast'],
+    criticality: 'medium',
+  },
+  {
     id: 'big-event-detector',
     label: 'Big Event Detector',
     version: '1.0.0',

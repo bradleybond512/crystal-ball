@@ -22,10 +22,13 @@ if (jsonOnly) {
   console.log('\nCrystal Ball — Forecast Replay Benchmark\n');
   console.log(`  Corpus                  ${report.corpus.id} (${report.corpus.recordCount} records)`);
   console.log(`  Walk-forward folds      ${report.folds.length}`);
+  console.log(`  Baseline model          ${report.config.baselineModel}`);
   console.log(`  Scored / evaluation     ${report.overall.scored} / ${report.overall.evaluationRecords}`);
   console.log(`  Resolution coverage     ${percent(report.overall.resolutionCoverage)}`);
   console.log(`  Brier score             ${metric(report.overall.brier)}`);
   console.log(`  Brier skill             ${metric(report.overall.brierSkill)}`);
+  console.log(`  Baseline Brier          ${metric(report.overall.baselineBrier)}`);
+  console.log(`  Global baseline Brier   ${metric(report.overall.globalBaselineBrier)}`);
   console.log(`  Log loss                ${metric(report.overall.logLoss)}`);
   console.log(`  High-confidence misses  ${report.overall.highConfidenceMisses}\n`);
   printTopLoss('Source', report.groups.bySource);

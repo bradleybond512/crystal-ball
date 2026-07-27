@@ -51,6 +51,7 @@ import {
   gradeForecastOutcome,
   syncForecastEvaluations,
 } from '@/services/algorithms/forecast-outcome-grading';
+import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -91,8 +92,12 @@ export function getCalibrationStore(): ForecastCalibrationStore {
 export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
+  const baseline = buildHierarchicalBaseRatePrediction(p, store.all());
+  const recordBaseline = baseline && !store.get(baseline.id);
+  if (recordBaseline) store.record(baseline);
   persist(store);
   ensureForecastEvaluation(p);
+  if (recordBaseline) ensureForecastEvaluation(baseline);
 }
 
 /** Record a snapshot batch and persist once. */
@@ -102,6 +107,14 @@ export function recordPredictions(predictions: readonly PredictionRecord[]): voi
   for (const prediction of predictions) {
     store.record(prediction);
     ensureForecastEvaluation(prediction);
+    const baseline = buildHierarchicalBaseRatePrediction(
+      prediction,
+      store.all(),
+    );
+    if (baseline && !store.get(baseline.id)) {
+      store.record(baseline);
+      ensureForecastEvaluation(baseline);
+    }
   }
   persist(store);
 }

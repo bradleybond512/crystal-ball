@@ -39,6 +39,21 @@ const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
 };
 
 /**
+ * Coerce an alert timestamp to an ISO string. The type says `Date`, but
+ * the NWS circuit breaker persists its cache with `persistCache: true`,
+ * which round-trips the payload through JSON — so cache-hydrated alerts
+ * arrive with `onset`/`expires` as ISO strings, not Date objects.
+ * Calling `.toISOString()` on those throws a TypeError that (inside the
+ * data-loader's per-batch try/catch) would drop EVERY severe alert that
+ * cycle. The matcher only needs a `Date.parse`-able string, so pass a
+ * string straight through and stringify a real Date.
+ */
+function toIsoString(value: Date | string | null | undefined): string {
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === 'string' ? value : '';
+}
+
+/**
  * Map a single polygon-match outcome to a 0-100 personal-exposure
  * score. Every genuine match (inside or near a saved place) clears the
  * Big Event Detector's default `exposureFloor` (70) so an official
@@ -68,8 +83,8 @@ export function weatherAlertToNwsMinimal(alert: WeatherAlert): NwsAlertMinimal {
     event: alert.event,
     polygon: ring ? { rings: [ring] } : undefined,
     ugcZones: alert.ugcZones,
-    sent: alert.onset.toISOString(),
-    expires: alert.expires.toISOString(),
+    sent: toIsoString(alert.onset),
+    expires: toIsoString(alert.expires),
     severity: SEVERITY_LOWER[alert.severity],
     headline: alert.headline,
     messageType: 'alert',

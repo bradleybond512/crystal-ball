@@ -1761,7 +1761,18 @@ export class DataLoaderManager implements AppModule {
  // high_confidence_high_impact trigger (< threshold 40) and was silently
  // dropped: the "all clear during a severe storm" bug. Adapted to the
  // matcher's SavedPlace shape (same mapping the storm-decision path uses).
- const weatherPlaces = getSavedPlaces().map((p) => ({ id: p.id, label: p.name, lat: p.lat, lon: p.lon }));
+ // Carry the user's configured radius through: the matcher uses it as the
+ // near-polygon sensitivity buffer and only near-matches non-high-urgency
+ // hazards when a place opts in via radiusKm. Dropping it shrank the user's
+ // coverage to the 10 km hazard default — the opposite of what someone
+ // asking "why wasn't I warned?" wants.
+ const weatherPlaces = getSavedPlaces().map((p) => ({
+ id: p.id,
+ label: p.name,
+ lat: p.lat,
+ lon: p.lon,
+ radiusKm: p.radiusKm,
+ }));
  for (const alert of severeAlerts) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
  // With no saved place, exposure is genuinely unknown — keep the

@@ -75,14 +75,42 @@ export class ReasoningDebugOverlay {
   private refreshTimer: number | null = null;
   private _unsubDebug: (() => void) | null = null;
   private _onKeydown: ((e: KeyboardEvent) => void) | null = null;
+  private readonly _clickAbort = new AbortController();
 
   constructor() {
     this.root = document.createElement('div');
     this.root.className = 'reasoning-debug-overlay';
     this.root.hidden = true;
     this.root.addEventListener('click', (e) => {
-      if (e.target === this.root) this.hide();
-    });
+      if (e.target === this.root) { this.hide(); return; }
+      // render() calls replaceChildren(this.root, ...) on every debug write
+      // (Events tab) and every 2s (other tabs), so buttons bound per-render
+      // would be torn down between pointerdown and pointerup and the click
+      // swallowed. Route by data attr on the stable root, which is never
+      // replaced, instead of binding each rebuilt button.
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-rdo-action]');
+      if (!btn || !this.root.contains(btn)) return;
+      switch (btn.dataset.rdoAction) {
+        case 'close': { this.hide(); break;
+        }
+        case 'tab': { this.tab = (btn.dataset.rdoTab as Tab) ?? this.tab; this.render(); break;
+        }
+        case 'clear': { clearDebug(); this.render(); break;
+        }
+        case 'copy': { void navigator.clipboard?.writeText(JSON.stringify(dumpDebug(), null, 2)); break;
+        }
+        case 'verbosity': {
+          const order: DebugLevel[] = ['info', 'warn', 'error'];
+          const cur = getVerbosity().llm;
+          const next = order[(order.indexOf(cur) + 1) % order.length] ?? 'info';
+          setVerbosity('llm', next);
+          this.render();
+          break;
+        }
+        case 'reset': { resetMetrics(); this.render(); break;
+        }
+      }
+    }, { signal: this._clickAbort.signal });
   }
 
   mount(parent: HTMLElement): void {
@@ -125,6 +153,7 @@ export class ReasoningDebugOverlay {
 
   destroy(): void {
     this.hide();
+    this._clickAbort.abort();
     if (this._onKeydown) {
       document.removeEventListener('keydown', this._onKeydown);
       this._onKeydown = null;
@@ -159,7 +188,7 @@ export class ReasoningDebugOverlay {
     close.className = 'reasoning-debug-close';
     close.textContent = 'x';
     close.title = 'Close (Esc)';
-    close.addEventListener('click', () => this.hide());
+    close.dataset.rdoAction = 'close';
     header.append(title, errTag, close);
     return header;
   }
@@ -171,7 +200,8 @@ export class ReasoningDebugOverlay {
       const b = document.createElement('button');
       b.className = 'reasoning-debug-tab' + (this.tab === t ? ' reasoning-debug-tab-active' : '');
       b.textContent = t;
-      b.addEventListener('click', () => { this.tab = t; this.render(); });
+      b.dataset.rdoAction = 'tab';
+      b.dataset.rdoTab = t;
       tabs.append(b);
     }
     return tabs;
@@ -249,13 +279,11 @@ export class ReasoningDebugOverlay {
     // Clear
     const clear = document.createElement('button');
     clear.textContent = 'clear';
-    clear.addEventListener('click', () => { clearDebug(); this.render(); });
+    clear.dataset.rdoAction = 'clear';
     // Copy
     const copyBtn = document.createElement('button');
     copyBtn.textContent = 'copy JSON';
-    copyBtn.addEventListener('click', () => {
-      void navigator.clipboard?.writeText(JSON.stringify(dumpDebug(), null, 2));
-    });
+    copyBtn.dataset.rdoAction = 'copy';
     // Verbosity for LLM
     const verbWrap = document.createElement('span');
     verbWrap.className = 'reasoning-debug-verb';
@@ -263,13 +291,10 @@ export class ReasoningDebugOverlay {
     const verbBtn = document.createElement('button');
     const currentLlm = getVerbosity().llm;
     verbBtn.textContent = currentLlm;
-    verbBtn.addEventListener('click', () => {
-      const order: DebugLevel[] = ['info', 'warn', 'error'];
-      const cur = getVerbosity().llm;
-      const next = order[(order.indexOf(cur) + 1) % order.length] ?? 'info';
-      setVerbosity('llm', next);
-      this.render();
-    });
+    // Delegated on the stable root (see constructor) — buildEventControls() is
+    // rebuilt on every events-tab render, so a per-render click listener here
+    // would be swallowed by a background re-render mid-gesture.
+    verbBtn.dataset.rdoAction = 'verbosity';
     verbWrap.append(verbBtn);
 
     row.append(levelLabel, catLabel, clear, copyBtn, verbWrap);
@@ -312,7 +337,7 @@ export class ReasoningDebugOverlay {
     wrap.className = 'reasoning-debug-metrics-wrap';
     const reset = document.createElement('button');
     reset.textContent = 'reset metrics';
-    reset.addEventListener('click', () => { resetMetrics(); this.render(); });
+    reset.dataset.rdoAction = 'reset';
     wrap.append(reset);
 
     const snapshot = getMetricsSnapshot();

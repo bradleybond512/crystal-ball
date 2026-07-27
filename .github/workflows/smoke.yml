@@ -30,6 +30,13 @@ jobs:
       # 2026-06). Single-* globs (no globstar) so it's portable across the
       # CI shell + Node version.
       - run: npm run test:renderer
+      # Swallowed-click ("dead click") delegation regression guards for the
+      # Panel-subclass / import.meta.glob components (GlobeHUD, NewsPanel,
+      # CIIPanel, SituationPanel). They load the register-hook stub loader, so
+      # test:renderer's plain-tsx src/** glob can't run them; the three
+      # standalone-overlay guards (TodayView / ReasoningDebugOverlay /
+      # OfflineStalenessBanner) import clean and ARE covered by test:renderer.
+      - run: npm run test:delegation
       # Cloud API routes and the complete localhost-sidecar contract are
       # separate Node suites; renderer globs cannot discover either tree.
       - run: npm run test:api

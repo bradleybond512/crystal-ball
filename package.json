@@ -142,6 +142,7 @@
     "test:panels:fixtures": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/panel-fixtures.test.mts",
     "test:mode-manager": "tsx --test tests/utils/mode-manager.test.mts",
     "test:component-lib": "tsx --test tests/components/lib/panel-components.test.mts",
+    "test:delegation": "tsx --import ./tests/panels/register-hook.mjs --test --test-force-exit --test-timeout=20000 tests/components/globe-hud-delegation.test.mts tests/components/news-panel-delegation.test.mts tests/components/cii-panel-delegation.test.mts tests/components/situation-panel-delegation.test.mts",
     "test:space-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/space-superpower-panel.test.mts",
     "test:aviation-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/aviation-superpower-panel.test.mts",
     "test:energy-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/energy-superpower-panel.test.mts",

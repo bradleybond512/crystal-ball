@@ -472,7 +472,11 @@ overflow.
 
 ### ACC-203 — Diagnostics and MCP evaluation export
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-203-evaluation-diagnostics`
 
 Dependencies: ACC-201
 

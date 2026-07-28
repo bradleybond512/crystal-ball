@@ -317,6 +317,23 @@ describe('superforecast: deterministic-only ladder', () => {
   });
 });
 
+describe('superforecast calibration logging', () => {
+  it('shares structured event criteria with the analyst forecast target', () => {
+    _resetCalibrationForTests();
+    const h = makeHypothesis({
+      id: 'h-conflict-criteria',
+      domains: ['conflict'],
+      region: 'Ukraine',
+      entitySlugs: ['UKR'],
+      signalTypes: ['hotspot_escalation'],
+    });
+
+    const id = recordSuperforecastPrediction(h, 0.72, 5_000);
+    const record = getCalibrationStore().get(id);
+    assert.equal(record?.criteria?.kind, 'event_occurrence');
+  });
+});
+
 // ── probability-aggregation integration fixture ─────────────────────────────
 
 describe('aggregate integration: full pipeline math', () => {

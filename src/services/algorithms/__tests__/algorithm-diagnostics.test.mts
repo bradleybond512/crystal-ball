@@ -4,8 +4,11 @@ import {
   buildAlgorithmDiagnosticsSnapshot,
   type BuildAlgorithmDiagnosticsInput,
 } from '../algorithm-diagnostics.ts';
+import type { PredictionRecord } from '../../intelligence/forecast-calibration.ts';
 
 const NOW = 1_800_000_000_000;
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
 
 function baseInput(): BuildAlgorithmDiagnosticsInput {
   return {
@@ -32,6 +35,7 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         outcome: 'hit',
         outcomeAt: NOW - 1_000,
         outcomeReason: 'confirmed',
+        outcomeOrigin: 'direct',
       },
       {
         id: 'eval-2',
@@ -43,6 +47,7 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         outcome: 'miss',
         outcomeAt: NOW,
         outcomeReason: 'rejected',
+        outcomeOrigin: 'llm',
       },
     ],
     forecastPredictions: [
@@ -55,7 +60,7 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
         predictedAt: NOW - 10_000,
         resolveBy: NOW - 5_000,
         status: 'resolved_true',
-        resolvedAt: NOW - 4_000,
+        resolvedAt: NOW - 6_000,
         criteria: {
           kind: 'market_move',
           symbol: 'AAPL',
@@ -70,8 +75,9 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
           kind: 'direct',
           evidence: [{
             sourceIds: ['yahoo-finance', 'finnhub'],
-            observedAt: NOW - 4_000,
+            observedAt: NOW - 6_000,
             value: 104,
+            supportsOutcome: true,
           }],
         },
       },
@@ -158,6 +164,65 @@ function baseInput(): BuildAlgorithmDiagnosticsInput {
   };
 }
 
+function resolvedForecastsForEvaluation(): PredictionRecord[] {
+  return Array.from({ length: 100 }, (_, index) => {
+    const goodCohort = index % 2 === 0;
+    const outcome = index % 4 < 2;
+    const predictedAt = NOW - (100 - index) * DAY;
+    return {
+      id: `holdout-${index}`,
+      sourceId: goodCohort ? 'model-good' : 'model-bad',
+      domain: goodCohort ? 'weather' : 'cyber',
+      claim: index === 99 ? 'SECRET-CLAIM-DO-NOT-EXPORT' : `claim-${index}`,
+      probability: goodCohort
+        ? (outcome ? 0.9 : 0.1)
+        : (outcome ? 0.1 : 0.9),
+      predictedAt,
+      resolveBy: predictedAt + (goodCohort ? 2 * HOUR : 2 * DAY),
+      status: outcome ? 'resolved_true' : 'resolved_false',
+      resolvedAt: predictedAt + HOUR,
+      algorithmVersion: 'v1',
+      ...(index === 99
+        ? {
+            criteria: {
+              kind: 'warning_verification' as const,
+              polygon: {
+                rings: [[
+                  [-97.123456, 35.654321] as const,
+                  [-97.223456, 35.754321] as const,
+                  [-97.323456, 35.854321] as const,
+                ]],
+              },
+              reportTypes: ['tornado'],
+              sentAt: predictedAt,
+            },
+            resolutionNote: 'direct: SECRET-RESOLUTION-NOTE',
+            resolutionProvenance: {
+              resolverId: 'fixture-direct-v1',
+              kind: 'direct' as const,
+              evidence: [{
+                sourceIds: ['fixture-source'],
+                observedAt: predictedAt + HOUR,
+                reference: 'SECRET-EVIDENCE-REFERENCE',
+                supportsOutcome: true,
+              }],
+            },
+          }
+        : {
+            resolutionProvenance: {
+              resolverId: 'fixture-direct-v1',
+              kind: 'direct' as const,
+              evidence: [{
+                sourceIds: ['fixture-source'],
+                observedAt: predictedAt + HOUR,
+                supportsOutcome: true,
+              }],
+            },
+          }),
+    };
+  });
+}
+
 test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persistence', () => {
   const snapshot = buildAlgorithmDiagnosticsSnapshot(baseInput());
 
@@ -167,6 +232,12 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
     graded: 2,
     pending: 0,
     lastEvaluationAt: NOW - 1_000,
+    outcomeOrigins: {
+      direct: 1,
+      proxy: 0,
+      manual: 0,
+      llm: 1,
+    },
     persistence: baseInput().persistence,
   });
   assert.equal(snapshot.health.status, 'healthy');
@@ -189,13 +260,48 @@ test('buildAlgorithmDiagnosticsSnapshot joins health, runtime, tuning, and persi
     unattributedResolved: 0,
     resolverExpired: 1,
   });
+  assert.deepEqual(snapshot.forecastCalibration.resolutionQuality.summary, {
+    total: 3,
+    resolved: 1,
+    resolutionCoverage: 0.333,
+    origins: {
+      direct: 1,
+      proxy: 0,
+      manual: 0,
+    },
+    malformed: 0,
+    labelLeakage: 0,
+    duplicateOutcomes: 0,
+    lateResolutions: 0,
+    contradictoryEvidence: 0,
+    uncertainProxy: 0,
+  });
+  assert.deepEqual(
+    snapshot.forecastCalibration.resolutionQuality.byDomain.map((row) => ({
+      domain: row.domain,
+      coverage: row.resolutionCoverage,
+      origins: row.origins,
+    })),
+    [
+      {
+        domain: 'cyber',
+        coverage: 0,
+        origins: { direct: 0, proxy: 0, manual: 0 },
+      },
+      {
+        domain: 'conflict',
+        coverage: 1,
+        origins: { direct: 1, proxy: 0, manual: 0 },
+      },
+    ],
+  );
   assert.deepEqual(snapshot.forecastCalibration.byResolver, [{
     resolverId: 'market-move-v1',
     resolved: 1,
     resolvedTrue: 1,
     resolvedFalse: 0,
     expired: 1,
-    lastResolvedAt: NOW - 4_000,
+    lastResolvedAt: NOW - 6_000,
   }]);
   assert.deepEqual(
     snapshot.forecastCalibration.marketSpots,
@@ -239,6 +345,189 @@ test('buildAlgorithmDiagnosticsSnapshot bounds recent evaluations and omits raw 
   assert.equal('detail' in snapshot.recentEvaluations[0]!, false);
   assert.equal('notes' in snapshot.recentEvaluations[0]!, false);
   assert.equal('inputHash' in snapshot.recentEvaluations[0]!, false);
+});
+
+test('forecast evaluation diagnostics expose bounded leakage-safe holdout cohorts', () => {
+  const input = baseInput();
+  input.forecastPredictions = resolvedForecastsForEvaluation();
+
+  const diagnostics = buildAlgorithmDiagnosticsSnapshot(input)
+    .forecastCalibration.evaluation;
+
+  assert.deepEqual(diagnostics.split, {
+    strategy: 'chronological_60_40',
+    trainingRecords: 60,
+    evaluationRecords: 40,
+    evaluationWindowStart: NOW - 40 * DAY,
+  });
+  assert.equal(diagnostics.overall.brier.status, 'ok');
+  assert.equal(diagnostics.overall.brier.sampleSize, 40);
+  assert.equal(diagnostics.worstCohorts.length, 2);
+  assert.equal(diagnostics.worstCohorts[0]?.sourceId, 'model-bad');
+  assert.equal(diagnostics.worstCohorts[0]?.domain, 'cyber');
+  assert.equal(diagnostics.worstCohorts[0]?.horizon, '1d-7d');
+  assert.deepEqual(diagnostics.worstCohorts[0]?.brier, {
+    status: 'ok',
+    sampleSize: 20,
+    value: 0.81,
+  });
+  assert.deepEqual(diagnostics.resolutionBacklog, {
+    pending: 0,
+    overduePending: 0,
+    expired: 0,
+    oldestPendingAt: null,
+  });
+  assert.deepEqual(diagnostics.labelOrigins, {
+    direct: 100,
+    proxy: 0,
+    manual: 0,
+    unattributed: 0,
+  });
+  assert.equal(diagnostics.cohortLimit, 10);
+  assert.equal(diagnostics.cohortCount, 2);
+  assert.equal(diagnostics.omittedCohortCount, 0);
+  assert.deepEqual(diagnostics.lossAttribution, {
+    sampleSize: 40,
+    totalBrierLoss: 16.4,
+    highConfidenceMisses: 20,
+    groupLimit: 10,
+    bySource: [
+      {
+        key: 'model-bad',
+        sampleSize: 20,
+        totalBrierLoss: 16.2,
+        meanBrier: 0.81,
+        shareOfBrierLoss: 0.987805,
+        highConfidenceMisses: 20,
+      },
+      {
+        key: 'model-good',
+        sampleSize: 20,
+        totalBrierLoss: 0.2,
+        meanBrier: 0.01,
+        shareOfBrierLoss: 0.012195,
+        highConfidenceMisses: 0,
+      },
+    ],
+    byDomain: [
+      {
+        key: 'cyber',
+        sampleSize: 20,
+        totalBrierLoss: 16.2,
+        meanBrier: 0.81,
+        shareOfBrierLoss: 0.987805,
+        highConfidenceMisses: 20,
+      },
+      {
+        key: 'weather',
+        sampleSize: 20,
+        totalBrierLoss: 0.2,
+        meanBrier: 0.01,
+        shareOfBrierLoss: 0.012195,
+        highConfidenceMisses: 0,
+      },
+    ],
+    byHorizon: [
+      {
+        key: '1d-7d',
+        sampleSize: 20,
+        totalBrierLoss: 16.2,
+        meanBrier: 0.81,
+        shareOfBrierLoss: 0.987805,
+        highConfidenceMisses: 20,
+      },
+      {
+        key: '1h-6h',
+        sampleSize: 20,
+        totalBrierLoss: 0.2,
+        meanBrier: 0.01,
+        shareOfBrierLoss: 0.012195,
+        highConfidenceMisses: 0,
+      },
+    ],
+    byAlgorithmVersion: [{
+      key: 'v1',
+      sampleSize: 40,
+      totalBrierLoss: 16.4,
+      meanBrier: 0.41,
+      shareOfBrierLoss: 1,
+      highConfidenceMisses: 20,
+    }],
+  });
+
+  const serialized = JSON.stringify(diagnostics);
+  assert.doesNotMatch(
+    serialized,
+    /SECRET-CLAIM|SECRET-RESOLUTION|SECRET-EVIDENCE|-97\.123456|35\.654321/,
+  );
+  assert.doesNotMatch(
+    serialized,
+    /"(?:claim|criteria|evidence|targetKey|scoredRecords)"/,
+  );
+});
+
+test('forecast evaluation diagnostics cap low-evidence cohorts deterministically', () => {
+  const input = baseInput();
+  input.forecastPredictions = Array.from({ length: 40 }, (_, index) => ({
+    id: `bounded-${index}`,
+    sourceId: `source-${String(index).padStart(2, '0')}`,
+    domain: 'other',
+    claim: `bounded claim ${index}`,
+    probability: 0.5,
+    predictedAt: NOW - (40 - index) * HOUR,
+    resolveBy: NOW + HOUR,
+    status: 'resolved_false',
+    resolvedAt: NOW - (40 - index) * HOUR + 1,
+  }));
+
+  const diagnostics = buildAlgorithmDiagnosticsSnapshot(input)
+    .forecastCalibration.evaluation;
+
+  assert.equal(diagnostics.cohortCount, 16);
+  assert.equal(diagnostics.worstCohorts.length, 10);
+  assert.equal(diagnostics.omittedCohortCount, 6);
+  assert.deepEqual(
+    diagnostics.worstCohorts.map((cohort) => cohort.sourceId),
+    Array.from({ length: 10 }, (_, index) =>
+      `source-${String(index + 24).padStart(2, '0')}`),
+  );
+  assert.ok(diagnostics.worstCohorts.every(
+    (cohort) => cohort.brier.status === 'insufficient_evidence',
+  ));
+});
+
+test('diagnostics report label origins and linked state without exposing forecast identifiers', () => {
+  const input = baseInput();
+  input.records = [{
+    id: 'opaque-evaluation-id',
+    algorithmId: 'fast-algo',
+    domain: 'other',
+    version: '2.0.0',
+    at: NOW - 1_000,
+    durationMs: 4,
+    forecastTarget: {
+      predictionId: 'private-prediction-id',
+      targetKey: 'private-target-key',
+      predictedAt: NOW - 2_000,
+      resolveBy: NOW + 2_000,
+    },
+    outcome: 'hit',
+    outcomeAt: NOW,
+    outcomeReason: 'confirmed',
+    outcomeOrigin: 'proxy',
+  }];
+
+  const snapshot = buildAlgorithmDiagnosticsSnapshot(input);
+  assert.deepEqual(snapshot.ledger.outcomeOrigins, {
+    direct: 0,
+    proxy: 1,
+    manual: 0,
+    llm: 0,
+  });
+  assert.equal(snapshot.recentEvaluations[0]?.forecastLinked, true);
+  assert.equal(snapshot.recentEvaluations[0]?.version, '2.0.0');
+  assert.equal(snapshot.recentEvaluations[0]?.outcomeOrigin, 'proxy');
+  assert.doesNotMatch(JSON.stringify(snapshot), /private-prediction-id|private-target-key/);
 });
 
 test('runtime diagnostics isolate the active algorithm version from historical latency', () => {

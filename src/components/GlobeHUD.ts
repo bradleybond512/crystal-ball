@@ -123,6 +123,7 @@ export class GlobeHUD {
   private autoFollowSkipBtn: HTMLElement | null = null;
   private layerCountEls = new Map<string, HTMLElement>();
   private alertListEl: HTMLElement | null = null;
+  private readonly clickAbort = new AbortController();
   private tooltipEl: HTMLElement | null = null;
   private conflictsEl: HTMLElement | null = null;
   private disastersEl: HTMLElement | null = null;
@@ -196,6 +197,23 @@ export class GlobeHUD {
  const alertSep = this.el('div', 'ge-hud-separator');
  card.append(alertSep);
  this.alertListEl = this.el('div', 'ge-hud-alert-list');
+ // Delegated click on the STABLE alert-list container. renderAlertList tears
+ // every row down and rebuilds it on GodsVisionView's 100ms updateState
+ // cadence; binding click per-row let a background re-render between
+ // pointerdown and pointerup orphan the node so the browser never synthesized
+ // the click (dead click). One listener on the container that is created once
+ // here survives every teardown; rows carry the target via data-* attributes
+ // re-read at click time.
+ this.alertListEl.addEventListener('click', (e) => {
+ const target = e.target as HTMLElement;
+ const row = target.closest<HTMLElement>('.ge-hud-alert-clickable');
+ if (!row || !this.alertListEl?.contains(row)) return;
+ const lat = Number(row.dataset.alertLat);
+ const lon = Number(row.dataset.alertLon);
+ if (Number.isFinite(lat) && Number.isFinite(lon)) {
+ this.onAlertClick?.(lat, lon, row.dataset.alertName ?? '');
+ }
+ }, { signal: this.clickAbort.signal });
  card.append(this.alertListEl);
  topLeft.append(card);
  this.element.append(topLeft);
@@ -692,11 +710,12 @@ export class GlobeHUD {
  if (hasPos) {
  row.classList.add('ge-hud-alert-clickable');
  row.title = 'Click to fly to this event';
- row.addEventListener('click', () => {
- if (alert.lat !== undefined && alert.lon !== undefined) {
- this.onAlertClick?.(alert.lat, alert.lon, alert.name);
- }
- });
+ // Carry the fly-to target on the node itself; the delegated listener on the
+ // stable alertListEl (see buildDOM) re-reads these at click time so a
+ // 100ms-cadence rebuild between pointerdown and pointerup can't swallow it.
+ row.dataset.alertLat = String(alert.lat);
+ row.dataset.alertLon = String(alert.lon);
+ row.dataset.alertName = alert.name;
  }
  const dot = document.createElement('span');
  dot.className = this.alertDotClass(alert.severity);
@@ -863,6 +882,7 @@ export class GlobeHUD {
   }
 
   destroy(): void {
+ this.clickAbort.abort();
  if (this.clockId != null) clearInterval(this.clockId);
  if (this.fusionTimer != null) clearInterval(this.fusionTimer);
  this.element.remove();

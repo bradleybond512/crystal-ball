@@ -105,7 +105,8 @@ test('toPredictionRecord builds a well-formed pending record', () => {
   assert.equal(rec.sourceId, 'mode-forecast:cyber');
   assert.equal(rec.predictedAt, NOW);
   assert.equal(rec.resolveBy, NOW + DAY_MS);
-  assert.equal(rec.algorithmVersion, 'mode-forecast-cyber-v1');
+  assert.equal(rec.algorithmVersion, '1.0.0');
+  assert.equal(rec.targetKey, 'mode:cyber');
   assert.equal(rec.probability, 0.8);
 });
 
@@ -138,6 +139,30 @@ test('resolveAdvisoryPrediction resolves the in-window record and returns its co
   assert.equal(rec.status, 'resolved_true');
 });
 
+test('resolveAdvisoryPrediction grades a paired baseline on the shared target key', () => {
+  recordAdvisoryPredictions([advisory({ domain: 'security' })], NOW);
+  recordPrediction({
+    id: 'base-rate:security',
+    sourceId: 'hierarchical-base-rate',
+    targetKey: 'mode:security',
+    domain: 'conflict',
+    claim: 'security posture escalation within 24h',
+    probability: 0.4,
+    predictedAt: NOW,
+    resolveBy: NOW + DAY_MS,
+    status: 'pending',
+    algorithmVersion: '1.0.0',
+  });
+
+  const n = resolveAdvisoryPrediction('security', true, NOW + HOUR_MS);
+
+  assert.equal(n, 2);
+  assert.equal(
+    getCalibrationStore().get('base-rate:security')?.status,
+    'resolved_true',
+  );
+});
+
 test('resolveAdvisoryPrediction returns 0 when nothing is pending', () => {
   assert.equal(resolveAdvisoryPrediction('disaster', true, NOW), 0);
 });
@@ -162,7 +187,10 @@ test('resolveAdvisoryFromObservation resolves true only at/above the escalation 
   assert.equal(resolveAdvisoryFromObservation('finance', MODE_ESCALATION_THRESHOLD - 0.01, NOW + HOUR_MS), 0);
   assert.equal(getCalibrationStore().all()[0]!.status, 'pending');
   assert.equal(resolveAdvisoryFromObservation('finance', MODE_ESCALATION_THRESHOLD, NOW + HOUR_MS), 1);
-  assert.equal(getCalibrationStore().all()[0]!.status, 'resolved_true');
+  const resolved = getCalibrationStore().all()[0]!;
+  assert.equal(resolved.status, 'resolved_true');
+  assert.equal(resolved.resolutionProvenance?.kind, 'proxy');
+  assert.equal(resolved.resolutionProvenance?.resolverId, 'mode-forecast-observation-v1');
 });
 
 test('a subthreshold observation never resolves a claim false mid-window', () => {
@@ -172,13 +200,41 @@ test('a subthreshold observation never resolves a claim false mid-window', () =>
   assert.equal(getCalibrationStore().all()[0]!.status, 'pending');
 });
 
-test('settleExpiredAdvisoryPredictions marks overdue pending records false, leaves in-window alone', () => {
+test('settleExpiredAdvisoryPredictions expires ambiguous overdue records, leaves in-window alone', () => {
   recordAdvisoryPredictions([advisory({ domain: 'finance' })], NOW);           // resolveBy NOW+24h
   recordAdvisoryPredictions([advisory({ domain: 'cyber' })], NOW + 20 * HOUR_MS); // resolveBy NOW+44h
   const n = settleExpiredAdvisoryPredictions(NOW + 30 * HOUR_MS);
   assert.equal(n, 1);
-  assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:finance')!.status, 'resolved_false');
+  const settled = getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:finance')!;
+  assert.equal(settled.status, 'expired');
+  assert.equal(settled.resolutionProvenance, undefined);
+  assert.match(settled.resolutionNote ?? '', /^unresolved:mode-forecast-window-v1/);
+  assert.equal(getCalibrationStore().brier().evaluated, 0);
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'mode-forecast:cyber')!.status, 'pending');
+});
+
+test('settleExpiredAdvisoryPredictions expires a paired baseline with its target', () => {
+  recordAdvisoryPredictions([advisory({ domain: 'finance' })], NOW);
+  recordPrediction({
+    id: 'base-rate:finance',
+    sourceId: 'hierarchical-base-rate',
+    targetKey: 'mode:finance',
+    domain: 'markets',
+    claim: 'finance posture escalation within 24h',
+    probability: 0.4,
+    predictedAt: NOW,
+    resolveBy: NOW + DAY_MS,
+    status: 'pending',
+    algorithmVersion: '1.0.0',
+  });
+
+  const n = settleExpiredAdvisoryPredictions(NOW + 2 * DAY_MS);
+
+  assert.equal(n, 2);
+  assert.equal(
+    getCalibrationStore().get('base-rate:finance')?.status,
+    'expired',
+  );
 });
 
 test('settleExpiredAdvisoryPredictions is scoped to mode-forecast records', () => {

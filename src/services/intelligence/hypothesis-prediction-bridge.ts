@@ -5,8 +5,9 @@
  * and later evaluated"). Keyed by feedback signature + a 6h window bucket
  * so successive 5-minute cycles don't spam duplicates.
  *
- * Resolution hook: hypothesis-accuracy calls resolveHypothesisPrediction
- * when it grades hit/miss after the 2-hour window.
+ * Legacy resolution hook: hypothesis-accuracy grades records without declared
+ * resolver criteria after the 2-hour window. Criteria-bearing records remain
+ * owned by their domain resolver.
  */
 
 import { signatureFor } from '@/services/hypothesis-feedback';
@@ -21,8 +22,17 @@ import {
   recordPrediction,
   resolvePrediction,
 } from './forecast-calibration-adapter';
-import type { MarketMoveCriteria } from './forecast-calibration';
+import type {
+  EventOccurrenceCriteria,
+  MarketMoveCriteria,
+  ResolutionCriteria,
+} from './forecast-calibration';
 import type { FactDomain } from './types';
+import { slugifyEntity } from './entity-slug';
+import {
+  EVENT_OCCURRENCE_DOMAINS,
+  eventOccurrenceTypesForSignals,
+} from './event-occurrence-contract';
 
 const WINDOW_MS = 6 * 60 * 60 * 1000;        // dedupe bucket
 export const HYPOTHESIS_OUTCOME_HORIZON_MS = 2 * 60 * 60 * 1000;
@@ -164,6 +174,54 @@ export function marketCriteriaFor(
   };
 }
 
+const NON_SPECIFIC_REGIONS = new Set([
+  'global',
+  'unknown',
+  'unknown-region',
+  'world',
+  'worldwide',
+]);
+
+export function eventOccurrenceCriteriaFor(
+  hypothesis: Hypothesis,
+): EventOccurrenceCriteria | undefined {
+  if (
+    hypothesis.kind !== 'situation-escalation'
+    || domainForHypothesis(hypothesis) !== 'conflict'
+  ) {
+    return undefined;
+  }
+  const region = slugifyEntity(hypothesis.region ?? '');
+  if (!region || NON_SPECIFIC_REGIONS.has(region)) return undefined;
+  const entitySlugs = [...new Set(
+    (hypothesis.entitySlugs ?? [])
+      .map((entity) => slugifyEntity(entity))
+      .filter(Boolean),
+  )].slice(0, 8);
+  if (entitySlugs.length !== 1) return undefined;
+  const eventTypes = eventOccurrenceTypesForSignals(
+    hypothesis.signalTypes ?? [],
+  );
+  if (eventTypes.length === 0) return undefined;
+  return {
+    kind: 'event_occurrence',
+    domains: [...EVENT_OCCURRENCE_DOMAINS],
+    eventTypes,
+    entitySlugs,
+    region,
+    minEvidence: 2,
+  };
+}
+
+export function resolutionCriteriaForHypothesis(
+  hypothesis: Hypothesis,
+  predictedAt: number,
+  spotFor: SpotPriceLookup = getLatestSpotPrice,
+): ResolutionCriteria | undefined {
+  return marketCriteriaFor(hypothesis, predictedAt, spotFor)
+    ?? eventOccurrenceCriteriaFor(hypothesis);
+}
+
 export function recordHypothesisPredictions(
   hypotheses: readonly Hypothesis[],
   now: number = Date.now(),
@@ -183,8 +241,8 @@ export function recordHypothesisPredictions(
       predictedAt: now,
       resolveBy: now + HYPOTHESIS_OUTCOME_HORIZON_MS,
       status: 'pending',
-      criteria: marketCriteriaFor(h, now, spotFor),
-      algorithmVersion: 'analyst-loop-v2',
+      criteria: resolutionCriteriaForHypothesis(h, now, spotFor),
+      algorithmVersion: '2.0.0',
     });
   }
 }
@@ -212,12 +270,25 @@ export function resolveHypothesisPredictionBySig(
   const due = store.all()
     .filter((r) =>
       r.status === 'pending'
+      && !r.criteria
       && (r.targetKey === targetKey || r.id.startsWith(sigPrefix))
       && r.resolveBy <= now)
     .sort((a, b) => a.predictedAt - b.predictedAt);
   let resolved = false;
   for (const target of due) {
-    resolved = resolvePrediction(target.id, hit, now) || resolved;
+    resolved = resolvePrediction(target.id, hit, now, {
+      note: `proxy:hypothesis-accuracy ${hit ? 'panned out' : 'fizzled'}`,
+      provenance: {
+        resolverId: 'hypothesis-accuracy-v1',
+        kind: 'proxy',
+        evidence: [{
+          sourceIds: ['hypothesis-accuracy'],
+          observedAt: now,
+          reference: sig.slice(0, 512),
+          supportsOutcome: true,
+        }],
+      },
+    }) || resolved;
   }
   return resolved;
 }

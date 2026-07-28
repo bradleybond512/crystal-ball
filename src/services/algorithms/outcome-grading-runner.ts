@@ -79,7 +79,13 @@ export async function runOutcomeGrading(deps: OutcomeGradingDeps = {}): Promise<
     // pending without it ever being graded. Leave it for a later cycle.
     if (r.llm.llmUnavailable) continue;
     try {
-      ledger.recordOutcome(r.record.id, r.ledgerOutcome, r.ledgerReason, deps.now);
+      ledger.recordOutcome(
+        r.record.id,
+        r.ledgerOutcome,
+        r.ledgerReason,
+        deps.now,
+        { origin: 'llm', reference: 'llm-grader' },
+      );
       graded += 1;
     } catch {
       // Already graded or evicted — skip.
@@ -88,10 +94,11 @@ export async function runOutcomeGrading(deps: OutcomeGradingDeps = {}): Promise<
   return { eligible: resolutions.length, graded };
 }
 
-/** Default cadence. Eligibility is independently gated by the resolver's
- *  48h record-age timeout, so most ticks are cheap no-ops. */
-const DEFAULT_CADENCE_MS = 60 * 60 * 1000; // hourly
-const DEFAULT_MAX_BATCH_SIZE = 20;
+/** One bounded fallback cadence. Authoritative forecast-linked records never
+ *  enter this path; unlinked records wait 48h, then consume at most five LLM
+ *  calls per 12h pass. */
+const DEFAULT_CADENCE_MS = 12 * 60 * 60 * 1000;
+const DEFAULT_MAX_BATCH_SIZE = 5;
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 let _running = false;

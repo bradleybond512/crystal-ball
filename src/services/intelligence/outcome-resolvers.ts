@@ -1,5 +1,6 @@
 import type { ObservationEvent } from '@/types/intelligence';
 import type {
+  EventOccurrenceCriteria,
   ForecastCalibrationStore,
   MarketMoveCriteria,
   PredictionRecord,
@@ -9,6 +10,14 @@ import type {
 import { RESOLVER_EXPIRY_GRACE_MS } from './forecast-calibration';
 import type { SpotPriceObservation } from '../market/spot-price-store';
 import { pointInPolygon } from '../weather/nws-polygon-match';
+import { slugifyEntity } from './entity-slug';
+import {
+  EVENT_OCCURRENCE_DOMAINS,
+  EVENT_OCCURRENCE_TYPES,
+  EVENT_REGION_TAG_PREFIX,
+  EVENT_TYPE_TAG_PREFIX,
+  type EventOccurrenceType,
+} from './event-occurrence-contract';
 
 export const MARKET_DEADLINE_COVERAGE_MS = 20 * 60 * 1000;
 
@@ -110,6 +119,7 @@ function directVerdict(
           observedAt: sample.observedAt,
           value: sample.price,
           reference: `${criteria.symbol}:basis@${criteria.basisObservedAt}`,
+          supportsOutcome: true,
         }],
       },
     },
@@ -138,6 +148,7 @@ function deadlineVerdict(
           observedAt: sample.observedAt,
           value: sample.price,
           reference: `${criteria.symbol}:deadline@${resolveBy}`,
+          supportsOutcome: true,
         })),
       },
     },
@@ -194,6 +205,263 @@ export const marketMoveResolver: OutcomeResolver = {
       return null;
     }
     return deadlineVerdict(criteria, samples, prediction.resolveBy);
+  },
+};
+
+const EVENT_QUERY_LIMIT_PER_DOMAIN = 200;
+const EVENT_DOMAIN_SET = new Set<string>(EVENT_OCCURRENCE_DOMAINS);
+const EVENT_TYPE_SET = new Set<string>(EVENT_OCCURRENCE_TYPES);
+const OBSERVATION_SEVERITIES = new Set([
+  'INFO',
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'CRITICAL',
+]);
+
+function canonicalSlug(value: unknown, maxLength = 80): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maxLength
+    && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
+function validEventCriteria(
+  prediction: PredictionRecord,
+  criteria: EventOccurrenceCriteria,
+): boolean {
+  return prediction.domain === 'conflict'
+    && Number.isFinite(prediction.predictedAt)
+    && Number.isFinite(prediction.resolveBy)
+    && prediction.resolveBy > prediction.predictedAt
+    && Array.isArray(criteria.domains)
+    && criteria.domains.length > 0
+    && criteria.domains.length <= EVENT_OCCURRENCE_DOMAINS.length
+    && new Set(criteria.domains).size === criteria.domains.length
+    && criteria.domains.every((domain: unknown) =>
+      typeof domain === 'string' && EVENT_DOMAIN_SET.has(domain))
+    && Array.isArray(criteria.eventTypes)
+    && criteria.eventTypes.length > 0
+    && criteria.eventTypes.length <= EVENT_OCCURRENCE_TYPES.length
+    && new Set(criteria.eventTypes).size === criteria.eventTypes.length
+    && criteria.eventTypes.every((eventType: unknown) =>
+      typeof eventType === 'string' && EVENT_TYPE_SET.has(eventType))
+    && Array.isArray(criteria.entitySlugs)
+    && criteria.entitySlugs.length > 0
+    && criteria.entitySlugs.length <= 8
+    && new Set(criteria.entitySlugs).size === criteria.entitySlugs.length
+    && criteria.entitySlugs.every((entity: unknown) => canonicalSlug(entity))
+    && canonicalSlug(criteria.region)
+    && Number.isInteger(criteria.minEvidence)
+    && criteria.minEvidence >= 2
+    && criteria.minEvidence <= 4;
+}
+
+function valuesForTagPrefix(
+  tags: readonly string[],
+  prefix: string,
+): string[] {
+  return tags
+    .filter((tag) => tag.startsWith(prefix))
+    .map((tag) => tag.slice(prefix.length));
+}
+
+function validOccurrenceObservation(
+  observation: unknown,
+): observation is ObservationEvent {
+  if (observation === null || typeof observation !== 'object') return false;
+  const candidate = observation as Partial<ObservationEvent>;
+  return typeof candidate.id === 'string'
+    && candidate.id.length > 0
+    && candidate.id.length <= 256
+    && !/[\u0000-\u001F\u007F]/.test(candidate.id)
+    && typeof candidate.sourceId === 'string'
+    && /^[a-z0-9][a-z0-9:-]{0,127}$/.test(candidate.sourceId)
+    && typeof candidate.domain === 'string'
+    && EVENT_DOMAIN_SET.has(candidate.domain)
+    && Number.isFinite(candidate.timestamp)
+    && typeof candidate.title === 'string'
+    && candidate.title.length > 0
+    && candidate.title.length <= 512
+    && typeof candidate.severity === 'string'
+    && OBSERVATION_SEVERITIES.has(candidate.severity)
+    && Array.isArray(candidate.entityIds)
+    && candidate.entityIds.length > 0
+    && candidate.entityIds.length <= 32
+    && candidate.entityIds.every((entity: unknown) =>
+      typeof entity === 'string' && entity.length > 0 && entity.length <= 128)
+    && Array.isArray(candidate.tags)
+    && candidate.tags.length > 0
+    && candidate.tags.length <= 32
+    && candidate.tags.every((tag: unknown) =>
+      typeof tag === 'string' && tag.length > 0 && tag.length <= 128)
+    && (
+      candidate.location === undefined
+      || (
+        Number.isFinite(candidate.location.lat)
+        && candidate.location.lat >= -90
+        && candidate.location.lat <= 90
+        && Number.isFinite(candidate.location.lon)
+        && candidate.location.lon >= -180
+        && candidate.location.lon <= 180
+      )
+    );
+}
+
+interface MatchedOccurrence {
+  observation: ObservationEvent;
+  eventType: EventOccurrenceType;
+}
+
+function matchOccurrence(
+  observation: ObservationEvent,
+  prediction: PredictionRecord,
+  criteria: EventOccurrenceCriteria,
+  now: number,
+): MatchedOccurrence | null {
+  if (
+    observation.timestamp <= prediction.predictedAt
+    || observation.timestamp > prediction.resolveBy
+    || observation.timestamp > now
+    || !criteria.domains.includes(observation.domain)
+  ) {
+    return null;
+  }
+  const eventTypes = valuesForTagPrefix(
+    observation.tags,
+    EVENT_TYPE_TAG_PREFIX,
+  );
+  if (
+    eventTypes.length !== 1
+    || !criteria.eventTypes.includes(eventTypes[0]!)
+    || !EVENT_TYPE_SET.has(eventTypes[0]!)
+  ) {
+    return null;
+  }
+  const regions = valuesForTagPrefix(
+    observation.tags,
+    EVENT_REGION_TAG_PREFIX,
+  );
+  if (
+    regions.length === 0
+    || regions.length > 4
+    || !regions.every((region) => canonicalSlug(region))
+    || !regions.includes(criteria.region)
+  ) {
+    return null;
+  }
+  const observedEntities = new Set(
+    observation.entityIds
+      .map((entity) => slugifyEntity(entity))
+      .filter(Boolean),
+  );
+  if (!criteria.entitySlugs.some((entity) => observedEntities.has(entity))) {
+    return null;
+  }
+  return {
+    observation,
+    eventType: eventTypes[0] as EventOccurrenceType,
+  };
+}
+
+function collectOccurrenceMatches(
+  prediction: PredictionRecord,
+  criteria: EventOccurrenceCriteria,
+  context: ResolverContext,
+  until: number,
+): MatchedOccurrence[] {
+  const seenObservations = new Set<string>();
+  const matches: MatchedOccurrence[] = [];
+  for (const domain of criteria.domains) {
+    const queried = context.queryObservations({
+      domain,
+      since: prediction.predictedAt,
+      until,
+      limit: EVENT_QUERY_LIMIT_PER_DOMAIN,
+    });
+    if (!Array.isArray(queried)) continue;
+    for (const observation of queried.slice(0, EVENT_QUERY_LIMIT_PER_DOMAIN)) {
+      if (!validOccurrenceObservation(observation)) continue;
+      const identity = `${observation.sourceId}\u0000${observation.id}`;
+      if (seenObservations.has(identity)) continue;
+      seenObservations.add(identity);
+      const match = matchOccurrence(
+        observation,
+        prediction,
+        criteria,
+        context.now,
+      );
+      if (match) matches.push(match);
+    }
+  }
+  return matches.sort((a, b) =>
+    a.observation.timestamp - b.observation.timestamp
+    || a.observation.sourceId.localeCompare(b.observation.sourceId)
+    || a.observation.id.localeCompare(b.observation.id));
+}
+
+function earliestOccurrencesBySource(
+  matches: readonly MatchedOccurrence[],
+): MatchedOccurrence[] {
+  const bySource = new Map<string, MatchedOccurrence>();
+  for (const match of matches) {
+    if (!bySource.has(match.observation.sourceId)) {
+      bySource.set(match.observation.sourceId, match);
+    }
+  }
+  return [...bySource.values()];
+}
+
+function eventOccurrenceVerdict(
+  criteria: EventOccurrenceCriteria,
+  evidence: readonly MatchedOccurrence[],
+): ResolverVerdict {
+  const eventTypes = [...new Set(evidence.map((item) => item.eventType))]
+    .sort((a, b) => a.localeCompare(b));
+  const corroboratedAt = Math.max(
+    ...evidence.map((item) => item.observation.timestamp),
+  );
+  return {
+    outcome: true,
+    metadata: {
+      note: `proxy:event_occurrence ${eventTypes.join('/')} matched entity ${criteria.entitySlugs.join('/')} in ${criteria.region} with ${evidence.length} independent sources by ${corroboratedAt}`,
+      provenance: {
+        resolverId: 'event-occurrence-v1',
+        kind: 'proxy',
+        evidence: evidence.map(({ observation, eventType }) => ({
+          sourceIds: [observation.sourceId],
+          observedAt: observation.timestamp,
+          reference: `observation:${observation.id}:${eventType}`,
+          supportsOutcome: true,
+        })),
+      },
+    },
+  };
+}
+
+export const eventOccurrenceResolver: OutcomeResolver = {
+  id: 'event-occurrence-v1',
+  canResolve: (prediction) =>
+    prediction.criteria?.kind === 'event_occurrence',
+  resolve(prediction, context) {
+    const criteria = prediction.criteria;
+    if (
+      criteria?.kind !== 'event_occurrence'
+      || !validEventCriteria(prediction, criteria)
+      || !Number.isFinite(context.now)
+    ) {
+      return null;
+    }
+    const until = Math.min(context.now, prediction.resolveBy);
+    if (until <= prediction.predictedAt) return null;
+    const independentMatches = earliestOccurrencesBySource(
+      collectOccurrenceMatches(prediction, criteria, context, until),
+    );
+    if (independentMatches.length < criteria.minEvidence) return null;
+    return eventOccurrenceVerdict(
+      criteria,
+      independentMatches.slice(0, criteria.minEvidence),
+    );
   },
 };
 
@@ -292,6 +560,7 @@ function warningDirectVerdict(
           sourceIds: ['iowa-state-lsr'],
           observedAt: report.reportedAt,
           reference: report.id,
+          supportsOutcome: true,
         }],
       },
     },
@@ -366,6 +635,7 @@ export const warningVerificationResolver: OutcomeResolver = {
             sourceIds: ['iowa-state-lsr'],
             observedAt: batch.fetchedAt,
             reference: `coverage:${batch.coverageStart}-${batch.coverageEnd}`,
+            supportsOutcome: true,
           }],
         },
       },

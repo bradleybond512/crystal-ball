@@ -22,10 +22,15 @@ import {
   getCalibrationStore,
   recordPrediction,
   recordPredictions,
+  resolvePrediction,
   getDomainCalibrationMult,
   _resetCalibrationForTests,
 } from '../forecast-calibration-adapter.ts';
 import { marketMoveResolver } from '../outcome-resolvers.ts';
+import {
+  getAlgorithmEvaluationLedger,
+  resetAlgorithmsState,
+} from '../../algorithms/algorithms-state.ts';
 
 function makeRecord(id: string, probability: number, outcome: boolean, domain = 'other'): PredictionRecord {
   return {
@@ -98,6 +103,7 @@ beforeEach(() => {
   mem.clear();
   storageWrites = 0;
   _resetCalibrationForTests();
+  resetAlgorithmsState();
 });
 
 test('recordPrediction persists and reloads', () => {
@@ -126,6 +132,136 @@ test('recordPredictions persists a batch with one storage write', () => {
 
   assert.equal(storageWrites, 1);
   assert.equal(getCalibrationStore().all().length, 2);
+});
+
+test('recordPrediction pairs an eligible target with a versioned hierarchical base rate', () => {
+  for (let index = 0; index < 30; index += 1) {
+    recordPrediction({
+      id: `history-${index}`,
+      sourceId: 'test-history',
+      targetKey: `history-target-${index}`,
+      domain: 'markets',
+      claim: 'historical outcome',
+      probability: 0.5,
+      predictedAt: index * 10,
+      resolveBy: index * 10 + 5,
+      status: index % 2 === 0 ? 'resolved_true' : 'resolved_false',
+      resolvedAt: index * 10 + 5,
+    });
+  }
+
+  recordPrediction({
+    id: 'live-weather-forecast',
+    sourceId: 'analyst-loop',
+    targetKey: 'weather:live-target',
+    domain: 'weather',
+    claim: 'weather event occurs',
+    probability: 0.8,
+    predictedAt: 1_000,
+    resolveBy: 1_000 + 24 * 60 * 60 * 1_000,
+    status: 'pending',
+    algorithmVersion: '2.0.0',
+  });
+
+  const baseline = getCalibrationStore().all().find(
+    (record) => record.sourceId === 'hierarchical-base-rate',
+  );
+  assert.ok(baseline);
+  assert.equal(baseline.targetKey, 'weather:live-target');
+  assert.equal(baseline.domain, 'weather');
+  assert.equal(baseline.probability, 0.5);
+  assert.equal(baseline.predictedAt, 1_000);
+  assert.equal(baseline.resolveBy, 1_000 + 24 * 60 * 60 * 1_000);
+  assert.equal(baseline.status, 'pending');
+  assert.equal(baseline.algorithmVersion, '1.0.0');
+  assert.equal(
+    getAlgorithmEvaluationLedger().pending().find(
+      (record) => record.algorithmId === 'hierarchical-base-rate',
+    )?.forecastTarget?.predictionId,
+    baseline.id,
+  );
+});
+
+test('shared target forecasts reuse one hierarchical baseline record', () => {
+  for (let index = 0; index < 30; index += 1) {
+    recordPrediction({
+      id: `shared-history-${index}`,
+      sourceId: 'test-history',
+      targetKey: `shared-history-target-${index}`,
+      domain: 'markets',
+      claim: 'historical outcome',
+      probability: 0.5,
+      predictedAt: index * 10,
+      resolveBy: index * 10 + 5,
+      status: index % 2 === 0 ? 'resolved_true' : 'resolved_false',
+      resolvedAt: index * 10 + 5,
+    });
+  }
+  const shared = {
+    targetKey: 'shared-target',
+    domain: 'weather' as const,
+    probability: 0.7,
+    predictedAt: 1_000,
+    resolveBy: 2_000,
+    status: 'pending' as const,
+    algorithmVersion: '1.0.0',
+  };
+
+  recordPrediction({
+    ...shared,
+    id: 'shared-analyst',
+    sourceId: 'analyst-loop',
+    claim: 'analyst wording',
+  });
+  assert.doesNotThrow(() => recordPrediction({
+    ...shared,
+    id: 'shared-superforecast',
+    sourceId: 'superforecast',
+    claim: 'different superforecast wording',
+  }));
+
+  assert.equal(
+    getCalibrationStore().all().filter(
+      (record) => record.sourceId === 'hierarchical-base-rate',
+    ).length,
+    1,
+  );
+});
+
+test('record and resolve bridge an exact authoritative algorithm evaluation', () => {
+  recordPrediction({
+    id: 'linked-1',
+    sourceId: 'analyst-loop',
+    targetKey: 'hypothesis:linked-1',
+    domain: 'conflict',
+    claim: 'linked fixture',
+    probability: 0.8,
+    predictedAt: 1_000,
+    resolveBy: 2_000,
+    status: 'pending',
+    algorithmVersion: '2.0.0',
+  });
+
+  const ledger = getAlgorithmEvaluationLedger();
+  assert.equal(ledger.pending().length, 1);
+  assert.equal(resolvePrediction('linked-1', true, 1_500, {
+    note: 'direct:test',
+    provenance: {
+      resolverId: 'test-resolver-v1',
+      kind: 'direct',
+      evidence: [{
+        sourceIds: ['fixture-provider'],
+        observedAt: 1_500,
+        reference: 'fixture:linked-1',
+        supportsOutcome: true,
+      }],
+    },
+  }), true);
+  const graded = ledger.graded()[0];
+  assert.equal(graded?.outcome, 'hit');
+  assert.equal(graded?.outcomeOrigin, 'direct');
+  assert.equal(graded?.version, '2.0.0');
+  assert.equal(graded?.forecastTarget?.targetKey, 'hypothesis:linked-1');
 });
 
 test('outcome resolver dispatch persists direct store mutations before reload', () => {

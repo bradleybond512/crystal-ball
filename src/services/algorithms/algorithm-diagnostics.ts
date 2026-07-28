@@ -1,6 +1,7 @@
 import {
   summarizeCalibration,
   type EvaluationRecord,
+  type OutcomeLabelOrigin,
 } from './algorithm-evaluation-ledger';
 import {
   aggregateAlgorithmHealth,
@@ -24,9 +25,29 @@ import {
   type PredictionRecord,
   type SourceMultiplier,
 } from '../intelligence/forecast-calibration';
+import {
+  auditResolutionQuality,
+  type ResolutionQualityAudit,
+} from '../intelligence/resolution-quality-audit';
+import {
+  evaluateForecastCohort,
+  forecastLossAttribution,
+  horizonBucket,
+  splitForecastRecordsChronologically,
+  type BrierSkillMetric,
+  type CalibrationFit,
+  type EqualMassEceMetric,
+  type EvidenceMetric,
+  type ForecastCohortEvaluation,
+  type ForecastCoverage,
+  type ForecastLossAttribution,
+  type ForecastLossContribution,
+} from '../intelligence/forecast-evaluation';
 
 const RECENT_EVALUATION_LIMIT = 20;
 const RECENT_TUNING_DECISION_LIMIT = 20;
+const FORECAST_COHORT_LIMIT = 10;
+const FORECAST_COHORT_LABEL_LIMIT = 80;
 const FORECAST_RESOLUTION_GRACE_MS = 15 * 60 * 1000;
 const WEATHER_REPORT_STALE_MS = 30 * 60 * 1000;
 const WEATHER_REPORT_TYPES = new Set([
@@ -66,7 +87,12 @@ export interface RecentAlgorithmEvaluation {
   label?: string;
   outcome?: EvaluationRecord['outcome'];
   outcomeAt?: number;
+  version?: string;
+  outcomeOrigin?: OutcomeLabelOrigin;
+  forecastLinked: boolean;
 }
+
+export type OutcomeOriginCounts = Record<OutcomeLabelOrigin, number>;
 
 export interface AlgorithmDiagnosticsSnapshot {
   schemaVersion: 1;
@@ -76,6 +102,7 @@ export interface AlgorithmDiagnosticsSnapshot {
     graded: number;
     pending: number;
     lastEvaluationAt: number | null;
+    outcomeOrigins: OutcomeOriginCounts;
     persistence: AlgorithmLedgerPersistenceStatus;
   };
   health: AlgorithmHealthReport;
@@ -132,8 +159,105 @@ export interface ForecastCalibrationDiagnostics {
   }[];
   bySource: readonly SourceMultiplier[];
   byResolver: readonly ForecastResolverDiagnostics[];
+  evaluation: ForecastEvaluationDiagnostics;
+  resolutionQuality: ResolutionQualityAudit;
   marketSpots: SpotPriceDiagnostics | null;
   weatherReports: WeatherReportDiagnostics;
+}
+
+export type ForecastDiagnosticMetric =
+  | {
+      status: 'ok';
+      sampleSize: number;
+      value: number;
+    }
+  | {
+      status: 'insufficient_evidence';
+      sampleSize: number;
+      minSampleSize: number;
+      reason?: string;
+    };
+
+export type ForecastCalibrationFitDiagnostics =
+  | {
+      status: 'ok';
+      sampleSize: number;
+      intercept: number;
+      slope: number;
+      iterations: number;
+    }
+  | {
+      status: 'insufficient_evidence';
+      sampleSize: number;
+      minSampleSize: number;
+      reason?: string;
+    };
+
+export interface ForecastCohortDiagnostics {
+  coverage: ForecastCoverage;
+  trainingSampleSize: number;
+  exclusions: ForecastCohortEvaluation['exclusions'];
+  brier: ForecastDiagnosticMetric;
+  logLoss: ForecastDiagnosticMetric;
+  baseRate: ForecastDiagnosticMetric;
+  brierSkill: ForecastDiagnosticMetric;
+  equalMassEce: ForecastDiagnosticMetric;
+  calibrationFit: ForecastCalibrationFitDiagnostics;
+}
+
+export interface ForecastEvaluationCohortDiagnostics
+  extends ForecastCohortDiagnostics {
+  sourceId: string;
+  domain: PredictionRecord['domain'];
+  horizon: string;
+}
+
+export interface ForecastLossContributionDiagnostics {
+  key: string;
+  sampleSize: number;
+  totalBrierLoss: number;
+  meanBrier: number;
+  shareOfBrierLoss: number;
+  highConfidenceMisses: number;
+}
+
+export interface ForecastLossAttributionDiagnostics {
+  sampleSize: number;
+  totalBrierLoss: number;
+  highConfidenceMisses: number;
+  groupLimit: 10;
+  bySource: readonly ForecastLossContributionDiagnostics[];
+  byDomain: readonly ForecastLossContributionDiagnostics[];
+  byHorizon: readonly ForecastLossContributionDiagnostics[];
+  byAlgorithmVersion: readonly ForecastLossContributionDiagnostics[];
+}
+
+export interface ForecastEvaluationDiagnostics {
+  schemaVersion: 1;
+  split: {
+    strategy: 'chronological_60_40';
+    trainingRecords: number;
+    evaluationRecords: number;
+    evaluationWindowStart: number | null;
+  };
+  resolutionBacklog: {
+    pending: number;
+    overduePending: number;
+    expired: number;
+    oldestPendingAt: number | null;
+  };
+  labelOrigins: {
+    direct: number;
+    proxy: number;
+    manual: number;
+    unattributed: number;
+  };
+  overall: ForecastCohortDiagnostics;
+  lossAttribution: ForecastLossAttributionDiagnostics;
+  worstCohorts: readonly ForecastEvaluationCohortDiagnostics[];
+  cohortLimit: 10;
+  cohortCount: number;
+  omittedCohortCount: number;
 }
 
 export interface WeatherReportDiagnostics {
@@ -171,6 +295,7 @@ export function buildAlgorithmDiagnosticsSnapshot(
       graded: records.filter((record) => record.outcome !== undefined).length,
       pending: records.filter((record) => record.outcome === undefined).length,
       lastEvaluationAt: lastRecord?.at ?? null,
+      outcomeOrigins: countOutcomeOrigins(records),
       persistence: { ...input.persistence },
     },
     health,
@@ -210,6 +335,7 @@ function buildForecastCalibrationDiagnostics(
     .sort((a, b) => a.predictedAt - b.predictedAt);
   const domainRows = perDomainAccuracy(predictions);
   const resolverDiagnostics = buildForecastResolverDiagnostics(predictions, resolved);
+  const resolutionQuality = auditResolutionQuality(predictions, now);
 
   return {
     summary: {
@@ -243,6 +369,12 @@ function buildForecastCalibrationDiagnostics(
     }),
     bySource: perSourceMultipliers(predictions),
     byResolver: resolverDiagnostics.rows,
+    evaluation: buildForecastEvaluationDiagnostics(
+      predictions,
+      now,
+      resolutionQuality,
+    ),
+    resolutionQuality,
     marketSpots: marketSpotPrices ? { ...marketSpotPrices } : null,
     weatherReports: buildWeatherReportDiagnostics(
       predictions,
@@ -250,6 +382,236 @@ function buildForecastCalibrationDiagnostics(
       now,
     ),
   };
+}
+
+function buildForecastEvaluationDiagnostics(
+  predictions: readonly PredictionRecord[],
+  now: number,
+  resolutionQuality: ResolutionQualityAudit,
+): ForecastEvaluationDiagnostics {
+  const split = splitForecastRecordsChronologically(predictions);
+  const evaluationOptions = { now };
+  const overallEvaluation = evaluateForecastCohort({
+    trainingRecords: split.training,
+    evaluationRecords: split.evaluation,
+  }, evaluationOptions);
+  const trainingGroups = groupForecastCohorts(split.training);
+  const evaluationGroups = groupForecastCohorts(split.evaluation);
+  const cohorts = [...evaluationGroups].map(([key, group]) => {
+    const evaluation = evaluateForecastCohort({
+      trainingRecords: trainingGroups.get(key)?.records ?? [],
+      evaluationRecords: group.records,
+    }, evaluationOptions);
+    return {
+      sourceId: boundedCohortLabel(group.sourceId),
+      domain: group.domain,
+      horizon: group.horizon,
+      ...toForecastCohortDiagnostics(evaluation),
+    };
+  });
+  cohorts.sort(compareForecastCohorts);
+  const pending = predictions
+    .filter((record) => record.status === 'pending')
+    .sort((left, right) => left.predictedAt - right.predictedAt);
+  const origins = resolutionQuality.summary.origins;
+
+  return {
+    schemaVersion: 1,
+    split: {
+      strategy: 'chronological_60_40',
+      trainingRecords: split.training.length,
+      evaluationRecords: split.evaluation.length,
+      evaluationWindowStart: overallEvaluation.evaluationWindowStart ?? null,
+    },
+    resolutionBacklog: {
+      pending: pending.length,
+      overduePending: pending.filter(
+        (record) => record.resolveBy < now - FORECAST_RESOLUTION_GRACE_MS,
+      ).length,
+      expired: predictions.filter((record) => record.status === 'expired').length,
+      oldestPendingAt: pending[0]?.predictedAt ?? null,
+    },
+    labelOrigins: {
+      ...origins,
+      unattributed: Math.max(
+        0,
+        resolutionQuality.summary.resolved
+        - origins.direct
+        - origins.proxy
+        - origins.manual,
+      ),
+    },
+    overall: toForecastCohortDiagnostics(overallEvaluation),
+    lossAttribution: toForecastLossAttributionDiagnostics(
+      forecastLossAttribution(overallEvaluation.scoredRecords),
+    ),
+    worstCohorts: cohorts.slice(0, FORECAST_COHORT_LIMIT),
+    cohortLimit: FORECAST_COHORT_LIMIT,
+    cohortCount: cohorts.length,
+    omittedCohortCount: Math.max(0, cohorts.length - FORECAST_COHORT_LIMIT),
+  };
+}
+
+function toForecastLossAttributionDiagnostics(
+  attribution: ForecastLossAttribution,
+): ForecastLossAttributionDiagnostics {
+  return {
+    sampleSize: attribution.sampleSize,
+    totalBrierLoss: roundedMetricValue(attribution.totalBrierLoss),
+    highConfidenceMisses: attribution.highConfidenceMisses,
+    groupLimit: FORECAST_COHORT_LIMIT,
+    bySource: attribution.bySource
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+    byDomain: attribution.byDomain
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+    byHorizon: attribution.byHorizon
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+    byAlgorithmVersion: attribution.byAlgorithmVersion
+      .slice(0, FORECAST_COHORT_LIMIT)
+      .map((contribution) =>
+        toForecastLossContributionDiagnostics(contribution)),
+  };
+}
+
+function toForecastLossContributionDiagnostics(
+  contribution: ForecastLossContribution,
+): ForecastLossContributionDiagnostics {
+  return {
+    key: boundedCohortLabel(contribution.key),
+    sampleSize: contribution.sampleSize,
+    totalBrierLoss: roundedMetricValue(contribution.totalBrierLoss),
+    meanBrier: roundedMetricValue(contribution.meanBrier),
+    shareOfBrierLoss: roundedMetricValue(contribution.shareOfBrierLoss),
+    highConfidenceMisses: contribution.highConfidenceMisses,
+  };
+}
+
+interface ForecastCohortGroup {
+  sourceId: string;
+  domain: PredictionRecord['domain'];
+  horizon: string;
+  records: PredictionRecord[];
+}
+
+function groupForecastCohorts(
+  records: readonly PredictionRecord[],
+): Map<string, ForecastCohortGroup> {
+  const groups = new Map<string, ForecastCohortGroup>();
+  for (const record of records) {
+    const horizon = horizonBucket(record.resolveBy - record.predictedAt);
+    const key = JSON.stringify([record.sourceId, record.domain, horizon]);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.records.push(record);
+      continue;
+    }
+    groups.set(key, {
+      sourceId: record.sourceId,
+      domain: record.domain,
+      horizon,
+      records: [record],
+    });
+  }
+  return groups;
+}
+
+function toForecastCohortDiagnostics(
+  evaluation: ForecastCohortEvaluation,
+): ForecastCohortDiagnostics {
+  return {
+    coverage: {
+      ...evaluation.coverage,
+      resolutionCoverage: roundedMetricValue(
+        evaluation.coverage.resolutionCoverage,
+      ),
+      expirationRate: roundedMetricValue(evaluation.coverage.expirationRate),
+      closedCoverage: roundedMetricValue(evaluation.coverage.closedCoverage),
+    },
+    trainingSampleSize: evaluation.trainingSampleSize,
+    exclusions: { ...evaluation.exclusions },
+    brier: toForecastDiagnosticMetric(evaluation.brier),
+    logLoss: toForecastDiagnosticMetric(evaluation.logLoss),
+    baseRate: toForecastDiagnosticMetric(evaluation.baseRate),
+    brierSkill: toForecastDiagnosticMetric(evaluation.brierSkill),
+    equalMassEce: toForecastDiagnosticMetric(evaluation.equalMassEce),
+    calibrationFit: toForecastCalibrationFit(evaluation.calibrationFit),
+  };
+}
+
+function toForecastDiagnosticMetric(
+  metric: EvidenceMetric | BrierSkillMetric | EqualMassEceMetric,
+): ForecastDiagnosticMetric {
+  if (metric.status === 'ok') {
+    return {
+      status: 'ok',
+      sampleSize: metric.sampleSize,
+      value: roundedMetricValue(metric.value),
+    };
+  }
+  return {
+    status: 'insufficient_evidence',
+    sampleSize: metric.sampleSize,
+    minSampleSize: metric.minSampleSize,
+    ...(metric.reason ? { reason: metric.reason } : {}),
+  };
+}
+
+function toForecastCalibrationFit(
+  fit: CalibrationFit,
+): ForecastCalibrationFitDiagnostics {
+  if (fit.status === 'ok') {
+    return {
+      status: 'ok',
+      sampleSize: fit.sampleSize,
+      intercept: roundedMetricValue(fit.intercept),
+      slope: roundedMetricValue(fit.slope),
+      iterations: fit.iterations,
+    };
+  }
+  return {
+    status: 'insufficient_evidence',
+    sampleSize: fit.sampleSize,
+    minSampleSize: fit.minSampleSize,
+    ...(fit.reason ? { reason: fit.reason } : {}),
+  };
+}
+
+function compareForecastCohorts(
+  left: ForecastEvaluationCohortDiagnostics,
+  right: ForecastEvaluationCohortDiagnostics,
+): number {
+  if (left.brier.status === 'ok' && right.brier.status !== 'ok') return -1;
+  if (left.brier.status !== 'ok' && right.brier.status === 'ok') return 1;
+  if (left.brier.status === 'ok' && right.brier.status === 'ok') {
+    const brierOrder = right.brier.value - left.brier.value;
+    if (brierOrder !== 0) return brierOrder;
+  }
+  const sampleOrder = right.brier.sampleSize - left.brier.sampleSize;
+  if (sampleOrder !== 0) return sampleOrder;
+  const totalOrder = right.coverage.total - left.coverage.total;
+  if (totalOrder !== 0) return totalOrder;
+  return left.sourceId.localeCompare(right.sourceId)
+    || left.domain.localeCompare(right.domain)
+    || left.horizon.localeCompare(right.horizon);
+}
+
+function boundedCohortLabel(value: string): string {
+  const bounded = value
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .slice(0, FORECAST_COHORT_LABEL_LIMIT);
+  return bounded || 'unknown';
+}
+
+function roundedMetricValue(value: number): number {
+  const rounded = Math.round(value * 1_000_000) / 1_000_000;
+  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 function buildWeatherReportDiagnostics(
@@ -479,5 +841,31 @@ function toRecentEvaluation(record: EvaluationRecord): RecentAlgorithmEvaluation
     label: record.label,
     outcome: record.outcome,
     outcomeAt: record.outcomeAt,
+    version: record.version,
+    outcomeOrigin: record.outcome === undefined
+      ? undefined
+      : outcomeOriginFor(record),
+    forecastLinked: record.forecastTarget !== undefined,
   };
+}
+
+function countOutcomeOrigins(
+  records: readonly EvaluationRecord[],
+): OutcomeOriginCounts {
+  const counts: OutcomeOriginCounts = {
+    direct: 0,
+    proxy: 0,
+    manual: 0,
+    llm: 0,
+  };
+  for (const record of records) {
+    if (record.outcome === undefined) continue;
+    counts[outcomeOriginFor(record)] += 1;
+  }
+  return counts;
+}
+
+function outcomeOriginFor(record: EvaluationRecord): OutcomeLabelOrigin {
+  if (record.outcomeOrigin) return record.outcomeOrigin;
+  return record.outcomeReason?.startsWith('llm-grader:') ? 'llm' : 'manual';
 }

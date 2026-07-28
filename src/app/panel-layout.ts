@@ -103,7 +103,6 @@ import { contradictEpisodesForRefutation } from '@/services/cognition/episodic-m
 import { startEpistemicBridge } from '@/services/intelligence/epistemic-bridge';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
-import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
 import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence';
 import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
 import { startCorrelationCalibration } from '@/services/correlation/correlation-calibration';
@@ -1140,7 +1139,6 @@ export class PanelLayoutManager implements AppModule {
  try { wireModeForecastCalibration(snap); } catch { /* never break the forecast cycle */ }
  });
  startTuningApplyCadence();
- startLlmGradingCadence();
  startBiasScanCadence();
  startLearnedCascadeCadence();
  startCorrelationCalibration();
@@ -2297,7 +2295,7 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/cognition/cognition-settings'),
  import('@/services/diagnostics/recurring-loops'),
 ]).then(([
-   { marketMoveResolver, warningVerificationResolver },
+   { eventOccurrenceResolver, marketMoveResolver, warningVerificationResolver },
    { dispatchOutcomeResolvers },
    { getSpotPriceHistory },
    { query },
@@ -2317,7 +2315,11 @@ export class PanelLayoutManager implements AppModule {
          getSpotPriceHistory(symbol, { sinceExclusive, untilInclusive }),
        queryObservations: (queryInput) => query(queryInput),
        stormReportBatch: () => stormReports,
-     }, [marketMoveResolver, warningVerificationResolver]);
+     }, [
+       marketMoveResolver,
+       warningVerificationResolver,
+       eventOccurrenceResolver,
+     ]);
    },
    15 * 60_000,
    { priority: 'low', runImmediately: false },

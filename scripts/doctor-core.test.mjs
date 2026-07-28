@@ -51,6 +51,98 @@ function healthyInput() {
           },
           byDomain: [],
           bySource: [],
+          evaluation: {
+            schemaVersion: 1,
+            split: {
+              strategy: 'chronological_60_40',
+              trainingRecords: 3,
+              evaluationRecords: 2,
+              evaluationWindowStart: NOW - 60_000,
+            },
+            resolutionBacklog: {
+              pending: 2,
+              overduePending: 0,
+              expired: 0,
+              oldestPendingAt: NOW - 60_000,
+            },
+            labelOrigins: {
+              direct: 1,
+              proxy: 1,
+              manual: 1,
+              unattributed: 0,
+            },
+            overall: {
+              coverage: {
+                total: 2,
+                resolved: 2,
+                expired: 0,
+                pending: 0,
+                overduePending: 0,
+                resolutionCoverage: 1,
+                expirationRate: 0,
+                closedCoverage: 1,
+              },
+              trainingSampleSize: 3,
+              exclusions: {
+                proxyLabels: 0,
+                invalidProbabilities: 0,
+                trainingWindowOverlap: 0,
+                trainingProxyLabels: 0,
+                trainingInvalidProbabilities: 0,
+              },
+              brier: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+              },
+              logLoss: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+              },
+              baseRate: {
+                status: 'insufficient_evidence',
+                sampleSize: 3,
+                minSampleSize: 20,
+              },
+              brierSkill: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+                reason: 'training_sample_floor',
+              },
+              equalMassEce: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 20,
+              },
+              calibrationFit: {
+                status: 'insufficient_evidence',
+                sampleSize: 2,
+                minSampleSize: 50,
+                reason: 'sample_floor',
+              },
+            },
+            worstCohorts: [],
+            cohortLimit: 10,
+            cohortCount: 0,
+            omittedCohortCount: 0,
+          },
+          resolutionQuality: {
+            summary: {
+              total: 5,
+              resolved: 3,
+              resolutionCoverage: 0.6,
+              origins: { direct: 1, proxy: 1, manual: 1 },
+              malformed: 0,
+              labelLeakage: 0,
+              duplicateOutcomes: 0,
+              lateResolutions: 0,
+              contradictoryEvidence: 0,
+              uncertainProxy: 0,
+            },
+            byDomain: [],
+          },
           weatherReports: {
             status: 'fresh',
             reportCount: 4,
@@ -142,6 +234,40 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
     oldestPendingAt: NOW - 86_400_000,
     brierScore: 0.41,
   };
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.overall.brier = {
+    status: 'ok',
+    sampleSize: 20,
+    value: 0.39,
+  };
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.worstCohorts = [{
+    sourceId: 'model-bad',
+    domain: 'cyber',
+    horizon: '1d-7d',
+    ...input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.overall,
+    brier: {
+      status: 'ok',
+      sampleSize: 20,
+      value: 0.64,
+    },
+  }];
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.lossAttribution = {
+    sampleSize: 20,
+    totalBrierLoss: 7.8,
+    highConfidenceMisses: 8,
+    groupLimit: 10,
+    bySource: [{
+      key: 'model-bad',
+      sampleSize: 20,
+      totalBrierLoss: 6.24,
+      meanBrier: 0.312,
+      shareOfBrierLoss: 0.8,
+      highConfidenceMisses: 8,
+    }],
+    byDomain: [],
+    byHorizon: [],
+    byAlgorithmVersion: [],
+  };
+  input.analyst.algorithmDiagnostics.forecastCalibration.evaluation.cohortCount = 1;
 
   const report = buildDoctorReport(input);
 
@@ -149,6 +275,24 @@ test('buildDoctorReport exposes stalled and poorly calibrated forecast truth loo
   assert.equal(report.algorithms.forecastCalibration.summary.overduePending, 3);
   assert.ok(report.findings.some((finding) => finding.id === 'forecast.outcomes_overdue'));
   assert.ok(report.findings.some((finding) => finding.id === 'forecast.calibration_poor'));
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.cohort_underperforming',
+  ));
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.loss_concentrated',
+  ));
+  assert.match(
+    report.findings.find(
+      (finding) => finding.id === 'forecast.cohort_underperforming',
+    )?.evidence ?? '',
+    /source=model-bad; domain=cyber; horizon=1d-7d; brier=0.64; sampleSize=20/,
+  );
+  assert.match(
+    report.findings.find(
+      (finding) => finding.id === 'forecast.loss_concentrated',
+    )?.evidence ?? '',
+    /source=model-bad; shareOfBrierLoss=0.8; sampleSize=20; highConfidenceMisses=8/,
+  );
 });
 
 test('buildDoctorReport exposes degraded warning-verification evidence', () => {
@@ -171,6 +315,56 @@ test('buildDoctorReport exposes degraded warning-verification evidence', () => {
   assert.equal(report.status, 'yellow');
   assert.ok(report.findings.some(
     (finding) => finding.id === 'forecast.weather_reports_stale',
+  ));
+});
+
+test('buildDoctorReport fails red on invalid resolution labels', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.forecastCalibration.resolutionQuality.summary = {
+    total: 20,
+    resolved: 12,
+    resolutionCoverage: 0.6,
+    origins: { direct: 4, proxy: 3, manual: 5 },
+    malformed: 1,
+    labelLeakage: 2,
+    duplicateOutcomes: 3,
+    lateResolutions: 0,
+    contradictoryEvidence: 1,
+    uncertainProxy: 0,
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'red');
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.resolution_quality_invalid',
+  ));
+  assert.doesNotMatch(JSON.stringify(report.findings), /prediction-id|fixture claim/);
+});
+
+test('buildDoctorReport separates uncertain proxy and late labels', () => {
+  const input = healthyInput();
+  input.analyst.algorithmDiagnostics.forecastCalibration.resolutionQuality.summary = {
+    total: 20,
+    resolved: 12,
+    resolutionCoverage: 0.6,
+    origins: { direct: 4, proxy: 3, manual: 5 },
+    malformed: 0,
+    labelLeakage: 0,
+    duplicateOutcomes: 0,
+    lateResolutions: 2,
+    contradictoryEvidence: 0,
+    uncertainProxy: 1,
+  };
+
+  const report = buildDoctorReport(input);
+
+  assert.equal(report.status, 'yellow');
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.proxy_labels_uncertain',
+  ));
+  assert.ok(report.findings.some(
+    (finding) => finding.id === 'forecast.resolutions_late',
   ));
 });
 

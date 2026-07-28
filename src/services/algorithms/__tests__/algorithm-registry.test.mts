@@ -33,13 +33,16 @@ test('initial: registers all live algorithms (orphaned algos with no call sites 
   // Cognition PR 12 registered 5 more, graded deterministically by
   // cognition/self-tuning.ts: episodic-analog, recalibration, superforecast,
   // operator-ranking, entity-trajectory.
+  // ACC-104 registers the forecast emitters whose exact targets are bridged
+  // into authoritative runtime grading.
   const expected = [
-    'bias-detector', 'big-event-detector', 'cognitive-bias-detector', 'competitive-hypothesis',
+    'analyst-loop', 'bias-detector', 'big-event-detector', 'cognitive-bias-detector', 'competitive-hypothesis',
     'compound-risk', 'confidence-urgency-matrix', 'correlation-feedback', 'counterfactual-reasoning',
-    'entity-trajectory', 'episodic-analog', 'hypothesis-accuracy', 'meta-confidence',
-    'negative-evidence', 'nws-polygon-match', 'operator-ranking', 'personal-storm-mode',
+    'entity-trajectory', 'episodic-analog', 'hierarchical-base-rate', 'hypothesis-accuracy', 'meta-confidence',
+    'mode-forecast', 'negative-evidence', 'nws-polygon-match', 'operator-ranking', 'personal-storm-mode',
     'recalibration', 'relevance-learner', 'shortage-diesel', 'shortage-wheat',
-    'source-feedback', 'superforecast', 'threat-classifier', 'truth-score', 'weather-urgency',
+    'source-feedback', 'superforecast', 'threat-classifier', 'truth-score', 'warning-verification',
+    'weather-urgency',
   ];
   assert.deepEqual(ids, expected);
 });
@@ -55,7 +58,7 @@ test('initial: every entry has nonempty label / version / domain / outputs / cri
 });
 
 test('initial: weather warning chain is all safety-critical', () => {
-  for (const id of ['nws-polygon-match', 'weather-urgency', 'personal-storm-mode']) {
+  for (const id of ['nws-polygon-match', 'weather-urgency', 'personal-storm-mode', 'warning-verification']) {
     assert.equal(getAlgorithm(id)?.criticality, 'safety', id);
   }
 });
@@ -82,14 +85,14 @@ test('getAlgorithm: returns the registered definition', () => {
 
 test('listByDomain: filters on domain', () => {
   const weather = listByDomain('weather');
-  assert.equal(weather.length, 3);
+  assert.equal(weather.length, 4);
   assert.ok(weather.every((a) => a.domain === 'weather'));
 });
 
 test('listByCriticality: safety tier returns weather chain', () => {
   const safety = listByCriticality('safety');
   const ids = safety.map((a) => a.id).sort();
-  assert.deepEqual(ids, ['nws-polygon-match', 'personal-storm-mode', 'weather-urgency']);
+  assert.deepEqual(ids, ['nws-polygon-match', 'personal-storm-mode', 'warning-verification', 'weather-urgency']);
 });
 
 test('listByOutput: ranking includes the expected algorithms', () => {
@@ -103,7 +106,7 @@ test('listByOutput: ranking includes the expected algorithms', () => {
 test('listByOwnerFeature: weather_warning groups all weather algorithms', () => {
   const weather = listByOwnerFeature('weather_warning');
   const ids = weather.map((a) => a.id).sort();
-  assert.deepEqual(ids, ['nws-polygon-match', 'personal-storm-mode', 'weather-urgency']);
+  assert.deepEqual(ids, ['nws-polygon-match', 'personal-storm-mode', 'warning-verification', 'weather-urgency']);
 });
 
 // ── registerAlgorithm ───────────────────────────────────────────────────

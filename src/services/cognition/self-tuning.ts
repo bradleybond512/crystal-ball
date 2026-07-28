@@ -280,6 +280,10 @@ function resolvedAfter(r: PredictionRecord, through: number): number | null {
   return r.resolvedAt;
 }
 
+function hasAuthoritativeForecastLink(record: PredictionRecord): boolean {
+  return Boolean(record.targetKey && record.algorithmVersion);
+}
+
 /** recalibration + superforecast: resolved calibration-store records,
  *  routed by sourceId. Returns the new calibration watermark — advanced
  *  only past records whose grade was actually recorded. */
@@ -293,6 +297,13 @@ function gradeCalibrationForecasts(
   for (const r of records) {
     const resolvedAt = resolvedAfter(r, resolvedThrough);
     if (resolvedAt === null) continue;
+    if (hasAuthoritativeForecastLink(r)) {
+      // ACC-104 owns structured forecasts through their exact emit-time
+      // target/version link. Replaying them through today's recalibrator
+      // would duplicate the grade and can grade a different model version.
+      maxRecorded = Math.max(maxRecorded, resolvedAt);
+      continue;
+    }
     const materialized = r.status === 'resolved_true';
 
     const target = forecastGradeTarget(r, recalibratorFor);

@@ -6,6 +6,60 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Hierarchical forecast base rate**: every eligible production forecast now
+  receives a versioned, same-target baseline after the ledger has 30
+  trustworthy resolved outcomes. The model uses a Beta-smoothed global rate,
+  conservative domain and horizon shrinkage, sparse-domain fallback, exact
+  outcome deduplication, and strict prediction-time evidence cutoffs. Frozen
+  walk-forward replay now names and gates the baseline, including a hard
+  failure if it trails the global Beta baseline; the reviewed corpus records
+  hierarchical Brier 0.238945 versus global 0.238997. (PR #1530)
+- **Time-ordered forecast replay benchmark**: `npm run bench:forecast`
+  replays a frozen, privacy-safe 120-record forecast/outcome corpus through
+  four expanding windows with strict prediction-time cutoffs. A committed
+  baseline and CI gate cover Brier skill, log loss, resolution coverage, and
+  high-confidence misses, while source/domain/horizon/version loss attribution
+  in the Belief Calibration panel, CLI doctor, and MCP diagnostics identifies
+  the exact slices driving forecast error. (PR #1529)
+- **Leakage-safe forecast diagnostics**: renderer, CLI doctor, and MCP
+  diagnostics now expose bounded chronological holdout metrics, evidence
+  floors, resolution backlog, label origins, and worst
+  source/domain/horizon cohorts. Agent-facing boundaries strip raw claims,
+  criteria, target keys, evidence, notes, scored records, and precise
+  coordinates. (PR #1527)
+- **Leakage-safe forecast workbench**: the Belief Calibration panel now offers
+  source, domain, horizon, version, and resolution-method filters; sortable
+  per-forecast probability, outcome, Brier, evidence-age, target, and
+  resolution audit fields; holdout cohort comparisons; a reliability chart
+  with uncertainty intervals; and worst-error/high-confidence-miss
+  drilldowns. Training, proxy, unresolved, and invalid records stay visible
+  but are explicitly excluded from aggregate metrics, while undersized
+  cohorts render an honest insufficient-evidence state. (PR #1525)
+- **Leakage-safe forecast evaluation workbench**: pure cohort metrics now expose
+  per-record and aggregate Brier scores, clipped log loss, training-only
+  empirical baselines and Brier skill, equal-mass calibration error,
+  calibration slope/intercept, resolution and expiration coverage, seeded
+  paired bootstrap intervals, and target/source/domain/horizon/version
+  rollups. Proxy labels are excluded unless explicitly requested, late-known
+  training outcomes cannot leak into evaluation, and undersized or degenerate
+  cohorts return `insufficient_evidence`. (PR #1524)
+- **Resolution-label quality audit**: deterministic fixtures now guard against
+  label leakage, duplicate outcomes, late data, contradictory evidence, and
+  uncertain proxy labels. Structured resolutions fail closed unless bounded
+  evidence explicitly supports the outcome, ambiguous window closures expire
+  outside calibration, and privacy-safe app/doctor/MCP diagnostics expose
+  resolution coverage, origins, and quality defects by domain. (PR #1523)
+- **Authoritative runtime outcome grading**: emitted forecasts now link to
+  opaque algorithm-ledger evaluations with exact target, horizon, and version
+  attribution. Persisted forecasts backfill idempotently, non-LLM outcomes
+  grade linked evaluations automatically, and diagnostics distinguish direct,
+  proxy, manual, and LLM labels without exposing forecast identifiers.
+  (PR #1521)
+- **Corroborated conflict and geospatial outcome resolution**: structured
+  conflict forecasts now resolve against exact entity, region, event-type, and
+  time-window matches from independent providers. Ambiguous near-matches and
+  unsupported negative labels fail closed, while proxy provenance remains
+  bounded and inspectable. (PR #1518)
 - **Deterministic weather-warning ground truth**: active Tornado, Severe
   Thunderstorm, and Flash Flood warnings now create bounded, deduplicated
   calibration records and resolve against current Iowa State Local Storm
@@ -163,6 +217,14 @@ All notable changes to Crystal Ball are documented here.
 
 ### Fixed
 
+- **Fail-closed macOS relaunches**: the local installer now waits for the prior
+  Crystal Ball process to exit before replacing the bundle, checks `open`
+  failures, waits for the replacement process to start, and records local-build
+  state only after a requested relaunch succeeds. Main sync can no longer report
+  an installed release while the desktop app is not running.
+- **Stable delegated click handling**: seven render-rebuilding components now
+  delegate clicks from stable roots, preventing background renders between
+  pointer-down and pointer-up from swallowing user actions. (PR #1526)
 - **Performance sprint**: panel lifecycle teardown on `destroy()` and the Groq
   egress-disclosure gate (scoped to desktop, honors local-only in the sidecar)
   (PRs #1135, #1136).

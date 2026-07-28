@@ -1,3 +1,5 @@
+import { publicForecastCalibration } from '../tools/mcp-server/forecast-evaluation-public.mjs';
+
 const REDACTION_PATTERNS = [
   [/\bBearer\s+\S+/gi, 'Bearer [REDACTED]'],
   [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[EMAIL]'],
@@ -69,7 +71,9 @@ export function buildDoctorReport(input) {
       available: algorithmDiagnostics !== null,
       health: objectOrNull(algorithmDiagnostics?.health),
       ledger: objectOrNull(algorithmDiagnostics?.ledger),
-      forecastCalibration: objectOrNull(algorithmDiagnostics?.forecastCalibration),
+      forecastCalibration: publicForecastCalibration(
+        algorithmDiagnostics?.forecastCalibration,
+      ),
       runtime: Array.isArray(algorithmDiagnostics?.runtime) ? algorithmDiagnostics.runtime : [],
       proposals: Array.isArray(algorithmDiagnostics?.proposals) ? algorithmDiagnostics.proposals : [],
       tunings: Array.isArray(algorithmDiagnostics?.tunings) ? algorithmDiagnostics.tunings : [],
@@ -275,6 +279,7 @@ function inspectAlgorithmPersistence(snapshot, findings) {
 function inspectForecastCalibration(snapshot, findings) {
   const summary = objectOrNull(snapshot.forecastCalibration?.summary);
   if (!summary) return;
+  inspectResolutionQuality(snapshot.forecastCalibration, findings);
   inspectWeatherReportEvidence(snapshot.forecastCalibration, findings);
   const overdue = finiteOrNull(summary.overduePending) ?? 0;
   if (overdue > 0) {
@@ -288,16 +293,122 @@ function inspectForecastCalibration(snapshot, findings) {
     });
   }
 
-  const resolved = finiteOrNull(summary.resolved) ?? 0;
-  const brier = finiteOrNull(summary.brierScore);
+  const holdoutBrier = objectOrNull(
+    snapshot.forecastCalibration?.evaluation?.overall?.brier,
+  );
+  const legacyResolved = finiteOrNull(summary.resolved) ?? 0;
+  const legacyBrier = finiteOrNull(summary.brierScore);
+  const holdoutReady = holdoutBrier?.status === 'ok'
+    && finiteOrNull(holdoutBrier.value) !== null;
+  const resolved = holdoutReady
+    ? finiteOrNull(holdoutBrier.sampleSize) ?? 0
+    : legacyResolved;
+  const brier = holdoutReady
+    ? finiteOrNull(holdoutBrier.value)
+    : legacyBrier;
   if (resolved >= 10 && brier !== null && brier > 0.35) {
+    const window = holdoutReady ? 'holdout ' : '';
     addFinding(findings, {
       id: 'forecast.calibration_poor',
       severity: 'yellow',
       priority: 29,
-      summary: `Forecast calibration is poor (Brier ${brier.toFixed(3)} across ${resolved} resolved predictions).`,
-      evidence: `brierScore=${brier}; resolved=${resolved}`,
-      nextAction: 'Compare bySource and byDomain Brier scores, then recalibrate or replace only the underperforming model/domain pair.',
+      summary: `Forecast ${window}calibration is poor (Brier ${brier.toFixed(3)} across ${resolved} scored predictions).`,
+      evidence: `${holdoutReady ? 'holdoutBrier' : 'brierScore'}=${brier}; scored=${resolved}`,
+      nextAction: 'Inspect evaluation.worstCohorts, then recalibrate or replace only the underperforming source/domain/horizon cohort.',
+    });
+  }
+  inspectForecastEvaluationCohorts(snapshot.forecastCalibration, findings);
+  inspectForecastLossAttribution(snapshot.forecastCalibration, findings);
+}
+
+function inspectForecastEvaluationCohorts(forecastCalibration, findings) {
+  const cohorts = Array.isArray(forecastCalibration?.evaluation?.worstCohorts)
+    ? forecastCalibration.evaluation.worstCohorts
+    : [];
+  const worst = cohorts.find((cohort) =>
+    cohort?.brier?.status === 'ok'
+    && finiteOrNull(cohort.brier.value) !== null);
+  const brier = finiteOrNull(worst?.brier?.value);
+  if (!worst || brier === null || brier <= 0.35) return;
+  const sampleSize = finiteOrNull(worst.brier.sampleSize) ?? 0;
+  const sourceId = boundedDiagnosticLabel(worst.sourceId);
+  const domain = boundedDiagnosticLabel(worst.domain);
+  const horizon = boundedDiagnosticLabel(worst.horizon);
+  addFinding(findings, {
+    id: 'forecast.cohort_underperforming',
+    severity: 'yellow',
+    priority: 30,
+    summary: `${sourceId}/${domain}/${horizon} is the worst evidenced forecast cohort (Brier ${brier.toFixed(3)}, n=${sampleSize}).`,
+    evidence: `source=${sourceId}; domain=${domain}; horizon=${horizon}; brier=${brier}; sampleSize=${sampleSize}`,
+    nextAction: 'Replay this cohort against its chronological holdout before changing source weights or calibration parameters.',
+  });
+}
+
+function inspectForecastLossAttribution(forecastCalibration, findings) {
+  const attribution = objectOrNull(
+    forecastCalibration?.evaluation?.lossAttribution,
+  );
+  const rows = Array.isArray(attribution?.bySource)
+    ? attribution.bySource
+    : [];
+  const top = objectOrNull(rows[0]);
+  const totalSamples = finiteOrNull(attribution?.sampleSize) ?? 0;
+  const share = finiteOrNull(top?.shareOfBrierLoss);
+  if (!top || totalSamples < 20 || share === null || share < 0.5) return;
+  const sourceId = boundedDiagnosticLabel(top.key);
+  const sampleSize = finiteOrNull(top.sampleSize) ?? 0;
+  const highConfidenceMisses =
+    finiteOrNull(top.highConfidenceMisses) ?? 0;
+  addFinding(findings, {
+    id: 'forecast.loss_concentrated',
+    severity: 'yellow',
+    priority: 31,
+    summary: `${sourceId} contributes ${(share * 100).toFixed(1)}% of holdout Brier loss across ${sampleSize} scored forecasts.`,
+    evidence: `source=${sourceId}; shareOfBrierLoss=${share}; sampleSize=${sampleSize}; highConfidenceMisses=${highConfidenceMisses}`,
+    nextAction: 'Inspect evaluation.lossAttribution by domain, horizon, and algorithm version, then replay only the dominant loss slice.',
+  });
+}
+
+function inspectResolutionQuality(forecastCalibration, findings) {
+  const quality = objectOrNull(forecastCalibration.resolutionQuality?.summary);
+  if (!quality) return;
+  const malformed = finiteOrNull(quality.malformed) ?? 0;
+  const leakage = finiteOrNull(quality.labelLeakage) ?? 0;
+  const duplicates = finiteOrNull(quality.duplicateOutcomes) ?? 0;
+  const contradictory = finiteOrNull(quality.contradictoryEvidence) ?? 0;
+  const invalid = malformed + leakage + duplicates + contradictory;
+  if (invalid > 0) {
+    addFinding(findings, {
+      id: 'forecast.resolution_quality_invalid',
+      severity: 'red',
+      priority: 23,
+      summary: `${invalid} invalid forecast resolution label issue(s) were detected.`,
+      evidence: `malformed=${malformed}; leakage=${leakage}; duplicates=${duplicates}; contradictory=${contradictory}`,
+      nextAction: 'Quarantine the affected domain labels and inspect resolutionQuality.byDomain plus the deterministic resolver fixtures before tuning any model.',
+    });
+  }
+
+  const uncertainProxy = finiteOrNull(quality.uncertainProxy) ?? 0;
+  if (uncertainProxy > 0) {
+    addFinding(findings, {
+      id: 'forecast.proxy_labels_uncertain',
+      severity: 'yellow',
+      priority: 24,
+      summary: `${uncertainProxy} proxy resolution label(s) lack strong corroboration.`,
+      evidence: `proxy=${quality.origins?.proxy ?? 0}; uncertainProxy=${uncertainProxy}`,
+      nextAction: 'Inspect resolutionQuality.byDomain, then require two independent supporting sources or replace the proxy with direct ground truth.',
+    });
+  }
+
+  const late = finiteOrNull(quality.lateResolutions) ?? 0;
+  if (late > 0) {
+    addFinding(findings, {
+      id: 'forecast.resolutions_late',
+      severity: 'yellow',
+      priority: 26,
+      summary: `${late} forecast resolution(s) arrived after their declared horizon.`,
+      evidence: `lateResolutions=${late}; resolved=${quality.resolved ?? 0}`,
+      nextAction: 'Compare resolver cadence and data timestamps by domain; keep late evidence distinct from in-window model performance.',
     });
   }
 }
@@ -464,6 +575,14 @@ function publicFinding(finding) {
     evidence: finding.evidence,
     nextAction: finding.nextAction,
   };
+}
+
+function boundedDiagnosticLabel(value) {
+  const bounded = String(value ?? 'unknown')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .slice(0, 80);
+  return redactDiagnosticText(bounded || 'unknown');
 }
 
 function redactDiagnosticValue(value) {

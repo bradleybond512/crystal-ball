@@ -133,7 +133,8 @@ test('toPredictionRecord builds a well-formed pending record', () => {
   assert.equal(rec.sourceId, 'shortage:corn');
   assert.equal(rec.predictedAt, NOW);
   assert.equal(rec.resolveBy, NOW + 90 * DAY_MS);
-  assert.equal(rec.algorithmVersion, 'shortage-corn-v1');
+  assert.equal(rec.algorithmVersion, '1.0.0');
+  assert.equal(rec.targetKey, 'shortage:corn:global');
   assert.equal(rec.probability, 0.7);
 });
 
@@ -167,6 +168,32 @@ test('resolveShortagePrediction resolves the in-window pending record and return
   assert.equal(rec.resolvedAt, NOW + DAY_MS);
 });
 
+test('resolveShortagePrediction grades a paired baseline on the shared target key', () => {
+  recordShortagePredictions([
+    forecast({ commodity: 'rice', region: 'asia' }),
+  ], NOW);
+  recordPrediction({
+    id: 'base-rate:rice-asia',
+    sourceId: 'hierarchical-base-rate',
+    targetKey: 'shortage:rice:asia',
+    domain: 'macro',
+    claim: 'rice shortage risk elevated in asia within 60d',
+    probability: 0.4,
+    predictedAt: NOW,
+    resolveBy: NOW + 60 * DAY_MS,
+    status: 'pending',
+    algorithmVersion: '1.0.0',
+  });
+
+  const n = resolveShortagePrediction('rice', 'asia', true, NOW + DAY_MS);
+
+  assert.equal(n, 2);
+  assert.equal(
+    getCalibrationStore().get('base-rate:rice-asia')?.status,
+    'resolved_true',
+  );
+});
+
 test('resolveShortagePrediction returns 0 when nothing is pending', () => {
   assert.equal(resolveShortagePrediction('soybeans', 'brazil', true, NOW), 0);
 });
@@ -197,7 +224,10 @@ test('resolveShortageFromObservation resolves true only above the threshold (str
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:natgas')!.status, 'pending');
   // above threshold → resolves true.
   assert.equal(resolveShortageFromObservation({ commodity: 'natgas', region: 'eu', riskScore: SHORTAGE_ELEVATED_THRESHOLD + 1 }, NOW + DAY_MS), 1);
-  assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:natgas')!.status, 'resolved_true');
+  const resolved = getCalibrationStore().all().find((r) => r.sourceId === 'shortage:natgas')!;
+  assert.equal(resolved.status, 'resolved_true');
+  assert.equal(resolved.resolutionProvenance?.kind, 'proxy');
+  assert.equal(resolved.resolutionProvenance?.resolverId, 'shortage-observation-v1');
 });
 
 test('a subthreshold observation never resolves a claim false mid-window', () => {
@@ -207,13 +237,43 @@ test('a subthreshold observation never resolves a claim false mid-window', () =>
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:jetfuel')!.status, 'pending');
 });
 
-test('settleExpiredShortagePredictions marks overdue pending records false, leaves in-window ones alone', () => {
+test('settleExpiredShortagePredictions expires ambiguous overdue records, leaves in-window ones alone', () => {
   recordShortagePredictions([forecast({ commodity: 'wheat', region: 'r1', horizonDays: 30 })], NOW);        // resolveBy NOW+30d
   recordShortagePredictions([forecast({ commodity: 'diesel', region: 'r2', horizonDays: 90 })], NOW);        // resolveBy NOW+90d
   const n = settleExpiredShortagePredictions(NOW + 45 * DAY_MS);
   assert.equal(n, 1);
-  assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:wheat')!.status, 'resolved_false');
+  const settled = getCalibrationStore().all().find((r) => r.sourceId === 'shortage:wheat')!;
+  assert.equal(settled.status, 'expired');
+  assert.equal(settled.resolutionProvenance, undefined);
+  assert.match(settled.resolutionNote ?? '', /^unresolved:shortage-window-v1/);
+  assert.equal(getCalibrationStore().brier().evaluated, 0);
   assert.equal(getCalibrationStore().all().find((r) => r.sourceId === 'shortage:diesel')!.status, 'pending');
+});
+
+test('settleExpiredShortagePredictions expires a paired baseline with its target', () => {
+  recordShortagePredictions([
+    forecast({ commodity: 'wheat', region: 'r1', horizonDays: 30 }),
+  ], NOW);
+  recordPrediction({
+    id: 'base-rate:wheat-r1',
+    sourceId: 'hierarchical-base-rate',
+    targetKey: 'shortage:wheat:r1',
+    domain: 'macro',
+    claim: 'wheat shortage risk elevated in r1 within 30d',
+    probability: 0.4,
+    predictedAt: NOW,
+    resolveBy: NOW + 30 * DAY_MS,
+    status: 'pending',
+    algorithmVersion: '1.0.0',
+  });
+
+  const n = settleExpiredShortagePredictions(NOW + 31 * DAY_MS);
+
+  assert.equal(n, 2);
+  assert.equal(
+    getCalibrationStore().get('base-rate:wheat-r1')?.status,
+    'expired',
+  );
 });
 
 test('settleExpiredShortagePredictions leaves a claim open at exactly resolveBy (boundary matches isOpenAt)', () => {

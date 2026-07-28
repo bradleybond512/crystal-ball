@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { publicAlgorithmDiagnostics } from '../forecast-evaluation-public.mjs';
 
 const HEALTHY = new Set(['healthy', 'ok', 'fresh', 'up', 'operational']);
 
@@ -12,7 +13,7 @@ export const schemas = {
   },
   get_algorithm_diagnostics: {
     description:
-      'Current algorithm health, forecast calibration/Brier coverage, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
+      'Current algorithm health, leakage-safe chronological holdout metrics, bounded Brier-loss attribution and worst source/domain/horizon cohorts, resolution backlog and label origins, weather ground-truth coverage, evaluation retention, p50/p95 latency, runtime errors, bounded tuning parameters, proposals, and recent tuning decisions from the live renderer.',
     inputSchema: z.object({}),
   },
 };
@@ -25,6 +26,9 @@ export function makeDiagnosticsTools(client) {
       const responses = await Promise.all(routes.map((route) => client.get(route)));
       const [health, feeds, analyst, selfTest = null] = responses;
       const findings = [];
+      const algorithmDiagnostics = publicAlgorithmDiagnostics(
+        analyst?.algorithmDiagnostics,
+      );
 
       if (health?.ok !== true) {
         findings.push(finding(
@@ -63,7 +67,7 @@ export function makeDiagnosticsTools(client) {
         ));
       }
 
-      for (const algorithm of analyst?.algorithmDiagnostics?.health?.algorithms ?? []) {
+      for (const algorithm of algorithmDiagnostics?.health?.algorithms ?? []) {
         if (!['unsafe', 'failing', 'degraded'].includes(algorithm.status)) continue;
         findings.push(finding(
           `algorithm.${algorithm.status}.${algorithm.algorithmId}`,
@@ -72,7 +76,7 @@ export function makeDiagnosticsTools(client) {
           algorithm.recommendedAdjustment || 'Replay recent evaluations before changing a tuning parameter.',
         ));
       }
-      const weatherReports = analyst?.algorithmDiagnostics
+      const weatherReports = algorithmDiagnostics
         ?.forecastCalibration?.weatherReports;
       const pendingWarnings = Number(
         weatherReports?.pendingWarningPredictions ?? 0,
@@ -86,6 +90,14 @@ export function makeDiagnosticsTools(client) {
           'Check the Iowa State LSR feed and weatherReports coverage before tuning weather confidence.',
         ));
       }
+      inspectResolutionQuality(
+        algorithmDiagnostics?.forecastCalibration,
+        findings,
+      );
+      inspectForecastEvaluation(
+        algorithmDiagnostics?.forecastCalibration,
+        findings,
+      );
 
       const failedSelfTests = Number(selfTest?.summary?.fail ?? selfTest?.summary?.failed ?? 0);
       const degradedSelfTests = Number(selfTest?.summary?.degraded ?? 0);
@@ -121,7 +133,7 @@ export function makeDiagnosticsTools(client) {
         renderer: analyst?.available === true
           ? { available: true, stale: analyst.stale === true, ageMs: analyst.ageMs ?? null }
           : { available: false },
-        algorithms: analyst?.algorithmDiagnostics ?? null,
+        algorithms: algorithmDiagnostics,
         selfTest,
         findings,
         timestamp: new Date().toISOString(),
@@ -145,11 +157,20 @@ export function makeDiagnosticsTools(client) {
           timestamp: new Date().toISOString(),
         };
       }
+      const diagnostics = publicAlgorithmDiagnostics(state.algorithmDiagnostics);
+      if (!diagnostics) {
+        return {
+          available: false,
+          summary: 'The running app returned an invalid algorithm diagnostics snapshot.',
+          stale: state.stale === true,
+          timestamp: new Date().toISOString(),
+        };
+      }
       return {
         available: true,
-        summary: summarizeAlgorithms(state.algorithmDiagnostics),
+        summary: summarizeAlgorithms(diagnostics),
         stale: state.stale === true,
-        diagnostics: state.algorithmDiagnostics,
+        diagnostics,
         timestamp: new Date().toISOString(),
       };
     },
@@ -181,9 +202,133 @@ function summarizeAlgorithms(snapshot) {
   const resolverOutcomes = typeof forecasts.directResolved === 'number'
     ? `; resolver outcomes direct:${forecasts.directResolved} proxy:${forecasts.proxyResolved ?? 0} expired:${forecasts.resolverExpired ?? 0}`
     : '';
+  const origins = ledger.outcomeOrigins;
+  const runtimeLabels = origins && typeof origins === 'object'
+    ? `; runtime labels direct:${origins.direct ?? 0} proxy:${origins.proxy ?? 0} manual:${origins.manual ?? 0} llm:${origins.llm ?? 0}`
+    : '';
   const weatherReports = snapshot.forecastCalibration?.weatherReports;
   const weather = typeof weatherReports?.status === 'string'
     ? `; weather reports ${weatherReports.status} (${weatherReports.pendingWarningPredictions ?? 0} pending warnings)`
     : '';
-  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${criteria}${resolverOutcomes}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+  const quality = snapshot.forecastCalibration?.resolutionQuality?.summary;
+  const invalid = resolutionInvalidCount(quality);
+  const labelQuality = quality && typeof quality === 'object'
+    ? `; label quality direct:${quality.origins?.direct ?? 0} proxy:${quality.origins?.proxy ?? 0} manual:${quality.origins?.manual ?? 0}; invalid:${invalid} uncertain-proxy:${quality.uncertainProxy ?? 0} late:${quality.lateResolutions ?? 0}`
+    : '';
+  const evaluation = snapshot.forecastCalibration?.evaluation;
+  const holdoutMetric = evaluation?.overall?.brier;
+  const holdout = holdoutMetric?.status === 'ok'
+    ? `; holdout Brier ${holdoutMetric.value.toFixed(3)} (n=${holdoutMetric.sampleSize})`
+    : holdoutMetric?.status === 'insufficient_evidence'
+      ? `; holdout evidence ${holdoutMetric.sampleSize}/${holdoutMetric.minSampleSize}`
+      : '';
+  const worst = evaluation?.worstCohorts?.find((cohort) =>
+    cohort?.brier?.status === 'ok');
+  const worstCohort = worst
+    ? `; worst cohort ${worst.sourceId}/${worst.domain}/${worst.horizon} Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize})`
+    : '';
+  const topLoss = evaluation?.lossAttribution?.bySource?.[0];
+  const lossAttribution =
+    typeof topLoss?.key === 'string'
+    && typeof topLoss.shareOfBrierLoss === 'number'
+      ? `; top Brier loss ${topLoss.key} ${(topLoss.shareOfBrierLoss * 100).toFixed(1)}% (${topLoss.highConfidenceMisses ?? 0} high-confidence misses)`
+      : '';
+  return `${status} algorithm health; ${ledger.graded ?? 0}/${ledger.total ?? 0} runtime evaluations graded${runtimeLabels}; ${forecasts.resolved ?? 0}/${forecasts.total ?? 0} forecasts resolved${brier}${holdout}${worstCohort}${lossAttribution}${criteria}${resolverOutcomes}${labelQuality}${weather}; ${forecasts.overduePending ?? 0} overdue.`;
+}
+
+function inspectForecastEvaluation(forecastCalibration, findings) {
+  const evaluation = forecastCalibration?.evaluation;
+  if (!evaluation || typeof evaluation !== 'object') return;
+  const backlog = evaluation.resolutionBacklog;
+  const overdue = finiteCount(backlog?.overduePending);
+  if (overdue > 0) {
+    findings.push(finding(
+      'forecast.outcomes_overdue',
+      'yellow',
+      `${overdue} forecast outcome(s) are overdue for resolution.`,
+      'Inspect the resolver backlog and upstream observation cadence before changing model weights.',
+    ));
+  }
+  const overall = evaluation.overall?.brier;
+  if (overall?.status === 'ok' && finiteNumber(overall.value) > 0.35) {
+    findings.push(finding(
+      'forecast.calibration_poor',
+      'yellow',
+      `Forecast holdout Brier is ${overall.value.toFixed(3)} across ${overall.sampleSize} scored predictions.`,
+      'Inspect evaluation.worstCohorts and replay the affected cohort before recalibrating.',
+    ));
+  }
+  const worst = evaluation.worstCohorts?.find((cohort) =>
+    cohort?.brier?.status === 'ok');
+  if (worst && finiteNumber(worst.brier.value) > 0.35) {
+    findings.push(finding(
+      'forecast.cohort_underperforming',
+      'yellow',
+      `${worst.sourceId}/${worst.domain}/${worst.horizon} has holdout Brier ${worst.brier.value.toFixed(3)} (n=${worst.brier.sampleSize}).`,
+      'Replay this source/domain/horizon cohort before changing source weights or calibration parameters.',
+    ));
+  }
+  const attribution = evaluation.lossAttribution;
+  const topLoss = attribution?.bySource?.[0];
+  if (
+    finiteCount(attribution?.sampleSize) >= 20
+    && finiteNumber(topLoss?.shareOfBrierLoss) >= 0.5
+  ) {
+    findings.push(finding(
+      'forecast.loss_concentrated',
+      'yellow',
+      `${topLoss.key} contributes ${(topLoss.shareOfBrierLoss * 100).toFixed(1)}% of holdout Brier loss across ${topLoss.sampleSize} scored forecasts.`,
+      'Inspect the same source across evaluation.lossAttribution.byDomain, byHorizon, and byAlgorithmVersion before changing its calibration.',
+    ));
+  }
+}
+
+function inspectResolutionQuality(forecastCalibration, findings) {
+  const quality = forecastCalibration?.resolutionQuality?.summary;
+  if (!quality || typeof quality !== 'object') return;
+  const invalid = resolutionInvalidCount(quality);
+  if (invalid > 0) {
+    findings.push(finding(
+      'forecast.resolution_quality_invalid',
+      'red',
+      `${invalid} invalid forecast resolution label issue(s) were detected.`,
+      'Quarantine affected domain labels and inspect resolutionQuality.byDomain before tuning.',
+    ));
+  }
+  const uncertainProxy = finiteCount(quality.uncertainProxy);
+  if (uncertainProxy > 0) {
+    findings.push(finding(
+      'forecast.proxy_labels_uncertain',
+      'yellow',
+      `${uncertainProxy} proxy resolution label(s) lack strong corroboration.`,
+      'Require two independent supporting sources or replace the proxy with direct ground truth.',
+    ));
+  }
+  const late = finiteCount(quality.lateResolutions);
+  if (late > 0) {
+    findings.push(finding(
+      'forecast.resolutions_late',
+      'yellow',
+      `${late} forecast resolution(s) arrived after their declared horizon.`,
+      'Inspect resolver cadence and keep late evidence distinct from in-window model performance.',
+    ));
+  }
+}
+
+function resolutionInvalidCount(quality) {
+  if (!quality || typeof quality !== 'object') return 0;
+  return finiteCount(quality.malformed)
+    + finiteCount(quality.labelLeakage)
+    + finiteCount(quality.duplicateOutcomes)
+    + finiteCount(quality.contradictoryEvidence);
+}
+
+function finiteCount(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : 0;
+}
+
+function finiteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

@@ -5,16 +5,26 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const DEFAULT_APP_PATH = path.join(repoRoot, 'src-tauri', 'target', 'release', 'bundle', 'macos', 'Crystal Ball.app');
 const DEFAULT_INSTALL_PATH = path.join(os.homedir(), 'Applications', 'Crystal Ball.app');
 const EXPECTED_BUNDLE_ID = 'com.bradleybond.crystalball';
+const APP_PROCESS_TIMEOUT_MS = 15_000;
+const APP_PROCESS_POLL_INTERVAL_MS = 100;
+const VALUE_OPTION_FIELDS = new Map([
+  ['--app', 'appPath'],
+  ['--install-path', 'installPath'],
+  ['--sha256', 'expectedSha256'],
+  ['--local-sha', 'localSha'],
+  ['--state-file', 'stateFile'],
+]);
 
 const DEFAULT_SYNC_STATE_FILE = path.join(os.homedir(), '.crystalball-main-sync', 'state.json');
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const options = {
  appPath: DEFAULT_APP_PATH,
  installPath: DEFAULT_INSTALL_PATH,
@@ -26,56 +36,21 @@ function parseArgs(argv) {
 
   for (let i = 0; i < argv.length; i += 1) {
  const arg = argv[i];
- if (arg === '--app') {
- options.appPath = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--app=')) {
- options.appPath = arg.slice('--app='.length);
- continue;
- }
- if (arg === '--install-path') {
- options.installPath = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--install-path=')) {
- options.installPath = arg.slice('--install-path='.length);
- continue;
- }
- if (arg === '--sha256') {
- options.expectedSha256 = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--sha256=')) {
- options.expectedSha256 = arg.slice('--sha256='.length);
- continue;
- }
  if (arg === '--relaunch') {
  options.relaunch = true;
  continue;
  }
- if (arg === '--local-sha') {
- options.localSha = argv[i + 1] ?? '';
- i += 1;
- continue;
+
+ const separatorIndex = arg.indexOf('=');
+ const optionName = separatorIndex === -1 ? arg : arg.slice(0, separatorIndex);
+ const field = VALUE_OPTION_FIELDS.get(optionName);
+ if (!field) {
+   throw new Error(`Unknown argument: ${arg}`);
  }
- if (arg.startsWith('--local-sha=')) {
- options.localSha = arg.slice('--local-sha='.length);
- continue;
- }
- if (arg === '--state-file') {
- options.stateFile = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--state-file=')) {
- options.stateFile = arg.slice('--state-file='.length);
- continue;
- }
- throw new Error(`Unknown argument: ${arg}`);
+
+ options[field] = separatorIndex === -1
+   ? argv[++i] ?? ''
+   : arg.slice(separatorIndex + 1);
   }
 
   return options;
@@ -185,12 +160,45 @@ async function writeLocalBuildSha(stateFile, localSha, installPath) {
   await writeFile(stateFile, `${JSON.stringify({ ...existing, localBuildSha: localSha, localInstalledAt: new Date().toISOString(), installPath }, null, 2)}\n`);
 }
 
-function stopRunningApp() {
-  spawnSync('osascript', ['-e', 'tell application "Crystal Ball" to quit'], { stdio: 'ignore' });
+function isAppProcessRunning(installPath, processCommands) {
+  const executablePath = path.join(installPath, 'Contents', 'MacOS', 'crystalball');
+  return processCommands
+ .split('\n')
+ .map((command) => command.trim())
+ .some((command) => command === executablePath || command.startsWith(`${executablePath} `));
 }
 
-function relaunchApp(installPath) {
-  spawnSync('open', ['-a', installPath], { stdio: 'ignore' });
+export async function waitForAppProcess(
+  installPath,
+  shouldBeRunning,
+  {
+ timeoutMs = APP_PROCESS_TIMEOUT_MS,
+ pollIntervalMs = APP_PROCESS_POLL_INTERVAL_MS,
+ readProcessCommands = () => runCommand('/bin/ps', ['-axo', 'command=']),
+  } = {},
+) {
+  const startedAt = Date.now();
+  while (true) {
+ const isRunning = isAppProcessRunning(installPath, readProcessCommands());
+ if (isRunning === shouldBeRunning) {
+   return;
+ }
+ if (Date.now() - startedAt >= timeoutMs) {
+   const action = shouldBeRunning ? 'start' : 'exit';
+   throw new Error(`Crystal Ball app process did not ${action} within ${timeoutMs}ms`);
+ }
+ await delay(pollIntervalMs);
+  }
+}
+
+async function stopRunningApp(installPath) {
+  spawnSync('/usr/bin/osascript', ['-e', 'tell application "Crystal Ball" to quit'], { stdio: 'ignore' });
+  await waitForAppProcess(installPath, false);
+}
+
+async function relaunchApp(installPath) {
+  runCommand('/usr/bin/open', ['-a', installPath]);
+  await waitForAppProcess(installPath, true);
 }
 
 async function main() {
@@ -200,11 +208,12 @@ async function main() {
  const stagedSource = path.join(tempRoot, path.basename(options.appPath));
  await cp(options.appPath, stagedSource, { recursive: true });
  await verifyAppBundle(stagedSource, options.expectedSha256);
- stopRunningApp();
+ await stopRunningApp(options.installPath);
  await installAppBundle(stagedSource, options.installPath);
+ if (options.relaunch) await relaunchApp(options.installPath);
  await writeLocalBuildSha(options.stateFile, options.localSha, options.installPath);
- if (options.relaunch) relaunchApp(options.installPath);
- console.log(`[install-built-app] Installed ${options.installPath}${options.localSha ? ` (local build ${options.localSha.slice(0, 8)})` : ''}`);
+ const localBuildSuffix = options.localSha ? ` (local build ${options.localSha.slice(0, 8)})` : '';
+ console.log(`[install-built-app] Installed ${options.installPath}${localBuildSuffix}`);
   } finally {
  await rm(tempRoot, { recursive: true, force: true });
   }
@@ -213,8 +222,10 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
-  main().catch((error) => {
+  try {
+ await main();
+  } catch (error) {
  console.error(`[install-built-app] Failed: ${error instanceof Error ? error.message : String(error)}`);
- process.exit(1);
-  });
+ process.exitCode = 1;
+  }
 }

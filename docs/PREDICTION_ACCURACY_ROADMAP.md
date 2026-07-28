@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-07-26
+> Updated: 2026-07-27
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -259,7 +259,13 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B2.
 
 ### ACC-103 — Conflict and geospatial event resolver
 
-Status: `TODO`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-103-geospatial-resolver`
+
+Evidence: PR #1518
 
 Dependencies: ACC-101 and ACC-004
 
@@ -282,11 +288,21 @@ Verify:
 - `npm run test:intelligence`;
 - `npm run typecheck:all`.
 
+Verification: conflict, military, security, protest, and corroborated-news
+adapters feed a bounded resolver that requires exact target matching and two
+independent sources. Intelligence, cognition, renderer, reasoning, situations,
+news, algorithm, diagnostics, weather, security, strict lint, TypeScript,
+production build, lockfile, and secret-scan gates passed.
+
 Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 ### ACC-104 — Grade runtime algorithms from authoritative outcomes
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-104-authoritative-grading`
 
 Dependencies: ACC-101 through ACC-103
 
@@ -309,9 +325,23 @@ Acceptance:
 - the production algorithm ledger begins accumulating non-LLM graded records;
 - no outcome can grade a different target, horizon, or version.
 
+Verification: PR #1521 links emitted forecasts to opaque ledger evaluations,
+requires exact target, horizon, and algorithm-version attribution at grade time,
+and backfills persisted forecasts idempotently at startup. Direct, proxy, manual,
+and LLM origins are persisted and reported separately while diagnostics omit raw
+forecast identifiers and input hashes. One bounded LLM runner remains
+(five labels per 12 hours, after 48 hours), and authoritative-linked records are
+ineligible for it. Algorithm, intelligence, cognition, shortage, weather,
+diagnostics, security, 12,722 renderer tests, strict/full lint, TypeScript,
+production build, offline smoke, lockfile, and secret-scan gates passed.
+
 ### ACC-105 — Resolution-quality audit
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-105-resolution-quality-audit`
 
 Dependencies: ACC-101 through ACC-104
 
@@ -328,6 +358,18 @@ Phase exit:
 - at least one direct outcome and one safe proxy outcome are proven end to end;
 - direct/proxy/LLM/manual label origin is visible in diagnostics.
 
+Verification: PR #1523 adds deterministic leakage, duplicate-outcome,
+late-data, contradictory-provider, and uncertain-proxy fixtures. Structured
+resolution metadata now fails closed unless bounded evidence explicitly
+supports the label, while ambiguous mode and shortage window closures expire
+without contaminating Brier scores. Privacy-safe diagnostics and the doctor/MCP
+tools report resolution coverage, label origins, and quality defects by domain.
+The live market, weather, and conflict resolvers retain direct and corroborated
+proxy paths established in ACC-103/104. Intelligence, shortage, algorithm,
+diagnostic, security, 12,732 renderer tests, strict/full lint, TypeScript,
+production build, bundle budgets, offline smoke, lockfile, dependency audit,
+and secret-scan gates passed.
+
 ## Phase 2 — Build the forecast evaluation workbench
 
 Purpose: make error analysis and model comparison fast enough that tuning is
@@ -335,7 +377,11 @@ driven by evidence instead of intuition.
 
 ### ACC-201 — Proper-scoring and cohort metrics
 
-Status: `TODO`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-201-forecast-evaluation`
 
 Dependencies: ACC-005
 
@@ -369,9 +415,27 @@ Verify:
 - `npm run test:intelligence`;
 - `npm run typecheck:all`.
 
+Verification: PR #1524 adds a deterministic, wall-clock-independent evaluation
+contract with per-record Brier and clipped-log-loss contributions, empirical
+training baselines, Brier skill, equal-mass ECE, calibration slope/intercept,
+resolution and expiration coverage, and seeded paired bootstrap intervals.
+Training labels must be resolved before the evaluation window begins, proxy
+labels are excluded unless explicitly enabled, malformed horizons remain
+visible in an `invalid` cohort, and every aggregate returns
+`insufficient_evidence` below its declared floor. Target, source, domain,
+horizon, and version rollups share the same guardrails. Sixteen known-answer
+fixtures within 556 intelligence tests, plus 302 algorithm, 395 diagnostic,
+12,748 renderer, strict and changed-file lint, TypeScript, production build,
+offline smoke, bundle/precache/sidecar budgets, 114 security tests, dependency
+audit, lockfile, documentation, and secret-scan gates passed.
+
 ### ACC-202 — Per-forecast workbench UI
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-202-forecast-workbench`
 
 Dependencies: ACC-201
 
@@ -392,9 +456,27 @@ Deliver:
 
 No new panel is needed unless the existing panel becomes unusably dense.
 
+Verification: PR #1525 turns the existing Belief Calibration panel into a
+wide, interactive forecast workbench without creating another panel. Five
+cohort filters, deterministic sorting, explicit training/proxy/unscored metric
+exclusions, a Wilson-interval reliability chart, overall-versus-selected
+holdout metrics, and bounded error drilldowns all share ACC-201's fixed 60/40
+chronological evaluation contract. Seventeen focused component fixtures within
+12,756 renderer tests, plus 556 intelligence, 302 algorithm, 395 diagnostic,
+strict and changed-file lint, TypeScript, production build, offline smoke,
+bundle/precache/sidecar budgets, 114 security tests, dependency audit,
+lockfile, documentation, and secret-scan gates passed. Live browser checks
+also exercised all filters, sorting, proxy exclusions, insufficient-evidence
+rendering, chart accessibility, and the wide-panel layout without root
+overflow.
+
 ### ACC-203 — Diagnostics and MCP evaluation export
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-203-evaluation-diagnostics`
 
 Dependencies: ACC-201
 
@@ -412,9 +494,48 @@ Deliver:
 - resolution backlog and label-origin counts;
 - no claims, evidence bodies, secrets, or high-precision locations in exports.
 
+Verification: PR #1527 adds a shared chronological 60/40 split, aggregate
+holdout Brier, log loss, base rate, Brier skill, equal-mass ECE, calibration
+fit, coverage, exclusions, resolution backlog, label origins, and the ten
+worst evidenced source/domain/horizon cohorts to renderer diagnostics, the
+doctor report, and the MCP tools. Cohorts below ACC-201's evidence floors stay
+explicitly `insufficient_evidence`; proxy labels remain excluded; agent
+boundaries allowlist the aggregate schema and strip injected raw fields.
+Privacy fixtures prove that claims, resolution notes, evidence references,
+target keys, scored records, and high-precision warning coordinates are
+absent. Twenty-four focused evaluator/diagnostic fixtures within 557
+intelligence and 304 algorithm tests, 396 diagnostic tests, 12,780 renderer
+tests, changed-file ESLint, strict lint, TypeScript, production build, offline
+smoke, bundle/precache/sidecar budgets, 69 security tests, dependency audit,
+lockfile, and secret-scan gates passed. The documentation freshness gate
+continues to report only the pre-existing main-branch omission for PR #1526.
+
 ### ACC-204 — Time-ordered replay corpus and benchmark
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-204-replay-benchmark`
+
+Evidence: PR #1529
+
+Verification: `npm run bench:forecast` replays a privacy-safe frozen
+120-record corpus through four expanding windows with strict prediction-time
+cutoffs and passes committed Brier-skill, log-loss, resolution-coverage, and
+high-confidence-miss gates. The 80-record evaluation window resolves 71
+records and scores 65 direct/manual labels (88.75% resolution coverage),
+with Brier 0.237735, log loss 0.698403, and Brier skill 0.005795. Loss
+attribution identifies the analyst loop as 75.4% of total Brier loss
+(Brier 0.448, skill -0.906, eight high-confidence misses) while the security
+mode retains positive 0.796 Brier skill. The Belief Calibration panel, CLI
+doctor, and MCP diagnostics now expose bounded source/domain/horizon/version
+loss attribution. Five hundred sixty-two intelligence tests, 304 algorithm
+tests, 12,786 renderer tests, 106 MCP tests, diagnostics suites, strict lint,
+full TypeScript, production build, offline smoke, cognition and forecast
+benchmarks, bundle/precache/sidecar budgets, 69 security tests, dependency
+audit, lockfile, and secret-scan gates passed. Documentation freshness now
+reports only the pre-existing main-branch omission for PR #1526.
 
 Dependencies: ACC-201 and ACC-101
 
@@ -447,7 +568,33 @@ well-calibrated alternatives.
 
 ### ACC-301 — Hierarchical base-rate model
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-301-hierarchical-base-rate`
+
+Evidence: PR #1530
+
+Verification: `hierarchical-base-rate@1.0.0` requires 30 direct/manual
+resolved outcomes, deduplicates shared target/window labels, rejects proxy and
+future-known evidence and malformed forecast windows, applies a Beta(1,1)
+global prior, falls back globally below 20 domain outcomes, and shrinks
+domain/horizon cells only after 10 matching outcomes. Eligible production
+forecasts emit one versioned baseline on the same target and horizon;
+hypothesis, mode, shortage, market, and warning resolution paths grade or
+expire the pair together. The frozen four-fold walk-forward corpus reports
+hierarchical baseline Brier 0.238945 versus 0.238997 for the global Beta
+baseline, with a hard regression gate if the hierarchy trails global. The
+incumbent forecast remains only narrowly positive against the stronger
+baseline (Brier skill 0.005062); this task does not promote a learned model.
+Final verification passed `typecheck:all`, strict repository linters, scoped
+ESLint, 12,801 renderer tests, the intelligence, algorithm, shortage,
+diagnostics, and security suites, production build, offline smoke, both
+deterministic benchmarks, dependency and secret scans, scenario coverage, and
+bundle/PWA/sidecar budgets. Repository-wide `npm run lint` still reports the
+pre-existing legacy/generated-file baseline (1,577 findings); no finding is in
+the ACC-301 change set.
 
 Dependencies: ACC-201 and ACC-204
 

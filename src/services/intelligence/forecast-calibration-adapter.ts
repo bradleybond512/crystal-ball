@@ -46,6 +46,12 @@ import {
   type OutcomeResolver,
   type ResolverContext,
 } from './outcome-resolvers';
+import {
+  ensureForecastEvaluation,
+  gradeForecastOutcome,
+  syncForecastEvaluations,
+} from '@/services/algorithms/forecast-outcome-grading';
+import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -86,14 +92,30 @@ export function getCalibrationStore(): ForecastCalibrationStore {
 export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
+  const baseline = buildHierarchicalBaseRatePrediction(p, store.all());
+  const recordBaseline = baseline && !store.get(baseline.id);
+  if (recordBaseline) store.record(baseline);
   persist(store);
+  ensureForecastEvaluation(p);
+  if (recordBaseline) ensureForecastEvaluation(baseline);
 }
 
 /** Record a snapshot batch and persist once. */
 export function recordPredictions(predictions: readonly PredictionRecord[]): void {
   if (predictions.length === 0) return;
   const store = getCalibrationStore();
-  for (const prediction of predictions) store.record(prediction);
+  for (const prediction of predictions) {
+    store.record(prediction);
+    ensureForecastEvaluation(prediction);
+    const baseline = buildHierarchicalBaseRatePrediction(
+      prediction,
+      store.all(),
+    );
+    if (baseline && !store.get(baseline.id)) {
+      store.record(baseline);
+      ensureForecastEvaluation(baseline);
+    }
+  }
   persist(store);
 }
 
@@ -106,6 +128,22 @@ export function resolvePrediction(
 ): boolean {
   const store = getCalibrationStore();
   const ok = store.resolve(id, outcome, when, metadata);
+  if (ok) {
+    persist(store);
+    const resolved = store.get(id);
+    if (resolved) gradeForecastOutcome(resolved);
+  }
+  return ok;
+}
+
+/** Expire one prediction with a resolver note and persist it. */
+export function expirePrediction(
+  id: string,
+  when?: number,
+  note?: string,
+): boolean {
+  const store = getCalibrationStore();
+  const ok = store.expire(id, when, note);
   if (ok) persist(store);
   return ok;
 }
@@ -127,6 +165,7 @@ export function dispatchOutcomeResolvers(
   const store = getCalibrationStore();
   const resolved = runOutcomeResolvers(store, context, resolvers);
   persist(store);
+  syncForecastEvaluations(store.all());
   return resolved;
 }
 

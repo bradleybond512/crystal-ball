@@ -173,6 +173,7 @@ import type { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { fetchRipeNccStatus } from '@/services/ripe-ncc';
 import type { RipeNccPanel } from '@/components/RipeNccPanel';
 import { updateRegionCount, getHighRiskRegions } from '@/services/ema-forecast';
+import { countryIso3Slug } from '@/services/intelligence/entity-slug';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
 import { GivingPanel } from '@/components';
@@ -344,6 +345,15 @@ import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/ser
 import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/services/intelligence/adapters/marine-forecast-adapter';
 import { fewsNetToObservations, hdxHapiToObservations, type FEWSNETResponse, type HDXHAPIResponse } from '@/services/intelligence/adapters/food-security-adapter';
 import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
+import {
+  airstrikesToObservations,
+  conflictEventsToObservations,
+  createConflictObservationDeduper,
+  newsClustersToObservations,
+  orefAlertsToObservations,
+  unrestEventsToObservations,
+  ucdpEventsToObservations,
+} from '@/services/intelligence/conflict-observation-adapters';
 import { slog } from '@/services/structured-log';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
@@ -458,6 +468,8 @@ export class DataLoaderManager implements AppModule {
   private callbacks: DataLoaderCallbacks;
 
   private mapFlashCache = new Map<string, number>();
+  private readonly dedupeConflictObservations =
+    createConflictObservationDeduper();
   private readonly MAP_FLASH_COOLDOWN_MS = 10 * 60 * 1000;
   private _lastFlashCleanup = 0;
   private readonly applyTimeRangeFilterToNewsPanelsDebounced = debounce(() => {
@@ -1252,6 +1264,10 @@ export class DataLoaderManager implements AppModule {
  if (this.ctx.latestClusters.length > 0) {
  const insightsPanel = this.ctx.panels.insights as InsightsPanel | undefined;
  insightsPanel?.updateInsights(this.ctx.latestClusters);
+ const conflictNews = this.dedupeConflictObservations(
+   newsClustersToObservations(this.ctx.latestClusters),
+ );
+ if (conflictNews.length > 0) ingestObservations(conflictNews);
  }
 
  const geoLocated = this.ctx.latestClusters
@@ -1702,6 +1718,8 @@ export class DataLoaderManager implements AppModule {
  { recordAlgorithmEvaluation },
  { annotateModelOutput: annotateWeatherOutput },
  { getNotificationPreferencesService },
+ { computeAlertExposure },
+ { getSavedPlaces },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1709,6 +1727,8 @@ export class DataLoaderManager implements AppModule {
  import('@/services/algorithms/record-evaluation'),
  import('@/services/intelligence/assumption-producers'),
  import('@/services/notifications/notification-preferences'),
+ import('@/services/weather/weather-exposure'),
+ import('@/services/saved-places'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1733,8 +1753,33 @@ export class DataLoaderManager implements AppModule {
  const severeAlerts = alerts.filter(
  (a) => a.severity === 'Extreme' || a.severity === 'Severe',
  );
+ // Personal exposure: match each alert's polygon (or UGC zones, for
+ // geometry-free alerts) against the user's saved places so an official
+ // warning sitting over the user clears the Big Event Detector's
+ // exposureFloor (70). Before this, userExposure was hardcoded to 50 —
+ // below the floor — so a lone NWS warning fired only the weight-35
+ // high_confidence_high_impact trigger (< threshold 40) and was silently
+ // dropped: the "all clear during a severe storm" bug. Adapted to the
+ // matcher's SavedPlace shape (same mapping the storm-decision path uses).
+ // Carry the user's configured radius through: the matcher uses it as the
+ // near-polygon sensitivity buffer and only near-matches non-high-urgency
+ // hazards when a place opts in via radiusKm. Dropping it shrank the user's
+ // coverage to the 10 km hazard default — the opposite of what someone
+ // asking "why wasn't I warned?" wants.
+ const weatherPlaces = getSavedPlaces().map((p) => ({
+ id: p.id,
+ label: p.name,
+ lat: p.lat,
+ lon: p.lon,
+ radiusKm: p.radiusKm,
+ }));
  for (const alert of severeAlerts) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
+ // With no saved place, exposure is genuinely unknown — keep the
+ // conservative default rather than fabricating a location match.
+ const userExposure = weatherPlaces.length > 0
+ ? computeAlertExposure(alert, weatherPlaces).exposure
+ : 50;
  const ladderInput = {
  id: alert.id,
  domain: 'weather',
@@ -1743,7 +1788,7 @@ export class DataLoaderManager implements AppModule {
  sourceCount: 1,
  hasOfficialSource: true,
  overlappingDomains: ['weather'] as const,
- userExposure: 50, // conservative default; polygon match refines this
+ userExposure,
  potentialImpact: severityScore,
  };
  const _bedStart = performance.now();
@@ -1946,6 +1991,10 @@ export class DataLoaderManager implements AppModule {
  const protestData = await fetchProtestEvents();
  this.ctx.intelligenceCache.protests = protestData;
  ingestProtests(protestData.events);
+ const unrestObservations = this.dedupeConflictObservations(
+   unrestEventsToObservations(protestData.events),
+ );
+ if (unrestObservations.length > 0) ingestObservations(unrestObservations);
  ingestProtestsForCII(protestData.events);
  signalAggregator.ingestProtests(protestData.events);
  checkGeofenceProtests(protestData.events);
@@ -1977,6 +2026,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const { data: conflictData } = await withOfflineCache('conflict-events', () => fetchConflictEvents(), 1 * 60 * 60 * 1000);
  ingestConflictsForCII(conflictData.events);
+ const conflictObservations = this.dedupeConflictObservations(
+   conflictEventsToObservations(conflictData.events),
+ );
+ if (conflictObservations.length > 0) ingestObservations(conflictObservations);
  if (conflictData.count > 0) dataFreshness.recordUpdate('acled_conflict', conflictData.count);
  } catch (error) {
  console.error('[Intelligence] Conflict events fetch failed:', error);
@@ -2112,6 +2165,10 @@ export class DataLoaderManager implements AppModule {
  latitude: e.lat, longitude: e.lon, event_date: e.time.toISOString(), fatalities: e.fatalities ?? 0,
  }));
  const events = deduplicateAgainstAcled(result.data, acledEvents);
+ const ucdpObservations = this.dedupeConflictObservations(
+   ucdpEventsToObservations(events),
+ );
+ if (ucdpObservations.length > 0) ingestObservations(ucdpObservations);
  (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.setEvents(events);
  if (this.ctx.mapLayers.ucdpEvents) {
  this.ctx.map?.setUcdpEvents(events);
@@ -2135,6 +2192,10 @@ export class DataLoaderManager implements AppModule {
  ingestAirstrikesToConvergence(events);
  ingestAirstrikesToTimeline(events);
  ingestAirstrikesToMatrix(events);
+ const airstrikeObservations = this.dedupeConflictObservations(
+   airstrikesToObservations(events),
+ );
+ if (airstrikeObservations.length > 0) ingestObservations(airstrikeObservations);
  if (events.length > 0) dataFreshness.recordUpdate('acled_airstrikes', events.length);
  } catch (error) {
  console.error('[Intelligence] Airstrikes fetch failed:', error);
@@ -2225,12 +2286,20 @@ export class DataLoaderManager implements AppModule {
  const alertCount = data.alerts?.length ?? 0;
  const historyCount24h = data.historyCount24h ?? 0;
  ingestOrefForCII(alertCount, historyCount24h);
+ const orefObservations = this.dedupeConflictObservations(
+   orefAlertsToObservations(data.alerts ?? []),
+ );
+ if (orefObservations.length > 0) ingestObservations(orefObservations);
  this.ctx.intelligenceCache.orefAlerts = { alertCount, historyCount24h };
  onOrefAlertsUpdate((update) => {
  (this.ctx.panels['oref-sirens'] as OrefSirensPanel)?.setData(update);
  const updAlerts = update.alerts?.length ?? 0;
  const updHistory = update.historyCount24h ?? 0;
  ingestOrefForCII(updAlerts, updHistory);
+ const updateObservations = this.dedupeConflictObservations(
+   orefAlertsToObservations(update.alerts ?? []),
+ );
+ if (updateObservations.length > 0) ingestObservations(updateObservations);
  this.ctx.intelligenceCache.orefAlerts = { alertCount: updAlerts, historyCount24h: updHistory };
  });
  startOrefPolling();
@@ -2764,7 +2833,9 @@ export class DataLoaderManager implements AppModule {
  reportElevatedPanel('ucdp-events', 'UCDP Conflict Events');
  }
  if (highRisk.length > 0) {
- const signals = highRisk.slice(0, 3).map(forecast => ({
+ const signals = highRisk.slice(0, 3).map(forecast => {
+ const countryIso3 = countryIso3Slug(forecast.region);
+ return {
  id: `ema-forecast-${forecast.region}-${Date.now()}`,
  type: 'velocity_spike' as const,
  title: `EMA Forecast: ${forecast.region}`,
@@ -2777,8 +2848,11 @@ export class DataLoaderManager implements AppModule {
  multiplier: forecast.deviation,
  relatedTopics: [forecast.region],
  explanation: `EMA deviation ${forecast.deviation.toFixed(1)}σ — 24h escalation risk ${forecast.risk24h}%`,
+ placeIds: countryIso3 ? [countryIso3.toUpperCase()] : [],
+ placeSummary: forecast.region,
  },
- }));
+ };
+ });
  addToSignalHistory(signals);
  situationEngine.observeSignals(signals);
  }
@@ -2908,6 +2982,10 @@ export class DataLoaderManager implements AppModule {
   async loadProtests(): Promise<void> {
  if (this.ctx.intelligenceCache.protests) {
  const protestData = this.ctx.intelligenceCache.protests;
+ const cachedObservations = this.dedupeConflictObservations(
+   unrestEventsToObservations(protestData.events),
+ );
+ if (cachedObservations.length > 0) ingestObservations(cachedObservations);
  this.ctx.map?.setProtests(protestData.events);
  this.ctx.map?.setLayerReady('protests', protestData.events.length > 0);
  const status = getProtestStatus();
@@ -2931,6 +3009,10 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setProtests(protestData.events);
  this.ctx.map?.setLayerReady('protests', protestData.events.length > 0);
  ingestProtests(protestData.events);
+ const unrestObservations = this.dedupeConflictObservations(
+   unrestEventsToObservations(protestData.events),
+ );
+ if (unrestObservations.length > 0) ingestObservations(unrestObservations);
  ingestProtestsForCII(protestData.events);
  signalAggregator.ingestProtests(protestData.events);
  const protestCount = protestData.sources.acled + protestData.sources.gdelt;

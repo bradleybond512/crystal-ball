@@ -43,8 +43,10 @@ const AXIS_FRESHNESS_DOMAIN: Partial<Record<SurvivalAxis, SnapshotDomain>> = {
   physical_safety: 'weather',
 };
 
-/** An axis needs an offline play once it reaches this level (band `elevated`). */
-const GUIDANCE_LEVEL = 40;
+/** An axis needs an offline play once it reaches this level (band `elevated`).
+ *  Exported so the offline-playbook resolver keys its "elevated" floor off the
+ *  exact same threshold this certification flags as a guidance gap. */
+export const GUIDANCE_LEVEL = 40;
 
 const DEFAULT_STALE_AFTER_MS = 6 * 60 * 60_000; // 6h — flag as stale beyond this
 const DEFAULT_BLIND_AFTER_MS = 24 * 60 * 60_000; // 24h — too old to certify at all

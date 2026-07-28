@@ -67,6 +67,20 @@ test('a move that raises the axis level is graded as posture not improved', () =
   assert.ok(/worsened/.test(g.headline)); // three-way headline reports the worsening
 });
 
+test('the headline reports an improvement when the observed posture drops', () => {
+  const g = gradePostureLoop(fixture({ postureBefore: 80, postureAfter: 45 }));
+  assert.ok(g.postureImproved);
+  assert.ok(!/worsened/.test(g.headline));
+  assert.ok(!/held/.test(g.headline));
+  assert.ok(/→/.test(g.headline)); // improved branch: "posture <before>→<after>"
+});
+
+test('the headline reports posture held when the observed level is unchanged', () => {
+  const g = gradePostureLoop(fixture({ postureBefore: 45, postureAfter: 45 }));
+  assert.equal(g.actualDelta, 0);
+  assert.ok(/held/.test(g.headline)); // three-way headline neutral branch
+});
+
 test('projection verdict: overpredicted when the move helped less than modeled', () => {
   // Modeled −40, actually only −20 → error +20 (over-promised) beyond tolerance.
   const g = gradePostureLoop(fixture({
@@ -78,7 +92,7 @@ test('projection verdict: overpredicted when the move helped less than modeled',
   assert.equal(g.actualDelta, -20);
   assert.equal(g.projectionError, 20);
   assert.equal(g.projectionVerdict, 'overpredicted');
-  assert.ok(g.notes.some((n) => /less than modeled/.test(n)));
+  assert.ok(g.notes.some((n) => /fell 20 pts short of the modeled effect/.test(n)));
 });
 
 test('projection verdict: underpredicted when the move helped more than modeled', () => {
@@ -90,7 +104,7 @@ test('projection verdict: underpredicted when the move helped more than modeled'
   assert.equal(g.actualDelta, -50);
   assert.equal(g.projectionError, -20);
   assert.equal(g.projectionVerdict, 'underpredicted');
-  assert.ok(g.notes.some((n) => /more than modeled/.test(n)));
+  assert.ok(g.notes.some((n) => /exceeded the modeled effect by 20 pts/.test(n)));
 });
 
 test('only the graded axis contributes to the projected delta', () => {

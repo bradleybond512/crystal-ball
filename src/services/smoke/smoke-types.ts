@@ -94,6 +94,52 @@ export interface SmokeSourceStatus {
   updatedAt: number | null;
 }
 
+export interface HourlyWind {
+  /** Place-local wall time (Open-Meteo hourly time, no offset) — for labels. */
+  time: string;
+  /** True epoch ms for this sample (derived via utc_offset_seconds) — for
+   *  all time comparisons. Null when the payload carried no usable offset;
+   *  consumers then fall back to device-local parsing of `time`. */
+  timeMs: number | null;
+  speedMph: number | null;
+  /** Meteorological convention: degrees the wind blows FROM. */
+  directionDeg: number | null;
+}
+
+export type SmokeSourceKind = 'plume' | 'fire';
+
+/** An upwind smoke source the arrival estimator can advect toward home —
+ *  an HMS plume centroid or a NIFC active-fire centroid. */
+export interface SmokeTransportSource {
+  id: string;
+  kind: SmokeSourceKind;
+  /** e.g. "Heavy smoke plume" / "Camp fire". */
+  label: string;
+  lat: number;
+  lon: number;
+  /** Plume density or fire-size class — wording + ranking only. */
+  intensity: 'light' | 'medium' | 'heavy';
+  /** Plume outer rings ([lon, lat]) — enables the overhead test. */
+  rings?: [number, number][][];
+}
+
+export interface SmokeArrivalEstimate {
+  sourceId: string;
+  kind: SmokeSourceKind;
+  label: string;
+  distanceMi: number;
+  /** Compass direction from home TOWARD the source (where to look). */
+  direction: CompassDirection;
+  status: 'overhead' | 'incoming' | 'not_expected';
+  etaStartIso: string | null;
+  etaEndIso: string | null;
+  /** e.g. "9 PM–1 AM" or "tomorrow 9 AM–1 PM" — set when incoming. */
+  etaLabel: string | null;
+  confidence: 'low' | 'medium' | 'high';
+  /** One-line human statement for panel rows / headline reuse. */
+  summary: string;
+}
+
 export interface SmokeSnapshot {
   placeId: string;
   placeName: string;
@@ -109,5 +155,8 @@ export interface SmokeSnapshot {
   checklist: ChecklistItem[];
   cleanRoomScore: CleanRoomScore;
   sources: SmokeSourceStatus[];
+  /** Wind-advection arrival estimates for upwind plumes/fires (absent on
+   *  snapshots built before the estimator ran or when winds are unknown). */
+  arrivals?: SmokeArrivalEstimate[];
   generatedAt: number;
 }

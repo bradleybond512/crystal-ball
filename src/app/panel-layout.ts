@@ -227,6 +227,7 @@ import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
 import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, revokePersonalWeatherClearConfirmation, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
+import { createPlacesClearRevoker } from '@/services/weather/saved-place-adapter';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -2275,12 +2276,17 @@ export class PanelLayoutManager implements AppModule {
  setDatacenterSite(resolveSiteConfig(getSavedPlaces()));
  this.unsubDcPlaces = subscribeSavedPlaces((places) => setDatacenterSite(resolveSiteConfig(places)));
  // A confirmed "all clear" was proven against the saved-place set at the last
- // weather refresh. When places change (a place added/edited/removed), that
- // clear no longer covers the new set — a newly-added place could sit under a
- // severe alert the prior clear never evaluated. Drop the confirmation to the
- // neutral "checking" state so the chip can't assert a stale ALL CLEAR until
- // the next refresh re-evaluates honestly. No-op when nothing is confirmed.
- this.unsubWeatherClearOnPlaces = subscribeSavedPlaces(() => revokePersonalWeatherClearConfirmation());
+ // weather refresh. When the MATCH set changes (a place added/moved/re-radiused/
+ // removed), that clear no longer covers the new set — a newly-added place could
+ // sit under a severe alert the prior clear never evaluated. Drop the confirmation
+ // to the neutral "checking" state so the chip can't assert a stale ALL CLEAR until
+ // the next refresh re-evaluates honestly. A display-only edit (rename/notes/
+ // priority) or a pure reorder leaves the match set unchanged, so the revoke is
+ // gated on savedPlacesMatchSignature and does NOT blank a valid clear. No-op when
+ // nothing is confirmed.
+ this.unsubWeatherClearOnPlaces = subscribeSavedPlaces(
+   createPlacesClearRevoker(getSavedPlaces(), revokePersonalWeatherClearConfirmation),
+ );
  const datacenterPanel = new DataCenterReadinessPanel();
  this.ctx.panels['datacenter-readiness'] = datacenterPanel;
  // Mount the pinned strip above the panel grid so it floats outside

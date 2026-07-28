@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { savedPlacesMatchSignature } from '../saved-place-adapter.ts';
+import { createPlacesClearRevoker, savedPlacesMatchSignature } from '../saved-place-adapter.ts';
 import type { SavedPlace } from '../../saved-places.ts';
 
 // ── savedPlacesMatchSignature: the TOCTOU guard for the personal-weather clear ─
@@ -82,4 +82,73 @@ test('a display-only edit (name/notes/priority) does NOT change the signature', 
 
 test('an empty place set is a stable, non-throwing signature', () => {
   assert.equal(savedPlacesMatchSignature([]), savedPlacesMatchSignature([]));
+});
+
+// ── createPlacesClearRevoker: revoke the confirmed clear ONLY on a match-set change
+// The saved-places subscription must drop a confirmed "all clear" when a place is
+// added/moved/re-radiused/removed — the clear was proven against the OLD set, and a
+// newly-added place could sit under a warning that clear never evaluated. But a
+// display-only edit (rename, notes, priority) cannot change the match set, so it
+// must NOT withhold the clear (that needlessly blanks the chip to CHECKING until the
+// next refresh). This factory remembers the last match signature and calls revoke
+// only when it actually changes.
+
+test('createPlacesClearRevoker does not revoke on a display-only edit (rename)', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker([place({ id: 'p1', name: 'Home' })], () => { calls += 1; });
+  onChange([place({ id: 'p1', name: 'Cabin', notes: 'lake', priority: 9 })]);
+  assert.equal(calls, 0);
+});
+
+test('createPlacesClearRevoker does not revoke on a pure reorder', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker(
+    [place({ id: 'p1' }), place({ id: 'p2', lat: 40, lon: -85 })],
+    () => { calls += 1; },
+  );
+  onChange([place({ id: 'p2', lat: 40, lon: -85 }), place({ id: 'p1' })]);
+  assert.equal(calls, 0);
+});
+
+test('createPlacesClearRevoker revokes when a place is added', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker([place({ id: 'p1' })], () => { calls += 1; });
+  onChange([place({ id: 'p1' }), place({ id: 'p2', lat: 40, lon: -85 })]);
+  assert.equal(calls, 1);
+});
+
+test('createPlacesClearRevoker revokes when a place is moved', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker([place({ id: 'p1', lat: 41.6, lon: -86.7 })], () => { calls += 1; });
+  onChange([place({ id: 'p1', lat: 44.0, lon: -80.0 })]);
+  assert.equal(calls, 1);
+});
+
+test('createPlacesClearRevoker revokes when a place radius changes', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker([place({ id: 'p1', radiusKm: 15 })], () => { calls += 1; });
+  onChange([place({ id: 'p1', radiusKm: 50 })]);
+  assert.equal(calls, 1);
+});
+
+test('createPlacesClearRevoker revokes when a place is removed', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker(
+    [place({ id: 'p1' }), place({ id: 'p2', lat: 40, lon: -85 })],
+    () => { calls += 1; },
+  );
+  onChange([place({ id: 'p1' })]);
+  assert.equal(calls, 1);
+});
+
+test('createPlacesClearRevoker revokes once per distinct match set, not per display-only edit', () => {
+  let calls = 0;
+  const onChange = createPlacesClearRevoker([place({ id: 'p1', name: 'Home' })], () => { calls += 1; });
+  onChange([place({ id: 'p1', name: 'A' })]); // rename — no revoke
+  onChange([place({ id: 'p1', name: 'B' })]); // rename — no revoke
+  assert.equal(calls, 0);
+  onChange([place({ id: 'p1', lat: 44, lon: -80 })]); // move — revoke
+  assert.equal(calls, 1);
+  onChange([place({ id: 'p1', lat: 44, lon: -80, name: 'C' })]); // rename after move — no revoke
+  assert.equal(calls, 1);
 });

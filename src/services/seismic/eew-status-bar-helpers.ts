@@ -70,9 +70,10 @@ export interface CompositeStatusInputs {
    * (isPersonalWeatherClearConfirmed()). `weatherSeverity: null` alone is
    * ambiguous — it means both "proven clear" and "not evaluated yet" — so the
    * chip used to paint boot/stale states as a green ALL CLEAR it had not
-   * verified. `false` → the chip stays neutral (CHECKING WEATHER) instead of
-   * claiming all-clear. `true` / undefined → a clear may show as ALL CLEAR
-   * (undefined keeps legacy callers backward-compatible).
+   * verified. Only an explicit `true` may show ALL CLEAR; ANY other value —
+   * `false`, or missing/undefined (boot, an unwired provider, or a provider
+   * throw where readCompositeInputs() returns undefined) — fails closed to the
+   * neutral CHECKING WEATHER state rather than claim an unverified all-clear.
    */
   weatherClearConfirmed?: boolean;
 }
@@ -235,13 +236,16 @@ export function deriveStatusBarState(
   const maxRank = Math.max(eewRank, weatherRank, safetyRank, readinessRank);
   if (maxRank === 0) {
     // Nothing is alarming — but only claim ALL CLEAR once a fresh weather read
-    // has actually proven no matched threat. An explicit `false` means weather
-    // is unevaluated (boot / stale feed): stay neutral rather than assert a
-    // safety we have not verified. undefined keeps legacy callers all-clear.
-    if (composite?.weatherClearConfirmed === false) {
-      return { ...CHECKING_STATE, imessage: { visible: false, status: null } };
+    // has actually PROVEN no matched threat (weatherClearConfirmed === true).
+    // Anything else — an explicit `false`, or a missing/undefined flag (boot,
+    // an unwired composite provider, or a provider throw where
+    // readCompositeInputs() returns undefined) — is an UNKNOWN weather state,
+    // not a proven clear. Fail closed to neutral CHECKING rather than assert a
+    // safety we have not verified.
+    if (composite?.weatherClearConfirmed === true) {
+      return { ...ALL_CLEAR_STATE, imessage: { visible: false, status: null } };
     }
-    return { ...ALL_CLEAR_STATE, imessage: { visible: false, status: null } };
+    return { ...CHECKING_STATE, imessage: { visible: false, status: null } };
   }
   if (lead && tier && eewRank === maxRank) {
     return {

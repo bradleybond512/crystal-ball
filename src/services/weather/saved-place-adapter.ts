@@ -56,6 +56,31 @@ export function savedPlacesMatchSignature(places: readonly StoredPlace[]): strin
   return JSON.stringify(rows);
 }
 
+/**
+ * Build the saved-places subscription handler that drops a confirmed personal
+ * "all clear" — but ONLY when the MATCH set actually changed. A confirmed clear
+ * was proven against a specific set of places at the last weather refresh; adding,
+ * moving, re-radiusing, or removing a place invalidates it (a new place could sit
+ * under a warning the clear never evaluated), so `revoke` fires and the chip falls
+ * back to the neutral "checking" state until the next honest re-evaluation. A
+ * display-only edit (rename, notes, priority) or a pure reorder leaves
+ * {@link savedPlacesMatchSignature} unchanged and must NOT withhold the clear —
+ * blanking the chip on a cosmetic edit is a needless downgrade. The handler holds
+ * the last signature across calls, seeded from `initialPlaces`.
+ */
+export function createPlacesClearRevoker(
+  initialPlaces: readonly StoredPlace[],
+  revoke: () => void,
+): (places: readonly StoredPlace[]) => void {
+  let lastSignature = savedPlacesMatchSignature(initialPlaces);
+  return (places) => {
+    const signature = savedPlacesMatchSignature(places);
+    if (signature === lastSignature) return;
+    lastSignature = signature;
+    revoke();
+  };
+}
+
 /** Injectable point→zones resolver (defaults to the live NWS `/points`
  *  lookup). Best-effort: the concrete impl returns `[]` on any failure. */
 export type ZoneResolver = (lat: number, lon: number) => Promise<string[]>;

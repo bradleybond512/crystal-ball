@@ -282,6 +282,28 @@ export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<s
 }
 
 /**
+ * Keep only the finite [lon, lat] vertices of one ring. A corrupt NWS body can
+ * carry non-finite coordinates (null / NaN / strings); a ring of such vertices
+ * has length >= 3 yet places nothing — point-in-polygon against NaN never
+ * matches, so downstream it would read evaluable while silently matching no one
+ * and let a severe warning reach a false clear. Sanitizing at this single
+ * producer keeps the unevaluable predicate and the polygon matcher — both of
+ * which read these rings — honest by construction.
+ */
+function toFiniteRing(ring?: number[][]): [number, number][] {
+  if (!Array.isArray(ring)) return [];
+  const out: [number, number][] = [];
+  for (const c of ring) {
+    const lon = c?.[0];
+    const lat = c?.[1];
+    if (typeof lon === 'number' && Number.isFinite(lon) && typeof lat === 'number' && Number.isFinite(lat)) {
+      out.push([lon, lat]);
+    }
+  }
+  return out;
+}
+
+/**
  * Every OUTER ring of the alert geometry: one ring for a Polygon, one ring per
  * sub-polygon for a MultiPolygon. NWS issues MultiPolygon warnings routinely (a
  * single product covering disjoint areas). The old single-ring extraction kept
@@ -296,14 +318,14 @@ function extractPolygonRings(geometry?: NWSAlert['geometry']): [number, number][
   try {
  if (geometry.type === 'Polygon') {
  const coords = geometry.coordinates as unknown as number[][][];
- const ring = coords[0]?.map(c => [c[0], c[1]] as [number, number]);
- return ring ? [ring] : [];
+ const ring = toFiniteRing(coords[0]);
+ return ring.length > 0 ? [ring] : [];
  }
  if (geometry.type === 'MultiPolygon') {
  const coords = geometry.coordinates as unknown as number[][][][];
  return coords
- .map((poly) => poly[0]?.map(c => [c[0], c[1]] as [number, number]))
- .filter((ring): ring is [number, number][] => Array.isArray(ring) && ring.length > 0);
+ .map((poly) => toFiniteRing(poly[0]))
+ .filter((ring) => ring.length > 0);
  }
   } catch {
  return [];

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isAlertSpatiallyUnevaluable, type WeatherAlert } from '../../weather.ts';
+import {
+  isAlertSpatiallyUnevaluable,
+  normalizeWeatherAlertsResponse,
+  type WeatherAlert,
+} from '../../weather.ts';
 
 // ── isAlertSpatiallyUnevaluable: the silent-drop guard (P0 #B) ────────────────
 // A severe alert that survives normalization with NO polygon rings AND NO UGC
@@ -89,4 +93,64 @@ test('an alert with one usable ring among degenerate ones is evaluable', () => {
     })),
     false,
   );
+});
+
+// ── Non-finite geometry: vertices that aren't real numbers are NOT usable ─────
+// A corrupt 200 can carry a Severe warning whose polygon vertices are non-finite
+// (null / NaN / strings). Under the old extractPolygonRings — which mapped
+// `c => [c[0], c[1]]` with no finite check — such a ring survived the length-only
+// >=3 gate: it reads EVALUABLE, yet places nothing. computeAlertExposure runs
+// point-in-polygon against NaN, never matches, returns 0 exposure, the severe loop
+// never degrades, and `confirm_clear` fires off a severe warning it could not
+// actually evaluate — a false ALL CLEAR. normalizeWeatherAlertsResponse must drop
+// non-finite vertices at the single producer so both the predicate here and the
+// matcher (alertMatchRings) read the same sanitized rings and stay in lockstep.
+
+function severeFeatureWithGeometry(geometry: unknown) {
+  return {
+    id: 'nws-corrupt-geo',
+    geometry,
+    properties: {
+      event: 'Severe Thunderstorm Warning',
+      severity: 'Severe',
+      headline: 'h',
+      description: 'd',
+      areaDesc: 'Somewhere, US',
+      onset: '2026-07-27T12:00:00Z',
+      expires: '2026-07-27T13:00:00Z',
+    },
+  };
+}
+
+test('a Severe Polygon whose every vertex is non-finite normalizes to spatially unevaluable', () => {
+  const [out] = normalizeWeatherAlertsResponse({
+    features: [severeFeatureWithGeometry({
+      type: 'Polygon',
+      coordinates: [[[null, null], [null, null], [null, null]]],
+    })],
+  } as never);
+  assert.ok(out, 'the Severe alert must survive normalization — it is a threat, not a clear');
+  assert.equal(isAlertSpatiallyUnevaluable(out!), true);
+});
+
+test('a Severe MultiPolygon whose every vertex is non-finite normalizes to spatially unevaluable', () => {
+  const [out] = normalizeWeatherAlertsResponse({
+    features: [severeFeatureWithGeometry({
+      type: 'MultiPolygon',
+      coordinates: [[[['x', 'y'], ['x', 'y'], ['x', 'y']]]],
+    })],
+  } as never);
+  assert.ok(out);
+  assert.equal(isAlertSpatiallyUnevaluable(out!), true);
+});
+
+test('a Severe Polygon with >=3 finite vertices stays evaluable when a stray vertex is non-finite', () => {
+  const [out] = normalizeWeatherAlertsResponse({
+    features: [severeFeatureWithGeometry({
+      type: 'Polygon',
+      coordinates: [[[-86.7, 41.6], [null, null], [-86.6, 41.6], [-86.6, 41.7]]],
+    })],
+  } as never);
+  assert.ok(out);
+  assert.equal(isAlertSpatiallyUnevaluable(out!), false);
 });

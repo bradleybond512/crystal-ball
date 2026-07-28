@@ -49,20 +49,24 @@ test('pickLeadAlert: ties broken by most recent triggeredAt', () => {
 
 // ── deriveStatusBarState ───────────────────────────────────────────────
 
-test('null payload → ALL CLEAR / gray', () => {
+test('null payload (boot / no composite) → neutral CHECKING, not a false ALL CLEAR', () => {
+  // The pre-mount boot value and the unwired-provider path both call
+  // deriveStatusBarState(null). With no proven weather clear the honest state is
+  // CHECKING (gray, not allClear) — never a green ALL CLEAR it has not verified.
   const state = deriveStatusBarState(null);
-  assert.equal(state.allClear, true);
+  assert.equal(state.allClear, false);
   assert.equal(state.color, 'gray');
-  assert.equal(state.label, 'ALL CLEAR');
+  assert.equal(state.label, 'CHECKING WEATHER');
 });
 
-test('empty activeAlerts → ALL CLEAR / gray', () => {
+test('empty activeAlerts with no weather confirmation → neutral CHECKING', () => {
   const payload: EewStatusPayload = {
     activeAlerts: [], highestTier: null, lastEventId: null, asOf: NOW,
   };
   const state = deriveStatusBarState(payload);
-  assert.equal(state.allClear, true);
+  assert.equal(state.allClear, false);
   assert.equal(state.color, 'gray');
+  assert.equal(state.label, 'CHECKING WEATHER');
 });
 
 test('TIER_1 active → blue / not all-clear', () => {
@@ -164,10 +168,11 @@ test('TIER_5 + disabled → badge visible with disabled status', () => {
 
 // ── Composite worst-of (safety case + readiness) ───────────────────────
 
-test('composite: all inputs clear → ALL CLEAR / source none', () => {
+test('composite: all inputs clear (weather confirmed) → ALL CLEAR / source none', () => {
   const state = deriveStatusBarState(null, {
     safetyCaseSafeToOperate: true,
     readinessStatus: 'healthy',
+    weatherClearConfirmed: true,
   });
   assert.equal(state.allClear, true);
   assert.equal(state.source, 'none');
@@ -194,15 +199,20 @@ test('composite: readiness unsafe alone → red READINESS: CRITICAL', () => {
 });
 
 test('composite: readiness degraded (not unsafe) does not trip the chip', () => {
-  const state = deriveStatusBarState(null, { readinessStatus: 'degraded' });
+  const state = deriveStatusBarState(null, { readinessStatus: 'degraded', weatherClearConfirmed: true });
   assert.equal(state.allClear, true);
   assert.equal(state.source, 'none');
 });
 
-test('composite: unknown inputs (null) treated as clear', () => {
+test('composite: unknown safety/readiness inputs (null) treated as clear', () => {
+  // Safety-case and readiness are supplementary INTERNAL signals: an unknown
+  // (null) there is the normal not-configured state and stays clear. Weather is
+  // the safety-critical external hazard, so its unknown fails closed — hence the
+  // explicit weatherClearConfirmed here isolates the safety/readiness behaviour.
   const state = deriveStatusBarState(null, {
     safetyCaseSafeToOperate: null,
     readinessStatus: null,
+    weatherClearConfirmed: true,
   });
   assert.equal(state.allClear, true);
 });
@@ -290,9 +300,13 @@ test('composite: weather severe alone → red SEVERE WEATHER', () => {
   assert.equal(state.source, 'weather');
 });
 
-test('composite: weather null treated as clear', () => {
+test('composite: weather severity null but unconfirmed → neutral CHECKING (not a false clear)', () => {
+  // `weatherSeverity: null` alone is ambiguous — it means both "proven clear"
+  // and "not evaluated yet". Without an explicit weatherClearConfirmed the chip
+  // must hold at CHECKING rather than assert a safety it has not verified.
   const state = deriveStatusBarState(null, { weatherSeverity: null });
-  assert.equal(state.allClear, true);
+  assert.equal(state.allClear, false, 'null severity without a confirmed clear must not claim all-clear');
+  assert.equal(state.label, 'CHECKING WEATHER');
   assert.equal(state.source, 'none');
 });
 
@@ -374,9 +388,15 @@ test('composite: weatherClearConfirmed true → real ALL CLEAR', () => {
   assert.equal(state.source, 'none');
 });
 
-test('composite: weatherClearConfirmed omitted → ALL CLEAR (backward compatible)', () => {
-  assert.equal(deriveStatusBarState(null, {}).allClear, true);
-  assert.equal(deriveStatusBarState(null).allClear, true);
+test('composite: weatherClearConfirmed omitted → neutral CHECKING (fail closed, not a false clear)', () => {
+  // A composite with no weatherClearConfirmed is an UNKNOWN weather state, not a
+  // proven clear: an unwired provider, a provider throw (readCompositeInputs()
+  // returns undefined), or the pre-mount boot value deriveStatusBarState(null).
+  // It must hold at CHECKING; only an explicit true may paint ALL CLEAR.
+  assert.equal(deriveStatusBarState(null, {}).allClear, false);
+  assert.equal(deriveStatusBarState(null, {}).label, 'CHECKING WEATHER');
+  assert.equal(deriveStatusBarState(null).allClear, false);
+  assert.equal(deriveStatusBarState(null).label, 'CHECKING WEATHER');
 });
 
 test('composite: an active weather threat wins over CHECKING (real hazard first)', () => {

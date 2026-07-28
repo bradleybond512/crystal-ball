@@ -9,6 +9,7 @@ import type { CompassPoint, SmokeArrivalEstimate, SmokeSnapshot, SmokeTransportS
 import { compassPoints } from './clean-air-compass';
 import { fetchAqForPoint, fetchAqForPoints, fetchTransportWinds, type ParsedAq } from './smoke-fetch';
 import { estimateArrivals } from './arrival-eta';
+import { firmsToTransportSources, type FirePixel } from './fire-detection-sources';
 import { buildSnapshot } from './smoke-snapshot';
 
 const CHECKLIST_KEY = 'cb-smoke-checklist';
@@ -72,14 +73,27 @@ function fireIntensity(acres: number | null): SmokeTransportSource['intensity'] 
 
 /**
  * Gather upwind smoke sources from the feeds the app already caches: HMS
- * plume polygons (60 min TTL) + NIFC active-fire perimeters (30 min TTL).
- * Dynamic imports keep the DOM-flavored KML parser out of the pure-module
- * graph; any failure degrades to an empty list (arrival rows just absent).
+ * plume polygons (60 min TTL) + NIFC active-fire perimeters (30 min TTL) +
+ * NASA FIRMS thermal detections (near-real-time hotspots that often lead the
+ * slower perimeter/plume products). Dynamic imports keep the DOM-flavored KML
+ * parser out of the pure-module graph; each feed degrades to empty on its own
+ * (arrival rows for that source just absent — never invented).
  */
-async function gatherTransportSources(): Promise<SmokeTransportSource[]> {
-  const [smoke, fires] = await Promise.all([
+async function gatherTransportSources(home: { lat: number; lon: number }): Promise<SmokeTransportSource[]> {
+  const [smoke, fires, firmsPixels] = await Promise.all([
     import('@/services/wildfire-smoke').then((m) => m.fetchWildfireSmoke()).catch(() => null),
     import('@/services/wildfires/fire-intel-service').then((m) => m.fetchActivePerimeters()).catch(() => []),
+    import('@/services/wildfires')
+      .then(async (m) => {
+        const { regions } = await m.fetchAllFires();
+        return m.flattenFires(regions).map((d): FirePixel => ({
+          lat: d.location?.latitude ?? Number.NaN,
+          lon: d.location?.longitude ?? Number.NaN,
+          frpMw: d.frp,
+          detectedAtMs: new Date(d.detectedAt).getTime(),
+        }));
+      })
+      .catch(() => [] as FirePixel[]),
   ]);
   const out: SmokeTransportSource[] = [];
   for (const p of smoke?.polygons ?? []) {
@@ -104,6 +118,7 @@ async function gatherTransportSources(): Promise<SmokeTransportSource[]> {
       intensity: fireIntensity(f.acres),
     });
   }
+  out.push(...firmsToTransportSources(firmsPixels, home, { nowMs: Date.now() }));
   return out;
 }
 
@@ -127,7 +142,7 @@ export async function refreshSmokeConditions(withNetwork = true): Promise<void> 
         // Both transport inputs self-degrade to empty — estimateArrivals is
         // fail-closed and emits no claims without usable winds.
         fetchTransportWinds(primary.lat, primary.lon).catch(() => []),
-        gatherTransportSources().catch(() => []),
+        gatherTransportSources({ lat: primary.lat, lon: primary.lon }).catch(() => []),
       ]);
       lastFetch = {
         home,

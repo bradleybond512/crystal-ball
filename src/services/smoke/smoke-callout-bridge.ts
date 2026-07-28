@@ -75,6 +75,13 @@ export function mergeSmokeEvent(
   return { events: [...withoutSmoke, event], headlineSeverity: headline.severity, category: headline.category };
 }
 
+/** Pure edge policy, exported for tests: with a live headline of this
+ *  category rank, the stored edge may only FALL to the observed rank —
+ *  it never rises without a delivered notification. */
+export function settleEdge(observedRank: number, storedEdge: number): number {
+  return Math.min(observedRank, storedEdge);
+}
+
 function fireNotification(body: string, sev: 'high' | 'critical'): void {
   new Notification('Air quality — wildfire smoke', {
     body,
@@ -98,7 +105,18 @@ function publishSmokeCallout(snapshots: readonly SmokeSnapshot[]): void {
     return;
   }
   const rank = CATEGORY_RANK[merged.category];
-  if (rank <= readEdge()) return;
+  const edge = readEdge();
+  if (rank <= edge) {
+    // Improvement while an advisory-grade headline is still live (active
+    // NWS alert, or the incoming-smoke forecast advisory): the delivered
+    // episode is over even though the headline isn't null, so ratchet the
+    // edge DOWN to the observed rank. Without this the predictive advisory
+    // would hold the old edge open and swallow the next episode's native
+    // notification (independent-review finding #2).
+    const settled = settleEdge(rank, edge);
+    if (settled !== edge) writeEdge(settled);
+    return;
+  }
   const sev = notifySeverity(merged.headlineSeverity);
   if (!shouldNotify('wildfire', sev)) return; // retry after quiet hours / settings change
   const body =

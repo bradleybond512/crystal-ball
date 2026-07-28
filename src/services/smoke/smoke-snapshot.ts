@@ -3,7 +3,7 @@
  * No @/ imports so it fixture-tests under tsx; the singleton runtime
  * (smoke-state.ts) supplies fetched data + persistence.
  */
-import type { CompassPoint, SmokeSnapshot } from './smoke-types';
+import type { CompassPoint, SmokeArrivalEstimate, SmokeSnapshot } from './smoke-types';
 import { categorizeUsAqi } from './aqi-category';
 import { computeSafeWindows, computeDaySummaries } from './safe-windows';
 import { rankCompass } from './clean-air-compass';
@@ -17,6 +17,9 @@ export interface BuildInputs {
   compassParsed: { point: CompassPoint; parsed: ParsedAq | null }[];
   doneChecklistIds: string[];
   sensitiveGroup: boolean;
+  /** Precomputed by the arrival estimator (smoke-state supplies fetched
+   *  plumes/fires/winds); omitted when transport inputs were unavailable. */
+  arrivals?: SmokeArrivalEstimate[];
   now: number;
 }
 
@@ -43,6 +46,7 @@ export function buildSnapshot(inputs: BuildInputs): SmokeSnapshot {
     days: computeDaySummaries(home.hourly),
     compass: rankCompass(compassSamples, home.current.usAqi),
     activities: adviseActivities(category, sensitiveGroup),
+    arrivals: inputs.arrivals ?? [],
     checklist: applyDoneState(doneChecklistIds),
     cleanRoomScore: scoreCleanRoom(doneChecklistIds),
     sources: [(() => {

@@ -6,8 +6,9 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)](tsconfig.json)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/bradleybond512/crystal-ball/releases/latest)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA)](https://github.com/sponsors/bradleybond512)
 
-<a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a> | <a href="docs/USER_MANUAL.md"><strong>📖 Operator Manual</strong></a>
+<a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a> | <a href="docs/USER_MANUAL.md"><strong>📖 Operator Manual</strong></a> | <a href="https://github.com/sponsors/bradleybond512"><strong>Support Development</strong></a>
 
 > **New here?** The [Operator Manual](docs/USER_MANUAL.md) is the step-by-step, task-oriented guide to running every feature. This README is the feature catalog; the manual is the how-to.
 
@@ -428,6 +429,10 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 ## Contributing
 
 If you change product behavior, API contracts, or operational workflows, update the docs in the same branch. The project is much easier to evaluate when the implementation and the documentation move together.
+
+## Support
+
+Crystal Ball is free and open source. If it is useful to you, you can support ongoing development through [GitHub Sponsors](https://github.com/sponsors/bradleybond512).
 
 ## License and Attribution
 

@@ -11,6 +11,7 @@ If you have ten minutes, read these in order:
 | Read this | Why it matters |
 | --- | --- |
 | [../README.md](../README.md) | Product overview, architecture thesis, and repo-level capabilities |
+| [GitHub Sponsors](https://github.com/sponsors/bradleybond512) | Optional support path for ongoing Crystal Ball development |
 | [API_KEY_DEPLOYMENT.md](API_KEY_DEPLOYMENT.md) | Clear view of the cloud trust boundary and origin rules |
 | [DESKTOP_CONFIGURATION.md](DESKTOP_CONFIGURATION.md) | Desktop secret model, runtime capabilities, and graceful degradation |
 | [RELEASE_PACKAGING.md](RELEASE_PACKAGING.md) | Evidence that the desktop target is treated like a real deliverable |
@@ -77,6 +78,10 @@ make generate
 | Guide | Focus |
 | --- | --- |
 | [../research/README.md](../research/README.md) | Repeatable autoresearch loop and track execution |
+
+## Support
+
+Crystal Ball remains free and open source. Users who want to help cover ongoing development can sponsor the project through [GitHub Sponsors](https://github.com/sponsors/bradleybond512).
 
 ## Verification Commands
 

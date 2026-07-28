@@ -27,6 +27,7 @@ import {
   _resetCalibrationForTests,
 } from '../forecast-calibration-adapter.ts';
 import { marketMoveResolver } from '../outcome-resolvers.ts';
+import { recordFusedSpotPrices, _resetSpotPriceStoreForTests } from '../../market/spot-price-store.ts';
 import {
   getAlgorithmEvaluationLedger,
   resetAlgorithmsState,
@@ -340,4 +341,87 @@ test('well-calibrated domain boosts; badly calibrated damps', () => {
     });
   }
   assert.ok(getDomainCalibrationMult('markets') < 1);
+});
+
+const H2 = 3_600_000;
+
+// ── ACC-302: adapter-path baseline emission ──────────────────────────────
+
+test('ACC-302: recordPredictions is batch-order independent for persistence emission', () => {
+  const T = Date.UTC(2026, 6, 1, 12, 0, 0);
+  const H = 3_600_000;
+  const prior: PredictionRecord = {
+    id: 'acc302-prior', sourceId: 'mode-forecast', targetKey: 'mode:finance',
+    domain: 'markets', claim: 'pressure elevated', probability: 0.6,
+    predictedAt: T - 48 * H, resolveBy: T - 36 * H,
+    status: 'resolved_true', resolvedAt: T - 40 * H, resolutionNote: 'direct:test',
+  } as PredictionRecord;
+  const pending: PredictionRecord = {
+    id: 'acc302-pending', sourceId: 'mode-forecast', targetKey: 'mode:finance',
+    domain: 'markets', claim: 'pressure stays elevated', probability: 0.6,
+    predictedAt: T, resolveBy: T + 24 * H, status: 'pending',
+  } as PredictionRecord;
+
+  // Worst-case order: the pending forecast BEFORE its resolved prior.
+  recordPredictions([pending, prior]);
+  const persistence = getCalibrationStore()
+    .all()
+    .filter((r) => r.sourceId === 'persistence-baseline');
+  assert.equal(persistence.length, 1, 'baseline emitted regardless of batch order');
+  assert.ok(Math.abs(persistence[0]!.probability - 2 / 3) < 1e-9);
+});
+
+test('ACC-302: recordPrediction emits a momentum baseline from the bounded spot accessor', () => {
+  _resetSpotPriceStoreForTests();
+  const T = Date.UTC(2026, 6, 1, 12, 0, 0);
+  const fusedFact = (occurredAt: number, value: number) => ({
+    key: 'AAPL', value, occurredAt,
+    providerIds: ['yahoo'],
+    fusion: { independentSourceCount: 1, confidenceMultiplier: 1, disagreements: [] },
+  }) as never;
+  // Rising pre-forecast series + one POST-forecast spike the accessor must ignore.
+  const pre = [0, 1, 2, 3, 4, 5, 6, 7].map((i) =>
+    fusedFact(T - (8 - i) * 30 * 60_000, 196 + i * 0.5));
+  recordFusedSpotPrices([...pre, fusedFact(T + 60_000, 400)]);
+
+  recordPrediction({
+    id: 'acc302-mkt', sourceId: 'analyst-loop', targetKey: 'hypothesis:acc302-mkt',
+    domain: 'markets', claim: 'AAPL up 3%', probability: 0.7,
+    predictedAt: T, resolveBy: T + 24 * H2,
+    status: 'pending',
+    criteria: {
+      kind: 'market_move', symbol: 'AAPL', direction: 'up',
+      minAbsPct: 3, basisPrice: 196, basisObservedAt: T - 4 * H2,
+    },
+  } as PredictionRecord);
+
+  const momentum = getCalibrationStore()
+    .all()
+    .filter((r) => r.sourceId === 'momentum-baseline');
+  assert.equal(momentum.length, 1, 'momentum baseline emitted via the adapter accessor');
+  assert.ok(momentum[0]!.probability > 0.5, 'rising series must lift P(up)');
+  assert.ok(momentum[0]!.probability <= 0.95);
+  assert.deepEqual(momentum[0]!.criteria, ({
+    kind: 'market_move', symbol: 'AAPL', direction: 'up',
+    minAbsPct: 3, basisPrice: 196, basisObservedAt: T - 4 * H2,
+  }), 'criteria inherited for paired resolution');
+  // The post-cutoff 400 spike must not have entered the estimate: with it,
+  // the slope would be absurd and probability pinned at the 0.95 ceiling
+  // AND the accessor window simply cannot return it. Re-run without the
+  // spike and require the identical probability.
+  _resetSpotPriceStoreForTests();
+  recordFusedSpotPrices(pre);
+  _resetCalibrationForTests();
+  recordPrediction({
+    id: 'acc302-mkt2', sourceId: 'analyst-loop', targetKey: 'hypothesis:acc302-mkt',
+    domain: 'markets', claim: 'AAPL up 3%', probability: 0.7,
+    predictedAt: T, resolveBy: T + 24 * H2,
+    status: 'pending',
+    criteria: {
+      kind: 'market_move', symbol: 'AAPL', direction: 'up',
+      minAbsPct: 3, basisPrice: 196, basisObservedAt: T - 4 * H2,
+    },
+  } as PredictionRecord);
+  const momentum2 = getCalibrationStore().all().filter((r) => r.sourceId === 'momentum-baseline');
+  assert.equal(momentum2[0]!.probability, momentum[0]!.probability, 'post-cutoff sample changed nothing');
 });

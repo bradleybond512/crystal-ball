@@ -20,6 +20,7 @@ Thank you for helping spread the word about Crystal Ball! This guide provides ta
 | [tech.crystalball.app](https://tech.crystalball.app) | Tech variant — startups, AI/ML, cybersecurity |
 | [finance.crystalball.app](https://finance.crystalball.app) | Finance variant — markets, exchanges, central banks |
 | [GitHub](https://github.com/bradleybond512/crystal-ball) | Source code (AGPL-3.0) |
+| [GitHub Sponsors](https://github.com/sponsors/bradleybond512) | Optional support for ongoing development |
 
 ---
 
@@ -172,6 +173,7 @@ Run AI summarization entirely on your own hardware with Ollama or an LM Studio-c
 - **Tagline**: "Real-time global intelligence dashboard"
 - **License**: AGPL-3.0 (free and open source)
 - **Creator**: Credit "Crystal Ball by " or link to the GitHub repo
+- **Support**: GitHub Sponsors is available at <https://github.com/sponsors/bradleybond512>
 - **Variants**: You can mention all three (World/Tech/Finance) or focus on the main one
 - **No login required**: Anyone can use the web app immediately — no signup, no paywall
 

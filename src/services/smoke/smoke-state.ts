@@ -5,9 +5,11 @@
  * the pure modules stay fixture-testable.
  */
 import { getSavedPlaces } from '@/services/saved-places';
-import type { CompassPoint, SmokeSnapshot } from './smoke-types';
+import type { CompassPoint, SmokeArrivalEstimate, SmokeSnapshot, SmokeTransportSource } from './smoke-types';
 import { compassPoints } from './clean-air-compass';
-import { fetchAqForPoint, fetchAqForPoints, type ParsedAq } from './smoke-fetch';
+import { fetchAqForPoint, fetchAqForPoints, fetchTransportWinds, type ParsedAq } from './smoke-fetch';
+import { estimateArrivals } from './arrival-eta';
+import { firmsToTransportSources, type FirePixel } from './fire-detection-sources';
 import { buildSnapshot } from './smoke-snapshot';
 
 const CHECKLIST_KEY = 'cb-smoke-checklist';
@@ -55,11 +57,70 @@ export function subscribeSmoke(fn: (s: SmokeSnapshot[]) => void): () => void {
 let lastFetch: {
   home: ParsedAq;
   compass: { point: CompassPoint; parsed: ParsedAq | null }[];
+  arrivals: SmokeArrivalEstimate[];
   placeId: string;
   /** When the data was actually fetched — snapshots generated from a cached
    *  fetch keep this timestamp so staleness is never masked as fresh. */
   fetchedAt: number;
 } | null = null;
+
+/** Fire-size class for arrival wording; mirrors the map's acreage scaling. */
+function fireIntensity(acres: number | null): SmokeTransportSource['intensity'] {
+  if (acres !== null && acres >= 10_000) return 'heavy';
+  if (acres !== null && acres >= 1000) return 'medium';
+  return 'light';
+}
+
+/**
+ * Gather upwind smoke sources from the feeds the app already caches: HMS
+ * plume polygons (60 min TTL) + NIFC active-fire perimeters (30 min TTL) +
+ * NASA FIRMS thermal detections (near-real-time hotspots that often lead the
+ * slower perimeter/plume products). Dynamic imports keep the DOM-flavored KML
+ * parser out of the pure-module graph; each feed degrades to empty on its own
+ * (arrival rows for that source just absent — never invented).
+ */
+async function gatherTransportSources(home: { lat: number; lon: number }): Promise<SmokeTransportSource[]> {
+  const [smoke, fires, firmsPixels] = await Promise.all([
+    import('@/services/wildfire-smoke').then((m) => m.fetchWildfireSmoke()).catch(() => null),
+    import('@/services/wildfires/fire-intel-service').then((m) => m.fetchActivePerimeters()).catch(() => []),
+    import('@/services/wildfires')
+      .then(async (m) => {
+        const { regions } = await m.fetchAllFires();
+        return m.flattenFires(regions).map((d): FirePixel => ({
+          lat: d.location?.latitude ?? Number.NaN,
+          lon: d.location?.longitude ?? Number.NaN,
+          frpMw: d.frp,
+          detectedAtMs: new Date(d.detectedAt).getTime(),
+        }));
+      })
+      .catch(() => [] as FirePixel[]),
+  ]);
+  const out: SmokeTransportSource[] = [];
+  for (const p of smoke?.polygons ?? []) {
+    if (!p.centroid) continue;
+    out.push({
+      id: p.id,
+      kind: 'plume',
+      label: `${p.density} smoke plume`,
+      lat: p.centroid[1],
+      lon: p.centroid[0],
+      intensity: p.density.toLowerCase() as SmokeTransportSource['intensity'],
+      rings: p.coordinates,
+    });
+  }
+  for (const f of fires) {
+    out.push({
+      id: f.irwinId,
+      kind: 'fire',
+      label: f.name ? `${f.name} fire` : 'Active fire',
+      lat: f.lat,
+      lon: f.lon,
+      intensity: fireIntensity(f.acres),
+    });
+  }
+  out.push(...firmsToTransportSources(firmsPixels, home, { nowMs: Date.now() }));
+  return out;
+}
 
 /** Refresh snapshots. withNetwork=false recomputes from cached fetches
  *  (checklist/sensitivity toggles shouldn't refetch). */
@@ -75,13 +136,23 @@ export async function refreshSmokeConditions(withNetwork = true): Promise<void> 
   if (withNetwork || lastFetch?.placeId !== primary.id) {
     try {
       const points = compassPoints(primary.lat, primary.lon, COMPASS_RADII_MI);
-      const [home, ring] = await Promise.all([
+      const [home, ring, winds, transportSources] = await Promise.all([
         fetchAqForPoint(primary.lat, primary.lon),
         fetchAqForPoints(points),
+        // Both transport inputs self-degrade to empty — estimateArrivals is
+        // fail-closed and emits no claims without usable winds.
+        fetchTransportWinds(primary.lat, primary.lon).catch(() => []),
+        gatherTransportSources({ lat: primary.lat, lon: primary.lon }).catch(() => []),
       ]);
       lastFetch = {
         home,
         compass: points.map((point, i) => ({ point, parsed: ring[i] ?? null })),
+        arrivals: estimateArrivals({
+          home: { lat: primary.lat, lon: primary.lon },
+          sources: transportSources,
+          winds,
+          now: Date.now(),
+        }),
         placeId: primary.id,
         fetchedAt: Date.now(),
       };
@@ -100,6 +171,7 @@ export async function refreshSmokeConditions(withNetwork = true): Promise<void> 
     compassParsed: lastFetch.compass,
     doneChecklistIds: getDoneChecklistIds(),
     sensitiveGroup: getSensitiveGroup(),
+    arrivals: lastFetch.arrivals,
     // Data age, not render time — a rebuild from cache must read as stale.
     now: lastFetch.fetchedAt,
   })];

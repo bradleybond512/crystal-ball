@@ -106,8 +106,28 @@ map layer, or arrival call site changes.
 
 ## Tests
 
-`npm run test:smoke-engine` (pure, tsx). This module adds 14 cases: cycle
+`npm run test:smoke-engine` (pure, tsx). This module adds 16 cases: cycle
 selection + UTC rollback, forecast-hour ceiling, URL construction, idx byte-range
-parsing (bounded / open-ended / absent), Range header rendering, AQI breakpoint
-anchors + 0.1 truncation + 500 cap, `fetchHrrrSmokeGrids` happy-path + skip +
-null, and the `hrrrGridsToGridPoints` drop-in shape + fail-closed nulls.
+parsing (bounded / open-ended / absent / malformed-empty-offset), Range header
+rendering, AQI breakpoint anchors + 0.1 truncation + 500 cap,
+`fetchHrrrSmokeGrids` happy-path + skip + null + non-206-Range-ignored, and the
+`hrrrGridsToGridPoints` drop-in shape + fail-closed nulls.
+
+## Cross-agent review follow-ups (deferred to the decoder-seam work)
+
+The isolated Codex review raised two hardening ideas that are out of scope for
+the dormant-until-decoded ingestion core, recorded here for whoever lands the
+decoder:
+
+- **Per-cycle completeness signal.** `fetchHrrrSmokeGrids` skips any failed
+  forecast hour. This is safe today because `assembleForecastField` aligns cells
+  by absolute valid-time with an exact-match lookup — a missing hour is a null
+  column, never interpolated — plus the all-past fail-closed guard. If a future
+  consumer ever interpolates across hours, add an explicit completeness/expected
+  vs. decoded count so a gappy cycle reduces confidence rather than reading as a
+  full forecast.
+- **Issuance/cycle time on `HrrrSmokeGrid`.** Grids carry `validMs` but not the
+  model cycle. The only entry point derives the cycle from `latestHrrrCycle(now)`,
+  so a stale run with future valid-times can't arise in practice — but when the
+  decoder is wired for real, thread the cycle epoch through so downstream can
+  detect and de-weight an old run.

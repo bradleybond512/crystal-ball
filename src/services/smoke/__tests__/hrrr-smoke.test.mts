@@ -69,6 +69,15 @@ test('parseIdxByteRange returns null when the field/level is absent', () => {
   assert.equal(parseIdxByteRange(IDX, { field: 'MASSDEN', level: '80 m above ground' }), null);
 });
 
+test('parseIdxByteRange rejects a malformed empty byte offset (no byte-0 record)', () => {
+  // A corrupt line whose start-byte field is empty must NOT coerce to byte 0.
+  const idx = [
+    '1::d=2026072212:MASSDEN:8 m above ground:6 hour fcst:', // empty offset ⇒ dropped
+    '2:2000:d=2026072212:TMP:surface:6 hour fcst:',
+  ].join('\n');
+  assert.equal(parseIdxByteRange(idx, { field: 'MASSDEN', level: '8 m above ground' }), null);
+});
+
 test('rangeHeader renders closed and open-ended ranges', () => {
   assert.equal(rangeHeader({ start: 1000, end: 1999 }), 'bytes=1000-1999');
   assert.equal(rangeHeader({ start: 1000, end: null }), 'bytes=1000-');
@@ -106,10 +115,10 @@ test('fetchHrrrSmokeGrids range-GETs each hour, skips failures, null when empty'
   const fetchImpl: FetchLike = async (url, init) => {
     if (url.endsWith('.idx')) {
       const ok = !url.includes('wrfsfcf02'); // fail forecast hour 02 to prove the skip
-      return { ok, text: async () => IDX, arrayBuffer: async () => new ArrayBuffer(0) };
+      return { ok, status: ok ? 200 : 404, text: async () => IDX, arrayBuffer: async () => new ArrayBuffer(0) };
     }
     if (init?.headers?.Range) ranges.push(init.headers.Range);
-    return { ok: true, text: async () => '', arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
+    return { ok: true, status: 206, text: async () => '', arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
   };
   const decoder = (bytes: Uint8Array, validMs: number): HrrrSmokeGrid | null =>
     bytes.length > 0 ? { validMs, sample: () => 10 } : null;
@@ -130,6 +139,31 @@ test('fetchHrrrSmokeGrids range-GETs each hour, skips failures, null when empty'
     fetchImpl,
   });
   assert.equal(none, null);
+});
+
+test('fetchHrrrSmokeGrids skips a hour whose Range was ignored (200, not 206)', async () => {
+  // A proxy that ignores Range returns the whole 130 MB file with 200; the
+  // decoder expects one MASSDEN message, so a non-206 must be treated as failed.
+  const decodedBytes: number[] = [];
+  const fetchImpl: FetchLike = async (url) => {
+    if (url.endsWith('.idx')) {
+      return { ok: true, status: 200, text: async () => IDX, arrayBuffer: async () => new ArrayBuffer(0) };
+    }
+    // ok:true but status 200 ⇒ Range ignored, full file returned.
+    return { ok: true, status: 200, text: async () => '', arrayBuffer: async () => new Uint8Array([9]).buffer };
+  };
+  const decoder = (bytes: Uint8Array, validMs: number): HrrrSmokeGrid | null => {
+    decodedBytes.push(bytes.length);
+    return { validMs, sample: () => 10 };
+  };
+  const grids = await fetchHrrrSmokeGrids({
+    cycle: { date: '20260722', hour: 12 },
+    forecastHours: [1, 2],
+    decoder,
+    fetchImpl,
+  });
+  assert.equal(grids, null, 'no hour decoded — every ranged GET came back 200');
+  assert.deepEqual(decodedBytes, [], 'decoder never handed a non-partial body');
 });
 
 test('hrrrGridsToGridPoints yields drop-in GridPointAq and nulls empty points', () => {

@@ -70,6 +70,7 @@ export type FetchLike = (
   init?: { headers?: Record<string, string> },
 ) => Promise<{
   ok: boolean;
+  status: number;
   text: () => Promise<string>;
   arrayBuffer: () => Promise<ArrayBuffer>;
 }>;
@@ -111,9 +112,12 @@ export function parseIdxByteRange(
     .filter(Boolean)
     .map((l) => {
       const parts = l.split(':');
-      return { start: Number(parts[1]), field: parts[3] ?? '', level: parts[4] ?? '' };
+      // An empty byte field must not survive as a byte-0 record (Number('')
+      // === 0 passes isFinite) — coerce missing/empty to NaN so it's dropped.
+      const startRaw = parts[1] ?? '';
+      return { start: startRaw === '' ? Number.NaN : Number(startRaw), field: parts[3] ?? '', level: parts[4] ?? '' };
     })
-    .filter((r) => Number.isFinite(r.start));
+    .filter((r) => Number.isFinite(r.start) && r.start >= 0);
 
   for (let i = 0; i < records.length; i++) {
     const r = records[i]!;
@@ -195,7 +199,10 @@ export async function fetchHrrrSmokeGrids(params: FetchHrrrSmokeParams): Promise
       const range = parseIdxByteRange(await idxRes.text(), { field, level });
       if (!range) continue;
       const msgRes = await fetchImpl(grib, { headers: { Range: rangeHeader(range) } });
-      if (!msgRes.ok) continue;
+      // A Range request MUST return 206. A 200 means the server ignored the
+      // header and sent the whole ~130 MB file; the decoder expects exactly one
+      // MASSDEN message, so treat a non-partial response as a failed hour.
+      if (msgRes.status !== 206) continue;
       const grid = decoder(new Uint8Array(await msgRes.arrayBuffer()), cycleMs + fh * HOUR_MS);
       if (grid) grids.push(grid);
     } catch {

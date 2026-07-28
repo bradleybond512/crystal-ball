@@ -161,10 +161,10 @@ export class CorrelationMapPanel extends Panel {
     const color = confidenceColor(row.confidence);
     const badges = [
       row.learned
-        ? `<span class="cm2-pair-badge-learned" style="font-size:10px;font-weight:700;color:#a855f7;border:1px solid #a855f7;border-radius:4px;padding:1px 5px;white-space:nowrap;">LEARNED</span>`
+        ? `<span class="cm2-pair-badge-learned" style="font-size:10px;font-weight:700;color:var(--cm-learned, #a855f7);border:1px solid var(--cm-learned, #a855f7);border-radius:4px;padding:1px 5px;white-space:nowrap;">LEARNED</span>`
         : '',
       row.regimeBoosted
-        ? `<span class="cm2-pair-badge-regime" style="font-size:10px;font-weight:700;color:#38bdf8;border:1px solid #38bdf8;border-radius:4px;padding:1px 5px;white-space:nowrap;">REGIME</span>`
+        ? `<span class="cm2-pair-badge-regime" style="font-size:10px;font-weight:700;color:var(--cm-regime, #38bdf8);border:1px solid var(--cm-regime, #38bdf8);border-radius:4px;padding:1px 5px;white-space:nowrap;">REGIME</span>`
         : '',
     ].join('');
     const chips = row.factorChips

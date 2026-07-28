@@ -158,8 +158,8 @@ export function gradePostureLoop(fixture: PostureLoopFixture): PostureLoopGrade 
   if (!commitTimingValid) notes.push('Commit or impact time is missing/invalid — cannot confirm the move beat impact.');
   else if (!committedBeforeImpact) notes.push('Move was committed after impact — too late to change the outcome.');
   if (!postureImproved) notes.push('Observed posture did not improve on the graded axis after the move.');
-  if (projectionVerdict === 'overpredicted') notes.push(`Move helped ${Math.abs(projectionError).toFixed(0)} pts less than modeled.`);
-  else if (projectionVerdict === 'underpredicted') notes.push(`Move helped ${Math.abs(projectionError).toFixed(0)} pts more than modeled.`);
+  if (projectionVerdict === 'overpredicted') notes.push(`Observed improvement fell ${Math.abs(projectionError).toFixed(0)} pts short of the modeled effect.`);
+  else if (projectionVerdict === 'underpredicted') notes.push(`Observed improvement exceeded the modeled effect by ${Math.abs(projectionError).toFixed(0)} pts.`);
 
   return {
     label: fixture.label,

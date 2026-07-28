@@ -155,3 +155,17 @@ test('a missing install path fails signer resolution closed', () => {
  'a missing install path must error, not return Ok(None)',
   );
 });
+
+test('a non-Apple install must prove an intact signature before skipping the pin', () => {
+  // codesign_satisfies("anchor apple generic") == false covers BOTH a valid
+  // ad-hoc/dev build and a broken/stripped signature. Only the former may skip
+  // signer enforcement, so the Ok(None) path must first require the running
+  // bundle's signature to verify — a corrupted install fails closed.
+  const gate = mainRs.match(
+ /if !codesign_satisfies\(installed, "anchor apple generic"\) \{[\s\S]*?verify_app_bundle_signature\(installed, "Installed app"\)\?;[\s\S]*?return Ok\(None\);/,
+  );
+  assert.ok(
+ gate,
+ 'the Ok(None) dev-build skip must be guarded by an intact-signature check',
+  );
+});

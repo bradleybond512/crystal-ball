@@ -1961,8 +1961,9 @@ fn codesign_satisfies(app_path: &str, requirement: &str) -> bool {
 /// distribution to pin against).
 ///
 /// Fails CLOSED in production: if the installed app IS Apple-signed but we cannot
-/// read its team, this errors so callers refuse the update rather than falling
-/// through to integrity-only verification.
+/// read its team, or its signature does not verify at all (broken/stripped rather
+/// than a genuine non-Apple build), this errors so callers refuse the update
+/// rather than falling through to integrity-only verification.
 #[cfg(target_os = "macos")]
 fn installed_signer_requirement(installed: &str) -> Result<Option<String>, String> {
  // Fail closed if the install path is gone: a missing bundle must never be read
@@ -1973,6 +1974,13 @@ fn installed_signer_requirement(installed: &str) -> Result<Option<String>, Strin
  }
  // Is the running install a real Apple-distributed build, or an unsigned dev build?
  if !codesign_satisfies(installed, "anchor apple generic") {
+ // The Apple-anchor requirement fails for BOTH a legitimately non-Apple build
+ // (valid ad-hoc/dev signature, nothing to pin) AND a production install whose
+ // signature is broken or stripped. Only the former may skip signer enforcement:
+ // require an intact signature here so a corrupted install fails closed instead
+ // of silently downgrading to integrity-only verification (which a compromised
+ // release could then satisfy with a self-signed bundle).
+ verify_app_bundle_signature(installed, "Installed app")?;
  return Ok(None);
  }
  let team = bundle_team_identifier(installed).ok_or_else(|| {

@@ -52,6 +52,12 @@ import {
   syncForecastEvaluations,
 } from '@/services/algorithms/forecast-outcome-grading';
 import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
+import { buildPersistenceBaselinePrediction } from './persistence-baseline';
+import {
+  buildMomentumBaselinePrediction,
+  type MomentumSample,
+} from './momentum-baseline';
+import { getSpotPriceHistory } from '@/services/market/spot-price-store';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -88,30 +94,74 @@ export function getCalibrationStore(): ForecastCalibrationStore {
   return _calibrationStore;
 }
 
+/** Lookback the momentum baseline's spot-price accessor covers. Matches
+ *  the model's own LOOKBACK_MS window so no extra data is fetched. */
+const MOMENTUM_ACCESSOR_LOOKBACK_MS = 6 * 3_600_000;
+
+/** Pre-forecast price samples for a market_move target, bounded at the
+ *  prediction time — the model re-filters, but the accessor never even
+ *  fetches post-cutoff samples (ACC-302 lookahead discipline). */
+function momentumSamplesFor(p: PredictionRecord): MomentumSample[] {
+  if (p.criteria?.kind !== 'market_move') return [];
+  try {
+    return getSpotPriceHistory(p.criteria.symbol, {
+      sinceExclusive: p.predictedAt - MOMENTUM_ACCESSOR_LOOKBACK_MS,
+      untilInclusive: p.predictedAt,
+    }).map((o) => ({ observedAt: o.observedAt, price: o.price }));
+  } catch {
+    return [];
+  }
+}
+
+/** ACC-301/ACC-302 baseline family — ordered; each returns null when
+ *  not applicable to the target (the roadmap's `not_applicable`). */
+function buildBaselinePredictions(
+  p: PredictionRecord,
+  history: readonly PredictionRecord[],
+): PredictionRecord[] {
+  const baselines: PredictionRecord[] = [];
+  const hierarchical = buildHierarchicalBaseRatePrediction(p, history);
+  if (hierarchical) baselines.push(hierarchical);
+  const persistence = buildPersistenceBaselinePrediction(p, history);
+  if (persistence) baselines.push(persistence);
+  const momentum = buildMomentumBaselinePrediction(p, momentumSamplesFor(p));
+  if (momentum) baselines.push(momentum);
+  return baselines;
+}
+
 /** Record + persist in one call. */
 export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
-  const baseline = buildHierarchicalBaseRatePrediction(p, store.all());
-  const recordBaseline = baseline && !store.get(baseline.id);
-  if (recordBaseline) store.record(baseline);
+  // One snapshot serves every baseline builder (store.all clones).
+  const history = store.all();
+  const recorded: PredictionRecord[] = [];
+  for (const baseline of buildBaselinePredictions(p, history)) {
+    if (store.get(baseline.id)) continue;
+    store.record(baseline);
+    recorded.push(baseline);
+  }
   persist(store);
   ensureForecastEvaluation(p);
-  if (recordBaseline) ensureForecastEvaluation(baseline);
+  for (const baseline of recorded) ensureForecastEvaluation(baseline);
 }
 
-/** Record a snapshot batch and persist once. */
+/** Record a snapshot batch and persist once. Two passes so baseline
+ *  emission is INDEPENDENT of batch order: every production record
+ *  lands first, then each baseline builds against the full post-batch
+ *  snapshot (the estimators' own predictedAt cutoffs keep temporal
+ *  correctness — a batch-mate from the future never enters training). */
 export function recordPredictions(predictions: readonly PredictionRecord[]): void {
   if (predictions.length === 0) return;
   const store = getCalibrationStore();
   for (const prediction of predictions) {
     store.record(prediction);
     ensureForecastEvaluation(prediction);
-    const baseline = buildHierarchicalBaseRatePrediction(
-      prediction,
-      store.all(),
-    );
-    if (baseline && !store.get(baseline.id)) {
+  }
+  const history = store.all();
+  for (const prediction of predictions) {
+    for (const baseline of buildBaselinePredictions(prediction, history)) {
+      if (store.get(baseline.id)) continue;
       store.record(baseline);
       ensureForecastEvaluation(baseline);
     }

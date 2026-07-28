@@ -1965,6 +1965,12 @@ fn codesign_satisfies(app_path: &str, requirement: &str) -> bool {
 /// through to integrity-only verification.
 #[cfg(target_os = "macos")]
 fn installed_signer_requirement(installed: &str) -> Result<Option<String>, String> {
+ // Fail closed if the install path is gone: a missing bundle must never be read
+ // as "unsigned dev build" and silently disable signer enforcement. Callers
+ // capture this from the live running app, so absence here means a race/tamper.
+ if !Path::new(installed).exists() {
+ return Err(format!("Install path {installed} is missing — refusing update"));
+ }
  // Is the running install a real Apple-distributed build, or an unsigned dev build?
  if !codesign_satisfies(installed, "anchor apple generic") {
  return Ok(None);
@@ -2108,18 +2114,23 @@ fn reject_symlinked_path(path: &str, label: &str) -> Result<(), String> {
 /// post-swap verification fails; if the rollback ITSELF fails, the error names the
 /// preserved backup so the install is recoverable rather than silently lost.
 ///
-/// The post-swap gate is deliberately as strong as the pre-swap gate: it captures
-/// the signer pin from the OLD install first, then after the rename re-checks
-/// integrity + bundle ID + that same pin on the bundle that actually landed. This
-/// closes the rename-window TOCTOU where a local process swaps the staged
-/// directory contents after validation but before the move.
+/// The post-swap gate is deliberately as strong as the pre-swap gate. The signer
+/// `requirement` and `expected_version` are captured ONCE from the live install
+/// before validation and threaded in here, so this re-checks integrity + bundle ID
+/// + that same immutable pin + that the landed version EXACTLY equals the one that
+/// was validated. This closes both the rename-window TOCTOU (a local process swaps
+/// the staged directory after validation but before the move) and the downgrade
+/// window (substituting an older but legitimately-signed bundle post-validation).
 #[cfg(target_os = "macos")]
-fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), String> {
+fn swap_staged_into_place(
+ staged: &str,
+ dest: &str,
+ backup: &str,
+ requirement: &Option<String>,
+ expected_version: &str,
+) -> Result<(), String> {
  reject_symlinked_path(staged, "staged bundle")?;
  reject_symlinked_path(dest, "install path")?;
-
- // Capture the pin from the CURRENT install before we move it out of the way.
- let pin = installed_signer_requirement(dest)?;
 
  let _ = fs::remove_dir_all(backup);
 
@@ -2138,12 +2149,22 @@ fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), 
  return Err(format!("Swap staged app into install path failed: {e}"));
  }
 
- // Re-verify the bundle that is NOW installed — integrity, bundle ID, and the
- // pinned signer — not just integrity. Anything a rename-window swap slipped in
- // is caught here and rolled back.
+ // Re-verify the bundle that is NOW installed — integrity, bundle ID, the pinned
+ // signer, AND that its version is exactly the validated one (blocks a downgrade
+ // substituted into the rename window). Anything else is rolled back.
  let post = verify_app_bundle_signature(&dest, "Installed app")
  .and_then(|_| verify_update_bundle_identifier(dest))
- .and_then(|_| verify_bundle_satisfies_requirement(dest, &pin));
+ .and_then(|_| verify_bundle_satisfies_requirement(dest, requirement))
+ .and_then(|_| {
+ let landed = read_bundle_short_version(dest)?;
+ if landed == expected_version {
+ Ok(())
+ } else {
+ Err(format!(
+ "Installed version {landed} does not match the validated staged version {expected_version} — refusing"
+ ))
+ }
+ });
  if let Err(e) = post {
  let _ = fs::remove_dir_all(dest);
  if let Err(rollback) = restore_backup(backup, dest) {
@@ -2300,7 +2321,7 @@ static UPDATE_SWAP_LOCK: Mutex<()> = Mutex::new(());
 /// running build, carries our bundle ID, has an intact signature, and satisfies
 /// the same Apple-anchored signer pin as the live install.
 #[cfg(target_os = "macos")]
-fn validate_staged_bundle(staged: &str, dest: &str) -> Result<(), String> {
+fn validate_staged_bundle(staged: &str, requirement: &Option<String>) -> Result<String, String> {
  let staged_version = read_bundle_short_version(staged)?;
  let current_version = env!("CARGO_PKG_VERSION");
  if !is_semver_newer(&staged_version, current_version) {
@@ -2310,8 +2331,11 @@ fn validate_staged_bundle(staged: &str, dest: &str) -> Result<(), String> {
  }
  verify_update_bundle_identifier(staged)?;
  verify_app_bundle_signature(staged, "Staged app bundle")?;
- verify_same_signer_as_installed(staged, dest)?;
- Ok(())
+ // Enforce the signer pin captured ONCE from the live install (not re-derived
+ // here), so an attacker cannot swap `dest` to a different Apple team between
+ // this check and the swap and have the later capture trust their team.
+ verify_bundle_satisfies_requirement(staged, requirement)?;
+ Ok(staged_version)
 }
 
 /// Re-verify the staged bundle signature and swap it into place, then relaunch.
@@ -2342,19 +2366,27 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  // a panic mid-swap must not wedge every future update behind a dead lock.
  let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
- // Re-verify at apply time so tampering between download and restart is caught.
- // Identical gate to the boot-apply path.
- validate_staged_bundle(&staged, &dest)?;
- swap_staged_into_place(&staged, &dest, &backup)?;
+ // Capture the Apple signer pin ONCE from the live install before any rename,
+ // then thread that immutable requirement + the validated version through both
+ // the pre-swap gate and the post-swap re-check. Re-verifying at apply time also
+ // catches tampering between download and restart. Identical gate to boot-apply.
+ let requirement = installed_signer_requirement(&dest)?;
+ let staged_version = validate_staged_bundle(&staged, &requirement)?;
+ swap_staged_into_place(&staged, &dest, &backup, &requirement, &staged_version)?;
 
  // The swap already landed on disk, so the new version runs no matter what.
- // Force a NEW instance of the freshly-installed bundle: plain `open` would
- // just re-activate THIS still-running old process and nothing would relaunch.
- // If the spawn fails, don't exit — the update is applied and will run on the
- // next manual launch; returning Ok keeps the current session usable.
- match Command::new("open").args(["-n", dest.as_str()]).spawn() {
- Ok(_) => std::process::exit(0),
- Err(_) => Ok(()),
+ // Force a NEW instance of the freshly-installed bundle (`open` alone would just
+ // re-activate THIS still-running old process). Wait for `open -n` to report its
+ // status and exit only if it actually accepted the launch; otherwise surface an
+ // error so the UI recovers — the update still applies on the next manual launch.
+ match Command::new("open").args(["-n", dest.as_str()]).status() {
+ Ok(s) if s.success() => std::process::exit(0),
+ Ok(s) => Err(format!(
+ "Update installed but relaunch failed (open exited {s}); it will apply on next launch"
+ )),
+ Err(e) => Err(format!(
+ "Update installed but relaunch could not start ({e}); it will apply on next launch"
+ )),
  }
  }
 }
@@ -2388,19 +2420,29 @@ fn maybe_apply_staged_update_on_boot() {
  // async runtime and IPC, so nothing can actually race it yet). Poison-tolerant.
  let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
- // Identical gate to the manual apply path — see validate_staged_bundle.
- if let Err(e) = validate_staged_bundle(&staged, &dest) {
- return discard(e);
- }
- if let Err(e) = swap_staged_into_place(&staged, &dest, &backup) {
+ // Identical gate to the manual apply path — see validate_staged_bundle. Capture
+ // the signer pin + version ONCE from the live install, then thread them through
+ // pre- and post-swap so neither can be re-derived from a tampered dest.
+ let requirement = match installed_signer_requirement(&dest) {
+ Ok(r) => r,
+ Err(e) => return discard(e),
+ };
+ let staged_version = match validate_staged_bundle(&staged, &requirement) {
+ Ok(v) => v,
+ Err(e) => return discard(e),
+ };
+ if let Err(e) = swap_staged_into_place(&staged, &dest, &backup, &requirement, &staged_version) {
  return discard(e);
  }
 
- // Relaunch the freshly-installed bundle as a NEW instance and hand off. If the
- // spawn fails, fall through and keep booting the old in-memory binary — the new
- // bundle is already on disk and will run cleanly on the next manual launch.
- if Command::new("open").args(["-n", dest.as_str()]).spawn().is_ok() {
+ // Relaunch the freshly-installed bundle as a NEW instance and hand off only if
+ // `open -n` actually accepted the launch; otherwise fall through and keep
+ // booting the old in-memory binary — the new bundle is already on disk and will
+ // run cleanly on the next manual launch.
+ if let Ok(s) = Command::new("open").args(["-n", dest.as_str()]).status() {
+ if s.success() {
  std::process::exit(0);
+ }
  }
 }
 

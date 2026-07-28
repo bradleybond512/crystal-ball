@@ -110,9 +110,48 @@ test('apply and boot share one staged-bundle validator (no weaker door)', () => 
  'a shared validator should gate both swap entry points identically',
   );
   // Both the manual apply command and the boot-time auto-apply must run it.
-  const validatorCalls = mainRs.match(/validate_staged_bundle\(&staged, &dest\)/g) ?? [];
+  const validatorCalls = mainRs.match(/validate_staged_bundle\(&staged, &requirement\)/g) ?? [];
   assert.ok(
  validatorCalls.length >= 2,
  `expected validate_staged_bundle in both apply and boot; found ${validatorCalls.length}`,
+  );
+});
+
+test('signer pin + version are captured once and re-checked after the swap', () => {
+  // The Apple signer requirement is derived from the live install exactly once
+  // per apply/boot and threaded through, never re-derived inside the swap (which
+  // could otherwise trust a tampered dest's team).
+  const captures = mainRs.match(/installed_signer_requirement\(&dest\)/g) ?? [];
+  assert.ok(
+ captures.length >= 2,
+ `expected one up-front signer-pin capture in each of apply and boot; found ${captures.length}`,
+  );
+  // The swap threads the captured requirement + expected version through.
+  assert.match(
+ mainRs,
+ /swap_staged_into_place\(&staged, &dest, &backup, &requirement, &staged_version\)/,
+ 'swap must receive the captured pin + version, not re-derive them',
+  );
+  // Post-swap must re-read the installed version and reject a mismatch, blocking a
+  // downgrade substituted into the rename window.
+  assert.match(
+ mainRs,
+ /read_bundle_short_version\(dest\)/,
+ 'post-swap must re-read the installed bundle version',
+  );
+  assert.match(
+ mainRs,
+ /does not match the validated staged version/,
+ 'post-swap must reject a version mismatch (downgrade in the rename window)',
+  );
+});
+
+test('a missing install path fails signer resolution closed', () => {
+  // installed_signer_requirement must never read a missing bundle as "unsigned
+  // dev build" and silently disable signer enforcement.
+  assert.match(
+ mainRs,
+ /is missing — refusing update/,
+ 'a missing install path must error, not return Ok(None)',
   );
 });

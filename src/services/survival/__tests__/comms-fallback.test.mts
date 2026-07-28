@@ -74,11 +74,29 @@ test('a critical comms band leaves only battery/foot rungs — recommend two-way
 });
 
 test('the transmit recommendation is never receive-only and always exists', () => {
-  for (const level of [0, GUIDANCE_LEVEL, 65, 90, 100]) {
+  // One representative per SurvivalBand (secure/guarded/elevated/high/critical),
+  // the band boundaries, and every non-finite value — the grid-down guarantee
+  // must hold across the whole domain, not just a sampled few.
+  const levels = [0, 10, 25, GUIDANCE_LEVEL, 55, 65, 79, 80, 90, 100,
+    Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  for (const level of levels) {
     const plan = resolveCommsFallback(snapshot(posture({ comms: level })));
     const rec = plan.ladder.find((r) => r.id === plan.recommendedRungId)!;
+    assert.ok(rec, `level ${level}: recommended rung must resolve`);
     assert.ok(rec.viable && !rec.receiveOnly, `level ${level}: recommended must be viable + transmit-capable`);
   }
+});
+
+test('resolveCommsFallback does not mutate the snapshot it is given', () => {
+  const snap = snapshot(posture({ comms: 90, energy_water: 70 }));
+  const before = JSON.stringify(snap);
+  const frozenAxes = snap.posture.axes.map((a) => Object.freeze(a));
+  Object.freeze(frozenAxes);
+  Object.freeze(snap.posture);
+  Object.freeze(snap);
+  // Would throw in strict mode if the resolver wrote through any frozen ref.
+  assert.doesNotThrow(() => resolveCommsFallback(snap));
+  assert.equal(JSON.stringify(snap), before, 'snapshot must be untouched after resolution');
 });
 
 test('a compromised power axis takes broadband even when comms is nominal', () => {

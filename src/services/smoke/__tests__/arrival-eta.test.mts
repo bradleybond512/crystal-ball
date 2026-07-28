@@ -102,6 +102,14 @@ test('fail-closed: no usable winds → no transport claims for non-overhead sour
   );
 });
 
+test('fail-closed: winds entirely in the past → no transport claims (stale, not reused)', () => {
+  // Aligned 20 mph winds, but every sample ended 24 h ago — none covers "now".
+  // The old code fell back to startIdx 0 and reprojected these stale winds into
+  // a bogus "incoming" ETA; fail-closed means no non-overhead claim at all.
+  const stale = winds(12, 0, 20).map((w) => ({ ...w, timeMs: w.timeMs! - 24 * 3_600_000 }));
+  assert.deepEqual(estimateArrivals({ home: HOME, sources: [NORTH_PLUME], winds: stale, now: T0 }), []);
+});
+
 test('sources beyond maxDistanceMi are ignored entirely', () => {
   const far: SmokeTransportSource = { ...NORTH_PLUME, id: 'far', lat: HOME.lat + 600 / 69.09 };
   assert.deepEqual(estimateArrivals({ home: HOME, sources: [far], winds: winds(12, 0, 30), now: T0 }), []);

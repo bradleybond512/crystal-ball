@@ -54,3 +54,10 @@ test('fail-closed: all-null AQI or empty parses → null (never a fake-good map)
   assert.equal(assembleForecastField(points, [null], T0), null);
   assert.equal(assembleForecastField([], [], T0), null);
 });
+
+test('fail-closed: forecast entirely in the past → null (no stale hour stamped "now")', () => {
+  const points = [{ lat: 41, lon: -86 }];
+  // 12 hourly samples that all ended 24 h ago — none covers now − 1 h.
+  const allPast = gridAq(T0 - 24 * HOUR, 12, (i) => 40 + i);
+  assert.equal(assembleForecastField(points, [allPast], T0), null);
+});

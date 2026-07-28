@@ -73,8 +73,10 @@ export function assembleForecastField(
   const reference = parsed.find((p) => p !== null && p.timesMs.length > 0);
   if (!reference) return null;
 
-  let start = reference.timesMs.findIndex((t) => t >= now - HOUR_MS);
-  if (start < 0) start = Math.max(0, reference.timesMs.length - 1);
+  const start = reference.timesMs.findIndex((t) => t >= now - HOUR_MS);
+  // Every hour is in the past ⇒ fail closed. Stamping the last historical hour
+  // as "now" would render stale model output as a fresh forecast.
+  if (start === -1) return null;
   const hoursMs = reference.timesMs.slice(start, start + horizonHours);
   if (hoursMs.length === 0) return null;
 

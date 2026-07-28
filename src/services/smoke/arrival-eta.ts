@@ -163,6 +163,24 @@ function advect(
   return { arrivalIdx: null, hoursOut: used, alignedFrac: used > 0 ? aligned / used : 0 };
 }
 
+/**
+ * Winds are usable only when a sample covers "now" (`windsCurrent`) AND the
+ * projection window — the same slice `advect` walks — holds at least one row
+ * with both speed and direction. Stale or out-of-horizon rows never license a
+ * transport claim.
+ */
+function hasUsableWinds(
+  winds: HourlyWind[],
+  startIdx: number,
+  windsCurrent: boolean,
+  horizonHours: number,
+): boolean {
+  if (!windsCurrent) return false;
+  return winds
+    .slice(startIdx, startIdx + horizonHours)
+    .some((w) => w.speedMph !== null && w.directionDeg !== null);
+}
+
 function confidenceOf(alignedFrac: number, hoursOut: number): SmokeArrivalEstimate['confidence'] {
   if (alignedFrac >= 0.75 && hoursOut <= 18) return 'high';
   if (alignedFrac >= 0.5) return 'medium';
@@ -196,9 +214,12 @@ export function estimateArrivals(inputs: ArrivalInputs): SmokeArrivalEstimate[] 
   // device clock (a saved place two timezones away would shift every ETA).
   // Rows without an epoch fall back to device parsing, the legacy behavior.
   let startIdx = winds.findIndex((w) => (w.timeMs ?? new Date(w.time).getTime()) >= now - HOUR_MS);
+  // No sample covers "now" ⇒ every wind is stale. Fail closed: reprojecting
+  // smoke from winds that ended in the past would fabricate arrival ETAs.
+  const windsCurrent = startIdx >= 0;
   if (startIdx < 0) startIdx = 0;
   const offsetMs = placeOffsetMs(winds[startIdx]);
-  const haveWinds = winds.some((w) => w.speedMph !== null && w.directionDeg !== null);
+  const haveWinds = hasUsableWinds(winds, startIdx, windsCurrent, horizonHours);
 
   const out: SmokeArrivalEstimate[] = [];
   for (const src of sources) {

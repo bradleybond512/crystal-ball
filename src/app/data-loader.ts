@@ -1752,7 +1752,7 @@ export class DataLoaderManager implements AppModule {
  { computeAlertExposure },
  { getSavedPlaces },
  { resolveSavedPlaceZonesWithHealth, toMatcherPlace },
- { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, resolveThreatExpiryMs, decideThreatPublication },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1972,13 +1972,21 @@ export class DataLoaderManager implements AppModule {
  // real match always publishes. When the clear can't be trusted the prior
  // threat stays put to self-expire, and the chip shows the neutral "CHECKING
  // WEATHER" state (clear not confirmed) rather than a false ALL CLEAR.
+ // Freshness and match-completeness are passed SEPARATELY: a fresh feed whose
+ // match pipeline degraded (an unresolved zone or a crashed exposure match)
+ // can't confirm a clear AND must revoke any prior confirmed clear — otherwise
+ // a stale "ALL CLEAR" lingers over a fresh feed we never actually evaluated.
+ // On a stale feed we leave everything to self-expire.
  const chipDecision = decideThreatPublication(
  selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
- weatherFeedFresh && !zonesDegraded && !matchingDegraded,
+ weatherFeedFresh,
+ !zonesDegraded && !matchingDegraded,
  );
- if (chipDecision.write) {
- if (chipDecision.value) setPersonalWeatherThreat(chipDecision.value);
- else confirmPersonalWeatherClear();
+ switch (chipDecision.action) {
+ case 'publish': setPersonalWeatherThreat(chipDecision.value); break;
+ case 'confirm_clear': confirmPersonalWeatherClear(); break;
+ case 'revoke_confirmation': revokePersonalWeatherClearConfirmation(); break;
+ case 'leave': break;
  }
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);

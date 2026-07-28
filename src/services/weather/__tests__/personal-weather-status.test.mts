@@ -10,7 +10,9 @@ import {
   resolveThreatExpiryMs,
   decideThreatPublication,
   confirmPersonalWeatherClear,
+  revokePersonalWeatherClearConfirmation,
   isPersonalWeatherClearConfirmed,
+  PERSONAL_WEATHER_CLEAR_TTL_MS,
   type WeatherThreatCandidate,
 } from '../personal-weather-status.ts';
 
@@ -188,26 +190,45 @@ test('resolveThreatExpiryMs: an unparseable value falls back to now + window', (
 // unreachable. A stale snapshot that predates a new storm yields an empty
 // candidate set; naively publishing that would call setPersonalWeatherThreat(
 // null) and assert "ALL CLEAR" over a live warning (the reported bug, on the
-// offline path). This pure decision gates the publish: a real match always
-// wins, but a CLEAR is only honored when the feed was a fresh live read.
+// offline path). This pure decision gates the publish across THREE inputs —
+// the selected threat, whether the feed was a fresh live read, and whether the
+// match pipeline ran to completion (no degraded zone lookup / no crashed
+// exposure match). It returns one of four actions:
+//   publish             — a real match; always wins, even on a stale/degraded feed
+//   confirm_clear       — fresh feed + complete matching proved no threat
+//   revoke_confirmation — fresh feed we could NOT fully evaluate (degraded
+//                         matching); a prior confirmed clear must drop to neutral
+//                         rather than assert an all-clear over an unevaluated feed
+//   leave               — stale feed; touch nothing (a prior threat self-expires,
+//                         a prior confirmed clear self-expires via its TTL)
 
-test('decideThreatPublication: a real match publishes even when the feed is stale', () => {
+test('decideThreatPublication: a real match publishes even when the feed is stale/degraded', () => {
   const threat = { severity: 'severe' as const, label: 'Tornado Warning', expiresAt: 10_000 };
-  assert.deepEqual(decideThreatPublication(threat, false), { write: true, value: threat });
+  assert.deepEqual(decideThreatPublication(threat, false, false), { action: 'publish', value: threat });
 });
 
 test('decideThreatPublication: a real match publishes on a fresh feed', () => {
   const threat = { severity: 'extreme' as const, label: 'PDS Tornado', expiresAt: 1 };
-  assert.deepEqual(decideThreatPublication(threat, true), { write: true, value: threat });
+  assert.deepEqual(decideThreatPublication(threat, true, true), { action: 'publish', value: threat });
 });
 
-test('decideThreatPublication: a clear IS honored on a fresh feed (storm passed)', () => {
-  assert.deepEqual(decideThreatPublication(null, true), { write: true, value: null });
+test('decideThreatPublication: a clear IS confirmed on a fresh feed with complete matching (storm passed)', () => {
+  assert.deepEqual(decideThreatPublication(null, true, true), { action: 'confirm_clear' });
 });
 
-test('decideThreatPublication: a clear is SUPPRESSED on a stale feed (never prove clear)', () => {
-  // write:false → the caller leaves the prior threat in place; it self-expires.
-  assert.deepEqual(decideThreatPublication(null, false), { write: false, value: null });
+test('decideThreatPublication: a clear is LEFT alone on a stale feed (never prove clear)', () => {
+  // leave → the caller touches nothing; a prior threat/confirmed-clear self-expires.
+  assert.deepEqual(decideThreatPublication(null, false, true), { action: 'leave' });
+});
+
+// P0: a FRESH feed whose match pipeline was degraded (an unresolved UGC zone or
+// a crashed exposure match) yields no candidate — but that "no match" is NOT
+// trustworthy: a zone-only severe warning could be hiding behind the failed
+// lookup. Confirming a clear here, or leaving a PRIOR confirmed clear standing,
+// asserts an all-clear over a feed we could not actually evaluate. The honest
+// action is to REVOKE the confirmation so the chip falls back to neutral.
+test('decideThreatPublication: a fresh feed with DEGRADED matching revokes the clear (never assert an unevaluated all-clear)', () => {
+  assert.deepEqual(decideThreatPublication(null, true, false), { action: 'revoke_confirmation' });
 });
 
 // ── clear / expiry must notify (P2) ──────────────────────────────────────
@@ -289,4 +310,66 @@ test('a self-expired threat is NOT a confirmed clear (expiry ≠ proof)', () => 
   // The threat lapses on its own timer; no fresh feed re-proved the area clear.
   assert.equal(isPersonalWeatherClearConfirmed(10_000), false, 'a lapsed threat leaves the clear unconfirmed');
   assert.equal(getPersonalWeatherThreat(10_000), null, 'the lapsed threat is gone from state');
+});
+
+// ── confirmed-clear self-expiry (P0: unbounded stale proof) ──────────────
+// The status chip trusts `isPersonalWeatherClearConfirmed()` as its ONLY
+// freshness signal (it no longer re-reads the shared NWS breaker timestamp,
+// which any unrelated re-fetch — e.g. the Air & Smoke panel — can advance
+// without the matcher ever re-running). So the confirmed-clear must carry its
+// OWN staleness bound: once the loader has not re-proved clear for the feed
+// TTL, the proof lapses and the chip falls back to neutral instead of asserting
+// an all-clear the loader can no longer vouch for (the app slept, the weather
+// task stalled, NWS went unreachable). The TTL equals the weather-feed TTL.
+
+test('a confirmed clear self-expires after the clear TTL (proof goes stale → neutral)', () => {
+  confirmPersonalWeatherClear(1_000);
+  assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS - 1), true,
+    'still within the TTL: the clear is still proven');
+  assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS), false,
+    'at/after the TTL the proof lapses and the chip must stop asserting all-clear');
+});
+
+test('a fresh confirm re-proves the clear and restarts the TTL', () => {
+  confirmPersonalWeatherClear(1_000);
+  assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS), false, 'lapsed');
+  confirmPersonalWeatherClear(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS);
+  assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS + 1), true,
+    'a fresh clear proof restarts the TTL window');
+});
+
+// ── revokePersonalWeatherClearConfirmation (P0: degraded tick must un-prove) ──
+// When the loader gets a fresh feed it could NOT fully evaluate (a degraded zone
+// lookup or a crashed exposure match), a prior confirmed clear is no longer
+// trustworthy — a zone-only warning could be hiding behind the failure. Revoke
+// drops the confirmation to neutral WITHOUT fabricating a threat, and without
+// disturbing an active threat (there is never one to disturb: a confirmed clear
+// and an active threat are mutually exclusive).
+
+test('revokePersonalWeatherClearConfirmation drops a prior confirmed clear to neutral', () => {
+  confirmPersonalWeatherClear(1_000);
+  assert.equal(isPersonalWeatherClearConfirmed(2_000), true);
+  revokePersonalWeatherClearConfirmation();
+  assert.equal(isPersonalWeatherClearConfirmed(2_000), false, 'a revoked clear is no longer proven');
+});
+
+test('revokePersonalWeatherClearConfirmation notifies only when it actually changed', () => {
+  confirmPersonalWeatherClear(1_000);
+  let hits = 0;
+  const unsub = subscribePersonalWeatherThreat(() => { hits += 1; });
+  revokePersonalWeatherClearConfirmation();
+  assert.equal(hits, 1, 'un-proving a standing clear must repaint the chip now');
+  revokePersonalWeatherClearConfirmation();
+  assert.equal(hits, 1, 'a redundant revoke (already unproven) must not churn the chip');
+  unsub();
+});
+
+test('revokePersonalWeatherClearConfirmation leaves an active threat untouched', () => {
+  // A confirmed clear and an active threat are mutually exclusive; setting a
+  // threat already nulls the confirmation, so revoke must be a no-op that never
+  // clobbers the live threat.
+  setPersonalWeatherThreat({ severity: 'extreme', label: 'Tornado Warning', expiresAt: Number.MAX_SAFE_INTEGER });
+  revokePersonalWeatherClearConfirmation();
+  assert.equal(getPersonalWeatherThreat(0)?.label, 'Tornado Warning', 'the live threat survives a revoke');
+  assert.equal(isPersonalWeatherClearConfirmed(0), false);
 });

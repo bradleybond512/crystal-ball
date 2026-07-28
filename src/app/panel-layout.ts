@@ -227,7 +227,6 @@ import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
 import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
-import { getWeatherAlertsFeedState, isWeatherFeedFresh } from '@/services/weather';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -674,19 +673,21 @@ function collectCompositeStatusInputs(): CompositeStatusInputs {
   } catch { weatherSeverity = null; }
 
   // Only let the chip assert "ALL CLEAR" when a FRESH weather read has actually
-  // proven no threat over a saved place — AND that proof is still current. Two
-  // honest signals must agree: the store's confirmed-clear flag (false at boot,
-  // before the first tick, and after a threat that merely self-expired) and a
-  // still-fresh feed (a clear proven before the feed went unavailable must not
-  // linger as ALL CLEAR). When either is false the chip shows the neutral
-  // "CHECKING WEATHER" state instead of a premature/false all-clear.
+  // proven no threat over a saved place — AND that proof is still current. Both
+  // conditions live inside the store's confirmed-clear flag: it is false at boot
+  // (before the first tick) and after a threat that merely self-expired, and it
+  // now SELF-EXPIRES once the loader has not re-proved clear within the feed
+  // TTL. We deliberately do NOT re-read the NWS breaker's feed timestamp here:
+  // that breaker is shared with unrelated fetchers (e.g. the Air & Smoke panel)
+  // whose re-fetches advance it without the alert matcher ever re-running, so it
+  // could read "fresh" while the loader is blind — a false ALL CLEAR. The
+  // loader-owned proof is the only honest freshness signal.
   // Fail CLOSED: the default AND the catch are both `false`. If the check can't
-  // even run (either singleton throws), we have NOT proven it clear, so the chip
+  // even run (the singleton throws), we have NOT proven it clear, so the chip
   // must stay neutral — never fall back to asserting ALL CLEAR on an error.
   let weatherClearConfirmed = false;
   try {
-    weatherClearConfirmed =
-      isPersonalWeatherClearConfirmed() && isWeatherFeedFresh(getWeatherAlertsFeedState());
+    weatherClearConfirmed = isPersonalWeatherClearConfirmed();
   } catch { weatherClearConfirmed = false; }
 
   return { safetyCaseSafeToOperate, readinessStatus, weatherSeverity, weatherClearConfirmed };

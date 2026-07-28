@@ -26,6 +26,19 @@ export interface PersonalWeatherThreat {
 let current: PersonalWeatherThreat | null = null;
 
 /**
+ * How long a confirmed clear stays trustworthy before it must be re-proven.
+ * The status chip treats `isPersonalWeatherClearConfirmed()` as its ONLY
+ * freshness signal — it no longer re-reads the shared NWS circuit-breaker
+ * timestamp, which any unrelated re-fetch (e.g. the Air & Smoke panel) can
+ * advance without the alert matcher ever running again. So the proof carries
+ * its own staleness bound: matched to the weather-feed TTL, once the loader has
+ * not re-proved clear within this window the confirmation lapses and the chip
+ * falls back to neutral rather than asserting an all-clear it can no longer
+ * vouch for (the app slept, the weather task stalled, NWS went unreachable).
+ */
+export const PERSONAL_WEATHER_CLEAR_TTL_MS = 30 * 60 * 1000;
+
+/**
  * Epoch ms at which a FRESH weather read last PROVED no matched threat — i.e.
  * the clear is confirmed, not merely unknown. `null` means we have never proven
  * clear (boot, or a stale/failed feed that could not authorize a clear). The
@@ -110,16 +123,41 @@ export function confirmPersonalWeatherClear(now: number = Date.now()): void {
 }
 
 /**
+ * Revoke a prior confirmed clear WITHOUT fabricating a threat: the loader calls
+ * this when it gets a fresh feed it could not fully evaluate (a degraded zone
+ * lookup or a crashed exposure match), so a standing "all clear" over an
+ * unevaluated feed must drop to neutral. Only touches `clearConfirmedAt`; an
+ * active threat (mutually exclusive with a confirmed clear) is never disturbed.
+ * Notifies only when it actually changed so a redundant revoke does not churn
+ * the chip.
+ */
+export function revokePersonalWeatherClearConfirmation(): void {
+  if (clearConfirmedAt === null) return;
+  clearConfirmedAt = null;
+  notify();
+}
+
+/**
  * Whether the personal weather clear is CONFIRMED (a fresh feed proved no
  * matched threat) versus merely unevaluated. Reads self-heal like
  * `getPersonalWeatherThreat`: a lapsed threat is expired here too, but expiry
  * alone never fabricates a confirmed clear — only `confirmPersonalWeatherClear`
- * does. The status chip uses this to stay neutral until weather is proven.
+ * does. A confirmed clear also self-expires once it is older than
+ * `PERSONAL_WEATHER_CLEAR_TTL_MS`, so a proof the loader can no longer refresh
+ * (app asleep, weather task stalled, NWS unreachable) lapses to neutral instead
+ * of lingering as a false all-clear. The status chip uses this as its sole
+ * freshness signal, so it stays neutral until weather is proven AND current.
  */
 export function isPersonalWeatherClearConfirmed(now: number = Date.now()): boolean {
   // Trigger the expiry self-heal so this read is consistent regardless of the
   // order the chip reads threat vs. confirmed-clear.
   getPersonalWeatherThreat(now);
+  if (clearConfirmedAt !== null && now - clearConfirmedAt >= PERSONAL_WEATHER_CLEAR_TTL_MS) {
+    // Null BEFORE notifying so a subscriber re-reading here sees the lapsed
+    // state and this branch is already false (no re-entrant notify).
+    clearConfirmedAt = null;
+    notify();
+  }
   return clearConfirmedAt !== null;
 }
 
@@ -169,9 +207,25 @@ function toEpochMs(expires: unknown): number | null {
 }
 
 /**
- * Decide whether — and with what value — to publish the chip threat this weather
- * tick, given the freshly-selected threat and whether the underlying feed was a
- * FRESH live read (vs a stale/offline-cache fallback).
+ * What the data-loader should do with the chip state this weather tick.
+ * - `publish`             — write the matched threat (always wins).
+ * - `confirm_clear`       — a fresh, fully-evaluated feed proved no threat.
+ * - `revoke_confirmation` — a fresh feed we could NOT fully evaluate; drop any
+ *                           prior confirmed clear to neutral.
+ * - `leave`               — a stale feed; touch nothing (prior threat and prior
+ *                           confirmed clear each self-expire on their own timer).
+ */
+export type ThreatPublicationDecision =
+  | { action: 'publish'; value: PersonalWeatherThreat }
+  | { action: 'confirm_clear' }
+  | { action: 'revoke_confirmation' }
+  | { action: 'leave' };
+
+/**
+ * Decide what to do with the chip state this weather tick, given the
+ * freshly-selected threat, whether the underlying feed was a FRESH live read
+ * (vs a stale/offline-cache fallback), and whether the match pipeline ran to
+ * completion (no degraded zone lookup, no crashed exposure match).
  *
  * The data-loader derives the threat from whatever snapshot it has this tick. On
  * a stale offline snapshot that predates a new storm the candidate set is empty,
@@ -179,19 +233,26 @@ function toEpochMs(expires: unknown): number | null {
  * CLEAR" over a live warning — the reported bug, on the offline path.
  *
  * - A real MATCH always publishes: a warning matched over the user wins
- *   regardless of feed freshness.
- * - A CLEAR (`null`) is honored ONLY on a fresh read (`write: true, value: null`)
- *   so the chip drops a genuinely-passed storm. On a stale/failed feed the clear
- *   is SUPPRESSED (`write: false`); the caller leaves the prior threat in place
- *   and it self-expires on its own. A stale feed must never PROVE clear.
+ *   regardless of feed freshness or a degraded match elsewhere.
+ * - A CLEAR (`null`) is only CONFIRMED on a fresh read whose matching completed,
+ *   so the chip drops a genuinely-passed storm.
+ * - A CLEAR on a fresh read whose matching DEGRADED is not trustworthy (a
+ *   zone-only warning could hide behind the failed lookup): REVOKE any prior
+ *   confirmed clear so the chip goes neutral instead of asserting an all-clear
+ *   over a feed it could not evaluate.
+ * - A CLEAR on a stale/failed feed is LEFT alone; the caller touches nothing and
+ *   the prior threat / prior confirmed clear self-expire. A stale feed must
+ *   never PROVE clear.
  */
 export function decideThreatPublication(
   next: PersonalWeatherThreat | null,
   feedIsFresh: boolean,
-): { write: boolean; value: PersonalWeatherThreat | null } {
-  if (next) return { write: true, value: next };
-  if (feedIsFresh) return { write: true, value: null };
-  return { write: false, value: null };
+  matchingComplete: boolean,
+): ThreatPublicationDecision {
+  if (next) return { action: 'publish', value: next };
+  if (!feedIsFresh) return { action: 'leave' };
+  if (!matchingComplete) return { action: 'revoke_confirmation' };
+  return { action: 'confirm_clear' };
 }
 
 const CANDIDATE_SEVERITY_RANK: Record<PersonalWeatherSeverity, number> = {

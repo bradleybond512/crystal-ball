@@ -165,22 +165,42 @@ function buildBaselinePredictions(
   return baselines;
 }
 
+/** For each applicable baseline: reuse the stored record when the id
+ *  already exists (a second producer on the same target/window still
+ *  gets its pair against the EXISTING baseline), record it otherwise.
+ *  Returns both the newly recorded set (for evaluations) and the full
+ *  pairable set (for ACC-303 shadow pairs). Exported for tests. */
+export function collectBaselines(
+  store: ForecastCalibrationStore,
+  p: PredictionRecord,
+  history: readonly PredictionRecord[],
+): { recorded: PredictionRecord[]; pairable: PredictionRecord[] } {
+  const recorded: PredictionRecord[] = [];
+  const pairable: PredictionRecord[] = [];
+  for (const baseline of buildBaselinePredictions(p, history)) {
+    const existing = store.get(baseline.id);
+    if (existing) {
+      pairable.push(existing);
+      continue;
+    }
+    store.record(baseline);
+    recorded.push(baseline);
+    pairable.push(baseline);
+  }
+  return { recorded, pairable };
+}
+
 /** Record + persist in one call. */
 export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
   // One snapshot serves every baseline builder (store.all clones).
   const history = store.all();
-  const recorded: PredictionRecord[] = [];
-  for (const baseline of buildBaselinePredictions(p, history)) {
-    if (store.get(baseline.id)) continue;
-    store.record(baseline);
-    recorded.push(baseline);
-  }
+  const { recorded, pairable } = collectBaselines(store, p, history);
   persist(store);
   ensureForecastEvaluation(p);
   for (const baseline of recorded) ensureForecastEvaluation(baseline);
-  pushBaselinePairs(p, recorded);
+  pushBaselinePairs(p, pairable);
 }
 
 /** Record a snapshot batch and persist once. Two passes so baseline
@@ -197,14 +217,9 @@ export function recordPredictions(predictions: readonly PredictionRecord[]): voi
   }
   const history = store.all();
   for (const prediction of predictions) {
-    const recorded: PredictionRecord[] = [];
-    for (const baseline of buildBaselinePredictions(prediction, history)) {
-      if (store.get(baseline.id)) continue;
-      store.record(baseline);
-      ensureForecastEvaluation(baseline);
-      recorded.push(baseline);
-    }
-    pushBaselinePairs(prediction, recorded);
+    const { recorded, pairable } = collectBaselines(store, prediction, history);
+    for (const baseline of recorded) ensureForecastEvaluation(baseline);
+    pushBaselinePairs(prediction, pairable);
   }
   persist(store);
 }

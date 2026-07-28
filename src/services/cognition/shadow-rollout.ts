@@ -343,6 +343,12 @@ export interface BaselinePairInput {
   baselineVersion?: string;
 }
 
+const BASELINE_RUN_ID_SET: ReadonlySet<string> = new Set([
+  RUN_IDS.BASELINE_HIERARCHICAL,
+  RUN_IDS.BASELINE_PERSISTENCE,
+  RUN_IDS.BASELINE_MOMENTUM,
+]);
+
 const BASELINE_RUN_BY_SOURCE: Record<string, RunId> = {
   'hierarchical-base-rate': RUN_IDS.BASELINE_HIERARCHICAL,
   'persistence-baseline': RUN_IDS.BASELINE_PERSISTENCE,
@@ -451,6 +457,15 @@ export function shadowVerdict(
   const pairCount = comparisons.length;
   const divergenceRate = svc.getDivergenceRate(runId);
 
+  // ACC-303 baseline runs: the probability-proximity join below can
+  // attach a comparison to the WRONG resolved outcome (two forecasts at
+  // p=0.6 resolving oppositely), so baseline runs report pair volume and
+  // divergence only — never a Brier verdict — until ACC-401 lands exact
+  // target-key joins.
+  if (BASELINE_RUN_ID_SET.has(runId)) {
+    return { runId, pairs: pairCount, divergenceRate, recommendation: 'insufficient-data', computedAt: ts };
+  }
+
   if (pairCount < FLIP_GATE_MIN_PAIRS) {
     return { runId, pairs: pairCount, divergenceRate, recommendation: 'insufficient-data', computedAt: ts };
   }
@@ -542,11 +557,9 @@ export function persistVerdictSnapshot(deps?: ShadowRolloutDeps): void {
   try {
     if (deps) _deps = { ..._deps, ...deps };
     const ts = now();
-    const verdicts: ShadowVerdict[] = [
-      shadowVerdict(RUN_IDS.RECALIBRATION),
-      shadowVerdict(RUN_IDS.SUPERFORECAST),
-      shadowVerdict(RUN_IDS.SCHEMA),
-    ];
+    const verdicts: ShadowVerdict[] = Object.values(RUN_IDS).map(
+      (id) => shadowVerdict(id),
+    );
     const snapshot: ShadowVerdictSnapshot = { verdicts, snapshottedAt: ts };
     const json = JSON.stringify(snapshot);
 

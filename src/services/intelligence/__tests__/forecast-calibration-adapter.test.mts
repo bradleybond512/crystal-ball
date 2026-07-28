@@ -25,6 +25,7 @@ import {
   resolvePrediction,
   getDomainCalibrationMult,
   _resetCalibrationForTests,
+  collectBaselines,
 } from '../forecast-calibration-adapter.ts';
 import { marketMoveResolver } from '../outcome-resolvers.ts';
 import { recordFusedSpotPrices, _resetSpotPriceStoreForTests } from '../../market/spot-price-store.ts';
@@ -493,4 +494,31 @@ test('ACC-303 PHASE EXIT (adapter path): every production family emits ≥1 base
       `${label}: expected ≥${minimum} baseline(s) via the real adapter, got ${emitted.length}`,
     );
   }
+});
+
+test('ACC-303: a second producer on the same target/window still gets pairable baselines', () => {
+  const T = Date.UTC(2026, 6, 1, 12, 0, 0);
+  const seed: PredictionRecord[] = [];
+  for (let i = 0; i < 35; i++) {
+    const predictedAt = T - (100 + i * 30) * H2;
+    seed.push({
+      id: `p2seed-${i}`, sourceId: 'mode-forecast', targetKey: `mode:p2s${i % 4}`,
+      domain: 'markets', claim: 's', probability: 0.5,
+      predictedAt, resolveBy: predictedAt + 12 * H2,
+      status: i % 2 === 0 ? 'resolved_true' : 'resolved_false',
+      resolvedAt: predictedAt + 6 * H2, resolutionNote: 'direct:seed',
+    } as PredictionRecord);
+  }
+  getCalibrationStore().loadJson(seed);
+  const mk = (id: string, sourceId: string): PredictionRecord => ({
+    id, sourceId, targetKey: 'hypothesis:shared', domain: 'markets', claim: 'c',
+    probability: 0.6, predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+  } as PredictionRecord);
+  const store = getCalibrationStore();
+  const first = collectBaselines(store, mk('shared-a', 'analyst-loop'), store.all());
+  assert.ok(first.recorded.length >= 1, 'first producer records the baseline');
+  const second = collectBaselines(store, mk('shared-b', 'superforecast'), store.all());
+  assert.equal(second.recorded.length, 0, 'baseline already exists — nothing re-recorded');
+  assert.ok(second.pairable.length >= 1, 'REGRESSION: second producer still gets pairable baselines');
+  assert.equal(second.pairable[0]!.sourceId, 'hierarchical-base-rate');
 });

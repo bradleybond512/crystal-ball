@@ -148,6 +148,11 @@ export interface SurvivalPosture {
 }
 
 // ── Snapshot (the save file) ──────────────────────────────────────────────
+/** On-disk format version for the World Snapshot. Lives with the type so both
+ *  the builder (world-snapshot.ts) and the import/integrity boundary
+ *  (snapshot-integrity.ts) can depend on it without a module cycle. */
+export const SNAPSHOT_VERSION = 1;
+
 export type SnapshotDomain = 'weather';
 
 export interface DomainFreshness {

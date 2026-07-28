@@ -1,13 +1,14 @@
 // src/services/survival/world-snapshot.ts
 import type { NwsAlertMinimal, SavedPlace } from '../weather/weather-threat-types.ts';
 import type { DomainFreshness, SurvivalPlan, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
-import { axisLabel } from './survival-types.ts';
+import { axisLabel, SNAPSHOT_VERSION } from './survival-types.ts';
 import { emptyPlan } from './survival-plan.ts';
 import { applyPlanToPosture } from './survival-plan.ts';
 import { computePosture } from './survival-posture.ts';
 import { availableMoves } from './survival-moves.ts';
+import { validateSnapshot } from './snapshot-integrity.ts';
 
-export const SNAPSHOT_VERSION = 1;
+export { SNAPSHOT_VERSION } from './survival-types.ts';
 const DEFAULT_STALE_AFTER_MS = 15 * 60_000;
 
 export interface SnapshotInputs {
@@ -62,6 +63,13 @@ export function deserializeSnapshot(json: string): WorldSnapshot {
   const parsed = JSON.parse(json) as WorldSnapshot;
   if (parsed.version !== SNAPSHOT_VERSION) {
     throw new Error(`Unsupported snapshot version ${parsed.version}`);
+  }
+  // Fail closed on a structurally broken snapshot rather than casting NaN levels
+  // or missing axes into a "trusted" posture — see snapshot-integrity.ts. For an
+  // untrusted, checksummed save file prefer importSnapshotEnvelope.
+  const validation = validateSnapshot(parsed);
+  if (!validation.ok) {
+    throw new Error(`Invalid snapshot: ${validation.errors.join('; ')}`);
   }
   return parsed;
 }

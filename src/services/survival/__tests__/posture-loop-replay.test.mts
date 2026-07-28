@@ -31,7 +31,7 @@ function fixture(over: Partial<PostureLoopFixture> = {}): PostureLoopFixture {
 test('the canonical storm-posture-loop fixture grades adequate + improved + near-accurate', () => {
   const g = gradePostureLoop(STORM_POSTURE_LOOP_FIXTURE);
   assert.equal(g.leadVerdict, 'adequate'); // 42 min ≥ 30 min target
-  assert.equal(g.moveImproved, true); // 82 → 51
+  assert.equal(g.postureImproved, true); // 82 → 51
   assert.equal(g.actualDelta, -31);
   assert.equal(g.projectedDelta, -35);
   assert.equal(g.projectionError, 4); // -31 − (-35): helped 4 pts less than modeled
@@ -59,11 +59,12 @@ test('a warning issued after impact yields negative lead and missed', () => {
   assert.equal(g.leadVerdict, 'missed');
 });
 
-test('a move that raises the axis level is graded as not improved', () => {
+test('a move that raises the axis level is graded as posture not improved', () => {
   const g = gradePostureLoop(fixture({ postureBefore: 40, postureAfter: 55 }));
-  assert.equal(g.moveImproved, false);
+  assert.equal(g.postureImproved, false);
   assert.equal(g.actualDelta, 15);
-  assert.ok(g.notes.some((n) => /did not reduce/.test(n)));
+  assert.ok(g.notes.some((n) => /did not improve/.test(n)));
+  assert.ok(/worsened/.test(g.headline)); // three-way headline reports the worsening
 });
 
 test('projection verdict: overpredicted when the move helped less than modeled', () => {
@@ -113,7 +114,7 @@ test('committedBeforeImpact is false when the move lands after impact', () => {
   assert.ok(g.notes.some((n) => /committed after impact/.test(n)));
 });
 
-test('non-finite levels normalize to 0 and non-finite timestamps do not throw', () => {
+test('non-finite levels normalize to 0 and non-finite timestamps fail closed to missed', () => {
   const g = gradePostureLoop(fixture({
     postureBefore: Number.NaN,
     postureAfter: Number.POSITIVE_INFINITY,
@@ -121,8 +122,22 @@ test('non-finite levels normalize to 0 and non-finite timestamps do not throw', 
     impactAtMs: Number.NaN,
   }));
   assert.equal(g.bandBefore, 'secure'); // 0
-  assert.equal(g.bandAfter, 'secure'); // clamped from +Inf to... 0 (non-finite → 0)
+  assert.equal(g.bandAfter, 'secure'); // non-finite level → 0
   assert.equal(Number.isFinite(g.warningLeadMs), true);
+  assert.equal(g.leadVerdict, 'missed'); // invalid timing must not read as a lead
+  assert.ok(g.notes.some((n) => /missing\/invalid/.test(n)));
+});
+
+test('a valid impact with a NaN warning time fails closed instead of a huge adequate lead', () => {
+  const g = gradePostureLoop(fixture({ warningIssuedAtMs: Number.NaN, impactAtMs: T0 + 60 * MIN }));
+  assert.equal(g.warningLeadMs, 0); // not impact − 0 (which would be enormous)
+  assert.equal(g.leadVerdict, 'missed');
+});
+
+test('a NaN commit time cannot masquerade as committed before impact', () => {
+  const g = gradePostureLoop(fixture({ committedMove: { moveId: 'm', committedAtMs: Number.NaN, effect: [] } }));
+  assert.equal(g.committedBeforeImpact, false);
+  assert.ok(g.notes.some((n) => /cannot confirm the move beat impact/.test(n)));
 });
 
 test('levels above 100 / below 0 are clamped before banding', () => {
@@ -133,16 +148,19 @@ test('levels above 100 / below 0 are clamped before banding', () => {
 });
 
 test('a custom lead target and tolerance override the defaults', () => {
-  // 20 min lead, target 15 min → adequate; tolerance 1 makes a 4-pt error over/under.
+  // 20 min lead, target 15 min → adequate (default 30 min would be short).
+  // Error +4 (actual −31 vs modeled −35): accurate under the default tolerance 5,
+  // but overpredicted once tolerance is tightened to 1 — so this exercises the override.
   const g = gradePostureLoop(fixture({
     impactAtMs: T0 + 20 * MIN,
     leadTimeTargetMs: 15 * MIN,
     projectionToleranceLevels: 1,
     postureBefore: 80,
-    postureAfter: 45, // actual −35, projected −35 → error 0, still accurate
+    postureAfter: 49, // actual −31, projected −35 → error +4
   }));
   assert.equal(g.leadVerdict, 'adequate');
-  assert.equal(g.projectionVerdict, 'accurate');
+  assert.equal(g.projectionError, 4);
+  assert.equal(g.projectionVerdict, 'overpredicted'); // |4| > custom tolerance 1
 });
 
 test('summarize aggregates lead verdicts, improvements, and signed projection bias', () => {
@@ -155,7 +173,7 @@ test('summarize aggregates lead verdicts, improvements, and signed projection bi
   assert.equal(s.adequateWarnings, 1);
   assert.equal(s.shortWarnings, 1);
   assert.equal(s.missedWarnings, 1);
-  assert.equal(s.movesImproved, 2);
+  assert.equal(s.posturesImproved, 2);
   assert.equal(s.meanProjectionError, (0 + 15 + 30) / 3); // signed bias = +15
   assert.equal(s.meanAbsProjectionError, (0 + 15 + 30) / 3);
   assert.equal(s.grades.length, 3);

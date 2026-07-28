@@ -607,11 +607,38 @@ Deliver:
 
 ### ACC-302 — Persistence and momentum baselines
 
-Status: `IN PROGRESS`
+Status: `DONE`
 
 Owner: Claude
 
 Branch: `claude/acc-302-persistence-momentum`
+
+Evidence: PR #1533
+
+Verification: `persistence-baseline@1.0.0` covers state-like advisory targets
+(criteria-less `mode:*`/`shortage:*` targetKeys) with a Laplace-smoothed
+recent-window rate over the target's own prior resolutions, filtered by the
+exact ACC-301 leakage predicate narrowed to the targetKey. `momentum-baseline@1.0.0`
+covers directional `market_move` targets: least-squares slope over pre-forecast
+fused spot prices (6h lookback, ≥5 samples, hard `observedAt < predictedAt`
+filter inside the model AND a bounded accessor at the adapter), projected over
+the horizon against the criteria threshold and squashed through a bounded tanh
+map. All other target kinds (event occurrence, warning verification,
+hypothesis) return `not_applicable` (null) by construction, with tests pinning
+each gate. Both models clone the production record (targetKey/window/criteria
+inheritance → paired resolution and expiry for free), emit through the single
+`recordPrediction(s)` choke point behind distinct id namespaces
+(`persistence:`/`momentum:` alongside `base-rate:`), and are registered with
+`forecast_calibration` health domains so ledger grading engages. The shared
+`BASELINE_SOURCE_IDS` family exclusion prevents any baseline training on any
+other baseline (hierarchical included; corpus-neutral — `npm run
+bench:forecast` passes with the ACC-301 committed metrics unchanged).
+Deferred to ACC-303 by design: replay-corpus evaluation of the new families —
+the frozen corpus carries no repeated targetKeys or price series, so
+persistence/momentum corpus fixtures land with the pairing work. Verified:
+`typecheck:all`, 17 new fixture tests plus hierarchical/adapter/calibration/
+momentum suites (51), algorithm-registry suite, scoped ESLint, and the frozen
+forecast replay benchmark, all green.
 
 Dependencies: ACC-301
 

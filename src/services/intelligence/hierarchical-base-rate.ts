@@ -1,5 +1,6 @@
 import type { PredictionRecord } from './forecast-calibration';
 import { horizonBucket } from './forecast-evaluation';
+import { isBaselineSourceId } from './baseline-model-ids';
 
 export const HIERARCHICAL_BASE_RATE_SOURCE_ID = 'hierarchical-base-rate';
 export const HIERARCHICAL_BASE_RATE_VERSION = '1.0.0';
@@ -53,7 +54,7 @@ export function estimateHierarchicalBaseRate(
   if (
     target.status !== 'pending'
     || !target.targetKey
-    || target.sourceId === HIERARCHICAL_BASE_RATE_SOURCE_ID
+    || isBaselineSourceId(target.sourceId)
     || !Number.isFinite(target.predictedAt)
     || !Number.isFinite(target.resolveBy)
     || target.resolveBy <= target.predictedAt
@@ -63,7 +64,10 @@ export function estimateHierarchicalBaseRate(
   const outcomes = deduplicateOutcomes(
     history.filter(
       (record) =>
-        record.sourceId !== HIERARCHICAL_BASE_RATE_SOURCE_ID
+        // Never train on ANY baseline model's records (ACC-302 widened
+        // this from self-exclusion to the shared family exclusion —
+        // corpus-neutral: no baseline-sourced fixtures exist).
+        !isBaselineSourceId(record.sourceId)
         && resolvedOutcome(record) !== null
         && !isProxyResolution(record)
         && Number.isFinite(record.predictedAt)
@@ -178,7 +182,7 @@ function evidenceAvailableBefore(
     );
 }
 
-function fnv1a64(input: string): string {
+export function fnv1a64(input: string): string {
   let hash = FNV_OFFSET_64;
   for (const character of input) {
     hash ^= BigInt(character.codePointAt(0)!);

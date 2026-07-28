@@ -114,10 +114,21 @@ function momentumSamplesFor(p: PredictionRecord): MomentumSample[] {
 }
 
 /** Fire-and-forget ACC-303 pairing push — lazy import breaks the
- *  adapter ↔ shadow-rollout store cycle; a failed import is silent. */
+ *  adapter ↔ shadow-rollout store cycle. The import promise is memoized
+ *  so only the FIRST push races module loading; pairs are best-effort
+ *  telemetry (ACC-401's authoritative joins re-derive from the
+ *  calibration store), so a lost boot-window pair is acceptable and a
+ *  failed chunk load is silent by design. */
+let _shadowRolloutModule: Promise<typeof import('@/services/cognition/shadow-rollout')> | null = null;
+
+function shadowRolloutModule(): Promise<typeof import('@/services/cognition/shadow-rollout')> {
+  _shadowRolloutModule ??= import('@/services/cognition/shadow-rollout');
+  return _shadowRolloutModule;
+}
+
 function pushBaselinePairs(production: PredictionRecord, baselines: readonly PredictionRecord[]): void {
   if (baselines.length === 0 || !production.targetKey) return;
-  void import('@/services/cognition/shadow-rollout')
+  void shadowRolloutModule()
     .then((m) => {
       for (const baseline of baselines) {
         m.pushBaselinePair(

@@ -7,10 +7,13 @@
  *
  * For every fixture, in strict time order, each applicable model sees
  * ONLY prior fixtures' resolutions (and only pre-forecast price
- * samples). Reported per model AND per family: record count, Brier,
- * and Brier SKILL versus the production incumbent on the SAME records
- * (positive skill = the naive baseline beats production — a red flag
- * the phase exists to expose). A committed JSON gates regressions.
+ * samples). Reported per model: record count, Brier, and Brier SKILL
+ * versus the corpus's SYNTHETIC incumbent on the SAME records. The
+ * incumbent is an outcome-informed oracle by construction — skill here
+ * is a FIXED regression reference, not a claim about the real
+ * production system (the live shadow pairing runs measure that). A
+ * committed JSON gates regressions on baseline Brier, incumbent drift,
+ * and skill drift.
  *
  * Pure and deterministic: no clock reads, no store singletons.
  */
@@ -33,9 +36,9 @@ export interface PairingModelReport {
   model: string;
   records: number;
   brier: number;
-  /** Production incumbent Brier on the SAME records. */
+  /** SYNTHETIC incumbent Brier on the SAME records (oracle reference). */
   productionBrier: number;
-  /** productionBrier − modelBrier (positive = baseline beats production). */
+  /** productionBrier − modelBrier vs the synthetic incumbent reference. */
   brierSkillVsProduction: number;
 }
 
@@ -59,12 +62,16 @@ export interface PairingBenchmarkBaseline {
   tolerances: {
     brierIncrease: number;
     recordCountChange: number;
+    /** Max |actual − expected| for the synthetic incumbent's Brier and
+     *  each model's skill — the corpus is deterministic, so ANY drift
+     *  means the oracle or corpus changed and must be re-reviewed. */
+    referenceDrift: number;
   };
 }
 
 export interface PairingRegression {
   model: string;
-  metric: 'records' | 'brier' | 'missing-model';
+  metric: 'records' | 'brier' | 'missing-model' | 'incumbent-brier' | 'skill-drift';
   expected: number;
   actual: number;
 }
@@ -172,11 +179,28 @@ export function comparePairingToBaseline(
     });
     return regressions;
   }
+  if (Math.abs(report.production.brier - baseline.productionBrier) > baseline.tolerances.referenceDrift) {
+    regressions.push({
+      model: 'incumbent',
+      metric: 'incumbent-brier',
+      expected: baseline.productionBrier,
+      actual: report.production.brier,
+    });
+  }
   for (const expected of baseline.models) {
     const actual = report.models.find((m) => m.model === expected.model);
     if (!actual) {
       regressions.push({ model: expected.model, metric: 'missing-model', expected: 1, actual: 0 });
       continue;
+    }
+    if (
+      Math.abs(actual.brierSkillVsProduction - expected.brierSkillVsProduction)
+      > baseline.tolerances.referenceDrift
+    ) {
+      regressions.push({
+        model: expected.model, metric: 'skill-drift',
+        expected: expected.brierSkillVsProduction, actual: actual.brierSkillVsProduction,
+      });
     }
     if (Math.abs(actual.records - expected.records) > baseline.tolerances.recordCountChange) {
       regressions.push({

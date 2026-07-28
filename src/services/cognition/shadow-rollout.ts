@@ -89,7 +89,9 @@ export const RUN_IDS = {
   RECALIBRATION: 'recalibration-vs-legacy',
   SUPERFORECAST: 'superforecast-vs-baseline',
   SCHEMA: 'learned-schema-vs-handauthored',
-  BASELINE_PAIRING: 'production-vs-baseline-family',
+  BASELINE_HIERARCHICAL: 'production-vs-hierarchical-base-rate',
+  BASELINE_PERSISTENCE: 'production-vs-persistence-baseline',
+  BASELINE_MOMENTUM: 'production-vs-momentum-baseline',
 } as const;
 
 export type RunId = typeof RUN_IDS[keyof typeof RUN_IDS];
@@ -140,12 +142,32 @@ const RUN_CONFIGS: ShadowRunConfig[] = [
     createdAt: 0,
   },
   {
-    id: RUN_IDS.BASELINE_PAIRING,
+    id: RUN_IDS.BASELINE_HIERARCHICAL,
     algorithmId: 'hierarchical-base-rate',
     description:
-      'ACC-303: production forecasts are LIVE; the baseline family (hierarchical/persistence/momentum) '
-      + 'runs as SHADOW on the same targetKey and horizon. liveOutput=production p; shadowOutput=baseline p. '
-      + 'Input carries stable join fields (targetKey, predictedAt, resolveBy, model ids) for ACC-401 exact joins.',
+      'ACC-303: production forecasts are LIVE; the hierarchical base rate runs as SHADOW on the same '
+      + 'targetKey and horizon. liveOutput=production p; shadowOutput=baseline p. Input carries stable '
+      + 'join fields (targetKey, predictedAt, resolveBy, model ids) for ACC-401 exact joins.',
+    enabled: true,
+    createdAt: 0,
+  },
+  {
+    id: RUN_IDS.BASELINE_PERSISTENCE,
+    algorithmId: 'persistence-baseline',
+    description:
+      'ACC-303: production forecasts are LIVE; the persistence baseline runs as SHADOW on the same '
+      + 'targetKey and horizon. One run PER baseline model so per-model aggregation and ACC-401 joins '
+      + 'never mix families.',
+    enabled: true,
+    createdAt: 0,
+  },
+  {
+    id: RUN_IDS.BASELINE_MOMENTUM,
+    algorithmId: 'momentum-baseline',
+    description:
+      'ACC-303: production forecasts are LIVE; the momentum baseline runs as SHADOW on the same '
+      + 'targetKey and horizon. One run PER baseline model so per-model aggregation and ACC-401 joins '
+      + 'never mix families.',
     enabled: true,
     createdAt: 0,
   },
@@ -321,6 +343,12 @@ export interface BaselinePairInput {
   baselineVersion?: string;
 }
 
+const BASELINE_RUN_BY_SOURCE: Record<string, RunId> = {
+  'hierarchical-base-rate': RUN_IDS.BASELINE_HIERARCHICAL,
+  'persistence-baseline': RUN_IDS.BASELINE_PERSISTENCE,
+  'momentum-baseline': RUN_IDS.BASELINE_MOMENTUM,
+};
+
 export function pushBaselinePair(
   input: BaselinePairInput,
   productionP: number,
@@ -328,10 +356,12 @@ export function pushBaselinePair(
 ): void {
   try {
     if (!isCognitionEnabled('shadow-algorithms')) return;
+    const runId = BASELINE_RUN_BY_SOURCE[input.baselineSourceId];
+    if (!runId) return; // unknown baseline family — never mis-aggregate
     if (!_initialized) initShadowRollout();
     const svc = getShadowService();
     if (!svc) return;
-    svc.compare(RUN_IDS.BASELINE_PAIRING, input, productionP, baselineP);
+    svc.compare(runId, input, productionP, baselineP);
   } catch {
     // Fire-and-forget.
   }

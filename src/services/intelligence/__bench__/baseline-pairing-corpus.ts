@@ -40,7 +40,10 @@ export interface PairingFixture {
   resolveBy: number;
   resolvedAt: number;
   outcome: boolean;
-  /** Production forecast probability (the incumbent being skill-tested). */
+  /** SYNTHETIC incumbent probability — an outcome-informed oracle by
+   *  construction (see productionProbabilityFor). It is a FIXED
+   *  reference for regression gating, NOT evidence about the real
+   *  production system's skill. */
   productionProbability: number;
   criteria?: MarketMoveCriteria;
   priceSeries?: PairingPricePoint[];
@@ -56,8 +59,12 @@ function stateOutcome(seriesIndex: number, phase: number): boolean {
 }
 
 function productionProbabilityFor(outcome: boolean, seriesIndex: number): number {
-  // A decent-but-imperfect incumbent: right direction most of the time,
-  // overconfident every 5th forecast.
+  // DELIBERATELY outcome-informed: this synthetic incumbent knows the
+  // fixture outcome and adds calibrated noise. That makes it an ORACLE
+  // reference the baselines are regression-gated against — it says
+  // nothing about real production skill (the live shadow pairing runs
+  // measure that). Right direction most of the time, overconfident
+  // every 5th forecast.
   const base = outcome ? 0.68 : 0.34;
   const wobble = ((seriesIndex * 7) % 10) / 100; // 0.00..0.09
   const overconfident = seriesIndex % 5 === 0;

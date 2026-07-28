@@ -662,7 +662,8 @@ Verification: emission-side pairing has been live since ACC-301/302 (every
 eligible production forecast emits its applicable baselines on the same
 targetKey and window through the recordPrediction choke point). This task adds
 the three missing pieces. (1) Shadow-rollout run
-`production-vs-baseline-family`: one pair pushed per emitted baseline, whose
+`production-vs-{hierarchical-base-rate,persistence-baseline,momentum-baseline}`
+(one run PER baseline model): one pair pushed per emitted baseline, whose
 input carries the STABLE join fields (targetKey, predictedAt, resolveBy,
 production/baseline source ids + versions) ACC-401's exact joins require —
 wired fire-and-forget from the adapter via lazy import (no store cycle),
@@ -671,9 +672,14 @@ kill-switch respected. (2) A dedicated deterministic walk-forward benchmark
 fixtures with repeated targetKeys and embedded pre-forecast price series —
 the structures the frozen ACC-301 corpus lacks) reporting record count, Brier,
 and Brier SKILL vs the production incumbent per model, gated by a committed
-JSON (production 0.152317; hierarchical −0.115069, momentum −0.057487,
-persistence −0.238375 skill — production beats every naive baseline, which is
-the phase's point) and run in CI beside bench:forecast. (3) Phase-exit
+JSON (synthetic incumbent 0.152317; hierarchical −0.115069, momentum
+−0.057487, persistence −0.238375 skill). The corpus incumbent is a DISCLOSED
+outcome-informed oracle — skill here is a fixed regression reference, not a
+claim about real production skill; the live per-model shadow runs
+(production-vs-{hierarchical,persistence,momentum}) measure the real thing,
+each family in its own run so per-model aggregation and ACC-401 joins never
+mix. Gate fails closed on baseline Brier, record drift, missing models,
+incumbent drift, and skill drift; run in CI beside bench:forecast. (3) Phase-exit
 coverage proof as a test: every production emitter family (mode, shortage,
 hypothesis/superforecast market and non-market, warning verification) yields
 at least one relevant baseline from the real builders. The frozen ACC-301

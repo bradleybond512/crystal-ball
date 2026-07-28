@@ -24,6 +24,7 @@
   ],
   "tolerances": {
     "brierIncrease": 0.01,
-    "recordCountChange": 0
+    "recordCountChange": 0,
+    "referenceDrift": 2e-06
   }
 }

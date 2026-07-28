@@ -62,6 +62,18 @@ test('gate FAILS closed on Brier regression, record drift, and missing models', 
   assert.ok(comparePairingToBaseline(missing, committed).some((r) => r.metric === 'missing-model'));
   const wrongCorpus = { ...report, corpusId: 'other' };
   assert.equal(comparePairingToBaseline(wrongCorpus, committed).length, 1);
+  // Incumbent (oracle reference) drift fails closed.
+  const incumbentDrift = { ...report, production: { ...report.production, brier: report.production.brier + 0.01 } };
+  assert.ok(comparePairingToBaseline(incumbentDrift, committed).some((r) => r.metric === 'incumbent-brier'));
+  // Skill drift fails closed even when raw Brier is within tolerance.
+  const skillDrift = {
+    ...report,
+    models: report.models.map((m) =>
+      m.model === 'momentum-baseline'
+        ? { ...m, brierSkillVsProduction: m.brierSkillVsProduction + 0.001 }
+        : m),
+  };
+  assert.ok(comparePairingToBaseline(skillDrift, committed).some((r) => r.metric === 'skill-drift'));
 });
 
 // ── ACC-303 phase exit: every production model has ≥1 relevant baseline ──

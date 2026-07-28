@@ -121,24 +121,35 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
 }
 
 /**
- * True when a normalized alert carries NO way to place it against a saved point:
- * no USABLE polygon ring AND no UGC zone. "Usable" mirrors `alertMatchRings`
+ * True when a normalized alert carries a polygon the matcher can actually use:
+ * at least one ring with >=3 vertices. "Usable" mirrors `alertMatchRings`
  * (weather-exposure.ts), which discards any ring with fewer than three vertices
- * before matching — a 1- or 2-vertex ring places nothing, so `computeAlertExposure`
- * returns a low exposure without throwing and the severe-alert loop never marks
- * matching degraded, letting the clear decision run `confirm_clear` off a severe
- * warning it could not actually evaluate. The loop uses this to route those
- * alerts to `revoke_confirmation` instead. Keeping the >=3 threshold here in
- * lockstep with the matcher is load-bearing: a looser check re-opens the drop.
- * An alert with EITHER a ring of >=3 vertices OR a UGC zone is evaluable (reads
- * false).
+ * before matching — a 1- or 2-vertex ring places nothing. Keeping the >=3
+ * threshold here in lockstep with the matcher is load-bearing: a looser check
+ * lets a degenerate-geometry severe alert reach a false clear. Deliberately does
+ * NOT consult `ugcZones`, so the clear decision can single out severe alerts that
+ * can ONLY match via the zone fallback (no usable polygon) and withhold the clear
+ * for exactly those when the zone lookup degrades.
  */
-export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
+export function alertHasUsablePolygon(alert: WeatherAlert): boolean {
   const rings = alert.polygonRings && alert.polygonRings.length > 0
     ? alert.polygonRings
     : [alert.coordinates];
-  const hasUsableRing = rings.some((ring) => ring.length >= 3);
-  return !hasUsableRing && alert.ugcZones.length === 0;
+  return rings.some((ring) => ring.length >= 3);
+}
+
+/**
+ * True when a normalized alert carries NO way to place it against a saved point:
+ * no usable polygon ring AND no UGC zone. Such an alert cannot be matched, so
+ * `computeAlertExposure` returns a low exposure without throwing and the
+ * severe-alert loop would never mark matching degraded — letting the clear
+ * decision run `confirm_clear` off a severe warning it could not actually
+ * evaluate. The loop uses this to route those alerts to `revoke_confirmation`
+ * instead. An alert with EITHER a ring of >=3 vertices OR a UGC zone is
+ * evaluable (reads false).
+ */
+export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
+  return !alertHasUsablePolygon(alert) && alert.ugcZones.length === 0;
 }
 
 /**

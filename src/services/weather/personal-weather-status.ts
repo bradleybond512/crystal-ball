@@ -255,6 +255,55 @@ export function decideThreatPublication(
   return { action: 'confirm_clear' };
 }
 
+/** Inputs the data-loader captures over its severe-alert evaluation, fed into
+ *  {@link isWeatherMatchingComplete}. */
+export interface WeatherMatchingState {
+  /** Extreme/Severe alerts on this feed. */
+  severeAlertCount: number;
+  /** Saved places the user has to match alerts against. */
+  savedPlaceCount: number;
+  /** A per-place UGC zone lookup failed this tick (zone picture incomplete). */
+  zonesDegraded: boolean;
+  /** Severe alerts with no usable polygon — they can ONLY match via the zone
+   *  fallback, so a degraded zone lookup could hide them. */
+  zoneOnlySevereAlertCount: number;
+  /** An exposure match crashed or an alert was spatially unevaluable. */
+  matchDegraded: boolean;
+  /** The saved-place match set changed while the async evaluation was in flight. */
+  placesChangedDuringEval: boolean;
+}
+
+/**
+ * Whether this weather tick's match pipeline ran to completion — the
+ * `matchingComplete` input {@link decideThreatPublication} uses to tell a proven
+ * clear from a "could not fully evaluate, go neutral". `false` withholds the
+ * clear (revoke to neutral CHECKING); `true` lets an empty feed prove clear.
+ *
+ * Incomplete when ANY of:
+ * - `matchDegraded` — an exposure match crashed or an alert was unevaluable.
+ * - `placesChangedDuringEval` — the match set changed mid-evaluation, so the
+ *   clear was computed against a stale set (a newly-added place under a warning
+ *   was never evaluated).
+ * - a severe alert exists but the user has NO saved places — it is unplaceable,
+ *   so the exposure sentinel keeps the selector silent and the tick reads clean
+ *   even though a live severe warning is on the feed (the false ALL CLEAR).
+ * - the zone lookup degraded AND a zone-only severe alert is on the feed — that
+ *   alert could only have matched via the fallback that just failed, so its
+ *   "no match" is not trustworthy.
+ *
+ * It must NOT over-block: an all-clear feed (no severe alerts) proves clear even
+ * with no saved places or a degraded zone lookup — there is nothing severe
+ * anywhere to have missed, and freezing the chip at CHECKING forever would just
+ * desensitize the user.
+ */
+export function isWeatherMatchingComplete(state: WeatherMatchingState): boolean {
+  if (state.matchDegraded) return false;
+  if (state.placesChangedDuringEval) return false;
+  if (state.severeAlertCount > 0 && state.savedPlaceCount === 0) return false;
+  if (state.zonesDegraded && state.zoneOnlySevereAlertCount > 0) return false;
+  return true;
+}
+
 const CANDIDATE_SEVERITY_RANK: Record<PersonalWeatherSeverity, number> = {
   extreme: 2,
   severe: 1,

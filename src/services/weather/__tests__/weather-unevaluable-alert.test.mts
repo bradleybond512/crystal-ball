@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   isAlertSpatiallyUnevaluable,
+  alertHasUsablePolygon,
   normalizeWeatherAlertsResponse,
   type WeatherAlert,
 } from '../../weather.ts';
@@ -153,4 +154,49 @@ test('a Severe Polygon with >=3 finite vertices stays evaluable when a stray ver
   } as never);
   assert.ok(out);
   assert.equal(isAlertSpatiallyUnevaluable(out!), false);
+});
+
+// ── alertHasUsablePolygon: the POLYGON-only half of evaluability ──────────────
+// isAlertSpatiallyUnevaluable = !alertHasUsablePolygon && no UGC zones. The clear
+// decision needs to count severe alerts that CAN ONLY match via the zone fallback
+// (no usable polygon) so a degraded zone lookup blocks the clear for exactly those
+// alerts and no others. That count is `severeAlerts.filter(a => !alertHasUsablePolygon(a))`,
+// so this predicate must answer "has a >=3-vertex ring" WITHOUT consulting ugcZones.
+
+test('alertHasUsablePolygon: a ring of >=3 vertices has a usable polygon', () => {
+  assert.equal(
+    alertHasUsablePolygon(alert({ coordinates: [[-86.7, 41.6], [-86.6, 41.6], [-86.6, 41.7]], ugcZones: [] })),
+    true,
+  );
+});
+
+test('alertHasUsablePolygon: no rings at all has no usable polygon', () => {
+  assert.equal(alertHasUsablePolygon(alert({ coordinates: [], ugcZones: [] })), false);
+});
+
+test('alertHasUsablePolygon: a single-point ring is not a usable polygon', () => {
+  assert.equal(alertHasUsablePolygon(alert({ coordinates: [[-86.7, 41.6]], ugcZones: [] })), false);
+});
+
+test('alertHasUsablePolygon: a two-vertex ring is not a usable polygon', () => {
+  assert.equal(alertHasUsablePolygon(alert({ coordinates: [[-86.7, 41.6], [-86.6, 41.6]], ugcZones: [] })), false);
+});
+
+test('alertHasUsablePolygon: one usable ring among degenerate polygonRings still counts', () => {
+  assert.equal(
+    alertHasUsablePolygon(alert({
+      coordinates: [[-86.7, 41.6]],
+      polygonRings: [[[-86.7, 41.6]], [[-86.6, 41.6], [-86.5, 41.6], [-86.5, 41.7]]],
+      ugcZones: [],
+    })),
+    true,
+  );
+});
+
+// The distinguishing case from isAlertSpatiallyUnevaluable: a zone-only alert IS
+// evaluable (via the fallback) but has NO usable polygon. alertHasUsablePolygon
+// must ignore ugcZones entirely, so the clear decision can identify the zone-only
+// severe alerts a degraded zone lookup would put at risk.
+test('alertHasUsablePolygon: a zone-only alert (no ring, has UGC zone) has no usable polygon', () => {
+  assert.equal(alertHasUsablePolygon(alert({ coordinates: [], ugcZones: ['INC091'] })), false);
 });

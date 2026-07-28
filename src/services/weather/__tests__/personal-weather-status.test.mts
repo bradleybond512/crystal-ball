@@ -9,6 +9,7 @@ import {
   subscribePersonalWeatherThreat,
   resolveThreatExpiryMs,
   decideThreatPublication,
+  isWeatherMatchingComplete,
   confirmPersonalWeatherClear,
   revokePersonalWeatherClearConfirmation,
   isPersonalWeatherClearConfirmed,
@@ -229,6 +230,77 @@ test('decideThreatPublication: a clear is LEFT alone on a stale feed (never prov
 // action is to REVOKE the confirmation so the chip falls back to neutral.
 test('decideThreatPublication: a fresh feed with DEGRADED matching revokes the clear (never assert an unevaluated all-clear)', () => {
   assert.deepEqual(decideThreatPublication(null, true, false), { action: 'revoke_confirmation' });
+});
+
+// ── isWeatherMatchingComplete: the `matchingComplete` gate the data-loader feeds
+// into decideThreatPublication. `matchingComplete: false` is what turns a fresh
+// empty feed's confirm_clear into a revoke, so this gate is the honest boundary
+// between "proved clear" and "could not fully evaluate — go neutral". Two real
+// fail-open cases (both a false ALL CLEAR under a live severe alert) motivate it:
+//   • no saved places at all: exposure stays the "unknown" sentinel below the
+//     Big-Event floor, so the selector finds no threat and NOTHING flags the tick
+//     degraded — yet a severe alert is genuinely on the feed and unplaceable.
+//   • a degraded zone lookup while a zone-only severe alert (no usable polygon)
+//     is on the feed: that alert could only have matched via the zone fallback
+//     that just failed, so its "no match" is not trustworthy.
+// It must NOT over-block: an all-clear feed (no severe alerts) proves clear even
+// with no places or a degraded zone lookup — nothing severe anywhere to miss.
+function mc(o: Partial<Parameters<typeof isWeatherMatchingComplete>[0]> = {}) {
+  return {
+    severeAlertCount: 0,
+    savedPlaceCount: 1,
+    zonesDegraded: false,
+    zoneOnlySevereAlertCount: 0,
+    matchDegraded: false,
+    placesChangedDuringEval: false,
+    ...o,
+  };
+}
+
+test('isWeatherMatchingComplete: a clean fully-evaluated tick is complete', () => {
+  assert.equal(isWeatherMatchingComplete(mc()), true);
+});
+
+test('isWeatherMatchingComplete: a crashed/unevaluable exposure match is incomplete', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ matchDegraded: true })), false);
+});
+
+test('isWeatherMatchingComplete: places changed mid-evaluation is incomplete', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ placesChangedDuringEval: true })), false);
+});
+
+// finding 2: a severe alert with NO saved places is unplaceable — the exposure
+// sentinel keeps the selector silent, so the tick reads clean; withhold the clear.
+test('isWeatherMatchingComplete: a severe alert with zero saved places is incomplete (unplaceable)', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ severeAlertCount: 1, savedPlaceCount: 0 })), false);
+});
+
+test('isWeatherMatchingComplete: no severe alerts and no saved places still proves clear', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ severeAlertCount: 0, savedPlaceCount: 0 })), true);
+});
+
+test('isWeatherMatchingComplete: a severe alert WITH a saved place (clean) is complete', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ severeAlertCount: 1, savedPlaceCount: 2 })), true);
+});
+
+// finding 3: a degraded zone lookup only endangers alerts that can ONLY match via
+// the zone fallback (no usable polygon). Block for those, but do NOT freeze the
+// chip when the degraded lookup coexists with an otherwise-clear feed.
+test('isWeatherMatchingComplete: zonesDegraded with a zone-only severe alert is incomplete', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ zonesDegraded: true, zoneOnlySevereAlertCount: 1 })), false);
+});
+
+test('isWeatherMatchingComplete: zonesDegraded with NO zone-only severe alert still proves clear', () => {
+  assert.equal(isWeatherMatchingComplete(mc({ zonesDegraded: true, zoneOnlySevereAlertCount: 0 })), true);
+});
+
+test('isWeatherMatchingComplete: a polygon-covered severe alert is unaffected by a degraded zone lookup', () => {
+  // severe alert present, but it has a usable polygon (zoneOnlySevereAlertCount 0),
+  // so the zone-lookup failure cannot have hidden it.
+  assert.equal(
+    isWeatherMatchingComplete(mc({ severeAlertCount: 1, savedPlaceCount: 1, zonesDegraded: true, zoneOnlySevereAlertCount: 0 })),
+    true,
+  );
 });
 
 // ── clear / expiry must notify (P2) ──────────────────────────────────────

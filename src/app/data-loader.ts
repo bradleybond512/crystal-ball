@@ -312,6 +312,7 @@ import {
   getWeatherAlertsFeedState,
   isWeatherFeedFresh,
   isAlertSpatiallyUnevaluable,
+  alertHasUsablePolygon,
 } from '@/services/weather';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
@@ -1753,7 +1754,7 @@ export class DataLoaderManager implements AppModule {
  { computeAlertExposure },
  { getSavedPlaces },
  { resolveSavedPlaceZonesWithHealth, toMatcherPlace, savedPlacesMatchSignature },
- { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication, isWeatherMatchingComplete },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -2004,10 +2005,24 @@ export class DataLoaderManager implements AppModule {
  // revoke_confirmation; the next tick re-evaluates against the current places.
  const placesChangedDuringEval =
  savedPlacesMatchSignature(getSavedPlaces()) !== placesSignatureAtSnapshot;
+ // Match completeness gates the clear (see isWeatherMatchingComplete). Two
+ // additional fail-open cases beyond a crashed match / degraded zone lookup:
+ // a severe alert with NO saved places is unplaceable (exposure stays the
+ // sub-floor sentinel, so nothing flags the tick degraded yet a live warning
+ // is on the feed), and a degraded zone lookup only endangers the severe
+ // alerts that can ONLY match via the zone fallback — those with no usable
+ // polygon. An all-clear feed still proves clear so the chip never freezes.
  const chipDecision = decideThreatPublication(
  selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
  weatherFeedFresh,
- !zonesDegraded && !matchingDegraded && !placesChangedDuringEval,
+ isWeatherMatchingComplete({
+ severeAlertCount: severeAlerts.length,
+ savedPlaceCount: savedPlaces.length,
+ zonesDegraded,
+ zoneOnlySevereAlertCount: severeAlerts.filter((a) => !alertHasUsablePolygon(a)).length,
+ matchDegraded: matchingDegraded,
+ placesChangedDuringEval,
+ }),
  );
  switch (chipDecision.action) {
  case 'publish': setPersonalWeatherThreat(chipDecision.value); break;

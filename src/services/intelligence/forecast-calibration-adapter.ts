@@ -146,14 +146,20 @@ export function recordPrediction(p: PredictionRecord): void {
   for (const baseline of recorded) ensureForecastEvaluation(baseline);
 }
 
-/** Record a snapshot batch and persist once. */
+/** Record a snapshot batch and persist once. Two passes so baseline
+ *  emission is INDEPENDENT of batch order: every production record
+ *  lands first, then each baseline builds against the full post-batch
+ *  snapshot (the estimators' own predictedAt cutoffs keep temporal
+ *  correctness — a batch-mate from the future never enters training). */
 export function recordPredictions(predictions: readonly PredictionRecord[]): void {
   if (predictions.length === 0) return;
   const store = getCalibrationStore();
   for (const prediction of predictions) {
     store.record(prediction);
     ensureForecastEvaluation(prediction);
-    const history = store.all();
+  }
+  const history = store.all();
+  for (const prediction of predictions) {
     for (const baseline of buildBaselinePredictions(prediction, history)) {
       if (store.get(baseline.id)) continue;
       store.record(baseline);

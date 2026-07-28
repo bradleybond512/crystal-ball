@@ -650,7 +650,11 @@ Deliver only where the domain contract supports it:
 
 ### ACC-303 — Pair all baselines with production forecasts
 
-Status: `WAITING`
+Status: `IN PROGRESS`
+
+Owner: Claude
+
+Branch: `claude/acc-303-baseline-pairing`
 
 Dependencies: ACC-301 and ACC-302
 

@@ -25,6 +25,7 @@ import {
   resolvePrediction,
   getDomainCalibrationMult,
   _resetCalibrationForTests,
+  collectBaselines,
 } from '../forecast-calibration-adapter.ts';
 import { marketMoveResolver } from '../outcome-resolvers.ts';
 import { recordFusedSpotPrices, _resetSpotPriceStoreForTests } from '../../market/spot-price-store.ts';
@@ -424,4 +425,100 @@ test('ACC-302: recordPrediction emits a momentum baseline from the bounded spot 
   } as PredictionRecord);
   const momentum2 = getCalibrationStore().all().filter((r) => r.sourceId === 'momentum-baseline');
   assert.equal(momentum2[0]!.probability, momentum[0]!.probability, 'post-cutoff sample changed nothing');
+});
+
+test('ACC-303 PHASE EXIT (adapter path): every production family emits ≥1 baseline through recordPrediction', () => {
+  const T = Date.UTC(2026, 6, 1, 12, 0, 0);
+  // Seed resolved global history + same-key priors directly into the store.
+  const seed: PredictionRecord[] = [];
+  for (let i = 0; i < 35; i++) {
+    const predictedAt = T - (100 + i * 30) * H2;
+    seed.push({
+      id: `seed-${i}`, sourceId: 'mode-forecast', targetKey: `mode:seed${i % 4}`,
+      domain: 'markets', claim: 's', probability: 0.5,
+      predictedAt, resolveBy: predictedAt + 12 * H2,
+      status: i % 2 === 0 ? 'resolved_true' : 'resolved_false',
+      resolvedAt: predictedAt + 6 * H2, resolutionNote: 'direct:seed',
+    } as PredictionRecord);
+  }
+  seed.push({ ...seed[0]!, id: 'seed-mode-fin', targetKey: 'mode:finance' });
+  seed.push({ ...seed[1]!, id: 'seed-short-wheat', targetKey: 'shortage:wheat:global' });
+  getCalibrationStore().loadJson(seed);
+  _resetSpotPriceStoreForTests();
+  recordFusedSpotPrices([0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
+    key: 'COVR', value: 200, occurredAt: T - 5 * 60_000 - (7 - i) * 30 * 60_000,
+    providerIds: ['yahoo'],
+    fusion: { independentSourceCount: 1, confidenceMultiplier: 1, disagreements: [] },
+  }) as never));
+
+  const families: [string, PredictionRecord, number][] = [
+    ['mode', {
+      id: 'cov-mode', sourceId: 'mode-forecast', targetKey: 'mode:finance',
+      domain: 'markets', claim: 'c', probability: 0.6,
+      predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+    } as PredictionRecord, 2],
+    ['shortage', {
+      id: 'cov-short', sourceId: 'shortage-forecast', targetKey: 'shortage:wheat:global',
+      domain: 'infra', claim: 'c', probability: 0.6,
+      predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+    } as PredictionRecord, 2],
+    ['market hypothesis', {
+      id: 'cov-mkt', sourceId: 'analyst-loop', targetKey: 'hypothesis:cov-mkt',
+      domain: 'markets', claim: 'c', probability: 0.6,
+      predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+      criteria: {
+        kind: 'market_move', symbol: 'COVR', direction: 'up',
+        minAbsPct: 3, basisPrice: 200, basisObservedAt: T - 60_000,
+      },
+    } as PredictionRecord, 2],
+    ['non-market hypothesis', {
+      id: 'cov-geo', sourceId: 'analyst-loop', targetKey: 'hypothesis:cov-geo',
+      domain: 'conflict', claim: 'c', probability: 0.6,
+      predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+    } as PredictionRecord, 1],
+    ['warning verification', {
+      id: 'cov-warn', sourceId: 'warning-verification-bridge', targetKey: 'nws-warning:cov',
+      domain: 'weather', claim: 'c', probability: 0.6,
+      predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+    } as PredictionRecord, 1],
+  ];
+  for (const [label, target, minimum] of families) {
+    const before = new Set(getCalibrationStore().all().map((r) => r.id));
+    recordPrediction(target);
+    const emitted = getCalibrationStore()
+      .all()
+      .filter((r) => !before.has(r.id) && r.id !== target.id
+        && ['hierarchical-base-rate', 'persistence-baseline', 'momentum-baseline'].includes(r.sourceId));
+    assert.ok(
+      emitted.length >= minimum,
+      `${label}: expected ≥${minimum} baseline(s) via the real adapter, got ${emitted.length}`,
+    );
+  }
+});
+
+test('ACC-303: a second producer on the same target/window still gets pairable baselines', () => {
+  const T = Date.UTC(2026, 6, 1, 12, 0, 0);
+  const seed: PredictionRecord[] = [];
+  for (let i = 0; i < 35; i++) {
+    const predictedAt = T - (100 + i * 30) * H2;
+    seed.push({
+      id: `p2seed-${i}`, sourceId: 'mode-forecast', targetKey: `mode:p2s${i % 4}`,
+      domain: 'markets', claim: 's', probability: 0.5,
+      predictedAt, resolveBy: predictedAt + 12 * H2,
+      status: i % 2 === 0 ? 'resolved_true' : 'resolved_false',
+      resolvedAt: predictedAt + 6 * H2, resolutionNote: 'direct:seed',
+    } as PredictionRecord);
+  }
+  getCalibrationStore().loadJson(seed);
+  const mk = (id: string, sourceId: string): PredictionRecord => ({
+    id, sourceId, targetKey: 'hypothesis:shared', domain: 'markets', claim: 'c',
+    probability: 0.6, predictedAt: T, resolveBy: T + 24 * H2, status: 'pending',
+  } as PredictionRecord);
+  const store = getCalibrationStore();
+  const first = collectBaselines(store, mk('shared-a', 'analyst-loop'), store.all());
+  assert.ok(first.recorded.length >= 1, 'first producer records the baseline');
+  const second = collectBaselines(store, mk('shared-b', 'superforecast'), store.all());
+  assert.equal(second.recorded.length, 0, 'baseline already exists — nothing re-recorded');
+  assert.ok(second.pairable.length >= 1, 'REGRESSION: second producer still gets pairable baselines');
+  assert.equal(second.pairable[0]!.sourceId, 'hierarchical-base-rate');
 });

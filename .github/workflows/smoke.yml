@@ -54,6 +54,7 @@ jobs:
       # time windows. Fails on Brier-skill/log-loss/coverage/high-confidence
       # miss regressions versus the reviewed baseline.
       - run: npm run bench:forecast
+      - run: npm run bench:baselines
       # Full MCP server suite (path-traversal sandbox, watchlist/alert tools,
       # trend/anomaly/correlate, sidecar client, etc.). It's a separate package
       # with its own deps (zod), so install + run it on its own — previously it

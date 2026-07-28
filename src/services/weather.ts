@@ -68,6 +68,11 @@ const SEVERITY_RANK: Record<string, number> = {
 /** Alerts at or above this rank (Severe, Extreme) are never shed by the cap. */
 const PROTECTED_SEVERITY_RANK = 3;
 
+/** The severity values NWS actually emits — the keys of the rank table are the
+ *  single source of truth. A feature whose severity is outside this set cannot
+ *  be classified as severe-or-not, so it must not be allowed to prove clear. */
+const RECOGNIZED_SEVERITIES = new Set(Object.keys(SEVERITY_RANK));
+
 /**
  * Filter → prioritize → cap → normalize the raw NWS feature list into
  * `WeatherAlert[]`. Pure and deterministic (given feature timestamps) so
@@ -117,17 +122,23 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
 
 /**
  * True when a normalized alert carries NO way to place it against a saved point:
- * no polygon ring AND no UGC zone. `computeAlertExposure` can only return a low
- * exposure for such an alert (there is nothing to match), so it never throws and
- * the severe-alert loop never marks matching degraded — the clear decision then
- * runs `confirm_clear` off a severe warning it could not actually evaluate. The
- * loop uses this to route those alerts to `revoke_confirmation` instead. An
- * alert with EITHER a ring or a zone is evaluable and reads false.
+ * no USABLE polygon ring AND no UGC zone. "Usable" mirrors `alertMatchRings`
+ * (weather-exposure.ts), which discards any ring with fewer than three vertices
+ * before matching — a 1- or 2-vertex ring places nothing, so `computeAlertExposure`
+ * returns a low exposure without throwing and the severe-alert loop never marks
+ * matching degraded, letting the clear decision run `confirm_clear` off a severe
+ * warning it could not actually evaluate. The loop uses this to route those
+ * alerts to `revoke_confirmation` instead. Keeping the >=3 threshold here in
+ * lockstep with the matcher is load-bearing: a looser check re-opens the drop.
+ * An alert with EITHER a ring of >=3 vertices OR a UGC zone is evaluable (reads
+ * false).
  */
 export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
-  const hasRings = alert.coordinates.length > 0
-    || (alert.polygonRings?.some((ring) => ring.length > 0) ?? false);
-  return !hasRings && alert.ugcZones.length === 0;
+  const rings = alert.polygonRings && alert.polygonRings.length > 0
+    ? alert.polygonRings
+    : [alert.coordinates];
+  const hasUsableRing = rings.some((ring) => ring.length >= 3);
+  return !hasUsableRing && alert.ugcZones.length === 0;
 }
 
 /**
@@ -140,10 +151,23 @@ export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
  * fail-open we close for failed fetches. Throwing routes the breaker to
  * `unavailable` so the clear is withheld. A VALID empty `features: []` still
  * passes through and legitimately proves clear.
+ *
+ * Validating the container is not enough: a feature we cannot classify by
+ * severity (missing or unrecognized value) would survive normalization as a
+ * non-severe alert, skip the severe loop, and reach `confirm_clear` — a
+ * fail-open, since that corrupt entry could be masking a Severe warning. Any
+ * such feature throws too, on the same fail-closed principle. The valid NWS
+ * value 'Unknown' is recognized (well-formed) and passes; it is merely filtered
+ * downstream by `selectAndNormalizeWeatherAlerts`.
  */
 export function normalizeWeatherAlertsResponse(data: NWSResponse | null | undefined): WeatherAlert[] {
   if (!data || !Array.isArray(data.features)) {
     throw new Error('NWS alerts response missing features array');
+  }
+  for (const feature of data.features) {
+    if (!RECOGNIZED_SEVERITIES.has(feature?.properties?.severity as string)) {
+      throw new Error('NWS alert feature has unclassifiable severity');
+    }
   }
   return selectAndNormalizeWeatherAlerts(data.features);
 }

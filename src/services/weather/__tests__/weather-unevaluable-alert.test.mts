@@ -50,3 +50,43 @@ test('an alert with both a ring and a zone is evaluable', () => {
     false,
   );
 });
+
+// ── Degenerate rings: fewer than 3 vertices is NOT usable geometry ────────────
+// alertMatchRings (weather-exposure.ts) filters `ring.length >= 3` before it can
+// match anything — a 1- or 2-vertex "ring" is discarded there, so exposure comes
+// back 0 and the loop never degrades. The predicate must apply the SAME >=3
+// threshold or it lets a degenerate-geometry severe alert reach a false clear.
+
+test('an alert whose only ring is a single point is spatially unevaluable', () => {
+  assert.equal(isAlertSpatiallyUnevaluable(alert({ coordinates: [[-86.7, 41.6]], ugcZones: [] })), true);
+});
+
+test('an alert whose only ring has two vertices is spatially unevaluable', () => {
+  assert.equal(isAlertSpatiallyUnevaluable(alert({ coordinates: [[-86.7, 41.6], [-86.6, 41.6]], ugcZones: [] })), true);
+});
+
+test('an alert whose every polygonRing has fewer than three vertices is spatially unevaluable', () => {
+  assert.equal(
+    isAlertSpatiallyUnevaluable(alert({
+      coordinates: [[-86.7, 41.6]],
+      polygonRings: [[[-86.7, 41.6]], [[-86.6, 41.6], [-86.5, 41.6]]],
+      ugcZones: [],
+    })),
+    true,
+  );
+});
+
+test('a degenerate ring is still evaluable when a UGC zone is present', () => {
+  assert.equal(isAlertSpatiallyUnevaluable(alert({ coordinates: [[-86.7, 41.6]], ugcZones: ['INC091'] })), false);
+});
+
+test('an alert with one usable ring among degenerate ones is evaluable', () => {
+  assert.equal(
+    isAlertSpatiallyUnevaluable(alert({
+      coordinates: [[-86.7, 41.6], [-86.6, 41.6], [-86.6, 41.7]],
+      polygonRings: [[[-86.7, 41.6], [-86.6, 41.6], [-86.6, 41.7]], [[-86.5, 41.5]]],
+      ugcZones: [],
+    })),
+    false,
+  );
+});

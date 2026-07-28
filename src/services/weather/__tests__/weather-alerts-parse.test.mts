@@ -68,6 +68,59 @@ test('a features value that is not an array throws (malformed, not clear)', () =
   assert.throws(() => normalizeWeatherAlertsResponse({ features: 'nope' } as never));
 });
 
+// ── Per-feature severity validation: an unclassifiable feature is not clear ───
+// Validating only the `features` container is not enough. A 200 whose features
+// array contains an entry we cannot classify by severity (missing or unrecognized
+// severity) is a malformed/unknown product: it survives normalization as a
+// non-severe alert, never enters the severe loop, and reaches `confirm_clear`.
+// That is a fail-open — the corrupt entry could be masking a Severe warning. A
+// feature we cannot classify must throw (feed → unavailable, clear withheld),
+// exactly like a corrupt container. A recognized severity — INCLUDING the valid
+// NWS value 'Unknown', which is well-formed and merely filtered downstream — must
+// NOT throw.
+
+function featureWith(severity: unknown) {
+  return {
+    id: 'nws-x',
+    geometry: null,
+    properties: {
+      event: 'Special Weather Statement',
+      severity,
+      headline: 'h',
+      description: 'd',
+      areaDesc: 'Somewhere, US',
+      onset: '2026-07-27T12:00:00Z',
+      expires: '2026-07-27T13:00:00Z',
+    },
+  };
+}
+
+test('a feature with a missing severity throws (unclassifiable, not clear)', () => {
+  const feature = featureWith(undefined);
+  delete (feature.properties as { severity?: unknown }).severity;
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [feature] } as never));
+});
+
+test('a feature with an unrecognized severity string throws (unclassifiable, not clear)', () => {
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [featureWith('Catastrophic')] } as never));
+});
+
+test("a feature with the valid NWS 'Unknown' severity is well-formed (filtered, not thrown)", () => {
+  assert.deepEqual(normalizeWeatherAlertsResponse({ features: [featureWith('Unknown')] } as never), []);
+});
+
+test('one unclassifiable feature rejects the whole batch (withhold clear over a hidden severe)', () => {
+  const good = {
+    id: 'nws-severe-1',
+    geometry: null,
+    properties: {
+      event: 'Severe Thunderstorm Warning', severity: 'Severe', headline: 'h', description: 'd',
+      areaDesc: 'Somewhere, US', onset: '2026-07-27T12:00:00Z', expires: '2026-07-27T13:00:00Z',
+    },
+  };
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [good, featureWith(undefined)] } as never));
+});
+
 test('a valid non-empty feed normalizes and retains a Severe alert', () => {
   const out = normalizeWeatherAlertsResponse({
     features: [{

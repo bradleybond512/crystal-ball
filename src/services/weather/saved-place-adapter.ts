@@ -35,6 +35,25 @@ export function toMatcherPlace(place: StoredPlace, ugcZones?: readonly string[])
   return mapped;
 }
 
+/**
+ * A stable, order-independent fingerprint of the MATCH-relevant fields of a
+ * saved-place set: id + lat + lon + radiusKm — exactly what `toMatcherPlace`
+ * carries into the polygon/zone matcher. The severe-alert loop captures this
+ * before its async zone lookup and re-reads it before publishing the clear
+ * decision; a change means a place was added/moved/re-radiused/removed while the
+ * evaluation was in flight, so the clear was computed against a stale set and
+ * must be withheld (the newly-added place under a live warning was never
+ * evaluated). Sorting makes a pure reorder — which cannot change the match set —
+ * read identical; display-only edits (name, notes, priority) are excluded so
+ * they never spuriously withhold a clear.
+ */
+export function savedPlacesMatchSignature(places: readonly StoredPlace[]): string {
+  return places
+    .map((p) => `${p.id}:${p.lat}:${p.lon}:${p.radiusKm}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join('|');
+}
+
 /** Injectable point→zones resolver (defaults to the live NWS `/points`
  *  lookup). Best-effort: the concrete impl returns `[]` on any failure. */
 export type ZoneResolver = (lat: number, lon: number) => Promise<string[]>;

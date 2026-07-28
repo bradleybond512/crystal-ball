@@ -1752,7 +1752,7 @@ export class DataLoaderManager implements AppModule {
  { getNotificationPreferencesService },
  { computeAlertExposure },
  { getSavedPlaces },
- { resolveSavedPlaceZonesWithHealth, toMatcherPlace },
+ { resolveSavedPlaceZonesWithHealth, toMatcherPlace, savedPlacesMatchSignature },
  { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
@@ -1805,6 +1805,14 @@ export class DataLoaderManager implements AppModule {
  // too so geometry-free (zone-only) NWS products — ice/heat/flood are often
  // issued by UGC zone, not polygon — match instead of reading as clear.
  const savedPlaces = getSavedPlaces();
+ // Fingerprint the match-relevant place set NOW, before the async zone lookup
+ // below. This whole block matches `severeAlerts` against `savedPlaces` and then
+ // publishes a clear decision — but a place added under a live warning DURING
+ // the awaits fires the subscription that revokes any confirmed clear, and this
+ // in-flight evaluation (still holding the pre-add set) would otherwise
+ // re-confirm clear against a set that never saw the new place. Re-reading this
+ // signature before publication lets us detect that and withhold the clear.
+ const placesSignatureAtSnapshot = savedPlacesMatchSignature(savedPlaces);
  // Resolve zones AND capture whether any place's /points lookup failed. A
  // degraded zone picture (some place's zones unknown) must withhold the
  // confirmed-clear below: a geometry-free zone-only severe alert could match
@@ -1988,10 +1996,18 @@ export class DataLoaderManager implements AppModule {
  // can't confirm a clear AND must revoke any prior confirmed clear — otherwise
  // a stale "ALL CLEAR" lingers over a fresh feed we never actually evaluated.
  // On a stale feed we leave everything to self-expire.
+ // Also treat a saved-place set that CHANGED mid-evaluation as an incomplete
+ // match: `weatherThreatCandidates` was scored against the pre-await snapshot,
+ // so a place added under a live warning during the awaits was never evaluated.
+ // Confirming clear here would silently reconfirm against the stale set and undo
+ // the subscription's revoke — the TOCTOU fail-open. A changed set routes to
+ // revoke_confirmation; the next tick re-evaluates against the current places.
+ const placesChangedDuringEval =
+ savedPlacesMatchSignature(getSavedPlaces()) !== placesSignatureAtSnapshot;
  const chipDecision = decideThreatPublication(
  selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
  weatherFeedFresh,
- !zonesDegraded && !matchingDegraded,
+ !zonesDegraded && !matchingDegraded && !placesChangedDuringEval,
  );
  switch (chipDecision.action) {
  case 'publish': setPersonalWeatherThreat(chipDecision.value); break;

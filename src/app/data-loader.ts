@@ -22,7 +22,6 @@ import {
   fetchCrypto,
   fetchPredictions,
   fetchEarthquakes,
-  fetchWeatherAlerts,
   fetchUgcZonesForPoint,
   fetchFredData,
   fetchInternetOutages,
@@ -309,7 +308,7 @@ import {
   fetchSite24hForecast,
   fetchSiteAirQuality,
   fetchConnectivitySignal,
-  getWeatherAlertsFeedState,
+  fetchWeatherAlertsWithFeedState,
   isWeatherFeedFresh,
   isAlertSpatiallyUnevaluable,
   alertHasUsablePolygon,
@@ -1599,17 +1598,20 @@ export class DataLoaderManager implements AppModule {
  } catch { /* pure module; a load failure here is unrecoverable and itself non-fatal */ }
  };
  try {
- const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
- const alerts = snapshot.data;
- // Capture the feed's currency ATOMICALLY with `alerts`, on this same
- // synchronous turn. The breaker's data-state is a mutable global that a
- // fire-and-forget stale-while-revalidate refresh can flip to mode:'live'
- // AFTER this await resolves. Reading it LATE — after the zone/exposure
- // awaits below, at chip-publication time — is a TOCTOU: the background
- // refresh could report 'live' while `alerts` is still the stale (empty)
- // set, proving a false "all clear". Snapshot it now so freshness matches
- // the dataset it describes.
- const weatherFeedState = getWeatherAlertsFeedState();
+ // Fetch the alerts AND the feed-currency snapshot the breaker produced for
+ // THIS fetch, paired ATOMICALLY inside the breaker (executeTracked): the
+ // dataState is captured in the same synchronous branch that returns the data,
+ // before any await. The breaker's `lastDataState` is a single-slot mutable
+ // global — a concurrent consumer (AirSmokePanel calls fetchWeatherAlerts()
+ // directly, bypassing this coalescer) or a fire-and-forget stale-while-
+ // revalidate refresh can flip it to mode:'live' between this fetch resolving
+ // and a later read. Reading it late via getWeatherAlertsFeedState() — after
+ // the zone/exposure awaits below, at chip-publication time — was a TOCTOU: a
+ // failed/empty loader fetch could read the unrelated caller's fresh 'live'
+ // timestamp and certify a false "all clear". The paired snapshot binds
+ // freshness to the exact dataset it describes.
+ const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlertsWithFeedState(), 1 * 60 * 60 * 1000);
+ const { alerts, feedState: weatherFeedState } = snapshot.data;
  const weatherFeedFresh = isWeatherFeedFresh(weatherFeedState);
  // Contain the NON-safety map render + freshness bookkeeping. A throw here
  // (e.g. setWeatherAlerts choking on a malformed geometry) must NOT abort the

@@ -96,16 +96,16 @@ test('an alert with one usable ring among degenerate ones is evaluable', () => {
   );
 });
 
-// ── Non-finite geometry: vertices that aren't real numbers are NOT usable ─────
-// A corrupt 200 can carry a Severe warning whose polygon vertices are non-finite
-// (null / NaN / strings). Under the old extractPolygonRings — which mapped
-// `c => [c[0], c[1]]` with no finite check — such a ring survived the length-only
-// >=3 gate: it reads EVALUABLE, yet places nothing. computeAlertExposure runs
-// point-in-polygon against NaN, never matches, returns 0 exposure, the severe loop
-// never degrades, and `confirm_clear` fires off a severe warning it could not
-// actually evaluate — a false ALL CLEAR. normalizeWeatherAlertsResponse must drop
-// non-finite vertices at the single producer so both the predicate here and the
-// matcher (alertMatchRings) read the same sanitized rings and stay in lockstep.
+// ── Non-finite geometry: a ring with ANY non-finite vertex is NOT usable ──────
+// A corrupt feed can carry a Severe warning whose polygon vertices are non-finite
+// (null / NaN / strings). toFiniteRing (weather.ts, the single producer) rejects
+// the WHOLE ring when ANY vertex is non-finite — it must NOT drop only the corrupt
+// vertices and salvage the finite ones into a smaller polygon: that smaller shape
+// silently mis-places the user (a saved place inside the intended polygon can fall
+// OUTSIDE the salvaged one), so matching returns 0 exposure, the severe loop never
+// degrades, and `confirm_clear` fires off a severe warning it could not actually
+// evaluate — a false ALL CLEAR. Rejecting the ring whole makes both the predicate
+// here and the matcher (alertMatchRings) read the alert as unplaceable in lockstep.
 
 function severeFeatureWithGeometry(geometry: unknown) {
   return {
@@ -145,15 +145,21 @@ test('a Severe MultiPolygon whose every vertex is non-finite normalizes to spati
   assert.equal(isAlertSpatiallyUnevaluable(out!), true);
 });
 
-test('a Severe Polygon with >=3 finite vertices stays evaluable when a stray vertex is non-finite', () => {
+test('a Severe Polygon with a stray non-finite vertex is rejected whole (no partial salvage)', () => {
   const [out] = normalizeWeatherAlertsResponse({
     features: [severeFeatureWithGeometry({
       type: 'Polygon',
-      coordinates: [[[-86.7, 41.6], [null, null], [-86.6, 41.6], [-86.6, 41.7]]],
+      coordinates: [[[0, 0], [1, 0], [null, 1], [0, 1]]],
     })],
   } as never);
-  assert.ok(out);
-  assert.equal(isAlertSpatiallyUnevaluable(out!), false);
+  assert.ok(out, 'the Severe alert must survive normalization — it is a threat, not a clear');
+  // A single corrupt vertex must invalidate the WHOLE ring, not salvage the
+  // finite ones into a smaller polygon: dropping [null,1] would leave the
+  // triangle [[0,0],[1,0],[0,1]], and a saved place at [0.9,0.9] sits inside the
+  // intended unit square but OUTSIDE that triangle — matching would return
+  // exposure 0, stay "complete", and mint a false ALL CLEAR. Reject the ring.
+  assert.equal(alertHasUsablePolygon(out!), false);
+  assert.equal(isAlertSpatiallyUnevaluable(out!), true);
 });
 
 // ── Out-of-range geometry: finite vertices outside the earth are NOT usable ───

@@ -191,6 +191,22 @@ export class CircuitBreaker<T> {
  fn: () => Promise<R>,
  defaultValue: R
   ): Promise<R> {
+ const { data } = await this.executeTracked(fn, defaultValue);
+ return data;
+  }
+
+  // Like execute(), but returns the data paired with a snapshot of the data-state
+  // it produced. The snapshot is captured in the SAME synchronous branch as the
+  // returned value — there is no await between each branch's lastDataState write
+  // and its capture — so it is bound to THIS call's outcome and cannot be
+  // contaminated by a concurrent caller mutating the shared lastDataState between
+  // this call resolving and a later getDataState() read (the TOCTOU behind the
+  // weather "all clear" fail-open). Consumers whose decision depends on currency
+  // must use this, not execute() + getDataState().
+  async executeTracked<R extends T>(
+ fn: () => Promise<R>,
+ defaultValue: R
+  ): Promise<{ data: R; dataState: BreakerDataState }> {
  const offline = isDesktopOfflineMode();
 
  // Hydrate from persistent storage on first call (~1-5ms IndexedDB read)
@@ -203,16 +219,16 @@ export class CircuitBreaker<T> {
  const cachedFallback = this.getCached();
  if (cachedFallback !== null) {
  this.lastDataState = { mode: 'cached', timestamp: this.cache?.timestamp ?? null, offline };
- return cachedFallback as R;
+ return { data: cachedFallback as R, dataState: { ...this.lastDataState } };
  }
  this.lastDataState = { mode: 'unavailable', timestamp: null, offline };
- return this.getCachedOrDefault(defaultValue) as R;
+ return { data: this.getCachedOrDefault(defaultValue) as R, dataState: { ...this.lastDataState } };
  }
 
  const cached = this.getCached();
  if (cached !== null) {
  this.lastDataState = { mode: 'cached', timestamp: this.cache?.timestamp ?? null, offline };
- return cached as R;
+ return { data: cached as R, dataState: { ...this.lastDataState } };
  }
 
  // Stale-while-revalidate: if we have stale cached data (outside TTL but
@@ -235,20 +251,20 @@ export class CircuitBreaker<T> {
  this.recordFailure(String(error));
  }).finally(() => { this.swrInFlight = false; });
  }
- return this.cache.data as R;
+ return { data: this.cache.data as R, dataState: { ...this.lastDataState } };
  }
 
  try {
  const result = await fn();
  this.recordSuccess(result);
- return result;
+ return { data: result, dataState: { ...this.lastDataState } };
  } catch (error) {
  const msg = String(error);
  // eslint-disable-next-line no-console
  console.error(`[${this.name}] Failed:`, msg);
  this.recordFailure(msg);
  this.lastDataState = { mode: 'unavailable', timestamp: null, offline };
- return defaultValue;
+ return { data: defaultValue, dataState: { ...this.lastDataState } };
  }
   }
 }

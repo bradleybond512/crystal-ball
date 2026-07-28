@@ -186,16 +186,18 @@ export function normalizeWeatherAlertsResponse(data: NWSResponse | null | undefi
   return selectAndNormalizeWeatherAlerts(data.features);
 }
 
-export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
-  return breaker.execute(async () => {
- const response = await fetch(NWS_API, {
+async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
+  const response = await fetch(NWS_API, {
  headers: { 'User-Agent': 'CrystalBall/1.0' }
- });
+  });
 
- if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
- return normalizeWeatherAlertsResponse(await response.json() as NWSResponse);
-  }, []);
+  return normalizeWeatherAlertsResponse(await response.json() as NWSResponse);
+}
+
+export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
+  return breaker.execute(fetchNwsAlerts, []);
 }
 
 export function getWeatherStatus(): string {
@@ -231,6 +233,24 @@ export const WEATHER_FEED_TTL_MS = 30 * 60 * 1000;
 export function getWeatherAlertsFeedState(): WeatherFeedState {
   const { mode, timestamp } = breaker.getDataState();
   return { mode, timestamp };
+}
+
+/**
+ * Fetch the NWS alerts AND the feed-currency snapshot the breaker produced for
+ * THIS fetch, captured atomically (see `CircuitBreaker.executeTracked`). The
+ * clear decision must read currency bound to the same fetch that produced its
+ * alerts: reading the shared `getWeatherAlertsFeedState()` in a later microtask
+ * lets a concurrent consumer's success (e.g. AirSmokePanel calls
+ * `fetchWeatherAlerts()` directly) masquerade as this tick's currency, so a
+ * failed/empty loader fetch reads a fresh `live` timestamp and certifies a false
+ * "all clear". The paired snapshot here closes that TOCTOU.
+ */
+export async function fetchWeatherAlertsWithFeedState(): Promise<{
+  alerts: WeatherAlert[];
+  feedState: WeatherFeedState;
+}> {
+  const { data, dataState } = await breaker.executeTracked(fetchNwsAlerts, []);
+  return { alerts: data, feedState: { mode: dataState.mode, timestamp: dataState.timestamp } };
 }
 
 /**
@@ -296,13 +316,19 @@ export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<s
 }
 
 /**
- * Keep only the finite [lon, lat] vertices of one ring. A corrupt NWS body can
- * carry non-finite coordinates (null / NaN / strings); a ring of such vertices
- * has length >= 3 yet places nothing — point-in-polygon against NaN never
- * matches, so downstream it would read evaluable while silently matching no one
- * and let a severe warning reach a false clear. Sanitizing at this single
- * producer keeps the unevaluable predicate and the polygon matcher — both of
- * which read these rings — honest by construction.
+ * Sanitize one ring, ALL-OR-NOTHING: return its [lon, lat] vertices only if
+ * EVERY vertex is a finite, in-range coordinate; otherwise return [] and drop
+ * the whole ring. A corrupt NWS body can carry non-finite (null / NaN / string)
+ * or off-earth (|lon| > 180, |lat| > 90) vertices. Dropping only the bad
+ * vertices would SALVAGE the ring into a smaller, differently-shaped polygon
+ * that still passes the length/area checks yet silently mis-places the user — a
+ * saved place inside the intended polygon can fall outside the salvaged one, so
+ * matching returns 0 exposure, reads "evaluated", and lets a severe warning
+ * reach a false clear. Rejecting the whole ring makes it spatially unplaceable
+ * instead, so the alert routes to CHECKING WEATHER. Bounds are inclusive (±180 /
+ * ±90) so a legitimate antimeridian/pole-edge polygon stays usable. For a
+ * MultiPolygon this rejects only the corrupt sub-polygon (its own ring), exactly
+ * as `isUsableMatchRing` rejects an out-of-range ring among its siblings.
  */
 function toFiniteRing(ring?: number[][]): [number, number][] {
   if (!Array.isArray(ring)) return [];
@@ -310,9 +336,14 @@ function toFiniteRing(ring?: number[][]): [number, number][] {
   for (const c of ring) {
     const lon = c?.[0];
     const lat = c?.[1];
-    if (typeof lon === 'number' && Number.isFinite(lon) && typeof lat === 'number' && Number.isFinite(lat)) {
-      out.push([lon, lat]);
+    if (
+      typeof lon !== 'number' || !Number.isFinite(lon) ||
+      typeof lat !== 'number' || !Number.isFinite(lat) ||
+      lon < -180 || lon > 180 || lat < -90 || lat > 90
+    ) {
+      return [];
     }
+    out.push([lon, lat]);
   }
   return out;
 }

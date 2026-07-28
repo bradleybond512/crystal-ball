@@ -30,6 +30,7 @@ function fixture(over: Partial<PostureLoopFixture> = {}): PostureLoopFixture {
 
 test('the canonical storm-posture-loop fixture grades adequate + improved + near-accurate', () => {
   const g = gradePostureLoop(STORM_POSTURE_LOOP_FIXTURE);
+  assert.equal(g.moveId, 'shelter-interior-room'); // carried through for E7 per-move calibration
   assert.equal(g.leadVerdict, 'adequate'); // 42 min ≥ 30 min target
   assert.equal(g.postureImproved, true); // 82 → 51
   assert.equal(g.actualDelta, -31);

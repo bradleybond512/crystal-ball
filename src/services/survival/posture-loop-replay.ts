@@ -55,6 +55,9 @@ export interface PostureLoopFixture {
 export interface PostureLoopGrade {
   label: string;
   axis: SurvivalAxis;
+  /** The committed move being graded. Lets E7 group episodes by move to calibrate
+   *  that move's modeled effect against what it actually delivered. */
+  moveId: string;
   /** impact − warning issued. Negative means the warning came at or after impact. */
   warningLeadMs: number;
   leadVerdict: LeadVerdict;
@@ -164,6 +167,7 @@ export function gradePostureLoop(fixture: PostureLoopFixture): PostureLoopGrade 
   return {
     label: fixture.label,
     axis: fixture.axis,
+    moveId: fixture.committedMove.moveId,
     warningLeadMs,
     leadVerdict,
     bandBefore,

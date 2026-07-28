@@ -45,13 +45,15 @@ export function toMatcherPlace(place: StoredPlace, ugcZones?: readonly string[])
  * must be withheld (the newly-added place under a live warning was never
  * evaluated). Sorting makes a pure reorder — which cannot change the match set —
  * read identical; display-only edits (name, notes, priority) are excluded so
- * they never spuriously withhold a clear.
+ * they never spuriously withhold a clear. JSON-encoding the sorted tuples keeps
+ * the fingerprint unambiguous regardless of what an id contains, so this safety
+ * guard never silently depends on the id charset staying delimiter-free.
  */
 export function savedPlacesMatchSignature(places: readonly StoredPlace[]): string {
-  return places
-    .map((p) => `${p.id}:${p.lat}:${p.lon}:${p.radiusKm}`)
-    .sort((a, b) => a.localeCompare(b))
-    .join('|');
+  const rows = places
+    .map((p) => [p.id, p.lat, p.lon, p.radiusKm] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  return JSON.stringify(rows);
 }
 
 /** Injectable point→zones resolver (defaults to the live NWS `/points`

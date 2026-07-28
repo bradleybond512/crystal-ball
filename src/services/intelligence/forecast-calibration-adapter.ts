@@ -113,6 +113,42 @@ function momentumSamplesFor(p: PredictionRecord): MomentumSample[] {
   }
 }
 
+/** Fire-and-forget ACC-303 pairing push — lazy import breaks the
+ *  adapter ↔ shadow-rollout store cycle. The import promise is memoized
+ *  so only the FIRST push races module loading; pairs are best-effort
+ *  telemetry (ACC-401's authoritative joins re-derive from the
+ *  calibration store), so a lost boot-window pair is acceptable and a
+ *  failed chunk load is silent by design. */
+let _shadowRolloutModule: Promise<typeof import('@/services/cognition/shadow-rollout')> | null = null;
+
+function shadowRolloutModule(): Promise<typeof import('@/services/cognition/shadow-rollout')> {
+  _shadowRolloutModule ??= import('@/services/cognition/shadow-rollout');
+  return _shadowRolloutModule;
+}
+
+function pushBaselinePairs(production: PredictionRecord, baselines: readonly PredictionRecord[]): void {
+  if (baselines.length === 0 || !production.targetKey) return;
+  void shadowRolloutModule()
+    .then((m) => {
+      for (const baseline of baselines) {
+        m.pushBaselinePair(
+          {
+            targetKey: production.targetKey!,
+            predictedAt: production.predictedAt,
+            resolveBy: production.resolveBy,
+            productionSourceId: production.sourceId,
+            productionVersion: production.algorithmVersion,
+            baselineSourceId: baseline.sourceId,
+            baselineVersion: baseline.algorithmVersion,
+          },
+          production.probability,
+          baseline.probability,
+        );
+      }
+    })
+    .catch(() => { /* pairing telemetry is best-effort */ });
+}
+
 /** ACC-301/ACC-302 baseline family — ordered; each returns null when
  *  not applicable to the target (the roadmap's `not_applicable`). */
 function buildBaselinePredictions(
@@ -129,21 +165,42 @@ function buildBaselinePredictions(
   return baselines;
 }
 
+/** For each applicable baseline: reuse the stored record when the id
+ *  already exists (a second producer on the same target/window still
+ *  gets its pair against the EXISTING baseline), record it otherwise.
+ *  Returns both the newly recorded set (for evaluations) and the full
+ *  pairable set (for ACC-303 shadow pairs). Exported for tests. */
+export function collectBaselines(
+  store: ForecastCalibrationStore,
+  p: PredictionRecord,
+  history: readonly PredictionRecord[],
+): { recorded: PredictionRecord[]; pairable: PredictionRecord[] } {
+  const recorded: PredictionRecord[] = [];
+  const pairable: PredictionRecord[] = [];
+  for (const baseline of buildBaselinePredictions(p, history)) {
+    const existing = store.get(baseline.id);
+    if (existing) {
+      pairable.push(existing);
+      continue;
+    }
+    store.record(baseline);
+    recorded.push(baseline);
+    pairable.push(baseline);
+  }
+  return { recorded, pairable };
+}
+
 /** Record + persist in one call. */
 export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
   // One snapshot serves every baseline builder (store.all clones).
   const history = store.all();
-  const recorded: PredictionRecord[] = [];
-  for (const baseline of buildBaselinePredictions(p, history)) {
-    if (store.get(baseline.id)) continue;
-    store.record(baseline);
-    recorded.push(baseline);
-  }
+  const { recorded, pairable } = collectBaselines(store, p, history);
   persist(store);
   ensureForecastEvaluation(p);
   for (const baseline of recorded) ensureForecastEvaluation(baseline);
+  pushBaselinePairs(p, pairable);
 }
 
 /** Record a snapshot batch and persist once. Two passes so baseline
@@ -160,11 +217,9 @@ export function recordPredictions(predictions: readonly PredictionRecord[]): voi
   }
   const history = store.all();
   for (const prediction of predictions) {
-    for (const baseline of buildBaselinePredictions(prediction, history)) {
-      if (store.get(baseline.id)) continue;
-      store.record(baseline);
-      ensureForecastEvaluation(baseline);
-    }
+    const { recorded, pairable } = collectBaselines(store, prediction, history);
+    for (const baseline of recorded) ensureForecastEvaluation(baseline);
+    pushBaselinePairs(prediction, pairable);
   }
   persist(store);
 }

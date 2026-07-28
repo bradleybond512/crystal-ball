@@ -284,7 +284,11 @@ describe('shadow-rollout — verdict snapshot persistence', () => {
     const raw = storage.data.get(VERDICT_STORAGE_KEY);
     assert.ok(raw, 'snapshot written to localStorage');
     const parsed = JSON.parse(raw!) as { verdicts: unknown[]; snapshottedAt: number };
-    assert.strictEqual(parsed.verdicts.length, 3, 'three run verdicts in snapshot');
+    assert.strictEqual(
+      parsed.verdicts.length,
+      Object.values(RUN_IDS).length,
+      'every registered run has a verdict in the snapshot (ACC-303 added the three baseline runs)',
+    );
     assert.strictEqual(parsed.snapshottedAt, FIXED_NOW);
   });
 
@@ -330,4 +334,52 @@ describe('shadow-rollout — recommendation field is the correct union type', ()
     const v = shadowVerdict(RUN_IDS.RECALIBRATION);
     assert.ok(valid.includes(v.recommendation), `recommendation '${v.recommendation}' is valid`);
   });
+});
+
+// ── ACC-303: baseline runs are fenced from the probability-proximity verdict ──
+
+it('baseline runs report volume only — never a Brier verdict — until ACC-401 exact joins', () => {
+  resetShadowRolloutForTests();
+  const comparisons = Array.from({ length: 300 }, (_, i) => ({
+    runId: 'production-vs-persistence-baseline',
+    liveOutput: 0.6,
+    shadowOutput: 0.55,
+    timestamp: 1_000 + i,
+  }));
+  const fakeSvc = {
+    registerRun: () => {},
+    compare: () => {},
+    getComparisons: () => comparisons,
+    getDivergenceRate: () => 0.2,
+  } as never;
+  const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, { shadowService: fakeSvc, clock: () => 5_000 });
+  assert.equal(verdict.pairs, 300);
+  assert.equal(verdict.recommendation, 'insufficient-data');
+  assert.equal(verdict.brierLive, undefined, 'no Brier from the proximity join');
+  assert.equal(verdict.brierShadow, undefined);
+  resetShadowRolloutForTests();
+});
+
+it('persistVerdictSnapshot covers every registered run including the three baseline runs', () => {
+  resetShadowRolloutForTests();
+  const written: Record<string, string> = {};
+  const fakeSvc = {
+    registerRun: () => {},
+    compare: () => {},
+    getComparisons: () => [],
+    getDivergenceRate: () => 0,
+  } as never;
+  persistVerdictSnapshot({
+    shadowService: fakeSvc,
+    storage: { getItem: () => null, setItem: (k, v) => { written[k] = v; } },
+    putMemoryFn: async () => {},
+    clock: () => 9_000,
+  });
+  const snapshot = JSON.parse(written[VERDICT_STORAGE_KEY]!) as { verdicts: { runId: string }[] };
+  const ids = snapshot.verdicts.map((v) => v.runId).sort();
+  assert.equal(ids.length, Object.values(RUN_IDS).length);
+  for (const id of Object.values(RUN_IDS)) {
+    assert.ok(ids.includes(id), `snapshot missing run ${id}`);
+  }
+  resetShadowRolloutForTests();
 });

@@ -248,3 +248,50 @@ test('baseline family: id hashes differ across models for the same target', () =
   const m = buildMomentumBaselinePrediction(marketTarget(), trendSamples(0.5))!;
   assert.ok(p.id.startsWith('persistence:') && m.id.startsWith('momentum:'));
 });
+
+// ── Codex review regressions ─────────────────────────────────────────────
+
+test('REGRESSION: same-window priors dedupe to one observation', () => {
+  // Five forecasts on the SAME resolveBy window, all true → one outcome → 2/3.
+  const window = [0, 1, 2, 3, 4].map((i) =>
+    resolvedPrior(48, true, { id: `w-${i}`, predictedAt: T0 - (48 + i) * HOUR, resolveBy: T0 - 36 * HOUR }));
+  const est = estimatePersistenceBaseline(record(), window)!;
+  assert.equal(est.sampleCount, 1);
+  assert.ok(Math.abs(est.probability - 2 / 3) < 1e-9);
+});
+
+test('REGRESSION: a window with disagreeing outcomes is dropped entirely', () => {
+  const disagree = [
+    resolvedPrior(48, true, { id: 'd1', resolveBy: T0 - 36 * HOUR }),
+    resolvedPrior(50, false, { id: 'd2', predictedAt: T0 - 50 * HOUR, resolveBy: T0 - 36 * HOUR }),
+  ];
+  assert.equal(estimatePersistenceBaseline(record(), disagree), null);
+});
+
+test('REGRESSION: realized displacement counts — flat above threshold scores high, not 0.5', () => {
+  // Basis 200, up 3% target; prices flat at 210 (already +5%) pre-forecast.
+  const flatAbove: MomentumSample[] = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
+    observedAt: T0 - 5 * 60_000 - i * 30 * 60_000,
+    price: 210,
+  }));
+  const est = estimateMomentumBaseline(marketTarget(), flatAbove)!;
+  assert.ok(est.probability > 0.75, `already past threshold must score high, got ${est.probability}`);
+});
+
+test('REGRESSION: a future-observed basis price is lookahead — not_applicable', () => {
+  const futureBasis = marketTarget({
+    criteria: {
+      kind: 'market_move', symbol: 'AAPL', direction: 'up',
+      minAbsPct: 3, basisPrice: 200, basisObservedAt: T0 + HOUR,
+    } as MarketMoveCriteria,
+  });
+  assert.equal(estimateMomentumBaseline(futureBasis, trendSamples(0.5)), null);
+});
+
+test('REGRESSION: burst samples without temporal span are not a trend', () => {
+  const burst: MomentumSample[] = [0, 1, 2, 3, 4, 5].map((i) => ({
+    observedAt: T0 - 5 * 60_000 - i * 1000,
+    price: 200 + i,
+  }));
+  assert.equal(estimateMomentumBaseline(marketTarget(), burst), null);
+});

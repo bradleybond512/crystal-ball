@@ -35,6 +35,8 @@ export const MOMENTUM_BASELINE_VERSION = '1.0.0';
 
 /** Minimum pre-forecast samples for a defensible trend. */
 const MIN_SAMPLES = 5;
+/** Minimum temporal span across the usable samples. */
+const MIN_SPAN_MS = 30 * 60_000;
 /** Ignore samples older than this before the forecast. */
 const LOOKBACK_MS = 6 * 3_600_000;
 const P_FLOOR = 0.05;
@@ -65,6 +67,10 @@ export function estimateMomentumBaseline(
   if (criteria?.kind !== 'market_move') return null;
   if (!Number.isFinite(criteria.minAbsPct) || criteria.minAbsPct <= 0) return null;
   if (!Number.isFinite(criteria.basisPrice) || criteria.basisPrice <= 0) return null;
+  // The basis must itself be pre-forecast — a future-observed basis is
+  // lookahead contamination (and the market resolver rejects it anyway).
+  if (!Number.isFinite(criteria.basisObservedAt)) return null;
+  if (criteria.basisObservedAt > target.predictedAt) return null;
 
   // Hard no-lookahead filter, regardless of what the caller passed.
   const cutoff = target.predictedAt;
@@ -80,12 +86,25 @@ export function estimateMomentumBaseline(
     .map((s) => ({ t: s.observedAt, v: s.price }))
     .sort((a, b) => a.t - b.t);
   if (usable.length < MIN_SAMPLES) return null;
+  // A defensible trend needs temporal spread, not a burst: distinct
+  // timestamps and a minimum span, or transient noise extrapolates
+  // across a day-scale horizon.
+  const distinctTimes = new Set(usable.map((s) => s.t)).size;
+  if (distinctTimes < MIN_SAMPLES) return null;
+  const spanMs = usable[usable.length - 1]!.t - usable[0]!.t;
+  if (spanMs < MIN_SPAN_MS) return null;
 
+  // The move criteria measure from basisPrice, so the estimate combines
+  // the ALREADY-REALIZED move (last pre-forecast price vs basis) with
+  // the trend projected over the remaining horizon. A target already
+  // past its threshold at prediction time must not score 0.5.
+  const lastPrice = usable[usable.length - 1]!.v;
+  const realizedPct = ((lastPrice - criteria.basisPrice) / criteria.basisPrice) * 100;
   const slope = linearSlope(usable);
   const horizonMs = target.resolveBy - target.predictedAt;
-  const projectedMove = slope.perMs * horizonMs;
-  const projectedPct = (projectedMove / criteria.basisPrice) * 100;
-  const signed = criteria.direction === 'down' ? -projectedPct : projectedPct;
+  const projectedPct = ((slope.perMs * horizonMs) / criteria.basisPrice) * 100;
+  const totalPct = realizedPct + projectedPct;
+  const signed = criteria.direction === 'down' ? -totalPct : totalPct;
   const ratio = signed / criteria.minAbsPct;
   const probability = Math.min(P_CEIL, Math.max(P_FLOOR, 0.5 + 0.4 * Math.tanh(ratio)));
   return {

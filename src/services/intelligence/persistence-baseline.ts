@@ -88,12 +88,27 @@ export function estimatePersistenceBaseline(
   if (target.resolveBy <= target.predictedAt) return null;
   if (!isStateLikeTarget(target)) return null;
 
-  const usable = usablePriorResolutions(target, history)
-    .sort((a, b) => b.resolvedAt! - a.resolvedAt!)
+  // ACC-301's window dedup: multiple forecasts on the same resolveBy
+  // window are ONE observation, and a window whose records disagree on
+  // the outcome is dropped entirely. Five same-window forecasts must
+  // not count as five outcomes.
+  const byWindow = new Map<number, { record: PredictionRecord; outcome: boolean } | null>();
+  for (const r of usablePriorResolutions(target, history)) {
+    const outcome = resolvedOutcome(r)!;
+    const existing = byWindow.get(r.resolveBy);
+    if (existing === undefined) {
+      byWindow.set(r.resolveBy, { record: r, outcome });
+    } else if (existing !== null && existing.outcome !== outcome) {
+      byWindow.set(r.resolveBy, null);
+    }
+  }
+  const usable = [...byWindow.values()]
+    .filter((e): e is { record: PredictionRecord; outcome: boolean } => e !== null)
+    .sort((a, b) => b.record.resolvedAt! - a.record.resolvedAt!)
     .slice(0, RECENT_WINDOW);
   if (usable.length === 0) return null;
 
-  const trues = usable.filter((r) => resolvedOutcome(r) === true).length;
+  const trues = usable.filter((e) => e.outcome).length;
   // Laplace smoothing: never certain, converges with evidence.
   const probability = (trues + 1) / (usable.length + 2);
   return { probability, sampleCount: usable.length };

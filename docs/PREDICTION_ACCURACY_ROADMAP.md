@@ -650,11 +650,36 @@ Deliver only where the domain contract supports it:
 
 ### ACC-303 — Pair all baselines with production forecasts
 
-Status: `IN PROGRESS`
+Status: `DONE`
 
 Owner: Claude
 
 Branch: `claude/acc-303-baseline-pairing`
+
+Evidence: PR #1536
+
+Verification: emission-side pairing has been live since ACC-301/302 (every
+eligible production forecast emits its applicable baselines on the same
+targetKey and window through the recordPrediction choke point). This task adds
+the three missing pieces. (1) Shadow-rollout run
+`production-vs-baseline-family`: one pair pushed per emitted baseline, whose
+input carries the STABLE join fields (targetKey, predictedAt, resolveBy,
+production/baseline source ids + versions) ACC-401's exact joins require —
+wired fire-and-forget from the adapter via lazy import (no store cycle),
+kill-switch respected. (2) A dedicated deterministic walk-forward benchmark
+(`npm run bench:baselines`, corpus `baseline-pairing-v1`, 72 closed-form
+fixtures with repeated targetKeys and embedded pre-forecast price series —
+the structures the frozen ACC-301 corpus lacks) reporting record count, Brier,
+and Brier SKILL vs the production incumbent per model, gated by a committed
+JSON (production 0.152317; hierarchical −0.115069, momentum −0.057487,
+persistence −0.238375 skill — production beats every naive baseline, which is
+the phase's point) and run in CI beside bench:forecast. (3) Phase-exit
+coverage proof as a test: every production emitter family (mode, shortage,
+hypothesis/superforecast market and non-market, warning verification) yields
+at least one relevant baseline from the real builders. The frozen ACC-301
+replay benchmark is untouched and still passes. Verified: typecheck:all, the
+new pairing suite (5), adapter + shadow-rollout suites, both deterministic
+benchmarks, scoped ESLint.
 
 Dependencies: ACC-301 and ACC-302
 

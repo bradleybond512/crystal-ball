@@ -1,0 +1,29 @@
+{
+  "corpusId": "baseline-pairing-v1",
+  "fixtureCount": 72,
+  "productionBrier": 0.152317,
+  "models": [
+    {
+      "model": "hierarchical-base-rate",
+      "records": 36,
+      "brier": 0.261052,
+      "brierSkillVsProduction": -0.115069
+    },
+    {
+      "model": "momentum-baseline",
+      "records": 12,
+      "brier": 0.209604,
+      "brierSkillVsProduction": -0.057487
+    },
+    {
+      "model": "persistence-baseline",
+      "records": 40,
+      "brier": 0.386255,
+      "brierSkillVsProduction": -0.238375
+    }
+  ],
+  "tolerances": {
+    "brierIncrease": 0.01,
+    "recordCountChange": 0
+  }
+}

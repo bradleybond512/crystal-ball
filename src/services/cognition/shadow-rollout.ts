@@ -89,6 +89,7 @@ export const RUN_IDS = {
   RECALIBRATION: 'recalibration-vs-legacy',
   SUPERFORECAST: 'superforecast-vs-baseline',
   SCHEMA: 'learned-schema-vs-handauthored',
+  BASELINE_PAIRING: 'production-vs-baseline-family',
 } as const;
 
 export type RunId = typeof RUN_IDS[keyof typeof RUN_IDS];
@@ -135,6 +136,16 @@ const RUN_CONFIGS: ShadowRunConfig[] = [
     description:
       'forecastHypothesis() is LIVE (drives ranking). superforecast() is SHADOW (not yet live). ' +
       'liveOutput=forecastHypothesis p; shadowOutput=superforecast p.',
+    enabled: true,
+    createdAt: 0,
+  },
+  {
+    id: RUN_IDS.BASELINE_PAIRING,
+    algorithmId: 'hierarchical-base-rate',
+    description:
+      'ACC-303: production forecasts are LIVE; the baseline family (hierarchical/persistence/momentum) '
+      + 'runs as SHADOW on the same targetKey and horizon. liveOutput=production p; shadowOutput=baseline p. '
+      + 'Input carries stable join fields (targetKey, predictedAt, resolveBy, model ids) for ACC-401 exact joins.',
     enabled: true,
     createdAt: 0,
   },
@@ -296,6 +307,36 @@ export function pushSuperforecastPair(
  * @param handAuthoredCount Number of hand-authored signature matches.
  * @param learnedCount      Number of learned schema matches.
  */
+/** ACC-303: one production-vs-baseline pair per emitted baseline. The
+ *  input object carries the STABLE join fields ACC-401's exact
+ *  paired-outcome joins need (targetKey + window + model identities) —
+ *  never an approximate hash of opaque state. */
+export interface BaselinePairInput {
+  targetKey: string;
+  predictedAt: number;
+  resolveBy: number;
+  productionSourceId: string;
+  productionVersion?: string;
+  baselineSourceId: string;
+  baselineVersion?: string;
+}
+
+export function pushBaselinePair(
+  input: BaselinePairInput,
+  productionP: number,
+  baselineP: number,
+): void {
+  try {
+    if (!isCognitionEnabled('shadow-algorithms')) return;
+    if (!_initialized) initShadowRollout();
+    const svc = getShadowService();
+    if (!svc) return;
+    svc.compare(RUN_IDS.BASELINE_PAIRING, input, productionP, baselineP);
+  } catch {
+    // Fire-and-forget.
+  }
+}
+
 export function pushSchemaPair(
   windowDescriptor: unknown,
   handAuthoredCount: number,

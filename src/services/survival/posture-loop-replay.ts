@@ -62,11 +62,15 @@ export interface PostureLoopGrade {
   bandAfter: SurvivalBand;
   /** Signed modeled change on the graded axis (negative = predicted improvement). */
   projectedDelta: number;
-  /** Signed observed change on the graded axis (negative = observed improvement). */
+  /** Signed observed change on the graded axis (negative = observed improvement).
+   *  Reflects the move AND the storm's own evolution — a single replay episode
+   *  cannot isolate the move's effect from the storm's. Downstream (E7) must
+   *  weigh this, not read it as the move's causal contribution. */
   actualDelta: number;
-  /** The move actually reduced the threat on its axis. */
-  moveImproved: boolean;
-  /** actual − projected. Positive = move helped LESS than modeled (over-promised). */
+  /** Observed posture improved on the graded axis (actualDelta < 0). Not a causal
+   *  claim about the move alone — see actualDelta. */
+  postureImproved: boolean;
+  /** observed − projected. Positive = posture improved LESS than the move modeled. */
   projectionError: number;
   projectionVerdict: ProjectionVerdict;
   /** The move was committed at or before impact (there was time to execute). */
@@ -80,7 +84,7 @@ export interface PostureLoopSummary {
   adequateWarnings: number;
   shortWarnings: number;
   missedWarnings: number;
-  movesImproved: number;
+  posturesImproved: number;
   meanWarningLeadMs: number;
   meanAbsProjectionError: number;
   /** Signed mean projection error — the model's bias. The seed E7 calibrates on. */
@@ -122,12 +126,16 @@ export function gradePostureLoop(fixture: PostureLoopFixture): PostureLoopGrade 
   const leadTarget = Math.max(0, finiteOr(fixture.leadTimeTargetMs ?? DEFAULT_LEAD_TARGET_MS, DEFAULT_LEAD_TARGET_MS));
   const tolerance = Math.max(0, finiteOr(fixture.projectionToleranceLevels ?? DEFAULT_PROJECTION_TOLERANCE, DEFAULT_PROJECTION_TOLERANCE));
 
-  const issuedAt = finiteOr(fixture.warningIssuedAtMs, 0);
-  const impactAt = finiteOr(fixture.impactAtMs, 0);
-  const committedAt = finiteOr(fixture.committedMove.committedAtMs, 0);
+  const issuedAt = fixture.warningIssuedAtMs;
+  const impactAt = fixture.impactAtMs;
+  const committedAt = fixture.committedMove.committedAtMs;
+  // Fail closed on non-finite timing: a valid impact paired with a NaN warning
+  // must NOT normalize to epoch 0 and read as an enormous "adequate" lead.
+  const warningTimingValid = Number.isFinite(issuedAt) && Number.isFinite(impactAt);
+  const commitTimingValid = Number.isFinite(committedAt) && Number.isFinite(impactAt);
 
-  const warningLeadMs = impactAt - issuedAt;
-  const leadVerdict = leadVerdictFor(warningLeadMs, leadTarget);
+  const warningLeadMs = warningTimingValid ? impactAt - issuedAt : 0;
+  const leadVerdict = warningTimingValid ? leadVerdictFor(warningLeadMs, leadTarget) : 'missed';
 
   const before = clampLevel(fixture.postureBefore);
   const after = clampLevel(fixture.postureAfter);
@@ -136,18 +144,20 @@ export function gradePostureLoop(fixture: PostureLoopFixture): PostureLoopGrade 
 
   const projectedDelta = projectedDeltaFor(fixture.committedMove.effect, fixture.axis);
   const actualDelta = after - before;
-  const moveImproved = actualDelta < 0;
+  const postureImproved = actualDelta < 0;
 
   const projectionError = actualDelta - projectedDelta;
   const projectionVerdict = projectionVerdictFor(projectionError, tolerance);
 
-  const committedBeforeImpact = committedAt <= impactAt;
+  const committedBeforeImpact = commitTimingValid ? committedAt <= impactAt : false;
 
   const notes: string[] = [];
-  if (leadVerdict === 'missed') notes.push('Warning landed at or after impact — no time to act.');
+  if (!warningTimingValid) notes.push('Warning or impact time is missing/invalid — treated as not warned in time.');
+  else if (leadVerdict === 'missed') notes.push('Warning landed at or after impact — no time to act.');
   else if (leadVerdict === 'short') notes.push(`Only ${Math.round(warningLeadMs / 60_000)} min of lead time (target ${Math.round(leadTarget / 60_000)} min).`);
-  if (!committedBeforeImpact) notes.push('Move was committed after impact — too late to change the outcome.');
-  if (!moveImproved) notes.push('Committed move did not reduce the threat on its axis.');
+  if (!commitTimingValid) notes.push('Commit or impact time is missing/invalid — cannot confirm the move beat impact.');
+  else if (!committedBeforeImpact) notes.push('Move was committed after impact — too late to change the outcome.');
+  if (!postureImproved) notes.push('Observed posture did not improve on the graded axis after the move.');
   if (projectionVerdict === 'overpredicted') notes.push(`Move helped ${Math.abs(projectionError).toFixed(0)} pts less than modeled.`);
   else if (projectionVerdict === 'underpredicted') notes.push(`Move helped ${Math.abs(projectionError).toFixed(0)} pts more than modeled.`);
 
@@ -160,19 +170,25 @@ export function gradePostureLoop(fixture: PostureLoopFixture): PostureLoopGrade 
     bandAfter,
     projectedDelta,
     actualDelta,
-    moveImproved,
+    postureImproved,
     projectionError,
     projectionVerdict,
     committedBeforeImpact,
-    headline: buildHeadline(fixture.label, leadVerdict, moveImproved, bandBefore, bandAfter),
+    headline: buildHeadline(fixture.label, leadVerdict, actualDelta, bandBefore, bandAfter),
     notes,
   };
+}
+
+function movementPhrase(actualDelta: number, bandBefore: SurvivalBand, bandAfter: SurvivalBand): string {
+  if (actualDelta < 0) return `posture ${bandBefore}→${bandAfter}`;
+  if (actualDelta > 0) return `posture worsened ${bandBefore}→${bandAfter}`;
+  return `posture held at ${bandAfter}`;
 }
 
 function buildHeadline(
   label: string,
   leadVerdict: LeadVerdict,
-  moveImproved: boolean,
+  actualDelta: number,
   bandBefore: SurvivalBand,
   bandAfter: SurvivalBand,
 ): string {
@@ -182,8 +198,7 @@ function buildHeadline(
     missed: 'not warned in time',
   };
   const warned = warnedLabels[leadVerdict];
-  const moved = moveImproved ? `posture ${bandBefore}→${bandAfter}` : `posture held at ${bandAfter}`;
-  return `${label}: ${warned}, ${moved}.`;
+  return `${label}: ${warned}, ${movementPhrase(actualDelta, bandBefore, bandAfter)}.`;
 }
 
 export function summarizePostureLoops(fixtures: PostureLoopFixture[]): PostureLoopSummary {
@@ -196,7 +211,7 @@ export function summarizePostureLoops(fixtures: PostureLoopFixture[]): PostureLo
     adequateWarnings: grades.filter((g) => g.leadVerdict === 'adequate').length,
     shortWarnings: grades.filter((g) => g.leadVerdict === 'short').length,
     missedWarnings: grades.filter((g) => g.leadVerdict === 'missed').length,
-    movesImproved: grades.filter((g) => g.moveImproved).length,
+    posturesImproved: grades.filter((g) => g.postureImproved).length,
     meanWarningLeadMs: count === 0 ? 0 : sum((g) => g.warningLeadMs) / count,
     meanAbsProjectionError: count === 0 ? 0 : sum((g) => Math.abs(g.projectionError)) / count,
     meanProjectionError: count === 0 ? 0 : sum((g) => g.projectionError) / count,

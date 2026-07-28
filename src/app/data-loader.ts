@@ -1754,7 +1754,7 @@ export class DataLoaderManager implements AppModule {
  { computeAlertExposure },
  { getSavedPlaces },
  { resolveSavedPlaceZonesWithHealth, toMatcherPlace, savedPlacesMatchSignature },
- { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication, isWeatherMatchingComplete },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication, isWeatherMatchingComplete, chipExposureFloor },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -2013,7 +2013,7 @@ export class DataLoaderManager implements AppModule {
  // alerts that can ONLY match via the zone fallback — those with no usable
  // polygon. An all-clear feed still proves clear so the chip never freezes.
  const chipDecision = decideThreatPublication(
- selectPersonalWeatherThreat(weatherThreatCandidates, exposureFloor),
+ selectPersonalWeatherThreat(weatherThreatCandidates, chipExposureFloor(exposureFloor)),
  weatherFeedFresh,
  isWeatherMatchingComplete({
  severeAlertCount: severeAlerts.length,
@@ -2028,7 +2028,6 @@ export class DataLoaderManager implements AppModule {
  case 'publish': setPersonalWeatherThreat(chipDecision.value); break;
  case 'confirm_clear': confirmPersonalWeatherClear(); break;
  case 'revoke_confirmation': revokePersonalWeatherClearConfirmation(); break;
- case 'leave': break;
  }
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);

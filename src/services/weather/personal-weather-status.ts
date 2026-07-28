@@ -210,16 +210,14 @@ function toEpochMs(expires: unknown): number | null {
  * What the data-loader should do with the chip state this weather tick.
  * - `publish`             — write the matched threat (always wins).
  * - `confirm_clear`       — a fresh, fully-evaluated feed proved no threat.
- * - `revoke_confirmation` — a fresh feed we could NOT fully evaluate; drop any
- *                           prior confirmed clear to neutral.
- * - `leave`               — a stale feed; touch nothing (prior threat and prior
- *                           confirmed clear each self-expire on their own timer).
+ * - `revoke_confirmation` — a feed we could NOT trust for a clear (stale /
+ *                           unavailable, OR fresh-but-degraded matching); drop
+ *                           any prior confirmed clear to neutral.
  */
 export type ThreatPublicationDecision =
   | { action: 'publish'; value: PersonalWeatherThreat }
   | { action: 'confirm_clear' }
-  | { action: 'revoke_confirmation' }
-  | { action: 'leave' };
+  | { action: 'revoke_confirmation' };
 
 /**
  * Decide what to do with the chip state this weather tick, given the
@@ -240,9 +238,13 @@ export type ThreatPublicationDecision =
  *   zone-only warning could hide behind the failed lookup): REVOKE any prior
  *   confirmed clear so the chip goes neutral instead of asserting an all-clear
  *   over a feed it could not evaluate.
- * - A CLEAR on a stale/failed feed is LEFT alone; the caller touches nothing and
- *   the prior threat / prior confirmed clear self-expire. A stale feed must
- *   never PROVE clear.
+ * - A CLEAR on a STALE/unavailable feed also REVOKES any prior confirmed clear:
+ *   isWeatherFeedFresh goes false the moment the NWS breaker is unavailable, and
+ *   a green chip must not ride a feed we can no longer read (it otherwise stood
+ *   until the 30-min clear TTL lapsed — a stale all-clear over a live storm). A
+ *   stale feed must never PROVE clear, and must not let a prior proof stand.
+ *   `revokePersonalWeatherClearConfirmation` is a guarded no-op when nothing is
+ *   standing, so this never disturbs an active threat or churns a neutral chip.
  */
 export function decideThreatPublication(
   next: PersonalWeatherThreat | null,
@@ -250,8 +252,7 @@ export function decideThreatPublication(
   matchingComplete: boolean,
 ): ThreatPublicationDecision {
   if (next) return { action: 'publish', value: next };
-  if (!feedIsFresh) return { action: 'leave' };
-  if (!matchingComplete) return { action: 'revoke_confirmation' };
+  if (!feedIsFresh || !matchingComplete) return { action: 'revoke_confirmation' };
   return { action: 'confirm_clear' };
 }
 
@@ -323,13 +324,22 @@ const RAW_SEVERITY_MAP: Record<string, PersonalWeatherSeverity> = {
  * Extreme outranks Severe; ties keep the later-expiring alert so the chip
  * stays lit for the longest-lived threat. Returns `null` when nothing
  * matches, which the caller uses to clear the chip.
+ *
+ * Already-expired candidates (expiry at/before `now`) are excluded BEFORE
+ * ranking: an expired Extreme must not outrank a still-active Severe, win
+ * selection, then self-clear the instant getPersonalWeatherThreat sees it past
+ * expiry — silently dropping the genuine Severe warning over the user. `now`
+ * defaults to Date.now() and matches getPersonalWeatherThreat's self-clear
+ * boundary (at/after expiry is not live).
  */
 export function selectPersonalWeatherThreat(
   candidates: readonly WeatherThreatCandidate[],
   exposureFloor: number,
+  now: number = Date.now(),
 ): PersonalWeatherThreat | null {
   let best: PersonalWeatherThreat | null = null;
   for (const c of candidates) {
+    if (c.expiresAt <= now) continue;
     if (c.exposure < exposureFloor) continue;
     const severity = RAW_SEVERITY_MAP[c.severity] ?? null;
     if (severity === null) continue;
@@ -343,4 +353,23 @@ export function selectPersonalWeatherThreat(
     }
   }
   return best;
+}
+
+/**
+ * The chip's own exposure floor is capped here, independent of the Big Event
+ * detector's auto-tunable `exposureFloor` (default 70, tuner may raise to 90).
+ * The chip is a safety indicator, not the calibrated notification threshold: a
+ * raised detector floor must never blind it to a Severe/Extreme alert whose
+ * personal exposure lands in the 70-89 band.
+ */
+export const PERSONAL_CHIP_EXPOSURE_FLOOR = 70;
+
+/**
+ * Clamp the detector's (possibly tuned-up) exposure floor to the chip's cap so
+ * the chip stays at least as sensitive as PERSONAL_CHIP_EXPOSURE_FLOOR, while
+ * still following the detector DOWN when it is more sensitive — never LESS
+ * sensitive than the detector in either direction.
+ */
+export function chipExposureFloor(detectorFloor: number): number {
+  return Math.min(detectorFloor, PERSONAL_CHIP_EXPOSURE_FLOOR);
 }

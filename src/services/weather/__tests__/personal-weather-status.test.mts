@@ -14,6 +14,8 @@ import {
   revokePersonalWeatherClearConfirmation,
   isPersonalWeatherClearConfirmed,
   PERSONAL_WEATHER_CLEAR_TTL_MS,
+  PERSONAL_CHIP_EXPOSURE_FLOOR,
+  chipExposureFloor,
   type WeatherThreatCandidate,
 } from '../personal-weather-status.ts';
 
@@ -122,7 +124,7 @@ test('selectPersonalWeatherThreat: everything below the exposure floor → null'
 });
 
 test('selectPersonalWeatherThreat: a matched Severe alert becomes a severe threat', () => {
-  const t = selectPersonalWeatherThreat([candidate({ event: 'Tornado Warning', exposure: 88 })], 70);
+  const t = selectPersonalWeatherThreat([candidate({ event: 'Tornado Warning', exposure: 88 })], 70, 0);
   assert.equal(t?.severity, 'severe');
   assert.equal(t?.label, 'Tornado Warning');
   assert.equal(t?.expiresAt, 10_000);
@@ -132,7 +134,7 @@ test('selectPersonalWeatherThreat: Extreme outranks Severe regardless of order',
   const t = selectPersonalWeatherThreat([
     candidate({ severity: 'Severe', event: 'svr' }),
     candidate({ severity: 'Extreme', event: 'xtr' }),
-  ], 70);
+  ], 70, 0);
   assert.equal(t?.severity, 'extreme');
   assert.equal(t?.label, 'xtr');
 });
@@ -141,7 +143,7 @@ test('selectPersonalWeatherThreat: same severity keeps the later-expiring alert'
   const t = selectPersonalWeatherThreat([
     candidate({ event: 'early', expiresAt: 5_000 }),
     candidate({ event: 'late', expiresAt: 20_000 }),
-  ], 70);
+  ], 70, 0);
   assert.equal(t?.label, 'late');
   assert.equal(t?.expiresAt, 20_000);
 });
@@ -151,7 +153,58 @@ test('selectPersonalWeatherThreat: non-Extreme/Severe severities are ignored', (
 });
 
 test('selectPersonalWeatherThreat: exposure exactly at the floor counts', () => {
-  const t = selectPersonalWeatherThreat([candidate({ exposure: 70 })], 70);
+  const t = selectPersonalWeatherThreat([candidate({ exposure: 70 })], 70, 0);
+  assert.equal(t?.severity, 'severe');
+});
+
+// P0 (Codex): an already-EXPIRED candidate must be excluded before ranking.
+// Otherwise an expired matched Extreme outranks a still-active matched Severe,
+// wins selection, then self-clears the instant getPersonalWeatherThreat sees it
+// past expiry — silently dropping the genuine Severe warning over the user. The
+// selector evaluates expiry as of `now` (default Date.now()), matching the
+// getPersonalWeatherThreat self-clear boundary (at/after expiry is not live).
+test('selectPersonalWeatherThreat: an expired candidate never shadows an active one', () => {
+  const t = selectPersonalWeatherThreat([
+    candidate({ severity: 'Extreme', event: 'expired xtr', expiresAt: 5_000 }),
+    candidate({ severity: 'Severe', event: 'active svr', expiresAt: 20_000 }),
+  ], 70, 10_000);
+  assert.equal(t?.severity, 'severe');
+  assert.equal(t?.label, 'active svr');
+});
+
+test('selectPersonalWeatherThreat: all candidates expired → null (nothing live to publish)', () => {
+  assert.equal(selectPersonalWeatherThreat([
+    candidate({ severity: 'Extreme', expiresAt: 5_000 }),
+    candidate({ severity: 'Severe', expiresAt: 9_999 }),
+  ], 70, 10_000), null);
+});
+
+test('selectPersonalWeatherThreat: a candidate expiring exactly at now is treated as expired', () => {
+  assert.equal(selectPersonalWeatherThreat([candidate({ expiresAt: 10_000 })], 70, 10_000), null);
+});
+
+// ── chipExposureFloor ────────────────────────────────────────────────────
+// P0 (Codex): the Big Event `exposureFloor` is auto-tunable (default 70, up to
+// 90). The chip selector shared that tuned floor, so the moment the tuner
+// tightened the detector to 90 a Severe alert whose personal exposure was
+// 70-89 stopped lighting the chip — a genuine severe threat over the user
+// reading as ALL CLEAR. The chip floor is capped at PERSONAL_CHIP_EXPOSURE_FLOOR
+// (70) so raising the detector can never blind the chip, while still following
+// the detector DOWN when it is more sensitive (never LESS sensitive than the
+// detector — fail-closed in both directions).
+test('chipExposureFloor: caps the chip floor at 70 when the tuner raised the detector floor', () => {
+  assert.equal(chipExposureFloor(90), 70);
+  assert.equal(chipExposureFloor(75), 70);
+  assert.equal(chipExposureFloor(PERSONAL_CHIP_EXPOSURE_FLOOR), 70);
+});
+
+test('chipExposureFloor: follows the detector DOWN when it is below 70 (stays at least as sensitive)', () => {
+  assert.equal(chipExposureFloor(50), 50);
+  assert.equal(chipExposureFloor(70), 70);
+});
+
+test('a Severe alert at exposure 80 still lights the chip when the tuner raised the detector floor to 90', () => {
+  const t = selectPersonalWeatherThreat([candidate({ exposure: 80 })], chipExposureFloor(90), 0);
   assert.equal(t?.severity, 'severe');
 });
 
@@ -194,14 +247,13 @@ test('resolveThreatExpiryMs: an unparseable value falls back to now + window', (
 // offline path). This pure decision gates the publish across THREE inputs —
 // the selected threat, whether the feed was a fresh live read, and whether the
 // match pipeline ran to completion (no degraded zone lookup / no crashed
-// exposure match). It returns one of four actions:
+// exposure match). It returns one of three actions:
 //   publish             — a real match; always wins, even on a stale/degraded feed
 //   confirm_clear       — fresh feed + complete matching proved no threat
-//   revoke_confirmation — fresh feed we could NOT fully evaluate (degraded
-//                         matching); a prior confirmed clear must drop to neutral
-//                         rather than assert an all-clear over an unevaluated feed
-//   leave               — stale feed; touch nothing (a prior threat self-expires,
-//                         a prior confirmed clear self-expires via its TTL)
+//   revoke_confirmation — a feed we could NOT trust for a clear: stale/unavailable
+//                         OR fresh-but-degraded matching. Any prior confirmed clear
+//                         drops to neutral rather than ride a feed we can't read /
+//                         assert an all-clear we never actually evaluated.
 
 test('decideThreatPublication: a real match publishes even when the feed is stale/degraded', () => {
   const threat = { severity: 'severe' as const, label: 'Tornado Warning', expiresAt: 10_000 };
@@ -217,9 +269,17 @@ test('decideThreatPublication: a clear IS confirmed on a fresh feed with complet
   assert.deepEqual(decideThreatPublication(null, true, true), { action: 'confirm_clear' });
 });
 
-test('decideThreatPublication: a clear is LEFT alone on a stale feed (never prove clear)', () => {
-  // leave → the caller touches nothing; a prior threat/confirmed-clear self-expires.
-  assert.deepEqual(decideThreatPublication(null, false, true), { action: 'leave' });
+// P0 (Codex): a STALE/unavailable feed must not let a prior confirmed clear
+// stand. `isWeatherFeedFresh` returns false the moment the NWS breaker goes
+// `unavailable`, so "leave" would keep a green ALL CLEAR chip riding a feed we
+// can no longer read (up to the 30-min clear TTL) — a fail-open. A stale feed is
+// unevaluable, so it must REVOKE any standing clear to neutral (CHECKING).
+test('decideThreatPublication: a stale feed revokes a standing clear (never ride an unreadable feed)', () => {
+  assert.deepEqual(decideThreatPublication(null, false, true), { action: 'revoke_confirmation' });
+});
+
+test('decideThreatPublication: a stale feed WITH degraded matching also revokes (both unevaluable)', () => {
+  assert.deepEqual(decideThreatPublication(null, false, false), { action: 'revoke_confirmation' });
 });
 
 // P0: a FRESH feed whose match pipeline was degraded (an unresolved UGC zone or

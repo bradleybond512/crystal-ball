@@ -29,6 +29,7 @@ import type {
   WeatherSeverity,
 } from './weather-threat-types';
 import { matchAlertsToPlaces, type MatchOptions } from './nws-polygon-match';
+import { isUsableMatchRing } from './ring-geometry';
 
 const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
   Extreme: 'extreme',
@@ -75,19 +76,21 @@ export function exposureFromMatch(match: PolygonMatchResult): number {
 }
 
 /**
- * All valid outer rings (≥3 vertices) of a `WeatherAlert` for matching. Prefers
- * `polygonRings` (every sub-polygon of a MultiPolygon) so a warning whose 2nd+
- * ring covers the user still matches; falls back to the legacy single
- * `coordinates` ring when `polygonRings` is absent (the common single-polygon
- * case). Returns `undefined` when the alert has no usable geometry, so the
- * matcher relies on the UGC-zone fallback.
+ * All usable outer rings of a `WeatherAlert` for matching, filtered through the
+ * shared {@link isUsableMatchRing} predicate (≥3 vertices AND non-zero area) in
+ * lockstep with `alertHasUsablePolygon`. Prefers `polygonRings` (every
+ * sub-polygon of a MultiPolygon) so a warning whose 2nd+ ring covers the user
+ * still matches; falls back to the legacy single `coordinates` ring when
+ * `polygonRings` is absent (the common single-polygon case). Returns `undefined`
+ * when the alert has no usable geometry, so the matcher relies on the UGC-zone
+ * fallback.
  */
 function alertMatchRings(alert: WeatherAlert): [number, number][][] | undefined {
   const source = alert.polygonRings && alert.polygonRings.length > 0
     ? alert.polygonRings
     : [alert.coordinates];
   const rings = source
-    .filter((ring) => ring.length >= 3)
+    .filter((ring) => isUsableMatchRing(ring))
     .map((ring) => ring.map(([lng, lat]) => [lng, lat] as [number, number]));
   return rings.length > 0 ? rings : undefined;
 }

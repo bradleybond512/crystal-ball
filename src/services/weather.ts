@@ -1,4 +1,5 @@
 import { createCircuitBreaker, getCSSColor } from '@/utils';
+import { isUsableMatchRing } from './weather/ring-geometry';
 
 export interface WeatherAlert {
   id: string;
@@ -122,20 +123,22 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
 
 /**
  * True when a normalized alert carries a polygon the matcher can actually use:
- * at least one ring with >=3 vertices. "Usable" mirrors `alertMatchRings`
- * (weather-exposure.ts), which discards any ring with fewer than three vertices
- * before matching — a 1- or 2-vertex ring places nothing. Keeping the >=3
- * threshold here in lockstep with the matcher is load-bearing: a looser check
- * lets a degenerate-geometry severe alert reach a false clear. Deliberately does
- * NOT consult `ugcZones`, so the clear decision can single out severe alerts that
- * can ONLY match via the zone fallback (no usable polygon) and withhold the clear
- * for exactly those when the zone lookup degrades.
+ * at least one ring that {@link isUsableMatchRing} accepts (≥3 vertices AND
+ * non-zero enclosed area). "Usable" mirrors `alertMatchRings`
+ * (weather-exposure.ts), which filters rings through the SAME predicate before
+ * matching — a 1-/2-vertex ring, or a finite but degenerate (all-identical /
+ * collinear, zero-area) ring, places nothing. Keeping this in lockstep with the
+ * matcher is load-bearing: a looser check lets a degenerate-geometry severe
+ * alert reach a false clear. Deliberately does NOT consult `ugcZones`, so the
+ * clear decision can single out severe alerts that can ONLY match via the zone
+ * fallback (no usable polygon) and withhold the clear for exactly those when the
+ * zone lookup degrades.
  */
 export function alertHasUsablePolygon(alert: WeatherAlert): boolean {
   const rings = alert.polygonRings && alert.polygonRings.length > 0
     ? alert.polygonRings
     : [alert.coordinates];
-  return rings.some((ring) => ring.length >= 3);
+  return rings.some((ring) => isUsableMatchRing(ring));
 }
 
 /**

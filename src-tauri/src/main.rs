@@ -1955,38 +1955,54 @@ fn codesign_satisfies(app_path: &str, requirement: &str) -> bool {
  .unwrap_or(false)
 }
 
+/// The Apple-anchored designated requirement an update must satisfy to match the
+/// currently-installed app, or `None` when the running install is itself not
+/// Apple-anchored (an unsigned local dev build, where there is no real
+/// distribution to pin against).
+///
+/// Fails CLOSED in production: if the installed app IS Apple-signed but we cannot
+/// read its team, this errors so callers refuse the update rather than falling
+/// through to integrity-only verification.
+#[cfg(target_os = "macos")]
+fn installed_signer_requirement(installed: &str) -> Result<Option<String>, String> {
+ // Is the running install a real Apple-distributed build, or an unsigned dev build?
+ if !codesign_satisfies(installed, "anchor apple generic") {
+ return Ok(None);
+ }
+ let team = bundle_team_identifier(installed).ok_or_else(|| {
+ "Installed app is Apple-signed but its team could not be read — refusing update".to_string()
+ })?;
+ Ok(Some(build_signer_requirement("com.bradleybond.crystalball", &team)))
+}
+
+/// Verify a bundle satisfies a captured signer requirement. `None` (dev build)
+/// always passes; a `Some` requirement is enforced strictly by codesign exit
+/// status, never fail-open.
+#[cfg(target_os = "macos")]
+fn verify_bundle_satisfies_requirement(path: &str, requirement: &Option<String>) -> Result<(), String> {
+ let Some(req) = requirement else { return Ok(()) };
+ let verify = Command::new("codesign")
+ .args(["--verify", "--deep", "--strict", &format!("-R={req}"), path])
+ .output()
+ .map_err(|e| format!("codesign requirement check failed: {e}"))?;
+ if !verify.status.success() {
+ return Err(format!(
+ "Bundle does not satisfy the pinned Apple signer requirement: {}",
+ String::from_utf8_lossy(&verify.stderr)
+ ));
+ }
+ Ok(())
+}
+
 /// `codesign --verify` proves a signature is intact but NOT who produced it, so a
 /// compromised release could ship a self-signed build that still passes the
 /// bundle-ID + integrity checks (a self-signed cert can claim any TeamIdentifier
 /// string). Pin the update to an APPLE-ANCHORED requirement carrying our bundle ID
 /// and the SAME Developer Team as the currently-installed app.
-///
-/// Fails CLOSED in production: if the installed app is Apple-signed but we cannot
-/// establish its team, the update is refused. Skips only when the running install
-/// itself is not Apple-anchored (an unsigned local dev build), where there is no
-/// real distribution to protect.
 #[cfg(target_os = "macos")]
 fn verify_same_signer_as_installed(candidate: &str, installed: &str) -> Result<(), String> {
- // Is the running install a real Apple-distributed build, or an unsigned dev build?
- if !codesign_satisfies(installed, "anchor apple generic") {
- return Ok(());
- }
- // Production install: we MUST be able to pin, or we refuse.
- let team = bundle_team_identifier(installed).ok_or_else(|| {
- "Installed app is Apple-signed but its team could not be read — refusing update".to_string()
- })?;
- let requirement = build_signer_requirement("com.bradleybond.crystalball", &team);
- let verify = Command::new("codesign")
- .args(["--verify", "--deep", "--strict", &format!("-R={requirement}"), candidate])
- .output()
- .map_err(|e| format!("codesign requirement check failed: {e}"))?;
- if !verify.status.success() {
- return Err(format!(
- "Update does not satisfy the pinned Apple signer requirement (team '{team}'): {}",
- String::from_utf8_lossy(&verify.stderr)
- ));
- }
- Ok(())
+ let requirement = installed_signer_requirement(installed)?;
+ verify_bundle_satisfies_requirement(candidate, &requirement)
 }
 
 #[cfg(target_os = "macos")]
@@ -2087,14 +2103,23 @@ fn reject_symlinked_path(path: &str, label: &str) -> Result<(), String> {
 }
 
 /// Atomic swap of a verified staged bundle into the live install path. Renames
-/// dest -> backup, staged -> dest, re-verifies the installed signature, then
-/// removes the backup. Rolls back to the backup if the rename or post-swap
-/// verification fails; if the rollback ITSELF fails, the error names the
+/// dest -> backup, staged -> dest, re-runs the FULL validation on whatever is now
+/// installed, then removes the backup. Rolls back to the backup if the rename or
+/// post-swap verification fails; if the rollback ITSELF fails, the error names the
 /// preserved backup so the install is recoverable rather than silently lost.
+///
+/// The post-swap gate is deliberately as strong as the pre-swap gate: it captures
+/// the signer pin from the OLD install first, then after the rename re-checks
+/// integrity + bundle ID + that same pin on the bundle that actually landed. This
+/// closes the rename-window TOCTOU where a local process swaps the staged
+/// directory contents after validation but before the move.
 #[cfg(target_os = "macos")]
 fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), String> {
  reject_symlinked_path(staged, "staged bundle")?;
  reject_symlinked_path(dest, "install path")?;
+
+ // Capture the pin from the CURRENT install before we move it out of the way.
+ let pin = installed_signer_requirement(dest)?;
 
  let _ = fs::remove_dir_all(backup);
 
@@ -2113,14 +2138,17 @@ fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), 
  return Err(format!("Swap staged app into install path failed: {e}"));
  }
 
- if let Err(e) = verify_app_bundle_signature(&dest, "Installed app") {
- // The swapped-in bundle failed post-swap verification (tampering in the
- // rename window, or a corrupt bundle). Restore the known-good backup so we
- // never leave an unverified app installed.
+ // Re-verify the bundle that is NOW installed — integrity, bundle ID, and the
+ // pinned signer — not just integrity. Anything a rename-window swap slipped in
+ // is caught here and rolled back.
+ let post = verify_app_bundle_signature(&dest, "Installed app")
+ .and_then(|_| verify_update_bundle_identifier(dest))
+ .and_then(|_| verify_bundle_satisfies_requirement(dest, &pin));
+ if let Err(e) = post {
  let _ = fs::remove_dir_all(dest);
  if let Err(rollback) = restore_backup(backup, dest) {
  return Err(format!(
- "Installed bundle failed verification ({e}) AND rollback failed ({rollback}) — previous install preserved at {backup}"
+ "Installed bundle failed post-swap verification ({e}) AND rollback failed ({rollback}) — previous install preserved at {backup}"
  ));
  }
  return Err(e);
@@ -2258,6 +2286,13 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  }
 }
 
+/// Serializes the whole validate+swap sequence. Two concurrent apply invocations
+/// (or an apply racing the boot-apply) must never interleave renames — that is how
+/// one could delete the other's backup and leave no install in place. Held across
+/// validate → swap; released (or abandoned at process exit) once the swap settles.
+#[cfg(target_os = "macos")]
+static UPDATE_SWAP_LOCK: Mutex<()> = Mutex::new(());
+
 /// Shared pre-swap gate for a staged bundle, run IDENTICALLY by the manual apply
 /// command and the boot-time auto-apply so neither path can be weaker than the
 /// other (a divergence here is exactly how a "verified" install slips through one
@@ -2302,14 +2337,25 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  return Err("No staged update to apply".into());
  }
 
+ // Serialize the whole validate+swap so a second apply (or the boot-apply)
+ // cannot interleave renames and destroy this pass's backup. Poison-tolerant:
+ // a panic mid-swap must not wedge every future update behind a dead lock.
+ let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
  // Re-verify at apply time so tampering between download and restart is caught.
  // Identical gate to the boot-apply path.
  validate_staged_bundle(&staged, &dest)?;
  swap_staged_into_place(&staged, &dest, &backup)?;
 
- // Relaunch and exit
- let _ = Command::new("open").arg(&dest).spawn();
- std::process::exit(0);
+ // The swap already landed on disk, so the new version runs no matter what.
+ // Force a NEW instance of the freshly-installed bundle: plain `open` would
+ // just re-activate THIS still-running old process and nothing would relaunch.
+ // If the spawn fails, don't exit — the update is applied and will run on the
+ // next manual launch; returning Ok keeps the current session usable.
+ match Command::new("open").args(["-n", dest.as_str()]).spawn() {
+ Ok(_) => std::process::exit(0),
+ Err(_) => Ok(()),
+ }
  }
 }
 
@@ -2338,6 +2384,10 @@ fn maybe_apply_staged_update_on_boot() {
  let _ = fs::remove_dir_all(&staged);
  };
 
+ // Serialize against the manual apply path (defensive — boot runs before the
+ // async runtime and IPC, so nothing can actually race it yet). Poison-tolerant.
+ let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
  // Identical gate to the manual apply path — see validate_staged_bundle.
  if let Err(e) = validate_staged_bundle(&staged, &dest) {
  return discard(e);
@@ -2346,8 +2396,12 @@ fn maybe_apply_staged_update_on_boot() {
  return discard(e);
  }
 
- let _ = Command::new("open").arg(&dest).spawn();
+ // Relaunch the freshly-installed bundle as a NEW instance and hand off. If the
+ // spawn fails, fall through and keep booting the old in-memory binary — the new
+ // bundle is already on disk and will run cleanly on the next manual launch.
+ if Command::new("open").args(["-n", dest.as_str()]).spawn().is_ok() {
  std::process::exit(0);
+ }
 }
 
 /// Fetch JSON from Polymarket Gamma API using native TLS (bypasses Cloudflare JA3 blocking).
@@ -2917,6 +2971,17 @@ mod updater_gate_tests {
  assert!(req.contains("anchor apple generic"), "{req}");
  assert!(req.contains("identifier \"com.bradleybond.crystalball\""), "{req}");
  assert!(req.contains("certificate leaf[subject.OU] = \"ABCDE12345\""), "{req}");
+ }
+
+ // The dev-build/ad-hoc skip path: when the installed app has no Apple signer
+ // to pin against, the requirement is None and any candidate passes without
+ // ever invoking codesign (so the swap is never blocked on unsigned builds).
+ #[cfg(target_os = "macos")]
+ #[test]
+ fn none_requirement_skips_codesign_and_passes() {
+ use super::verify_bundle_satisfies_requirement;
+ verify_bundle_satisfies_requirement("/nonexistent/Crystal Ball.app", &None)
+ .expect("a None requirement (ad-hoc/dev build) must not gate the swap");
  }
 
  // ── parse_team_identifier ─────────────────────────────────────────

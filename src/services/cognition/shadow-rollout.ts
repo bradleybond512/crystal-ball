@@ -89,6 +89,9 @@ export const RUN_IDS = {
   RECALIBRATION: 'recalibration-vs-legacy',
   SUPERFORECAST: 'superforecast-vs-baseline',
   SCHEMA: 'learned-schema-vs-handauthored',
+  BASELINE_HIERARCHICAL: 'production-vs-hierarchical-base-rate',
+  BASELINE_PERSISTENCE: 'production-vs-persistence-baseline',
+  BASELINE_MOMENTUM: 'production-vs-momentum-baseline',
 } as const;
 
 export type RunId = typeof RUN_IDS[keyof typeof RUN_IDS];
@@ -135,6 +138,36 @@ const RUN_CONFIGS: ShadowRunConfig[] = [
     description:
       'forecastHypothesis() is LIVE (drives ranking). superforecast() is SHADOW (not yet live). ' +
       'liveOutput=forecastHypothesis p; shadowOutput=superforecast p.',
+    enabled: true,
+    createdAt: 0,
+  },
+  {
+    id: RUN_IDS.BASELINE_HIERARCHICAL,
+    algorithmId: 'hierarchical-base-rate',
+    description:
+      'ACC-303: production forecasts are LIVE; the hierarchical base rate runs as SHADOW on the same '
+      + 'targetKey and horizon. liveOutput=production p; shadowOutput=baseline p. Input carries stable '
+      + 'join fields (targetKey, predictedAt, resolveBy, model ids) for ACC-401 exact joins.',
+    enabled: true,
+    createdAt: 0,
+  },
+  {
+    id: RUN_IDS.BASELINE_PERSISTENCE,
+    algorithmId: 'persistence-baseline',
+    description:
+      'ACC-303: production forecasts are LIVE; the persistence baseline runs as SHADOW on the same '
+      + 'targetKey and horizon. One run PER baseline model so per-model aggregation and ACC-401 joins '
+      + 'never mix families.',
+    enabled: true,
+    createdAt: 0,
+  },
+  {
+    id: RUN_IDS.BASELINE_MOMENTUM,
+    algorithmId: 'momentum-baseline',
+    description:
+      'ACC-303: production forecasts are LIVE; the momentum baseline runs as SHADOW on the same '
+      + 'targetKey and horizon. One run PER baseline model so per-model aggregation and ACC-401 joins '
+      + 'never mix families.',
     enabled: true,
     createdAt: 0,
   },
@@ -296,6 +329,50 @@ export function pushSuperforecastPair(
  * @param handAuthoredCount Number of hand-authored signature matches.
  * @param learnedCount      Number of learned schema matches.
  */
+/** ACC-303: one production-vs-baseline pair per emitted baseline. The
+ *  input object carries the STABLE join fields ACC-401's exact
+ *  paired-outcome joins need (targetKey + window + model identities) —
+ *  never an approximate hash of opaque state. */
+export interface BaselinePairInput {
+  targetKey: string;
+  predictedAt: number;
+  resolveBy: number;
+  productionSourceId: string;
+  productionVersion?: string;
+  baselineSourceId: string;
+  baselineVersion?: string;
+}
+
+const BASELINE_RUN_ID_SET: ReadonlySet<string> = new Set([
+  RUN_IDS.BASELINE_HIERARCHICAL,
+  RUN_IDS.BASELINE_PERSISTENCE,
+  RUN_IDS.BASELINE_MOMENTUM,
+]);
+
+const BASELINE_RUN_BY_SOURCE: Record<string, RunId> = {
+  'hierarchical-base-rate': RUN_IDS.BASELINE_HIERARCHICAL,
+  'persistence-baseline': RUN_IDS.BASELINE_PERSISTENCE,
+  'momentum-baseline': RUN_IDS.BASELINE_MOMENTUM,
+};
+
+export function pushBaselinePair(
+  input: BaselinePairInput,
+  productionP: number,
+  baselineP: number,
+): void {
+  try {
+    if (!isCognitionEnabled('shadow-algorithms')) return;
+    const runId = BASELINE_RUN_BY_SOURCE[input.baselineSourceId];
+    if (!runId) return; // unknown baseline family — never mis-aggregate
+    if (!_initialized) initShadowRollout();
+    const svc = getShadowService();
+    if (!svc) return;
+    svc.compare(runId, input, productionP, baselineP);
+  } catch {
+    // Fire-and-forget.
+  }
+}
+
 export function pushSchemaPair(
   windowDescriptor: unknown,
   handAuthoredCount: number,
@@ -379,6 +456,15 @@ export function shadowVerdict(
   const comparisons = svc.getComparisons({ runId }, /* limit = */ 2000);
   const pairCount = comparisons.length;
   const divergenceRate = svc.getDivergenceRate(runId);
+
+  // ACC-303 baseline runs: the probability-proximity join below can
+  // attach a comparison to the WRONG resolved outcome (two forecasts at
+  // p=0.6 resolving oppositely), so baseline runs report pair volume and
+  // divergence only — never a Brier verdict — until ACC-401 lands exact
+  // target-key joins.
+  if (BASELINE_RUN_ID_SET.has(runId)) {
+    return { runId, pairs: pairCount, divergenceRate, recommendation: 'insufficient-data', computedAt: ts };
+  }
 
   if (pairCount < FLIP_GATE_MIN_PAIRS) {
     return { runId, pairs: pairCount, divergenceRate, recommendation: 'insufficient-data', computedAt: ts };
@@ -471,11 +557,9 @@ export function persistVerdictSnapshot(deps?: ShadowRolloutDeps): void {
   try {
     if (deps) _deps = { ..._deps, ...deps };
     const ts = now();
-    const verdicts: ShadowVerdict[] = [
-      shadowVerdict(RUN_IDS.RECALIBRATION),
-      shadowVerdict(RUN_IDS.SUPERFORECAST),
-      shadowVerdict(RUN_IDS.SCHEMA),
-    ];
+    const verdicts: ShadowVerdict[] = Object.values(RUN_IDS).map(
+      (id) => shadowVerdict(id),
+    );
     const snapshot: ShadowVerdictSnapshot = { verdicts, snapshottedAt: ts };
     const json = JSON.stringify(snapshot);
 

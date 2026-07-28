@@ -84,10 +84,24 @@ export interface SnapshotValidation {
 
 // ── Canonical encoding + checksum ───────────────────────────────────────────
 
+/** Locale-independent ordinal (UTF-16 code-unit) comparison. localeCompare
+ *  varies by the runtime's locale, which would make the digest differ between
+ *  devices — exactly what a portable checksum must not do. */
+function ordinalCompare(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /** Deterministic, key-sorted JSON so the checksum is stable regardless of the
- *  key order a serializer happened to emit. Arrays keep their order; undefined
- *  and non-finite numbers encode to a stable `null` (they carry no meaning in a
- *  snapshot and must not make the digest depend on engine quirks). */
+ *  key order a serializer happened to emit. Mirrors JSON.stringify precisely so
+ *  the digest computed at export matches the one recomputed after a
+ *  serialize→parse round-trip:
+ *    - object keys whose value is `undefined` are OMITTED (JSON.stringify drops
+ *      them; encoding them as null would break a valid snapshot's round-trip);
+ *    - inside arrays, `undefined` and non-finite numbers encode to `null`
+ *      (JSON.stringify's array behavior);
+ *    - keys are ordered ordinally so the digest is identical across devices. */
 function canonicalJson(value: unknown): string {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : 'null';
@@ -97,19 +111,23 @@ function canonicalJson(value: unknown): string {
     return `[${items.join(',')}]`;
   }
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort((a, b) => a.localeCompare(b));
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort(ordinalCompare);
   const entries = keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`);
   return `{${entries.join(',')}}`;
 }
 
-/** FNV-1a 64-bit over the string's code points, hex-encoded (16 chars).
- *  A corruption digest, not a cryptographic hash — see the file header. */
+/** FNV-1a 64-bit over the string's UTF-16 code units, hex-encoded (16 chars).
+ *  A corruption digest, not a cryptographic hash — see the file header. Each
+ *  code unit is hashed exactly once (charCodeAt, not codePointAt) so an astral
+ *  character isn't hashed twice with mismatched forms; charCodeAt is spec-exact
+ *  across engines, so the digest stays portable. */
 function fnv1a64(str: string): string {
   const mask = 0xFF_FF_FF_FF_FF_FF_FF_FFn;
   const prime = 0x1_00_00_00_01_B3n;
   let hash = 0xCB_F2_9C_E4_84_22_23_25n;
   for (let i = 0; i < str.length; i += 1) {
-    hash ^= BigInt(str.codePointAt(i) ?? 0);
+    // eslint-disable-next-line unicorn/prefer-code-point -- deliberately hashing every UTF-16 code unit once; codePointAt would double-count surrogate pairs
+    hash ^= BigInt(str.charCodeAt(i));
     hash = (hash * prime) & mask;
   }
   return hash.toString(16).padStart(16, '0');
@@ -139,6 +157,7 @@ function validateAxis(axis: unknown, index: number, errors: string[]): void {
   }
   if (!AXIS_SET.has(axis.axis as string)) errors.push(`${where}.axis "${String(axis.axis)}" is not a survival axis`);
   if (!isFiniteNumber(axis.level)) errors.push(`${where}.level is not a finite number`);
+  else if (axis.level < 0 || axis.level > 100) errors.push(`${where}.level ${axis.level} is out of range 0..100`);
   if (!BAND_SET.has(axis.band as SurvivalBand)) errors.push(`${where}.band "${String(axis.band)}" is not a band`);
   if (!TREND_SET.has(axis.trend as AxisState['trend'])) errors.push(`${where}.trend "${String(axis.trend)}" is invalid`);
   if (!Array.isArray(axis.threats)) errors.push(`${where}.threats is not an array`);
@@ -147,17 +166,29 @@ function validateAxis(axis: unknown, index: number, errors: string[]): void {
   if (!isObject(axis.explanation)) errors.push(`${where}.explanation is missing`);
 }
 
+/** Every survival axis must be present exactly once — a partial posture is not
+ *  a trustworthy grid-down projection (computePosture always emits all 8). */
+function validateAxisCoverage(axes: unknown[], errors: string[]): void {
+  if (axes.length === 0) errors.push('posture.axes is empty');
+  axes.forEach((a, i) => validateAxis(a, i, errors));
+  const present = new Set<string>();
+  for (const a of axes) {
+    if (isObject(a) && typeof a.axis === 'string') present.add(a.axis);
+  }
+  for (const axis of SURVIVAL_AXES) {
+    if (!present.has(axis)) errors.push(`posture.axes is missing the "${axis}" axis`);
+  }
+}
+
 function validatePosture(posture: unknown, errors: string[]): void {
   if (!isObject(posture)) {
     errors.push('posture is not an object');
     return;
   }
-  if (Array.isArray(posture.axes)) {
-    posture.axes.forEach((a, i) => validateAxis(a, i, errors));
-  } else {
-    errors.push('posture.axes is not an array');
-  }
+  if (Array.isArray(posture.axes)) validateAxisCoverage(posture.axes, errors);
+  else errors.push('posture.axes is not an array');
   if (!isFiniteNumber(posture.overallLevel)) errors.push('posture.overallLevel is not a finite number');
+  else if (posture.overallLevel < 0 || posture.overallLevel > 100) errors.push('posture.overallLevel is out of range 0..100');
   if (!BAND_SET.has(posture.overallBand as SurvivalBand)) errors.push('posture.overallBand is not a band');
   if (!AXIS_SET.has(posture.worstAxis as string)) errors.push('posture.worstAxis is not a survival axis');
   if (typeof posture.headline !== 'string') errors.push('posture.headline is not a string');
@@ -180,6 +211,39 @@ function validateFreshness(freshness: unknown, errors: string[]): void {
     if (!isFiniteNumber(f.fetchedAtMs)) errors.push(`${where}.fetchedAtMs is not a finite number`);
     if (!isFiniteNumber(f.ageMs)) errors.push(`${where}.ageMs is not a finite number`);
     if (typeof f.ok !== 'boolean') errors.push(`${where}.ok is not a boolean`);
+  });
+}
+
+function validateSavedPlaces(places: unknown, errors: string[]): void {
+  if (!Array.isArray(places)) {
+    errors.push('savedPlaces is not an array');
+    return;
+  }
+  places.forEach((p, i) => {
+    const where = `savedPlaces[${i}]`;
+    if (!isObject(p)) {
+      errors.push(`${where} is not an object`);
+      return;
+    }
+    if (typeof p.id !== 'string') errors.push(`${where}.id is not a string`);
+    if (!isFiniteNumber(p.lat)) errors.push(`${where}.lat is not a finite number`);
+    if (!isFiniteNumber(p.lon)) errors.push(`${where}.lon is not a finite number`);
+  });
+}
+
+function validateWeatherAlerts(alerts: unknown, errors: string[]): void {
+  if (!Array.isArray(alerts)) {
+    errors.push('weatherAlerts is not an array');
+    return;
+  }
+  alerts.forEach((a, i) => {
+    const where = `weatherAlerts[${i}]`;
+    if (!isObject(a)) {
+      errors.push(`${where} is not an object`);
+      return;
+    }
+    if (typeof a.id !== 'string') errors.push(`${where}.id is not a string`);
+    if (typeof a.event !== 'string') errors.push(`${where}.event is not a string`);
   });
 }
 
@@ -219,8 +283,8 @@ export function validateSnapshot(value: unknown): SnapshotValidation {
   }
   if (!isFiniteNumber(value.capturedAtMs)) errors.push('capturedAtMs is not a finite number');
   validateFreshness(value.freshness, errors);
-  if (!Array.isArray(value.weatherAlerts)) errors.push('weatherAlerts is not an array');
-  if (!Array.isArray(value.savedPlaces)) errors.push('savedPlaces is not an array');
+  validateWeatherAlerts(value.weatherAlerts, errors);
+  validateSavedPlaces(value.savedPlaces, errors);
   validatePosture(value.posture, errors);
   validatePlan(value.plan, errors);
   return { ok: errors.length === 0, errors };
@@ -262,6 +326,12 @@ export function importSnapshotEnvelope(json: string): SnapshotImportResult {
     return fail('unsupported_envelope_version', `envelope version ${String(parsed.envelopeVersion)} is unsupported`);
   }
   const snapshot = parsed.snapshot;
+  // snapshotVersion is envelope framing that sits OUTSIDE the checksummed body;
+  // if it disagrees with the body's own version the envelope was corrupted, so
+  // reject rather than trust the "cheap early reject" field it advertises.
+  if (isObject(snapshot) && parsed.snapshotVersion !== snapshot.version) {
+    return fail('unsupported_envelope_version', `envelope snapshotVersion ${String(parsed.snapshotVersion)} disagrees with body version ${String(snapshot.version)}`);
+  }
   const expected = typeof parsed.checksum === 'string' ? parsed.checksum : '';
   const actual = fnv1a64(canonicalJson(snapshot));
   if (expected !== actual) {

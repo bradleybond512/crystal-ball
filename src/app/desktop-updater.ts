@@ -353,6 +353,10 @@ export class DesktopUpdater implements AppModule {
  this.logUpdaterOutcome('open_failed', {
  error: error instanceof Error ? error.message : String(error),
  });
+ // The staged bundle failed to apply (missing / re-verify failed). Clear the
+ // "already staged" flag so the next check re-downloads instead of getting
+ // stuck offering a phantom ready state.
+ try { localStorage.removeItem(`wm-update-staged-${version}`); } catch { /* quota */ }
  if (btn) { btn.textContent = 'Failed — retry?'; btn.disabled = false; }
  });
  } else if (action === 'dismiss') {

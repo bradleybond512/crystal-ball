@@ -1902,6 +1902,54 @@ fn verify_app_bundle_signature(app_path: &str, label: &str) -> Result<(), String
  Ok(())
 }
 
+/// Parse the `TeamIdentifier=...` field out of `codesign -dvvv` stderr. Pure so
+/// it can be unit-tested. Returns None when the field is absent or `not set`
+/// (ad-hoc / unsigned bundles), which callers treat as "no team to pin against".
+fn parse_team_identifier(codesign_stderr: &str) -> Option<String> {
+ for line in codesign_stderr.lines() {
+ if let Some(rest) = line.trim().strip_prefix("TeamIdentifier=") {
+ let value = rest.trim();
+ if !value.is_empty() && value != "not set" {
+ return Some(value.to_string());
+ }
+ }
+ }
+ None
+}
+
+/// Read a bundle's Apple Developer Team Identifier via codesign, if it has one.
+#[cfg(target_os = "macos")]
+fn bundle_team_identifier(app_path: &str) -> Option<String> {
+ let out = Command::new("codesign")
+ .args(["-dvvv", app_path])
+ .output()
+ .ok()?;
+ // codesign writes its display output to stderr.
+ parse_team_identifier(&String::from_utf8_lossy(&out.stderr))
+}
+
+/// `codesign --verify` proves a signature is intact but NOT who produced it, so a
+/// compromised release could ship an ad-hoc-signed build that still passes the
+/// bundle-ID + integrity checks. Pin the update to the SAME Apple Team Identifier
+/// as the currently-installed app. If the running app has no team (unsigned local
+/// dev build), we cannot pin and fall back to the integrity check alone.
+#[cfg(target_os = "macos")]
+fn verify_same_signer_as_installed(candidate: &str, installed: &str) -> Result<(), String> {
+ let installed_team = match bundle_team_identifier(installed) {
+ Some(t) => t,
+ None => return Ok(()),
+ };
+ match bundle_team_identifier(candidate) {
+ Some(candidate_team) if candidate_team == installed_team => Ok(()),
+ Some(candidate_team) => Err(format!(
+ "Update signer mismatch: installed team '{installed_team}', update team '{candidate_team}' — aborting"
+ )),
+ None => Err(format!(
+ "Update is not signed by the expected team '{installed_team}' (ad-hoc or unsigned) — aborting"
+ )),
+ }
+}
+
 #[cfg(target_os = "macos")]
 fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), String> {
  let copy = Command::new("ditto")
@@ -2005,7 +2053,16 @@ fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), 
  return Err(format!("Swap staged app into install path failed: {e}"));
  }
 
- verify_app_bundle_signature(&dest, "Installed app")?;
+ if let Err(e) = verify_app_bundle_signature(&dest, "Installed app") {
+ // The swapped-in bundle failed post-swap verification (tampering in the
+ // rename window, or a corrupt bundle). Restore the known-good backup so we
+ // never leave an unverified app installed.
+ let _ = fs::remove_dir_all(dest);
+ if Path::new(backup).exists() {
+ let _ = fs::rename(backup, dest);
+ }
+ return Err(e);
+ }
  let _ = fs::remove_dir_all(backup);
  Ok(())
 }
@@ -2030,8 +2087,18 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
 
  #[cfg(target_os = "macos")]
  {
- let tmp_dmg = "/tmp/wm-update.dmg";
- let mount_point = "/tmp/wm-update-vol";
+ // Resolve the live install path BEFORE any download/mount so a failure here
+ // can never leak a mounted DMG.
+ let dest = resolve_update_install_path()?;
+ let staged = format!("{dest}.update-staged");
+
+ // Per-user private temp dir ($TMPDIR is mode-700, unlike world-writable /tmp)
+ // + pid stamp so another local process cannot pre-plant a symlink at a
+ // predictable path or collide with a concurrent staging run.
+ let pid = std::process::id();
+ let tmp_dir = std::env::temp_dir();
+ let tmp_dmg = tmp_dir.join(format!("wm-update-{pid}.dmg")).to_string_lossy().into_owned();
+ let mount_point = tmp_dir.join(format!("wm-update-vol-{pid}")).to_string_lossy().into_owned();
 
  // 1. Download the DMG
  let client = reqwest::Client::builder()
@@ -2071,17 +2138,20 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  ));
  }
 
- std::fs::write(tmp_dmg, &bytes)
- .map_err(|e| format!("Write DMG to /tmp failed: {e}"))?;
+ // Drop any pre-existing entry (e.g. a planted symlink) so the write lands on
+ // a fresh regular file we own.
+ let _ = std::fs::remove_file(&tmp_dmg);
+ std::fs::write(&tmp_dmg, &bytes)
+ .map_err(|e| format!("Write DMG to temp dir failed: {e}"))?;
 
  // 2. Mount the DMG
  let attach = Command::new("hdiutil")
- .args(["attach", tmp_dmg, "-mountpoint", mount_point, "-nobrowse", "-quiet"])
+ .args(["attach", tmp_dmg.as_str(), "-mountpoint", mount_point.as_str(), "-nobrowse", "-quiet"])
  .output()
  .map_err(|e| format!("hdiutil attach failed: {e}"))?;
 
  if !attach.status.success() {
- let _ = std::fs::remove_file(tmp_dmg);
+ let _ = std::fs::remove_file(&tmp_dmg);
  return Err(format!(
  "hdiutil attach error: {}",
  String::from_utf8_lossy(&attach.stderr)
@@ -2091,21 +2161,21 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  // 3. Verify the mounted bundle, then copy it into a PERSISTENT staged bundle
  // next to the live install. No swap or relaunch happens here.
  let source = format!("{}/Crystal Ball.app", mount_point);
- let dest = resolve_update_install_path()?;
- let staged = format!("{dest}.update-staged");
 
  let stage_result = (|| -> Result<(), String> {
  verify_update_bundle_identifier(&source)?;
  verify_app_bundle_signature(&source, "Mounted app bundle")?;
+ verify_same_signer_as_installed(&source, &dest)?;
  let _ = fs::remove_dir_all(&staged);
  copy_app_bundle_preserving_signature(&source, &staged)?;
  verify_app_bundle_signature(&staged, "Staged app")?;
+ verify_same_signer_as_installed(&staged, &dest)?;
  Ok(())
  })();
 
  // 4. Detach the DMG and clean up the download regardless of stage result.
- let _ = Command::new("hdiutil").args(["detach", mount_point, "-quiet"]).output();
- let _ = std::fs::remove_file(tmp_dmg);
+ let _ = Command::new("hdiutil").args(["detach", mount_point.as_str(), "-quiet"]).output();
+ let _ = std::fs::remove_file(&tmp_dmg);
 
  if let Err(e) = stage_result {
  let _ = fs::remove_dir_all(&staged);
@@ -2138,6 +2208,7 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
 
  // Re-verify at apply time so tampering between download and restart is caught.
  verify_app_bundle_signature(&staged, "Staged app")?;
+ verify_same_signer_as_installed(&staged, &dest)?;
  swap_staged_into_place(&staged, &dest, &backup)?;
 
  // Relaunch and exit
@@ -2183,6 +2254,9 @@ fn maybe_apply_staged_update_on_boot() {
  return discard(e);
  }
  if let Err(e) = verify_app_bundle_signature(&staged, "Staged app") {
+ return discard(e);
+ }
+ if let Err(e) = verify_same_signer_as_installed(&staged, &dest) {
  return discard(e);
  }
  if let Err(e) = swap_staged_into_place(&staged, &dest, &backup) {
@@ -2748,7 +2822,25 @@ fn sanitize_path_for_node(p: &Path) -> String {
 
 #[cfg(test)]
 mod updater_gate_tests {
- use super::{is_semver_newer, validate_expected_sha256, validate_update_url};
+ use super::{is_semver_newer, parse_team_identifier, validate_expected_sha256, validate_update_url};
+
+ // ── parse_team_identifier ─────────────────────────────────────────
+
+ #[test]
+ fn parses_team_identifier_from_codesign_output() {
+ let stderr = "Executable=/x\nIdentifier=com.foo\nFormat=app bundle\nTeamIdentifier=ABCDE12345\nSealed Resources\n";
+ assert_eq!(parse_team_identifier(stderr).as_deref(), Some("ABCDE12345"));
+ }
+
+ #[test]
+ fn treats_not_set_team_as_absent() {
+ assert_eq!(parse_team_identifier("TeamIdentifier=not set\n"), None);
+ }
+
+ #[test]
+ fn returns_none_when_team_field_missing() {
+ assert_eq!(parse_team_identifier("Identifier=com.foo\nno team here\n"), None);
+ }
 
  // ── validate_expected_sha256 ──────────────────────────────────────
 

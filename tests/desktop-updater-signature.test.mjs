@@ -76,3 +76,22 @@ test('updater is split into background stage + prompted apply commands', () => {
  'apply/boot paths should re-verify the staged bundle signature before swapping',
   );
 });
+
+test('updater pins the update to the same Apple signer as the installed app', () => {
+  assert.match(
+ mainRs,
+ /fn verify_same_signer_as_installed\(/,
+ 'updater should compare the update Team Identifier against the installed app',
+  );
+  assert.match(
+ mainRs,
+ /fn parse_team_identifier\(/,
+ 'signer pinning should parse TeamIdentifier from codesign output (pure + testable)',
+  );
+  // Signer pinning must guard all three swap entry points: stage, apply, boot.
+  const signerCalls = mainRs.match(/verify_same_signer_as_installed\(&(?:source|staged), &dest\)/g) ?? [];
+  assert.ok(
+ signerCalls.length >= 4,
+ `expected signer checks at stage (source+staged), apply, and boot; found ${signerCalls.length}`,
+  );
+});

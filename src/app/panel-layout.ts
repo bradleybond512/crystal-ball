@@ -949,6 +949,11 @@ export class PanelLayoutManager implements AppModule {
  // On success the bundle is swapped and the app relaunches, so this
  // promise never resolves here; only a failure returns control to JS.
  invokeTauri<void>('apply_staged_update').catch(() => {
+ // Clear the "already staged" flag so the next check re-downloads
+ // instead of getting stuck on a phantom ready state.
+ if (prev?.version) {
+ try { localStorage.removeItem(`wm-update-staged-${prev.version}`); } catch { /* quota */ }
+ }
  this.ctx.updateState = prev;
  this.renderSidebarUpdateBtn();
  });

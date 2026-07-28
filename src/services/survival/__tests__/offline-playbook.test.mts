@@ -173,3 +173,62 @@ test('a non-finite axis level is treated as 0, not elevated', () => {
   const r = resolveOfflinePlaybook(snapshot(p));
   assert.ok(!r.playbooks.some((pb) => pb.axis === 'supply'));
 });
+
+// ── Codex review regressions (PR #1540) ──────────────────────────────────────
+
+test('a zero / negative / fractional maxPerAxis never starves an elevated axis', () => {
+  for (const cap of [0, -3, 0.5]) {
+    const r = resolveOfflinePlaybook(snapshot(posture({ supply: axisState('supply', 85) })), { maxPerAxis: cap });
+    const supply = r.playbooks.find((pb) => pb.axis === 'supply');
+    assert.ok(supply && supply.actions.length >= 1, `cap ${cap} starved supply`);
+    assert.equal(supply!.actions.length, 1, `cap ${cap} should floor to 1 action`);
+    assert.equal(r.unresolvedAxes.length, 0);
+    assert.match(r.headline, /1 steps staged/);
+  }
+});
+
+test('capped physical_safety fallback keeps the priority-1 action, not a lower one', () => {
+  // Level 90 unlocks the priority-1 HIGH_BAND ps-ready-evac; a cap of 2 must not
+  // drop it in favor of the priority-2 ps-shoes-light.
+  const p = posture({ physical_safety: axisState('physical_safety', 90, { drivers: ['seismic swarm'] }) });
+  const r = resolveOfflinePlaybook(snapshot(p), { maxPerAxis: 2 });
+  const ps = r.playbooks.find((pb) => pb.axis === 'physical_safety')!;
+  assert.equal(ps.actions.length, 2);
+  assert.ok(ps.actions.every((a) => a.priority === 1), 'both survivors are priority-1');
+  assert.ok(ps.actions.some((a) => a.id === 'ps-ready-evac'), 'ps-ready-evac survives the cap');
+});
+
+test('weather-hazard dedup is independent of threat order', () => {
+  const forward = posture({ physical_safety: axisState('physical_safety', 90, {
+    threats: [threat('physical_safety', 'flash_flood', 'Flash Flood Warning'), threat('physical_safety', 'flood', 'Flood Warning')],
+  }) });
+  const reversed = posture({ physical_safety: axisState('physical_safety', 90, {
+    threats: [threat('physical_safety', 'flood', 'Flood Warning'), threat('physical_safety', 'flash_flood', 'Flash Flood Warning')],
+  }) });
+  const a = resolveOfflinePlaybook(snapshot(forward)).playbooks.find((p) => p.axis === 'physical_safety')!;
+  const b = resolveOfflinePlaybook(snapshot(reversed)).playbooks.find((p) => p.axis === 'physical_safety')!;
+  // Same actions, same order, same per-action priority regardless of threat order.
+  assert.deepEqual(a.actions.map((x) => [x.id, x.priority]), b.actions.map((x) => [x.id, x.priority]));
+});
+
+test('a weather threat with an empty hazardLabel still yields non-empty triggers', () => {
+  const t = threat('physical_safety', 'tornado', '');
+  const p = posture({ physical_safety: axisState('physical_safety', 90, { threats: [t], drivers: ['radar-indicated rotation'] }) });
+  const r = resolveOfflinePlaybook(snapshot(p));
+  const ps = r.playbooks.find((pb) => pb.axis === 'physical_safety')!;
+  assert.ok(ps.actions.length >= 1);
+  assert.ok(ps.triggers.length >= 1, 'triggers falls back, never empty');
+  assert.deepEqual(ps.triggers, ['radar-indicated rotation']);
+});
+
+test('a non-finite energy_water level does not spuriously fold in outage actions', () => {
+  const p = posture({
+    physical_safety: axisState('physical_safety', 90, { threats: [threat('physical_safety', 'tornado', 'Tornado Warning')] }),
+    energy_water: axisState('energy_water', Number.POSITIVE_INFINITY),
+  });
+  const r = resolveOfflinePlaybook(snapshot(p));
+  const ps = r.playbooks.find((pb) => pb.axis === 'physical_safety')!;
+  assert.ok(!ps.actions.some((a) => a.id.startsWith('outage-')), 'Infinity is not elevated');
+  // And the energy_water axis itself is not resolved from a non-finite level.
+  assert.ok(!r.playbooks.some((pb) => pb.axis === 'energy_water'));
+});

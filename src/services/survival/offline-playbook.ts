@@ -144,8 +144,20 @@ const AXIS_PLAYBOOKS: Record<Exclude<SurvivalAxis, 'physical_safety'>, readonly 
 
 // ── Resolver ─────────────────────────────────────────────────────────────────
 
+/** Normalize a posture level to 0–100, treating non-finite as 0. Shared by the
+ *  per-axis gate and the energy_water coupling so both read the same number. */
+function clampLevel(n: number): number {
+  return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+}
+
 function bySeverity(a: OfflinePlayItem, b: OfflinePlayItem): number {
   return a.priority - b.priority || a.estimatedMinutes - b.estimatedMinutes;
+}
+
+/** Keep the more urgent of two same-id actions: lower priority wins, then fewer
+ *  estimated minutes. Makes dedup independent of the order hazards are scanned. */
+function moreUrgent(a: OfflinePlayItem, b: OfflinePlayItem): OfflinePlayItem {
+  return bySeverity(a, b) <= 0 ? a : b;
 }
 
 function toItem(a: PreparednessAction, source: OfflinePlaySource): OfflinePlayItem {
@@ -164,11 +176,13 @@ function resolvePhysicalSafety(
   state: AxisState,
   energyWaterElevated: boolean,
 ): { actions: OfflinePlayItem[]; triggers: string[] } {
+  const level = clampLevel(state.level);
   const withHazard = state.threats.filter((t) => t.hazardKind);
   if (withHazard.length === 0) {
     const actions = PHYSICAL_SAFETY_FALLBACK
-      .filter((a) => state.level >= a.minLevel)
-      .map((a) => toItem(a, 'axis_playbook'));
+      .filter((a) => level >= a.minLevel)
+      .map((a) => toItem(a, 'axis_playbook'))
+      .sort(bySeverity);
     return { actions, triggers: triggersFor(state) };
   }
 
@@ -177,17 +191,25 @@ function resolvePhysicalSafety(
   for (const threat of withHazard) {
     if (threat.hazardLabel && !triggers.includes(threat.hazardLabel)) triggers.push(threat.hazardLabel);
     for (const a of actionsForHazard(threat.hazardKind, { includeOutageActions: energyWaterElevated, max: 8 })) {
-      // First writer wins — actionsForHazard already returns worst-first, and a
-      // duplicate id across two hazards is the same concrete action.
-      if (!byId.has(a.id)) byId.set(a.id, toItem(a, 'weather_hazard'));
+      // A duplicate id across two hazards is the same concrete action, but its
+      // priority can differ per hazard — keep the more urgent copy so the result
+      // is independent of the order the hazards are scanned.
+      const item = toItem(a, 'weather_hazard');
+      const prior = byId.get(a.id);
+      byId.set(a.id, prior ? moreUrgent(prior, item) : item);
     }
   }
-  return { actions: [...byId.values()].sort(bySeverity), triggers };
+  return {
+    actions: [...byId.values()].sort(bySeverity),
+    // Hazard labels can all be empty; never emit an empty trigger list.
+    triggers: triggers.length > 0 ? triggers : triggersFor(state),
+  };
 }
 
 function resolveOtherAxis(axis: Exclude<SurvivalAxis, 'physical_safety'>, state: AxisState): OfflinePlayItem[] {
+  const level = clampLevel(state.level);
   return AXIS_PLAYBOOKS[axis]
-    .filter((a) => state.level >= a.minLevel)
+    .filter((a) => level >= a.minLevel)
     .map((a) => toItem(a, 'axis_playbook'))
     .sort(bySeverity);
 }
@@ -204,8 +226,13 @@ export function resolveOfflinePlaybook(
   snapshot: WorldSnapshot,
   options: OfflinePlaybookOptions = {},
 ): OfflinePlaybookResult {
-  const maxPerAxis = Number.isFinite(options.maxPerAxis) ? Math.max(0, options.maxPerAxis as number) : Infinity;
-  const energyWaterElevated = (snapshot.posture.axes.find((a) => a.axis === 'energy_water')?.level ?? 0) >= GUIDANCE_LEVEL;
+  // Floor the cap to a whole number ≥1: a cap of 0 (or a fraction below 1) would
+  // slice every elevated axis to zero actions, silently re-opening the guidance
+  // gap this resolver exists to close.
+  const maxPerAxis = Number.isFinite(options.maxPerAxis)
+    ? Math.max(1, Math.floor(options.maxPerAxis as number))
+    : Infinity;
+  const energyWaterElevated = clampLevel(snapshot.posture.axes.find((a) => a.axis === 'energy_water')?.level ?? 0) >= GUIDANCE_LEVEL;
 
   const playbooks: AxisOfflinePlaybook[] = [];
   const unresolvedAxes: SurvivalAxis[] = [];
@@ -213,7 +240,7 @@ export function resolveOfflinePlaybook(
   for (const axis of SURVIVAL_AXES) {
     const state = snapshot.posture.axes.find((a) => a.axis === axis);
     if (!state) continue;
-    const level = Math.max(0, Math.min(100, Number.isFinite(state.level) ? state.level : 0));
+    const level = clampLevel(state.level);
     if (level < GUIDANCE_LEVEL) continue;
 
     let actions: OfflinePlayItem[];

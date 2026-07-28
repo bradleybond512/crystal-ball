@@ -226,7 +226,7 @@ import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-inte
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
-import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
+import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, revokePersonalWeatherClearConfirmation, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -740,6 +740,7 @@ export class PanelLayoutManager implements AppModule {
   private triageBar: TriageBar | null = null;
   private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
+  private unsubWeatherClearOnPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
   private personalWeatherUnsub: (() => void) | null = null;
   private modeAdvisoryUnsub: (() => void) | null = null;
@@ -854,6 +855,7 @@ export class PanelLayoutManager implements AppModule {
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
+ if (this.unsubWeatherClearOnPlaces) { this.unsubWeatherClearOnPlaces(); this.unsubWeatherClearOnPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
  if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
@@ -2272,6 +2274,13 @@ export class PanelLayoutManager implements AppModule {
  // Resolve site on boot; re-resolve whenever saved places change.
  setDatacenterSite(resolveSiteConfig(getSavedPlaces()));
  this.unsubDcPlaces = subscribeSavedPlaces((places) => setDatacenterSite(resolveSiteConfig(places)));
+ // A confirmed "all clear" was proven against the saved-place set at the last
+ // weather refresh. When places change (a place added/edited/removed), that
+ // clear no longer covers the new set — a newly-added place could sit under a
+ // severe alert the prior clear never evaluated. Drop the confirmation to the
+ // neutral "checking" state so the chip can't assert a stale ALL CLEAR until
+ // the next refresh re-evaluates honestly. No-op when nothing is confirmed.
+ this.unsubWeatherClearOnPlaces = subscribeSavedPlaces(() => revokePersonalWeatherClearConfirmation());
  const datacenterPanel = new DataCenterReadinessPanel();
  this.ctx.panels['datacenter-readiness'] = datacenterPanel;
  // Mount the pinned strip above the panel grid so it floats outside

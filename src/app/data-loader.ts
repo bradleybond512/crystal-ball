@@ -311,6 +311,7 @@ import {
   fetchConnectivitySignal,
   getWeatherAlertsFeedState,
   isWeatherFeedFresh,
+  isAlertSpatiallyUnevaluable,
 } from '@/services/weather';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
@@ -1833,6 +1834,16 @@ export class DataLoaderManager implements AppModule {
  // publication after the loop. weather-exposure also hardens the known
  // invalid-Date crash; this is defense in depth.
  let userExposure = 50;
+ // A severe alert stripped of all spatial data during normalization (no
+ // polygon ring AND no UGC zone) cannot be matched to any saved place:
+ // computeAlertExposure returns a low exposure WITHOUT throwing, so the catch
+ // below never fires and matching reads "complete" for a warning we could not
+ // actually place. Treat it like a crashed match — degrade so the clear falls
+ // to revoke_confirmation instead of confirming clear off an unevaluable severe
+ // warning. Independent of saved places: the gap is in the alert, not the user.
+ if (isAlertSpatiallyUnevaluable(alert)) {
+ matchingDegraded = true;
+ }
  if (weatherPlaces.length > 0) {
  try {
  userExposure = computeAlertExposure(alert, weatherPlaces).exposure;

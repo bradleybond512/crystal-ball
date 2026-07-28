@@ -115,6 +115,39 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
     });
 }
 
+/**
+ * True when a normalized alert carries NO way to place it against a saved point:
+ * no polygon ring AND no UGC zone. `computeAlertExposure` can only return a low
+ * exposure for such an alert (there is nothing to match), so it never throws and
+ * the severe-alert loop never marks matching degraded — the clear decision then
+ * runs `confirm_clear` off a severe warning it could not actually evaluate. The
+ * loop uses this to route those alerts to `revoke_confirmation` instead. An
+ * alert with EITHER a ring or a zone is evaluable and reads false.
+ */
+export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
+  const hasRings = alert.coordinates.length > 0
+    || (alert.polygonRings?.some((ring) => ring.length > 0) ?? false);
+  return !hasRings && alert.ugcZones.length === 0;
+}
+
+/**
+ * Turn a parsed NWS active-alerts body into the normalized feed, or THROW when
+ * the body is malformed. A successful HTTP 200 whose payload has no `features`
+ * array is corrupt, not a clear sky: NWS always returns a `features` array (it
+ * is empty only when there are genuinely no active alerts). Returning `[]` on a
+ * corrupt body would let the circuit breaker log a live success — the feed then
+ * reads fresh and the loader can confirm "all clear" off garbage, the same
+ * fail-open we close for failed fetches. Throwing routes the breaker to
+ * `unavailable` so the clear is withheld. A VALID empty `features: []` still
+ * passes through and legitimately proves clear.
+ */
+export function normalizeWeatherAlertsResponse(data: NWSResponse | null | undefined): WeatherAlert[] {
+  if (!data || !Array.isArray(data.features)) {
+    throw new Error('NWS alerts response missing features array');
+  }
+  return selectAndNormalizeWeatherAlerts(data.features);
+}
+
 export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
   return breaker.execute(async () => {
  const response = await fetch(NWS_API, {
@@ -123,10 +156,7 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
 
  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
- const data = await response.json() as NWSResponse;
- if (!data || !Array.isArray(data.features)) return [];
-
- return selectAndNormalizeWeatherAlerts(data.features);
+ return normalizeWeatherAlertsResponse(await response.json() as NWSResponse);
   }, []);
 }
 

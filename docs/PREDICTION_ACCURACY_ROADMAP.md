@@ -607,7 +607,11 @@ Deliver:
 
 ### ACC-302 — Persistence and momentum baselines
 
-Status: `WAITING`
+Status: `IN PROGRESS`
+
+Owner: Claude
+
+Branch: `claude/acc-302-persistence-momentum`
 
 Dependencies: ACC-301
 

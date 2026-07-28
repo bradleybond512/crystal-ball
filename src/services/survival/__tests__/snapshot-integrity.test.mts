@@ -158,6 +158,67 @@ test('a NaN axis level with a valid checksum is rejected as invalid shape', () =
   assert.ok((result.errors ?? []).some((e) => e.includes('level')));
 });
 
+// ── round-trip robustness (regression: undefined optionals) ─────────────────
+
+test('a snapshot with explicit-undefined optional fields still round-trips', () => {
+  // canonicalJson must omit undefined-valued keys exactly like JSON.stringify,
+  // or the export checksum (which sees the key) disagrees with the re-imported
+  // body (where the key was dropped) — a false checksum_mismatch on valid data.
+  const snap = realSnapshot();
+  const withUndefined = {
+    ...snap,
+    weatherAlerts: [{
+      id: 'al-u', event: 'Flood Warning', polygon: undefined, headline: undefined,
+      sent: new Date(NOW).toISOString(), expires: new Date(NOW + 3_600_000).toISOString(),
+    }],
+  } as unknown as WorldSnapshot;
+  const result = importSnapshotEnvelope(exportSnapshotEnvelope(withUndefined));
+  assert.ok(result.ok, `expected round-trip ok, got ${result.ok ? '' : result.reason}`);
+});
+
+// ── envelope framing (regression: snapshotVersion) ──────────────────────────
+
+test('an envelope whose snapshotVersion disagrees with the body is rejected', () => {
+  const env = JSON.parse(exportSnapshotEnvelope(realSnapshot()));
+  env.snapshotVersion = 99; // framing lies about the checksummed body's version
+  const result = importSnapshotEnvelope(JSON.stringify(env));
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
+  assert.equal(result.reason, 'unsupported_envelope_version');
+});
+
+// ── deeper validation (regression: shallow shape acceptance) ────────────────
+
+test('a posture missing a survival axis is rejected as invalid shape', () => {
+  const snap = structuredClone(realSnapshot());
+  snap.posture.axes = snap.posture.axes.slice(0, 4); // drop half the axes
+  const env = {
+    kind: SNAPSHOT_ENVELOPE_KIND, envelopeVersion: SNAPSHOT_ENVELOPE_VERSION,
+    snapshotVersion: SNAPSHOT_VERSION, checksum: snapshotChecksum(snap), snapshot: snap,
+  };
+  const result = importSnapshotEnvelope(JSON.stringify(env));
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
+  assert.equal(result.reason, 'invalid_shape');
+  assert.ok((result.errors ?? []).some((e) => e.includes('is missing the')));
+});
+
+test('an out-of-range axis level is rejected as invalid shape', () => {
+  const snap = structuredClone(realSnapshot());
+  snap.posture.axes[0]!.level = -100;
+  const v = validateSnapshot(snap);
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.some((e) => e.includes('out of range')));
+});
+
+test('a saved place with a non-finite coordinate is rejected', () => {
+  const snap = structuredClone(realSnapshot());
+  snap.savedPlaces[0]!.lat = Number.NaN;
+  const v = validateSnapshot(snap);
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.some((e) => e.includes('savedPlaces[0].lat')));
+});
+
 // ── validateSnapshot directly ────────────────────────────────────────────────
 
 test('validateSnapshot accepts a real snapshot with no errors', () => {

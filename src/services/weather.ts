@@ -200,10 +200,12 @@ interface NWSPointZones {
  *  decision withhold "all clear" while a place's zones are UNKNOWN. That flag
  *  only flips when the resolver THROWS, so a swallow-and-return-`[]` here would
  *  make `degraded` permanently false and re-open the fail-open it exists to
- *  close. Therefore: THROW on an ambiguous failure (network/timeout/5xx —
- *  zones unknown), and return `[]` ONLY on an honest empty (404 = NWS has no
- *  point here, or a 200 that carries no zone codes). Callers that want the old
- *  best-effort behavior wrap this in their own try/catch (the adapter does). */
+ *  close. Therefore: THROW on an ambiguous failure (network/timeout/5xx, or a
+ *  200 whose payload carries no parseable zone codes — every real NWS point
+ *  returns at least a forecastZone, so zero codes means the zones are UNKNOWN,
+ *  not a genuinely zone-less place), and return `[]` ONLY on the one honest
+ *  empty (404 = NWS has no point here). Callers that want the old best-effort
+ *  behavior wrap this in their own try/catch (the adapter does). */
 export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<string[]> {
   const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
     headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
@@ -218,6 +220,10 @@ export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<s
   const zones = [payload.properties?.forecastZone, payload.properties?.county]
     .map((url) => url?.split('/').pop() ?? '')
     .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
+  // A 200 with zero parseable codes is anomalous (every real point returns at
+  // least a forecastZone): the zones are UNKNOWN, so throw to mark the batch
+  // degraded rather than authorize an all-clear for a zone-only severe alert.
+  if (zones.length === 0) throw new Error('NWS /points returned no parseable zone codes');
   return [...new Set(zones)];
 }
 

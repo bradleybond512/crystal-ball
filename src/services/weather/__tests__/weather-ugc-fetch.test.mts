@@ -12,8 +12,10 @@ import { fetchUgcZonesForPoint } from '../../weather.ts';
 // returns `[]`, the adapter can never tell "genuinely zone-less point" apart from
 // "lookup failed" — so `degraded` is permanently false in production and the
 // fail-open it was built to close stays open. It must THROW on an ambiguous
-// failure (network down, timeout, 5xx) and only return `[]` on an honest empty
-// (404 = NWS has no point here, or a 200 that carries no zone codes).
+// failure (network down, timeout, 5xx) OR a 200 whose payload carries no
+// parseable zone codes (every real NWS point returns at least a forecastZone,
+// so zero codes means the zones are UNKNOWN — not a genuinely zone-less place),
+// and only return `[]` on the one honest empty: a 404 (NWS has no point here).
 
 const realFetch = globalThis.fetch;
 
@@ -71,11 +73,16 @@ test('returns the forecast-zone + county UGC codes on a 200', async () => {
   );
 });
 
-test('returns [] on a 200 that carries no zone codes (honest empty)', async () => {
+test('throws on a 200 that carries no parseable zone codes (zones UNKNOWN, not a zone-less place)', async () => {
+  // Every real NWS point (land or marine) returns at least a forecastZone, so a
+  // 200 with zero parseable codes is anomalous — the zones are unknown, and a
+  // zone-only severe alert over this place could go unseen. Treating it as an
+  // honest empty (returning []) leaves `degraded` false and re-opens the
+  // fail-open; it must throw so the batch is marked degraded.
   await withFetch(
     (async () => response({ ok: true, status: 200, json: async () => ({ properties: {} }) })) as unknown as typeof globalThis.fetch,
     async () => {
-      assert.deepEqual(await fetchUgcZonesForPoint(41.61, -86.72), []);
+      await assert.rejects(() => fetchUgcZonesForPoint(41.61, -86.72));
     },
   );
 });

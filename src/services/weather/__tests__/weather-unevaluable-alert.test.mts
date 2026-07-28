@@ -156,6 +156,59 @@ test('a Severe Polygon with >=3 finite vertices stays evaluable when a stray ver
   assert.equal(isAlertSpatiallyUnevaluable(out!), false);
 });
 
+// ── Out-of-range geometry: finite vertices outside the earth are NOT usable ───
+// A corrupt feed can carry a Severe warning whose polygon vertices are finite but
+// outside the valid geographic range (|lon| > 180 or |lat| > 90). toFiniteRing
+// keeps them (they are finite), and such a ring still encloses non-zero area, so
+// under the old area-only check it read EVALUABLE — yet no real saved place lies
+// inside it. computeAlertExposure returns 0, the severe loop never degrades, and
+// `confirm_clear` fires off a severe warning it could not actually place — a false
+// ALL CLEAR. isUsableMatchRing rejects any out-of-range vertex, so both this
+// predicate and the matcher (alertMatchRings) read the alert as unplaceable.
+
+test('an alert whose only polygon is out of geographic range is spatially unevaluable', () => {
+  assert.equal(
+    isAlertSpatiallyUnevaluable(alert({ coordinates: [[181, 40], [182, 40], [181, 41]], ugcZones: [] })),
+    true,
+  );
+});
+
+test('an out-of-range polygon is still evaluable when a UGC zone is present (no fail-stuck)', () => {
+  assert.equal(
+    isAlertSpatiallyUnevaluable(alert({ coordinates: [[181, 40], [182, 40], [181, 41]], ugcZones: ['INC091'] })),
+    false,
+  );
+});
+
+test('alertHasUsablePolygon: an out-of-range polygon is not a usable polygon', () => {
+  assert.equal(
+    alertHasUsablePolygon(alert({ coordinates: [[181, 40], [182, 40], [181, 41]], ugcZones: [] })),
+    false,
+  );
+});
+
+test('a Severe Polygon whose every vertex is out of geographic range normalizes to spatially unevaluable', () => {
+  const [out] = normalizeWeatherAlertsResponse({
+    features: [severeFeatureWithGeometry({
+      type: 'Polygon',
+      coordinates: [[[181, 40], [182, 40], [181, 41]]],
+    })],
+  } as never);
+  assert.ok(out, 'the Severe alert must survive normalization — it is a threat, not a clear');
+  assert.equal(isAlertSpatiallyUnevaluable(out!), true);
+});
+
+test('a legitimate antimeridian Severe Polygon (lon ±180) stays evaluable (fail-stuck guard)', () => {
+  const [out] = normalizeWeatherAlertsResponse({
+    features: [severeFeatureWithGeometry({
+      type: 'Polygon',
+      coordinates: [[[180, 71], [-180, 71], [-180, 71.5], [180, 71.5]]],
+    })],
+  } as never);
+  assert.ok(out);
+  assert.equal(isAlertSpatiallyUnevaluable(out!), false);
+});
+
 // ── alertHasUsablePolygon: the POLYGON-only half of evaluability ──────────────
 // isAlertSpatiallyUnevaluable = !alertHasUsablePolygon && no UGC zones. The clear
 // decision needs to count severe alerts that CAN ONLY match via the zone fallback

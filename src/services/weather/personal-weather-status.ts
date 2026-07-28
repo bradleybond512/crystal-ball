@@ -222,14 +222,18 @@ function toEpochMs(expires: unknown): number | null {
 /**
  * What the data-loader should do with the chip state this weather tick.
  * - `publish`             — write the matched threat (always wins).
- * - `confirm_clear`       — a fresh, fully-evaluated feed proved no threat.
+ * - `confirm_clear`       — a fresh, fully-evaluated feed proved no threat;
+ *                           `provenAt` is the feed's own data timestamp, so the
+ *                           clear's 30-min TTL is measured from data currency,
+ *                           not from the (possibly much later) publish instant.
  * - `revoke_confirmation` — a feed we could NOT trust for a clear (stale /
- *                           unavailable, OR fresh-but-degraded matching); drop
- *                           any prior confirmed clear to neutral.
+ *                           unavailable, fresh-but-degraded matching, OR fresh
+ *                           with no data timestamp); drop any prior confirmed
+ *                           clear to neutral.
  */
 export type ThreatPublicationDecision =
   | { action: 'publish'; value: PersonalWeatherThreat }
-  | { action: 'confirm_clear' }
+  | { action: 'confirm_clear'; provenAt: number }
   | { action: 'revoke_confirmation' };
 
 /**
@@ -261,12 +265,14 @@ export type ThreatPublicationDecision =
  */
 export function decideThreatPublication(
   next: PersonalWeatherThreat | null,
-  feedIsFresh: boolean,
+  feed: { fresh: boolean; provenAtMs: number | null },
   matchingComplete: boolean,
 ): ThreatPublicationDecision {
   if (next) return { action: 'publish', value: next };
-  if (!feedIsFresh || !matchingComplete) return { action: 'revoke_confirmation' };
-  return { action: 'confirm_clear' };
+  if (!feed.fresh || !matchingComplete || feed.provenAtMs === null) {
+    return { action: 'revoke_confirmation' };
+  }
+  return { action: 'confirm_clear', provenAt: feed.provenAtMs };
 }
 
 /** Inputs the data-loader captures over its severe-alert evaluation, fed into

@@ -257,16 +257,42 @@ test('resolveThreatExpiryMs: an unparseable value falls back to now + window', (
 
 test('decideThreatPublication: a real match publishes even when the feed is stale/degraded', () => {
   const threat = { severity: 'severe' as const, label: 'Tornado Warning', expiresAt: 10_000 };
-  assert.deepEqual(decideThreatPublication(threat, false, false), { action: 'publish', value: threat });
+  assert.deepEqual(decideThreatPublication(threat, { fresh: false, provenAtMs: null }, false), { action: 'publish', value: threat });
 });
 
 test('decideThreatPublication: a real match publishes on a fresh feed', () => {
   const threat = { severity: 'extreme' as const, label: 'PDS Tornado', expiresAt: 1 };
-  assert.deepEqual(decideThreatPublication(threat, true, true), { action: 'publish', value: threat });
+  assert.deepEqual(decideThreatPublication(threat, { fresh: true, provenAtMs: 5_000 }, true), { action: 'publish', value: threat });
 });
 
 test('decideThreatPublication: a clear IS confirmed on a fresh feed with complete matching (storm passed)', () => {
-  assert.deepEqual(decideThreatPublication(null, true, true), { action: 'confirm_clear' });
+  assert.deepEqual(decideThreatPublication(null, { fresh: true, provenAtMs: 5_000 }, true), { action: 'confirm_clear', provenAt: 5_000 });
+});
+
+// P0 (Codex round 3): the confirm_clear proof must be anchored to the FEED's own
+// data timestamp, not to wall-clock confirm time. The loader captures freshness
+// BEFORE up to ~8s of UGC-zone / datacenter awaits; stamping the clear at
+// Date.now() AFTER them mints a fresh full-TTL "ALL CLEAR" over a feed that has
+// since aged past its own freshness window (WEATHER_FEED_TTL_MS == the clear
+// TTL). Carrying provenAt = the feed's data time bounds the clear to that data's
+// currency, so a near-stale feed can never mint a brand-new clear window.
+test('decideThreatPublication: confirm_clear carries the feed data timestamp as provenAt (window bounded by data currency)', () => {
+  const feedProvenAt = 12_345;
+  assert.deepEqual(
+    decideThreatPublication(null, { fresh: true, provenAtMs: feedProvenAt }, true),
+    { action: 'confirm_clear', provenAt: feedProvenAt },
+  );
+});
+
+// A fresh flag with a missing data timestamp can never authorize a clear — it
+// fails closed to revoke. (isWeatherFeedFresh already guarantees a non-null
+// timestamp whenever it reports fresh, so this only pins the type-safe
+// fail-closed direction, never a real production path.)
+test('decideThreatPublication: fresh but no data timestamp fails closed to revoke', () => {
+  assert.deepEqual(
+    decideThreatPublication(null, { fresh: true, provenAtMs: null }, true),
+    { action: 'revoke_confirmation' },
+  );
 });
 
 // P0 (Codex): a STALE/unavailable feed must not let a prior confirmed clear
@@ -275,11 +301,11 @@ test('decideThreatPublication: a clear IS confirmed on a fresh feed with complet
 // can no longer read (up to the 30-min clear TTL) — a fail-open. A stale feed is
 // unevaluable, so it must REVOKE any standing clear to neutral (CHECKING).
 test('decideThreatPublication: a stale feed revokes a standing clear (never ride an unreadable feed)', () => {
-  assert.deepEqual(decideThreatPublication(null, false, true), { action: 'revoke_confirmation' });
+  assert.deepEqual(decideThreatPublication(null, { fresh: false, provenAtMs: 1_000 }, true), { action: 'revoke_confirmation' });
 });
 
 test('decideThreatPublication: a stale feed WITH degraded matching also revokes (both unevaluable)', () => {
-  assert.deepEqual(decideThreatPublication(null, false, false), { action: 'revoke_confirmation' });
+  assert.deepEqual(decideThreatPublication(null, { fresh: false, provenAtMs: null }, false), { action: 'revoke_confirmation' });
 });
 
 // P0: a FRESH feed whose match pipeline was degraded (an unresolved UGC zone or
@@ -289,7 +315,7 @@ test('decideThreatPublication: a stale feed WITH degraded matching also revokes 
 // asserts an all-clear over a feed we could not actually evaluate. The honest
 // action is to REVOKE the confirmation so the chip falls back to neutral.
 test('decideThreatPublication: a fresh feed with DEGRADED matching revokes the clear (never assert an unevaluated all-clear)', () => {
-  assert.deepEqual(decideThreatPublication(null, true, false), { action: 'revoke_confirmation' });
+  assert.deepEqual(decideThreatPublication(null, { fresh: true, provenAtMs: 5_000 }, false), { action: 'revoke_confirmation' });
 });
 
 // ── isWeatherMatchingComplete: the `matchingComplete` gate the data-loader feeds
@@ -468,6 +494,23 @@ test('a fresh confirm re-proves the clear and restarts the TTL', () => {
   confirmPersonalWeatherClear(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS);
   assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS + 1), true,
     'a fresh clear proof restarts the TTL window');
+});
+
+// ── P0 (Codex round 3): a clear is bounded by the FEED's data currency, not by
+// wall-clock confirm time ────────────────────────────────────────────────────
+// The loader stamps the clear at the decision's provenAt (the feed's data
+// timestamp), so a feed current at T yields a clear that lapses TTL after T —
+// even if the confirm ran seconds before the read. Under the old wall-clock
+// stamping, a feed captured at age 29:59 plus ~8s of awaits minted a brand-new
+// full-TTL ALL CLEAR on data already past its freshness horizon.
+test('a clear proven off feed-data time T lapses TTL after T, not TTL after the confirm ran', () => {
+  const decision = decideThreatPublication(null, { fresh: true, provenAtMs: 1_000 }, true);
+  if (decision.action !== 'confirm_clear') throw new Error('expected confirm_clear');
+  confirmPersonalWeatherClear(decision.provenAt);
+  assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS - 1), true,
+    'within the feed-data TTL: the clear stays proven');
+  assert.equal(isPersonalWeatherClearConfirmed(1_000 + PERSONAL_WEATHER_CLEAR_TTL_MS), false,
+    'at the feed-data TTL the clear lapses — no fresh window minted on aged data');
 });
 
 // ── confirmed-clear fails closed on a BACKWARD clock jump (negative age) ──────

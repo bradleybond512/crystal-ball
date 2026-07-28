@@ -1609,7 +1609,8 @@ export class DataLoaderManager implements AppModule {
  // refresh could report 'live' while `alerts` is still the stale (empty)
  // set, proving a false "all clear". Snapshot it now so freshness matches
  // the dataset it describes.
- const weatherFeedFresh = isWeatherFeedFresh(getWeatherAlertsFeedState());
+ const weatherFeedState = getWeatherAlertsFeedState();
+ const weatherFeedFresh = isWeatherFeedFresh(weatherFeedState);
  // Contain the NON-safety map render + freshness bookkeeping. A throw here
  // (e.g. setWeatherAlerts choking on a malformed geometry) must NOT abort the
  // tick and skip the downstream status-chip publication — that would strand a
@@ -2038,7 +2039,7 @@ export class DataLoaderManager implements AppModule {
  // polygon. An all-clear feed still proves clear so the chip never freezes.
  const chipDecision = decideThreatPublication(
  selectPersonalWeatherThreat(weatherThreatCandidates, chipExposureFloor(exposureFloor)),
- weatherFeedFresh,
+ { fresh: weatherFeedFresh, provenAtMs: weatherFeedState.timestamp },
  isWeatherMatchingComplete({
  severeAlertCount: severeAlerts.length,
  savedPlaceCount: savedPlaces.length,
@@ -2050,7 +2051,7 @@ export class DataLoaderManager implements AppModule {
  );
  switch (chipDecision.action) {
  case 'publish': setPersonalWeatherThreat(chipDecision.value); break;
- case 'confirm_clear': confirmPersonalWeatherClear(); break;
+ case 'confirm_clear': confirmPersonalWeatherClear(chipDecision.provenAt); break;
  case 'revoke_confirmation': revokePersonalWeatherClearConfirmation(); break;
  }
  // The chip decision has been applied — mark it settled so a later throw in the

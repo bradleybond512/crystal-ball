@@ -145,18 +145,31 @@ export function revokePersonalWeatherClearConfirmation(): void {
  * does. A confirmed clear also self-expires once it is older than
  * `PERSONAL_WEATHER_CLEAR_TTL_MS`, so a proof the loader can no longer refresh
  * (app asleep, weather task stalled, NWS unreachable) lapses to neutral instead
- * of lingering as a false all-clear. The status chip uses this as its sole
- * freshness signal, so it stays neutral until weather is proven AND current.
+ * of lingering as a false all-clear. A proof stamped in the FUTURE relative to
+ * `now` (a backward clock step after the confirm) is likewise untrustworthy and
+ * fails closed — otherwise its negative age would sit below the TTL forever. The
+ * status chip uses this as its sole freshness signal, so it stays neutral until
+ * weather is proven AND current.
  */
 export function isPersonalWeatherClearConfirmed(now: number = Date.now()): boolean {
   // Trigger the expiry self-heal so this read is consistent regardless of the
   // order the chip reads threat vs. confirmed-clear.
   getPersonalWeatherThreat(now);
-  if (clearConfirmedAt !== null && now - clearConfirmedAt >= PERSONAL_WEATHER_CLEAR_TTL_MS) {
-    // Null BEFORE notifying so a subscriber re-reading here sees the lapsed
-    // state and this branch is already false (no re-entrant notify).
-    clearConfirmedAt = null;
-    notify();
+  if (clearConfirmedAt !== null) {
+    // Expire on age OUT of the trustworthy [0, TTL) window. A NEGATIVE age means
+    // the proof was stamped in the future relative to `now` — a backward clock
+    // step (NTP correction, manual clock set) after the confirm. A naive
+    // `>= TTL` check treats that negative age as "still fresh" and would pin a
+    // false ALL CLEAR indefinitely while the weather task is stalled. A future
+    // stamp cannot be vouched for, so fail closed to neutral just like a lapsed
+    // one. Only the normal forward window (0 ≤ age < TTL) keeps the clear proven.
+    const age = now - clearConfirmedAt;
+    if (age < 0 || age >= PERSONAL_WEATHER_CLEAR_TTL_MS) {
+      // Null BEFORE notifying so a subscriber re-reading here sees the lapsed
+      // state and this branch is already false (no re-entrant notify).
+      clearConfirmedAt = null;
+      notify();
+    }
   }
   return clearConfirmedAt !== null;
 }

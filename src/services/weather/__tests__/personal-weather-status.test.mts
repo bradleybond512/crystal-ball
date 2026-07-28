@@ -470,6 +470,32 @@ test('a fresh confirm re-proves the clear and restarts the TTL', () => {
     'a fresh clear proof restarts the TTL window');
 });
 
+// ── confirmed-clear fails closed on a BACKWARD clock jump (negative age) ──────
+// The self-expiry compares `now - clearConfirmedAt` against the TTL. If the
+// clear was stamped at a FUTURE-skewed instant and the system clock is then
+// corrected BACKWARD (NTP step, manual set) while the weather task is stalled,
+// the age goes NEGATIVE — below the TTL — so a naive `>= TTL` check keeps the
+// clear "proven" indefinitely: a false ALL CLEAR that never lapses. A proof
+// stamped in the future cannot be trusted; the chip must fail closed to neutral.
+test('a confirmed clear stamped in the future fails closed once the clock rolls back', () => {
+  confirmPersonalWeatherClear(1_000_000);
+  assert.equal(
+    isPersonalWeatherClearConfirmed(400_000),
+    false,
+    'now < clearConfirmedAt (clock rolled back): an untrustworthy future-stamped proof lapses to neutral',
+  );
+});
+
+test('a future-stamped clear is discarded, not merely hidden, and only a fresh confirm re-proves it', () => {
+  confirmPersonalWeatherClear(1_000_000);
+  assert.equal(isPersonalWeatherClearConfirmed(400_000), false);
+  // The future stamp was nulled, so a later read at the corrected real time
+  // still sees no proof rather than the stale future stamp resurfacing.
+  assert.equal(isPersonalWeatherClearConfirmed(401_000), false, 'still neutral until re-proved');
+  confirmPersonalWeatherClear(402_000);
+  assert.equal(isPersonalWeatherClearConfirmed(402_000), true, 'a fresh confirm at real time re-proves clear');
+});
+
 // ── revokePersonalWeatherClearConfirmation (P0: degraded tick must un-prove) ──
 // When the loader gets a fresh feed it could NOT fully evaluate (a degraded zone
 // lookup or a crashed exposure match), a prior confirmed clear is no longer

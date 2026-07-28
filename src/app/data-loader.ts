@@ -1584,6 +1584,20 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadWeatherAlerts(): Promise<void> {
+ // Fail-closed backstop for the safety-critical status chip. If any part of the
+ // tick throws BEFORE the personal weather-threat publication runs, a prior
+ // confirmed "ALL CLEAR" must not ride out an unevaluated feed and hide a live
+ // warning — drop it to neutral (CHECKING WEATHER). `publicationSettled` guards
+ // against the mirror failure: a throw AFTER a correct publish/confirm/revoke
+ // (e.g. in the downstream anomaly/correlation code) must NOT undo it.
+ let publicationSettled = false;
+ const failClosedRevokeClear = async (): Promise<void> => {
+ if (publicationSettled) return;
+ try {
+ const { revokePersonalWeatherClearConfirmation } = await import('@/services/weather/personal-weather-status');
+ revokePersonalWeatherClearConfirmation();
+ } catch { /* pure module; a load failure here is unrecoverable and itself non-fatal */ }
+ };
  try {
  const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
  const alerts = snapshot.data;
@@ -1596,6 +1610,13 @@ export class DataLoaderManager implements AppModule {
  // set, proving a false "all clear". Snapshot it now so freshness matches
  // the dataset it describes.
  const weatherFeedFresh = isWeatherFeedFresh(getWeatherAlertsFeedState());
+ // Contain the NON-safety map render + freshness bookkeeping. A throw here
+ // (e.g. setWeatherAlerts choking on a malformed geometry) must NOT abort the
+ // tick and skip the downstream status-chip publication — that would strand a
+ // prior "ALL CLEAR" over a live storm, the exact fail-open this stack closes.
+ // The chip publication further down is the safety-critical step and runs
+ // regardless; the map layer simply won't repaint this tick.
+ try {
  this.ctx.map?.setWeatherAlerts(alerts);
  this.ctx.map?.setLayerReady('weather', alerts.length > 0);
  const freshness = feedFreshnessFromSnapshot(snapshot);
@@ -1616,6 +1637,9 @@ export class DataLoaderManager implements AppModule {
  // state singleton owns its own fetch (NWS alerts + saved places); this
  // just nudges it so the StormPosturePanel updates alongside the map.
  void refreshStormPosture();
+ } catch (renderError) {
+ console.warn('[data-loader] weather render/bookkeeping failed (continuing to chip publication):', renderError);
+ }
 
  // Feed weather alerts + grid status into the datacenter posture engine.
  // Only runs when the user has a saved place tagged data_center.
@@ -2029,8 +2053,15 @@ export class DataLoaderManager implements AppModule {
  case 'confirm_clear': confirmPersonalWeatherClear(); break;
  case 'revoke_confirmation': revokePersonalWeatherClearConfirmation(); break;
  }
+ // The chip decision has been applied — mark it settled so a later throw in the
+ // downstream (non-safety) code below cannot trigger the fail-closed revoke and
+ // undo a correct publish/confirm.
+ publicationSettled = true;
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);
+ // The publication above never ran (the throw preceded it) — a standing
+ // confirmed "ALL CLEAR" must not survive a tick whose evaluation crashed.
+ await failClosedRevokeClear();
  }
 
  // Wire weather alerts into the mission ledger (closed-loop ops PR 2).
@@ -2112,6 +2143,11 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setLayerReady('weather', false);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
  dataFreshness.recordError('weather', String(error));
+ // A tick that threw before its chip publication (e.g. the initial fetch
+ // failed, or an uncontained step upstream of the ladder) must not let a
+ // prior confirmed "ALL CLEAR" persist over a feed we never evaluated. No-op
+ // when the publication already settled this tick.
+ await failClosedRevokeClear();
  }
   }
 

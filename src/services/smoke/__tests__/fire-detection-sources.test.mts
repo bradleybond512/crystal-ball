@@ -57,6 +57,33 @@ test('drops detections older than maxAgeHours', () => {
   assert.equal(out[0]!.id, 'firms:202:-500');
 });
 
+test('drops future-dated detections (negative age is not "fresh")', () => {
+  const out = firmsToTransportSources(
+    [
+      pixel({ lat: 40.0, lon: -100.0, detectedAtMs: NOW + 6 * HOUR }), // clock skew → dropped
+      pixel({ lat: 40.5, lon: -100.0, detectedAtMs: NOW - 1 * HOUR }), // kept
+    ],
+    HOME,
+    { nowMs: NOW, maxAgeHours: 24 },
+  );
+  assert.equal(out.length, 1);
+  assert.equal(out[0]!.id, 'firms:202:-500');
+});
+
+test('drops out-of-range coordinates (no haversine aliasing)', () => {
+  const out = firmsToTransportSources(
+    [
+      pixel({ lat: 400, lon: -100 }), // finite but absurd → must not alias to lat 40
+      pixel({ lat: 40, lon: -460 }), // finite but out of range → dropped
+      pixel({ lat: 40.1, lon: -100 }), // the only valid row
+    ],
+    HOME,
+    { nowMs: NOW },
+  );
+  assert.equal(out.length, 1);
+  assert.equal(out[0]!.id, 'firms:200:-500');
+});
+
 test('drops detections beyond maxRadiusMi', () => {
   const out = firmsToTransportSources(
     [

@@ -66,6 +66,34 @@ interface Cell {
 }
 
 /**
+ * Fail-closed per-pixel gate. Rejects non-finite fields, out-of-range
+ * coordinates (lat 400 ≈ lat 40 under haversine periodicity — a phantom
+ * source), sub-threshold FRP, future timestamps (negative age from clock
+ * skew / a bad parse must not read as "fresh"), stale pixels, and far-away
+ * pixels. Extracted so the clustering loop stays flat.
+ */
+function isUsablePixel(
+  d: FirePixel,
+  nowMs: number,
+  minFrpMw: number,
+  maxAgeHours: number,
+  home: { lat: number; lon: number },
+  maxRadiusMi: number,
+): boolean {
+  if (
+    !Number.isFinite(d.lat) ||
+    !Number.isFinite(d.lon) ||
+    !Number.isFinite(d.frpMw) ||
+    !Number.isFinite(d.detectedAtMs)
+  ) return false;
+  if (Math.abs(d.lat) > 90 || Math.abs(d.lon) > 180) return false;
+  if (d.frpMw < minFrpMw) return false;
+  const ageMs = nowMs - d.detectedAtMs;
+  if (ageMs < 0 || ageMs / HOUR_MS > maxAgeHours) return false;
+  return haversineMi(home.lat, home.lon, d.lat, d.lon) <= maxRadiusMi;
+}
+
+/**
  * Cluster FIRMS hotspots into ranked SmokeTransportSource fires. Survivors are
  * binned onto a `cellDeg` grid; each cell reports its summed FRP and its
  * FRP-weighted centroid (so a cell's coordinate leans toward its hottest
@@ -89,15 +117,7 @@ export function firmsToTransportSources(
 
   const cells = new Map<string, Cell>();
   for (const d of detections) {
-    if (
-      !Number.isFinite(d.lat) ||
-      !Number.isFinite(d.lon) ||
-      !Number.isFinite(d.frpMw) ||
-      !Number.isFinite(d.detectedAtMs)
-    ) continue;
-    if (d.frpMw < minFrpMw) continue;
-    if ((nowMs - d.detectedAtMs) / HOUR_MS > maxAgeHours) continue;
-    if (haversineMi(home.lat, home.lon, d.lat, d.lon) > maxRadiusMi) continue;
+    if (!isUsablePixel(d, nowMs, minFrpMw, maxAgeHours, home, maxRadiusMi)) continue;
 
     const latKey = Math.floor(d.lat / cellDeg);
     const lonKey = Math.floor(d.lon / cellDeg);

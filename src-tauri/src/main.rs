@@ -1917,8 +1917,105 @@ fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), 
  Ok(())
 }
 
+/// Pure semver comparison for the boot-time staged-update gate. Strips a leading
+/// `v`, splits on `.`, and compares numeric parts (non-numeric -> 0). Returns
+/// true iff `candidate` is strictly newer than `current`. Ungated so it is
+/// unit-tested without the macOS cfg.
+fn is_semver_newer(candidate: &str, current: &str) -> bool {
+ fn parts(v: &str) -> Vec<u64> {
+ v.trim()
+ .trim_start_matches(|c| c == 'v' || c == 'V')
+ .split('.')
+ .map(|p| {
+ let digits: String = p.chars().take_while(|c| c.is_ascii_digit()).collect();
+ digits.parse::<u64>().unwrap_or(0)
+ })
+ .collect()
+ }
+ let a = parts(candidate);
+ let b = parts(current);
+ for i in 0..a.len().max(b.len()) {
+ let av = a.get(i).copied().unwrap_or(0);
+ let bv = b.get(i).copied().unwrap_or(0);
+ if av != bv {
+ return av > bv;
+ }
+ }
+ false
+}
+
+/// R2-SEC-009/011: verify the app bundle identifier before it can replace the
+/// active install. Blocks a compromised GitHub account or MITM from swapping in
+/// a malicious binary that passes the host check but is not Crystal Ball.
+#[cfg(target_os = "macos")]
+fn verify_update_bundle_identifier(source: &str) -> Result<(), String> {
+ const EXPECTED_BUNDLE_ID: &str = "com.bradleybond.crystalball";
+ let plist = format!("{source}/Contents/Info.plist");
+ let id_check = Command::new("plutil")
+ .args(["-extract", "CFBundleIdentifier", "raw", "-o", "-", &plist])
+ .output();
+ match id_check {
+ Ok(out) if out.status.success() => {
+ let bundle_id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+ if bundle_id != EXPECTED_BUNDLE_ID {
+ return Err(format!(
+ "Bundle identifier mismatch: expected '{EXPECTED_BUNDLE_ID}', got '{bundle_id}'"
+ ));
+ }
+ Ok(())
+ }
+ _ => Err("Could not verify bundle identifier — aborting update".into()),
+ }
+}
+
+/// Read CFBundleShortVersionString from a bundle's Info.plist (boot-apply gate).
+#[cfg(target_os = "macos")]
+fn read_bundle_short_version(app_path: &str) -> Result<String, String> {
+ let plist = format!("{app_path}/Contents/Info.plist");
+ let out = Command::new("plutil")
+ .args(["-extract", "CFBundleShortVersionString", "raw", "-o", "-", &plist])
+ .output()
+ .map_err(|e| format!("plutil read version failed: {e}"))?;
+ if !out.status.success() {
+ return Err(format!(
+ "Could not read staged bundle version: {}",
+ String::from_utf8_lossy(&out.stderr)
+ ));
+ }
+ Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Atomic swap of a verified staged bundle into the live install path. Renames
+/// dest -> backup, staged -> dest, re-verifies the installed signature, then
+/// removes the backup. Rolls back to the backup if the rename fails.
+#[cfg(target_os = "macos")]
+fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), String> {
+ let _ = fs::remove_dir_all(backup);
+
+ if Path::new(dest).exists() {
+ fs::rename(dest, backup)
+ .map_err(|e| format!("Move existing install to backup failed: {e}"))?;
+ }
+
+ if let Err(e) = fs::rename(staged, dest) {
+ let _ = fs::remove_dir_all(dest);
+ if Path::new(backup).exists() {
+ let _ = fs::rename(backup, dest);
+ }
+ return Err(format!("Swap staged app into install path failed: {e}"));
+ }
+
+ verify_app_bundle_signature(&dest, "Installed app")?;
+ let _ = fs::remove_dir_all(backup);
+ Ok(())
+}
+
+/// Download -> SHA-256 verify -> mount -> bundle-ID + signature verify -> copy
+/// into a PERSISTENT `{dest}.update-staged` bundle next to the live install.
+/// Does NOT swap or relaunch; apply_staged_update (or the boot-apply gate)
+/// performs the swap so the running session is never interrupted mid-flight.
 #[tauri::command]
-async fn install_update(webview: Webview, download_url: String, expected_sha256: Option<String>) -> Result<(), String> {
+async fn stage_update(webview: Webview, download_url: String, expected_sha256: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  // R2-SEC-009/011: enforce GitHub-host allowlist + mandatory hash up-front
  // so a bad request is rejected before any network or filesystem activity.
@@ -1991,73 +2088,109 @@ async fn install_update(webview: Webview, download_url: String, expected_sha256:
  ));
  }
 
- // 3. Verify the app bundle identifier before replacing the active install.
- // This prevents a compromised GitHub account or MITM from replacing the app
- // with a malicious binary that passes the host check but is not Crystal Ball.
+ // 3. Verify the mounted bundle, then copy it into a PERSISTENT staged bundle
+ // next to the live install. No swap or relaunch happens here.
  let source = format!("{}/Crystal Ball.app", mount_point);
+ let dest = resolve_update_install_path()?;
+ let staged = format!("{dest}.update-staged");
+
+ let stage_result = (|| -> Result<(), String> {
+ verify_update_bundle_identifier(&source)?;
+ verify_app_bundle_signature(&source, "Mounted app bundle")?;
+ let _ = fs::remove_dir_all(&staged);
+ copy_app_bundle_preserving_signature(&source, &staged)?;
+ verify_app_bundle_signature(&staged, "Staged app")?;
+ Ok(())
+ })();
+
+ // 4. Detach the DMG and clean up the download regardless of stage result.
+ let _ = Command::new("hdiutil").args(["detach", mount_point, "-quiet"]).output();
+ let _ = std::fs::remove_file(tmp_dmg);
+
+ if let Err(e) = stage_result {
+ let _ = fs::remove_dir_all(&staged);
+ return Err(e);
+ }
+ Ok(())
+ }
+}
+
+/// Re-verify the staged bundle signature and swap it into place, then relaunch.
+/// Called when the user clicks "Restart now" after an update has been staged.
+#[tauri::command]
+async fn apply_staged_update(webview: Webview) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+
+ #[cfg(not(target_os = "macos"))]
+ {
+ return Err("Auto-install is only supported on macOS".into());
+ }
+
+ #[cfg(target_os = "macos")]
+ {
  let dest = resolve_update_install_path()?;
  let staged = format!("{dest}.update-staged");
  let backup = format!("{dest}.update-backup");
 
- const EXPECTED_BUNDLE_ID: &str = "com.bradleybond.crystalball";
- let plist = format!("{source}/Contents/Info.plist");
- let id_check = Command::new("plutil")
- .args(["-extract", "CFBundleIdentifier", "raw", "-o", "-", &plist])
- .output();
- match id_check {
- Ok(out) if out.status.success() => {
- let bundle_id = String::from_utf8_lossy(&out.stdout).trim().to_string();
- if bundle_id != EXPECTED_BUNDLE_ID {
- let _ = Command::new("hdiutil").args(["detach", mount_point, "-quiet"]).output();
- let _ = std::fs::remove_file(tmp_dmg);
- return Err(format!(
- "Bundle identifier mismatch: expected '{EXPECTED_BUNDLE_ID}', got '{bundle_id}'"
- ));
- }
- }
- _ => {
- let _ = Command::new("hdiutil").args(["detach", mount_point, "-quiet"]).output();
- let _ = std::fs::remove_file(tmp_dmg);
- return Err("Could not verify bundle identifier — aborting update".into());
- }
+ if !Path::new(&staged).exists() {
+ return Err("No staged update to apply".into());
  }
 
- verify_app_bundle_signature(&source, "Mounted app bundle")?;
- let _ = fs::remove_dir_all(&staged);
- let _ = fs::remove_dir_all(&backup);
-
- let install_result = (|| -> Result<(), String> {
- copy_app_bundle_preserving_signature(&source, &staged)?;
+ // Re-verify at apply time so tampering between download and restart is caught.
  verify_app_bundle_signature(&staged, "Staged app")?;
+ swap_staged_into_place(&staged, &dest, &backup)?;
 
- if Path::new(&dest).exists() {
- fs::rename(&dest, &backup)
- .map_err(|e| format!("Move existing install to backup failed: {e}"))?;
- }
-
- if let Err(e) = fs::rename(&staged, &dest) {
- let _ = fs::remove_dir_all(&dest);
- if Path::new(&backup).exists() {
- let _ = fs::rename(&backup, &dest);
- }
- return Err(format!("Swap staged app into install path failed: {e}"));
- }
-
- verify_app_bundle_signature(&dest, "Installed app")?;
- let _ = fs::remove_dir_all(&backup);
- Ok(())
- })();
-
- // 4. Detach the DMG and clean up regardless of install result
- let _ = Command::new("hdiutil").args(["detach", mount_point, "-quiet"]).output();
- let _ = std::fs::remove_file(tmp_dmg);
-
- install_result?;
-
- // 5. Relaunch and exit
+ // Relaunch and exit
  let _ = Command::new("open").arg(&dest).spawn();
  std::process::exit(0);
  }
+}
+
+/// Boot-time apply of a previously staged update. Called at the top of `main()`
+/// so an update staged in the prior session lands seamlessly before any window
+/// shows — but only if the staged build is strictly newer and re-passes the
+/// bundle-ID + signature checks. Any problem discards the staged bundle and
+/// continues a normal boot; it never blocks startup and cannot loop (after a
+/// successful apply the running version equals the staged version).
+#[cfg(target_os = "macos")]
+fn maybe_apply_staged_update_on_boot() {
+ let dest = match resolve_update_install_path() {
+ Ok(d) => d,
+ Err(_) => return,
+ };
+ let staged = format!("{dest}.update-staged");
+ let backup = format!("{dest}.update-backup");
+ if !Path::new(&staged).exists() {
+ return;
+ }
+
+ let discard = |reason: String| {
+ eprintln!("[updater] discarding staged update: {reason}");
+ let _ = fs::remove_dir_all(&staged);
+ };
+
+ let staged_version = match read_bundle_short_version(&staged) {
+ Ok(v) => v,
+ Err(e) => return discard(e),
+ };
+ let current_version = env!("CARGO_PKG_VERSION");
+ if !is_semver_newer(&staged_version, current_version) {
+ return discard(format!(
+ "staged version {staged_version} not newer than running {current_version}"
+ ));
+ }
+ if let Err(e) = verify_update_bundle_identifier(&staged) {
+ return discard(e);
+ }
+ if let Err(e) = verify_app_bundle_signature(&staged, "Staged app") {
+ return discard(e);
+ }
+ if let Err(e) = swap_staged_into_place(&staged, &dest, &backup) {
+ return discard(e);
+ }
+
+ let _ = Command::new("open").arg(&dest).spawn();
+ std::process::exit(0);
 }
 
 /// Fetch JSON from Polymarket Gamma API using native TLS (bypasses Cloudflare JA3 blocking).
@@ -2615,7 +2748,7 @@ fn sanitize_path_for_node(p: &Path) -> String {
 
 #[cfg(test)]
 mod updater_gate_tests {
- use super::{validate_expected_sha256, validate_update_url};
+ use super::{is_semver_newer, validate_expected_sha256, validate_update_url};
 
  // ── validate_expected_sha256 ──────────────────────────────────────
 
@@ -2690,6 +2823,29 @@ mod updater_gate_tests {
  #[test]
  fn rejects_invalid_url() {
  assert!(validate_update_url("not a url").is_err());
+ }
+
+ // ── is_semver_newer (boot-apply gate) ─────────────────────────────
+
+ #[test]
+ fn newer_patch_minor_major_are_newer() {
+ assert!(is_semver_newer("1.2.4", "1.2.3"));
+ assert!(is_semver_newer("1.3.0", "1.2.9"));
+ assert!(is_semver_newer("2.0.0", "1.9.9"));
+ }
+
+ #[test]
+ fn equal_and_older_are_not_newer() {
+ assert!(!is_semver_newer("1.2.3", "1.2.3"));
+ assert!(!is_semver_newer("1.2.2", "1.2.3"));
+ assert!(!is_semver_newer("0.9.9", "1.0.0"));
+ }
+
+ #[test]
+ fn tolerates_v_prefix_and_uneven_lengths() {
+ assert!(is_semver_newer("v1.2.3", "1.2.2"));
+ assert!(!is_semver_newer("v1.2", "1.2.0"));
+ assert!(is_semver_newer("1.2.0.1", "1.2.0"));
  }
 }
 
@@ -3829,6 +3985,12 @@ fn main() {
  }
  }));
 
+ // Apply an update staged in the previous session before any window shows, so a
+ // manual quit/relaunch lands the new build seamlessly. No-op if nothing is
+ // staged; discards + continues normal boot on any verification problem.
+ #[cfg(target_os = "macos")]
+ maybe_apply_staged_update_on_boot();
+
  // Work around WebKitGTK rendering issues on Linux that can cause blank white
  // screens. DMA-BUF renderer failures are common with NVIDIA drivers and on
  // immutable distros (e.g. Bazzite/Fedora Atomic).  Setting the env var before
@@ -4029,7 +4191,8 @@ fn main() {
  send_notification,
  send_imessage,
  speak_aloud,
- install_update,
+ stage_update,
+ apply_staged_update,
  update_mode_label,
  set_dock_badge,
  set_menubar_status

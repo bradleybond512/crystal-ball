@@ -48,3 +48,31 @@ test('macOS updater preserves bundle signatures when installing app updates', ()
  'updater should not delete the current install before a verified replacement exists',
   );
 });
+
+test('updater is split into background stage + prompted apply commands', () => {
+  assert.match(
+ mainRs,
+ /async fn stage_update\(/,
+ 'updater should expose stage_update to download+verify+stage in the background',
+  );
+  assert.match(
+ mainRs,
+ /async fn apply_staged_update\(/,
+ 'updater should expose apply_staged_update to swap the staged bundle on restart',
+  );
+  assert.match(
+ mainRs,
+ /fn maybe_apply_staged_update_on_boot\(/,
+ 'updater should apply a staged update at boot for seamless quit/relaunch',
+  );
+  assert.doesNotMatch(
+ mainRs,
+ /fn install_update\(/,
+ 'the one-shot install_update command should be gone (replaced by stage + apply)',
+  );
+  assert.match(
+ mainRs,
+ /verify_app_bundle_signature\(&staged, "Staged app"\)/,
+ 'apply/boot paths should re-verify the staged bundle signature before swapping',
+  );
+});

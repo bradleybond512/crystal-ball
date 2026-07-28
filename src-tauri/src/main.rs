@@ -1918,36 +1918,75 @@ fn parse_team_identifier(codesign_stderr: &str) -> Option<String> {
 }
 
 /// Read a bundle's Apple Developer Team Identifier via codesign, if it has one.
+/// Returns None on any codesign failure OR an absent/`not set` team so callers
+/// must decide fail-open vs fail-closed explicitly rather than trusting this.
 #[cfg(target_os = "macos")]
 fn bundle_team_identifier(app_path: &str) -> Option<String> {
  let out = Command::new("codesign")
  .args(["-dvvv", app_path])
  .output()
  .ok()?;
+ if !out.status.success() {
+ return None;
+ }
  // codesign writes its display output to stderr.
  parse_team_identifier(&String::from_utf8_lossy(&out.stderr))
 }
 
+/// Build the Apple-anchored designated requirement the update bundle must satisfy.
+/// Pure so it is unit-tested. `anchor apple generic` forces the cert chain to
+/// Apple's root (an attacker's self-signed cert can NEVER satisfy it, no matter
+/// what TeamIdentifier string it claims); the identifier + team leaf clauses pin
+/// the update to our exact bundle ID and Developer Team.
+fn build_signer_requirement(bundle_id: &str, team: &str) -> String {
+ format!(
+ "anchor apple generic and identifier \"{bundle_id}\" and certificate leaf[subject.OU] = \"{team}\""
+ )
+}
+
+/// Whether `app_path` satisfies a codesign requirement, decided strictly by the
+/// process exit status (a non-zero exit means "does not satisfy", never a fail-open).
+#[cfg(target_os = "macos")]
+fn codesign_satisfies(app_path: &str, requirement: &str) -> bool {
+ Command::new("codesign")
+ .args(["--verify", "--deep", "--strict", &format!("-R={requirement}"), app_path])
+ .output()
+ .map(|o| o.status.success())
+ .unwrap_or(false)
+}
+
 /// `codesign --verify` proves a signature is intact but NOT who produced it, so a
-/// compromised release could ship an ad-hoc-signed build that still passes the
-/// bundle-ID + integrity checks. Pin the update to the SAME Apple Team Identifier
-/// as the currently-installed app. If the running app has no team (unsigned local
-/// dev build), we cannot pin and fall back to the integrity check alone.
+/// compromised release could ship a self-signed build that still passes the
+/// bundle-ID + integrity checks (a self-signed cert can claim any TeamIdentifier
+/// string). Pin the update to an APPLE-ANCHORED requirement carrying our bundle ID
+/// and the SAME Developer Team as the currently-installed app.
+///
+/// Fails CLOSED in production: if the installed app is Apple-signed but we cannot
+/// establish its team, the update is refused. Skips only when the running install
+/// itself is not Apple-anchored (an unsigned local dev build), where there is no
+/// real distribution to protect.
 #[cfg(target_os = "macos")]
 fn verify_same_signer_as_installed(candidate: &str, installed: &str) -> Result<(), String> {
- let installed_team = match bundle_team_identifier(installed) {
- Some(t) => t,
- None => return Ok(()),
- };
- match bundle_team_identifier(candidate) {
- Some(candidate_team) if candidate_team == installed_team => Ok(()),
- Some(candidate_team) => Err(format!(
- "Update signer mismatch: installed team '{installed_team}', update team '{candidate_team}' — aborting"
- )),
- None => Err(format!(
- "Update is not signed by the expected team '{installed_team}' (ad-hoc or unsigned) — aborting"
- )),
+ // Is the running install a real Apple-distributed build, or an unsigned dev build?
+ if !codesign_satisfies(installed, "anchor apple generic") {
+ return Ok(());
  }
+ // Production install: we MUST be able to pin, or we refuse.
+ let team = bundle_team_identifier(installed).ok_or_else(|| {
+ "Installed app is Apple-signed but its team could not be read — refusing update".to_string()
+ })?;
+ let requirement = build_signer_requirement("com.bradleybond.crystalball", &team);
+ let verify = Command::new("codesign")
+ .args(["--verify", "--deep", "--strict", &format!("-R={requirement}"), candidate])
+ .output()
+ .map_err(|e| format!("codesign requirement check failed: {e}"))?;
+ if !verify.status.success() {
+ return Err(format!(
+ "Update does not satisfy the pinned Apple signer requirement (team '{team}'): {}",
+ String::from_utf8_lossy(&verify.stderr)
+ ));
+ }
+ Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -2033,11 +2072,30 @@ fn read_bundle_short_version(app_path: &str) -> Result<String, String> {
  Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Refuse to operate on a symlinked path root. A symlinked `staged`/`dest` would
+/// let a local process redirect the rename target outside the intended install
+/// location (a TOCTOU redirect), so reject before any destructive move. A path
+/// that does not exist yet is fine — only an actual symlink is refused.
+#[cfg(target_os = "macos")]
+fn reject_symlinked_path(path: &str, label: &str) -> Result<(), String> {
+ match fs::symlink_metadata(path) {
+ Ok(meta) if meta.file_type().is_symlink() => {
+ Err(format!("Refusing to operate on symlinked {label} at {path}"))
+ }
+ _ => Ok(()),
+ }
+}
+
 /// Atomic swap of a verified staged bundle into the live install path. Renames
 /// dest -> backup, staged -> dest, re-verifies the installed signature, then
-/// removes the backup. Rolls back to the backup if the rename fails.
+/// removes the backup. Rolls back to the backup if the rename or post-swap
+/// verification fails; if the rollback ITSELF fails, the error names the
+/// preserved backup so the install is recoverable rather than silently lost.
 #[cfg(target_os = "macos")]
 fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), String> {
+ reject_symlinked_path(staged, "staged bundle")?;
+ reject_symlinked_path(dest, "install path")?;
+
  let _ = fs::remove_dir_all(backup);
 
  if Path::new(dest).exists() {
@@ -2047,8 +2105,10 @@ fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), 
 
  if let Err(e) = fs::rename(staged, dest) {
  let _ = fs::remove_dir_all(dest);
- if Path::new(backup).exists() {
- let _ = fs::rename(backup, dest);
+ if let Err(rollback) = restore_backup(backup, dest) {
+ return Err(format!(
+ "Swap failed ({e}) AND rollback failed ({rollback}) — previous install preserved at {backup}"
+ ));
  }
  return Err(format!("Swap staged app into install path failed: {e}"));
  }
@@ -2058,13 +2118,26 @@ fn swap_staged_into_place(staged: &str, dest: &str, backup: &str) -> Result<(), 
  // rename window, or a corrupt bundle). Restore the known-good backup so we
  // never leave an unverified app installed.
  let _ = fs::remove_dir_all(dest);
- if Path::new(backup).exists() {
- let _ = fs::rename(backup, dest);
+ if let Err(rollback) = restore_backup(backup, dest) {
+ return Err(format!(
+ "Installed bundle failed verification ({e}) AND rollback failed ({rollback}) — previous install preserved at {backup}"
+ ));
  }
  return Err(e);
  }
  let _ = fs::remove_dir_all(backup);
  Ok(())
+}
+
+/// Move a preserved backup back into the install path. A missing backup is not an
+/// error (nothing to restore); a failed rename IS surfaced so the caller can warn
+/// the user their install needs manual recovery rather than assuming it succeeded.
+#[cfg(target_os = "macos")]
+fn restore_backup(backup: &str, dest: &str) -> Result<(), String> {
+ if !Path::new(backup).exists() {
+ return Ok(());
+ }
+ fs::rename(backup, dest).map_err(|e| format!("restore backup failed: {e}"))
 }
 
 /// Download -> SHA-256 verify -> mount -> bundle-ID + signature verify -> copy
@@ -2185,6 +2258,27 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  }
 }
 
+/// Shared pre-swap gate for a staged bundle, run IDENTICALLY by the manual apply
+/// command and the boot-time auto-apply so neither path can be weaker than the
+/// other (a divergence here is exactly how a "verified" install slips through one
+/// door but not the other). Confirms the staged bundle is strictly newer than the
+/// running build, carries our bundle ID, has an intact signature, and satisfies
+/// the same Apple-anchored signer pin as the live install.
+#[cfg(target_os = "macos")]
+fn validate_staged_bundle(staged: &str, dest: &str) -> Result<(), String> {
+ let staged_version = read_bundle_short_version(staged)?;
+ let current_version = env!("CARGO_PKG_VERSION");
+ if !is_semver_newer(&staged_version, current_version) {
+ return Err(format!(
+ "staged version {staged_version} not newer than running {current_version}"
+ ));
+ }
+ verify_update_bundle_identifier(staged)?;
+ verify_app_bundle_signature(staged, "Staged app bundle")?;
+ verify_same_signer_as_installed(staged, dest)?;
+ Ok(())
+}
+
 /// Re-verify the staged bundle signature and swap it into place, then relaunch.
 /// Called when the user clicks "Restart now" after an update has been staged.
 #[tauri::command]
@@ -2200,15 +2294,17 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  {
  let dest = resolve_update_install_path()?;
  let staged = format!("{dest}.update-staged");
- let backup = format!("{dest}.update-backup");
+ // pid-stamped backup so two apply/boot passes cannot collide on a shared
+ // backup path and delete each other's only recovery copy.
+ let backup = format!("{dest}.update-backup-{}", std::process::id());
 
  if !Path::new(&staged).exists() {
  return Err("No staged update to apply".into());
  }
 
  // Re-verify at apply time so tampering between download and restart is caught.
- verify_app_bundle_signature(&staged, "Staged app")?;
- verify_same_signer_as_installed(&staged, &dest)?;
+ // Identical gate to the boot-apply path.
+ validate_staged_bundle(&staged, &dest)?;
  swap_staged_into_place(&staged, &dest, &backup)?;
 
  // Relaunch and exit
@@ -2230,7 +2326,9 @@ fn maybe_apply_staged_update_on_boot() {
  Err(_) => return,
  };
  let staged = format!("{dest}.update-staged");
- let backup = format!("{dest}.update-backup");
+ // pid-stamped backup so two apply/boot passes cannot collide on a shared
+ // backup path and delete each other's only recovery copy.
+ let backup = format!("{dest}.update-backup-{}", std::process::id());
  if !Path::new(&staged).exists() {
  return;
  }
@@ -2240,23 +2338,8 @@ fn maybe_apply_staged_update_on_boot() {
  let _ = fs::remove_dir_all(&staged);
  };
 
- let staged_version = match read_bundle_short_version(&staged) {
- Ok(v) => v,
- Err(e) => return discard(e),
- };
- let current_version = env!("CARGO_PKG_VERSION");
- if !is_semver_newer(&staged_version, current_version) {
- return discard(format!(
- "staged version {staged_version} not newer than running {current_version}"
- ));
- }
- if let Err(e) = verify_update_bundle_identifier(&staged) {
- return discard(e);
- }
- if let Err(e) = verify_app_bundle_signature(&staged, "Staged app") {
- return discard(e);
- }
- if let Err(e) = verify_same_signer_as_installed(&staged, &dest) {
+ // Identical gate to the manual apply path — see validate_staged_bundle.
+ if let Err(e) = validate_staged_bundle(&staged, &dest) {
  return discard(e);
  }
  if let Err(e) = swap_staged_into_place(&staged, &dest, &backup) {
@@ -2822,7 +2905,19 @@ fn sanitize_path_for_node(p: &Path) -> String {
 
 #[cfg(test)]
 mod updater_gate_tests {
- use super::{is_semver_newer, parse_team_identifier, validate_expected_sha256, validate_update_url};
+ use super::{build_signer_requirement, is_semver_newer, parse_team_identifier, validate_expected_sha256, validate_update_url};
+
+ // ── build_signer_requirement (Apple-anchored designated requirement) ──
+
+ #[test]
+ fn signer_requirement_is_apple_anchored_and_pins_id_and_team() {
+ let req = build_signer_requirement("com.bradleybond.crystalball", "ABCDE12345");
+ // Must chain to Apple's root — a self-signed cert can never satisfy this,
+ // no matter what TeamIdentifier string it claims.
+ assert!(req.contains("anchor apple generic"), "{req}");
+ assert!(req.contains("identifier \"com.bradleybond.crystalball\""), "{req}");
+ assert!(req.contains("certificate leaf[subject.OU] = \"ABCDE12345\""), "{req}");
+ }
 
  // ── parse_team_identifier ─────────────────────────────────────────
 

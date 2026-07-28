@@ -77,21 +77,42 @@ test('updater is split into background stage + prompted apply commands', () => {
   );
 });
 
-test('updater pins the update to the same Apple signer as the installed app', () => {
+test('updater pins the update to an Apple-anchored designated requirement', () => {
   assert.match(
  mainRs,
  /fn verify_same_signer_as_installed\(/,
- 'updater should compare the update Team Identifier against the installed app',
+ 'updater should verify the update is signed by the same signer as the installed app',
   );
   assert.match(
  mainRs,
- /fn parse_team_identifier\(/,
- 'signer pinning should parse TeamIdentifier from codesign output (pure + testable)',
+ /fn build_signer_requirement\(/,
+ 'signer pinning should build a designated requirement (pure + unit-testable)',
   );
-  // Signer pinning must guard all three swap entry points: stage, apply, boot.
-  const signerCalls = mainRs.match(/verify_same_signer_as_installed\(&(?:source|staged), &dest\)/g) ?? [];
+  // The requirement MUST chain to Apple's root — a self-signed cert claiming the
+  // expected Team OU can never satisfy `anchor apple generic`.
+  assert.match(
+ mainRs,
+ /anchor apple generic and identifier .* certificate leaf\[subject\.OU\]/,
+ 'signer requirement must be Apple-anchored and pin bundle id + team OU',
+  );
+  // The staging path pins BOTH the mounted source and the copied staged bundle.
+  const stagePins = mainRs.match(/verify_same_signer_as_installed\(&(?:source|staged), &dest\)/g) ?? [];
   assert.ok(
- signerCalls.length >= 4,
- `expected signer checks at stage (source+staged), apply, and boot; found ${signerCalls.length}`,
+ stagePins.length >= 2,
+ `expected signer pinning on the mounted source and staged copy; found ${stagePins.length}`,
+  );
+});
+
+test('apply and boot share one staged-bundle validator (no weaker door)', () => {
+  assert.match(
+ mainRs,
+ /fn validate_staged_bundle\(/,
+ 'a shared validator should gate both swap entry points identically',
+  );
+  // Both the manual apply command and the boot-time auto-apply must run it.
+  const validatorCalls = mainRs.match(/validate_staged_bundle\(&staged, &dest\)/g) ?? [];
+  assert.ok(
+ validatorCalls.length >= 2,
+ `expected validate_staged_bundle in both apply and boot; found ${validatorCalls.length}`,
   );
 });

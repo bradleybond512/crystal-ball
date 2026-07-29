@@ -18,6 +18,10 @@ export class DesktopUpdater implements AppModule {
   // every 30 seconds doesn't rate-limit us out.
   private readonly FOCUS_RECHECK_COOLDOWN_MS = 5 * 60 * 1000;
   private lastFocusCheckAt = 0;
+  // Epoch ms of the last check that actually reached GitHub — drives the
+  // sidebar "last checked N ago" tooltip. Persisted so it survives relaunches
+  // and is meaningful before the first check of a new session completes.
+  private lastCheckedAt = Number(localStorage.getItem('wm-update-last-checked')) || 0;
   private readonly boundFocusHandler = (): void => {
  if (!this.ctx.isDesktopApp || this.ctx.isDestroyed) return;
  const now = Date.now();
@@ -80,8 +84,22 @@ export class DesktopUpdater implements AppModule {
   }
 
   private setUpdateState(state: UpdateState): void {
+ // Carry the last successful check time onto every non-null phase so the
+ // sidebar tooltip stays accurate even while a fresh check is in flight.
+ if (state && state.lastCheckedAt === undefined && this.lastCheckedAt > 0) {
+ state = { ...state, lastCheckedAt: this.lastCheckedAt };
+ }
  this.ctx.updateState = state;
  document.dispatchEvent(new CustomEvent('wm:update-state'));
+  }
+
+  private markChecked(): void {
+ this.lastCheckedAt = Date.now();
+ try {
+ localStorage.setItem('wm-update-last-checked', String(this.lastCheckedAt));
+ } catch {
+ // localStorage quota — the in-memory value still drives this session.
+ }
   }
 
   private resolveDownloadInfo(data: { assets?: { name: string; browser_download_url: string }[] }): { url: string; name: string | null } {
@@ -139,6 +157,11 @@ export class DesktopUpdater implements AppModule {
  return;
  }
 
+ // The check reached GitHub and returned a usable version — record it for
+ // the "last checked" indicator. Fetch/parse failures deliberately don't,
+ // so the tooltip always reflects the last SUCCESSFUL check.
+ this.markChecked();
+
  const current = __APP_VERSION__;
  if (!this.isNewerVersion(remote, current)) {
  this.logUpdaterOutcome('no_update', { current, remote });
@@ -150,29 +173,12 @@ export class DesktopUpdater implements AppModule {
  const assets = Array.isArray(data.assets) ? data.assets : [];
  const { url: downloadUrl, name: dmgName } = this.resolveDownloadInfo(data);
  const expectedSha256 = dmgName ? await this.fetchExpectedSha256(assets, dmgName) : undefined;
- const dismissKey = `wm-update-dismissed-${remote}`;
- const notifiedKey = `wm-update-notified-${remote}`;
- if (localStorage.getItem(dismissKey) && !manual) {
- this.logUpdaterOutcome('update_available', { current, remote, dismissed: true });
- this.setUpdateState({ phase: 'available', version: remote, downloadUrl, expectedSha256 });
- return;
- }
 
- this.logUpdaterOutcome('update_available', { current, remote, dismissed: false });
- this.setUpdateState({ phase: 'available', version: remote, downloadUrl, expectedSha256 });
- trackUpdateShown(current, remote);
- await this.showUpdateToast(remote, downloadUrl, expectedSha256);
- // Fire a native macOS notification once per remote version so a
- // background-running app surfaces the update without the user needing
- // to look at the Crystal Ball window.
- if (!localStorage.getItem(notifiedKey)) {
- localStorage.setItem(notifiedKey, '1');
- await tryInvokeTauri<void>('send_notification', {
- title: 'Crystal Ball update available',
- body: `v${current} → v${remote}. Click the version chip in the sidebar to install.`,
- sound: 'Glass',
- });
- }
+ // On macOS with a real DMG and a verified manifest hash we can auto-download
+ // and stage the update in the background, then prompt to restart. Without a
+ // hash the Rust side would abort anyway, so we fall back to a browser
+ // download there and on web / non-DMG releases.
+ await (this.ctx.isDesktopApp && downloadUrl.endsWith('.dmg') && expectedSha256 ? this.stageAndPrompt(current, remote, downloadUrl, expectedSha256, manual) : this.offerBrowserDownload(current, remote, downloadUrl, expectedSha256, manual));
  } catch (error) {
  this.logUpdaterOutcome('fetch_failed', {
  error: error instanceof Error ? error.message : String(error),
@@ -196,59 +202,224 @@ export class DesktopUpdater implements AppModule {
  return false;
   }
 
-  private async showUpdateToast(version: string, downloadUrl: string, expectedSha256?: string): Promise<void> {
- const existing = document.querySelector<HTMLElement>('.update-toast');
- if (existing?.dataset.version === version) return;
- existing?.remove();
+  private buildStrokeIcon(
+ children: { tag: 'path' | 'polyline' | 'line'; attrs: Record<string, string> }[],
+  ): SVGElement {
+ const NS = 'http://www.w3.org/2000/svg' as const;
+ const svg = document.createElementNS(NS, 'svg');
+ const svgAttrs: Record<string, string> = {
+ width: '20', height: '20', viewBox: '0 0 24 24', fill: 'none',
+ stroke: 'currentColor', 'stroke-width': '2',
+ 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+ };
+ for (const [k, v] of Object.entries(svgAttrs)) svg.setAttribute(k, v);
+ for (const child of children) {
+ const el = document.createElementNS(NS, child.tag);
+ for (const [k, v] of Object.entries(child.attrs)) el.setAttribute(k, v);
+ svg.append(el);
+ }
+ return svg;
+  }
 
- // On macOS desktop, show "Update Now" (auto-install). Otherwise show "Download".
- const canAutoInstall = this.ctx.isDesktopApp && downloadUrl.endsWith('.dmg');
- const actionLabel = canAutoInstall ? 'Update Now' : 'Download';
+  // Background-download + verify + stage the update, then prompt to restart.
+  // Idempotent per remote version: once staged we skip the (re-)download and go
+  // straight to the ready prompt. Any staging failure falls back to a browser
+  // download so the user is never left stuck.
+  private async stageAndPrompt(
+ current: string,
+ remote: string,
+ downloadUrl: string,
+ expectedSha256: string,
+ manual: boolean,
+  ): Promise<void> {
+ const stagedKey = `wm-update-staged-${remote}`;
+ const dismissKey = `wm-update-dismissed-${remote}`;
+ const notifiedKey = `wm-update-notified-${remote}`;
 
- const toast = document.createElement('div');
- toast.className = 'update-toast';
- toast.dataset.version = version;
- toast.innerHTML = `
- <div class="update-toast-icon">
- <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
- <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
- <polyline points="7 10 12 15 17 10"/>
- <line x1="12" y1="15" x2="12" y2="3"/>
- </svg>
- </div>
- <div class="update-toast-body">
- <div class="update-toast-title">Update Available</div>
- <div class="update-toast-detail">v${escapeHtml(__APP_VERSION__)} \u2192 v${escapeHtml(version)}</div>
- </div>
- <button class="update-toast-action" data-action="install">${actionLabel}</button>
- <button class="update-toast-dismiss" data-action="dismiss" aria-label="Dismiss">\u00D7</button>
- `;
-
- toast.addEventListener('click', (e) => {
- const target = e.target as HTMLElement;
- const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
-
- if (action === 'install') {
- trackUpdateClicked(version);
- const btn = toast.querySelector<HTMLButtonElement>('[data-action="install"]');
-
- if (canAutoInstall) {
- // Auto-install: download DMG, mount, replace app, relaunch
- if (btn) { btn.textContent = 'Downloading…'; btn.disabled = true; }
- invokeTauri<void>('install_update', { downloadUrl, expectedSha256 })
- .catch((error: unknown) => {
+ if (localStorage.getItem(stagedKey) !== '1') {
+ this.setUpdateState({ phase: 'downloading', version: remote, downloadUrl, expectedSha256 });
+ try {
+ await invokeTauri<void>('stage_update', { downloadUrl, expectedSha256 });
+ try { localStorage.setItem(stagedKey, '1'); } catch { /* quota */ }
+ } catch (error) {
  this.logUpdaterOutcome('open_failed', {
  downloadUrl,
  error: error instanceof Error ? error.message : String(error),
  });
- if (btn) { btn.textContent = 'Failed — retry?'; btn.disabled = false; }
- // Fall back to opening the releases page
- void invokeTauri<void>('open_url', {
- url: 'https://github.com/bradleybond512/crystal-ball/releases/latest',
- }).catch(() => {});
+ await this.offerBrowserDownload(current, remote, downloadUrl, expectedSha256, manual);
+ return;
+ }
+ }
+
+ // Staged and verified — it will apply on the next quit/relaunch even if the
+ // user never touches the prompt.
+ this.logUpdaterOutcome('update_available', { current, remote, staged: true });
+ this.setUpdateState({ phase: 'ready', version: remote, downloadUrl, expectedSha256 });
+ trackUpdateShown(current, remote);
+ if (!localStorage.getItem(dismissKey) || manual) {
+ this.showReadyToast(current, remote);
+ }
+ if (!localStorage.getItem(notifiedKey)) {
+ try { localStorage.setItem(notifiedKey, '1'); } catch { /* quota */ }
+ await tryInvokeTauri<void>('send_notification', {
+ title: 'Crystal Ball update ready',
+ body: `v${current} → v${remote} downloaded. Restart to update — it also applies next time you quit and reopen.`,
+ sound: 'Glass',
  });
- } else {
- // Web or non-DMG: open in browser
+ }
+  }
+
+  // Fallback for web builds, non-DMG releases, or a failed background stage:
+  // surface the update and offer a browser download.
+  private async offerBrowserDownload(
+ current: string,
+ remote: string,
+ downloadUrl: string,
+ expectedSha256: string | undefined,
+ manual: boolean,
+  ): Promise<void> {
+ const dismissKey = `wm-update-dismissed-${remote}`;
+ const notifiedKey = `wm-update-notified-${remote}`;
+ this.setUpdateState({ phase: 'available', version: remote, downloadUrl, expectedSha256 });
+ if (localStorage.getItem(dismissKey) && !manual) {
+ this.logUpdaterOutcome('update_available', { current, remote, dismissed: true });
+ return;
+ }
+ this.logUpdaterOutcome('update_available', { current, remote, dismissed: false });
+ trackUpdateShown(current, remote);
+ await this.showUpdateToast(remote, downloadUrl);
+ if (!localStorage.getItem(notifiedKey)) {
+ try { localStorage.setItem(notifiedKey, '1'); } catch { /* quota */ }
+ await tryInvokeTauri<void>('send_notification', {
+ title: 'Crystal Ball update available',
+ body: `v${current} → v${remote}. Click the version chip in the sidebar to download.`,
+ sound: 'Glass',
+ });
+ }
+  }
+
+  private showReadyToast(current: string, version: string): void {
+ const existing = document.querySelector<HTMLElement>('.update-toast');
+ if (existing?.dataset.version === version && existing.dataset.kind === 'ready') return;
+ existing?.remove();
+
+ const toast = document.createElement('div');
+ toast.className = 'update-toast';
+ toast.dataset.version = version;
+ toast.dataset.kind = 'ready';
+
+ const icon = document.createElement('div');
+ icon.className = 'update-toast-icon';
+ icon.append(this.buildStrokeIcon([
+ { tag: 'path', attrs: { d: 'M21 2v6h-6' } },
+ { tag: 'path', attrs: { d: 'M3 12a9 9 0 0 1 15-6.7L21 8' } },
+ { tag: 'path', attrs: { d: 'M3 22v-6h6' } },
+ { tag: 'path', attrs: { d: 'M21 12a9 9 0 0 1-15 6.7L3 16' } },
+ ]));
+
+ const body = document.createElement('div');
+ body.className = 'update-toast-body';
+ const title = document.createElement('div');
+ title.className = 'update-toast-title';
+ title.textContent = 'Update ready';
+ const detail = document.createElement('div');
+ detail.className = 'update-toast-detail';
+ detail.textContent = `v${current} → v${version} · downloaded`;
+ body.append(title, detail);
+
+ const apply = document.createElement('button');
+ apply.className = 'update-toast-action';
+ apply.dataset.action = 'apply';
+ apply.textContent = 'Restart now';
+
+ const dismiss = document.createElement('button');
+ dismiss.className = 'update-toast-dismiss';
+ dismiss.dataset.action = 'dismiss';
+ dismiss.setAttribute('aria-label', 'Later');
+ dismiss.textContent = '×';
+
+ toast.append(icon, body, apply, dismiss);
+
+ toast.addEventListener('click', (e) => {
+ const target = e.target as HTMLElement;
+ const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+ if (action === 'apply') {
+ trackUpdateClicked(version);
+ const btn = toast.querySelector<HTMLButtonElement>('[data-action="apply"]');
+ if (btn) { btn.textContent = 'Restarting…'; btn.disabled = true; }
+ // On success the app swaps the bundle and relaunches, so nothing after
+ // this resolves; only the failure path returns to JS.
+ invokeTauri<void>('apply_staged_update').catch((error: unknown) => {
+ this.logUpdaterOutcome('open_failed', {
+ error: error instanceof Error ? error.message : String(error),
+ });
+ // The staged bundle failed to apply (missing / re-verify failed). Clear the
+ // "already staged" flag so the next check re-downloads instead of getting
+ // stuck offering a phantom ready state.
+ try { localStorage.removeItem(`wm-update-staged-${version}`); } catch { /* quota */ }
+ if (btn) { btn.textContent = 'Failed — retry?'; btn.disabled = false; }
+ });
+ } else if (action === 'dismiss') {
+ trackUpdateDismissed(version);
+ localStorage.setItem(`wm-update-dismissed-${version}`, '1');
+ toast.classList.remove('visible');
+ setTimeout(() => toast.remove(), 300);
+ }
+ });
+
+ document.body.append(toast);
+ requestAnimationFrame(() => {
+ requestAnimationFrame(() => toast.classList.add('visible'));
+ });
+  }
+
+  private async showUpdateToast(version: string, downloadUrl: string): Promise<void> {
+ const existing = document.querySelector<HTMLElement>('.update-toast');
+ if (existing?.dataset.version === version) return;
+ existing?.remove();
+
+ const toast = document.createElement('div');
+ toast.className = 'update-toast';
+ toast.dataset.version = version;
+
+ const icon = document.createElement('div');
+ icon.className = 'update-toast-icon';
+ icon.append(this.buildStrokeIcon([
+ { tag: 'path', attrs: { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' } },
+ { tag: 'polyline', attrs: { points: '7 10 12 15 17 10' } },
+ { tag: 'line', attrs: { x1: '12', y1: '15', x2: '12', y2: '3' } },
+ ]));
+
+ const body = document.createElement('div');
+ body.className = 'update-toast-body';
+ const title = document.createElement('div');
+ title.className = 'update-toast-title';
+ title.textContent = 'Update available';
+ const detail = document.createElement('div');
+ detail.className = 'update-toast-detail';
+ detail.textContent = `v${__APP_VERSION__} → v${version}`;
+ body.append(title, detail);
+
+ const action = document.createElement('button');
+ action.className = 'update-toast-action';
+ action.dataset.action = 'install';
+ action.textContent = 'Download';
+
+ const dismiss = document.createElement('button');
+ dismiss.className = 'update-toast-dismiss';
+ dismiss.dataset.action = 'dismiss';
+ dismiss.setAttribute('aria-label', 'Dismiss');
+ dismiss.textContent = '×';
+
+ toast.append(icon, body, action, dismiss);
+
+ toast.addEventListener('click', (e) => {
+ const target = e.target as HTMLElement;
+ const clicked = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+ if (clicked === 'install') {
+ trackUpdateClicked(version);
+ // No auto-install on this fallback path — just open the DMG so the user
+ // can install it manually.
  if (this.ctx.isDesktopApp) {
  void invokeTauri<void>('open_url', { url: downloadUrl }).catch((error: unknown) => {
  this.logUpdaterOutcome('open_failed', {
@@ -260,8 +431,7 @@ export class DesktopUpdater implements AppModule {
  } else {
  window.open(downloadUrl, '_blank', 'noopener');
  }
- }
- } else if (action === 'dismiss') {
+ } else if (clicked === 'dismiss') {
  trackUpdateDismissed(version);
  localStorage.setItem(`wm-update-dismissed-${version}`, '1');
  toast.classList.remove('visible');

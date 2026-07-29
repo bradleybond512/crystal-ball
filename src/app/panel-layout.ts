@@ -968,20 +968,44 @@ export class PanelLayoutManager implements AppModule {
  });
  }
 
+ // Ready chip: a verified update is staged. Restart-to-apply now; it also
+ // applies on the next quit/relaunch, so this is just a shortcut.
+ const applyBtn = container.querySelector<HTMLButtonElement>('#sidebarUpdateApply');
+ if (applyBtn) {
+ applyBtn.addEventListener('click', () => {
+ const prev = this.ctx.updateState;
+ this.ctx.updateState = { phase: 'installing' };
+ this.renderSidebarUpdateBtn();
+ // On success the bundle is swapped and the app relaunches, so this
+ // promise never resolves here; only a failure returns control to JS.
+ invokeTauri<void>('apply_staged_update').catch(() => {
+ // Clear the "already staged" flag so the next check re-downloads
+ // instead of getting stuck on a phantom ready state.
+ if (prev?.version) {
+ try { localStorage.removeItem(`wm-update-staged-${prev.version}`); } catch { /* quota */ }
+ }
+ this.ctx.updateState = prev;
+ this.renderSidebarUpdateBtn();
+ });
+ });
+ return;
+ }
+
+ // Available chip: no auto-staged bundle (web / non-DMG / no manifest hash) —
+ // open the download so the user can install it manually.
  const installBtn = container.querySelector<HTMLButtonElement>('#sidebarUpdateInstall');
  if (!installBtn) return;
 
  const state = this.ctx.updateState;
  if (state?.phase !== 'available' || !state.downloadUrl) return;
 
- const { version, downloadUrl, expectedSha256 } = state;
+ const { downloadUrl } = state;
  installBtn.addEventListener('click', () => {
- this.ctx.updateState = { phase: 'installing' };
- this.renderSidebarUpdateBtn();
- invokeTauri<void>('install_update', { downloadUrl, expectedSha256 }).catch(() => {
- this.ctx.updateState = { phase: 'available', version, downloadUrl, expectedSha256 };
- this.renderSidebarUpdateBtn();
- });
+ if (this.ctx.isDesktopApp) {
+ void invokeTauri<void>('open_url', { url: downloadUrl }).catch(() => {});
+ } else {
+ window.open(downloadUrl, '_blank', 'noopener');
+ }
  });
   }
 

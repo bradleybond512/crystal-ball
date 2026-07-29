@@ -29,10 +29,11 @@ import type { BreakingNewsBanner } from '@/components/BreakingNewsBanner';
 import type { AcledEvent, AdsbMilitaryFlight } from '@/services/osint';
 
 export type UpdateState = {
-  phase: 'checking' | 'up-to-date' | 'available' | 'installing';
+  phase: 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'installing';
   version?: string;
   downloadUrl?: string;
   expectedSha256?: string;
+  lastCheckedAt?: number;
 } | null;
 
 export interface CountryBriefSignals {

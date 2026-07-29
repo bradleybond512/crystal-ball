@@ -41,6 +41,12 @@ import {
 import type { PersonalImpact } from '@/services/personal/personal-impact';
 import type { FeatureHealth, HealthStatus } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  buildCalibrationReportCard,
+  type CalibrationDomainRow,
+  type CalibrationReliabilityLabel,
+} from '@/services/cognition/calibration-report-view';
+import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
 import { getSavedPlaces, type SavedPlace } from '@/services/saved-places';
 import type { ImpactSeverity } from '@/services/personal/personal-impact';
 import { getActive as getActiveSituations } from '@/services/intelligence/situation-store';
@@ -119,6 +125,20 @@ const RISK_LABEL: Record<HealthStatus, string> = {
   blind: 'BLIND',
   failing: 'STRESSED',
   unsafe: 'CRITICAL',
+};
+
+const CALIBRATION_TONE: Record<CalibrationReliabilityLabel, string> = {
+  well_calibrated: 'var(--severity-ok, #3fb950)',
+  overconfident: 'var(--severity-medium, #ff9f0a)',
+  underconfident: 'var(--severity-info, #0a84ff)',
+  insufficient_data: 'var(--text-secondary, #8a8a8e)',
+};
+
+const CALIBRATION_LABEL_TEXT: Record<CalibrationReliabilityLabel, string> = {
+  well_calibrated: 'calibrated',
+  overconfident: 'runs hot',
+  underconfident: 'runs cold',
+  insufficient_data: 'building',
 };
 
 const WHAT_CHANGED_WINDOW_MS = 60 * 60 * 1000;
@@ -297,6 +317,7 @@ export class CommandCenterPanel extends Panel {
         ${this.renderTopThings(concerning)}
         ${this.renderReadinessRow()}
         ${this.renderProviderRedundancy(redundancy)}
+        ${this.renderCalibrationReport()}
         ${this.renderWatchNext(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
         ${this.renderRecommendations(report.recommendations)}
       </div>
@@ -592,6 +613,57 @@ export class CommandCenterPanel extends Panel {
         <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:3px;">${exposures}</div>
         ${i.recommendedAction ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(i.recommendedAction)}</div>` : ''}
       </div>
+    </div>`;
+  }
+
+  /**
+   * "How well am I forecasting?" — surfaces the Closed Calibration Loop
+   * (recalibration.ts) so the recalibration the system applies invisibly
+   * becomes legible: which domains run hot/cold, how much resolved history
+   * backs each, and whether recalibration is actively engaged. Renders
+   * nothing until at least one forecast has resolved.
+   */
+  private renderCalibrationReport(): string {
+    const card = buildCalibrationReportCard(getCalibrationStore().all());
+    if (card.overall.resolvedTotal === 0) return '';
+
+    const chip = (label: CalibrationReliabilityLabel): string => {
+      const color = CALIBRATION_TONE[label];
+      const text = CALIBRATION_LABEL_TEXT[label];
+      return `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${color}22;color:${color};text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(text)}</span>`;
+    };
+
+    const sparkline = (row: CalibrationDomainRow): string => {
+      if (row.sparkline.length === 0) return '';
+      const cells = row.sparkline.map((pt) => {
+        let c = 'var(--severity-ok, #3fb950)';
+        if (Math.abs(pt.gap) > 0.05) c = pt.gap < 0 ? 'var(--severity-medium, #ff9f0a)' : 'var(--severity-info, #0a84ff)';
+        const title = `predicted ${Math.round(pt.predicted * 100)}% · observed ${Math.round(pt.observed * 100)}% (n=${pt.n})`;
+        return `<span title="${escapeHtml(title)}" style="display:inline-block;width:6px;height:10px;background:${c};border-radius:1px;"></span>`;
+      }).join('');
+      return `<span style="display:inline-flex;gap:2px;align-items:center;margin-left:auto;">${cells}</span>`;
+    };
+
+    const rows = card.domains.slice(0, 5).map((row) => {
+      const brier = row.brier === null ? '' : ` · Brier ${row.brier.toFixed(2)}`;
+      return `<div style="display:flex;flex-direction:column;gap:2px;padding:4px 0;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <strong style="font-size:12px;">${escapeHtml(row.label)}</strong>
+          ${chip(row.reliability)}
+          <span style="font-size:10px;color:var(--text-secondary,#888);">n=${row.sampleSize}${escapeHtml(brier)}</span>
+          ${sparkline(row)}
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);line-height:1.4;">${escapeHtml(row.headline)}</div>
+      </div>`;
+    }).join('');
+
+    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;">Forecast calibration</span>
+        ${chip(card.overall.label)}
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-bottom:6px;line-height:1.4;">${escapeHtml(card.overall.summary)}</div>
+      ${rows}
     </div>`;
   }
 

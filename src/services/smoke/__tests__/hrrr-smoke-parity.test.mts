@@ -10,7 +10,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import * as ts from '../hrrr-smoke.ts';
-// eslint-disable-next-line import/extensions
 import * as mjs from '../../../../src-tauri/sidecar/hrrr-smoke.mjs';
 
 test('latestHrrrCycle agrees across a day of timestamps + latencies', () => {

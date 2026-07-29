@@ -257,3 +257,23 @@ test('fetchHrrrGrid serves a repeat request for the same cycle+points from cache
   assert.equal(idxFetches, fetchesAfterFirst, 'second identical call hit the cache — no re-fetch');
   _resetGridCache();
 });
+
+test('fetchHrrrGrid coalesces concurrent identical requests into one decode', async () => {
+  _resetGridCache();
+  const now = Date.UTC(2026, 6, 22, 14, 37);
+  let idxFetches = 0;
+  const fetchImpl = async (url) => {
+    if (url.endsWith('.idx')) {
+      idxFetches++;
+      // Yield so both concurrent callers reach the in-flight check before this resolves.
+      await Promise.resolve();
+      return { ok: true, status: 200, text: async () => IDX, arrayBuffer: async () => new ArrayBuffer(0) };
+    }
+    return { ok: true, status: 206, text: async () => '', arrayBuffer: async () => new Uint8Array([1]).buffer };
+  };
+  const params = { points: [{ lat: 41.5, lon: -97.5 }], now, horizonHours: 1, deps: { wgrib2Path: '/w', fetchImpl, ...decodeDeps('val=1e-08') } };
+  const [a, b] = await Promise.all([fetchHrrrGrid(params), fetchHrrrGrid(params)]);
+  assert.deepEqual(a, b);
+  assert.equal(idxFetches, 1, 'concurrent identical calls shared one decode — a single idx fetch');
+  _resetGridCache();
+});

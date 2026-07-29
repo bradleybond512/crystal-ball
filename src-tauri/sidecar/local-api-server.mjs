@@ -4131,6 +4131,71 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   }
 }
 
+// Cap a single HRRR fetch's buffered body. A MASSDEN message is a few hundred KB;
+// the whole cycle file is ~130 MB, so this trips only if the server ignores a
+// Range and streams the full file — which we then abort rather than OOM on.
+const HRRR_MAX_RESPONSE_BYTES = 24 * 1024 * 1024;
+
+function hrrrResponseWrapper(res, status, buf) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k) => res.headers[k.toLowerCase()] || null },
+    text: () => Promise.resolve(buf.toString('utf8')),
+    arrayBuffer: () =>
+      Promise.resolve(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)),
+  };
+}
+
+// Binary-capable fetch for the HRRR-Smoke decoder. fetchWithTimeout is unusable
+// here: it stringifies the body (corrupting GRIB2 bytes) and exposes no
+// arrayBuffer(). This preserves raw bytes, refuses to buffer a Range request the
+// server answered non-206 (a 200 means it ignored the Range and would stream the
+// whole ~130 MB file), and caps total bytes. IPv4-forced like the sidecar's
+// other outbound calls.
+function fetchHrrrResource(url, options = {}, timeoutMs = 20_000) {
+  const u = new URL(url);
+  const hdrs = options.headers || {};
+  const wantsRange = Boolean(hdrs.Range || hdrs.range);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        method: options.method || 'GET',
+        headers: hdrs,
+        family: 4,
+        agent: httpsAgent,
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (wantsRange && status !== 206) {
+          res.destroy();
+          resolve(hrrrResponseWrapper(res, status, Buffer.alloc(0)));
+          return;
+        }
+        const chunks = [];
+        let total = 0;
+        res.on('data', (c) => {
+          total += c.length;
+          if (total > HRRR_MAX_RESPONSE_BYTES) {
+            res.destroy();
+            reject(new Error('HRRR response exceeded byte cap'));
+            return;
+          }
+          chunks.push(c);
+        });
+        res.on('end', () => resolve(hrrrResponseWrapper(res, status, Buffer.concat(chunks))));
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => { req.destroy(new Error('Request timed out')); });
+    req.end();
+  });
+}
+
 /**
  * Sanitize a single GlobeSeismicOverlay payload from a renderer push.
  * Returns null if any required field is missing or wrong-typed so the
@@ -5906,7 +5971,12 @@ async function dispatch(requestUrl, req, routes, context) {
         points,
         now: Date.now(),
         horizonHours,
-        fetchImpl: (url, init) => fetchWithTimeout(url, { headers: init?.headers }, 20_000),
+        // fetchHrrrGrid reads fetchImpl (and wgrib2Path) from `deps` — passing it
+        // at the top level silently falls back to global fetch, losing the
+        // IPv4-forcing, non-206 abort, and byte cap this helper provides.
+        deps: {
+          fetchImpl: (url, init) => fetchHrrrResource(url, { headers: init?.headers }, 20_000),
+        },
       });
       const available = grid.some((g) => g !== null);
       return json({ grid, available, source: 'hrrr-smoke' });

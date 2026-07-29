@@ -274,6 +274,10 @@ async function mapWithConcurrency(items, limit, fn) {
 // cycle + horizon + a rounded-point fingerprint; short TTL so a new cycle wins.
 const CACHE_TTL_MS = 20 * 60 * 1000;
 let _gridCache = null;
+// Coalesce concurrent identical decodes: while one cycle+points decode is in
+// flight, later callers with the same key share its promise instead of spawning
+// a fresh fleet of downloads/subprocesses.
+const _inFlight = new Map();
 
 function pointsFingerprint(points) {
   return points.map((p) => `${p.lat.toFixed(2)},${p.lon.toFixed(2)}`).join('|');
@@ -282,6 +286,7 @@ function pointsFingerprint(points) {
 /** @internal test hook — clear the decode cache. */
 export function _resetGridCache() {
   _gridCache = null;
+  _inFlight.clear();
 }
 
 /**
@@ -322,6 +327,25 @@ export async function fetchHrrrGrid(params) {
     return _gridCache.grid;
   }
 
+  if (!deps.noCache) {
+    const pending = _inFlight.get(cacheKey);
+    if (pending) return pending;
+  }
+
+  const run = decodeGrid({
+    points, now, field, level, concurrency, cycle, maxFh, wgrib2Path, fetchImpl, deps, cacheKey, allNull,
+  });
+  if (deps.noCache) return run;
+  _inFlight.set(cacheKey, run);
+  try {
+    return await run;
+  } finally {
+    _inFlight.delete(cacheKey);
+  }
+}
+
+async function decodeGrid(ctx) {
+  const { points, now, field, level, concurrency, cycle, maxFh, wgrib2Path, fetchImpl, deps, cacheKey, allNull } = ctx;
   const cycleMs = cycleEpochMs(cycle);
   const decoded = await mapWithConcurrency(fhRange(maxFh), concurrency, async (fh) => {
     try {

@@ -125,6 +125,11 @@ if [[ -z "${TARGET}" ]]; then
   TARGET="${HOST_TRIPLE}"
 fi
 
+# Start from a clean slot: never let a stale or wrong-architecture binary from a
+# previous run survive a skip or a failed build. We only (re)install at the very
+# end, after the otool self-containment gate passes.
+rm -f "${DEST_DIR}/${OUTPUT_NAME}"
+
 skip() {
   echo "[vendor-wgrib2] SKIP: $1" >&2
   echo "[vendor-wgrib2] HRRR-Smoke stays inert; the app falls back to Open-Meteo." >&2

@@ -32,7 +32,7 @@ export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto' | 'stocks
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
-    providerIds: ['usgs-earthquakes', 'emsc-seismic'],
+    providerIds: ['usgs-earthquakes', 'emsc-seismic', 'geofon-seismic'],
     numericTolerance: 0.5,
     match: { maxDistanceKm: 50, maxTimeDeltaMs: 120_000 },
   },

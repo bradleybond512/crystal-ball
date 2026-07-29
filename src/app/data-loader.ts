@@ -242,6 +242,7 @@ import { fetchReliefWebCrises } from '@/services/reliefweb';
 import { fetchBellingcatOsint } from '@/services/bellingcat';
 import { fetchFcdoWarnings, fetchDfatWarnings, fetchGacWarnings, fetchGovWarningConvergence, getConvergenceAlerts } from '@/services/travel-warnings';
 import { fetchEmscSeismic } from '@/services/emsc-seismic';
+import { fetchGeofonSeismic } from '@/services/geofon-seismic';
 import { fetchAcapsCrises } from '@/services/acaps';
 import { fetchLiveUaMap } from '@/services/liveuamap';
 import { fetchDebrisReentries } from '@/services/aerospace-reentry';
@@ -335,7 +336,7 @@ import {
   getLatestFusion,
   recordDomainObservations,
 } from '@/services/providers/fusion-publish';
-import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { usgsEarthquakesToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
 import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
@@ -740,6 +741,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: () => runGuarded('bellingcat', () => this.loadBellingcat()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: () => runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: () => runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'geofonSeismic', task: () => runGuarded('geofonSeismic', () => this.loadGeofonSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: () => runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'liveUaMap', task: () => runGuarded('liveUaMap', () => this.loadLiveUaMap()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'debrisReentries', task: () => runGuarded('debrisReentries', () => this.loadDebrisReentries()) });
@@ -4112,6 +4114,16 @@ export class DataLoaderManager implements AppModule {
  console.warn('[emsc-seismic] fetch failed', error);
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
  recordDomainObservations('emsc-seismic', [], false);
+ }
+  }
+
+  async loadGeofonSeismic(): Promise<void> {
+ try {
+ const events = await fetchGeofonSeismic();
+ recordDomainObservations('geofon-seismic', geofonEventsToObservations(events), true);
+ } catch (error) {
+ console.warn('[geofon-seismic] fetch failed', error);
+ recordDomainObservations('geofon-seismic', [], false);
  }
   }
 

@@ -169,22 +169,33 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/**
- * One-sided lower bound of the mean per-pair Brier improvement
- * (incumbent − challenger) via a paired bootstrap: resample pairs with
- * replacement, take the mean improvement of each resample, and return
- * the (1 − confidence) percentile of the resample means.
- */
-export function pairedBootstrapLowerBound(
-  pairs: readonly JoinedPairEvidence[],
-  resamples: number,
-  confidence: number,
-  seed: number,
-): number {
-  const diffs = pairs.map((e) => {
+/** Per-pair Brier improvement (incumbent − challenger; positive =
+ *  challenger better). */
+export function brierImprovementDiffs(pairs: readonly JoinedPairEvidence[]): number[] {
+  return pairs.map((e) => {
     const o = e.outcome ? 1 : 0;
     return (e.liveP - o) ** 2 - (e.shadowP - o) ** 2;
   });
+}
+
+/** Per-pair log-loss improvement (incumbent − challenger; positive =
+ *  challenger better). Probabilities clamped like logLossOf. */
+function clampProbability(p: number): number {
+  return Math.min(1 - LOG_LOSS_EPSILON, Math.max(LOG_LOSS_EPSILON, p));
+}
+
+export function logLossImprovementDiffs(pairs: readonly JoinedPairEvidence[]): number[] {
+  return pairs.map((e) => {
+    const live = clampProbability(e.liveP);
+    const shadow = clampProbability(e.shadowP);
+    return e.outcome
+      ? -Math.log(live) - -Math.log(shadow)
+      : -Math.log(1 - live) - -Math.log(1 - shadow);
+  });
+}
+
+/** Sorted resample means of `diffs` under the deterministic PRNG. */
+function bootstrapMeans(diffs: readonly number[], resamples: number, seed: number): number[] {
   const rand = mulberry32(seed);
   const means: number[] = [];
   for (let r = 0; r < resamples; r += 1) {
@@ -197,11 +208,47 @@ export function pairedBootstrapLowerBound(
     means.push(sum / diffs.length);
   }
   means.sort((a, b) => a - b);
+  return means;
+}
+
+/**
+ * One-sided lower bound of the mean per-pair Brier improvement
+ * (incumbent − challenger) via a paired bootstrap: resample pairs with
+ * replacement, take the mean improvement of each resample, and return
+ * the (1 − confidence) percentile of the resample means.
+ */
+export function pairedBootstrapLowerBound(
+  pairs: readonly JoinedPairEvidence[],
+  resamples: number,
+  confidence: number,
+  seed: number,
+): number {
+  const means = bootstrapMeans(brierImprovementDiffs(pairs), resamples, seed);
   const idx = Math.min(
     means.length - 1,
     Math.max(0, Math.floor((1 - confidence) * means.length)),
   );
   return means[idx]!;
+}
+
+/**
+ * Two-sided paired-bootstrap confidence interval of the mean of `diffs`
+ * (ACC-403: metric deltas with confidence intervals). Same deterministic
+ * PRNG as the gate's lower bound. Returns the ((1−c)/2, (1+c)/2)
+ * percentiles of the resample means.
+ */
+export function pairedBootstrapInterval(
+  diffs: readonly number[],
+  resamples: number,
+  confidence: number,
+  seed: number,
+): { low: number; high: number } {
+  const means = bootstrapMeans(diffs, resamples, seed);
+  const clampIdx = (i: number): number =>
+    Math.min(means.length - 1, Math.max(0, i));
+  const low = means[clampIdx(Math.floor(((1 - confidence) / 2) * means.length))]!;
+  const high = means[clampIdx(Math.floor(((1 + confidence) / 2) * means.length))]!;
+  return { low, high };
 }
 
 // ── Safety replay adapter ────────────────────────────────────────────

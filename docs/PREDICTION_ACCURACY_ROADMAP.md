@@ -745,9 +745,12 @@ Extend `src/services/cognition/shadow-rollout.ts`:
 
 ### ACC-402 — Promotion and rollback gate
 
-Status: `WAITING`
+Status: `IN PROGRESS`
 
-Dependencies: ACC-401
+Owner: Claude
+Branch: `claude/acc-402-promotion-gate`
+
+Dependencies: ACC-401 (DONE — #1564)
 
 Deliver:
 

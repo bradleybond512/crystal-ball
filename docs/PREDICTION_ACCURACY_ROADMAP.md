@@ -790,9 +790,12 @@ typecheck:all, scoped ESLint.
 
 ### ACC-403 — Champion/challenger status surface
 
-Status: `WAITING`
+Status: `IN PROGRESS`
 
-Dependencies: ACC-402
+Owner: Claude
+Branch: `claude/acc-403-status-surface`
+
+Dependencies: ACC-402 (DONE — #1566)
 
 Show:
 

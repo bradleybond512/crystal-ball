@@ -337,7 +337,9 @@ import {
   recordDomainObservations,
 } from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
-import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { openMeteoAqToObservations, openaqToObservations, airnowToObservations, purpleairToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { fetchAirnowCurrent } from '@/services/airquality/airnow-fusion-fetch';
+import { fetchPurpleairNearby } from '@/services/airquality/purpleair-fusion-fetch';
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
 import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
@@ -2684,7 +2686,19 @@ export class DataLoaderManager implements AppModule {
 
   async evaluateCompoundThreats(): Promise<void> {
  try {
- const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts, openaqReadings] = await Promise.allSettled([
+ // AirNow's current-observations API is a single nearest-station lookup
+ // (not a global fetch like open-meteo-aqi/openaq-v3), so it needs a point
+ // to query around. Reuses the same getSavedPlaces()[0] + NYC-fallback
+ // convention as loadExtendedForecast() — the app's established pattern
+ // for "pick one representative coordinate" when a fetch is single-point.
+ let airnowLat = 40.71, airnowLon = -74.01;
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const home = getSavedPlaces()[0];
+ if (home) { airnowLat = home.lat; airnowLon = home.lon; }
+ } catch { /* fall back to NYC */ }
+
+ const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts, openaqReadings, airnowReadings, purpleairReadings] = await Promise.allSettled([
  fetchInciwebIncidents(),
  fetchGlobalAirQuality(),
  fetchHazmatIncidents(),
@@ -2692,6 +2706,8 @@ export class DataLoaderManager implements AppModule {
  fetchDamSafetyAlerts(),
  fetchPowerGridAlerts(),
  fetchOpenaqWorstReadings(),
+ fetchAirnowCurrent(airnowLat, airnowLon),
+ fetchPurpleairNearby(),
  ]);
 
  // Second air-quality source for fusion (OpenAQ ground stations). Fail-closed:
@@ -2701,6 +2717,22 @@ export class DataLoaderManager implements AppModule {
  recordDomainObservations('openaq-v3', openaqToObservations(r.readings), r.ok);
  } else {
  recordDomainObservations('openaq-v3', [], false);
+ }
+
+ // Third air-quality source for fusion (AirNow EPA ground stations, keyed).
+ if (airnowReadings.status === 'fulfilled') {
+ const r = airnowReadings.value;
+ recordDomainObservations('airnow', airnowToObservations(r.readings), r.ok);
+ } else {
+ recordDomainObservations('airnow', [], false);
+ }
+
+ // Fourth air-quality source for fusion (PurpleAir crowdsourced sensors, keyed).
+ if (purpleairReadings.status === 'fulfilled') {
+ const r = purpleairReadings.value;
+ recordDomainObservations('purpleair', purpleairToObservations(r.readings), r.ok);
+ } else {
+ recordDomainObservations('purpleair', [], false);
  }
 
  const signals = [];

@@ -38,9 +38,14 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   },
   // AQI is a bounded 0–500 scale, so an absolute tolerance works; two sources
   // sampling the same locale (≤25 km) within a few hours should agree within
-  // ~25 AQI points. Open-Meteo (modeled) + OpenAQ v3 (ground stations).
+  // ~25 AQI points. Open-Meteo (modeled) + OpenAQ v3 (ground stations) +
+  // AirNow (EPA ground stations) + PurpleAir (crowdsourced sensors, PM2.5→AQI
+  // converted). AirNow feeds OpenAQ's US coverage too, but they're kept as
+  // separate independenceGroups (see provider-registry.ts) since AirNow's own
+  // direct-report cadence and QA process differ from OpenAQ's aggregation —
+  // revisit if live disagreement data suggests they should be merged.
   air_quality: {
-    providerIds: ['open-meteo-aqi', 'openaq-v3'],
+    providerIds: ['open-meteo-aqi', 'openaq-v3', 'airnow', 'purpleair'],
     numericTolerance: 25,
     match: { maxDistanceKm: 25, maxTimeDeltaMs: 3 * 60 * 60_000 },
   },

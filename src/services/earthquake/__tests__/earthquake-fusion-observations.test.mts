@@ -69,9 +69,9 @@ function geofon(o: Partial<GeofonEvent> = {}): GeofonEvent {
 
 test('geofonEventsToObservations maps valid events and drops NaN rows', () => {
   const obs = geofonEventsToObservations([
-    { id: 'gfz2026osef', time: '2026-07-29T04:07:23.28Z', lat: -17.595, lon: -178.762, depthKm: 531.4, magnitude: 5.19, region: 'Fiji' },
-    { id: 'bad', time: 'not-a-date', lat: 1, lon: 2, depthKm: 10, magnitude: 5, region: 'X' },
-    { id: 'bad2', time: '2026-07-29T00:00:00Z', lat: Number.NaN, lon: 2, depthKm: 10, magnitude: 5, region: 'Y' },
+    geofon(),
+    geofon({ time: 'not-a-date', id: 'bad' }),
+    geofon({ lat: Number.NaN, id: 'bad2' }),
   ]);
   assert.equal(obs.length, 1);
   assert.equal(obs[0]!.providerId, 'geofon-seismic');

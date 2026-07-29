@@ -48,7 +48,7 @@ export function emscEventsToObservations(events: readonly EmscEvent[]): DomainOb
 // GEOFON FDSN text timestamps lack a trailing timezone suffix (e.g.
 // "2026-07-29T04:07:23.28"); Date.parse treats a suffix-less ISO string as
 // LOCAL time, which would skew fusion matching against USGS/EMSC (both UTC).
-const HAS_TZ_SUFFIX = /(?:[zZ])|(?:[+-]\d\d:?\d\d$)/;
+const HAS_TZ_SUFFIX = /(?:[zZ]$)|(?:[+-]\d\d:?\d\d$)/;
 
 export function geofonEventsToObservations(events: readonly GeofonEvent[]): DomainObservation[] {
   const out: DomainObservation[] = [];

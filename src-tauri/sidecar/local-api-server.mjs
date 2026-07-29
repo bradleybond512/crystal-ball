@@ -12310,6 +12310,7 @@ async function dispatch(requestUrl, req, routes, context) {
       if (!r.ok) throw new Error(`GEOFON ${r.status}`);
       const text = await r.text();
       const events = text.split('\n')
+        .map((line) => line.trim())
         .filter((line) => line && !line.startsWith('#'))
         .map((line) => {
           const c = line.split('|');

@@ -12295,6 +12295,43 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── GEOFON (GFZ Potsdam) FDSN event service — 3rd independent seismic
+  // network for earthquake fusion (groups: usgs / emsc / gfz). Text format
+  // is the stable FDSN contract; parsed here so the renderer gets JSON.
+  if (requestUrl.pathname === '/api/geofon-seismic') {
+    const _gfCached = getCached('geofon-seismic', 5 * 60 * 1000);
+    if (_gfCached) return json(_gfCached);
+    try {
+      const r = await fetchWithTimeout(
+        'https://geofon.gfz-potsdam.de/fdsnws/event/1/query?format=text&limit=50&minmagnitude=4.0',
+        { headers: { 'User-Agent': CHROME_UA } },
+        12_000,
+      );
+      if (!r.ok) throw new Error(`GEOFON ${r.status}`);
+      const text = await r.text();
+      const events = text.split('\n')
+        .filter((line) => line && !line.startsWith('#'))
+        .map((line) => {
+          const c = line.split('|');
+          return {
+            id: c[0],
+            time: c[1],
+            lat: Number.parseFloat(c[2]),
+            lon: Number.parseFloat(c[3]),
+            depthKm: Number.parseFloat(c[4]),
+            magnitude: Number.parseFloat(c[10]),
+            region: c[12] ?? '',
+          };
+        })
+        .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon) && Number.isFinite(e.magnitude));
+      const _gfResult = { events };
+      setCached('geofon-seismic', _gfResult, 5 * 60 * 1000);
+      return json(_gfResult);
+    } catch (error) {
+      return json({ events: [], error: String(error.message ?? error) });
+    }
+  }
+
   // ── USGS PAGER + ShakeMap rapid impact assessment ────────────────────────
   // GET /api/seismic-impact?eventId=<id>
   // Returns the PAGER alert label + ShakeMap maxMMI for the requested

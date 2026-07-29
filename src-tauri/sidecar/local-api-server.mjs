@@ -11089,6 +11089,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const price = s.value?.quotes?.USD?.price;
  if (Number.isFinite(price) && price > 0) quotes.push({ symbol: CP_IDS[id], price });
  }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all CoinPaprika requests failed' });
  const _cpResult = { quotes };
  setCached('crypto-quotes-coinpaprika', _cpResult, 60 * 1000);
  return json(_cpResult);
@@ -11118,6 +11119,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const price = Number.parseFloat(t?.c?.[0]);
  if (Number.isFinite(price) && price > 0) { quotes.push({ symbol: hit[1], price }); seen.add(hit[1]); }
  }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all Kraken requests failed' });
  const _krResult = { quotes };
  setCached('crypto-quotes-kraken', _krResult, 60 * 1000);
  return json(_krResult);

@@ -10953,11 +10953,14 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Shared equities fusion ticker set (Finnhub / Yahoo / FMP) ────────────
+  const STOCK_FUSION_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+
   // ── Stock fusion source A: Finnhub (keyed; proven in the market panel) ────
   if (requestUrl.pathname === '/api/stocks-finnhub') {
  const _sfCached = getCached('stocks-finnhub', 60 * 1000);
  if (_sfCached) return json(_sfCached);
- const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ const SYMS = STOCK_FUSION_SYMBOLS;
  const finnhubKey = process.env.FINNHUB_API_KEY;
  if (!finnhubKey) return json({ quotes: [], degraded: true, error: 'no Finnhub key' });
  try {
@@ -10987,7 +10990,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/stocks-yahoo') {
  const _syCached = getCached('stocks-yahoo', 60 * 1000);
  if (_syCached) return json(_syCached);
- const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ const SYMS = STOCK_FUSION_SYMBOLS;
  try {
  const results = await Promise.allSettled(SYMS.map((s) =>
  fetchWithTimeout(
@@ -11006,6 +11009,40 @@ async function dispatch(requestUrl, req, routes, context) {
  const _syResult = { quotes };
  setCached('stocks-yahoo', _syResult, 60 * 1000);
  return json(_syResult);
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Stock fusion source C: Financial Modeling Prep (keyed). Real per-quote
+  // timestamps — corroborates when FMP_API_KEY is set, Yahoo+Finnhub only
+  // otherwise. ──────────────────────────────────────────────────────────────
+  if (requestUrl.pathname === '/api/stocks-fmp') {
+ const _sfmpCached = getCached('stocks-fmp', 60 * 1000);
+ if (_sfmpCached) return json(_sfmpCached);
+ const fmpKey = process.env.FMP_API_KEY;
+ if (!fmpKey) return json({ quotes: [], degraded: true, error: 'no FMP key' });
+ try {
+ const r = await fetchWithTimeout(
+ `https://financialmodelingprep.com/api/v3/quote/${STOCK_FUSION_SYMBOLS.join(',')}?apikey=${encodeURIComponent(fmpKey)}`,
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000,
+ );
+ if (!r.ok) throw new Error(`FMP ${r.status}`);
+ const data = await r.json();
+ const rows = Array.isArray(data) ? data : [];
+ const quotes = [];
+ for (const row of rows) {
+ const symbol = row?.symbol;
+ const price = row?.price;
+ if (typeof symbol !== 'string' || !Number.isFinite(price) || price <= 0) continue;
+ const rawTs = row?.timestamp;
+ const observedAt = Number.isFinite(rawTs) && rawTs > 0 ? rawTs * 1000 : Date.now(); // epoch seconds → ms; missing/0 falls back to fetch time
+ quotes.push({ symbol, price, observedAt });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no FMP prices' });
+ const _sfmpResult = { quotes };
+ setCached('stocks-fmp', _sfmpResult, 60 * 1000);
+ return json(_sfmpResult);
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
  }

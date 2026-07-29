@@ -48,10 +48,12 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   { id: 'coinpaprika', domain: 'markets', displayName: 'CoinPaprika', authType: 'none', baseUrl: 'https://api.coinpaprika.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 6, independenceGroup: 'coinpaprika' },
   { id: 'kraken', domain: 'markets', displayName: 'Kraken', authType: 'none', baseUrl: 'https://api.kraken.com', rateLimitNote: 'public ticker, no key', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 7, independenceGroup: 'kraken' },
   // ── Stock prices (fused by ticker: Yahoo (no-key, primary) + Finnhub
-  // (keyed, corroborating). Own 'equities' domain so stock fingerprints don't
-  // collide with crypto's in the per-domain redundancy group. ──
+  // (keyed, corroborating) + FMP (keyed, corroborating). Own 'equities'
+  // domain so stock fingerprints don't collide with crypto's in the
+  // per-domain redundancy group. ──
   { id: 'yahoo-finance', domain: 'equities', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'yahoo' },
   { id: 'finnhub', domain: 'equities', displayName: 'Finnhub', authType: 'free_key', requiredSecret: 'FINNHUB_API_KEY', baseUrl: 'https://finnhub.io', rateLimitNote: '60 req/min free tier', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'finnhub' },
+  { id: 'fmp', domain: 'equities', displayName: 'Financial Modeling Prep', authType: 'free_key', requiredSecret: 'FMP_API_KEY', baseUrl: 'https://financialmodelingprep.com', rateLimitNote: '250 req/day free tier', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 3, independenceGroup: 'fmp' },
   // ── Intel Expansion Cluster 1: abuse.ch cyber trio ───────────────────────
   // All three share independenceGroup 'abuse-ch' — same operator, same data
   // pipeline. They MUST NOT count as 3 independent votes in corroboration.

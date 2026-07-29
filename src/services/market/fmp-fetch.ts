@@ -15,7 +15,7 @@ export async function fetchFmpPrices(): Promise<FmpFetchResult> {
     const data = (await res.json()) as { quotes?: FmpQuote[]; degraded?: boolean; error?: string } | null;
     if (!data || data.degraded || data.error || !Array.isArray(data.quotes)) return { ok: false, quotes: [] };
     const quotes = data.quotes.filter((q): q is FmpQuote =>
-      !!q && typeof q.symbol === 'string' && Number.isFinite(q.price) && q.price > 0 && Number.isFinite(q.observedAt));
+      !!q && typeof q.symbol === 'string' && Number.isFinite(q.price) && q.price > 0 && Number.isFinite(q.observedAt) && q.observedAt > 0);
     if (quotes.length === 0) return { ok: false, quotes: [] };
     return { ok: true, quotes };
   } catch {

@@ -1311,6 +1311,10 @@ const ALLOWED_ENV_KEYS = new Set([
 ]);
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+// Shared equities fusion ticker set (Finnhub / Yahoo / FMP routes). Module
+// scope: shared across three route blocks, so function-body placement would
+// create a TDZ ordering hazard if a route ever moved above the declaration.
+const STOCK_FUSION_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
 
 // Path aliases for callers that use the renderer's preferred names rather
 // than the canonical handler paths. Each alias is rewritten to its target
@@ -10964,9 +10968,6 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ quotes: symbols.map(sym => ({ symbol: sym, price: null, change: null })), error: String(error.message ?? error) });
  }
   }
-
-  // ── Shared equities fusion ticker set (Finnhub / Yahoo / FMP) ────────────
-  const STOCK_FUSION_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
 
   // ── Stock fusion source A: Finnhub (keyed; proven in the market panel) ────
   if (requestUrl.pathname === '/api/stocks-finnhub') {

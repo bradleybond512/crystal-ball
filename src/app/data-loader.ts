@@ -341,6 +341,7 @@ import { openMeteoAqToObservations, openaqToObservations } from '@/services/airq
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
 import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
+import { fetchFmpPrices } from '@/services/market/fmp-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
 import { fetchCoinpaprikaPrices } from '@/services/market/coinpaprika-fetch';
 import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
@@ -1422,13 +1423,21 @@ export class DataLoaderManager implements AppModule {
  const krObservedAt = Date.now();
  recordDomainObservations('kraken', exchangePricesToObservations('kraken', kr.prices, krObservedAt), kr.ok, krObservedAt);
  recordFusedSpotPrices(getLatestFusion('crypto', krObservedAt).facts);
- // Stock price fusion: Yahoo (no-key) + Finnhub (keyed), matched by ticker. Fail-closed.
+ // Stock price fusion: Yahoo (no-key) + Finnhub (keyed) + FMP (keyed),
+ // matched by ticker. Fail-closed. FMP quotes carry their own per-row
+ // occurredAt (the API's real quote timestamp, not "now") — that's why
+ // this source doesn't route through exchangePricesToObservations' shared
+ // timestamp like the others.
  const yahoo = await fetchYahooPrices();
  const yahooObservedAt = Date.now();
  recordDomainObservations('yahoo-finance', exchangePricesToObservations('yahoo-finance', yahoo.prices, yahooObservedAt), yahoo.ok, yahooObservedAt);
  const finnhub = await fetchFinnhubPrices();
  const finnhubObservedAt = Date.now();
  recordDomainObservations('finnhub', exchangePricesToObservations('finnhub', finnhub.prices, finnhubObservedAt), finnhub.ok, finnhubObservedAt);
+ const fmp = await fetchFmpPrices();
+ recordDomainObservations('fmp',
+   fmp.quotes.map((q) => ({ providerId: 'fmp', key: q.symbol.toUpperCase(), value: q.price, lat: 0, lon: 0, occurredAt: q.observedAt })),
+   fmp.ok);
  recordFusedSpotPrices(getLatestFusion('stocks', finnhubObservedAt).facts);
   }
 

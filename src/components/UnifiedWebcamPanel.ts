@@ -75,6 +75,9 @@ export class UnifiedWebcamPanel extends Panel {
    *  (probe/smoke timers) reuse the live media instead of rebuilding it. */
   private viewerEl: HTMLElement | null = null;
   private viewerFeedId: string | null = null;
+  /** Feeds whose inline stream (HLS/MJPEG) errored this session — their viewer
+   *  rebuilds in snapshot mode instead of leaving a silent black box. */
+  private streamFailedIds = new Set<string>();
 
   constructor() {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
@@ -766,6 +769,9 @@ export class UnifiedWebcamPanel extends Panel {
     this.viewerFeedId = feed.id;
     this.viewerEl = this.buildViewer(feed);
     host.append(this.viewerEl);
+    // The viewer mounts above the grid — if the user clicked a card deep in a
+    // scrolled list, bring it into view so the click visibly does something.
+    this.viewerEl.scrollIntoView({ block: 'nearest' });
   }
 
   private teardownViewer(): void {
@@ -840,6 +846,13 @@ export class UnifiedWebcamPanel extends Panel {
         captureImg.addEventListener('load', () => {
           loadedAt = Date.now();
           asOf.textContent = formatDataAsOf(loadedAt, Date.now());
+        });
+        // A failed frame must say so — a blank rectangle reads as "broken app".
+        // The auto-refresh timer keeps retrying, so a transient blip recovers.
+        captureImg.addEventListener('error', () => {
+          asOf.textContent = loadedAt === null
+            ? '⚠️ No image — camera may be offline (retrying automatically)'
+            : `⚠️ Latest frame failed — ${formatDataAsOf(loadedAt, Date.now())} (retrying)`;
         });
         div.append(asOf);
       }
@@ -938,7 +951,19 @@ export class UnifiedWebcamPanel extends Panel {
       m.style.objectFit = 'contain';
     };
 
-    if (stream && f.streamType === 'hls') {
+    // A dead stream must never sit as a silent black box: on media error,
+    // remember the failure and rebuild this feed's viewer in snapshot mode
+    // (which brings the cadence/updated stamp, Refresh, and the external
+    // "open live stream" link along with it).
+    const failStreamToSnapshot = (): void => {
+      if (this.streamFailedIds.has(f.id)) return;
+      this.streamFailedIds.add(f.id);
+      this.teardownViewer();
+      this.render();
+    };
+    const streamUsable = stream && !this.streamFailedIds.has(f.id);
+
+    if (streamUsable && f.streamType === 'hls') {
       const video = document.createElement('video');
       // hls.js needs `connect-src` for segment fetches, which the CSP locks
       // down — so rely on native HLS only, and fall through to snapshot when
@@ -950,6 +975,7 @@ export class UnifiedWebcamPanel extends Panel {
         video.controls = true;
         video.playsInline = true;
         styleMedia(video);
+        video.addEventListener('error', failStreamToSnapshot);
         const play = (): void => { void video.play().catch(() => undefined); };
         play();
         this.viewerResume = play;
@@ -962,11 +988,12 @@ export class UnifiedWebcamPanel extends Panel {
       }
     }
 
-    if (stream && f.streamType === 'mjpeg') {
+    if (streamUsable && f.streamType === 'mjpeg') {
       const img = document.createElement('img');
       img.src = stream;
       img.alt = f.name;
       styleMedia(img);
+      img.addEventListener('error', failStreamToSnapshot);
       this.viewerCleanup = () => { img.src = ''; };
       return { el: img, capture: img, playingInline: true, label: '🔴 Live MJPEG stream' };
     }
@@ -984,7 +1011,10 @@ export class UnifiedWebcamPanel extends Panel {
     const periodSec = Math.max(5, f.refreshIntervalSec || 15);
     const timer = setInterval(reload, periodSec * 1000);
     this.viewerCleanup = () => clearInterval(timer);
-    return { el: img, capture: img, playingInline: false, label: `🔄 Auto-refreshing snapshot (every ${periodSec}s)` };
+    const label = this.streamFailedIds.has(f.id)
+      ? `⚠️ Live stream unavailable — showing snapshots (every ${periodSec}s)`
+      : `🔄 Auto-refreshing snapshot (every ${periodSec}s)`;
+    return { el: img, capture: img, playingInline: false, label };
   }
 
   // ── Snapshot to Downloads ────────────────────────────────────────────

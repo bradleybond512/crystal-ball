@@ -6,6 +6,7 @@
 
 import type { Earthquake } from '@/generated/client/crystalball/seismology/v1/service_client';
 import type { EmscEvent } from '@/services/emsc-seismic';
+import type { GeofonEvent } from '@/services/geofon-seismic';
 import type { DomainObservation } from '@/services/providers/fusion-ingest';
 
 export function usgsEarthquakesToObservations(quakes: readonly Earthquake[]): DomainObservation[] {
@@ -40,6 +41,23 @@ export function emscEventsToObservations(events: readonly EmscEvent[]): DomainOb
       occurredAt,
       externalId: e.id ?? undefined,
     });
+  }
+  return out;
+}
+
+// GEOFON FDSN text timestamps lack a trailing timezone suffix (e.g.
+// "2026-07-29T04:07:23.28"); Date.parse treats a suffix-less ISO string as
+// LOCAL time, which would skew fusion matching against USGS/EMSC (both UTC).
+const HAS_TZ_SUFFIX = /(?:[zZ])|(?:[+-]\d\d:?\d\d$)/;
+
+export function geofonEventsToObservations(events: readonly GeofonEvent[]): DomainObservation[] {
+  const out: DomainObservation[] = [];
+  for (const e of events) {
+    if (!Number.isFinite(e.magnitude) || !Number.isFinite(e.lat) || !Number.isFinite(e.lon)) continue;
+    const iso = e.time && !HAS_TZ_SUFFIX.test(e.time) ? `${e.time}Z` : e.time;
+    const occurredAt = iso ? Date.parse(iso) : Number.NaN;
+    if (!Number.isFinite(occurredAt)) continue;
+    out.push({ providerId: 'geofon-seismic', value: e.magnitude, lat: e.lat, lon: e.lon, occurredAt, externalId: e.id || undefined });
   }
   return out;
 }

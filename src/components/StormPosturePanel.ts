@@ -37,6 +37,8 @@ import type {
 import { axisLabel, SURVIVAL_AXES, type SurvivalAxis } from '@/services/survival/survival-types.ts';
 import { survivalMapModes } from '@/services/survival/survival-map-modes.ts';
 import { selectPostureCards } from './storm-posture-view.ts';
+import { buildSurvivalOutlook } from '@/services/survival/survival-outlook.ts';
+import { renderSurvivalOutlook } from '@/services/survival/survival-outlook-render.ts';
 import { escapeHtml } from '@/utils/sanitize.ts';
 
 const REFRESH_MS = 120_000;
@@ -121,7 +123,10 @@ export class StormPosturePanel extends Panel {
     const overall = this.buildOverallCard(posture);
     const cards = selectPostureCards(posture).map((a) => this.buildAxisCard(a)).join('');
     const movesCard = this.buildMovesCard(snap, moves);
-    return `${banner}${modeChips}${overall}${cards}${movesCard}`;
+    const outlook = renderSurvivalOutlook(
+      buildSurvivalOutlook(snap, posture, moves, { now: Date.now() }),
+    );
+    return `${banner}${modeChips}${overall}${cards}${movesCard}${outlook}`;
   }
 
   private buildStaleBanner(weatherAgeMs: number): string {

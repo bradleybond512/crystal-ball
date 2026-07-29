@@ -5,6 +5,10 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const mainRs = readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'main.rs'), 'utf8');
+const desktopUpdaterTs = readFileSync(
+  path.join(repoRoot, 'src', 'app', 'desktop-updater.ts'),
+  'utf8',
+);
 
 test('macOS updater preserves bundle signatures when installing app updates', () => {
   assert.match(
@@ -167,5 +171,164 @@ test('a non-Apple install must prove an intact signature before skipping the pin
   assert.ok(
  gate,
  'the Ok(None) dev-build skip must be guarded by an intact-signature check',
+  );
+});
+
+test('the swap is guarded by a cross-process advisory lock, not just an in-process mutex', () => {
+  // Residual A: two running instances (the real race — a user can launch two
+  // copies) must not both swap `dest` at once. flock is advisory and the kernel
+  // releases it on fd-close OR process death, so a crashed updater can't wedge
+  // future updates behind a stale lock.
+  assert.match(
+ mainRs,
+ /struct CrossProcessSwapLock/,
+ 'a cross-process swap lock type should exist',
+  );
+  assert.match(
+ mainRs,
+ /fn flock\(fd: std::os::raw::c_int, operation: std::os::raw::c_int\)/,
+ 'the lock should use a raw BSD flock FFI (no new crate dependency)',
+  );
+  // The lockfile is a deterministic sibling of the install so both instances
+  // open the SAME inode; a per-process temp path would not be mutually exclusive.
+  assert.match(
+ mainRs,
+ /\{dest\}\.update\.lock/,
+ 'the lockfile must be a deterministic sibling of the install path',
+  );
+  // Manual apply + stage-publish block on the lock; boot only tries it so
+  // startup never hangs behind another instance's swap.
+  const blocking = mainRs.match(/CrossProcessSwapLock::acquire_blocking\(&dest\)/g) ?? [];
+  assert.ok(
+ blocking.length >= 2,
+ `apply and stage-publish should block on the cross-process lock; found ${blocking.length}`,
+  );
+  assert.match(
+ mainRs,
+ /CrossProcessSwapLock::try_acquire\(&dest\)/,
+ 'boot-apply must use a non-blocking try-acquire so startup never hangs',
+  );
+});
+
+test('concurrent staging uses a unique per-request dir, then publishes atomically', () => {
+  // Residual B: two concurrent stage_update runs (or another local process) must
+  // not clobber each other's download / in-progress copy. Each gets a pid+counter
+  // path, is verified in full there, then renamed onto the canonical staged path.
+  assert.match(
+ mainRs,
+ /STAGE_COUNTER\.fetch_add/,
+ 'a per-call counter should stamp each staging request',
+  );
+  assert.match(
+ mainRs,
+ /update-staging-\{pid\}-\{n\}/,
+ 'the per-request staging bundle path must include pid + counter',
+  );
+  assert.match(
+ mainRs,
+ /fs::rename\(&staged, &canonical_staged\)/,
+ 'the FIRST publish (no canonical yet) must move the verified bundle into place via rename',
+  );
+  // A failed NEW stage must delete only its own dir, never the previously
+  // published good bundle at the canonical path.
+  assert.doesNotMatch(
+ mainRs,
+ /if let Err\(e\) = stage_result \{[\s\S]*?remove_dir_all\(&canonical_staged\)/,
+ 'a failed stage must not delete a previously-published canonical bundle',
+  );
+  // Publish over an EXISTING canonical bundle is a single-syscall atomic swap
+  // (renamex_np RENAME_SWAP), not remove-then-rename or move-aside/restore.
+  // RENAME_SWAP has no intermediate state: on success canonical is the new
+  // bundle and `staged` holds the old one; on ANY failure NEITHER path changes,
+  // so the previous good bundle is never even briefly absent and there is no
+  // persistent `.prev` recovery artifact to leak or later delete by mistake.
+  assert.match(
+ mainRs,
+ /fn swap_paths_atomically\(/,
+ 'publish must go through a single-syscall atomic-swap helper',
+  );
+  assert.match(
+ mainRs,
+ /fn renamex_np\(/,
+ 'the atomic swap must use the macOS renamex_np FFI (no new crate dependency)',
+  );
+  assert.match(
+ mainRs,
+ /const RENAME_SWAP: std::os::raw::c_uint = 0x0000_0002;/,
+ 'the swap must pass the RENAME_SWAP flag',
+  );
+  assert.match(
+ mainRs,
+ /swap_paths_atomically\(&staged, &canonical_staged\)/,
+ 'the existing-canonical publish path must swap the new bundle in atomically',
+  );
+  // The move-aside/restore `.prev` artifact is GONE — its lifecycle (leaking a
+  // stale old bundle on success, and pid-reuse deleting a recovery bundle) is
+  // structurally eliminated by the atomic swap.
+  assert.doesNotMatch(
+ mainRs,
+ /\.prev-\{pid\}-\{n\}/,
+ 'the move-aside `.prev` recovery artifact must be gone (replaced by atomic swap)',
+  );
+  // The swapped-out OLD bundle must not leak on a successful publish. A plain
+  // remove_dir_all can fail persistently on a BSD immutable flag / read-only
+  // dir copied from the DMG, so disposal goes through force_remove_dir_all,
+  // which clears those blockers and retries — no per-update accumulation.
+  assert.match(
+ mainRs,
+ /fn force_remove_dir_all\(/,
+ 'staged-bundle disposal must use a flag-clearing robust remove helper',
+  );
+  assert.match(
+ mainRs,
+ /Command::new\("chflags"\)[\s\S]*?nouchg/,
+ 'force_remove_dir_all must clear immutable flags before retrying',
+  );
+  // `ditto` preserves ACLs from the DMG; a deny delete/delete_child ACL survives
+  // chmod mode-bit changes, so the helper must strip ACLs (`chmod -R -N`) too or
+  // a signed bundle could resist removal and accumulate per update.
+  assert.match(
+ mainRs,
+ /Command::new\("chmod"\)\.args\(\["-R", "-N"/,
+ 'force_remove_dir_all must strip ACLs (chmod -R -N) before retrying',
+  );
+  assert.match(
+ mainRs,
+ /force_remove_dir_all\(&staged\)/,
+ 'the post-swap old-bundle cleanup must use the robust remove',
+  );
+  // Concurrency guard: a slow stage for an OLDER version must not overwrite a
+  // newer bundle a concurrent run already published under the lock.
+  assert.match(
+ mainRs,
+ /is_semver_newer\(&existing, &staged_version\)/,
+ 'publish must refuse to regress a strictly-newer already-staged bundle',
+  );
+});
+
+test('Rust filesystem state is authoritative over the localStorage staged hint', () => {
+  // Residual C: the renderer must not trust a `wm-update-staged-*` localStorage
+  // flag as ground truth — it queries the Rust filesystem probe and reconciles.
+  assert.match(
+ mainRs,
+ /async fn staged_update_status\(/,
+ 'a staged_update_status command should expose the on-disk staged version',
+  );
+  assert.match(
+ mainRs,
+ /^\s*staged_update_status,$/m,
+ 'staged_update_status must be registered in the invoke handler',
+  );
+  assert.match(
+ desktopUpdaterTs,
+ /invokeTauri<string \| null>\('staged_update_status'\)/,
+ 'the updater must query the Rust staged-status probe before (re-)downloading',
+  );
+  // Reconcile in BOTH directions: re-stage when disk lacks it (stale '1'),
+  // skip re-download when disk has it (cleared flag).
+  assert.match(
+ desktopUpdaterTs,
+ /if \(!stagedOnDisk\)/,
+ 'the download gate must key off disk truth, not the localStorage flag',
   );
 });

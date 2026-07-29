@@ -221,6 +221,26 @@ export class DesktopUpdater implements AppModule {
  return svg;
   }
 
+  // Ask Rust whether the canonical staged bundle on disk is THIS version, and
+  // heal the localStorage hint to match. The hint can go stale (a boot-apply
+  // discarded an invalid bundle, or a prior apply consumed it) or claim "staged"
+  // for a bundle that was never written — so disk truth wins in both directions.
+  private async reconcileStagedOnDisk(stagedKey: string, remote: string): Promise<boolean> {
+ let stagedOnDisk: boolean;
+ try {
+ const diskVersion = await invokeTauri<string | null>('staged_update_status');
+ stagedOnDisk = diskVersion === remote;
+ } catch {
+ // Older desktop binary without the status command — trust the local hint.
+ return localStorage.getItem(stagedKey) === '1';
+ }
+ try {
+ if (stagedOnDisk) localStorage.setItem(stagedKey, '1');
+ else localStorage.removeItem(stagedKey);
+ } catch { /* quota */ }
+ return stagedOnDisk;
+  }
+
   // Background-download + verify + stage the update, then prompt to restart.
   // Idempotent per remote version: once staged we skip the (re-)download and go
   // straight to the ready prompt. Any staging failure falls back to a browser
@@ -236,7 +256,11 @@ export class DesktopUpdater implements AppModule {
  const dismissKey = `wm-update-dismissed-${remote}`;
  const notifiedKey = `wm-update-notified-${remote}`;
 
- if (localStorage.getItem(stagedKey) !== '1') {
+ // The Rust filesystem — not the localStorage hint — is the source of truth
+ // for whether THIS version is already staged on disk.
+ const stagedOnDisk = await this.reconcileStagedOnDisk(stagedKey, remote);
+
+ if (!stagedOnDisk) {
  this.setUpdateState({ phase: 'downloading', version: remote, downloadUrl, expectedSha256 });
  try {
  await invokeTauri<void>('stage_update', { downloadUrl, expectedSha256 });

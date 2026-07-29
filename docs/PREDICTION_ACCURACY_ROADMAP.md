@@ -705,7 +705,11 @@ selection bias.
 
 ### ACC-401 — Exact paired-outcome joins
 
-Status: `WAITING`
+Status: `IN PROGRESS`
+
+Owner: Claude
+
+Branch: `claude/acc-401-exact-joins`
 
 Dependencies: ACC-303
 

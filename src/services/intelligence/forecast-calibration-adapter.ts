@@ -52,6 +52,12 @@ import {
   syncForecastEvaluations,
 } from '@/services/algorithms/forecast-outcome-grading';
 import { buildHierarchicalBaseRatePrediction } from './hierarchical-base-rate';
+import { buildPersistenceBaselinePrediction } from './persistence-baseline';
+import {
+  buildMomentumBaselinePrediction,
+  type MomentumSample,
+} from './momentum-baseline';
+import { getSpotPriceHistory } from '@/services/market/spot-price-store';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -88,33 +94,132 @@ export function getCalibrationStore(): ForecastCalibrationStore {
   return _calibrationStore;
 }
 
+/** Lookback the momentum baseline's spot-price accessor covers. Matches
+ *  the model's own LOOKBACK_MS window so no extra data is fetched. */
+const MOMENTUM_ACCESSOR_LOOKBACK_MS = 6 * 3_600_000;
+
+/** Pre-forecast price samples for a market_move target, bounded at the
+ *  prediction time — the model re-filters, but the accessor never even
+ *  fetches post-cutoff samples (ACC-302 lookahead discipline). */
+function momentumSamplesFor(p: PredictionRecord): MomentumSample[] {
+  if (p.criteria?.kind !== 'market_move') return [];
+  try {
+    return getSpotPriceHistory(p.criteria.symbol, {
+      sinceExclusive: p.predictedAt - MOMENTUM_ACCESSOR_LOOKBACK_MS,
+      untilInclusive: p.predictedAt,
+    }).map((o) => ({ observedAt: o.observedAt, price: o.price }));
+  } catch {
+    return [];
+  }
+}
+
+/** Fire-and-forget ACC-303 pairing push — lazy import breaks the
+ *  adapter ↔ shadow-rollout store cycle. The import promise is memoized
+ *  so only the FIRST push races module loading; pairs are best-effort
+ *  telemetry (ACC-401's authoritative joins re-derive from the
+ *  calibration store), so a lost boot-window pair is acceptable and a
+ *  failed chunk load is silent by design. */
+let _shadowRolloutModule: Promise<typeof import('@/services/cognition/shadow-rollout')> | null = null;
+
+function shadowRolloutModule(): Promise<typeof import('@/services/cognition/shadow-rollout')> {
+  _shadowRolloutModule ??= import('@/services/cognition/shadow-rollout');
+  return _shadowRolloutModule;
+}
+
+function pushBaselinePairs(production: PredictionRecord, baselines: readonly PredictionRecord[]): void {
+  if (baselines.length === 0 || !production.targetKey) return;
+  void shadowRolloutModule()
+    .then((m) => {
+      for (const baseline of baselines) {
+        m.pushBaselinePair(
+          {
+            targetKey: production.targetKey!,
+            predictedAt: production.predictedAt,
+            resolveBy: production.resolveBy,
+            productionSourceId: production.sourceId,
+            productionVersion: production.algorithmVersion,
+            baselineSourceId: baseline.sourceId,
+            baselineVersion: baseline.algorithmVersion,
+          },
+          production.probability,
+          baseline.probability,
+        );
+      }
+    })
+    .catch(() => { /* pairing telemetry is best-effort */ });
+}
+
+/** ACC-301/ACC-302 baseline family — ordered; each returns null when
+ *  not applicable to the target (the roadmap's `not_applicable`). */
+function buildBaselinePredictions(
+  p: PredictionRecord,
+  history: readonly PredictionRecord[],
+): PredictionRecord[] {
+  const baselines: PredictionRecord[] = [];
+  const hierarchical = buildHierarchicalBaseRatePrediction(p, history);
+  if (hierarchical) baselines.push(hierarchical);
+  const persistence = buildPersistenceBaselinePrediction(p, history);
+  if (persistence) baselines.push(persistence);
+  const momentum = buildMomentumBaselinePrediction(p, momentumSamplesFor(p));
+  if (momentum) baselines.push(momentum);
+  return baselines;
+}
+
+/** For each applicable baseline: reuse the stored record when the id
+ *  already exists (a second producer on the same target/window still
+ *  gets its pair against the EXISTING baseline), record it otherwise.
+ *  Returns both the newly recorded set (for evaluations) and the full
+ *  pairable set (for ACC-303 shadow pairs). Exported for tests. */
+export function collectBaselines(
+  store: ForecastCalibrationStore,
+  p: PredictionRecord,
+  history: readonly PredictionRecord[],
+): { recorded: PredictionRecord[]; pairable: PredictionRecord[] } {
+  const recorded: PredictionRecord[] = [];
+  const pairable: PredictionRecord[] = [];
+  for (const baseline of buildBaselinePredictions(p, history)) {
+    const existing = store.get(baseline.id);
+    if (existing) {
+      pairable.push(existing);
+      continue;
+    }
+    store.record(baseline);
+    recorded.push(baseline);
+    pairable.push(baseline);
+  }
+  return { recorded, pairable };
+}
+
 /** Record + persist in one call. */
 export function recordPrediction(p: PredictionRecord): void {
   const store = getCalibrationStore();
   store.record(p);
-  const baseline = buildHierarchicalBaseRatePrediction(p, store.all());
-  const recordBaseline = baseline && !store.get(baseline.id);
-  if (recordBaseline) store.record(baseline);
+  // One snapshot serves every baseline builder (store.all clones).
+  const history = store.all();
+  const { recorded, pairable } = collectBaselines(store, p, history);
   persist(store);
   ensureForecastEvaluation(p);
-  if (recordBaseline) ensureForecastEvaluation(baseline);
+  for (const baseline of recorded) ensureForecastEvaluation(baseline);
+  pushBaselinePairs(p, pairable);
 }
 
-/** Record a snapshot batch and persist once. */
+/** Record a snapshot batch and persist once. Two passes so baseline
+ *  emission is INDEPENDENT of batch order: every production record
+ *  lands first, then each baseline builds against the full post-batch
+ *  snapshot (the estimators' own predictedAt cutoffs keep temporal
+ *  correctness — a batch-mate from the future never enters training). */
 export function recordPredictions(predictions: readonly PredictionRecord[]): void {
   if (predictions.length === 0) return;
   const store = getCalibrationStore();
   for (const prediction of predictions) {
     store.record(prediction);
     ensureForecastEvaluation(prediction);
-    const baseline = buildHierarchicalBaseRatePrediction(
-      prediction,
-      store.all(),
-    );
-    if (baseline && !store.get(baseline.id)) {
-      store.record(baseline);
-      ensureForecastEvaluation(baseline);
-    }
+  }
+  const history = store.all();
+  for (const prediction of predictions) {
+    const { recorded, pairable } = collectBaselines(store, prediction, history);
+    for (const baseline of recorded) ensureForecastEvaluation(baseline);
+    pushBaselinePairs(prediction, pairable);
   }
   persist(store);
 }

@@ -607,7 +607,38 @@ Deliver:
 
 ### ACC-302 — Persistence and momentum baselines
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Claude
+
+Branch: `claude/acc-302-persistence-momentum`
+
+Evidence: PR #1533
+
+Verification: `persistence-baseline@1.0.0` covers state-like advisory targets
+(criteria-less `mode:*`/`shortage:*` targetKeys) with a Laplace-smoothed
+recent-window rate over the target's own prior resolutions, filtered by the
+exact ACC-301 leakage predicate narrowed to the targetKey. `momentum-baseline@1.0.0`
+covers directional `market_move` targets: least-squares slope over pre-forecast
+fused spot prices (6h lookback, ≥5 samples, hard `observedAt < predictedAt`
+filter inside the model AND a bounded accessor at the adapter), projected over
+the horizon against the criteria threshold and squashed through a bounded tanh
+map. All other target kinds (event occurrence, warning verification,
+hypothesis) return `not_applicable` (null) by construction, with tests pinning
+each gate. Both models clone the production record (targetKey/window/criteria
+inheritance → paired resolution and expiry for free), emit through the single
+`recordPrediction(s)` choke point behind distinct id namespaces
+(`persistence:`/`momentum:` alongside `base-rate:`), and are registered with
+`forecast_calibration` health domains so ledger grading engages. The shared
+`BASELINE_SOURCE_IDS` family exclusion prevents any baseline training on any
+other baseline (hierarchical included; corpus-neutral — `npm run
+bench:forecast` passes with the ACC-301 committed metrics unchanged).
+Deferred to ACC-303 by design: replay-corpus evaluation of the new families —
+the frozen corpus carries no repeated targetKeys or price series, so
+persistence/momentum corpus fixtures land with the pairing work. Verified:
+`typecheck:all`, 17 new fixture tests plus hierarchical/adapter/calibration/
+momentum suites (51), algorithm-registry suite, scoped ESLint, and the frozen
+forecast replay benchmark, all green.
 
 Dependencies: ACC-301
 
@@ -619,7 +650,42 @@ Deliver only where the domain contract supports it:
 
 ### ACC-303 — Pair all baselines with production forecasts
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Claude
+
+Branch: `claude/acc-303-baseline-pairing`
+
+Evidence: PR #1536
+
+Verification: emission-side pairing has been live since ACC-301/302 (every
+eligible production forecast emits its applicable baselines on the same
+targetKey and window through the recordPrediction choke point). This task adds
+the three missing pieces. (1) Shadow-rollout run
+`production-vs-{hierarchical-base-rate,persistence-baseline,momentum-baseline}`
+(one run PER baseline model): one pair pushed per emitted baseline, whose
+input carries the STABLE join fields (targetKey, predictedAt, resolveBy,
+production/baseline source ids + versions) ACC-401's exact joins require —
+wired fire-and-forget from the adapter via lazy import (no store cycle),
+kill-switch respected. (2) A dedicated deterministic walk-forward benchmark
+(`npm run bench:baselines`, corpus `baseline-pairing-v1`, 72 closed-form
+fixtures with repeated targetKeys and embedded pre-forecast price series —
+the structures the frozen ACC-301 corpus lacks) reporting record count, Brier,
+and Brier SKILL vs the production incumbent per model, gated by a committed
+JSON (synthetic incumbent 0.152317; hierarchical −0.115069, momentum
+−0.057487, persistence −0.238375 skill). The corpus incumbent is a DISCLOSED
+outcome-informed oracle — skill here is a fixed regression reference, not a
+claim about real production skill; the live per-model shadow runs
+(production-vs-{hierarchical,persistence,momentum}) measure the real thing,
+each family in its own run so per-model aggregation and ACC-401 joins never
+mix. Gate fails closed on baseline Brier, record drift, missing models,
+incumbent drift, and skill drift; run in CI beside bench:forecast. (3) Phase-exit
+coverage proof as a test: every production emitter family (mode, shortage,
+hypothesis/superforecast market and non-market, warning verification) yields
+at least one relevant baseline from the real builders. The frozen ACC-301
+replay benchmark is untouched and still passes. Verified: typecheck:all, the
+new pairing suite (5), adapter + shadow-rollout suites, both deterministic
+benchmarks, scoped ESLint.
 
 Dependencies: ACC-301 and ACC-302
 

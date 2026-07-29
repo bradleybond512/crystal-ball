@@ -705,7 +705,34 @@ selection bias.
 
 ### ACC-401 — Exact paired-outcome joins
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Claude
+
+Branch: `claude/acc-401-exact-joins`
+
+Evidence: PR #1564
+
+Verification: `ShadowComparison` gains a first-class optional `ShadowJoinKey`
+(targetKey, predictedAt, resolveBy, live/shadow model ids + versions,
+feature-set version) persisted through compare/clone/hydrate — never an
+approximate hash. The three ACC-303 baseline runs now verdict through
+`exactPairedVerdict`: resolved calibration records are indexed by exact
+identity (targetKey ⊕ predictedAt ⊕ resolveBy ⊕ producing sourceId, with
+conflicting-outcome identities dropped whole per ACC-301 semantics),
+comparisons join only on that identity, pairs produced at-or-after the
+outcome observation are excluded, and both models score on the identical
+joined cohort by construction (one comparison carries both probabilities).
+Verdict `pairs` for these runs now means JOINED resolved pairs — the
+evidence count ACC-402's promotion gate consumes — and the ACC-303 fence is
+removed. The regression that motivated the task is pinned: two forecasts at
+p=0.6 resolving oppositely join to their own outcomes with exact Brier
+(0.26 vs 0.41 on the fixture). Legacy runs (recalibration/superforecast/
+schema) keep their existing joins unchanged — migrating their producers to
+join keys is ACC-402-adjacent follow-on. Verified: typecheck:all, shadow
+suite 24/24 incl. post-outcome exclusion, identity-conflict drop, model-id
+mismatch, and min-pairs honesty; adapter + pairing suites; both
+deterministic benchmarks unchanged; scoped ESLint.
 
 Dependencies: ACC-303
 

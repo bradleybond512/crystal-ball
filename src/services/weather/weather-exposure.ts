@@ -29,6 +29,7 @@ import type {
   WeatherSeverity,
 } from './weather-threat-types';
 import { matchAlertsToPlaces, type MatchOptions } from './nws-polygon-match';
+import { isUsableMatchRing } from './ring-geometry';
 
 const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
   Extreme: 'extreme',
@@ -47,9 +48,15 @@ const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
  * data-loader's per-batch try/catch) would drop EVERY severe alert that
  * cycle. The matcher only needs a `Date.parse`-able string, so pass a
  * string straight through and stringify a real Date.
+ *
+ * A malformed NWS timestamp also yields an *invalid* Date object
+ * (`new Date('garbage')`), whose `.toISOString()` throws RangeError('Invalid
+ * time value') — a second path to the same batch-aborting crash. Treat an
+ * invalid Date as unusable ('') rather than throwing; the timestamp is
+ * non-essential to the spatial match.
  */
-function toIsoString(value: Date | string | null | undefined): string {
-  if (value instanceof Date) return value.toISOString();
+export function toIsoString(value: Date | string | null | undefined): string {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString();
   return typeof value === 'string' ? value : '';
 }
 
@@ -69,19 +76,37 @@ export function exposureFromMatch(match: PolygonMatchResult): number {
 }
 
 /**
+ * All usable outer rings of a `WeatherAlert` for matching, filtered through the
+ * shared {@link isUsableMatchRing} predicate (≥3 vertices AND non-zero area) in
+ * lockstep with `alertHasUsablePolygon`. Prefers `polygonRings` (every
+ * sub-polygon of a MultiPolygon) so a warning whose 2nd+ ring covers the user
+ * still matches; falls back to the legacy single `coordinates` ring when
+ * `polygonRings` is absent (the common single-polygon case). Returns `undefined`
+ * when the alert has no usable geometry, so the matcher relies on the UGC-zone
+ * fallback.
+ */
+function alertMatchRings(alert: WeatherAlert): [number, number][][] | undefined {
+  const source = alert.polygonRings && alert.polygonRings.length > 0
+    ? alert.polygonRings
+    : [alert.coordinates];
+  const rings = source
+    .filter((ring) => isUsableMatchRing(ring))
+    .map((ring) => ring.map(([lng, lat]) => [lng, lat] as [number, number]));
+  return rings.length > 0 ? rings : undefined;
+}
+
+/**
  * Adapt the renderer's `WeatherAlert` to the matcher's
- * `NwsAlertMinimal`, carrying BOTH the polygon ring and the UGC zone
+ * `NwsAlertMinimal`, carrying BOTH the polygon rings and the UGC zone
  * codes so zone-only alerts (no geometry) still match via the county
  * fallback.
  */
 export function weatherAlertToNwsMinimal(alert: WeatherAlert): NwsAlertMinimal {
-  const ring = alert.coordinates.length >= 3
-    ? alert.coordinates.map(([lng, lat]) => [lng, lat] as [number, number])
-    : undefined;
+  const rings = alertMatchRings(alert);
   return {
     id: alert.id,
     event: alert.event,
-    polygon: ring ? { rings: [ring] } : undefined,
+    polygon: rings ? { rings } : undefined,
     ugcZones: alert.ugcZones,
     sent: toIsoString(alert.onset),
     expires: toIsoString(alert.expires),

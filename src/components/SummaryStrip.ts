@@ -192,7 +192,10 @@ export class SummaryStrip {
   private statusSegHtml(dotOnly: boolean): string {
     const state = this.status;
     const color = STATUS_COLOR_TOKEN[state?.color ?? 'gray'];
-    const label = state?.label ?? 'ALL CLEAR';
+    // Before the first derived state arrives, stay non-committal ("—") rather
+    // than asserting "ALL CLEAR" — the chip must never claim safety it hasn't
+    // yet evaluated. Once state exists, the composite label (incl. weather) wins.
+    const label = state?.label ?? '—';
     const dot = `<span class="cb-summary-strip-dot" style="background:${color};" aria-hidden="true"></span>`;
     const text = dotOnly ? '' : `<span class="cb-summary-strip-status" style="color:${color};">${escapeHtml(label)}</span>`;
     return `<button type="button" class="cb-summary-strip-seg" data-seg="status" title="System status — open Safety Case" aria-label="System status: ${escapeHtml(label)}. Open Safety Case panel.">${dot}${text}</button>`;

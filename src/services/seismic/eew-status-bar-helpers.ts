@@ -18,7 +18,7 @@ export type StatusBarColor =
   | 'crimson';
 
 /** Which subsystem drives the chip when it is not all-clear. */
-export type StatusBarSource = 'eew' | 'safety' | 'readiness' | 'none';
+export type StatusBarSource = 'eew' | 'weather' | 'safety' | 'readiness' | 'none';
 
 export interface StatusBarState {
   /** True only when EEW, safety case, AND readiness are all clear. */
@@ -56,6 +56,26 @@ export interface CompositeStatusInputs {
    * READINESS: CRITICAL. null / undefined = unknown (treated as clear).
    */
   readinessStatus?: HealthStatus | null;
+  /**
+   * The user's CURRENT personal weather threat — the worst Extreme/Severe
+   * NWS alert matched to a saved place (getPersonalWeatherThreat()). This
+   * is deliberately PERSONAL, not the national feed: there is always severe
+   * weather somewhere, so the national feed would pin the chip non-clear.
+   * 'extreme' → crimson "WEATHER: EXTREME" (rank 5), 'severe' → red
+   * "SEVERE WEATHER" (rank 4). null / undefined = no personal threat.
+   */
+  weatherSeverity?: 'extreme' | 'severe' | null;
+  /**
+   * Whether a FRESH weather read has actually PROVEN no matched threat
+   * (isPersonalWeatherClearConfirmed()). `weatherSeverity: null` alone is
+   * ambiguous — it means both "proven clear" and "not evaluated yet" — so the
+   * chip used to paint boot/stale states as a green ALL CLEAR it had not
+   * verified. Only an explicit `true` may show ALL CLEAR; ANY other value —
+   * `false`, or missing/undefined (boot, an unwired provider, or a provider
+   * throw where readCompositeInputs() returns undefined) — fails closed to the
+   * neutral CHECKING WEATHER state rather than claim an unverified all-clear.
+   */
+  weatherClearConfirmed?: boolean;
 }
 
 const TIER_LABELS: Record<EewTier, string> = {
@@ -113,11 +133,35 @@ export function pickLeadAlert(alerts: readonly EewAlert[]): EewAlert | null {
 const SAFETY_REVIEW_RANK = 4;
 /** Severity rank for readiness 'unsafe' ("Current risk CRITICAL"). */
 const READINESS_CRITICAL_RANK = 4;
+/** Personal Extreme weather (e.g. Tornado Warning over the user). Crimson,
+ *  ties with TIER_5 EEW (which wins the tie as the live/imminent hazard). */
+const WEATHER_EXTREME_RANK = 5;
+/** Personal Severe weather. Red, ties with TIER_4 EEW / safety / readiness. */
+const WEATHER_SEVERE_RANK = 4;
+
+const WEATHER_RANK_BY_SEVERITY: Record<'extreme' | 'severe', number> = {
+  extreme: WEATHER_EXTREME_RANK,
+  severe: WEATHER_SEVERE_RANK,
+};
 
 const ALL_CLEAR_STATE: StatusBarState = {
   allClear: true,
   color: 'gray',
   label: 'ALL CLEAR',
+  source: 'none',
+  tier: null,
+  lastAlert: null,
+  imessage: { visible: false, status: null },
+};
+
+/** Neutral "we have not verified weather yet" state. Shown instead of ALL CLEAR
+ *  when nothing else is alarming but a fresh weather read has not yet proven the
+ *  area clear (boot, or a stale/failed feed). Deliberately NOT allClear and NOT
+ *  red: honest uncertainty, neither a false all-clear nor a false alarm. */
+const CHECKING_STATE: StatusBarState = {
+  allClear: false,
+  color: 'gray',
+  label: 'CHECKING WEATHER',
   source: 'none',
   tier: null,
   lastAlert: null,
@@ -137,6 +181,42 @@ const ALL_CLEAR_STATE: StatusBarState = {
  * safety beats readiness) so the label always names the worst source.
  * "ALL CLEAR" is only shown when all three sources are clear.
  */
+interface CompositeRanks {
+  weatherSeverity: 'extreme' | 'severe' | null;
+  weatherRank: number;
+  safetyReview: boolean;
+  safetyRank: number;
+  readinessRank: number;
+}
+
+/** Rank the non-EEW composite inputs. Kept out of deriveStatusBarState so the
+ *  main dispatch stays flat: this is where the per-source ternaries live. */
+function compositeRanks(composite?: CompositeStatusInputs): CompositeRanks {
+  const weatherSeverity = composite?.weatherSeverity ?? null;
+  const safetyReview = composite?.safetyCaseSafeToOperate === false;
+  const readinessCritical = composite?.readinessStatus === 'unsafe';
+  return {
+    weatherSeverity,
+    weatherRank: weatherSeverity ? WEATHER_RANK_BY_SEVERITY[weatherSeverity] : 0,
+    safetyReview,
+    safetyRank: safetyReview ? SAFETY_REVIEW_RANK : 0,
+    readinessRank: readinessCritical ? READINESS_CRITICAL_RANK : 0,
+  };
+}
+
+function weatherState(severity: 'extreme' | 'severe'): StatusBarState {
+  const extreme = severity === 'extreme';
+  return {
+    allClear: false,
+    color: extreme ? 'crimson' : 'red',
+    label: extreme ? 'WEATHER: EXTREME' : 'SEVERE WEATHER',
+    source: 'weather',
+    tier: null,
+    lastAlert: null,
+    imessage: { visible: false, status: null },
+  };
+}
+
 export function deriveStatusBarState(
   payload: EewStatusPayload | null,
   composite?: CompositeStatusInputs,
@@ -146,20 +226,28 @@ export function deriveStatusBarState(
     : null;
   const tier = lead?.tier ?? null;
   const eewRank = tier === null ? 0 : TIER_RANK[tier];
+  const { weatherSeverity, weatherRank, safetyReview, safetyRank, readinessRank } =
+    compositeRanks(composite);
 
-  const safetyReview = composite?.safetyCaseSafeToOperate === false;
-  const readinessCritical = composite?.readinessStatus === 'unsafe';
-  const safetyRank = safetyReview ? SAFETY_REVIEW_RANK : 0;
-  const readinessRank = readinessCritical ? READINESS_CRITICAL_RANK : 0;
-
-  if (eewRank === 0 && safetyRank === 0 && readinessRank === 0) {
-    return { ...ALL_CLEAR_STATE, imessage: { visible: false, status: null } };
+  // Worst-of composite: the highest rank drives the chip. Ties break in
+  // source order EEW > weather > safety > readiness (the checks below run in
+  // that order), so a live seismic alert beats a storm, a storm beats the
+  // meta signals, and safety beats readiness. "ALL CLEAR" only when all zero.
+  const maxRank = Math.max(eewRank, weatherRank, safetyRank, readinessRank);
+  if (maxRank === 0) {
+    // Nothing is alarming — but only claim ALL CLEAR once a fresh weather read
+    // has actually PROVEN no matched threat (weatherClearConfirmed === true).
+    // Anything else — an explicit `false`, or a missing/undefined flag (boot,
+    // an unwired composite provider, or a provider throw where
+    // readCompositeInputs() returns undefined) — is an UNKNOWN weather state,
+    // not a proven clear. Fail closed to neutral CHECKING rather than assert a
+    // safety we have not verified.
+    if (composite?.weatherClearConfirmed === true) {
+      return { ...ALL_CLEAR_STATE, imessage: { visible: false, status: null } };
+    }
+    return { ...CHECKING_STATE, imessage: { visible: false, status: null } };
   }
-
-  // Below TIER_2, label is INFO but it's not "active" enough to count
-  // as a non-clear state. Per spec the bar shows TIER_1_INFO color/label
-  // but allClear stays false since we have an active info alert.
-  if (lead && tier && eewRank >= safetyRank && eewRank >= readinessRank) {
+  if (lead && tier && eewRank === maxRank) {
     return {
       allClear: false,
       color: TIER_COLORS[tier],
@@ -170,8 +258,10 @@ export function deriveStatusBarState(
       imessage: deriveImessageState(lead),
     };
   }
-
-  if (safetyReview && safetyRank >= readinessRank) {
+  if (weatherSeverity && weatherRank === maxRank) {
+    return weatherState(weatherSeverity);
+  }
+  if (safetyReview && safetyRank === maxRank) {
     return {
       allClear: false,
       color: 'red',
@@ -182,7 +272,6 @@ export function deriveStatusBarState(
       imessage: { visible: false, status: null },
     };
   }
-
   return {
     allClear: false,
     color: 'red',

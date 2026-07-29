@@ -22,7 +22,6 @@ import {
   fetchCrypto,
   fetchPredictions,
   fetchEarthquakes,
-  fetchWeatherAlerts,
   fetchUgcZonesForPoint,
   fetchFredData,
   fetchInternetOutages,
@@ -163,6 +162,7 @@ import { fetchNWSAlerts, type NWSAlert } from '@/services/nws-alerts';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
 import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
 import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
+import type { WeatherThreatCandidate } from '@/services/weather/personal-weather-status';
 import { recordWarningPredictions } from '@/services/weather/warning-verification-bridge';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
@@ -301,12 +301,17 @@ import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
 import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import { toIsoString } from '@/services/weather/weather-exposure';
 import type { PowerContext } from '@/services/infrastructure/osm-power';
 import {
   fetchOpenMeteoConditions,
   fetchSite24hForecast,
   fetchSiteAirQuality,
   fetchConnectivitySignal,
+  fetchWeatherAlertsWithFeedState,
+  isWeatherFeedFresh,
+  isAlertSpatiallyUnevaluable,
+  alertHasUsablePolygon,
 } from '@/services/weather';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
@@ -687,7 +692,10 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'firms', task: () => runGuarded('firms', () => this.loadFirmsData()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'inpeFires', task: () => runGuarded('inpeFires', () => this.loadInpeFires()) });
  if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: () => runGuarded('natural', () => this.loadNatural()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.weather) tasks.push({ name: 'weather', task: () => runGuarded('weather', () => this.loadWeatherAlerts()) });
+ // Weather is safety-critical: it drives the status chip + storm posture, not
+ // just the map overlay. Never gate the fetch on the cosmetic `mapLayers.weather`
+ // toggle — turning the layer off must not blind the user to a live storm.
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'weather', task: () => runGuarded('weather', () => this.loadWeatherAlerts()) });
  if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: () => runGuarded('ais', () => this.loadAisSignals()) });
  if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.adsb) tasks.push({ name: 'adsb', task: () => runGuarded('adsb', () => this.loadAdsb()) });
  if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cables', task: () => runGuarded('cables', () => this.loadCableActivity()) });
@@ -1575,9 +1583,43 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadWeatherAlerts(): Promise<void> {
+ // Fail-closed backstop for the safety-critical status chip. If any part of the
+ // tick throws BEFORE the personal weather-threat publication runs, a prior
+ // confirmed "ALL CLEAR" must not ride out an unevaluated feed and hide a live
+ // warning — drop it to neutral (CHECKING WEATHER). `publicationSettled` guards
+ // against the mirror failure: a throw AFTER a correct publish/confirm/revoke
+ // (e.g. in the downstream anomaly/correlation code) must NOT undo it.
+ let publicationSettled = false;
+ const failClosedRevokeClear = async (): Promise<void> => {
+ if (publicationSettled) return;
  try {
- const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
- const alerts = snapshot.data;
+ const { revokePersonalWeatherClearConfirmation } = await import('@/services/weather/personal-weather-status');
+ revokePersonalWeatherClearConfirmation();
+ } catch { /* pure module; a load failure here is unrecoverable and itself non-fatal */ }
+ };
+ try {
+ // Fetch the alerts AND the feed-currency snapshot the breaker produced for
+ // THIS fetch, paired ATOMICALLY inside the breaker (executeTracked): the
+ // dataState is captured in the same synchronous branch that returns the data,
+ // before any await. The breaker's `lastDataState` is a single-slot mutable
+ // global — a concurrent consumer (AirSmokePanel calls fetchWeatherAlerts()
+ // directly, bypassing this coalescer) or a fire-and-forget stale-while-
+ // revalidate refresh can flip it to mode:'live' between this fetch resolving
+ // and a later read. Reading it late via getWeatherAlertsFeedState() — after
+ // the zone/exposure awaits below, at chip-publication time — was a TOCTOU: a
+ // failed/empty loader fetch could read the unrelated caller's fresh 'live'
+ // timestamp and certify a false "all clear". The paired snapshot binds
+ // freshness to the exact dataset it describes.
+ const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlertsWithFeedState(), 1 * 60 * 60 * 1000);
+ const { alerts, feedState: weatherFeedState } = snapshot.data;
+ const weatherFeedFresh = isWeatherFeedFresh(weatherFeedState);
+ // Contain the NON-safety map render + freshness bookkeeping. A throw here
+ // (e.g. setWeatherAlerts choking on a malformed geometry) must NOT abort the
+ // tick and skip the downstream status-chip publication — that would strand a
+ // prior "ALL CLEAR" over a live storm, the exact fail-open this stack closes.
+ // The chip publication further down is the safety-critical step and runs
+ // regardless; the map layer simply won't repaint this tick.
+ try {
  this.ctx.map?.setWeatherAlerts(alerts);
  this.ctx.map?.setLayerReady('weather', alerts.length > 0);
  const freshness = feedFreshnessFromSnapshot(snapshot);
@@ -1598,10 +1640,18 @@ export class DataLoaderManager implements AppModule {
  // state singleton owns its own fetch (NWS alerts + saved places); this
  // just nudges it so the StormPosturePanel updates alongside the map.
  void refreshStormPosture();
+ } catch (renderError) {
+ console.warn('[data-loader] weather render/bookkeeping failed (continuing to chip publication):', renderError);
+ }
 
  // Feed weather alerts + grid status into the datacenter posture engine.
  // Only runs when the user has a saved place tagged data_center.
  if (getDatacenterSite()) {
+ // Contain the datacenter posture computation: it runs many awaits and
+ // timestamp coercions, and a throw here must never abort the weather tick's
+ // downstream status-chip publication — otherwise a single malformed alert
+ // could strand a stale "ALL CLEAR" over a live storm.
+ try {
  let site = getDatacenterSite()!;
  // Resolve the site's own UGC zones once (forecast zone + county) so
  // zone-only NWS products (ice/heat/flood are often issued by UGC zone,
@@ -1627,20 +1677,27 @@ export class DataLoaderManager implements AppModule {
  const grid = await fetchGridStatus().catch(() => null);
  const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
  // Map WeatherAlert[] → NwsAlertMinimal[]. Shapes differ (severity casing,
- // Date vs ISO). WeatherAlert carries its polygon as a flat [lon,lat] ring
- // under `coordinates`; map it into polygon.rings so matchAlertToPlace can
- // do point-in-polygon against the site. UGC zones thread through so the
- // matcher's zone fallback fires for polygon-free alerts.
- const nwsAlerts = alerts.map((a) => ({
+ // Date vs ISO). Carry EVERY outer ring of the warning into polygon.rings so
+ // matchAlertToPlace does point-in-polygon over the union — a MultiPolygon
+ // warning whose 2nd+ sub-polygon covers the site must still match here, the
+ // same way the personal-exposure path matches it (weather-exposure.ts). Fall
+ // back to the legacy single `coordinates` ring when `polygonRings` is absent.
+ // UGC zones thread through so the matcher's zone fallback fires for
+ // polygon-free alerts.
+ const nwsAlerts = alerts.map((a) => {
+ const rings = (a.polygonRings && a.polygonRings.length > 0 ? a.polygonRings : [a.coordinates])
+ .filter((ring) => ring.length >= 3);
+ return {
  id: a.id,
  event: a.event,
- sent: a.onset instanceof Date ? a.onset.toISOString() : String(a.onset),
- expires: a.expires instanceof Date ? a.expires.toISOString() : String(a.expires),
+ sent: toIsoString(a.onset),
+ expires: toIsoString(a.expires),
  severity: (a.severity?.toLowerCase() as import('@/services/weather/weather-threat-types').WeatherSeverity | undefined),
- polygon: a.coordinates.length >= 3 ? { rings: [a.coordinates] } : undefined,
+ polygon: rings.length > 0 ? { rings } : undefined,
  ugcZones: a.ugcZones,
  headline: a.headline,
- }));
+ };
+ });
  const [condResult, forecastResult, aqResult, connResult] = await Promise.allSettled([
    fetchOpenMeteoConditions(site.lat, site.lon),
    fetchSite24hForecast(site.lat, site.lon),
@@ -1683,6 +1740,9 @@ export class DataLoaderManager implements AppModule {
    connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
    gridInfrastructure,
  });
+ } catch (error) {
+ console.warn('[Datacenter] posture recompute failed; skipping this tick:', error);
+ }
  }
 
  // Wire weather alerts into the insights state singleton so Command
@@ -1720,6 +1780,8 @@ export class DataLoaderManager implements AppModule {
  { getNotificationPreferencesService },
  { computeAlertExposure },
  { getSavedPlaces },
+ { resolveSavedPlaceZonesWithHealth, toMatcherPlace, savedPlacesMatchSignature },
+ { selectPersonalWeatherThreat, setPersonalWeatherThreat, confirmPersonalWeatherClear, revokePersonalWeatherClearConfirmation, resolveThreatExpiryMs, decideThreatPublication, isWeatherMatchingComplete, chipExposureFloor },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
@@ -1729,6 +1791,8 @@ export class DataLoaderManager implements AppModule {
  import('@/services/notifications/notification-preferences'),
  import('@/services/weather/weather-exposure'),
  import('@/services/saved-places'),
+ import('@/services/weather/saved-place-adapter'),
+ import('@/services/weather/personal-weather-status'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1765,21 +1829,80 @@ export class DataLoaderManager implements AppModule {
  // near-polygon sensitivity buffer and only near-matches non-high-urgency
  // hazards when a place opts in via radiusKm. Dropping it shrank the user's
  // coverage to the 10 km hazard default — the opposite of what someone
- // asking "why wasn't I warned?" wants.
- const weatherPlaces = getSavedPlaces().map((p) => ({
- id: p.id,
- label: p.name,
- lat: p.lat,
- lon: p.lon,
- radiusKm: p.radiusKm,
- }));
+ // asking "why wasn't I warned?" wants. Resolve each place's own UGC zones
+ // too so geometry-free (zone-only) NWS products — ice/heat/flood are often
+ // issued by UGC zone, not polygon — match instead of reading as clear.
+ const savedPlaces = getSavedPlaces();
+ // Fingerprint the match-relevant place set NOW, before the async zone lookup
+ // below. This whole block matches `severeAlerts` against `savedPlaces` and then
+ // publishes a clear decision — but a place added under a live warning DURING
+ // the awaits fires the subscription that revokes any confirmed clear, and this
+ // in-flight evaluation (still holding the pre-add set) would otherwise
+ // re-confirm clear against a set that never saw the new place. Re-reading this
+ // signature before publication lets us detect that and withhold the clear.
+ const placesSignatureAtSnapshot = savedPlacesMatchSignature(savedPlaces);
+ // Resolve zones AND capture whether any place's /points lookup failed. A
+ // degraded zone picture (some place's zones unknown) must withhold the
+ // confirmed-clear below: a geometry-free zone-only severe alert could match
+ // an unresolved place and go unseen, so we can't honestly assert "all clear".
+ const { zonesByPlace: placeZonesById, degraded: zonesDegraded } =
+ await resolveSavedPlaceZonesWithHealth(savedPlaces);
+ const weatherPlaces = savedPlaces.map((p) => toMatcherPlace(p, placeZonesById.get(p.id)));
+ // Exposure floor read once (same tuned value the detector uses) so the
+ // status-chip threat decision uses the identical "over the user" bar.
+ const exposureFloor = getTunedParam('big-event-detector', 'exposureFloor', 70);
+ // Personal weather threats for the title-bar status chip — collected as we
+ // iterate so the chip can stop showing "ALL CLEAR" during a storm actually
+ // over the user (see selectPersonalWeatherThreat). Personal, not national.
+ const weatherThreatCandidates: WeatherThreatCandidate[] = [];
+ // Did any alert's exposure match THROW? A crash leaves that alert's exposure
+ // at the conservative default (50) — below the floor — so a warning genuinely
+ // over the user could be scored as "not over you" and the chip could clear.
+ // Treat any match failure as a reason to withhold "all clear" (fail closed),
+ // the same way an unresolved UGC zone (zonesDegraded) does.
+ let matchingDegraded = false;
  for (const alert of severeAlerts) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
  // With no saved place, exposure is genuinely unknown — keep the
  // conservative default rather than fabricating a location match.
- const userExposure = weatherPlaces.length > 0
- ? computeAlertExposure(alert, weatherPlaces).exposure
- : 50;
+ // Guarded: a single malformed alert (e.g. an unparseable NWS timestamp)
+ // must not abort the whole severe-alert batch and strand the status-chip
+ // publication after the loop. weather-exposure also hardens the known
+ // invalid-Date crash; this is defense in depth.
+ let userExposure = 50;
+ // A severe alert stripped of all spatial data during normalization (no
+ // polygon ring AND no UGC zone) cannot be matched to any saved place:
+ // computeAlertExposure returns a low exposure WITHOUT throwing, so the catch
+ // below never fires and matching reads "complete" for a warning we could not
+ // actually place. Treat it like a crashed match — degrade so the clear falls
+ // to revoke_confirmation instead of confirming clear off an unevaluable severe
+ // warning. Independent of saved places: the gap is in the alert, not the user.
+ if (isAlertSpatiallyUnevaluable(alert)) {
+ matchingDegraded = true;
+ }
+ if (weatherPlaces.length > 0) {
+ try {
+ userExposure = computeAlertExposure(alert, weatherPlaces).exposure;
+ } catch (error) {
+ console.warn('[data-loader] weather exposure failed for', alert.id, error);
+ matchingDegraded = true;
+ }
+ }
+ // Record this alert as a chip-threat candidate. `alert.expires` is a Date
+ // when freshly fetched but an ISO string after the offline cache round-trips
+ // it — resolveThreatExpiryMs parses both (and falls back to a bounded window
+ // only when the value is unusable) so a matched threat can never pin the chip
+ // on forever and an expired one self-clears on time.
+ weatherThreatCandidates.push({
+ severity: alert.severity,
+ event: alert.event,
+ exposure: userExposure,
+ expiresAt: resolveThreatExpiryMs(alert.expires),
+ });
+ // Route this alert through the ladder in an ISOLATED try: the chip
+ // candidate above is already collected, so one malformed alert failing to
+ // route must not abort the batch and strand the publication after the loop.
+ try {
  const ladderInput = {
  id: alert.id,
  domain: 'weather',
@@ -1797,7 +1920,7 @@ export class DataLoaderManager implements AppModule {
  const bigEventResult = detectBigEvent(ladderInput, {
  threshold: getTunedParam('big-event-detector', 'threshold', 40),
  rapidJumpDelta: getTunedParam('big-event-detector', 'rapidJumpDelta', 25),
- exposureFloor: getTunedParam('big-event-detector', 'exposureFloor', 70),
+ exposureFloor,
  });
  // B1 (self-improvement gameplan): feed the evaluation ledger so the
  // adaptive-tuner has data. Guarded — instrumentation must never break
@@ -1875,9 +1998,73 @@ export class DataLoaderManager implements AppModule {
  action,
  );
  }
+ } catch (error) {
+ console.warn('[data-loader] weather alert routing failed for', alert.id, error);
  }
+ }
+ // Feed the title-bar status chip: the worst Extreme/Severe alert matched to
+ // a saved place (or null → chip clears). This is what stops the visible
+ // "ALL CLEAR" chip from lying during a storm actually over the user.
+ // Gate the CLEAR on an HONEST feed-currency read: `freshness.fresh` comes
+ // from the offline-cache wrapper, which always reports success because the
+ // NWS circuit breaker never throws — so that gate was inert in production.
+ // `weatherFeedFresh` was captured from the breaker's real mode ATOMICALLY
+ // with `alerts` at fetch time (see the note there); reading it late here
+ // would race a background stale-while-revalidate refresh that could flip the
+ // mode to 'live' while `alerts` is still the stale empty set. A clear is
+ // only authorized on a live (or still-fresh cached) read AND when no saved
+ // place's zone lookup failed (a degraded zone picture could hide a zone-only
+ // warning) AND when no exposure match crashed (a match failure leaves that
+ // alert scored below the floor, which could mask a warning over the user). A
+ // real match always publishes. When the clear can't be trusted the prior
+ // threat stays put to self-expire, and the chip shows the neutral "CHECKING
+ // WEATHER" state (clear not confirmed) rather than a false ALL CLEAR.
+ // Freshness and match-completeness are passed SEPARATELY: a fresh feed whose
+ // match pipeline degraded (an unresolved zone or a crashed exposure match)
+ // can't confirm a clear AND must revoke any prior confirmed clear — otherwise
+ // a stale "ALL CLEAR" lingers over a fresh feed we never actually evaluated.
+ // On a stale feed we leave everything to self-expire.
+ // Also treat a saved-place set that CHANGED mid-evaluation as an incomplete
+ // match: `weatherThreatCandidates` was scored against the pre-await snapshot,
+ // so a place added under a live warning during the awaits was never evaluated.
+ // Confirming clear here would silently reconfirm against the stale set and undo
+ // the subscription's revoke — the TOCTOU fail-open. A changed set routes to
+ // revoke_confirmation; the next tick re-evaluates against the current places.
+ const placesChangedDuringEval =
+ savedPlacesMatchSignature(getSavedPlaces()) !== placesSignatureAtSnapshot;
+ // Match completeness gates the clear (see isWeatherMatchingComplete). Two
+ // additional fail-open cases beyond a crashed match / degraded zone lookup:
+ // a severe alert with NO saved places is unplaceable (exposure stays the
+ // sub-floor sentinel, so nothing flags the tick degraded yet a live warning
+ // is on the feed), and a degraded zone lookup only endangers the severe
+ // alerts that can ONLY match via the zone fallback — those with no usable
+ // polygon. An all-clear feed still proves clear so the chip never freezes.
+ const chipDecision = decideThreatPublication(
+ selectPersonalWeatherThreat(weatherThreatCandidates, chipExposureFloor(exposureFloor)),
+ { fresh: weatherFeedFresh, provenAtMs: weatherFeedState.timestamp },
+ isWeatherMatchingComplete({
+ severeAlertCount: severeAlerts.length,
+ savedPlaceCount: savedPlaces.length,
+ zonesDegraded,
+ zoneOnlySevereAlertCount: severeAlerts.filter((a) => !alertHasUsablePolygon(a)).length,
+ matchDegraded: matchingDegraded,
+ placesChangedDuringEval,
+ }),
+ );
+ switch (chipDecision.action) {
+ case 'publish': setPersonalWeatherThreat(chipDecision.value); break;
+ case 'confirm_clear': confirmPersonalWeatherClear(chipDecision.provenAt); break;
+ case 'revoke_confirmation': revokePersonalWeatherClearConfirmation(); break;
+ }
+ // The chip decision has been applied — mark it settled so a later throw in the
+ // downstream (non-safety) code below cannot trigger the fail-closed revoke and
+ // undo a correct publish/confirm.
+ publicationSettled = true;
  } catch (error) {
  console.warn('[data-loader] notification ladder failed:', error);
+ // The publication above never ran (the throw preceded it) — a standing
+ // confirmed "ALL CLEAR" must not survive a tick whose evaluation crashed.
+ await failClosedRevokeClear();
  }
 
  // Wire weather alerts into the mission ledger (closed-loop ops PR 2).
@@ -1959,6 +2146,11 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setLayerReady('weather', false);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
  dataFreshness.recordError('weather', String(error));
+ // A tick that threw before its chip publication (e.g. the initial fetch
+ // failed, or an uncontained step upstream of the ladder) must not let a
+ // prior confirmed "ALL CLEAR" persist over a feed we never evaluated. No-op
+ // when the publication already settled this tick.
+ await failClosedRevokeClear();
  }
   }
 
@@ -2747,10 +2939,14 @@ export class DataLoaderManager implements AppModule {
  // matcher can do point-in-polygon and fall back to zone matching.
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
+ const { resolveSavedPlaceZones, toMatcherPlace } = await import('@/services/weather/saved-place-adapter');
  const places = getSavedPlaces();
  if (places.length > 0) {
- // Adapt saved-places.SavedPlace to weather-threat-types.SavedPlace
- const weatherPlaces = places.map(p => ({ id: p.id, label: p.name, lat: p.lat, lon: p.lon }));
+ // Adapt saved-places.SavedPlace to weather-threat-types.SavedPlace via the
+ // shared adapter — carries radiusKm (near-polygon buffer) AND resolved UGC
+ // zones (zone fallback), which this site used to drop on both counts.
+ const placeZonesById = await resolveSavedPlaceZones(places);
+ const weatherPlaces = places.map(p => toMatcherPlace(p, placeZonesById.get(p.id)));
  let bestDecision = undefined;
  for (const minimal of minimalAlerts) {
  const decision = routeWeatherAlert(minimal, weatherPlaces);

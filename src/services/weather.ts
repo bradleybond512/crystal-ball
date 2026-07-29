@@ -1,4 +1,5 @@
 import { createCircuitBreaker, getCSSColor } from '@/utils';
+import { isUsableMatchRing } from './weather/ring-geometry';
 
 export interface WeatherAlert {
   id: string;
@@ -10,6 +11,13 @@ export interface WeatherAlert {
   onset: Date;
   expires: Date;
   coordinates: [number, number][];
+  /** All outer rings of the alert geometry (one per sub-polygon of a
+   *  MultiPolygon; a single ring for a Polygon). Present ONLY when the alert
+   *  has more than one outer ring — `coordinates` legacy-carries just the
+   *  first ring for the map/DeckGL consumers, but personal matching must union
+   *  over every ring or a warning whose 2nd+ sub-polygon covers the user reads
+   *  as clear. Consumers that do point-in-polygon prefer this when set. */
+  polygonRings?: [number, number][][];
   centroid?: [number, number];
   /** UGC zone/county codes the alert applies to (from properties.geocode.UGC).
    *  Used as the geometry-free fallback when an alert has no polygon. */
@@ -41,41 +49,230 @@ interface NWSResponse {
 const NWS_API = 'https://api.weather.gov/alerts/active';
 const breaker = createCircuitBreaker<WeatherAlert[]>({ name: 'NWS Weather', cacheTtlMs: 30 * 60 * 1000, persistCache: true });
 
-export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
-  return breaker.execute(async () => {
- const response = await fetch(NWS_API, {
+/** Cap on active alerts retained from the national feed. The feed is
+ *  sorted MOST-SEVERE-FIRST before this cap applies, so a busy severe-
+ *  weather outbreak can't push the user's own warning out of range. Set
+ *  well above a realistic simultaneous-warning count (the old value, 50,
+ *  was smaller than a single big outbreak). */
+export const MAX_ACTIVE_ALERTS = 200;
+
+/** Higher = more severe. Drives the pre-cap priority sort so Extreme/
+ *  Severe products always survive truncation. */
+const SEVERITY_RANK: Record<string, number> = {
+  Extreme: 4,
+  Severe: 3,
+  Moderate: 2,
+  Minor: 1,
+  Unknown: 0,
+};
+
+/** Alerts at or above this rank (Severe, Extreme) are never shed by the cap. */
+const PROTECTED_SEVERITY_RANK = 3;
+
+/** The severity values NWS actually emits — the keys of the rank table are the
+ *  single source of truth. A feature whose severity is outside this set cannot
+ *  be classified as severe-or-not, so it must not be allowed to prove clear. */
+const RECOGNIZED_SEVERITIES = new Set(Object.keys(SEVERITY_RANK));
+
+/**
+ * Filter → prioritize → cap → normalize the raw NWS feature list into
+ * `WeatherAlert[]`. Pure and deterministic (given feature timestamps) so
+ * the truncation policy is unit-testable without a live fetch.
+ *
+ * The sort is the safety-critical part: personalization happens
+ * DOWNSTREAM of this cap, so if a Severe/Extreme alert over the user is
+ * dropped here it can never warn them. Sorting most-severe-first (stable
+ * within a severity, so API order is preserved per tier) guarantees the
+ * cap only ever sheds the least-severe products.
+ */
+export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): WeatherAlert[] {
+  const ranked = [...features]
+    .filter((alert) => alert.properties.severity !== 'Unknown')
+    .sort((a, b) => (SEVERITY_RANK[b.properties.severity] ?? 0) - (SEVERITY_RANK[a.properties.severity] ?? 0));
+  // Never shed a Severe/Extreme product — those are the ones that can be over
+  // the user, and personalization runs DOWNSTREAM of this cap. Because `ranked`
+  // is severe-first, the protected set is a prefix: extend the slice to cover
+  // it so the cap only ever trims the Moderate/Minor tail, even in an outbreak
+  // with more Severe/Extreme warnings than MAX_ACTIVE_ALERTS.
+  const protectedCount = ranked.filter(
+    (a) => (SEVERITY_RANK[a.properties.severity] ?? 0) >= PROTECTED_SEVERITY_RANK,
+  ).length;
+  return ranked
+    .slice(0, Math.max(MAX_ACTIVE_ALERTS, protectedCount))
+    .map((alert) => {
+      const rings = extractPolygonRings(alert.geometry);
+      const coords = rings[0] ?? [];
+      return {
+        id: alert.id,
+        event: alert.properties.event,
+        severity: alert.properties.severity as WeatherAlert['severity'],
+        headline: alert.properties.headline,
+        description: alert.properties.description?.slice(0, 500) ?? '',
+        areaDesc: alert.properties.areaDesc,
+        onset: new Date(alert.properties.onset),
+        expires: new Date(alert.properties.expires),
+        coordinates: coords,
+        // Only carry the multi-ring array when there is genuinely more than the
+        // first ring — single-ring alerts stay lean and read `coordinates`.
+        polygonRings: rings.length > 1 ? rings : undefined,
+        centroid: calculateCentroid(coords),
+        ugcZones: alert.properties.geocode?.UGC ?? [],
+      };
+    });
+}
+
+/**
+ * True when a normalized alert carries a polygon the matcher can actually use:
+ * at least one ring that {@link isUsableMatchRing} accepts (≥3 vertices AND
+ * non-zero enclosed area). "Usable" mirrors `alertMatchRings`
+ * (weather-exposure.ts), which filters rings through the SAME predicate before
+ * matching — a 1-/2-vertex ring, or a finite but degenerate (all-identical /
+ * collinear, zero-area) ring, places nothing. Keeping this in lockstep with the
+ * matcher is load-bearing: a looser check lets a degenerate-geometry severe
+ * alert reach a false clear. Deliberately does NOT consult `ugcZones`, so the
+ * clear decision can single out severe alerts that can ONLY match via the zone
+ * fallback (no usable polygon) and withhold the clear for exactly those when the
+ * zone lookup degrades.
+ */
+export function alertHasUsablePolygon(alert: WeatherAlert): boolean {
+  const rings = alert.polygonRings && alert.polygonRings.length > 0
+    ? alert.polygonRings
+    : [alert.coordinates];
+  return rings.some((ring) => isUsableMatchRing(ring));
+}
+
+/**
+ * True when a normalized alert carries NO way to place it against a saved point:
+ * no usable polygon ring AND no UGC zone. Such an alert cannot be matched, so
+ * `computeAlertExposure` returns a low exposure without throwing and the
+ * severe-alert loop would never mark matching degraded — letting the clear
+ * decision run `confirm_clear` off a severe warning it could not actually
+ * evaluate. The loop uses this to route those alerts to `revoke_confirmation`
+ * instead. An alert with EITHER a ring of >=3 vertices OR a UGC zone is
+ * evaluable (reads false).
+ */
+export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
+  return !alertHasUsablePolygon(alert) && alert.ugcZones.length === 0;
+}
+
+/**
+ * Turn a parsed NWS active-alerts body into the normalized feed, or THROW when
+ * the body is malformed. A successful HTTP 200 whose payload has no `features`
+ * array is corrupt, not a clear sky: NWS always returns a `features` array (it
+ * is empty only when there are genuinely no active alerts). Returning `[]` on a
+ * corrupt body would let the circuit breaker log a live success — the feed then
+ * reads fresh and the loader can confirm "all clear" off garbage, the same
+ * fail-open we close for failed fetches. Throwing routes the breaker to
+ * `unavailable` so the clear is withheld. A VALID empty `features: []` still
+ * passes through and legitimately proves clear.
+ *
+ * Validating the container is not enough: a feature we cannot classify by
+ * severity (missing or unrecognized value) would survive normalization as a
+ * non-severe alert, skip the severe loop, and reach `confirm_clear` — a
+ * fail-open, since that corrupt entry could be masking a Severe warning. Any
+ * such feature throws too, on the same fail-closed principle. The valid NWS
+ * value 'Unknown' is recognized (well-formed) and passes; it is merely filtered
+ * downstream by `selectAndNormalizeWeatherAlerts`.
+ */
+export function normalizeWeatherAlertsResponse(data: NWSResponse | null | undefined): WeatherAlert[] {
+  if (!data || !Array.isArray(data.features)) {
+    throw new Error('NWS alerts response missing features array');
+  }
+  for (const feature of data.features) {
+    if (!RECOGNIZED_SEVERITIES.has(feature?.properties?.severity as string)) {
+      throw new Error('NWS alert feature has unclassifiable severity');
+    }
+  }
+  return selectAndNormalizeWeatherAlerts(data.features);
+}
+
+async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
+  const response = await fetch(NWS_API, {
  headers: { 'User-Agent': 'CrystalBall/1.0' }
- });
+  });
 
- if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
- const data = await response.json() as NWSResponse;
- if (!data || !Array.isArray(data.features)) return [];
+  return normalizeWeatherAlertsResponse(await response.json() as NWSResponse);
+}
 
- return data.features
- .filter(alert => alert.properties.severity !== 'Unknown')
- .slice(0, 50)
- .map(alert => {
- const coords = extractCoordinates(alert.geometry);
- return {
- id: alert.id,
- event: alert.properties.event,
- severity: alert.properties.severity as WeatherAlert['severity'],
- headline: alert.properties.headline,
- description: alert.properties.description?.slice(0, 500) ?? '',
- areaDesc: alert.properties.areaDesc,
- onset: new Date(alert.properties.onset),
- expires: new Date(alert.properties.expires),
- coordinates: coords,
- centroid: calculateCentroid(coords),
- ugcZones: alert.properties.geocode?.UGC ?? [],
- };
- });
-  }, []);
+export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
+  return breaker.execute(fetchNwsAlerts, []);
 }
 
 export function getWeatherStatus(): string {
   return breaker.getStatus();
+}
+
+/** Live | recent-cache | nothing-usable — the breaker's own read of the last
+ *  fetch outcome. Mirrors `BreakerDataMode` but narrowed to what the weather
+ *  clear decision needs. */
+export type WeatherFeedMode = 'live' | 'cached' | 'unavailable';
+
+/** Honest snapshot of the NWS feed's currency, taken straight from the circuit
+ *  breaker (not the offline-cache wrapper, which always reports success because
+ *  the breaker never throws). `timestamp` is when the underlying data was last
+ *  refreshed (epoch ms), or null when nothing has been fetched. */
+export interface WeatherFeedState {
+  mode: WeatherFeedMode;
+  timestamp: number | null;
+}
+
+/** The freshness window for a CACHED read to still authorize a clear. Matches
+ *  the breaker's `cacheTtlMs` above: cache older than this is too stale to
+ *  prove "all clear" over a possible new storm. */
+export const WEATHER_FEED_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * The current NWS-alerts feed state, read from the circuit breaker's last
+ * fetch outcome. The data-loader reads this RIGHT AFTER awaiting the weather
+ * fetch so it reflects THIS tick, then feeds it to `isWeatherFeedFresh` to
+ * decide whether an empty candidate set is a real "all clear" or just a failed
+ * feed that must not clear the chip.
+ */
+export function getWeatherAlertsFeedState(): WeatherFeedState {
+  const { mode, timestamp } = breaker.getDataState();
+  return { mode, timestamp };
+}
+
+/**
+ * Fetch the NWS alerts AND the feed-currency snapshot the breaker produced for
+ * THIS fetch, captured atomically (see `CircuitBreaker.executeTracked`). The
+ * clear decision must read currency bound to the same fetch that produced its
+ * alerts: reading the shared `getWeatherAlertsFeedState()` in a later microtask
+ * lets a concurrent consumer's success (e.g. AirSmokePanel calls
+ * `fetchWeatherAlerts()` directly) masquerade as this tick's currency, so a
+ * failed/empty loader fetch reads a fresh `live` timestamp and certifies a false
+ * "all clear". The paired snapshot here closes that TOCTOU.
+ */
+export async function fetchWeatherAlertsWithFeedState(): Promise<{
+  alerts: WeatherAlert[];
+  feedState: WeatherFeedState;
+}> {
+  const { data, dataState } = await breaker.executeTracked(fetchNwsAlerts, []);
+  return { alerts: data, feedState: { mode: dataState.mode, timestamp: dataState.timestamp } };
+}
+
+/**
+ * Whether the weather feed is current enough to PROVE a clear (drop the
+ * personal weather threat). Requires an in-window read for BOTH live and
+ * cached modes: a finite timestamp whose age is within `[0, ttlMs]`. `mode`
+ * alone is never proof of currency — the breaker can report a `live` read
+ * whose timestamp is hours old (no fetch has refreshed it), and a bare
+ * `mode:'live'` clear off that stale read re-introduces the "all clear during
+ * a storm" fail-open. An `unavailable` feed (failed fetch, no usable cache),
+ * a missing/non-finite timestamp, or a future timestamp (clock skew → negative
+ * age) all fail closed.
+ */
+export function isWeatherFeedFresh(
+  state: WeatherFeedState,
+  now: number = Date.now(),
+  ttlMs: number = WEATHER_FEED_TTL_MS,
+): boolean {
+  if (state.mode === 'unavailable') return false;
+  if (state.timestamp === null || !Number.isFinite(state.timestamp)) return false;
+  const age = now - state.timestamp;
+  return age >= 0 && age <= ttlMs;
 }
 
 interface NWSPointZones {
@@ -83,37 +280,97 @@ interface NWSPointZones {
 }
 
 /** Derive a location's own UGC codes (forecast zone + county) from NWS
- *  `/points/{lat},{lon}`. Best-effort: returns `[]` on any failure so
- *  callers can degrade to polygon-only matching. The codes are the last
- *  path segment of the `forecastZone` / `county` URLs (e.g. `INZ001`). */
+ *  `/points/{lat},{lon}`. The codes are the last path segment of the
+ *  `forecastZone` / `county` URLs (e.g. `INZ001`).
+ *
+ *  Failure semantics matter: this resolver is the DEFAULT behind
+ *  `resolveSavedPlaceZonesWithHealth`, whose `degraded` flag lets the clear
+ *  decision withhold "all clear" while a place's zones are UNKNOWN. That flag
+ *  only flips when the resolver THROWS, so a swallow-and-return-`[]` here would
+ *  make `degraded` permanently false and re-open the fail-open it exists to
+ *  close. Therefore: THROW on an ambiguous failure (network/timeout/5xx, or a
+ *  200 whose payload carries no parseable zone codes — every real NWS point
+ *  returns at least a forecastZone, so zero codes means the zones are UNKNOWN,
+ *  not a genuinely zone-less place), and return `[]` ONLY on the one honest
+ *  empty (404 = NWS has no point here). Callers that want the old best-effort
+ *  behavior wrap this in their own try/catch (the adapter does). */
 export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<string[]> {
-  try {
-    const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
-      headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-    const payload = await res.json() as NWSPointZones;
-    const zones = [payload.properties?.forecastZone, payload.properties?.county]
-      .map((url) => url?.split('/').pop() ?? '')
-      .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
-    return [...new Set(zones)];
-  } catch {
-    return [];
-  }
+  const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
+    headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  // 404 → this coordinate genuinely has no NWS point (e.g. offshore): an honest
+  // empty, not a degradation. Any other non-OK status (5xx, throttling) leaves
+  // the zones UNKNOWN — propagate so the caller marks the batch degraded.
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const payload = await res.json() as NWSPointZones;
+  const zones = [payload.properties?.forecastZone, payload.properties?.county]
+    .map((url) => url?.split('/').pop() ?? '')
+    .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
+  // A 200 with zero parseable codes is anomalous (every real point returns at
+  // least a forecastZone): the zones are UNKNOWN, so throw to mark the batch
+  // degraded rather than authorize an all-clear for a zone-only severe alert.
+  if (zones.length === 0) throw new Error('NWS /points returned no parseable zone codes');
+  return [...new Set(zones)];
 }
 
-function extractCoordinates(geometry?: NWSAlert['geometry']): [number, number][] {
+/**
+ * Sanitize one ring, ALL-OR-NOTHING: return its [lon, lat] vertices only if
+ * EVERY vertex is a finite, in-range coordinate; otherwise return [] and drop
+ * the whole ring. A corrupt NWS body can carry non-finite (null / NaN / string)
+ * or off-earth (|lon| > 180, |lat| > 90) vertices. Dropping only the bad
+ * vertices would SALVAGE the ring into a smaller, differently-shaped polygon
+ * that still passes the length/area checks yet silently mis-places the user — a
+ * saved place inside the intended polygon can fall outside the salvaged one, so
+ * matching returns 0 exposure, reads "evaluated", and lets a severe warning
+ * reach a false clear. Rejecting the whole ring makes it spatially unplaceable
+ * instead, so the alert routes to CHECKING WEATHER. Bounds are inclusive (±180 /
+ * ±90) so a legitimate antimeridian/pole-edge polygon stays usable. For a
+ * MultiPolygon this rejects only the corrupt sub-polygon (its own ring), exactly
+ * as `isUsableMatchRing` rejects an out-of-range ring among its siblings.
+ */
+function toFiniteRing(ring?: number[][]): [number, number][] {
+  if (!Array.isArray(ring)) return [];
+  const out: [number, number][] = [];
+  for (const c of ring) {
+    const lon = c?.[0];
+    const lat = c?.[1];
+    if (
+      typeof lon !== 'number' || !Number.isFinite(lon) ||
+      typeof lat !== 'number' || !Number.isFinite(lat) ||
+      lon < -180 || lon > 180 || lat < -90 || lat > 90
+    ) {
+      return [];
+    }
+    out.push([lon, lat]);
+  }
+  return out;
+}
+
+/**
+ * Every OUTER ring of the alert geometry: one ring for a Polygon, one ring per
+ * sub-polygon for a MultiPolygon. NWS issues MultiPolygon warnings routinely (a
+ * single product covering disjoint areas). The old single-ring extraction kept
+ * only `coords[0][0]` — the FIRST sub-polygon — so a warning whose 2nd+
+ * sub-polygon covered the user matched nothing and read as clear. Interior
+ * holes (rings after index 0 within a polygon) are ignored: a warning applies
+ * to its whole outer boundary, and honoring holes would only shrink coverage.
+ */
+function extractPolygonRings(geometry?: NWSAlert['geometry']): [number, number][][] {
   if (!geometry) return [];
 
   try {
  if (geometry.type === 'Polygon') {
  const coords = geometry.coordinates as unknown as number[][][];
- return coords[0]?.map(c => [c[0], c[1]] as [number, number]) ?? [];
+ const ring = toFiniteRing(coords[0]);
+ return ring.length > 0 ? [ring] : [];
  }
  if (geometry.type === 'MultiPolygon') {
  const coords = geometry.coordinates as unknown as number[][][][];
- return coords[0]?.[0]?.map(c => [c[0], c[1]] as [number, number]) ?? [];
+ return coords
+ .map((poly) => toFiniteRing(poly[0]))
+ .filter((ring) => ring.length > 0);
  }
   } catch {
  return [];

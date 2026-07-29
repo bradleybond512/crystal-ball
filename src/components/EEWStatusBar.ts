@@ -81,7 +81,10 @@ export class EEWStatusBar {
     main.className = 'eew-bar-main';
     this.labelEl = document.createElement('span');
     this.labelEl.className = 'eew-bar-label';
-    this.labelEl.textContent = 'ALL CLEAR';
+    // Honest pre-render placeholder: weather has not been evaluated yet at mount,
+    // so the boot label is the neutral CHECKING state (render() replaces it
+    // synchronously below), never a false ALL CLEAR the chip has not verified.
+    this.labelEl.textContent = 'CHECKING WEATHER';
     this.subtitleEl = document.createElement('span');
     this.subtitleEl.className = 'eew-bar-subtitle';
     this.imessageBadgeEl = document.createElement('span');

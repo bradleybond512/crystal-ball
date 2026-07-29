@@ -226,6 +226,8 @@ import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-inte
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
+import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, revokePersonalWeatherClearConfirmation, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
+import { createPlacesClearRevoker } from '@/services/weather/saved-place-adapter';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -666,7 +668,30 @@ function collectCompositeStatusInputs(): CompositeStatusInputs {
     }).status;
   } catch { readinessStatus = null; }
 
-  return { safetyCaseSafeToOperate, readinessStatus };
+  let weatherSeverity: 'extreme' | 'severe' | null = null;
+  try {
+    weatherSeverity = getPersonalWeatherThreat()?.severity ?? null;
+  } catch { weatherSeverity = null; }
+
+  // Only let the chip assert "ALL CLEAR" when a FRESH weather read has actually
+  // proven no threat over a saved place — AND that proof is still current. Both
+  // conditions live inside the store's confirmed-clear flag: it is false at boot
+  // (before the first tick) and after a threat that merely self-expired, and it
+  // now SELF-EXPIRES once the loader has not re-proved clear within the feed
+  // TTL. We deliberately do NOT re-read the NWS breaker's feed timestamp here:
+  // that breaker is shared with unrelated fetchers (e.g. the Air & Smoke panel)
+  // whose re-fetches advance it without the alert matcher ever re-running, so it
+  // could read "fresh" while the loader is blind — a false ALL CLEAR. The
+  // loader-owned proof is the only honest freshness signal.
+  // Fail CLOSED: the default AND the catch are both `false`. If the check can't
+  // even run (the singleton throws), we have NOT proven it clear, so the chip
+  // must stay neutral — never fall back to asserting ALL CLEAR on an error.
+  let weatherClearConfirmed = false;
+  try {
+    weatherClearConfirmed = isPersonalWeatherClearConfirmed();
+  } catch { weatherClearConfirmed = false; }
+
+  return { safetyCaseSafeToOperate, readinessStatus, weatherSeverity, weatherClearConfirmed };
 }
 
 /** CSS class driving the brief accent pulse on a navigated-to panel
@@ -716,7 +741,9 @@ export class PanelLayoutManager implements AppModule {
   private triageBar: TriageBar | null = null;
   private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
+  private unsubWeatherClearOnPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
+  private personalWeatherUnsub: (() => void) | null = null;
   private modeAdvisoryUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
   private homeShell: HomeShellOverlay | null = null;
@@ -802,6 +829,8 @@ export class PanelLayoutManager implements AppModule {
  this.panelDragCleanupHandlers = [];
  this.safetyCaseUnsub?.();
  this.safetyCaseUnsub = null;
+ this.personalWeatherUnsub?.();
+ this.personalWeatherUnsub = null;
  this.modeAdvisoryUnsub?.();
  this.modeAdvisoryUnsub = null;
  if (this.criticalBannerEl) {
@@ -827,6 +856,7 @@ export class PanelLayoutManager implements AppModule {
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
+ if (this.unsubWeatherClearOnPlaces) { this.unsubWeatherClearOnPlaces(); this.unsubWeatherClearOnPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
  if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
@@ -1097,6 +1127,12 @@ export class PanelLayoutManager implements AppModule {
  // than waiting for the next 30 s EEW poll.
  try {
  this.safetyCaseUnsub = getSafetyCaseService().subscribe(() => eewStatusBar.refreshCompositeStatus());
+ } catch { /* diagnostics optional */ }
+ // A personal weather threat matched between polls (e.g. a Tornado Warning
+ // arriving 5 s after the last tick) must repaint the chip at once rather
+ // than leaving "ALL CLEAR" up for the rest of the 30 s poll window.
+ try {
+ this.personalWeatherUnsub = subscribePersonalWeatherThreat(() => eewStatusBar.refreshCompositeStatus());
  } catch { /* diagnostics optional */ }
  startSpaceWeatherStatusBarPoller(eewStatusBar);
 
@@ -2263,6 +2299,18 @@ export class PanelLayoutManager implements AppModule {
  // Resolve site on boot; re-resolve whenever saved places change.
  setDatacenterSite(resolveSiteConfig(getSavedPlaces()));
  this.unsubDcPlaces = subscribeSavedPlaces((places) => setDatacenterSite(resolveSiteConfig(places)));
+ // A confirmed "all clear" was proven against the saved-place set at the last
+ // weather refresh. When the MATCH set changes (a place added/moved/re-radiused/
+ // removed), that clear no longer covers the new set — a newly-added place could
+ // sit under a severe alert the prior clear never evaluated. Drop the confirmation
+ // to the neutral "checking" state so the chip can't assert a stale ALL CLEAR until
+ // the next refresh re-evaluates honestly. A display-only edit (rename/notes/
+ // priority) or a pure reorder leaves the match set unchanged, so the revoke is
+ // gated on savedPlacesMatchSignature and does NOT blank a valid clear. No-op when
+ // nothing is confirmed.
+ this.unsubWeatherClearOnPlaces = subscribeSavedPlaces(
+   createPlacesClearRevoker(getSavedPlaces(), revokePersonalWeatherClearConfirmation),
+ );
  const datacenterPanel = new DataCenterReadinessPanel();
  this.ctx.panels['datacenter-readiness'] = datacenterPanel;
  // Mount the pinned strip above the panel grid so it floats outside

@@ -11036,12 +11036,24 @@ async function dispatch(requestUrl, req, routes, context) {
  const fmpKey = process.env.FMP_API_KEY;
  if (!fmpKey) return json({ quotes: [], degraded: true, error: 'no FMP key' });
  try {
- const r = await fetchWithTimeout(
- `https://financialmodelingprep.com/api/v3/quote/${STOCK_FUSION_SYMBOLS.join(',')}?apikey=${encodeURIComponent(fmpKey)}`,
- { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000,
- );
- if (!r.ok) throw new Error(`FMP ${r.status}`);
- const data = await r.json();
+ // FMP's current API lives under /stable; /api/v3 is legacy and unavailable
+ // to newly created free keys (grandfathered keys still work there). Try
+ // stable first, fall back to v3 so both key generations get quotes.
+ const symbolCsv = STOCK_FUSION_SYMBOLS.join(',');
+ const fmpUrls = [
+ `https://financialmodelingprep.com/stable/quote?symbol=${symbolCsv}&apikey=${encodeURIComponent(fmpKey)}`,
+ `https://financialmodelingprep.com/api/v3/quote/${symbolCsv}?apikey=${encodeURIComponent(fmpKey)}`,
+ ];
+ let data = null;
+ let lastStatus = 0;
+ for (const url of fmpUrls) {
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000);
+ lastStatus = r.status;
+ if (!r.ok) continue;
+ data = await r.json();
+ if (Array.isArray(data) && data.length > 0) break;
+ }
+ if (!Array.isArray(data)) throw new Error(`FMP ${lastStatus}`);
  const rows = Array.isArray(data) ? data : [];
  const quotes = [];
  for (const row of rows) {
@@ -12431,6 +12443,10 @@ async function dispatch(requestUrl, req, routes, context) {
           };
         })
         .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon) && Number.isFinite(e.magnitude));
+      // Zero parsed events from a 200 means a maintenance page or format
+      // change, not a quiet planet (M4+ is never absent from a 50-row,
+      // no-time-floor query) — degraded, uncached so the next poll retries.
+      if (events.length === 0) return json({ events: [], degraded: true, error: 'no GEOFON events parsed' });
       const _gfResult = { events };
       setCached('geofon-seismic', _gfResult, 5 * 60 * 1000);
       return json(_gfResult);

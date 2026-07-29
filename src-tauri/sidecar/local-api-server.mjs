@@ -11040,20 +11040,28 @@ async function dispatch(requestUrl, req, routes, context) {
  // to newly created free keys (grandfathered keys still work there). Try
  // stable first, fall back to v3 so both key generations get quotes.
  const symbolCsv = STOCK_FUSION_SYMBOLS.join(',');
+ // Stable's batch endpoint is /stable/batch-quote?symbols= (the singular
+ // /stable/quote takes ONE symbol). Each attempt catches its own errors so
+ // a stable-side timeout or maintenance-HTML parse failure still falls
+ // through to legacy v3 for grandfathered keys.
  const fmpUrls = [
- `https://financialmodelingprep.com/stable/quote?symbol=${symbolCsv}&apikey=${encodeURIComponent(fmpKey)}`,
+ `https://financialmodelingprep.com/stable/batch-quote?symbols=${encodeURIComponent(symbolCsv)}&apikey=${encodeURIComponent(fmpKey)}`,
  `https://financialmodelingprep.com/api/v3/quote/${symbolCsv}?apikey=${encodeURIComponent(fmpKey)}`,
  ];
  let data = null;
- let lastStatus = 0;
+ let lastError = 'FMP: no attempt succeeded';
  for (const url of fmpUrls) {
+ try {
  const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000);
- lastStatus = r.status;
- if (!r.ok) continue;
- data = await r.json();
- if (Array.isArray(data) && data.length > 0) break;
+ if (!r.ok) { lastError = `FMP ${r.status}`; continue; }
+ const body = await r.json();
+ if (Array.isArray(body) && body.length > 0) { data = body; break; }
+ lastError = 'FMP: empty response';
+ } catch (attemptError) {
+ lastError = String(attemptError.message ?? attemptError);
  }
- if (!Array.isArray(data)) throw new Error(`FMP ${lastStatus}`);
+ }
+ if (!Array.isArray(data)) throw new Error(lastError);
  const rows = Array.isArray(data) ? data : [];
  const quotes = [];
  for (const row of rows) {

@@ -745,7 +745,7 @@ Extend `src/services/cognition/shadow-rollout.ts`:
 
 ### ACC-402 — Promotion and rollback gate
 
-Status: `IN PROGRESS`
+Status: `DONE`
 
 Owner: Claude
 Branch: `claude/acc-402-promotion-gate`
@@ -761,6 +761,32 @@ Deliver:
 - safety replay recall and lead-time gates;
 - one-click or configuration-based rollback to the previous version;
 - no automatic promotion from proxy-only cohorts.
+
+Evidence: `src/services/cognition/promotion-gate.ts` —
+`evaluatePromotionGate()` runs seven explained gates (min-pairs overall
+200 / per enabled domain 100, strict Brier skill vs the cohort base
+rate, log-loss no-regression vs the incumbent, one-sided 95% paired
+bootstrap lower bound on per-pair Brier improvement with a deterministic
+seeded PRNG, safety replay recall + lead-time floors that fail closed
+when no safety fixtures ran, and a direct-outcomes gate so a proxy-only
+cohort can never auto-promote). Evidence flows from ACC-401's exact
+joins via `collectJoinedEvidence()` in shadow-rollout.ts, which now
+attributes per-pair domain and resolution provenance kind (direct
+dominates proxy on a shared identity; conflicts still drop).
+`safetyEvidenceFromReplayReport()` distills the ops replay harness
+report. `src/services/cognition/champion-registry.ts` is the single
+configuration mutator: `promote()` refuses any non-'promote' decision
+and stores the full gate evidence for audit; `rollback(slot)` is the
+one-call restore of the previous distinct champion (version included),
+persisted under `crystalball-champion-registry-v1` and surviving
+rehydration. Shadow-ledger retention is now PER RUN
+(`MAX_COMPARISONS_PER_RUN` 300 + global ceiling 1800 in
+shadow-mode.ts) so one chatty run can no longer evict another run's
+promotion evidence — the ACC-401 review's evidence-starvation concern.
+Verified: 53 tests across promotion-gate/champion-registry/
+shadow-rollout suites, full test:cognition 632/632, adapter + ACC-302
+suites, frozen bench:forecast + bench:baselines unchanged,
+typecheck:all, scoped ESLint.
 
 ### ACC-403 — Champion/challenger status surface
 

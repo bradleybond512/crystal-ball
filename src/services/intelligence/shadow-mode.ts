@@ -101,7 +101,17 @@ export interface ShadowModeServiceOptions {
 
 export const RUNS_STORAGE_KEY = 'wm-shadow-mode-runs';
 export const COMPARISONS_STORAGE_KEY = 'wm-shadow-mode-comparisons';
-export const MAX_COMPARISONS = 500;
+/** ACC-402: retention is PER RUN so one chatty run cannot evict another
+ *  run's promotion evidence (the flip gate needs 200 joined pairs per run;
+ *  the previous single global cap of 500 across 6 registered runs could
+ *  starve every run below the gate). 300 per run leaves join-loss slack
+ *  above the 200-pair gate. */
+export const MAX_COMPARISONS_PER_RUN = 300;
+/** Hard global ceiling bounding localStorage growth (~250 bytes per
+ *  numeric comparison → worst case ≈ 450 KB, reached only when six runs
+ *  are all saturated). Binds only if more runs register than
+ *  MAX_COMPARISONS_TOTAL / MAX_COMPARISONS_PER_RUN. */
+export const MAX_COMPARISONS_TOTAL = 1800;
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -323,7 +333,7 @@ export class ShadowModeAlgorithmService {
     // — but don't pollute the ledger.
     if (run?.enabled) {
       this.comparisons.push(comparison);
-      this.enforceCapacity();
+      this.enforceCapacity(runId);
       this.persistComparisons();
       this.notify(comparison);
     }
@@ -400,9 +410,26 @@ export class ShadowModeAlgorithmService {
 
   // ── Internal ─────────────────────────────────────────────────────
 
-  private enforceCapacity(): void {
-    if (this.comparisons.length <= MAX_COMPARISONS) return;
-    this.comparisons.splice(0, this.comparisons.length - MAX_COMPARISONS);
+  /** Trim the run that just grew past its per-run cap (oldest first),
+   *  then enforce the global ceiling across all runs. */
+  private enforceCapacity(grownRunId: string): void {
+    let runCount = 0;
+    for (const c of this.comparisons) {
+      if (c.runId === grownRunId) runCount += 1;
+    }
+    if (runCount > MAX_COMPARISONS_PER_RUN) {
+      let toDrop = runCount - MAX_COMPARISONS_PER_RUN;
+      this.comparisons = this.comparisons.filter((c) => {
+        if (toDrop > 0 && c.runId === grownRunId) {
+          toDrop -= 1;
+          return false;
+        }
+        return true;
+      });
+    }
+    if (this.comparisons.length > MAX_COMPARISONS_TOTAL) {
+      this.comparisons.splice(0, this.comparisons.length - MAX_COMPARISONS_TOTAL);
+    }
   }
 
   private notify(comparison: ShadowComparison): void {
@@ -455,6 +482,9 @@ export class ShadowModeAlgorithmService {
       for (const entry of parsed) {
         if (entry && typeof entry.id === 'string') this.comparisons.push({ ...entry });
       }
+      if (this.comparisons.length > MAX_COMPARISONS_TOTAL) {
+        this.comparisons.splice(0, this.comparisons.length - MAX_COMPARISONS_TOTAL);
+      }
     } catch {
       // corrupt — leave empty
     }
@@ -497,5 +527,6 @@ export const __internals = {
   deepEqual,
   divergenceScore,
   hashInput,
-  MAX_COMPARISONS,
+  MAX_COMPARISONS_PER_RUN,
+  MAX_COMPARISONS_TOTAL,
 };

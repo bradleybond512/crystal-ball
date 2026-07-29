@@ -33,12 +33,31 @@ export interface ShadowRunConfig {
   createdAt: number;
 }
 
+/** ACC-401: stable join fields carried FIRST-CLASS on a comparison so
+ *  verdicts join to resolved outcomes exactly — never by approximate
+ *  hash or probability proximity. */
+export interface ShadowJoinKey {
+  targetKey: string;
+  predictedAt: number;
+  resolveBy: number;
+  /** Model identity of the LIVE side (the production forecast). */
+  liveModelId?: string;
+  liveModelVersion?: string;
+  /** Model identity of the SHADOW side (the challenger/baseline). */
+  shadowModelId?: string;
+  shadowModelVersion?: string;
+  /** Feature-set version, when the emitting pipeline defines one. */
+  featureSetVersion?: string;
+}
+
 export interface ShadowComparison {
   id: string;
   algorithmId: ShadowAlgorithmId;
   runId: string;
   /** SHA-256-free stable hash of the input — JSON.stringify based. */
   inputHash: string;
+  /** Present when the producer supplied exact join fields (ACC-401). */
+  joinKey?: ShadowJoinKey;
   liveOutput: unknown;
   shadowOutput: unknown;
   /** True when liveOutput and shadowOutput are not structurally equal. */
@@ -274,7 +293,13 @@ export class ShadowModeAlgorithmService {
 
   // ── Compare ──────────────────────────────────────────────────────
 
-  compare<T>(runId: string, input: unknown, liveOutput: T, shadowOutput: T): ShadowComparison {
+  compare<T>(
+    runId: string,
+    input: unknown,
+    liveOutput: T,
+    shadowOutput: T,
+    joinKey?: ShadowJoinKey,
+  ): ShadowComparison {
     this.ensureHydrated();
     const run = this.runs.get(runId);
     const now = this.clock();
@@ -286,6 +311,7 @@ export class ShadowModeAlgorithmService {
       algorithmId,
       runId,
       inputHash: hashInput(input),
+      ...(joinKey ? { joinKey: { ...joinKey } } : {}),
       liveOutput,
       shadowOutput,
       diverged,

@@ -338,7 +338,7 @@ describe('shadow-rollout — recommendation field is the correct union type', ()
 
 // ── ACC-303: baseline runs are fenced from the probability-proximity verdict ──
 
-it('baseline runs report volume only — never a Brier verdict — until ACC-401 exact joins', () => {
+it('baseline runs without joinable outcomes report zero joined pairs and no Brier (ACC-401 semantics)', () => {
   resetShadowRolloutForTests();
   const comparisons = Array.from({ length: 300 }, (_, i) => ({
     runId: 'production-vs-persistence-baseline',
@@ -353,9 +353,11 @@ it('baseline runs report volume only — never a Brier verdict — until ACC-401
     getDivergenceRate: () => 0.2,
   } as never;
   const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, { shadowService: fakeSvc, clock: () => 5_000 });
-  assert.equal(verdict.pairs, 300);
+  // ACC-401: pairs = JOINED resolved pairs. These comparisons carry no
+  // joinKey, so nothing joins — and no Brier can come from proximity.
+  assert.equal(verdict.pairs, 0);
   assert.equal(verdict.recommendation, 'insufficient-data');
-  assert.equal(verdict.brierLive, undefined, 'no Brier from the proximity join');
+  assert.equal(verdict.brierLive, undefined, 'no Brier without exact joins');
   assert.equal(verdict.brierShadow, undefined);
   resetShadowRolloutForTests();
 });
@@ -381,5 +383,147 @@ it('persistVerdictSnapshot covers every registered run including the three basel
   for (const id of Object.values(RUN_IDS)) {
     assert.ok(ids.includes(id), `snapshot missing run ${id}`);
   }
+  resetShadowRolloutForTests();
+});
+
+// ── ACC-401: exact paired-outcome joins ──────────────────────────────────
+
+const J_T = Date.UTC(2026, 6, 1, 12, 0, 0);
+const J_H = 3_600_000;
+
+function joinComparison(
+  targetKey: string,
+  liveP: number,
+  shadowP: number,
+  overrides: Record<string, unknown> = {},
+): never {
+  return {
+    runId: 'production-vs-persistence-baseline',
+    liveOutput: liveP,
+    shadowOutput: shadowP,
+    timestamp: J_T + 60_000,
+    joinKey: {
+      targetKey,
+      predictedAt: J_T,
+      resolveBy: J_T + 24 * J_H,
+      liveModelId: 'mode-forecast',
+      liveModelVersion: '1.0.0',
+      shadowModelId: 'persistence-baseline',
+      shadowModelVersion: '1.0.0',
+    },
+    ...overrides,
+  } as never;
+}
+
+function joinResolved(
+  targetKey: string,
+  outcome: boolean,
+  overrides: Record<string, unknown> = {},
+): PredictionRecord {
+  return {
+    id: `jr-${targetKey}-${outcome}`,
+    sourceId: 'mode-forecast',
+    targetKey,
+    domain: 'markets',
+    claim: 'j',
+    probability: 0.6,
+    predictedAt: J_T,
+    resolveBy: J_T + 24 * J_H,
+    status: outcome ? 'resolved_true' : 'resolved_false',
+    resolvedAt: J_T + 12 * J_H,
+    resolutionNote: 'direct:j',
+    ...overrides,
+  } as PredictionRecord;
+}
+
+function fakeJoinStore(records: PredictionRecord[]): never {
+  return { all: () => records } as never;
+}
+
+function fakeJoinSvc(comparisons: unknown[]): never {
+  return {
+    registerRun: () => {},
+    compare: () => {},
+    getComparisons: () => comparisons,
+    getDivergenceRate: () => 0.1,
+  } as never;
+}
+
+it('REGRESSION (round-2 P1): two p=0.6 forecasts resolving oppositely join to their OWN outcomes', () => {
+  resetShadowRolloutForTests();
+  // 200+ joined pairs split across two targets with opposite outcomes,
+  // every comparison at the same probability — proximity would mix them.
+  const comparisons: unknown[] = [];
+  const records: PredictionRecord[] = [];
+  for (let i = 0; i < 120; i++) {
+    const kTrue = `mode:true-${i}`;
+    const kFalse = `mode:false-${i}`;
+    comparisons.push(joinComparison(kTrue, 0.6, 0.9));
+    comparisons.push(joinComparison(kFalse, 0.6, 0.9));
+    records.push(joinResolved(kTrue, true), joinResolved(kFalse, false));
+  }
+  const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc(comparisons),
+    calibrationStore: fakeJoinStore(records),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(verdict.pairs, 240);
+  // live 0.6 on half-true cohort → Brier 0.5*(0.16)+0.5*(0.36)=0.26;
+  // shadow 0.9 → 0.5*(0.01)+0.5*(0.81)=0.41. Exact joins keep them honest.
+  assert.ok(Math.abs(verdict.brierLive! - 0.26) < 1e-9);
+  assert.ok(Math.abs(verdict.brierShadow! - 0.41) < 1e-9);
+  assert.equal(verdict.recommendation, 'keep-live');
+  resetShadowRolloutForTests();
+});
+
+it('exact joins exclude pairs produced at-or-after the outcome observation', () => {
+  resetShadowRolloutForTests();
+  const late = joinComparison('mode:late', 0.6, 0.5, { timestamp: J_T + 13 * J_H }) as Record<string, unknown>;
+  const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([late]),
+    calibrationStore: fakeJoinStore([joinResolved('mode:late', true)]),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(verdict.pairs, 0, 'resolvedAt (T+12h) precedes the pair timestamp (T+13h)');
+  resetShadowRolloutForTests();
+});
+
+it('exact joins drop identities whose records disagree on the outcome', () => {
+  resetShadowRolloutForTests();
+  const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([joinComparison('mode:conflict', 0.6, 0.5)]),
+    calibrationStore: fakeJoinStore([
+      joinResolved('mode:conflict', true, { id: 'c1' }),
+      joinResolved('mode:conflict', false, { id: 'c2' }),
+    ]),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(verdict.pairs, 0, 'conflicting identity dropped entirely');
+  resetShadowRolloutForTests();
+});
+
+it('exact joins require the LIVE model identity to match the resolved record source', () => {
+  resetShadowRolloutForTests();
+  const wrongModel = joinComparison('mode:wm', 0.6, 0.5);
+  const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([wrongModel]),
+    calibrationStore: fakeJoinStore([
+      joinResolved('mode:wm', true, { sourceId: 'superforecast' }),
+    ]),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(verdict.pairs, 0, 'different producing model = different identity');
+  resetShadowRolloutForTests();
+});
+
+it('below the min-pairs gate joined evidence reports insufficient-data with the honest joined count', () => {
+  resetShadowRolloutForTests();
+  const verdict = shadowVerdict(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([joinComparison('mode:few', 0.6, 0.5)]),
+    calibrationStore: fakeJoinStore([joinResolved('mode:few', true)]),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(verdict.pairs, 1);
+  assert.equal(verdict.recommendation, 'insufficient-data');
   resetShadowRolloutForTests();
 });

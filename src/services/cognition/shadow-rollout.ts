@@ -51,9 +51,9 @@
  *     tests (no real IDB / localStorage required).
  */
 
-import type { ShadowModeAlgorithmService, ShadowRunConfig } from '@/services/intelligence/shadow-mode';
+import type { ShadowJoinKey, ShadowModeAlgorithmService, ShadowRunConfig } from '@/services/intelligence/shadow-mode';
 import { getShadowModeAlgorithmService } from '@/services/intelligence/shadow-mode';
-import type { ForecastCalibrationStore } from '@/services/intelligence/forecast-calibration';
+import type { ForecastCalibrationStore, PredictionRecord } from '@/services/intelligence/forecast-calibration';
 import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
 import { putMemory as idbPutMemory } from '@/services/reasoning-memory';
 import { isCognitionEnabled } from './cognition-settings';
@@ -341,6 +341,8 @@ export interface BaselinePairInput {
   productionVersion?: string;
   baselineSourceId: string;
   baselineVersion?: string;
+  /** Feature-set version, when the emitting pipeline defines one. */
+  featureSetVersion?: string;
 }
 
 const BASELINE_RUN_ID_SET: ReadonlySet<string> = new Set([
@@ -367,7 +369,16 @@ export function pushBaselinePair(
     if (!_initialized) initShadowRollout();
     const svc = getShadowService();
     if (!svc) return;
-    svc.compare(runId, input, productionP, baselineP);
+    svc.compare(runId, input, productionP, baselineP, {
+      targetKey: input.targetKey,
+      predictedAt: input.predictedAt,
+      resolveBy: input.resolveBy,
+      liveModelId: input.productionSourceId,
+      liveModelVersion: input.productionVersion,
+      shadowModelId: input.baselineSourceId,
+      shadowModelVersion: input.baselineVersion,
+      featureSetVersion: input.featureSetVersion,
+    });
   } catch {
     // Fire-and-forget.
   }
@@ -400,6 +411,92 @@ export function pushSchemaPair(
  * Compute Brier score for a set of (probability, outcome) pairs.
  * Returns null when there are no pairs.
  */
+/**
+ * ACC-401 exact paired-outcome verdict. Joins comparisons to resolved
+ * calibration records by the comparison's STABLE joinKey — targetKey +
+ * predictedAt + resolveBy + the LIVE model's identity — never by hash
+ * or probability proximity. Discipline:
+ *  - comparisons without a joinKey are ignored (they cannot join exactly);
+ *  - a join target whose records disagree on the outcome is dropped
+ *    entirely (ACC-301 dedup semantics);
+ *  - records whose outcome was observed BEFORE the pair was produced
+ *    are excluded (comparison.timestamp must precede resolvedAt);
+ *  - both models score on the identical joined cohort by construction —
+ *    one comparison carries both probabilities.
+ * `pairs` in the verdict = JOINED resolved pairs (the evidence count
+ * ACC-402's promotion gate consumes), not raw comparison volume.
+ */
+function exactPairedVerdict(
+  runId: RunId,
+  comparisons: readonly { liveOutput: unknown; shadowOutput: unknown; timestamp: number; joinKey?: ShadowJoinKey }[],
+  divergenceRate: number,
+  ts: number,
+): ShadowVerdict {
+  const insufficient = (joined: number): ShadowVerdict => ({
+    runId, pairs: joined, divergenceRate, recommendation: 'insufficient-data', computedAt: ts,
+  });
+  const store = getCalStore();
+  if (!store) return insufficient(0);
+
+  const byIdentity = indexResolvedIdentities(store.all());
+  const { livePairs, shadowPairs } = joinExactPairs(comparisons, byIdentity);
+
+  const joined = livePairs.length;
+  if (joined < FLIP_GATE_MIN_PAIRS) return insufficient(joined);
+  const brierLive = brierScore(livePairs) ?? undefined;
+  const brierShadow = brierScore(shadowPairs) ?? undefined;
+  if (brierLive === undefined || brierShadow === undefined) return insufficient(joined);
+  const recommendation: FlipRecommendation =
+    brierShadow <= brierLive ? 'flip-to-shadow' : 'keep-live';
+  return { runId, pairs: joined, divergenceRate, brierLive, brierShadow, recommendation, computedAt: ts };
+}
+
+/** Resolved records indexed by exact join identity; conflicting
+ *  outcomes on one identity drop the whole key (ACC-301 semantics). */
+function indexResolvedIdentities(
+  records: readonly PredictionRecord[],
+): Map<string, { outcome: boolean; resolvedAt: number } | null> {
+  const byIdentity = new Map<string, { outcome: boolean; resolvedAt: number } | null>();
+  for (const r of records) {
+    if (r.status !== 'resolved_true' && r.status !== 'resolved_false') continue;
+    if (!r.targetKey || r.resolvedAt === undefined || !Number.isFinite(r.resolvedAt)) continue;
+    const key = [r.targetKey, r.predictedAt, r.resolveBy, r.sourceId].join('\u0000');
+    const outcome = r.status === 'resolved_true';
+    const existing = byIdentity.get(key);
+    if (existing === undefined) {
+      byIdentity.set(key, { outcome, resolvedAt: r.resolvedAt });
+    } else if (existing !== null && existing.outcome !== outcome) {
+      byIdentity.set(key, null);
+    }
+  }
+  return byIdentity;
+}
+
+/** Join comparisons to resolved identities. Excludes joinKey-less
+ *  comparisons, non-numeric outputs, unknown/conflicting identities,
+ *  and pairs produced at-or-after the outcome observation. */
+function joinExactPairs(
+  comparisons: readonly { liveOutput: unknown; shadowOutput: unknown; timestamp: number; joinKey?: ShadowJoinKey }[],
+  byIdentity: ReadonlyMap<string, { outcome: boolean; resolvedAt: number } | null>,
+): { livePairs: { p: number; outcome: boolean }[]; shadowPairs: { p: number; outcome: boolean }[] } {
+  const livePairs: { p: number; outcome: boolean }[] = [];
+  const shadowPairs: { p: number; outcome: boolean }[] = [];
+  for (const cmp of comparisons) {
+    const jk = cmp.joinKey;
+    if (!jk?.targetKey || !jk.liveModelId) continue;
+    const liveP = typeof cmp.liveOutput === 'number' ? cmp.liveOutput : null;
+    const shadowP = typeof cmp.shadowOutput === 'number' ? cmp.shadowOutput : null;
+    if (liveP === null || shadowP === null) continue;
+    const key = [jk.targetKey, jk.predictedAt, jk.resolveBy, jk.liveModelId].join('\u0000');
+    const resolved = byIdentity.get(key);
+    if (!resolved) continue;
+    if (cmp.timestamp >= resolved.resolvedAt) continue;
+    livePairs.push({ p: liveP, outcome: resolved.outcome });
+    shadowPairs.push({ p: shadowP, outcome: resolved.outcome });
+  }
+  return { livePairs, shadowPairs };
+}
+
 function brierScore(pairs: { p: number; outcome: boolean }[]): number | null {
   if (pairs.length === 0) return null;
   let sum = 0;
@@ -457,13 +554,11 @@ export function shadowVerdict(
   const pairCount = comparisons.length;
   const divergenceRate = svc.getDivergenceRate(runId);
 
-  // ACC-303 baseline runs: the probability-proximity join below can
-  // attach a comparison to the WRONG resolved outcome (two forecasts at
-  // p=0.6 resolving oppositely), so baseline runs report pair volume and
-  // divergence only — never a Brier verdict — until ACC-401 lands exact
-  // target-key joins.
+  // ACC-401: baseline runs verdict through EXACT target-key joins — the
+  // probability-proximity join below (legacy runs only) can attach a
+  // comparison to the wrong resolved outcome.
   if (BASELINE_RUN_ID_SET.has(runId)) {
-    return { runId, pairs: pairCount, divergenceRate, recommendation: 'insufficient-data', computedAt: ts };
+    return exactPairedVerdict(runId, comparisons, divergenceRate, ts);
   }
 
   if (pairCount < FLIP_GATE_MIN_PAIRS) {

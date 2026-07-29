@@ -7,6 +7,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript 7 (the native "tsgo" port) changes internal APIs that
+      # @typescript-eslint/typescript-estree reads, crashing the lint pass
+      # ("Cannot read properties of undefined (reading 'Cjs')"). typescript-eslint's
+      # peer range is still `<6.1.0` at latest (8.65.0) AND canary (8.65.1-alpha.11),
+      # so no release supports TS7 yet. 6.x updates still flow.
+      # REMOVE this ignore once typescript-eslint ships TS7 support, then take the
+      # bump together with a matching typescript-eslint upgrade + tsconfig migration.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
     groups:
       dev-tooling:
         patterns:

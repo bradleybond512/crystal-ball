@@ -17,6 +17,7 @@ import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
 import { buildBiosurveillanceWastewater } from './biosurveillance-wastewater.mjs';
+import { fetchHrrrGrid } from './hrrr-smoke.mjs';
 import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
 import { crossReferenceWhoDonWithProMed } from './who-promed-cross-reference.mjs';
 import {
@@ -4130,6 +4131,71 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   }
 }
 
+// Cap a single HRRR fetch's buffered body. A MASSDEN message is a few hundred KB;
+// the whole cycle file is ~130 MB, so this trips only if the server ignores a
+// Range and streams the full file — which we then abort rather than OOM on.
+const HRRR_MAX_RESPONSE_BYTES = 24 * 1024 * 1024;
+
+function hrrrResponseWrapper(res, status, buf) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k) => res.headers[k.toLowerCase()] || null },
+    text: () => Promise.resolve(buf.toString('utf8')),
+    arrayBuffer: () =>
+      Promise.resolve(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)),
+  };
+}
+
+// Binary-capable fetch for the HRRR-Smoke decoder. fetchWithTimeout is unusable
+// here: it stringifies the body (corrupting GRIB2 bytes) and exposes no
+// arrayBuffer(). This preserves raw bytes, refuses to buffer a Range request the
+// server answered non-206 (a 200 means it ignored the Range and would stream the
+// whole ~130 MB file), and caps total bytes. IPv4-forced like the sidecar's
+// other outbound calls.
+function fetchHrrrResource(url, options = {}, timeoutMs = 20_000) {
+  const u = new URL(url);
+  const hdrs = options.headers || {};
+  const wantsRange = Boolean(hdrs.Range || hdrs.range);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        method: options.method || 'GET',
+        headers: hdrs,
+        family: 4,
+        agent: httpsAgent,
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (wantsRange && status !== 206) {
+          res.destroy();
+          resolve(hrrrResponseWrapper(res, status, Buffer.alloc(0)));
+          return;
+        }
+        const chunks = [];
+        let total = 0;
+        res.on('data', (c) => {
+          total += c.length;
+          if (total > HRRR_MAX_RESPONSE_BYTES) {
+            res.destroy();
+            reject(new Error('HRRR response exceeded byte cap'));
+            return;
+          }
+          chunks.push(c);
+        });
+        res.on('end', () => resolve(hrrrResponseWrapper(res, status, Buffer.concat(chunks))));
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => { req.destroy(new Error('Request timed out')); });
+    req.end();
+  });
+}
+
 /**
  * Sanitize a single GlobeSeismicOverlay payload from a renderer push.
  * Returns null if any required field is missing or wrong-typed so the
@@ -5872,6 +5938,51 @@ async function dispatch(requestUrl, req, routes, context) {
  warnUnauthorizedOnce(context, requestUrl.pathname);
  return json({ error: 'Unauthorized' }, 401);
  }
+  }
+
+  // ── HRRR-Smoke MASSDEN grid (authed) ───────────────────────────────────
+  // POST { points:[{lat,lon}], horizonHours? } → { grid:(GridPointAq|null)[],
+  // available, source }. The heavy lifting (NOMADS fetch + wgrib2 decode) is
+  // server-side; the renderer's fetchHrrrAqGrid is a thin client that falls
+  // back to Open-Meteo when available:false. Points feed wgrib2 as execFile
+  // args (no shell) and never touch the fetched URL, so there's no SSRF/
+  // injection surface — but validate + clamp them anyway.
+  if (requestUrl.pathname === '/api/smoke/hrrr-grid' && req.method === 'POST') {
+    try {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw.toString()) : null;
+      const rawPoints = Array.isArray(body?.points) ? body.points : null;
+      if (!rawPoints) return json({ error: 'points must be an array' }, 400);
+      if (rawPoints.length === 0) return json({ grid: [], available: false, source: 'hrrr-smoke' });
+      if (rawPoints.length > 200) return json({ error: 'too many points (max 200)' }, 400);
+      const points = [];
+      for (const p of rawPoints) {
+        const lat = Number(p?.lat);
+        const lon = Number(p?.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+          return json({ error: 'invalid point' }, 400);
+        }
+        points.push({ lat, lon });
+      }
+      const horizonHours = Number.isFinite(Number(body?.horizonHours))
+        ? Math.max(1, Math.min(48, Math.floor(Number(body.horizonHours))))
+        : 24;
+      const grid = await fetchHrrrGrid({
+        points,
+        now: Date.now(),
+        horizonHours,
+        // fetchHrrrGrid reads fetchImpl (and wgrib2Path) from `deps` — passing it
+        // at the top level silently falls back to global fetch, losing the
+        // IPv4-forcing, non-206 abort, and byte cap this helper provides.
+        deps: {
+          fetchImpl: (url, init) => fetchHrrrResource(url, { headers: init?.headers }, 20_000),
+        },
+      });
+      const available = grid.some((g) => g !== null);
+      return json({ grid, available, source: 'hrrr-smoke' });
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 400);
+    }
   }
 
   // ── S2 Underground media + Patreon (authed) ────────────────────────────

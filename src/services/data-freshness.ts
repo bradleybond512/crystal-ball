@@ -36,6 +36,7 @@ export type DataSourceId =
   | 'smoke_forecast' // Open-Meteo air-quality forecast (smoke engine)
   | 'smoke_transport' // Open-Meteo wind forecast (smoke arrival ETA)
   | 'smoke_field' // Open-Meteo AQ grid (map forecast smoke field)
+  | 'smoke_field_hrrr' // HRRR-Smoke MASSDEN grid via sidecar wgrib2 decode (optional upgrade layer)
   | 'worldpop' // WorldPop population exposure
   | 'giving' // Global giving activity data
   | 'bis' // BIS central bank data
@@ -213,6 +214,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   smoke_forecast: { name: 'Smoke Forecast (Open-Meteo AQ)', requiredForRisk: false, panelId: 'air-smoke' },
   smoke_transport: { name: 'Smoke Transport Winds (Open-Meteo)', requiredForRisk: false, panelId: 'air-smoke' },
   smoke_field: { name: 'Forecast Smoke Field (Open-Meteo AQ)', requiredForRisk: false, panelId: 'air-smoke' },
+  smoke_field_hrrr: { name: 'Forecast Smoke Field (HRRR-Smoke MASSDEN)', requiredForRisk: false, panelId: 'air-smoke' },
   worldpop: { name: 'Population Exposure', requiredForRisk: false, panelId: 'population-exposure' },
   giving: { name: 'Global Giving Activity', requiredForRisk: false, panelId: 'giving' },
   bis: { name: 'BIS Central Banks', requiredForRisk: false, panelId: 'economic' },
@@ -612,6 +614,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   smoke_forecast: 'Air-quality forecast unavailable—wildfire smoke conditions and safe windows unknown',
   smoke_transport: 'Wind forecast unavailable—smoke arrival timing unknown',
   smoke_field: 'Forecast smoke field unavailable—map smoke forecast hidden',
+  smoke_field_hrrr: 'HRRR-Smoke model field unavailable—map falls back to Open-Meteo smoke forecast',
   worldpop: 'Population exposure data unavailable—affected population unknown',
   giving: 'Global giving activity data unavailable',
   bis: 'Central bank policy data may be stale—BIS feed unavailable',

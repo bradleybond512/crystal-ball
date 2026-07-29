@@ -2419,12 +2419,17 @@ export class DeckGLMap {
  if (Date.now() - this.smokeForecastFailedAt < FIELD_RETRY_MS) return;
  this.smokeForecastLoading = true;
  try {
- const [{ forecastGridPoints, assembleForecastField }, { fetchAqGrid }] = await Promise.all([
+ const [{ forecastGridPoints, assembleForecastField }, { fetchAqGrid, fetchHrrrAqGrid }] = await Promise.all([
  import('@/services/smoke/forecast-field'),
  import('@/services/smoke/smoke-fetch'),
  ]);
  const points = forecastGridPoints(snap.lat, snap.lon);
- const field = assembleForecastField(points, await fetchAqGrid(points), Date.now());
+ // Prefer the HRRR-Smoke gridded model (sidecar wgrib2 decode); fall back to
+ // the Open-Meteo sampler whenever HRRR yields nothing (wgrib2 not installed,
+ // point outside CONUS, or NOMADS down). Both return the same GridPointAq[].
+ const hrrr = await fetchHrrrAqGrid(points);
+ const parsed = hrrr.some((p) => p !== null) ? hrrr : await fetchAqGrid(points);
+ const field = assembleForecastField(points, parsed, Date.now());
  if (field) {
  this.smokeForecastField = field;
  this.smokeForecastCenter = snap.placeId;

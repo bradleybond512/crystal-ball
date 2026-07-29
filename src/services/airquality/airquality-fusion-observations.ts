@@ -132,3 +132,37 @@ export function purpleairToObservations(readings: readonly PurpleairReading[]): 
   }
   return out;
 }
+
+const EARTH_RADIUS_KM = 6371;
+
+function toRad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+// Local, not shared: fusion-ingest.ts has its own module-private haversineKm
+// (unexported) and proximity-filter.ts's exported haversineKm drags in the
+// location service (localStorage/GPS globals) — neither is a clean pure
+// import here, so this mirrors the fusion-ingest formula directly.
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// PurpleAir's sidecar route returns every outdoor sensor globally (20-30k+),
+// unfiltered — feeding all of them into fusion means ingestDomain's per-
+// observation linear cluster scan (fusion-ingest.ts) runs against a payload
+// orders of magnitude larger than any other domain, on the renderer main
+// thread, 2-4x per 30-min tick. Cap to a radius around the reference
+// coordinate before fusion ever sees the readings.
+export function filterReadingsNearby(
+  readings: readonly PurpleairReading[],
+  lat: number,
+  lon: number,
+  radiusKm: number,
+): PurpleairReading[] {
+  return readings.filter((r) => haversineKm(lat, lon, r.lat, r.lon) <= radiusKm);
+}

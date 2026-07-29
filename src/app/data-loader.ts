@@ -2691,6 +2691,8 @@ export class DataLoaderManager implements AppModule {
  // to query around. Reuses the same getSavedPlaces()[0] + NYC-fallback
  // convention as loadExtendedForecast() — the app's established pattern
  // for "pick one representative coordinate" when a fetch is single-point.
+ // PurpleAir reuses the same coordinate to cap its otherwise-global sensor
+ // fetch to a radius around it (see purpleair-fusion-fetch.ts).
  let airnowLat = 40.71, airnowLon = -74.01;
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
@@ -2707,7 +2709,7 @@ export class DataLoaderManager implements AppModule {
  fetchPowerGridAlerts(),
  fetchOpenaqWorstReadings(),
  fetchAirnowCurrent(airnowLat, airnowLon),
- fetchPurpleairNearby(),
+ fetchPurpleairNearby(airnowLat, airnowLon),
  ]);
 
  // Second air-quality source for fusion (OpenAQ ground stations). Fail-closed:

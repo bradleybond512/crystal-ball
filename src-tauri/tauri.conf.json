@@ -52,6 +52,7 @@
       "sidecar/wastewater-aggregate.mjs",
       "sidecar/who-promed-cross-reference.mjs",
       "sidecar/biosurveillance-wastewater.mjs",
+      "sidecar/hrrr-smoke.mjs",
       "sidecar/ofac-cache.mjs",
       "sidecar/explainer.mjs",
       "sidecar/faa-tfrs.mjs",
@@ -70,6 +71,7 @@
       "sidecar/sms-response-formatter.mjs",
       "sidecar/package.json",
       "sidecar/node",
+      "sidecar/wgrib2",
       "../data",
       "../src/config",
       "../tools/littlesnitch"

@@ -24,6 +24,9 @@ internal/
 test-results/
 src-tauri/sidecar/node/*
 !src-tauri/sidecar/node/.gitkeep
+src-tauri/sidecar/wgrib2/*
+!src-tauri/sidecar/wgrib2/.gitkeep
+!src-tauri/sidecar/wgrib2/README.md
 
 # AI planning session state
 .planning/

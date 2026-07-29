@@ -6,6 +6,7 @@
  * dedicated 'smoke_forecast' source id (fail-closed pattern).
  */
 import { dataFreshness } from '@/services/data-freshness';
+import { getApiBaseUrl } from '@/services/runtime';
 import {
   parseOpenMeteoAq,
   parseOpenMeteoAqUnix,
@@ -123,6 +124,54 @@ export async function fetchAqGrid(
     return out;
   } catch (error) {
     dataFreshness.recordError('smoke_field', String(error));
+    return points.map(() => null);
+  }
+}
+
+/** Defensive normalize of one server grid column into the GridPointAq shape. */
+function normalizeHrrrColumn(raw: unknown): GridPointAq | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const times = (raw as { timesMs?: unknown }).timesMs;
+  const aqi = (raw as { usAqi?: unknown }).usAqi;
+  if (!Array.isArray(times) || !Array.isArray(aqi) || times.length !== aqi.length || times.length === 0) return null;
+  const timesMs = times.map((t) => Number(t));
+  if (timesMs.some((t) => !Number.isFinite(t))) return null;
+  const usAqi = aqi.map((v) => (v === null || !Number.isFinite(Number(v)) ? null : Number(v)));
+  return usAqi.some((v) => v !== null) ? { timesMs, usAqi } : null;
+}
+
+/**
+ * HRRR-Smoke grid via the sidecar decode route — the preferred gridded-model
+ * sampler, a drop-in for fetchAqGrid. The sidecar fetches NOMADS and decodes
+ * MASSDEN with wgrib2; when wgrib2 isn't installed (or the point is outside
+ * CONUS, or NOMADS is down) it returns available:false and this yields all
+ * nulls so the caller falls back to Open-Meteo.
+ *
+ * Freshness is recorded under 'smoke_field_hrrr' ONLY when real HRRR data comes
+ * back — HRRR is an optional upgrade layer, so its routine absence must not
+ * read as a feed outage (the Open-Meteo field carries its own 'smoke_field'
+ * freshness). Always fail-closed to nulls, never throws.
+ */
+export async function fetchHrrrAqGrid(points: { lat: number; lon: number }[]): Promise<(GridPointAq | null)[]> {
+  if (points.length === 0) return [];
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/smoke/hrrr-grid`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ points }),
+      // Own timeout — the sidecar decode (NOMADS + wgrib2) runs longer than the
+      // patched-fetch 15s default, and supplying a signal opts out of it.
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) return points.map(() => null);
+    const body: unknown = await res.json();
+    const grid = Array.isArray((body as { grid?: unknown })?.grid) ? (body as { grid: unknown[] }).grid : [];
+    const out = points.map((_, i) => normalizeHrrrColumn(grid[i]));
+    const withData = out.filter((p) => p?.usAqi.some((v) => v !== null)).length;
+    if (withData > 0) dataFreshness.recordUpdate('smoke_field_hrrr', withData);
+    return out;
+  } catch {
+    // Optional overlay — a transport failure just means "use Open-Meteo".
     return points.map(() => null);
   }
 }

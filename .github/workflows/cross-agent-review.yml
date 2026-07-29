@@ -23,7 +23,7 @@ jobs:
         if: github.event_name == 'merge_group'
         run: echo "Cross-agent gate is enforced at PR time; nothing to re-verify inside the merge queue."
 
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/'))
         with:
           fetch-depth: 0

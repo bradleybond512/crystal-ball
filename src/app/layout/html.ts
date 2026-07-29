@@ -51,6 +51,18 @@ export function buildThemeIcon(): string {
  : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
 }
 
+function formatCheckedAgo(ts: number | undefined): string {
+  if (!ts || ts <= 0) return '';
+  const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (secs < 45) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 export function buildSidebarUpdateBtnHtml(ctx: AppContext): string {
   const versionLabel = escapeHtml(`v${__APP_VERSION__}${BETA_MODE ? ' β' : ''}`);
   const state = ctx.updateState;
@@ -58,23 +70,37 @@ export function buildSidebarUpdateBtnHtml(ctx: AppContext): string {
   if (state?.phase === 'checking') {
  return `<span class="mac-sidebar-version">${versionLabel}</span>`;
   }
-  // A new release is out — primary action: install.
+  // Update downloaded + verified + staged — primary action is restart-to-apply.
+  // It also applies on its own at the next quit/relaunch, so this is a shortcut,
+  // not the only path.
+  if (state?.phase === 'ready' && state.version) {
+ const remoteLabel = escapeHtml(`v${state.version}`);
+ return `<button class="mac-sidebar-update-btn mac-sidebar-update-btn--ready" id="sidebarUpdateApply" title="Restart to update to ${remoteLabel}">Restart to update</button>`;
+  }
+  // Downloading + staging the update in the background — inert progress label.
+  if (state?.phase === 'downloading') {
+ return `<span class="mac-sidebar-version mac-sidebar-version--installing">Downloading update…</span>`;
+  }
+  // A new release exists but we can't auto-stage it (web / non-DMG / no manifest
+  // hash) — primary action: open the download.
   if (state?.phase === 'available' && state.version) {
  const remoteLabel = escapeHtml(`v${state.version}`);
- return `<button class="mac-sidebar-update-btn" id="sidebarUpdateInstall" title="Install ${remoteLabel}">${versionLabel} → ${remoteLabel}</button>`;
+ return `<button class="mac-sidebar-update-btn" id="sidebarUpdateInstall" title="Download ${remoteLabel}">${versionLabel} → ${remoteLabel}</button>`;
   }
-  // Auto-installer is downloading + replacing the .app bundle.
+  // Applying a staged update — the app is about to relaunch.
   if (state?.phase === 'installing') {
- return `<span class="mac-sidebar-version mac-sidebar-version--installing">Installing…</span>`;
+ return `<span class="mac-sidebar-version mac-sidebar-version--installing">Restarting…</span>`;
   }
   // Up-to-date OR initial pre-check OR a previous fetch failed (state === null).
   // All three render the same clickable widget so the user can always trigger
   // a manual re-check; the ✓ only renders when we know the result is fresh.
   const okMark = state?.phase === 'up-to-date' ? ' ✓' : '';
   const okClass = state?.phase === 'up-to-date' ? ' mac-sidebar-version--ok' : '';
-  const titleAttr = state?.phase === 'up-to-date'
- ? 'Click to check for updates'
- : 'Check for updates';
+  const ago = formatCheckedAgo(state?.lastCheckedAt);
+  const checkedSuffix = ago ? ` · checked ${ago}` : '';
+  const titleAttr = escapeHtml(state?.phase === 'up-to-date'
+ ? `Up to date${checkedSuffix} — click to check again`
+ : `Check for updates${checkedSuffix}`);
   return `<button class="mac-sidebar-version mac-sidebar-update-recheck${okClass}" id="sidebarUpdateRecheck" title="${titleAttr}">${versionLabel}${okMark}</button>`;
 }
 

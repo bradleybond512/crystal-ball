@@ -13,7 +13,8 @@ import test from 'node:test';
 import {
   ShadowModeAlgorithmService,
   COMPARISONS_STORAGE_KEY,
-  MAX_COMPARISONS,
+  MAX_COMPARISONS_PER_RUN,
+  MAX_COMPARISONS_TOTAL,
   RUNS_STORAGE_KEY,
   __internals,
   __resetShadowModeAlgorithmServiceSingleton,
@@ -336,15 +337,16 @@ test('unsubscribe removes the listener', () => {
 
 // ── Ring-buffer eviction ──────────────────────────────────────────────
 
-test('comparisons ring buffer evicts oldest entries past MAX_COMPARISONS', () => {
+test('comparisons ring buffer evicts oldest entries past the per-run cap (ACC-402)', () => {
   const svc = new ShadowModeAlgorithmService({ storage: makeFakeStorage(), clock: makeClock() });
   svc.register({ id: 'r', algorithmId: 'a', description: '', enabled: true, createdAt: 0 });
-  const total = MAX_COMPARISONS + 25;
+  const total = MAX_COMPARISONS_PER_RUN + 25;
   for (let i = 0; i < total; i += 1) svc.compare('r', i, 1, 2);
   const rows = svc.getComparisons('r');
-  assert.equal(rows.length, MAX_COMPARISONS);
+  assert.equal(rows.length, MAX_COMPARISONS_PER_RUN);
   // Newest-first: row 0 should have the highest sequence id.
   assert.ok(rows[0]!.id.endsWith(`-${total}`), `expected newest id to be seq ${total}, got ${rows[0]!.id}`);
+  assert.ok(MAX_COMPARISONS_PER_RUN <= MAX_COMPARISONS_TOTAL, 'global ceiling bounds per-run caps');
 });
 
 // ── Persistence ───────────────────────────────────────────────────────

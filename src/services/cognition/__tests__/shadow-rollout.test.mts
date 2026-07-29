@@ -34,6 +34,7 @@ import {
   FLIP_GATE_MIN_PAIRS,
   VERDICT_STORAGE_KEY,
   RUN_IDS,
+  collectJoinedEvidence,
 } from '../shadow-rollout.js';
 import type { FlipRecommendation, StorageLike } from '../shadow-rollout.js';
 
@@ -525,5 +526,81 @@ it('below the min-pairs gate joined evidence reports insufficient-data with the 
   });
   assert.equal(verdict.pairs, 1);
   assert.equal(verdict.recommendation, 'insufficient-data');
+  resetShadowRolloutForTests();
+});
+
+// ── ACC-402: joined evidence collection + per-run ledger retention ───────
+
+it('collectJoinedEvidence attributes domain and resolution kind per pair', () => {
+  resetShadowRolloutForTests();
+  const evidence = collectJoinedEvidence(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([
+      joinComparison('mode:d1', 0.6, 0.5),
+      joinComparison('mode:d2', 0.7, 0.4),
+    ]),
+    calibrationStore: fakeJoinStore([
+      joinResolved('mode:d1', true, { domain: 'weather' }),
+      joinResolved('mode:d2', false, {
+        domain: 'markets',
+        resolutionNote: 'proxy:downstream',
+        resolutionProvenance: { resolverId: 'proxy-outcomes', kind: 'proxy', evidence: [] },
+      }),
+    ]),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(evidence.length, 2);
+  const d1 = evidence.find(e => e.domain === 'weather')!;
+  const d2 = evidence.find(e => e.domain === 'markets')!;
+  assert.equal(d1.resolutionKind, 'direct');
+  assert.equal(d1.outcome, true);
+  assert.equal(d1.liveP, 0.6);
+  assert.equal(d1.shadowP, 0.5);
+  assert.equal(d2.resolutionKind, 'proxy');
+  assert.equal(d2.outcome, false);
+  resetShadowRolloutForTests();
+});
+
+it('collectJoinedEvidence upgrades kind to direct when a direct record shares the identity', () => {
+  resetShadowRolloutForTests();
+  const evidence = collectJoinedEvidence(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([joinComparison('mode:up', 0.6, 0.5)]),
+    calibrationStore: fakeJoinStore([
+      joinResolved('mode:up', true, {
+        id: 'up-proxy',
+        resolutionNote: 'proxy:first',
+        resolutionProvenance: { resolverId: 'proxy-outcomes', kind: 'proxy', evidence: [] },
+      }),
+      joinResolved('mode:up', true, { id: 'up-direct' }),
+    ]),
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.equal(evidence.length, 1);
+  assert.equal(evidence[0]!.resolutionKind, 'direct', 'direct evidence dominates proxy on the same identity');
+  resetShadowRolloutForTests();
+});
+
+it('collectJoinedEvidence fails closed to an empty array without a calibration store', () => {
+  resetShadowRolloutForTests();
+  const evidence = collectJoinedEvidence(RUN_IDS.BASELINE_PERSISTENCE, {
+    shadowService: fakeJoinSvc([joinComparison('mode:nostore', 0.6, 0.5)]),
+    calibrationStore: null as never,
+    clock: () => J_T + 24 * J_H,
+  });
+  assert.deepEqual(evidence, []);
+  resetShadowRolloutForTests();
+});
+
+it('per-run retention: a chatty run cannot evict another run\'s comparisons (ACC-402 evidence starvation fix)', () => {
+  resetShadowRolloutForTests();
+  const storage = makeStorage();
+  const svc = new ShadowModeAlgorithmService({ storage, clock: () => J_T });
+  svc.register({ id: 'quiet-run', algorithmId: 'a', description: '', enabled: true, createdAt: J_T });
+  svc.register({ id: 'chatty-run', algorithmId: 'b', description: '', enabled: true, createdAt: J_T });
+  for (let i = 0; i < 220; i++) svc.compare('quiet-run', { i }, 0.5, 0.6);
+  for (let i = 0; i < 900; i++) svc.compare('chatty-run', { i }, 0.5, 0.6);
+  const quiet = svc.getComparisons({ runId: 'quiet-run' });
+  const chatty = svc.getComparisons({ runId: 'chatty-run' });
+  assert.equal(quiet.length, 220, 'quiet run keeps every comparison under its own cap');
+  assert.equal(chatty.length, 300, 'chatty run trimmed to its per-run cap');
   resetShadowRolloutForTests();
 });

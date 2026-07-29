@@ -439,34 +439,64 @@ function exactPairedVerdict(
   if (!store) return insufficient(0);
 
   const byIdentity = indexResolvedIdentities(store.all());
-  const { livePairs, shadowPairs } = joinExactPairs(comparisons, byIdentity);
+  const evidence = joinExactPairs(comparisons, byIdentity);
 
-  const joined = livePairs.length;
+  const joined = evidence.length;
   if (joined < FLIP_GATE_MIN_PAIRS) return insufficient(joined);
-  const brierLive = brierScore(livePairs) ?? undefined;
-  const brierShadow = brierScore(shadowPairs) ?? undefined;
+  const brierLive = brierScore(evidence.map((e) => ({ p: e.liveP, outcome: e.outcome }))) ?? undefined;
+  const brierShadow = brierScore(evidence.map((e) => ({ p: e.shadowP, outcome: e.outcome }))) ?? undefined;
   if (brierLive === undefined || brierShadow === undefined) return insufficient(joined);
   const recommendation: FlipRecommendation =
     brierShadow <= brierLive ? 'flip-to-shadow' : 'keep-live';
   return { runId, pairs: joined, divergenceRate, brierLive, brierShadow, recommendation, computedAt: ts };
 }
 
+/** ACC-402: one exact-joined pair with the outcome attribution the
+ *  promotion gate consumes — per-pair domain (for the per-domain
+ *  minimum-evidence gate) and resolution provenance kind (so proxy-only
+ *  cohorts can never auto-promote). */
+export interface JoinedPairEvidence {
+  liveP: number;
+  shadowP: number;
+  outcome: boolean;
+  domain: string;
+  resolutionKind: 'direct' | 'proxy';
+  comparedAt: number;
+}
+
+interface ResolvedIdentity {
+  outcome: boolean;
+  resolvedAt: number;
+  domain: string;
+  kind: 'direct' | 'proxy';
+}
+
+function resolutionKindOf(r: PredictionRecord): 'direct' | 'proxy' {
+  if (r.resolutionProvenance) return r.resolutionProvenance.kind;
+  return r.resolutionNote?.startsWith('proxy:') ? 'proxy' : 'direct';
+}
+
 /** Resolved records indexed by exact join identity; conflicting
- *  outcomes on one identity drop the whole key (ACC-301 semantics). */
+ *  outcomes on one identity drop the whole key (ACC-301 semantics).
+ *  Same-outcome duplicates upgrade kind to 'direct' when any record
+ *  carries direct provenance — direct evidence dominates proxy. */
 function indexResolvedIdentities(
   records: readonly PredictionRecord[],
-): Map<string, { outcome: boolean; resolvedAt: number } | null> {
-  const byIdentity = new Map<string, { outcome: boolean; resolvedAt: number } | null>();
+): Map<string, ResolvedIdentity | null> {
+  const byIdentity = new Map<string, ResolvedIdentity | null>();
   for (const r of records) {
     if (r.status !== 'resolved_true' && r.status !== 'resolved_false') continue;
     if (!r.targetKey || r.resolvedAt === undefined || !Number.isFinite(r.resolvedAt)) continue;
     const key = [r.targetKey, r.predictedAt, r.resolveBy, r.sourceId].join('\u0000');
     const outcome = r.status === 'resolved_true';
+    const kind = resolutionKindOf(r);
     const existing = byIdentity.get(key);
     if (existing === undefined) {
-      byIdentity.set(key, { outcome, resolvedAt: r.resolvedAt });
+      byIdentity.set(key, { outcome, resolvedAt: r.resolvedAt, domain: r.domain, kind });
     } else if (existing !== null && existing.outcome !== outcome) {
       byIdentity.set(key, null);
+    } else if (existing !== null && existing.kind === 'proxy' && kind === 'direct') {
+      byIdentity.set(key, { ...existing, kind: 'direct' });
     }
   }
   return byIdentity;
@@ -477,10 +507,9 @@ function indexResolvedIdentities(
  *  and pairs produced at-or-after the outcome observation. */
 function joinExactPairs(
   comparisons: readonly { liveOutput: unknown; shadowOutput: unknown; timestamp: number; joinKey?: ShadowJoinKey }[],
-  byIdentity: ReadonlyMap<string, { outcome: boolean; resolvedAt: number } | null>,
-): { livePairs: { p: number; outcome: boolean }[]; shadowPairs: { p: number; outcome: boolean }[] } {
-  const livePairs: { p: number; outcome: boolean }[] = [];
-  const shadowPairs: { p: number; outcome: boolean }[] = [];
+  byIdentity: ReadonlyMap<string, ResolvedIdentity | null>,
+): JoinedPairEvidence[] {
+  const evidence: JoinedPairEvidence[] = [];
   for (const cmp of comparisons) {
     const jk = cmp.joinKey;
     if (!jk?.targetKey || !jk.liveModelId) continue;
@@ -491,10 +520,39 @@ function joinExactPairs(
     const resolved = byIdentity.get(key);
     if (!resolved) continue;
     if (cmp.timestamp >= resolved.resolvedAt) continue;
-    livePairs.push({ p: liveP, outcome: resolved.outcome });
-    shadowPairs.push({ p: shadowP, outcome: resolved.outcome });
+    evidence.push({
+      liveP,
+      shadowP,
+      outcome: resolved.outcome,
+      domain: resolved.domain,
+      resolutionKind: resolved.kind,
+      comparedAt: cmp.timestamp,
+    });
   }
-  return { livePairs, shadowPairs };
+  return evidence;
+}
+
+/**
+ * ACC-402: the exact-joined evidence cohort for a run — the same join
+ * the flip-gate verdict uses (identical exclusion rules), returned as
+ * attributed pairs for the promotion gate. Empty array on any missing
+ * dependency (fail-closed: no evidence, no promotion).
+ */
+export function collectJoinedEvidence(
+  runId: RunId,
+  deps?: ShadowRolloutDeps,
+): JoinedPairEvidence[] {
+  try {
+    if (deps) _deps = { ..._deps, ...deps };
+    if (!_initialized) initShadowRollout();
+    const svc = getShadowService();
+    const store = getCalStore();
+    if (!svc || !store) return [];
+    const comparisons = svc.getComparisons({ runId }, 2000);
+    return joinExactPairs(comparisons, indexResolvedIdentities(store.all()));
+  } catch {
+    return [];
+  }
 }
 
 function brierScore(pairs: { p: number; outcome: boolean }[]): number | null {

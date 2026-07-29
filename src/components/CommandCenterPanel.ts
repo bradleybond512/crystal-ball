@@ -128,10 +128,10 @@ const RISK_LABEL: Record<HealthStatus, string> = {
 };
 
 const CALIBRATION_TONE: Record<CalibrationReliabilityLabel, string> = {
-  well_calibrated: '#3fb950',
-  overconfident: '#ff9f0a',
-  underconfident: '#0a84ff',
-  insufficient_data: '#8a8a8e',
+  well_calibrated: 'var(--severity-ok, #3fb950)',
+  overconfident: 'var(--severity-medium, #ff9f0a)',
+  underconfident: 'var(--severity-info, #0a84ff)',
+  insufficient_data: 'var(--text-secondary, #8a8a8e)',
 };
 
 const CALIBRATION_LABEL_TEXT: Record<CalibrationReliabilityLabel, string> = {
@@ -636,8 +636,8 @@ export class CommandCenterPanel extends Panel {
     const sparkline = (row: CalibrationDomainRow): string => {
       if (row.sparkline.length === 0) return '';
       const cells = row.sparkline.map((pt) => {
-        let c = '#3fb950';
-        if (Math.abs(pt.gap) > 0.05) c = pt.gap < 0 ? '#ff9f0a' : '#0a84ff';
+        let c = 'var(--severity-ok, #3fb950)';
+        if (Math.abs(pt.gap) > 0.05) c = pt.gap < 0 ? 'var(--severity-medium, #ff9f0a)' : 'var(--severity-info, #0a84ff)';
         const title = `predicted ${Math.round(pt.predicted * 100)}% · observed ${Math.round(pt.observed * 100)}% (n=${pt.n})`;
         return `<span title="${escapeHtml(title)}" style="display:inline-block;width:6px;height:10px;background:${c};border-radius:1px;"></span>`;
       }).join('');

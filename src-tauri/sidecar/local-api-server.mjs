@@ -11072,6 +11072,60 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── CoinPaprika — 3rd crypto fusion group (aggregator, no key).
+  if (requestUrl.pathname === '/api/crypto-quotes-coinpaprika') {
+ const _cpCached = getCached('crypto-quotes-coinpaprika', 60 * 1000);
+ if (_cpCached) return json(_cpCached);
+ const CP_IDS = { 'btc-bitcoin': 'BTC', 'eth-ethereum': 'ETH', 'sol-solana': 'SOL', 'xrp-xrp': 'XRP' };
+ try {
+ const settled = await Promise.allSettled(Object.keys(CP_IDS).map((id) =>
+ fetchWithTimeout(`https://api.coinpaprika.com/v1/tickers/${id}?quotes=USD`,
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000)
+ .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`coinpaprika ${r.status}`))))));
+ const quotes = [];
+ for (const [i, id] of Object.keys(CP_IDS).entries()) {
+ const s = settled[i];
+ if (s.status !== 'fulfilled') continue;
+ const price = s.value?.quotes?.USD?.price;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: CP_IDS[id], price });
+ }
+ const _cpResult = { quotes };
+ setCached('crypto-quotes-coinpaprika', _cpResult, 60 * 1000);
+ return json(_cpResult);
+ } catch (error) {
+ return json({ quotes: [], error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Kraken public ticker — 4th crypto fusion group (US-reachable exchange).
+  if (requestUrl.pathname === '/api/crypto-quotes-kraken') {
+ const _krCached = getCached('crypto-quotes-kraken', 60 * 1000);
+ if (_krCached) return json(_krCached);
+ try {
+ const r = await fetchWithTimeout(
+ 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD,XRPUSD',
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000);
+ if (!r.ok) throw new Error(`Kraken ${r.status}`);
+ const data = await r.json();
+ if (data.error?.length) throw new Error(String(data.error[0]));
+ // Kraken result keys are exchange-native (XXBTZUSD, XETHZUSD, SOLUSD, XXRPZUSD).
+ const SYM = [['XBT', 'BTC'], ['ETH', 'ETH'], ['SOL', 'SOL'], ['XRP', 'XRP']];
+ const seen = new Set();
+ const quotes = [];
+ for (const [pair, t] of Object.entries(data.result ?? {})) {
+ const hit = SYM.find(([native]) => pair.includes(native));
+ if (!hit || seen.has(hit[1])) continue;
+ const price = Number.parseFloat(t?.c?.[0]);
+ if (Number.isFinite(price) && price > 0) { quotes.push({ symbol: hit[1], price }); seen.add(hit[1]); }
+ }
+ const _krResult = { quotes };
+ setCached('crypto-quotes-kraken', _krResult, 60 * 1000);
+ return json(_krResult);
+ } catch (error) {
+ return json({ quotes: [], error: String(error.message ?? error) });
+ }
+  }
+
   // ── FRED economic series — direct API call using stored key ──────────────
   // GET /api/fred-series?ids=WALCL,FEDFUNDS,... → calls api.stlouisfed.org
   if (requestUrl.pathname === '/api/fred-series') {

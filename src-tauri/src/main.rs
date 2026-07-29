@@ -2220,15 +2220,23 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  // Resolve the live install path BEFORE any download/mount so a failure here
  // can never leak a mounted DMG.
  let dest = resolve_update_install_path()?;
- let staged = format!("{dest}.update-staged");
+ // Canonical staged bundle both apply paths read. We copy + fully verify into a
+ // PER-REQUEST path first, then publish onto this path atomically.
+ let canonical_staged = format!("{dest}.update-staged");
 
  // Per-user private temp dir ($TMPDIR is mode-700, unlike world-writable /tmp)
- // + pid stamp so another local process cannot pre-plant a symlink at a
- // predictable path or collide with a concurrent staging run.
+ // + pid + per-call counter so two concurrent staging runs (or another local
+ // process) can never pre-plant a symlink at a predictable path or clobber each
+ // other's download / in-progress copy.
  let pid = std::process::id();
+ let n = STAGE_COUNTER.fetch_add(1, Ordering::Relaxed);
  let tmp_dir = std::env::temp_dir();
- let tmp_dmg = tmp_dir.join(format!("wm-update-{pid}.dmg")).to_string_lossy().into_owned();
- let mount_point = tmp_dir.join(format!("wm-update-vol-{pid}")).to_string_lossy().into_owned();
+ let tmp_dmg = tmp_dir.join(format!("wm-update-{pid}-{n}.dmg")).to_string_lossy().into_owned();
+ let mount_point = tmp_dir.join(format!("wm-update-vol-{pid}-{n}")).to_string_lossy().into_owned();
+ // Per-request staging bundle — verified in full here, then renamed onto
+ // `canonical_staged` under the swap lock so a concurrent apply/boot never
+ // observes a half-written bundle and a second staging run can't corrupt it.
+ let staged = format!("{dest}.update-staging-{pid}-{n}");
 
  // 1. Download the DMG
  let client = reqwest::Client::builder()
@@ -2300,7 +2308,43 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  copy_app_bundle_preserving_signature(&source, &staged)?;
  verify_app_bundle_signature(&staged, "Staged app")?;
  verify_same_signer_as_installed(&staged, &dest)?;
+ // Publish under the SAME locks the swap uses so an in-progress apply/boot never
+ // reads a half-written bundle and a concurrent staging run can't interleave.
+ // Held only for this fast version-check + swap — never across the slow
+ // copy/verify above.
+ let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+ let _xproc_guard = CrossProcessSwapLock::acquire_blocking(&dest)?;
+ if Path::new(&canonical_staged).exists() {
+ // Never regress a newer already-staged bundle: if a concurrent run published
+ // a strictly-newer version while we were copying, keep theirs and drop ours.
+ // (An unreadable canonical version falls through and is replaced by this
+ // fully-verified bundle.)
+ if let Ok(existing) = read_bundle_short_version(&canonical_staged) {
+ let staged_version = read_bundle_short_version(&staged)?;
+ if is_semver_newer(&existing, &staged_version) {
+ let _ = force_remove_dir_all(&staged);
+ return Ok(());
+ }
+ }
+ // Atomically swap the new bundle into the canonical path in ONE syscall.
+ // RENAME_SWAP has no intermediate state: on success `canonical_staged` is the
+ // new bundle and `staged` holds the old one; on ANY failure NEITHER path
+ // changes, so the previous good bundle is never even briefly absent and there
+ // is no persistent recovery artifact to leak or accidentally delete later.
+ swap_paths_atomically(&staged, &canonical_staged)?;
+ // `staged` now holds the OLD bundle. `force_remove_dir_all` clears BSD
+ // immutable/append flags, ACLs (which `ditto` copies from the DMG), and mode
+ // bits — every persistent blocker for a bundle we own — before removing, so a
+ // successful publish does not leak an old bundle per update. The swap already
+ // committed the new bundle, so cleanup is best-effort: a residual failure here
+ // is a genuine I/O fault, not flag/perms/ACL accumulation, and must NOT fail an
+ // update that is already published.
+ let _ = force_remove_dir_all(&staged);
  Ok(())
+ } else {
+ fs::rename(&staged, &canonical_staged)
+ .map_err(|e| format!("Publish staged bundle failed: {e}"))
+ }
  })();
 
  // 4. Detach the DMG and clean up the download regardless of stage result.
@@ -2308,7 +2352,9 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
  let _ = std::fs::remove_file(&tmp_dmg);
 
  if let Err(e) = stage_result {
- let _ = fs::remove_dir_all(&staged);
+ // Remove only THIS request's staging dir — a failed new stage must never
+ // delete a previously-published good bundle at `canonical_staged`.
+ let _ = force_remove_dir_all(&staged);
  return Err(e);
  }
  Ok(())
@@ -2321,6 +2367,132 @@ async fn stage_update(webview: Webview, download_url: String, expected_sha256: O
 /// validate → swap; released (or abandoned at process exit) once the swap settles.
 #[cfg(target_os = "macos")]
 static UPDATE_SWAP_LOCK: Mutex<()> = Mutex::new(());
+
+/// Per-request stamp so two concurrent `stage_update` calls in THIS process get
+/// distinct temp/mount/staging paths and cannot clobber each other's download.
+/// Combined with the pid it is unique across processes too.
+#[cfg(target_os = "macos")]
+static STAGE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Cross-process advisory lock over the swap/publish critical section, layered
+/// ON TOP of `UPDATE_SWAP_LOCK` (which only serializes threads within one
+/// process). A second running copy of the app — the real race, since a user can
+/// launch two instances — is serialized here so it cannot swap `dest` while this
+/// process is mid-swap and delete the backup out from under it. Uses BSD `flock`,
+/// which the kernel releases automatically when this guard's fd closes OR the
+/// holding process dies, so a crashed updater can never leave a stale lock that
+/// would wedge every future update.
+#[cfg(target_os = "macos")]
+struct CrossProcessSwapLock {
+ // Held only to keep the fd open for the lifetime of the guard; dropping it
+ // closes the fd and releases the lock.
+ _file: File,
+}
+
+#[cfg(target_os = "macos")]
+impl CrossProcessSwapLock {
+ fn open_lockfile(dest: &str) -> Result<File, String> {
+ // The lockfile sits beside the install, at a path both instances derive
+ // identically. Swapping `dest` already requires write permission on this
+ // same parent directory, so needing it to create the lockfile adds no new
+ // failure mode. Never truncated or deleted — a persistent empty sibling
+ // (like the transient `.update-staged` / `.update-backup-*`) that both
+ // instances open to the same inode.
+ let path = format!("{dest}.update.lock");
+ OpenOptions::new()
+ .create(true)
+ .write(true)
+ .open(&path)
+ .map_err(|e| format!("Could not open update lock {path}: {e}"))
+ }
+
+ fn lock_file(file: File, nonblocking: bool) -> Result<Self, String> {
+ use std::os::unix::io::AsRawFd;
+ extern "C" {
+ fn flock(fd: std::os::raw::c_int, operation: std::os::raw::c_int) -> std::os::raw::c_int;
+ }
+ // LOCK_EX = 2, LOCK_NB = 4.
+ let operation = if nonblocking { 2 | 4 } else { 2 };
+ let rc = unsafe { flock(file.as_raw_fd(), operation) };
+ if rc != 0 {
+ return Err("Could not acquire update lock (another instance may be updating)".to_string());
+ }
+ Ok(Self { _file: file })
+ }
+
+ /// Blocks until the exclusive lock is held. Used at the tail of staging and
+ /// by the user-initiated apply, where a brief wait for an in-flight swap is
+ /// preferable to a spurious failure. The wait is bounded: the lock is only
+ /// ever held across a fast validate+swap or a rename, and dies with its holder.
+ fn acquire_blocking(dest: &str) -> Result<Self, String> {
+ Self::lock_file(Self::open_lockfile(dest)?, false)
+ }
+
+ /// Returns Err immediately if another process holds the lock. Used at boot so
+ /// startup never blocks behind another instance's swap.
+ fn try_acquire(dest: &str) -> Result<Self, String> {
+ Self::lock_file(Self::open_lockfile(dest)?, true)
+ }
+}
+
+/// Atomically exchanges the contents of two same-directory paths in ONE syscall
+/// via macOS `renamex_np(RENAME_SWAP)`. Unlike a rename onto an existing path
+/// (which fails ENOTEMPTY for a non-empty dir) or a remove-then-rename (which has
+/// a window where the destination is briefly absent), this has NO intermediate
+/// state: on success the two paths are swapped, and on ANY error NEITHER path
+/// changes. Both paths must exist and live on the same filesystem — here they are
+/// always siblings of the install.
+#[cfg(target_os = "macos")]
+fn swap_paths_atomically(a: &str, b: &str) -> Result<(), String> {
+ extern "C" {
+ fn renamex_np(
+ from: *const std::os::raw::c_char,
+ to: *const std::os::raw::c_char,
+ flags: std::os::raw::c_uint,
+ ) -> std::os::raw::c_int;
+ }
+ // RENAME_SWAP = 0x2 (sys/stdio.h): exchange from<->to atomically.
+ const RENAME_SWAP: std::os::raw::c_uint = 0x0000_0002;
+ let from = std::ffi::CString::new(a)
+ .map_err(|e| format!("Publish staged bundle failed (path): {e}"))?;
+ let to = std::ffi::CString::new(b)
+ .map_err(|e| format!("Publish staged bundle failed (path): {e}"))?;
+ let rc = unsafe { renamex_np(from.as_ptr(), to.as_ptr(), RENAME_SWAP) };
+ if rc == 0 {
+ Ok(())
+ } else {
+ Err(format!(
+ "Publish staged bundle failed (atomic swap): {}",
+ std::io::Error::last_os_error()
+ ))
+ }
+}
+
+/// `fs::remove_dir_all`, but if the first attempt fails, clear every mechanism a
+/// non-root owner can use to deny deletion of files it owns — BSD immutable /
+/// append-only flags (`chflags`), inherited/explicit ACLs including deny
+/// `delete`/`delete_child` (`chmod -N`, which `ditto` preserves from the DMG),
+/// and restrictive mode bits (`chmod u+rwx`) — across the tree, then retry. These
+/// are the realistic persistent blockers for removing a bundle WE own; clearing
+/// them keeps a successful publish from leaking the swapped-out old bundle. The
+/// first attempt succeeds in the common case, so the shell-outs run only on the
+/// (rare) failure path. Returns the retry's result.
+#[cfg(target_os = "macos")]
+fn force_remove_dir_all(path: &str) -> std::io::Result<()> {
+ match fs::remove_dir_all(path) {
+ Ok(()) => return Ok(()),
+ Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+ Err(_) => {}
+ }
+ let _ = Command::new("chflags")
+ .args(["-R", "nouchg,noschg,nouappnd,nosappnd", path])
+ .output();
+ // Strip ACLs (deny-delete entries survive chmod mode changes), then restore
+ // owner rwx so directories are traversable/writable for the removal.
+ let _ = Command::new("chmod").args(["-R", "-N", path]).output();
+ let _ = Command::new("chmod").args(["-R", "u+rwx", path]).output();
+ fs::remove_dir_all(path)
+}
 
 /// Shared pre-swap gate for a staged bundle, run IDENTICALLY by the manual apply
 /// command and the boot-time auto-apply so neither path can be weaker than the
@@ -2373,12 +2545,25 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  // cannot interleave renames and destroy this pass's backup. Poison-tolerant:
  // a panic mid-swap must not wedge every future update behind a dead lock.
  let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+ // ...and serialize against a SECOND running copy of the app (the in-process
+ // mutex above only covers threads of this process). Blocks briefly if another
+ // instance is mid-swap; auto-released if that instance dies. Held for the whole
+ // critical section below.
+ let _xproc_guard = CrossProcessSwapLock::acquire_blocking(&dest)?;
 
  // Capture the Apple signer pin ONCE from the live install before any rename,
  // then thread that immutable requirement + the validated version through both
  // the pre-swap gate and the post-swap re-check. Re-verifying at apply time also
  // catches tampering between download and restart. Identical gate to boot-apply.
  let requirement = installed_signer_requirement(&dest)?;
+ // NOTE: a validate failure here is NOT discarded. validate_staged_bundle can
+ // fail two ways — a definitive rejection (not newer / wrong id / bad signer) OR
+ // an operational failure (plutil/codesign couldn't even spawn, e.g. EMFILE), and
+ // they are indistinguishable as `String` errors. Deleting on the operational
+ // case would throw away a perfectly good staged bundle and force a full
+ // re-download, so we leave it: boot-apply's own discard sweeps a genuinely
+ // invalid bundle on the next launch (self-healing), and it is never an
+ // apply-gate bypass because the swap only runs on Ok.
  let staged_version = validate_staged_bundle(&staged, &requirement)?;
  swap_staged_into_place(&staged, &dest, &backup, &requirement, &staged_version)?;
 
@@ -2396,6 +2581,39 @@ async fn apply_staged_update(webview: Webview) -> Result<(), String> {
  "Update installed but relaunch could not start ({e}); it will apply on next launch"
  )),
  }
+ }
+}
+
+/// Renderer-queryable truth for "is an update staged on disk?". The renderer
+/// keeps a `wm-update-staged-*` localStorage hint, but that flag can go stale (a
+/// boot-apply discarded the bundle as invalid, or a prior apply consumed it), so
+/// the FILESYSTEM — not localStorage — is authoritative. Returns the staged
+/// bundle's short version if one physically exists and can report a version, else
+/// None. This is a cheap existence probe, NOT the security gate: the full
+/// signer + version re-verification still runs in `validate_staged_bundle` at
+/// apply/boot time.
+#[tauri::command]
+async fn staged_update_status(webview: Webview) -> Result<Option<String>, String> {
+ require_trusted_window(webview.label())?;
+
+ #[cfg(not(target_os = "macos"))]
+ {
+ return Ok(None);
+ }
+
+ #[cfg(target_os = "macos")]
+ {
+ let dest = match resolve_update_install_path() {
+ Ok(d) => d,
+ Err(_) => return Ok(None),
+ };
+ let staged = format!("{dest}.update-staged");
+ if !Path::new(&staged).exists() {
+ return Ok(None);
+ }
+ // A staged bundle that can't even report its short version is not something
+ // to advertise as ready — treat it as absent so the renderer re-stages.
+ Ok(read_bundle_short_version(&staged).ok())
  }
 }
 
@@ -2427,6 +2645,13 @@ fn maybe_apply_staged_update_on_boot() {
  // Serialize against the manual apply path (defensive — boot runs before the
  // async runtime and IPC, so nothing can actually race it yet). Poison-tolerant.
  let _swap_guard = UPDATE_SWAP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+ // Serialize against a SECOND running instance that may already be applying this
+ // staged update. Non-blocking so startup never hangs; on contention skip WITHOUT
+ // discarding — the staged bundle stays for the holder to apply, or the next boot.
+ let _xproc_guard = match CrossProcessSwapLock::try_acquire(&dest) {
+ Ok(g) => g,
+ Err(_) => return,
+ };
 
  // Identical gate to the manual apply path — see validate_staged_bundle. Capture
  // the signer pin + version ONCE from the live install, then thread them through
@@ -4495,6 +4720,7 @@ fn main() {
  speak_aloud,
  stage_update,
  apply_staged_update,
+ staged_update_status,
  update_mode_label,
  set_dock_badge,
  set_menubar_status

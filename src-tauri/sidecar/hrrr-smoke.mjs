@@ -34,6 +34,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const execFileAsync = promisify(execFile);
 
@@ -142,10 +143,11 @@ function scanPathForWgrib2(env, exists) {
 }
 
 /**
- * The vendored binary's production location. The Tauri host launches this
- * sidecar with LOCAL_API_RESOURCE_DIR pointing at the app's Resources dir, and
- * scripts/vendor-wgrib2.sh drops a signed, self-contained wgrib2 at
- * `<resources>/sidecar/wgrib2/wgrib2` (tauri.conf.json bundles `sidecar/wgrib2`).
+ * Legacy fallback: derive the vendored binary from LOCAL_API_RESOURCE_DIR. In
+ * practice Tauri points that env var at `<Resources>/_up_`, a DIFFERENT subtree
+ * from the sidecar's own files, so this usually misses in the packaged app —
+ * `bundledWgrib2BesideModule()` is the load-bearing resolver. Kept because a
+ * host that DOES set it to the real Resources dir (or a test) still resolves.
  * Returns null when the env var is unset (dev/web) so the caller keeps looking.
  */
 function bundledWgrib2FromResourceDir(env) {
@@ -155,10 +157,29 @@ function bundledWgrib2FromResourceDir(env) {
 }
 
 /**
+ * The vendored binary's real production location: beside THIS module.
+ * scripts/vendor-wgrib2.sh drops a signed, self-contained wgrib2 at
+ * `<sidecar>/wgrib2/wgrib2` and tauri.conf.json ships `sidecar/wgrib2`, so in
+ * dev (`src-tauri/sidecar/`) and in the packaged app (`<Resources>/sidecar/`)
+ * alike it is a sibling of this file. Unlike LOCAL_API_RESOURCE_DIR — which
+ * Tauri points at the `_up_` artifact subtree — the module's own directory
+ * always names the correct location. Returns null only if the module URL can't
+ * be resolved to a path.
+ */
+export function bundledWgrib2BesideModule() {
+  try {
+    return path.join(path.dirname(fileURLToPath(import.meta.url)), 'wgrib2', 'wgrib2');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Locate a usable `wgrib2`, or null. Order: explicit WGRIB2_PATH → an explicit
- * bundled override (WGRIB2_BUNDLED_PATH) → the vendored binary derived from
- * LOCAL_API_RESOURCE_DIR (the shipped default) → common Homebrew/system
- * locations → $PATH scan. Cached; null means "HRRR stays inert, caller falls back."
+ * bundled override (WGRIB2_BUNDLED_PATH) → the vendored binary beside this
+ * module (the shipped default) → the LOCAL_API_RESOURCE_DIR-derived path (legacy
+ * fallback) → common Homebrew/system locations → $PATH scan. Cached; null means
+ * "HRRR stays inert, caller falls back."
  */
 export function resolveWgrib2Path(deps = {}) {
   const env = deps.env ?? process.env;
@@ -172,7 +193,12 @@ export function resolveWgrib2Path(deps = {}) {
 
 /** Ordered wgrib2 search: explicit → bundled override → vendored → known dirs → $PATH. */
 function firstUsableWgrib2(env, exists) {
-  const preferred = [env.WGRIB2_PATH, env.WGRIB2_BUNDLED_PATH, bundledWgrib2FromResourceDir(env)];
+  const preferred = [
+    env.WGRIB2_PATH,
+    env.WGRIB2_BUNDLED_PATH,
+    bundledWgrib2BesideModule(),
+    bundledWgrib2FromResourceDir(env),
+  ];
   for (const p of preferred) {
     if (p && exists(p)) return p;
   }

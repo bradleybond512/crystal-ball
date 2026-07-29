@@ -100,28 +100,30 @@ test('AirNow adapter skips non-finite/negative AQI and missing coords/time', () 
   assert.equal(airnowToObservations([anReading({ observedAt: Number.NaN })]).length, 0);
 });
 
-test('pm25ToAqi follows the EPA breakpoint table', () => {
+test('pm25ToAqi follows the 2024-revision EPA breakpoint table (imported from purpleair-helpers)', () => {
   assert.equal(pm25ToAqi(0), 0);
-  assert.equal(pm25ToAqi(12), 50);
-  assert.equal(pm25ToAqi(35.5), 101, 'first value in the unhealthy-for-sensitive-groups band');
+  assert.equal(pm25ToAqi(12), 56, '2024 table moved the good/moderate boundary from 12 to 9 µg/m³');
+  assert.equal(pm25ToAqi(35.5), 101, 'first value in the unhealthy-for-sensitive-groups band (bands converge above 35.5)');
   assert.equal(pm25ToAqi(500.4), 500);
-  assert.equal(pm25ToAqi(600), undefined, 'above the top breakpoint is out of table');
-  assert.equal(pm25ToAqi(-5), undefined, 'negative concentration is not a valid table lookup');
+  assert.equal(pm25ToAqi(600), 500, 'above the top breakpoint caps at 500 (AirNow hazardous ceiling), not dropped');
+  assert.equal(pm25ToAqi(-5), undefined, 'negative concentration is rejected at this call site, not clamped to AQI 0');
 });
 
-test('PurpleAir adapter converts PM2.5 to AQI via the breakpoint table', () => {
+test('PurpleAir adapter converts PM2.5 to AQI via the shared 2024 breakpoint table', () => {
   const obs = purpleairToObservations([paReading({ pm25: 12 })]);
   assert.equal(obs.length, 1);
   assert.equal(obs[0]!.providerId, 'purpleair');
-  assert.equal(obs[0]!.value, 50);
+  assert.equal(obs[0]!.value, 56);
   assert.equal(obs[0]!.lat, 41.6);
   assert.equal(obs[0]!.lon, -87.06);
   assert.equal(obs[0]!.occurredAt, NOW);
 });
 
-test('PurpleAir adapter drops negative/out-of-range PM2.5 and missing coords/time', () => {
+test('PurpleAir adapter drops negative PM2.5 and missing coords/time; caps extreme PM2.5 at AQI 500', () => {
   assert.equal(purpleairToObservations([paReading({ pm25: -5 })]).length, 0, 'negative pm25 dropped by caller');
-  assert.equal(purpleairToObservations([paReading({ pm25: 600 })]).length, 0, 'out-of-table pm25 (undefined AQI) dropped');
+  const capped = purpleairToObservations([paReading({ pm25: 600 })]);
+  assert.equal(capped.length, 1, 'extreme PM2.5 is capped, not dropped');
+  assert.equal(capped[0]!.value, 500);
   assert.equal(purpleairToObservations([paReading({ lat: Number.NaN })]).length, 0);
   assert.equal(purpleairToObservations([paReading({ observedAt: Number.NaN })]).length, 0);
 });

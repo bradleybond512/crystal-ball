@@ -61,14 +61,20 @@ const PM25_BREAKPOINTS: readonly [number, number, number, number, AqiCategory][]
 // ── Pure helpers ─────────────────────────────────────────────────────────
 
 /**
- * Truncate PM2.5 to 2 decimal places, matching the input precision the
- * EPA conversion expects. Negative values clamp to 0; non-finite returns
- * null. Truncates (not rounds) — 9.999 → 9.99, not 10.00.
+ * Truncate PM2.5 to 1 decimal place — the EPA's own AQI-calculation
+ * convention, and the precision the breakpoint table above is defined on
+ * (each band's boundary sits on a 1-decimal value, e.g. 9.0/9.1, 35.4/35.5).
+ * Truncating to a coarser precision (e.g. 2 decimals) leaves a crack between
+ * adjacent bands — a reading like 9.05 truncates to itself, which is greater
+ * than the first band's 9.0 ceiling but less than the second band's 9.1
+ * floor, so it matches neither and pm25ToAqi silently returns null for a
+ * perfectly valid reading. Truncates (not rounds) — 9.99 → 9.9, not 10.0.
+ * Negative values clamp to 0; non-finite returns null.
  */
 export function truncatePm25(pm25: number): number | null {
   if (!Number.isFinite(pm25)) return null;
   if (pm25 < 0) return 0;
-  return Math.trunc(pm25 * 100) / 100;
+  return Math.trunc(pm25 * 10) / 10;
 }
 
 /**

@@ -13596,6 +13596,61 @@ async function dispatch(requestUrl, req, routes, context) {
     return json(result);
   }
 
+  // ── AirNow current observations — nearest-station real-time AQI, keyed.
+  // 3rd air_quality fusion source (alongside Open-Meteo + OpenAQ). AirNow's
+  // current-observations API reports local time as DateObserved + an int
+  // HourObserved + a US timezone abbreviation (LocalTimeZone) rather than a
+  // UTC timestamp — GEOFON already burned us once on Date.parse() silently
+  // parsing a suffix-less string as local time, so this is normalized to
+  // epoch ms explicitly via an abbreviation→offset table below and never
+  // handed to Date.parse() without one.
+  if (requestUrl.pathname === '/api/airnow/current') {
+    const AIRNOW_TZ_OFFSETS = {
+      EST: '-05:00', EDT: '-04:00', CST: '-06:00', CDT: '-05:00',
+      MST: '-07:00', MDT: '-06:00', PST: '-08:00', PDT: '-07:00',
+      AKST: '-09:00', AKDT: '-08:00', HST: '-10:00',
+    };
+    const apiKey = process.env.AIRNOW_API_KEY;
+    if (!apiKey) return json({ readings: [], degraded: true, error: 'no AirNow key' });
+    const lat = Number.parseFloat(requestUrl.searchParams.get('lat') || '');
+    const lon = Number.parseFloat(requestUrl.searchParams.get('lon') || '');
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return json({ readings: [], error: 'lat/lon required' }, 400);
+    }
+    const cacheKey = `airnow-current:${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://www.airnowapi.org/aq/observation/latLong/current/`
+        + `?format=application/json&latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`
+        + `&distance=75&API_KEY=${encodeURIComponent(apiKey)}`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12_000);
+      if (!r.ok) throw new Error(`AirNow ${r.status}`);
+      const rows = await r.json();
+      const readings = (Array.isArray(rows) ? rows : [])
+        .map((o) => {
+          const offset = AIRNOW_TZ_OFFSETS[String(o?.LocalTimeZone ?? '').trim()];
+          const dateObserved = String(o?.DateObserved ?? '').trim();
+          const hourObserved = String(o?.HourObserved ?? '').padStart(2, '0');
+          const parsed = offset ? Date.parse(`${dateObserved}T${hourObserved}:00:00${offset}`) : Number.NaN;
+          return {
+            lat: o?.Latitude,
+            lon: o?.Longitude,
+            aqi: o?.AQI,
+            parameter: o?.ParameterName,
+            observedAt: Number.isFinite(parsed) ? parsed : Date.now(),
+          };
+        })
+        .filter((o) => Number.isFinite(o.aqi) && o.aqi >= 0 && Number.isFinite(o.lat) && Number.isFinite(o.lon));
+      if (readings.length === 0) return json({ readings: [], degraded: true, error: 'no AirNow observations' });
+      const result = { readings };
+      setCached(cacheKey, result, 30 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ readings: [], degraded: true, error: String(error.message ?? error) });
+    }
+  }
+
   // ── INPE Queimadas — Brazil wildfire hotspots (last 48h) ─────────────────
   // ── PurpleAir hyper-local AQI sensors ────────────────────────────────────
   // Prefers PURPLEAIR_API_KEY (v1/sensors), falls back to the deprecated

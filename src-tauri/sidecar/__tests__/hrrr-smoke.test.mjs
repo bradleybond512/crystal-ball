@@ -12,6 +12,7 @@ import test from 'node:test';
 import {
   cycleEpochMs,
   resolveWgrib2Path,
+  bundledWgrib2BesideModule,
   _resetWgrib2Cache,
   parseWgrib2Vals,
   decodeMassdenAtPoints,
@@ -78,6 +79,23 @@ test('resolveWgrib2Path derives the vendored binary from LOCAL_API_RESOURCE_DIR'
   assert.equal(
     resolveWgrib2Path({ env: {}, existsSync: seen('/opt/homebrew/bin/wgrib2'), noCache: true }),
     '/opt/homebrew/bin/wgrib2',
+  );
+});
+
+test('resolveWgrib2Path finds the binary beside the sidecar module, even when LOCAL_API_RESOURCE_DIR points at Tauri _up_ dir', () => {
+  const beside = bundledWgrib2BesideModule();
+  assert.ok(beside && beside.endsWith('/wgrib2/wgrib2'), 'module-relative path resolves to <sidecar>/wgrib2/wgrib2');
+  // The real packaged layout: Tauri sets LOCAL_API_RESOURCE_DIR to
+  // <Resources>/_up_ — a sibling of the sidecar's own files — so the
+  // resource-dir-derived path (<_up_>/sidecar/wgrib2/wgrib2) does NOT exist.
+  // Only the module-relative path does, and it must still be found.
+  assert.equal(
+    resolveWgrib2Path({
+      env: { LOCAL_API_RESOURCE_DIR: '/App/Resources/_up_' },
+      existsSync: seen(beside),
+      noCache: true,
+    }),
+    beside,
   );
 });
 

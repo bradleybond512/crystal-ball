@@ -7,9 +7,13 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 
 function runRipgrep() {
+  // Trusted local dev tooling: rg is resolved from PATH like every sibling lint script.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path
   return spawnSync('rg', [
  '-n',
  '--hidden',
+ '-g',
+ '!.git/**',
  '-g',
  '!node_modules/**',
  '-g',
@@ -25,6 +29,8 @@ function runRipgrep() {
 }
 
 function runGitGrep() {
+  // Trusted local dev tooling: git is resolved from PATH like every sibling lint script.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path
   return spawnSync('git', [
  'grep',
  '-nE',

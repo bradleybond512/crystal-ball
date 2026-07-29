@@ -65,8 +65,9 @@ test('multiple domains fuse independently (earthquakes + air_quality)', () => {
   recordDomainObservations('openaq-v3', [ob('openaq-v3', 130)], true, NOW); // within ±25 AQI
 
   const snaps = getFusionProviderSnapshots(NOW);
-  // earthquakes now has 3 registered providers (USGS + EMSC + GEOFON) + air_quality's 2.
-  assert.equal(snaps.length, 5, 'both active fused domains surface their providers');
+  // earthquakes now has 3 registered providers (USGS + EMSC + GEOFON) +
+  // air_quality's 4 (Open-Meteo + OpenAQ + AirNow + PurpleAir).
+  assert.equal(snaps.length, 7, 'both active fused domains surface their providers');
 
   const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
   const disasters = report.domains.find((d) => d.domain === 'disasters')!;

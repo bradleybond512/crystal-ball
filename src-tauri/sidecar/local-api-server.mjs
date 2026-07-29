@@ -5710,6 +5710,18 @@ function extractAlertCentroid(feature) {
   return null;
 }
 
+// Local-time zone abbreviation → UTC offset, for AirNow's DateObserved +
+// HourObserved + LocalTimeZone triple (see /api/airnow/current). Module-level
+// so the table is built once instead of reallocated on every dispatch() call.
+// Includes AirNow's non-CONUS territories: Puerto Rico/USVI (AST), Guam
+// (ChST), American Samoa (SST).
+const AIRNOW_TZ_OFFSETS = {
+  EST: '-05:00', EDT: '-04:00', CST: '-06:00', CDT: '-05:00',
+  MST: '-07:00', MDT: '-06:00', PST: '-08:00', PDT: '-07:00',
+  AKST: '-09:00', AKDT: '-08:00', HST: '-10:00',
+  AST: '-04:00', ChST: '+10:00', SST: '-11:00',
+};
+
 async function dispatch(requestUrl, req, routes, context) {
   if (req.method === 'OPTIONS') {
  return new Response(null, { status: 204, headers: makeCorsHeaders(req) });
@@ -13605,11 +13617,6 @@ async function dispatch(requestUrl, req, routes, context) {
   // epoch ms explicitly via an abbreviation→offset table below and never
   // handed to Date.parse() without one.
   if (requestUrl.pathname === '/api/airnow/current') {
-    const AIRNOW_TZ_OFFSETS = {
-      EST: '-05:00', EDT: '-04:00', CST: '-06:00', CDT: '-05:00',
-      MST: '-07:00', MDT: '-06:00', PST: '-08:00', PDT: '-07:00',
-      AKST: '-09:00', AKDT: '-08:00', HST: '-10:00',
-    };
     const apiKey = process.env.AIRNOW_API_KEY;
     if (!apiKey) return json({ readings: [], degraded: true, error: 'no AirNow key' });
     const lat = Number.parseFloat(requestUrl.searchParams.get('lat') || '');
@@ -13665,6 +13672,9 @@ async function dispatch(requestUrl, req, routes, context) {
  error: 'PURPLEAIR_API_KEY required — public www.purpleair.com/json endpoint is no longer served',
  }, 503);
  }
+ const cacheKey = 'purpleair-sensors';
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
  const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
  try {
  const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0`;
@@ -13678,7 +13688,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!resp.ok) return json({ sensors: [], error: `purpleair upstream ${resp.status}` }, 502);
  const payload = await resp.json();
  const sensors = sidecarParseV1Sensors(payload);
- return json({ sensors, source: 'v1', fetchedAt: Date.now() });
+ const result = { sensors, source: 'v1', fetchedAt: Date.now() };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
  } catch (error) {
  return json({ sensors: [], error: String(error.message ?? error) }, 500);
  }

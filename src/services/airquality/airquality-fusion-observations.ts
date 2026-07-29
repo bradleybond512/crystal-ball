@@ -7,6 +7,7 @@
 import type { AirQualityReading } from '@/services/air-quality';
 import type { MonitorReading } from '@/services/airquality/openaq-service';
 import type { DomainObservation } from '@/services/providers/fusion-ingest';
+import { pm25ToAqi as epaPm25ToAqi } from '@/services/airquality/purpleair-helpers';
 
 export function openMeteoAqToObservations(readings: readonly AirQualityReading[]): DomainObservation[] {
   const out: DomainObservation[] = [];
@@ -91,28 +92,28 @@ export function airnowToObservations(readings: readonly AirnowReading[]): Domain
   return out;
 }
 
-// EPA PM2.5 (µg/m³, 24hr) → AQI breakpoint table (linear interpolation within
-// each band). Deliberately self-contained here rather than sharing
-// purpleair-helpers.ts's table — that one carries the 2024 EPA revision plus
-// category labels for its own UI purposes; this is the plain pre-2024 table
-// used to derive a fusion-comparable AQI, not a display concern.
-const PM25_BREAKPOINTS: readonly { lo: number; hi: number; aqiLo: number; aqiHi: number }[] = [
-  { lo: 0, hi: 12, aqiLo: 0, aqiHi: 50 },
-  { lo: 12.1, hi: 35.4, aqiLo: 51, aqiHi: 100 },
-  { lo: 35.5, hi: 55.4, aqiLo: 101, aqiHi: 150 },
-  { lo: 55.5, hi: 150.4, aqiLo: 151, aqiHi: 200 },
-  { lo: 150.5, hi: 250.4, aqiLo: 201, aqiHi: 300 },
-  { lo: 250.5, hi: 500.4, aqiLo: 301, aqiHi: 500 },
-];
-
+// Consolidated onto purpleair-helpers.ts's 2024-revision EPA breakpoint
+// table — this file used to carry its own self-contained pre-2024 table,
+// which under-reports by up to ~12 AQI points vs what AirNow has actually
+// published since May 2024 (worst divergence around 9-10 µg/m³), eating
+// into half of this domain's 25-point fusion tolerance right where readings
+// cluster. purpleair-helpers.pm25ToAqi is pure (no DOM/fetch/imports) and
+// already exported, so it's imported directly rather than re-declared.
+//
+// Two behavioral deltas from the old local table, both handled here:
+//  - purpleair-helpers clamps negative PM2.5 to 0 (AQI 0) rather than
+//    rejecting it, since it's built for a display path where "somehow
+//    negative" should still render something. For fusion input a negative
+//    reading is physically invalid sensor garbage, not a legitimate "clean
+//    air" observation, so this wrapper keeps rejecting it explicitly.
+//  - purpleair-helpers caps anything >= 500.4 at AQI 500 instead of
+//    rejecting it — this matches AirNow's own hazardous-ceiling convention
+//    (extreme wildfire-smoke PM2.5 is a real reading, not sensor noise) and
+//    is adopted as-is; a value that used to be dropped as "off the table"
+//    now correctly fuses in as AQI 500.
 export function pm25ToAqi(pm25: number): number | undefined {
   if (!Number.isFinite(pm25) || pm25 < 0) return undefined;
-  for (const bp of PM25_BREAKPOINTS) {
-    if (pm25 >= bp.lo && pm25 <= bp.hi) {
-      return Math.round(((bp.aqiHi - bp.aqiLo) / (bp.hi - bp.lo)) * (pm25 - bp.lo) + bp.aqiLo);
-    }
-  }
-  return undefined;
+  return epaPm25ToAqi(pm25) ?? undefined;
 }
 
 export function purpleairToObservations(readings: readonly PurpleairReading[]): DomainObservation[] {

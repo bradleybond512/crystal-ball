@@ -16,15 +16,39 @@
  */
 import { getApiBaseUrl } from '@/services/runtime';
 import { filterReadingsNearby, type PurpleairReading } from './airquality-fusion-observations';
+import { MIN_CONFIDENCE } from './purpleair-helpers';
 
 interface PurpleAirSensorRaw {
   lat?: number;
   lon?: number;
   pm25?: number;
   lastSeen?: number | null;
+  confidence?: number;
 }
 
 export interface PurpleairFetchResult { ok: boolean; readings: PurpleairReading[] }
+
+/**
+ * Validate + normalize one raw sensor row into a PurpleairReading, or null
+ * to drop it. Split out of fetchPurpleairNearby's loop to keep the caller's
+ * cognitive complexity down.
+ */
+function toPurpleairReading(s: PurpleAirSensorRaw | null | undefined, now: number): PurpleairReading | null {
+  if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || !Number.isFinite(s.pm25)) return null;
+  if ((s.pm25 as number) < 0) return null;
+  // A/B-channel disagreement shows up as a low confidence score — that's a
+  // failing sensor, not a legitimate reading, and fusion is exactly where a
+  // garbage vote turns into a false disagreement flag. Mirrors
+  // purpleair-helpers.filterUsable's own confidence gate.
+  if (!Number.isFinite(s.confidence) || (s.confidence as number) <= MIN_CONFIDENCE) return null;
+  let observedAt = Number.isFinite(s.lastSeen) && (s.lastSeen as number) > 0 ? (s.lastSeen as number) * 1000 : now;
+  // Plausibility guard: if seconds->ms conversion lands more than a day in
+  // the future, the sidecar's lastSeen was probably already in ms (e.g. if
+  // the parser at the source gets fixed) — use it as-is instead of producing
+  // a millennia-future timestamp.
+  if (observedAt > now + 24 * 60 * 60 * 1000) observedAt = s.lastSeen as number;
+  return { lat: s.lat as number, lon: s.lon as number, pm25: s.pm25 as number, observedAt };
+}
 
 export async function fetchPurpleairNearby(lat: number, lon: number, radiusKm = 100): Promise<PurpleairFetchResult> {
   try {
@@ -35,10 +59,8 @@ export async function fetchPurpleairNearby(lat: number, lon: number, radiusKm = 
     const now = Date.now();
     const readings: PurpleairReading[] = [];
     for (const s of data.sensors) {
-      if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || !Number.isFinite(s.pm25)) continue;
-      if ((s.pm25 as number) < 0) continue;
-      const observedAt = Number.isFinite(s.lastSeen) && (s.lastSeen as number) > 0 ? (s.lastSeen as number) * 1000 : now;
-      readings.push({ lat: s.lat as number, lon: s.lon as number, pm25: s.pm25 as number, observedAt });
+      const reading = toPurpleairReading(s, now);
+      if (reading) readings.push(reading);
     }
     const nearby = filterReadingsNearby(readings, lat, lon, radiusKm);
     if (nearby.length === 0) return { ok: false, readings: [] };

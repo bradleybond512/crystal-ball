@@ -1405,9 +1405,10 @@ export class DataLoaderManager implements AppModule {
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
  }
- // Crypto price fusion: CoinGecko + Coinbase, matched by symbol. Dedicated
- // fail-closed fetches (NOT the panel's cached fetchCrypto) so a down source
- // records a failing outcome instead of corroborating against stale prices.
+ // Crypto price fusion: CoinGecko + Coinbase + CoinPaprika + Kraken, matched
+ // by symbol. Dedicated fail-closed fetches (NOT the panel's cached
+ // fetchCrypto) so a down source records a failing outcome instead of
+ // corroborating against stale prices.
  const cg = await fetchCoingeckoPrices();
  const cgObservedAt = Date.now();
  recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices, cgObservedAt), cg.ok, cgObservedAt);

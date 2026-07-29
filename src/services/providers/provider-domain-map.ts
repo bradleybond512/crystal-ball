@@ -45,10 +45,11 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     match: { maxDistanceKm: 25, maxTimeDeltaMs: 3 * 60 * 60_000 },
   },
   // Crypto prices: matched by SYMBOL (not geography), agree within 2% (prices
-  // span $0.50 to $60k so the band must scale with magnitude). CoinGecko
-  // (aggregator) + Coinbase (exchange), both no-key, both US-reachable.
+  // span $0.50 to $60k so the band must scale with magnitude). CoinGecko +
+  // CoinPaprika (aggregators) + Coinbase + Kraken (exchanges), all no-key,
+  // all US-reachable.
   crypto: {
-    providerIds: ['coingecko', 'coinbase'],
+    providerIds: ['coingecko', 'coinbase', 'coinpaprika', 'kraken'],
     toleranceMode: 'relative',
     numericTolerance: 0.02,
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 60_000 },

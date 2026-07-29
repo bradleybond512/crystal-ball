@@ -342,6 +342,8 @@ import { exchangePricesToObservations } from '@/services/market/crypto-fusion-ob
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
 import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
+import { fetchCoinpaprikaPrices } from '@/services/market/coinpaprika-fetch';
+import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
 import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
@@ -1412,7 +1414,13 @@ export class DataLoaderManager implements AppModule {
  const coinbase = await fetchCoinbasePrices();
  const coinbaseObservedAt = Date.now();
  recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices, coinbaseObservedAt), coinbase.ok, coinbaseObservedAt);
- recordFusedSpotPrices(getLatestFusion('crypto', coinbaseObservedAt).facts);
+ const cp = await fetchCoinpaprikaPrices();
+ const cpObservedAt = Date.now();
+ recordDomainObservations('coinpaprika', exchangePricesToObservations('coinpaprika', cp.prices, cpObservedAt), cp.ok, cpObservedAt);
+ const kr = await fetchKrakenPrices();
+ const krObservedAt = Date.now();
+ recordDomainObservations('kraken', exchangePricesToObservations('kraken', kr.prices, krObservedAt), kr.ok, krObservedAt);
+ recordFusedSpotPrices(getLatestFusion('crypto', krObservedAt).facts);
  // Stock price fusion: Yahoo (no-key) + Finnhub (keyed), matched by ticker. Fail-closed.
  const yahoo = await fetchYahooPrices();
  const yahooObservedAt = Date.now();

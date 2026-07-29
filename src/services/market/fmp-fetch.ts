@@ -10,7 +10,8 @@ export interface FmpFetchResult { ok: boolean; quotes: FmpQuote[] }
 
 export async function fetchFmpPrices(): Promise<FmpFetchResult> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}/api/stocks-fmp`, { signal: AbortSignal.timeout(10_000) });
+    // 25s: the sidecar may try stable + legacy-v3 sequentially (10s each).
+    const res = await fetch(`${getApiBaseUrl()}/api/stocks-fmp`, { signal: AbortSignal.timeout(25_000) });
     if (!res.ok) return { ok: false, quotes: [] };
     const data = (await res.json()) as { quotes?: FmpQuote[]; degraded?: boolean; error?: string } | null;
     if (!data || data.degraded || data.error || !Array.isArray(data.quotes)) return { ok: false, quotes: [] };

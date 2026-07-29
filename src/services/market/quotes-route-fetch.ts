@@ -20,7 +20,9 @@ export interface QuotesFetchResult {
 
 export async function fetchQuotesRoute(path: string): Promise<QuotesFetchResult> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, { signal: AbortSignal.timeout(10_000) });
+    // 15s: above the sidecar's per-upstream deadline so slow upstreams fail
+    // sidecar-side (and get recorded there) instead of racing this abort.
+    const res = await fetch(`${getApiBaseUrl()}${path}`, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return { ok: false, prices: [] };
     const data = (await res.json()) as { quotes?: ExchangePrice[]; degraded?: boolean; error?: string } | null;
     if (!data || data.degraded || data.error || !Array.isArray(data.quotes)) return { ok: false, prices: [] };

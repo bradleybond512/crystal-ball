@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
   openMeteoAqToObservations, openaqToObservations,
-  airnowToObservations, purpleairToObservations, pm25ToAqi,
+  airnowToObservations, purpleairToObservations, pm25ToAqi, filterReadingsNearby,
 } from '../airquality-fusion-observations.ts';
 import type { AirQualityReading } from '@/services/air-quality';
 import type { MonitorReading } from '@/services/airquality/openaq-service';
@@ -103,6 +103,7 @@ test('AirNow adapter skips non-finite/negative AQI and missing coords/time', () 
 test('pm25ToAqi follows the EPA breakpoint table', () => {
   assert.equal(pm25ToAqi(0), 0);
   assert.equal(pm25ToAqi(12), 50);
+  assert.equal(pm25ToAqi(35.5), 101, 'first value in the unhealthy-for-sensitive-groups band');
   assert.equal(pm25ToAqi(500.4), 500);
   assert.equal(pm25ToAqi(600), undefined, 'above the top breakpoint is out of table');
   assert.equal(pm25ToAqi(-5), undefined, 'negative concentration is not a valid table lookup');
@@ -123,4 +124,18 @@ test('PurpleAir adapter drops negative/out-of-range PM2.5 and missing coords/tim
   assert.equal(purpleairToObservations([paReading({ pm25: 600 })]).length, 0, 'out-of-table pm25 (undefined AQI) dropped');
   assert.equal(purpleairToObservations([paReading({ lat: Number.NaN })]).length, 0);
   assert.equal(purpleairToObservations([paReading({ observedAt: Number.NaN })]).length, 0);
+});
+
+test('filterReadingsNearby keeps a sensor ~50km away, drops one ~500km away', () => {
+  const near = paReading({ lat: 42.05, lon: -87.06 }); // haversine ≈ 50.04km from the ref point
+  const far = paReading({ lat: 46.1, lon: -87.06 }); // haversine ≈ 500.38km from the ref point
+  const kept = filterReadingsNearby([near, far], 41.6, -87.06, 100);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0], near);
+});
+
+test('filterReadingsNearby respects the radius parameter', () => {
+  const at50km = paReading({ lat: 42.05, lon: -87.06 });
+  assert.equal(filterReadingsNearby([at50km], 41.6, -87.06, 100).length, 1, 'kept under a 100km radius');
+  assert.equal(filterReadingsNearby([at50km], 41.6, -87.06, 10).length, 0, 'dropped under a tighter 10km radius');
 });

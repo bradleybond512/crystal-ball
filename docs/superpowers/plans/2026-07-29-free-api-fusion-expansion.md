@@ -767,7 +767,18 @@ Required:
 - Modify: registry (+`gfz-kp`), domain map, data-loader (space-weather refresh section).
 - Test: `src/services/spaceweather/__tests__/kp-fusion-observations.test.mts`.
 
-- [ ] Registry: `{ id: 'gfz-kp', domain: 'space_weather', displayName: 'GFZ Potsdam Kp', authType: 'none', baseUrl: 'https://kp.gfz.de', rateLimitNote: 'no key; definitive/preliminary Kp, 3h bins', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.95, fallbackPriority: 2, independenceGroup: 'gfz' }` — reliability 0.95: GFZ publishes *the* IAGA-endorsed Kp. `freshnessTtlMs` is 3h because the product itself only advances every 3h; a tighter TTL would flag a healthy feed as stale. Group `'gfz'` is correct and intentional — same institution as `geofon-seismic`; within `space_weather` it is the only `gfz` member, so it still earns its own vote.
+- [ ] Registry: `{ id: 'gfz-kp', domain: 'space_weather', displayName: 'GFZ Potsdam Kp', authType: 'none', baseUrl: 'https://kp.gfz.de', rateLimitNote: 'no key; definitive/preliminary Kp, 3h bins', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.95, fallbackPriority: 4, independenceGroup: 'gfz' }` — reliability 0.95: GFZ publishes *the* IAGA-endorsed Kp. `freshnessTtlMs` is 3h because the product itself only advances every 3h; a tighter TTL would flag a healthy feed as stale. Group `'gfz'` is correct and intentional — same institution as `geofon-seismic`; within `space_weather` it is the only `gfz` member, so it still earns its own vote.
+
+**CORRECTED 2026-07-30 (fourth probe) — `fallbackPriority` must be 3 and 4, NOT 1 and 2.** The
+`space_weather` *registry domain* is not empty: `swpc-ovation` (priority **1**) and
+`swpc-solar-regions` (priority **2**) already occupy it (`provider-registry.ts:102,104`). The
+live invariant `test('exactly one primary per domain')` in
+`provider-registry.test.mts:44` asserts exactly one `fallbackPriority === 1` per registry
+domain, so assigning `swpc-kp` priority 1 would make **two** primaries and fail an existing
+test, and `gfz-kp` at 2 would duplicate `swpc-solar-regions`. Use `swpc-kp: 3` and
+`gfz-kp: 4`; `swpc-ovation` stays the domain primary. Note the FUSION_DOMAINS key need not
+equal the registry `domain` field — `frankfurter-fx`/`er-api-fx` carry registry domain `'fx'`
+under fusion key `fx_rates` — so only these two new rows are affected.
 - [ ] Domain config:
 
 ```ts
@@ -782,7 +793,7 @@ Required:
   },
 ```
 
-- [ ] Registry also needs a `swpc-kp` entry (the existing `swpc-ovation` / `swpc-solar-regions` rows are different products and must NOT be reused as the Kp voter): same shape as `gfz-kp` but `displayName: 'SWPC Planetary Kp (estimated)'`, `baseUrl: 'https://services.swpc.noaa.gov'`, `reliabilityWeight: 0.9`, `fallbackPriority: 1`, `independenceGroup: 'noaa-swpc'`.
+- [ ] Registry also needs a `swpc-kp` entry (the existing `swpc-ovation` / `swpc-solar-regions` rows are different products and must NOT be reused as the Kp voter): same shape as `gfz-kp` but `displayName: 'SWPC Planetary Kp (estimated)'`, `baseUrl: 'https://services.swpc.noaa.gov'`, `reliabilityWeight: 0.9`, `fallbackPriority: 3` (see the priority correction above), `independenceGroup: 'noaa-swpc'`.
 - [ ] Fixture test: same bin, Kp 1.0 vs 0.667 → 1 fused fact, **no** disagreement; Kp 2.0 vs 5.0 → disagreement surfaces (values per the tolerance amendment below; and per the Task 2.3 correction, assert the outlier row + `confidenceMultiplier` + both ids in `fact.fingerprints` — NOT "names both providers", which `fuseObservations` never does). Plus a suffix-less-`time_tag` case proving UTC coercion (a `'2026-07-30T00:00:00'` NOAA tag and a `'2026-07-30T00:00:00Z'` GFZ tag must land in the SAME bin — this is the regression that would silently kill the domain).
 
 #### AMENDED 2026-07-30 (second probe): `numericTolerance` MUST be 1.5, not 0.5 — and never filter on `status`
@@ -830,6 +841,14 @@ and the disagreement case must move from `1.0 vs 4.0` to a gap that clears 1.5 �
 **`2.0 vs 5.0`** (quiet-vs-G1-storm), which is the disagreement this domain actually exists
 to surface. Add a regression case at **`2.0 vs 1.333`** (a real measured pair) asserting
 **no** disagreement — that is the exact false-positive the 0.5 tolerance produced.
+
+**Re-confirmed live 2026-07-30T15:21Z (fourth probe).** The newest bin both sources publish,
+`2026-07-30T12:00:00`, reads SWPC **1.67** vs GFZ **0.667** — a **1.003** delta, i.e. the
+measured maximum, occurring on an ordinary quiet day. A `0.5` tolerance would be raising a
+"sources disagree" flag on the current live bin at the moment of implementation. `1.5` is
+correct. (Same probe: SWPC 61 rows / array-of-objects / suffix-less `time_tag`; GFZ 15 bins
+over 48 h, `status` uniformly `'pre'`, `datetime` `Z`-suffixed; GFZ without `start`/`end`
+still HTTP 500.)
 
 **`status` is `'pre'` for all live data — never require `'def'`.** The description above is
 literally true but operationally misleading. Probed: 2026-03-01 → `["def"]`; 2026-07-15 and

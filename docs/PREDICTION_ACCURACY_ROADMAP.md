@@ -829,9 +829,12 @@ bench:forecast + bench:baselines unchanged.
 
 ### ACC-404 — First production promotion decision
 
-Status: `WAITING`
+Status: `IN PROGRESS`
 
-Dependencies: ACC-402 and the data threshold
+Owner: Claude
+Branch: `claude/acc-404-first-decision`
+
+Dependencies: ACC-402 (DONE — #1566) and the data threshold
 
 Outcome:
 

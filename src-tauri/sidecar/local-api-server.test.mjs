@@ -3160,6 +3160,12 @@ test('/api/spaceweather-kp-gfz — requests an explicit rolling 48h window (no w
     assert.equal(hostname, 'kp.gfz.de', 'kp.gfz-potsdam.de 301-redirects here — pin the new host');
     const query = new URL(reqPath, 'https://kp.gfz.de').searchParams;
     assert.equal(query.get('index'), 'Kp');
+    // Second-precision ISO ONLY. Date.toISOString()'s milliseconds
+    // ("2026-07-28T15:00:00.000Z") return HTTP 500 from GFZ — verified live
+    // 2026-07-30 — which would leave this provider permanently dark.
+    const ISO_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+    assert.match(query.get('start'), ISO_SECONDS);
+    assert.match(query.get('end'), ISO_SECONDS);
     const start = Date.parse(query.get('start'));
     const end = Date.parse(query.get('end'));
     assert.ok(Number.isFinite(start) && Number.isFinite(end), 'both bounds must be parseable ISO instants');

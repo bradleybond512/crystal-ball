@@ -17655,8 +17655,13 @@ async function dispatch(requestUrl, req, routes, context) {
  const cached = getCached('gfz-kp', GFZ_KP_TTL);
  if (cached) return json(cached);
  const nowMs = Date.now();
- const start = new Date(nowMs - 48 * 60 * 60 * 1000).toISOString();
- const end = new Date(nowMs).toISOString();
+ // GFZ accepts ONLY second-precision ISO ("2026-07-28T15:00:00Z"). Date's
+ // own toISOString() emits milliseconds, and "...T15:00:00.000Z" returns
+ // HTTP 500 — verified live 2026-07-30. Do not "simplify" this back to a
+ // bare toISOString().
+ const gfzIso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+ const start = gfzIso(nowMs - 48 * 60 * 60 * 1000);
+ const end = gfzIso(nowMs);
  const gfzUrl = `https://kp.gfz.de/app/json/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&index=Kp`;
  const r = await fetchWithTimeout(gfzUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
  if (!r.ok) return json({ samples: [], degraded: true, reason: `gfz-kp upstream ${r.status}` }, 502);

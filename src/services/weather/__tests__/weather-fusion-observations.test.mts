@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tempToObservations, type TempReading } from '../weather-fusion-observations.ts';
+import { tempToObservations, tempVote, type TempReading } from '../weather-fusion-observations.ts';
 import { ingestDomain } from '../../providers/fusion-ingest.ts';
 import { recordFetchOutcome, emptyProviderHealthState } from '../../providers/provider-health.ts';
 import type { ProviderHealthState } from '../../providers/provider-health.ts';
@@ -48,6 +48,31 @@ test('tempToObservations drops physically implausible temperatures', () => {
   assert.equal(tempToObservations('met-norway', [reading({ tempC: 66 })]).length, 0, 'above 65C bound');
   assert.equal(tempToObservations('met-norway', [reading({ tempC: -89 })]).length, 1, 'Vostok-record cold is kept');
   assert.equal(tempToObservations('met-norway', [reading({ tempC: 57 })]).length, 1, 'Death-Valley-record heat is kept');
+});
+
+// ── tempVote: health derived from the adapter output, not the raw readings ───
+
+test('tempVote fails a provider whose only reading the adapter drops', () => {
+  // Upstream answers 200 with tempC 999. `readings.length > 0` is true, so a
+  // health check built on the RAW array records ok:true — while the adapter
+  // drops the row and records []. That is a phantom healthy vote: the provider
+  // counts toward "verified by N independent sources" having contributed
+  // nothing, and the domain silently runs single-source.
+  const sentinel = tempVote('open-meteo-forecast', [reading({ tempC: 999 })]);
+  assert.deepEqual(sentinel.observations, [], 'the sentinel reading is dropped');
+  assert.equal(sentinel.ok, false, 'and the provider is recorded down, not green');
+
+  // Every other adapter-only drop must fail the vote the same way.
+  assert.equal(tempVote('met-norway', [reading({ placeId: '' })]).ok, false, 'empty placeId');
+  assert.equal(tempVote('met-norway', [reading({ lon: Number.NaN })]).ok, false, 'non-finite lon');
+  assert.equal(tempVote('met-norway', [reading({ observedAt: 0 })]).ok, false, 'unusable observedAt');
+});
+
+test('tempVote passes when at least one reading survives, and fails on no readings', () => {
+  const mixed = tempVote('met-norway', [reading({ tempC: 999 }), reading({ tempC: 12.3, placeId: 'place-b' })]);
+  assert.deepEqual(mixed.observations.map((o) => o.key), ['place-b'], 'the junk row is dropped, the good one kept');
+  assert.equal(mixed.ok, true, 'one usable reading is a healthy vote');
+  assert.equal(tempVote('met-norway', []).ok, false, 'nothing fetched is not a healthy vote');
 });
 
 test('two readings 1C apart at the same place fuse into one fact with no disagreement', () => {

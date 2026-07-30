@@ -36,3 +36,23 @@ export function tempToObservations(providerId: string, readings: readonly TempRe
   }
   return out;
 }
+
+export interface TempVote {
+  observations: DomainObservation[];
+  ok: boolean;
+}
+
+/**
+ * The health verdict and the recorded observations must come from the SAME
+ * array (same rationale as kpVote in spaceweather/kp-fusion-observations.ts).
+ * The fetches accept any reading a 200 carried, but tempToObservations drops
+ * implausible temperatures, non-finite coordinates, unusable timestamps and
+ * empty place ids — so a provider stuck on a sentinel (tempC 999) would pass a
+ * "readings.length > 0" check on the RAW array and still contribute nothing,
+ * leaving it green while the domain quietly runs single-source. Deriving `ok`
+ * from the output makes the two predicates incapable of drifting apart.
+ */
+export function tempVote(providerId: string, readings: readonly TempReading[]): TempVote {
+  const observations = tempToObservations(providerId, readings);
+  return { observations, ok: observations.length > 0 };
+}

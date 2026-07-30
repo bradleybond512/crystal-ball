@@ -5,6 +5,18 @@
 
 const EARTH_RADIUS_KM = 6371;
 
+/**
+ * Whether a coordinate pair is usable as a fetch target. Never test a
+ * coordinate with truthiness: longitude 0 (Greenwich — London, Accra) and
+ * latitude 0 (the equator) are ordinary places, and `!lon` silently skips
+ * them, which then records every provider for that place as empty.
+ */
+export function isUsableLatLon(lat: unknown, lon: unknown): boolean {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
+
 export function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }

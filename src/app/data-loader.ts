@@ -359,7 +359,8 @@ import { kpVote } from '@/services/spaceweather/kp-fusion-observations';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
-import { tempToObservations, type TempReading } from '@/services/weather/weather-fusion-observations';
+import { tempVote, type TempReading } from '@/services/weather/weather-fusion-observations';
+import { isUsableLatLon } from '@/services/geo/geo-math';
 import { fetchOpenMeteoTemp } from '@/services/weather/open-meteo-temp-fetch';
 import { fetchMetNorwayTemp } from '@/services/weather/met-norway-fetch';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
@@ -2213,14 +2214,19 @@ export class DataLoaderManager implements AppModule {
  // 1-hour freshnessTtlMs, manufacturing staleness that isn't real. The
  // sidecar's own 10-min cache on /api/weather/local-forecast already
  // absorbs upstream load, so a fresh renderer-side call per tick is cheap.
- void (async () => {
+ // AWAITED, not fire-and-forget: recordDomainObservations REPLACES per
+ // provider, so an unawaited block lets the tick's in-flight guard release
+ // while these requests are still running — a retry then starts a second
+ // tick and the older, slower one can land LAST and overwrite the newer
+ // observations. Awaiting is free for alert latency: this block is the last
+ // thing in the tick, long after the safety-critical chip publication.
  const openMeteoReadings: TempReading[] = [];
  const metNorwayReadings: TempReading[] = [];
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
  const places = getSavedPlaces().slice(0, 3);
  await Promise.allSettled(places.map(async (place) => {
- if (!place.lat || !place.lon) return;
+ if (!isUsableLatLon(place.lat, place.lon)) return;
  const [om, mn] = await Promise.allSettled([
  fetchOpenMeteoTemp(place.lat, place.lon),
  fetchMetNorwayTemp(place.lat, place.lon),
@@ -2231,10 +2237,14 @@ export class DataLoaderManager implements AppModule {
  } catch {
  /* readings arrays may be partially populated or empty — recorded below either way */
  } finally {
- recordDomainObservations('open-meteo-forecast', tempToObservations('open-meteo-forecast', openMeteoReadings), openMeteoReadings.length > 0);
- recordDomainObservations('met-norway', tempToObservations('met-norway', metNorwayReadings), metNorwayReadings.length > 0);
+ // `ok` comes from the ADAPTER output, never the raw readings: the adapter
+ // applies the stricter validation, so a 200 carrying `tempC: 999` has
+ // readings.length 1 but yields zero observations — a phantom healthy vote.
+ const omVote = tempVote('open-meteo-forecast', openMeteoReadings);
+ const mnVote = tempVote('met-norway', metNorwayReadings);
+ recordDomainObservations('open-meteo-forecast', omVote.observations, omVote.ok);
+ recordDomainObservations('met-norway', mnVote.observations, mnVote.ok);
  }
- })();
 
  } catch (error) {
  this.ctx.map?.setLayerReady('weather', false);

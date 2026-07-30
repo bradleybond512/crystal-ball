@@ -37,6 +37,46 @@ describe('RIPE Atlas wiring', () => {
   });
 });
 
+// The surface_temp fusion block in loadWeatherAlerts. Scoped deliberately: the
+// hourly-forecast block ~30 lines ABOVE it is a separate, pre-existing
+// fire-and-forget IIFE with its own `!place.lat || !place.lon` test, and an
+// unscoped regex over the whole file would match that one instead.
+const surfaceTempBlock = (() => {
+  const start = dataLoaderSrc.indexOf('// surface_temp fusion: Open-Meteo + MET Norway per saved place.');
+  assert.notEqual(start, -1, 'surface_temp fusion block must exist in data-loader');
+  const end = dataLoaderSrc.indexOf("recordDomainObservations('met-norway'", start);
+  assert.notEqual(end, -1, 'surface_temp block must record met-norway');
+  return dataLoaderSrc.slice(start, end + 200);
+})();
+
+describe('surface_temp fusion data-loader wiring', () => {
+  it('the block is awaited, not fire-and-forget', () => {
+    // recordDomainObservations REPLACES per provider. Unawaited, the tick's
+    // in-flight guard releases while these requests are still running, so a
+    // retry can start a second tick whose newer observations are then
+    // overwritten by the older, slower one landing last.
+    assert.match(surfaceTempBlock, /await Promise\.allSettled\(places\.map\(/);
+    assert.doesNotMatch(surfaceTempBlock, /void \(async \(\)/, 'surface_temp fetches must not be fire-and-forget');
+  });
+
+  it('coordinates are range-checked, never truthiness-tested', () => {
+    // `!place.lat || !place.lon` skips longitude 0 (London, Accra) and
+    // latitude 0 — after which both providers are recorded empty for that place.
+    assert.match(surfaceTempBlock, /isUsableLatLon\(place\.lat, place\.lon\)/);
+    assert.doesNotMatch(surfaceTempBlock, /!place\.lat \|\| !place\.lon/);
+  });
+
+  it('the health verdict comes from the adapter output, not the raw readings', () => {
+    // Recording ok from `readings.length > 0` greens a provider whose rows the
+    // adapter drops — a phantom vote toward "verified by N independent sources".
+    assert.match(surfaceTempBlock, /tempVote\('open-meteo-forecast', openMeteoReadings\)/);
+    assert.match(surfaceTempBlock, /tempVote\('met-norway', metNorwayReadings\)/);
+    assert.match(surfaceTempBlock, /recordDomainObservations\('open-meteo-forecast', omVote\.observations, omVote\.ok\)/);
+    assert.match(surfaceTempBlock, /recordDomainObservations\('met-norway', mnVote\.observations, mnVote\.ok\)/);
+    assert.doesNotMatch(surfaceTempBlock, /readings\.length > 0/, 'ok must never be derived from the raw readings array');
+  });
+});
+
 describe('World Bank data-loader wiring', () => {
   it('data-loader imports fetchWorldBankProfile', () => {
     assert.match(dataLoaderSrc, /fetchWorldBankProfile/);

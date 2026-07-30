@@ -1,7 +1,31 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { haversineKm, filterNearby } from '../geo-math.ts';
+import { haversineKm, filterNearby, isUsableLatLon } from '../geo-math.ts';
+
+test('isUsableLatLon accepts zero coordinates — Greenwich and the equator are real places', () => {
+  // The bug this replaces: `if (!place.lat || !place.lon) return;`. Longitude 0
+  // runs through London and Accra, latitude 0 through Quito and Nairobi, and a
+  // truthiness test silently skips every saved place on either line — after
+  // which both surface_temp providers get recorded empty for that place.
+  assert.equal(isUsableLatLon(51.4779, 0), true, 'Greenwich, lon 0');
+  assert.equal(isUsableLatLon(0, 32.5), true, 'equator, lat 0');
+  assert.equal(isUsableLatLon(0, 0), true, 'Null Island is still a valid coordinate');
+});
+
+test('isUsableLatLon rejects non-numeric, non-finite and out-of-range coordinates', () => {
+  assert.equal(isUsableLatLon(undefined, -86.7), false);
+  assert.equal(isUsableLatLon(41.6, null), false);
+  assert.equal(isUsableLatLon('41.6', -86.7), false, 'a numeric string is not a coordinate');
+  assert.equal(isUsableLatLon(Number.NaN, -86.7), false);
+  assert.equal(isUsableLatLon(41.6, Number.POSITIVE_INFINITY), false);
+  assert.equal(isUsableLatLon(91, 0), false, 'latitude above the pole');
+  assert.equal(isUsableLatLon(-91, 0), false);
+  assert.equal(isUsableLatLon(0, 181), false, 'longitude past the antimeridian');
+  assert.equal(isUsableLatLon(0, -181), false);
+  assert.equal(isUsableLatLon(90, 180), true, 'the range bounds themselves are valid');
+  assert.equal(isUsableLatLon(-90, -180), true);
+});
 
 test('haversineKm measures ~50km and ~500km reference pairs from the air-quality fixtures', () => {
   const near = haversineKm(41.6, -87.06, 42.05, -87.06);

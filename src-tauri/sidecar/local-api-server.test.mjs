@@ -3152,6 +3152,25 @@ test('parseGfzKp survives mismatched column lengths and non-object payloads', ()
   assert.deepEqual(parseGfzKp({ datetime: '2026-07-30T06:00:00Z', Kp: 0.333 }), []);
 });
 
+test('parseGfzKp resolves a suffix-less datetime as UTC, not host-local', () => {
+  // GFZ is zone-explicit today. If it ever drops the Z — the same upstream
+  // format assumption that left the NOAA normalizer dead for three months —
+  // a host-local parse would stay finite, return 200, report ok:true, and bin
+  // hours off NOAA's, giving two disjoint sets of permanent 1-vote facts with
+  // both providers green. TZ is forced non-UTC because on a UTC host this
+  // assertion cannot fail and would be theatre.
+  const restoreTz = swapEnv('TZ', 'America/Chicago');
+  try {
+    const [naive] = parseGfzKp({ datetime: ['2026-07-30T06:00:00'], Kp: [1.333] });
+    const [zoned] = parseGfzKp({ datetime: ['2026-07-30T06:00:00Z'], Kp: [1.333] });
+    assert.ok(naive && zoned);
+    assert.equal(naive.observedAt, zoned.observedAt);
+    assert.equal(naive.observedAt, Date.parse('2026-07-30T06:00:00Z'));
+  } finally {
+    restoreTz();
+  }
+});
+
 test('/api/spaceweather-kp-gfz — requests an explicit rolling 48h window (no window is a 500 upstream)', async () => {
   const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify(GFZ_KP_LIVE_SHAPE) }));
   try {

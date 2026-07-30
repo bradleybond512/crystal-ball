@@ -11,7 +11,7 @@ import { ingestDomain } from '../../providers/fusion-ingest.ts';
 import { emptyProviderHealthState, recordFetchOutcome } from '../../providers/provider-health.ts';
 import type { ProviderHealthState } from '../../providers/provider-types.ts';
 import { fetchGfzKp, fetchSwpcKp } from '../gfz-kp-fetch.ts';
-import { KP_BIN_MS, kpToObservations } from '../kp-fusion-observations.ts';
+import { KP_BIN_MS, kpToObservations, kpVote } from '../kp-fusion-observations.ts';
 
 const NOW = Date.parse('2026-07-30T15:21:00Z');
 const BIN_12Z = Date.parse('2026-07-30T12:00:00Z');
@@ -155,10 +155,39 @@ test('an empty sample set yields no observations (the caller reports ok:false, n
   assert.deepEqual(kpToObservations('gfz-kp', []), []);
 });
 
+test('a fetch that succeeded but whose rows all get dropped votes ok:false', () => {
+  // The asymmetry this closes: the fetch layer accepts any finite kp, so a
+  // source stuck on SWPC's -1 sentinel returns rows and reports success, while
+  // kpToObservations drops every one of them. Recording that as ok:true leaves
+  // the provider green while it contributes zero votes and the domain silently
+  // falls back to one source.
+  const sentinels = [
+    { observedAt: BIN_12Z, kp: -1 },
+    { observedAt: BIN_12Z - KP_BIN_MS, kp: -1 },
+  ];
+  assert.deepEqual(kpToObservations('swpc-kp', sentinels), [], 'precondition: every row is dropped');
+
+  const vote = kpVote('swpc-kp', true, sentinels);
+  assert.deepEqual(vote.observations, []);
+  assert.equal(vote.ok, false, 'ok must follow the recorded array, not the fetch verdict');
+});
+
+test('kpVote keeps ok:true when rows survive, and stays false when the fetch failed', () => {
+  const good = [{ observedAt: BIN_12Z, kp: 1.67 }];
+  assert.equal(kpVote('gfz-kp', true, good).ok, true);
+  // A failed fetch stays failed even if it somehow carried usable rows.
+  assert.equal(kpVote('gfz-kp', false, good).ok, false);
+});
+
 // ── Fail-closed fetches ─────────────────────────────────────────────────────
 // A provider that returns nothing must record ok:false. Recording ok:true with
 // an empty sample list would leave its health green while it contributes no
 // votes — the domain silently drops to one source with nothing to show for it.
+
+// Captured once at module scope. Restoring to whatever `fetch` happened to be
+// when the stub was installed makes each t.after hook put back the PREVIOUS
+// iteration's stub, so the last one in a loop leaks a stub past the test.
+const REAL_FETCH = globalThis.fetch;
 
 function stubFetch(
   t: { after: (fn: () => void) => void },
@@ -166,7 +195,6 @@ function stubFetch(
   status = 200,
 ): { url: string } {
   const call = { url: '' };
-  const original = globalThis.fetch;
   globalThis.fetch = ((input: RequestInfo | URL) => {
     call.url = String(input);
     return Promise.resolve(new Response(JSON.stringify(payload), {
@@ -174,7 +202,7 @@ function stubFetch(
       headers: { 'content-type': 'application/json' },
     }));
   }) as typeof fetch;
-  t.after(() => { globalThis.fetch = original; });
+  t.after(() => { globalThis.fetch = REAL_FETCH; });
   return call;
 }
 
@@ -192,9 +220,10 @@ test('fetchSwpcKp reads kpPoints off the already-cached status payload', async (
   assert.match(call.url, /\/api\/spaceweather\/status$/);
 });
 
-test('fetchSwpcKp trims to the shared 48h window so the two bin sets align', async (t) => {
-  // NOAA publishes ~7 days of bins against GFZ's 48h. Untrimmed, every older
-  // NOAA bin fuses as a permanent single-vote fact.
+test('fetchSwpcKp trims to the shared 12h window so the two bin sets align', async (t) => {
+  // NOAA publishes ~7 days of bins. Untrimmed, every older NOAA bin fuses as
+  // a permanent single-vote fact; and depth past ~12h only lets a stale storm
+  // bin win the headline tie-break (see KP_FUSION_WINDOW_MS).
   stubFetch(t, { kpPoints: [{ time_tag: freshTag(40), kp: 3 }, { time_tag: freshTag(1), kp: 2 }] });
   const result = await fetchSwpcKp();
   assert.deepEqual(result.samples.map((s) => s.kp), [2]);

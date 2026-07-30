@@ -3041,8 +3041,12 @@ export async function fetchSpaceweatherStatusSidecar() {
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
     now,
   });
-  spacewxStatusCache = status;
-  spacewxStatusCachedAt = now;
+  // Don't cache a total upstream failure: serving the empty payload for the
+  // whole TTL turns one blip into every swpc-kp tick recording ok:false.
+  if (xrayRaw !== null || kpRaw !== null || cmeRaw !== null) {
+    spacewxStatusCache = status;
+    spacewxStatusCachedAt = now;
+  }
   return status;
 }
 
@@ -18399,7 +18403,10 @@ export function parseGfzKp(raw) {
   const rows = [];
   const len = Math.min(times.length, values.length);
   for (let i = 0; i < len; i += 1) {
-    const observedAt = Date.parse(String(times[i] ?? ''));
+    // Same UTC discipline as the NOAA normalizer. GFZ is zone-explicit today,
+    // but a suffix-less tag would parse host-locally, stay finite, and bin
+    // hours off NOAA's — two disjoint sets of 1-vote facts, both green.
+    const observedAt = Date.parse(toUtcIsoTag(times[i]));
     if (!Number.isFinite(observedAt) || observedAt <= 0) continue;
     // Number(null) is 0, a valid-looking quiet Kp; -1 is GFZ's missing-value
     // sentinel. Reject both before they become a fake reading.

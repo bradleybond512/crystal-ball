@@ -44,3 +44,21 @@ export function kpToObservations(providerId: string, samples: KpSample[]): Domai
   }
   return out;
 }
+
+export interface KpVote {
+  observations: DomainObservation[];
+  ok: boolean;
+}
+
+/**
+ * The health verdict and the recorded observations must come from the SAME
+ * array. The fetches accept any finite kp, but kpToObservations drops values
+ * outside 0..9 — so a source stuck on a sentinel (-1) would pass the fetch's
+ * "I got rows" check and still contribute nothing, leaving the provider green
+ * while the domain quietly runs single-source. Deriving `ok` from the output
+ * makes the two predicates incapable of drifting apart.
+ */
+export function kpVote(providerId: string, fetchOk: boolean, samples: KpSample[]): KpVote {
+  const observations = kpToObservations(providerId, samples);
+  return { observations, ok: fetchOk && observations.length > 0 };
+}

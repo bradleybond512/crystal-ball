@@ -350,7 +350,7 @@ import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
 import { fetchErApiRates, fetchFrankfurterRates, fxRatesToObservations } from '@/services/market/fx-fusion-fetch';
 import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
 import { fetchGfzKp, fetchSwpcKp } from '@/services/spaceweather/gfz-kp-fetch';
-import { kpToObservations } from '@/services/spaceweather/kp-fusion-observations';
+import { kpVote } from '@/services/spaceweather/kp-fusion-observations';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
@@ -2746,8 +2746,12 @@ export class DataLoaderManager implements AppModule {
     // orphaning any bin that fell in the gap.
     const now = Date.now();
     const [swpc, gfz] = await Promise.all([fetchSwpcKp(now), fetchGfzKp(now)]);
-    recordDomainObservations('swpc-kp', kpToObservations('swpc-kp', swpc.samples), swpc.ok);
-    recordDomainObservations('gfz-kp', kpToObservations('gfz-kp', gfz.samples), gfz.ok);
+    // kpVote derives `ok` from the same array it hands back, so a provider
+    // whose rows all get dropped records ok:false instead of green-but-silent.
+    const swpcVote = kpVote('swpc-kp', swpc.ok, swpc.samples);
+    const gfzVote = kpVote('gfz-kp', gfz.ok, gfz.samples);
+    recordDomainObservations('swpc-kp', swpcVote.observations, swpcVote.ok);
+    recordDomainObservations('gfz-kp', gfzVote.observations, gfzVote.ok);
   }
   async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
   async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }

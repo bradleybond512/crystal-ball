@@ -15,9 +15,17 @@ export interface KpFetchResult {
 }
 
 /**
- * Both sources are trimmed to the same rolling 48h so their bin sets line up.
- * NOAA publishes ~7 days of bins and GFZ's route asks for 48h; without the
- * trim NOAA's extra ~44 bins would each fuse as a permanent single-vote fact.
+ * Both sources are trimmed to the same rolling window so their bin sets line
+ * up. NOAA publishes ~7 days of bins; without the trim its extra bins would
+ * each fuse as a permanent single-vote fact.
+ *
+ * 12h, not 48h: ingestDomain's headlineFingerprints picks the fact with the
+ * most providers and breaks ties by HIGHEST VALUE. Every shared bin here has
+ * exactly two providers, so the tie-break always decides — meaning the domain
+ * verdict comes from the stormiest bin in the window, not the current one. At
+ * 48h a single threshold-straddling split would pin SourceConfidencePanel to
+ * 'redundant_disagreement' for two more days after every later bin agreed.
+ * Fusion needs overlap, not depth; 12h still leaves ~4 shared 3-hour bins.
  *
  * The caller passes ONE `now` into both fetches. Letting each read its own
  * Date.now() would put the two cutoffs however far apart the slower leg runs
@@ -25,7 +33,7 @@ export interface KpFetchResult {
  * would be kept by one source and trimmed by the other — recreating exactly
  * the orphan single-vote fact the shared window exists to prevent.
  */
-const KP_FUSION_WINDOW_MS = 48 * 60 * 60 * 1000;
+const KP_FUSION_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 // Must exceed the sidecar's 12s upstream deadline, or the renderer gives up
 // while the sidecar is still working and a slow-but-successful upstream reads

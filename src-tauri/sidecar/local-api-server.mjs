@@ -10565,19 +10565,74 @@ async function dispatch(requestUrl, req, routes, context) {
     const lat = requestUrl.searchParams.get('lat');
     const lon = requestUrl.searchParams.get('lon');
     if (!lat || !lon) return json({ error: 'lat and lon required' }, 400);
-    const cacheKey = `open-meteo-forecast-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
+    // v2: cache key bumped so a warm cache from before `current` was added
+    // can't serve a stale payload missing currentObservedAtMs.
+    const cacheKey = `open-meteo-forecast-v2-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
     const cached = getCached(cacheKey, 10 * 60 * 1000);
     if (cached) return json(cached);
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&forecast_days=3&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&current=temperature_2m&forecast_days=3&timezone=auto`;
       const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 10000);
       if (!r.ok) throw new Error(`Open-Meteo HTTP ${r.status}`);
       const data = await r.json();
-      const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
+      // timezone=auto returns offset-less LOCAL wall-clock strings (e.g.
+      // "2026-07-29T23:00"), not UTC — Date.parse would silently misread
+      // them as UTC. Normalize once here to an unambiguous epoch ms.
+      const observedAt = Date.parse(`${data.current.time}Z`) - (data.utc_offset_seconds ?? 0) * 1000;
+      const result = { ...data, currentObservedAtMs: observedAt, fetchedAt: Date.now(), source: 'open-meteo.com' };
       setCached(cacheKey, result);
       return json(result);
     } catch (error) {
       return json({ error: `open-meteo forecast error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
+    }
+  }
+
+  // ── MET Norway locationforecast (no key) ─────────────────────────────────
+  // GET /api/met-norway-temp?lat=&lon=
+  // 2nd independent source for the surface_temp fusion domain (see
+  // provider-domain-map.ts). MET Norway's TOS requires an identifying
+  // User-Agent (not the generic CHROME_UA used elsewhere in this file).
+  if (requestUrl.pathname === '/api/met-norway-temp') {
+    const lat = requestUrl.searchParams.get('lat');
+    const lon = requestUrl.searchParams.get('lon');
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    if (!lat || !lon || !Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+      return json({ error: 'lat and lon required' }, 400);
+    }
+    const cacheKey = `met-norway-temp-${latNum.toFixed(2)}-${lonNum.toFixed(2)}`;
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latNum}&lon=${lonNum}`;
+      const r = await fetchWithTimeout(
+        url,
+        { headers: { 'User-Agent': 'CrystalBall/1.0 github.com/bradleybond512/crystal-ball', Accept: 'application/json' } },
+        10000,
+      );
+      if (!r.ok) {
+        return json({ readings: [], degraded: true, reason: `met-norway upstream ${r.status}`, fetchedAt: Date.now() }, 502);
+      }
+      const data = await r.json();
+      const readings = [];
+      // MET Norway's TOS-mandated unit contract — refuse to emit a reading
+      // rather than silently fusing a mis-scaled value into surface_temp.
+      if (data?.properties?.meta?.units?.air_temperature === 'celsius') {
+        const first = data.properties.timeseries?.[0];
+        const tempC = first?.data?.instant?.details?.air_temperature;
+        const observedAt = first ? Date.parse(first.time) : NaN;
+        if (Number.isFinite(tempC) && Number.isFinite(observedAt)) {
+          readings.push({ lat: latNum, lon: lonNum, tempC, observedAt });
+        }
+      }
+      if (readings.length === 0) {
+        return json({ readings: [], degraded: true, reason: 'met-norway: no valid celsius reading', fetchedAt: Date.now() }, 502);
+      }
+      const result = { readings, fetchedAt: Date.now() };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ readings: [], degraded: true, reason: `met-norway upstream error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
     }
   }
 

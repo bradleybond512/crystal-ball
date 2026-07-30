@@ -28,7 +28,7 @@ export interface FusionDomainConfig {
   match: FactMatchConfig;
 }
 
-export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto' | 'stocks';
+export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto' | 'stocks' | 'surface_temp';
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
@@ -68,6 +68,13 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     toleranceMode: 'relative',
     numericTolerance: 0.01,
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 3 * 60_000 },
+  },
+  // Same-place same-hour temps from independent models should agree within
+  // ~2.5°C; larger gaps are real forecast disagreement worth surfacing.
+  surface_temp: {
+    providerIds: ['open-meteo-forecast', 'met-norway'],
+    numericTolerance: 2.5,
+    match: { maxDistanceKm: 25, maxTimeDeltaMs: 90 * 60_000 },
   },
 };
 

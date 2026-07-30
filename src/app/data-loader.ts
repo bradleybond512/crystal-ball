@@ -351,6 +351,9 @@ import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
+import { tempToObservations, type TempReading } from '@/services/weather/weather-fusion-observations';
+import { fetchOpenMeteoTemp } from '@/services/weather/open-meteo-temp-fetch';
+import { fetchMetNorwayTemp } from '@/services/weather/met-norway-fetch';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
 import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/services/intelligence/adapters/river-discharge-adapter';
 import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/services/intelligence/adapters/marine-forecast-adapter';
@@ -2180,6 +2183,33 @@ export class DataLoaderManager implements AppModule {
  }));
  } catch {
  /* local forecast failure is non-critical — NWS alerts are the primary source */
+ }
+ })();
+
+ // surface_temp fusion: Open-Meteo + MET Norway per saved place.
+ // recordDomainObservations REPLACES per provider rather than accumulating
+ // (see fusion-publish.ts), so every place's readings are collected into
+ // one array per provider before the single, fail-closed record call below.
+ void (async () => {
+ const openMeteoReadings: TempReading[] = [];
+ const metNorwayReadings: TempReading[] = [];
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const places = getSavedPlaces().slice(0, 3);
+ await Promise.allSettled(places.map(async (place) => {
+ if (!place.lat || !place.lon) return;
+ const [om, mn] = await Promise.allSettled([
+ fetchOpenMeteoTemp(place.lat, place.lon),
+ fetchMetNorwayTemp(place.lat, place.lon),
+ ]);
+ if (om.status === 'fulfilled' && om.value.ok) openMeteoReadings.push(...om.value.readings);
+ if (mn.status === 'fulfilled' && mn.value.ok) metNorwayReadings.push(...mn.value.readings);
+ }));
+ } catch {
+ /* readings arrays may be partially populated or empty — recorded below either way */
+ } finally {
+ recordDomainObservations('open-meteo-forecast', tempToObservations('open-meteo-forecast', openMeteoReadings), openMeteoReadings.length > 0);
+ recordDomainObservations('met-norway', tempToObservations('met-norway', metNorwayReadings), metNorwayReadings.length > 0);
  }
  })();
 

@@ -607,6 +607,8 @@ export interface MapLayers {
   // Weather overlay layers
   weatherRadar: boolean;
   weatherSatellite: boolean;
+  // ECCC FireWork 72 h wildfire-smoke PM2.5 forecast raster (GeoMet WMS)
+  smokeForecast: boolean;
   lightning: boolean;
   owmTemperature: boolean;
   owmPrecipitation: boolean;

@@ -236,9 +236,9 @@ const CHALLENGER_RUNS = [
 ] as const;
 
 const CHALLENGER_STATUS_DISPLAY: Record<ChallengerStatus, { label: string; color: string }> = {
-  promotable: { label: 'PROMOTABLE', color: '#4caf50' },
-  rejected: { label: 'REJECTED', color: '#ff453a' },
-  'insufficient-evidence': { label: 'INSUFFICIENT EVIDENCE', color: '#ffb74d' },
+  promotable: { label: 'PROMOTABLE', color: 'var(--status-ok, #4caf50)' },
+  rejected: { label: 'REJECTED', color: 'var(--status-error, #ff453a)' },
+  'insufficient-evidence': { label: 'INSUFFICIENT EVIDENCE', color: 'var(--status-warn, #ff9800)' },
 };
 
 function composeChampionStatus(): ChampionStatusView {
@@ -313,7 +313,7 @@ function renderChallengerCard(c: ChallengerRow): string {
   const evidenceStr = `${c.evidenceCount} joined pairs${domains ? ` (${domains})` : ''}`
     + (c.proxyShare > 0 ? ` · ${(c.proxyShare * 100).toFixed(0)}% proxy-resolved` : '');
   const deltasHtml = c.deltas.map((d) =>
-    `<div style="font-size:10px;color:${d.better ? '#4caf50' : 'var(--text-secondary,#aaa)'};font-family:ui-monospace,monospace;">${escapeHtml(d.explanation)}</div>`,
+    `<div style="font-size:10px;color:${d.better ? 'var(--status-ok, #4caf50)' : 'var(--text-secondary,#aaa)'};font-family:ui-monospace,monospace;">${escapeHtml(d.explanation)}</div>`,
   ).join('');
   const reasonsHtml = c.reasons.slice(0, 4).map((r) =>
     `<li>${escapeHtml(r)}</li>`,

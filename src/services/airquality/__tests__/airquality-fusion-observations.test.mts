@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
   openMeteoAqToObservations, openaqToObservations,
-  airnowToObservations, purpleairToObservations, pm25ToAqi, filterReadingsNearby,
+  airnowToObservations, purpleairToObservations, pm25ToAqi, filterReadingsNearby, bboxAround,
 } from '../airquality-fusion-observations.ts';
 import type { AirQualityReading } from '@/services/air-quality';
 import type { MonitorReading } from '@/services/airquality/openaq-service';
@@ -140,4 +140,52 @@ test('filterReadingsNearby respects the radius parameter', () => {
   const at50km = paReading({ lat: 42.05, lon: -87.06 });
   assert.equal(filterReadingsNearby([at50km], 41.6, -87.06, 100).length, 1, 'kept under a 100km radius');
   assert.equal(filterReadingsNearby([at50km], 41.6, -87.06, 10).length, 0, 'dropped under a tighter 10km radius');
+});
+
+test('bboxAround produces a box that brackets the center and matches the haversine radius', () => {
+  const box = bboxAround(41.6, -87.06, 100);
+  // 100km of latitude ≈ 0.8993°; longitude widens by 1/cos(41.6°) ≈ 1.2026°.
+  assert.ok(Math.abs(box.nwLat - 42.499) < 0.01, `nwLat ${box.nwLat}`);
+  assert.ok(Math.abs(box.seLat - 40.701) < 0.01, `seLat ${box.seLat}`);
+  assert.ok(Math.abs(box.nwLng - -88.263) < 0.01, `nwLng ${box.nwLng}`);
+  assert.ok(Math.abs(box.seLng - -85.857) < 0.01, `seLng ${box.seLng}`);
+  assert.ok(box.nwLat > 41.6 && box.seLat < 41.6, 'brackets center latitude');
+  assert.ok(box.nwLng < -87.06 && box.seLng > -87.06, 'brackets center longitude');
+});
+
+test('bboxAround contains every point filterReadingsNearby would keep', () => {
+  const box = bboxAround(41.6, -87.06, 100);
+  const at50km = paReading({ lat: 42.05, lon: -87.06 });
+  const kept = filterReadingsNearby([at50km], 41.6, -87.06, 100);
+  assert.equal(kept.length, 1);
+  assert.ok(at50km.lat <= box.nwLat && at50km.lat >= box.seLat);
+  assert.ok(at50km.lon >= box.nwLng && at50km.lon <= box.seLng);
+});
+
+test('bboxAround clamps at the poles and widens to the full longitude span', () => {
+  const box = bboxAround(89.5, 10, 100);
+  assert.equal(box.nwLat, 90);
+  assert.equal(box.nwLng, -180);
+  assert.equal(box.seLng, 180);
+});
+
+test('bboxAround uses the spherical longitude bound near the poles, not the tangent-plane approximation', () => {
+  // At lat 89° a 100km circle spans ±64.07° of longitude — latDelta/cos(lat)
+  // gives only ±51.5° and would exclude genuinely-nearby sensors upstream.
+  const box = bboxAround(89, 0, 100);
+  assert.ok(Math.abs(box.seLng - 64.07) < 0.1, `seLng ${box.seLng}`);
+  assert.ok(Math.abs(box.nwLng - -64.07) < 0.1, `nwLng ${box.nwLng}`);
+});
+
+test('bboxAround widens to the full longitude span when the box crosses the antimeridian', () => {
+  // Clamping at ±180 would silently drop a user's nearest cross-meridian
+  // sensors — sensors at -179.8° are within 100km of 179.5° but outside a
+  // clamped box, and the downstream radius filter can't recover what the
+  // upstream bbox already excluded.
+  const east = bboxAround(0, 179.5, 100);
+  assert.equal(east.nwLng, -180);
+  assert.equal(east.seLng, 180);
+  const west = bboxAround(0, -179.5, 100);
+  assert.equal(west.nwLng, -180);
+  assert.equal(west.seLng, 180);
 });

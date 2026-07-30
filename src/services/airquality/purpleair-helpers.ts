@@ -205,7 +205,8 @@ function parseV1Row(row: unknown, idx: V1FieldIdx): PurpleAirSensor | null {
     locationType: pickIdx(row, idx.locationType, 0),
     confidence:   pickIdx(row, idx.confidence, 100),
     name:         pickName(row, idx.name),
-    lastSeen:     idx.lastSeen >= 0 ? toNum(row[idx.lastSeen]) : null,
+    // v1 last_seen is unix seconds, same as the legacy endpoint's LastSeen.
+    lastSeen:     idx.lastSeen >= 0 ? toNum(row[idx.lastSeen]) * 1000 : null,
   });
 }
 

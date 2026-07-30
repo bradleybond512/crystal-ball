@@ -153,12 +153,11 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// PurpleAir's sidecar route returns every outdoor sensor globally (20-30k+),
-// unfiltered — feeding all of them into fusion means ingestDomain's per-
-// observation linear cluster scan (fusion-ingest.ts) runs against a payload
-// orders of magnitude larger than any other domain, on the renderer main
-// thread, 2-4x per 30-min tick. Cap to a radius around the reference
-// coordinate before fusion ever sees the readings.
+// Precise distance gate on top of the sidecar's bbox pre-filter: the bbox
+// corners reach ~√2 × radius from the center, and a caller that skips the
+// bbox still gets the global 20-30k-sensor payload — so cap to the true
+// radius before fusion's per-observation linear cluster scan
+// (fusion-ingest.ts) ever sees the readings.
 export function filterReadingsNearby(
   readings: readonly PurpleairReading[],
   lat: number,
@@ -166,4 +165,42 @@ export function filterReadingsNearby(
   radiusKm: number,
 ): PurpleairReading[] {
   return readings.filter((r) => haversineKm(lat, lon, r.lat, r.lon) <= radiusKm);
+}
+
+export interface SensorBoundingBox {
+  nwLng: number;
+  nwLat: number;
+  seLng: number;
+  seLat: number;
+}
+
+// PurpleAir's v1 API accepts a nwlng/nwlat/selng/selat bounding box, so the
+// sidecar can filter upstream instead of shipping every global sensor to the
+// renderer. filterReadingsNearby stays the precise gate: a widened box only
+// costs payload size, never correctness.
+export function bboxAround(lat: number, lon: number, radiusKm: number): SensorBoundingBox {
+  const radiusRad = radiusKm / EARTH_RADIUS_KM;
+  const latDelta = radiusRad * (180 / Math.PI);
+  const nwLat = Math.min(90, lat + latDelta);
+  const seLat = Math.max(-90, lat - latDelta);
+  if (nwLat >= 90 || seLat <= -90) {
+    return { nwLat, seLat, nwLng: -180, seLng: 180 };
+  }
+  // Spherical longitude bound (asin, not the tangent-plane latDelta/cos(lat)
+  // approximation, which underestimates near the poles — at lat 89° a 100km
+  // circle spans ±64.07° of longitude, not ±51.5°).
+  const sinRatio = Math.sin(radiusRad) / Math.cos(toRad(lat));
+  if (sinRatio >= 1) {
+    return { nwLat, seLat, nwLng: -180, seLng: 180 };
+  }
+  const lonDelta = Math.asin(sinRatio) * (180 / Math.PI);
+  const nwLng = lon - lonDelta;
+  const seLng = lon + lonDelta;
+  // A box crossing the antimeridian can't be expressed as one nwlng<selng
+  // pair — widen to the full span and let filterReadingsNearby trim, rather
+  // than silently dropping a user's nearest cross-meridian sensors.
+  if (nwLng < -180 || seLng > 180) {
+    return { nwLat, seLat, nwLng: -180, seLng: 180 };
+  }
+  return { nwLat, seLat, nwLng, seLng };
 }

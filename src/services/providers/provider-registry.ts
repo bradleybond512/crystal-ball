@@ -85,7 +85,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // edge, IODA infers from BGP withdrawals, active probing and darknet
   // telemetry. Different observation methods, different vantage points.
   // Sidecar route: /api/internet-outages-cf
-  { id: 'cloudflare-radar', domain: 'internet_health', displayName: 'Cloudflare Radar', authType: 'free_key', requiredSecret: 'CLOUDFLARE_API_TOKEN', baseUrl: 'https://api.cloudflare.com', rateLimitNote: 'keyed, generous free quota', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'cloudflare' },
+  { id: 'cloudflare-radar', domain: 'internet_health', displayName: 'Cloudflare Radar', authType: 'free_key', requiredSecret: 'CLOUDFLARE_API_TOKEN', baseUrl: 'https://api.cloudflare.com', rateLimitNote: 'API token scoped Account → Radar → Read; quota/tier undocumented', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'cloudflare' },
   // openFDA drug shortages + enforcement recalls. New 'health' domain. 6h cache.
   // Sidecar routes: /api/pharma-shortages · /api/recalls?type=drug|food
   { id: 'openfda', domain: 'health', displayName: 'openFDA (Shortages + Recalls)', authType: 'none', baseUrl: 'https://api.fda.gov', rateLimitNote: 'no key, 240 req/min per IP', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'openfda' },

@@ -13,9 +13,16 @@ import type { ProviderHealthState } from '../../providers/provider-health.ts';
 
 interface StubCall { url: string }
 
+// Snapshotted ONCE, at module scope, and every restore assigns these back.
+// node:test runs `t.after` hooks in REGISTRATION order, not LIFO, so a helper
+// that snapshots the CURRENT global on each call and restores it in its own
+// hook leaves the last-registered stub installed after a test that stubs more
+// than once. Restoring to the true original is order-independent.
+const REAL_FETCH = globalThis.fetch;
+const REAL_ABORT_TIMEOUT = AbortSignal.timeout;
+
 function stubFetch(t: { after: (fn: () => void) => void }, payload: unknown, status = 200): StubCall {
   const call: StubCall = { url: '' };
-  const original = globalThis.fetch;
   globalThis.fetch = ((input: RequestInfo | URL) => {
     call.url = String(input);
     return Promise.resolve(new Response(JSON.stringify(payload), {
@@ -23,9 +30,28 @@ function stubFetch(t: { after: (fn: () => void) => void }, payload: unknown, sta
       headers: { 'content-type': 'application/json' },
     }));
   }) as typeof fetch;
-  t.after(() => { globalThis.fetch = original; });
+  t.after(() => { globalThis.fetch = REAL_FETCH; });
   return call;
 }
+
+/** Captures the ms values passed to AbortSignal.timeout — the only way to read
+ *  a requested timeout back, since an AbortSignal does not expose it. */
+function spyAbortTimeout(t: { after: (fn: () => void) => void }): number[] {
+  const requested: number[] = [];
+  AbortSignal.timeout = ((ms: number) => {
+    requested.push(ms);
+    return REAL_ABORT_TIMEOUT.call(AbortSignal, ms);
+  }) as typeof AbortSignal.timeout;
+  t.after(() => { AbortSignal.timeout = REAL_ABORT_TIMEOUT; });
+  return requested;
+}
+
+// The upstream deadline each renderer fetch races. Deliberate LITERALS: they
+// mirror src-tauri/sidecar/local-api-server.mjs:17715 (IODA, 15s) and :17739
+// (Cloudflare Radar, 12s). Deriving them from the renderer constants would make
+// the assertions below true by construction.
+const SIDECAR_IODA_DEADLINE_MS = 15_000;
+const SIDECAR_CLOUDFLARE_DEADLINE_MS = 12_000;
 
 const NOW = Date.parse('2026-07-30T12:00:00.000Z');
 const RECENT = NOW - 60 * 60_000;
@@ -182,6 +208,19 @@ test('drops events older than the trailing count window', () => {
   assert.deepEqual(obs.map((o) => o.key), ['SD']);
 });
 
+test('the window edge is inclusive — an event exactly at the cutoff still counts', () => {
+  // The comparison is `startedAt < cutoff`, so an event landing exactly on
+  // NOW - OUTAGE_COUNT_WINDOW_MS is INSIDE the window. Both providers count
+  // over the same trailing window, so the two sides must agree on which way
+  // the boundary falls or a shared outage sitting on the edge reads as a
+  // disagreement. Loosening to `<=` silently drops this row.
+  const obs = outageCountsToObservations('ioda', [
+    { country: 'BF', startedAt: NOW - OUTAGE_COUNT_WINDOW_MS },
+    { country: 'SD', startedAt: NOW - OUTAGE_COUNT_WINDOW_MS - 1 },
+  ], NOW);
+  assert.deepEqual(obs.map((o) => o.key), ['BF'], 'edge is in, one ms past it is out');
+});
+
 test('drops rows with a missing country key', () => {
   const obs = outageCountsToObservations('ioda', [
     { country: '', startedAt: RECENT },
@@ -224,6 +263,36 @@ test('fetchIodaOutageEvents asks for limit=5000 over a 24h window', async (t) =>
   const until = Number(url.searchParams.get('until'));
   assert.equal(until, Math.floor(NOW / 1000));
   assert.equal(until - from, 24 * 60 * 60);
+});
+
+test('fetchIodaOutageEvents outlives the 15s deadline on the route it races', async (t) => {
+  // Each renderer timeout must STRICTLY EXCEED the sidecar deadline behind the
+  // route it calls. Aborting first kills the request before the sidecar can
+  // record its degraded response or setCached the good one, so a slow-but-
+  // successful upstream reads as a hard failure on every tick.
+  //
+  // IODA and Cloudflare race DIFFERENT deadlines (15s vs 12s), so the two
+  // constants are not interchangeable: swapping them at the call sites hands
+  // IODA a 15s timeout against a 15s deadline and reinstates the bug.
+  const requested = spyAbortTimeout(t);
+  stubFetch(t, { alerts: [] });
+  await fetchIodaOutageEvents(NOW);
+  assert.equal(requested.length, 1, 'exactly one timeout requested');
+  assert.ok(
+    requested[0]! > SIDECAR_IODA_DEADLINE_MS,
+    `IODA renderer timeout ${requested[0]}ms must exceed the route's ${SIDECAR_IODA_DEADLINE_MS}ms upstream deadline`,
+  );
+});
+
+test('fetchCloudflareRadarOutages outlives the 12s deadline on the route it races', async (t) => {
+  const requested = spyAbortTimeout(t);
+  stubFetch(t, { outages: [] });
+  await fetchCloudflareRadarOutages();
+  assert.equal(requested.length, 1, 'exactly one timeout requested');
+  assert.ok(
+    requested[0]! > SIDECAR_CLOUDFLARE_DEADLINE_MS,
+    `Cloudflare renderer timeout ${requested[0]}ms must exceed the route's ${SIDECAR_CLOUDFLARE_DEADLINE_MS}ms upstream deadline`,
+  );
 });
 
 test('fetchIodaOutageEvents reports a quiet internet as a success, not a failure', async (t) => {
@@ -360,8 +429,13 @@ test('BF counted 9 by one source and 1 by the other surfaces a disagreement', ()
   const f = r.facts[0]!;
   assert.ok(f.fusion.disagreements.length >= 1, 'disagreement surfaces');
   // Only the outlier is named, never the pair — a disagreement listing both
-  // providers would mean the consensus side got reported as dissenting.
-  assert.equal(f.fusion.disagreements[0]!.providerIds.length, 1);
+  // providers would mean the consensus side got reported as dissenting. With
+  // two size-1 clusters every tie-break in splitConsensus draws (one
+  // independence group each, one observation each, identical reliabilityWeight
+  // 0.85), so consensus falls to first-seen order and it is the SECOND
+  // provider that gets reported. Counting the ids instead would be true by
+  // construction and would pin nothing.
+  assert.deepEqual(f.fusion.disagreements[0]!.providerIds, ['cloudflare-radar']);
   assert.ok(f.fusion.confidenceMultiplier <= 0.6, 'capped at the disagreement ceiling');
   assert.ok('ioda' in f.fingerprints, 'fingerprint map names ioda');
   assert.ok('cloudflare-radar' in f.fingerprints, 'fingerprint map names cloudflare-radar');

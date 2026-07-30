@@ -160,6 +160,13 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     // reading, so the window is what has to line up; the adapter counts both
     // providers over the same 6 h (OUTAGE_COUNT_WINDOW_MS) and stamps both with
     // the same wall clock, making the real delta ~0.
+    //
+    // STRUCTURALLY INERT at the current call site, and documented rather than
+    // dropped: data-loader passes ONE `now` to both providers and the adapter
+    // stamps every observation `occurredAt: now`, so the inter-provider delta is
+    // always exactly 0 and no value >= 0 here can reject anything. The 6 h
+    // mirrors OUTAGE_COUNT_WINDOW_MS so that if the two providers ever come to
+    // be sampled on separate clocks, the gate that wakes up is the right one.
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 6 * 60 * 60_000 },
   },
 };

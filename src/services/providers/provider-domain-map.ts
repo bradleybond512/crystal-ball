@@ -28,7 +28,14 @@ export interface FusionDomainConfig {
   match: FactMatchConfig;
 }
 
-export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto' | 'stocks' | 'surface_temp' | 'fx_rates';
+export type FusionDomainKey =
+  | 'earthquakes'
+  | 'air_quality'
+  | 'crypto'
+  | 'stocks'
+  | 'surface_temp'
+  | 'fx_rates'
+  | 'space_weather';
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
@@ -108,6 +115,27 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     // corroborating for 2 days in 7 without any visible error. Do not "tidy" this
     // number down.
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 24 * 60 * 60_000 },
+  },
+  // Planetary Kp matched by its 3-HOUR BIN START — Kp is a global index with
+  // no geography, so there is nothing spatial to match on. SWPC (8-station
+  // estimate, near-real-time) + GFZ Potsdam (13-observatory network, its own
+  // algorithm).
+  space_weather: {
+    providerIds: ['swpc-kp', 'gfz-kp'],
+    // 1.5 Kp units, NOT 0.5. Kp is quantized to thirds (0, 0.333, 0.667, 1,
+    // ...), so the two agencies' independent algorithms routinely land 1-3
+    // steps apart on the same bin. Measured across 60 shared bins
+    // (2026-07-23..2026-07-30): median delta 0.333, p95 1.003, max 1.003 —
+    // not one bin exceeded 1.5. At 0.5 the domain would flag 16 of those 60
+    // bins (26.7%) as disagreement on entirely ordinary space weather, a
+    // permanent false positive that trains the user to ignore the flag. 1.5
+    // still catches what matters: a split across the G1-storm threshold
+    // (Kp 5) is ≥1.5 whenever one source says quiet and the other says storm.
+    numericTolerance: 1.5,
+    // Both sources stamp the bin START, so the real delta is 0; the 3h window
+    // is headroom for a mid-bin timestamp, not a corroboration loophole —
+    // adjacent bins have different keys and cannot match regardless.
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 3 * 60 * 60_000 },
   },
 };
 

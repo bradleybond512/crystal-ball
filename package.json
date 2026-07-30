@@ -134,7 +134,7 @@
     "test:geopolitics": "tsx --test src/services/geopolitics/__tests__/grayzone-classifier.test.mts",
     "test:finance": "tsx --test src/services/finance/__tests__/stress-monitor.test.mts",
     "test:climate": "tsx --test src/services/climate/__tests__/enso-monitor.test.mts",
-    "test:spaceweather": "tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs",
+    "test:spaceweather": "tsx --test src/services/spaceweather/__tests__/swpc-monitor.test.mts src/services/spaceweather/__tests__/globe-overlay.test.mts src/services/spaceweather/__tests__/solar-imagery.test.mts src/services/spaceweather/__tests__/kp-fusion-observations.test.mts && node --test src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs && node --import tsx --test src-tauri/sidecar/__tests__/spaceweather-imagery-parity.test.mjs",
     "test:panels:smoke": "node tests/panels/run-harness.mjs",
     "test:components": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
     "test:alerts": "tsx --test src/services/alerts/__tests__/ipaws-monitor.test.mts",

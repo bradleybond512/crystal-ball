@@ -102,6 +102,18 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   { id: 'swpc-ovation', domain: 'space_weather', displayName: 'SWPC OVATION Aurora Forecast', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'noaa-swpc' },
   // SWPC solar active regions + flare probabilities. Same 'space_weather' domain. 15 min cache.
   { id: 'swpc-solar-regions', domain: 'space_weather', displayName: 'SWPC Solar Active Regions', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'noaa-swpc' },
+  // ── space_weather Kp fusion pair (FUSION_DOMAINS.space_weather) ───────────
+  // Two agencies' planetary Kp for the same 3-hour bin. PARTIALLY overlapping
+  // inputs: SWPC's estimate uses 8 magnetometer observatories, GFZ's uses 13,
+  // and some stations feed both. Different institutions, different algorithms,
+  // different cadences — so they corroborate meaningfully and sit in separate
+  // independence groups — but they are NOT fully independent. Do not describe
+  // them as such anywhere in code or UI.
+  // The NOAA series rides on /api/spaceweather/status (`kpPoints`), which the
+  // sidecar already fetches; there is deliberately no second NOAA request.
+  { id: 'swpc-kp', domain: 'space_weather', displayName: 'SWPC Planetary Kp (estimated)', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key; 8-station estimated Kp, 3h bins', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.9, fallbackPriority: 3, independenceGroup: 'noaa-swpc' },
+  // Sidecar route: /api/spaceweather-kp-gfz
+  { id: 'gfz-kp', domain: 'space_weather', displayName: 'GFZ Potsdam Kp', authType: 'none', baseUrl: 'https://kp.gfz.de', rateLimitNote: 'no key; definitive/preliminary Kp, 3h bins', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.95, fallbackPriority: 4, independenceGroup: 'gfz' },
   // AviationWeather SIGMET/G-AIRMET airspace hazard notices. 'aviation' domain. 10 min cache.
   // Shares independenceGroup with existing aviationweather-gov — same upstream.
   // Sidecar route: /api/aviation-hazards

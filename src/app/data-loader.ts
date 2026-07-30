@@ -349,6 +349,8 @@ import { fetchCoinpaprikaPrices } from '@/services/market/coinpaprika-fetch';
 import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
 import { fetchErApiRates, fetchFrankfurterRates, fxRatesToObservations } from '@/services/market/fx-fusion-fetch';
 import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
+import { fetchGfzKp, fetchSwpcKp } from '@/services/spaceweather/gfz-kp-fetch';
+import { kpToObservations } from '@/services/spaceweather/kp-fusion-observations';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
@@ -2730,7 +2732,19 @@ export class DataLoaderManager implements AppModule {
   async loadLittleSnitch(): Promise<void> { return cyberLoaders.loadLittleSnitch(this.ctx); }
 
   // Space domain → src/app/loaders/space.ts
-  async loadSpaceWeather(): Promise<void> { return spaceLoaders.loadSpaceWeather(this.ctx); }
+  async loadSpaceWeather(): Promise<void> {
+    await spaceLoaders.loadSpaceWeather(this.ctx);
+    // Planetary Kp fusion: SWPC's 8-station estimate + GFZ Potsdam's
+    // 13-observatory index, matched on the 3-hour bin they both stamp.
+    // Exactly one record per provider per tick — recordDomainObservations
+    // REPLACES a provider's set rather than accumulating. The fetch-outcome
+    // clock stays at the default wall clock (the request really did just
+    // happen); each sample carries its own bin timestamp as occurredAt, so a
+    // source serving stale bins still reads as stale.
+    const [swpc, gfz] = await Promise.all([fetchSwpcKp(), fetchGfzKp()]);
+    recordDomainObservations('swpc-kp', kpToObservations('swpc-kp', swpc.samples), swpc.ok);
+    recordDomainObservations('gfz-kp', kpToObservations('gfz-kp', gfz.samples), gfz.ok);
+  }
   async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
   async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }
 

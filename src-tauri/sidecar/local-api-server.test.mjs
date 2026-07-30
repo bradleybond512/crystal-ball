@@ -13,6 +13,9 @@ import {
   _resetSidecarCacheForTests,
   buildOllamaSummaryMessages,
   createLocalApiServer,
+  normalizeKpPoints,
+  parseGfzKp,
+  summarizeKpSidecar,
 } from './local-api-server.mjs';
 
 test('Ollama summary prompt treats headlines as cited untrusted records', () => {
@@ -3010,6 +3013,209 @@ test('/api/fx-rates-erapi — forwards rates + time_last_update_unix and caches 
 
     await app.get('/api/fx-rates-erapi');
     assert.equal(app.calls.length, 1, 'a success is served from cache within the TTL');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+// ── space_weather Kp fusion: normalizeKpPoints + /api/spaceweather-kp-gfz ───
+// normalizeKpPoints parsed a header-row + array-of-ARRAYS payload (the SWPC
+// 1-minute product's shape) while being fed products/noaa-planetary-k-index
+// .json, which is an array of OBJECTS with a capital-K `Kp`. Every row failed
+// `Array.isArray(row)`, so the function returned [] and summarizeKpSidecar
+// returned null — the geomag block of /api/spaceweather/status was silently
+// empty for ~3 months with no error anywhere. A second bug sat underneath:
+// SWPC's `time_tag` carries no timezone suffix, so Date.parse read it as LOCAL
+// time and a UTC-5 host saw the three newest bins as FUTURE and dropped them.
+// These tests pin both, plus the GFZ route that corroborates the NOAA index.
+
+// Real payload shape, verified live 2026-07-30 (61 rows; first/last kept
+// verbatim, middles trimmed). No `Z`, no offset — naïve UTC.
+const SWPC_KP_LIVE_SHAPE = [
+  { time_tag: '2026-07-30T03:00:00', Kp: 2.33, a_running: 7, station_count: 8 },
+  { time_tag: '2026-07-30T06:00:00', Kp: 3, a_running: 7, station_count: 8 },
+  { time_tag: '2026-07-30T09:00:00', Kp: 2, a_running: 6, station_count: 8 },
+  { time_tag: '2026-07-30T12:00:00', Kp: 1.67, a_running: 6, station_count: 8 },
+];
+
+test('normalizeKpPoints reads the live array-of-objects product with a capital-K Kp', () => {
+  const points = normalizeKpPoints(SWPC_KP_LIVE_SHAPE);
+  assert.equal(points.length, 4, 'the live shape must not parse to zero rows');
+  assert.deepEqual(points.map((p) => p.kp), [2.33, 3, 2, 1.67]);
+});
+
+test('normalizeKpPoints stamps the suffix-less time_tag as explicit UTC', () => {
+  const points = normalizeKpPoints(SWPC_KP_LIVE_SHAPE);
+  assert.equal(points[3].time_tag, '2026-07-30T12:00:00Z', 'Z is appended at the normalizer, so every consumer inherits it');
+  assert.equal(Date.parse(points[3].time_tag), Date.parse('2026-07-30T12:00:00Z'));
+});
+
+test('normalizeKpPoints + summarizeKpSidecar land on the same instant in every host timezone', () => {
+  // The user's zone is America/Chicago (UTC-5). Before the fix, that host kept
+  // 8 rows in the 24h window and reported Kp 2.00, while a UTC host kept 7 and
+  // reported 1.67 — the same feed, two different answers.
+  const now = Date.parse('2026-07-30T15:21:00Z');
+  const restoreTz = swapEnv('TZ', 'UTC');
+  try {
+    const utcPoints = normalizeKpPoints(SWPC_KP_LIVE_SHAPE);
+    const utcSummary = summarizeKpSidecar(utcPoints, now);
+    swapEnv('TZ', 'America/Chicago');
+    const chicagoPoints = normalizeKpPoints(SWPC_KP_LIVE_SHAPE);
+    const chicagoSummary = summarizeKpSidecar(chicagoPoints, now);
+
+    assert.deepEqual(
+      utcPoints.map((p) => Date.parse(p.time_tag)),
+      chicagoPoints.map((p) => Date.parse(p.time_tag)),
+      'a suffix-less tag must resolve to one instant regardless of host TZ',
+    );
+    assert.deepEqual(chicagoSummary, utcSummary, 'the summary must not depend on where the machine is');
+    assert.equal(utcSummary.kp, 1.67, 'newest bin wins in both zones');
+  } finally {
+    restoreTz();
+  }
+});
+
+test('summarizeKpSidecar reports the newest bin from live-shaped data (was null for ~3 months)', () => {
+  const now = Date.parse('2026-07-30T15:21:00Z');
+  const summary = summarizeKpSidecar(normalizeKpPoints(SWPC_KP_LIVE_SHAPE), now);
+  assert.ok(summary, 'the geomag block must not be null on a healthy live payload');
+  assert.equal(summary.kp, 1.67);
+  assert.equal(summary.observedAt, '2026-07-30T12:00:00Z');
+  assert.equal(summary.kpMax24h, 3, '24h max spans the whole retained window, not just the newest bin');
+});
+
+test('normalizeKpPoints drops unusable rows without dropping the payload', () => {
+  const points = normalizeKpPoints([
+    { time_tag: '', Kp: 4 },
+    { time_tag: '2026-07-30T00:00:00', Kp: null },
+    { time_tag: '2026-07-30T03:00:00' },
+    { time_tag: '2026-07-30T06:00:00', Kp: 'not-a-number' },
+    ['2026-07-30T09:00:00', 5],
+    null,
+    { time_tag: '2026-07-30T12:00:00', Kp: 1.67 },
+  ]);
+  // `Number(null)` is 0 — a perfectly valid-looking Kp. The null row must be
+  // rejected on identity, not coerced into a fake "quiet" reading.
+  assert.deepEqual(points, [{ time_tag: '2026-07-30T12:00:00Z', kp: 1.67 }]);
+  assert.deepEqual(normalizeKpPoints(null), []);
+  assert.deepEqual(normalizeKpPoints({ Kp: [1] }), []);
+});
+
+// ── GFZ Potsdam Kp parser + route ──────────────────────────────────────────
+
+// Live shape, verified 2026-07-30: parallel COLUMN arrays, not row objects.
+const GFZ_KP_LIVE_SHAPE = {
+  datetime: ['2026-07-30T06:00:00Z', '2026-07-30T09:00:00Z', '2026-07-30T12:00:00Z'],
+  Kp: [0.333, 1.333, 0.667],
+  status: ['pre', 'pre', 'pre'],
+  meta: { source: 'GFZ' },
+};
+
+test('parseGfzKp transposes the column arrays into observation rows', () => {
+  assert.deepEqual(parseGfzKp(GFZ_KP_LIVE_SHAPE), [
+    { observedAt: Date.parse('2026-07-30T06:00:00Z'), kp: 0.333, status: 'pre' },
+    { observedAt: Date.parse('2026-07-30T09:00:00Z'), kp: 1.333, status: 'pre' },
+    { observedAt: Date.parse('2026-07-30T12:00:00Z'), kp: 0.667, status: 'pre' },
+  ]);
+});
+
+test('parseGfzKp keeps preliminary rows — filtering on "def" would leave GFZ permanently dark', () => {
+  // Definitive Kp is only certified months in arrears: probing 2026-07-15 and
+  // 2026-07-29 returned status ["pre"] for 100% of rows, and only 2026-03-01
+  // returned ["def"]. A `status === 'def'` filter fails the provider closed
+  // forever while looking like a working feed.
+  const rows = parseGfzKp(GFZ_KP_LIVE_SHAPE);
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every((r) => r.status === 'pre'), 'status is carried as provenance, never used as a filter');
+});
+
+test('parseGfzKp drops null, non-finite, and out-of-range Kp values', () => {
+  const rows = parseGfzKp({
+    datetime: [
+      '2026-07-30T00:00:00Z', '2026-07-30T03:00:00Z', '2026-07-30T06:00:00Z',
+      '2026-07-30T09:00:00Z', 'not-a-date', '2026-07-30T15:00:00Z',
+    ],
+    // -1 is GFZ's missing-value sentinel; `Number(null)` is 0, a valid-looking
+    // "quiet" Kp, so null must be rejected on identity too.
+    Kp: [null, -1, 9.5, 'x', 3, 2.667],
+    status: ['pre', 'pre', 'pre', 'pre', 'pre', 'pre'],
+  });
+  assert.deepEqual(rows, [{ observedAt: Date.parse('2026-07-30T15:00:00Z'), kp: 2.667, status: 'pre' }]);
+});
+
+test('parseGfzKp survives mismatched column lengths and non-object payloads', () => {
+  const rows = parseGfzKp({ datetime: ['2026-07-30T06:00:00Z', '2026-07-30T09:00:00Z'], Kp: [0.333] });
+  assert.deepEqual(rows.map((r) => r.kp), [0.333], 'the shorter column bounds the transpose');
+  assert.deepEqual(parseGfzKp(null), []);
+  assert.deepEqual(parseGfzKp([]), []);
+  assert.deepEqual(parseGfzKp({ datetime: '2026-07-30T06:00:00Z', Kp: 0.333 }), []);
+});
+
+test('/api/spaceweather-kp-gfz — requests an explicit rolling 48h window (no window is a 500 upstream)', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify(GFZ_KP_LIVE_SHAPE) }));
+  try {
+    await app.getJson('/api/spaceweather-kp-gfz');
+    const { hostname, path: reqPath } = app.calls[0];
+    assert.equal(hostname, 'kp.gfz.de', 'kp.gfz-potsdam.de 301-redirects here — pin the new host');
+    const query = new URL(reqPath, 'https://kp.gfz.de').searchParams;
+    assert.equal(query.get('index'), 'Kp');
+    const start = Date.parse(query.get('start'));
+    const end = Date.parse(query.get('end'));
+    assert.ok(Number.isFinite(start) && Number.isFinite(end), 'both bounds must be parseable ISO instants');
+    assert.equal(end - start, 48 * 60 * 60 * 1000, 'the window must be exactly 48h — omitting it 500s upstream');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather-kp-gfz — forwards samples and caches the success', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify(GFZ_KP_LIVE_SHAPE) }));
+  try {
+    const payload = await app.getJson('/api/spaceweather-kp-gfz');
+    assert.equal(payload.degraded, false);
+    assert.deepEqual(payload.samples.map((s) => s.kp), [0.333, 1.333, 0.667]);
+    await app.get('/api/spaceweather-kp-gfz');
+    assert.equal(app.calls.length, 1, 'a success is served from cache within the TTL');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather-kp-gfz — non-2xx upstream is a 502 and never cached', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 503, body: 'service unavailable' }));
+  try {
+    const res = await app.get('/api/spaceweather-kp-gfz');
+    assert.equal(res.status, 502);
+    const payload = await res.json();
+    assert.deepEqual(payload.samples, []);
+    assert.equal(payload.degraded, true);
+    assert.match(payload.reason, /gfz-kp upstream 503/, 'reason names the actual upstream status');
+    await app.get('/api/spaceweather-kp-gfz');
+    assert.equal(app.calls.length, 2, 'a transient upstream failure must not be cached');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather-kp-gfz — zero valid samples on HTTP 200 is degraded and never cached', async () => {
+  // Well-formed envelope, every Kp unusable — the shape check alone must not
+  // pass this through as a healthy-but-empty success.
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({ datetime: ['2026-07-30T06:00:00Z'], Kp: [null], status: ['pre'] }),
+  }));
+  try {
+    const res = await app.get('/api/spaceweather-kp-gfz');
+    assert.equal(res.status, 502);
+    const payload = await res.json();
+    assert.deepEqual(payload.samples, []);
+    assert.equal(payload.degraded, true);
+    await app.get('/api/spaceweather-kp-gfz');
+    assert.equal(app.calls.length, 2, 'an empty parse must not be cached');
   } finally {
     _resetSidecarCacheForTests();
     await app.cleanup();

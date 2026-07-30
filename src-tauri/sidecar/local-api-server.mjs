@@ -2931,6 +2931,10 @@ export function buildSpaceweatherStatusSidecar(input) {
   return {
     xray,
     geomag,
+    // Full normalized Kp series (UTC-stamped), exposed so the space_weather
+    // fusion domain can vote NOAA's bins against GFZ's without a SECOND fetch
+    // of the same upstream product.
+    kpPoints: Array.isArray(input.kpIndex) ? input.kpIndex : [],
     gpsDisruption: classifyGpsDisruptionSidecar(peakClass),
     hfRadioBlackout: !!xray && xray.peakFlux >= 1e-4,
     earthwardCmes,
@@ -2968,16 +2972,36 @@ function normalizeXrayPoints(raw) {
   return out;
 }
 
-function normalizeKpPoints(raw) {
-  // SWPC returns ["time_tag","kp_index","estimated_kp","kp"] header row + data.
-  if (!Array.isArray(raw) || raw.length < 2) return [];
+// SWPC stamps naïve UTC ("2026-07-30T12:00:00"), which Date.parse reads as
+// LOCAL time — so a UTC-5 host saw the newest bins as future-dated and
+// summarizeKpSidecar's `t > now` guard silently dropped them. Stamping the Z
+// here (rather than at each call site) means every consumer inherits the fix.
+function toUtcIsoTag(raw) {
+  const tag = String(raw ?? '').trim().replace(' ', 'T');
+  if (!tag) return '';
+  // Only a date-TIME can take a Z; appending one to a bare date yields NaN.
+  if (!/\d{2}:\d{2}/.test(tag)) return tag;
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(tag)) return tag;
+  return `${tag}Z`;
+}
+
+export function normalizeKpPoints(raw) {
+  // products/noaa-planetary-k-index.json is an array of OBJECTS with a
+  // capital-K `Kp` — NOT the header-row + array-of-arrays shape this used to
+  // parse. Every row failed the old Array.isArray(row) check, so this returned
+  // [] and the geomag block went dark for ~3 months without an error anywhere.
+  if (!Array.isArray(raw)) return [];
   const out = [];
-  for (let i = 1; i < raw.length; i += 1) {
-    const row = raw[i];
-    if (!Array.isArray(row) || row.length < 2) continue;
-    const time_tag = String(row[0] ?? '');
-    const kp = Number(row[1]);
-    if (!time_tag || !Number.isFinite(kp)) continue;
+  for (const row of raw) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const time_tag = toUtcIsoTag(row.time_tag);
+    if (!time_tag) continue;
+    // Number(null) is 0 — a plausible-looking "quiet" Kp — so reject the
+    // absent value on identity before coercing.
+    const rawKp = row.Kp;
+    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
+    const kp = Number(rawKp);
+    if (!Number.isFinite(kp)) continue;
     out.push({ time_tag, kp });
   }
   return out;
@@ -17617,6 +17641,35 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // GET /api/spaceweather-kp-gfz — GFZ Potsdam planetary Kp (~30 min cache)
+  // 2nd source for the space_weather fusion domain: GFZ computes Kp from its
+  // own 13-observatory network with its own algorithm, against SWPC's
+  // 8-station estimate. Partially overlapping observatories — corroborating,
+  // NOT fully independent.
+  //
+  // The window is mandatory: omitting start/end returns HTTP 500 upstream.
+  // The URL therefore moves every request, so the cache key is deliberately
+  // STABLE ('gfz-kp') — keying on the URL would miss on every single call.
+  if (requestUrl.pathname === '/api/spaceweather-kp-gfz' && req.method === 'GET') {
+ const GFZ_KP_TTL = 30 * 60 * 1000;
+ const cached = getCached('gfz-kp', GFZ_KP_TTL);
+ if (cached) return json(cached);
+ const nowMs = Date.now();
+ const start = new Date(nowMs - 48 * 60 * 60 * 1000).toISOString();
+ const end = new Date(nowMs).toISOString();
+ const gfzUrl = `https://kp.gfz.de/app/json/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&index=Kp`;
+ const r = await fetchWithTimeout(gfzUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ samples: [], degraded: true, reason: `gfz-kp upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ const samples = parseGfzKp(raw);
+ // A well-formed envelope carrying no usable Kp is a failure, not an empty
+ // success — and it must stay uncached so the next poll retries.
+ if (samples.length === 0) return json({ samples: [], degraded: true, reason: 'gfz-kp no valid samples' }, 502);
+ const result = { samples, fetchedAt: nowMs, degraded: false };
+ setCached('gfz-kp', result, GFZ_KP_TTL);
+ return json(result);
+  }
+
   // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
   // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
   if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {
@@ -18321,6 +18374,37 @@ export function parseFrankfurterRates(raw) {
     date: raw.date ?? null,
     rates: raw.rates,
   };
+}
+
+// ── GFZ Potsdam Kp parser ────────────────────────────────────────────────────
+// Input: parsed JSON from kp.gfz.de/app/json/?start=..&end=..&index=Kp, which
+// returns parallel COLUMN arrays ({ datetime: [...], Kp: [...], status: [...] })
+// rather than row objects. Output: transposed observation rows.
+//
+// `status` is 'def' (definitive) or 'pre' (preliminary) and is carried purely
+// as provenance — NEVER filter on it. Definitive Kp is only certified months
+// in arrears, so every row inside a live 48h window is 'pre'; a `=== 'def'`
+// filter would fail the provider closed forever while looking healthy.
+export function parseGfzKp(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const times = raw.datetime;
+  const values = raw.Kp;
+  const statuses = Array.isArray(raw.status) ? raw.status : [];
+  if (!Array.isArray(times) || !Array.isArray(values)) return [];
+  const rows = [];
+  const len = Math.min(times.length, values.length);
+  for (let i = 0; i < len; i += 1) {
+    const observedAt = Date.parse(String(times[i] ?? ''));
+    if (!Number.isFinite(observedAt) || observedAt <= 0) continue;
+    // Number(null) is 0, a valid-looking quiet Kp; -1 is GFZ's missing-value
+    // sentinel. Reject both before they become a fake reading.
+    const rawKp = values[i];
+    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
+    const kp = Number(rawKp);
+    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
+    rows.push({ observedAt, kp, status: typeof statuses[i] === 'string' ? statuses[i] : null });
+  }
+  return rows;
 }
 
 // ── IMF PortWatch parser ──────────────────────────────────────────────────────

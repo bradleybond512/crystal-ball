@@ -28,7 +28,7 @@ export interface FusionDomainConfig {
   match: FactMatchConfig;
 }
 
-export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto' | 'stocks' | 'surface_temp';
+export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto' | 'stocks' | 'surface_temp' | 'fx_rates';
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
@@ -83,6 +83,31 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     providerIds: ['open-meteo-forecast', 'met-norway'],
     numericTolerance: 2.5,
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 90 * 60_000 },
+  },
+  // USD-based FX rates matched by CURRENCY CODE. Frankfurter (ECB daily
+  // reference fixing) + open.er-api (continuously-updated aggregator).
+  fx_rates: {
+    providerIds: ['frankfurter-fx', 'er-api-fx'],
+    toleranceMode: 'relative',
+    // 1%, NOT 0.5%. Live side-by-side probe of both upstreams in the same
+    // minute (2026-07-30): EUR 0.87873 vs 0.875576 = 0.36% apart, GBP 0.24%,
+    // JPY 0.09%. The two sources differ structurally — a daily fixing vs a
+    // continuous aggregate — so a small persistent gap is expected, not a
+    // defect. At 0.5% EUR would flip to "disagreement" on an ordinary day, a
+    // permanent false positive that trains the user to ignore the flag. 1%
+    // still catches a genuinely broken feed: a stale-by-days rate or a wrong
+    // base currency moves far more than 1%. Relative, not absolute: the
+    // measured absolute gaps span JPY 0.149 and KRW 3.36 down to SEK 0.028,
+    // all ≤0.36% relative, so one absolute band cannot fit both ends.
+    numericTolerance: 0.01,
+    // 5 days, NOT the minutes-scale window the spatial domains use. Frankfurter
+    // stamps observations with the ECB *fixing date* (UTC midnight) and the ECB
+    // does not publish on weekends or TARGET holidays — a Sunday query returns
+    // Friday's fixing, so the two sources sit ~48 h apart every weekend and ~72 h
+    // apart on Monday morning. Anything tighter makes this domain stop
+    // corroborating for 2 days in 7 without any visible error. Do not "tidy" this
+    // number down.
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 24 * 60 * 60_000 },
   },
 };
 

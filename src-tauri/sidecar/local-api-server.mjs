@@ -17595,6 +17595,28 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // GET /api/fx-rates-erapi — open.er-api.com USD rates (~6h cache)
+  // 2nd independent source for the fx_rates fusion domain (see
+  // provider-domain-map.ts). Structurally independent of Frankfurter: a
+  // continuously-updated aggregator rather than the ECB daily reference
+  // fixing. Failure is signalled in the BODY (`result: "error"`) as well as
+  // by status, and neither shape is cached — a transient upstream blip must
+  // not pin the domain dark for the whole TTL.
+  if (requestUrl.pathname === '/api/fx-rates-erapi' && req.method === 'GET') {
+ const ERAPI_TTL = 6 * 60 * 60 * 1000;
+ const cached = getCached('er-api-fx', ERAPI_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: `er-api upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ if (raw?.result !== 'success' || !raw.rates || typeof raw.rates !== 'object') {
+ return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: `er-api result "${raw?.result ?? 'unparseable'}"` }, 502);
+ }
+ const result = { rates: raw.rates, time_last_update_unix: raw.time_last_update_unix ?? null, fetchedAt: Date.now(), degraded: false };
+ setCached('er-api-fx', result, ERAPI_TTL);
+ return json(result);
+  }
+
   // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
   // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
   if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {

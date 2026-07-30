@@ -347,6 +347,7 @@ import { fetchFmpPrices } from '@/services/market/fmp-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
 import { fetchCoinpaprikaPrices } from '@/services/market/coinpaprika-fetch';
 import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
+import { fetchErApiRates, fetchFrankfurterRates, fxRatesToObservations } from '@/services/market/fx-fusion-fetch';
 import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
@@ -1463,6 +1464,16 @@ export class DataLoaderManager implements AppModule {
    fmp.quotes.map((q) => ({ providerId: 'fmp', key: q.symbol.toUpperCase(), value: q.price, lat: 0, lon: 0, occurredAt: q.observedAt })),
    fmp.ok);
  recordFusedSpotPrices(getLatestFusion('stocks', finnhubObservedAt).facts);
+ // USD FX rate fusion: Frankfurter (ECB daily fixing) + open.er-api
+ // (continuous aggregator), matched by currency code. Both stamp their rows
+ // with the instant the quote refers to — the ECB fixing date, or er-api's
+ // own update time — NOT the fetch time, so a source serving a week-old rate
+ // reads as a week old. The fetch-outcome clock stays at "now" (default),
+ // since the request itself did just happen.
+ const frankfurter = await fetchFrankfurterRates();
+ recordDomainObservations('frankfurter-fx', fxRatesToObservations('frankfurter-fx', frankfurter.rates, frankfurter.observedAt), frankfurter.ok);
+ const erApi = await fetchErApiRates();
+ recordDomainObservations('er-api-fx', fxRatesToObservations('er-api-fx', erApi.rates, erApi.observedAt), erApi.ok);
   }
 
   async loadPredictions(): Promise<void> {

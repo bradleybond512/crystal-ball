@@ -2939,3 +2939,71 @@ test('/api/met-norway-temp — empty timeseries is a 502 and never cached', asyn
     await app.cleanup();
   }
 });
+
+// ── fx_rates fusion route contract (open.er-api, 2nd fx source) ─────────────
+// The upstream signals failure in the BODY (`result: "error"`) as well as by
+// status code, and api.frankfurter.dev was observed serving a transient
+// Cloudflare 522 during probing — so a degraded response must never be
+// cached, or one unlucky minute pins the domain dark for the whole 6h TTL.
+
+test('/api/fx-rates-erapi — upstream result "error" is a 502 and never cached', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({ result: 'error', 'error-type': 'unsupported-code' }),
+  }));
+  try {
+    const res = await app.get('/api/fx-rates-erapi');
+    assert.equal(res.status, 502, 'a 200 carrying result:"error" is still a failure');
+    const payload = await res.json();
+    assert.deepEqual(payload.rates, {});
+    assert.equal(payload.degraded, true);
+    assert.match(payload.reason, /error/, 'reason names the upstream result');
+    await app.get('/api/fx-rates-erapi');
+    assert.equal(app.calls.length, 2, 'a body-level failure must not be cached');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/fx-rates-erapi — non-2xx upstream is a 502 and never cached', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 522, body: 'origin connection time-out' }));
+  try {
+    const res = await app.get('/api/fx-rates-erapi');
+    assert.equal(res.status, 502);
+    const payload = await res.json();
+    assert.deepEqual(payload.rates, {});
+    assert.equal(payload.degraded, true);
+    assert.match(payload.reason, /522/, 'reason names the upstream status');
+    await app.get('/api/fx-rates-erapi');
+    assert.equal(app.calls.length, 2, 'a transient upstream 5xx must not be cached');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/fx-rates-erapi — forwards rates + time_last_update_unix and caches the success', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({
+      result: 'success',
+      base_code: 'USD',
+      time_last_update_unix: 1_785_369_751,
+      rates: { USD: 1, EUR: 0.875_576, GBP: 0.744_054 },
+    }),
+  }));
+  try {
+    const payload = await app.getJson('/api/fx-rates-erapi');
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.time_last_update_unix, 1_785_369_751, 'epoch SECONDS forwarded verbatim; the renderer does the x1000');
+    assert.deepEqual(payload.rates, { USD: 1, EUR: 0.875_576, GBP: 0.744_054 });
+    assert.match(app.calls[0].path, /\/v6\/latest\/USD/);
+
+    await app.get('/api/fx-rates-erapi');
+    assert.equal(app.calls.length, 1, 'a success is served from cache within the TTL');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});

@@ -17721,6 +17721,33 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // GET /api/internet-outages-cf — Cloudflare Radar outage annotations (~15 min cache)
+  // 2nd source for the internet_outages fusion domain: Cloudflare observes
+  // traffic drops across its own edge, against IODA's BGP/active-probing/
+  // darknet detection — different methodology, genuinely independent.
+  //
+  // An empty annotation list is a SUCCESS, not a failure: a quiet internet is
+  // a real observation, and failing it closed would make the domain go dark
+  // exactly when nothing is wrong.
+  if (requestUrl.pathname === '/api/internet-outages-cf' && req.method === 'GET') {
+ const CF_OUTAGES_TTL = 15 * 60 * 1000;
+ const cached = getCached('cf-radar-outages', CF_OUTAGES_TTL);
+ if (cached) return json(cached);
+ const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+ if (!cfToken) return json({ outages: [], degraded: true, reason: 'no Cloudflare API token' });
+ const cfUrl = 'https://api.cloudflare.com/client/v4/radar/annotations/outages?dateRange=1d&limit=100&format=json';
+ const r = await fetchWithTimeout(cfUrl, { headers: { Accept: 'application/json', Authorization: `Bearer ${cfToken}` } }, 12_000);
+ if (!r.ok) return json({ outages: [], degraded: true, reason: `cloudflare radar upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ if (!raw || !Array.isArray(raw?.result?.annotations)) {
+ return json({ outages: [], degraded: true, reason: 'cloudflare radar unparseable envelope' }, 502);
+ }
+ const outages = parseCloudflareRadarOutages(raw);
+ const result = { outages, fetchedAt: Date.now(), degraded: false };
+ setCached('cf-radar-outages', result, CF_OUTAGES_TTL);
+ return json(result);
+  }
+
   // GET /api/pharma-shortages — openFDA drug shortage database (~6h cache)
   if (requestUrl.pathname === '/api/pharma-shortages' && req.method === 'GET') {
  const FDA_TTL = 6 * 60 * 60 * 1000;
@@ -18479,6 +18506,28 @@ export function parseIodaAlerts(raw) {
     condition: alert?.condition ?? null,
     method: alert?.method ?? null,
   }));
+}
+
+// ── Cloudflare Radar outage annotation parser ────────────────────────────────
+// Input: parsed JSON from api.cloudflare.com/client/v4/radar/annotations/outages
+// Output: one row per (annotation, location) pair — { country: <ISO2>, startedAt: <ms> }.
+// `locations` is a required ISO2 string[] and `startDate` a required Z-suffixed
+// date-time, so Date.parse reads it as UTC. Do NOT add a defensive 'Z' append
+// here: it would corrupt an already-offset string.
+export function parseCloudflareRadarOutages(raw) {
+  const annotations = raw?.result?.annotations;
+  if (!Array.isArray(annotations)) return [];
+  const rows = [];
+  for (const a of annotations) {
+    const startedAt = typeof a?.startDate === 'string' ? Date.parse(a.startDate) : Number.NaN;
+    if (!Number.isFinite(startedAt)) continue;
+    if (!Array.isArray(a?.locations)) continue;
+    for (const code of a.locations) {
+      if (typeof code !== 'string' || code.trim() === '') continue;
+      rows.push({ country: code.trim().toUpperCase(), startedAt });
+    }
+  }
+  return rows;
 }
 
 // ── openFDA drug shortage parser ─────────────────────────────────────────────

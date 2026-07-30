@@ -11,6 +11,7 @@
  *   - ORNL ODIN power outages (parseOdinOutages)
  *   - Copernicus EMS activations (parseCopernicusActivations)
  *   - GLEIF LEI entity lookup (parseGleifLeiRecords)
+ *   - Cloudflare Radar outage annotations (parseCloudflareRadarOutages)
  */
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
@@ -26,6 +27,7 @@ import {
   parseOdinOutages,
   parseCopernicusActivations,
   parseGleifLeiRecords,
+  parseCloudflareRadarOutages,
 } from '../local-api-server.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
@@ -266,4 +268,55 @@ test('parseGleifLeiRecords: returns empty for missing data array', () => {
   assert.deepEqual(parseGleifLeiRecords(null), []);
   assert.deepEqual(parseGleifLeiRecords({}), []);
   assert.deepEqual(parseGleifLeiRecords({ data: [] }), []);
+});
+
+// ── Cloudflare Radar outage annotations ───────────────────────────────────────
+
+test('parseCloudflareRadarOutages: one row per (annotation, location) pair', () => {
+  const rows = parseCloudflareRadarOutages({
+    result: {
+      annotations: [
+        { startDate: '2026-07-30T04:15:00Z', locations: ['SD', 'ER'] },
+        { startDate: '2026-07-30T09:00:00Z', locations: ['BF'] },
+      ],
+    },
+  });
+  assert.deepEqual(rows, [
+    { country: 'SD', startedAt: Date.parse('2026-07-30T04:15:00Z') },
+    { country: 'ER', startedAt: Date.parse('2026-07-30T04:15:00Z') },
+    { country: 'BF', startedAt: Date.parse('2026-07-30T09:00:00Z') },
+  ]);
+});
+
+test('parseCloudflareRadarOutages: startDate is Z-suffixed, so no local-time drift', () => {
+  // Guards the timestamp-honesty rule from the other direction: Cloudflare
+  // always sends UTC, so Date.parse is correct as-is and a defensive 'Z'
+  // append would corrupt it. This assertion is only meaningful because the
+  // suite also runs under TZ=America/Chicago.
+  const [row] = parseCloudflareRadarOutages({
+    result: { annotations: [{ startDate: '2026-07-30T04:15:00Z', locations: ['SD'] }] },
+  });
+  assert.equal(new Date(row.startedAt).toISOString(), '2026-07-30T04:15:00.000Z');
+});
+
+test('parseCloudflareRadarOutages: drops rows with an unusable date or location', () => {
+  const rows = parseCloudflareRadarOutages({
+    result: {
+      annotations: [
+        { startDate: 'not-a-date', locations: ['SD'] },
+        { locations: ['SD'] },
+        { startDate: '2026-07-30T04:15:00Z' },
+        { startDate: '2026-07-30T04:15:00Z', locations: ['', '  ', 7] },
+        { startDate: '2026-07-30T04:15:00Z', locations: ['bf'] },
+      ],
+    },
+  });
+  assert.deepEqual(rows, [{ country: 'BF', startedAt: Date.parse('2026-07-30T04:15:00Z') }]);
+});
+
+test('parseCloudflareRadarOutages: returns empty for a missing annotations array', () => {
+  assert.deepEqual(parseCloudflareRadarOutages(null), []);
+  assert.deepEqual(parseCloudflareRadarOutages({}), []);
+  assert.deepEqual(parseCloudflareRadarOutages({ result: {} }), []);
+  assert.deepEqual(parseCloudflareRadarOutages({ result: { annotations: [] } }), []);
 });

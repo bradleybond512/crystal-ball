@@ -35,7 +35,8 @@ export type FusionDomainKey =
   | 'stocks'
   | 'surface_temp'
   | 'fx_rates'
-  | 'space_weather';
+  | 'space_weather'
+  | 'internet_outages';
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
@@ -136,6 +137,30 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     // is headroom for a mid-bin timestamp, not a corroboration loophole —
     // adjacent bins have different keys and cannot match regardless.
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 3 * 60 * 60_000 },
+  },
+  // Per-country outage-onset counts matched by ISO2 COUNTRY CODE — a country
+  // has no single coordinate, so there is nothing spatial to match on. IODA
+  // (BGP withdrawals + active probing + darknet) + Cloudflare Radar (traffic
+  // drop at Cloudflare's own edge).
+  //
+  // Note the naming: the fusion key is `internet_outages`, the registry domain
+  // both providers carry is `internet_health`. That is deliberate, not a typo —
+  // the registry groups sources by subject area, this map keys the fused fact.
+  internet_outages: {
+    providerIds: ['ioda', 'cloudflare-radar'],
+    // 3 onsets, and deliberately loose. The two methodologies count different
+    // things: IODA raises a row per (country, detection method) so one national
+    // outage can surface up to 3 times, while Cloudflare curates roughly one
+    // annotation per event. A 1-2 gap on a real shared outage is the expected
+    // steady state, not a defect; 3 absorbs it while still flagging the case
+    // that matters — one source seeing a national-scale multi-outage cascade
+    // the other has not noticed at all.
+    numericTolerance: 3,
+    // 6 h. Both sides report a COUNT over a trailing window rather than a point
+    // reading, so the window is what has to line up; the adapter counts both
+    // providers over the same 6 h (OUTAGE_COUNT_WINDOW_MS) and stamps both with
+    // the same wall clock, making the real delta ~0.
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 6 * 60 * 60_000 },
   },
 };
 

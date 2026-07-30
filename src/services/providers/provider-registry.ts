@@ -80,6 +80,12 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // IODA internet outage alerts. New 'internet_health' domain. 15 min cache.
   // Sidecar route: /api/internet-outages?from=<epoch>&until=<epoch>
   { id: 'ioda', domain: 'internet_health', displayName: 'IODA Internet Outages (Georgia Tech)', authType: 'none', baseUrl: 'https://api.ioda.inetintel.cc.gatech.edu', rateLimitNote: 'no key required, fair-use', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ioda' },
+  // Cloudflare Radar outage annotations — the 2nd internet_health voter.
+  // Genuinely independent of IODA: Cloudflare sees traffic drops at its own
+  // edge, IODA infers from BGP withdrawals, active probing and darknet
+  // telemetry. Different observation methods, different vantage points.
+  // Sidecar route: /api/internet-outages-cf
+  { id: 'cloudflare-radar', domain: 'internet_health', displayName: 'Cloudflare Radar', authType: 'free_key', requiredSecret: 'CLOUDFLARE_API_TOKEN', baseUrl: 'https://api.cloudflare.com', rateLimitNote: 'keyed, generous free quota', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'cloudflare' },
   // openFDA drug shortages + enforcement recalls. New 'health' domain. 6h cache.
   // Sidecar routes: /api/pharma-shortages · /api/recalls?type=drug|food
   { id: 'openfda', domain: 'health', displayName: 'openFDA (Shortages + Recalls)', authType: 'none', baseUrl: 'https://api.fda.gov', rateLimitNote: 'no key, 240 req/min per IP', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'openfda' },

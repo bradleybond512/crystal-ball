@@ -1,0 +1,378 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  fetchCloudflareRadarOutages,
+  fetchIodaOutageEvents,
+  iodaAlertsToEvents,
+} from '../cloudflare-radar-fetch.ts';
+import { outageCountsToObservations } from '../outage-fusion-observations.ts';
+import { ingestDomain } from '../../providers/fusion-ingest.ts';
+import { emptyProviderHealthState, recordFetchOutcome } from '../../providers/provider-health.ts';
+import type { ProviderHealthState } from '../../providers/provider-health.ts';
+
+interface StubCall { url: string }
+
+function stubFetch(t: { after: (fn: () => void) => void }, payload: unknown, status = 200): StubCall {
+  const call: StubCall = { url: '' };
+  const original = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL) => {
+    call.url = String(input);
+    return Promise.resolve(new Response(JSON.stringify(payload), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    }));
+  }) as typeof fetch;
+  t.after(() => { globalThis.fetch = original; });
+  return call;
+}
+
+const NOW = Date.parse('2026-07-30T12:00:00.000Z');
+const RECENT = NOW - 60 * 60_000;
+const RECENT_SEC = RECENT / 1000;
+
+function healthyBoth(now: number): ProviderHealthState {
+  let s = emptyProviderHealthState();
+  for (const id of ['ioda', 'cloudflare-radar']) {
+    s = recordFetchOutcome(s, id, { ok: true, latencyMs: 100, at: now });
+  }
+  return s;
+}
+
+// ── iodaAlertsToEvents ──────────────────────────────────────────────────────
+
+test('three normal rows plus one alert for BF count as one outage onset, not four', () => {
+  // /outages/alerts is an alert-TRANSITION feed: `level: 'normal'` rows are
+  // RECOVERIES. Over a live 24h window they are roughly half the payload
+  // (measured 2026-07-30: 891 normal vs 925 critical), so counting rows
+  // without the level filter roughly doubles every country and reports a
+  // permanent global outage storm.
+  //
+  // The four rows carry four different datasources so the (code, datasource)
+  // dedupe cannot mask the filter — without `level !== 'normal'` this yields 4.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'normal', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BF', datasource: 'ping-slash24', level: 'normal', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BF', datasource: 'merit-nt', level: 'normal', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BF', datasource: 'gtr', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.deepEqual(events, [{ country: 'BF', startedAt: RECENT }]);
+});
+
+test("'critical' is the ordinary alert level, not a major-outage marker", () => {
+  // IODA has no warning tier — every non-recovery row is 'critical'. A count
+  // built from these is an ALERT-ROW count, never a "major outage" count, and
+  // nothing downstream may relabel it as one.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'IR', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.equal(events.length, 1);
+});
+
+test('never filters on `condition`, which is a threshold string', () => {
+  // Live values are 'normal', '< 0.99', '< 0.95', '< 0.8', '< 0.25' — a
+  // threshold expression, not a status word. `condition === 'outage'` (or any
+  // similar guess) matches nothing and silently empties the feed.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'SD', datasource: 'bgp', level: 'critical', condition: '< 0.25', from: RECENT_SEC },
+  ] as Parameters<typeof iodaAlertsToEvents>[0]);
+  assert.deepEqual(events.map((e) => e.country), ['SD']);
+});
+
+test('drops region and ASN rows, keeping only countries', () => {
+  // entityCode is only an ISO2 code for entityType 'country'. Region codes
+  // ('BF-01') and ASN numbers are a different namespace entirely, and under
+  // matchBy:'key' they would either sit as permanent singletons or collide
+  // with a real country key. Live 24h mix: 44 country rows against 275 region,
+  // 763 asn and 734 geoasn.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'region', entityCode: 'BF-01', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'asn', entityCode: '12345', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'geoasn', entityCode: 'BF-12345', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.deepEqual(events.map((e) => e.country), ['BF']);
+});
+
+test('drops rows with a missing or empty entity code', () => {
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: '', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'country', entityCode: '   ', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'country', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.deepEqual(events.map((e) => e.country), ['BF']);
+});
+
+test('dedupes repeated rows for the same country and datasource', () => {
+  // One detection method re-asserting the same country inside the window is
+  // one outage, not three. Without the dedupe this counts 3.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC + 600 },
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC + 1200 },
+  ]);
+  assert.deepEqual(events, [{ country: 'BF', startedAt: RECENT }], 'first occurrence wins');
+});
+
+test('one country seen by two different datasources counts twice', () => {
+  // Deliberate, and the reason FUSION_DOMAINS.internet_outages sets
+  // numericTolerance to 3: IODA raises a row per detection method, so a single
+  // national outage can inflate to 2-3 against Cloudflare's one-annotation-per-
+  // event counting. The dedupe key is (entityCode, datasource) — deduping on
+  // the country alone would pin every value at 0 or 1, which would make the
+  // count carry no information and the tolerance meaningless.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BF', datasource: 'ping-slash24', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.equal(events.length, 2);
+});
+
+test('converts IODA `from` from unix seconds to ms and normalizes the code', () => {
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: ' bf ', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.deepEqual(events, [{ country: 'BF', startedAt: RECENT }]);
+});
+
+test('drops rows with an unusable timestamp', () => {
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'AA', datasource: 'bgp', level: 'critical', from: Number.NaN },
+    { entityType: 'country', entityCode: 'BB', datasource: 'bgp', level: 'critical', from: 0 },
+    { entityType: 'country', entityCode: 'CC', datasource: 'bgp', level: 'critical', from: '1785369751' },
+    { entityType: 'country', entityCode: 'DD', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+  ]);
+  assert.deepEqual(events.map((e) => e.country), ['DD']);
+});
+
+test('an all-normal payload yields no events, which is a quiet internet not a failure', () => {
+  assert.deepEqual(iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'normal', from: RECENT_SEC },
+  ]), []);
+});
+
+// ── outageCountsToObservations ──────────────────────────────────────────────
+
+test('counts onsets per country into key-matched observations stamped with the wall clock', () => {
+  const obs = outageCountsToObservations('ioda', [
+    { country: 'BF', startedAt: RECENT },
+    { country: 'BF', startedAt: RECENT + 600_000 },
+    { country: 'SD', startedAt: RECENT },
+  ], NOW);
+  assert.deepEqual(obs, [
+    { providerId: 'ioda', key: 'BF', value: 2, lat: 0, lon: 0, occurredAt: NOW },
+    { providerId: 'ioda', key: 'SD', value: 1, lat: 0, lon: 0, occurredAt: NOW },
+  ]);
+});
+
+test('drops events older than the trailing count window', () => {
+  // Both providers must count over the SAME window or their numbers are not
+  // comparable and every shared country reads as a disagreement.
+  const obs = outageCountsToObservations('ioda', [
+    { country: 'BF', startedAt: NOW - 7 * 60 * 60_000 },
+    { country: 'SD', startedAt: RECENT },
+  ], NOW);
+  assert.deepEqual(obs.map((o) => o.key), ['SD']);
+});
+
+test('drops rows with a missing country key', () => {
+  const obs = outageCountsToObservations('ioda', [
+    { country: '', startedAt: RECENT },
+    { country: '   ', startedAt: RECENT },
+    { country: 'BF', startedAt: RECENT },
+  ], NOW);
+  assert.deepEqual(obs.map((o) => o.key), ['BF']);
+});
+
+test("''-keyed rows from both providers would fuse into one bogus corroborated fact", () => {
+  // Why the empty-key guard exists: matchBy:'key' ignores distance entirely,
+  // so '' is a perfectly good cluster key and two junk rows corroborate each
+  // other into a 2-vote "fact" about a country that does not exist.
+  const junk = ingestDomain('internet_outages', [
+    { providerId: 'ioda', key: '', value: 1, lat: 0, lon: 0, occurredAt: NOW },
+    { providerId: 'cloudflare-radar', key: '', value: 1, lat: 0, lon: 0, occurredAt: NOW },
+  ], healthyBoth(NOW), NOW);
+  assert.equal(junk.facts.length, 1);
+  assert.equal(junk.facts[0]!.providerIds.length, 2, 'two junk rows corroborate each other — exactly what the guard stops');
+
+  const guarded = ingestDomain('internet_outages', [
+    ...outageCountsToObservations('ioda', [{ country: '', startedAt: RECENT }], NOW),
+    ...outageCountsToObservations('cloudflare-radar', [{ country: '', startedAt: RECENT }], NOW),
+  ], healthyBoth(NOW), NOW);
+  assert.equal(guarded.facts.length, 0, 'the adapter drops them before they can fuse');
+});
+
+// ── IODA fetch ──────────────────────────────────────────────────────────────
+
+test('fetchIodaOutageEvents asks for limit=5000 over a 24h window', async (t) => {
+  // The shared route defaults to limit=50 and IODA returns rows ASCENDING, so
+  // the limit truncates the NEWEST rows. At 50 the fusion path would see only
+  // the oldest sliver of the day and still report success.
+  const call = stubFetch(t, { alerts: [] });
+  await fetchIodaOutageEvents(NOW);
+  const url = new URL(call.url, 'http://sidecar.test');
+  assert.equal(url.pathname, '/api/internet-outages');
+  assert.equal(url.searchParams.get('limit'), '5000');
+  const from = Number(url.searchParams.get('from'));
+  const until = Number(url.searchParams.get('until'));
+  assert.equal(until, Math.floor(NOW / 1000));
+  assert.equal(until - from, 24 * 60 * 60);
+});
+
+test('fetchIodaOutageEvents reports a quiet internet as a success, not a failure', async (t) => {
+  // The domain-wide exception: zero qualifying rows behind a 200 is a real
+  // observation. Failing it closed would blank the domain exactly when
+  // everything is working.
+  stubFetch(t, { alerts: [] });
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), { ok: true, events: [] }, 'empty payload');
+
+  stubFetch(t, {
+    alerts: [
+      { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'normal', from: RECENT_SEC },
+      { entityType: 'asn', entityCode: '12345', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    ],
+  });
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), { ok: true, events: [] }, 'rows present but none qualify');
+});
+
+test('fetchIodaOutageEvents fails closed on non-2xx, degraded, and a malformed body', async (t) => {
+  const empty = { ok: false, events: [] };
+  const good = [{ entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC }];
+
+  stubFetch(t, { alerts: good }, 502);
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), empty, 'non-2xx');
+
+  // Otherwise fully valid — `degraded` must be the sole reason this fails.
+  stubFetch(t, { alerts: good, degraded: true });
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), empty, 'degraded flag');
+
+  stubFetch(t, { alerts: 'nope' });
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), empty, 'alerts is not an array');
+
+  stubFetch(t, {});
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), empty, 'alerts missing entirely');
+
+  stubFetch(t, null);
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), empty, 'null body');
+});
+
+test('fetchIodaOutageEvents returns the mapped events on success', async (t) => {
+  stubFetch(t, {
+    alerts: [
+      { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+      { entityType: 'country', entityCode: 'BF', datasource: 'bgp', level: 'normal', from: RECENT_SEC + 900 },
+    ],
+  });
+  assert.deepEqual(await fetchIodaOutageEvents(NOW), { ok: true, events: [{ country: 'BF', startedAt: RECENT }] });
+});
+
+// ── Cloudflare Radar fetch ──────────────────────────────────────────────────
+
+test('fetchCloudflareRadarOutages reads the sidecar route and maps its rows', async (t) => {
+  const call = stubFetch(t, { outages: [{ country: ' bf ', startedAt: RECENT }] });
+  const r = await fetchCloudflareRadarOutages();
+  assert.equal(new URL(call.url, 'http://sidecar.test').pathname, '/api/internet-outages-cf');
+  assert.deepEqual(r, { ok: true, events: [{ country: 'BF', startedAt: RECENT }] });
+});
+
+test('fetchCloudflareRadarOutages reports an empty annotation list as a success', async (t) => {
+  stubFetch(t, { outages: [] });
+  assert.deepEqual(await fetchCloudflareRadarOutages(), { ok: true, events: [] });
+});
+
+test('fetchCloudflareRadarOutages fails closed on non-2xx, degraded, and a malformed body', async (t) => {
+  const empty = { ok: false, events: [] };
+  const good = [{ country: 'BF', startedAt: RECENT }];
+
+  stubFetch(t, { outages: good }, 502);
+  assert.deepEqual(await fetchCloudflareRadarOutages(), empty, 'non-2xx');
+
+  // The no-token case: the sidecar answers 200 with degraded:true, and that
+  // must never be recorded as a healthy vote.
+  stubFetch(t, { outages: [], degraded: true });
+  assert.deepEqual(await fetchCloudflareRadarOutages(), empty, 'degraded flag');
+
+  stubFetch(t, { outages: 'nope' });
+  assert.deepEqual(await fetchCloudflareRadarOutages(), empty, 'outages is not an array');
+
+  stubFetch(t, {});
+  assert.deepEqual(await fetchCloudflareRadarOutages(), empty, 'outages missing entirely');
+
+  stubFetch(t, null);
+  assert.deepEqual(await fetchCloudflareRadarOutages(), empty, 'null body');
+});
+
+test('fetchCloudflareRadarOutages drops unusable rows without failing the fetch', async (t) => {
+  stubFetch(t, {
+    outages: [
+      { country: '', startedAt: RECENT },
+      { country: 'BF', startedAt: Number.NaN },
+      { country: 'BF', startedAt: 0 },
+      { country: 'SD', startedAt: RECENT },
+    ],
+  });
+  assert.deepEqual(await fetchCloudflareRadarOutages(), { ok: true, events: [{ country: 'SD', startedAt: RECENT }] });
+});
+
+// ── Fusion ──────────────────────────────────────────────────────────────────
+
+test('BF counted 4 by IODA and 2 by Cloudflare fuses into one two-vote fact', () => {
+  // The expected steady state: IODA inflates per detection method, Cloudflare
+  // curates one annotation per event. A gap this size is methodology, not a
+  // defect, and must not read as disagreement.
+  const r = ingestDomain('internet_outages', [
+    ...outageCountsToObservations('ioda', [
+      { country: 'BF', startedAt: RECENT },
+      { country: 'BF', startedAt: RECENT },
+      { country: 'BF', startedAt: RECENT },
+      { country: 'BF', startedAt: RECENT },
+    ], NOW),
+    ...outageCountsToObservations('cloudflare-radar', [
+      { country: 'BF', startedAt: RECENT },
+      { country: 'BF', startedAt: RECENT },
+    ], NOW),
+  ], healthyBoth(NOW), NOW);
+
+  assert.equal(r.facts.length, 1, 'same country collapses to one fact');
+  const f = r.facts[0]!;
+  assert.equal(f.key, 'BF');
+  assert.equal(f.providerIds.length, 2);
+  assert.equal(f.fusion.disagreements.length, 0);
+  // Pin to a concrete value first: `undefined === undefined` would pass this
+  // vacuously if the fact never formed.
+  assert.equal(typeof r.providerFingerprints['ioda'], 'string');
+  assert.equal(r.providerFingerprints['ioda'], r.providerFingerprints['cloudflare-radar']);
+});
+
+test('BF counted 9 by one source and 1 by the other surfaces a disagreement', () => {
+  const r = ingestDomain('internet_outages', [
+    ...outageCountsToObservations('ioda', Array.from({ length: 9 }, () => ({ country: 'BF', startedAt: RECENT })), NOW),
+    ...outageCountsToObservations('cloudflare-radar', [{ country: 'BF', startedAt: RECENT }], NOW),
+  ], healthyBoth(NOW), NOW);
+
+  const f = r.facts[0]!;
+  assert.ok(f.fusion.disagreements.length >= 1, 'disagreement surfaces');
+  // Only the outlier is named, never the pair — a disagreement listing both
+  // providers would mean the consensus side got reported as dissenting.
+  assert.equal(f.fusion.disagreements[0]!.providerIds.length, 1);
+  assert.ok(f.fusion.confidenceMultiplier <= 0.6, 'capped at the disagreement ceiling');
+  assert.ok('ioda' in f.fingerprints, 'fingerprint map names ioda');
+  assert.ok('cloudflare-radar' in f.fingerprints, 'fingerprint map names cloudflare-radar');
+  assert.notEqual(f.fingerprints['ioda'], f.fingerprints['cloudflare-radar']);
+});
+
+test('a country only one source sees stays a single-vote fact rather than vanishing', () => {
+  // The expected steady state for this domain — a 24h IODA window yields ~20
+  // countries, Cloudflare curates far fewer, so most facts carry one vote.
+  const r = ingestDomain('internet_outages', [
+    ...outageCountsToObservations('ioda', [{ country: 'SD', startedAt: RECENT }], NOW),
+    ...outageCountsToObservations('cloudflare-radar', [{ country: 'BF', startedAt: RECENT }], NOW),
+  ], healthyBoth(NOW), NOW);
+
+  assert.equal(r.facts.length, 2);
+  for (const f of r.facts) {
+    assert.equal(f.providerIds.length, 1, `${f.key} is seen by one source only`);
+    assert.equal(f.fusion.disagreements.length, 0, 'one observation cannot disagree with itself');
+  }
+});

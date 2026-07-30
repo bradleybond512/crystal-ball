@@ -142,6 +142,11 @@ import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
 import { fetchIodaOutages } from '@/services/internet-outages';
+import {
+  fetchCloudflareRadarOutages,
+  fetchIodaOutageEvents,
+} from '@/services/netwatch/cloudflare-radar-fetch';
+import { outageCountsToObservations } from '@/services/netwatch/outage-fusion-observations';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { fetchAirstrikes } from '@/services/airstrikes';
 import { updateFromFlights } from '@/services/strike-packages';
@@ -4174,6 +4179,31 @@ export class DataLoaderManager implements AppModule {
   // rather than coupling this loader back into refreshStormPosture (re-entrancy).
   async loadInternetOutages(): Promise<void> {
  await fetchIodaOutages();
+    // internet_outages fusion: per-country outage-onset counts from IODA and
+    // Cloudflare Radar. A SECOND IODA request, not a reuse of the one above —
+    // that one asks for limit=50 to warm the comms-axis cache, and the fusion
+    // path needs limit=5000 or the newest rows are silently truncated away.
+    // Different query string, so the sidecar caches the two independently.
+    //
+    // ONE `now` for both fetches and for the adapter: it is both the trailing
+    // window's end and the observations' occurredAt, and two clocks would put
+    // the providers on different windows.
+    // Exactly one record per provider per tick — recordDomainObservations
+    // REPLACES a provider's set rather than accumulating.
+    const now = Date.now();
+    const [ioda, cloudflare] = await Promise.all([
+      fetchIodaOutageEvents(now),
+      fetchCloudflareRadarOutages(),
+    ]);
+    // `ok` comes straight from the fetch, NOT from the observation count: an
+    // internet with no outages anywhere is a real, healthy observation, and
+    // failing it closed would blind the domain exactly when nothing is wrong.
+    recordDomainObservations('ioda', outageCountsToObservations('ioda', ioda.events, now), ioda.ok);
+    recordDomainObservations(
+      'cloudflare-radar',
+      outageCountsToObservations('cloudflare-radar', cloudflare.events, now),
+      cloudflare.ok,
+    );
   }
 
   async loadIswReports(): Promise<void> {

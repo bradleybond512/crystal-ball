@@ -17637,10 +17637,11 @@ async function dispatch(requestUrl, req, routes, context) {
  const r = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
  if (!r.ok) return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: `er-api upstream ${r.status}` }, 502);
  const raw = await r.json().catch(() => null);
- if (raw?.result !== 'success' || !raw.rates || typeof raw.rates !== 'object') {
- return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: `er-api result "${raw?.result ?? 'unparseable'}"` }, 502);
+ const erApiReject = erApiRejectReason(raw);
+ if (erApiReject) {
+ return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: erApiReject }, 502);
  }
- const result = { rates: raw.rates, time_last_update_unix: raw.time_last_update_unix ?? null, fetchedAt: Date.now(), degraded: false };
+ const result = { rates: raw.rates, time_last_update_unix: raw.time_last_update_unix, fetchedAt: Date.now(), degraded: false };
  setCached('er-api-fx', result, ERAPI_TTL);
  return json(result);
   }
@@ -17714,7 +17715,12 @@ async function dispatch(requestUrl, req, routes, context) {
  const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
  const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
  if (!r.ok) return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ioda upstream ${r.status}` }, 502);
- const raw = await r.json();
+ const raw = await r.json().catch(() => null);
+ // A malformed body is a failure, not a quiet internet — and must stay
+ // uncached so the next poll retries instead of serving it for 15 minutes.
+ if (!iodaEnvelopeIsWellFormed(raw)) {
+ return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: 'ioda unparseable envelope' }, 502);
+ }
  const alerts = parseIodaAlerts(raw);
  const result = { alerts, count: alerts.length, fetchedAt: Date.now(), degraded: false };
  setCached(cacheKey, result, IODA_TTL);
@@ -17741,6 +17747,13 @@ async function dispatch(requestUrl, req, routes, context) {
  const raw = await r.json().catch(() => null);
  if (!raw || !Array.isArray(raw?.result?.annotations)) {
  return json({ outages: [], degraded: true, reason: 'cloudflare radar unparseable envelope' }, 502);
+ }
+ // A valid envelope whose annotations ALL fail to parse is a shape mismatch,
+ // not a quiet internet: upstream said "here are annotations" and we
+ // extracted none. Some rows parsing is enough — one bad row among many must
+ // not kill the tick — but zero out of many must not be cached as healthy.
+ if (raw.result.annotations.length > 0 && countUsableCfAnnotations(raw) === 0) {
+ return json({ outages: [], degraded: true, reason: 'cloudflare radar annotations unusable' }, 502);
  }
  const outages = parseCloudflareRadarOutages(raw);
  const result = { outages, fetchedAt: Date.now(), degraded: false };
@@ -18412,6 +18425,27 @@ export function parseFrankfurterRates(raw) {
   };
 }
 
+// ── open.er-api payload gate ─────────────────────────────────────────────────
+// Input: parsed JSON from open.er-api.com/v6/latest/USD.
+// Output: a reason string when the payload must NOT be cached, else null.
+//
+// The route caches for SIX HOURS, so anything that gets past this gate pins the
+// fx_rates domain for that long. `result: "success"` alone is not enough:
+// { result: "success", rates: {}, time_last_update_unix: null } satisfies it,
+// carries no rate and no observation time, and the renderer then correctly
+// fails closed on every retry against the poisoned cache entry.
+export function erApiRejectReason(raw) {
+  if (raw?.result !== 'success' || !raw.rates || typeof raw.rates !== 'object') {
+    return `er-api result "${raw?.result ?? 'unparseable'}"`;
+  }
+  const updatedUnix = raw.time_last_update_unix;
+  if (typeof updatedUnix !== 'number' || !Number.isFinite(updatedUnix) || updatedUnix <= 0) {
+    return 'er-api missing time_last_update_unix';
+  }
+  if (Object.keys(raw.rates).length === 0) return 'er-api empty rates';
+  return null;
+}
+
 // ── GFZ Potsdam Kp parser ────────────────────────────────────────────────────
 // Input: parsed JSON from kp.gfz.de/app/json/?start=..&end=..&index=Kp, which
 // returns parallel COLUMN arrays ({ datetime: [...], Kp: [...], status: [...] })
@@ -18491,8 +18525,18 @@ export function parsePortwatchChokepoints(arcgisJson) {
 // ── IODA internet outage alerts parser ───────────────────────────────────────
 // Input: parsed JSON from api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts
 // Output: normalized array of alert objects.
+// A well-formed IODA envelope always carries a `data` ARRAY — an empty one when
+// the internet is quiet. parseIodaAlerts collapses "bad envelope" and "quiet
+// internet" onto the same `[]`, so the ROUTE must separate them before caching:
+// a 200 carrying `{ error: "maintenance" }` would otherwise be cached for the
+// full 15-minute TTL as a healthy zero-outage reading, and every retry in that
+// window reads the poisoned entry.
+export function iodaEnvelopeIsWellFormed(raw) {
+  return Boolean(raw) && Array.isArray(raw.data);
+}
+
 export function parseIodaAlerts(raw) {
-  if (!raw || !Array.isArray(raw.data)) return [];
+  if (!iodaEnvelopeIsWellFormed(raw)) return [];
   return raw.data.map(alert => ({
     entityType: alert?.entity?.type ?? null,
     entityCode: alert?.entity?.code ?? null,
@@ -18514,6 +18558,23 @@ export function parseIodaAlerts(raw) {
 // `locations` is a required ISO2 string[] and `startDate` a required Z-suffixed
 // date-time, so Date.parse reads it as UTC. Do NOT add a defensive 'Z' append
 // here: it would corrupt an already-offset string.
+// How many annotations are STRUCTURALLY usable — an ISO2 array plus a parseable
+// startDate. The route needs this to tell a quiet internet (`annotations: []`)
+// from a shape mismatch (upstream said "here are annotations" and we extracted
+// none): only the first is a real observation, and only the first may be cached
+// as a healthy zero-outage reading.
+export function countUsableCfAnnotations(raw) {
+  const annotations = raw?.result?.annotations;
+  if (!Array.isArray(annotations)) return 0;
+  let usable = 0;
+  for (const a of annotations) {
+    if (!Array.isArray(a?.locations)) continue;
+    if (typeof a?.startDate !== 'string' || !Number.isFinite(Date.parse(a.startDate))) continue;
+    usable += 1;
+  }
+  return usable;
+}
+
 export function parseCloudflareRadarOutages(raw) {
   const annotations = raw?.result?.annotations;
   if (!Array.isArray(annotations)) return [];

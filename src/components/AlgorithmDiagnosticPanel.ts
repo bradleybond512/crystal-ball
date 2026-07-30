@@ -33,6 +33,20 @@ import type { AlgorithmDefinition as HealthAlgorithmDefinition } from '@/service
 import type { PolicyDecision } from '@/services/governance/policy-engine';
 import { escapeHtml } from '@/utils/sanitize';
 import { getKindAccuracy } from '@/services/hypothesis-accuracy';
+import { getChampionRegistry } from '@/services/cognition/champion-registry';
+import { collectJoinedEvidence, RUN_IDS } from '@/services/cognition/shadow-rollout';
+import {
+  evaluatePromotionGate,
+  safetyEvidenceFromReplayReport,
+} from '@/services/cognition/promotion-gate';
+import {
+  buildChampionStatusView,
+  type ChallengerRow,
+  type ChallengerStatus,
+  type ChampionStatusView,
+} from '@/services/cognition/champion-status-view';
+import { runReplay } from '@/services/ops/replay-harness';
+import { buildCatalogReplayFixtures } from '@/services/ops/replay-fixtures-catalog';
 
 const REFRESH_MS = 15_000;
 
@@ -166,6 +180,10 @@ export class AlgorithmDiagnosticPanel extends Panel {
         ${renderPredictionAccuracy()}
       </div>
       <div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Champion / Challenger</div>
+        ${renderChampionChallenger()}
+      </div>
+      <div>
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Recommendations</div>
         ${recHtml}
       </div>
@@ -200,6 +218,115 @@ export class AlgorithmDiagnosticPanel extends Panel {
       ${proposalHtml}
     </div>`;
   }
+}
+
+// ── ACC-403: champion/challenger status surface ──────────────────────
+
+/** The forecast slot the first ACC-404 promotion decision will govern. */
+const CHAMPION_SLOT = 'forecast-primary';
+
+/** Shadow runs surfaced as challengers. Superforecast pairs carry no
+ *  join keys yet, so it honestly reads insufficient-evidence until its
+ *  producer emits them. */
+const CHALLENGER_RUNS = [
+  { runId: RUN_IDS.SUPERFORECAST, challengerId: 'superforecast' },
+  { runId: RUN_IDS.BASELINE_HIERARCHICAL, challengerId: 'hierarchical-base-rate' },
+  { runId: RUN_IDS.BASELINE_PERSISTENCE, challengerId: 'persistence-baseline' },
+  { runId: RUN_IDS.BASELINE_MOMENTUM, challengerId: 'momentum-baseline' },
+] as const;
+
+const CHALLENGER_STATUS_DISPLAY: Record<ChallengerStatus, { label: string; color: string }> = {
+  promotable: { label: 'PROMOTABLE', color: '#4caf50' },
+  rejected: { label: 'REJECTED', color: '#ff453a' },
+  'insufficient-evidence': { label: 'INSUFFICIENT EVIDENCE', color: '#ffb74d' },
+};
+
+function composeChampionStatus(): ChampionStatusView {
+  const registry = getChampionRegistry();
+  const active = registry.getActiveChampion(CHAMPION_SLOT);
+  const fixtures = buildCatalogReplayFixtures();
+  const safety = safetyEvidenceFromReplayReport(
+    runReplay({ fixtures }),
+    fixtures,
+  );
+  const incumbentId = active?.modelId ?? 'production';
+  const challengers = CHALLENGER_RUNS.map(({ runId, challengerId }) => {
+    const pairs = collectJoinedEvidence(runId);
+    const decision = evaluatePromotionGate({
+      challengerId,
+      incumbentId,
+      pairs,
+      // No per-domain deployment floors declared yet — the overall
+      // 200-pair floor still applies. ACC-404 declares domains when the
+      // first promotion decision is made.
+      enabledDomains: [],
+      safety,
+      evaluatedAt: Date.now(),
+    });
+    return { runId, challengerId, pairs, decision };
+  });
+  return buildChampionStatusView({
+    slot: CHAMPION_SLOT,
+    ...(active === undefined ? {} : { active }),
+    history: registry.getHistory(CHAMPION_SLOT),
+    challengers,
+  });
+}
+
+function renderChampionChallenger(): string {
+  let view: ChampionStatusView;
+  try {
+    view = composeChampionStatus();
+  } catch {
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">Champion status unavailable.</div>`;
+  }
+  let championHtml = `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No champion installed in '${escapeHtml(view.slot)}' — awaiting the first evidence-backed promotion decision (ACC-404).</div>`;
+  if (view.championId) {
+    const versionHtml = view.championVersion
+      ? ` <span style="color:var(--text-secondary,#aaa);">v${escapeHtml(view.championVersion)}</span>`
+      : '';
+    const reasonHtml = view.championActivationReason
+      ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:2px;">${escapeHtml(view.championActivationReason)}</div>`
+      : '';
+    championHtml = `<div style="font-size:12px;"><strong>${escapeHtml(view.championId)}</strong>${versionHtml} <span style="color:var(--text-secondary,#aaa);">— active champion of ${escapeHtml(view.slot)}</span></div>
+       ${reasonHtml}`;
+  }
+  const challengerHtml = view.challengers.map((c) => renderChallengerCard(c)).join('');
+  const activityHtml = view.recentActivity.length === 0
+    ? ''
+    : `<div style="margin-top:6px;">
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:3px;">Recent activity</div>
+        ${view.recentActivity.map((a) => `<div style="font-size:11px;color:var(--text-secondary,#aaa);">${escapeHtml(new Date(a.at).toLocaleString())} — ${escapeHtml(a.summary)}</div>`).join('')}
+      </div>`;
+  return `<div style="display:flex;flex-direction:column;gap:6px;">
+    ${championHtml}
+    ${challengerHtml}
+    ${activityHtml}
+  </div>`;
+}
+
+function renderChallengerCard(c: ChallengerRow): string {
+  const display = CHALLENGER_STATUS_DISPLAY[c.status];
+  const domains = Object.entries(c.perDomainCounts)
+    .map(([d, n]) => `${d}: ${n}`)
+    .join(' · ');
+  const evidenceStr = `${c.evidenceCount} joined pairs${domains ? ` (${domains})` : ''}`
+    + (c.proxyShare > 0 ? ` · ${(c.proxyShare * 100).toFixed(0)}% proxy-resolved` : '');
+  const deltasHtml = c.deltas.map((d) =>
+    `<div style="font-size:10px;color:${d.better ? '#4caf50' : 'var(--text-secondary,#aaa)'};font-family:ui-monospace,monospace;">${escapeHtml(d.explanation)}</div>`,
+  ).join('');
+  const reasonsHtml = c.reasons.slice(0, 4).map((r) =>
+    `<li>${escapeHtml(r)}</li>`,
+  ).join('');
+  return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:6px 8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+      <span style="font-size:12px;font-weight:600;">${escapeHtml(c.challengerId)}</span>
+      <span style="font-size:9px;color:${display.color};font-weight:700;letter-spacing:0.05em;">${display.label}</span>
+    </div>
+    <div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;font-family:ui-monospace,monospace;">${escapeHtml(evidenceStr)}</div>
+    ${deltasHtml}
+    ${c.reasons.length > 0 ? `<ul style="margin:3px 0 0;padding-left:16px;font-size:10px;color:var(--text-secondary,#aaa);">${reasonsHtml}</ul>` : ''}
+  </div>`;
 }
 
 function renderPredictionAccuracy(): string {

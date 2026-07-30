@@ -790,9 +790,12 @@ typecheck:all, scoped ESLint.
 
 ### ACC-403 — Champion/challenger status surface
 
-Status: `WAITING`
+Status: `DONE`
 
-Dependencies: ACC-402
+Owner: Claude
+Branch: `claude/acc-403-status-surface`
+
+Dependencies: ACC-402 (DONE — #1566)
 
 Show:
 
@@ -800,6 +803,29 @@ Show:
 - challengers and evidence counts;
 - metric deltas with confidence intervals;
 - promotion, rejection, rollback, and insufficient-evidence reasons.
+
+Evidence: `src/services/cognition/champion-status-view.ts` —
+`buildChampionStatusView()` is the pure view-model: active champion +
+version + activation reason (or an honest "no champion installed —
+awaiting ACC-404" state), per-challenger evidence counts (overall +
+per-domain + proxy share), Brier and log-loss deltas each with a
+two-sided 90% paired-bootstrap confidence interval (deterministic
+seeded PRNG shared with the gate; `pairedBootstrapInterval` +
+`brierImprovementDiffs`/`logLossImprovementDiffs` added to
+promotion-gate.ts, with the gate's one-sided lower bound refactored
+onto the same resample core — bench-verified unchanged), and
+promotion / rejection / insufficient-evidence reasons taken verbatim
+from the ACC-402 gate results (min-pairs failures map to
+insufficient-evidence; rollbacks and promotions surface through the
+registry history as recent-activity rows). Rendered as the
+"Champion / Challenger" section of `AlgorithmDiagnosticPanel`
+(existing panel — no new panel wiring), composed live from
+`getChampionRegistry()` + `collectJoinedEvidence()` per shadow run +
+`evaluatePromotionGate()` with real safety evidence from
+`runReplay(buildCatalogReplayFixtures())`. Verified: 12-test
+champion-status-view suite + bootstrap-addition tests (66 across the
+four cognition suites touched), typecheck:all, scoped ESLint, frozen
+bench:forecast + bench:baselines unchanged.
 
 ### ACC-404 — First production promotion decision
 

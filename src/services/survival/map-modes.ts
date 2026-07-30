@@ -33,7 +33,7 @@ export const MAP_MODES: Record<SurvivalAxis, MapMode> = {
     layers: ['weather', 'weatherRadar', 'weatherSatellite', 'lightning', 'owmTemperature',
       'owmPrecipitation', 'owmClouds', 'owmWind', 'redFlagWarnings', 'weatherHazards',
       'severeWeatherPolygons', 'shakemapOverlay', 'volcanoMonitor', 'fires', 'hotspots',
-      'airSmoke', 'natural', 'climate', 'forecastOverlay'],
+      'airSmoke', 'smokeForecast', 'natural', 'climate', 'forecastOverlay'],
   },
   supply: {
     axis: 'supply',

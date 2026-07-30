@@ -1,8 +1,8 @@
 /**
  * Pure adapter: convert surface-temperature readings from the surface_temp
- * fusion providers (Open-Meteo forecast model, MET Norway observation) into
- * the generic DomainObservation the fusion-ingest layer consumes (value =
- * °C). No DOM, no fetch, no globals — fixture-testable.
+ * fusion providers (Open-Meteo forecast model, MET Norway forecast model)
+ * into the generic DomainObservation the fusion-ingest layer consumes (value
+ * = °C). No DOM, no fetch, no globals — fixture-testable.
  */
 
 import type { DomainObservation } from '@/services/providers/fusion-ingest';
@@ -12,6 +12,9 @@ export interface TempReading {
   lon: number;
   tempC: number;
   observedAt: number;
+  /** The saved place this reading was fetched for — fusion matches on this,
+   *  not geography (see provider-domain-map.ts). */
+  placeId: string;
 }
 
 // Real-world surface air temperature never leaves roughly -89°C (Vostok,
@@ -26,7 +29,12 @@ export function tempToObservations(providerId: string, readings: readonly TempRe
     if (!Number.isFinite(r.tempC) || r.tempC < MIN_PLAUSIBLE_C || r.tempC > MAX_PLAUSIBLE_C) continue;
     if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
     if (!Number.isFinite(r.observedAt) || r.observedAt <= 0) continue;
-    out.push({ providerId, value: r.tempC, lat: r.lat, lon: r.lon, occurredAt: r.observedAt });
+    // A reading without a placeId would fuse under fusion-ingest's
+    // matchBy:'key' as key === undefined — findHomeCluster's `o.key !==
+    // undefined` guard means that never joins a cluster, so it'd silently
+    // become a permanent singleton instead of raising an error.
+    if (!r.placeId) continue;
+    out.push({ providerId, value: r.tempC, lat: r.lat, lon: r.lon, occurredAt: r.observedAt, key: r.placeId });
   }
   return out;
 }

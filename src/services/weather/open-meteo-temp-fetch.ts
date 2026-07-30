@@ -7,9 +7,14 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import type { TempReading } from './weather-fusion-observations';
 
+// The sidecar's single-point route has no saved-place context, so its
+// response carries no placeId — the caller (data-loader.ts) stamps it on
+// the way out, per saved place, before handing readings to tempToObservations.
+type RawTempReading = Omit<TempReading, 'placeId'>;
+
 export interface OpenMeteoTempFetchResult {
   ok: boolean;
-  readings: TempReading[];
+  readings: RawTempReading[];
 }
 
 interface OpenMeteoForecastResponse {

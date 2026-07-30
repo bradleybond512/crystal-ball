@@ -2843,3 +2843,99 @@ test('/api/airquality/purpleair — v1 success caches for 5 minutes, refetches a
     await app.cleanup();
   }
 });
+
+// ── surface_temp fusion route contracts (Open-Meteo current + MET Norway) ───
+// Two routes back the surface_temp fusion domain: the existing
+// /api/weather/local-forecast gained an additive `current` block, and
+// /api/met-norway-temp is new. Contracts pinned here: `timezone=auto`'s
+// offset-less local wall-clock string is normalized to an unambiguous epoch
+// for negative, positive, and fractional UTC offsets; a missing `current`
+// block degrades only the new field, not the pre-existing hourly consumer;
+// and MET Norway's unit contract + empty-timeseries cases both 502 without
+// caching a bad or absent reading.
+
+test('/api/weather/local-forecast — currentObservedAtMs normalizes negative, positive, and fractional UTC offsets', async () => {
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('latitude=41.6')) {
+      // America/Chicago-style UTC-5: local 14:00 is 19:00Z.
+      return { statusCode: 200, body: JSON.stringify({ current: { time: '2026-07-28T14:00', temperature_2m: 22.5 }, utc_offset_seconds: -18_000, hourly: {} }) };
+    }
+    if (options.path.includes('latitude=52.5')) {
+      // Europe/Berlin-style UTC+2: local 14:00 is 12:00Z.
+      return { statusCode: 200, body: JSON.stringify({ current: { time: '2026-07-28T14:00', temperature_2m: 18 }, utc_offset_seconds: 7200, hourly: {} }) };
+    }
+    if (options.path.includes('latitude=27.7')) {
+      // Asia/Kathmandu UTC+5:45: local 14:00 is 08:15Z.
+      return { statusCode: 200, body: JSON.stringify({ current: { time: '2026-07-28T14:00', temperature_2m: 30 }, utc_offset_seconds: 20_700, hourly: {} }) };
+    }
+    return { statusCode: 500, body: 'unexpected request' };
+  });
+  try {
+    const negative = await app.getJson('/api/weather/local-forecast?lat=41.6&lon=-87.1');
+    assert.equal(negative.currentObservedAtMs, Date.parse('2026-07-28T19:00:00Z'), 'UTC-5 local 14:00 -> 19:00Z');
+
+    const positive = await app.getJson('/api/weather/local-forecast?lat=52.5&lon=13.4');
+    assert.equal(positive.currentObservedAtMs, Date.parse('2026-07-28T12:00:00Z'), 'UTC+2 local 14:00 -> 12:00Z');
+
+    const fractional = await app.getJson('/api/weather/local-forecast?lat=27.7&lon=85.3');
+    assert.equal(fractional.currentObservedAtMs, Date.parse('2026-07-28T08:15:00Z'), 'UTC+5:45 local 14:00 -> 08:15Z');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/weather/local-forecast — current block absent from upstream omits currentObservedAtMs but keeps the hourly forecast', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({ hourly: { time: ['2026-07-28T15:00'], precipitation: [0], wind_gusts_10m: [10], weather_code: [1] } }),
+  }));
+  try {
+    const res = await app.get('/api/weather/local-forecast?lat=10&lon=20');
+    assert.equal(res.status, 200, 'a missing current block must not 502 the whole route');
+    const payload = await res.json();
+    assert.equal(payload.currentObservedAtMs, undefined, 'no current block -> no currentObservedAtMs');
+    assert.deepEqual(payload.hourly.time, ['2026-07-28T15:00'], 'the pre-existing hourly forecast consumer is unaffected');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/met-norway-temp — non-celsius unit is a 502 naming the offending unit', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({
+      properties: {
+        meta: { units: { air_temperature: 'fahrenheit' } },
+        timeseries: [{ time: '2026-07-28T14:00:00Z', data: { instant: { details: { air_temperature: 72 } } } }],
+      },
+    }),
+  }));
+  try {
+    const res = await app.get('/api/met-norway-temp?lat=41.6&lon=-87.1');
+    assert.equal(res.status, 502);
+    const payload = await res.json();
+    assert.deepEqual(payload.readings, []);
+    assert.equal(payload.degraded, true);
+    assert.match(payload.reason, /unexpected unit "fahrenheit"/, 'reason names the actual offending unit, not a generic message');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/met-norway-temp — empty timeseries is a 502 and never cached', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({ properties: { meta: { units: { air_temperature: 'celsius' } }, timeseries: [] } }),
+  }));
+  try {
+    const first = await app.get('/api/met-norway-temp?lat=41.6&lon=-87.1');
+    assert.equal(first.status, 502);
+    const payload = await first.json();
+    assert.deepEqual(payload.readings, []);
+    assert.equal(payload.reason, 'met-norway: no valid celsius reading');
+    await app.get('/api/met-norway-temp?lat=41.6&lon=-87.1');
+    assert.equal(app.calls.length, 2, 'an empty timeseries must not be cached');
+  } finally {
+    await app.cleanup();
+  }
+});

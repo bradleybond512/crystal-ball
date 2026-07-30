@@ -10565,9 +10565,7 @@ async function dispatch(requestUrl, req, routes, context) {
     const lat = requestUrl.searchParams.get('lat');
     const lon = requestUrl.searchParams.get('lon');
     if (!lat || !lon) return json({ error: 'lat and lon required' }, 400);
-    // v2: cache key bumped so a warm cache from before `current` was added
-    // can't serve a stale payload missing currentObservedAtMs.
-    const cacheKey = `open-meteo-forecast-v2-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
+    const cacheKey = `open-meteo-forecast-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
     const cached = getCached(cacheKey, 10 * 60 * 1000);
     if (cached) return json(cached);
     try {

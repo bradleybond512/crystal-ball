@@ -8,7 +8,7 @@ import type { ProviderHealthState } from '../../providers/provider-health.ts';
 const NOW = 1_745_000_000_000;
 
 function reading(o: Partial<TempReading> = {}): TempReading {
-  return { lat: 41.61, lon: -86.72, tempC: 20, observedAt: NOW, ...o };
+  return { lat: 41.61, lon: -86.72, tempC: 20, observedAt: NOW, placeId: 'place-a', ...o };
 }
 
 function healthyBoth(): ProviderHealthState {
@@ -20,9 +20,9 @@ function healthyBoth(): ProviderHealthState {
 }
 
 test('tempToObservations maps a reading to a DomainObservation', () => {
-  const obs = tempToObservations('met-norway', [reading({ tempC: 12.3 })]);
+  const obs = tempToObservations('met-norway', [reading({ tempC: 12.3, placeId: 'place-a' })]);
   assert.equal(obs.length, 1);
-  assert.deepEqual(obs[0], { providerId: 'met-norway', value: 12.3, lat: 41.61, lon: -86.72, occurredAt: NOW });
+  assert.deepEqual(obs[0], { providerId: 'met-norway', value: 12.3, lat: 41.61, lon: -86.72, occurredAt: NOW, key: 'place-a' });
 });
 
 test('tempToObservations drops non-finite tempC, non-finite coords, and non-positive/non-finite observedAt', () => {
@@ -34,6 +34,15 @@ test('tempToObservations drops non-finite tempC, non-finite coords, and non-posi
   assert.equal(tempToObservations('met-norway', [reading({ observedAt: -5 })]).length, 0);
 });
 
+test('tempToObservations drops readings with a missing or empty placeId', () => {
+  assert.equal(tempToObservations('met-norway', [reading({ placeId: '' })]).length, 0, 'empty placeId is dropped');
+  assert.equal(
+    tempToObservations('met-norway', [{ lat: 41.61, lon: -86.72, tempC: 20, observedAt: NOW } as TempReading]).length,
+    0,
+    'missing placeId is dropped, not emitted keyless',
+  );
+});
+
 test('tempToObservations drops physically implausible temperatures', () => {
   assert.equal(tempToObservations('met-norway', [reading({ tempC: -96 })]).length, 0, 'below -95C bound');
   assert.equal(tempToObservations('met-norway', [reading({ tempC: 66 })]).length, 0, 'above 65C bound');
@@ -41,10 +50,10 @@ test('tempToObservations drops physically implausible temperatures', () => {
   assert.equal(tempToObservations('met-norway', [reading({ tempC: 57 })]).length, 1, 'Death-Valley-record heat is kept');
 });
 
-test('two readings 1C apart at the same coordinate fuse into one fact with no disagreement', () => {
+test('two readings 1C apart at the same place fuse into one fact with no disagreement', () => {
   const r = ingestDomain('surface_temp', [
-    ...tempToObservations('open-meteo-forecast', [reading({ tempC: 20.0, observedAt: NOW })]),
-    ...tempToObservations('met-norway', [reading({ tempC: 21.0, observedAt: NOW + 60_000 })]),
+    ...tempToObservations('open-meteo-forecast', [reading({ tempC: 20.0, observedAt: NOW, placeId: 'home' })]),
+    ...tempToObservations('met-norway', [reading({ tempC: 21.0, observedAt: NOW + 60_000, placeId: 'home' })]),
   ], healthyBoth(), NOW);
 
   assert.equal(r.facts.length, 1, 'same place/time collapses to one fact');
@@ -56,8 +65,8 @@ test('two readings 1C apart at the same coordinate fuse into one fact with no di
 
 test('two readings 5C apart surface a disagreement naming both providers', () => {
   const r = ingestDomain('surface_temp', [
-    ...tempToObservations('open-meteo-forecast', [reading({ tempC: 15.0, observedAt: NOW })]),
-    ...tempToObservations('met-norway', [reading({ tempC: 20.0, observedAt: NOW })]),
+    ...tempToObservations('open-meteo-forecast', [reading({ tempC: 15.0, observedAt: NOW, placeId: 'home' })]),
+    ...tempToObservations('met-norway', [reading({ tempC: 20.0, observedAt: NOW, placeId: 'home' })]),
   ], healthyBoth(), NOW);
 
   const f = r.facts[0]!;
@@ -72,12 +81,27 @@ test('two readings 5C apart surface a disagreement naming both providers', () =>
   assert.notEqual(r.providerFingerprints['open-meteo-forecast'], r.providerFingerprints['met-norway']);
 });
 
-test('readings beyond 25km apart do not fuse into one fact', () => {
+test('two saved places 17.8km apart each fuse independently — no cross-place aliasing', () => {
+  // La Porte, IN and Michigan City, IN are ~17.8km apart, well inside the old
+  // spatial matchDistanceKm:25 radius. Matching by placeId (not geography)
+  // must keep them as two separate facts even though each place's two
+  // providers agree closely with each other — the regression that would have
+  // caught the pre-fix bug, where the two places silently blended into one
+  // fact and manufactured a false disagreement.
+  const laPorte = { lat: 41.6106, lon: -86.7228, placeId: 'la-porte' };
+  const michiganCity = { lat: 41.7075, lon: -86.8950, placeId: 'michigan-city' };
+
   const r = ingestDomain('surface_temp', [
-    ...tempToObservations('open-meteo-forecast', [reading({ tempC: 20, lat: 41.61, lon: -86.72, observedAt: NOW })]),
-    // ~32km north of the first reading — outside the 25km match window.
-    ...tempToObservations('met-norway', [reading({ tempC: 20, lat: 41.90, lon: -86.72, observedAt: NOW })]),
+    ...tempToObservations('open-meteo-forecast', [reading({ ...laPorte, tempC: 20.0, observedAt: NOW })]),
+    ...tempToObservations('met-norway', [reading({ ...laPorte, tempC: 20.2, observedAt: NOW })]),
+    ...tempToObservations('open-meteo-forecast', [reading({ ...michiganCity, tempC: 24.0, observedAt: NOW })]),
+    ...tempToObservations('met-norway', [reading({ ...michiganCity, tempC: 24.1, observedAt: NOW })]),
   ], healthyBoth(), NOW);
 
-  assert.equal(r.facts.length, 2, 'distant readings stay distinct facts');
+  assert.equal(r.facts.length, 2, 'each saved place is its own fact');
+  const totalDisagreements = r.facts.reduce((n, f) => n + f.fusion.disagreements.length, 0);
+  assert.equal(totalDisagreements, 0, 'agreeing-per-place readings must not manufacture a cross-place disagreement');
+  for (const f of r.facts) {
+    assert.ok(f.fusion.confidenceMultiplier > 0.6, 'not capped at the disagreement ceiling');
+  }
 });

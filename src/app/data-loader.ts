@@ -2190,6 +2190,12 @@ export class DataLoaderManager implements AppModule {
  // recordDomainObservations REPLACES per provider rather than accumulating
  // (see fusion-publish.ts), so every place's readings are collected into
  // one array per provider before the single, fail-closed record call below.
+ // Deliberately bypasses fetchJsonCached (unlike the hourly-forecast block
+ // above): routing through its 30-min renderer cache would pin
+ // currentObservedAtMs for up to 30 min against open-meteo-forecast's
+ // 1-hour freshnessTtlMs, manufacturing staleness that isn't real. The
+ // sidecar's own 10-min cache on /api/weather/local-forecast already
+ // absorbs upstream load, so a fresh renderer-side call per tick is cheap.
  void (async () => {
  const openMeteoReadings: TempReading[] = [];
  const metNorwayReadings: TempReading[] = [];
@@ -2202,8 +2208,8 @@ export class DataLoaderManager implements AppModule {
  fetchOpenMeteoTemp(place.lat, place.lon),
  fetchMetNorwayTemp(place.lat, place.lon),
  ]);
- if (om.status === 'fulfilled' && om.value.ok) openMeteoReadings.push(...om.value.readings);
- if (mn.status === 'fulfilled' && mn.value.ok) metNorwayReadings.push(...mn.value.readings);
+ if (om.status === 'fulfilled' && om.value.ok) openMeteoReadings.push(...om.value.readings.map((r) => ({ ...r, placeId: place.id })));
+ if (mn.status === 'fulfilled' && mn.value.ok) metNorwayReadings.push(...mn.value.readings.map((r) => ({ ...r, placeId: place.id })));
  }));
  } catch {
  /* readings arrays may be partially populated or empty — recorded below either way */

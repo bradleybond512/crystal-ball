@@ -69,12 +69,20 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     numericTolerance: 0.01,
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 3 * 60_000 },
   },
-  // Same-place same-hour temps from independent models should agree within
+  // Matched by SAVED-PLACE ID, not geography: two saved places can sit only
+  // a few km apart (home + work), and spatial matching at any workable
+  // radius would blend their readings into one fact — a lake-effect gradient
+  // of several °C over a handful of km is ordinary weather, not disagreement.
+  // The 90-minute window covers the systematic gap between the two providers'
+  // cadences even when both are perfectly fresh: Open-Meteo `current` is a
+  // 15-minute-bucketed nowcast, MET Norway `timeseries[0]` is the next hourly
+  // forecast step, so the two land 0-60 min apart by construction. Same-place
+  // same-hour temps from independent models should still agree within
   // ~2.5°C; larger gaps are real forecast disagreement worth surfacing.
   surface_temp: {
     providerIds: ['open-meteo-forecast', 'met-norway'],
     numericTolerance: 2.5,
-    match: { maxDistanceKm: 25, maxTimeDeltaMs: 90 * 60_000 },
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 90 * 60_000 },
   },
 };
 

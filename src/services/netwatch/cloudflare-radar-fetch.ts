@@ -26,10 +26,13 @@ export interface IodaFusionAlert {
   from?: unknown;
 }
 
-// Must exceed the sidecar's 12s upstream deadline, or the renderer gives up
-// while the sidecar is still working and a slow-but-successful upstream reads
-// as a hard failure.
-const RENDERER_TIMEOUT_MS = 15_000;
+// Each renderer timeout must OUTLIVE the sidecar deadline it races: aborting
+// first means the sidecar's degraded-handling and setCached never run for that
+// tick, and a slow-but-successful upstream reads as a hard failure.
+/** Races the shared /api/internet-outages route's 15s upstream deadline. */
+const IODA_RENDERER_TIMEOUT_MS = 18_000;
+/** Races the /api/internet-outages-cf route's 12s upstream deadline. */
+const CLOUDFLARE_RENDERER_TIMEOUT_MS = 15_000;
 
 const IODA_WINDOW_SEC = 24 * 60 * 60;
 
@@ -118,7 +121,7 @@ export async function fetchIodaOutageEvents(now: number = Date.now()): Promise<O
     const url = `${getApiBaseUrl()}/api/internet-outages?from=${fromSec}&until=${untilSec}&limit=${IODA_FUSION_LIMIT}`;
     const res = await fetch(url, {
       headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(RENDERER_TIMEOUT_MS),
+      signal: AbortSignal.timeout(IODA_RENDERER_TIMEOUT_MS),
     });
     if (!res.ok) return failed();
     const data = (await res.json()) as { alerts?: unknown; degraded?: boolean } | null;
@@ -135,7 +138,7 @@ export async function fetchCloudflareRadarOutages(): Promise<OutageFetchResult> 
   try {
     const res = await fetch(`${getApiBaseUrl()}/api/internet-outages-cf`, {
       headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(RENDERER_TIMEOUT_MS),
+      signal: AbortSignal.timeout(CLOUDFLARE_RENDERER_TIMEOUT_MS),
     });
     if (!res.ok) return failed();
     const data = (await res.json()) as { outages?: unknown; degraded?: boolean } | null;

@@ -4183,7 +4183,9 @@ export class DataLoaderManager implements AppModule {
     // Cloudflare Radar. A SECOND IODA request, not a reuse of the one above —
     // that one asks for limit=50 to warm the comms-axis cache, and the fusion
     // path needs limit=5000 or the newest rows are silently truncated away.
-    // Different query string, so the sidecar caches the two independently.
+    // The cache key carries from/until/limit, so the two never clobber each other —
+    // and this query's second-resolution bounds make its key unique per call, so it
+    // never reuses a cached entry (one upstream request per launch).
     //
     // ONE `now` for both fetches and for the adapter: it is both the trailing
     // window's end and the observations' occurredAt, and two clocks would put

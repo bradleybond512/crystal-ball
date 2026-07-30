@@ -6,7 +6,7 @@ import {
   fetchIodaOutageEvents,
   iodaAlertsToEvents,
 } from '../cloudflare-radar-fetch.ts';
-import { outageCountsToObservations } from '../outage-fusion-observations.ts';
+import { OUTAGE_COUNT_WINDOW_MS, outageCountsToObservations } from '../outage-fusion-observations.ts';
 import { ingestDomain } from '../../providers/fusion-ingest.ts';
 import { emptyProviderHealthState, recordFetchOutcome } from '../../providers/provider-health.ts';
 import type { ProviderHealthState } from '../../providers/provider-health.ts';
@@ -169,9 +169,15 @@ test('counts onsets per country into key-matched observations stamped with the w
 test('drops events older than the trailing count window', () => {
   // Both providers must count over the SAME window or their numbers are not
   // comparable and every shared country reads as a disagreement.
+  //
+  // BF is placed relative to the window so it is outside whatever the window
+  // is. SD's 5h is a deliberate LITERAL, not `RECENT` and not window-relative:
+  // it is the only fixture that straddles the window, so shrinking the constant
+  // drops SD and fails this test. Both rows expressed relative to the constant
+  // would be true by construction and would pin nothing.
   const obs = outageCountsToObservations('ioda', [
-    { country: 'BF', startedAt: NOW - 7 * 60 * 60_000 },
-    { country: 'SD', startedAt: RECENT },
+    { country: 'BF', startedAt: NOW - OUTAGE_COUNT_WINDOW_MS - 60 * 60_000 },
+    { country: 'SD', startedAt: NOW - 5 * 60 * 60_000 },
   ], NOW);
   assert.deepEqual(obs.map((o) => o.key), ['SD']);
 });

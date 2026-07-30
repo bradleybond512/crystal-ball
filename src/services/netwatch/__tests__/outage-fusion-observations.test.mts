@@ -86,13 +86,46 @@ test('three normal rows plus one alert for BF count as one outage onset, not fou
 });
 
 test("'critical' is the ordinary alert level, not a major-outage marker", () => {
-  // IODA has no warning tier — every non-recovery row is 'critical'. A count
+  // Live IODA emits 'critical' for essentially every non-recovery row. A count
   // built from these is an ALERT-ROW count, never a "major outage" count, and
   // nothing downstream may relabel it as one.
   const events = iodaAlertsToEvents([
     { entityType: 'country', entityCode: 'IR', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
   ]);
   assert.equal(events.length, 1);
+});
+
+test('level is an ALLOWLIST — absent, null, non-string and unknown levels are dropped', () => {
+  // `level` is untrusted input typed `unknown`. A denylist (`level !== 'normal'`)
+  // rejects only that exact string, so every malformed row below passes straight
+  // through and becomes a real country outage onset. Under the denylist this
+  // returns all six countries.
+  const events = iodaAlertsToEvents([
+    { entityType: 'country', entityCode: 'AA', datasource: 'bgp', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'BB', datasource: 'bgp', level: null, from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'CC', datasource: 'bgp', level: 'ok', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'DD', datasource: 'bgp', level: 7, from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'EE', datasource: 'bgp', level: 'critical', from: RECENT_SEC },
+    { entityType: 'country', entityCode: 'FF', datasource: 'bgp', level: 'warning', from: RECENT_SEC },
+  ]);
+  assert.deepEqual(events.map((e) => e.country), ['EE', 'FF'], 'only the two onset levels survive');
+});
+
+test('a malformed IODA row must not corroborate a real Cloudflare outage', () => {
+  // The harm the allowlist prevents, end to end: a row with no `level` at all
+  // slips past a denylist, IODA then "sees" BF, and Cloudflare's genuine BF
+  // annotation turns it into a corroborated TWO-SOURCE fact built half out of
+  // junk. Assert the surviving voter by NAME — a length check would pass on
+  // the wrong pair.
+  const r = ingestDomain('internet_outages', [
+    ...outageCountsToObservations('ioda', iodaAlertsToEvents([
+      { entityType: 'country', entityCode: 'BF', datasource: 'bgp', from: RECENT_SEC },
+    ]), NOW),
+    ...outageCountsToObservations('cloudflare-radar', [{ country: 'BF', startedAt: RECENT }], NOW),
+  ], healthyBoth(NOW), NOW);
+
+  assert.equal(r.facts.length, 1);
+  assert.deepEqual(r.facts[0]!.providerIds, ['cloudflare-radar'], 'only the source that really saw BF votes');
 });
 
 test('never filters on `condition`, which is a threshold string', () => {

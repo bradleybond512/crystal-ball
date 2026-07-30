@@ -63,10 +63,15 @@ function failed(): OutageFetchResult {
  * without this filter counts recoveries as outages and fabricates a global
  * outage storm.
  *
- * `level` is binary in practice — there is no warning tier — so the filter is
- * exactly `level !== 'normal'`, and what survives is outage ONSETS. Do NOT
- * filter on `condition`: it is a THRESHOLD STRING ('< 0.99', '< 0.8', ...),
- * not a status word, so any equality test against it drops everything.
+ * The filter is an ALLOWLIST of the known alert levels, and must stay one. A
+ * denylist (`level !== 'normal'`) rejects only that exact string, so a row
+ * whose `level` is undefined, null, or a renamed field passes straight through
+ * and becomes a real country outage — and if Cloudflare independently names
+ * the same country, that fabricates a corroborated TWO-SOURCE fact out of a
+ * malformed body. `level` is untrusted input; only 'critical' and 'warning'
+ * are outage ONSETS, everything else is dropped. Do NOT filter on `condition`:
+ * it is a THRESHOLD STRING ('< 0.99', '< 0.8', ...), not a status word, so any
+ * equality test against it drops everything.
  *
  * Country-only: region/ASN entity codes are not ISO2 and would collide with
  * country keys under matchBy:'key'.
@@ -97,11 +102,20 @@ interface QualifyingAlert {
   datasource: string;
 }
 
-/** Country-scoped, non-recovery, usably-timestamped rows only — see above. */
+/**
+ * The alert levels that mean "an outage started". Live IODA emits 'critical'
+ * against 'normal' recoveries; 'warning' is carried because the codebase's own
+ * IODA mapper (services/internet-outages.ts levelToSeverity) already treats it
+ * as a real tier, so allowlisting both rejects malformed rows without
+ * narrowing genuine coverage.
+ */
+const ONSET_LEVELS = new Set(['critical', 'warning']);
+
+/** Country-scoped, onset-level, usably-timestamped rows only — see above. */
 function qualifyingAlert(alert: IodaFusionAlert): QualifyingAlert | null {
   if (!alert || typeof alert !== 'object') return null;
   if (alert.entityType !== 'country') return null;
-  if (alert.level === 'normal') return null;
+  if (typeof alert.level !== 'string' || !ONSET_LEVELS.has(alert.level.trim().toLowerCase())) return null;
   const country = typeof alert.entityCode === 'string' ? alert.entityCode.trim().toUpperCase() : '';
   if (!country) return null;
   const seconds = typeof alert.from === 'number' ? alert.from : Number.NaN;

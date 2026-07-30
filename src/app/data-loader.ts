@@ -4158,6 +4158,12 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadEmscSeismic(): Promise<void> {
+ // Toggled-off feed: clear the panel and record nothing — a disabled source
+ // is neither a healthy fetch nor a failure for earthquake fusion.
+ if (!isFeatureAvailable('emscSeismic')) {
+ (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
+ return;
+ }
  try {
  const events = await fetchEmscSeismic();
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents(events);

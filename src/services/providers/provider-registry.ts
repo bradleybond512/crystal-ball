@@ -27,6 +27,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
 
   { id: 'aviationweather-gov', domain: 'aviation', displayName: 'AviationWeather.gov', authType: 'none', baseUrl: 'https://aviationweather.gov/api', rateLimitNote: 'no key, NOAA', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.95, fallbackPriority: 1, independenceGroup: 'noaa' },
   { id: 'open-meteo-forecast', domain: 'weather', displayName: 'Open-Meteo Forecast', authType: 'none', baseUrl: 'https://api.open-meteo.com', rateLimitNote: '10k req/day non-commercial', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'open-meteo' },
+  { id: 'met-norway', domain: 'weather', displayName: 'MET Norway', authType: 'none', baseUrl: 'https://api.met.no', rateLimitNote: 'no key; identifying User-Agent REQUIRED by TOS', freshnessTtlMs: HOUR, reliabilityWeight: 0.9, fallbackPriority: 3, independenceGroup: 'met-norway' },
   { id: 'open-meteo-flood', domain: 'disasters', displayName: 'Open-Meteo Flood', authType: 'none', baseUrl: 'https://flood-api.open-meteo.com', rateLimitNote: '10k req/day non-commercial', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.8, fallbackPriority: 3, independenceGroup: 'open-meteo' },
   { id: 'open-meteo-marine', domain: 'maritime', displayName: 'Open-Meteo Marine', authType: 'none', baseUrl: 'https://marine-api.open-meteo.com', rateLimitNote: '10k req/day non-commercial', freshnessTtlMs: HOUR, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'open-meteo' },
   { id: 'nasa-eonet', domain: 'disasters', displayName: 'NASA EONET', authType: 'none', baseUrl: 'https://eonet.gsfc.nasa.gov', rateLimitNote: 'no published limit', freshnessTtlMs: HOUR, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'nasa' },
@@ -67,6 +68,9 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // ECB-sourced FX rates via Frankfurter API. New 'fx' domain.
   // Sidecar route: /api/fx-rates?base=USD&symbols=EUR,GBP,...
   { id: 'frankfurter-fx', domain: 'fx', displayName: 'Frankfurter FX (ECB)', authType: 'none', baseUrl: 'https://api.frankfurter.dev', rateLimitNote: 'no key, no published limit', freshnessTtlMs: 12 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'ecb-fx' },
+  // fx_rates fusion 2nd source: open.er-api, an aggregator independent of the
+  // ECB fixing. Sidecar route: /api/fx-rates-erapi
+  { id: 'er-api-fx', domain: 'fx', displayName: 'ExchangeRate-API (open)', authType: 'none', baseUrl: 'https://open.er-api.com', rateLimitNote: 'free endpoint, daily refresh', freshnessTtlMs: 24 * HOUR, reliabilityWeight: 0.8, fallbackPriority: 2, independenceGroup: 'er-api' },
   // ── Intel Expansion Cluster 2: IMF PortWatch ─────────────────────────────
   // Daily maritime chokepoint transit counts from IMF PortWatch ArcGIS
   // FeatureServer. Keyless, ~daily cadence — 6h cache. New 'supply_chain' domain.
@@ -76,6 +80,12 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // IODA internet outage alerts. New 'internet_health' domain. 15 min cache.
   // Sidecar route: /api/internet-outages?from=<epoch>&until=<epoch>
   { id: 'ioda', domain: 'internet_health', displayName: 'IODA Internet Outages (Georgia Tech)', authType: 'none', baseUrl: 'https://api.ioda.inetintel.cc.gatech.edu', rateLimitNote: 'no key required, fair-use', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ioda' },
+  // Cloudflare Radar outage annotations — the 2nd internet_health voter.
+  // Genuinely independent of IODA: Cloudflare sees traffic drops at its own
+  // edge, IODA infers from BGP withdrawals, active probing and darknet
+  // telemetry. Different observation methods, different vantage points.
+  // Sidecar route: /api/internet-outages-cf
+  { id: 'cloudflare-radar', domain: 'internet_health', displayName: 'Cloudflare Radar', authType: 'free_key', requiredSecret: 'CLOUDFLARE_API_TOKEN', baseUrl: 'https://api.cloudflare.com', rateLimitNote: 'API token scoped Account → Radar → Read; quota/tier undocumented', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'cloudflare' },
   // openFDA drug shortages + enforcement recalls. New 'health' domain. 6h cache.
   // Sidecar routes: /api/pharma-shortages · /api/recalls?type=drug|food
   { id: 'openfda', domain: 'health', displayName: 'openFDA (Shortages + Recalls)', authType: 'none', baseUrl: 'https://api.fda.gov', rateLimitNote: 'no key, 240 req/min per IP', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'openfda' },
@@ -98,6 +108,18 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   { id: 'swpc-ovation', domain: 'space_weather', displayName: 'SWPC OVATION Aurora Forecast', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'noaa-swpc' },
   // SWPC solar active regions + flare probabilities. Same 'space_weather' domain. 15 min cache.
   { id: 'swpc-solar-regions', domain: 'space_weather', displayName: 'SWPC Solar Active Regions', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'noaa-swpc' },
+  // ── space_weather Kp fusion pair (FUSION_DOMAINS.space_weather) ───────────
+  // Two agencies' planetary Kp for the same 3-hour bin. PARTIALLY overlapping
+  // inputs: SWPC's estimate uses 8 magnetometer observatories, GFZ's uses 13,
+  // and some stations feed both. Different institutions, different algorithms,
+  // different cadences — so they corroborate meaningfully and sit in separate
+  // independence groups — but they are NOT fully independent. Do not describe
+  // them as such anywhere in code or UI.
+  // The NOAA series rides on /api/spaceweather/status (`kpPoints`), which the
+  // sidecar already fetches; there is deliberately no second NOAA request.
+  { id: 'swpc-kp', domain: 'space_weather', displayName: 'SWPC Planetary Kp (estimated)', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key; 8-station estimated Kp, 3h bins', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.9, fallbackPriority: 3, independenceGroup: 'noaa-swpc' },
+  // Sidecar route: /api/spaceweather-kp-gfz
+  { id: 'gfz-kp', domain: 'space_weather', displayName: 'GFZ Potsdam Kp', authType: 'none', baseUrl: 'https://kp.gfz.de', rateLimitNote: 'no key; definitive/preliminary Kp, 3h bins', freshnessTtlMs: 3 * HOUR, reliabilityWeight: 0.95, fallbackPriority: 4, independenceGroup: 'gfz' },
   // AviationWeather SIGMET/G-AIRMET airspace hazard notices. 'aviation' domain. 10 min cache.
   // Shares independenceGroup with existing aviationweather-gov — same upstream.
   // Sidecar route: /api/aviation-hazards

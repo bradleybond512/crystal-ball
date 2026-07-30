@@ -1,0 +1,58 @@
+/**
+ * Pure adapter: convert surface-temperature readings from the surface_temp
+ * fusion providers (Open-Meteo forecast model, MET Norway forecast model)
+ * into the generic DomainObservation the fusion-ingest layer consumes (value
+ * = °C). No DOM, no fetch, no globals — fixture-testable.
+ */
+
+import type { DomainObservation } from '@/services/providers/fusion-ingest';
+
+export interface TempReading {
+  lat: number;
+  lon: number;
+  tempC: number;
+  observedAt: number;
+  /** The saved place this reading was fetched for — fusion matches on this,
+   *  not geography (see provider-domain-map.ts). */
+  placeId: string;
+}
+
+// Real-world surface air temperature never leaves roughly -89°C (Vostok,
+// Antarctica, 1983) to +57°C (Death Valley, 1913) — a reading outside
+// -95..65°C is a unit-conversion bug or a sentinel/error value, not weather.
+const MIN_PLAUSIBLE_C = -95;
+const MAX_PLAUSIBLE_C = 65;
+
+export function tempToObservations(providerId: string, readings: readonly TempReading[]): DomainObservation[] {
+  const out: DomainObservation[] = [];
+  for (const r of readings) {
+    if (!Number.isFinite(r.tempC) || r.tempC < MIN_PLAUSIBLE_C || r.tempC > MAX_PLAUSIBLE_C) continue;
+    if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
+    if (!Number.isFinite(r.observedAt) || r.observedAt <= 0) continue;
+    // An empty placeId would key a cluster on '' — both providers' junk rows
+    // would then fuse into one bogus 2-vote "fact" instead of being dropped.
+    if (!r.placeId) continue;
+    out.push({ providerId, value: r.tempC, lat: r.lat, lon: r.lon, occurredAt: r.observedAt, key: r.placeId });
+  }
+  return out;
+}
+
+export interface TempVote {
+  observations: DomainObservation[];
+  ok: boolean;
+}
+
+/**
+ * The health verdict and the recorded observations must come from the SAME
+ * array (same rationale as kpVote in spaceweather/kp-fusion-observations.ts).
+ * The fetches accept any reading a 200 carried, but tempToObservations drops
+ * implausible temperatures, non-finite coordinates, unusable timestamps and
+ * empty place ids — so a provider stuck on a sentinel (tempC 999) would pass a
+ * "readings.length > 0" check on the RAW array and still contribute nothing,
+ * leaving it green while the domain quietly runs single-source. Deriving `ok`
+ * from the output makes the two predicates incapable of drifting apart.
+ */
+export function tempVote(providerId: string, readings: readonly TempReading[]): TempVote {
+  const observations = tempToObservations(providerId, readings);
+  return { observations, ok: observations.length > 0 };
+}

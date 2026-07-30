@@ -2931,6 +2931,10 @@ export function buildSpaceweatherStatusSidecar(input) {
   return {
     xray,
     geomag,
+    // Full normalized Kp series (UTC-stamped), exposed so the space_weather
+    // fusion domain can vote NOAA's bins against GFZ's without a SECOND fetch
+    // of the same upstream product.
+    kpPoints: Array.isArray(input.kpIndex) ? input.kpIndex : [],
     gpsDisruption: classifyGpsDisruptionSidecar(peakClass),
     hfRadioBlackout: !!xray && xray.peakFlux >= 1e-4,
     earthwardCmes,
@@ -2968,16 +2972,36 @@ function normalizeXrayPoints(raw) {
   return out;
 }
 
-function normalizeKpPoints(raw) {
-  // SWPC returns ["time_tag","kp_index","estimated_kp","kp"] header row + data.
-  if (!Array.isArray(raw) || raw.length < 2) return [];
+// SWPC stamps naïve UTC ("2026-07-30T12:00:00"), which Date.parse reads as
+// LOCAL time — so a UTC-5 host saw the newest bins as future-dated and
+// summarizeKpSidecar's `t > now` guard silently dropped them. Stamping the Z
+// here (rather than at each call site) means every consumer inherits the fix.
+function toUtcIsoTag(raw) {
+  const tag = String(raw ?? '').trim().replace(' ', 'T');
+  if (!tag) return '';
+  // Only a date-TIME can take a Z; appending one to a bare date yields NaN.
+  if (!/\d{2}:\d{2}/.test(tag)) return tag;
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(tag)) return tag;
+  return `${tag}Z`;
+}
+
+export function normalizeKpPoints(raw) {
+  // products/noaa-planetary-k-index.json is an array of OBJECTS with a
+  // capital-K `Kp` — NOT the header-row + array-of-arrays shape this used to
+  // parse. Every row failed the old Array.isArray(row) check, so this returned
+  // [] and the geomag block went dark for ~3 months without an error anywhere.
+  if (!Array.isArray(raw)) return [];
   const out = [];
-  for (let i = 1; i < raw.length; i += 1) {
-    const row = raw[i];
-    if (!Array.isArray(row) || row.length < 2) continue;
-    const time_tag = String(row[0] ?? '');
-    const kp = Number(row[1]);
-    if (!time_tag || !Number.isFinite(kp)) continue;
+  for (const row of raw) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const time_tag = toUtcIsoTag(row.time_tag);
+    if (!time_tag) continue;
+    // Number(null) is 0 — a plausible-looking "quiet" Kp — so reject the
+    // absent value on identity before coercing.
+    const rawKp = row.Kp;
+    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
+    const kp = Number(rawKp);
+    if (!Number.isFinite(kp)) continue;
     out.push({ time_tag, kp });
   }
   return out;
@@ -3017,8 +3041,12 @@ export async function fetchSpaceweatherStatusSidecar() {
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
     now,
   });
-  spacewxStatusCache = status;
-  spacewxStatusCachedAt = now;
+  // Don't cache a total upstream failure: serving the empty payload for the
+  // whole TTL turns one blip into every swpc-kp tick recording ok:false.
+  if (xrayRaw !== null || kpRaw !== null || cmeRaw !== null) {
+    spacewxStatusCache = status;
+    spacewxStatusCachedAt = now;
+  }
   return status;
 }
 
@@ -10569,15 +10597,79 @@ async function dispatch(requestUrl, req, routes, context) {
     const cached = getCached(cacheKey, 10 * 60 * 1000);
     if (cached) return json(cached);
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&forecast_days=3&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&current=temperature_2m&forecast_days=3&timezone=auto`;
       const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 10000);
       if (!r.ok) throw new Error(`Open-Meteo HTTP ${r.status}`);
       const data = await r.json();
+      // timezone=auto returns offset-less LOCAL wall-clock strings (e.g.
+      // "2026-07-29T23:00"), not UTC — Date.parse would silently misread
+      // them as UTC. Normalize once here to an unambiguous epoch ms.
+      // `current` is additive — if Open-Meteo ever omits it, that must
+      // degrade only the new temperature reading, not the pre-existing
+      // hourly forecast consumer, so currentObservedAtMs is left off
+      // rather than throwing and 502-ing the whole route.
+      const currentTime = data.current?.time;
+      const observedAt = currentTime !== undefined ? Date.parse(`${currentTime}Z`) - (data.utc_offset_seconds ?? 0) * 1000 : NaN;
       const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
+      if (Number.isFinite(observedAt)) result.currentObservedAtMs = observedAt;
       setCached(cacheKey, result);
       return json(result);
     } catch (error) {
       return json({ error: `open-meteo forecast error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
+    }
+  }
+
+  // ── MET Norway locationforecast (no key) ─────────────────────────────────
+  // GET /api/met-norway-temp?lat=&lon=
+  // 2nd independent source for the surface_temp fusion domain (see
+  // provider-domain-map.ts). MET Norway's TOS requires an identifying
+  // User-Agent (not the generic CHROME_UA used elsewhere in this file).
+  if (requestUrl.pathname === '/api/met-norway-temp') {
+    const lat = requestUrl.searchParams.get('lat');
+    const lon = requestUrl.searchParams.get('lon');
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    if (!lat || !lon || !Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+      return json({ error: 'lat and lon required' }, 400);
+    }
+    const cacheKey = `met-norway-temp-${latNum.toFixed(2)}-${lonNum.toFixed(2)}`;
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latNum}&lon=${lonNum}`;
+      const r = await fetchWithTimeout(
+        url,
+        { headers: { 'User-Agent': 'CrystalBall/1.0 github.com/bradleybond512/crystal-ball', Accept: 'application/json' } },
+        10000,
+      );
+      if (!r.ok) {
+        return json({ readings: [], degraded: true, reason: `met-norway upstream ${r.status}`, fetchedAt: Date.now() }, 502);
+      }
+      const data = await r.json();
+      const unit = data?.properties?.meta?.units?.air_temperature;
+      // MET Norway's TOS-mandated unit contract — refuse to emit a reading
+      // rather than silently fusing a mis-scaled value into surface_temp.
+      // Named separately from the generic empty-reading case below so a
+      // silent unit change (e.g. celsius -> fahrenheit) is distinguishable
+      // in the reason string, not just an ordinary empty/malformed response.
+      if (unit !== 'celsius') {
+        return json({ readings: [], degraded: true, reason: `met-norway: unexpected unit "${unit}" (expected celsius)`, fetchedAt: Date.now() }, 502);
+      }
+      const readings = [];
+      const first = data.properties.timeseries?.[0];
+      const tempC = first?.data?.instant?.details?.air_temperature;
+      const observedAt = first ? Date.parse(first.time) : NaN;
+      if (Number.isFinite(tempC) && Number.isFinite(observedAt)) {
+        readings.push({ lat: latNum, lon: lonNum, tempC, observedAt });
+      }
+      if (readings.length === 0) {
+        return json({ readings: [], degraded: true, reason: 'met-norway: no valid celsius reading', fetchedAt: Date.now() }, 502);
+      }
+      const result = { readings, fetchedAt: Date.now() };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ readings: [], degraded: true, reason: `met-norway upstream error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
     }
   }
 
@@ -17531,6 +17623,63 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // GET /api/fx-rates-erapi — open.er-api.com USD rates (~6h cache)
+  // 2nd independent source for the fx_rates fusion domain (see
+  // provider-domain-map.ts). Structurally independent of Frankfurter: a
+  // continuously-updated aggregator rather than the ECB daily reference
+  // fixing. Failure is signalled in the BODY (`result: "error"`) as well as
+  // by status, and neither shape is cached — a transient upstream blip must
+  // not pin the domain dark for the whole TTL.
+  if (requestUrl.pathname === '/api/fx-rates-erapi' && req.method === 'GET') {
+ const ERAPI_TTL = 6 * 60 * 60 * 1000;
+ const cached = getCached('er-api-fx', ERAPI_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: `er-api upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ const erApiReject = erApiRejectReason(raw);
+ if (erApiReject) {
+ return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: erApiReject }, 502);
+ }
+ const result = { rates: raw.rates, time_last_update_unix: raw.time_last_update_unix, fetchedAt: Date.now(), degraded: false };
+ setCached('er-api-fx', result, ERAPI_TTL);
+ return json(result);
+  }
+
+  // GET /api/spaceweather-kp-gfz — GFZ Potsdam planetary Kp (~30 min cache)
+  // 2nd source for the space_weather fusion domain: GFZ computes Kp from its
+  // own 13-observatory network with its own algorithm, against SWPC's
+  // 8-station estimate. Partially overlapping observatories — corroborating,
+  // NOT fully independent.
+  //
+  // The window is mandatory: omitting start/end returns HTTP 500 upstream.
+  // The URL therefore moves every request, so the cache key is deliberately
+  // STABLE ('gfz-kp') — keying on the URL would miss on every single call.
+  if (requestUrl.pathname === '/api/spaceweather-kp-gfz' && req.method === 'GET') {
+ const GFZ_KP_TTL = 30 * 60 * 1000;
+ const cached = getCached('gfz-kp', GFZ_KP_TTL);
+ if (cached) return json(cached);
+ const nowMs = Date.now();
+ // GFZ accepts ONLY second-precision ISO ("2026-07-28T15:00:00Z"). Date's
+ // own toISOString() emits milliseconds, and "...T15:00:00.000Z" returns
+ // HTTP 500 — verified live 2026-07-30. Do not "simplify" this back to a
+ // bare toISOString().
+ const gfzIso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+ const start = gfzIso(nowMs - 48 * 60 * 60 * 1000);
+ const end = gfzIso(nowMs);
+ const gfzUrl = `https://kp.gfz.de/app/json/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&index=Kp`;
+ const r = await fetchWithTimeout(gfzUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ samples: [], degraded: true, reason: `gfz-kp upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ const samples = parseGfzKp(raw);
+ // A well-formed envelope carrying no usable Kp is a failure, not an empty
+ // success — and it must stay uncached so the next poll retries.
+ if (samples.length === 0) return json({ samples: [], degraded: true, reason: 'gfz-kp no valid samples' }, 502);
+ const result = { samples, fetchedAt: nowMs, degraded: false };
+ setCached('gfz-kp', result, GFZ_KP_TTL);
+ return json(result);
+  }
+
   // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
   // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
   if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {
@@ -17566,10 +17715,49 @@ async function dispatch(requestUrl, req, routes, context) {
  const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
  const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
  if (!r.ok) return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ioda upstream ${r.status}` }, 502);
- const raw = await r.json();
+ const raw = await r.json().catch(() => null);
+ // A malformed body is a failure, not a quiet internet — and must stay
+ // uncached so the next poll retries instead of serving it for 15 minutes.
+ if (!iodaEnvelopeIsWellFormed(raw)) {
+ return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: 'ioda unparseable envelope' }, 502);
+ }
  const alerts = parseIodaAlerts(raw);
  const result = { alerts, count: alerts.length, fetchedAt: Date.now(), degraded: false };
  setCached(cacheKey, result, IODA_TTL);
+ return json(result);
+  }
+
+  // GET /api/internet-outages-cf — Cloudflare Radar outage annotations (~15 min cache)
+  // 2nd source for the internet_outages fusion domain: Cloudflare observes
+  // traffic drops across its own edge, against IODA's BGP/active-probing/
+  // darknet detection — different methodology, genuinely independent.
+  //
+  // An empty annotation list is a SUCCESS, not a failure: a quiet internet is
+  // a real observation, and failing it closed would make the domain go dark
+  // exactly when nothing is wrong.
+  if (requestUrl.pathname === '/api/internet-outages-cf' && req.method === 'GET') {
+ const CF_OUTAGES_TTL = 15 * 60 * 1000;
+ const cached = getCached('cf-radar-outages', CF_OUTAGES_TTL);
+ if (cached) return json(cached);
+ const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+ if (!cfToken) return json({ outages: [], degraded: true, reason: 'no Cloudflare API token' });
+ const cfUrl = 'https://api.cloudflare.com/client/v4/radar/annotations/outages?dateRange=1d&limit=100&format=json';
+ const r = await fetchWithTimeout(cfUrl, { headers: { Accept: 'application/json', Authorization: `Bearer ${cfToken}` } }, 12_000);
+ if (!r.ok) return json({ outages: [], degraded: true, reason: `cloudflare radar upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ if (!raw || !Array.isArray(raw?.result?.annotations)) {
+ return json({ outages: [], degraded: true, reason: 'cloudflare radar unparseable envelope' }, 502);
+ }
+ // A valid envelope whose annotations ALL fail to parse is a shape mismatch,
+ // not a quiet internet: upstream said "here are annotations" and we
+ // extracted none. Some rows parsing is enough — one bad row among many must
+ // not kill the tick — but zero out of many must not be cached as healthy.
+ if (raw.result.annotations.length > 0 && countUsableCfAnnotations(raw) === 0) {
+ return json({ outages: [], degraded: true, reason: 'cloudflare radar annotations unusable' }, 502);
+ }
+ const outages = parseCloudflareRadarOutages(raw);
+ const result = { outages, fetchedAt: Date.now(), degraded: false };
+ setCached('cf-radar-outages', result, CF_OUTAGES_TTL);
  return json(result);
   }
 
@@ -18237,6 +18425,61 @@ export function parseFrankfurterRates(raw) {
   };
 }
 
+// ── open.er-api payload gate ─────────────────────────────────────────────────
+// Input: parsed JSON from open.er-api.com/v6/latest/USD.
+// Output: a reason string when the payload must NOT be cached, else null.
+//
+// The route caches for SIX HOURS, so anything that gets past this gate pins the
+// fx_rates domain for that long. `result: "success"` alone is not enough:
+// { result: "success", rates: {}, time_last_update_unix: null } satisfies it,
+// carries no rate and no observation time, and the renderer then correctly
+// fails closed on every retry against the poisoned cache entry.
+export function erApiRejectReason(raw) {
+  if (raw?.result !== 'success' || !raw.rates || typeof raw.rates !== 'object') {
+    return `er-api result "${raw?.result ?? 'unparseable'}"`;
+  }
+  const updatedUnix = raw.time_last_update_unix;
+  if (typeof updatedUnix !== 'number' || !Number.isFinite(updatedUnix) || updatedUnix <= 0) {
+    return 'er-api missing time_last_update_unix';
+  }
+  if (Object.keys(raw.rates).length === 0) return 'er-api empty rates';
+  return null;
+}
+
+// ── GFZ Potsdam Kp parser ────────────────────────────────────────────────────
+// Input: parsed JSON from kp.gfz.de/app/json/?start=..&end=..&index=Kp, which
+// returns parallel COLUMN arrays ({ datetime: [...], Kp: [...], status: [...] })
+// rather than row objects. Output: transposed observation rows.
+//
+// `status` is 'def' (definitive) or 'pre' (preliminary) and is carried purely
+// as provenance — NEVER filter on it. Definitive Kp is only certified months
+// in arrears, so every row inside a live 48h window is 'pre'; a `=== 'def'`
+// filter would fail the provider closed forever while looking healthy.
+export function parseGfzKp(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const times = raw.datetime;
+  const values = raw.Kp;
+  const statuses = Array.isArray(raw.status) ? raw.status : [];
+  if (!Array.isArray(times) || !Array.isArray(values)) return [];
+  const rows = [];
+  const len = Math.min(times.length, values.length);
+  for (let i = 0; i < len; i += 1) {
+    // Same UTC discipline as the NOAA normalizer. GFZ is zone-explicit today,
+    // but a suffix-less tag would parse host-locally, stay finite, and bin
+    // hours off NOAA's — two disjoint sets of 1-vote facts, both green.
+    const observedAt = Date.parse(toUtcIsoTag(times[i]));
+    if (!Number.isFinite(observedAt) || observedAt <= 0) continue;
+    // Number(null) is 0, a valid-looking quiet Kp; -1 is GFZ's missing-value
+    // sentinel. Reject both before they become a fake reading.
+    const rawKp = values[i];
+    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
+    const kp = Number(rawKp);
+    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
+    rows.push({ observedAt, kp, status: typeof statuses[i] === 'string' ? statuses[i] : null });
+  }
+  return rows;
+}
+
 // ── IMF PortWatch parser ──────────────────────────────────────────────────────
 // Input: ArcGIS FeatureServer JSON { features: [{ attributes: {...} }] }
 // Output: latest-per-portid normalized array (drops rows missing portid).
@@ -18282,8 +18525,18 @@ export function parsePortwatchChokepoints(arcgisJson) {
 // ── IODA internet outage alerts parser ───────────────────────────────────────
 // Input: parsed JSON from api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts
 // Output: normalized array of alert objects.
+// A well-formed IODA envelope always carries a `data` ARRAY — an empty one when
+// the internet is quiet. parseIodaAlerts collapses "bad envelope" and "quiet
+// internet" onto the same `[]`, so the ROUTE must separate them before caching:
+// a 200 carrying `{ error: "maintenance" }` would otherwise be cached for the
+// full 15-minute TTL as a healthy zero-outage reading, and every retry in that
+// window reads the poisoned entry.
+export function iodaEnvelopeIsWellFormed(raw) {
+  return Boolean(raw) && Array.isArray(raw.data);
+}
+
 export function parseIodaAlerts(raw) {
-  if (!raw || !Array.isArray(raw.data)) return [];
+  if (!iodaEnvelopeIsWellFormed(raw)) return [];
   return raw.data.map(alert => ({
     entityType: alert?.entity?.type ?? null,
     entityCode: alert?.entity?.code ?? null,
@@ -18297,6 +18550,45 @@ export function parseIodaAlerts(raw) {
     condition: alert?.condition ?? null,
     method: alert?.method ?? null,
   }));
+}
+
+// ── Cloudflare Radar outage annotation parser ────────────────────────────────
+// Input: parsed JSON from api.cloudflare.com/client/v4/radar/annotations/outages
+// Output: one row per (annotation, location) pair — { country: <ISO2>, startedAt: <ms> }.
+// `locations` is a required ISO2 string[] and `startDate` a required Z-suffixed
+// date-time, so Date.parse reads it as UTC. Do NOT add a defensive 'Z' append
+// here: it would corrupt an already-offset string.
+// How many annotations are STRUCTURALLY usable — an ISO2 array plus a parseable
+// startDate. The route needs this to tell a quiet internet (`annotations: []`)
+// from a shape mismatch (upstream said "here are annotations" and we extracted
+// none): only the first is a real observation, and only the first may be cached
+// as a healthy zero-outage reading.
+export function countUsableCfAnnotations(raw) {
+  const annotations = raw?.result?.annotations;
+  if (!Array.isArray(annotations)) return 0;
+  let usable = 0;
+  for (const a of annotations) {
+    if (!Array.isArray(a?.locations)) continue;
+    if (typeof a?.startDate !== 'string' || !Number.isFinite(Date.parse(a.startDate))) continue;
+    usable += 1;
+  }
+  return usable;
+}
+
+export function parseCloudflareRadarOutages(raw) {
+  const annotations = raw?.result?.annotations;
+  if (!Array.isArray(annotations)) return [];
+  const rows = [];
+  for (const a of annotations) {
+    const startedAt = typeof a?.startDate === 'string' ? Date.parse(a.startDate) : Number.NaN;
+    if (!Number.isFinite(startedAt)) continue;
+    if (!Array.isArray(a?.locations)) continue;
+    for (const code of a.locations) {
+      if (typeof code !== 'string' || code.trim() === '') continue;
+      rows.push({ country: code.trim().toUpperCase(), startedAt });
+    }
+  }
+  return rows;
 }
 
 // ── openFDA drug shortage parser ─────────────────────────────────────────────

@@ -142,6 +142,11 @@ import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
 import { fetchIodaOutages } from '@/services/internet-outages';
+import {
+  fetchCloudflareRadarOutages,
+  fetchIodaOutageEvents,
+} from '@/services/netwatch/cloudflare-radar-fetch';
+import { outageCountsToObservations } from '@/services/netwatch/outage-fusion-observations';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { fetchAirstrikes } from '@/services/airstrikes';
 import { updateFromFlights } from '@/services/strike-packages';
@@ -347,10 +352,17 @@ import { fetchFmpPrices } from '@/services/market/fmp-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
 import { fetchCoinpaprikaPrices } from '@/services/market/coinpaprika-fetch';
 import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
+import { fetchErApiRates, fetchFrankfurterRates, fxRatesToObservations } from '@/services/market/fx-fusion-fetch';
 import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
+import { fetchGfzKp, fetchSwpcKp } from '@/services/spaceweather/gfz-kp-fetch';
+import { kpVote } from '@/services/spaceweather/kp-fusion-observations';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
+import { tempVote, type TempReading } from '@/services/weather/weather-fusion-observations';
+import { isUsableLatLon } from '@/services/geo/geo-math';
+import { fetchOpenMeteoTemp } from '@/services/weather/open-meteo-temp-fetch';
+import { fetchMetNorwayTemp } from '@/services/weather/met-norway-fetch';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
 import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/services/intelligence/adapters/river-discharge-adapter';
 import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/services/intelligence/adapters/marine-forecast-adapter';
@@ -1460,6 +1472,15 @@ export class DataLoaderManager implements AppModule {
    fmp.quotes.map((q) => ({ providerId: 'fmp', key: q.symbol.toUpperCase(), value: q.price, lat: 0, lon: 0, occurredAt: q.observedAt })),
    fmp.ok);
  recordFusedSpotPrices(getLatestFusion('stocks', finnhubObservedAt).facts);
+ // USD FX rate fusion: Frankfurter (ECB daily fixing) + open.er-api
+ // (continuous aggregator), matched by currency code. Both stamp their rows
+ // with the instant the quote refers to — the ECB fixing date, or er-api's
+ // own update time — NOT the fetch time, so a source serving a week-old rate
+ // reads as a week old. The fetch-outcome clock stays at "now" (default),
+ // since the request itself did just happen.
+ const [frankfurter, erApi] = await Promise.all([fetchFrankfurterRates(), fetchErApiRates()]);
+ recordDomainObservations('frankfurter-fx', fxRatesToObservations('frankfurter-fx', frankfurter.rates, frankfurter.observedAt), frankfurter.ok);
+ recordDomainObservations('er-api-fx', fxRatesToObservations('er-api-fx', erApi.rates, erApi.observedAt), erApi.ok);
   }
 
   async loadPredictions(): Promise<void> {
@@ -2183,6 +2204,48 @@ export class DataLoaderManager implements AppModule {
  }
  })();
 
+ // surface_temp fusion: Open-Meteo + MET Norway per saved place.
+ // recordDomainObservations REPLACES per provider rather than accumulating
+ // (see fusion-publish.ts), so every place's readings are collected into
+ // one array per provider before the single, fail-closed record call below.
+ // Deliberately bypasses fetchJsonCached (unlike the hourly-forecast block
+ // above): routing through its 30-min renderer cache would pin
+ // currentObservedAtMs for up to 30 min against open-meteo-forecast's
+ // 1-hour freshnessTtlMs, manufacturing staleness that isn't real. The
+ // sidecar's own 10-min cache on /api/weather/local-forecast already
+ // absorbs upstream load, so a fresh renderer-side call per tick is cheap.
+ // AWAITED, not fire-and-forget: recordDomainObservations REPLACES per
+ // provider, so an unawaited block lets the tick's in-flight guard release
+ // while these requests are still running — a retry then starts a second
+ // tick and the older, slower one can land LAST and overwrite the newer
+ // observations. Awaiting is free for alert latency: this block is the last
+ // thing in the tick, long after the safety-critical chip publication.
+ const openMeteoReadings: TempReading[] = [];
+ const metNorwayReadings: TempReading[] = [];
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const places = getSavedPlaces().slice(0, 3);
+ await Promise.allSettled(places.map(async (place) => {
+ if (!isUsableLatLon(place.lat, place.lon)) return;
+ const [om, mn] = await Promise.allSettled([
+ fetchOpenMeteoTemp(place.lat, place.lon),
+ fetchMetNorwayTemp(place.lat, place.lon),
+ ]);
+ if (om.status === 'fulfilled' && om.value.ok) openMeteoReadings.push(...om.value.readings.map((r) => ({ ...r, placeId: place.id })));
+ if (mn.status === 'fulfilled' && mn.value.ok) metNorwayReadings.push(...mn.value.readings.map((r) => ({ ...r, placeId: place.id })));
+ }));
+ } catch {
+ /* readings arrays may be partially populated or empty — recorded below either way */
+ } finally {
+ // `ok` comes from the ADAPTER output, never the raw readings: the adapter
+ // applies the stricter validation, so a 200 carrying `tempC: 999` has
+ // readings.length 1 but yields zero observations — a phantom healthy vote.
+ const omVote = tempVote('open-meteo-forecast', openMeteoReadings);
+ const mnVote = tempVote('met-norway', metNorwayReadings);
+ recordDomainObservations('open-meteo-forecast', omVote.observations, omVote.ok);
+ recordDomainObservations('met-norway', mnVote.observations, mnVote.ok);
+ }
+
  } catch (error) {
  this.ctx.map?.setLayerReady('weather', false);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
@@ -2684,7 +2747,27 @@ export class DataLoaderManager implements AppModule {
   async loadLittleSnitch(): Promise<void> { return cyberLoaders.loadLittleSnitch(this.ctx); }
 
   // Space domain → src/app/loaders/space.ts
-  async loadSpaceWeather(): Promise<void> { return spaceLoaders.loadSpaceWeather(this.ctx); }
+  async loadSpaceWeather(): Promise<void> {
+    await spaceLoaders.loadSpaceWeather(this.ctx);
+    // Planetary Kp fusion: SWPC's 8-station estimate + GFZ Potsdam's
+    // 13-observatory index, matched on the 3-hour bin they both stamp.
+    // Exactly one record per provider per tick — recordDomainObservations
+    // REPLACES a provider's set rather than accumulating. The fetch-outcome
+    // clock stays at the default wall clock (the request really did just
+    // happen); each sample carries its own bin timestamp as occurredAt, so a
+    // source serving stale bins still reads as stale.
+    // ONE `now` for both fetches: they share a rolling 48h trim, and two
+    // independent clocks would drift by however long the slower leg takes,
+    // orphaning any bin that fell in the gap.
+    const now = Date.now();
+    const [swpc, gfz] = await Promise.all([fetchSwpcKp(now), fetchGfzKp(now)]);
+    // kpVote derives `ok` from the same array it hands back, so a provider
+    // whose rows all get dropped records ok:false instead of green-but-silent.
+    const swpcVote = kpVote('swpc-kp', swpc.ok, swpc.samples);
+    const gfzVote = kpVote('gfz-kp', gfz.ok, gfz.samples);
+    recordDomainObservations('swpc-kp', swpcVote.observations, swpcVote.ok);
+    recordDomainObservations('gfz-kp', gfzVote.observations, gfzVote.ok);
+  }
   async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
   async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }
 
@@ -4106,6 +4189,33 @@ export class DataLoaderManager implements AppModule {
   // rather than coupling this loader back into refreshStormPosture (re-entrancy).
   async loadInternetOutages(): Promise<void> {
  await fetchIodaOutages();
+    // internet_outages fusion: per-country outage-onset counts from IODA and
+    // Cloudflare Radar. A SECOND IODA request, not a reuse of the one above —
+    // that one asks for limit=50 to warm the comms-axis cache, and the fusion
+    // path needs limit=5000 or the newest rows are silently truncated away.
+    // The cache key carries from/until/limit, so the two never clobber each other —
+    // and this query's second-resolution bounds make its key unique per call, so it
+    // never reuses a cached entry (one upstream request per launch).
+    //
+    // ONE `now` for both fetches and for the adapter: it is both the trailing
+    // window's end and the observations' occurredAt, and two clocks would put
+    // the providers on different windows.
+    // Exactly one record per provider per tick — recordDomainObservations
+    // REPLACES a provider's set rather than accumulating.
+    const now = Date.now();
+    const [ioda, cloudflare] = await Promise.all([
+      fetchIodaOutageEvents(now),
+      fetchCloudflareRadarOutages(),
+    ]);
+    // `ok` comes straight from the fetch, NOT from the observation count: an
+    // internet with no outages anywhere is a real, healthy observation, and
+    // failing it closed would blind the domain exactly when nothing is wrong.
+    recordDomainObservations('ioda', outageCountsToObservations('ioda', ioda.events, now), ioda.ok);
+    recordDomainObservations(
+      'cloudflare-radar',
+      outageCountsToObservations('cloudflare-radar', cloudflare.events, now),
+      cloudflare.ok,
+    );
   }
 
   async loadIswReports(): Promise<void> {

@@ -347,12 +347,20 @@ src/                        # TypeScript frontend (Vite)
     providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
     providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
     providers/provider-health-timeline-view.ts # pure: ProviderHealthState.outcomes[id] ring buffer → windowed timeline (dots + windowed success rate) for the SourceConfidencePanel provider-health strip
-    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), 2nd fused domain
-    market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
-    market/coingecko-fetch.ts + coinbase-fetch.ts # no-key fail-closed fetches — the 2 crypto sources (Coinbase, not Binance: 451 in US)
-    market/stock-fetch.ts                    # fail-closed Yahoo (no-key) + Finnhub (keyed) fetches — the 2 stock sources (4th fused domain, own 'equities' domain)
+    geo/geo-math.ts                          # shared pure haversine + bbox helpers (single source of truth for the spatial fusion domains)
+    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ + AirNow + PurpleAir readings → DomainObservation[] (AQI)
+    market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance)
+    market/coingecko-fetch.ts + coinbase-fetch.ts + coinpaprika-fetch.ts + kraken-fetch.ts # no-key fail-closed fetches — the 4 crypto sources (Coinbase, not Binance: 451 in US)
+    market/stock-fetch.ts                    # fail-closed Yahoo (no-key) + Finnhub (keyed) + FMP (keyed) — the 3 equities sources
+    market/fx-fusion-fetch.ts                # Frankfurter (ECB fixing) + open.er-api (continuous aggregate) → USD-base FX rates, matched by currency code
+    weather/open-meteo-temp-fetch.ts + met-norway-fetch.ts # the 2 surface_temp sources; api.met.no requires a descriptive User-Agent per its ToS — set sidecar-side at local-api-server.mjs:10642, not in the renderer fetch
+    weather/weather-fusion-observations.ts   # saved-place temps → DomainObservation[] (matched by PLACE ID, never spatially — home+work sit km apart)
+    spaceweather/gfz-kp-fetch.ts             # GFZ Potsdam Kp (SWPC rides the existing /api/spaceweather/status route)
+    spaceweather/kp-fusion-observations.ts   # Kp samples → DomainObservation[] keyed by 3-hour bin start; kpVote() derives `ok` from the ADAPTER output, not the fetch
+    netwatch/cloudflare-radar-fetch.ts       # IODA + Cloudflare Radar per-country outage-onset fetches (CF needs CLOUDFLARE_API_TOKEN, Account→Radar→Read)
+    netwatch/outage-fusion-observations.ts   # outage onsets → per-country counts over a trailing 6 h. DELIBERATE INVERSION vs every sibling adapter: zero qualifying rows behind a 200 is ok:true with an empty array — a quiet internet is a real observation, not a failed fetch.
     diagnostics/source-confidence-view.ts    # pure: composes assessProviderRedundancy() + provider-health-timeline-view into per-domain cards (fusion-active vs SPOF, live disagreement flags, per-provider health) for SourceConfidencePanel
-    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Coinbase) + stocks (Yahoo+Finnhub), the last two key/relative. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
+    # 8 fused domains: earthquakes (USGS+EMSC+GEOFON) + air_quality (Open-Meteo+OpenAQ+AirNow+PurpleAir) — both spatial; crypto (4 sources) + stocks (3) + surface_temp (2) + fx_rates (2) + space_weather (2) + internet_outages (2) — all matchBy:'key'. Tolerances are EMPIRICAL, set from live side-by-side probes (see the per-domain comments in provider-domain-map.ts) — do not "tidy" them toward rounder numbers. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
     # `src/components/SourceConfidencePanel.ts` (Phase 1 UI, panel id `source-confidence`) is the dedicated per-domain redundancy surface — SystemDiagnostic's Feeds tab still shows the compact "Source corroboration" summary, this panel is the full drill-down (per-provider health timeline + live disagreement flags + FUSED/SPOF tags). Widening fusion to more domains + closing the cataloged SPOFs (Workstream B) is still open — see the spec's "Phase 1 status" note.
     # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/

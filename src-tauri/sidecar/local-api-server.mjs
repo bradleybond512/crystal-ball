@@ -13711,7 +13711,8 @@ async function dispatch(requestUrl, req, routes, context) {
  // global one can never be served for each other.
  const bboxRaw = ['nwlng', 'nwlat', 'selng', 'selat'].map((p) => requestUrl.searchParams.get(p));
  const bboxPresent = bboxRaw.some((v) => v !== null);
- const bbox = bboxRaw.map((v) => Number.parseFloat(v ?? ''));
+ // Number(), not parseFloat: '1junk' must 400, not silently truncate to 1.
+ const bbox = bboxRaw.map((v) => (v === null || v.trim() === '' ? Number.NaN : Number(v)));
  if (bboxPresent && !bbox.every(Number.isFinite)) {
  return json({ sensors: [], error: 'bbox requires all four finite params: nwlng, nwlat, selng, selat' }, 400);
  }

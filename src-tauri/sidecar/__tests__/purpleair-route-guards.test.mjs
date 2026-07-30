@@ -112,7 +112,13 @@ test('purpleair route: partial or malformed bbox → 400, all-four-or-none', asy
   process.env.PURPLEAIR_API_KEY = 'test-key-never-sent-upstream';
   try {
     await withServer(async (get) => {
-      for (const qs of ['?nwlng=-88.2', '?nwlng=-88.2&nwlat=42.4&selng=-85.8', '?nwlng=abc&nwlat=42.4&selng=-85.8&selat=40.7']) {
+      for (const qs of [
+        '?nwlng=-88.2',
+        '?nwlng=-88.2&nwlat=42.4&selng=-85.8',
+        '?nwlng=abc&nwlat=42.4&selng=-85.8&selat=40.7',
+        '?nwlng=1junk&nwlat=42.4&selng=-85.8&selat=40.7', // parseFloat would truncate to 1 — must 400
+        '?nwlng=&nwlat=42.4&selng=-85.8&selat=40.7', // empty param is not 0
+      ]) {
         const res = await get(`/api/airquality/purpleair${qs}`);
         assert.equal(res.status, 400, `expected 400 for ${qs}`);
         const body = await res.json();

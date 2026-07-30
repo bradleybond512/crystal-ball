@@ -169,6 +169,14 @@ test('bboxAround clamps at the poles and widens to the full longitude span', () 
   assert.equal(box.seLng, 180);
 });
 
+test('bboxAround uses the spherical longitude bound near the poles, not the tangent-plane approximation', () => {
+  // At lat 89° a 100km circle spans ±64.07° of longitude — latDelta/cos(lat)
+  // gives only ±51.5° and would exclude genuinely-nearby sensors upstream.
+  const box = bboxAround(89, 0, 100);
+  assert.ok(Math.abs(box.seLng - 64.07) < 0.1, `seLng ${box.seLng}`);
+  assert.ok(Math.abs(box.nwLng - -64.07) < 0.1, `nwLng ${box.nwLng}`);
+});
+
 test('bboxAround widens to the full longitude span when the box crosses the antimeridian', () => {
   // Clamping at ±180 would silently drop a user's nearest cross-meridian
   // sensors — sensors at -179.8° are within 100km of 179.5° but outside a

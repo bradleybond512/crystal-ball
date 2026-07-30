@@ -179,13 +179,21 @@ export interface SensorBoundingBox {
 // renderer. filterReadingsNearby stays the precise gate: a widened box only
 // costs payload size, never correctness.
 export function bboxAround(lat: number, lon: number, radiusKm: number): SensorBoundingBox {
-  const latDelta = (radiusKm / EARTH_RADIUS_KM) * (180 / Math.PI);
+  const radiusRad = radiusKm / EARTH_RADIUS_KM;
+  const latDelta = radiusRad * (180 / Math.PI);
   const nwLat = Math.min(90, lat + latDelta);
   const seLat = Math.max(-90, lat - latDelta);
   if (nwLat >= 90 || seLat <= -90) {
     return { nwLat, seLat, nwLng: -180, seLng: 180 };
   }
-  const lonDelta = latDelta / Math.cos(toRad(lat));
+  // Spherical longitude bound (asin, not the tangent-plane latDelta/cos(lat)
+  // approximation, which underestimates near the poles — at lat 89° a 100km
+  // circle spans ±64.07° of longitude, not ±51.5°).
+  const sinRatio = Math.sin(radiusRad) / Math.cos(toRad(lat));
+  if (sinRatio >= 1) {
+    return { nwLat, seLat, nwLng: -180, seLng: 180 };
+  }
+  const lonDelta = Math.asin(sinRatio) * (180 / Math.PI);
   const nwLng = lon - lonDelta;
   const seLng = lon + lonDelta;
   // A box crossing the antimeridian can't be expressed as one nwlng<selng

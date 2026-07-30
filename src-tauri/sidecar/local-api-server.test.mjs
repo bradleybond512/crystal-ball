@@ -2397,3 +2397,457 @@ test('/api/airnow/forecast: keyed AirNow primary carries the ActionDay flag', as
     if (prev === undefined) delete process.env.AIRNOW_API_KEY; else process.env.AIRNOW_API_KEY = prev;
   }
 });
+
+// ── Fusion batch-1 route contracts (#1584 / #1585 / #1586) ───────────────────
+// Six routes added by the API-fusion expansion: GEOFON seismic, CoinPaprika +
+// Kraken crypto, FMP stocks, AirNow current observations, PurpleAir sensors.
+// Contracts pinned here: malformed/partial upstream payloads degrade honestly,
+// total failures are never cached (the sidecar TTL cache is module-level, so
+// per-route failure tests run BEFORE the success test that writes the cache),
+// and timestamp/timezone normalization is exact.
+
+function mockHttpsRouted(route) {
+  const original = https.request;
+  const calls = [];
+  https.request = (options, onResponse) => {
+    calls.push({ hostname: options.hostname, path: options.path, headers: options.headers ?? {} });
+    const spec = route(options) ?? { statusCode: 500, body: 'unmatched request' };
+    const req = new EventEmitter();
+    req.setTimeout = () => {};
+    req.write = () => {};
+    req.destroy = (error) => { if (error) req.emit('error', error); };
+    req.end = () => {
+      queueMicrotask(() => {
+        if (spec.error) { req.emit('error', spec.error); return; }
+        const res = new EventEmitter();
+        res.statusCode = spec.statusCode ?? 200;
+        res.statusMessage = '';
+        res.headers = spec.headers ?? { 'content-type': 'application/json' };
+        onResponse(res);
+        if (spec.body) res.emit('data', Buffer.from(spec.body));
+        res.emit('end');
+      });
+    };
+    return req;
+  };
+  return { calls, restore: () => { https.request = original; } };
+}
+
+function swapEnv(key, value) {
+  const previous = process.env[key];
+  if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  return () => {
+    if (previous === undefined) delete process.env[key]; else process.env[key] = previous;
+  };
+}
+
+// The sidecar TTL cache stamps entries with Date.now(); shifting the clock
+// forward is the only way to cross a TTL boundary without a real sleep.
+function shiftClock(ms) {
+  const realNow = Date.now;
+  const base = realNow();
+  Date.now = () => base + ms;
+  return () => { Date.now = realNow; };
+}
+
+async function startRouteApp(route) {
+  const mock = mockHttpsRouted(route);
+  const app = await createLocalApiServer({ port: 0, logger: { log() {}, warn() {}, error() {} } });
+  const { port } = await app.start();
+  return {
+    calls: mock.calls,
+    get(pathname) { return authFetch(`http://127.0.0.1:${port}${pathname}`); },
+    async getJson(pathname) {
+      const res = await authFetch(`http://127.0.0.1:${port}${pathname}`);
+      return res.json();
+    },
+    async cleanup() { mock.restore(); await app.close(); },
+  };
+}
+
+const GEOFON_HEADER = '#EventID|Time|Latitude|Longitude|Depth/km|Author|Catalog|Contributor|ContributorID|MagType|Magnitude|MagAuthor|EventLocationName';
+
+test('/api/geofon-seismic — zero events on HTTP 200 is degraded and never cached', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 200, headers: { 'content-type': 'text/plain' }, body: `${GEOFON_HEADER}\n` }));
+  try {
+    const first = await app.getJson('/api/geofon-seismic');
+    assert.deepEqual(first, { events: [], degraded: true, error: 'no GEOFON events parsed' });
+    const second = await app.getJson('/api/geofon-seismic');
+    assert.equal(second.degraded, true);
+    assert.equal(app.calls.length, 2, 'degraded zero-event result must not be cached');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/geofon-seismic — malformed HTML on HTTP 200 (maintenance page) is degraded, not events', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    headers: { 'content-type': 'text/html' },
+    body: '<html><body><h1>GEOFON maintenance</h1><p>back soon|really</p></body></html>',
+  }));
+  try {
+    const payload = await app.getJson('/api/geofon-seismic');
+    assert.deepEqual(payload, { events: [], degraded: true, error: 'no GEOFON events parsed' });
+    await app.get('/api/geofon-seismic');
+    assert.equal(app.calls.length, 2, 'malformed-payload result must not be cached');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/geofon-seismic — parses pipe-delimited FDSN text and caches the success', async () => {
+  const body = [
+    GEOFON_HEADER,
+    'gfz2026abcd|2026-07-28T12:34:56|35.20|26.10|10.0|GFZ|GEOFON|GFZ|gfz2026abcd|M|5.1|GFZ|Crete, Greece',
+    'gfz2026wxyz|2026-07-28T10:00:00|-5.50|151.20|45.3|GFZ|GEOFON|GFZ|gfz2026wxyz|M|4.4|GFZ|New Britain Region, P.N.G.',
+    'this line has no pipes and must be dropped',
+  ].join('\n');
+  const app = await startRouteApp(() => ({ statusCode: 200, headers: { 'content-type': 'text/plain' }, body }));
+  try {
+    const res = await app.get('/api/geofon-seismic');
+    assert.equal(res.status, 200);
+    const payload = await res.json();
+    assert.equal(payload.degraded, undefined);
+    assert.equal(payload.events.length, 2);
+    assert.deepEqual(payload.events[0], {
+      id: 'gfz2026abcd',
+      time: '2026-07-28T12:34:56',
+      lat: 35.2,
+      lon: 26.1,
+      depthKm: 10,
+      magnitude: 5.1,
+      region: 'Crete, Greece',
+    });
+    assert.equal(app.calls[0].hostname, 'geofon.gfz-potsdam.de');
+    assert.match(app.calls[0].path, /format=text&limit=50&minmagnitude=4\.0/);
+
+    const second = await app.getJson('/api/geofon-seismic');
+    assert.equal(second.events.length, 2);
+    assert.equal(app.calls.length, 1, 'success must be served from the 5-min cache');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/crypto-quotes-coinpaprika — all four upstreams failing is degraded and never cached', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 500, body: 'oops' }));
+  try {
+    const payload = await app.getJson('/api/crypto-quotes-coinpaprika');
+    assert.deepEqual(payload, { quotes: [], degraded: true, error: 'all CoinPaprika requests failed' });
+    await app.get('/api/crypto-quotes-coinpaprika');
+    assert.equal(app.calls.length, 8, 'a total failure must retry all four tickers on the next poll');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/crypto-quotes-coinpaprika — partial success maps ids to ticker symbols and caches', async () => {
+  const app = await startRouteApp((options) => {
+    if (options.path.startsWith('/v1/tickers/btc-bitcoin')) return { statusCode: 200, body: JSON.stringify({ quotes: { USD: { price: 65_123.45 } } }) };
+    if (options.path.startsWith('/v1/tickers/sol-solana')) return { statusCode: 200, body: JSON.stringify({ quotes: { USD: { price: 151.2 } } }) };
+    if (options.path.startsWith('/v1/tickers/xrp-xrp')) return { statusCode: 200, body: JSON.stringify({ quotes: { USD: { price: 0 } } }) };
+    return { statusCode: 502, body: 'eth down' };
+  });
+  try {
+    const payload = await app.getJson('/api/crypto-quotes-coinpaprika');
+    assert.deepEqual(payload.quotes, [
+      { symbol: 'BTC', price: 65_123.45 },
+      { symbol: 'SOL', price: 151.2 },
+    ]);
+    await app.get('/api/crypto-quotes-coinpaprika');
+    assert.equal(app.calls.length, 4, 'partial success is cacheable — second hit must be served from cache');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/crypto-quotes-kraken — empty result set is degraded and never cached', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify({ error: [], result: {} }) }));
+  try {
+    const payload = await app.getJson('/api/crypto-quotes-kraken');
+    assert.deepEqual(payload, { quotes: [], degraded: true, error: 'all Kraken requests failed' });
+    await app.get('/api/crypto-quotes-kraken');
+    assert.equal(app.calls.length, 2, 'a zero-quote result must not be cached');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/crypto-quotes-kraken — Kraken error array surfaces as the error string, uncached', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify({ error: ['EGeneral:Invalid arguments'] }) }));
+  try {
+    const payload = await app.getJson('/api/crypto-quotes-kraken');
+    assert.deepEqual(payload.quotes, []);
+    assert.equal(payload.error, 'EGeneral:Invalid arguments');
+    await app.get('/api/crypto-quotes-kraken');
+    assert.equal(app.calls.length, 2, 'a Kraken-reported error must not be cached');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/crypto-quotes-kraken — exchange-native pairs map + dedupe to one quote per symbol, then cache', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({
+      error: [],
+      result: {
+        XXBTZUSD: { c: ['65000.1', '1.0'] },
+        XBTUSDT: { c: ['65999.9', '1.0'] }, // second XBT pair — dedupe keeps the first
+        XETHZUSD: { c: ['3500.5', '1.0'] },
+        SOLUSD: { c: ['150.25', '1.0'] },
+        XXRPZUSD: { c: ['3.14', '1.0'] },
+      },
+    }),
+  }));
+  try {
+    const payload = await app.getJson('/api/crypto-quotes-kraken');
+    assert.deepEqual(payload.quotes, [
+      { symbol: 'BTC', price: 65_000.1 },
+      { symbol: 'ETH', price: 3500.5 },
+      { symbol: 'SOL', price: 150.25 },
+      { symbol: 'XRP', price: 3.14 },
+    ]);
+    await app.get('/api/crypto-quotes-kraken');
+    assert.equal(app.calls.length, 1, 'successful ticker must be served from cache');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+test('/api/stocks-fmp — keyless is degraded with no upstream call', async () => {
+  const restoreKey = swapEnv('FMP_API_KEY', undefined);
+  const app = await startRouteApp(() => ({ statusCode: 200, body: '[]' }));
+  try {
+    const payload = await app.getJson('/api/stocks-fmp');
+    assert.deepEqual(payload, { quotes: [], degraded: true, error: 'no FMP key' });
+    assert.equal(app.calls.length, 0);
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/stocks-fmp — tries /stable/batch-quote before /api/v3; both failing is degraded, uncached', async () => {
+  const restoreKey = swapEnv('FMP_API_KEY', 'test-fmp-key');
+  const app = await startRouteApp((options) => {
+    if (options.path.startsWith('/stable/batch-quote')) return { statusCode: 403, body: 'denied' };
+    return { error: new Error('v3 unreachable') };
+  });
+  try {
+    const payload = await app.getJson('/api/stocks-fmp');
+    assert.deepEqual(payload, { quotes: [], degraded: true, error: 'v3 unreachable' });
+    assert.ok(app.calls[0].path.startsWith('/stable/batch-quote'), 'stable endpoint must be attempted first');
+    assert.ok(app.calls[1].path.startsWith('/api/v3/quote/'), 'legacy v3 must be the fallback');
+    await app.get('/api/stocks-fmp');
+    assert.equal(app.calls.length, 4, 'a no-quotes failure must not be cached');
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/stocks-fmp — thrown stable error falls through to v3; timestamps map seconds→ms with fetch-time fallback', async () => {
+  const restoreKey = swapEnv('FMP_API_KEY', 'test-fmp-key');
+  const app = await startRouteApp((options) => {
+    if (options.path.startsWith('/stable/batch-quote')) return { error: new Error('stable timeout') };
+    return {
+      statusCode: 200,
+      body: JSON.stringify([
+        { symbol: 'AAPL', price: 213.45, timestamp: 1_753_000_000 },
+        { symbol: 'MSFT', price: 512.3 }, // no timestamp → fetch-time fallback
+        { symbol: 'BAD', price: 0, timestamp: 1_753_000_000 }, // non-positive price dropped
+        { price: 100, timestamp: 1_753_000_000 }, // symbol-less row dropped
+      ]),
+    };
+  });
+  try {
+    const before = Date.now();
+    const payload = await app.getJson('/api/stocks-fmp');
+    const after = Date.now();
+    assert.equal(payload.quotes.length, 2, 'zero-price and symbol-less rows are dropped');
+    const [aapl, msft] = payload.quotes;
+    assert.deepEqual(aapl, { symbol: 'AAPL', price: 213.45, observedAt: 1_753_000_000_000 });
+    assert.equal(msft.symbol, 'MSFT');
+    assert.ok(msft.observedAt >= before && msft.observedAt <= after, 'missing timestamp falls back to fetch time');
+    await app.get('/api/stocks-fmp');
+    assert.equal(app.calls.length, 2, 'successful quotes must be served from the 60s cache');
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/stocks-fmp — stable success needs no v3 fallback (fresh cache window via shifted clock)', async () => {
+  const restoreKey = swapEnv('FMP_API_KEY', 'test-fmp-key');
+  const restoreClock = shiftClock(61_000); // step past the 60s TTL left by the previous test
+  const app = await startRouteApp((options) => {
+    if (options.path.startsWith('/stable/batch-quote')) {
+      return { statusCode: 200, body: JSON.stringify([{ symbol: 'NVDA', price: 181.1, timestamp: 1_753_100_000 }]) };
+    }
+    return { statusCode: 500, body: 'v3 must not be called' };
+  });
+  try {
+    const payload = await app.getJson('/api/stocks-fmp');
+    assert.deepEqual(payload.quotes, [{ symbol: 'NVDA', price: 181.1, observedAt: 1_753_100_000_000 }]);
+    assert.equal(app.calls.length, 1, 'stable success must not fall through to v3');
+    assert.ok(app.calls[0].path.startsWith('/stable/batch-quote'));
+  } finally {
+    restoreClock();
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airnow/current — keyless is degraded with no upstream call', async () => {
+  const restoreKey = swapEnv('AIRNOW_API_KEY', undefined);
+  const app = await startRouteApp(() => ({ statusCode: 200, body: '[]' }));
+  try {
+    const payload = await app.getJson('/api/airnow/current?lat=41.6&lon=-87.1');
+    assert.deepEqual(payload, { readings: [], degraded: true, error: 'no AirNow key' });
+    assert.equal(app.calls.length, 0);
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airnow/current — missing or non-numeric lat/lon is a 400', async () => {
+  const restoreKey = swapEnv('AIRNOW_API_KEY', 'test-airnow-key');
+  const app = await startRouteApp(() => ({ statusCode: 200, body: '[]' }));
+  try {
+    const missing = await app.get('/api/airnow/current');
+    assert.equal(missing.status, 400);
+    assert.deepEqual(await missing.json(), { readings: [], error: 'lat/lon required' });
+    const garbled = await app.get('/api/airnow/current?lat=abc&lon=-87.1');
+    assert.equal(garbled.status, 400);
+    assert.equal(app.calls.length, 0);
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airnow/current — tz-offset table normalizes EST/AST/ChST/SST local times to epoch ms', async () => {
+  const restoreKey = swapEnv('AIRNOW_API_KEY', 'test-airnow-key');
+  const rows = [
+    { DateObserved: '2026-07-28 ', HourObserved: 14, LocalTimeZone: 'EST', Latitude: 41.6, Longitude: -87.1, ParameterName: 'PM2.5', AQI: 42 },
+    { DateObserved: '2026-07-28', HourObserved: 7, LocalTimeZone: 'AST', Latitude: 18.4, Longitude: -66.1, ParameterName: 'OZONE', AQI: 55 },
+    { DateObserved: '2026-07-28', HourObserved: 14, LocalTimeZone: 'ChST', Latitude: 13.5, Longitude: 144.8, ParameterName: 'PM2.5', AQI: 18 },
+    { DateObserved: '2026-07-28', HourObserved: 14, LocalTimeZone: 'SST', Latitude: -14.3, Longitude: -170.7, ParameterName: 'PM2.5', AQI: 12 },
+    { DateObserved: '2026-07-28', HourObserved: 14, LocalTimeZone: 'EST', Latitude: 41.6, Longitude: -87.1, ParameterName: 'PM10', AQI: -1 }, // negative AQI dropped
+    { DateObserved: '2026-07-28', HourObserved: 14, LocalTimeZone: 'EST', ParameterName: 'PM2.5', AQI: 40 }, // coordinate-less row dropped
+  ];
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify(rows) }));
+  try {
+    const payload = await app.getJson('/api/airnow/current?lat=41.601&lon=-87.101');
+    assert.equal(payload.readings.length, 4, 'negative-AQI and coordinate-less rows are dropped');
+    const at = payload.readings.map((r) => r.observedAt);
+    assert.equal(at[0], Date.parse('2026-07-28T19:00:00Z'), 'EST 14:00 → 19:00Z (trailing space trimmed)');
+    assert.equal(at[1], Date.parse('2026-07-28T11:00:00Z'), 'AST 07:00 → 11:00Z (single-digit hour zero-padded)');
+    assert.equal(at[2], Date.parse('2026-07-28T04:00:00Z'), 'ChST 14:00 → 04:00Z');
+    assert.equal(at[3], Date.parse('2026-07-29T01:00:00Z'), 'SST 14:00 → next-day 01:00Z');
+    assert.equal(payload.readings[0].aqi, 42);
+    assert.equal(payload.readings[0].parameter, 'PM2.5');
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airnow/current — unknown timezone abbreviation falls back to fetch time, never Date.parse', async () => {
+  const restoreKey = swapEnv('AIRNOW_API_KEY', 'test-airnow-key');
+  const rows = [{ DateObserved: '2026-07-28', HourObserved: 14, LocalTimeZone: 'XYZ', Latitude: 35, Longitude: -100, ParameterName: 'PM2.5', AQI: 30 }];
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify(rows) }));
+  try {
+    const before = Date.now();
+    const payload = await app.getJson('/api/airnow/current?lat=35.001&lon=-100.001');
+    const after = Date.now();
+    assert.equal(payload.readings.length, 1);
+    const { observedAt } = payload.readings[0];
+    assert.ok(observedAt >= before && observedAt <= after, `observedAt ${observedAt} must be the fetch time (range ${before}-${after})`);
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airnow/current — zero observations is degraded and never cached', async () => {
+  const restoreKey = swapEnv('AIRNOW_API_KEY', 'test-airnow-key');
+  const app = await startRouteApp(() => ({ statusCode: 200, body: '[]' }));
+  try {
+    const payload = await app.getJson('/api/airnow/current?lat=10.5&lon=20.5');
+    assert.deepEqual(payload, { readings: [], degraded: true, error: 'no AirNow observations' });
+    await app.get('/api/airnow/current?lat=10.5&lon=20.5');
+    assert.equal(app.calls.length, 2, 'an empty observation set must not be cached');
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airquality/purpleair — keyless is a 503 with keyMissing, no upstream call', async () => {
+  const restoreKey = swapEnv('PURPLEAIR_API_KEY', undefined);
+  const app = await startRouteApp(() => ({ statusCode: 200, body: '{}' }));
+  try {
+    const res = await app.get('/api/airquality/purpleair');
+    assert.equal(res.status, 503);
+    const payload = await res.json();
+    assert.deepEqual(payload.sensors, []);
+    assert.equal(payload.keyMissing, true);
+    assert.equal(app.calls.length, 0);
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airquality/purpleair — upstream error is a 502 and never cached', async () => {
+  const restoreKey = swapEnv('PURPLEAIR_API_KEY', 'test-purpleair-key');
+  const app = await startRouteApp(() => ({ statusCode: 403, body: 'forbidden' }));
+  try {
+    const res = await app.get('/api/airquality/purpleair');
+    assert.equal(res.status, 502);
+    assert.deepEqual(await res.json(), { sensors: [], error: 'purpleair upstream 403' });
+    await app.get('/api/airquality/purpleair');
+    assert.equal(app.calls.length, 2, 'upstream failure must not be cached');
+  } finally {
+    restoreKey();
+    await app.cleanup();
+  }
+});
+
+test('/api/airquality/purpleair — v1 success caches for 5 minutes, refetches after the TTL', async () => {
+  const restoreKey = swapEnv('PURPLEAIR_API_KEY', 'test-purpleair-key');
+  const upstream = {
+    fields: ['sensor_index', 'pm2.5', 'latitude', 'longitude', 'location_type', 'confidence', 'name', 'last_seen'],
+    data: [
+      [123, 12.5, 41.6, -87.1, 0, 95, 'Backyard', 1_753_700_000],
+      [456, 'not-a-number', 41.7, -87.2, 0, 90, 'Broken', 1_753_700_000],
+    ],
+  };
+  const app = await startRouteApp(() => ({ statusCode: 200, body: JSON.stringify(upstream) }));
+  let restoreClock = null;
+  try {
+    const first = await app.getJson('/api/airquality/purpleair');
+    assert.equal(first.source, 'v1');
+    assert.equal(first.sensors.length, 1, 'non-numeric pm2.5 row is dropped');
+    assert.equal(first.sensors[0].id, 123);
+    assert.equal(first.sensors[0].pm25, 12.5);
+    assert.equal(first.sensors[0].name, 'Backyard');
+    assert.equal(app.calls[0].headers['X-API-Key'], 'test-purpleair-key', 'key must travel in the X-API-Key header, not the URL');
+    assert.match(app.calls[0].path, /location_type=0/);
+
+    await app.get('/api/airquality/purpleair');
+    assert.equal(app.calls.length, 1, 'second hit inside the TTL must be served from cache');
+
+    restoreClock = shiftClock(5 * 60 * 1000 + 1000);
+    await app.get('/api/airquality/purpleair');
+    assert.equal(app.calls.length, 2, 'a hit after the 5-min TTL must refetch upstream');
+  } finally {
+    if (restoreClock) restoreClock();
+    restoreKey();
+    await app.cleanup();
+  }
+});

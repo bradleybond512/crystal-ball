@@ -10578,8 +10578,14 @@ async function dispatch(requestUrl, req, routes, context) {
       // timezone=auto returns offset-less LOCAL wall-clock strings (e.g.
       // "2026-07-29T23:00"), not UTC — Date.parse would silently misread
       // them as UTC. Normalize once here to an unambiguous epoch ms.
-      const observedAt = Date.parse(`${data.current.time}Z`) - (data.utc_offset_seconds ?? 0) * 1000;
-      const result = { ...data, currentObservedAtMs: observedAt, fetchedAt: Date.now(), source: 'open-meteo.com' };
+      // `current` is additive — if Open-Meteo ever omits it, that must
+      // degrade only the new temperature reading, not the pre-existing
+      // hourly forecast consumer, so currentObservedAtMs is left off
+      // rather than throwing and 502-ing the whole route.
+      const currentTime = data.current?.time;
+      const observedAt = currentTime !== undefined ? Date.parse(`${currentTime}Z`) - (data.utc_offset_seconds ?? 0) * 1000 : NaN;
+      const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
+      if (Number.isFinite(observedAt)) result.currentObservedAtMs = observedAt;
       setCached(cacheKey, result);
       return json(result);
     } catch (error) {
@@ -10614,16 +10620,21 @@ async function dispatch(requestUrl, req, routes, context) {
         return json({ readings: [], degraded: true, reason: `met-norway upstream ${r.status}`, fetchedAt: Date.now() }, 502);
       }
       const data = await r.json();
-      const readings = [];
+      const unit = data?.properties?.meta?.units?.air_temperature;
       // MET Norway's TOS-mandated unit contract — refuse to emit a reading
       // rather than silently fusing a mis-scaled value into surface_temp.
-      if (data?.properties?.meta?.units?.air_temperature === 'celsius') {
-        const first = data.properties.timeseries?.[0];
-        const tempC = first?.data?.instant?.details?.air_temperature;
-        const observedAt = first ? Date.parse(first.time) : NaN;
-        if (Number.isFinite(tempC) && Number.isFinite(observedAt)) {
-          readings.push({ lat: latNum, lon: lonNum, tempC, observedAt });
-        }
+      // Named separately from the generic empty-reading case below so a
+      // silent unit change (e.g. celsius -> fahrenheit) is distinguishable
+      // in the reason string, not just an ordinary empty/malformed response.
+      if (unit !== 'celsius') {
+        return json({ readings: [], degraded: true, reason: `met-norway: unexpected unit "${unit}" (expected celsius)`, fetchedAt: Date.now() }, 502);
+      }
+      const readings = [];
+      const first = data.properties.timeseries?.[0];
+      const tempC = first?.data?.instant?.details?.air_temperature;
+      const observedAt = first ? Date.parse(first.time) : NaN;
+      if (Number.isFinite(tempC) && Number.isFinite(observedAt)) {
+        readings.push({ lat: latNum, lon: lonNum, tempC, observedAt });
       }
       if (readings.length === 0) {
         return json({ readings: [], degraded: true, reason: 'met-norway: no valid celsius reading', fetchedAt: Date.now() }, 502);

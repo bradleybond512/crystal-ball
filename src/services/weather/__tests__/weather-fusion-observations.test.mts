@@ -62,6 +62,7 @@ test('two readings 5C apart surface a disagreement naming both providers', () =>
 
   const f = r.facts[0]!;
   assert.ok(f.fusion.disagreements.length >= 1, 'disagreement surfaces');
+  assert.ok(f.fusion.confidenceMultiplier <= 0.6, 'capped at disagreement ceiling');
   // The per-fact fingerprint map is keyed by every provider in the cluster —
   // both provider ids are named, one tagged as consensus and one as the
   // outlier, with distinct fingerprint values.

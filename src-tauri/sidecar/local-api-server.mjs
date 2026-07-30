@@ -4372,6 +4372,12 @@ function setCached(key, data, ttlMs) {
   _ensureSidecarCacheSweep();
 }
 
+// Test-only: clear every TTL-cache entry so route tests can cross cache
+// boundaries without sleeping (same convention as _resetSecurityCaches).
+export function _resetSidecarCacheForTests() {
+  _sidecarCache.clear();
+}
+
 // ── Webcam helpers (shared by /api/webcams aggregator and sub-handlers) ──
 
 // Pure helper: derive per-source health from Promise.allSettled results.

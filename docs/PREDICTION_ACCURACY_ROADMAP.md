@@ -829,7 +829,7 @@ bench:forecast + bench:baselines unchanged.
 
 ### ACC-404 — First production promotion decision
 
-Status: `IN PROGRESS`
+Status: `DONE`
 
 Owner: Claude
 Branch: `claude/acc-404-first-decision`
@@ -846,6 +846,36 @@ Phase exit:
 
 - the first evidence-backed promote-or-reject decision is recorded;
 - rollback is tested against the installed app.
+
+Evidence: the first evidence-backed decision is **MONITOR** (no
+promotion), recorded durably in
+`docs/decisions/2026-07-29-acc404-first-promotion-decision.md` with the
+full machine record. The ACC-402 gate ran against the installed app's
+REAL evidence (read-only extraction from the production WKWebView
+localStorage): superforecast 0 joined pairs (its comparisons carry no
+join keys yet), hierarchical-base-rate 14/200 (87 raw comparisons, only
+the 14 post-ACC-401 rows join), persistence/momentum 0 (emission path
+not yet exercised in the installed build) — each verdict carries the
+exact missing evidence verbatim from the gate.
+`src/services/cognition/first-promotion-decision.ts` is the pure
+recorder (per-challenger PROMOTE/REJECTED/MONITOR semantics, overall
+precedence, persistence under `crystalball-acc404-first-decision-v1`);
+`scripts/acc404-first-decision.mts` re-runs the decision from any
+localStorage export using the live modules. Running against real data
+exposed and fixed an ACC-403 safety-evidence flaw: the replay catalog's
+fixtures are intentionally-failing historical-miss cases (raw recall 0/4,
+lead −1440 min), so the gate now consumes
+`safetyEvidenceFromBaselineRegression` — no-NEW-regressions vs the
+committed replay baseline (5/5, lead-time only from passing warnings) —
+in both the panel composition and the decision script. Rollback is
+tested against the installed app via the new `champion_rollback`
+self-test probe (SystemDiagnostic → Self-Test):
+`runChampionRollbackSelfTestFixture()` proves setInitial → promote →
+rollback restores the previous champion on an isolated in-memory
+registry inside the shipped bundle. Verified: 34 tests across the
+first-promotion-decision + self-test suites (self-test regression guard
+updated to the 10-probe set), typecheck:all, scoped ESLint, frozen
+benches unchanged.
 
 ## Phase 5 — Correlation quality and statistical controls
 

@@ -29,10 +29,8 @@ export function tempToObservations(providerId: string, readings: readonly TempRe
     if (!Number.isFinite(r.tempC) || r.tempC < MIN_PLAUSIBLE_C || r.tempC > MAX_PLAUSIBLE_C) continue;
     if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
     if (!Number.isFinite(r.observedAt) || r.observedAt <= 0) continue;
-    // A reading without a placeId would fuse under fusion-ingest's
-    // matchBy:'key' as key === undefined — findHomeCluster's `o.key !==
-    // undefined` guard means that never joins a cluster, so it'd silently
-    // become a permanent singleton instead of raising an error.
+    // An empty placeId would key a cluster on '' — both providers' junk rows
+    // would then fuse into one bogus 2-vote "fact" instead of being dropped.
     if (!r.placeId) continue;
     out.push({ providerId, value: r.tempC, lat: r.lat, lon: r.lon, occurredAt: r.observedAt, key: r.placeId });
   }

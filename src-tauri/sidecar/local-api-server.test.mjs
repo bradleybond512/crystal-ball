@@ -2947,9 +2947,17 @@ test('/api/met-norway-temp — empty timeseries is a 502 and never cached', asyn
 // cached, or one unlucky minute pins the domain dark for the whole 6h TTL.
 
 test('/api/fx-rates-erapi — upstream result "error" is a 502 and never cached', async () => {
+  // Rates are present and well-formed — `result` must be the only thing that
+  // distinguishes this from a success, or the assertion proves nothing about
+  // the result check.
   const app = await startRouteApp(() => ({
     statusCode: 200,
-    body: JSON.stringify({ result: 'error', 'error-type': 'unsupported-code' }),
+    body: JSON.stringify({
+      result: 'error',
+      'error-type': 'unsupported-code',
+      time_last_update_unix: 1_785_369_751,
+      rates: { USD: 1, EUR: 0.875_576 },
+    }),
   }));
   try {
     const res = await app.get('/api/fx-rates-erapi');

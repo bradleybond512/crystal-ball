@@ -44,10 +44,27 @@ test('fxRatesToObservations maps each currency to a key-matched observation', ()
 });
 
 test('fxRatesToObservations drops rows with a missing currency code', () => {
-  // A keyless observation is a silent trap under matchBy:'key' — it can never
-  // join a cluster, so it becomes a permanent 1-vote singleton with no error.
   const obs = fxRatesToObservations('er-api-fx', { '': 0.87, EUR: 0.88 }, FIXING_MS);
   assert.deepEqual(obs.map((o) => o.key), ['EUR']);
+});
+
+test("''-keyed rows from both providers would fuse into one bogus corroborated fact", () => {
+  // Why the empty-code guard exists: '' is a perfectly good cluster key, so
+  // two junk rows agree with each other and the domain reports a 2-vote fact
+  // for a currency that does not exist. Feeding the raw rows past the adapter
+  // proves the failure mode the guard prevents.
+  const junk = ingestDomain('fx_rates', [
+    { providerId: 'frankfurter-fx', key: '', value: 0.87, lat: 0, lon: 0, occurredAt: FIXING_MS },
+    { providerId: 'er-api-fx', key: '', value: 0.87, lat: 0, lon: 0, occurredAt: FIXING_MS },
+  ], healthyBoth(FIXING_MS), FIXING_MS);
+  assert.equal(junk.facts.length, 1);
+  assert.equal(junk.facts[0]!.providerIds.length, 2, 'two junk rows corroborate each other — exactly what the guard stops');
+
+  const guarded = ingestDomain('fx_rates', [
+    ...fxRatesToObservations('frankfurter-fx', { '': 0.87 }, FIXING_MS),
+    ...fxRatesToObservations('er-api-fx', { '': 0.87 }, FIXING_MS),
+  ], healthyBoth(FIXING_MS), FIXING_MS);
+  assert.equal(guarded.facts.length, 0, 'the adapter drops them before they can fuse');
 });
 
 test('fxRatesToObservations drops non-finite and non-positive rates', () => {
@@ -62,14 +79,15 @@ test('fxRatesToObservations drops non-finite and non-positive rates', () => {
 });
 
 test('fxRatesToObservations emits nothing for a non-finite or non-positive observedAt', () => {
-  // A NaN occurredAt would defeat clustering's `Math.abs(delta) > max` guard
-  // (NaN > n is false), silently matching every currency to every other.
+  // A NaN occurredAt defeats clustering's `Math.abs(delta) > max` guard
+  // (NaN > n is false), so a stale quote of the same currency would
+  // corroborate no matter how old — the 5-day window stops applying.
   assert.deepEqual(fxRatesToObservations('er-api-fx', { EUR: 0.88 }, Number.NaN), []);
   assert.deepEqual(fxRatesToObservations('er-api-fx', { EUR: 0.88 }, 0), []);
 });
 
-test('fxRatesToObservations returns nothing when no row survives', () => {
-  assert.deepEqual(fxRatesToObservations('er-api-fx', {}, FIXING_MS), []);
+test('fxRatesToObservations returns nothing when every row is filtered out', () => {
+  assert.deepEqual(fxRatesToObservations('er-api-fx', { EUR: 0, GBP: Number.NaN, JPY: -3 }, FIXING_MS), []);
 });
 
 // ── Frankfurter fetch ───────────────────────────────────────────────────────
@@ -104,7 +122,9 @@ test('fetchFrankfurterRates fails closed on non-2xx, degraded, missing date, and
   stubFetch(t, { base: 'USD', date: '2026-07-29', rates: { EUR: 0.87 } }, 502);
   assert.deepEqual(await fetchFrankfurterRates(), empty, 'non-2xx');
 
-  stubFetch(t, { base: 'USD', date: null, rates: {}, degraded: true });
+  // Otherwise fully valid — `degraded` must be the sole reason this fails, or
+  // the assertion passes for a reason that has nothing to do with the flag.
+  stubFetch(t, { base: 'USD', date: '2026-07-29', rates: { EUR: 0.87 }, degraded: true });
   assert.deepEqual(await fetchFrankfurterRates(), empty, 'degraded flag');
 
   stubFetch(t, { base: 'USD', rates: { EUR: 0.87 } });
@@ -115,6 +135,12 @@ test('fetchFrankfurterRates fails closed on non-2xx, degraded, missing date, and
 
   stubFetch(t, { base: 'USD', date: '2026-07-29', rates: { EUR: Number.NaN } });
   assert.deepEqual(await fetchFrankfurterRates(), empty, 'no valid row is a failure, not a healthy-but-empty success');
+
+  // A negative rate must fail the whole fetch, not pass the freshness gate and
+  // then get dropped by the adapter — that would record ok:true with zero
+  // observations, a provider reading healthy while contributing nothing.
+  stubFetch(t, { base: 'USD', date: '2026-07-29', rates: { EUR: -1 } });
+  assert.deepEqual(await fetchFrankfurterRates(), empty, 'non-positive rate');
 });
 
 // ── open.er-api fetch ───────────────────────────────────────────────────────
@@ -142,7 +168,8 @@ test('fetchErApiRates fails closed on non-2xx, degraded, bad timestamp, and zero
   stubFetch(t, { rates: { EUR: 0.875 }, time_last_update_unix: 1_785_369_751 }, 502);
   assert.deepEqual(await fetchErApiRates(), empty, 'non-2xx');
 
-  stubFetch(t, { rates: {}, time_last_update_unix: null, degraded: true });
+  // Otherwise fully valid — `degraded` must be the sole reason this fails.
+  stubFetch(t, { rates: { EUR: 0.875 }, time_last_update_unix: 1_785_369_751, degraded: true });
   assert.deepEqual(await fetchErApiRates(), empty, 'degraded flag');
 
   stubFetch(t, { rates: { EUR: 0.875 } });
@@ -153,6 +180,9 @@ test('fetchErApiRates fails closed on non-2xx, degraded, bad timestamp, and zero
 
   stubFetch(t, { rates: { ZZZ: 1 }, time_last_update_unix: 1_785_369_751 });
   assert.deepEqual(await fetchErApiRates(), empty, 'no fusable row is a failure, not a healthy-but-empty success');
+
+  stubFetch(t, { rates: { EUR: -1 }, time_last_update_unix: 1_785_369_751 });
+  assert.deepEqual(await fetchErApiRates(), empty, 'non-positive rate — never ok:true with zero observations');
 });
 
 // ── Fusion ──────────────────────────────────────────────────────────────────
@@ -168,6 +198,9 @@ test('EUR quoted 0.9200 and 0.9210 fuses into one fact with two votes and no dis
   assert.equal(f.key, 'EUR');
   assert.equal(f.providerIds.length, 2);
   assert.equal(f.fusion.disagreements.length, 0);
+  // Pin to a concrete value first: `undefined === undefined` would pass this
+  // vacuously if the fact never formed.
+  assert.equal(typeof r.providerFingerprints['frankfurter-fx'], 'string');
   assert.equal(r.providerFingerprints['frankfurter-fx'], r.providerFingerprints['er-api-fx']);
 });
 

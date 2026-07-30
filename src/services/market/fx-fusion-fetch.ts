@@ -86,14 +86,14 @@ export function fxRatesToObservations(
   observedAt: number,
 ): DomainObservation[] {
   // A NaN occurredAt would defeat clustering's `Math.abs(delta) > max` time
-  // guard (NaN > n is false), silently matching unrelated observations.
+  // guard (NaN > n is false), so a stale quote of the SAME currency would
+  // corroborate no matter how old — the 5-day window stops applying.
   if (!Number.isFinite(observedAt) || observedAt <= 0) return [];
   const out: DomainObservation[] = [];
   for (const [code, value] of Object.entries(rates)) {
-    // A row without a currency code would fuse under matchBy:'key' as
-    // key === undefined — findHomeCluster's `o.key !== undefined` guard means
-    // it can never join a cluster, so it would silently become a permanent
-    // 1-vote singleton rather than raising an error anywhere.
+    // An empty currency code would key a cluster on '' — both providers'
+    // junk rows would then fuse into one bogus 2-vote "fact" instead of
+    // being dropped.
     if (!code) continue;
     if (!Number.isFinite(value) || value <= 0) continue;
     out.push({ providerId, key: code.toUpperCase(), value, lat: 0, lon: 0, occurredAt: observedAt });

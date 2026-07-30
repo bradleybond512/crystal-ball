@@ -1470,9 +1470,8 @@ export class DataLoaderManager implements AppModule {
  // own update time — NOT the fetch time, so a source serving a week-old rate
  // reads as a week old. The fetch-outcome clock stays at "now" (default),
  // since the request itself did just happen.
- const frankfurter = await fetchFrankfurterRates();
+ const [frankfurter, erApi] = await Promise.all([fetchFrankfurterRates(), fetchErApiRates()]);
  recordDomainObservations('frankfurter-fx', fxRatesToObservations('frankfurter-fx', frankfurter.rates, frankfurter.observedAt), frankfurter.ok);
- const erApi = await fetchErApiRates();
  recordDomainObservations('er-api-fx', fxRatesToObservations('er-api-fx', erApi.rates, erApi.observedAt), erApi.ok);
   }
 

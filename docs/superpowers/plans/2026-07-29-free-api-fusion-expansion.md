@@ -873,6 +873,60 @@ Assert both filters in the fixture test: a payload of three `normal` rows plus o
   },
 ```
 
+#### AMENDED 2026-07-30 (second probe): concrete IODA vocabulary + what "country-only" actually costs
+
+Probed live (`limit=500`, 6 h window → 358 rows). The task above said to "exclude rows whose
+`level`/`condition` indicate normal operation" without saying what those values *are*, which
+is not implementable. Measured vocabulary:
+
+- **`level` is binary in practice: `'critical'` (166) or `'normal'` (192).** No warning tier
+  appeared. The filter is exactly `level !== 'normal'` — nothing cleverer is needed.
+- **`condition` is NOT a status word — it is a threshold string.** Observed values:
+  `'normal'`, `'< 0.99'` (62), `'< 0.95'` (26), `'< 0.8'` (66), `'< 0.25'` (12). It encodes how
+  far traffic fell below the historical baseline. **Do not write `condition === 'outage'`** or
+  any similar guess; if you filter on it at all, the only safe test is `condition !== 'normal'`,
+  which is redundant with the `level` test (they agreed on all 358 rows).
+- **`'critical'` does not mean "major outage."** 62 of 166 criticals were `'< 0.99'` — a 1 %
+  dip below baseline. All three live *country* criticals were this mildest tier. Any UI copy
+  derived from this count must not call it an outage count; it is an alert-row count.
+
+**Corrected line reference:** `parseIodaAlerts` is at `local-api-server.mjs:18351` (`:18265`
+in the task above is the ThreatFox parser). Its emitted contract is confirmed correct — it
+maps IODA's raw `time` field to **both** `from` and `until`, so the specced "`from` (unix
+seconds → ×1000)" holds even though no `from` exists on the upstream row. Emitted shape:
+`{entityType, entityCode, entityName, datasource, score, historyValue, from, until, level, condition, method}`.
+
+**What the country-only filter costs — expect a thin stream, and do not treat that as a bug.**
+Entity mix in the live sample: `asn` 161, `geoasn` 149, `region` 40, **`country` 8**. After
+dropping non-country rows *and* `level === 'normal'`, a 6-hour global window yielded **3 rows**
+(ET, NG, TD — all `'< 0.99'`). So:
+
+- Most ticks will produce a handful of country keys or none. A fused fact carrying a **single**
+  vote is the expected steady state here, not a defect — unlike the radiation domain this is
+  not fatal, because both sources are live and global and they overlap precisely on the large
+  outages the domain exists to catch.
+- The fixture test must therefore also assert the **empty** case: zero qualifying rows must
+  still record `ok: true` with an empty observation array (a quiet internet is not a fetch
+  failure), while a non-2xx or malformed body records `ok: false`.
+
+**Alerts are edge-triggered transitions, not a running status list.** In the sample, `NG` went
+`critical` at 1785408900 and `normal` at 1785412800 — the `normal` rows are *recovery* events.
+Counting "events started in the last 6 h" after the `level !== 'normal'` filter therefore counts
+outage **onsets**, which is the intended metric. Worth a comment so nobody later "fixes" the
+filter back into counting recoveries.
+
+**Same country appears once per datasource.** `datasource` observed as `bgp`, `gtr`,
+`ping-slash24`; one real outage can raise a row from each, so the per-country count is inflated
+relative to distinct outages. Tolerance 3 absorbs this against Cloudflare's one-row-per-outage
+counting, but dedupe by `(entityCode, datasource)` before counting so a single flapping
+datasource cannot run the count up on its own.
+
+**Deployment caveat (not a code defect):** the Cloudflare side needs `CLOUDFLARE_API_TOKEN`.
+Per the standing keychain-restore issue, that secret may be absent on this machine, in which
+case the route returns `{ degraded: true }` and the domain runs single-source until keys are
+restored. The route must degrade cleanly rather than throw; do **not** attempt to read or
+write the keychain to check.
+
 ### Task 2.6: Batch 2 PR
 
 - [ ] Same close-out as Task 1.8; branch `claude/api-fusion-batch2`, PR body marker, Codex review, auto-squash. Also assert in the PR description which of the 8 fused domains are live and which are key-gated (cloudflare-radar, airnow, purpleair activate only when their keys are present — the SourceConfidencePanel will honestly show them down otherwise).

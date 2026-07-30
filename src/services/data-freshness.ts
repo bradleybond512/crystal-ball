@@ -69,6 +69,7 @@ export type DataSourceId =
     | "telegram-intel"
     | "spaceflight-news"
     | "rainviewer-radar"
+    | "firework-smoke"
     | "lightning"
     | "copernicus-cems"
     | "faa-nas-status"
@@ -248,6 +249,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   "telegram-intel": { name: "Telegram Intel", requiredForRisk: false },
   "spaceflight-news": { name: "Spaceflight News", requiredForRisk: false },
   "rainviewer-radar": { name: "Rainviewer Radar", requiredForRisk: false },
+  "firework-smoke": { name: "FireWork Smoke Forecast", requiredForRisk: false },
   "lightning": { name: "Lightning", requiredForRisk: false },
   "copernicus-cems": { name: "Copernicus Cems", requiredForRisk: false },
   "faa-nas-status": { name: "Faa Nas Status", requiredForRisk: false },
@@ -650,6 +652,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   "telegram-intel": "Telegram intel data unavailable",
   "spaceflight-news": "Spaceflight news unavailable",
   "rainviewer-radar": "RainViewer radar unavailable",
+  "firework-smoke": "FireWork smoke forecast unavailable",
   "lightning": "Lightning-strike data unavailable",
   "copernicus-cems": "Copernicus CEMS data unavailable",
   "faa-nas-status": "FAA NAS status unavailable",

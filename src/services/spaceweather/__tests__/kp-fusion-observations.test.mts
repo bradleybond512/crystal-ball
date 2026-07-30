@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// Reaching into the sidecar is deliberate: the cross-layer seam below is only
+// real if the naïve NOAA tag flows through the SAME normalizer production uses.
+// The import binds no port — local-api-server.mjs calls server.listen() only
+// from start(), which runs behind its isMainModule() guard. It does emit two
+// boot/exit log lines; that is the whole of the side effect.
+import { normalizeKpPoints } from '../../../../src-tauri/sidecar/local-api-server.mjs';
 import { ingestDomain } from '../../providers/fusion-ingest.ts';
 import { emptyProviderHealthState, recordFetchOutcome } from '../../providers/provider-health.ts';
 import type { ProviderHealthState } from '../../providers/provider-types.ts';
@@ -38,20 +44,43 @@ test('a mid-bin timestamp floors into the bin it belongs to', () => {
 
 test('a suffix-less NOAA tag and a Z-suffixed GFZ tag land in the SAME bin', () => {
   // SWPC's products/noaa-planetary-k-index.json stamps "2026-07-30T00:00:00"
-  // with no zone; GFZ stamps "2026-07-30T00:00:00Z". If the naïve tag were
-  // parsed host-locally the two would key different bins on any non-UTC
-  // machine and the domain would show two permanent 1-vote facts instead of
-  // one corroborated 2-vote fact — the sidecar normalizer stamps the Z so
-  // both sides arrive here as the same instant.
-  const noaaMs = Date.parse('2026-07-30T00:00:00Z');
-  const gfzMs = Date.parse('2026-07-30T00:00:00Z');
-  const noaa = kpToObservations('swpc-kp', [{ observedAt: noaaMs, kp: 2 }]);
-  const gfz = kpToObservations('gfz-kp', [{ observedAt: gfzMs, kp: 1.667 }]);
-  assert.equal(noaa[0]!.key, gfz[0]!.key);
+  // with NO zone; GFZ stamps "2026-07-30T00:00:00Z".
+  //
+  // The naïve tag is driven through the REAL sidecar normalizer rather than
+  // hand-stamped here — hand-stamping would make this assertion true by
+  // construction and it would keep passing with the Z-append deleted. The
+  // sidecar suite already proves the Z gets appended; this proves the stamped
+  // value keys the same 3-hour bin as GFZ's already-zoned tag, which is the
+  // seam that actually breaks. Without it the domain shows two permanent
+  // 1-vote facts instead of one corroborated 2-vote fact.
+  //
+  // TZ is forced non-UTC for the duration: on a UTC host the bug is invisible,
+  // so a UTC-only run could not distinguish a working normalizer from a
+  // missing one.
+  const priorTz = process.env.TZ;
+  process.env.TZ = 'America/Chicago';
+  try {
+    const [noaaPoint] = normalizeKpPoints([{ time_tag: '2026-07-30T00:00:00', Kp: 2 }]) as {
+      time_tag: string;
+      kp: number;
+    }[];
+    assert.ok(noaaPoint, 'the live NOAA row shape must survive normalization');
+    const noaaMs = Date.parse(noaaPoint.time_tag);
+    const gfzMs = Date.parse('2026-07-30T00:00:00Z');
+    // Guard the guard: a host-local parse would put these 5h apart.
+    assert.equal(noaaMs, gfzMs, 'normalizer must resolve the naïve tag to the UTC instant');
 
-  const result = ingestDomain('space_weather', [...noaa, ...gfz], healthyBoth(noaaMs), noaaMs);
-  assert.equal(result.facts.length, 1, 'same bin ⇒ one fused fact, not two singletons');
-  assert.equal(result.facts[0]!.providerIds.length, 2);
+    const noaa = kpToObservations('swpc-kp', [{ observedAt: noaaMs, kp: noaaPoint.kp }]);
+    const gfz = kpToObservations('gfz-kp', [{ observedAt: gfzMs, kp: 1.667 }]);
+    assert.equal(noaa[0]!.key, gfz[0]!.key);
+
+    const result = ingestDomain('space_weather', [...noaa, ...gfz], healthyBoth(gfzMs), gfzMs);
+    assert.equal(result.facts.length, 1, 'same bin ⇒ one fused fact, not two singletons');
+    assert.equal(result.facts[0]!.providerIds.length, 2);
+  } finally {
+    if (priorTz === undefined) delete process.env.TZ;
+    else process.env.TZ = priorTz;
+  }
 });
 
 test('routine cross-source spread does NOT read as disagreement', () => {

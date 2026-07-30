@@ -18,6 +18,12 @@ export interface KpFetchResult {
  * Both sources are trimmed to the same rolling 48h so their bin sets line up.
  * NOAA publishes ~7 days of bins and GFZ's route asks for 48h; without the
  * trim NOAA's extra ~44 bins would each fuse as a permanent single-vote fact.
+ *
+ * The caller passes ONE `now` into both fetches. Letting each read its own
+ * Date.now() would put the two cutoffs however far apart the slower leg runs
+ * (up to the 15s timeout on a GFZ cache miss), so a bin landing in that gap
+ * would be kept by one source and trimmed by the other — recreating exactly
+ * the orphan single-vote fact the shared window exists to prevent.
  */
 const KP_FUSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
@@ -36,7 +42,7 @@ function withinWindow(samples: KpSample[], now: number): KpSample[] {
 }
 
 /** NOAA SWPC estimated planetary Kp, read off the cached status payload. */
-export async function fetchSwpcKp(): Promise<KpFetchResult> {
+export async function fetchSwpcKp(now: number = Date.now()): Promise<KpFetchResult> {
   try {
     const res = await fetch(`${getApiBaseUrl()}/api/spaceweather/status`, {
       headers: { Accept: 'application/json' },
@@ -56,7 +62,7 @@ export async function fetchSwpcKp(): Promise<KpFetchResult> {
       if (!Number.isFinite(observedAt) || !Number.isFinite(kp)) continue;
       samples.push({ observedAt, kp });
     }
-    const recent = withinWindow(samples, Date.now());
+    const recent = withinWindow(samples, now);
     // An empty series is a failure, not a quiet success: a provider that
     // returns nothing must record ok:false so its health goes down, rather
     // than looking healthy while contributing no votes.
@@ -68,7 +74,7 @@ export async function fetchSwpcKp(): Promise<KpFetchResult> {
 }
 
 /** GFZ Potsdam Kp — the corroborating vote. */
-export async function fetchGfzKp(): Promise<KpFetchResult> {
+export async function fetchGfzKp(now: number = Date.now()): Promise<KpFetchResult> {
   try {
     const res = await fetch(`${getApiBaseUrl()}/api/spaceweather-kp-gfz`, {
       headers: { Accept: 'application/json' },
@@ -86,7 +92,7 @@ export async function fetchGfzKp(): Promise<KpFetchResult> {
       if (!Number.isFinite(observedAt) || !Number.isFinite(kp)) continue;
       samples.push({ observedAt, kp });
     }
-    const recent = withinWindow(samples, Date.now());
+    const recent = withinWindow(samples, now);
     if (recent.length === 0) return failed();
     return { ok: true, samples: recent };
   } catch {

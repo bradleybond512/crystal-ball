@@ -2741,7 +2741,11 @@ export class DataLoaderManager implements AppModule {
     // clock stays at the default wall clock (the request really did just
     // happen); each sample carries its own bin timestamp as occurredAt, so a
     // source serving stale bins still reads as stale.
-    const [swpc, gfz] = await Promise.all([fetchSwpcKp(), fetchGfzKp()]);
+    // ONE `now` for both fetches: they share a rolling 48h trim, and two
+    // independent clocks would drift by however long the slower leg takes,
+    // orphaning any bin that fell in the gap.
+    const now = Date.now();
+    const [swpc, gfz] = await Promise.all([fetchSwpcKp(now), fetchGfzKp(now)]);
     recordDomainObservations('swpc-kp', kpToObservations('swpc-kp', swpc.samples), swpc.ok);
     recordDomainObservations('gfz-kp', kpToObservations('gfz-kp', gfz.samples), gfz.ok);
   }

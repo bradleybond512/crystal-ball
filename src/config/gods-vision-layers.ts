@@ -264,6 +264,12 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: false,
  description: 'NOAA GOES/Himawari satellite weather imagery',
   },
+  smokeForecast: {
+ name: 'Smoke Forecast',
+ category: 'intelligence',
+ enabled: false,
+ description: 'ECCC FireWork 72 h wildfire-smoke PM2.5 forecast (WMS)',
+  },
   lightningStrikes: {
  name: 'Lightning',
  category: 'intelligence',

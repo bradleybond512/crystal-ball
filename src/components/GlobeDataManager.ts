@@ -19,6 +19,7 @@ import {
   Ellipsoid,
   Rectangle,
   UrlTemplateImageryProvider,
+  WebMapServiceImageryProvider,
   type ImageryLayer,
   PointPrimitiveCollection,
   PolylineCollection,
@@ -41,6 +42,7 @@ import { fetchLightningStrikes } from '@/services/lightning';
 import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
 import { getGoesWmsTileUrl } from '@/services/satellite-weather';
+import { FIREWORK_WMS_BASE, FIREWORK_LAYER } from '@/services/firework-smoke';
 import { getApiBaseUrl } from '@/services/runtime';
 import { getSavedPlaces } from '@/services/saved-places';
 import { resolveSiteConfig } from '@/services/datacenter/site-resolver';
@@ -609,6 +611,7 @@ const DEFERRED_LAYER_ALTITUDE: Record<string, number> = {
   redFlagWarnings: 5_000_000,
   weatherRadar: 5_000_000,
   weatherSatellite: 15_000_000,
+  smokeForecast: 15_000_000,
 };
 
 // Settle delay before the power overlay fetches a new anchor cell, so an active
@@ -689,6 +692,7 @@ export class GlobeDataManager {
  // Weather layers
  this.registerLayer('weatherRadar', () => this.loadWeatherRadar());
  this.registerLayer('weatherSatellite', () => this.loadWeatherSatellite());
+ this.registerLayer('smokeForecast', () => this.loadSmokeForecastWms());
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
  this.registerLayer('weatherHazards', () => this.loadWeatherHazards());
@@ -2505,6 +2509,21 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  imgLayer.alpha = 0.7;
  this.weatherImageryLayers.push(imgLayer);
  } catch { /* satellite imagery unavailable */ }
+  }
+
+  private loadSmokeForecastWms(): void {
+ try {
+ // Server-default TIME (nearest current hour) — the globe is the ambient
+ // view; scrubbing through the 72 h forecast lives on the 2D map.
+ const provider = new WebMapServiceImageryProvider({
+ url: FIREWORK_WMS_BASE,
+ layers: FIREWORK_LAYER,
+ parameters: { format: 'image/png', transparent: true },
+ });
+ const imgLayer = this.viewer.imageryLayers.addImageryProvider(provider);
+ imgLayer.alpha = 0.55;
+ this.weatherImageryLayers.push(imgLayer);
+ } catch { /* smoke forecast unavailable — other weather layers unaffected */ }
   }
 
   private async loadFloodAlerts(): Promise<void> {

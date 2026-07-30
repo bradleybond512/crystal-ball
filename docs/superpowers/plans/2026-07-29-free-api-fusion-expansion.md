@@ -978,6 +978,75 @@ case the route returns `{ degraded: true }` and the domain runs single-source un
 restored. The route must degrade cleanly rather than throw; do **not** attempt to read or
 write the keychain to check.
 
+#### AMENDED 2026-07-30 (third probe): Cloudflare response shape CONFIRMED from the official schema
+
+The Cloudflare body could not be probed directly (no token), which left its shape the single
+biggest unverified assumption in this task — the exact class of defect that has already cost
+this batch five corrections. Resolved by reading Cloudflare's **published OpenAPI schema**
+(`raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json`, 23 MB) rather than
+guessing. `/radar/annotations/outages` is present and its 200 body is confirmed as:
+
+```
+result.annotations[] — required: id, dataSource, startDate, asns, asnsDetails,
+                       locations, locationsDetails, origins, originsDetails,
+                       eventType, outage    (optional: endDate, description,
+                       linkedUrl, scope)
+```
+
+- **`result.annotations[].locations` is `string[]` of ISO2 codes** (`example: "US"`) and is
+  **required** — so the specced "one row per location" mapping is correct as written. There is
+  also a parallel `locationsDetails[] {code,name}` if a display name is ever wanted.
+- **`startDate` is required and typed `format: date-time`** with the example
+  `"2023-09-01T11:41:33.782Z"` — explicitly `Z`-suffixed. **This is the one fusion source in
+  the whole program with no timezone trap**; `Date.parse` is safe directly. Do not add a
+  defensive `Z`-append here (it would corrupt an already-offset string).
+- Query params verified against the schema: `limit`, `offset`, `dateRange` (example `"7d"`,
+  so `1d` is well-formed), `dateStart`/`dateEnd`, `asn`, `location`, `origin`, `format`.
+  Note `format`'s declared enum is **uppercase `["JSON","CSV"]`** while its example is
+  lowercase `"json"`. Send `format=json` per the example, but if the route ever 400s on that
+  parameter, try `JSON` before suspecting anything else — and consider simply omitting it,
+  since JSON is the default.
+- Endpoint liveness re-confirmed: unauthenticated it returns `{"success":false,"errors":
+  [{"code":9106,"message":"Missing X-Auth-Key, X-Auth-Email or Authorization headers"}]}` —
+  an auth error, not a 404, so the path is right.
+
+**Do not trust the line numbers in this task — grep instead.** `parseIodaAlerts` has now moved
+twice: `:18265` (original, actually the ThreatFox parser), `:18351` (second probe), and
+**`:18460` as of this branch's Task-2.4 commits**, which added ~107 lines to the sidecar. Any
+line reference in this plan is stale the moment another task lands. Use
+`grep -n 'export function parseIodaAlerts' src-tauri/sidecar/local-api-server.mjs`.
+
+**IODA vocabulary re-confirmed live 2026-07-30 (363 rows / 6 h), with one drift.** Entity mix
+`asn` 165 / `geoasn` 156 / `region` 34 / **`country` 8**; `level` binary `critical` 183 /
+`normal` 180; `condition` exactly the threshold-string set (`normal` 180, `< 0.99` 73,
+`< 0.8` 71, `< 0.95` 30, `< 0.25` 9). After both filters: **4 country rows** (ET, NG, TD, AZ)
+— *all four* `'< 0.99'`, the mildest tier, reinforcing that this is an alert-row count and
+must never be labelled an outage count in UI copy. **Drift:** `datasource` now reads
+`bgp` 193 / `ping-slash24` 151 / **`merit-nt` 19**; the previously-observed `gtr` did not
+appear. The dedupe-by-`(entityCode, datasource)` requirement is unaffected — it must not be
+written against a hardcoded list of datasource names.
+
+**The IODA caller MUST pass an explicit `limit` — the route's default of 50 starves the
+country-only filter.** Read the live route (`/api/internet-outages`, grep
+`ioda-outages:` for the cache-key line): it defaults to `limit=50`, `from = now − 86400`,
+`until = now`. But country rows are only **8 of 363** at `limit=500` — roughly 2 %. IODA
+returns alerts unordered with respect to entity type, so at `limit=50` the expected country
+yield is **~1 row, frequently 0**, and after the `level !== 'normal'` filter usually zero.
+The domain would then look permanently dead while every layer reported success — the same
+silent-starvation shape as Safecast's ignored `order=`. Pass `limit=500` explicitly from the
+fusion fetch. This is safe: `limit` is already part of the route's cache key (there is an
+in-code comment explaining exactly that), so a high-limit fusion request cannot poison the
+existing panel's 50-row cache entry or vice versa.
+
+Confirmed contract for the IODA-side mapper (no changes needed to either):
+`parseIodaAlerts` emits `{entityType, entityCode, entityName, datasource, score, historyValue,
+from, until, level, condition, method}`, where **`from` and `until` are both `alert.time`**
+(unix **seconds** — multiply by 1000). The route wraps that as
+`{ alerts, count, fetchedAt, degraded }`, returning `{alerts: [], count: 0, degraded: true,
+reason: 'ioda upstream <status>' }` at 502 on a non-2xx. Note the route caches **only on
+success** already, so the fail-closed/uncached invariant needs no route change — but the
+fusion fetch must still map `degraded: true` to `ok: false` on its own side.
+
 ### Task 2.6: Batch 2 PR
 
 - [ ] Same close-out as Task 1.8; branch `claude/api-fusion-batch2`, PR body marker, Codex review, auto-squash. Also assert in the PR description which of the 8 fused domains are live and which are key-gated (cloudflare-radar, airnow, purpleair activate only when their keys are present — the SourceConfidencePanel will honestly show them down otherwise).

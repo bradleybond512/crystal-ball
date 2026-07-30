@@ -622,6 +622,56 @@ Verified against the live pair: Open-Meteo 23:00 local → 04:00Z Jul 30; MET No
 
 **AMENDED 2026-07-30 — widen `numericTolerance` to `0.01` (1%).** Live side-by-side probe of the two upstreams (same minute): EUR 0.87873 (Frankfurter/ECB) vs 0.875576 (er-api) = **0.36% apart**; GBP 0.24% apart; JPY 0.09% apart. The specced 0.005 (0.5%) leaves only 0.14% of headroom above the *observed steady-state* gap, so EUR would flip to "disagreement" on any ordinary day the ECB fixing and er-api's snapshot drift slightly further apart. That is a permanent false-positive, which trains the user to ignore the disagreement flag — the opposite of the invariant's intent. 1% still catches a genuinely broken feed (a stale-by-days rate or a wrong base currency moves far more than 1%). Comment the observed 0.36% baseline next to the constant so the number is not mistaken for a guess. The two sources differ structurally — ECB daily reference fixing vs a continuously-updated aggregator — so a small persistent gap is expected, not a defect.
 
+**AMENDED 2026-07-30 (second probe) — `maxTimeDeltaMs` MUST widen from 26 h to 5 days, or this domain silently stops fusing every weekend.**
+
+Live probe of both upstreams on 2026-07-30:
+
+| | timestamp field | resolved instant |
+|---|---|---|
+| Frankfurter | `date: "2026-07-29"` (date-only) | `2026-07-29T00:00:00.000Z` |
+| open.er-api | `time_last_update_unix: 1785369751` (epoch **seconds**, ×1000) | `2026-07-30T00:02:31.000Z` |
+
+That is a **24.04-hour gap on an ordinary weekday** — the specced 26 h window clears it by less than two hours.
+
+It does not clear a weekend. Frankfurter is ECB reference data and the ECB does not publish on weekends or TARGET holidays. Verified directly: querying `https://api.frankfurter.dev/v1/2026-07-26` (a Sunday) returns `date: "2026-07-24"` — **Friday's** fixing. So:
+
+- Sunday: Frankfurter stamped Friday 00:00Z vs er-api Sunday 00:02Z ⇒ **~48 h**
+- Monday before the ~16:00 CET fixing: Frankfurter still Friday vs er-api Monday ⇒ **~72 h**
+- Christmas / Easter TARGET closures run longer still
+
+At 26 h the pair simply never matches on those days, `fx_rates` reports a single source, and the UI quietly shows a SPOF instead of corroboration — for roughly 2 days in 7. A silent 29%-of-the-time outage is precisely the failure this program exists to eliminate, and it would read as "working fine" from the outside.
+
+```ts
+  fx_rates: {
+    providerIds: ['frankfurter-fx', 'er-api-fx'],
+    toleranceMode: 'relative',
+    numericTolerance: 0.01,
+    // 5 days, NOT the minutes-scale window the spatial domains use. Frankfurter
+    // stamps observations with the ECB *fixing date* (UTC midnight) and the ECB
+    // does not publish on weekends or TARGET holidays — a Sunday query returns
+    // Friday's fixing, so the two sources sit ~48 h apart every weekend and ~72 h
+    // apart on Monday morning. Anything tighter makes this domain stop
+    // corroborating for 2 days in 7 without any visible error. Do not "tidy" this
+    // number down.
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 24 * 60 * 60_000 },
+  },
+```
+
+**Do NOT "fix" this by stamping Frankfurter observations with the fetch time.** That would hide genuine staleness — a Frankfurter serving a three-week-old fixing would look perfectly fresh. Keep `observedAt` honest and let freshness decay do its job (below).
+
+**Corollary — do NOT change `frankfurter-fx.freshnessTtlMs` (currently 12 h).** With honest fixing-date stamping, Frankfurter's freshness score in `source-fusion.ts` (`max(0, 1 - age/ttl)`) will sit at **0** essentially always, since the latest fixing is ≥24 h old by construction. That is acceptable and should be left alone:
+
+- Freshness carries weight 0.25 while corroboration carries 0.5, so a corroborated pair still scores well; the mean across the two providers lands near 0.5 on freshness.
+- `freshnessTtlMs` has **two consumers on different time bases**: `source-fusion.ts:59` measures against `observedAt` (the fixing date — stale by design), while `provider-health.ts:76` measures against `lastSuccessAt` (the fetch time — minutes old, healthy). Raising the TTL to flatter the fusion score would simultaneously blind health detection, letting a genuinely dead Frankfurter go unflagged for days.
+- `provider-registry.test.mts:96` pins the 12 h value, so changing it breaks an existing test for no benefit.
+
+**Other probe findings for the implementer:**
+
+- **Host migration is already handled.** `api.frankfurter.app` now 301-redirects to `api.frankfurter.dev/v1`, and the existing `/api/fx-rates` route (`local-api-server.mjs:17588`) already points at the new host. No change needed — just do not "restore" the old domain.
+- **`toleranceMode: 'relative'` is load-bearing, not a style choice.** Absolute 0.01 would pass for EUR/GBP/CHF (values ~0.75–0.88) and fail permanently for every high-magnitude pair — measured absolute gaps: JPY 0.149, KRW 3.36, SEK 0.028, MXN 0.013, INR 0.106. All are ≤0.36% relative. Relative mode makes one constant work across the whole basket.
+- **Currency sets differ: Frankfurter exposes 29, er-api 166.** Only the intersection can ever fuse. Keep the existing route's `symbols=EUR,GBP,JPY,CHF,CAD,AUD,CNY` — all seven verified present in both. Do not attempt to fuse er-api's full 166.
+- **`api.frankfurter.dev` returned a transient Cloudflare 522** during probing, then three consecutive 200s at ~85 ms. The fail-closed ladder must treat 5xx as `ok: false` (it will) and the degraded response must be returned **uncached**, or one unlucky 522 pins the domain dark for the whole 6 h cache TTL.
+
 ### Task 2.4 AMENDED (2026-07-30): Radiation is DEFERRED — `space_weather` (Kp index) takes its slot
 
 **Why radiation was cut.** Re-probing the bodies (the Batch-1 Stooq lesson) showed the
@@ -702,6 +752,72 @@ describe them as fully independent anywhere in code or UI.
 
 - [ ] Registry also needs a `swpc-kp` entry (the existing `swpc-ovation` / `swpc-solar-regions` rows are different products and must NOT be reused as the Kp voter): same shape as `gfz-kp` but `displayName: 'SWPC Planetary Kp (estimated)'`, `baseUrl: 'https://services.swpc.noaa.gov'`, `reliabilityWeight: 0.9`, `fallbackPriority: 1`, `independenceGroup: 'noaa-swpc'`.
 - [ ] Fixture test: same bin, Kp 1.0 vs 0.667 → 1 fused fact, **no** disagreement; Kp 1.0 vs 4.0 → disagreement row naming both providers. Plus a suffix-less-`time_tag` case proving UTC coercion (a `'2026-07-30T00:00:00'` NOAA tag and a `'2026-07-30T00:00:00Z'` GFZ tag must land in the SAME bin — this is the regression that would silently kill the domain).
+
+#### AMENDED 2026-07-30 (second probe): `numericTolerance` MUST be 1.5, not 0.5 — and never filter on `status`
+
+The `0.5` above was calibrated from **one** sample (`1 vs 0.667`), which turns out to be the
+*median* case, not a typical worst case. Re-probed by aligning every overlapping 3-hour bin
+across the full 7.5-day SWPC window (60 matched bins, 2026-07-23 → 2026-07-30):
+
+| statistic | \|SWPC − GFZ\| |
+|---|---|
+| median | 0.333 |
+| p90 | 0.670 |
+| p95 / max | 1.003 |
+| bins > 0.5 | **16 / 60 (26.7 %)** |
+| bins > 1.0 | 3 / 60 (5 %) |
+| bins > 1.5 | **0 / 60** |
+
+At `0.5` this domain would report a **disagreement in more than one bin in four** on an
+ordinary, storm-free week — capping `confidenceMultiplier` at 0.6 and painting the
+Source Confidence card as "sources disagree" a quarter of the time for no real reason.
+That is worse than not fusing at all: it trains the user to ignore the disagreement flag.
+
+Root cause: SWPC's *estimated* Kp is quantized to thirds just like GFZ's, and the two
+networks (8 vs 13 observatories, different algorithms) routinely land **two** steps apart
+(0.667) and sometimes **three** (1.003). A `0.5` tolerance admits only ONE step.
+
+```ts
+  // 60 overlapping bins measured 2026-07-23..2026-07-30: median 0.333, p95 1.003,
+  // max 1.003, and ZERO bins above 1.5. SWPC-estimated and GFZ-definitive Kp are
+  // both quantized to thirds and routinely sit 2-3 quantization steps apart, so
+  // anything at or below 1.0 false-flags a quiet week as a disagreement (0.5 does
+  // it in 26.7% of bins). 1.5 clears the measured max with headroom while still
+  // catching the >=2-unit gaps that mean the networks genuinely disagree about
+  // storm level (Kp 2 "quiet" vs Kp 5 "G1 storm" is a 3.0 delta). Do NOT tighten
+  // this without re-running the bin-alignment measurement.
+  space_weather: {
+    providerIds: ['swpc-kp', 'gfz-kp'],
+    numericTolerance: 1.5,
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 3 * 60 * 60_000 },
+  },
+```
+
+Adjust the fixture test accordingly: `1.0 vs 0.667` → no disagreement (unchanged intent),
+and the disagreement case must move from `1.0 vs 4.0` to a gap that clears 1.5 — use
+**`2.0 vs 5.0`** (quiet-vs-G1-storm), which is the disagreement this domain actually exists
+to surface. Add a regression case at **`2.0 vs 1.333`** (a real measured pair) asserting
+**no** disagreement — that is the exact false-positive the 0.5 tolerance produced.
+
+**`status` is `'pre'` for all live data — never require `'def'`.** The description above is
+literally true but operationally misleading. Probed: 2026-03-01 → `["def"]`; 2026-07-15 and
+2026-07-29 → `["pre"]`. Definitive Kp is only certified months in arrears, so **100 % of the
+rows fusion will ever see are `'pre'`**. A `status === 'def'` filter (or a preference that
+drops `'pre'`) would leave GFZ permanently fail-closed — the identical defect class to
+Safecast's silently-ignored `order=` param that killed the radiation domain. Carry `status`
+through to the parsed row for provenance, but **do not filter on it**.
+
+**GFZ requires both `start` and `end`.** `https://kp.gfz.de/app/json/?index=Kp` with no window
+returns **HTTP 500**, not a default range. The rolling-48h window specced in the route is
+mandatory, not a nicety. `end` is **inclusive** (a 48 h window returns 17 bins, not 16).
+
+**Do not use `services.swpc.noaa.gov/json/planetary_k_index_1m.json`.** It is a different
+product: 1-minute cadence (~358 rows/28 KB per fetch) with a different field set
+(`kp_index` int, `estimated_kp` float, `kp` string like `"0P"`). Fusing it would require
+binning hundreds of rows per tick and would compare a 1-minute estimate against a 3-hour
+index. The `products/noaa-planetary-k-index.json` endpoint specced above is correct —
+re-verified 2026-07-30: array-of-objects, 60 rows, exactly `{time_tag, Kp, a_running,
+station_count}`, `time_tag` suffix-less as described.
 
 <details>
 <summary>Superseded original Task 2.4 (Radiation — BfS ODL + Safecast) — kept for the record</summary>

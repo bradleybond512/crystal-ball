@@ -289,6 +289,7 @@ import type { BreakingAlert } from '@/services/breaking-news-alerts';
 import { fetchFloodGauges } from '@/services/flood-gauges';
 import { fetchExtendedForecast } from '@/services/extended-forecast';
 import { fetchRadarFrames } from '@/services/rainviewer-radar';
+import { fetchSmokeForecastFrames } from '@/services/firework-smoke';
 import { fetchTidePredictions, TIDE_STATIONS } from '@/services/tide-predictions';
 import { fetchPollenData } from '@/services/pollen';
 import { fetchRedFlagWarnings, fetchFireWeatherOutlook } from '@/services/red-flag-warnings';
@@ -796,6 +797,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'spcMesoscale', task: () => runGuarded('spcMesoscale', () => this.loadSpcMesoscale()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'extendedForecast', task: () => runGuarded('extendedForecast', () => this.loadExtendedForecast()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: () => runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'smokeForecast', task: () => runGuarded('smokeForecast', () => this.loadSmokeForecast()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: () => runGuarded('tidePredictions', () => this.loadTidePredictions()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'goesSatellite', task: () => runGuarded('goesSatellite', () => this.loadGoesSatellite()) });
@@ -4535,6 +4537,17 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setRadarState(state);
  } catch (error) {
  console.warn('[weather-radar] fetch failed', error);
+ }
+  }
+
+  async loadSmokeForecast(): Promise<void> {
+ try {
+ const state = await fetchSmokeForecastFrames();
+ this.ctx.map?.setFireworkForecast(state);
+ } catch (error) {
+ // Fail-open: the map layer still renders GeoMet's default TIME without
+ // frames; the service already recorded the freshness error.
+ console.warn('[smoke-forecast] frames fetch failed', error);
  }
   }
 

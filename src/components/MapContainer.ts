@@ -494,6 +494,12 @@ export class MapContainer {
  }
   }
 
+  public setFireworkForecast(state: import('@/services/firework-smoke').SmokeForecastState): void {
+ if (this.useDeckGL) {
+ this.deckGLMap?.setFireworkForecast(state);
+ }
+  }
+
   public setLightningStrikes(strikes: import('@/services/lightning').LightningStrike[]): void {
  if (this.useDeckGL) {
  this.deckGLMap?.setLightningStrikes(strikes);

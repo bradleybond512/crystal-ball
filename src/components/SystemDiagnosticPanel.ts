@@ -8,7 +8,7 @@
  * one place the user can answer "is the app healthy right now?".
  *
  * Auto-refreshes every 5 s. Click a tab to switch view; click "Run
- * self-test" to fire the standard nine probes.
+ * self-test" to fire the standard probe set.
  */
 
 import { Panel } from './Panel';
@@ -33,6 +33,7 @@ import { diagnosticsHeartbeatAgeMs } from '@/services/diagnostics/diagnostics-he
 import { getApiBaseUrl } from '@/services/runtime';
 import { getSavedPlaces } from '@/services/saved-places';
 import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
+import { runChampionRollbackSelfTestFixture } from '@/services/cognition/champion-rollback-fixture';
 import { PROVIDER_DEFINITIONS } from '@/services/providers/provider-registry';
 import { getProviderRedundancyReport } from '@/services/insights/insights-state';
 import { buildRedundancyView, corroborationSummary, type RedundancyTone } from '@/services/diagnostics/provider-redundancy-view';
@@ -700,6 +701,9 @@ export class SystemDiagnosticPanel extends Panel {
           countSavedPlaces: () => getSavedPlaces().length,
           // Proves the NWS point-in-polygon matcher actually works.
           runNwsPolygonFixture: () => Promise.resolve(runNwsPolygonSelfTestFixture()),
+          // ACC-404: proves champion-registry rollback in the shipped
+          // bundle against an isolated in-memory registry.
+          runChampionRollbackFixture: () => Promise.resolve(runChampionRollbackSelfTestFixture()),
           // Static provider catalog (not live health — empty pre-fetch would false-fail).
           countProviderRegistry: () => PROVIDER_DEFINITIONS.length,
           isStorageAvailable: () => ({

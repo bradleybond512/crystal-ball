@@ -37,7 +37,7 @@ import { getChampionRegistry } from '@/services/cognition/champion-registry';
 import { collectJoinedEvidence, RUN_IDS } from '@/services/cognition/shadow-rollout';
 import {
   evaluatePromotionGate,
-  safetyEvidenceFromReplayReport,
+  safetyEvidenceFromBaselineRegression,
 } from '@/services/cognition/promotion-gate';
 import {
   buildChampionStatusView,
@@ -47,6 +47,8 @@ import {
 } from '@/services/cognition/champion-status-view';
 import { runReplay } from '@/services/ops/replay-harness';
 import { buildCatalogReplayFixtures } from '@/services/ops/replay-fixtures-catalog';
+import type { ReplayBaseline } from '@/services/ops/replay-baseline';
+import panelReplayBaseline from '@/services/ops/replay-baseline.json';
 
 const REFRESH_MS = 15_000;
 
@@ -245,9 +247,13 @@ function composeChampionStatus(): ChampionStatusView {
   const registry = getChampionRegistry();
   const active = registry.getActiveChampion(CHAMPION_SLOT);
   const fixtures = buildCatalogReplayFixtures();
-  const safety = safetyEvidenceFromReplayReport(
+  // ACC-404 correction: the catalog fixtures are intentionally-failing
+  // historical-miss cases — the safety gate consumes NO-NEW-REGRESSIONS
+  // vs the committed baseline, never their raw pass rate.
+  const safety = safetyEvidenceFromBaselineRegression(
     runReplay({ fixtures }),
     fixtures,
+    panelReplayBaseline as ReplayBaseline,
   );
   const incumbentId = active?.modelId ?? 'production';
   const challengers = CHALLENGER_RUNS.map(({ runId, challengerId }) => {

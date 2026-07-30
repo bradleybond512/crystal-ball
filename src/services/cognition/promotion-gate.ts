@@ -36,6 +36,7 @@
 import type { JoinedPairEvidence } from './shadow-rollout';
 import type { ReplayHarnessReport } from '@/services/ops/replay-harness';
 import type { ReplayFixture } from '@/services/ops/replay-fixtures';
+import type { ReplayBaseline } from '@/services/ops/replay-baseline';
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -287,6 +288,72 @@ export function safetyEvidenceFromReplayReport(
     safetyCriticalPassed: acc.passed,
     ...(acc.minLeadMs === undefined ? {} : { minLeadTimeMinutes: acc.minLeadMs / 60_000 }),
   };
+}
+
+/**
+ * ACC-404: safety evidence as a NO-NEW-REGRESSIONS check against the
+ * committed replay baseline. The catalog fixtures are intentionally-
+ * failing historical-miss cases (their raw pass rate is 0 by design),
+ * so raw recall from safetyEvidenceFromReplayReport would fail every
+ * promotion forever. The meaningful safety question for a challenger is
+ * "did anything get WORSE than the accepted baseline?":
+ *
+ *   - a safety-relevant fixture counts as passed when its live outcome
+ *     matches the baseline, or improved over a baseline 'fail';
+ *   - a baseline 'pass' (or unknown fixture) that now fails counts as
+ *     a safety regression;
+ *   - lead-time evidence comes only from PASSING warning_before_impact
+ *     expectations — a historical miss's negative lead never poisons
+ *     the floor.
+ */
+export function safetyEvidenceFromBaselineRegression(
+  report: ReplayHarnessReport,
+  fixtures: readonly ReplayFixture[],
+  baseline: ReplayBaseline,
+): SafetyReplayEvidence {
+  const safetyFixtureIds = new Set<string>();
+  const kindByExpectation = new Map<string, string>();
+  for (const fixture of fixtures) {
+    for (const e of fixture.expectations) {
+      kindByExpectation.set(`${fixture.fixtureId}:${e.id}`, e.check.kind);
+      if (SAFETY_CHECK_KINDS.has(e.check.kind)) safetyFixtureIds.add(fixture.fixtureId);
+    }
+  }
+  const acc: SafetyAccumulator = { total: 0, passed: 0 };
+  for (const fixtureResult of report.results) {
+    if (!safetyFixtureIds.has(fixtureResult.fixtureId)) continue;
+    acc.total += 1;
+    if (matchesBaseline(fixtureResult.outcome, baseline.fixtures[fixtureResult.fixtureId])) {
+      acc.passed += 1;
+    }
+    accumulatePassingLeadTimes(acc, fixtureResult, kindByExpectation);
+  }
+  return {
+    safetyCriticalTotal: acc.total,
+    safetyCriticalPassed: acc.passed,
+    ...(acc.minLeadMs === undefined ? {} : { minLeadTimeMinutes: acc.minLeadMs / 60_000 }),
+  };
+}
+
+/** Matching the accepted baseline — or improving over a baseline
+ *  'fail' — is not a regression. */
+function matchesBaseline(outcome: string, expected: string | undefined): boolean {
+  return outcome === expected || (expected === 'fail' && outcome !== 'fail');
+}
+
+function accumulatePassingLeadTimes(
+  acc: SafetyAccumulator,
+  fixtureResult: ReplayHarnessReport['results'][number],
+  kindByExpectation: ReadonlyMap<string, string>,
+): void {
+  for (const er of fixtureResult.results) {
+    const kind = kindByExpectation.get(`${fixtureResult.fixtureId}:${er.expectationId}`);
+    if (kind !== 'warning_before_impact' || er.outcome !== 'pass') continue;
+    const leadMs = er.pivots?.leadMs;
+    if (typeof leadMs === 'number' && (acc.minLeadMs === undefined || leadMs < acc.minLeadMs)) {
+      acc.minLeadMs = leadMs;
+    }
+  }
 }
 
 interface SafetyAccumulator {

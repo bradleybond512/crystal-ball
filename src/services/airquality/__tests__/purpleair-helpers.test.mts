@@ -189,7 +189,7 @@ test('scoreAndRank: drops sensors that produce no AQI (NaN pm25)', () => {
 
 // ── parseV1SensorsResponse ──────────────────────────────────────────────
 
-test('parseV1SensorsResponse: maps fields by name and produces sensors', () => {
+test('parseV1SensorsResponse: maps fields by name and converts last_seen seconds → ms', () => {
   const out = parseV1SensorsResponse({
     fields: ['sensor_index', 'pm2.5', 'latitude', 'longitude', 'location_type', 'confidence', 'name', 'last_seen'],
     data: [
@@ -201,7 +201,8 @@ test('parseV1SensorsResponse: maps fields by name and produces sensors', () => {
   assert.equal(out[0]!.id, 101);
   assert.equal(out[0]!.pm25, 12.5);
   assert.equal(out[0]!.locationType, 0);
-  assert.equal(out[0]!.lastSeen, 1_700_000_000);
+  assert.equal(out[0]!.lastSeen, 1_700_000_000_000, 'v1 last_seen is unix seconds — must land as epoch ms like the type documents');
+  assert.equal(out[1]!.lastSeen, 1_700_000_100_000);
 });
 
 test('parseV1SensorsResponse: returns [] on garbage input', () => {

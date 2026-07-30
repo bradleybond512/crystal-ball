@@ -1,21 +1,18 @@
 /**
  * Fail-closed PurpleAir nearby-sensor fetch — 4th air_quality fusion source,
- * keyed. The sidecar's v1 route returns `lastSeen` in raw Unix SECONDS (see
- * sidecarParseV1Sensors in local-api-server.mjs — its own public-JSON
- * fallback converts to ms, the v1 path currently does not), so this wrapper
- * does the ×1000 conversion itself to land observedAt in ms like every
- * other fusion source.
+ * keyed. `lastSeen` arrives from the sidecar in epoch ms (sidecarParseV1Sensors
+ * converts v1's unix-seconds `last_seen` at the source) and lands directly in
+ * `observedAt`.
  *
- * The route itself returns every outdoor sensor globally (20-30k+, unfiltered
- * — the sidecar accepts no bbox/location params), so this wrapper applies a
- * pure radius filter (default 100km, 4x the domain's 25km fusion match
- * window) around the caller's reference coordinate before handing readings
- * to the caller. Without this, fusion-ingest's per-observation linear
- * cluster scan would run against tens of thousands of irrelevant global
- * sensors on every tick.
+ * The request carries a PurpleAir-native nwlng/nwlat/selng/selat bounding box
+ * around the caller's reference coordinate, so the upstream fetch, transfer,
+ * and parse stay bounded instead of covering all 20-30k global outdoor
+ * sensors. The pure radius filter (default 100km, 4x the domain's 25km fusion
+ * match window) remains as the precise gate — the bbox corners reach ~√2 ×
+ * radius from the center, and pole/antimeridian clamping can narrow the box.
  */
 import { getApiBaseUrl } from '@/services/runtime';
-import { filterReadingsNearby, type PurpleairReading } from './airquality-fusion-observations';
+import { bboxAround, filterReadingsNearby, type PurpleairReading } from './airquality-fusion-observations';
 import { MIN_CONFIDENCE } from './purpleair-helpers';
 
 interface PurpleAirSensorRaw {
@@ -41,18 +38,20 @@ function toPurpleairReading(s: PurpleAirSensorRaw | null | undefined, now: numbe
   // garbage vote turns into a false disagreement flag. Mirrors
   // purpleair-helpers.filterUsable's own confidence gate.
   if (!Number.isFinite(s.confidence) || (s.confidence as number) <= MIN_CONFIDENCE) return null;
-  let observedAt = Number.isFinite(s.lastSeen) && (s.lastSeen as number) > 0 ? (s.lastSeen as number) * 1000 : now;
-  // Plausibility guard: if seconds->ms conversion lands more than a day in
-  // the future, the sidecar's lastSeen was probably already in ms (e.g. if
-  // the parser at the source gets fixed) — use it as-is instead of producing
-  // a millennia-future timestamp.
-  if (observedAt > now + 24 * 60 * 60 * 1000) observedAt = s.lastSeen as number;
+  const observedAt = Number.isFinite(s.lastSeen) && (s.lastSeen as number) > 0 ? (s.lastSeen as number) : now;
   return { lat: s.lat as number, lon: s.lon as number, pm25: s.pm25 as number, observedAt };
 }
 
 export async function fetchPurpleairNearby(lat: number, lon: number, radiusKm = 100): Promise<PurpleairFetchResult> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}/api/airquality/purpleair`, { signal: AbortSignal.timeout(20_000) });
+    const box = bboxAround(lat, lon, radiusKm);
+    const params = new URLSearchParams({
+      nwlng: String(box.nwLng),
+      nwlat: String(box.nwLat),
+      selng: String(box.seLng),
+      selat: String(box.seLat),
+    });
+    const res = await fetch(`${getApiBaseUrl()}/api/airquality/purpleair?${params}`, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return { ok: false, readings: [] };
     const data = (await res.json()) as { sensors?: PurpleAirSensorRaw[]; keyMissing?: boolean; error?: string } | null;
     if (!data || data.keyMissing || data.error || !Array.isArray(data.sensors)) return { ok: false, readings: [] };

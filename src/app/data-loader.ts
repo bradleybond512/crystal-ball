@@ -487,6 +487,14 @@ export class DataLoaderManager implements AppModule {
  this.applyTimeRangeFilterToNewsPanels();
   }, 120);
 
+  // The three hazard loaders (air quality / wildfire / hazmat) each trigger a
+  // compound-threat pass and typically finish within the same refresh window —
+  // trailing-debounce them into one evaluation so its fetch fan-out (including
+  // the air-quality fusion block) doesn't rerun 2-4x per tick.
+  private readonly evaluateCompoundThreatsDebounced = debounce(() => {
+ void this.evaluateCompoundThreats();
+  }, 10_000);
+
   public updateSearchIndex: () => void = () => {};
 
   private digestBreaker = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, cooldownUntil: 0 };
@@ -2677,11 +2685,11 @@ export class DataLoaderManager implements AppModule {
   // Hazard pipeline → src/app/loaders/hazards.ts
   // The compound-threat evaluator still owns cross-domain data, so we pass it
   // in as a callback rather than importing it from the loader module.
-  async loadAirQuality(): Promise<void> { return hazardLoaders.loadAirQuality(this.ctx, () => void this.evaluateCompoundThreats()); }
-  async loadWildfireIncidents(): Promise<void> { return hazardLoaders.loadWildfireIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadAirQuality(): Promise<void> { return hazardLoaders.loadAirQuality(this.ctx, () => this.evaluateCompoundThreatsDebounced()); }
+  async loadWildfireIncidents(): Promise<void> { return hazardLoaders.loadWildfireIncidents(this.ctx, () => this.evaluateCompoundThreatsDebounced()); }
   async loadWildfireIntel(): Promise<void> { return hazardLoaders.loadWildfireIntel(this.ctx); }
   async loadPurpleAir(): Promise<void> { return hazardLoaders.loadPurpleAir(this.ctx); }
-  async loadHazmatIncidents(): Promise<void> { return hazardLoaders.loadHazmatIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadHazmatIncidents(): Promise<void> { return hazardLoaders.loadHazmatIncidents(this.ctx, () => this.evaluateCompoundThreatsDebounced()); }
   async loadOilSpills(): Promise<void> { return hazardLoaders.loadOilSpills(this.ctx); }
 
   async evaluateCompoundThreats(): Promise<void> {

@@ -153,12 +153,11 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// PurpleAir's sidecar route returns every outdoor sensor globally (20-30k+),
-// unfiltered — feeding all of them into fusion means ingestDomain's per-
-// observation linear cluster scan (fusion-ingest.ts) runs against a payload
-// orders of magnitude larger than any other domain, on the renderer main
-// thread, 2-4x per 30-min tick. Cap to a radius around the reference
-// coordinate before fusion ever sees the readings.
+// Precise distance gate on top of the sidecar's bbox pre-filter: the bbox
+// corners reach ~√2 × radius from the center, and a caller that skips the
+// bbox still gets the global 20-30k-sensor payload — so cap to the true
+// radius before fusion's per-observation linear cluster scan
+// (fusion-ingest.ts) ever sees the readings.
 export function filterReadingsNearby(
   readings: readonly PurpleairReading[],
   lat: number,
@@ -166,4 +165,32 @@ export function filterReadingsNearby(
   radiusKm: number,
 ): PurpleairReading[] {
   return readings.filter((r) => haversineKm(lat, lon, r.lat, r.lon) <= radiusKm);
+}
+
+export interface SensorBoundingBox {
+  nwLng: number;
+  nwLat: number;
+  seLng: number;
+  seLat: number;
+}
+
+// PurpleAir's v1 API accepts a nwlng/nwlat/selng/selat bounding box, so the
+// sidecar can filter upstream instead of shipping every global sensor to the
+// renderer. Clamped at the poles and the antimeridian (no wrap) —
+// filterReadingsNearby stays the precise gate, so a clamped-narrower box only
+// costs edge coverage, never correctness.
+export function bboxAround(lat: number, lon: number, radiusKm: number): SensorBoundingBox {
+  const latDelta = (radiusKm / EARTH_RADIUS_KM) * (180 / Math.PI);
+  const nwLat = Math.min(90, lat + latDelta);
+  const seLat = Math.max(-90, lat - latDelta);
+  if (nwLat >= 90 || seLat <= -90) {
+    return { nwLat, seLat, nwLng: -180, seLng: 180 };
+  }
+  const lonDelta = latDelta / Math.cos(toRad(lat));
+  return {
+    nwLat,
+    seLat,
+    nwLng: Math.max(-180, lon - lonDelta),
+    seLng: Math.min(180, lon + lonDelta),
+  };
 }

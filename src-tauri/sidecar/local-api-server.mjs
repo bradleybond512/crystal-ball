@@ -1618,7 +1618,7 @@ function sidecarParsePurpleAirNum(v) {
   return Number.NaN;
 }
 
-function sidecarParseV1Sensors(payload) {
+export function sidecarParseV1Sensors(payload) {
   if (!payload || typeof payload !== 'object') return [];
   const fields = payload.fields;
   const data = payload.data;
@@ -1652,7 +1652,8 @@ function sidecarParseV1Sensors(payload) {
  locationType: Number.isFinite(locationType) ? locationType : 0,
  confidence: Number.isFinite(confidence) ? confidence : 0,
  name: nameVal || `Sensor ${id}`,
- lastSeen: lastSeen !== null && Number.isFinite(lastSeen) ? lastSeen : null,
+ // v1 last_seen is unix seconds — emit epoch ms like the public-JSON parser below.
+ lastSeen: lastSeen !== null && Number.isFinite(lastSeen) ? lastSeen * 1000 : null,
  });
   }
   return out;
@@ -13703,12 +13704,24 @@ async function dispatch(requestUrl, req, routes, context) {
  error: 'PURPLEAIR_API_KEY required — public www.purpleair.com/json endpoint is no longer served',
  }, 503);
  }
- const cacheKey = 'purpleair-sensors';
+ // Optional PurpleAir-native bounding box (all four params or none). The
+ // fusion fetch sends one so upstream + transfer + renderer parse stay
+ // bounded; the wildfire panel's global snapshot omits it and keeps the
+ // unbounded form. Cache is keyed per-bbox so a bounded payload and the
+ // global one can never be served for each other.
+ const bboxRaw = ['nwlng', 'nwlat', 'selng', 'selat'].map((p) => requestUrl.searchParams.get(p));
+ const bboxPresent = bboxRaw.some((v) => v !== null);
+ const bbox = bboxRaw.map((v) => Number.parseFloat(v ?? ''));
+ if (bboxPresent && !bbox.every(Number.isFinite)) {
+ return json({ sensors: [], error: 'bbox requires all four finite params: nwlng, nwlat, selng, selat' }, 400);
+ }
+ const bboxQuery = bboxPresent ? `&nwlng=${bbox[0]}&nwlat=${bbox[1]}&selng=${bbox[2]}&selat=${bbox[3]}` : '';
+ const cacheKey = bboxPresent ? `purpleair-sensors:${bbox.join(',')}` : 'purpleair-sensors';
  const cached = getCached(cacheKey, 5 * 60 * 1000);
  if (cached) return json(cached);
  const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
  try {
- const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0`;
+ const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0${bboxQuery}`;
  const resp = await fetchWithTimeout(url, {
  headers: {
  'X-API-Key': apiKey,

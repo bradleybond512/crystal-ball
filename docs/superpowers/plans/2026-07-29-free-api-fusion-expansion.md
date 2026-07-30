@@ -1038,6 +1038,52 @@ fusion fetch. This is safe: `limit` is already part of the route's cache key (th
 in-code comment explaining exactly that), so a high-limit fusion request cannot poison the
 existing panel's 50-row cache entry or vice versa.
 
+#### AMENDED 2026-07-30 (fourth probe): `limit=500` is ALSO wrong — IODA truncates the NEWEST rows
+
+The fix above (`limit=500`) is necessary but **not sufficient**, and shipping it would still
+leave the domain effectively blind. Two live findings, both measured:
+
+**1. Rows arrive in ASCENDING time order, and `limit` truncates the tail.** A 24 h window
+holds 1805 rows (confirmed total: `limit=3000` and `limit=5000` both return exactly 1805, so
+that is the real count and not another cap). Asking for fewer returns the *oldest* N:
+
+| `limit` | rows returned | newest row in response |
+|---------|---------------|------------------------|
+| 50      | 50            | ~23 h stale            |
+| 500     | 500           | truncated              |
+| 1000    | 1000          | **13.6 h stale**       |
+| 5000    | 1805 (all)    | 13 min old             |
+
+So `limit=1000` over a 24 h window silently discards the most recent ~13.6 hours of alerts.
+For a *live outage* feed this is the worst possible truncation direction: the feed would show
+only day-old recoveries and could never surface an outage happening now, while every layer —
+route, fetch, fusion, health — reported success. This is strictly worse than the `limit=50`
+starvation, because the row count looks healthy.
+
+**2. Ordering cannot be controlled — the parameters are silently ignored.** Probed
+`order=desc`, `sort=-time`, and `orderBy=time_desc` against a no-param baseline: all four
+responses returned an identical first timestamp (`1785341100`) and none was descending. This
+is the *third* instance in this program of an upstream accepting an unknown query parameter
+and ignoring it (after Safecast's `order=` and the FMP `/api/v3` vs `/stable` split). **Never
+assume a query parameter works because the request returns 200 — diff the body against a
+no-param baseline.**
+
+**Required spec, replacing `limit=500`: pass `limit=5000` and keep the 24 h window.**
+Measured headroom is 2.8× over the observed 1805 rows, and the response is confirmed
+un-truncated at that limit. Do not "optimize" this by shrinking the window instead: Cloudflare
+Radar annotations are day-scale curated events, so a 6 h IODA window (340 rows, 4 qualifying)
+would systematically fail to line up with the Cloudflare side and the domain would sit at one
+vote — defeating the entire point of the task.
+
+Country-row yield at the corrected settings, measured over 24 h: **42 country rows → 20 after
+`level !== 'normal'`**. That is a genuinely useful population, versus the ~1-and-usually-0 the
+original spec would have produced.
+
+Payload cost is ~1800 rows per 15-minute cache window over loopback — acceptable. Do **not**
+add server-side entity filtering to the shared route to trim it: `/api/internet-outages` also
+backs the existing panel and the `get_internet_outages` MCP tool, and narrowing its default
+response shape would regress both. Filter in the fusion adapter.
+
 Confirmed contract for the IODA-side mapper (no changes needed to either):
 `parseIodaAlerts` emits `{entityType, entityCode, entityName, datasource, score, historyValue,
 from, until, level, condition, method}`, where **`from` and `until` are both `alert.time`**

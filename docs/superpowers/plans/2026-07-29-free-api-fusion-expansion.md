@@ -715,6 +715,37 @@ stations). Different institutions, different algorithms, independently published
 earn separate independence groups — but the input overlap is partial, not zero. Do not
 describe them as fully independent anywhere in code or UI.
 
+#### AMENDED 2026-07-30 (third probe): `normalizeKpPoints` IS BROKEN IN PRODUCTION — fixing it is part of this task
+
+Probing the reuse target before dispatching (per the Batch-1 Stooq lesson) found a **live, dormant defect**. `normalizeKpPoints` (`local-api-server.mjs:2971`, unexported, **zero test coverage**) parses a header-row + array-of-**arrays** payload:
+
+```js
+// SWPC returns ["time_tag","kp_index","estimated_kp","kp"] header row + data.
+if (!Array.isArray(raw) || raw.length < 2) return [];
+for (let i = 1; i < raw.length; i += 1) {
+  const row = raw[i];
+  if (!Array.isArray(row) || row.length < 2) continue;   // <-- always true
+```
+
+Those field names are the **1-minute** product's — the very product this plan warns against below. But the URL it is fed (`local-api-server.mjs:3011`) is `products/noaa-planetary-k-index.json`, which returns array-of-**objects**. Verified against the live payload 2026-07-30 (61 rows): `Array.isArray(row)` is false for every row, so `normalizeKpPoints(live)` returns **`[]`**, and `summarizeKpSidecar([])` returns **`null`**. The geomag block of `/api/spaceweather/status` has therefore been empty since `1a286e7f` (2026-05-06) — roughly three months — with no error anywhere.
+
+**A second bug is stacked underneath it.** `summarizeKpSidecar` does `Date.parse(p.time_tag)` on the suffix-less tag, so even with the shape fixed the result is timezone-dependent. Measured against the same live payload:
+
+| TZ | rows kept in 24 h window | reported latest |
+|---|---|---|
+| `UTC` | 7 | `2026-07-30T12:00:00` Kp **1.67** |
+| `America/Chicago` (the user's zone) | 8 | `2026-07-30T09:00:00` Kp **2.00** |
+
+Under UTC-5 the three newest bins parse as *future* and are silently dropped by the `t > now` guard, reporting a 3-hour-stale and numerically different Kp. Note `normalizeAlertRaw` twenty lines below **already** appends `Z` with the comment "SWPC's `issue_datetime` is naïve UTC" — the codebase knows this trap; `normalizeKpPoints` just missed it.
+
+**Both fixes are in scope for this task, and are a prerequisite for it.** The spec below says to reuse `normalizeKpPoints`' output and not add a second NOAA fetch. Left as-is, that wires `swpc-kp` to a function returning `[]` forever: the provider records `ok: false` every tick, `space_weather` ships permanently single-source, and the Source Confidence card shows a SPOF while looking like it works. That is the identical defect class to Safecast's silently-ignored `order=` that got the radiation domain cut — shipping it knowingly would be worse.
+
+Required:
+
+- Rewrite `normalizeKpPoints` for the real shape: array-of-objects, `Kp` (**capital K**), plus `a_running` / `station_count` available if wanted. Keep emitting `{ time_tag, kp }` so `summarizeKpSidecar` and the new fusion mapper share one source.
+- Normalize `time_tag` to explicit UTC **at the normalizer** (append `Z` when there is no offset), so every consumer — `summarizeKpSidecar`, the fusion mapper, and the Kp bin key — inherits a correct instant. Do not fix it only at the fusion call site.
+- **Export** `normalizeKpPoints` and add route-contract tests over both it and `summarizeKpSidecar`, including a fixture in the real array-of-objects shape and a `TZ`-sensitivity case proving a suffix-less tag lands on the same instant regardless of host timezone. The absence of any test is why this survived three months; do not fix the bug without closing that gap.
+
 **Files:**
 - Modify: `local-api-server.mjs` — new route `/api/spaceweather-kp-gfz` proxying the GFZ URL
   above with a rolling 48h window (`start` = now−48h, `end` = now, both `toISOString()`),

@@ -176,9 +176,8 @@ export interface SensorBoundingBox {
 
 // PurpleAir's v1 API accepts a nwlng/nwlat/selng/selat bounding box, so the
 // sidecar can filter upstream instead of shipping every global sensor to the
-// renderer. Clamped at the poles and the antimeridian (no wrap) —
-// filterReadingsNearby stays the precise gate, so a clamped-narrower box only
-// costs edge coverage, never correctness.
+// renderer. filterReadingsNearby stays the precise gate: a widened box only
+// costs payload size, never correctness.
 export function bboxAround(lat: number, lon: number, radiusKm: number): SensorBoundingBox {
   const latDelta = (radiusKm / EARTH_RADIUS_KM) * (180 / Math.PI);
   const nwLat = Math.min(90, lat + latDelta);
@@ -187,10 +186,13 @@ export function bboxAround(lat: number, lon: number, radiusKm: number): SensorBo
     return { nwLat, seLat, nwLng: -180, seLng: 180 };
   }
   const lonDelta = latDelta / Math.cos(toRad(lat));
-  return {
-    nwLat,
-    seLat,
-    nwLng: Math.max(-180, lon - lonDelta),
-    seLng: Math.min(180, lon + lonDelta),
-  };
+  const nwLng = lon - lonDelta;
+  const seLng = lon + lonDelta;
+  // A box crossing the antimeridian can't be expressed as one nwlng<selng
+  // pair — widen to the full span and let filterReadingsNearby trim, rather
+  // than silently dropping a user's nearest cross-meridian sensors.
+  if (nwLng < -180 || seLng > 180) {
+    return { nwLat, seLat, nwLng: -180, seLng: 180 };
+  }
+  return { nwLat, seLat, nwLng, seLng };
 }

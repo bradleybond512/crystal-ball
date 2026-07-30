@@ -169,8 +169,15 @@ test('bboxAround clamps at the poles and widens to the full longitude span', () 
   assert.equal(box.seLng, 180);
 });
 
-test('bboxAround clamps at the antimeridian instead of wrapping', () => {
-  const box = bboxAround(0, 179.5, 100);
-  assert.equal(box.seLng, 180);
-  assert.ok(box.nwLng > 178 && box.nwLng < 179.5, `nwLng ${box.nwLng}`);
+test('bboxAround widens to the full longitude span when the box crosses the antimeridian', () => {
+  // Clamping at ±180 would silently drop a user's nearest cross-meridian
+  // sensors — sensors at -179.8° are within 100km of 179.5° but outside a
+  // clamped box, and the downstream radius filter can't recover what the
+  // upstream bbox already excluded.
+  const east = bboxAround(0, 179.5, 100);
+  assert.equal(east.nwLng, -180);
+  assert.equal(east.seLng, 180);
+  const west = bboxAround(0, -179.5, 100);
+  assert.equal(west.nwLng, -180);
+  assert.equal(west.seLng, 180);
 });

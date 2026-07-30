@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 process.env.LOCAL_API_TOKEN ??= 'test-token-for-sidecar-tests';
-const { sidecarParseV1Sensors } = await import('../local-api-server.mjs');
+const { sidecarParseV1Sensors, createLocalApiServer } = await import('../local-api-server.mjs');
 
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const serverSrc = readFileSync(path.join(__dir, '..', 'local-api-server.mjs'), 'utf8');
@@ -74,4 +74,53 @@ test('purpleair route cache key is bbox-scoped, and the unbounded form survives'
   const body = routeBody('/api/airquality/purpleair');
   assert.match(body, /purpleair-sensors:/, 'bounded requests need their own cache key');
   assert.match(body, /'purpleair-sensors'/, 'global (unbounded) cache key must remain for the wildfire panel');
+});
+
+// ── Route, behavioral: paths that return before any upstream call ───────────
+// (Forwarding + cache isolation stay source-scoped above: fetchWithTimeout
+// goes through node:https directly, so there is no cheap upstream mock seam.)
+
+async function withServer(fn) {
+  const app = await createLocalApiServer({ port: 0, logger: { log() {}, warn() {}, error() {} } });
+  const { port } = await app.start();
+  try {
+    await fn((path) => fetch(`http://127.0.0.1:${port}${path}`, {
+      headers: { authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    }));
+  } finally {
+    await app.close();
+  }
+}
+
+test('purpleair route: missing key → 503 keyMissing before bbox handling', async () => {
+  const saved = process.env.PURPLEAIR_API_KEY;
+  delete process.env.PURPLEAIR_API_KEY;
+  try {
+    await withServer(async (get) => {
+      const res = await get('/api/airquality/purpleair?nwlng=1');
+      assert.equal(res.status, 503);
+      const body = await res.json();
+      assert.equal(body.keyMissing, true);
+    });
+  } finally {
+    if (saved !== undefined) process.env.PURPLEAIR_API_KEY = saved;
+  }
+});
+
+test('purpleair route: partial or malformed bbox → 400, all-four-or-none', async () => {
+  const saved = process.env.PURPLEAIR_API_KEY;
+  process.env.PURPLEAIR_API_KEY = 'test-key-never-sent-upstream';
+  try {
+    await withServer(async (get) => {
+      for (const qs of ['?nwlng=-88.2', '?nwlng=-88.2&nwlat=42.4&selng=-85.8', '?nwlng=abc&nwlat=42.4&selng=-85.8&selat=40.7']) {
+        const res = await get(`/api/airquality/purpleair${qs}`);
+        assert.equal(res.status, 400, `expected 400 for ${qs}`);
+        const body = await res.json();
+        assert.match(body.error, /bbox/);
+      }
+    });
+  } finally {
+    if (saved === undefined) delete process.env.PURPLEAIR_API_KEY;
+    else process.env.PURPLEAIR_API_KEY = saved;
+  }
 });

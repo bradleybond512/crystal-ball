@@ -59,10 +59,25 @@ test('fetchPurpleairNearby falls back to now for missing/non-positive lastSeen',
   }
 });
 
-test('fetchPurpleairNearby fails closed on keyMissing, upstream error, and low confidence', async (t) => {
+test('fetchPurpleairNearby fails closed on keyMissing', async (t) => {
   const call = stubFetch(t, { sensors: [], keyMissing: true });
   assert.deepEqual(await fetchPurpleairNearby(41.6, -87.06), { ok: false, readings: [] });
   assert.ok(call.url.includes('/api/airquality/purpleair'));
+});
+
+test('fetchPurpleairNearby fails closed on a non-2xx response', async (t) => {
+  stubFetch(t, { sensors: [sensor()] }, 502);
+  assert.deepEqual(await fetchPurpleairNearby(41.6, -87.06), { ok: false, readings: [] });
+});
+
+test('fetchPurpleairNearby fails closed on an upstream error payload', async (t) => {
+  stubFetch(t, { sensors: [], error: 'purpleair upstream 502' });
+  assert.deepEqual(await fetchPurpleairNearby(41.6, -87.06), { ok: false, readings: [] });
+});
+
+test('fetchPurpleairNearby drops low-confidence sensors (A/B-channel disagreement)', async (t) => {
+  stubFetch(t, { sensors: [sensor({ confidence: 30 }), sensor({ confidence: undefined })] });
+  assert.deepEqual(await fetchPurpleairNearby(41.6, -87.06), { ok: false, readings: [] });
 });
 
 test('fetchPurpleairNearby still radius-filters sensors the bbox let through', async (t) => {

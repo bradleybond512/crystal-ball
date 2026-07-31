@@ -40,6 +40,10 @@ export interface ProviderSnapshot {
   recentFactFingerprint?: string;
   /** Optional free-text last-error message. */
   lastError?: string;
+  /** Set when the provider declares a required API key that isn't configured.
+   *  Such a provider is structurally unreachable — it was never switched on,
+   *  as opposed to switched on and now failing. */
+  unconfiguredSecret?: string;
 }
 
 export type RedundancyVerdict =
@@ -48,6 +52,7 @@ export type RedundancyVerdict =
   | 'redundant_disagreement'  // multiple up but emitting different fingerprints
   | 'single_source'        // primary up, no working backup
   | 'primary_down_with_backup'
+  | 'not_configured'       // nothing up, and every provider is waiting on an API key
   | 'all_down'
   | 'unknown';
 
@@ -120,7 +125,7 @@ function buildDomainEntry(domain: string, raw: readonly ProviderSnapshot[]): Dom
     verdict,
     confidenceMultiplier,
     reason,
-    remediation: pickRemediation(verdict, domain),
+    remediation: pickRemediation(verdict, domain, providers),
     providers,
   };
 }
@@ -130,7 +135,12 @@ function decideVerdict(providers: readonly ProviderSnapshot[]): RedundancyVerdic
   const upProviders = providers.filter((p) => p.level === 'healthy' || p.level === 'degraded');
   const primary = providers.find((p) => p.primary);
 
-  if (upProviders.length === 0) return 'all_down';
+  if (upProviders.length === 0) {
+    // Nothing up. Distinguish "never switched on" from "switched on and broke":
+    // only when EVERY provider is waiting on an API key is the honest advice
+    // "enter the key". One genuinely broken provider makes it an outage.
+    return providers.every((p) => p.unconfiguredSecret) ? 'not_configured' : 'all_down';
+  }
   if (upProviders.length === 1) {
     const onlyUp = upProviders[0]!;
     // Only call it 'primary down' when a DIFFERENT provider is the registry
@@ -173,7 +183,10 @@ const VERDICT_RANK: Record<RedundancyVerdict, number> = {
   single_source: 3,
   redundant_disagreement: 4,
   primary_down_with_backup: 5,
-  all_down: 6,
+  // Below all_down: a domain that was never enabled is a gap to close, while a
+  // domain that WAS answering and stopped is a live problem.
+  not_configured: 6,
+  all_down: 7,
 };
 
 const MULTIPLIER: Record<RedundancyVerdict, number> = {
@@ -184,9 +197,20 @@ const MULTIPLIER: Record<RedundancyVerdict, number> = {
   redundant_disagreement: 0.6,
   single_source: 0.7,
   primary_down_with_backup: 0.5,
+  // No key means no data — same zero as all_down, different cause.
+  not_configured: 0,
   all_down: 0,
   unknown: 0.5,
 };
+
+/** The distinct API keys a domain is waiting on, in provider order. */
+function missingSecrets(providers: readonly ProviderSnapshot[]): string[] {
+  const keys: string[] = [];
+  for (const p of providers) {
+    if (p.unconfiguredSecret && !keys.includes(p.unconfiguredSecret)) keys.push(p.unconfiguredSecret);
+  }
+  return keys;
+}
 
 function describeVerdict(verdict: RedundancyVerdict, providers: readonly ProviderSnapshot[]): string {
   const upCount = providers.filter((p) => p.level === 'healthy' || p.level === 'degraded').length;
@@ -212,6 +236,12 @@ function describeVerdict(verdict: RedundancyVerdict, providers: readonly Provide
     case 'primary_down_with_backup': {
       return `Primary down; running on backup only.`;
     }
+    case 'not_configured': {
+      const keys = missingSecrets(providers);
+      return keys.length === 1
+        ? `${keys[0]} is not configured — this domain has no reachable source.`
+        : `No reachable source: ${keys.join(', ')} are not configured.`;
+    }
     case 'all_down': {
       return `${total} providers configured, none reachable.`;
     }
@@ -221,7 +251,11 @@ function describeVerdict(verdict: RedundancyVerdict, providers: readonly Provide
   }
 }
 
-function pickRemediation(verdict: RedundancyVerdict, domain: string): string {
+function pickRemediation(
+  verdict: RedundancyVerdict,
+  domain: string,
+  providers: readonly ProviderSnapshot[],
+): string {
   switch (verdict) {
     case 'redundant_agreement': {
       return '';
@@ -237,6 +271,9 @@ function pickRemediation(verdict: RedundancyVerdict, domain: string): string {
     }
     case 'primary_down_with_backup': {
       return `${domain}: investigate the primary provider; verify keys + upstream availability.`;
+    }
+    case 'not_configured': {
+      return `${domain}: add ${missingSecrets(providers).join(' or ')} in Settings → API Keys to enable this domain.`;
     }
     case 'all_down': {
       return `${domain}: every provider is silent. Check the sidecar + network connectivity.`;

@@ -16,6 +16,13 @@ test('verdict label + tone mapping', () => {
   assert.equal(verdictTone('redundant_unverified'), 'neutral');
 });
 
+test('not_configured is labelled as a config gap, not an outage', () => {
+  assert.equal(verdictLabel('not_configured'), 'Not configured');
+  // 'warn', not 'bad': TONE_RANK drives worst-first ordering, and a domain that
+  // was never switched on shouldn't outrank a live outage for attention.
+  assert.equal(verdictTone('not_configured'), 'warn');
+});
+
 test('builds rows with corroborating-source counts and sorts worst-first', () => {
   const report = assessProviderRedundancy({
     generatedAt: 1,

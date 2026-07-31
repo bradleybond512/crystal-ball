@@ -79,6 +79,98 @@ test('all_down: every provider failing/silent', () => {
   assert.equal(r.domains[0]?.confidenceMultiplier, 0);
 });
 
+// ── not_configured: never enabled ≠ broken ─────────────────────────────
+// `all_down` says "you had these sources and they stopped answering", and its
+// remediation sends the user to check the sidecar and the network. When the
+// only provider is key-gated and the key was never entered, that advice is
+// wrong — nothing is broken, the domain was simply never switched on.
+
+test('domain whose only provider is key-gated and unconfigured reads not_configured', () => {
+  const r = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({
+        providerId: 'eia',
+        domain: 'commodities',
+        primary: true,
+        level: 'failing',
+        unconfiguredSecret: 'EIA_API_KEY',
+      }),
+    ],
+  });
+  const d = r.domains[0]!;
+  assert.equal(d.verdict, 'not_configured');
+  assert.equal(d.confidenceMultiplier, 0);
+  assert.match(d.reason, /EIA_API_KEY/);
+  assert.match(d.remediation, /EIA_API_KEY/);
+  assert.match(d.remediation, /API Keys/);
+  assert.doesNotMatch(d.remediation, /sidecar/);
+});
+
+test('not_configured names every missing key when several providers are gated', () => {
+  const r = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({
+        providerId: 'airnow',
+        domain: 'air_quality',
+        primary: true,
+        level: 'failing',
+        unconfiguredSecret: 'AIRNOW_API_KEY',
+      }),
+      snap({
+        providerId: 'purpleair',
+        domain: 'air_quality',
+        primary: false,
+        level: 'failing',
+        unconfiguredSecret: 'PURPLEAIR_API_KEY',
+      }),
+    ],
+  });
+  const d = r.domains[0]!;
+  assert.equal(d.verdict, 'not_configured');
+  assert.match(d.remediation, /AIRNOW_API_KEY/);
+  assert.match(d.remediation, /PURPLEAIR_API_KEY/);
+});
+
+test('an unconfigured provider next to a genuinely broken one stays all_down', () => {
+  // Something here WAS enabled and stopped answering. "Add a key" would be the
+  // wrong advice, so the outage verdict must win.
+  const r = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({ providerId: 'ioda', domain: 'internet_health', primary: true, level: 'silent' }),
+      snap({
+        providerId: 'cloudflare-radar',
+        domain: 'internet_health',
+        primary: false,
+        level: 'failing',
+        unconfiguredSecret: 'CLOUDFLARE_API_TOKEN',
+      }),
+    ],
+  });
+  assert.equal(r.domains[0]?.verdict, 'all_down');
+});
+
+test('not_configured sorts ahead of a working domain but behind a real outage', () => {
+  const r = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({ providerId: 'a', domain: 'weather', primary: true, recentFactFingerprint: 'x' }),
+      snap({ providerId: 'b', domain: 'weather', primary: false, recentFactFingerprint: 'x' }),
+      snap({
+        providerId: 'eia',
+        domain: 'commodities',
+        primary: true,
+        level: 'failing',
+        unconfiguredSecret: 'EIA_API_KEY',
+      }),
+      snap({ providerId: 'c', domain: 'adsb', primary: true, level: 'silent' }),
+    ],
+  });
+  assert.deepEqual(r.domains.map((d) => d.domain), ['adsb', 'commodities', 'weather']);
+});
+
 // ── Multi-domain ───────────────────────────────────────────────────────
 
 test('multi-domain: each gets its own verdict', () => {

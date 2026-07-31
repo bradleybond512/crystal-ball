@@ -26,6 +26,10 @@ const intervalIndex = args.indexOf('--interval-seconds');
 const intervalSeconds = intervalIndex === -1
   ? 900
   : Number.parseInt(args[intervalIndex + 1], 10);
+const graceIndex = args.indexOf('--stopped-grace-seconds');
+const stoppedGraceSeconds = graceIndex === -1
+  ? intervalSeconds * 2
+  : Number.parseInt(args[graceIndex + 1], 10);
 const userHome = homedir();
 const launchAgentsDir = join(userHome, 'Library', 'LaunchAgents');
 const plistPath = join(launchAgentsDir, `${MONITOR_LABEL}.plist`);
@@ -50,6 +54,7 @@ const plist = renderMonitorLaunchAgent({
   runnerPath,
   logPath,
   intervalSeconds,
+  stoppedGraceSeconds,
 });
 
 mkdirSync(launchAgentsDir, { recursive: true });

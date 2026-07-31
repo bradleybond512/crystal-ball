@@ -12,9 +12,11 @@ import {
 } from 'node:fs';
 import { dirname } from 'node:path';
 import { quarantinedAlgorithmIds } from '../safety-policy.mjs';
+import { publicMonitorEvents, reconcileMonitorEvents } from './monitor-events.mjs';
 
 const STATE_PATH = 'monitor/state.json';
 const HISTORY_PATH = 'monitor/history.json';
+const EVENTS_PATH = 'monitor/events.json';
 const MAX_HISTORY = 96;
 
 export const schemas = {
@@ -34,6 +36,7 @@ export function makeMonitorTools({
   diagnostics,
   lockOptions,
   now = Date.now,
+  scheduleOptions,
 }) {
   async function run_monitor_cycle() {
     const releaseLock = acquireMonitorCycleLock(storage, lockOptions);
@@ -78,7 +81,14 @@ export function makeMonitorTools({
         snapshot,
       });
       writeMonitorJSONAtomic(storage, HISTORY_PATH, rows.slice(-MAX_HISTORY));
-      return publicState(state);
+      const eventState = reconcileMonitorEvents(
+        storage.readJSON(EVENTS_PATH),
+        findings,
+        snapshot.at,
+        scheduleOptions,
+      );
+      writeMonitorJSONAtomic(storage, EVENTS_PATH, eventState);
+      return publicState(state, eventState, snapshot.at);
     } finally {
       releaseLock();
     }
@@ -87,6 +97,7 @@ export function makeMonitorTools({
   async function get_monitor_status() {
     const state = storage.readJSON(STATE_PATH);
     if (!state) {
+      const monitorEvents = publicMonitorEvents(storage.readJSON(EVENTS_PATH), now());
       return {
         available: false,
         status: 'unknown',
@@ -94,9 +105,11 @@ export function makeMonitorTools({
         findings: [],
         newlyTriggered: [],
         recovered: [],
+        schedule: monitorEvents.schedule,
+        events: monitorEvents.events,
       };
     }
-    return publicState(state);
+    return publicState(state, storage.readJSON(EVENTS_PATH), now());
   }
 
   return { get_monitor_status, run_monitor_cycle };
@@ -346,7 +359,8 @@ function detectFindings(previous, current) {
   return findings;
 }
 
-function publicState(state) {
+function publicState(state, eventState, at) {
+  const monitorEvents = publicMonitorEvents(eventState, at);
   return {
     available: state.available,
     lastRunAt: state.lastRunAt,
@@ -356,6 +370,8 @@ function publicState(state) {
     newlyTriggered: state.newlyTriggered,
     recovered: state.recovered,
     snapshot: state.snapshot,
+    schedule: monitorEvents.schedule,
+    events: monitorEvents.events,
   };
 }
 

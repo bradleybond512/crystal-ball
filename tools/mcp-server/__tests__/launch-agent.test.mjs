@@ -21,12 +21,25 @@ test('monitor LaunchAgent uses an explicit runtime, bounded cadence, and escaped
     runnerPath: '/Users/test/Crystal <Ball>/monitor-once.mjs',
     logPath: '/Users/test/Library/Logs/crystalball-monitor.log',
     intervalSeconds: 900,
+    stoppedGraceSeconds: 2_400,
   });
 
   assert.match(plist, /<integer>900<\/integer>/);
+  assert.match(plist, /--expected-interval-seconds[\s\S]*<string>900<\/string>/);
+  assert.match(plist, /--stopped-grace-seconds[\s\S]*<string>2400<\/string>/);
   assert.match(plist, /\/opt\/node &amp; tools\/bin\/node/);
   assert.match(plist, /Crystal &lt;Ball&gt;\/monitor-once\.mjs/);
   assert.doesNotMatch(plist, /RunAtLoad/);
+});
+
+test('monitor LaunchAgent validates the configured stopped grace', () => {
+  assert.throws(() => renderMonitorLaunchAgent({
+    nodePath: '/usr/bin/node',
+    runnerPath: '/tmp/monitor-once.mjs',
+    logPath: '/tmp/monitor.log',
+    intervalSeconds: 900,
+    stoppedGraceSeconds: 59,
+  }), /stopped grace/i);
 });
 
 test('monitor installer validates the staged plist before unloading the active service', () => {

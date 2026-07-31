@@ -25,9 +25,13 @@ export function renderMonitorLaunchAgent({
   runnerPath,
   logPath,
   intervalSeconds = 900,
+  stoppedGraceSeconds = intervalSeconds * 2,
 }) {
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 60 || intervalSeconds > 86_400) {
     throw new Error('Monitor interval must be an integer from 60 to 86400 seconds.');
+  }
+  if (!Number.isInteger(stoppedGraceSeconds) || stoppedGraceSeconds < 60 || stoppedGraceSeconds > 604_800) {
+    throw new Error('Monitor stopped grace must be an integer from 60 to 604800 seconds.');
   }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -40,6 +44,10 @@ export function renderMonitorLaunchAgent({
   <array>
     <string>${escapeXml(nodePath)}</string>
     <string>${escapeXml(runnerPath)}</string>
+    <string>--expected-interval-seconds</string>
+    <string>${intervalSeconds}</string>
+    <string>--stopped-grace-seconds</string>
+    <string>${stoppedGraceSeconds}</string>
   </array>
   <key>StartInterval</key>
   <integer>${intervalSeconds}</integer>

@@ -57,7 +57,13 @@ function fixture({ brier = 0.2, coverage = 0.8, total = 100, unsafe = true, feed
   };
 }
 
-function createTools(baseDir, currentRef) {
+function createTools(baseDir, currentRef, {
+  clock = { value: 1_785_000_000_000 },
+  expectedIntervalMs,
+  stoppedGraceMs,
+  eventCooldownMs,
+  maxEvents,
+} = {}) {
   return makeMonitorTools({
     storage: createStorage(baseDir),
     granular: {
@@ -66,7 +72,13 @@ function createTools(baseDir, currentRef) {
     diagnostics: {
       get_algorithm_diagnostics: async () => currentRef.value.algorithmDiagnostics,
     },
-    now: () => 1_785_000_000_000,
+    now: () => clock.value,
+    scheduleOptions: {
+      expectedIntervalMs,
+      stoppedGraceMs,
+      eventCooldownMs,
+      maxEvents,
+    },
   });
 }
 
@@ -255,5 +267,232 @@ test('monitor fails closed when live collection and diagnostics are unavailable'
   assert.equal(result.status, 'red');
   assert.ok(result.findings.some((finding) => finding.id === 'collection.sidecar-unavailable'));
   assert.ok(result.findings.some((finding) => finding.id === 'collection.algorithm-diagnostics-unavailable'));
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor persists versioned schedule metadata and opened/resolved events across restarts', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+  const options = {
+    clock,
+    expectedIntervalMs: 900_000,
+    stoppedGraceMs: 1_200_000,
+    eventCooldownMs: 3_600_000,
+  };
+  let tools = createTools(dir, current, options);
+
+  const initial = await tools.run_monitor_cycle();
+  assert.deepEqual(initial.schedule, {
+    schemaVersion: 1,
+    status: 'running',
+    expectedIntervalMs: 900_000,
+    stoppedGraceMs: 1_200_000,
+    lastRunAt: clock.value,
+    nextRunAt: clock.value + 900_000,
+    stoppedAt: null,
+  });
+
+  clock.value += 300_000;
+  current.value = fixture({ unsafe: true });
+  const opened = await tools.run_monitor_cycle();
+  assert.equal(opened.events.at(-1).type, 'opened');
+  assert.equal(opened.events.at(-1).subject, 'algorithm.quarantined.warning-verification');
+  assert.match(opened.events.at(-1).id, /^monitor-event-v1-[a-f0-9]{24}$/);
+
+  tools = createTools(dir, current, options);
+  clock.value += 300_000;
+  const repeated = await tools.run_monitor_cycle();
+  assert.equal(repeated.events.filter((event) => event.type === 'opened').length, 1);
+
+  clock.value += 300_000;
+  current.value = fixture({ unsafe: false });
+  const resolved = await tools.run_monitor_cycle();
+  assert.equal(resolved.events.at(-1).type, 'resolved');
+  assert.equal(resolved.events.at(-1).subject, 'algorithm.quarantined.warning-verification');
+  assert.equal(createStorage(dir).readJSON('monitor/events.json').schemaVersion, 1);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor emits a materially escalated transition for a persistent finding severity increase', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  const clock = { value: 1_785_000_000_000 };
+  storage.writeJSON('monitor/events.json', {
+    schemaVersion: 1,
+    schedule: {
+      expectedIntervalMs: 900_000,
+      stoppedGraceMs: 1_800_000,
+      lastRunAt: clock.value - 900_000,
+      nextRunAt: clock.value,
+      stoppedAt: null,
+    },
+    activeFindings: {
+      'collection.sidecar-unavailable': {
+        severity: 'yellow',
+        summary: 'Collection is degraded.',
+      },
+    },
+    cooldowns: {},
+    events: [],
+  });
+  const current = {
+    value: {
+      feedHealth: { data: { sidecar: { error: 'unreachable' }, feeds: [] } },
+      algorithmDiagnostics: { available: true, diagnostics: { health: { algorithms: [] } } },
+    },
+  };
+
+  const result = await createTools(dir, current, {
+    clock,
+    expectedIntervalMs: 900_000,
+  }).run_monitor_cycle();
+
+  assert.deepEqual(result.events.map((event) => ({
+    type: event.type,
+    subject: event.subject,
+    fromSeverity: event.fromSeverity,
+    toSeverity: event.toSeverity,
+  })), [{
+    type: 'materially_escalated',
+    subject: 'collection.sidecar-unavailable',
+    fromSeverity: 'yellow',
+    toSeverity: 'red',
+  }]);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor reports missing schedule data as unknown and records one stopped/resumed pair after a missed window', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+
+  const unscheduled = createTools(dir, current, { clock });
+  const neverRun = await unscheduled.get_monitor_status();
+  assert.equal(neverRun.schedule.status, 'unknown');
+  assert.deepEqual(neverRun.events, []);
+  await unscheduled.run_monitor_cycle();
+  assert.equal((await unscheduled.get_monitor_status()).schedule.status, 'unknown');
+
+  const scheduled = createTools(dir, current, {
+    clock,
+    expectedIntervalMs: 900_000,
+    stoppedGraceMs: 2_400_000,
+  });
+  await scheduled.run_monitor_cycle();
+  clock.value += 2_399_999;
+  assert.equal((await scheduled.get_monitor_status()).schedule.status, 'running');
+  clock.value += 1;
+  const stopped = await scheduled.get_monitor_status();
+  assert.equal(stopped.schedule.status, 'stopped');
+  assert.equal(stopped.schedule.stoppedAt, 1_785_002_400_000);
+
+  clock.value += 60_000;
+  const resumed = await scheduled.run_monitor_cycle();
+  assert.deepEqual(resumed.events.slice(-2).map((event) => event.type), ['stopped', 'resumed']);
+
+  const restarted = createTools(dir, current, {
+    clock,
+    expectedIntervalMs: 900_000,
+    stoppedGraceMs: 2_400_000,
+  });
+  clock.value += 60_000;
+  await restarted.run_monitor_cycle();
+  const status = await restarted.get_monitor_status();
+  assert.equal(status.schedule.status, 'running');
+  assert.equal(status.events.filter((event) => event.type === 'stopped').length, 1);
+  assert.equal(status.events.filter((event) => event.type === 'resumed').length, 1);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor applies per-subject/type cooldowns across repeated finding transitions', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+  const options = {
+    clock,
+    expectedIntervalMs: 60_000,
+    eventCooldownMs: 600_000,
+    maxEvents: 20,
+  };
+  const tools = createTools(dir, current, options);
+  await tools.run_monitor_cycle();
+
+  for (let index = 0; index < 6; index += 1) {
+    clock.value += 60_000;
+    current.value = fixture({ unsafe: index % 2 === 0 });
+    await tools.run_monitor_cycle();
+  }
+  let status = await tools.get_monitor_status();
+  assert.equal(status.events.filter((event) => event.type === 'opened').length, 1);
+  assert.ok(status.events.length <= 20);
+
+  clock.value += 600_000;
+  current.value = fixture({ unsafe: false });
+  await tools.run_monitor_cycle();
+  clock.value += 60_000;
+  current.value = fixture({ unsafe: true });
+  status = await tools.run_monitor_cycle();
+  assert.equal(status.events.filter((event) => event.type === 'opened').length, 2);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor bounds persisted event history while retaining current transition state', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+  const tools = createTools(dir, current, {
+    clock,
+    expectedIntervalMs: 60_000,
+    eventCooldownMs: 0,
+    maxEvents: 4,
+  });
+  await tools.run_monitor_cycle();
+
+  for (let index = 0; index < 10; index += 1) {
+    clock.value += 60_000;
+    current.value = fixture({ unsafe: index % 2 === 0 });
+    await tools.run_monitor_cycle();
+  }
+
+  const persisted = createStorage(dir).readJSON('monitor/events.json');
+  assert.equal(persisted.events.length, 4);
+  assert.deepEqual(Object.keys(persisted.activeFindings), []);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor treats malformed or future-version event metadata as unknown until a successful cycle replaces it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+  await createTools(dir, current, { clock }).run_monitor_cycle();
+  storage.writeJSON('monitor/events.json', {
+    schemaVersion: 1,
+    schedule: { lastRunAt: clock.value },
+    activeFindings: {},
+    cooldowns: {},
+    events: [{ type: 'opened', subject: 'malformed-without-stable-fields' }],
+  });
+  const malformed = createTools(dir, current, { clock, expectedIntervalMs: 900_000 });
+  assert.equal((await malformed.get_monitor_status()).schedule.status, 'unknown');
+  assert.deepEqual((await malformed.get_monitor_status()).events, []);
+
+  storage.writeJSON('monitor/events.json', {
+    schemaVersion: 999,
+    schedule: { lastRunAt: clock.value },
+    events: [{ type: 'opened', subject: 'untrusted.future' }],
+  });
+  const tools = createTools(dir, current, { clock, expectedIntervalMs: 900_000 });
+
+  const before = await tools.get_monitor_status();
+  assert.equal(before.schedule.status, 'unknown');
+  assert.deepEqual(before.events, []);
+
+  clock.value += 900_000;
+  const after = await tools.run_monitor_cycle();
+  assert.equal(after.schedule.schemaVersion, 1);
+  assert.equal(after.schedule.status, 'running');
+  assert.equal(after.events.some((event) => event.subject === 'untrusted.future'), false);
   rmSync(dir, { recursive: true });
 });

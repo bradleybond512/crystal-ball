@@ -10,6 +10,7 @@ class WorkflowSecurityTests(unittest.TestCase):
         cls.workflow = (
             root / ".github/workflows/agentic-pipeline.yml"
         ).read_text()
+        cls.actionlint = (root / ".github/actionlint.yaml").read_text()
 
     def test_uses_protected_control_plane_and_separate_target_worktree(self):
         self.assertIn("Checkout protected control plane", self.workflow)
@@ -59,6 +60,10 @@ class WorkflowSecurityTests(unittest.TestCase):
             '--validator-container-image "$VALIDATOR_IMAGE"',
             model_step,
         )
+
+    def test_actionlint_knows_the_dedicated_runner_label(self):
+        self.assertIn("self-hosted-runner:", self.actionlint)
+        self.assertIn("- crystal-ball-agentic", self.actionlint)
 
     def test_validator_image_is_resolved_before_model_execution(self):
         prepare_index = self.workflow.index(

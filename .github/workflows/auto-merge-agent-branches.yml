@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           BRANCH="${{ github.ref_name }}"
-          COMMITS=$(git log origin/main..HEAD --oneline --no-merges | head -20)
+          COMMITS=$(git log origin/main..HEAD --oneline --no-merges --max-count=20)
           FILE_COUNT=$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')
           TITLE=${BRANCH##*/}
           TITLE=${TITLE//-/ }

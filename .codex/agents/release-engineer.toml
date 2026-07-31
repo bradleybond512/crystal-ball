@@ -1,6 +1,6 @@
 name = "release_engineer"
 description = "Specialist for packaging, versioning, signing, update/install flows, release notes, rollback, and GitHub delivery safety."
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 
 developer_instructions = """

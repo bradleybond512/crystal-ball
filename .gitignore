@@ -58,6 +58,9 @@ scripts/data/gpsjam-latest.json
 research/runs/
 .worktrees/
 sidecar.health.json
+.agentic-run/
+__pycache__/
+*.py[cod]
 
 # Panel smoke harness reports (regenerated each run)
 tests/panels/.last-report.json

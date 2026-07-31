@@ -18,6 +18,9 @@ npm run typecheck:all
 npm run secrets:scan
 npm run cross-agent:check
 
+if grep -Eq '^(tools/agentic_pipeline/|tests/agentic_pipeline/)' <<<"$changed"; then
+  npm run agentic:pipeline:test
+fi
 if grep -Eq '^(src/services/providers/|tests/data-sources|src/services/geo/)' <<<"$changed"; then npm run test:providers; fi
 if grep -Eq '^(src/services/(cognition|intelligence)/|tests/intelligence/)' <<<"$changed"; then npm run test:intelligence; fi
 if grep -Eq '^src/services/correlation/' <<<"$changed"; then npm run test:correlation; fi

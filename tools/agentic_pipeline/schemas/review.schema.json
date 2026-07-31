@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "blocking_findings",
+    "nonblocking_findings"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "blocking_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "nonblocking_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "confidence",
+        "file",
+        "problem",
+        "impact",
+        "evidence",
+        "recommended_fix"
+      ],
+      "properties": {
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "file": {
+          "type": "string"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "impact": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "recommended_fix": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

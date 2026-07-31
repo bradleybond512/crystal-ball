@@ -1,6 +1,6 @@
 name = "architecture_memory"
 description = "Read-only architecture memory and ADR specialist that preserves decisions, constraints, rejected alternatives, and operational lessons."
-model_reasoning_effort = "medium"
+model_reasoning_effort = "low"
 sandbox_mode = "read-only"
 
 developer_instructions = """

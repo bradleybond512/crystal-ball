@@ -7,6 +7,18 @@ description: Run Crystal Ball coding work as an automated routed builder, determ
 
 Read `.codex/MODEL_POLICY.md`, `AGENTS.md`, and the task-router output before delegation.
 
+For executable orchestration, use:
+
+```bash
+python3 -m tools.agentic_pipeline start \
+  --request "<task>" \
+  --branch "codex/<branch>"
+```
+
+The Python runtime owns the durable ledger, Codex invocations, budgets,
+approvals, validation ordering, repair attempts, and independent review. Do not
+manually reproduce those stages when the runtime is available.
+
 ## 1. Route
 
 Run:
@@ -91,3 +103,7 @@ Completion requires:
 - PR summary states actual validation, risks and rollback
 
 Do not push, merge, release, install, deploy, change secrets, or perform destructive operations without explicit approval.
+
+The manual GitHub Actions workflow may publish only when its
+`publish_changes` dispatch input is explicitly enabled. High-assurance design
+approval is recorded through a separate resume dispatch.

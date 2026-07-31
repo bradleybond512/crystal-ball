@@ -22,6 +22,8 @@
     "docs:check": "node scripts/check-docs-freshness.mjs",
     "cross-agent:check": "node scripts/cross-agent-check.mjs",
     "cross-check": "node scripts/cross-agent-check.mjs",
+    "agentic:pipeline:test": "python3 -m unittest discover -s tests/agentic_pipeline -v && node --test scripts/agent-router.test.mjs",
+    "agentic:pipeline": "python3 -m tools.agentic_pipeline",
     "secrets:scan": "node scripts/secret-scan.mjs",
     "secrets:scan:staged": "node scripts/secret-scan.mjs --staged",
     "lint": "eslint .",

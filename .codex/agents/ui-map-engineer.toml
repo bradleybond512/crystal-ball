@@ -1,6 +1,6 @@
 name = "ui_map_engineer"
 description = "Crystal Ball TypeScript UI, globe/map rendering, state, accessibility, and performance specialist."
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """

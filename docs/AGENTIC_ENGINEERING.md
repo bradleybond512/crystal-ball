@@ -4,6 +4,97 @@ Crystal Ball uses Codex as a supervised engineering team rather than a single
 unbounded coding agent. Repository instructions, specialist agents, a reusable
 workflow Skill, executable checks, and GitHub CI work together.
 
+## Executable runtime
+
+The repository includes a standard-library-only Python orchestration package at
+`tools/agentic_pipeline/`. It executes the workflow rather than relying on a
+model to remember the sequence.
+
+Start a local pipeline:
+
+```bash
+python3 -m tools.agentic_pipeline start \
+  --request "Add a bounded provider integration" \
+  --branch "codex/provider-integration"
+```
+
+The command creates `.agentic-run/state.sqlite` with mode `0600`, routes through
+`scripts/agent-router.mjs`, selects models from `.codex/model-policy.json`,
+invokes Codex with JSON schemas, runs targeted checks, then runs
+`scripts/agentic-check-changed.sh` and `scripts/agentic-validate.sh`. An
+independent reviewer runs only after deterministic checks pass.
+
+Important commands:
+
+```bash
+python3 -m tools.agentic_pipeline status <pipeline-id>
+python3 -m tools.agentic_pipeline approve <pipeline-id> \
+  --gate design --actor "<name>"
+python3 -m tools.agentic_pipeline resume <pipeline-id>
+python3 -m tools.agentic_pipeline summary <pipeline-id>
+npm run agentic:pipeline:test
+```
+
+Starting the same normalized request on the same branch returns the existing
+pipeline. SQLite uses optimistic versions to reject concurrent writers. A
+process interruption during a model invocation blocks resume rather than
+repeating a possibly mutating call.
+
+## Failure and repair contract
+
+Validation stops at the first failure. The runtime creates a redacted packet
+containing the owning builder, command, exit code, bounded output, changed
+files, and attempt number. The packet returns to the original builder. The
+failed command runs first after repair, followed by the complete gate.
+
+Two automatic builder repairs are permitted. The second repair raises reasoning
+effort by one level. A third failure triggers read-only GPT-5.6 Sol diagnosis
+and blocks further mutation.
+
+Blocking independent-review findings use the same ownership rule: the original
+builder repairs them, deterministic validation reruns, and a fresh independent
+review decides readiness.
+
+## Budgets and logs
+
+Every pipeline has hard token and invocation limits. A USD limit is also
+supported, but it fails closed if the Codex event stream does not report cost;
+do not set `--max-cost-usd` unless the active Codex provider reports cost.
+Prompts are sent over stdin rather than command arguments. Persisted model and
+validator output is bounded and redacts bearer credentials, credential-like
+environment assignments, authenticated URLs, common token prefixes, and
+private keys.
+
+## Command and secret boundary
+
+Validators never use a shell string. Router commands are parsed into argument
+arrays and checked against a fixed allowlist. Before execution, npm script
+definitions and gate executables are compared with `HEAD`; modified validation
+code fails closed instead of being executed.
+
+Codex model subprocesses receive no inherited shell environment and no network
+access. The Codex process receives only `PATH`, `HOME`, `CODEX_HOME`, and
+`OPENAI_API_KEY` when present. Run local automation from a clean worktree
+without `.env` files or unrelated credentials. GitHub-hosted runners are the
+preferred unattended environment because they are ephemeral.
+
+## Manual GitHub Actions operation
+
+`.github/workflows/agentic-pipeline.yml` is `workflow_dispatch` only. Configure
+the repository `OPENAI_API_KEY` secret before use.
+
+For a new run, provide a request and an existing `codex/*` branch. If a
+high-assurance design gate pauses the run, download nothing manually: dispatch
+the workflow again with the prior run ID, pipeline ID, and `design` approval.
+The workflow restores the SQLite ledger and binary worktree patch from the
+prior artifact.
+
+Publishing defaults off. When `publish_changes` is explicitly enabled after
+all gates pass, the workflow records a durable publish approval, stages only
+the exact changed paths, commits with the required co-author trailer, pushes
+the specified `codex/*` branch, and optionally updates an existing draft PR.
+It refuses non-draft PR body updates.
+
 ## Start a task
 
 Open the repository in Codex and prompt:
@@ -39,7 +130,8 @@ obtain an independent review, and prepare the completion report.
 2. `.codex/agents/*.toml` defines narrow specialists and permissions.
 3. `.agents/skills/crystal-ball-feature-workflow/SKILL.md` defines sequencing and handoffs.
 4. `scripts/agentic-validate.sh` supplies a repeatable local completion gate.
-5. Existing GitHub required checks remain the final merge authority.
+5. `tools/agentic_pipeline/` executes routing, state, repair, and review.
+6. Existing GitHub required checks remain the final merge authority.
 
 Instructions guide behavior; executable checks and branch protection enforce
 reality. A task is not complete when validation could not run.
@@ -64,6 +156,8 @@ use this mode.
 
 ## Safety boundary
 
-Agents may prepare branches, commits, and draft PR material. Push, merge,
-auto-merge, release, install, deployment, secret changes, and destructive data
-operations require explicit human approval.
+Agents may prepare local changes and draft PR material. A manual workflow
+dispatch may explicitly authorize pushing a completed `codex/*` branch and
+updating an existing draft PR. Merge, auto-merge, release, install, deployment,
+secret changes, and destructive data operations remain outside the runtime and
+require separate explicit human approval.

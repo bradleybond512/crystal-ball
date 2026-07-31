@@ -11,6 +11,7 @@ run() {
 # Deterministic checks run before expensive model review. Domain-specific tests
 # must run before this script; CI remains the final authority for the matrix.
 run node scripts/check-agent-model-policy.mjs
+run npm run agentic:pipeline:test
 run npm run lockfile:check
 run npm run lint:strict
 run npm run typecheck:all

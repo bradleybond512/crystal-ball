@@ -36,6 +36,7 @@ class BudgetLimits:
     max_total_tokens: int
     max_invocations: int
     max_cost_usd: float | None = None
+    max_tokens_per_invocation: int | None = None
 
 
 @dataclass
@@ -64,7 +65,22 @@ class BudgetLedger:
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
 
+    @property
+    def remaining_tokens(self) -> int:
+        return max(0, self.limits.max_total_tokens - self.total_tokens)
+
+    @property
+    def invocation_token_limit(self) -> int:
+        if self.limits.max_tokens_per_invocation is None:
+            return self.remaining_tokens
+        return min(
+            self.remaining_tokens,
+            self.limits.max_tokens_per_invocation,
+        )
+
     def reserve_invocation(self) -> None:
+        if self.remaining_tokens == 0:
+            raise BudgetExceeded("token budget exhausted")
         if self.invocation_count + 1 > self.limits.max_invocations:
             raise BudgetExceeded("invocation budget exceeded")
         self.invocation_count += 1
@@ -106,6 +122,7 @@ class RouteDecision:
     requires_design_approval: bool
     max_automatic_repairs: int
     rationale: list[str]
+    requires_model_review: bool = True
 
     @property
     def validation_commands(self) -> list[list[str]]:
@@ -224,6 +241,10 @@ class PipelineState:
                 ],
                 max_automatic_repairs=route_value["max_automatic_repairs"],
                 rationale=route_value["rationale"],
+                requires_model_review=route_value.get(
+                    "requires_model_review",
+                    route_value["tier"] != "mechanical",
+                ),
             )
         budget_value = value["budget"]
         budget = BudgetLedger(

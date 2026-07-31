@@ -12,6 +12,20 @@ from tools.agentic_pipeline.models import (
 
 
 class BudgetLedgerTests(unittest.TestCase):
+    def test_reports_remaining_tokens_before_an_invocation(self):
+        ledger = BudgetLedger(
+            limits=BudgetLimits(
+                max_total_tokens=100,
+                max_invocations=3,
+                max_tokens_per_invocation=40,
+            ),
+            input_tokens=30,
+            output_tokens=20,
+        )
+
+        self.assertEqual(ledger.remaining_tokens, 50)
+        self.assertEqual(ledger.invocation_token_limit, 40)
+
     def test_rejects_usage_that_exceeds_token_budget(self):
         ledger = BudgetLedger(limits=BudgetLimits(max_total_tokens=100, max_invocations=3))
 

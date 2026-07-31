@@ -44,6 +44,7 @@ SAFE_NPM_SCRIPTS = {
     "version:check",
 }
 SAFE_EXACT_COMMANDS = {
+    ("bash", "scripts/agentic-check-mechanical.sh"),
     ("bash", "scripts/agentic-check-changed.sh"),
     ("bash", "scripts/agentic-validate.sh"),
     ("node", "scripts/check-agent-model-policy.mjs"),
@@ -93,7 +94,7 @@ class AgentRouter:
         unknown = set(agents) - set(self.policy.get("agents", {}))
         if unknown:
             raise ValueError(f"router selected unknown agents: {sorted(unknown)}")
-        planner_name = "architect" if "architect" in self.policy["agents"] else agents[0]
+        tier = str(raw.get("tier", "focused"))
         reviewer_name = (
             "independent_reviewer"
             if "independent_reviewer" in self.policy["agents"]
@@ -108,6 +109,19 @@ class AgentRouter:
             ]
         if not builders:
             raise ValueError("router selected no implementation-capable agent")
+        if (
+            len(builders) > 1
+            and "integration_engineer" in self.policy["agents"]
+        ):
+            builders = ["integration_engineer"]
+        if tier == "mechanical":
+            planner_name = builders[0]
+        elif tier == "high_assurance" and "architect" in agents:
+            planner_name = "architect"
+        elif "delivery_planner" in self.policy["agents"]:
+            planner_name = "delivery_planner"
+        else:
+            planner_name = builders[0]
         checks = [
             self._parse_safe_command(command)
             for command in raw.get("targeted_checks", [])
@@ -118,12 +132,35 @@ class AgentRouter:
         ]
         del router_always
         full_gate = ["bash", "scripts/agentic-validate.sh"]
-        always = [full_gate]
+        mechanical_gate = ["bash", "scripts/agentic-check-mechanical.sh"]
+        always = [mechanical_gate if tier == "mechanical" else full_gate]
+        reviewer = self._assignment(reviewer_name)
+        if tier != "high_assurance":
+            default = self.policy.get("defaults", {}).get(
+                "implementation",
+                {},
+            )
+            reviewer = AgentAssignment(
+                agent=reviewer.agent,
+                model=default.get("model", reviewer.model),
+                effort=default.get("effort", reviewer.effort),
+            )
+        builder = self._assignment(builders[0])
+        if tier == "high_assurance":
+            implementation = self.policy.get("defaults", {}).get(
+                "implementation",
+                {},
+            )
+            builder = AgentAssignment(
+                agent=builder.agent,
+                model=implementation.get("model", builder.model),
+                effort="high",
+            )
         return RouteDecision(
-            tier=str(raw.get("tier", "focused")),
+            tier=tier,
             planner=self._assignment(planner_name),
-            builder=self._assignment(builders[0]),
-            reviewer=self._assignment(reviewer_name),
+            builder=builder,
+            reviewer=reviewer,
             targeted_checks=checks,
             always_run=always,
             requires_design_approval=bool(
@@ -137,6 +174,7 @@ class AgentRouter:
             rationale=[
                 str(item) for item in raw.get("rationale", [])
             ],
+            requires_model_review=tier != "mechanical",
         )
 
     def _assignment(self, agent: str) -> AgentAssignment:

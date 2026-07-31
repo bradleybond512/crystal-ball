@@ -140,18 +140,24 @@ class Orchestrator:
                 },
             )
         if state.plan is None:
-            result = self._invoke(
-                state,
-                "plan",
-                state.route.planner,
-                self._planning_prompt(state),
-                "plan.schema.json",
-                read_only=True,
-            )
-            if not result.succeeded:
-                return self._block_invocation(state, state.route.planner, result)
-            state.plan = result.payload
-            self.store.save(state, "plan_completed")
+            if state.route.tier == "mechanical":
+                state.plan = self._mechanical_plan(state.request)
+                self.store.save(state, "deterministic_plan_completed")
+            else:
+                result = self._invoke(
+                    state,
+                    "plan",
+                    state.route.planner,
+                    self._planning_prompt(state),
+                    "plan.schema.json",
+                    read_only=True,
+                )
+                if not result.succeeded:
+                    return self._block_invocation(
+                        state, state.route.planner, result
+                    )
+                state.plan = result.payload
+                self.store.save(state, "plan_completed")
         plan_policy = PlanPolicy(state.plan)
         approved = {
             gate
@@ -201,9 +207,36 @@ class Orchestrator:
         self.store.save(state, "validation_completed", _result_summary(results))
         failed = next((result for result in results if not result.succeeded), None)
         if failed:
+            if failed.failure_class in {
+                "policy_tamper",
+                "validator_mutation",
+                "workspace_integrity",
+            }:
+                state.status = PipelineStatus.BLOCKED
+                state.last_failure = self._failure_packet(state, failed)
+                self.store.save(
+                    state,
+                    "validation_policy_blocked",
+                    _result_summary([failed]),
+                )
+                return state
             repaired = self._repair_validation(state, failed, commands)
             if repaired is not None:
                 return repaired
+        post_validation_scope = self._scope_block(state)
+        if post_validation_scope:
+            return post_validation_scope
+        if not state.route.requires_model_review:
+            state.review = {
+                "summary": "Deterministic mechanical checks passed.",
+                "blocking_findings": [],
+                "nonblocking_findings": [],
+            }
+            state.status = PipelineStatus.COMPLETED
+            state.stage = PipelineStage.COMPLETE
+            state.last_failure = None
+            self.store.save(state, "model_review_skipped")
+            return state
         return self._review(state, commands)
 
     def _repair_validation(
@@ -394,6 +427,7 @@ class Orchestrator:
             prompt,
             self.schemas / schema_name,
             read_only,
+            token_limit=state.budget.invocation_token_limit,
         )
         state.inflight_invocation = None
         state.budget.record(result.usage)
@@ -468,6 +502,8 @@ class Orchestrator:
             capture_output=True,
             check=False,
         )
+        if result.returncode != 0:
+            return ["<workspace-integrity-unavailable>"]
         return [
             line[3:] for line in result.stdout.splitlines() if len(line) > 3
         ]
@@ -486,11 +522,28 @@ class Orchestrator:
         )
 
     def _scope_block(self, state: PipelineState) -> PipelineState | None:
-        scope_violation = PlanPolicy(state.plan or {}).out_of_scope(
-            self._changed_files()
-        )
+        changed_files = self._changed_files()
+        policy = PlanPolicy(state.plan or {})
+        scope_violation = policy.out_of_scope(changed_files)
         if not scope_violation:
-            return None
+            missing_gates = [
+                gate
+                for gate in policy.required_gates_for_paths(changed_files)
+                if not self.store.has_approval(state.pipeline_id, gate)
+            ]
+            if not missing_gates:
+                return None
+            state.status = PipelineStatus.WAITING_APPROVAL
+            state.stage = PipelineStage.DESIGN_APPROVAL
+            self.store.save(
+                state,
+                "approval_required",
+                {
+                    "gate": missing_gates[0],
+                    "reason": "actual_diff",
+                },
+            )
+            return state
         state.status = PipelineStatus.BLOCKED
         state.last_failure = FailurePacket(
             builder=state.route.builder.agent,
@@ -542,6 +595,37 @@ Create the smallest repository-grounded plan for this request:
 Return JSON matching the supplied schema. Include bounded tasks, allowed files,
 acceptance criteria, validation commands, risks, rollback, and approval gates.
 Do not edit files. Do not include credentials or environment values."""
+
+    def _mechanical_plan(self, request: str) -> dict[str, Any]:
+        normalized = request.lower()
+        allowed_files = []
+        if "readme" in normalized:
+            allowed_files.append("README.md")
+        if "changelog" in normalized:
+            allowed_files.append("CHANGELOG.md")
+        if any(word in normalized for word in ("doc", "documentation")):
+            allowed_files.append("docs/**")
+        if not allowed_files:
+            allowed_files = ["README.md", "docs/**"]
+        return {
+            "summary": "Bounded mechanical documentation correction.",
+            "tasks": [
+                {
+                    "id": "mechanical-edit",
+                    "objective": request[:512],
+                    "allowed_files": sorted(set(allowed_files)),
+                    "acceptance_criteria": [
+                        "Only the requested text or formatting changes."
+                    ],
+                    "validation_commands": [
+                        "bash scripts/agentic-check-mechanical.sh"
+                    ],
+                }
+            ],
+            "risks": [],
+            "rollback": "Revert the bounded documentation edit.",
+            "approval_gates": [],
+        }
 
     def _build_prompt(self, state: PipelineState) -> str:
         return f"""Act as the owning {state.route.builder.agent}.

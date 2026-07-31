@@ -26,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--control-root", type=Path)
+    parser.add_argument("--validator-container-image")
     parser.add_argument(
         "--state", type=Path, default=Path(".agentic-run/state.sqlite")
     )
@@ -36,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--branch", required=True)
     start.add_argument("--max-total-tokens", type=int, default=250_000)
     start.add_argument("--max-invocations", type=int, default=12)
+    start.add_argument(
+        "--max-tokens-per-invocation",
+        type=int,
+        default=60_000,
+    )
     start.add_argument("--max-cost-usd", type=float)
     start.add_argument("--create-only", action="store_true")
     start.add_argument("--json", action="store_true")
@@ -47,6 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
     status = subparsers.add_parser("status")
     status.add_argument("pipeline_id")
     status.add_argument("--json", action="store_true")
+
+    provenance = subparsers.add_parser("provenance")
+    provenance.add_argument("pipeline_id")
+    provenance.add_argument("--json", action="store_true")
 
     approve = subparsers.add_parser("approve")
     approve.add_argument("pipeline_id")
@@ -68,6 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
     cancel = subparsers.add_parser("cancel")
     cancel.add_argument("pipeline_id")
     cancel.add_argument("--actor", required=True)
+
+    reconcile = subparsers.add_parser("reconcile")
+    reconcile.add_argument("pipeline_id")
+    reconcile.add_argument("--expected-head", required=True)
+    reconcile.add_argument("--actor", required=True)
+    reconcile.add_argument("--action", required=True, choices=["retry"])
 
     summary = subparsers.add_parser("summary")
     summary.add_argument("pipeline_id")
@@ -94,6 +110,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         if args.command == "start":
             _validate_positive(args.max_total_tokens, "max-total-tokens")
             _validate_positive(args.max_invocations, "max-invocations")
+            _validate_positive(
+                args.max_tokens_per_invocation,
+                "max-tokens-per-invocation",
+            )
             state, created = store.create_or_get(
                 args.request,
                 args.branch,
@@ -101,6 +121,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
                     max_total_tokens=args.max_total_tokens,
                     max_invocations=args.max_invocations,
                     max_cost_usd=args.max_cost_usd,
+                    max_tokens_per_invocation=(
+                        args.max_tokens_per_invocation
+                    ),
                 ),
                 baseline_sha=_git_sha(root),
                 control_sha=_git_sha(control_root),
@@ -109,7 +132,11 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 _print_state(state, args.json, created=created)
                 return 0
             state = _orchestrator(
-                root, control_root, store, state
+                root,
+                control_root,
+                store,
+                state,
+                validator_container_image=args.validator_container_image,
             ).run_until_blocked(
                 state.pipeline_id
             )
@@ -118,7 +145,11 @@ def main(arguments: Sequence[str] | None = None) -> int:
         if args.command == "resume":
             state = store.get(args.pipeline_id)
             state = _orchestrator(
-                root, control_root, store, state
+                root,
+                control_root,
+                store,
+                state,
+                validator_container_image=args.validator_container_image,
             ).run_until_blocked(
                 state.pipeline_id
             )
@@ -126,6 +157,32 @@ def main(arguments: Sequence[str] | None = None) -> int:
             return _exit_for(state)
         if args.command == "status":
             _print_state(store.get(args.pipeline_id), args.json)
+            return 0
+        if args.command == "provenance":
+            state = store.get(args.pipeline_id)
+            actual_target = _git_sha(root)
+            actual_control = _git_sha(control_root)
+            if (
+                not state.baseline_sha
+                or state.baseline_sha != actual_target
+                or not state.control_sha
+                or state.control_sha != actual_control
+            ):
+                raise PermissionError(
+                    "target or control checkout no longer matches the ledger"
+                )
+            payload = {
+                "baseline_sha": state.baseline_sha,
+                "control_sha": state.control_sha,
+            }
+            print(
+                json.dumps(payload, sort_keys=True)
+                if args.json
+                else (
+                    f"target={state.baseline_sha}\n"
+                    f"control={state.control_sha}"
+                )
+            )
             return 0
         if args.command == "approve":
             created = store.approve(args.pipeline_id, args.gate, args.actor)
@@ -138,6 +195,33 @@ def main(arguments: Sequence[str] | None = None) -> int:
             state.status = PipelineStatus.CANCELLED
             store.save(state, "cancelled", {"actor": args.actor})
             print(f"cancelled {state.pipeline_id}")
+            return 0
+        if args.command == "reconcile":
+            state = store.get(args.pipeline_id)
+            actual_head = _git_sha(root)
+            if not actual_head or actual_head != args.expected_head:
+                raise PermissionError(
+                    "worktree HEAD does not match the inspected commit"
+                )
+            if not state.inflight_invocation:
+                raise RuntimeError(
+                    "pipeline has no interrupted invocation to reconcile"
+                )
+            invocation = state.inflight_invocation
+            state.inflight_invocation = None
+            state.last_failure = None
+            state.status = PipelineStatus.CREATED
+            store.save(
+                state,
+                "inflight_reconciled",
+                {
+                    "action": args.action,
+                    "actor": args.actor,
+                    "expected_head": args.expected_head,
+                    "invocation": invocation,
+                },
+            )
+            print(f"reconciled {state.pipeline_id} for explicit retry")
             return 0
         if args.command == "summary":
             summary = render_summary(store.get(args.pipeline_id))
@@ -170,6 +254,7 @@ def _orchestrator(
     control_root: Path,
     store: StateStore,
     state: PipelineState,
+    validator_container_image: str | None = None,
 ) -> Orchestrator:
     route = state.route or AgentRouter(
         root, control_root=control_root
@@ -178,7 +263,11 @@ def _orchestrator(
     allowed.extend(
         [["npm", "run", script] for script in sorted(SAFE_NPM_SCRIPTS)]
     )
-    validators = SubprocessValidator(root, CommandPolicy(allowed))
+    validators = SubprocessValidator(
+        root,
+        CommandPolicy(allowed),
+        container_image=validator_container_image,
+    )
     router = _FixedRouter(route)
     return Orchestrator(
         root,

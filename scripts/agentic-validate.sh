@@ -17,7 +17,11 @@ run npm run lockfile:check
 run npm run lint:strict
 run npm run typecheck:all
 run npm run secrets:scan
-run npm run cross-agent:check
+if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  run npm run cross-agent:check
+else
+  printf '\n==> cross-agent review marker deferred to pull-request CI\n'
+fi
 run npm run docs:check
 run npm run build
 

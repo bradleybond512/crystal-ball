@@ -20,6 +20,11 @@ on:
         description: Pipeline ID from the prior run
         required: false
         type: string
+      reconcile_inflight:
+        description: Retry an interrupted model call after inspecting its worktree
+        required: true
+        default: false
+        type: boolean
       approval_gate:
         description: Durable approval to record before resume
         required: true
@@ -42,6 +47,11 @@ on:
         description: Hard model-invocation budget
         required: true
         default: "12"
+        type: string
+      max_tokens_per_invocation:
+        description: Hard weighted token budget for any one model call
+        required: true
+        default: "60000"
         type: string
       publish_changes:
         description: Commit, push, and update the draft PR after all gates pass
@@ -77,6 +87,7 @@ jobs:
       PIPELINE_STATE: ${{ github.workspace }}/.agentic-run/state.sqlite
       TARGET_BRANCH: ${{ inputs.branch }}
       PIPELINE_ACTOR: ${{ github.actor }}
+      VALIDATOR_IMAGE_REF: node:22-bookworm@sha256:7725a5c2c83eed1d36258c66efae14b1ceccd021db9ed1d9559d3335ed3d68ed
     steps:
       - name: Validate dispatch
         env:
@@ -137,11 +148,31 @@ jobs:
       - name: Install pinned Codex CLI
         run: npm install --global @openai/codex@0.145.0
 
+      - name: Prepare isolated validator runtime
+        run: |
+          docker pull "$VALIDATOR_IMAGE_REF"
+          validator_image="$(
+            docker image inspect "$VALIDATOR_IMAGE_REF" --format='{{.Id}}'
+          )"
+          if [[ ! "$validator_image" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Docker returned a non-immutable validator image ID." >&2
+            exit 1
+          fi
+          docker run --rm --pull never --network none \
+            "$validator_image" \
+            sh -c 'command -v node && command -v npm && command -v python3'
+          printf 'VALIDATOR_IMAGE=%s\n' "$validator_image" \
+            >> "$GITHUB_ENV"
+
       - name: Restore worktree and ledger
         if: inputs.resume_run_id != ''
         run: |
           mkdir -p "$RUN_ROOT"
           cp .agentic-resume/state.sqlite "$PIPELINE_STATE"
+          if [[ ! -s .agentic-resume/control-sha ]]; then
+            echo "This artifact predates control-plane provenance. Start a new run." >&2
+            exit 1
+          fi
           expected_control_sha="$(cat .agentic-resume/control-sha)"
           git -C "$CONTROL_ROOT" fetch --depth=1 origin \
             "$expected_control_sha"
@@ -157,9 +188,11 @@ jobs:
           REQUEST: ${{ inputs.request }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
           PIPELINE_ID: ${{ inputs.pipeline_id }}
+          RECONCILE_INFLIGHT: ${{ inputs.reconcile_inflight }}
           APPROVAL_GATE: ${{ inputs.approval_gate }}
           MAX_TOTAL_TOKENS: ${{ inputs.max_total_tokens }}
           MAX_INVOCATIONS: ${{ inputs.max_invocations }}
+          MAX_TOKENS_PER_INVOCATION: ${{ inputs.max_tokens_per_invocation }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           mkdir -p "$RUN_ROOT"
@@ -168,9 +201,17 @@ jobs:
             --root "$TARGET_ROOT"
             --control-root "$CONTROL_ROOT"
             --state "$PIPELINE_STATE"
+            --validator-container-image "$VALIDATOR_IMAGE"
           )
           cd "$CONTROL_ROOT"
           if [[ -n "$RESUME_RUN_ID" ]]; then
+            if [[ "$RECONCILE_INFLIGHT" == "true" ]]; then
+              TARGET_HEAD="$(git -C "$TARGET_ROOT" rev-parse HEAD)"
+              "${pipeline[@]}" reconcile "$PIPELINE_ID" \
+                --expected-head "$TARGET_HEAD" \
+                --actor "$PIPELINE_ACTOR" \
+                --action retry
+            fi
             if [[ "$APPROVAL_GATE" != "none" ]]; then
               "${pipeline[@]}" approve "$PIPELINE_ID" \
                 --gate "$APPROVAL_GATE" --actor "$PIPELINE_ACTOR"
@@ -186,6 +227,8 @@ jobs:
               --branch "$TARGET_BRANCH" \
               --max-total-tokens "$MAX_TOTAL_TOKENS" \
               --max-invocations "$MAX_INVOCATIONS" \
+              --max-tokens-per-invocation \
+              "$MAX_TOKENS_PER_INVOCATION" \
               --json)"
             pipeline_exit=$?
             set -e
@@ -288,6 +331,23 @@ jobs:
           name: agentic-pipeline-state
           path: .agentic-publish
 
+      - name: Verify reviewed checkout provenance
+        working-directory: control-plane
+        run: |
+          provenance="$(
+            python3 -m tools.agentic_pipeline \
+              --root "$TARGET_ROOT" \
+              --control-root "$CONTROL_ROOT" \
+              --state "$PIPELINE_STATE" \
+              provenance "$PIPELINE_ID" --json
+          )"
+          baseline_sha="$(
+            python3 -c \
+              'import json,sys; print(json.load(sys.stdin)["baseline_sha"])' \
+              <<<"$provenance"
+          )"
+          printf 'BASELINE_SHA=%s\n' "$baseline_sha" >> "$GITHUB_ENV"
+
       - name: Apply reviewed worktree patch
         run: |
           if [[ -s "$PUBLISH_ROOT/workspace.patch" ]]; then
@@ -333,7 +393,9 @@ jobs:
         run: |
           gh auth setup-git
           git remote add fork "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
-          git push fork "HEAD:${TARGET_BRANCH}"
+          git push \
+            --force-with-lease="refs/heads/${TARGET_BRANCH}:${BASELINE_SHA}" \
+            fork "HEAD:${TARGET_BRANCH}"
 
       - name: Update approved draft PR
         if: inputs.draft_pr_number != ''

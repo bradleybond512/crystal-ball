@@ -6,7 +6,14 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   BASE_REF="HEAD~1"
 fi
 
-changed="$(git diff --name-only "$BASE_REF"...HEAD)"
+changed="$(
+  {
+    git diff --name-only "$BASE_REF"...HEAD
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+  } | sort -u
+)"
 printf '%s\n' "$changed"
 
 npm run lint:conflicts
@@ -16,7 +23,9 @@ npm run lint:md
 npm run lockfile:check
 npm run typecheck:all
 npm run secrets:scan
-npm run cross-agent:check
+if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  npm run cross-agent:check
+fi
 
 if grep -Eq '^(tools/agentic_pipeline/|tests/agentic_pipeline/)' <<<"$changed"; then
   npm run agentic:pipeline:test

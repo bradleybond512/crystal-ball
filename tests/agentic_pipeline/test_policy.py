@@ -33,7 +33,18 @@ class PlanPolicyTests(unittest.TestCase):
         )
 
     def test_rejects_traversal_and_empty_allowed_file_patterns(self):
-        for pattern in ("", "../outside", "/absolute/path", "C:\\outside"):
+        for pattern in (
+            "",
+            "*",
+            "**",
+            "**/*",
+            "**/**",
+            "?*/**",
+            "./**",
+            "../outside",
+            "/absolute/path",
+            "C:\\outside",
+        ):
             with self.subTest(pattern=pattern):
                 with self.assertRaises(ValueError):
                     PlanPolicy(
@@ -47,12 +58,42 @@ class PlanPolicyTests(unittest.TestCase):
         policy = PlanPolicy(
             {
                 "tasks": [{"allowed_files": [".github/workflows/**"]}],
-                "approval_gates": ["control_plane"],
+                "approval_gates": [],
             }
         )
 
-        self.assertEqual(policy.pending_gates(set()), ["control_plane"])
-        self.assertEqual(policy.pending_gates({"control_plane"}), [])
+        self.assertEqual(
+            policy.pending_gates(set()),
+            ["control_plane", "release"],
+        )
+        self.assertEqual(
+            policy.pending_gates({"control_plane", "release"}),
+            [],
+        )
+
+    def test_empty_allowed_file_list_is_rejected(self):
+        with self.assertRaises(ValueError):
+            PlanPolicy(
+                {
+                    "tasks": [{"allowed_files": []}],
+                    "approval_gates": [],
+                }
+            )
+
+    def test_actual_sensitive_paths_require_deterministic_gates(self):
+        policy = PlanPolicy(
+            {
+                "tasks": [{"allowed_files": ["scripts/**"]}],
+                "approval_gates": [],
+            }
+        )
+
+        self.assertEqual(
+            policy.required_gates_for_paths(
+                ["scripts/agentic-validate.sh"]
+            ),
+            ["control_plane"],
+        )
 
 
 if __name__ == "__main__":

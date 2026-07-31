@@ -11,24 +11,31 @@
   "properties": {
     "summary": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 1000
     },
     "changed_files": {
       "type": "array",
+      "maxItems": 50,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 500
       }
     },
     "tests_added": {
       "type": "array",
+      "maxItems": 50,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 500
       }
     },
     "deviations": {
       "type": "array",
+      "maxItems": 30,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 1000
       }
     }
   }

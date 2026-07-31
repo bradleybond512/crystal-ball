@@ -53,14 +53,28 @@ class CodexClientTests(unittest.TestCase):
                 "Return a plan",
                 schema,
                 read_only=True,
+                token_limit=12_345,
             )
 
         command = captured["command"]
         self.assertEqual(command[0:2], ["codex", "exec"])
         self.assertIn("--ephemeral", command)
+        self.assertIn("--strict-config", command)
         self.assertIn("--output-schema", command)
         self.assertEqual(command[command.index("--sandbox") + 1], "read-only")
         self.assertIn('approval_policy="never"', command)
+        self.assertIn(
+            "features.rollout_budget.enabled=true",
+            command,
+        )
+        self.assertIn(
+            "features.rollout_budget.limit_tokens=12345",
+            command,
+        )
+        self.assertIn(
+            "features.rollout_budget.reminder_at_remaining_tokens=[1000]",
+            command,
+        )
         self.assertNotIn("Return a plan", command)
         self.assertIn("Use repository evidence.", captured["input"])
         self.assertIn("Return a plan", captured["input"])

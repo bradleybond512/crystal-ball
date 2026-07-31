@@ -44,6 +44,9 @@ Default effort: `low` or `medium`. Luna must not make final architecture, securi
 
 | Agent | Model | Effort |
 |---|---|---|
+| mechanical_engineer | gpt-5.6-luna | low |
+| delivery_planner | gpt-5.6-terra | medium |
+| integration_engineer | gpt-5.6-terra | high |
 | architect | gpt-5.6-sol | high |
 | mission_architect | gpt-5.6-sol | high |
 | prediction_engineer | gpt-5.6-sol | high |
@@ -62,6 +65,13 @@ Default effort: `low` or `medium`. Luna must not make final architecture, securi
 | architecture_memory | gpt-5.6-luna | low |
 | accessibility_reviewer | gpt-5.6-luna | medium |
 
+The table defines each agent's maximum role tier. The deterministic router uses
+Terra/medium for the independent reviewer on focused and standard work, and
+retains Sol/high only for high-assurance review. Mechanical changes skip model
+planning and model review after their deterministic scope and micro-gate pass.
+High-assurance work uses Sol for planning and review but defaults implementation
+to Terra/high.
+
 ## Escalation rules
 
 1. Start with the assigned model and effort.
@@ -70,3 +80,8 @@ Default effort: `low` or `medium`. Luna must not make final architecture, securi
 4. A third failure escalates diagnosis to Sol and stops automatic mutation until the diagnosis is incorporated into a new bounded repair task.
 5. Never use Sol to perform linting, formatting, file enumeration, or other deterministic work.
 6. Record model, effort, builder, validation command, failure class, and repair attempt in the pipeline ledger.
+7. Enforce both the pipeline total-token budget and the per-invocation rollout
+   budget. Tune the latter through `--max-tokens-per-invocation` or the manual
+   workflow input; never disable strict config validation.
+8. CI validation must use the protected workflow's immutable, networkless
+   validator container. Target code must not select or replace that image.

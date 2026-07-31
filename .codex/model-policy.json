@@ -7,6 +7,9 @@
     "maxAutomaticRepairs": 2
   },
   "agents": {
+    "mechanical_engineer": { "model": "gpt-5.6-luna", "effort": "low" },
+    "delivery_planner": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "integration_engineer": { "model": "gpt-5.6-terra", "effort": "high" },
     "architect": { "model": "gpt-5.6-sol", "effort": "high" },
     "mission_architect": { "model": "gpt-5.6-sol", "effort": "high" },
     "prediction_engineer": { "model": "gpt-5.6-sol", "effort": "high" },

@@ -32,11 +32,13 @@ class CodexClient:
         prompt: str,
         schema: Path,
         read_only: bool,
+        token_limit: int | None = None,
     ) -> InvocationResult:
         sandbox = "read-only" if read_only else "workspace-write"
         command = [
             "codex",
             "exec",
+            "--strict-config",
             "--ephemeral",
             "--json",
             "--color",
@@ -59,6 +61,22 @@ class CodexClient:
             str(self.root),
             "-",
         ]
+        if token_limit is not None:
+            if token_limit <= 0:
+                raise ValueError("token_limit must be positive")
+            insertion = command.index("--cd")
+            reminder = max(1, min(1_000, token_limit // 5))
+            command[insertion:insertion] = [
+                "-c",
+                "features.rollout_budget.enabled=true",
+                "-c",
+                f"features.rollout_budget.limit_tokens={token_limit}",
+                "-c",
+                (
+                    "features.rollout_budget."
+                    f"reminder_at_remaining_tokens=[{reminder}]"
+                ),
+            ]
         try:
             role_prompt = self._role_prompt(assignment, prompt)
         except (OSError, PermissionError, ValueError, tomllib.TOMLDecodeError) as error:

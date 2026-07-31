@@ -11,24 +11,31 @@
   "properties": {
     "summary": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 1000
     },
     "root_causes": {
       "type": "array",
+      "maxItems": 10,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 1000
       }
     },
     "recommended_actions": {
       "type": "array",
+      "maxItems": 10,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 1000
       }
     },
     "blocking_findings": {
       "type": "array",
+      "maxItems": 10,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 1000
       }
     }
   }

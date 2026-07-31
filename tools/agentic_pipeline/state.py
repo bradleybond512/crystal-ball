@@ -64,7 +64,10 @@ class StateStore:
         normalized = " ".join(request.split())
         request_hash = hashlib.sha256(normalized.encode()).hexdigest()
         request_key = hashlib.sha256(
-            f"{branch}\0{baseline_sha}\0{normalized}".encode()
+            (
+                f"v2\0{branch}\0{baseline_sha}\0{control_sha}\0"
+                f"{normalized}"
+            ).encode()
         ).hexdigest()
         existing = self.connection.execute(
             "SELECT state_json FROM pipelines WHERE request_key = ?",

@@ -8,6 +8,29 @@ from tools.agentic_pipeline.state import StateStore
 
 
 class StateStoreTests(unittest.TestCase):
+    def test_new_control_plane_sha_creates_a_new_pipeline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = StateStore(Path(temp_dir) / "state.sqlite")
+            first, first_created = store.create_or_get(
+                "Build feature",
+                "codex/test",
+                BudgetLimits(max_total_tokens=1_000, max_invocations=5),
+                baseline_sha="target",
+                control_sha="control-one",
+            )
+            second, second_created = store.create_or_get(
+                "Build feature",
+                "codex/test",
+                BudgetLimits(max_total_tokens=1_000, max_invocations=5),
+                baseline_sha="target",
+                control_sha="control-two",
+            )
+            store.close()
+
+        self.assertTrue(first_created)
+        self.assertTrue(second_created)
+        self.assertNotEqual(first.pipeline_id, second.pipeline_id)
+
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp_dir.name) / "state.sqlite"

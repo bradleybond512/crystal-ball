@@ -10,16 +10,19 @@
   "properties": {
     "summary": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 1000
     },
     "blocking_findings": {
       "type": "array",
+      "maxItems": 5,
       "items": {
         "$ref": "#/$defs/finding"
       }
     },
     "nonblocking_findings": {
       "type": "array",
+      "maxItems": 5,
       "items": {
         "$ref": "#/$defs/finding"
       }
@@ -53,19 +56,24 @@
           "maximum": 1
         },
         "file": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 500
         },
         "problem": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 1000
         },
         "impact": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 1000
         },
         "evidence": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 1000
         },
         "recommended_fix": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 1000
         }
       }
     }

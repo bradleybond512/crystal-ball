@@ -18,12 +18,23 @@ from tools.agentic_pipeline.state import StateStore
 
 
 class FakeRouter:
-    def __init__(self, high_assurance=False):
+    def __init__(
+        self,
+        high_assurance=False,
+        model_review=True,
+        mechanical=False,
+    ):
         self.high_assurance = high_assurance
+        self.model_review = model_review
+        self.mechanical = mechanical
 
     def route(self, _request):
         return RouteDecision(
-            tier="high_assurance" if self.high_assurance else "standard",
+            tier=(
+                "mechanical"
+                if self.mechanical
+                else "high_assurance" if self.high_assurance else "standard"
+            ),
             planner=AgentAssignment("architect", "gpt-5.6-sol", "high"),
             builder=AgentAssignment(
                 "provider_engineer", "gpt-5.6-terra", "medium"
@@ -36,6 +47,7 @@ class FakeRouter:
             requires_design_approval=self.high_assurance,
             max_automatic_repairs=2,
             rationale=["provider_engineer"],
+            requires_model_review=self.model_review,
         )
 
 
@@ -45,8 +57,17 @@ class FakeCodex:
         self.calls = []
         self.on_invoke = on_invoke
 
-    def invoke(self, assignment, prompt, schema, read_only):
-        self.calls.append((assignment.agent, prompt, schema.name, read_only))
+    def invoke(
+        self,
+        assignment,
+        prompt,
+        schema,
+        read_only,
+        token_limit=None,
+    ):
+        self.calls.append(
+            (assignment.agent, prompt, schema.name, read_only, token_limit)
+        )
         if self.on_invoke:
             self.on_invoke(assignment, read_only)
         payload = self.payloads.popleft()
@@ -133,6 +154,37 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(
             [call[0] for call in codex.calls],
             ["architect", "provider_engineer", "independent_reviewer"],
+        )
+
+    def test_mechanical_pipeline_completes_after_deterministic_validation(self):
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        (self.root / ".git/info/exclude").write_text("state.sqlite*\n")
+        codex = FakeCodex(
+            [
+                {"summary": "implemented", "changed_files": ["README.md"]},
+            ]
+        )
+        gate = ["bash", "scripts/agentic-check-mechanical.sh"]
+        validators = FakeValidators([[passed(gate)]])
+        orchestrator = Orchestrator(
+            self.root,
+            self.store,
+            FakeRouter(model_review=False, mechanical=True),
+            codex,
+            validators,
+        )
+        state, _ = self.store.create_or_get(
+            "Fix typo in README",
+            "codex/docs",
+            BudgetLimits(max_total_tokens=1_000, max_invocations=5),
+        )
+
+        completed = orchestrator.run_until_blocked(state.pipeline_id)
+
+        self.assertEqual(completed.status, PipelineStatus.COMPLETED)
+        self.assertEqual(
+            [call[0] for call in codex.calls],
+            ["provider_engineer"],
         )
 
     def test_blocks_before_model_invocation_when_workspace_contains_env_file(self):

@@ -1,15 +1,36 @@
 {
   "name": "crystalball-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "MCP server giving Claude CLI full access to Crystal Ball live data — 30 tools across 6 categories: aggregate, granular, foundation, intelligence, stateful, and help",
+  "description": "Crystal Ball MCP server — 59 tools across 9 categories",
   "type": "module",
   "bin": {
-    "crystalball-mcp": "./index.mjs"
+    "crystalball-mcp": "./index.mjs",
+    "crystalball-monitor": "./monitor-once.mjs",
+    "crystalball-monitor-install": "./install-monitor.mjs"
   },
+  "files": [
+    "correlation.mjs",
+    "docs",
+    "forecast-evaluation-public.mjs",
+    "tools",
+    "index.mjs",
+    "install-monitor.mjs",
+    "launch-agent.mjs",
+    "monitor-once.mjs",
+    "result.mjs",
+    "route-policy.mjs",
+    "safety-policy.mjs",
+    "server-meta.mjs",
+    "sidecar-client.mjs",
+    "storage.mjs",
+    "tool-registry.mjs"
+  ],
   "scripts": {
     "start": "node index.mjs",
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.mjs",
+    "docs:generate": "node generate-docs.mjs",
+    "docs:check": "node generate-docs.mjs --check"
   },
   "engines": {
     "node": ">=20"

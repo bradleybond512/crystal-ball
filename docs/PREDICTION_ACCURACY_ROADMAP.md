@@ -988,7 +988,27 @@ Phase exit:
 
 ### ACC-701 — Drift and cohort-health monitor
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-701-mcp-hardening`
+
+Evidence: PR #1597
+
+Verification: the MCP monitor persists bounded snapshots and deduplicated
+findings for holdout Brier regression, feed readiness changes, evaluation
+missingness, prediction-volume shifts, resolution-coverage drops, algorithm
+version loss concentration, and explicit derived-output quarantine. It records
+recoveries and fails closed when live collection or algorithm diagnostics are
+unavailable. The same safety envelope blocks quarantined analyst hypotheses
+and forecasts while preserving independent authoritative observations. A
+15-minute macOS LaunchAgent runs the portable monitor command outside agent
+sessions. The MCP surface is generated from one 59-tool registry with safety
+annotations, structured output, capability discovery, compact diagnostics,
+and an approved read-only route policy. Verified with the full MCP suite,
+portable installed-binary handshake, dependency audit, strict lint, explicit
+ESLint, secret scan, typecheck, and production build.
 
 Dependencies: ACC-201 and ACC-402
 

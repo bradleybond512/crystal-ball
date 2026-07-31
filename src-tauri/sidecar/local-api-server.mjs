@@ -1727,6 +1727,19 @@ export function gdacsResultShouldCache(degraded, eventCount) {
   return !(degraded && eventCount === 0);
 }
 
+// Open-Meteo local-forecast: a valid hourly response whose `current` block is
+// missing or malformed is a PARTIAL success — the hourly consumer is served,
+// the surface_temp fusion reading is not. Caching that partial for the full
+// 10 minutes meant Open-Meteo could resume serving `current` while the
+// surface_temp domain kept recording ok:false for the rest of the window. The
+// partial earns a short retry floor instead; a COMPLETE payload keeps the full
+// TTL so a healthy feed is not re-fetched every minute. Pure helper.
+const OPEN_METEO_FORECAST_TTL_MS = 10 * 60 * 1000;
+const OPEN_METEO_FORECAST_PARTIAL_TTL_MS = 60 * 1000;
+export function openMeteoForecastTtlMs(hasCurrentReading) {
+  return hasCurrentReading ? OPEN_METEO_FORECAST_TTL_MS : OPEN_METEO_FORECAST_PARTIAL_TTL_MS;
+}
+
 // DNS resolution cache — avoids repeated lookups on the same hostname (5 min TTL).
 const _dnsCache = new Map(); // hostname → addresses[]
 const _DNS_CACHE_TTL = 5 * 60_000;
@@ -2919,6 +2932,14 @@ const SPACEWX_KP_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
 const SPACEWX_ALERTS_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
 const SPACEWX_EARTHWARD_LON_DEG = 30;
 const SPACEWX_CACHE_TTL_MS = 5 * 60 * 1000;
+// A FAILED subfeed keeps only a short retry floor rather than the success TTL.
+// Long enough that an SWPC outage can't turn every status request into an
+// upstream retry, short enough that a recovered product shows up on the next
+// poll instead of the next window. Pure helper so the policy is testable.
+const SPACEWX_SUBFEED_RETRY_TTL_MS = 30 * 1000;
+export function spacewxSubfeedTtlMs(ok) {
+  return ok ? SPACEWX_CACHE_TTL_MS : SPACEWX_SUBFEED_RETRY_TTL_MS;
+}
 
 // Solar imagery catalog — kept in sync with
 // src/services/spaceweather/solar-imagery.ts (the renderer-side source
@@ -2981,8 +3002,6 @@ async function probeUpstreamLastModified(upstreamUrl) {
   }
 }
 
-let spacewxStatusCache = null;
-let spacewxStatusCachedAt = 0;
 let spacewxAlertsCache = null;
 let spacewxAlertsCachedAt = 0;
 
@@ -3256,28 +3275,48 @@ function normalizeAlertRaw(raw) {
   return out;
 }
 
+/**
+ * One SWPC product, cached on its OWN clock.
+ *
+ * Caching the assembled status whenever ANY product answered let one slow
+ * product poison the other two's window: when planetary-K-index timed out but
+ * xray succeeded, a status with an EMPTY kpIndex was cached for the full TTL,
+ * so the swpc-kp fusion provider recorded ok:false on every tick for five
+ * minutes even if Kp recovered immediately. Per-subfeed entries also mean a
+ * retry re-asks only the product that actually failed — the healthy ones keep
+ * their full TTL, so this is not "stop caching".
+ */
+async function loadSpacewxSubfeed(id, url) {
+  const cacheKey = `spacewx-subfeed-${id}`;
+  const cached = getCached(cacheKey); // per-entry TTL, written below
+  if (cached) return cached;
+  const raw = await fetchJsonSidecar(url);
+  const entry = { raw, ok: raw !== null };
+  setCached(cacheKey, entry, spacewxSubfeedTtlMs(entry.ok));
+  return entry;
+}
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
-  if (spacewxStatusCache && now - spacewxStatusCachedAt < SPACEWX_CACHE_TTL_MS) {
-    return spacewxStatusCache;
-  }
-  const [xrayRaw, kpRaw, cmeRaw] = await Promise.all([
-    fetchJsonSidecar('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
-    fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-    fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
+  const [xray, kp, cme] = await Promise.all([
+    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
+    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
+    loadSpacewxSubfeed('cme', 'https://services.swpc.noaa.gov/json/donki/cme.json'),
   ]);
   const status = buildSpaceweatherStatusSidecar({
-    xrayFlux: normalizeXrayPoints(xrayRaw),
-    kpIndex: normalizeKpPoints(kpRaw),
-    cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
+    xrayFlux: normalizeXrayPoints(xray.raw),
+    kpIndex: normalizeKpPoints(kp.raw),
+    cmes: Array.isArray(cme.raw) ? cme.raw : [],
     now,
   });
-  // Don't cache a total upstream failure: serving the empty payload for the
-  // whole TTL turns one blip into every swpc-kp tick recording ok:false.
-  if (xrayRaw !== null || kpRaw !== null || cmeRaw !== null) {
-    spacewxStatusCache = status;
-    spacewxStatusCachedAt = now;
-  }
+  // Per-subfeed provenance so a consumer can tell "this product FAILED" from
+  // "this product is QUIET" — an empty kpPoints means very different things in
+  // those two cases, and they were previously indistinguishable.
+  status.subfeeds = { xray: xray.ok, kp: kp.ok, cme: cme.ok };
+  // `degraded` stays reserved for a TOTAL outage. fetchSwpcKp reads it as
+  // "don't trust this payload at all", so raising it for a CME-only failure
+  // would take the Kp voter down over an unrelated product's outage.
+  if (!xray.ok && !kp.ok && !cme.ok) status.degraded = true;
   return status;
 }
 
@@ -10825,7 +10864,10 @@ async function dispatch(requestUrl, req, routes, context) {
     const lon = requestUrl.searchParams.get('lon');
     if (!lat || !lon) return json({ error: 'lat and lon required' }, 400);
     const cacheKey = `open-meteo-forecast-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
-    const cached = getCached(cacheKey, 10 * 60 * 1000);
+    // No explicit TTL here on purpose: the entry carries its own, so a partial
+    // expires on the short retry floor while a complete payload gets the full
+    // window (see openMeteoForecastTtlMs).
+    const cached = getCached(cacheKey);
     if (cached) return json(cached);
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&current=temperature_2m&forecast_days=3&timezone=auto`;
@@ -10842,8 +10884,9 @@ async function dispatch(requestUrl, req, routes, context) {
       const currentTime = data.current?.time;
       const observedAt = currentTime !== undefined ? Date.parse(`${currentTime}Z`) - (data.utc_offset_seconds ?? 0) * 1000 : NaN;
       const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
-      if (Number.isFinite(observedAt)) result.currentObservedAtMs = observedAt;
-      setCached(cacheKey, result);
+      const hasCurrentReading = Number.isFinite(observedAt);
+      if (hasCurrentReading) result.currentObservedAtMs = observedAt;
+      setCached(cacheKey, result, openMeteoForecastTtlMs(hasCurrentReading));
       return json(result);
     } catch (error) {
       return json({ error: `open-meteo forecast error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);

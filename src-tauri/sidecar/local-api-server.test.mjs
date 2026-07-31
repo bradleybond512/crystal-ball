@@ -14,7 +14,9 @@ import {
   buildOllamaSummaryMessages,
   createLocalApiServer,
   normalizeKpPoints,
+  openMeteoForecastTtlMs,
   parseGfzKp,
+  spacewxSubfeedTtlMs,
   summarizeKpSidecar,
 } from './local-api-server.mjs';
 
@@ -2903,6 +2905,82 @@ test('/api/weather/local-forecast — current block absent from upstream omits c
   }
 });
 
+// ── Partial-failure caching: a degraded payload must not outlive the outage ──
+// A `current`-less response is a PARTIAL success — the hourly forecast is
+// usable, the surface_temp fusion reading is not. Caching that partial for the
+// full 10-minute TTL means Open-Meteo can start serving `current` again while
+// surface_temp keeps recording ok:false for the rest of the window: the outage
+// outlives the outage. The partial therefore earns a SHORT TTL so the next poll
+// re-asks, while a complete payload keeps the full TTL — the fix must not
+// degenerate into "stop caching" and put avoidable load on Open-Meteo.
+
+test('/api/weather/local-forecast — a `current`-less partial is not pinned for the full TTL', async () => {
+  let serveCurrent = false;
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({
+      ...(serveCurrent ? { current: { time: '2026-07-28T15:00', temperature_2m: 21 }, utc_offset_seconds: 0 } : {}),
+      hourly: { time: ['2026-07-28T15:00'], precipitation: [0], wind_gusts_10m: [10], weather_code: [1] },
+    }),
+  }));
+  try {
+    const partial = await app.getJson('/api/weather/local-forecast?lat=10&lon=20');
+    assert.equal(partial.currentObservedAtMs, undefined, 'upstream omitted current, so the reading is absent');
+
+    serveCurrent = true;
+    // Two minutes on: past any sane retry floor for a partial, but still well
+    // inside the 10 minutes a COMPLETE payload would have earned.
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      const recovered = await app.getJson('/api/weather/local-forecast?lat=10&lon=20');
+      assert.equal(
+        recovered.currentObservedAtMs,
+        Date.parse('2026-07-28T15:00:00Z'),
+        'a recovered `current` block must surface without waiting out the full TTL',
+      );
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests(); // shifted-clock writes are future-stamped
+    await app.cleanup();
+  }
+});
+
+test('/api/weather/local-forecast — a complete payload is still cached for the full TTL', async () => {
+  const app = await startRouteApp(() => ({
+    statusCode: 200,
+    body: JSON.stringify({
+      current: { time: '2026-07-28T15:00', temperature_2m: 21 },
+      utc_offset_seconds: 0,
+      hourly: { time: ['2026-07-28T15:00'], precipitation: [0], wind_gusts_10m: [10], weather_code: [1] },
+    }),
+  }));
+  try {
+    await app.getJson('/api/weather/local-forecast?lat=30&lon=40');
+    assert.equal(app.calls.length, 1, 'first request reaches upstream');
+
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      await app.getJson('/api/weather/local-forecast?lat=30&lon=40');
+      assert.equal(app.calls.length, 1, 'a healthy payload must NOT be re-fetched two minutes in');
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('openMeteoForecastTtlMs — a partial expires sooner than a complete payload, but is still cached', () => {
+  assert.ok(
+    openMeteoForecastTtlMs(false) < openMeteoForecastTtlMs(true),
+    'a `current`-less partial must not hold the full-payload TTL',
+  );
+  assert.ok(openMeteoForecastTtlMs(false) > 0, 'the partial is still cached — the fix is not "stop caching"');
+});
+
 test('/api/met-norway-temp — non-celsius unit is a 502 naming the offending unit', async () => {
   const app = await startRouteApp(() => ({
     statusCode: 200,
@@ -3100,6 +3178,128 @@ test('normalizeKpPoints drops unusable rows without dropping the payload', () =>
   assert.deepEqual(points, [{ time_tag: '2026-07-30T12:00:00Z', kp: 1.67 }]);
   assert.deepEqual(normalizeKpPoints(null), []);
   assert.deepEqual(normalizeKpPoints({ Kp: [1] }), []);
+});
+
+// ── /api/spaceweather/status subfeed independence ───────────────────────────
+// The status payload fans out to THREE independent SWPC products (xray, Kp,
+// CME). Caching the assembled status whenever ANY of them succeeded means one
+// slow product poisons the other two's window: when the planetary-K-index feed
+// times out but xray answers, a status with an EMPTY kpIndex is cached for the
+// full success TTL, so the swpc-kp fusion provider records ok:false on every
+// tick for that whole window even if Kp recovers on the very next request.
+// Each subfeed therefore caches on its OWN clock — a success keeps the full
+// TTL, a failure keeps only a short retry floor — so a recovered subfeed shows
+// up promptly WITHOUT re-fetching the siblings that are already healthy.
+
+/** A naïve-UTC SWPC time_tag (no offset suffix), `agoMs` before now. */
+function swpcTag(agoMs) {
+  return new Date(Date.now() - agoMs).toISOString().replace(/\.\d{3}Z$/, '');
+}
+
+test('/api/spaceweather/status — a recovered Kp subfeed is not pinned empty by the healthy xray subfeed', async () => {
+  const tag = swpcTag(60_000);
+  let kpUp = false;
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('xrays-6-hour')) {
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: `${tag}Z`, flux: 1e-6, energy: '0.1-0.8nm' }]) };
+    }
+    if (options.path.includes('noaa-planetary-k-index')) {
+      return kpUp
+        ? { statusCode: 200, body: JSON.stringify([{ time_tag: tag, Kp: 4.33 }]) }
+        : { statusCode: 503, body: 'SWPC planetary K unavailable' };
+    }
+    if (options.path.includes('donki/cme')) return { statusCode: 200, body: '[]' };
+    return { statusCode: 500, body: 'unexpected request' };
+  });
+  try {
+    const degraded = await app.getJson('/api/spaceweather/status');
+    assert.deepEqual(degraded.kpPoints, [], 'the Kp product is down, so it contributes no points');
+    assert.ok(degraded.xray, 'the xray product answered and must still be reported');
+
+    kpUp = true;
+    // Two minutes on: past any sane retry floor for a failed subfeed, but still
+    // well inside the success TTL the xray subfeed earned.
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      const recovered = await app.getJson('/api/spaceweather/status');
+      assert.equal(recovered.kpPoints.length, 1, 'a recovered Kp subfeed must not stay empty for the whole status TTL');
+      assert.equal(recovered.kpPoints[0].kp, 4.33);
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather/status — retrying a failed subfeed does not re-fetch the healthy ones', async () => {
+  const tag = swpcTag(60_000);
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('xrays-6-hour')) {
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: `${tag}Z`, flux: 1e-6, energy: '0.1-0.8nm' }]) };
+    }
+    if (options.path.includes('noaa-planetary-k-index')) return { statusCode: 503, body: 'still down' };
+    if (options.path.includes('donki/cme')) return { statusCode: 200, body: '[]' };
+    return { statusCode: 500, body: 'unexpected request' };
+  });
+  const pathHits = (needle) => app.calls.filter((c) => c.path.includes(needle)).length;
+  try {
+    await app.getJson('/api/spaceweather/status');
+    assert.equal(pathHits('xrays-6-hour'), 1);
+    assert.equal(pathHits('noaa-planetary-k-index'), 1);
+
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      await app.getJson('/api/spaceweather/status');
+      assert.equal(pathHits('noaa-planetary-k-index'), 2, 'the failed subfeed retries once its short floor elapses');
+      assert.equal(pathHits('xrays-6-hour'), 1, 'the healthy subfeed keeps its full TTL — no avoidable load on SWPC');
+      assert.equal(pathHits('donki/cme'), 1, 'likewise the healthy CME subfeed');
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather/status — subfeed provenance separates "failed" from "quiet"', async () => {
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('noaa-planetary-k-index')) return { statusCode: 503, body: 'down' };
+    // xray and CME answer with genuinely EMPTY (but valid) payloads.
+    return { statusCode: 200, body: '[]' };
+  });
+  try {
+    const status = await app.getJson('/api/spaceweather/status');
+    assert.deepEqual(status.subfeeds, { xray: true, kp: false, cme: true },
+      'an empty-but-valid product is ok:true; only the 503 is ok:false');
+    assert.equal(status.degraded, undefined,
+      'degraded is reserved for a TOTAL outage — one failed product must not take the Kp voter down');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather/status — a total SWPC outage is flagged degraded', async () => {
+  const app = await startRouteApp(() => ({ statusCode: 503, body: 'SWPC down' }));
+  try {
+    const status = await app.getJson('/api/spaceweather/status');
+    assert.deepEqual(status.subfeeds, { xray: false, kp: false, cme: false });
+    assert.equal(status.degraded, true, 'every product failed — consumers must not trust this payload');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('spacewxSubfeedTtlMs — a failed subfeed retries sooner than a successful one, but is still cached', () => {
+  assert.ok(
+    spacewxSubfeedTtlMs(false) < spacewxSubfeedTtlMs(true),
+    'a failure must not hold the success TTL — that is what pinned kpPoints empty for 5 minutes',
+  );
+  assert.ok(spacewxSubfeedTtlMs(false) > 0, 'but it still caches, so an outage cannot hammer SWPC every request');
 });
 
 // ── GFZ Potsdam Kp parser + route ──────────────────────────────────────────

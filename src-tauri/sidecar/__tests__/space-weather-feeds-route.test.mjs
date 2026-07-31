@@ -282,19 +282,13 @@ test('space-weather-feeds derives its envelope from buildSwpcEnvelope', () => {
 // the full TTL. These read the LIVE exported function source rather than the
 // file, so an assertion can't drift away from what actually runs.
 
-test('the status cache is written from adapter output, not from a non-null body', () => {
+test('the status route caches each normalized subfeed instead of the assembled status', () => {
   const src = codeOf(fetchSpaceweatherStatusSidecar);
-  const guardAt = src.search(/if \(xrayFlux\.length > 0 \|\| kpIndex\.length > 0\)/);
-  assert.notEqual(guardAt, -1, 'cacheability must be decided on what the normalizers produced');
-  assert.ok(guardAt < src.indexOf('spacewxStatusCache ='), 'and decided before the write');
-
-  // `xrayRaw`/`kpRaw` are non-null for an HTTP 200 carrying `[]`, so testing
-  // them caches a status with no flux and no Kp — which renders identically to
-  // a genuinely quiet sun for the whole TTL.
-  assert.ok(
-    !/if \([^)]*(xrayRaw|kpRaw)[^)]*\)\s*\{[^}]*spacewxStatusCache/.test(src),
-    'the raw bodies must not gate the cache write',
-  );
+  assert.match(src, /loadSpacewxSubfeed\('xray'/, 'xray must use the per-subfeed cache');
+  assert.match(src, /loadSpacewxSubfeed\('kp'/, 'Kp must use the per-subfeed cache');
+  assert.match(src, /loadSpacewxSubfeed\('cme'/, 'CME must use the per-subfeed cache');
+  assert.doesNotMatch(src, /spacewxStatusCache/, 'the assembled status must not pin a partial outage');
+  assert.match(src, /status\.subfeeds =/, 'the response must expose product-level health');
 });
 
 test('the alerts cache is written only for a well-shaped body', () => {

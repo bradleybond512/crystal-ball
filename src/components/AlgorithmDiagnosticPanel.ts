@@ -9,6 +9,10 @@
 
 import { Panel } from './Panel';
 import {
+  buildAgentIntelligenceView,
+  renderAgentIntelligenceHtml,
+} from './agent-intelligence-view';
+import {
   getAlgorithmEvaluationLedger,
   getAlgorithmDefinitions,
 } from '@/services/algorithms/algorithms-state';
@@ -100,11 +104,11 @@ export class AlgorithmDiagnosticPanel extends Panel {
   constructor() {
     super({
       id: 'algorithm-diagnostic',
-      title: 'Algorithm Diagnostic',
+      title: 'Agent Intelligence & Algorithms',
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Hit-rate / latency / drift report for each algorithm. Surfaces safe-adjustment proposals — never auto-applied; always a recommendation.',
+        'Explains local Claude/Codex access, derived-output safeguards, algorithm health, and evidence-gated adjustments.',
     });
     this.start();
   }
@@ -132,6 +136,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
     const definitions = getAlgorithmDefinitions();
     const calibrations = summarizeCalibration(ledger.all());
     const report = aggregateAlgorithmHealth({ definitions, calibrations });
+    const agentIntelligence = buildAgentIntelligenceView(report.algorithms);
     const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: getTunings() });
     const definitionsById = new Map<string, HealthAlgorithmDefinition>();
     for (const d of definitions) definitionsById.set(d.algorithmId, d);
@@ -177,6 +182,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Overall</div>
         <div style="font-size:14px;font-weight:700;color:${STATUS_COLOR[report.status]};">${escapeHtml(report.status.toUpperCase())} — ${escapeHtml(report.summary)}</div>
       </div>
+      ${renderAgentIntelligenceHtml(agentIntelligence)}
       <div>
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Prediction Accuracy</div>
         ${renderPredictionAccuracy()}

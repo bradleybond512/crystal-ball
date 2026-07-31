@@ -252,7 +252,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'operator-mode': { name: 'Operator Mode', enabled: true, priority: 2 },
   'global-risk-heatmap': { name: 'Global Risk Heatmap', enabled: true, priority: 1 },
   'command-center': { name: 'Command Center', enabled: true, priority: 1 },
-  'algorithm-diagnostic': { name: 'Algorithm Diagnostic', enabled: true, priority: 3 },
+  'algorithm-diagnostic': { name: 'Agent Intelligence & Algorithms', enabled: true, priority: 3 },
   'source-confidence': { name: 'Source Confidence', enabled: true, priority: 2 },
   'event-store': { name: 'Event Store', enabled: true, priority: 3 },
   'belief-calibration': { name: 'Belief Calibration', enabled: true, priority: 3 },

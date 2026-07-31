@@ -672,9 +672,15 @@ export class App {
  // running on USGS alone ~10 min after launch, with no upstream fault.
  // 8 min, not 10: scheduleRefresh applies +/-10% jitter, so an interval set
  // EQUAL to the TTL lands over it on roughly half its ticks and the provider
- // flaps healthy/stale. 8 min tops out at 8.8 min. Both routes are already
- // sidecar-cached on a stable key (emsc 2 min, geofon 5 min), so the cadence
- // costs at most one upstream request per tick per source.
+ // flaps healthy/stale. 8 min tops out at 8.8 min AT THE DEFAULT CADENCE
+ // MULTIPLIER — computeDelay also multiplies by the ghost (x5) and context
+ // (x2 battery / x4 low-power) factors, under which these do exceed the TTL
+ // and report stale. That is the intended trade, not a regression: those modes
+ // exist to buy battery with freshness, and a provider whose data really is
+ // 20 min old SHOULD read stale. What this fixes is the default path, where
+ // the user chose nothing and the domain went stale anyway.
+ // Both routes are already sidecar-cached on a stable key (emsc 2 min,
+ // geofon 5 min), so the cadence costs at most one upstream request per tick.
  { name: 'emscSeismic', fn: () => this.dataLoader.loadEmscSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'geofonSeismic', fn: () => this.dataLoader.loadGeofonSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  // Safety-critical: drives the status chip + storm posture, so it must keep
@@ -703,16 +709,25 @@ export class App {
  { name: 'ripeAtlas', fn: () => this.dataLoader.loadRipeAtlas(), intervalMs: 10 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeNcc', fn: () => this.dataLoader.loadRipeNcc(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  // Both votes of the internet_outages fusion domain, AND the warm cache the
- // survival comms axis reads synchronously. 5 min is set by the TIGHTER of the
+ // survival comms axis reads synchronously. 4 min is set by the TIGHTER of the
  // two contracts: ioda's registry freshnessTtlMs is 15 min, but
  // internet-outages.getCachedIodaOutages() returns [] once its own cache is
  // >= 10 min old, and fetchIodaOutages() only refetches on a tick that finds
  // the cache already >= 10 min old. At a 15 min cadence that getter is empty
  // for a third of every cycle and the comms axis silently reports no threats.
- // 5 min divides 10 evenly, so the refetch lands as the window closes.
- // Affordable because fetchIodaOutageEvents snaps its window to a 15 min
- // boundary — the sidecar cache absorbs the extra ticks (<=96 upstream/day).
- { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ //
+ // Because the refetch is LAZY — triggered by the first tick that finds the
+ // cache already expired, not by expiry itself — no interval closes the gap
+ // entirely; it only bounds it at one jittered tick, ~1.1x the interval. Exact
+ // divisors buy nothing here: 5 min would line up only with zero jitter, and
+ // ticks at 4.5/9.0 push the refetch to 14.5 and leave the axis blind 10->14.5.
+ // 4 min caps the blind window at 4.4 min, under half the 10 min it protects.
+ //
+ // Cheap at that rate: the limit=50 comms fetch early-returns from its own
+ // module cache without touching the network, and the limit=5000 fusion fetch
+ // snaps its window to a 15 min boundary, so extra ticks land on the sidecar
+ // cache. Upstream stays <=96/day for either path regardless of cadence.
+ { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 4 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'federalRegister', fn: () => this.dataLoader.loadFederalRegister(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'airQuality', fn: () => this.dataLoader.loadAirQuality(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'commsHealth', fn: () => this.dataLoader.loadCommsHealth(), intervalMs: 2 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

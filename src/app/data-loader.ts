@@ -4206,7 +4206,7 @@ export class DataLoaderManager implements AppModule {
     // This query's bounds are snapped to a 15-minute boundary (see
     // IODA_WINDOW_QUANTUM_MS) precisely so its key is NOT unique per call:
     // every tick inside one quantum reuses the cached entry, which is what
-    // keeps the 5-minute scheduled cadence off the upstream API.
+    // keeps the scheduled cadence off the upstream API.
     //
     // ONE `now` for both fetches and for the adapter: it is both the trailing
     // window's end and the observations' occurredAt, and two clocks would put

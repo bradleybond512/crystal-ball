@@ -152,14 +152,17 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       interval * JITTER <= binding,
       `internetOutages runs every ${interval / 60000} min against a ${binding / 60000} min window`,
     );
-    // fetchIodaOutages only refetches on a tick that already finds the cache
-    // expired, so the true refresh gap is ceil(window / interval) * interval.
-    // Unless the interval divides the window, that gap EXCEEDS the window and
-    // the comms axis is blind for the remainder of every cycle.
-    assert.equal(
-      commsWindow % interval, 0,
-      `interval must divide the ${commsWindow / 60000} min comms window evenly, else the cache ` +
-      `goes cold for ${(Math.ceil(commsWindow / interval) * interval - commsWindow) / 60000} min per cycle`,
+    // fetchIodaOutages refetches LAZILY — on the first tick that finds the cache
+    // already expired, not on expiry itself. So the axis is blind from the
+    // moment the cache turns 10 min old until the next tick, and no interval
+    // closes that gap; it only bounds it at one jittered tick. Picking an exact
+    // divisor does NOT help: it lines up only at zero jitter, and real ticks at
+    // 4.5/9.0 min push the refetch out to 14.5 with a 5 min interval.
+    const worstBlindMs = interval * JITTER;
+    assert.ok(
+      worstBlindMs <= binding / 2,
+      `worst-case blind window is ${worstBlindMs / 60000} min out of the ${binding / 60000} min ` +
+      `it protects; keep it under half so the axis has data for most of each cycle`,
     );
   });
 
@@ -169,10 +172,13 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // keyless fair-use API — the cache is provably never hit.
     const fetchSrc = readFileSync(resolve(root, 'src/services/netwatch/cloudflare-radar-fetch.ts'), 'utf8');
     assert.match(fetchSrc, /IODA_WINDOW_QUANTUM_MS/, 'the fusion window must be quantized');
+    // Ceil, not floor: a floored `until` ends before the caller instant and
+    // truncates onsets IODA has already published, which drops a country to a
+    // single vote because the adapter emits nothing for a zero-row country.
     assert.match(
       fetchSrc,
-      /Math\.floor\(now \/ IODA_WINDOW_QUANTUM_MS\)/,
-      'until must derive from the snapped instant, not the caller instant',
+      /Math\.ceil\(now \/ IODA_WINDOW_QUANTUM_MS\)/,
+      'until must derive from the snapped instant, snapped UP',
     );
   });
 });

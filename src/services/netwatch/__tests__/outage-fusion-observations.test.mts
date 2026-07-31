@@ -321,12 +321,27 @@ test('fetchIodaOutageEvents snaps its window so ticks inside one quantum share a
   const url = new URL(first, 'http://sidecar.test');
   const until = Number(url.searchParams.get('until'));
   const from = Number(url.searchParams.get('from'));
-  assert.equal(until, BOUNDARY / 1000, 'until is snapped DOWN to the boundary, not the caller instant');
+  assert.equal(until, (BOUNDARY + QUANTUM_MS) / 1000, 'until snaps UP to the next boundary');
   assert.equal(until - from, 24 * 60 * 60, 'snapping moves the window without resizing it');
 
+  // The reason it snaps up rather than down. A floored `until` ends BEFORE the
+  // caller instant, so every onset published between the boundary and this tick
+  // is truncated away — and since the adapter emits no observation at all for a
+  // country with zero rows, that silently drops the country to a single vote
+  // while Cloudflare still reports it.
+  for (const offsetMs of [20_000, 14 * 60_000, QUANTUM_MS - 1]) {
+    await fetchIodaOutageEvents(BOUNDARY + offsetMs);
+    const tickUntil = Number(new URL(call.url, 'http://sidecar.test').searchParams.get('until')) * 1000;
+    assert.ok(
+      tickUntil >= BOUNDARY + offsetMs,
+      `until (${tickUntil}) must never end before the caller instant (${BOUNDARY + offsetMs})`,
+    );
+  }
+
   // Crossing the boundary must produce a NEW key, or the window would freeze
-  // and the domain would count outages over a receding 24 h forever.
-  await fetchIodaOutageEvents(BOUNDARY + QUANTUM_MS);
+  // and the domain would count outages over a receding 24 h forever. Under ceil
+  // the boundary instant itself still belongs to the OLD quantum, so step past.
+  await fetchIodaOutageEvents(BOUNDARY + QUANTUM_MS + 1000);
   assert.notEqual(call.url, first, 'the next quantum fetches fresh');
 });
 

@@ -53,7 +53,7 @@ const IODA_WINDOW_SEC = 24 * 60 * 60;
 const IODA_FUSION_LIMIT = 5000;
 
 /**
- * The window's `until` is snapped DOWN to a 15-minute boundary so consecutive
+ * The window's `until` is snapped to a 15-minute boundary so consecutive
  * refresh ticks share one sidecar cache entry.
  *
  * The route's cache key is `ioda-outages:${from}:${until}:${limit}` and the
@@ -61,16 +61,30 @@ const IODA_FUSION_LIMIT = 5000;
  * — the cache is provably never hit and each tick is a fresh limit=5000
  * multi-thousand-row request against a keyless fair-use API. Snapping caps the
  * upstream rate at one request per quantum (<=96/day) no matter how often the
- * loader ticks, which is what makes the 5-minute cadence in App.ts affordable.
+ * loader ticks, which is what makes the scheduled cadence in App.ts affordable.
  *
  * 15 min matches the route's own IODA_TTL: a larger quantum would outlive the
  * cache entry it is trying to reuse, and a smaller one is mostly ignored
  * because the entry survives 15 min regardless.
  *
- * Snapping shifts the window end back by up to 15 min, which is immaterial
- * here on both counts: the window is 24 h long, and the adapter counts onsets
- * over a 6 h trailing window (OUTAGE_COUNT_WINDOW_MS) against a tolerance of 3
- * events. It also does NOT reach the survival comms axis — that axis reads
+ * Snapped UP (ceil), not down. Both directions give the same stable key, but
+ * flooring also truncates the window at the boundary, so every onset between
+ * the boundary and the tick that actually populates the cache is discarded even
+ * though IODA already has it. Since the adapter emits NO observation for a
+ * country with zero rows, that lost tail can drop a country to a single vote
+ * while Cloudflare still reports it — the exact corroboration this domain
+ * exists to provide. Ceiling asks for slightly more than has happened yet;
+ * IODA accepts a future `until` (verified live: HTTP 200, `error: null`, the
+ * bound echoed back in requestParameters) and simply returns everything
+ * through the present.
+ *
+ * The residual lag is the cache freeze — every tick inside a quantum reuses the
+ * first tick's payload, so the counts can be up to one quantum old. That is
+ * inherent to caching and symmetric with the corroborating source: the
+ * `/api/internet-outages-cf` route caches for 15 min on a FIXED key, so
+ * Cloudflare's own view lags comparably rather than racing ahead.
+ *
+ * None of this reaches the survival comms axis — that axis reads
  * `internet-outages.fetchIodaOutages()`, a separate limit=50 call on an
  * unsnapped `now`.
  */
@@ -156,8 +170,9 @@ export async function fetchIodaOutageEvents(now: number = Date.now()): Promise<O
   try {
     // Snapped, NOT `now` — see IODA_WINDOW_QUANTUM_MS. Both bounds derive from
     // the snapped instant so the whole window, and therefore the cache key,
-    // is stable across every tick inside one quantum.
-    const untilSec = Math.floor(now / IODA_WINDOW_QUANTUM_MS) * (IODA_WINDOW_QUANTUM_MS / 1000);
+    // is stable across every tick inside one quantum. Ceil, so the window never
+    // ends before the present and no already-published onset is truncated away.
+    const untilSec = Math.ceil(now / IODA_WINDOW_QUANTUM_MS) * (IODA_WINDOW_QUANTUM_MS / 1000);
     const fromSec = untilSec - IODA_WINDOW_SEC;
     const url = `${getApiBaseUrl()}/api/internet-outages?from=${fromSec}&until=${untilSec}&limit=${IODA_FUSION_LIMIT}`;
     const res = await fetch(url, {

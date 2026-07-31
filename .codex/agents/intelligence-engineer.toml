@@ -14,5 +14,6 @@ unbounded processing, repeated full-dataset scans, and unstable IDs.
 
 Add focused behavior and regression tests. For correlation or forecast-adjacent
 changes, include replay or benchmark evidence where the repository supports it.
-Run targeted tests and bash scripts/agentic-validate.sh.
+Run targeted tests, then bash scripts/agentic-validate.sh --tests "<the
+scripts you ran>".
 """

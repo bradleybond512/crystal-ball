@@ -68,16 +68,25 @@ deviations, and run targeted checks. Dependencies require explicit approval and
 an explanation of necessity, maintenance, license, build/bundle, and security
 impact.
 
+Write each test first and watch it fail for the right reason before implementing.
+Where that ordering was not possible, produce the equivalent mutation proof
+afterward — see "Mutation proof" in `AGENTS.md`. A test that has never been seen
+red is an unverified claim, not coverage.
+
 ## 7. Integrate and validate
 
 Resolve mechanical integration issues without changing the approved design.
 Architectural deviations return to the design phase.
 
-Run targeted domain tests, then:
+Run targeted domain tests, then name them to the gate so it runs them too:
 
 ```bash
-bash scripts/agentic-validate.sh
+bash scripts/agentic-validate.sh --tests "test:providers test:weather"
 ```
+
+The gate is lint, typecheck, secrets, docs, and build. It executes no tests of
+its own and proves nothing about behavior, so "the gate passed" is never on its
+own evidence that the change works.
 
 Do not edit validation rules during a feature unless that is explicitly within
 approved scope. Record exact commands, exit results, failures, and warnings.
@@ -96,6 +105,16 @@ Repair confirmed findings with the relevant specialist, rerun affected checks,
 and obtain fresh independent review. Allow at most two automatic repair cycles.
 Stop if a blocker remains, tests must be weakened, architecture changes, or
 scope materially expands.
+
+When the second cycle ends with the finding still open, hand it to the human with
+both attempted repairs and why each failed. A third cycle, a quiet severity
+downgrade, and "pre-existing, out of scope" are all the same failure: closing a
+confirmed finding without fixing it.
+
+The reviewer runs read-only and cannot reach the network, so it can never confirm
+that a filter, parameter, or field name matches live production data. For any
+change to an external source, supply the live-probe evidence from `AGENTS.md`
+alongside the diff.
 
 ## 9. Completion and publication boundary
 

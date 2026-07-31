@@ -17,9 +17,11 @@ Stop after a reviewed local change and draft PR description. Do not push or
 merge without approval.
 ```
 
-Codex should create a fresh `codex/*` branch from `macos/main`, classify the
-work, run discovery and design, delegate bounded implementation, validate,
-obtain an independent review, and prepare the completion report.
+Codex should create a fresh `codex/*` branch from the canonical `main` (the
+remote for `bradleybond512/crystal-ball` is named `macos` on Bradley's Mac and
+`origin` in most other clones — resolve it, do not assume it), classify the work,
+run discovery and design, delegate bounded implementation, validate, obtain an
+independent review, and prepare the completion report.
 
 ## Agent roster
 
@@ -38,11 +40,22 @@ obtain an independent review, and prepare the completion report.
 1. `AGENTS.md` defines permanent repository policy.
 2. `.codex/agents/*.toml` defines narrow specialists and permissions.
 3. `.agents/skills/crystal-ball-feature-workflow/SKILL.md` defines sequencing and handoffs.
-4. `scripts/agentic-validate.sh` supplies a repeatable local completion gate.
+4. `scripts/agentic-validate.sh` supplies a repeatable local completion gate. It
+   runs lint, typecheck, secrets, docs, and build — no tests of its own — so it
+   refuses to run until you name the targeted test scripts via `--tests`, or state
+   why none apply via `--no-tests "<reason>"`. `docs:check` runs advisory: it flags
+   PRs missing a CHANGELOG entry, but CHANGELOG entries are written at release time
+   by `npm run release:prepare`, so it is red on a pristine `main` between releases.
+   A gate that fails before you touch anything teaches agents to ignore it.
 5. Existing GitHub required checks remain the final merge authority.
 
 Instructions guide behavior; executable checks and branch protection enforce
 reality. A task is not complete when validation could not run.
+
+The gate cannot prove a new test would fail without its fix, and it cannot reach
+the network to prove a provider filter matches live data. Those two gaps are
+closed by evidence the agent must attach — the mutation proof and the live
+response shape, both defined in `AGENTS.md` — and audited by `independent_reviewer`.
 
 ## Operating modes
 

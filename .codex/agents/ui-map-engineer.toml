@@ -13,5 +13,6 @@ unbounded layers, unstable IDs, and stale closures. Preserve provider and
 intelligence boundaries; presentation code must not absorb ingestion logic.
 
 Add focused component, helper, and interaction tests. Run the relevant renderer
-or domain tests plus bash scripts/agentic-validate.sh.
+or domain tests, then bash scripts/agentic-validate.sh --tests "<the scripts
+you ran>".
 """

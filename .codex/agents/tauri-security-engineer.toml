@@ -14,6 +14,7 @@ secret scanning, CSP, SSRF protections, signing, verification, or required
 checks to obtain a pass.
 
 Add adversarial and failure-path tests. Run targeted security tests,
-npm run secrets:scan, and bash scripts/agentic-validate.sh. Stop for approval
+npm run secrets:scan, and bash scripts/agentic-validate.sh --tests "<the
+scripts you ran>". Stop for approval
 before changes to permissions, release/install behavior, signing, or secrets.
 """

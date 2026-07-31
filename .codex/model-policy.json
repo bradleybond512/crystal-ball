@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "defaults": {
+    "planning": { "model": "gpt-5.6-sol", "effort": "high" },
+    "implementation": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "mechanical": { "model": "gpt-5.6-luna", "effort": "low" },
+    "maxAutomaticRepairs": 2
+  },
+  "agents": {
+    "architect": { "model": "gpt-5.6-sol", "effort": "high" },
+    "mission_architect": { "model": "gpt-5.6-sol", "effort": "high" },
+    "prediction_engineer": { "model": "gpt-5.6-sol", "effort": "high" },
+    "correlation_engineer": { "model": "gpt-5.6-sol", "effort": "high" },
+    "tauri_security_engineer": { "model": "gpt-5.6-sol", "effort": "high" },
+    "independent_reviewer": { "model": "gpt-5.6-sol", "effort": "high" },
+    "provider_engineer": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "intelligence_engineer": { "model": "gpt-5.6-terra", "effort": "high" },
+    "ui_map_engineer": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "performance_engineer": { "model": "gpt-5.6-terra", "effort": "high" },
+    "benchmark_engineer": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "product_designer": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "test_engineer": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "release_engineer": { "model": "gpt-5.6-terra", "effort": "medium" },
+    "repository_analyst": { "model": "gpt-5.6-luna", "effort": "medium" },
+    "architecture_memory": { "model": "gpt-5.6-luna", "effort": "low" },
+    "accessibility_reviewer": { "model": "gpt-5.6-luna", "effort": "medium" }
+  },
+  "escalation": {
+    "firstFailure": "return_to_builder",
+    "secondFailure": "increase_effort_one_level",
+    "thirdFailure": "sol_read_only_diagnosis_and_stop"
+  }
+}

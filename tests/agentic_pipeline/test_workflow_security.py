@@ -95,6 +95,18 @@ class WorkflowSecurityTests(unittest.TestCase):
             self.workflow,
         )
 
+    def test_resume_recovers_pipeline_id_from_artifact(self):
+        dispatch = self.workflow.split("permissions:", 1)[0]
+        self.assertNotIn("\n      pipeline_id:", dispatch)
+        self.assertIn(
+            'cp .agentic-resume/pipeline-id "$RUN_ROOT/pipeline-id"',
+            self.workflow,
+        )
+        self.assertIn(
+            'PIPELINE_ID="$(cat "$RUN_ROOT/pipeline-id")"',
+            self.workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

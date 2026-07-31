@@ -169,7 +169,8 @@ dispatched from the protected default branch. Configure the repository
 
 For a new run, provide a request and an existing `codex/*` branch. If a
 high-assurance design gate pauses the run, download nothing manually: dispatch
-the workflow again with the prior run ID, pipeline ID, and `design` approval.
+the workflow again with the prior run ID and `design` approval. The pipeline ID
+is recovered from the prior artifact.
 The workflow restores the SQLite ledger and binary worktree patch from the
 prior artifact.
 

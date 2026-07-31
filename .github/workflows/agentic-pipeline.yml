@@ -16,10 +16,6 @@ on:
         description: Prior workflow run ID to resume
         required: false
         type: string
-      pipeline_id:
-        description: Pipeline ID from the prior run
-        required: false
-        type: string
       reconcile_inflight:
         description: Retry an interrupted model call after inspecting its worktree
         required: true
@@ -93,7 +89,6 @@ jobs:
         env:
           REQUEST: ${{ inputs.request }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
-          PIPELINE_ID: ${{ inputs.pipeline_id }}
           WORKFLOW_REF: ${{ github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
@@ -108,10 +103,6 @@ jobs:
           fi
           if [[ -z "$RESUME_RUN_ID" && -z "$REQUEST" ]]; then
             echo "request is required for a new run." >&2
-            exit 1
-          fi
-          if [[ -n "$RESUME_RUN_ID" && -z "$PIPELINE_ID" ]]; then
-            echo "pipeline_id is required when resuming." >&2
             exit 1
           fi
 
@@ -169,6 +160,7 @@ jobs:
         run: |
           mkdir -p "$RUN_ROOT"
           cp .agentic-resume/state.sqlite "$PIPELINE_STATE"
+          cp .agentic-resume/pipeline-id "$RUN_ROOT/pipeline-id"
           if [[ ! -s .agentic-resume/control-sha ]]; then
             echo "This artifact predates control-plane provenance. Start a new run." >&2
             exit 1
@@ -187,7 +179,6 @@ jobs:
         env:
           REQUEST: ${{ inputs.request }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
-          PIPELINE_ID: ${{ inputs.pipeline_id }}
           RECONCILE_INFLIGHT: ${{ inputs.reconcile_inflight }}
           APPROVAL_GATE: ${{ inputs.approval_gate }}
           MAX_TOTAL_TOKENS: ${{ inputs.max_total_tokens }}
@@ -205,6 +196,7 @@ jobs:
           )
           cd "$CONTROL_ROOT"
           if [[ -n "$RESUME_RUN_ID" ]]; then
+            PIPELINE_ID="$(cat "$RUN_ROOT/pipeline-id")"
             if [[ "$RECONCILE_INFLIGHT" == "true" ]]; then
               TARGET_HEAD="$(git -C "$TARGET_ROOT" rev-parse HEAD)"
               "${pipeline[@]}" reconcile "$PIPELINE_ID" \

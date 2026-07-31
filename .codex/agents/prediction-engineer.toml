@@ -1,5 +1,6 @@
 name = "prediction_engineer"
 description = "High-assurance Crystal Ball forecasting, calibration, scoring, replay, and self-tuning specialist."
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 

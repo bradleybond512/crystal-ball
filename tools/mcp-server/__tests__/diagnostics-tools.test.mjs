@@ -44,13 +44,62 @@ test('diagnose_runtime combines health, feed, self-test, and renderer evidence',
     },
   }));
 
-  const result = await tools.diagnose_runtime({ deep: true });
+  const result = await tools.diagnose_runtime({ deep: true, detail: 'full' });
 
   assert.equal(result.available, true);
   assert.equal(result.status, 'yellow');
   assert.equal(result.sidecar.port, 46123);
   assert.equal(result.selfTest.summary.passed, 10);
   assert.ok(result.findings.some((finding) => finding.id === 'feed.ucdp'));
+});
+
+test('diagnose_runtime defaults to compact output', async () => {
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/health': { ok: true, port: 46123, keys_missing: ['DO_NOT_EXPOSE'] },
+    '/api/feeds/health': { feeds: [] },
+    '/api/analyst-state': {
+      available: true,
+      stale: false,
+      algorithmDiagnostics: {
+        health: {
+          status: 'unsafe',
+          algorithms: [
+            {
+              algorithmId: 'warning-verification',
+              criticality: 'safety',
+              status: 'unsafe',
+              reason: 'below floor',
+            },
+          ],
+        },
+        ledger: { total: 2000, graded: 300, pending: 1700 },
+        runtime: Array.from({ length: 100 }, (_, index) => ({ id: index })),
+      },
+    },
+  }));
+
+  const result = await tools.diagnose_runtime({});
+
+  assert.equal('algorithms' in result, false);
+  assert.equal(result.algorithmSummary.status, 'unsafe');
+  assert.equal(result.algorithmSummary.ledger.total, 2000);
+  assert.deepEqual(result.quarantinedAlgorithms, ['warning-verification']);
+  assert.doesNotMatch(JSON.stringify(result), /DO_NOT_EXPOSE/);
+});
+
+test('diagnose_runtime supports explicit section projection', async () => {
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/health': { ok: true, port: 46123 },
+    '/api/feeds/health': { feeds: [] },
+    '/api/analyst-state': { available: false },
+  }));
+
+  const result = await tools.diagnose_runtime({ sections: ['findings'] });
+
+  assert.deepEqual(
+    Object.keys(result).sort(),
+    ['available', 'findings', 'status', 'summary', 'timestamp'],
+  );
 });
 
 test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated analyst data', async () => {

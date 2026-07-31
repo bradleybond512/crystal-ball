@@ -140,4 +140,58 @@ test('analyst tools', async (t) => {
     assert.equal(res.totalEntities, 8);
     assert.match(res.summary, /IRN\(3\)/);
   });
+
+  await t.test('unsafe analyst-loop conclusions are quarantined', async () => {
+    const tools = makeAnalystTools(fakeClient({
+      available: true,
+      analyst: {
+        hypotheses: [{
+          id: 'h1',
+          kind: 'cascade',
+          risk: 'critical',
+          confidence: 0.9,
+          statement: 'Derived conclusion',
+        }],
+      },
+      algorithmDiagnostics: {
+        health: {
+          algorithms: [{
+            algorithmId: 'analyst-loop',
+            criticality: 'high',
+            status: 'unsafe',
+            reason: 'holdout failure',
+          }],
+        },
+      },
+    }));
+
+    const result = await tools.get_analyst_hypotheses();
+
+    assert.equal(result.available, false);
+    assert.equal(result.quarantined, true);
+    assert.deepEqual(result.hypotheses, []);
+    assert.match(result.summary, /quarantined/i);
+  });
+
+  await t.test('unrelated unsafe algorithms are disclosed without suppressing analyst output', async () => {
+    const tools = makeAnalystTools(fakeClient({
+      available: true,
+      analyst: { hypotheses: [] },
+      algorithmDiagnostics: {
+        health: {
+          algorithms: [{
+            algorithmId: 'warning-verification',
+            criticality: 'safety',
+            status: 'unsafe',
+            reason: 'below floor',
+          }],
+        },
+      },
+    }));
+
+    const result = await tools.get_analyst_hypotheses();
+
+    assert.equal(result.available, true);
+    assert.deepEqual(result.safety.quarantinedAlgorithms, ['warning-verification']);
+  });
 });

@@ -23,6 +23,12 @@ function miniSparkline(data: number[] | undefined, change: number | null, w = 50
 export class MarketPanel extends Panel {
   constructor() {
  super({ id: 'markets', title: t('panels.markets') });
+ // The panel content is vertically scrollable at smaller heights. Axe requires
+ // scrollable regions to be keyboard-focusable so keyboard-only users can
+ // reach and operate the scroll area.
+ this.content.tabIndex = 0;
+ this.content.setAttribute('role', 'region');
+ this.content.setAttribute('aria-label', t('panels.markets'));
   }
 
   public renderMarkets(data: MarketData[], rateLimited?: boolean): void {

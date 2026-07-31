@@ -1,0 +1,8 @@
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 6
+
+# Subagents inherit the parent session's approval and sandbox posture unless
+# their individual definitions are stricter. Start substantial work in an
+# isolated codex/* branch and require approval before push, merge, install,
+# deployment, secret changes, or destructive operations.

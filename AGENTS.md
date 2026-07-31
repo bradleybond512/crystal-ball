@@ -61,3 +61,63 @@ git push macos codex/your-feature-name
 - Prefer fail-closed behavior. If signing, verification, packaging, or install checks fail, stop the sync instead of falling back to a weaker path.
 - Keep `~/Applications/Crystal Ball.app` as the canonical install target.
 - This is a user-owned repo on GitHub, so non-provider patterns and validity checks are unavailable. The compensating control is mandatory repo secret scan coverage in local hooks and CI; keep `npm run secrets:scan:staged` and `npm run secrets:scan` enabled and passing.
+
+## Agentic Engineering Workflow
+
+Use `.agents/skills/crystal-ball-feature-workflow/SKILL.md` for every nontrivial feature, multi-file bug fix, provider integration, prediction-system change, Tauri/native change, or security-sensitive task.
+
+### Work classification
+
+- **Fast:** isolated documentation, copy, style, or obvious one-file fixes.
+- **Standard:** normal features, multi-file fixes, provider work, UI behavior, performance work, and test additions.
+- **High assurance:** prediction/calibration logic, security boundaries, secrets, Tauri IPC, filesystem or network permissions, migrations, destructive operations, release/install logic, and architecture changes.
+
+High-assurance work must stop for human approval after discovery and design, before production implementation.
+
+### Required sequence
+
+For Standard and High Assurance work:
+
+1. Create a structured feature brief with goals, acceptance criteria, constraints, non-goals, unknowns, and risk.
+2. Delegate read-only repository exploration to `repository_analyst`.
+3. Delegate design to `architect` before editing production code.
+4. Decompose the approved design into bounded tasks with owners, dependencies, file scope, and validation commands.
+5. Delegate implementation to the narrowest suitable specialist.
+6. Require behavior-focused tests for every behavior change.
+7. Run `bash scripts/agentic-validate.sh` plus the most relevant targeted test scripts.
+8. Delegate the completed diff to `independent_reviewer`; the reviewer must not be the implementer.
+9. Repair confirmed findings and rerun affected checks. Allow at most two automatic review/repair cycles.
+10. Prepare a draft PR summary. Do not push, merge, publish, deploy, install, or alter production data without explicit approval.
+
+### Crystal Ball architecture boundaries
+
+- Preserve existing module and provider conventions before introducing new abstractions.
+- Validate and normalize external data at provider boundaries.
+- Use bounded timeouts, retries, caches, and rate-limit handling for network providers.
+- Keep provider-specific schemas out of presentation components.
+- Treat forecast, calibration, correlation, scoring, self-tuning, and promotion logic as high assurance.
+- Prediction changes must include measurable evidence, benchmark or replay impact where applicable, and rollback behavior.
+- Tauri commands and sidecar endpoints must validate input, constrain privileged access, avoid leaking secrets/internal errors, and fail closed.
+- Avoid expensive work in render loops and repeated computation over large intelligence datasets.
+- Never add dependencies without explaining necessity, maintenance, licensing, bundle/build impact, and security impact.
+
+### Testing and validation
+
+- Never delete tests merely because they fail.
+- Never weaken assertions, linting, type checking, secret scanning, CSP checks, or security tests to obtain a pass.
+- Prefer focused behavioral tests over broad snapshots.
+- Run targeted tests first, then the repository agentic validation gate.
+- If any command cannot run, state why; never claim it passed.
+
+### Completion report
+
+Every completed coding task must report:
+
+- summary and user-visible behavior;
+- files and architecture changed;
+- validation commands and actual results;
+- independent review outcome;
+- unresolved risks;
+- manual verification steps;
+- rollback considerations;
+- proposed commit and draft PR description.

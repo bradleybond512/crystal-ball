@@ -1,3 +1,14 @@
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname } from 'node:path';
+
 export const MONITOR_LABEL = 'com.bradleybond.crystalball.mcp-monitor';
 
 function escapeXml(value) {
@@ -41,4 +52,66 @@ export function renderMonitorLaunchAgent({
 </dict>
 </plist>
 `;
+}
+
+export function installMonitorLaunchAgent({
+  domain,
+  execFileSyncFn = execFileSync,
+  plist,
+  plistPath,
+  renameSyncFn = renameSync,
+  service,
+}) {
+  const stagedPath = `${plistPath}.${process.pid}.${Date.now()}.staged`;
+  const previousPlist = existsSync(plistPath) ? readFileSync(plistPath, 'utf8') : null;
+  let unloaded = false;
+
+  mkdirSync(dirname(plistPath), { recursive: true });
+  try {
+    writeFileSync(stagedPath, plist, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
+    execFileSyncFn('plutil', ['-lint', stagedPath], { stdio: 'ignore' });
+    try {
+      execFileSyncFn('launchctl', ['bootout', service], { stdio: 'ignore' });
+      unloaded = true;
+    } catch {
+      // The job may not be loaded yet.
+    }
+    try {
+      renameSyncFn(stagedPath, plistPath);
+      execFileSyncFn('launchctl', ['bootstrap', domain, plistPath]);
+    } catch (error) {
+      let priorRestored = false;
+      if (previousPlist === null) {
+        rmSync(plistPath, { force: true });
+      } else {
+        if (existsSync(stagedPath)) {
+          priorRestored = true;
+        } else {
+          try {
+            const rollbackPath = `${stagedPath}.rollback`;
+            writeFileSync(rollbackPath, previousPlist, {
+              encoding: 'utf8',
+              flag: 'wx',
+              mode: 0o644,
+            });
+            renameSyncFn(rollbackPath, plistPath);
+            priorRestored = true;
+          } catch (rollbackError) {
+            error.rollbackError = rollbackError;
+          }
+        }
+        if (unloaded && priorRestored) {
+          try {
+            execFileSyncFn('launchctl', ['bootstrap', domain, plistPath]);
+          } catch (rollbackError) {
+            error.rollbackError = rollbackError;
+          }
+        }
+      }
+      throw error;
+    }
+  } finally {
+    rmSync(stagedPath, { force: true });
+    rmSync(`${stagedPath}.rollback`, { force: true });
+  }
 }

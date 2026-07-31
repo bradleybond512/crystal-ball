@@ -49,9 +49,9 @@ export function buildAgentIntelligenceView(
     ))
     .map((algorithm) => algorithm.algorithmId)
     .sort((a, b) => a.localeCompare(b));
-  const safetyEvidenceMissing = algorithms.some((algorithm) => (
-    algorithm.criticality === 'safety' && algorithm.status === 'unknown'
-  ));
+  const algorithmFailurePresent = algorithms.some((algorithm) => algorithm.status === 'failing');
+  const healthyEvidenceComplete = algorithms.length > 0
+    && algorithms.every((algorithm) => algorithm.status === 'healthy');
 
   let state: AgentIntelligenceState = 'protected';
   let label = 'Agent safeguards ready';
@@ -60,10 +60,16 @@ export function buildAgentIntelligenceView(
     state = 'protection-active';
     label = 'Derived-output protection active';
     summary = `${quarantinedAlgorithmIds.length} derived algorithm${quarantinedAlgorithmIds.length === 1 ? ' is' : 's are'} blocked from agent conclusions pending better evidence.`;
-  } else if (safetyEvidenceMissing) {
+  } else if (algorithmFailurePresent) {
     state = 'evidence-building';
-    label = 'Safety evidence still building';
-    summary = 'At least one safety-critical algorithm lacks enough graded evidence for a healthy verdict.';
+    label = 'Algorithm review needed';
+    summary = 'At least one algorithm is failing its current release floor and needs review.';
+  } else if (!healthyEvidenceComplete) {
+    state = 'evidence-building';
+    label = 'Algorithm evidence still building';
+    summary = algorithms.length === 0
+      ? 'No algorithm health evidence is available yet.'
+      : 'At least one algorithm is degraded or lacks enough graded evidence for a healthy verdict.';
   }
 
   return {

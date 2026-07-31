@@ -3,7 +3,6 @@ const SAFE_AGENT_QUERY_ROUTES = new Set([
   '/api/acled-events',
   '/api/adsb-military',
   '/api/ais-snapshot',
-  '/api/analyst-state',
   '/api/aviation-hazards',
   '/api/btc-etf-flows',
   '/api/chokepoint-transits',

@@ -12,8 +12,36 @@ test('agent query policy allows catalogued intelligence routes', () => {
 test('agent query policy denies unlisted, administrative, and malformed routes', () => {
   assert.equal(isAgentQueryRouteAllowed('/api/secrets'), false);
   assert.equal(isAgentQueryRouteAllowed('/api/analyst-commands'), false);
+  assert.equal(isAgentQueryRouteAllowed('/api/analyst-state'), false);
   assert.equal(isAgentQueryRouteAllowed('/api/acled-events/../secrets'), false);
   assert.equal(isAgentQueryRouteAllowed('//evil.example/x'), false);
+});
+
+test('query_raw cannot bypass derived-output quarantine through analyst state', async () => {
+  let called = false;
+  const tools = makeFoundationTools({
+    get: async () => {
+      called = true;
+      return {
+        analyst: { hypotheses: [{ statement: 'unsafe derived conclusion' }] },
+        algorithmDiagnostics: {
+          health: {
+            algorithms: [{
+              algorithmId: 'analyst-loop',
+              criticality: 'safety',
+              status: 'failing',
+            }],
+          },
+        },
+      };
+    },
+  });
+
+  const result = await tools.query_raw({ endpoint: '/api/analyst-state' });
+
+  assert.equal(called, false);
+  assert.equal(result.healthy, false);
+  assert.equal(result.data.error, 'route_not_approved');
 });
 
 test('query_raw fails closed without calling the sidecar for a denied route', async () => {

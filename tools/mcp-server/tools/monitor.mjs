@@ -1,4 +1,16 @@
 import { z } from 'zod';
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname } from 'node:path';
 import { quarantinedAlgorithmIds } from '../safety-policy.mjs';
 
 const STATE_PATH = 'monitor/state.json';
@@ -16,49 +28,60 @@ export const schemas = {
   },
 };
 
-export function makeMonitorTools({ storage, granular, diagnostics, now = Date.now }) {
+export function makeMonitorTools({
+  storage,
+  granular,
+  diagnostics,
+  lockOptions,
+  now = Date.now,
+}) {
   async function run_monitor_cycle() {
-    const [feedHealth, algorithmResult] = await Promise.all([
-      granular.check_feed_health(),
-      diagnostics.get_algorithm_diagnostics(),
-    ]);
-    const previous = storage.readJSON(STATE_PATH);
-    const snapshot = captureSnapshot(feedHealth, algorithmResult, now());
-    const findings = detectFindings(previous?.snapshot, snapshot);
-    const activeIds = findings.map((finding) => finding.id);
-    const previousIds = Array.isArray(previous?.activeIds) ? previous.activeIds : [];
-    const newlyTriggered = activeIds.filter((id) => !previousIds.includes(id));
-    const recovered = previousIds.filter((id) => !activeIds.includes(id));
-    const state = {
-      available: true,
-      lastRunAt: snapshot.at,
-      status: findings.some((finding) => finding.severity === 'red')
-        ? 'red'
-        : findings.length > 0
-          ? 'yellow'
-          : 'green',
-      summary: findings.length === 0
-        ? 'No active drift or quarantine findings.'
-        : `${findings.length} active monitor finding(s); ${newlyTriggered.length} new; ${recovered.length} recovered.`,
-      findings,
-      newlyTriggered,
-      recovered,
-      activeIds,
-      snapshot,
-    };
-    storage.writeJSON(STATE_PATH, state);
-    const history = storage.readJSON(HISTORY_PATH);
-    const rows = Array.isArray(history) ? history : [];
-    rows.push({
-      at: snapshot.at,
-      status: state.status,
-      activeIds,
-      newlyTriggered,
-      recovered,
-      snapshot,
-    });
-    storage.writeJSON(HISTORY_PATH, rows.slice(-MAX_HISTORY));
-    return publicState(state);
+    const releaseLock = acquireMonitorCycleLock(storage, lockOptions);
+    try {
+      const [feedHealth, algorithmResult] = await Promise.all([
+        granular.check_feed_health(),
+        diagnostics.get_algorithm_diagnostics(),
+      ]);
+      const previous = storage.readJSON(STATE_PATH);
+      const snapshot = captureSnapshot(feedHealth, algorithmResult, now());
+      const findings = detectFindings(previous?.snapshot, snapshot);
+      const activeIds = findings.map((finding) => finding.id);
+      const previousIds = Array.isArray(previous?.activeIds) ? previous.activeIds : [];
+      const newlyTriggered = activeIds.filter((id) => !previousIds.includes(id));
+      const recovered = previousIds.filter((id) => !activeIds.includes(id));
+      const state = {
+        available: true,
+        lastRunAt: snapshot.at,
+        status: findings.some((finding) => finding.severity === 'red')
+          ? 'red'
+          : findings.length > 0
+            ? 'yellow'
+            : 'green',
+        summary: findings.length === 0
+          ? 'No active drift or quarantine findings.'
+          : `${findings.length} active monitor finding(s); ${newlyTriggered.length} new; ${recovered.length} recovered.`,
+        findings,
+        newlyTriggered,
+        recovered,
+        activeIds,
+        snapshot,
+      };
+      writeMonitorJSONAtomic(storage, STATE_PATH, state);
+      const history = storage.readJSON(HISTORY_PATH);
+      const rows = Array.isArray(history) ? history : [];
+      rows.push({
+        at: snapshot.at,
+        status: state.status,
+        activeIds,
+        newlyTriggered,
+        recovered,
+        snapshot,
+      });
+      writeMonitorJSONAtomic(storage, HISTORY_PATH, rows.slice(-MAX_HISTORY));
+      return publicState(state);
+    } finally {
+      releaseLock();
+    }
   }
 
   async function get_monitor_status() {
@@ -96,9 +119,116 @@ export function startMonitorScheduler(runCycle, {
 export function monitorIntervalMs(env = process.env) {
   const raw = env.CRYSTALBALL_MCP_MONITOR_INTERVAL_MINUTES;
   if (raw === '0' || raw === 'off') return 0;
-  const minutes = raw === undefined ? 15 : Number(raw);
+  const minutes = raw === undefined ? 0 : Number(raw);
   if (!Number.isFinite(minutes) || minutes < 1) return 0;
   return Math.min(minutes, 24 * 60) * 60_000;
+}
+
+export function writeMonitorJSONAtomic(storage, relPath, data, {
+  renameSyncFn = renameSync,
+} = {}) {
+  const destination = storage.resolve(relPath);
+  const temporary = `${destination}.${process.pid}.${Date.now()}.tmp`;
+  mkdirSync(dirname(destination), { recursive: true });
+  try {
+    writeFileSync(temporary, JSON.stringify(data, null, 2), {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    renameSyncFn(temporary, destination);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+}
+
+function acquireMonitorCycleLock(storage, {
+  closeSyncFn = closeSync,
+  lockNow = Date.now,
+  openSyncFn = openSync,
+  readFileSyncFn = readFileSync,
+  statSyncFn = statSync,
+  unlinkSyncFn = unlinkSync,
+  writeFileSyncFn = writeFileSync,
+} = {}) {
+  const lockPath = storage.resolve('monitor/cycle.lock');
+  mkdirSync(dirname(lockPath), { recursive: true });
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let descriptor;
+    try {
+      descriptor = openSyncFn(lockPath, 'wx', 0o600);
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      if (attempt === 0 && removeDeadOwnerLock(lockPath, {
+        lockNow,
+        readFileSyncFn,
+        statSyncFn,
+        unlinkSyncFn,
+      })) continue;
+      throw new Error('A monitor cycle is already running for this storage directory.');
+    }
+    try {
+      writeFileSyncFn(descriptor, JSON.stringify({ pid: process.pid, startedAt: lockNow() }));
+      closeSyncFn(descriptor);
+    } catch (error) {
+      try {
+        closeSyncFn(descriptor);
+      } catch {
+        // Preserve the initialization error while still clearing its lock below.
+      }
+      try {
+        unlinkSyncFn(lockPath);
+      } catch {
+        // The failed owner must not leave a lock behind; a missing file is already clean.
+      }
+      throw error;
+    }
+    return () => {
+      try {
+        unlinkSyncFn(lockPath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    };
+  }
+  throw new Error('A monitor cycle is already running for this storage directory.');
+}
+
+function removeDeadOwnerLock(lockPath, {
+  lockNow,
+  readFileSyncFn,
+  statSyncFn,
+  unlinkSyncFn,
+}) {
+  let owner;
+  try {
+    owner = JSON.parse(readFileSyncFn(lockPath, 'utf8'));
+  } catch {
+    try {
+      if (lockNow() - statSyncFn(lockPath).mtimeMs < 30_000) return false;
+    } catch {
+      return false;
+    }
+    return removeLock(lockPath, unlinkSyncFn);
+  }
+  if (!Number.isInteger(owner?.pid) || owner.pid <= 0) return false;
+  try {
+    process.kill(owner.pid, 0);
+    return false;
+  } catch (error) {
+    if (error?.code !== 'ESRCH') return false;
+  }
+  return removeLock(lockPath, unlinkSyncFn);
+}
+
+function removeLock(lockPath, unlinkSyncFn) {
+  try {
+    unlinkSyncFn(lockPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function captureSnapshot(feedHealth, algorithmResult, at) {

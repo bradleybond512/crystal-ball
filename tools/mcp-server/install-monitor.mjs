@@ -4,14 +4,17 @@ import {
   mkdirSync,
   realpathSync,
   rmSync,
-  writeFileSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { MONITOR_LABEL, renderMonitorLaunchAgent } from './launch-agent.mjs';
+import {
+  installMonitorLaunchAgent,
+  MONITOR_LABEL,
+  renderMonitorLaunchAgent,
+} from './launch-agent.mjs';
 
 if (process.platform !== 'darwin') {
   throw new Error('The Crystal Ball background monitor installer currently supports macOS.');
@@ -30,13 +33,12 @@ const logPath = join(userHome, 'Library', 'Logs', 'crystalball-mcp-monitor.log')
 const domain = `gui/${process.getuid()}`;
 const service = `${domain}/${MONITOR_LABEL}`;
 
-try {
-  execFileSync('launchctl', ['bootout', service], { stdio: 'ignore' });
-} catch {
-  // The job may not be loaded yet.
-}
-
 if (remove) {
+  try {
+    execFileSync('launchctl', ['bootout', service], { stdio: 'ignore' });
+  } catch {
+    // The job may not be loaded yet.
+  }
   if (existsSync(plistPath)) rmSync(plistPath);
   console.log(`Removed ${MONITOR_LABEL}.`);
   process.exit(0);
@@ -52,6 +54,5 @@ const plist = renderMonitorLaunchAgent({
 
 mkdirSync(launchAgentsDir, { recursive: true });
 mkdirSync(dirname(logPath), { recursive: true });
-writeFileSync(plistPath, plist, { mode: 0o644 });
-execFileSync('launchctl', ['bootstrap', domain, plistPath]);
+installMonitorLaunchAgent({ domain, plist, plistPath, service });
 console.log(`Installed ${MONITOR_LABEL}; interval ${intervalSeconds} seconds.`);

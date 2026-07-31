@@ -60,6 +60,46 @@ test('missing safety evidence is presented as uncertainty instead of healthy', (
   assert.match(view.summary, /evidence/i);
 });
 
+test('a failing non-safety algorithm is not presented as protected', () => {
+  const view = buildAgentIntelligenceView([
+    algorithm({
+      algorithmId: 'forecast-calibration',
+      criticality: 'medium',
+      status: 'failing',
+      reason: 'below release floor',
+    }),
+  ]);
+
+  assert.notEqual(view.state, 'protected');
+  assert.doesNotMatch(view.label, /safeguards ready/i);
+  assert.match(view.summary, /failing/i);
+});
+
+test('a degraded algorithm is not presented as protected', () => {
+  const view = buildAgentIntelligenceView([
+    algorithm({ status: 'degraded', reason: 'latency above release floor' }),
+  ]);
+
+  assert.notEqual(view.state, 'protected');
+  assert.doesNotMatch(view.label, /safeguards ready/i);
+});
+
+test('unknown non-safety evidence is not presented as protected', () => {
+  const view = buildAgentIntelligenceView([
+    algorithm({ status: 'unknown', reason: 'insufficient evidence' }),
+  ]);
+
+  assert.notEqual(view.state, 'protected');
+  assert.doesNotMatch(view.label, /safeguards ready/i);
+});
+
+test('an empty algorithm registry is not presented as protected', () => {
+  const view = buildAgentIntelligenceView([]);
+
+  assert.notEqual(view.state, 'protected');
+  assert.doesNotMatch(view.label, /safeguards ready/i);
+});
+
 test('agent explanation describes the local data path and operational limits', () => {
   const view = buildAgentIntelligenceView([
     algorithm({ algorithmId: 'forecast', status: 'healthy' }),

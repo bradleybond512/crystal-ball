@@ -1,13 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import {
+  closeSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { createStorage } from '../storage.mjs';
 import {
   makeMonitorTools,
+  monitorIntervalMs,
   startMonitorScheduler,
+  writeMonitorJSONAtomic,
 } from '../tools/monitor.mjs';
 
 function fixture({ brier = 0.2, coverage = 0.8, total = 100, unsafe = true, feed = 'ok' } = {}) {
@@ -116,6 +126,113 @@ test('monitor scheduler is opt-in and unrefs its timer', () => {
   assert.ok(timer);
   assert.equal(scheduledMs, 60_000);
   assert.equal(unrefCalled, true);
+});
+
+test('the LaunchAgent is the sole default scheduler owner', () => {
+  assert.equal(monitorIntervalMs({}), 0);
+  assert.equal(monitorIntervalMs({ CRYSTALBALL_MCP_MONITOR_INTERVAL_MINUTES: '15' }), 900_000);
+});
+
+test('monitor permits only one cycle owner for a shared storage directory', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false }) };
+  let releaseFirst;
+  let firstEntered;
+  const entered = new Promise((resolve) => { firstEntered = resolve; });
+  const release = new Promise((resolve) => { releaseFirst = resolve; });
+  const first = makeMonitorTools({
+    storage: createStorage(dir),
+    granular: {
+      check_feed_health: async () => {
+        firstEntered();
+        await release;
+        return current.value.feedHealth;
+      },
+    },
+    diagnostics: {
+      get_algorithm_diagnostics: async () => current.value.algorithmDiagnostics,
+    },
+    now: () => 1_785_000_000_000,
+  });
+  const second = createTools(dir, current);
+
+  const activeCycle = first.run_monitor_cycle();
+  await entered;
+  await assert.rejects(
+    second.run_monitor_cycle(),
+    /already running/i,
+  );
+  releaseFirst();
+  await activeCycle;
+
+  const history = createStorage(dir).readJSON('monitor/history.json');
+  assert.equal(history.length, 1);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor cleans up a failed lock initialization and closes its descriptor', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false }) };
+  let descriptorClosed = false;
+  const tools = makeMonitorTools({
+    storage: createStorage(dir),
+    granular: {
+      check_feed_health: async () => current.value.feedHealth,
+    },
+    diagnostics: {
+      get_algorithm_diagnostics: async () => current.value.algorithmDiagnostics,
+    },
+    lockOptions: {
+      closeSyncFn(descriptor) {
+        descriptorClosed = true;
+        closeSync(descriptor);
+      },
+      writeFileSyncFn() {
+        throw new Error('simulated owner metadata failure');
+      },
+    },
+  });
+
+  await assert.rejects(tools.run_monitor_cycle(), /simulated owner metadata failure/);
+  assert.equal(descriptorClosed, true);
+  assert.equal(createStorage(dir).readJSON('monitor/cycle.lock'), null);
+  await createTools(dir, current).run_monitor_cycle();
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor recovers an old malformed lock but preserves a recent initializing lock', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  const current = { value: fixture({ unsafe: false }) };
+  mkdirSync(storage.resolve('monitor'), { recursive: true });
+  writeFileSync(storage.resolve('monitor/cycle.lock'), '');
+
+  await assert.rejects(createTools(dir, current).run_monitor_cycle(), /already running/i);
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(storage.resolve('monitor/cycle.lock'), old, old);
+  await createTools(dir, current).run_monitor_cycle();
+
+  assert.equal(storage.readJSON('monitor/cycle.lock'), null);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor JSON replacement preserves the previous file when commit fails', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  mkdirSync(storage.resolve('monitor'), { recursive: true });
+  writeFileSync(storage.resolve('monitor/state.json'), JSON.stringify({ generation: 'old' }), {
+    flag: 'w',
+  });
+
+  assert.throws(() => writeMonitorJSONAtomic(
+    storage,
+    'monitor/state.json',
+    { generation: 'new' },
+    { renameSyncFn: () => { throw new Error('simulated commit failure'); } },
+  ), /simulated commit failure/);
+  assert.deepEqual(storage.readJSON('monitor/state.json'), { generation: 'old' });
+  assert.deepEqual(readdirSync(storage.resolve('monitor')), ['state.json']);
+  rmSync(dir, { recursive: true });
 });
 
 test('monitor fails closed when live collection and diagnostics are unavailable', async () => {

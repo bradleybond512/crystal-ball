@@ -887,7 +887,7 @@ These tasks retain their detailed designs in
 
 | ID | Status | Work | Dependencies |
 |---|---|---|---|
-| ACC-501 | TODO | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
+| ACC-501 | IN REVIEW | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
 | ACC-502 | WAITING | Multiple-comparison correction and inhibitory edges | ACC-501 |
 | ACC-503 | WAITING | Multi-hop mediation/confounder filtering | ACC-501 |
 | ACC-504 | WAITING | Dispersion correction for bursty streams | ACC-501 |
@@ -902,6 +902,25 @@ Phase exit:
 - correlation changes improve or preserve frozen precision/recall;
 - false learned edges fall on confounded and bursty streams;
 - tuning cannot bypass the benchmark or safety fixtures.
+
+### ACC-501 — Frozen correlation benchmark and `bench:correlation` CI gate
+
+Status: `IN REVIEW`
+
+Owner: Claude
+Branch: `claude/acc-501-correlation-benchmark`
+
+Dependencies: ACC-201 (DONE)
+
+Outcome:
+
+- a frozen golden-stream corpus with planted ground truth (true causal
+  pairs, independents, a confounded bursty stream) replayed through the
+  real `CorrelateEngine` and the real lead-lag miner;
+- a committed baseline capturing today's pair precision/recall, learned
+  false-positive count, and edge-confidence separation;
+- `npm run bench:correlation` wired into CI so ACC-502 through ACC-506
+  have to prove their improvements instead of asserting them.
 
 ## Phase 6 — Evaluate better statistical models
 

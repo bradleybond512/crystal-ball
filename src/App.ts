@@ -666,6 +666,17 @@ export class App {
  { name: 'predictions', fn: () => this.dataLoader.loadPredictions(), intervalMs: REFRESH_INTERVALS.predictions },
  { name: 'pizzint', fn: () => this.dataLoader.loadPizzInt(), intervalMs: 10 * 60 * 1000 },
  { name: 'natural', fn: () => this.dataLoader.loadNatural(), intervalMs: 60 * 60 * 1000, condition: () => this.state.mapLayers.natural },
+ // The earthquakes fusion domain's 2nd and 3rd votes. Both providers declare
+ // freshnessTtlMs: 10 min, and provider-health marks a provider `stale` once
+ // now - lastSuccessAt exceeds it — so an unscheduled loader leaves the domain
+ // running on USGS alone ~10 min after launch, with no upstream fault.
+ // 8 min, not 10: scheduleRefresh applies +/-10% jitter, so an interval set
+ // EQUAL to the TTL lands over it on roughly half its ticks and the provider
+ // flaps healthy/stale. 8 min tops out at 8.8 min. Both routes are already
+ // sidecar-cached on a stable key (emsc 2 min, geofon 5 min), so the cadence
+ // costs at most one upstream request per tick per source.
+ { name: 'emscSeismic', fn: () => this.dataLoader.loadEmscSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ { name: 'geofonSeismic', fn: () => this.dataLoader.loadGeofonSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  // Safety-critical: drives the status chip + storm posture, so it must keep
  // refreshing even when the weather map layer is toggled off.
  { name: 'weather', fn: () => this.dataLoader.loadWeatherAlerts(), intervalMs: 10 * 60 * 1000 },
@@ -691,6 +702,17 @@ export class App {
  { name: 'humanitarianCrises', fn: () => this.dataLoader.loadHumanitarianCrises(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeAtlas', fn: () => this.dataLoader.loadRipeAtlas(), intervalMs: 10 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeNcc', fn: () => this.dataLoader.loadRipeNcc(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ // Both votes of the internet_outages fusion domain, AND the warm cache the
+ // survival comms axis reads synchronously. 5 min is set by the TIGHTER of the
+ // two contracts: ioda's registry freshnessTtlMs is 15 min, but
+ // internet-outages.getCachedIodaOutages() returns [] once its own cache is
+ // >= 10 min old, and fetchIodaOutages() only refetches on a tick that finds
+ // the cache already >= 10 min old. At a 15 min cadence that getter is empty
+ // for a third of every cycle and the comms axis silently reports no threats.
+ // 5 min divides 10 evenly, so the refetch lands as the window closes.
+ // Affordable because fetchIodaOutageEvents snaps its window to a 15 min
+ // boundary — the sidecar cache absorbs the extra ticks (<=96 upstream/day).
+ { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'federalRegister', fn: () => this.dataLoader.loadFederalRegister(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'airQuality', fn: () => this.dataLoader.loadAirQuality(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'commsHealth', fn: () => this.dataLoader.loadCommsHealth(), intervalMs: 2 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

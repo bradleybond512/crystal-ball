@@ -52,6 +52,30 @@ const IODA_WINDOW_SEC = 24 * 60 * 60;
  */
 const IODA_FUSION_LIMIT = 5000;
 
+/**
+ * The window's `until` is snapped DOWN to a 15-minute boundary so consecutive
+ * refresh ticks share one sidecar cache entry.
+ *
+ * The route's cache key is `ioda-outages:${from}:${until}:${limit}` and the
+ * bounds are unix SECONDS, so an unsnapped `now` makes every call's key unique
+ * — the cache is provably never hit and each tick is a fresh limit=5000
+ * multi-thousand-row request against a keyless fair-use API. Snapping caps the
+ * upstream rate at one request per quantum (<=96/day) no matter how often the
+ * loader ticks, which is what makes the 5-minute cadence in App.ts affordable.
+ *
+ * 15 min matches the route's own IODA_TTL: a larger quantum would outlive the
+ * cache entry it is trying to reuse, and a smaller one is mostly ignored
+ * because the entry survives 15 min regardless.
+ *
+ * Snapping shifts the window end back by up to 15 min, which is immaterial
+ * here on both counts: the window is 24 h long, and the adapter counts onsets
+ * over a 6 h trailing window (OUTAGE_COUNT_WINDOW_MS) against a tolerance of 3
+ * events. It also does NOT reach the survival comms axis — that axis reads
+ * `internet-outages.fetchIodaOutages()`, a separate limit=50 call on an
+ * unsnapped `now`.
+ */
+const IODA_WINDOW_QUANTUM_MS = 15 * 60 * 1000;
+
 function failed(): OutageFetchResult {
   return { ok: false, events: [] };
 }
@@ -130,7 +154,10 @@ function qualifyingAlert(alert: IodaFusionAlert): QualifyingAlert | null {
 /** IODA outage onsets — the primary vote. */
 export async function fetchIodaOutageEvents(now: number = Date.now()): Promise<OutageFetchResult> {
   try {
-    const untilSec = Math.floor(now / 1000);
+    // Snapped, NOT `now` — see IODA_WINDOW_QUANTUM_MS. Both bounds derive from
+    // the snapped instant so the whole window, and therefore the cache key,
+    // is stable across every tick inside one quantum.
+    const untilSec = Math.floor(now / IODA_WINDOW_QUANTUM_MS) * (IODA_WINDOW_QUANTUM_MS / 1000);
     const fromSec = untilSec - IODA_WINDOW_SEC;
     const url = `${getApiBaseUrl()}/api/internet-outages?from=${fromSec}&until=${untilSec}&limit=${IODA_FUSION_LIMIT}`;
     const res = await fetch(url, {

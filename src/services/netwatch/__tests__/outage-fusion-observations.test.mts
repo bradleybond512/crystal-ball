@@ -298,6 +298,38 @@ test('fetchIodaOutageEvents asks for limit=5000 over a 24h window', async (t) =>
   assert.equal(until - from, 24 * 60 * 60);
 });
 
+test('fetchIodaOutageEvents snaps its window so ticks inside one quantum share a cache key', async (t) => {
+  // The route's cache key is `ioda-outages:${from}:${until}:${limit}`. An
+  // unsnapped `now` makes every call's key unique, so the sidecar's 15 min
+  // cache is provably never hit and each scheduled tick is a fresh limit=5000
+  // request against a keyless fair-use API. This is what bounds the upstream
+  // rate to one request per quantum regardless of the loader's cadence.
+  //
+  // NOTE: the limit=5000 test above uses a NOW that already sits exactly on a
+  // 15 min boundary, so it cannot observe snapping at all. These instants are
+  // deliberately off-boundary.
+  const QUANTUM_MS = 15 * 60 * 1000;
+  const BOUNDARY = Date.parse('2026-07-30T12:15:00.000Z');
+  const call = stubFetch(t, { alerts: [] });
+
+  await fetchIodaOutageEvents(BOUNDARY + 20_000);
+  const first = call.url;
+  await fetchIodaOutageEvents(BOUNDARY + 14 * 60_000);
+  const second = call.url;
+  assert.equal(second, first, 'two ticks 14 min apart inside one quantum reuse the same key');
+
+  const url = new URL(first, 'http://sidecar.test');
+  const until = Number(url.searchParams.get('until'));
+  const from = Number(url.searchParams.get('from'));
+  assert.equal(until, BOUNDARY / 1000, 'until is snapped DOWN to the boundary, not the caller instant');
+  assert.equal(until - from, 24 * 60 * 60, 'snapping moves the window without resizing it');
+
+  // Crossing the boundary must produce a NEW key, or the window would freeze
+  // and the domain would count outages over a receding 24 h forever.
+  await fetchIodaOutageEvents(BOUNDARY + QUANTUM_MS);
+  assert.notEqual(call.url, first, 'the next quantum fetches fresh');
+});
+
 test('fetchIodaOutageEvents outlives the 15s deadline on the route it races', async (t) => {
   // Each renderer timeout must STRICTLY EXCEED the sidecar deadline behind the
   // route it calls. Aborting first kills the request before the sidecar can

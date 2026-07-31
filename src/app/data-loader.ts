@@ -4202,9 +4202,11 @@ export class DataLoaderManager implements AppModule {
     // Cloudflare Radar. A SECOND IODA request, not a reuse of the one above —
     // that one asks for limit=50 to warm the comms-axis cache, and the fusion
     // path needs limit=5000 or the newest rows are silently truncated away.
-    // The cache key carries from/until/limit, so the two never clobber each other —
-    // and this query's second-resolution bounds make its key unique per call, so it
-    // never reuses a cached entry (one upstream request per launch).
+    // The cache key carries from/until/limit, so the two never clobber each other.
+    // This query's bounds are snapped to a 15-minute boundary (see
+    // IODA_WINDOW_QUANTUM_MS) precisely so its key is NOT unique per call:
+    // every tick inside one quantum reuses the cached entry, which is what
+    // keeps the 5-minute scheduled cadence off the upstream API.
     //
     // ONE `now` for both fetches and for the adapter: it is both the trailing
     // window's end and the observations' occurredAt, and two clocks would put

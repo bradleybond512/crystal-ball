@@ -91,3 +91,88 @@ describe('World Bank data-loader wiring', () => {
     assert.match(appSrc, /loadWorldBankBaselines/);
   });
 });
+
+describe('fused-domain loaders stay inside their freshness contracts', () => {
+  // A fused domain whose loader only runs at boot goes stale inside its own
+  // declared TTL and silently decays toward single-source — no upstream fault,
+  // no error, just a corroboration count quietly dropping to 1. Asserting the
+  // NAME appears in App.ts is not enough to catch that: these three loaders
+  // were always named there (via loadAllData), just never scheduled. So this
+  // reads the interval back and checks it against the contract it must honor.
+  const registrySrc = readFileSync(resolve(root, 'src/services/providers/provider-registry.ts'), 'utf8');
+  const outagesSrc = readFileSync(resolve(root, 'src/services/internet-outages.ts'), 'utf8');
+
+  /** Multiplies out the `N * 60 * 1000` literals these files use. */
+  const product = (expr) => expr.trim().split('*').reduce((acc, part) => {
+    const n = Number(part.trim().replace(/_/g, ''));
+    assert.ok(Number.isFinite(n), `unparseable interval factor '${part}' in '${expr}'`);
+    return acc * n;
+  }, 1);
+
+  const schedulerIntervalMs = (taskName) => {
+    // No `s` flag: the match must stay on one line, so it cannot run past this
+    // entry and pick up a later entry's intervalMs.
+    const m = appSrc.match(new RegExp(`name: '${taskName}'.*?intervalMs:\\s*([^,]+),`));
+    assert.ok(m, `${taskName} is not registered with the refresh scheduler in App.ts`);
+    return product(m[1]);
+  };
+
+  const registryTtlMs = (providerId) => {
+    const m = registrySrc.match(new RegExp(`id: '${providerId}'.*?freshnessTtlMs:\\s*([^,]+),`));
+    assert.ok(m, `${providerId} has no freshnessTtlMs in the provider registry`);
+    return product(m[1].replace(/\bMIN\b/g, '60000'));
+  };
+
+  // scheduleRefresh jitters +/-10% (refresh-scheduler.ts JITTER_FRACTION), so an
+  // interval set EQUAL to the TTL lands over it on roughly half its ticks and
+  // the provider flaps healthy/stale. The budget must cover the worst case.
+  const JITTER = 1.1;
+
+  for (const [task, provider] of [['emscSeismic', 'emsc-seismic'], ['geofonSeismic', 'geofon-seismic']]) {
+    it(`${task} refreshes inside the ${provider} freshness TTL`, () => {
+      const interval = schedulerIntervalMs(task);
+      const ttl = registryTtlMs(provider);
+      assert.ok(
+        interval * JITTER <= ttl,
+        `${task} runs every ${interval / 60000} min but ${provider} declares a ${ttl / 60000} min TTL; ` +
+        `with jitter that reaches ${(interval * JITTER) / 60000} min and the domain drops to USGS alone`,
+      );
+    });
+  }
+
+  it('internetOutages refreshes inside the TIGHTER of its two contracts', () => {
+    const interval = schedulerIntervalMs('internetOutages');
+    // The registry TTL is the LOOSER contract. The binding one is the comms
+    // axis's synchronous getter, which returns [] past its own window — see
+    // survival/comms-contributor.ts.
+    const commsWindow = product(outagesSrc.match(/const CACHE_TTL_MS = ([^;]+);/)[1]);
+    const binding = Math.min(registryTtlMs('ioda'), commsWindow);
+    assert.equal(binding, commsWindow, 'the comms getter is expected to be the tighter contract');
+    assert.ok(
+      interval * JITTER <= binding,
+      `internetOutages runs every ${interval / 60000} min against a ${binding / 60000} min window`,
+    );
+    // fetchIodaOutages only refetches on a tick that already finds the cache
+    // expired, so the true refresh gap is ceil(window / interval) * interval.
+    // Unless the interval divides the window, that gap EXCEEDS the window and
+    // the comms axis is blind for the remainder of every cycle.
+    assert.equal(
+      commsWindow % interval, 0,
+      `interval must divide the ${commsWindow / 60000} min comms window evenly, else the cache ` +
+      `goes cold for ${(Math.ceil(commsWindow / interval) * interval - commsWindow) / 60000} min per cycle`,
+    );
+  });
+
+  it('the IODA fusion window is snapped so scheduled ticks share a cache key', () => {
+    // The sidecar cache key carries from/until at second resolution, so an
+    // unsnapped `now` makes every tick a fresh limit=5000 request against a
+    // keyless fair-use API — the cache is provably never hit.
+    const fetchSrc = readFileSync(resolve(root, 'src/services/netwatch/cloudflare-radar-fetch.ts'), 'utf8');
+    assert.match(fetchSrc, /IODA_WINDOW_QUANTUM_MS/, 'the fusion window must be quantized');
+    assert.match(
+      fetchSrc,
+      /Math\.floor\(now \/ IODA_WINDOW_QUANTUM_MS\)/,
+      'until must derive from the snapped instant, not the caller instant',
+    );
+  });
+});

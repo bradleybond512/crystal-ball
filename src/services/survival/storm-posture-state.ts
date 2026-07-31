@@ -170,6 +170,9 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       // Comms axis reads the warm IODA outage cache synchronously (kept warm by
       // the scheduled loadInternetOutages loader, which routes through the sidecar
       // /api/internet-outages endpoint); an empty/stale cache → no comms threats.
+      // That loader's 5 min cadence is load-bearing here, not arbitrary: the
+      // getter's own window is 10 min, so slowing it blinds this axis. See
+      // comms-contributor.ts.
       makeCommsContributor(getCachedIodaOutages(now)),
       // Mobility axis reads the warm chokepoint feed synchronously (kept warm by
       // the shortage supply loader, which fetches chokepoint status every ~5 min);

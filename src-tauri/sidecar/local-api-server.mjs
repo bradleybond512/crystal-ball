@@ -3758,41 +3758,47 @@ export function donkiCmeFeedHealthySidecar(raw) {
  * retry re-asks only the product that actually failed — the healthy ones keep
  * their full TTL, so this is not "stop caching".
  */
-async function loadSpacewxSubfeed(id, url) {
+async function loadSpacewxSubfeed(id, url, normalize, usable) {
   const cacheKey = `spacewx-subfeed-${id}`;
   const cached = getCached(cacheKey); // per-entry TTL, written below
   if (cached) return cached;
-  const raw = await fetchJsonSidecar(url);
-  const entry = { raw, ok: raw !== null };
+  // `ok` is derived from the NORMALIZED product, never from "the fetch came
+  // back non-null". SWPC answers 200 with a parseable-but-empty body often
+  // enough that keying off the raw response counts a broken payload as a
+  // healthy subfeed — it would earn the full TTL and report ok while the
+  // consumer sees no points and fails the voter for the whole window.
+  const value = normalize(await fetchJsonSidecar(url));
+  const entry = { value, ok: usable(value) };
   setCached(cacheKey, entry, spacewxSubfeedTtlMs(entry.ok));
   return entry;
 }
 
+// SWPC publishes x-ray and the planetary index continuously, so an empty
+// series means the payload was unusable, not that the sun went quiet.
+const spacewxHasRows = (rows) => rows.length > 0;
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   const [xray, kp, cme] = await Promise.all([
-    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
-    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-    loadSpacewxSubfeed('cme', buildDonkiCmeUrlSidecar(now)),
+    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json', normalizeXrayPoints, spacewxHasRows),
+    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', normalizeKpPoints, spacewxHasRows),
+    loadSpacewxSubfeed('cme', buildDonkiCmeUrlSidecar(now), (raw) => raw, donkiCmeFeedHealthySidecar),
   ]);
-  const xrayFlux = normalizeXrayPoints(xray.raw);
-  const kpIndex = normalizeKpPoints(kp.raw);
-  const cmeFeedOk = cme.ok && donkiCmeFeedHealthySidecar(cme.raw);
   const status = buildSpaceweatherStatusSidecar({
-    xrayFlux,
-    kpIndex,
-    cmes: Array.isArray(cme.raw) ? cme.raw : [],
-    cmeFeedOk,
+    xrayFlux: xray.value,
+    kpIndex: kp.value,
+    cmes: Array.isArray(cme.value) ? cme.value : [],
+    cmeFeedOk: cme.ok,
     now,
   });
   // Per-subfeed provenance so a consumer can tell "this product FAILED" from
   // "this product is QUIET" — an empty kpPoints means very different things in
   // those two cases, and they were previously indistinguishable.
-  status.subfeeds = { xray: xray.ok, kp: kp.ok, cme: cmeFeedOk };
+  status.subfeeds = { xray: xray.ok, kp: kp.ok, cme: cme.ok };
   // `degraded` stays reserved for a TOTAL outage. fetchSwpcKp reads it as
   // "don't trust this payload at all", so raising it for a CME-only failure
   // would take the Kp voter down over an unrelated product's outage.
-  if (!xray.ok && !kp.ok && !cmeFeedOk) status.degraded = true;
+  if (!xray.ok && !kp.ok && !cme.ok) status.degraded = true;
   return status;
 }
 
@@ -11400,7 +11406,10 @@ async function dispatch(requestUrl, req, routes, context) {
       const currentTime = data.current?.time;
       const observedAt = currentTime !== undefined ? Date.parse(`${currentTime}Z`) - (data.utc_offset_seconds ?? 0) * 1000 : NaN;
       const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
-      const hasCurrentReading = Number.isFinite(observedAt);
+      // Both halves, matching fetchOpenMeteoTemp: a timestamp with no reading
+      // is exactly as unusable to the surface_temp domain as no `current` block
+      // at all, so it must not earn the full TTL just because the time parsed.
+      const hasCurrentReading = Number.isFinite(observedAt) && Number.isFinite(data.current?.temperature_2m);
       if (hasCurrentReading) result.currentObservedAtMs = observedAt;
       setCached(cacheKey, result, openMeteoForecastTtlMs(hasCurrentReading));
       return json(result);

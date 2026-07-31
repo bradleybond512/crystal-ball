@@ -43,6 +43,7 @@ const VERDICT_LABEL: Record<RedundancyVerdict, string> = {
   redundant_disagreement: 'Sources disagree',
   single_source: 'Single source',
   primary_down_with_backup: 'Primary down',
+  not_configured: 'Not configured',
   all_down: 'All down',
   unknown: 'Unknown',
 };
@@ -53,6 +54,9 @@ const VERDICT_TONE: Record<RedundancyVerdict, RedundancyTone> = {
   redundant_disagreement: 'warn',
   single_source: 'warn',
   primary_down_with_backup: 'bad',
+  // A gap the user can close, not something that broke — 'warn' keeps live
+  // outages ahead of it in the TONE_RANK sort.
+  not_configured: 'warn',
   all_down: 'bad',
   unknown: 'neutral',
 };

@@ -1,6 +1,6 @@
 # Agent Access v2 Roadmap
 
-Status: design complete; implementation awaiting high-assurance approval  
+Status: implementation complete; release verification in progress
 Owner: Codex  
 Branch: `codex/agent-access-v2`
 
@@ -109,7 +109,7 @@ source availability.
 - [x] Repository analyst execution-path review
 - [x] Independent architecture design
 - [x] Trust-boundary and rollback design
-- [ ] Human approval for high-assurance implementation
+- [x] Human approval for high-assurance implementation
 
 Evidence: repository analysis and architecture review recorded in the task.
 
@@ -131,11 +131,11 @@ Files:
 
 Tasks:
 
-- [ ] Add permission and compatibility contracts with stable machine codes.
-- [ ] Add installed `crystalball doctor` and temporary-prefix installation test.
-- [ ] Add synthetic safeguard demo with fail-closed negative cases.
-- [ ] Generate complete permission/tool/compatibility reference documentation.
-- [ ] Correct stale counts and Sentinel-versus-safety-monitor language.
+- [x] Add permission and compatibility contracts with stable machine codes.
+- [x] Add installed `crystalball doctor` and temporary-prefix installation test.
+- [x] Add synthetic safeguard demo with fail-closed negative cases.
+- [x] Generate complete permission/tool/compatibility reference documentation.
+- [x] Correct stale counts and Sentinel-versus-safety-monitor language.
 
 Validation:
 
@@ -159,11 +159,11 @@ Files:
 
 Tasks:
 
-- [ ] Persist schedule metadata and calculate `nextRunAt`.
-- [ ] Add versioned opened/resolved/escalated/stopped/resumed events.
-- [ ] Add deterministic deduplication, cooldowns, bounded history, and restart
+- [x] Persist schedule metadata and calculate `nextRunAt`.
+- [x] Add versioned opened/resolved/escalated/stopped/resumed events.
+- [x] Add deterministic deduplication, cooldowns, bounded history, and restart
       persistence.
-- [ ] Preserve one default scheduler and installer rollback.
+- [x] Preserve one default scheduler and installer rollback.
 
 Validation:
 
@@ -184,10 +184,10 @@ Files:
 
 Tasks:
 
-- [ ] Add localhost-authenticated, read-only, redacted, bounded projection route.
-- [ ] Reject invalid, future, oversized, unauthenticated, and raw-field requests.
-- [ ] Add desktop live/stale/degraded/stopped/incompatible/unavailable states.
-- [ ] Add bounded reconnect/reconciliation behavior without notification storms.
+- [x] Add localhost-authenticated, read-only, redacted, bounded projection route.
+- [x] Reject invalid, future, oversized, unauthenticated, and raw-field requests.
+- [x] Add desktop live/stale/degraded/stopped/incompatible/unavailable states.
+- [x] Add bounded reconnect/reconciliation behavior without notification storms.
 
 Validation:
 
@@ -208,10 +208,10 @@ Files:
 
 Tasks:
 
-- [ ] Build deterministic, redacted evidence packets from projected data.
-- [ ] Preserve direct-versus-derived provenance and missing-capability warnings.
-- [ ] Write exports atomically with restrictive permissions and no partial files.
-- [ ] Verify digest stability, malformed input rejection, and output size bounds.
+- [x] Build deterministic, redacted evidence packets from projected data.
+- [x] Preserve direct-versus-derived provenance and missing-capability warnings.
+- [x] Write exports atomically with restrictive permissions and no partial files.
+- [x] Verify digest stability, malformed input rejection, and output size bounds.
 
 Validation:
 
@@ -229,11 +229,11 @@ Repositories:
 
 Tasks:
 
-- [ ] Publish task-oriented Agent Access guide and generated references.
-- [ ] Correct public repository/download links and release facts.
-- [ ] Expand the Site with doctor, permission, evidence, compatibility, monitor,
+- [x] Publish task-oriented Agent Access guide and generated references.
+- [x] Correct public repository/download links and release facts.
+- [x] Expand the Site with doctor, permission, evidence, compatibility, monitor,
       and safeguard-demo documentation.
-- [ ] Keep public claims static and explicit; do not imply access to local state.
+- [x] Keep public claims static and explicit; do not imply access to local state.
 
 Validation:
 

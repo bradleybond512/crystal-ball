@@ -54,6 +54,226 @@ import { EventStore } from './event-store.mjs';
 // log write must not break live ingestion.
 const EVENT_SEVERITY_SCORES = { CRITICAL: 0.95, HIGH: 0.85, MEDIUM: 0.7, LOW: 0.55, INFO: 0.4 };
 
+const AGENT_MONITOR_PROJECTION_SCHEMA_VERSION = 1;
+const AGENT_MONITOR_STATE_SCHEMA_VERSION = 1;
+const AGENT_MONITOR_MAX_BYTES = 256 * 1024;
+const AGENT_MONITOR_MAX_FINDINGS = 16;
+const AGENT_MONITOR_MAX_EVENTS = 16;
+const AGENT_MONITOR_MAX_IDS = 24;
+const AGENT_MONITOR_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/;
+const AGENT_MONITOR_EVENT_TYPES = new Set(['opened', 'resolved', 'materially_escalated', 'stopped', 'resumed']);
+const AGENT_MONITOR_SEVERITIES = new Set(['green', 'yellow', 'red', 'unknown']);
+let _agentMonitorCache = null;
+
+function boundedMonitorId(value) {
+  return typeof value === 'string' && AGENT_MONITOR_ID_PATTERN.test(value) ? value : null;
+}
+
+function monitorTimestamp(value, { future = false, now = Date.now() } = {}) {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const upper = future ? now + 24 * 60 * 60 * 1000 : now + 5 * 60 * 1000;
+  return value <= upper ? Math.trunc(value) : null;
+}
+
+function emptyAgentMonitorProjection(state, generatedAt, stateSchemaVersion = null) {
+  return {
+    schemaVersion: AGENT_MONITOR_PROJECTION_SCHEMA_VERSION,
+    generatedAt,
+    state,
+    lastRunAt: null,
+    nextRunAt: null,
+    compatibility: {
+      status: state === 'incompatible' ? 'incompatible' : 'unknown',
+      stateSchemaVersion,
+      supportedSchemaVersion: AGENT_MONITOR_STATE_SCHEMA_VERSION,
+    },
+    findings: [],
+    events: [],
+    recovered: [],
+    quarantine: { activeCount: 0, algorithmIds: [] },
+    capabilities: {
+      liveCollection: null,
+      algorithmDiagnostics: null,
+      feeds: { ready: 0, degraded: 0, unavailable: 0, unknown: 0, total: 0 },
+    },
+  };
+}
+
+function normalizeMonitorFindings(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    const id = boundedMonitorId(row?.id);
+    if (!id) return [];
+    const severity = AGENT_MONITOR_SEVERITIES.has(row?.severity) ? row.severity : 'unknown';
+    return [{ id, severity }];
+  });
+}
+
+function normalizeMonitorEvents(rows, now) {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    const id = boundedMonitorId(row?.id);
+    const at = monitorTimestamp(row?.occurredAt ?? row?.at, { now });
+    if (!id || !at || !AGENT_MONITOR_EVENT_TYPES.has(row?.type)) return [];
+    const findingId = boundedMonitorId(row?.subject ?? row?.findingId);
+    const rawSeverity = row?.toSeverity ?? row?.fromSeverity ?? row?.severity;
+    const severity = AGENT_MONITOR_SEVERITIES.has(rawSeverity) ? rawSeverity : undefined;
+    return [{
+      id,
+      type: row.type === 'materially_escalated' ? 'escalated' : row.type,
+      at,
+      ...(findingId ? { findingId } : {}),
+      ...(severity ? { severity } : {}),
+    }];
+  });
+}
+
+function normalizeMonitorIds(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.slice(0, AGENT_MONITOR_MAX_IDS).map(boundedMonitorId).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function monitorCapabilitySummary(snapshot) {
+  const feeds = { ready: 0, degraded: 0, unavailable: 0, unknown: 0, total: 0 };
+  if (snapshot?.feeds && typeof snapshot.feeds === 'object' && !Array.isArray(snapshot.feeds)) {
+    for (const status of Object.values(snapshot.feeds).slice(0, 256)) {
+      feeds.total += 1;
+      if (status === 'ok' || status === 'ready' || status === 'healthy') feeds.ready += 1;
+      else if (status === 'degraded' || status === 'stale' || status === 'partial') feeds.degraded += 1;
+      else if (status === 'unavailable' || status === 'error' || status === 'failing') feeds.unavailable += 1;
+      else feeds.unknown += 1;
+    }
+  }
+  return {
+    liveCollection: typeof snapshot?.sidecarAvailable === 'boolean' ? snapshot.sidecarAvailable : null,
+    algorithmDiagnostics: typeof snapshot?.algorithmDiagnosticsAvailable === 'boolean'
+      ? snapshot.algorithmDiagnosticsAvailable
+      : null,
+    feeds,
+  };
+}
+
+function normalizeAgentMonitorState(raw, eventState, now) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'unknown' };
+  if (Number.isInteger(raw.schemaVersion) && raw.schemaVersion > AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+    return { error: 'incompatible', stateSchemaVersion: raw.schemaVersion };
+  }
+  if (raw.schemaVersion !== undefined && raw.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+    return { error: 'unknown' };
+  }
+  if (!eventState || typeof eventState !== 'object' || Array.isArray(eventState)) return { error: 'unknown' };
+  if (Number.isInteger(eventState.schemaVersion) && eventState.schemaVersion > AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+    return { error: 'incompatible', stateSchemaVersion: eventState.schemaVersion };
+  }
+  if (eventState.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION
+      || !eventState.schedule || typeof eventState.schedule !== 'object'
+      || Array.isArray(eventState.schedule)) return { error: 'unknown' };
+  if (raw.available === false) return { unavailable: true, stateSchemaVersion: eventState.schemaVersion };
+  const lastRunAt = monitorTimestamp(raw.lastRunAt, { now });
+  const rawNextRunAt = eventState.schedule.nextRunAt;
+  const nextRunAt = rawNextRunAt == null ? null : monitorTimestamp(rawNextRunAt, { future: true, now });
+  if (!lastRunAt || (rawNextRunAt != null && !nextRunAt)) return { error: 'unknown' };
+  const intervalCandidate = eventState.schedule.expectedIntervalMs;
+  const intervalMs = Number.isFinite(intervalCandidate)
+    ? Math.min(24 * 60 * 60 * 1000, Math.max(60_000, Math.trunc(intervalCandidate)))
+    : 15 * 60_000;
+  if (!Array.isArray(raw.findings) || raw.findings.length > AGENT_MONITOR_MAX_FINDINGS
+      || !Array.isArray(eventState.events) || eventState.events.length > 1000) return { error: 'unknown' };
+  const findings = normalizeMonitorFindings(raw.findings);
+  const events = normalizeMonitorEvents(eventState.events, now);
+  if (findings.length !== raw.findings.length || events.length !== eventState.events.length) {
+    return { error: 'unknown' };
+  }
+  return Object.freeze({
+    stateSchemaVersion: eventState.schemaVersion,
+    available: true,
+    lastRunAt,
+    nextRunAt,
+    intervalMs,
+    explicitlyStopped: eventState.schedule.status === 'stopped' || raw.monitorState === 'stopped',
+    monitorStatus: AGENT_MONITOR_SEVERITIES.has(raw.status) ? raw.status : 'unknown',
+    findings,
+    events: events.slice(-AGENT_MONITOR_MAX_EVENTS),
+    recovered: normalizeMonitorIds(raw.recovered),
+    quarantineAlgorithmIds: normalizeMonitorIds(raw.snapshot?.quarantinedAlgorithms),
+    capabilities: monitorCapabilitySummary(raw.snapshot),
+  });
+}
+
+function classifyAgentMonitorState(normalized, now) {
+  if (normalized.explicitlyStopped) return 'stopped';
+  const dueAt = normalized.nextRunAt ?? (normalized.lastRunAt + normalized.intervalMs);
+  const overdueMs = Math.max(0, now - dueAt);
+  if (overdueMs > normalized.intervalMs * 3) return 'stopped';
+  if (overdueMs > normalized.intervalMs) return 'stale';
+  if (normalized.monitorStatus === 'red' || normalized.monitorStatus === 'yellow'
+      || normalized.findings.length > 0) return 'degraded';
+  if (normalized.monitorStatus !== 'green') return 'unknown';
+  return 'live';
+}
+
+function readAgentMonitorProjection(statePath, eventsPath, now = Date.now()) {
+  let stat;
+  try {
+    stat = statSync(statePath);
+  } catch (error) {
+    return emptyAgentMonitorProjection(error?.code === 'ENOENT' ? 'unavailable' : 'unknown', now);
+  }
+  if (!stat.isFile() || stat.size > AGENT_MONITOR_MAX_BYTES) {
+    return emptyAgentMonitorProjection('unknown', now);
+  }
+  let eventsStat;
+  try {
+    eventsStat = statSync(eventsPath);
+  } catch {
+    return emptyAgentMonitorProjection('unknown', now);
+  }
+  if (!eventsStat.isFile() || eventsStat.size > AGENT_MONITOR_MAX_BYTES) {
+    return emptyAgentMonitorProjection('unknown', now);
+  }
+  const cacheKey = `${statePath}:${stat.size}:${stat.mtimeMs}:${eventsPath}:${eventsStat.size}:${eventsStat.mtimeMs}`;
+  let normalized;
+  if (_agentMonitorCache?.key === cacheKey) {
+    normalized = _agentMonitorCache.normalized;
+  } else {
+    try {
+      normalized = normalizeAgentMonitorState(
+        JSON.parse(readFileSync(statePath, 'utf8')),
+        JSON.parse(readFileSync(eventsPath, 'utf8')),
+        now,
+      );
+    } catch {
+      normalized = { error: 'unknown' };
+    }
+    _agentMonitorCache = { key: cacheKey, normalized };
+  }
+  if (normalized.error) {
+    return emptyAgentMonitorProjection(normalized.error, now, normalized.stateSchemaVersion ?? null);
+  }
+  if (normalized.unavailable) {
+    return emptyAgentMonitorProjection('unavailable', now, normalized.stateSchemaVersion);
+  }
+  const algorithmIds = normalized.quarantineAlgorithmIds;
+  return {
+    schemaVersion: AGENT_MONITOR_PROJECTION_SCHEMA_VERSION,
+    generatedAt: now,
+    state: classifyAgentMonitorState(normalized, now),
+    lastRunAt: normalized.lastRunAt,
+    nextRunAt: normalized.nextRunAt,
+    compatibility: {
+      status: 'compatible',
+      stateSchemaVersion: normalized.stateSchemaVersion,
+      supportedSchemaVersion: AGENT_MONITOR_STATE_SCHEMA_VERSION,
+    },
+    findings: normalized.findings,
+    events: normalized.events,
+    recovered: normalized.recovered,
+    quarantine: { activeCount: algorithmIds.length, algorithmIds },
+    capabilities: normalized.capabilities,
+  };
+}
+
 function eventSeverityScore(label) {
   const k = String(label ?? '').toUpperCase();
   return k in EVENT_SEVERITY_SCORES ? EVENT_SEVERITY_SCORES[k] : null;
@@ -2099,6 +2319,10 @@ function resolveConfig(options = {}) {
   const mode = String(options.mode ?? process.env.LOCAL_API_MODE ?? 'desktop-sidecar');
   const cloudFallback = String(options.cloudFallback ?? process.env.LOCAL_API_CLOUD_FALLBACK ?? '') === 'true';
   const logger = options.logger ?? (process.env.CB_SIDECAR_FILE_LOG !== '0' ? createSidecarLogger() : console);
+  const agentMonitorStatePath = String(options.agentMonitorStatePath
+    ?? path.resolve(os.homedir(), '.crystal-ball', 'monitor', 'state.json'));
+  const agentMonitorEventsPath = String(options.agentMonitorEventsPath
+    ?? path.resolve(path.dirname(agentMonitorStatePath), 'events.json'));
 
   return {
  port,
@@ -2109,6 +2333,8 @@ function resolveConfig(options = {}) {
  mode,
  cloudFallback,
  logger,
+ agentMonitorStatePath,
+ agentMonitorEventsPath,
   };
 }
 
@@ -19006,6 +19232,20 @@ export async function createLocalApiServer(options = {}) {
  res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;
+ }
+
+ // ── /api/local-agent-monitor — redacted read-only monitor projection ─
+ // The path is resolved at server construction, never from request input.
+ // Only the explicit projection builder sees the raw file; the renderer gets
+ // bounded IDs, severities, timestamps, counts, and compatibility metadata.
+ if (requestUrl.pathname === '/api/local-agent-monitor') {
+   if (req.method !== 'GET') {
+     return sendJson({ error: 'Method not allowed' }, 405);
+   }
+   return sendJson(readAgentMonitorProjection(
+     context.agentMonitorStatePath,
+     context.agentMonitorEventsPath,
+   ));
  }
 
  // ── /api/feeds/health — per-feed resilience status ────────────────────

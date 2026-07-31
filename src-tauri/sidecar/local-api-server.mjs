@@ -60,7 +60,8 @@ const AGENT_MONITOR_MAX_BYTES = 256 * 1024;
 const AGENT_MONITOR_MAX_FINDINGS = 16;
 const AGENT_MONITOR_MAX_EVENTS = 16;
 const AGENT_MONITOR_MAX_IDS = 24;
-const AGENT_MONITOR_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/;
+const AGENT_MONITOR_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/;
+const AGENT_MONITOR_GENERATION_PATTERN = /^monitor-generation-v1-\d+$/;
 const AGENT_MONITOR_EVENT_TYPES = new Set(['opened', 'resolved', 'materially_escalated', 'stopped', 'resumed']);
 const AGENT_MONITOR_SEVERITIES = new Set(['green', 'yellow', 'red', 'unknown']);
 let _agentMonitorCache = null;
@@ -159,7 +160,7 @@ function normalizeAgentMonitorState(raw, eventState, now) {
   if (Number.isInteger(raw.schemaVersion) && raw.schemaVersion > AGENT_MONITOR_STATE_SCHEMA_VERSION) {
     return { error: 'incompatible', stateSchemaVersion: raw.schemaVersion };
   }
-  if (raw.schemaVersion !== undefined && raw.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+  if (raw.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION) {
     return { error: 'unknown' };
   }
   if (!eventState || typeof eventState !== 'object' || Array.isArray(eventState)) return { error: 'unknown' };
@@ -167,6 +168,8 @@ function normalizeAgentMonitorState(raw, eventState, now) {
     return { error: 'incompatible', stateSchemaVersion: eventState.schemaVersion };
   }
   if (eventState.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION
+      || !AGENT_MONITOR_GENERATION_PATTERN.test(raw.generationId)
+      || raw.generationId !== eventState.generationId
       || !eventState.schedule || typeof eventState.schedule !== 'object'
       || Array.isArray(eventState.schedule)) return { error: 'unknown' };
   if (raw.available === false) return { unavailable: true, stateSchemaVersion: eventState.schemaVersion };
@@ -178,7 +181,7 @@ function normalizeAgentMonitorState(raw, eventState, now) {
   const intervalMs = Number.isFinite(intervalCandidate)
     ? Math.min(24 * 60 * 60 * 1000, Math.max(60_000, Math.trunc(intervalCandidate)))
     : 15 * 60_000;
-  if (!Array.isArray(raw.findings) || raw.findings.length > AGENT_MONITOR_MAX_FINDINGS
+  if (!Array.isArray(raw.findings) || raw.findings.length > 256
       || !Array.isArray(eventState.events) || eventState.events.length > 1000) return { error: 'unknown' };
   const findings = normalizeMonitorFindings(raw.findings);
   const events = normalizeMonitorEvents(eventState.events, now);
@@ -193,7 +196,9 @@ function normalizeAgentMonitorState(raw, eventState, now) {
     intervalMs,
     explicitlyStopped: eventState.schedule.status === 'stopped' || raw.monitorState === 'stopped',
     monitorStatus: AGENT_MONITOR_SEVERITIES.has(raw.status) ? raw.status : 'unknown',
-    findings,
+    findings: findings
+      .sort((left, right) => (right.severity === 'red' ? 1 : 0) - (left.severity === 'red' ? 1 : 0))
+      .slice(0, AGENT_MONITOR_MAX_FINDINGS),
     events: events.slice(-AGENT_MONITOR_MAX_EVENTS),
     recovered: normalizeMonitorIds(raw.recovered),
     quarantineAlgorithmIds: normalizeMonitorIds(raw.snapshot?.quarantinedAlgorithms),

@@ -32,13 +32,15 @@ async function withApp(t, contents, eventContents = null) {
 
 function validState(now = Date.now()) {
   return {
+    schemaVersion: 1,
+    generationId: 'monitor-generation-v1-1785000000000',
     available: true,
     lastRunAt: now - 1000,
     nextRunAt: now + 60_000,
     status: 'red',
     summary: 'Authorization: Bearer must-not-leak /Users/private/raw.json',
     findings: [{
-      id: 'algorithm.quarantined.warning-verification',
+      id: 'drift.feed./api/nws-alerts',
       severity: 'red',
       summary: 'secret payload must-not-leak',
       nextAction: '/Users/private/token.txt',
@@ -59,6 +61,7 @@ function validState(now = Date.now()) {
 function validEvents(now = Date.now()) {
   return {
     schemaVersion: 1,
+    generationId: 'monitor-generation-v1-1785000000000',
     schedule: {
       expectedIntervalMs: 15 * 60_000,
       stoppedGraceMs: 0,
@@ -72,7 +75,7 @@ function validEvents(now = Date.now()) {
       schemaVersion: 1,
       id: 'monitor-event-v1-0123456789abcdef01234567',
       type: 'opened',
-      subject: 'algorithm.quarantined.warning-verification',
+      subject: 'drift.feed./api/nws-alerts',
       occurredAt: now - 1000,
       toSeverity: 'red',
       summary: 'Authorization: Bearer must-not-leak /Users/private/raw.json',
@@ -100,7 +103,7 @@ test('agent monitor projection allowlists bounded operational metadata and redac
   assert.equal(body.compatibility.status, 'compatible');
   assert.deepEqual(body.quarantine.algorithmIds, ['warning-verification']);
   assert.equal(body.capabilities.feeds.total, 2);
-  assert.equal(body.findings[0].id, 'algorithm.quarantined.warning-verification');
+  assert.equal(body.findings[0].id, 'drift.feed./api/nws-alerts');
   assert.equal(body.events[0].type, 'opened');
   assert.deepEqual(body.recovered, ['drift.feed.weather']);
   const serialized = JSON.stringify(body);
@@ -116,6 +119,8 @@ test('missing, corrupt, invalid, future, and oversized monitor state never proje
     { name: 'malformed event', contents: JSON.stringify(validState()), events: JSON.stringify({ ...validEvents(), events: [{ id: 'bad' }] }), expected: 'unknown' },
     { name: 'invalid timestamp', contents: JSON.stringify({ ...validState(), lastRunAt: 'today' }), events: JSON.stringify(validEvents()), expected: 'unknown' },
     { name: 'future schema', contents: JSON.stringify(validState()), events: JSON.stringify({ ...validEvents(), schemaVersion: 2 }), expected: 'incompatible' },
+    { name: 'unversioned state', contents: JSON.stringify({ ...validState(), schemaVersion: undefined }), events: JSON.stringify(validEvents()), expected: 'unknown' },
+    { name: 'mismatched generation', contents: JSON.stringify(validState()), events: JSON.stringify({ ...validEvents(), generationId: 'monitor-generation-v1-other' }), expected: 'unknown' },
     { name: 'oversized', contents: JSON.stringify({ ...validState(), padding: 'x'.repeat(300_000) }), expected: 'unknown' },
   ];
 
@@ -133,6 +138,22 @@ test('missing, corrupt, invalid, future, and oversized monitor state never proje
       assert.deepEqual(body.events, []);
     });
   }
+});
+
+test('agent monitor projection bounds widespread findings instead of hiding all degradation', async (t) => {
+  const state = validState();
+  state.findings = Array.from({ length: 20 }, (_, index) => ({
+    id: `drift.feed./api/feed-${index}`,
+    severity: index < 3 ? 'red' : 'yellow',
+  }));
+  const url = await withApp(t, JSON.stringify(state), JSON.stringify(validEvents()));
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+  });
+  const body = await response.json();
+  assert.equal(body.state, 'degraded');
+  assert.equal(body.findings.length, 16);
+  assert.equal(body.findings.filter((finding) => finding.severity === 'red').length, 3);
 });
 
 test('missed monitor windows project stale and then stopped without exposing raw state', async (t) => {

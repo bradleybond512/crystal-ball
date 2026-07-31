@@ -9,7 +9,7 @@ const STATES = new Set<AgentMonitorProjectionState>([
 const COMPATIBILITY = new Set(['compatible', 'incompatible', 'unknown']);
 const SEVERITIES = new Set(['green', 'yellow', 'red', 'unknown']);
 const EVENT_TYPES = new Set(['opened', 'resolved', 'escalated', 'stopped', 'resumed']);
-const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/;
+const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -124,4 +124,31 @@ export async function fetchAgentMonitorProjection(signal?: AbortSignal): Promise
   const projection = parseAgentMonitorProjection(await response.json());
   if (!projection) throw new Error('Agent monitor returned an incompatible projection');
   return projection;
+}
+
+export function markAgentMonitorProjectionUnavailable(
+  previous: AgentMonitorProjection | null,
+  generatedAt = Date.now(),
+): AgentMonitorProjection {
+  return {
+    schemaVersion: 1,
+    generatedAt,
+    state: 'unavailable',
+    lastRunAt: previous?.lastRunAt ?? null,
+    nextRunAt: previous?.nextRunAt ?? null,
+    compatibility: previous?.compatibility ?? {
+      status: 'unknown',
+      stateSchemaVersion: null,
+      supportedSchemaVersion: 1,
+    },
+    findings: [],
+    events: [],
+    recovered: [],
+    quarantine: { activeCount: 0, algorithmIds: [] },
+    capabilities: {
+      liveCollection: null,
+      algorithmDiagnostics: null,
+      feeds: { ready: 0, degraded: 0, unavailable: 0, unknown: 0, total: 0 },
+    },
+  };
 }

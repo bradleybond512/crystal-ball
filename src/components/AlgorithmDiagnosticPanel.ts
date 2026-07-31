@@ -14,7 +14,10 @@ import {
   renderAgentIntelligenceHtml,
   type AgentMonitorProjection,
 } from './agent-intelligence-view';
-import { fetchAgentMonitorProjection } from '@/services/agent-monitor-projection';
+import {
+  fetchAgentMonitorProjection,
+  markAgentMonitorProjectionUnavailable,
+} from '@/services/agent-monitor-projection';
 import { isDesktopRuntime } from '@/services/runtime';
 import {
   getAlgorithmEvaluationLedger,
@@ -163,6 +166,8 @@ export class AlgorithmDiagnosticPanel extends Panel {
     } catch {
       if (!controller.signal.aborted || !this.panelDestroyed) {
         this.monitorPollFailures += 1;
+        this.monitorProjection = markAgentMonitorProjectionUnavailable(this.monitorProjection);
+        this.renderWhenVisible(() => this.render());
       }
     } finally {
       clearTimeout(timeout);

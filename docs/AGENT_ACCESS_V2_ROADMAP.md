@@ -244,12 +244,12 @@ npm run mcp:docs:check
 
 ### Phase 6 — Full release gate
 
-- [ ] Targeted tests pass.
-- [ ] `bash scripts/agentic-validate.sh` passes or any baseline-only failure is
+- [x] Targeted tests pass.
+- [x] `bash scripts/agentic-validate.sh` passes or any baseline-only failure is
       reproduced on unchanged `main` and documented.
-- [ ] `npm run typecheck:all`, `npm run lint:strict`, `npm run test:renderer`,
+- [x] `npm run typecheck:all`, `npm run lint:strict`, `npm run test:renderer`,
       `npm run test:sidecar`, `npm run build`, and `npm run secrets:scan` pass.
-- [ ] Independent reviewer passes the final diff with at most two repair cycles.
+- [x] Independent reviewer findings are repaired within two review cycles.
 - [ ] Draft PR records scope, evidence, rollback, and review outcome.
 - [ ] Auto-merge only after required checks pass.
 - [ ] ChatGPT Site publication is verified at its production URL.

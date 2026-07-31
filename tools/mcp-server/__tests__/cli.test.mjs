@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,4 +60,64 @@ test('CLI returns EX_USAGE for unknown commands', () => {
   const result = run(['unknown-command']);
   assert.equal(result.status, 64);
   assert.match(result.stderr, /Unknown command/);
+});
+
+test('CLI monitor exits degraded for an old green state whose scheduler stopped', () => {
+  const home = mkdtempSync(join(tmpdir(), 'crystalball-cli-monitor-'));
+  const monitorDir = join(home, '.crystal-ball', 'monitor');
+  mkdirSync(monitorDir, { recursive: true });
+  const generationId = 'monitor-generation-v1-1785000000000';
+  writeFileSync(join(monitorDir, 'state.json'), JSON.stringify({
+    schemaVersion: 1,
+    generationId,
+    available: true,
+    status: 'green',
+    lastRunAt: Date.now() - 60 * 60_000,
+    summary: 'Old green state.',
+    findings: [],
+    recovered: [],
+    activeIds: [],
+    snapshot: { feeds: {}, quarantinedAlgorithms: [] },
+  }));
+  writeFileSync(join(monitorDir, 'events.json'), JSON.stringify({
+    schemaVersion: 1,
+    generationId,
+    schedule: {
+      expectedIntervalMs: 15 * 60_000,
+      stoppedGraceMs: 0,
+      lastRunAt: Date.now() - 60 * 60_000,
+      nextRunAt: Date.now() - 45 * 60_000,
+    },
+    activeFindings: {},
+    cooldowns: {},
+    events: [],
+  }));
+  const result = run(['monitor', '--json'], { HOME: home });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(JSON.parse(result.stdout).schedule.status, 'stopped');
+});
+
+test('CLI doctor does not treat an unrelated Codex config as Crystal Ball registration', () => {
+  const home = mkdtempSync(join(tmpdir(), 'crystalball-cli-doctor-'));
+  const codexDir = join(home, '.codex');
+  mkdirSync(codexDir, { recursive: true });
+  writeFileSync(join(codexDir, 'config.toml'), '[mcp_servers.other]\ncommand = "other-mcp"\n');
+  let result = run(['doctor', '--json'], { HOME: home });
+  let report = JSON.parse(result.stdout);
+  assert.equal(report.checks.clients.configured, 0);
+
+  writeFileSync(join(codexDir, 'config.toml'), '[mcp_servers.crystalball]\ncommand = "crystalball-mcp"\n');
+  result = run(['doctor', '--json'], { HOME: home });
+  report = JSON.parse(result.stdout);
+  assert.equal(report.checks.clients.configured, 1);
+
+  writeFileSync(join(codexDir, 'config.toml'), [
+    '[mcp_servers.crystalball]',
+    'enabled = false',
+    '[mcp_servers.other]',
+    'command = "crystalball-mcp"',
+  ].join('\n'));
+  result = run(['doctor', '--json'], { HOME: home });
+  report = JSON.parse(result.stdout);
+  assert.equal(report.checks.clients.configured, 0);
 });

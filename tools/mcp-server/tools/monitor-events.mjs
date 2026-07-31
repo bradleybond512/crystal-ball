@@ -82,6 +82,7 @@ export function reconcileMonitorEvents(rawState, findings, at, options = {}) {
 
   return {
     schemaVersion: MONITOR_EVENT_SCHEMA_VERSION,
+    generationId: monitorGenerationId(at),
     schedule: {
       expectedIntervalMs,
       stoppedGraceMs,
@@ -94,6 +95,46 @@ export function reconcileMonitorEvents(rawState, findings, at, options = {}) {
       .filter(([, occurredAt]) => at - occurredAt < cooldownMs)),
     events: events.slice(-maxEvents),
   };
+}
+
+export function monitorGenerationId(at) {
+  if (!Number.isFinite(at) || at <= 0) throw new Error('Monitor generation timestamp is invalid.');
+  return `monitor-generation-v1-${Math.trunc(at)}`;
+}
+
+export function validCommittedMonitorState(state, eventState) {
+  if (!isRecord(state)
+      || state.schemaVersion !== 1
+      || state.available !== true
+      || !validEventState(eventState)
+      || state.generationId !== eventState.generationId) return false;
+  const lastRunAt = finite(state.lastRunAt);
+  if (lastRunAt === null
+      || state.generationId !== monitorGenerationId(lastRunAt)
+      || finite(eventState.schedule?.lastRunAt) !== lastRunAt
+      || !['green', 'yellow', 'red'].includes(state.status)
+      || !Array.isArray(state.findings)
+      || !Array.isArray(state.activeIds)
+      || !Array.isArray(state.newlyTriggered)
+      || !Array.isArray(state.recovered)
+      || !isRecord(state.snapshot)
+      || finite(state.snapshot.at) !== lastRunAt
+      || !isRecord(state.snapshot.feeds)
+      || !Array.isArray(state.snapshot.quarantinedAlgorithms)) return false;
+  const findings = state.findings;
+  if (findings.length > 1_000 || !findings.every(validMonitorFinding)) return false;
+  const findingIds = findings.map((finding) => finding.id);
+  if (new Set(findingIds).size !== findingIds.length
+      || !sameStringSet(state.activeIds, findingIds)
+      || !validIdList(state.newlyTriggered)
+      || !validIdList(state.recovered)) return false;
+  const expectedStatus = findings.some((finding) => finding.severity === 'red')
+    ? 'red'
+    : findings.length > 0 ? 'yellow' : 'green';
+  if (state.status !== expectedStatus) return false;
+  const persistedFindings = eventState.activeFindings;
+  return sameStringSet(Object.keys(persistedFindings), findingIds)
+    && findings.every((finding) => persistedFindings[finding.id]?.severity === finding.severity);
 }
 
 export function publicMonitorEvents(rawState, at) {
@@ -119,6 +160,7 @@ export function publicMonitorEvents(rawState, at) {
     }
   }
   return {
+    generationId: rawState.generationId,
     schedule: {
       schemaVersion: MONITOR_EVENT_SCHEMA_VERSION,
       status,
@@ -187,6 +229,7 @@ function emptyEventState() {
 
 function validEventState(value) {
   return value?.schemaVersion === MONITOR_EVENT_SCHEMA_VERSION
+    && /^monitor-generation-v1-\d+$/.test(value.generationId)
     && isRecord(value.schedule)
     && isRecord(value.activeFindings)
     && isRecord(value.cooldowns)
@@ -224,6 +267,32 @@ function validStoredEvent(event) {
 
 function optionalSeverity(value) {
   return value === undefined || value === 'yellow' || value === 'red';
+}
+
+function validMonitorFinding(finding) {
+  return isRecord(finding)
+    && typeof finding.id === 'string'
+    && finding.id.length > 0
+    && finding.id.length <= 512
+    && (finding.severity === 'yellow' || finding.severity === 'red')
+    && typeof finding.summary === 'string'
+    && finding.summary.length <= 2_000;
+}
+
+function validIdList(values) {
+  return values.length <= 1_000 && values.every((value) => (
+    typeof value === 'string' && value.length > 0 && value.length <= 512
+  ));
+}
+
+function sameStringSet(left, right) {
+  if (!validIdList(left) || !validIdList(right)) return false;
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  return leftSet.size === left.length
+    && rightSet.size === right.length
+    && leftSet.size === rightSet.size
+    && [...leftSet].every((value) => rightSet.has(value));
 }
 
 function normalizeActiveFindings(value) {

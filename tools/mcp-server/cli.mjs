@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
 
-import { buildAgentDoctorReport, DOCTOR_EXIT, formatDoctorReport } from './doctor.mjs';
+import {
+  buildAgentDoctorReport,
+  DOCTOR_EXIT,
+  formatDoctorReport,
+  readLocalMonitorStatus,
+} from './doctor.mjs';
 import { buildEvidencePacket, writeEvidencePacket } from './evidence-packet.mjs';
 import { runSafeguardDemo } from './safeguard-demo.mjs';
 import { COMPATIBILITY } from './server-meta.mjs';
-import { createStorage } from './storage.mjs';
 import { TOOL_CATALOG } from './tool-registry.mjs';
 
 const HELP = `Crystal Ball agent access
@@ -44,13 +48,13 @@ try {
     };
     output(report, json, `${report.tools.length} tools. Use --json for the complete permission reference.\n`);
   } else if (command === 'monitor') {
-    const state = createStorage().readJSON('monitor/state.json') ?? {
-      available: false,
-      status: 'unknown',
-      summary: 'The safety monitor has not completed a cycle.',
-    };
+    const state = await readLocalMonitorStatus();
     output(state, json, `${state.status ?? 'unknown'}: ${state.summary ?? ''}\n`);
-    process.exitCode = state.available ? 0 : DOCTOR_EXIT.DEGRADED;
+    process.exitCode = state.available
+      && state.status === 'green'
+      && state.schedule?.status === 'running'
+      ? DOCTOR_EXIT.READY
+      : DOCTOR_EXIT.DEGRADED;
   } else if (command === 'safeguard-demo') {
     const report = runSafeguardDemo();
     output(report, json, `${report.passed ? 'PASS' : 'FAIL'}: ${report.summary}\n`);

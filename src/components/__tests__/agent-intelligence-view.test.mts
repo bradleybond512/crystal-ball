@@ -10,7 +10,10 @@ import {
   renderAgentIntelligenceHtml,
 } from '../agent-intelligence-view.ts';
 import type { AlgorithmHealth } from '@/services/algorithms/algorithm-health';
-import { parseAgentMonitorProjection } from '../../services/agent-monitor-projection.ts';
+import {
+  markAgentMonitorProjectionUnavailable,
+  parseAgentMonitorProjection,
+} from '../../services/agent-monitor-projection.ts';
 
 function algorithm(overrides: Partial<AlgorithmHealth>): AlgorithmHealth {
   return {
@@ -198,6 +201,31 @@ test('monitor projection parser rejects malformed and future responses', () => {
   assert.equal(parseAgentMonitorProjection({ schemaVersion: 1, state: 'live' }), null);
 });
 
+test('monitor projection accepts real route-shaped finding IDs and disconnects old live state', () => {
+  const live = {
+    schemaVersion: 1 as const,
+    generatedAt: 2_000,
+    state: 'live' as const,
+    lastRunAt: 1_000,
+    nextRunAt: 3_000,
+    compatibility: { status: 'compatible' as const, stateSchemaVersion: 1, supportedSchemaVersion: 1 },
+    findings: [{ id: 'drift.feed./api/nws-alerts', severity: 'yellow' as const }],
+    events: [],
+    recovered: [],
+    quarantine: { activeCount: 0, algorithmIds: [] },
+    capabilities: {
+      liveCollection: true,
+      algorithmDiagnostics: true,
+      feeds: { ready: 1, degraded: 0, unavailable: 0, unknown: 0, total: 1 },
+    },
+  };
+  assert.ok(parseAgentMonitorProjection(live));
+  const disconnected = markAgentMonitorProjectionUnavailable(live, 4_000);
+  assert.equal(disconnected.state, 'unavailable');
+  assert.equal(disconnected.generatedAt, 4_000);
+  assert.equal(disconnected.lastRunAt, 1_000);
+});
+
 test('algorithm diagnostics panel polls read-only status, offers refresh, and tears down lifecycle work', async () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = await readFile(join(here, '..', 'AlgorithmDiagnosticPanel.ts'), 'utf8');
@@ -206,5 +234,6 @@ test('algorithm diagnostics panel polls read-only status, offers refresh, and te
   assert.match(source, /data-agent-monitor-refresh/);
   assert.match(source, /clearTimeout\(this\.monitorPollTimer\)/);
   assert.match(source, /this\.monitorAbortController\?\.abort\(\)/);
+  assert.match(source, /markAgentMonitorProjectionUnavailable/);
   assert.doesNotMatch(source, /run_monitor_cycle|run-monitor-cycle/);
 });

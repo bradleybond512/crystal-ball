@@ -92,6 +92,12 @@ test('monitor persists quarantine findings and deduplicates repeated alerts', as
   const status = await tools.get_monitor_status();
 
   assert.deepEqual(first.newlyTriggered, ['algorithm.quarantined.warning-verification']);
+  const storage = createStorage(dir);
+  assert.equal(storage.readJSON('monitor/state.json').schemaVersion, 1);
+  assert.equal(
+    storage.readJSON('monitor/state.json').generationId,
+    storage.readJSON('monitor/events.json').generationId,
+  );
   assert.deepEqual(second.newlyTriggered, []);
   assert.equal(status.available, true);
   assert.equal(status.findings[0].severity, 'red');
@@ -143,6 +149,18 @@ test('monitor scheduler is opt-in and unrefs its timer', () => {
 test('the LaunchAgent is the sole default scheduler owner', () => {
   assert.equal(monitorIntervalMs({}), 0);
   assert.equal(monitorIntervalMs({ CRYSTALBALL_MCP_MONITOR_INTERVAL_MINUTES: '15' }), 900_000);
+});
+
+test('monitor persists the cadence supplied to an opt-in in-process scheduler', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false }) };
+  const tools = createTools(dir, current, { expectedIntervalMs: 60_000 });
+  await tools.run_monitor_cycle();
+  assert.equal(
+    createStorage(dir).readJSON('monitor/events.json').schedule.expectedIntervalMs,
+    60_000,
+  );
+  rmSync(dir, { recursive: true });
 });
 
 test('monitor permits only one cycle owner for a shared storage directory', async () => {
@@ -247,6 +265,67 @@ test('monitor JSON replacement preserves the previous file when commit fails', (
   rmSync(dir, { recursive: true });
 });
 
+test('monitor generations fail closed during a partial commit and preserve transitions on recovery', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+  await createTools(dir, current, { clock, expectedIntervalMs: 60_000 }).run_monitor_cycle();
+
+  clock.value += 60_000;
+  current.value = fixture({ unsafe: true });
+  const failing = makeMonitorTools({
+    storage,
+    granular: { check_feed_health: async () => current.value.feedHealth },
+    diagnostics: { get_algorithm_diagnostics: async () => current.value.algorithmDiagnostics },
+    now: () => clock.value,
+    scheduleOptions: { expectedIntervalMs: 60_000 },
+    writeJSONAtomic(targetStorage, path, data) {
+      if (path === 'monitor/state.json') throw new Error('simulated state commit failure');
+      writeMonitorJSONAtomic(targetStorage, path, data);
+    },
+  });
+  await assert.rejects(failing.run_monitor_cycle(), /simulated state commit failure/);
+  assert.notEqual(
+    storage.readJSON('monitor/state.json').generationId,
+    storage.readJSON('monitor/events.json').generationId,
+  );
+  assert.equal((await failing.get_monitor_status()).status, 'unknown');
+
+  clock.value += 60_000;
+  current.value = fixture({ unsafe: false });
+  const recovered = await createTools(dir, current, {
+    clock,
+    expectedIntervalMs: 60_000,
+  }).run_monitor_cycle();
+  assert.deepEqual(
+    recovered.events.filter((event) => event.subject === 'algorithm.quarantined.warning-verification')
+      .map((event) => event.type),
+    ['opened', 'resolved'],
+  );
+  assert.equal(
+    storage.readJSON('monitor/state.json').generationId,
+    storage.readJSON('monitor/events.json').generationId,
+  );
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor status fails closed on a malformed matching-generation state', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  const clock = { value: 1_785_000_000_000 };
+  const current = { value: fixture({ unsafe: false }) };
+  const tools = createTools(dir, current, { clock, expectedIntervalMs: 60_000 });
+  await tools.run_monitor_cycle();
+  const state = storage.readJSON('monitor/state.json');
+  storage.writeJSON('monitor/state.json', { ...state, lastRunAt: 'not-a-date' });
+  const result = await tools.get_monitor_status();
+  assert.equal(result.available, false);
+  assert.equal(result.status, 'unknown');
+  assert.deepEqual(result.findings, []);
+  rmSync(dir, { recursive: true });
+});
+
 test('monitor fails closed when live collection and diagnostics are unavailable', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
   const current = {
@@ -320,6 +399,7 @@ test('monitor emits a materially escalated transition for a persistent finding s
   const clock = { value: 1_785_000_000_000 };
   storage.writeJSON('monitor/events.json', {
     schemaVersion: 1,
+    generationId: 'monitor-generation-v1-1784999100000',
     schedule: {
       expectedIntervalMs: 900_000,
       stoppedGraceMs: 1_800_000,

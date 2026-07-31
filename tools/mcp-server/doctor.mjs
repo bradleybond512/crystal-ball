@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +10,10 @@ import {
   compatibilityVerdict,
 } from './server-meta.mjs';
 import { TOOL_CATALOG, TOOL_INDEX } from './tool-registry.mjs';
+import {
+  publicMonitorEvents,
+  validCommittedMonitorState,
+} from './tools/monitor-events.mjs';
 
 export const DOCTOR_EXIT = Object.freeze({ READY: 0, DEGRADED: 1, UNAVAILABLE: 2, USAGE: 64 });
 
@@ -19,17 +23,22 @@ export async function buildAgentDoctorReport(options = {}) {
   const executablePath = options.executablePath ?? process.argv[1];
   const now = options.now?.() ?? new Date().toISOString();
   const checkSidecar = options.checkSidecar ?? defaultSidecarCheck;
+  const inspectInstall = options.inspectInstall ?? defaultInstallInspection;
   const inspectClients = options.inspectClients ?? defaultClientInspection;
   const readMonitor = options.readMonitor ?? defaultMonitorRead;
   const checks = {};
 
-  checks.install = await independentCheck('install', options, async () => ({
-    status: executablePath ? 'pass' : 'warn',
-    installed: Boolean(executablePath),
-    executable: executablePath ? redact(executablePath) : null,
-    nodeVersion,
-    packageVersion,
-  }));
+  checks.install = await independentCheck('install', options, async () => {
+    const install = await inspectInstall({ executablePath, nodeVersion, packageVersion });
+    return {
+      status: install?.installed && install?.nodeSupported ? 'pass' : 'fail',
+      installed: install?.installed === true,
+      nodeSupported: install?.nodeSupported === true,
+      command: install?.installed ? 'crystalball' : null,
+      nodeVersion,
+      packageVersion,
+    };
+  });
   checks.runtime = await independentCheck('runtime', options, async () => {
     const runtime = await checkSidecar();
     return {
@@ -52,13 +61,24 @@ export async function buildAgentDoctorReport(options = {}) {
     };
   });
   checks.monitor = await independentCheck('monitor', options, async () => {
-    const monitor = await readMonitor();
+    const monitor = await readMonitor(new Date(now).valueOf());
+    const scheduleStatus = monitor?.schedule?.status ?? 'unknown';
+    const lastRunAt = validDateOrNull(monitor?.lastRunAt);
+    const healthy = monitor?.available === true
+      && monitor.status === 'green'
+      && scheduleStatus === 'running'
+      && lastRunAt !== null;
     return {
-      status: monitor?.available ? (monitor.status === 'red' ? 'warn' : 'pass') : 'warn',
+      status: healthy ? 'pass' : 'warn',
       available: monitor?.available === true,
       monitorStatus: monitor?.status ?? 'unknown',
-      lastRunAt: validDateOrNull(monitor?.lastRunAt),
-      message: monitor?.available ? 'Safety monitor state is available.' : 'Safety monitor has not completed a cycle.',
+      scheduleStatus,
+      lastRunAt,
+      message: healthy
+        ? 'Safety monitor is current and running.'
+        : scheduleStatus === 'stopped'
+          ? 'Safety monitor missed its expected run window.'
+          : 'Safety monitor state is unavailable, degraded, or not current.',
     };
   });
   const compatibility = compatibilityVerdict({
@@ -119,8 +139,28 @@ async function defaultSidecarCheck() {
   };
 }
 
-async function defaultMonitorRead() {
-  return createStorage().readJSON('monitor/state.json');
+export async function readLocalMonitorStatus(now = Date.now(), storage = createStorage()) {
+  const state = storage.readJSON('monitor/state.json');
+  const eventState = storage.readJSON('monitor/events.json');
+  const monitorEvents = publicMonitorEvents(eventState, now);
+  if (!validCommittedMonitorState(state, eventState)) {
+    return {
+      available: false,
+      status: 'unknown',
+      summary: 'The monitor state is missing, incompatible, or from mismatched generations.',
+      schedule: monitorEvents.schedule,
+      events: [],
+    };
+  }
+  return {
+    ...state,
+    schedule: monitorEvents.schedule,
+    events: monitorEvents.events,
+  };
+}
+
+async function defaultMonitorRead(now) {
+  return readLocalMonitorStatus(now);
 }
 
 async function defaultClientInspection() {
@@ -128,7 +168,64 @@ async function defaultClientInspection() {
     ['Codex', join(homedir(), '.codex', 'config.toml')],
     ['Claude Code', join(homedir(), '.claude.json')],
   ];
-  return candidates.map(([name, path]) => ({ name, configured: existsSync(path) }));
+  return candidates.map(([name, path]) => ({
+    name,
+    configured: hasCrystalBallClientRegistration(path),
+  }));
+}
+
+function defaultInstallInspection({ executablePath, nodeVersion }) {
+  let installed = false;
+  try {
+    installed = Boolean(executablePath) && statSync(executablePath).isFile();
+  } catch {
+    installed = false;
+  }
+  const nodeMajor = Number.parseInt(String(nodeVersion).split('.')[0], 10);
+  return { installed, nodeSupported: Number.isInteger(nodeMajor) && nodeMajor >= 20 };
+}
+
+function hasCrystalBallClientRegistration(path) {
+  let source;
+  try {
+    source = readFileSync(path, 'utf8');
+  } catch {
+    return false;
+  }
+  if (path.endsWith('.toml')) {
+    const sections = source.split(/^\s*(?=\[)/m);
+    const section = sections.find((candidate) => (
+      /^\s*\[mcp_servers\.(?:"crystalball"|crystalball)\]\s*$/im.test(candidate)
+    ));
+    if (!section) return false;
+    const disabled = /^\s*disabled\s*=\s*true\s*$/im.test(section)
+      || /^\s*enabled\s*=\s*false\s*$/im.test(section);
+    const command = section.match(/^\s*command\s*=\s*["']([^"']+)["']\s*$/im)?.[1];
+    return !disabled && isCrystalBallCommand(command);
+  }
+  try {
+    return containsCrystalBallClient(JSON.parse(source));
+  } catch {
+    return false;
+  }
+}
+
+function containsCrystalBallClient(value) {
+  if (!value || typeof value !== 'object') return false;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'mcpServers' && child && typeof child === 'object') {
+      const registration = child.crystalball;
+      if (registration && typeof registration === 'object'
+          && registration.disabled !== true
+          && isCrystalBallCommand(registration.command)) return true;
+    }
+    if (containsCrystalBallClient(child)) return true;
+  }
+  return false;
+}
+
+function isCrystalBallCommand(value) {
+  return typeof value === 'string' && /(?:^|[\\/])crystalball-mcp$/.test(value.trim());
 }
 
 export function formatDoctorReport(report) {
@@ -147,7 +244,7 @@ function redact(value) {
 }
 
 function validDateOrNull(value) {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string' && !Number.isFinite(value)) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.valueOf()) ? null : parsed.toISOString();
 }

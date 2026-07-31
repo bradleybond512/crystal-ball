@@ -66,6 +66,18 @@ git push macos codex/your-feature-name
 
 Use `.agents/skills/crystal-ball-feature-workflow/SKILL.md` for every nontrivial feature, multi-file bug fix, provider integration, prediction-system change, Tauri/native change, or security-sensitive task.
 
+### Subscription-only model access
+
+- Codex model calls must use a logged-in ChatGPT subscription session.
+- Claude model calls must use a logged-in Claude Pro or Max subscription
+  session.
+- Never use model API keys, access-token environment variables, pay-as-you-go
+  credits, Bedrock, Vertex, or model gateways for agentic engineering work.
+- Run `npm run agentic:auth-check` before cross-agent work. If authentication
+  is missing or subscription capacity is exhausted, stop; do not fall back.
+- Never place cached subscription credentials in repository secrets,
+  artifacts, logs, commits, or shared runner accounts.
+
 ### Work classification
 
 - **Fast:** isolated documentation, copy, style, or obvious one-file fixes.

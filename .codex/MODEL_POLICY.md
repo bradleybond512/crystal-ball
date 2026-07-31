@@ -2,6 +2,20 @@
 
 Use the least expensive model that meets the quality requirement. Model choice is part of the agent contract and may not be silently downgraded.
 
+## Subscription-only authentication
+
+All Codex and Claude model execution must use the user's logged-in ChatGPT or
+Claude Pro/Max CLI subscription session. Model API keys, access-token
+environment variables, pay-as-you-go fallbacks, Bedrock, Vertex, and model
+gateway credentials are not supported by this engineering pipeline.
+
+Run `npm run agentic:auth-check` before local cross-agent work. Automation that
+invokes a model must run on a trusted, dedicated self-hosted runner under the
+same OS account that completed the subscription login. Never copy cached
+subscription credentials into GitHub secrets or workflow artifacts. If a
+subscription is exhausted or signed out, stop rather than falling back to API
+billing.
+
 ## Tiers
 
 ### GPT-5.6 Sol — frontier judgment

@@ -31,12 +31,25 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("pull-requests: read", permissions)
         self.assertNotIn("contents: write", permissions)
 
-    def test_model_credential_is_scoped_to_one_pipeline_step(self):
-        self.assertEqual(self.workflow.count("OPENAI_API_KEY:"), 1)
+    def test_model_execution_uses_subscription_session_without_api_keys(self):
+        self.assertIn(
+            "runs-on: [self-hosted, crystal-ball-agentic]",
+            self.workflow,
+        )
+        self.assertNotIn("secrets.OPENAI_API_KEY", self.workflow)
+        self.assertNotIn("OPENAI_API_KEY:", self.workflow)
+        self.assertIn(
+            "Verify subscription-backed Codex session",
+            self.workflow,
+        )
+        self.assertIn(
+            "check-agent-subscription-auth.mjs",
+            self.workflow,
+        )
+        self.assertIn("--codex", self.workflow)
         model_step = self.workflow.split(
             "- name: Run or resume protected pipeline", 1
         )[1].split("- name: Package resumable state", 1)[0]
-        self.assertIn("OPENAI_API_KEY:", model_step)
         self.assertIn("max_tokens_per_invocation:", self.workflow)
         self.assertIn(
             '--max-tokens-per-invocation',
@@ -47,7 +60,7 @@ class WorkflowSecurityTests(unittest.TestCase):
             model_step,
         )
 
-    def test_validator_image_is_resolved_before_model_credentials_are_available(self):
+    def test_validator_image_is_resolved_before_model_execution(self):
         prepare_index = self.workflow.index(
             "- name: Prepare isolated validator runtime"
         )

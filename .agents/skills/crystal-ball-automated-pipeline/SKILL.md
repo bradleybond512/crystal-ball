@@ -7,6 +7,16 @@ description: Run Crystal Ball coding work as an automated routed builder, determ
 
 Read `.codex/MODEL_POLICY.md`, `AGENTS.md`, and the task-router output before delegation.
 
+Before any model call, run:
+
+```bash
+npm run agentic:auth-check
+```
+
+Stop if Codex is not using a ChatGPT subscription, Claude is not using a
+Claude Pro/Max subscription, or any model API credential is present. Never
+fall back to API credits when a subscription limit is reached.
+
 For executable orchestration, use:
 
 ```bash

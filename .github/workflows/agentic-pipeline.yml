@@ -71,7 +71,7 @@ concurrency:
 jobs:
   run:
     name: Route, build, validate, review
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, crystal-ball-agentic]
     timeout-minutes: 120
     outputs:
       outcome: ${{ steps.pipeline.outputs.outcome }}
@@ -139,6 +139,9 @@ jobs:
       - name: Install pinned Codex CLI
         run: npm install --global @openai/codex@0.145.0
 
+      - name: Verify subscription-backed Codex session
+        run: node "$CONTROL_ROOT/scripts/check-agent-subscription-auth.mjs" --codex
+
       - name: Prepare isolated validator runtime
         run: |
           docker pull "$VALIDATOR_IMAGE_REF"
@@ -184,7 +187,6 @@ jobs:
           MAX_TOTAL_TOKENS: ${{ inputs.max_total_tokens }}
           MAX_INVOCATIONS: ${{ inputs.max_invocations }}
           MAX_TOKENS_PER_INVOCATION: ${{ inputs.max_tokens_per_invocation }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           mkdir -p "$RUN_ROOT"
           pipeline=(

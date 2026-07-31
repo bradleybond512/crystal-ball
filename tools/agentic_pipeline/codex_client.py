@@ -52,6 +52,10 @@ class CodexClient:
             "-c",
             f'model_reasoning_effort="{assignment.effort}"',
             "-c",
+            'model_provider="openai"',
+            "-c",
+            'forced_login_method="chatgpt"',
+            "-c",
             'approval_policy="never"',
             "-c",
             'shell_environment_policy.inherit="none"',
@@ -157,7 +161,7 @@ class CodexClient:
         return payload, usage
 
     def _minimal_environment(self) -> dict[str, str]:
-        allowed = ("PATH", "HOME", "CODEX_HOME", "OPENAI_API_KEY")
+        allowed = ("PATH", "HOME", "CODEX_HOME")
         return {key: os.environ[key] for key in allowed if key in os.environ}
 
     def _role_prompt(

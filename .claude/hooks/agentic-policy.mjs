@@ -14,6 +14,25 @@ try {
   process.exit(0);
 }
 
+const forbiddenModelCredentials = [
+  'OPENAI_API_KEY',
+  'CODEX_API_KEY',
+  'CODEX_ACCESS_TOKEN',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+].filter((name) => process.env[name]);
+
+if (forbiddenModelCredentials.length) {
+  process.stdout.write(JSON.stringify({
+    continue: false,
+    stopReason:
+      'Crystal Ball is subscription-only. Remove model credential environment ' +
+      `variables before continuing: ${forbiddenModelCredentials.join(', ')}`,
+  }));
+  process.exit(0);
+}
+
 if (input.hook_event_name === 'SessionStart') {
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
@@ -24,7 +43,9 @@ if (input.hook_event_name === 'SessionStart') {
         '$crystal-ball-automated-pipeline for nontrivial work. Deterministic ' +
         'failures return to the owning builder. Publishing, merging, release, ' +
         'deploy, secrets, keychain, and destructive actions require explicit ' +
-        'human approval.',
+        'human approval. Model execution is subscription-only; run ' +
+        '`npm run agentic:auth-check` before cross-agent work and never fall ' +
+        'back to API credits.',
     },
   }));
   process.exit(0);

@@ -164,8 +164,28 @@ are deferred until a plan proves disjoint file ownership.
 ## Manual GitHub Actions operation
 
 `.github/workflows/agentic-pipeline.yml` is `workflow_dispatch` only and must be
-dispatched from the protected default branch. Configure the repository
-`OPENAI_API_KEY` secret before use.
+dispatched from the protected default branch.
+
+Model execution is subscription-only. The `run` job requires a trusted,
+dedicated self-hosted runner labeled `crystal-ball-agentic`, running under the
+same OS account that has completed `codex login` with ChatGPT. Do not configure
+`OPENAI_API_KEY`, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, or `CLAUDE_CODE_OAUTH_TOKEN` for this workflow. The
+preflight rejects those variables and verifies the active Codex login before
+the first model call.
+
+For local Codex and Claude work:
+
+1. Run `codex login` and complete **Sign in with ChatGPT**.
+2. Run `claude login` and choose the Claude.ai Pro or Max subscription.
+3. Run `npm run agentic:auth-check`.
+
+Never copy cached CLI credentials into GitHub secrets, artifacts, containers,
+or shared runner accounts. A fresh GitHub-hosted runner cannot safely reuse a
+personal subscription session, which is why only the model-running job is
+self-hosted. The isolated publish job remains GitHub-hosted and uses GitHub's
+scoped workflow credential solely for repository operations; it does not call
+an AI model.
 
 For a new run, provide a request and an existing `codex/*` branch. If a
 high-assurance design gate pauses the run, download nothing manually: dispatch

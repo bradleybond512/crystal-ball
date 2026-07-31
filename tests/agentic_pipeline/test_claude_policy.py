@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -65,6 +66,26 @@ class ClaudePolicyTests(unittest.TestCase):
         decision = response["hookSpecificOutput"]
         self.assertEqual(decision["permissionDecision"], "deny")
         self.assertIn("explicit approval", decision["permissionDecisionReason"])
+
+    def test_hook_stops_claude_when_an_api_credential_is_present(self):
+        hook = self.root / ".claude/hooks/agentic-policy.mjs"
+        environment = os.environ.copy()
+        environment["ANTHROPIC_API_KEY"] = "must-not-be-used"
+
+        result = subprocess.run(
+            ["node", str(hook)],
+            input=json.dumps({"hook_event_name": "SessionStart"}),
+            text=True,
+            capture_output=True,
+            cwd=self.root,
+            env=environment,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        response = json.loads(result.stdout)
+        self.assertFalse(response["continue"])
+        self.assertIn("subscription-only", response["stopReason"])
 
 
 if __name__ == "__main__":

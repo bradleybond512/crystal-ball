@@ -1,6 +1,8 @@
 import json
+import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from tools.agentic_pipeline.codex_client import CodexClient
@@ -63,6 +65,8 @@ class CodexClientTests(unittest.TestCase):
         self.assertIn("--output-schema", command)
         self.assertEqual(command[command.index("--sandbox") + 1], "read-only")
         self.assertIn('approval_policy="never"', command)
+        self.assertIn('model_provider="openai"', command)
+        self.assertIn('forced_login_method="chatgpt"', command)
         self.assertIn(
             "features.rollout_budget.enabled=true",
             command,
@@ -80,6 +84,51 @@ class CodexClientTests(unittest.TestCase):
         self.assertIn("Return a plan", captured["input"])
         self.assertEqual(result.payload, {"ok": True})
         self.assertEqual(result.usage.total_tokens, 25)
+
+    def test_model_api_credentials_are_never_forwarded(self):
+        captured = {}
+
+        def runner(_command, **kwargs):
+            captured["env"] = kwargs["env"]
+            return type(
+                "Result",
+                (),
+                {
+                    "returncode": 0,
+                    "stdout": (
+                        '{"type":"item.completed","item":'
+                        '{"type":"agent_message","text":"{\\"ok\\":true}"}}\n'
+                    ),
+                    "stderr": "",
+                },
+            )()
+
+        credentials = {
+            "OPENAI_API_KEY": "openai-key",
+            "CODEX_API_KEY": "codex-key",
+            "CODEX_ACCESS_TOKEN": "codex-token",
+            "ANTHROPIC_API_KEY": "anthropic-key",
+            "ANTHROPIC_AUTH_TOKEN": "anthropic-token",
+            "CLAUDE_CODE_OAUTH_TOKEN": "claude-token",
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            schema = root / "schema.json"
+            schema.write_text('{"type":"object"}')
+            with patch.dict(os.environ, credentials):
+                CodexClient(root, runner=runner).invoke(
+                    AgentAssignment(
+                        agent="architect",
+                        model="gpt-5.6-sol",
+                        effort="high",
+                    ),
+                    "Return a plan",
+                    schema,
+                    read_only=True,
+                )
+
+        for name in credentials:
+            self.assertNotIn(name, captured["env"])
 
     def test_redacts_failed_codex_output(self):
         def runner(*_args, **_kwargs):

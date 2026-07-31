@@ -200,9 +200,9 @@ For terminal triage, run `npm run doctor`. It discovers the live sidecar port, c
 
 ---
 
-## MCP Server -- Claude Code Integration
+## MCP Server -- Agent Integration
 
-Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds and the in-app reasoning state. 56 tools are registered automatically when you open a session in this repo. Call `help()` for full documentation.
+Crystal Ball ships an MCP server that gives MCP-compatible agents access to intelligence feeds and the in-app reasoning state. The canonical registry contains 59 tools across 9 categories. Call `help()` for generated tool documentation, or install the `crystalball` command for doctor, capabilities, monitor, safeguard-demo, and Evidence Packet workflows. See [Agent Access](docs/AGENT_ACCESS.md).
 
 **Aggregate tools** (broad awareness):
 
@@ -241,7 +241,7 @@ Crystal Ball ships an MCP server that gives Claude Code direct access to all int
 - `/threat-brief` -- top 5 threats with trajectory and recommended watches
 - `/market-pulse` -- markets snapshot with yield curve and Fed balance sheet
 
-The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated localhost port. Crystal Ball must be running. Sentinel history and watchlists are stored in `~/.crystal-ball/`.
+The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated localhost port. Crystal Ball must be running. Sentinel history and watchlists are stored in `~/.crystal-ball/`. Sentinel's normal 30-minute intelligence sweep is separate from the normal 15-minute safety monitor.
 
 ---
 
@@ -344,7 +344,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Algorithm intelligence | Pure-deterministic scoring foundation — `intelligence/` (evidence graph, truth scoring, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance) |
 | Domain engines | `weather/` (NWS polygon matching, urgency ladder, Storm Mode, miss diagnostics), `shortage/` (8 commodity forecast models with seasonal multipliers), `insights/` (Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs, Presentation Export) |
 | Reasoning  | Analyst HUD, hypothesis-threads / accuracy / dedupe / entities / skeptic / projection / ensemble, IDB reasoning_memory, local-first LLM adapter with daily budget |
-| MCP server | @modelcontextprotocol/sdk, 56 tools (aggregate / granular / foundation / intelligence / stateful / analyst / diagnostic / help), sidecar port/token discovery |
+| MCP server | @modelcontextprotocol/sdk, 59 tools across 9 canonical categories, sidecar port/token discovery, permission and compatibility contracts |
 | Correlation | Unified event schema, directional rules, temporal chains, situation clustering |
 | Alerts | Unified inbox, composite relevance scoring, IndexedDB persistence, custom rules |
 | Audio | Procedural Web Audio synthesis, per-layer spatial mixing |
@@ -361,7 +361,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | God's Vision map layers | Generated from the full map-layer catalog | `src/config/panels.ts` FULL_MAP_LAYERS |
 | Panel categories | Generated from the panel category map | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 56 | `tools/mcp-server/index.mjs` |
+| MCP tools | 59 | `tools/mcp-server/tool-registry.mjs` |
 | Supported secret keys | 77 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
@@ -418,7 +418,8 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 | [docs/API_KEYS.md](docs/API_KEYS.md) | All 77 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
-| [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How Claude Code gathers intelligence via MCP -- pipeline, auth, tools |
+| [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How MCP-compatible agents gather intelligence -- pipeline, auth, tools |
+| [docs/AGENT_ACCESS.md](docs/AGENT_ACCESS.md) | Install, diagnose, connect clients, understand permissions, and export evidence |
 | [docs/DIAGNOSTICS_WORKBENCH.md](docs/DIAGNOSTICS_WORKBENCH.md) | Fast runtime triage, agent handoffs, pipeline tracing, and safe algorithm-tuning workflow |
 | [docs/ALERTS_ENHANCEMENT_ROADMAP.md](docs/ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture and enhancement roadmap |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflow, checks, PR expectations |

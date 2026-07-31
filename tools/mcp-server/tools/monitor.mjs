@@ -12,9 +12,16 @@ import {
 } from 'node:fs';
 import { dirname } from 'node:path';
 import { quarantinedAlgorithmIds } from '../safety-policy.mjs';
+import {
+  monitorGenerationId,
+  publicMonitorEvents,
+  reconcileMonitorEvents,
+  validCommittedMonitorState,
+} from './monitor-events.mjs';
 
 const STATE_PATH = 'monitor/state.json';
 const HISTORY_PATH = 'monitor/history.json';
+const EVENTS_PATH = 'monitor/events.json';
 const MAX_HISTORY = 96;
 
 export const schemas = {
@@ -34,6 +41,8 @@ export function makeMonitorTools({
   diagnostics,
   lockOptions,
   now = Date.now,
+  scheduleOptions,
+  writeJSONAtomic = writeMonitorJSONAtomic,
 }) {
   async function run_monitor_cycle() {
     const releaseLock = acquireMonitorCycleLock(storage, lockOptions);
@@ -49,7 +58,10 @@ export function makeMonitorTools({
       const previousIds = Array.isArray(previous?.activeIds) ? previous.activeIds : [];
       const newlyTriggered = activeIds.filter((id) => !previousIds.includes(id));
       const recovered = previousIds.filter((id) => !activeIds.includes(id));
+      const generationId = monitorGenerationId(snapshot.at);
       const state = {
+        schemaVersion: 1,
+        generationId,
         available: true,
         lastRunAt: snapshot.at,
         status: findings.some((finding) => finding.severity === 'red')
@@ -66,10 +78,19 @@ export function makeMonitorTools({
         activeIds,
         snapshot,
       };
-      writeMonitorJSONAtomic(storage, STATE_PATH, state);
+      const eventState = reconcileMonitorEvents(
+        storage.readJSON(EVENTS_PATH),
+        findings,
+        snapshot.at,
+        scheduleOptions,
+      );
+      writeJSONAtomic(storage, EVENTS_PATH, eventState);
+      writeJSONAtomic(storage, STATE_PATH, state);
       const history = storage.readJSON(HISTORY_PATH);
       const rows = Array.isArray(history) ? history : [];
       rows.push({
+        schemaVersion: 1,
+        generationId,
         at: snapshot.at,
         status: state.status,
         activeIds,
@@ -77,8 +98,8 @@ export function makeMonitorTools({
         recovered,
         snapshot,
       });
-      writeMonitorJSONAtomic(storage, HISTORY_PATH, rows.slice(-MAX_HISTORY));
-      return publicState(state);
+      writeJSONAtomic(storage, HISTORY_PATH, rows.slice(-MAX_HISTORY));
+      return publicState(state, eventState, snapshot.at);
     } finally {
       releaseLock();
     }
@@ -87,6 +108,7 @@ export function makeMonitorTools({
   async function get_monitor_status() {
     const state = storage.readJSON(STATE_PATH);
     if (!state) {
+      const monitorEvents = publicMonitorEvents(storage.readJSON(EVENTS_PATH), now());
       return {
         available: false,
         status: 'unknown',
@@ -94,9 +116,11 @@ export function makeMonitorTools({
         findings: [],
         newlyTriggered: [],
         recovered: [],
+        schedule: monitorEvents.schedule,
+        events: monitorEvents.events,
       };
     }
-    return publicState(state);
+    return publicState(state, storage.readJSON(EVENTS_PATH), now());
   }
 
   return { get_monitor_status, run_monitor_cycle };
@@ -346,8 +370,23 @@ function detectFindings(previous, current) {
   return findings;
 }
 
-function publicState(state) {
+function publicState(state, eventState, at) {
+  const monitorEvents = publicMonitorEvents(eventState, at);
+  if (!validCommittedMonitorState(state, eventState)) {
+    return {
+      available: false,
+      status: 'unknown',
+      summary: 'The monitor state is incomplete or from mismatched generations.',
+      findings: [],
+      newlyTriggered: [],
+      recovered: [],
+      schedule: monitorEvents.schedule,
+      events: [],
+    };
+  }
   return {
+    schemaVersion: state.schemaVersion,
+    generationId: state.generationId,
     available: state.available,
     lastRunAt: state.lastRunAt,
     status: state.status,
@@ -356,6 +395,8 @@ function publicState(state) {
     newlyTriggered: state.newlyTriggered,
     recovered: state.recovered,
     snapshot: state.snapshot,
+    schedule: monitorEvents.schedule,
+    events: monitorEvents.events,
   };
 }
 

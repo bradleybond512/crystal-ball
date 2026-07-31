@@ -36,7 +36,13 @@ const diagnostics = makeDiagnosticsTools(client);
 const helpTools = makeHelpTools();
 const intelExpansion = makeIntelExpansionTools(client);
 const capabilities = makeCapabilityTools(granular);
-const monitor = makeMonitorTools({ storage, granular, diagnostics });
+const monitorCadenceMs = monitorIntervalMs();
+const monitor = makeMonitorTools({
+  storage,
+  granular,
+  diagnostics,
+  scheduleOptions: { expectedIntervalMs: monitorCadenceMs || undefined },
+});
 
 const server = new McpServer(
   { name: SERVER_NAME, version: SERVER_VERSION },
@@ -345,5 +351,5 @@ registerTool('help', helpSchemas.help, async (args) => textResult(await helpTool
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-startMonitorScheduler(monitor.run_monitor_cycle, { intervalMs: monitorIntervalMs() });
+startMonitorScheduler(monitor.run_monitor_cycle, { intervalMs: monitorCadenceMs });
 console.error('[crystalball-mcp] Server running on stdio');

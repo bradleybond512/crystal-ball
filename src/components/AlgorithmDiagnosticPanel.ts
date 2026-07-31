@@ -10,8 +10,15 @@
 import { Panel } from './Panel';
 import {
   buildAgentIntelligenceView,
+  nextAgentMonitorPollDelayMs,
   renderAgentIntelligenceHtml,
+  type AgentMonitorProjection,
 } from './agent-intelligence-view';
+import {
+  fetchAgentMonitorProjection,
+  markAgentMonitorProjectionUnavailable,
+} from '@/services/agent-monitor-projection';
+import { isDesktopRuntime } from '@/services/runtime';
 import {
   getAlgorithmEvaluationLedger,
   getAlgorithmDefinitions,
@@ -100,6 +107,23 @@ const POLICY_DISPLAY: Record<PolicyDecision, PolicyVerdictDisplay> = {
 
 export class AlgorithmDiagnosticPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private monitorPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private monitorAbortController: AbortController | null = null;
+  private monitorProjection: AgentMonitorProjection | null = null;
+  private monitorPollFailures = 0;
+  private monitorPollInFlight = false;
+  private panelDestroyed = false;
+  private readonly onMonitorClick = (event: Event): void => {
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-agent-monitor-refresh]')
+      : null;
+    if (!target || !this.content.contains(target)) return;
+    if (this.monitorPollTimer !== null) {
+      clearTimeout(this.monitorPollTimer);
+      this.monitorPollTimer = null;
+    }
+    void this.refreshAgentMonitor();
+  };
 
   constructor() {
     super({
@@ -114,8 +138,43 @@ export class AlgorithmDiagnosticPanel extends Panel {
   }
 
   private start(): void {
+    this.content.addEventListener('click', this.onMonitorClick);
     this.render();
+    if (isDesktopRuntime()) void this.refreshAgentMonitor();
     this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
+  }
+
+  private scheduleAgentMonitorPoll(): void {
+    if (this.panelDestroyed || !isDesktopRuntime()) return;
+    if (this.monitorPollTimer !== null) clearTimeout(this.monitorPollTimer);
+    this.monitorPollTimer = setTimeout(() => {
+      this.monitorPollTimer = null;
+      void this.refreshAgentMonitor();
+    }, nextAgentMonitorPollDelayMs(this.monitorPollFailures));
+  }
+
+  private async refreshAgentMonitor(): Promise<void> {
+    if (this.panelDestroyed || this.monitorPollInFlight || !isDesktopRuntime()) return;
+    this.monitorPollInFlight = true;
+    const controller = new AbortController();
+    this.monitorAbortController = controller;
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      this.monitorProjection = await fetchAgentMonitorProjection(controller.signal);
+      this.monitorPollFailures = 0;
+      this.renderWhenVisible(() => this.render());
+    } catch {
+      if (!controller.signal.aborted || !this.panelDestroyed) {
+        this.monitorPollFailures += 1;
+        this.monitorProjection = markAgentMonitorProjectionUnavailable(this.monitorProjection);
+        this.renderWhenVisible(() => this.render());
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (this.monitorAbortController === controller) this.monitorAbortController = null;
+      this.monitorPollInFlight = false;
+      this.scheduleAgentMonitorPoll();
+    }
   }
 
   public destroy(): void {
@@ -124,6 +183,14 @@ export class AlgorithmDiagnosticPanel extends Panel {
     // super.destroy() disconnects the IntersectionObserver and aborts the
     // AbortController, so a timer firing in that window would operate on a
     // partially-torn-down panel.  Every other subclass follows this order.
+    this.panelDestroyed = true;
+    this.content.removeEventListener('click', this.onMonitorClick);
+    if (this.monitorPollTimer !== null) {
+      clearTimeout(this.monitorPollTimer);
+      this.monitorPollTimer = null;
+    }
+    this.monitorAbortController?.abort();
+    this.monitorAbortController = null;
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
@@ -136,7 +203,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
     const definitions = getAlgorithmDefinitions();
     const calibrations = summarizeCalibration(ledger.all());
     const report = aggregateAlgorithmHealth({ definitions, calibrations });
-    const agentIntelligence = buildAgentIntelligenceView(report.algorithms);
+    const agentIntelligence = buildAgentIntelligenceView(report.algorithms, this.monitorProjection);
     const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: getTunings() });
     const definitionsById = new Map<string, HealthAlgorithmDefinition>();
     for (const d of definitions) definitionsById.set(d.algorithmId, d);

@@ -988,7 +988,10 @@ Phase exit:
 
 ### ACC-701 — Drift and cohort-health monitor
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+Branch: `codex/acc-701-mcp-hardening`
 
 Dependencies: ACC-201 and ACC-402
 

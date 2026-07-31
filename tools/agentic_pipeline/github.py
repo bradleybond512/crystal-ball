@@ -22,7 +22,12 @@ class GitHubClient:
         self.runner = runner
         self.redactor = redactor or Redactor()
 
-    def update_pr_body(self, pr_number: int, summary: str) -> None:
+    def update_pr_body(
+        self,
+        pr_number: int,
+        summary: str,
+        expected_head: str | None = None,
+    ) -> None:
         view = self.runner(
             [
                 "gh",
@@ -32,7 +37,7 @@ class GitHubClient:
                 "--repo",
                 self.repository,
                 "--json",
-                "body,isDraft",
+                "body,isDraft,headRefName",
             ],
             text=True,
             capture_output=True,
@@ -46,6 +51,10 @@ class GitHubClient:
         pr = json.loads(view.stdout)
         if not pr.get("isDraft"):
             raise PermissionError("automated pipeline updates require a draft PR")
+        if expected_head and pr.get("headRefName") != expected_head:
+            raise PermissionError(
+                "draft PR head does not match the pipeline branch"
+            )
         body = self._replace_section(pr.get("body") or "", summary)
         edit = self.runner(
             [

@@ -11,7 +11,7 @@
 ## Delivery Path
 
 - `main` is the only merge target.
-- Agent branches (`claude/*`, `codex/*`, `copilot/*`) must go through PRs and GitHub auto-merge after required checks pass.
+- Agent branches (`claude/*`, `codex/*`, `copilot/*`) must go through draft PRs and required checks. Merge and auto-merge require explicit human approval.
 - Do not merge agent PRs directly with the REST merge endpoint or local `git merge` unless explicitly told.
 
 ## Branch Discipline (MANDATORY — start every session here)
@@ -23,7 +23,7 @@ git fetch macos
 git checkout -b codex/your-feature-name macos/main  # use claude/* for Claude sessions
 # ... do work, commit freely ...
 git push macos codex/your-feature-name
-# open PR → auto-merge lands it
+# open a draft PR → wait for explicit merge approval
 ```
 
 - Local `main` is read-only — only ever fast-forward it to `macos/main`

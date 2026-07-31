@@ -54,17 +54,25 @@ class AgentRouter:
     def __init__(
         self,
         root: Path,
+        control_root: Path | None = None,
         runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     ) -> None:
         self.root = root
+        self.control_root = control_root or root
         self.runner = runner
         self.policy = json.loads(
-            (root / ".codex/model-policy.json").read_text()
+            (self.control_root / ".codex/model-policy.json").read_text()
         )
 
     def route(self, request: str) -> RouteDecision:
+        router = self.control_root / "scripts/agent-router.mjs"
+        router_command = (
+            "scripts/agent-router.mjs"
+            if self.control_root == self.root
+            else str(router)
+        )
         result = self.runner(
-            ["node", "scripts/agent-router.mjs", "--request", request],
+            ["node", router_command, "--request", request],
             cwd=self.root,
             text=True,
             capture_output=True,
@@ -104,16 +112,13 @@ class AgentRouter:
             self._parse_safe_command(command)
             for command in raw.get("targeted_checks", [])
         ]
-        always = [
+        router_always = [
             self._parse_safe_command(command)
             for command in raw.get("always_run", [])
         ]
-        changed_gate = ["bash", "scripts/agentic-check-changed.sh"]
-        if changed_gate not in always:
-            always.append(changed_gate)
+        del router_always
         full_gate = ["bash", "scripts/agentic-validate.sh"]
-        if full_gate not in always:
-            always.append(full_gate)
+        always = [full_gate]
         return RouteDecision(
             tier=str(raw.get("tier", "focused")),
             planner=self._assignment(planner_name),

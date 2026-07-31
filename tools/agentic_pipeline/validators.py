@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -50,6 +51,7 @@ class SubprocessValidator:
             result = subprocess.run(
                 command,
                 cwd=self.root,
+                env=self._validation_environment(),
                 text=True,
                 capture_output=True,
                 timeout=self.timeout_seconds,
@@ -84,6 +86,36 @@ class SubprocessValidator:
 
     def _bounded(self, value: str) -> str:
         return self.redactor.redact(value[-self.max_output_chars :])
+
+    def _validation_environment(self) -> dict[str, str]:
+        blocked_names = {
+            "ANTHROPIC_API_KEY",
+            "CODEX_API_KEY",
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "OPENAI_API_KEY",
+        }
+        blocked_suffixes = (
+            "_API_KEY",
+            "_PASSWORD",
+            "_PRIVATE_KEY",
+            "_SECRET",
+            "_TOKEN",
+        )
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in blocked_names
+            and not key.upper().endswith(blocked_suffixes)
+        }
+        environment.update(
+            {
+                "CI": "true",
+                "npm_config_ignore_scripts": "true",
+                "NPM_CONFIG_IGNORE_SCRIPTS": "true",
+            }
+        )
+        return environment
 
     def _tamper_reason(self, command: list[str]) -> str | None:
         if len(command) == 3 and command[:2] == ["npm", "run"]:

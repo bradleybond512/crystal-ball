@@ -1,5 +1,28 @@
 # Crystal Ball — Claude Code Context
 
+@AGENTS.md
+
+## Canonical Agentic Engineering Policy
+
+Claude Code and Codex use the same checked-in engineering control plane.
+For every nontrivial feature, multi-file fix, architecture change, provider
+change, prediction change, security change, or CI change:
+
+1. Read `AGENTS.md`, `.codex/MODEL_POLICY.md`, and
+   `docs/AGENTIC_ENGINEERING.md`.
+2. Use `$crystal-ball-automated-pipeline`; do not substitute an ad hoc
+   plan/build/review sequence.
+3. Route through `scripts/agent-router.mjs`, use the assigned model and
+   specialist, enforce planned file scope, and return deterministic failures or
+   review findings to the original builder.
+4. Keep merge, release, deploy, secrets, keychain access, destructive actions,
+   and publication behind explicit human approval.
+5. Run the shared deterministic gates. Do not claim completion from an
+   assistant-specific check.
+
+Project hooks reinforce these rules across macOS, Linux, and Windows. CI is the
+final enforcement boundary; do not disable or bypass the hooks or policy tests.
+
 ## KEYCHAIN — ABSOLUTE PROHIBITION
 
 Never access, modify, or delete macOS Keychain entries under any circumstances.

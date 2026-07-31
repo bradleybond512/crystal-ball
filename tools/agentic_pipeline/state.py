@@ -58,10 +58,14 @@ class StateStore:
         request: str,
         branch: str,
         budget: BudgetLimits,
+        baseline_sha: str = "",
+        control_sha: str = "",
     ) -> tuple[PipelineState, bool]:
         normalized = " ".join(request.split())
         request_hash = hashlib.sha256(normalized.encode()).hexdigest()
-        request_key = hashlib.sha256(f"{branch}\0{normalized}".encode()).hexdigest()
+        request_key = hashlib.sha256(
+            f"{branch}\0{baseline_sha}\0{normalized}".encode()
+        ).hexdigest()
         existing = self.connection.execute(
             "SELECT state_json FROM pipelines WHERE request_key = ?",
             (request_key,),
@@ -73,6 +77,8 @@ class StateStore:
             request_hash=request_hash,
             branch=branch,
             budget=budget,
+            baseline_sha=baseline_sha,
+            control_sha=control_sha,
         )
         payload = json.dumps(
             self.redactor.redact_value(state.to_dict()), sort_keys=True

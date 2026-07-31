@@ -10,7 +10,11 @@ scripts/telegram/telegram-session.txt
 .vercel
 api/\[domain\]/v1/\[rpc\].js
 api/\[\[...path\]\].js
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/agentic-policy.mjs
+!.claude/skills/
 .cursor/
 .env.vercel-backup
 .env.vercel-export
@@ -18,6 +22,9 @@ api/\[\[...path\]\].js
 .factory/
 .windsurf/
 skills/
+!.claude/skills/
+!.claude/skills/crystal-ball-automated-pipeline/
+!.claude/skills/crystal-ball-automated-pipeline/SKILL.md
 ideas/
 docs/internal/
 internal/

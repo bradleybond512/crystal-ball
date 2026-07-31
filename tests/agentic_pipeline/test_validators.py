@@ -1,9 +1,11 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.agentic_pipeline.validators import CommandPolicy, SubprocessValidator
 
@@ -44,6 +46,34 @@ class ValidatorTests(unittest.TestCase):
 
         self.assertEqual(result.failure_class, "timeout")
         self.assertEqual(result.exit_code, 124)
+
+    def test_validation_subprocess_does_not_inherit_model_credentials(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            command = [
+                sys.executable,
+                "-c",
+                (
+                    "import os; "
+                    "print(os.environ.get('OPENAI_API_KEY', 'missing')); "
+                    "print(os.environ.get('GH_TOKEN', 'missing')); "
+                    "print(os.environ.get('npm_config_ignore_scripts', 'missing'))"
+                ),
+            ]
+            validator = SubprocessValidator(
+                Path(temp_dir), CommandPolicy([command])
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "OPENAI_API_KEY": "sk-secret-value",
+                    "GH_TOKEN": "ghs_secret-value",
+                },
+            ):
+                result = validator.run(command)
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.stdout.splitlines(), ["missing", "missing", "true"])
 
     def test_refuses_modified_npm_script_definition(self):
         with tempfile.TemporaryDirectory() as temp_dir:

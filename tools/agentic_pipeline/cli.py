@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from typing import Sequence
 
@@ -24,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Durable, model-routed Crystal Ball engineering pipeline",
     )
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--control-root", type=Path)
     parser.add_argument(
         "--state", type=Path, default=Path(".agentic-run/state.sqlite")
     )
@@ -48,7 +50,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     approve = subparsers.add_parser("approve")
     approve.add_argument("pipeline_id")
-    approve.add_argument("--gate", required=True, choices=["design", "publish"])
+    approve.add_argument(
+        "--gate",
+        required=True,
+        choices=[
+            "design",
+            "control_plane",
+            "publish",
+            "release",
+            "deploy",
+            "secrets",
+            "destructive",
+        ],
+    )
     approve.add_argument("--actor", required=True)
 
     cancel = subparsers.add_parser("cancel")
@@ -69,6 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(arguments: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(arguments)
     root = args.root.resolve()
+    control_root = (
+        args.control_root.resolve() if args.control_root else root
+    )
     state_path = args.state
     if not state_path.is_absolute():
         state_path = root / state_path
@@ -85,18 +102,24 @@ def main(arguments: Sequence[str] | None = None) -> int:
                     max_invocations=args.max_invocations,
                     max_cost_usd=args.max_cost_usd,
                 ),
+                baseline_sha=_git_sha(root),
+                control_sha=_git_sha(control_root),
             )
             if args.create_only:
                 _print_state(state, args.json, created=created)
                 return 0
-            state = _orchestrator(root, store, state).run_until_blocked(
+            state = _orchestrator(
+                root, control_root, store, state
+            ).run_until_blocked(
                 state.pipeline_id
             )
             _print_state(state, args.json, created=created)
             return _exit_for(state)
         if args.command == "resume":
             state = store.get(args.pipeline_id)
-            state = _orchestrator(root, store, state).run_until_blocked(
+            state = _orchestrator(
+                root, control_root, store, state
+            ).run_until_blocked(
                 state.pipeline_id
             )
             _print_state(state, args.json)
@@ -131,7 +154,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
             if not store.has_approval(args.pipeline_id, "publish"):
                 raise PermissionError("publish approval is required")
             GitHubClient(args.repository).update_pr_body(
-                args.pr_number, render_summary(state)
+                args.pr_number,
+                render_summary(state),
+                expected_head=state.branch,
             )
             print(f"updated draft PR #{args.pr_number}")
             return 0
@@ -141,16 +166,28 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
 
 def _orchestrator(
-    root: Path, store: StateStore, state: PipelineState
+    root: Path,
+    control_root: Path,
+    store: StateStore,
+    state: PipelineState,
 ) -> Orchestrator:
-    route = state.route or AgentRouter(root).route(state.request)
+    route = state.route or AgentRouter(
+        root, control_root=control_root
+    ).route(state.request)
     allowed = [list(command) for command in SAFE_EXACT_COMMANDS]
     allowed.extend(
         [["npm", "run", script] for script in sorted(SAFE_NPM_SCRIPTS)]
     )
     validators = SubprocessValidator(root, CommandPolicy(allowed))
     router = _FixedRouter(route)
-    return Orchestrator(root, store, router, CodexClient(root), validators)
+    return Orchestrator(
+        root,
+        store,
+        router,
+        CodexClient(root, control_root=control_root),
+        validators,
+        control_root=control_root,
+    )
 
 
 class _FixedRouter:
@@ -229,3 +266,14 @@ def _exit_for(state: PipelineState) -> int:
 def _validate_positive(value: int, name: str) -> None:
     if value <= 0:
         raise ValueError(f"{name} must be positive")
+
+
+def _git_sha(root: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""

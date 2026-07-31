@@ -16,7 +16,8 @@ class GitHubClientTests(unittest.TestCase):
                     {
                         "returncode": 0,
                         "stdout": '{"body":"Intro\\n\\n<!-- agentic-pipeline:start -->\\nold\\n'
-                        '<!-- agentic-pipeline:end -->\\n","isDraft":true}',
+                        '<!-- agentic-pipeline:end -->\\n","isDraft":true,'
+                        '"headRefName":"codex/feature"}',
                         "stderr": "",
                     },
                 )()
@@ -28,7 +29,9 @@ class GitHubClientTests(unittest.TestCase):
 
         client = GitHubClient("owner/repo", runner=runner)
 
-        client.update_pr_body(12, "new validation")
+        client.update_pr_body(
+            12, "new validation", expected_head="codex/feature"
+        )
 
         edit = calls[-1]
         self.assertEqual(edit[0][:3], ["gh", "pr", "edit"])
@@ -51,6 +54,26 @@ class GitHubClientTests(unittest.TestCase):
 
         with self.assertRaises(PermissionError):
             GitHubClient("owner/repo", runner=runner).update_pr_body(12, "summary")
+
+    def test_refuses_pr_for_a_different_branch(self):
+        def runner(*_args, **_kwargs):
+            return type(
+                "Result",
+                (),
+                {
+                    "returncode": 0,
+                    "stdout": (
+                        '{"body":"Intro","isDraft":true,'
+                        '"headRefName":"codex/other"}'
+                    ),
+                    "stderr": "",
+                },
+            )()
+
+        with self.assertRaises(PermissionError):
+            GitHubClient("owner/repo", runner=runner).update_pr_body(
+                12, "summary", expected_head="codex/feature"
+            )
 
 
 if __name__ == "__main__":

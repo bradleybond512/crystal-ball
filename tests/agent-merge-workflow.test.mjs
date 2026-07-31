@@ -9,22 +9,13 @@ const workflow = readFileSync(
   'utf8',
 );
 
-test('agent branches use GitHub auto-merge instead of direct merge API calls', () => {
-  assert.match(
- workflow,
- /Enable GitHub auto-merge/,
- 'agent workflow should explicitly enable GitHub auto-merge',
-  );
-  assert.match(
- workflow,
- /enablePullRequestAutoMerge/,
- 'agent workflow should rely on GitHub auto-merge after checks pass',
-  );
+test('agent branches create draft PRs and never merge without approval', () => {
   assert.doesNotMatch(
- workflow,
- /github\.rest\.pulls\.merge/,
- 'agent workflow should not merge PRs immediately on branch push',
+    workflow,
+    /enablePullRequestAutoMerge|github\.rest\.pulls\.merge/,
+    'agent workflow should not merge or enable auto-merge on branch push',
   );
+  assert.match(workflow, /draft:\s*true/, 'agent PRs should start as drafts');
   assert.match(
  workflow,
  /TITLE=\$\{BRANCH##\*\/\}[\s\S]*TITLE=\$\{TITLE\/\/-\/ \}/,

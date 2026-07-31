@@ -1,4 +1,5 @@
 import tempfile
+import subprocess
 import unittest
 from collections import deque
 from pathlib import Path
@@ -39,12 +40,15 @@ class FakeRouter:
 
 
 class FakeCodex:
-    def __init__(self, payloads):
+    def __init__(self, payloads, on_invoke=None):
         self.payloads = deque(payloads)
         self.calls = []
+        self.on_invoke = on_invoke
 
     def invoke(self, assignment, prompt, schema, read_only):
         self.calls.append((assignment.agent, prompt, schema.name, read_only))
+        if self.on_invoke:
+            self.on_invoke(assignment, read_only)
         payload = self.payloads.popleft()
         return InvocationResult(
             succeeded=True,
@@ -168,6 +172,42 @@ class OrchestratorTests(unittest.TestCase):
 
         self.assertEqual(resumed.status, PipelineStatus.COMPLETED)
 
+    def test_resume_blocks_when_target_commit_no_longer_matches_ledger(self):
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=self.root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-qm", "baseline"],
+            cwd=self.root,
+            check=True,
+        )
+        codex = FakeCodex([])
+        validators = FakeValidators([])
+        orchestrator = Orchestrator(
+            self.root, self.store, FakeRouter(), codex, validators
+        )
+        state, _ = self.store.create_or_get(
+            "Add a provider",
+            "codex/feature",
+            BudgetLimits(max_total_tokens=1_000, max_invocations=10),
+            baseline_sha="0000000000000000000000000000000000000000",
+        )
+
+        blocked = orchestrator.run_until_blocked(state.pipeline_id)
+
+        self.assertEqual(blocked.status, PipelineStatus.BLOCKED)
+        self.assertEqual(blocked.last_failure.failure_class, "provenance")
+        self.assertEqual(codex.calls, [])
+        self.assertEqual(validators.calls, [])
+
     def test_validation_failure_returns_to_original_builder_then_reruns(self):
         target = ["npm", "run", "test:providers"]
         broad = ["bash", "scripts/agentic-check-changed.sh"]
@@ -286,6 +326,48 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(codex.calls[3][0], "provider_engineer")
         self.assertIn("unsafe parser", codex.calls[3][1])
         self.assertEqual(validators.calls[1], [target, broad])
+
+    def test_blocks_out_of_scope_builder_changes_before_validation(self):
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        (self.root / ".git/info/exclude").write_text("state.sqlite*\n")
+
+        def mutate(_assignment, read_only):
+            if not read_only:
+                (self.root / "outside.txt").write_text("not approved")
+
+        codex = FakeCodex(
+            [
+                {
+                    "summary": "plan",
+                    "tasks": [
+                        {
+                            "id": "T1",
+                            "objective": "build",
+                            "allowed_files": ["src/providers/**"],
+                        }
+                    ],
+                    "approval_gates": [],
+                },
+                {"summary": "implemented", "changed_files": ["outside.txt"]},
+            ],
+            on_invoke=mutate,
+        )
+        validators = FakeValidators([])
+        orchestrator = Orchestrator(
+            self.root, self.store, FakeRouter(), codex, validators
+        )
+        state, _ = self.store.create_or_get(
+            "Add a provider",
+            "codex/feature",
+            BudgetLimits(max_total_tokens=1_000, max_invocations=10),
+        )
+
+        blocked = orchestrator.run_until_blocked(state.pipeline_id)
+
+        self.assertEqual(blocked.status, PipelineStatus.BLOCKED)
+        self.assertEqual(blocked.last_failure.failure_class, "scope_violation")
+        self.assertEqual(blocked.last_failure.changed_files, ["outside.txt"])
+        self.assertEqual(validators.calls, [])
 
 
 if __name__ == "__main__":

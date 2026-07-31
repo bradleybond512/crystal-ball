@@ -28,6 +28,19 @@ class RedactorTests(unittest.TestCase):
             {"stderr": ["GITHUB_TOKEN=[REDACTED]"], "count": 2},
         )
 
+    def test_redacts_github_app_tokens_and_json_secret_values(self):
+        text = (
+            'GH_TOKEN=ghs_1234567890 '
+            '"api_key": "sk-1234567890" '
+            '"password":"do-not-log-this"'
+        )
+
+        redacted = Redactor().redact(text)
+
+        self.assertNotIn("ghs_1234567890", redacted)
+        self.assertNotIn("sk-1234567890", redacted)
+        self.assertNotIn("do-not-log-this", redacted)
+
 
 if __name__ == "__main__":
     unittest.main()

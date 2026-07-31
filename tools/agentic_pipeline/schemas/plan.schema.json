@@ -73,6 +73,7 @@
       "items": {
         "enum": [
           "design",
+          "control_plane",
           "publish",
           "release",
           "deploy",

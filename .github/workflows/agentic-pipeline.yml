@@ -28,6 +28,11 @@ on:
         options:
           - none
           - design
+          - control_plane
+          - release
+          - deploy
+          - secrets
+          - destructive
       max_total_tokens:
         description: Hard token budget
         required: true
@@ -50,8 +55,8 @@ on:
 
 permissions:
   actions: read
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: agentic-pipeline-${{ inputs.branch }}
@@ -62,8 +67,14 @@ jobs:
     name: Route, build, validate, review
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    outputs:
+      outcome: ${{ steps.pipeline.outputs.outcome }}
+      pipeline_id: ${{ steps.pipeline.outputs.pipeline_id }}
     env:
-      PIPELINE_STATE: .agentic-run/state.sqlite
+      CONTROL_ROOT: ${{ github.workspace }}/control-plane
+      TARGET_ROOT: ${{ github.workspace }}/agent-worktree
+      RUN_ROOT: ${{ github.workspace }}/.agentic-run
+      PIPELINE_STATE: ${{ github.workspace }}/.agentic-run/state.sqlite
       TARGET_BRANCH: ${{ inputs.branch }}
       PIPELINE_ACTOR: ${{ github.actor }}
     steps:
@@ -72,8 +83,14 @@ jobs:
           REQUEST: ${{ inputs.request }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
           PIPELINE_ID: ${{ inputs.pipeline_id }}
+          WORKFLOW_REF: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           git check-ref-format --branch "$TARGET_BRANCH"
+          if [[ "$WORKFLOW_REF" != "$DEFAULT_BRANCH" ]]; then
+            echo "Run this workflow from the protected default branch." >&2
+            exit 1
+          fi
           if [[ "$TARGET_BRANCH" != codex/* ]]; then
             echo "The pipeline only writes codex/* branches." >&2
             exit 1
@@ -87,9 +104,19 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Checkout protected control plane
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control-plane
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout mutable target worktree
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           ref: ${{ inputs.branch }}
+          path: agent-worktree
           fetch-depth: 0
           persist-credentials: false
 
@@ -104,7 +131,8 @@ jobs:
           run-id: ${{ inputs.resume_run_id }}
 
       - name: Install locked application dependencies
-        run: npm ci
+        working-directory: agent-worktree
+        run: npm ci --ignore-scripts
 
       - name: Install pinned Codex CLI
         run: npm install --global @openai/codex@0.145.0
@@ -112,13 +140,18 @@ jobs:
       - name: Restore worktree and ledger
         if: inputs.resume_run_id != ''
         run: |
-          mkdir -p .agentic-run
-          cp .agentic-resume/state.sqlite .agentic-run/state.sqlite
+          mkdir -p "$RUN_ROOT"
+          cp .agentic-resume/state.sqlite "$PIPELINE_STATE"
+          expected_control_sha="$(cat .agentic-resume/control-sha)"
+          git -C "$CONTROL_ROOT" fetch --depth=1 origin \
+            "$expected_control_sha"
+          git -C "$CONTROL_ROOT" checkout --detach "$expected_control_sha"
           if [[ -s .agentic-resume/workspace.patch ]]; then
-            git apply --whitespace=error .agentic-resume/workspace.patch
+            git -C "$TARGET_ROOT" apply --whitespace=error \
+              .agentic-resume/workspace.patch
           fi
 
-      - name: Run or resume pipeline
+      - name: Run or resume protected pipeline
         id: pipeline
         env:
           REQUEST: ${{ inputs.request }}
@@ -129,27 +162,26 @@ jobs:
           MAX_INVOCATIONS: ${{ inputs.max_invocations }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          mkdir -p .agentic-run
+          mkdir -p "$RUN_ROOT"
+          pipeline=(
+            python3 -m tools.agentic_pipeline
+            --root "$TARGET_ROOT"
+            --control-root "$CONTROL_ROOT"
+            --state "$PIPELINE_STATE"
+          )
+          cd "$CONTROL_ROOT"
           if [[ -n "$RESUME_RUN_ID" ]]; then
             if [[ "$APPROVAL_GATE" != "none" ]]; then
-              python3 -m tools.agentic_pipeline \
-                --state "$PIPELINE_STATE" \
-                approve "$PIPELINE_ID" \
-                --gate "$APPROVAL_GATE" \
-                --actor "$PIPELINE_ACTOR"
+              "${pipeline[@]}" approve "$PIPELINE_ID" \
+                --gate "$APPROVAL_GATE" --actor "$PIPELINE_ACTOR"
             fi
             set +e
-            result="$(python3 -m tools.agentic_pipeline \
-              --state "$PIPELINE_STATE" \
-              resume "$PIPELINE_ID" \
-              --json)"
+            result="$("${pipeline[@]}" resume "$PIPELINE_ID" --json)"
             pipeline_exit=$?
             set -e
           else
             set +e
-            result="$(python3 -m tools.agentic_pipeline \
-              --state "$PIPELINE_STATE" \
-              start \
+            result="$("${pipeline[@]}" start \
               --request "$REQUEST" \
               --branch "$TARGET_BRANCH" \
               --max-total-tokens "$MAX_TOTAL_TOKENS" \
@@ -161,7 +193,7 @@ jobs:
               'import json,sys; print(json.load(sys.stdin)["pipeline_id"])' \
               <<<"$result")"
           fi
-          printf '%s\n' "$PIPELINE_ID" > .agentic-run/pipeline-id
+          printf '%s\n' "$PIPELINE_ID" > "$RUN_ROOT/pipeline-id"
           printf 'pipeline_id=%s\n' "$PIPELINE_ID" >> "$GITHUB_OUTPUT"
           if [[ "$pipeline_exit" -eq 0 ]]; then
             printf 'outcome=completed\n' >> "$GITHUB_OUTPUT"
@@ -170,35 +202,35 @@ jobs:
           else
             printf 'outcome=blocked\n' >> "$GITHUB_OUTPUT"
           fi
-          python3 -m tools.agentic_pipeline \
-            --state "$PIPELINE_STATE" \
-            summary "$PIPELINE_ID" \
-            --output .agentic-run/summary.md
-          cat .agentic-run/summary.md >> "$GITHUB_STEP_SUMMARY"
+          "${pipeline[@]}" summary "$PIPELINE_ID" \
+            --output "$RUN_ROOT/summary.md"
+          cat "$RUN_ROOT/summary.md" >> "$GITHUB_STEP_SUMMARY"
           if [[ "$pipeline_exit" -ne 0 && "$pipeline_exit" -ne 10 ]]; then
             exit "$pipeline_exit"
           fi
 
       - name: Package resumable state
         if: always()
+        working-directory: agent-worktree
         run: |
-          mkdir -p .agentic-run
+          mkdir -p "$RUN_ROOT"
+          git -C "$CONTROL_ROOT" rev-parse HEAD > "$RUN_ROOT/control-sha"
           git ls-files --others --exclude-standard -z \
-            > .agentic-run/untracked-paths
-          if [[ -s .agentic-run/untracked-paths ]]; then
+            > "$RUN_ROOT/untracked-paths"
+          if [[ -s "$RUN_ROOT/untracked-paths" ]]; then
             git add -N \
-              --pathspec-from-file=.agentic-run/untracked-paths \
+              --pathspec-from-file="$RUN_ROOT/untracked-paths" \
               --pathspec-file-nul
           fi
-          git diff --binary > .agentic-run/workspace.patch
+          git diff --binary > "$RUN_ROOT/workspace.patch"
           if ! git diff --quiet HEAD -- scripts/secret-scan.mjs; then
-            echo "Secret scanner changed; refusing to retain the worktree patch." \
-              >> .agentic-run/summary.md
-            : > .agentic-run/workspace.patch
-          elif ! node scripts/secret-scan.mjs; then
+            echo "Secret scanner changed; worktree patch omitted." \
+              >> "$RUN_ROOT/summary.md"
+            : > "$RUN_ROOT/workspace.patch"
+          elif ! node "$CONTROL_ROOT/scripts/secret-scan.mjs"; then
             echo "Secret scan failed; worktree patch omitted." \
-              >> .agentic-run/summary.md
-            : > .agentic-run/workspace.patch
+              >> "$RUN_ROOT/summary.md"
+            : > "$RUN_ROOT/workspace.patch"
           fi
 
       - name: Upload durable state and worktree patch
@@ -210,55 +242,109 @@ jobs:
             .agentic-run/state.sqlite
             .agentic-run/workspace.patch
             .agentic-run/pipeline-id
+            .agentic-run/control-sha
             .agentic-run/summary.md
           if-no-files-found: error
           retention-days: 14
 
-      - name: Commit approved completed changes
-        if: >-
-          steps.pipeline.outputs.outcome == 'completed' &&
-          inputs.publish_changes
-        env:
-          PIPELINE_ID: ${{ steps.pipeline.outputs.pipeline_id }}
-          GH_TOKEN: ${{ github.token }}
+  publish:
+    name: Publish approved completed change
+    needs: run
+    if: needs.run.outputs.outcome == 'completed' && inputs.publish_changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    env:
+      CONTROL_ROOT: ${{ github.workspace }}/control-plane
+      TARGET_ROOT: ${{ github.workspace }}/agent-worktree
+      PUBLISH_ROOT: ${{ github.workspace }}/.agentic-publish
+      PIPELINE_STATE: ${{ github.workspace }}/.agentic-publish/state.sqlite
+      TARGET_BRANCH: ${{ inputs.branch }}
+      PIPELINE_ACTOR: ${{ github.actor }}
+      PIPELINE_ID: ${{ needs.run.outputs.pipeline_id }}
+    steps:
+      - name: Checkout protected control plane
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control-plane
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout mutable target worktree
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ inputs.branch }}
+          path: agent-worktree
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download reviewed pipeline artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: agentic-pipeline-state
+          path: .agentic-publish
+
+      - name: Apply reviewed worktree patch
+        run: |
+          if [[ -s "$PUBLISH_ROOT/workspace.patch" ]]; then
+            git -C "$TARGET_ROOT" apply --whitespace=error \
+              "$PUBLISH_ROOT/workspace.patch"
+          fi
+
+      - name: Record explicit publish approval
+        working-directory: control-plane
         run: |
           python3 -m tools.agentic_pipeline \
+            --root "$TARGET_ROOT" \
+            --control-root "$CONTROL_ROOT" \
             --state "$PIPELINE_STATE" \
             approve "$PIPELINE_ID" \
             --gate publish \
             --actor "$PIPELINE_ACTOR"
+
+      - name: Commit reviewed change
+        working-directory: agent-worktree
+        run: |
           {
             git diff --name-only -z
             git ls-files --others --exclude-standard -z
-          } > .agentic-run/changed-paths
-          if [[ ! -s .agentic-run/changed-paths ]]; then
+          } > "$PUBLISH_ROOT/changed-paths"
+          if [[ ! -s "$PUBLISH_ROOT/changed-paths" ]]; then
             echo "No changes to publish."
             exit 0
           fi
           git add \
-            --pathspec-from-file=.agentic-run/changed-paths \
+            --pathspec-from-file="$PUBLISH_ROOT/changed-paths" \
             --pathspec-file-nul
           git config user.name "Crystal Ball Agentic Pipeline"
           git config user.email "actions@users.noreply.github.com"
           git commit \
             -m "build(codex): execute approved agentic task" \
             -m "Co-Authored-By: Codex Sonnet 4.6 <noreply@anthropic.com>"
+
+      - name: Push approved branch
+        working-directory: agent-worktree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           gh auth setup-git
-          git remote add fork \
-            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git remote add fork "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
           git push fork "HEAD:${TARGET_BRANCH}"
 
       - name: Update approved draft PR
-        if: >-
-          steps.pipeline.outputs.outcome == 'completed' &&
-          inputs.publish_changes &&
-          inputs.draft_pr_number != ''
+        if: inputs.draft_pr_number != ''
+        working-directory: control-plane
         env:
           GH_TOKEN: ${{ github.token }}
-          PIPELINE_ID: ${{ steps.pipeline.outputs.pipeline_id }}
           PR_NUMBER: ${{ inputs.draft_pr_number }}
         run: |
           python3 -m tools.agentic_pipeline \
+            --root "$TARGET_ROOT" \
+            --control-root "$CONTROL_ROOT" \
             --state "$PIPELINE_STATE" \
             pr-update "$PIPELINE_ID" \
             --repository "$GITHUB_REPOSITORY" \

@@ -15,11 +15,13 @@ class CodexClient:
     def __init__(
         self,
         root: Path,
+        control_root: Path | None = None,
         runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
         timeout_seconds: int = 3_600,
         redactor: Redactor | None = None,
     ) -> None:
         self.root = root
+        self.control_root = control_root or root
         self.runner = runner
         self.timeout_seconds = timeout_seconds
         self.redactor = redactor or Redactor()
@@ -144,7 +146,7 @@ class CodexClient:
         self, assignment: AgentAssignment, task_prompt: str
     ) -> str:
         path = (
-            self.root
+            self.control_root
             / ".codex/agents"
             / f"{assignment.agent.replace('_', '-')}.toml"
         )

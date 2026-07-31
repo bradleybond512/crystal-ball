@@ -15,6 +15,7 @@ from .models import (
     PipelineStatus,
     ValidationResult,
 )
+from .policy import PlanPolicy
 from .state import StateStore
 
 
@@ -26,16 +27,34 @@ class Orchestrator:
         router: Any,
         codex: Any,
         validators: Any,
+        control_root: Path | None = None,
     ) -> None:
         self.root = root
         self.store = store
         self.router = router
         self.codex = codex
         self.validators = validators
-        self.schemas = root / "tools/agentic_pipeline/schemas"
+        self.schemas = (
+            control_root or root
+        ) / "tools/agentic_pipeline/schemas"
 
     def run_until_blocked(self, pipeline_id: str) -> PipelineState:
         state = self.store.get(pipeline_id)
+        provenance_error = self._provenance_error(state)
+        if provenance_error:
+            state.status = PipelineStatus.BLOCKED
+            state.last_failure = FailurePacket(
+                builder="orchestrator",
+                failure_class="provenance",
+                command=[],
+                exit_code=1,
+                summary="Pipeline checkout provenance does not match its ledger.",
+                relevant_output=provenance_error,
+                changed_files=[],
+                attempt=state.repair_attempts,
+            )
+            self.store.save(state, "provenance_blocked")
+            return state
         secret_file = self._workspace_secret_file()
         if secret_file:
             state.status = PipelineStatus.BLOCKED
@@ -133,6 +152,22 @@ class Orchestrator:
                 return self._block_invocation(state, state.route.planner, result)
             state.plan = result.payload
             self.store.save(state, "plan_completed")
+        plan_policy = PlanPolicy(state.plan)
+        approved = {
+            gate
+            for gate in plan_policy.approval_gates
+            if self.store.has_approval(state.pipeline_id, gate)
+        }
+        pending_gates = plan_policy.pending_gates(approved)
+        if pending_gates:
+            state.status = PipelineStatus.WAITING_APPROVAL
+            state.stage = PipelineStage.DESIGN_APPROVAL
+            self.store.save(
+                state,
+                "approval_required",
+                {"gate": pending_gates[0]},
+            )
+            return state
         if (
             state.route.requires_design_approval
             and not self.store.has_approval(state.pipeline_id, "design")
@@ -156,6 +191,9 @@ class Orchestrator:
                 return self._block_invocation(state, state.route.builder, result)
             state.implementation = result.payload
             self.store.save(state, "implementation_completed")
+        scope_block = self._scope_block(state)
+        if scope_block:
+            return scope_block
         state.stage = PipelineStage.VALIDATING
         commands = state.route.validation_commands
         results = self.validators.run_many(commands)
@@ -196,6 +234,9 @@ class Orchestrator:
                 "repair_completed",
                 {"attempt": state.repair_attempts},
             )
+            scope_block = self._scope_block(state)
+            if scope_block:
+                return scope_block
             failed_first = self.validators.run_many([failed.command])
             state.validation_results = failed_first
             self.store.save(
@@ -284,6 +325,9 @@ class Orchestrator:
                 "review_repair_completed",
                 {"attempt": state.repair_attempts},
             )
+            scope_block = self._scope_block(state)
+            if scope_block:
+                return scope_block
             validation = self.validators.run_many(commands)
             state.validation_results = validation
             self.store.save(
@@ -440,6 +484,53 @@ class Orchestrator:
             (path for path in candidates if (self.root / path).is_file()),
             None,
         )
+
+    def _scope_block(self, state: PipelineState) -> PipelineState | None:
+        scope_violation = PlanPolicy(state.plan or {}).out_of_scope(
+            self._changed_files()
+        )
+        if not scope_violation:
+            return None
+        state.status = PipelineStatus.BLOCKED
+        state.last_failure = FailurePacket(
+            builder=state.route.builder.agent,
+            failure_class="scope_violation",
+            command=[],
+            exit_code=1,
+            summary="Builder changed files outside the approved plan.",
+            relevant_output="\n".join(scope_violation),
+            changed_files=scope_violation,
+            attempt=state.repair_attempts,
+        )
+        self.store.save(
+            state,
+            "scope_violation_blocked",
+            {"changed_files": scope_violation},
+        )
+        return state
+
+    def _provenance_error(self, state: PipelineState) -> str | None:
+        checks = (
+            (self.root, state.baseline_sha, "target"),
+            (self.schemas.parents[2], state.control_sha, "control"),
+        )
+        for root, expected, label in checks:
+            if not expected:
+                continue
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            actual = result.stdout.strip()
+            if result.returncode != 0 or actual != expected:
+                return (
+                    f"{label} checkout expected {expected}, "
+                    f"found {actual or 'unavailable'}"
+                )
+        return None
 
     def _planning_prompt(self, state: PipelineState) -> str:
         return f"""Act as the {state.route.planner.agent} in read-only mode.

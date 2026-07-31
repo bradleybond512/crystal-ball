@@ -1,8 +1,9 @@
 # Crystal Ball Agentic Engineering
 
-Crystal Ball uses Codex as a supervised engineering team rather than a single
-unbounded coding agent. Repository instructions, specialist agents, a reusable
-workflow Skill, executable checks, and GitHub CI work together.
+Crystal Ball uses one supervised engineering control plane across Codex and
+Claude Code rather than separate assistant-specific workflows. Repository
+instructions, specialist agents, reusable workflow Skills, executable checks,
+Claude project hooks, and GitHub CI work together.
 
 ## Executable runtime
 
@@ -20,9 +21,9 @@ python3 -m tools.agentic_pipeline start \
 
 The command creates `.agentic-run/state.sqlite` with mode `0600`, routes through
 `scripts/agent-router.mjs`, selects models from `.codex/model-policy.json`,
-invokes Codex with JSON schemas, runs targeted checks, then runs
-`scripts/agentic-check-changed.sh` and `scripts/agentic-validate.sh`. An
-independent reviewer runs only after deterministic checks pass.
+invokes Codex with JSON schemas, runs the smallest targeted checks first, then
+runs `scripts/agentic-validate.sh` once as the broad gate. An independent
+reviewer runs only after deterministic checks pass.
 
 Important commands:
 
@@ -72,16 +73,51 @@ arrays and checked against a fixed allowlist. Before execution, npm script
 definitions and gate executables are compared with `HEAD`; modified validation
 code fails closed instead of being executed.
 
-Codex model subprocesses receive no inherited shell environment and no network
-access. The Codex process receives only `PATH`, `HOME`, `CODEX_HOME`, and
-`OPENAI_API_KEY` when present. Run local automation from a clean worktree
-without `.env` files or unrelated credentials. GitHub-hosted runners are the
-preferred unattended environment because they are ephemeral.
+Codex model subprocesses receive no inherited shell environment and no
+workspace network access. Validator subprocesses receive a separately built
+environment that removes credential-like variables and disables npm lifecycle
+scripts. The GitHub workflow checks out its executable control plane from the
+protected default branch and the change target into a separate worktree.
+Build/validation runs with read-only repository permissions; a separate
+approval-gated job receives write permission only for publishing.
+
+Each ledger binds the target and control-plane commit IDs. Resume fails closed
+when either checkout changes, and draft PR updates verify that the PR head is
+the pipeline branch.
+
+## Cross-platform Claude enforcement
+
+`CLAUDE.md` imports `AGENTS.md`, so Claude Code consumes the same canonical
+repository rules. `.claude/settings.json` installs Node-based `SessionStart`
+and `PreToolUse` hooks, which work on macOS, Linux, and Windows without relying
+on a shell script. The hooks inject the shared workflow contract and deny
+unapproved push, merge, release, deployment, keychain, and destructive
+commands.
+
+`node scripts/agent-policy-check.mjs` and the Python regression suite verify
+that Claude's import, hooks, and protected-action rules remain present. Local
+hooks can be disabled by a machine owner, so CI and branch protection remain
+the non-bypassable repository boundary.
+
+## Tuning without workflow drift
+
+Tune the system through these checked-in control points:
+
+- `.codex/model-policy.json`: agent model, reasoning effort, and repair limit
+- `scripts/agent-router.mjs`: domain signals and targeted deterministic tests
+- workflow inputs: total-token and invocation budgets
+- `tools/agentic_pipeline/schemas/`: bounded handoff contracts
+- `scripts/agentic-validate.sh`: the single broad completion gate
+
+Run `npm run agentic:policy-check` and `npm run agentic:pipeline:test` after
+every tuning change. Keep routing deterministic and run cheap targeted tests
+before the broad gate; do not add model calls for work a script can decide.
 
 ## Manual GitHub Actions operation
 
-`.github/workflows/agentic-pipeline.yml` is `workflow_dispatch` only. Configure
-the repository `OPENAI_API_KEY` secret before use.
+`.github/workflows/agentic-pipeline.yml` is `workflow_dispatch` only and must be
+dispatched from the protected default branch. Configure the repository
+`OPENAI_API_KEY` secret before use.
 
 For a new run, provide a request and an existing `codex/*` branch. If a
 high-assurance design gate pauses the run, download nothing manually: dispatch
@@ -128,10 +164,11 @@ obtain an independent review, and prepare the completion report.
 
 1. `AGENTS.md` defines permanent repository policy.
 2. `.codex/agents/*.toml` defines narrow specialists and permissions.
-3. `.agents/skills/crystal-ball-feature-workflow/SKILL.md` defines sequencing and handoffs.
-4. `scripts/agentic-validate.sh` supplies a repeatable local completion gate.
-5. `tools/agentic_pipeline/` executes routing, state, repair, and review.
-6. Existing GitHub required checks remain the final merge authority.
+3. `CLAUDE.md` imports the same policy; `.claude/` adds cross-platform hooks.
+4. `.agents/skills/crystal-ball-feature-workflow/SKILL.md` defines sequencing and handoffs.
+5. `scripts/agentic-validate.sh` supplies a repeatable local completion gate.
+6. `tools/agentic_pipeline/` executes routing, state, repair, and review.
+7. Existing GitHub required checks remain the final merge authority.
 
 Instructions guide behavior; executable checks and branch protection enforce
 reality. A task is not complete when validation could not run.

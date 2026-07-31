@@ -16,6 +16,11 @@ class Redactor:
             ),
             re.compile(r"(?i)(https?://[^:/\s]+:)[^@\s]+(@)"),
             re.compile(r"\b(?:sk|ghp|gho|github_pat)_[A-Za-z0-9_-]{8,}\b"),
+            re.compile(r"\b(?:sk-|ghs_)[A-Za-z0-9_-]{8,}\b"),
+            re.compile(
+                r'(?i)(["\'](?:api_key|password|private_key|secret|token)["\']'
+                r'\s*:\s*)(["\'])(.*?)\2'
+            ),
             re.compile(
                 r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?"
                 r"-----END [A-Z ]*PRIVATE KEY-----",
@@ -29,7 +34,11 @@ class Redactor:
         redacted = self.patterns[1].sub(r"\1[REDACTED]", redacted)
         redacted = self.patterns[2].sub(r"\1[REDACTED]\2", redacted)
         redacted = self.patterns[3].sub("[REDACTED]", redacted)
-        redacted = self.patterns[4].sub("[REDACTED PRIVATE KEY]", redacted)
+        redacted = self.patterns[4].sub("[REDACTED]", redacted)
+        redacted = self.patterns[5].sub(
+            r"\1\2[REDACTED]\2", redacted
+        )
+        redacted = self.patterns[6].sub("[REDACTED PRIVATE KEY]", redacted)
         return redacted
 
     def redact_value(self, value: Any) -> Any:

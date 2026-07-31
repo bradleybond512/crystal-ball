@@ -91,7 +91,7 @@ jobs:
                 head: branch,
                 base: 'main',
                 body: body,
-                draft: false
+                draft: true
               });
               console.log(`Created PR #${pr.number}: ${pr.html_url}`);
               core.setOutput('pr_number', String(pr.number));
@@ -147,80 +147,4 @@ jobs:
               } catch (e) {
                 console.log('Labels may not exist yet:', e.message);
               }
-            }
-
-  auto-merge:
-    name: Auto-merge when checks pass
-    needs: auto-pr
-    runs-on: ubuntu-latest
-    # enablePullRequestAutoMerge requires contents: write on the token;
-    # the top-level contents: read made every run fail with
-    # "Resource not accessible by integration".
-    permissions:
-      contents: write
-      pull-requests: write
-    if: startsWith(github.ref_name, 'claude/') || startsWith(github.ref_name, 'codex/') || startsWith(github.ref_name, 'copilot/') || startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'fix/') || startsWith(github.ref_name, 'chore/')
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          fetch-depth: 0
-
-      - name: Enable GitHub auto-merge
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
-        with:
-          # Prefer a PAT / App token (AUTO_MERGE_PAT) because the default
-          # GITHUB_TOKEN cannot call enablePullRequestAutoMerge in this repo —
-          # it returns "Resource not accessible by integration", which used to
-          # fail this check on every push. With the PAT present, auto-merge is
-          # enabled for real; without it, the step degrades to a warning so the
-          # check stays green instead of blocking the PR.
-          github-token: ${{ secrets.AUTO_MERGE_PAT || secrets.GITHUB_TOKEN }}
-          script: |
-            const usingPat = Boolean('${{ secrets.AUTO_MERGE_PAT }}');
-            const branch = '${{ github.ref_name }}';
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head: `${context.repo.owner}:${branch}`,
-              state: 'open'
-            });
-            if (prs.length === 0) {
-              core.info(`No open PR for ${branch}; nothing to enable.`);
-              return;
-            }
-            const pr = prs[0];
-            // The repo currently disallows squash merges
-            // (allow_squash_merge=false / allow_rebase_merge=true).
-            // Use REBASE so auto-merge actually engages instead of
-            // bouncing with "squash merging is not allowed."
-            const mutation = `
-              mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
-                enablePullRequestAutoMerge(input: {
-                  pullRequestId: $pullRequestId
-                  mergeMethod: REBASE
-                }) {
-                  pullRequest {
-                    number
-                  }
-                }
-              }
-            `;
-            try {
-              await github.graphql(mutation, { pullRequestId: pr.node_id });
-              core.info(`Enabled GitHub auto-merge for PR #${pr.number}`);
-            } catch (err) {
-              const msg = String((err && err.message) || err);
-              // Benign states: auto-merge already enabled, or the PR is already
-              // mergeable/clean so there is nothing to queue. Not a failure.
-              if (/already|clean status|not mergeable|in the (allowed|clean)/i.test(msg)) {
-                core.info(`Auto-merge not (re)enabled for PR #${pr.number}: ${msg}`);
-                return;
-              }
-              // "Resource not accessible by integration" => the token can't
-              // enable auto-merge. Expected with the default GITHUB_TOKEN.
-              // Warn (don't fail) so this check stops blocking every PR.
-              const hint = usingPat
-                ? 'The AUTO_MERGE_PAT may be missing repo/PR scope or lack write access.'
-                : 'Add an AUTO_MERGE_PAT secret (a PAT or App token with repo scope) — the default GITHUB_TOKEN cannot enable auto-merge in this repo.';
-              core.warning(`Could not enable auto-merge for PR #${pr.number}: ${msg}. ${hint}`);
             }

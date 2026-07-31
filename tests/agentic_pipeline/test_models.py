@@ -45,6 +45,9 @@ class PipelineModelTests(unittest.TestCase):
             request="Repair provider parsing",
             request_hash="hash",
             budget=BudgetLimits(max_total_tokens=1_000, max_invocations=4),
+            branch="codex/feature",
+            baseline_sha="abc123",
+            control_sha="def456",
         )
         state.status = PipelineStatus.BLOCKED
         state.last_failure = FailurePacket(

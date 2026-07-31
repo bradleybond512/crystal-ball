@@ -63,6 +63,13 @@ class AgentRouterTests(unittest.TestCase):
         self.assertEqual(route.reviewer.agent, "independent_reviewer")
         self.assertTrue(route.requires_design_approval)
         self.assertEqual(route.max_automatic_repairs, 2)
+        self.assertEqual(
+            route.validation_commands,
+            [
+                ["npm", "run", "test:providers"],
+                ["bash", "scripts/agentic-validate.sh"],
+            ],
+        )
 
     def test_rejects_unknown_agent_from_router_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:

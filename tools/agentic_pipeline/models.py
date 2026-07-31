@@ -166,6 +166,8 @@ class PipelineState:
     request: str
     request_hash: str
     branch: str
+    baseline_sha: str
+    control_sha: str
     status: PipelineStatus
     stage: PipelineStage
     budget: BudgetLedger
@@ -187,12 +189,16 @@ class PipelineState:
         request_hash: str,
         budget: BudgetLimits,
         branch: str = "",
+        baseline_sha: str = "",
+        control_sha: str = "",
     ) -> PipelineState:
         return cls(
             pipeline_id=str(uuid4()),
             request=request,
             request_hash=request_hash,
             branch=branch,
+            baseline_sha=baseline_sha,
+            control_sha=control_sha,
             status=PipelineStatus.CREATED,
             stage=PipelineStage.ROUTING,
             budget=BudgetLedger(limits=budget),
@@ -234,6 +240,8 @@ class PipelineState:
             request=value["request"],
             request_hash=value["request_hash"],
             branch=value.get("branch", ""),
+            baseline_sha=value.get("baseline_sha", ""),
+            control_sha=value.get("control_sha", ""),
             status=PipelineStatus(value["status"]),
             stage=PipelineStage(value["stage"]),
             budget=budget,

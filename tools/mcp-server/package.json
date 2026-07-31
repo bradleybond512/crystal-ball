@@ -5,13 +5,17 @@
   "description": "Crystal Ball MCP server — 59 tools across 9 categories",
   "type": "module",
   "bin": {
+    "crystalball": "./cli.mjs",
     "crystalball-mcp": "./index.mjs",
     "crystalball-monitor": "./monitor-once.mjs",
     "crystalball-monitor-install": "./install-monitor.mjs"
   },
   "files": [
+    "cli.mjs",
     "correlation.mjs",
     "docs",
+    "doctor.mjs",
+    "evidence-packet.mjs",
     "forecast-evaluation-public.mjs",
     "tools",
     "index.mjs",
@@ -20,6 +24,7 @@
     "monitor-once.mjs",
     "result.mjs",
     "route-policy.mjs",
+    "safeguard-demo.mjs",
     "safety-policy.mjs",
     "server-meta.mjs",
     "sidecar-client.mjs",

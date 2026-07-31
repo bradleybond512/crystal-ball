@@ -62,12 +62,15 @@ test('package metadata and executable match the server contract', async () => {
   const indexSource = await readFile(join(serverRoot, 'index.mjs'), 'utf8');
   const indexStat = await stat(join(serverRoot, 'index.mjs'));
   const monitorStat = await stat(join(serverRoot, 'monitor-once.mjs'));
+  const cliStat = await stat(join(serverRoot, 'cli.mjs'));
 
   assert.equal(packageJson.description, `Crystal Ball MCP server — ${catalogSummary()}`);
   assert.equal(packageJson.version, '0.3.0');
   assert.equal(packageJson.bin['crystalball-monitor'], './monitor-once.mjs');
   assert.equal(packageJson.bin['crystalball-monitor-install'], './install-monitor.mjs');
+  assert.equal(packageJson.bin.crystalball, './cli.mjs');
   assert.match(indexSource, /^#!\/usr\/bin\/env node/);
   assert.ok(indexStat.mode & 0o111);
   assert.ok(monitorStat.mode & 0o111);
+  assert.ok(cliStat.mode & 0o111);
 });

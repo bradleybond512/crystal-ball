@@ -29,6 +29,42 @@ const MUTATING_REMOTE = {
   openWorldHint: true,
 };
 
+const PERMISSIONS = Object.freeze({
+  read_external: Object.freeze({
+    code: 'read_external',
+    label: 'Reads live intelligence',
+    detail: 'Reads local Crystal Ball data that may come from external providers; it does not change state.',
+  }),
+  read_local: Object.freeze({
+    code: 'read_local',
+    label: 'Reads local status',
+    detail: 'Reads local Crystal Ball status or history; it does not contact providers or change state.',
+  }),
+  change_local: Object.freeze({
+    code: 'change_local',
+    label: 'Changes local state',
+    detail: 'Changes local Crystal Ball state without deleting records or contacting external providers.',
+  }),
+  manage_local: Object.freeze({
+    code: 'manage_local',
+    label: 'Manages local records',
+    detail: 'Creates, updates, or deletes local Crystal Ball records. Confirm the requested change with the user.',
+  }),
+  act_external: Object.freeze({
+    code: 'act_external',
+    label: 'Runs live checks and changes state',
+    detail: 'Contacts live providers and records local results. Run only when the user requests the action.',
+  }),
+});
+
+export function permissionFromAnnotations(annotations) {
+  if (annotations?.readOnlyHint) {
+    return annotations.openWorldHint ? PERMISSIONS.read_external : PERMISSIONS.read_local;
+  }
+  if (annotations?.openWorldHint) return PERMISSIONS.act_external;
+  return annotations?.destructiveHint ? PERMISSIONS.manage_local : PERMISSIONS.change_local;
+}
+
 const CATEGORY_DESCRIPTIONS = {
   Foundation: 'Low-level query primitives for direct sidecar access, chaining, and diffing.',
   Intelligence: 'Cross-domain analysis, trend detection, and anomaly scanning.',
@@ -145,6 +181,7 @@ export const TOOL_CATALOG = Object.freeze(Object.fromEntries(
         category,
         description,
         annotations: Object.freeze(ANNOTATION_OVERRIDES[name] ?? READ_ONLY_REMOTE),
+        permission: permissionFromAnnotations(ANNOTATION_OVERRIDES[name] ?? READ_ONLY_REMOTE),
       }),
     ])
   )),
@@ -163,6 +200,15 @@ export const TOOL_INDEX = Object.freeze({
   topics: Object.freeze(['getting-started', 'watchlists', 'alerts', 'correlation', 'sentinel', 'capabilities']),
   examples: Object.freeze(['cross-domain', 'time-series', 'watchlists', 'alert-rules']),
 });
+
+export const TOOL_REFERENCE = Object.freeze(Object.fromEntries(
+  Object.entries(TOOL_CATALOG).map(([name, metadata]) => [name, Object.freeze({
+    category: metadata.category,
+    description: metadata.description,
+    permission: metadata.permission,
+    annotations: metadata.annotations,
+  })]),
+));
 
 export function createToolConfig(name, config) {
   const metadata = TOOL_CATALOG[name];

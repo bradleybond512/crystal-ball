@@ -1,5 +1,6 @@
 name = "independent_reviewer"
 description = "Read-only independent Crystal Ball reviewer used after implementation and validation."
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
@@ -14,5 +15,7 @@ unnecessary scope. Ignore style-only issues covered by automation.
 
 For every finding provide severity, confidence, file and symbol, problem,
 concrete impact, evidence, recommended fix, and whether it blocks completion.
+Do not edit production code. Return confirmed failures to the owning builder
+through the automated repair packet; never repair findings yourself.
 Return 'No blocking findings' only after meaningful inspection.
 """

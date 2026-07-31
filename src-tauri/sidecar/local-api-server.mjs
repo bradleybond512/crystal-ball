@@ -3286,27 +3286,38 @@ function normalizeAlertRaw(raw) {
  * retry re-asks only the product that actually failed — the healthy ones keep
  * their full TTL, so this is not "stop caching".
  */
-async function loadSpacewxSubfeed(id, url) {
+async function loadSpacewxSubfeed(id, url, normalize, usable) {
   const cacheKey = `spacewx-subfeed-${id}`;
   const cached = getCached(cacheKey); // per-entry TTL, written below
   if (cached) return cached;
-  const raw = await fetchJsonSidecar(url);
-  const entry = { raw, ok: raw !== null };
+  // `ok` is derived from the NORMALIZED product, never from "the fetch came
+  // back non-null". SWPC answers 200 with a parseable-but-empty body often
+  // enough that keying off the raw response counts a broken payload as a
+  // healthy subfeed — it would earn the full TTL and report ok while the
+  // consumer sees no points and fails the voter for the whole window.
+  const value = normalize(await fetchJsonSidecar(url));
+  const entry = { value, ok: usable(value) };
   setCached(cacheKey, entry, spacewxSubfeedTtlMs(entry.ok));
   return entry;
 }
 
+// SWPC publishes x-ray and the planetary index continuously, so an empty
+// series means the payload was unusable, not that the sun went quiet.
+const spacewxHasRows = (rows) => rows.length > 0;
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   const [xray, kp, cme] = await Promise.all([
-    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
-    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-    loadSpacewxSubfeed('cme', 'https://services.swpc.noaa.gov/json/donki/cme.json'),
+    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json', normalizeXrayPoints, spacewxHasRows),
+    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', normalizeKpPoints, spacewxHasRows),
+    // DELIBERATE asymmetry: an EMPTY cme list is the sun's normal state — a
+    // real observation, not a failed fetch — so only a non-array is unusable.
+    loadSpacewxSubfeed('cme', 'https://services.swpc.noaa.gov/json/donki/cme.json', (raw) => (Array.isArray(raw) ? raw : null), (list) => list !== null),
   ]);
   const status = buildSpaceweatherStatusSidecar({
-    xrayFlux: normalizeXrayPoints(xray.raw),
-    kpIndex: normalizeKpPoints(kp.raw),
-    cmes: Array.isArray(cme.raw) ? cme.raw : [],
+    xrayFlux: xray.value,
+    kpIndex: kp.value,
+    cmes: cme.value ?? [],
     now,
   });
   // Per-subfeed provenance so a consumer can tell "this product FAILED" from
@@ -10884,7 +10895,10 @@ async function dispatch(requestUrl, req, routes, context) {
       const currentTime = data.current?.time;
       const observedAt = currentTime !== undefined ? Date.parse(`${currentTime}Z`) - (data.utc_offset_seconds ?? 0) * 1000 : NaN;
       const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
-      const hasCurrentReading = Number.isFinite(observedAt);
+      // Both halves, matching fetchOpenMeteoTemp: a timestamp with no reading
+      // is exactly as unusable to the surface_temp domain as no `current` block
+      // at all, so it must not earn the full TTL just because the time parsed.
+      const hasCurrentReading = Number.isFinite(observedAt) && Number.isFinite(data.current?.temperature_2m);
       if (hasCurrentReading) result.currentObservedAtMs = observedAt;
       setCached(cacheKey, result, openMeteoForecastTtlMs(hasCurrentReading));
       return json(result);

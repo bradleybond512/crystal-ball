@@ -1,5 +1,6 @@
 name = "mission_architect"
 description = "Ensures proposed work advances Crystal Ball's intelligence, forecasting, analyst, resilience, or operational mission without unnecessary complexity."
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 

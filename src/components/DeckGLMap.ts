@@ -4646,7 +4646,7 @@ export class DeckGLMap {
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
  { key: 'airSmoke', label: 'Air & Smoke', icon: '💨' },
- { key: 'smokeForecast', label: 'Smoke Forecast (72h)', icon: '&#127787;' },
+ { key: 'smokeForecast', label: 'Smoke Forecast (72h)', icon: '🌫' },
  { key: 'waterways', label: t('components.deckgl.layers.strategicWaterways'), icon: '&#9875;' },
  { key: 'economic', label: t('components.deckgl.layers.economicCenters'), icon: '&#128176;' },
  { key: 'minerals', label: t('components.deckgl.layers.criticalMinerals'), icon: '&#128142;' },

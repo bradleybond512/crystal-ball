@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
-import { deriveScriptIndex, selectScripts, ciVerdict } from '../scripts/targeted-tests.mjs';
+import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -261,9 +261,39 @@ test('ciVerdict fails a source-touching PR with zero applicable suites', () => {
   assert.match(r.reason, /ZERO targeted suites/);
 });
 
-test('ciVerdict passes partial coverage (warned, not blocked) and full coverage', () => {
-  assert.equal(ciVerdict({ indexSize: 106, selected: ['test:weather'], unmapped: ['scripts/pr-closeout.sh'] }).fail, false);
+test('ciVerdict fails when the PR neuters a suite that main selected for it', () => {
+  // The PR rewrote test:weather to `echo ok` — main's mapping still demands it.
+  const r = ciVerdict({ indexSize: 106, selected: ['test:weather'], unmapped: [], neutered: ['test:weather'] });
+  assert.equal(r.fail, true);
+  assert.match(r.reason, /removed or rewrote suite/);
+});
+
+test('ciVerdict fails a NEW uncovered source file; baselined gaps only warn', () => {
+  // New file, not in the ratchet baseline → hard fail even with other coverage.
+  const fresh = ciVerdict({
+    indexSize: 106,
+    selected: ['test:weather'],
+    unmapped: ['src/services/brandnew/engine.ts'],
+    unbaselined: ['src/services/brandnew/engine.ts'],
+  });
+  assert.equal(fresh.fail, true);
+  assert.match(fresh.reason, /not in the coverage baseline/);
+  // Same gap listed in the reviewed baseline → pass with the printed warning.
+  const known = ciVerdict({
+    indexSize: 106,
+    selected: ['test:weather'],
+    unmapped: ['scripts/pr-closeout.sh'],
+    unbaselined: [],
+  });
+  assert.equal(known.fail, false);
   assert.equal(ciVerdict({ indexSize: 106, selected: ['test:weather'], unmapped: [] }).fail, false);
+});
+
+test('the runner allowlist accepts real runners and rejects impostors', () => {
+  assert.equal(isRunnerAllowlisted('tsx --test src/services/weather/__tests__/a.test.mts'), true);
+  assert.equal(isRunnerAllowlisted('node --test tests/x.test.mjs'), true);
+  assert.equal(isRunnerAllowlisted('echo ok'), false);
+  assert.equal(isRunnerAllowlisted(undefined), false);
 });
 
 // ── ci-codex-review: verdict-line parsing ──

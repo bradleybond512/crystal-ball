@@ -13,8 +13,10 @@ case "$BRANCH" in
   *) printf 'pr-closeout: %s is not an agent branch.\n' "$BRANCH" >&2; exit 2 ;;
 esac
 
-if [ -n "$(git status --porcelain)" ]; then
-  printf 'pr-closeout: working tree is dirty — commit or discard first.\n' >&2
+# Untracked files (worktree node_modules symlinks, evidence transcripts) do
+# not affect the committed state being shipped; tracked modifications do.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  printf 'pr-closeout: tracked files have uncommitted changes — commit or discard first.\n' >&2
   exit 1
 fi
 

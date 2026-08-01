@@ -887,11 +887,11 @@ These tasks retain their detailed designs in
 
 | ID | Status | Work | Dependencies |
 |---|---|---|---|
-| ACC-501 | IN REVIEW | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
-| ACC-502 | WAITING | Multiple-comparison correction and inhibitory edges | ACC-501 |
-| ACC-503 | WAITING | Multi-hop mediation/confounder filtering | ACC-501 |
-| ACC-504 | WAITING | Dispersion correction for bursty streams | ACC-501 |
-| ACC-505 | WAITING | Per-regime correlation reliability | ACC-501 |
+| ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
+| ACC-502 | TODO | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
+| ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
+| ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
+| ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
 
 Safety invariant: learned inhibitory or dampening evidence may soften
@@ -905,22 +905,73 @@ Phase exit:
 
 ### ACC-501 — Frozen correlation benchmark and `bench:correlation` CI gate
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Claude
 Branch: `claude/acc-501-correlation-benchmark`
+PR: #1596
 
 Dependencies: ACC-201 (DONE)
 
-Outcome:
+Outcome — delivered:
 
-- a frozen golden-stream corpus with planted ground truth (true causal
-  pairs, independents, a confounded bursty stream) replayed through the
-  real `CorrelateEngine` and the real lead-lag miner;
-- a committed baseline capturing today's pair precision/recall, learned
-  false-positive count, and edge-confidence separation;
-- `npm run bench:correlation` wired into CI so ACC-502 through ACC-506
-  have to prove their improvements instead of asserting them.
+- `src/services/correlation/__bench__/golden-streams.ts` — 10 frozen
+  streams, 378 observations over a fixed 30-day span, with **two levels**
+  of planted truth: domain-level `PLANTED_COUPLINGS` (5 causal, plus
+  independent / confounded / mediated / inhibitory traps) grading the
+  lead-lag miner, and event-level `plantedTruePairKeys()` /
+  `decoyEventIds()` grading the engine's built-in rules. Fixed-seed
+  jitter, no clock reads, no fetch.
+- `src/services/correlation/bench-correlation.ts` — pure replay through
+  the **real** miner and two **real** `CorrelateEngine` instances
+  (`timer: () => 0`, fixed `now`): pass A built-ins only, pass B with the
+  learned rules mined from the same corpus.
+- `src/services/correlation/bench-correlation-baseline.ts` +
+  `__bench__/bench-correlation-baseline.json` — committed baseline with
+  **one-sided** tolerances (improvement passes silently) and an
+  exact-equality corpus-identity check that short-circuits before any
+  metric comparison.
+- `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
+  wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
+  `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
+- 24 unit tests in
+  `src/services/correlation/__tests__/bench-correlation.test.mts`,
+  covering both the corpus (the traps still trap) and the gate (one-sided
+  tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit).
+
+Seed measurements (uncorrected miner, 2026-07-30):
+
+| Metric | Value |
+|---|---|
+| Coupling precision | 22.7% (5 causal of 22 significant, 256 mined) |
+| Coupling recall | 100% (no planted causal coupling missed) |
+| False positives | confounded 2 · mediated 1 · independent 0 · inhibitory 0 · unplanted 14 |
+| Edge evidence separation (mean z) | 8.49 (causal 15.11 vs false 6.62) |
+| Learned rules | 12 synthesised, 9 from non-causal edges |
+| Engine pair precision / recall | 100% / 100%, 0 decoy pairs |
+| Learned-rule pair blast radius | 101 pairs |
+
+Findings the benchmark surfaced, each now a concrete target:
+
+- `significantEdges()` applies **no** multiple-comparisons correction and
+  **no** de-clustering — only three fixed thresholds (`minLift 2`,
+  `minZ 2`, `minSupport 3`). CLAUDE.md and `docs/CORRELATION_NEXTGEN_PLAN.md`
+  describe Bonferroni correction and de-clustered trials that do not exist
+  in the code; **ACC-502 is what makes those claims true.**
+- Of the 14 unplanted edges, 6 are a *systematic* near-coincidence that
+  will survive a Bonferroni correction (z=4.63 vs z_crit≈3.66 at 256
+  tests) and 8 are weak incidental noise a correction should kill — so
+  ACC-502 alone is not sufficient.
+- `LeadLagEdge.strength` **saturates**: every causal edge scores exactly
+  1.0 and false edges average 0.9498, a separation of 0.05. That nearly
+  flat ranking is what decides which 12 edges survive
+  `MAX_LEARNED_RULES`, and it is why two genuinely causal couplings
+  (`macro->maritime`, `space->infra`) were evicted in favour of burst
+  artefacts. The gated separation metric therefore runs on the raw
+  z-score, which has real dynamic range; `edgeStrengthSeparation` is kept
+  as reported-only evidence of the defect.
+- The engine's built-in rules are already perfect on event-level truth,
+  so **all** the available headroom in Phase 5 is in the miner.
 
 ## Phase 6 — Evaluate better statistical models
 
@@ -1107,7 +1158,7 @@ Every task runs focused tests first, then the smallest relevant rows:
 | Forecast/calibration core | `npm run test:intelligence`, `npm run typecheck:all` |
 | Cognition or model comparison | `npm run test:cognition`, `npm run bench:cognition` |
 | Algorithm health/tuning | `npm run test:algorithms`, `npm run test:diagnostics` |
-| Correlation engine | focused correlation tests, then `npm run bench:correlation` once ACC-501 lands |
+| Correlation engine | focused correlation tests, then `npm run bench:correlation` (ACC-501, gated in CI) |
 | Runtime/sidecar/MCP | `npm run test:diagnostics`, `npm run smoke` |
 | UI surface | focused view-model tests, `npm run test:renderer`, relevant smoke/axe checks |
 | Every PR | `npm run lint:ci`, `npm run typecheck:all`, `npm run secrets:scan:staged`, `git diff --check` |

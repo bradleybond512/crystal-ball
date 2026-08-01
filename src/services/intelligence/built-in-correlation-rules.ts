@@ -1,5 +1,5 @@
 /**
- * Built-in correlation rules — the 8 cross-domain joins Crystal Ball
+ * Built-in correlation rules — the 9 cross-domain joins Crystal Ball
  * ships with out of the box.
  *
  * Each rule combines a time window with one of three matchers:

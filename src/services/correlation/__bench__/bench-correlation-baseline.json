@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "seededAt": "2026-07-30",
+  "note": "ACC-501 seed run against the UNCORRECTED miner: significantEdges() gates on fixed thresholds (minLift 2, minZ 2, minSupport 3) with no multiple-comparisons correction and no de-clustering, so 22 of 256 mined edges clear and only 5 are real — coupling precision 22.7%. Recall is 1.0 and the engine's built-in rules are perfect on event-level truth (precision 1.0, recall 1.0, zero decoy leakage), so every unit of headroom here is in the miner, not the rules. The 14 unplanted edges split into two kinds: 6 are a systematic near-coincidence (the S2 grid-storm anchors sit a fixed ~0.5d before the S8 chain triplets, so space/infra -> chain-x/y/z score z=4.63 and will SURVIVE a Bonferroni correction), and 8 are weak incidental noise (z 2.5-4.8) that a correction should kill. Two real couplings (macro->maritime, space->infra) were evicted at MAX_LEARNED_RULES by burst artefacts, which is what edgeStrengthSeparation=0.05 measures: `strength` saturates at 1.0, so the ranking that decides the cap is nearly flat. ACC-502 owns the correction, ACC-503 the mediated edge, ACC-504 the burst artefacts.",
+
+  "streamCount": 10,
+  "observationCount": 378,
+  "plantedCausalCount": 5,
+
+  "couplingPrecision": 0.2273,
+  "couplingRecall": 1,
+  "significantEdgeCount": 22,
+  "confoundedFalsePositives": 2,
+  "mediatedFalsePositives": 1,
+  "independentFalsePositives": 0,
+  "inhibitoryEdgesReported": 0,
+  "unplantedFalsePositives": 14,
+  "edgeEvidenceSeparation": 8.4898,
+  "learnedRuleCount": 12,
+  "learnedRuleFalsePositives": 9,
+  "pairPrecision": 1,
+  "pairRecall": 1,
+  "decoyPairsEmitted": 0,
+  "learnedRulePairCount": 101,
+
+  "tolerances": {
+    "couplingPrecisionDrop": 0.02,
+    "couplingRecallDrop": 0,
+    "pairPrecisionDrop": 0,
+    "pairRecallDrop": 0,
+    "edgeEvidenceSeparationDrop": 1,
+    "learnedRuleFalsePositiveGrowth": 0,
+    "learnedRulePairGrowth": 5
+  }
+}

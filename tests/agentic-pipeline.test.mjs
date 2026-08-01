@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
+import { validateVerdict, requiredReviewers, evidenceApproves } from '../scripts/verify-review-verdict.mjs';
+// Namespace import: a mutation that removes one of these exports must fail an
+// assertion, not crash the file at load — a load crash is not behavioral proof.
+import * as loop from '../scripts/agentic-review-loop.mjs';
 import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted, commandToStages } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
@@ -338,4 +341,31 @@ test('schema violations parse to null so the check refuses to pass', () => {
   assert.equal(parseVerdictLine('{"blockingFindings": 0.5, "findings": []}'), null);
   assert.equal(parseVerdictLine('{"blockingFindings": 0, "findings": [{"file": "a.ts", "summary": "x"}]}'), null);
   assert.equal(parseVerdictLine('{"looksLike": "json but wrong shape"}'), null);
+});
+
+test('a corrupt state file is refused, not read as zero cycles', () => {
+  // Reading a broken state file as {} would silently reset the mandatory cycle
+  // cap — one bad byte away from an uncapped loop.
+  assert.deepEqual(loop.parseState('{"claude/x":{"cycles":2}}'), { 'claude/x': { cycles: 2 } });
+  assert.throws(() => loop.parseState('{not json'));
+  assert.throws(() => loop.parseState('[]'), /not an object/);
+  assert.throws(() => loop.parseState('null'), /not an object/);
+});
+
+test('the needs-human label is the durable record that the cap is spent', () => {
+  assert.equal(loop.hasEscalationLabel('{"labels":[{"name":"needs-human"}]}'), true);
+  assert.equal(loop.hasEscalationLabel('{"labels":[{"name":"claude"}]}'), false);
+  // gh failures and junk must not read as "escalated" — that would strand every
+  // branch the moment the CLI hiccups.
+  assert.equal(loop.hasEscalationLabel(''), false);
+});
+
+test('recorded evidence keeps the verdict even under heavy reviewer chatter', () => {
+  const verdict = { blockingFindings: 0, findings: [] };
+  const chatter = Array.from({ length: 60 }, (_, i) => `progress line ${i}`).join('\n');
+  const evidence = loop.buildEvidence(`${chatter}\n${JSON.stringify(verdict)}`, verdict);
+  assert.equal(evidenceApproves(evidence), true);
+  // Even when the verdict line itself scrolled out of the 20-line context
+  // window, the appended copy keeps the record approvable.
+  assert.equal(evidenceApproves(loop.buildEvidence(chatter, verdict)), true);
 });

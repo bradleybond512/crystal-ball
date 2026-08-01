@@ -40,6 +40,12 @@ export function nextAction(state, branch, tip, blockingCount) {
 // A missing state file is a legitimate first run, but a state file that EXISTS
 // and will not parse must not silently read as zero cycles: that is a one-line
 // corruption away from an uncapped review loop. Distinguish the two.
+export function parseState(raw) {
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+  return parsed;
+}
+
 function loadState() {
   let raw;
   try {
@@ -48,9 +54,7 @@ function loadState() {
     return {};
   }
   try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
-    return parsed;
+    return parseState(raw);
   } catch (err) {
     console.error(`[review-loop] ${path.relative(root, STATE_FILE)} exists but is unreadable (${err.message}).`);
     console.error('[review-loop] refusing to run: a corrupt state file would reset the mandatory cycle cap.');
@@ -62,14 +66,27 @@ function loadState() {
 // authority on whether the cap is spent. GitHub is the durable record: once the
 // loop has escalated, it labels the PR needs-human, and that label outlives any
 // local cleanup, reclone, or agent that deletes .agentic/.
-function escalatedOnGitHub(branch) {
-  const r = spawnSync('gh', ['pr', 'view', branch, '--json', 'labels'], { cwd: root, encoding: 'utf8' });
-  if (r.status !== 0) return false;
+export function hasEscalationLabel(ghJson) {
   try {
-    return JSON.parse(r.stdout).labels.some((l) => l.name === 'needs-human');
+    return JSON.parse(ghJson).labels.some((l) => l.name === 'needs-human');
   } catch {
     return false;
   }
+}
+
+function escalatedOnGitHub(branch) {
+  const r = spawnSync('gh', ['pr', 'view', branch, '--json', 'labels'], { cwd: root, encoding: 'utf8' });
+  if (r.status !== 0) return false;
+  return hasEscalationLabel(r.stdout);
+}
+
+// Evidence must CONTAIN the verdict. This used to be the last 20 lines of
+// stdout AND stderr concatenated, so 20+ lines of reviewer progress chatter on
+// stderr pushed the verdict out of the window and made a clean review
+// impossible to record. Take context from stdout only, then append the
+// already-parsed verdict last so truncation can never drop it.
+export function buildEvidence(stdout, verdict) {
+  return `${stdout.trim().split('\n').slice(-20).join('\n')}\n${JSON.stringify(verdict)}\n`;
 }
 
 function saveState(state) {
@@ -221,13 +238,7 @@ function main() {
       process.exit(1);
     }
     const evidenceFile = path.join(tmpdir(), `evidence-${tip.slice(0, 8)}.txt`);
-    // Evidence must CONTAIN the verdict. This used to be the last 20 lines of
-    // stdout AND stderr concatenated, so 20+ lines of reviewer progress chatter
-    // on stderr pushed the verdict out of the window and made a clean review
-    // impossible to record. Take context from stdout only, then append the
-    // already-parsed verdict last so truncation can never drop it.
-    const context = stdout.trim().split('\n').slice(-20).join('\n');
-    writeFileSync(evidenceFile, `${context}\n${JSON.stringify(verdict)}\n`);
+    writeFileSync(evidenceFile, buildEvidence(stdout, verdict));
     execFileSync('node', [path.join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', reviewer, '--evidence-file', evidenceFile], { cwd: root, stdio: 'inherit' });
     ledger({ type: 'verdict', branch, tip: tip.slice(0, 8), reviewer });
     console.log('[review-loop] verdict recorded — push, then run scripts/pr-closeout.sh.');

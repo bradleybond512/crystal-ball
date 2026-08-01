@@ -33,15 +33,28 @@ export function parseCounts(output) {
   // Node's test runner (tsx --test / node --test) reports these lines.
   const pass = [...output.matchAll(/ℹ pass (\d+)/g)].reduce((a, m) => a + Number(m[1]), 0);
   const fail = [...output.matchAll(/ℹ fail (\d+)/g)].reduce((a, m) => a + Number(m[1]), 0);
+  // `tests` is the load-crash detector. A file that throws at import does NOT
+  // produce a runnerless output — node reports it as ONE synthetic failing
+  // test (verified: `ℹ pass 0 / ℹ fail 1` for a bad import), which the
+  // `seen` check happily accepts as a behavioral red. Collapsing a file's N
+  // tests into 1 drops this total, and that drop is the signal.
+  const tests = [...output.matchAll(/ℹ tests (\d+)/g)].reduce((a, m) => a + Number(m[1]), 0);
   const seen = /ℹ (pass|fail) \d+/.test(output);
-  return { pass, fail, seen };
+  return { pass, fail, tests, seen };
 }
 
-function runSuites(tests, { phase }) {
+function runSuites(tests, { phase, green }) {
   const results = {};
   for (const script of tests) {
     const r = spawnSync('npm', ['run', script], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     const counts = parseCounts(`${r.stdout ?? ''}${r.stderr ?? ''}`);
+    // Fewer tests ran than in GREEN: at least one file failed to load, so its
+    // assertions never executed. That is a crash, not behavioral evidence,
+    // however cleanly the runner totals it up.
+    if (counts.seen && phase === 'red' && counts.tests < (green?.[script]?.tests ?? 0)) {
+      results[script] = { ...counts, crashed: true, exit: r.status, greenTests: green[script].tests };
+      continue;
+    }
     if (!counts.seen) {
       // In GREEN, a runnerless output means the setup is broken — abort.
       // In RED, the mutation crashing the suite outright IS a failure signal:
@@ -113,14 +126,15 @@ function main() {
   let red;
   try {
     console.log('[mutation-proof] RED run...');
-    red = runSuites(tests, { phase: 'red' });
+    red = runSuites(tests, { phase: 'red', green });
   } finally {
     console.log('[mutation-proof] restoring...');
     git(['checkout', 'HEAD', '--', ...files]);
   }
   const redFails = Object.values(red).reduce((a, r) => a + r.fail, 0);
-  // A crashed suite proves the code is load-bearing, not that any assertion
-  // observed the behavior red. Demand at least one non-crash assertion red.
+  // A crashed suite (no runner output, or fewer tests than GREEN) proves the
+  // code is load-bearing, not that any assertion observed the behavior red.
+  // Demand at least one full-count suite that went red.
   const behavioralReds = Object.values(red).filter((r) => !r.crashed).reduce((a, r) => a + r.fail, 0);
   const after = shasums(files);
   for (const f of files) {

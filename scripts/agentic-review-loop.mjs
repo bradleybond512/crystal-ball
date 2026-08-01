@@ -84,12 +84,25 @@ function runReviewer(reviewer, branch, diff) {
 function escalate(branch, summary, cycles) {
   console.error(`[review-loop] cycle ${cycles} exceeds the ${MAX_CYCLES}-cycle cap — escalating to the human.`);
   const body = `Automated review loop stopped after ${cycles} cycles with blocking findings still open:\n\n${summary}\n\nPer AGENTS.md, a third automatic cycle is prohibited — human decision required.`;
-  try {
+  // The escalation must survive having nowhere to post it. The documented flow
+  // reviews BEFORE push and pr-closeout, so at the cap there is usually no PR
+  // yet — swallowing the gh failure made the loop escalate into silence.
+  // Write the record to disk first; the PR annotation is best-effort on top.
+  const file = path.join(root, '.agentic/escalations', `${branch.replaceAll('/', '__')}.md`);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${body}\n`);
+  console.error(`[review-loop] escalation recorded at ${path.relative(root, file)}`);
+  const prExists = spawnSync('gh', ['pr', 'view', branch, '--json', 'number'], { cwd: root, encoding: 'utf8' }).status === 0;
+  if (prExists) {
     spawnSync('gh', ['label', 'create', 'needs-human', '--color', 'B60205', '--description', 'Agent loop escalation'], { cwd: root });
-    execFileSync('gh', ['pr', 'comment', branch, '--body', body], { cwd: root, stdio: 'inherit' });
-    execFileSync('gh', ['pr', 'edit', branch, '--add-label', 'needs-human'], { cwd: root, stdio: 'inherit' });
-  } catch {
-    console.error('[review-loop] could not annotate the PR — deliver the escalation manually.');
+    const commented = spawnSync('gh', ['pr', 'comment', branch, '--body', body], { cwd: root, stdio: 'inherit' });
+    const labeled = spawnSync('gh', ['pr', 'edit', branch, '--add-label', 'needs-human'], { cwd: root, stdio: 'inherit' });
+    if (commented.status !== 0 || labeled.status !== 0) {
+      console.error('[review-loop] PR annotation FAILED — the needs-human alert will not fire. Deliver it manually.');
+    }
+  } else {
+    console.error(`[review-loop] no PR exists for ${branch} yet, so no needs-human label can fire.`);
+    console.error('[review-loop] ACTION REQUIRED: open the PR and apply needs-human, or resolve the findings above.');
   }
   process.exit(2);
 }

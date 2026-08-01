@@ -10,8 +10,12 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
-const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
-const LEDGER = path.join(root, '.agentic/ledger.jsonl');
+// One ledger per REPOSITORY, not per worktree: dispatch events are written
+// from the canonical checkout while review/verdict events come from agent
+// worktrees, and per-worktree files cannot correlate spend with outcomes.
+// --git-common-dir resolves to the canonical .git from inside any worktree.
+const commonDir = path.resolve(execFileSync('git', ['rev-parse', '--git-common-dir'], { encoding: 'utf8' }).trim());
+const LEDGER = path.join(path.dirname(commonDir), '.agentic/ledger.jsonl');
 
 export function append(event) {
   mkdirSync(path.dirname(LEDGER), { recursive: true });

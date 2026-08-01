@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-os-command-from-path -- dev-tooling CLI: git on PATH is intentional */
+/* eslint-disable sonarjs/no-os-command-from-path -- dev-tooling CLI: git on PATH is intentional */
 // SHA-pinned cross-agent review verdicts.
 //
 // The old gate was a free-text marker in the PR body: self-attestable, never
@@ -48,6 +48,29 @@ export function requiredReviewers(branch) {
   if (branch.startsWith('codex/')) return ['claude'];
   if (branch.startsWith('copilot/')) return ['codex', 'claude'];
   return null; // not an agent branch — no verdict required
+}
+
+// The reviewer's structured verdict object is the ONLY accepted approval
+// marker. Scans every line for a JSON object carrying blockingFindings; an
+// approval requires at least one such object and every one of them clean, so
+// a transcript quoting an earlier failing cycle cannot back a record.
+export function evidenceApproves(evidence) {
+  let sawVerdict = false;
+  for (const line of evidence.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{') || !trimmed.includes('blockingFindings')) continue;
+    let obj;
+    try {
+      obj = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    if (typeof obj.blockingFindings !== 'number') continue;
+    sawVerdict = true;
+    if (obj.blockingFindings !== 0) return false;
+    if (Array.isArray(obj.findings) && obj.findings.some((f) => f?.blocking === true)) return false;
+  }
+  return sawVerdict;
 }
 
 // headEntries: [{ status, file }] from a --no-renames name-status diff of the
@@ -111,13 +134,15 @@ export function validateVerdict({ branch, headEntries, headParent, verdictJson }
         + 'never a paraphrase.',
     );
   } else {
-    const positive = /VERDICT:\s*APPROVE|no blocking finding|"blockingFindings"\s*:\s*0/i.test(verdict.evidence);
-    const negated = /\b(do not|don't|cannot|must not)\s+(approve|record|merge)\b|\bnot approved\b/i.test(verdict.evidence);
-    if (!positive || negated) {
+    // Prose is not evidence. Substring matching over English is polarity-blind
+    // ("VERDICT: APPROVE? No; blocking findings remain" satisfies every
+    // positive marker), so the only accepted approval signal is the reviewer's
+    // own STRUCTURED verdict object with a zero count and no blocking finding.
+    if (!evidenceApproves(verdict.evidence)) {
       failures.push(
-        'evidence must contain an explicit approval marker (VERDICT: APPROVE / no blocking findings / '
-          + '"blockingFindings": 0) and no negation of it — a transcript reporting open blockers or '
-          + '"do not approve" cannot back an approve verdict.',
+        'evidence must contain the reviewer\'s structured verdict object '
+          + '({"blockingFindings": 0, "findings": [...]}) with a zero count and no finding marked '
+          + 'blocking. Prose approvals are rejected — English negation is not machine-checkable.',
       );
     }
   }

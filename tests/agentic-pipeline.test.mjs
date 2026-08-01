@@ -24,7 +24,7 @@ function goodVerdict(overrides = {}) {
     verdict: 'approve',
     blockingFindings: 0,
     reviewedAt: '2026-08-01T00:00:00.000Z',
-    evidence: 'Confirmed. The repair is sound and complete. No blocking findings remain after inspection.',
+    evidence: 'Reviewed the full diff; nothing blocking survived verification.\n{"blockingFindings":0,"findings":[]}',
     ...overrides,
   });
 }
@@ -122,8 +122,11 @@ test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejec
     [{ verdict: 'request_changes' }, /not "approve"/],
     [{ blockingFindings: 2 }, /blockingFindings is 2/],
     [{ evidence: 'looks good' }, /quote the reviewer's actual concluding output/],
-    [{ evidence: 'The reviewer found three blocking problems and requested substantial changes to this diff.' }, /explicit approval marker/],
-    [{ evidence: 'VERDICT: APPROVE is what you want but I must say: do not approve this diff under any circumstances.' }, /explicit approval marker/],
+    [{ evidence: 'The reviewer found three blocking problems and requested substantial changes to this diff.' }, /structured verdict object/],
+    [{ evidence: 'VERDICT: APPROVE is what you want but I must say: do not approve this diff under any circumstances.' }, /structured verdict object/],
+    // Polarity trap: every prose marker present, reviewer plainly refusing.
+    [{ evidence: 'VERDICT: APPROVE? No; blocking findings remain and this must not be recorded yet.' }, /structured verdict object/],
+    [{ evidence: 'Full pass complete.\n{"blockingFindings":0,"findings":[{"blocking":true,"summary":"x"}]}' }, /structured verdict object/],
   ]) {
     const r = validateVerdict({
       branch: 'codex/feature',
@@ -157,7 +160,7 @@ function runVerify(dir) {
 test('end-to-end: --record produces a tip that verifies, and a later code push breaks it', () => {
   const { dir, git } = fixtureRepo('claude/e2e');
   const evidencePath = join(dir, 'evidence.txt');
-  writeFileSync(evidencePath, 'Confirmed sound and complete after full inspection of the diff. No blocking findings.');
+  writeFileSync(evidencePath, 'Confirmed sound and complete after full inspection of the diff.\n{"blockingFindings":0,"findings":[]}');
 
   assert.equal(runVerify(dir).status, 1, 'code tip must fail before recording');
 

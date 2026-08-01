@@ -36,8 +36,12 @@ text. A marker sentence in the PR body proves nothing and is no longer read.
    The commit may touch nothing else.
 3. Push. CI re-derives everything: the tip must be a verdict-only commit whose
    parent is the exact reviewed sha, the reviewer must be the required
-   cross-agent (self-review is rejected), and the evidence must be quoted
-   reviewer output.
+   cross-agent (self-review is rejected), and the evidence must contain the
+   reviewer's own structured verdict object (`{"blockingFindings": 0,
+   "findings": []}`) with a zero count and no finding marked blocking. Prose
+   approvals are rejected outright: substring matching over English is
+   polarity-blind, so "VERDICT: APPROVE? No; blocking findings remain" would
+   otherwise read as an approval.
 
 Pushing any code after the verdict makes the check red until a fresh review is
 recorded — a stale approval cannot ride a new push into main. That is the

@@ -106,8 +106,13 @@ function main() {
   // Claiming is list-then-label, so two dispatchers can race. After
   // commenting, count claim comments: if ours is not the only one, the other
   // dispatcher won — back off without touching the workspace.
+  // Only comments from THIS account arbitrate: an untrusted issue author can
+  // pre-post a fake "Claimed by agent dispatch" comment, and trusting it would
+  // make the dispatcher label the issue claimed and abandon it forever.
+  const me = JSON.parse(gh(['api', 'user'])).login;
   const comments = JSON.parse(gh(['issue', 'view', String(issue.number), '--json', 'comments']));
-  const claims = (comments.comments ?? []).filter((c) => c.body.startsWith('Claimed by agent dispatch'))
+  const claims = (comments.comments ?? [])
+    .filter((c) => c.author?.login === me && c.body.startsWith('Claimed by agent dispatch'))
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   // First-writer-wins: proceed only if OUR claim is the earliest, so exactly
   // one of two racing dispatchers continues and none abandons the issue.
@@ -125,14 +130,23 @@ function main() {
   // Re-read the issue AFTER claiming: if the author edited it in the window
   // between labeling and dispatch, the text no longer matches what the label
   // authorized — stop instead of executing unreviewed instructions.
-  const fresh = JSON.parse(gh(['issue', 'view', String(issue.number), '--json', 'title,body,number']));
+  const fresh = JSON.parse(gh(['issue', 'view', String(issue.number), '--json', 'title,body,number,labels,state']));
   if (contentHash(fresh) !== claimedHash) {
     console.error(`[dispatch] #${issue.number} was edited after claim (hash ${contentHash(fresh)} != ${claimedHash}) — aborting; re-review and re-label.`);
     gh(['issue', 'comment', String(issue.number), '--body', 'Dispatch aborted: issue content changed after the claim. Re-apply agent-ok after review to re-authorize.']);
     process.exit(1);
   }
+  // Authorization is revocable. The `agent-ok` label read at list time is
+  // stale by the time the workspace exists; re-check it, and the open state,
+  // against the same fresh read that pins the content.
+  if (!(fresh.labels ?? []).some((l) => l.name === 'agent-ok') || fresh.state !== 'OPEN') {
+    console.error(`[dispatch] #${issue.number} is no longer an open agent-ok issue — authorization withdrawn, aborting.`);
+    process.exit(1);
+  }
 
-  const prompt = buildPrompt(issue);
+  // Build from `fresh`, never the listing: the prompt must be generated from
+  // the exact content whose hash and labels were just verified.
+  const prompt = buildPrompt(fresh);
   const wtDir = path.join(root, '.worktrees', name);
   ledger({ type: 'dispatch', issue: issue.number, branch: `claude/${name}`, run });
   if (run) {

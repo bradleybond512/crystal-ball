@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 
 import { PROBES, runValidator } from '../scripts/live-contract-probes.mjs';
 import { nextAction } from '../scripts/agentic-review-loop.mjs';
-import { pickIssue, slugify, buildPrompt, contentHash, weWonClaim } from '../scripts/agent-dispatch.mjs';
+import { pickIssue, slugify, buildPrompt, contentHash } from '../scripts/agent-dispatch.mjs';
+// Namespace import on purpose: a named import of weWonClaim makes a mutation
+// proof that reverts the fix crash at LOAD, which is not behavioral evidence.
+// Reached through the namespace, its absence fails an assertion instead.
+import * as dispatch from '../scripts/agent-dispatch.mjs';
 import { parseCounts } from '../scripts/mutation-proof.mjs';
 import { evidenceApproves } from '../scripts/verify-review-verdict.mjs';
 import { aggregate } from '../scripts/agent-ledger.mjs';
@@ -192,7 +196,7 @@ test('claim arbitration ignores claims older than the race window', () => {
     { author: { login: 'me' }, createdAt: stale, body: 'Claimed by agent dispatch; claim-nonce deadbeef.' },
     { author: { login: 'me' }, createdAt: mine, body: 'Claimed by agent dispatch; claim-nonce abc123.' },
   ];
-  assert.equal(weWonClaim(comments, 'me', 'abc123', now), true);
+  assert.equal(dispatch.weWonClaim(comments, 'me', 'abc123', now), true);
 });
 
 test('claim arbitration still yields to an earlier claim inside the window', () => {
@@ -201,7 +205,7 @@ test('claim arbitration still yields to an earlier claim inside the window', () 
     { author: { login: 'me' }, createdAt: new Date(now - 3000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce first1.' },
     { author: { login: 'me' }, createdAt: new Date(now - 1000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce abc123.' },
   ];
-  assert.equal(weWonClaim(comments, 'me', 'abc123', now), false);
+  assert.equal(dispatch.weWonClaim(comments, 'me', 'abc123', now), false);
 });
 
 test('a forged claim from another account cannot strand the issue', () => {
@@ -210,5 +214,5 @@ test('a forged claim from another account cannot strand the issue', () => {
     { author: { login: 'attacker' }, createdAt: new Date(now - 5000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce forged.' },
     { author: { login: 'me' }, createdAt: new Date(now - 1000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce abc123.' },
   ];
-  assert.equal(weWonClaim(comments, 'me', 'abc123', now), true);
+  assert.equal(dispatch.weWonClaim(comments, 'me', 'abc123', now), true);
 });

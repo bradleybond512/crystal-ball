@@ -729,8 +729,12 @@ export class App {
  // dominant term, not a complete bound: the abort timeouts cap the network wait
  // only, so parse/adapt/ingest and event-loop delay sit outside it. Sub-second
  // here, and the margin below absorbs them. 4 min landed at
- // 4.4 + 0.6 = exactly the 5 min budget rather than under it. 3 min caps the
- // blind window at 3.9 min, under half the 10 min it protects —
+ // 4.4 + 0.6 = exactly the 5 min budget rather than under it. 3 min models the
+ // blind window at 3.9 min — an estimate, not a cap, for the reason just
+ // given — leaving ~6 min of headroom against the 10 min it protects. Half is
+ // the target precisely BECAUSE the estimate is incomplete: the unmodeled
+ // terms are sub-second and the slack is minutes, so the conclusion survives
+ // even if they are off by orders of magnitude. Scoped, as ever,
  // AT THE DEFAULT CADENCE MULTIPLIER, the same scoping as the seismic entries
  // above. computeDelay also multiplies by the ghost (x5), context (x2 battery /
  // x4 low-power) and hidden (x10) factors, and under any of those this loader

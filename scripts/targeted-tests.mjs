@@ -5,7 +5,9 @@
 // Branch protection's required checks run no unit tests at all — a PR that
 // breaks every suite merges green. Running the full ~11k-test sweep per PR is
 // not viable, so this selects the targeted `test:*` scripts whose files (or
-// covered source directories) intersect the PR's changed paths.
+// covered source directories) intersect the PR's changed paths and runs ALL
+// of them — no cap: a silently dropped suite is a suite that cannot block a
+// merge, which defeats the gate.
 //
 // The mapping is DERIVED from package.json: each eligible script lists its
 // test files explicitly, and a test file at src/<area>/__tests__/x.test.mts
@@ -13,13 +15,19 @@
 // Only plain node/tsx --test runners are eligible (allowlist, never a
 // denylist): playwright, composite npm-run chains, and bespoke harnesses are
 // never auto-selected.
+//
+// CI runs the copy of this script from origin/main (a PR must not control its
+// own gate), so paths resolve from the working directory, not this file.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MAX_SCRIPTS = 12;
+const root = process.cwd();
+
+// The derived index currently holds ~106 scripts. If a package.json change
+// collapses it below this floor, the gate is being starved (runner formats
+// rewritten, scripts deleted) — refuse to certify instead of passing vacuously.
+const INDEX_FLOOR = 40;
 
 // Cross-file guards the derived map cannot see: tests that assert against the
 // TEXT of another file, and scripts exercised by a suite that does not live
@@ -38,6 +46,10 @@ const RUNNER_ALLOWLIST = [
   /^node --test /,
   /^tsx --import \.\/tests\/panels\/register-hook\.mjs --test /,
 ];
+
+// Anything source-shaped that maps to no suite is a visible coverage gap.
+const SOURCE_SHAPED = /^(src|src-tauri\/(sidecar|src)|scripts|tests|api|tools)\//;
+const SOURCE_EXT = /\.(ts|mts|tsx|mjs|js|rs|sh)$/;
 
 function isPathToken(token) {
   return token.includes('/') && /\.(mjs|mts|ts|js)$/.test(token) && !token.startsWith('--');
@@ -84,15 +96,30 @@ export function selectScripts(changedFiles, index, overrides = OVERRIDES) {
         }
       }
     }
-    // Only source-shaped paths count as coverage gaps; docs, workflows, and
-    // assets legitimately map to nothing.
-    if (!mapped && /^(src|src-tauri\/sidecar|scripts|tests)\//.test(file) && /\.(ts|mts|tsx|mjs|js|rs|sh)$/.test(file)) {
+    if (!mapped && SOURCE_SHAPED.test(file) && SOURCE_EXT.test(file)) {
       unmapped.push(file);
     }
   }
-  const ordered = [...selected].sort();
-  const dropped = ordered.slice(MAX_SCRIPTS);
-  return { scripts: ordered.slice(0, MAX_SCRIPTS), dropped, unmapped };
+  return { scripts: [...selected].sort(), unmapped };
+}
+
+// Pure gate decision, unit-testable without git or npm.
+export function ciVerdict({ indexSize, selected, unmapped }) {
+  if (indexSize < INDEX_FLOOR) {
+    return {
+      fail: true,
+      reason: `derived index collapsed to ${indexSize} script(s) (floor ${INDEX_FLOOR}) — `
+        + 'package.json runner formats changed or scripts were mass-removed; refusing to certify.',
+    };
+  }
+  if (unmapped.length > 0 && selected.length === 0) {
+    return {
+      fail: true,
+      reason: 'source files changed but ZERO targeted suites apply — this gate would certify nothing. '
+        + 'Add or map a suite for at least one changed area (see OVERRIDES in scripts/targeted-tests.mjs).',
+    };
+  }
+  return { fail: false, reason: '' };
 }
 
 function changedFilesFromGit() {
@@ -114,11 +141,10 @@ function main() {
   const scripts = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts ?? {};
   const index = deriveScriptIndex(scripts);
   const changed = changedFilesFromGit();
-  const { scripts: selected, dropped, unmapped } = selectScripts(changed, index);
+  const { scripts: selected, unmapped } = selectScripts(changed, index);
 
   summarize([
     `[targeted-tests] ${changed.length} changed file(s) → ${selected.length} test script(s): ${selected.join(', ') || '(none)'}`,
-    ...(dropped.length > 0 ? [`[targeted-tests] CAPPED at ${MAX_SCRIPTS}; dropped: ${dropped.join(', ')} — run these locally.`] : []),
     ...(unmapped.length > 0 ? [
       [
         `[targeted-tests] WARNING — ${unmapped.length} changed source file(s) map to no targeted suite; this gate proves nothing about them:`,
@@ -127,6 +153,11 @@ function main() {
     ] : []),
   ]);
 
+  const gate = ciVerdict({ indexSize: index.size, selected, unmapped });
+  if (gate.fail) {
+    summarize([`[targeted-tests] FAIL: ${gate.reason}`]);
+    process.exit(1);
+  }
   if (unmapped.length > 0 && args.has('--strict')) {
     console.error('[targeted-tests] --strict: unmapped source changes are a failure.');
     process.exit(1);

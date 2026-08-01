@@ -17,18 +17,26 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function parseVerdictLine(output) {
-  // The final JSON-object line wins; everything before it is reasoning noise.
+  // The verdict must be the FINAL non-empty line, strictly schema-valid.
+  // Scanning upward would let an approve JSON followed by a prose correction
+  // ("actually, one more issue —") read as an approval.
   const lines = output.split('\n').map((l) => l.trim()).filter(Boolean);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].startsWith('{')) continue;
-    try {
-      const parsed = JSON.parse(lines[i]);
-      if (typeof parsed.blockingFindings === 'number' && Array.isArray(parsed.findings)) {
-        return parsed;
-      }
-    } catch { /* keep scanning upward */ }
+  const last = lines.at(-1);
+  if (!last || !last.startsWith('{')) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(last);
+  } catch {
+    return null;
   }
-  return null;
+  if (!Number.isInteger(parsed.blockingFindings) || parsed.blockingFindings < 0) return null;
+  if (!Array.isArray(parsed.findings)) return null;
+  for (const f of parsed.findings) {
+    if (typeof f !== 'object' || f === null) return null;
+    if (typeof f.blocking !== 'boolean') return null;
+    if (typeof f.file !== 'string' || typeof f.summary !== 'string') return null;
+  }
+  return parsed;
 }
 
 export function buildPrompt(branch) {

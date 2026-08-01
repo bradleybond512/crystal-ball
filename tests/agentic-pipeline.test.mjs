@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
-import { deriveScriptIndex, selectScripts } from '../scripts/targeted-tests.mjs';
+import { deriveScriptIndex, selectScripts, ciVerdict } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -29,16 +29,20 @@ function goodVerdict(overrides = {}) {
   });
 }
 
+function verdictEntry(status = 'A', file = `.agentic/reviews/${SHA_A}.json`) {
+  return { status, file };
+}
+
 test('non-agent branches require no verdict', () => {
   assert.equal(requiredReviewers('dependabot/npm_and_yarn/foo'), null);
-  const r = validateVerdict({ branch: 'dependabot/npm_and_yarn/foo', headFiles: ['package.json'], headParent: SHA_A, verdictJson: '' });
+  const r = validateVerdict({ branch: 'dependabot/npm_and_yarn/foo', headEntries: [{ status: 'M', file: 'package.json' }], headParent: SHA_A, verdictJson: '' });
   assert.equal(r.ok, true);
 });
 
 test('a code tip on an agent branch fails with recording instructions', () => {
   const r = validateVerdict({
     branch: 'claude/feature',
-    headFiles: ['src/app/data-loader.ts'],
+    headEntries: [{ status: 'M', file: 'src/app/data-loader.ts' }],
     headParent: SHA_A,
     verdictJson: '',
   });
@@ -50,7 +54,7 @@ test('a code tip on an agent branch fails with recording instructions', () => {
 test('a valid codex verdict commit on claude/* passes', () => {
   const r = validateVerdict({
     branch: 'claude/feature',
-    headFiles: [`.agentic/reviews/${SHA_A}.json`],
+    headEntries: [verdictEntry()],
     headParent: SHA_A,
     verdictJson: goodVerdict(),
   });
@@ -60,7 +64,7 @@ test('a valid codex verdict commit on claude/* passes', () => {
 test('self-review is rejected: claude reviewing claude/*', () => {
   const r = validateVerdict({
     branch: 'claude/feature',
-    headFiles: [`.agentic/reviews/${SHA_A}.json`],
+    headEntries: [verdictEntry()],
     headParent: SHA_A,
     verdictJson: goodVerdict({ reviewer: 'claude' }),
   });
@@ -71,7 +75,7 @@ test('self-review is rejected: claude reviewing claude/*', () => {
 test('a verdict pinning the wrong sha is rejected', () => {
   const r = validateVerdict({
     branch: 'claude/feature',
-    headFiles: [`.agentic/reviews/${SHA_A}.json`],
+    headEntries: [verdictEntry()],
     headParent: SHA_A,
     verdictJson: goodVerdict({ reviewedSha: SHA_B }),
   });
@@ -82,12 +86,35 @@ test('a verdict pinning the wrong sha is rejected', () => {
 test('a verdict commit smuggling a code file is rejected', () => {
   const r = validateVerdict({
     branch: 'claude/feature',
-    headFiles: [`.agentic/reviews/${SHA_A}.json`, 'src/services/weather/weather.ts'],
+    headEntries: [verdictEntry(), { status: 'M', file: 'src/services/weather/weather.ts' }],
     headParent: SHA_A,
     verdictJson: goodVerdict(),
   });
   assert.equal(r.ok, false);
-  assert.ok(r.failures.some((f) => /outside the protocol dir.*weather\.ts/.test(f)));
+  assert.ok(r.failures.some((f) => /Offending entries.*weather\.ts/.test(f)));
+});
+
+test('rename smuggling decomposes to a delete and is rejected', () => {
+  // `git mv src/x.ts .agentic/reviews/<sha>.json` under --no-renames shows
+  // D src/x.ts + A .agentic/reviews/<sha>.json — the D must fail the commit.
+  const r = validateVerdict({
+    branch: 'claude/feature',
+    headEntries: [{ status: 'D', file: 'src/services/weather/weather.ts' }, verdictEntry()],
+    headParent: SHA_A,
+    verdictJson: goodVerdict(),
+  });
+  assert.equal(r.ok, false);
+  assert.ok(r.failures.some((f) => /Offending entries.*D src\/services\/weather\/weather\.ts/.test(f)));
+});
+
+test('a delete inside the protocol dir is still rejected', () => {
+  const r = validateVerdict({
+    branch: 'claude/feature',
+    headEntries: [verdictEntry(), { status: 'D', file: `.agentic/reviews/${SHA_B}.json` }],
+    headParent: SHA_A,
+    verdictJson: goodVerdict(),
+  });
+  assert.equal(r.ok, false);
 });
 
 test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejected', () => {
@@ -98,7 +125,7 @@ test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejec
   ]) {
     const r = validateVerdict({
       branch: 'codex/feature',
-      headFiles: [`.agentic/reviews/${SHA_A}.json`],
+      headEntries: [verdictEntry()],
       headParent: SHA_A,
       verdictJson: goodVerdict({ reviewer: 'claude', ...overrides }),
     });
@@ -196,11 +223,23 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   assert.deepEqual(scripts, ['test:providers']);
 });
 
-test('unmapped source files are reported, never silently covered', () => {
+test('unmapped source files are reported across api/, tools/, and src-tauri/src/', () => {
   const index = deriveScriptIndex(SCRIPTS);
-  const { scripts, unmapped } = selectScripts(['src/services/brandnew/engine.ts', 'docs/README.md'], index, {});
+  const changed = [
+    'src/services/brandnew/engine.ts',
+    'api/handler.mjs',
+    'tools/mcp-server/index.mjs',
+    'src-tauri/src/main.rs',
+    'docs/README.md',
+  ];
+  const { scripts, unmapped } = selectScripts(changed, index, {});
   assert.deepEqual(scripts, []);
-  assert.deepEqual(unmapped, ['src/services/brandnew/engine.ts']);
+  assert.deepEqual(unmapped, [
+    'src/services/brandnew/engine.ts',
+    'api/handler.mjs',
+    'tools/mcp-server/index.mjs',
+    'src-tauri/src/main.rs',
+  ]);
 });
 
 test('lockfile- and docs-only changes select nothing and flag nothing', () => {
@@ -210,20 +249,37 @@ test('lockfile- and docs-only changes select nothing and flag nothing', () => {
   assert.deepEqual(unmapped, []);
 });
 
-// ── ci-codex-review: verdict-line parsing ──
-
-test('the parser takes the final JSON verdict line and ignores prose', () => {
-  const out = [
-    'Thinking about the diff...',
-    '{"looksLike": "json but wrong shape"}',
-    'Findings below.',
-    '{"blockingFindings": 1, "findings": [{"severity": "high", "file": "a.ts", "line": 3, "summary": "bug", "blocking": true}]}',
-  ].join('\n');
-  const v = parseVerdictLine(out);
-  assert.equal(v.blockingFindings, 1);
-  assert.equal(v.findings[0].file, 'a.ts');
+test('ciVerdict fails a collapsed index instead of certifying vacuously', () => {
+  const r = ciVerdict({ indexSize: 3, selected: [], unmapped: [] });
+  assert.equal(r.fail, true);
+  assert.match(r.reason, /collapsed to 3/);
 });
 
-test('prose-only reviewer output parses to null so the check refuses to pass', () => {
+test('ciVerdict fails a source-touching PR with zero applicable suites', () => {
+  const r = ciVerdict({ indexSize: 106, selected: [], unmapped: ['src/services/brandnew/engine.ts'] });
+  assert.equal(r.fail, true);
+  assert.match(r.reason, /ZERO targeted suites/);
+});
+
+test('ciVerdict passes partial coverage (warned, not blocked) and full coverage', () => {
+  assert.equal(ciVerdict({ indexSize: 106, selected: ['test:weather'], unmapped: ['scripts/pr-closeout.sh'] }).fail, false);
+  assert.equal(ciVerdict({ indexSize: 106, selected: ['test:weather'], unmapped: [] }).fail, false);
+});
+
+// ── ci-codex-review: verdict-line parsing ──
+
+test('the verdict must be the final non-empty line', () => {
+  const good = '{"blockingFindings": 1, "findings": [{"severity": "high", "file": "a.ts", "line": 3, "summary": "bug", "blocking": true}]}';
+  const v = parseVerdictLine(`Thinking about the diff...\n${good}`);
+  assert.equal(v.blockingFindings, 1);
+  // An approve JSON followed by a prose correction must NOT read as approval.
+  assert.equal(parseVerdictLine(`${good}\nActually, one more blocking issue in b.ts.`), null);
+});
+
+test('schema violations parse to null so the check refuses to pass', () => {
   assert.equal(parseVerdictLine('All good, ship it. No blocking findings.'), null);
+  assert.equal(parseVerdictLine('{"blockingFindings": -1, "findings": []}'), null);
+  assert.equal(parseVerdictLine('{"blockingFindings": 0.5, "findings": []}'), null);
+  assert.equal(parseVerdictLine('{"blockingFindings": 0, "findings": [{"file": "a.ts", "summary": "x"}]}'), null);
+  assert.equal(parseVerdictLine('{"looksLike": "json but wrong shape"}'), null);
 });

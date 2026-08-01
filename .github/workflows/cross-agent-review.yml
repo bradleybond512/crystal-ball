@@ -5,12 +5,15 @@ name: Cross-agent review gate
 # merged mid-review because a new push did not invalidate the "approval".
 #
 # Two paths, strongest available wins:
-#   1. CI_CODEX_REVIEW variable 'on' + OPENAI_API_KEY secret -> Codex reviews
-#      the diff IN CI and the verdict comes from the reviewer itself (no
-#      self-attestation possible).
+#   1. CI_CODEX_REVIEW repo variable 'on' + OPENAI_API_KEY secret, same-repo
+#      AGENT branches only -> Codex reviews the diff IN CI and the verdict
+#      comes from the reviewer itself (no self-attestation possible).
 #   2. Otherwise -> verify the SHA-pinned verdict commit recorded by the local
-#      review loop (scripts/verify-review-verdict.mjs). Any code push after
-#      the verdict turns the check red until a fresh review is recorded.
+#      review loop. Any code push after the verdict turns the check red until
+#      a fresh review is recorded.
+#
+# Both verifier scripts are executed FROM origin/main, never from the PR head:
+# a PR must not be able to weaken or delete the gate that judges it.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -26,6 +29,7 @@ permissions:
 jobs:
   cross-agent-review:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Skip in merge queue
         if: github.event_name == 'merge_group'
@@ -34,29 +38,49 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         if: github.event_name == 'pull_request'
         with:
+          # The default pull_request checkout is the SYNTHETIC MERGE commit;
+          # the verdict protocol must examine the actual branch tip.
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Codex review in CI (when CI_CODEX_REVIEW is on)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.CI_CODEX_REVIEW == 'on'
+      - name: Review gate
+        if: github.event_name == 'pull_request'
         env:
+          # GITHUB_HEAD_REF is runner-provided; branch names are consumed only
+          # by case-pattern matching and the Node scripts, never interpolated.
+          CI_CODEX_MODE: ${{ vars.CI_CODEX_REVIEW }}
+          IS_SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "CI_CODEX_REVIEW is on but the OPENAI_API_KEY secret is missing." >&2
-            exit 1
+          case "$GITHUB_HEAD_REF" in
+            claude/*|codex/*|copilot/*) AGENT_BRANCH=1 ;;
+            *) AGENT_BRANCH=0 ;;
+          esac
+          if [ "$AGENT_BRANCH" = "0" ]; then
+            echo "Not an agent branch; cross-agent review not required."
+            exit 0
           fi
-          npm install -g @openai/codex
-          node scripts/ci-codex-review.mjs
-
-      - name: Verify SHA-pinned review verdict
-        if: github.event_name == 'pull_request' && vars.CI_CODEX_REVIEW != 'on'
-        # Passes trivially on non-agent branches (dependabot, human PRs);
-        # on claude/* | codex/* | copilot/* it requires the verdict commit.
-        # Branches cut before the protocol landed don't carry the script —
-        # pass them rather than failing on a file they could not have.
-        run: |
-          if [ -f scripts/verify-review-verdict.mjs ]; then
-            node scripts/verify-review-verdict.mjs --ci
+          git fetch origin main --quiet
+          if [ "$CI_CODEX_MODE" = "on" ] && [ "$IS_SAME_REPO" = "true" ]; then
+            if [ -z "$OPENAI_API_KEY" ]; then
+              echo "CI_CODEX_REVIEW is on but the OPENAI_API_KEY secret is missing." >&2
+              exit 1
+            fi
+            npm install -g @openai/codex@0.146.0 || npm install -g @openai/codex
+            if git cat-file -e origin/main:scripts/ci-codex-review.mjs 2>/dev/null; then
+              git show origin/main:scripts/ci-codex-review.mjs > "$RUNNER_TEMP/ci-codex-review.mjs"
+            else
+              cp scripts/ci-codex-review.mjs "$RUNNER_TEMP/ci-codex-review.mjs"
+            fi
+            node "$RUNNER_TEMP/ci-codex-review.mjs"
           else
-            echo "verify-review-verdict.mjs not on this branch (predates the protocol); passing."
+            # Trusted copy: a PR that deletes or edits the verifier is still
+            # judged by main's version. Only before the protocol first lands
+            # on main does this fall back to passing.
+            if git cat-file -e origin/main:scripts/verify-review-verdict.mjs 2>/dev/null; then
+              git show origin/main:scripts/verify-review-verdict.mjs > "$RUNNER_TEMP/verify-review-verdict.mjs"
+              node "$RUNNER_TEMP/verify-review-verdict.mjs" --ci
+            else
+              echo "verify-review-verdict.mjs not on origin/main yet (protocol rollout); passing."
+            fi
           fi

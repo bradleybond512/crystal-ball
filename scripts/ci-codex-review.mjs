@@ -11,6 +11,8 @@
 // The prompt demands a single JSON object as the FINAL line so the verdict is
 // machine-parsed, never inferred from prose.
 import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 // CI extracts this script from origin/main into RUNNER_TEMP, so the repo root
@@ -65,8 +67,12 @@ function main() {
     console.log('[ci-codex-review] Empty diff; nothing to review.');
     return;
   }
+  // Run the reviewer from an instruction-free temp dir: from the repo root,
+  // codex would load the PR-controlled AGENTS.md as its own instructions —
+  // a PR could tell its reviewer to approve it.
+  const reviewCwd = mkdtempSync(path.join(tmpdir(), 'ci-codex-review-'));
   const r = spawnSync('codex', ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', buildPrompt(branch)], {
-    cwd: root, input: diff, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+    cwd: reviewCwd, input: diff, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
   });
   const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   console.log(output);

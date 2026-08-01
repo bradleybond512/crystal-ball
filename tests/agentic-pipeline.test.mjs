@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
-import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted } from '../scripts/targeted-tests.mjs';
+import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted, commandToArgv } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -261,11 +261,15 @@ test('ciVerdict fails a source-touching PR with zero applicable suites', () => {
   assert.match(r.reason, /ZERO targeted suites/);
 });
 
-test('ciVerdict fails when the PR neuters a suite that main selected for it', () => {
-  // The PR rewrote test:weather to `echo ok` — main's mapping still demands it.
-  const r = ciVerdict({ indexSize: 106, selected: ['test:weather'], unmapped: [], neutered: ['test:weather'] });
-  assert.equal(r.fail, true);
-  assert.match(r.reason, /removed or rewrote suite/);
+test('commandToArgv spawns main-trusted commands directly, bypassing PR package.json', () => {
+  // A PR rewriting test:weather to another allowlisted-but-inert runner
+  // changes nothing: main-selected suites execute MAIN's command verbatim.
+  const tsx = commandToArgv('tsx --test src/services/weather/__tests__/a.test.mts', '/repo/node_modules/.bin');
+  assert.equal(tsx.bin, '/repo/node_modules/.bin/tsx');
+  assert.deepEqual(tsx.args, ['--test', 'src/services/weather/__tests__/a.test.mts']);
+  const node = commandToArgv('node --test tests/x.test.mjs');
+  assert.equal(node.bin, process.execPath);
+  assert.deepEqual(node.args, ['--test', 'tests/x.test.mjs']);
 });
 
 test('ciVerdict fails a NEW uncovered source file; baselined gaps only warn', () => {

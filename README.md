@@ -6,9 +6,10 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)](tsconfig.json)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/bradleybond512/crystal-ball/releases/latest)
+[![Website](https://img.shields.io/badge/Website-crystal--ball--observatory-8A2BE2)](https://crystal-ball-observatory.bradleybond512.chatgpt.site/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA)](https://github.com/sponsors/bradleybond512)
 
-<a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a> | <a href="docs/USER_MANUAL.md"><strong>📖 Operator Manual</strong></a> | <a href="https://github.com/sponsors/bradleybond512"><strong>Support Development</strong></a>
+<a href="https://crystal-ball-observatory.bradleybond512.chatgpt.site/"><strong>🌐 Website</strong></a> | <a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a> | <a href="docs/USER_MANUAL.md"><strong>📖 Operator Manual</strong></a> | <a href="https://github.com/sponsors/bradleybond512"><strong>Support Development</strong></a>
 
 > **New here?** The [Operator Manual](docs/USER_MANUAL.md) is the step-by-step, task-oriented guide to running every feature. This README is the feature catalog; the manual is the how-to.
 

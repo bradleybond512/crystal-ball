@@ -50,10 +50,19 @@ function saveState(state) {
   writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-function reviewPrompt(branch) {
+function reviewPrompt(branch, diffPath) {
   return [
     `You are the independent cross-agent reviewer for Crystal Ball branch ${branch}.`,
-    'The unified diff against main arrives on stdin. Review it for real defects:',
+    // The working directory is a bare temp dir ON PURPOSE: run in the repo and
+    // codex rebases the worktree and reports the resulting conflict markers as
+    // committed P0s. But an EMPTY dir made it burn its whole budget probing for
+    // a source tree ("fatal: not a git repository") and exit 0 with no verdict.
+    // So: hand it the diff as a real file and say plainly there is nothing else.
+    `Your working directory contains exactly one file: ${diffPath}. Read it.`,
+    'There is no git repository and no source tree here, by design — do not look',
+    'for one, and do not treat its absence as a reason to withhold the verdict.',
+    'Judge the diff on its own text; say so in a finding if context is missing.',
+    `The same unified diff against main is also on stdin. Review it for real defects:`,
     'correctness, security boundaries, fail-open provider votes, denylist',
     'filtering of untrusted fields, truthiness-tested coordinates, regressions,',
     'missing or weakened tests, and CI/release hazards. Ignore style covered by',
@@ -67,13 +76,15 @@ function reviewPrompt(branch) {
 
 function runReviewer(reviewer, branch, diff) {
   const cwd = mkdtempSync(path.join(tmpdir(), 'agentic-review-'));
+  const diffPath = path.join(cwd, 'review.diff');
+  writeFileSync(diffPath, diff);
   // codex exec consumes stdin as ADDITIONAL input alongside a positional
   // prompt — it prints "Reading additional input from stdin..." and echoes
   // the diff between <stdin> markers in its transcript (observed on every
   // run of this loop). The diff on stdin does reach the reviewer.
   const argv = reviewer === 'codex'
-    ? ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', reviewPrompt(branch)]
-    : ['-p', reviewPrompt(branch)];
+    ? ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', reviewPrompt(branch, diffPath)]
+    : ['-p', reviewPrompt(branch, diffPath)];
   const r = spawnSync(reviewer, argv, { cwd, input: diff, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   // The verdict is parsed from STDOUT ONLY: codex prints progress ("tokens
   // used") on stderr AFTER the verdict, and concatenating streams made that
@@ -147,6 +158,11 @@ function main() {
   const verdict = parseVerdictLine(stdout);
   if (!verdict) {
     console.error('[review-loop] no strict final-line JSON verdict — refusing to interpret prose.');
+    // Exit 0 with no verdict is the silent-no-op class this pipeline exists to
+    // catch, so name what the reviewer actually ended on instead of making the
+    // next operator scroll a multi-thousand-line transcript to find out.
+    console.error('[review-loop] reviewer\'s last 20 stdout lines:');
+    console.error(stdout.trimEnd().split('\n').slice(-20).join('\n') || '(stdout was empty)');
     process.exit(1);
   }
 

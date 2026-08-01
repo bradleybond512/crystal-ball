@@ -223,7 +223,9 @@ const result = {
   needsUpdate,
   staleCount: allIssues.length,
   issues: allIssues,
-  advisoryIssues,
+  // Key present only under the flag: bare --json output is a pre-existing
+  // contract and must stay byte-shape identical.
+  ...(changelogAdvisory ? { advisoryIssues } : {}),
   changedCategories: categories,
   hints,
   summary: needsUpdate

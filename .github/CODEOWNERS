@@ -7,3 +7,13 @@
 /AGENTS.md @bradleybond512
 /CLAUDE.md @bradleybond512
 /.github/copilot-instructions.md @bradleybond512
+
+# Agentic merge gates: a PR must not be able to weaken the checks that judge it.
+/scripts/verify-review-verdict.mjs @bradleybond512
+/scripts/targeted-tests.mjs @bradleybond512
+/scripts/ci-codex-review.mjs @bradleybond512
+/scripts/agentic-review-loop.mjs @bradleybond512
+/scripts/agent-dispatch.mjs @bradleybond512
+/scripts/mutation-proof.mjs @bradleybond512
+/scripts/agentic-validate.sh @bradleybond512
+/scripts/pr-closeout.sh @bradleybond512

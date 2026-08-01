@@ -60,12 +60,22 @@ const IODA_FUSION_LIMIT = 5000;
  * bounds are unix SECONDS, so an unsnapped `now` makes every call's key unique
  * — the cache is provably never hit and each tick is a fresh limit=5000
  * multi-thousand-row request against a keyless fair-use API. Snapping caps the
- * upstream rate at one request per quantum (<=96/day) no matter how often the
- * loader ticks, which is what makes the scheduled cadence in App.ts affordable.
+ * upstream rate at one request per quantum in STEADY STATE (<=96/day) no matter
+ * how often the loader ticks, which is what makes the scheduled cadence in
+ * App.ts affordable. Steady state, not a hard ceiling: a sidecar restart drops
+ * the in-memory cache, and the route deliberately leaves 502s and malformed
+ * envelopes uncached so the next tick retries — both add misses inside a
+ * quantum. What the snap guarantees is that the rate is set by the QUANTUM
+ * rather than by the tick interval.
  *
- * 15 min matches the route's own IODA_TTL: a larger quantum would outlive the
- * cache entry it is trying to reuse, and a smaller one is mostly ignored
- * because the entry survives 15 min regardless.
+ * 15 min matches the route's own IODA_TTL, and the two must be read together:
+ * the quantum sets how often a NEW key is minted, the TTL sets how long each
+ * key's entry survives. A larger quantum would outlive the entry it is trying
+ * to reuse — ticks late in the quantum find it expired. A smaller quantum is
+ * strictly WORSE, not neutral: every quantum boundary mints a fresh key, so a
+ * 5 min quantum abandons a still-valid entry twice per TTL and triples the
+ * upstream rate. Equality is the only setting where each cache entry is reused
+ * for exactly as long as it is valid.
  *
  * Snapped UP (ceil), not down. Both directions give the same stable key, but
  * flooring also truncates the window at the boundary, so every onset between

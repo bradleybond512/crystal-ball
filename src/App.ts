@@ -721,12 +721,23 @@ export class App {
  // entirely; it only bounds it at one jittered tick, ~1.1x the interval. Exact
  // divisors buy nothing here: 5 min would line up only with zero jitter, and
  // ticks at 4.5/9.0 push the refetch to 14.5 and leave the axis blind 10->14.5.
- // 4 min caps the blind window at 4.4 min, under half the 10 min it protects.
+ // 4 min caps the blind window at 4.4 min, under half the 10 min it protects —
+ // AT THE DEFAULT CADENCE MULTIPLIER, the same scoping as the seismic entries
+ // above. computeDelay also multiplies by the ghost (x5), context (x2 battery /
+ // x4 low-power) and hidden (x10) factors, and under any of those this loader
+ // ticks slower than the 10 min cache it warms, so the comms axis does go blind
+ // for part of each cycle. That is the same freshness-for-battery trade those
+ // modes exist to make, and it is NOT silently wrong the way the boot-only bug
+ // was: the axis is quiet because the user asked for quiet. The default path —
+ // where the user chose nothing — is what this interval fixes. If the comms axis
+ // is ever deemed safety-critical enough to survive throttling, the fix is an
+ // exemption in the scheduler, not a smaller interval here.
  //
  // Cheap at that rate because neither path's upstream rate is set by this
  // interval, but they are bounded differently and only one is cadence-proof.
  // The limit=5000 fusion fetch snaps its window to a 15 min boundary, so extra
- // ticks land on the sidecar cache: <=96 upstream/day however often we tick.
+ // ticks land on the sidecar cache: <=96 upstream/day in steady state however
+ // often we tick (a sidecar restart or an uncached 502 adds misses).
  // The limit=50 comms fetch early-returns from its own 10 min module cache
  // without touching the network, so it reaches IODA about once per expiry,
  // ~100-145/day. That one is NOT quantum-bounded — it builds an unsnapped

@@ -2,6 +2,16 @@
 // Docs: https://services.swpc.noaa.gov/
 import { getApiBaseUrl } from '@/services/runtime';
 import { dataFreshness } from '@/services/data-freshness';
+import {
+  parseAlerts,
+  parseKpFeed,
+  parseSolarWindFeed,
+  parseXrayClass,
+} from '@/services/space-weather-parse';
+
+import type { SpaceWeatherAlert } from '@/services/space-weather-parse';
+
+export type { SpaceWeatherAlert } from '@/services/space-weather-parse';
 
 export interface SpaceWeatherData {
   kpIndex: number | null; // 0–9 planetary geomagnetic index
@@ -13,13 +23,6 @@ export interface SpaceWeatherData {
   alertMessages: SpaceWeatherAlert[];
   fetchedAt: Date;
   donkiEvents: DonkiEvent[];
-}
-
-export interface SpaceWeatherAlert {
-  id: string;
-  message: string;
-  issuedAt: Date;
-  severity: 'watch' | 'warning' | 'alert' | 'summary';
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -44,105 +47,56 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity -- composes 5 SWPC feed parsers; refactor deferred
+/** Shape of `/api/space-weather-feeds` — ONE object keyed by SWPC product. */
+interface SpaceWeatherFeeds {
+  kp?: unknown;
+  wind?: unknown;
+  xray?: unknown;
+  alerts?: unknown;
+}
+
 export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
- return cache.data;
+    return cache.data;
   }
 
-  const [kpRaw, solarWindRaw, xrayRaw, alertsRaw] = await Promise.allSettled([
- // Latest 1-min Kp data (3-hour index, last entry)
- fetchJson<number[][]>(`${getApiBaseUrl()}/api/space-weather-feeds`),
- // Real-time solar wind from ACE/DSCOVR
- fetchJson<Record<string, unknown>[]>(`${getApiBaseUrl()}/api/space-weather-feeds`),
- // Latest X-ray flux class
- fetchJson<number[][]>(`${getApiBaseUrl()}/api/space-weather-feeds`),
- // Active alerts and warnings
- fetchJson<{ message: string; issue_datetime: string }[]>(`${getApiBaseUrl()}/api/space-weather-feeds`),
-  ]);
+  // The route fans out to every SWPC product and returns them in a single
+  // object. This used to issue five identical requests and gate each parse on
+  // Array.isArray of that object, so every field stayed null.
+  const feeds = await fetchJson<SpaceWeatherFeeds>(`${getApiBaseUrl()}/api/space-weather-feeds`);
 
-  // Parse Kp index
-  let kpIndex: number | null = null;
-  if (kpRaw.status === 'fulfilled' && Array.isArray(kpRaw.value) && kpRaw.value.length > 1) {
- const rows = kpRaw.value as number[][];
- const last = rows[rows.length - 1];
- const kpVal = last ? Number(last[1]) : Number.NaN;
- if (!Number.isNaN(kpVal)) kpIndex = kpVal;
-  }
-
-  // Parse solar wind (Bz from mag data)
-  let solarWindSpeed: number | null = null;
-  let solarWindDensity: number | null = null;
-  let bz: number | null = null;
-  if (solarWindRaw.status === 'fulfilled' && Array.isArray(solarWindRaw.value) && solarWindRaw.value.length > 1) {
- const rows = solarWindRaw.value as unknown as [string, string, string, string, string][];
- // Skip header row (index 0), get last data row
- const last = rows[rows.length - 1];
- if (last) {
- const bzVal = Number.parseFloat(last[3] ?? '');
- if (!Number.isNaN(bzVal)) bz = bzVal;
- }
-  }
-
-  // Fetch plasma data for speed and density separately
-  const plasmaRaw = await fetchJson<[string, string, string, string][]>(
- `${getApiBaseUrl()}/api/space-weather-feeds`,
-  );
-  if (Array.isArray(plasmaRaw) && plasmaRaw.length > 1) {
- const last = plasmaRaw[plasmaRaw.length - 1];
- if (last) {
- const speed = Number.parseFloat(last[1] ?? '');
- const density = Number.parseFloat(last[2] ?? '');
- if (!Number.isNaN(speed)) solarWindSpeed = speed;
- if (!Number.isNaN(density)) solarWindDensity = density;
- }
-  }
-
-  // Parse X-ray flares
-  let xrayClass: string | null = null;
-  if (xrayRaw.status === 'fulfilled' && Array.isArray(xrayRaw.value) && xrayRaw.value.length > 0) {
- const flares = xrayRaw.value as { max_class?: string; class?: string }[];
- const latest = flares[0];
- xrayClass = latest?.max_class ?? latest?.class ?? null;
-  }
-
-  // Parse alerts
-  const alertMessages: SpaceWeatherAlert[] = [];
-  if (alertsRaw.status === 'fulfilled' && Array.isArray(alertsRaw.value)) {
- const raw = alertsRaw.value as { message: string; issue_datetime: string }[];
- const cutoff = Date.now() - 24 * 60 * 60 * 1000; // last 24h
- for (const entry of raw.slice(0, 20)) {
- const issued = new Date(entry.issue_datetime + 'Z');
- if (issued.getTime() < cutoff) continue;
- const msg = entry.message ?? '';
- const firstLine = msg.split('\n')[0]?.trim() ?? '';
- let severity: SpaceWeatherAlert['severity'] = 'summary';
- if (/\bWATCH\b/i.test(firstLine)) severity = 'watch';
- else if (/\bWARNING\b/i.test(firstLine)) severity = 'warning';
- else if (/\bALERT\b/i.test(firstLine)) severity = 'alert';
- alertMessages.push({
- id: `${entry.issue_datetime}`,
- message: firstLine,
- issuedAt: issued,
- severity,
- });
- }
-  }
+  const now = Date.now();
+  const kpIndex = parseKpFeed(feeds?.kp);
+  const wind = parseSolarWindFeed(feeds?.wind);
+  const xrayClass = parseXrayClass(feeds?.xray);
+  const alertMessages = parseAlerts(feeds?.alerts, now);
 
   const data: SpaceWeatherData = {
- kpIndex,
- kpClass: kpIndex === null ? 'quiet' : kpClass(kpIndex),
- solarWindSpeed,
- solarWindDensity,
- bz,
- xrayClass,
- alertMessages,
- donkiEvents: [],
- fetchedAt: new Date(),
+    kpIndex,
+    kpClass: kpIndex === null ? 'quiet' : kpClass(kpIndex),
+    solarWindSpeed: wind.speed,
+    solarWindDensity: wind.density,
+    bz: wind.bz,
+    xrayClass,
+    alertMessages,
+    donkiEvents: [],
+    fetchedAt: new Date(),
   };
 
-  cache = { data, fetchedAt: Date.now() };
-  dataFreshness.recordUpdate('space-weather', alertMessages.length);
+  // Health is derived from what the PARSERS produced, not from the fetch
+  // resolving. A 200 that yields nothing usable is a failure — reporting it as
+  // a healthy update is the fail-open "phantom healthy vote" that let this
+  // panel sit empty without ever flagging a problem.
+  const parsedCount = alertMessages.length
+    + [kpIndex, wind.speed, wind.density, wind.bz, xrayClass].filter((v) => v !== null).length;
+  if (parsedCount === 0) {
+    dataFreshness.recordError('space-weather', feeds ? 'no usable fields in SWPC payload' : 'space-weather-feeds fetch failed');
+    // An empty result is a failure, not an empty success — leaving it uncached
+    // means the next poll retries instead of pinning the panel blank for 5 min.
+    return data;
+  }
+  dataFreshness.recordUpdate('space-weather', parsedCount);
+  cache = { data, fetchedAt: now };
   return data;
 }
 

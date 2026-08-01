@@ -107,27 +107,29 @@ export function isRunnerAllowlisted(command) {
   return typeof command === 'string' && RUNNER_ALLOWLIST.some((re) => re.test(command));
 }
 
+// Turn a trusted (origin/main) runner command into a directly-spawnable argv,
+// so a main-selected suite executes MAIN's definition even if the PR rewrote
+// its package.json entry to another allowlisted-but-inert command.
+export function commandToArgv(command, binDir = 'node_modules/.bin') {
+  const tokens = command.split(/\s+/).filter(Boolean);
+  const [runner, ...rest] = tokens;
+  if (runner === 'node') return { bin: process.execPath, args: rest };
+  return { bin: path.join(binDir, runner), args: rest };
+}
+
 // Pure gate decision, unit-testable without git or npm.
 // indexSize/selected derive from ORIGIN/MAIN's package.json — the PR's copy
 // only ADDS suites, so a PR cannot fabricate a compliant index of no-op
-// scripts or starve the floor. `neutered` lists main-selected suites the PR
-// removed or rewrote off the runner allowlist. `unbaselined` lists unmapped
+// scripts or starve the floor. `unbaselined` lists unmapped
 // source files absent from the coverage-ratchet baseline: pre-existing gaps
 // are listed there and warn; NEW uncovered files fail until covered or
 // explicitly baselined in a reviewable diff.
-export function ciVerdict({ indexSize, selected, unmapped, neutered = [], unbaselined = [] }) {
+export function ciVerdict({ indexSize, selected, unmapped, unbaselined = [] }) {
   if (indexSize < INDEX_FLOOR) {
     return {
       fail: true,
       reason: `derived index collapsed to ${indexSize} script(s) (floor ${INDEX_FLOOR}) — `
         + 'package.json runner formats changed or scripts were mass-removed; refusing to certify.',
-    };
-  }
-  if (neutered.length > 0) {
-    return {
-      fail: true,
-      reason: `the PR removed or rewrote suite(s) that guard its own changes: ${neutered.join(', ')} — `
-        + 'a suite selected by main\'s mapping must stay a real test runner in the PR.',
     };
   }
   if (unbaselined.length > 0) {
@@ -197,8 +199,8 @@ function main() {
   const prSel = selectScripts(changed, prIndex);
   // Main's mapping decides what MUST run; the PR's copy may only add suites
   // (new tests shipped alongside new code).
-  const selected = [...new Set([...mainSel.scripts, ...prSel.scripts])].sort();
-  const neutered = mainSel.scripts.filter((s) => !isRunnerAllowlisted(prScripts[s]));
+  const prOnly = prSel.scripts.filter((s) => !mainSel.scripts.includes(s));
+  const selected = [...new Set([...mainSel.scripts, ...prOnly])].sort();
   // A file is a coverage gap only if NEITHER mapping covers it; the baseline
   // ratchet decides whether the gap is pre-existing (warn) or new (fail).
   const unmapped = mainSel.unmapped.filter((f) => prSel.unmapped.includes(f));
@@ -215,7 +217,7 @@ function main() {
     ] : []),
   ]);
 
-  const gate = ciVerdict({ indexSize: mainIndex.size, selected, unmapped, neutered, unbaselined });
+  const gate = ciVerdict({ indexSize: mainIndex.size, selected, unmapped, unbaselined });
   if (gate.fail) {
     summarize([`[targeted-tests] FAIL: ${gate.reason}`]);
     process.exit(1);
@@ -228,9 +230,19 @@ function main() {
 
   const failures = [];
   for (const script of selected) {
-    console.log(`\n==> npm run ${script}`);
-    const r = spawnSync('npm', ['run', script], { cwd: root, stdio: 'inherit' });
-    if (r.status !== 0) failures.push(`${script} (exit ${r.status})`);
+    // Main-selected suites run MAIN's command verbatim — a PR rewriting the
+    // script to another allowlisted-but-inert runner changes nothing here.
+    // PR-only (new) suites run via the PR's npm.
+    if (mainSel.scripts.includes(script)) {
+      const { bin, args: argv } = commandToArgv(mainScripts[script], path.join(root, 'node_modules/.bin'));
+      console.log(`\n==> [trusted:main] ${script}: ${mainScripts[script]}`);
+      const r = spawnSync(bin, argv, { cwd: root, stdio: 'inherit' });
+      if (r.status !== 0) failures.push(`${script} (exit ${r.status})`);
+    } else {
+      console.log(`\n==> npm run ${script}`);
+      const r = spawnSync('npm', ['run', script], { cwd: root, stdio: 'inherit' });
+      if (r.status !== 0) failures.push(`${script} (exit ${r.status})`);
+    }
   }
   if (failures.length > 0) {
     summarize([`[targeted-tests] FAILED: ${failures.join(', ')}`]);

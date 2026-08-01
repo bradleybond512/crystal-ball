@@ -39,13 +39,18 @@ if [ "$LOCAL" != "$REMOTE" ]; then
   exit 1
 fi
 
-PR_JSON=$(gh pr view "$BRANCH" --json number,headRefOid,state 2>/dev/null || echo "")
+PR_JSON=$(gh pr view "$BRANCH" --json number,headRefOid,state,baseRefName 2>/dev/null || echo "")
 if [ -z "$PR_JSON" ]; then
   printf 'pr-closeout: no open PR for %s — the auto-PR workflow creates one on push; wait or open it.\n' "$BRANCH" >&2
   exit 1
 fi
 PR_NUMBER=$(printf '%s' "$PR_JSON" | node -e 'let d="";process.stdin.on("data",(c)=>d+=c).on("end",()=>{const j=JSON.parse(d);if(j.state!=="OPEN"){console.error(`PR #${j.number} is ${j.state}`);process.exit(1)}console.log(j.number)})')
 PR_HEAD=$(printf '%s' "$PR_JSON" | node -e 'let d="";process.stdin.on("data",(c)=>d+=c).on("end",()=>console.log(JSON.parse(d).headRefOid))')
+PR_BASE=$(printf '%s' "$PR_JSON" | node -e 'let d="";process.stdin.on("data",(c)=>d+=c).on("end",()=>console.log(JSON.parse(d).baseRefName))')
+if [ "$PR_BASE" != "main" ]; then
+  printf 'pr-closeout: PR targets %s, not main — main is the only merge target.\n' "$PR_BASE" >&2
+  exit 1
+fi
 if [ "$PR_HEAD" != "$LOCAL" ]; then
   printf 'pr-closeout: PR #%s head %s != local tip %s — GitHub has not seen your last push yet.\n' \
     "$PR_NUMBER" "${PR_HEAD:0:8}" "${LOCAL:0:8}" >&2

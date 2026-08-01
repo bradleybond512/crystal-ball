@@ -152,6 +152,28 @@ test('an unconfigured provider next to a genuinely broken one stays all_down', (
   assert.equal(r.domains[0]?.verdict, 'all_down');
 });
 
+test('a live outage outranks a config gap in sort and recommendation order', () => {
+  // "Your primary broke" is a live problem; "you never added a key" is a gap to
+  // close when convenient. The urgent one has to lead.
+  const r = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({
+        providerId: 'eia',
+        domain: 'commodities',
+        primary: true,
+        level: 'failing',
+        unconfiguredSecret: 'EIA_API_KEY',
+      }),
+      snap({ providerId: 'p', domain: 'weather', primary: true, level: 'silent' }),
+      snap({ providerId: 'b', domain: 'weather', primary: false, level: 'healthy' }),
+    ],
+  });
+  assert.equal(r.domains[0]?.verdict, 'primary_down_with_backup');
+  assert.deepEqual(r.domains.map((d) => d.domain), ['weather', 'commodities']);
+  assert.match(r.recommendations[0] ?? '', /investigate the primary/);
+});
+
 test('not_configured sorts ahead of a working domain but behind a real outage', () => {
   const r = assessProviderRedundancy({
     generatedAt: NOW,

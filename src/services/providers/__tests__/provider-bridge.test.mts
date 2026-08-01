@@ -152,6 +152,27 @@ test('keyless providers are never demoted, whatever the predicate says', () => {
   assert.equal(gated.find((p) => p.providerId === 'ioda')?.level, 'healthy');
 });
 
+test('legacy diagnostic ids resolve to their registry definition for the secret gate', () => {
+  // The live SourceDiagnostic for FRED is id 'economic' and for EIA is 'oil'
+  // (src/services/data-freshness.ts), while the registry calls them 'fred' and
+  // 'eia'. Without an alias the lookup misses and both cast an "up" vote with no
+  // key configured — the exact fail-open this gate exists to close.
+  const raw = [
+    { providerId: 'economic', domain: 'economic', label: 'Economic Data (FRED)', primary: true, level: 'healthy' as const },
+    { providerId: 'oil', domain: 'oil', label: 'Oil Analytics (EIA)', primary: true, level: 'healthy' as const },
+  ];
+  const gated = demoteUnconfiguredProviders(raw, NO_SECRETS);
+  const fred = gated.find((p) => p.providerId === 'economic');
+  const eia = gated.find((p) => p.providerId === 'oil');
+  assert.equal(fred?.level, 'failing');
+  assert.equal(fred?.unconfiguredSecret, 'FRED_API_KEY');
+  assert.equal(eia?.level, 'failing');
+  assert.equal(eia?.unconfiguredSecret, 'EIA_API_KEY');
+  // The alias is scoped to the gate — it must not renumber the domain, which
+  // would silently regroup these rows out of 'economic'/'oil'.
+  assert.equal(fred?.domain, 'economic');
+});
+
 test('snapshotsFromRegistry attaches fingerprints when provided', () => {
   let s = emptyProviderHealthState();
   for (const id of ['usgs-earthquakes', 'emsc-seismic']) {

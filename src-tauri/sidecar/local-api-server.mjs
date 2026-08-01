@@ -3761,7 +3761,16 @@ export function donkiCmeFeedHealthySidecar(raw) {
 async function loadSpacewxSubfeed(id, url, normalize, usable) {
   const cacheKey = `spacewx-subfeed-${id}`;
   const cached = getCached(cacheKey); // per-entry TTL, written below
-  if (cached) return cached;
+  // A stored FAILURE is served as-is: its short TTL is the retry floor, and
+  // re-checking it here would re-ask upstream on every tick.
+  if (cached && !cached.ok) return cached;
+  // A stored SUCCESS is re-checked, because usability is time-relative and the
+  // status summary is recomputed against the current request. A bin well inside
+  // the window when it was cached ages out of it long before a 5-minute TTL
+  // expires; serving it then would report the health it had at insertion while
+  // the consumer gets nothing — the same failure-wearing-a-success this whole
+  // change removes, just arriving by the clock instead of by the payload.
+  if (cached && usable(cached.value)) return cached;
   // `ok` is derived from the NORMALIZED product, never from "the fetch came
   // back non-null". SWPC answers 200 with a parseable-but-empty body often
   // enough that keying off the raw response counts a broken payload as a

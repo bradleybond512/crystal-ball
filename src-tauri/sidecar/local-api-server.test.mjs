@@ -3313,6 +3313,49 @@ test('/api/spaceweather/status — a stale-but-parseable xray payload is a failu
   }
 });
 
+// Usability is time-RELATIVE, so it cannot be settled once at insertion: a bin
+// comfortably inside the window when it was cached can age out of it while still
+// inside the success TTL it earned. The status summary is recomputed against the
+// newer request time, so without a re-check the payload reports health it no
+// longer has and the upstream is never re-asked.
+test('/api/spaceweather/status — a subfeed that ages out of the window inside its own TTL is re-fetched', async () => {
+  const agingTag = swpcTag(5 * 60 * 60 * 1000 + 59 * 60 * 1000);
+  let xrayFresh = false;
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('xrays-6-hour')) {
+      const tag = xrayFresh ? swpcTag(60_000) : agingTag;
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: `${tag}Z`, flux: 1e-6, energy: '0.1-0.8nm' }]) };
+    }
+    if (options.path.includes('noaa-planetary-k-index')) {
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: swpcTag(60_000), Kp: 4.33 }]) };
+    }
+    if (options.path.includes('donki/cme')) return { statusCode: 200, body: '[]' };
+    return { statusCode: 500, body: 'unexpected request' };
+  });
+  const xrayCalls = () => app.calls.filter((c) => c.path.includes('xrays-6-hour')).length;
+  try {
+    const first = await app.getJson('/api/spaceweather/status');
+    assert.ok(first.xray, 'one minute inside the 6h window, so this is a genuine reading');
+    assert.equal(xrayCalls(), 1);
+
+    xrayFresh = true;
+    // Two minutes on the bin is 6h01m old — past the summary cutoff, but still
+    // inside the 5-minute success TTL it earned a moment ago.
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      const aged = await app.getJson('/api/spaceweather/status');
+      assert.equal(xrayCalls(), 2, 'health settled at insertion cannot outlive the data it was measured on');
+      assert.ok(aged.xray, 'and the re-ask must actually restore the reading');
+      assert.equal(aged.subfeeds.xray, true);
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
 test('/api/spaceweather/status — retrying a failed subfeed does not re-fetch the healthy ones', async () => {
   const tag = swpcTag(60_000);
   const app = await startRouteApp((options) => {

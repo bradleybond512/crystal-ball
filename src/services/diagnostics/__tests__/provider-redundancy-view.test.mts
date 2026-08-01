@@ -18,9 +18,29 @@ test('verdict label + tone mapping', () => {
 
 test('not_configured is labelled as a config gap, not an outage', () => {
   assert.equal(verdictLabel('not_configured'), 'Not configured');
-  // 'warn', not 'bad': TONE_RANK drives worst-first ordering, and a domain that
-  // was never switched on shouldn't outrank a live outage for attention.
   assert.equal(verdictTone('not_configured'), 'warn');
+});
+
+test('rows within a tone are ordered by verdict severity, not alphabetically', () => {
+  // not_configured and redundant_disagreement are both 'warn', so tone alone
+  // can't separate them — 'adsb' would sort ahead of 'weather' on the domain
+  // name and put a config gap above a live disagreement.
+  const report = assessProviderRedundancy({
+    generatedAt: 0,
+    snapshots: [
+      snap({
+        providerId: 'wingbits',
+        domain: 'adsb',
+        primary: true,
+        level: 'failing',
+        unconfiguredSecret: 'WINGBITS_API_KEY',
+      }),
+      snap({ providerId: 'nws', domain: 'weather', primary: true, recentFactFingerprint: 'a' }),
+      snap({ providerId: 'noaa', domain: 'weather', primary: false, recentFactFingerprint: 'b' }),
+    ],
+  });
+  const view = buildRedundancyView(report);
+  assert.deepEqual(view.rows.map((r) => r.verdict), ['redundant_disagreement', 'not_configured']);
 });
 
 test('builds rows with corroborating-source counts and sorts worst-first', () => {

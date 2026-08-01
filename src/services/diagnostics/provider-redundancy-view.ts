@@ -12,6 +12,7 @@ import type {
   RedundancyVerdict,
   ProviderSnapshot,
 } from './provider-redundancy.ts';
+import { verdictRank } from './provider-redundancy.ts';
 
 export type RedundancyTone = 'good' | 'warn' | 'bad' | 'neutral';
 
@@ -99,7 +100,15 @@ export function buildRedundancyView(report: ProviderRedundancyReport): Redundanc
     };
   });
 
-  rows.sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone] || a.domain.localeCompare(b.domain));
+  // Tone first (it drives the visual grouping), then verdict severity — tone is
+  // too coarse to separate a config gap from a live disagreement, which share
+  // 'warn' and would otherwise fall back to alphabetical order.
+  rows.sort(
+    (a, b) =>
+      TONE_RANK[a.tone] - TONE_RANK[b.tone]
+      || verdictRank(b.verdict) - verdictRank(a.verdict)
+      || a.domain.localeCompare(b.domain),
+  );
 
   const healthyCount = rows.filter((r) => r.tone === 'good').length;
   const stressedCount = rows.length - healthyCount;

@@ -1528,7 +1528,6 @@ export class DeckGLMap {
  this.ensureSmokeOverlayData();
  layers.push(...this.createAirSmokeLayers());
  }
- this.syncSmokeScrubber(mapLayers.airSmoke || mapLayers.smokeForecast);
 
  // Iran events layer
  if (mapLayers.iranAttacks && this.iranEvents.length > 0) {
@@ -6729,6 +6728,10 @@ export class DeckGLMap {
  }
  this.syncRasterTileLayer(map, 'wm-firework', ml.smokeForecast, () => [fireworkUrl], 0.55);
  if (ml.smokeForecast) this.fireworkAppliedUrl = fireworkUrl;
+ // Scrubber lives here rather than in buildLayers(): that call is behind
+ // `this.deckOverlay?.`, so it is skipped entirely when the deck overlay
+ // failed to construct — the raster would render with no way to scrub it.
+ this.syncSmokeScrubber(ml.airSmoke || ml.smokeForecast);
   }
 
   private syncRasterTileLayer(

@@ -859,6 +859,13 @@ export class DataLoaderManager implements AppModule {
  await this.loadWeatherAlerts();
  break;
  }
+ case 'smokeForecast': {
+ // Re-delivers the (cached) frames to the map. The boot-time task can
+ // land before MapContainer's dynamic DeckGLMap import resolves, in
+ // which case the setter short-circuits and the state is dropped.
+ await this.loadSmokeForecast();
+ break;
+ }
  case 'outages': {
  await this.loadOutages();
  break;

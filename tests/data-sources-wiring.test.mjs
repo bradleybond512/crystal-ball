@@ -165,10 +165,31 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // closes that gap; it only bounds it at one jittered tick. Picking an exact
     // divisor does NOT help: it lines up only at zero jitter, and real ticks at
     // 4.5/9.0 min push the refetch out to 14.5 with a 5 min interval.
-    const worstBlindMs = interval * JITTER;
+    // The gap is NOT just the jittered delay. refresh-scheduler arms the next
+    // timer in a `finally` AFTER `await fn()` resolves, so a cycle costs the
+    // loader's own runtime on top of the interval. loadInternetOutages awaits
+    // the comms fetch, then a Promise.all of the two fusion fetches — worst
+    // case one comms timeout plus the slower of the parallel pair, all of which
+    // are read back from source here rather than assumed.
+    const fetchSrc = readFileSync(resolve(root, 'src/services/netwatch/cloudflare-radar-fetch.ts'), 'utf8');
+    const timeoutMs = (src, name) => {
+      const m = src.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));
+      assert.ok(m, `${name} not found; the execution budget below would silently under-count`);
+      return Number(m[1].replace(/_/g, ''));
+    };
+    const commsTimeout = product(outagesSrc.match(/AbortSignal\.timeout\(([0-9_]+)\)/)[1]);
+    const worstExecMs = commsTimeout + Math.max(
+      timeoutMs(fetchSrc, 'IODA_RENDERER_TIMEOUT_MS'),
+      timeoutMs(fetchSrc, 'CLOUDFLARE_RENDERER_TIMEOUT_MS'),
+    );
+    // Strict `<`, not `<=`: at a 4 min interval the sum lands on exactly
+    // binding/2, and a bound met with zero margin is not a bound — any drift in
+    // the timeouts parsed above would push it over without failing here.
+    const worstBlindMs = interval * JITTER + worstExecMs;
     assert.ok(
-      worstBlindMs <= binding / 2,
-      `worst-case blind window is ${worstBlindMs / 60000} min out of the ${binding / 60000} min ` +
+      worstBlindMs < binding / 2,
+      `worst-case blind window is ${worstBlindMs / 60000} min (${interval / 60000} min interval ` +
+      `x${JITTER} jitter + ${worstExecMs / 1000}s execution) out of the ${binding / 60000} min ` +
       `it protects; keep it under half so the axis has data for most of each cycle`,
     );
   });

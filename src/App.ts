@@ -724,8 +724,11 @@ export class App {
  //
  // 3 min, not 4, because the gap is not just the jittered delay: the scheduler
  // arms the next timer in a `finally` AFTER the loader resolves, so a cycle
- // costs this loader's runtime too — worst case ~36s (an 18s comms fetch, then
- // a Promise.all of the two fusion fetches capped at 18s). 4 min landed at
+ // costs this loader's runtime too — ~36s of network waits (an 18s comms fetch,
+ // then a Promise.all of the two fusion fetches capped at 18s). That is the
+ // dominant term, not a complete bound: the abort timeouts cap the network wait
+ // only, so parse/adapt/ingest and event-loop delay sit outside it. Sub-second
+ // here, and the margin below absorbs them. 4 min landed at
  // 4.4 + 0.6 = exactly the 5 min budget rather than under it. 3 min caps the
  // blind window at 3.9 min, under half the 10 min it protects —
  // AT THE DEFAULT CADENCE MULTIPLIER, the same scoping as the seismic entries

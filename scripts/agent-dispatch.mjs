@@ -12,6 +12,15 @@
 // Default is dry-ish (claim + workspace + print): starting a Claude session
 // costs real money, so the final trigger stays explicit until you wire this
 // into cron/LaunchAgent with --run.
+//
+// Prompt-injection posture: issue text is untrusted and enters the prompt
+// verbatim under an explicit "cannot override AGENTS.md" guard. There is
+// deliberately NO deterministic text filter — a denylist over natural
+// language is the denylist antipattern this repo bans. The real boundary is
+// layered downstream: the session's own permission gates, the cross-agent
+// review verdict (a different model reads the actual diff), targeted tests,
+// and the human-visible PR. An injected instruction still cannot reach main
+// without surviving all of those.
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 

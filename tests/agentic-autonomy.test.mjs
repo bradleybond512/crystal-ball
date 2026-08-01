@@ -50,8 +50,11 @@ test('the loop records at zero blocking, repairs through cycle 2, escalates at 3
   const after2 = { 'claude/x': { cycles: 2 } };
   const esc = nextAction(after2, 'claude/x', 'a'.repeat(40), 1);
   assert.equal(esc.action, 'escalate');
-  // A clean review still records regardless of past cycles.
-  assert.equal(nextAction(after2, 'claude/x', 'a'.repeat(40), 0).action, 'record');
+  // A clean review records regardless of past cycles AND resets the counter,
+  // so a later unrelated change on the same branch starts fresh.
+  const rec = nextAction(after2, 'claude/x', 'a'.repeat(40), 0);
+  assert.equal(rec.action, 'record');
+  assert.equal(rec.cycles, 0);
 });
 
 // ── dispatcher: claim discipline ──

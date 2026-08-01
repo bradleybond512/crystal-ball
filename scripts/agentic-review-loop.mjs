@@ -25,10 +25,12 @@ const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: '
 const STATE_FILE = path.join(root, '.agentic/loop-state.json');
 const MAX_CYCLES = 2;
 
+// Cycles accumulate per branch until a clean review records a verdict, which
+// resets them: a later, unrelated change on the same branch starts fresh
+// instead of inheriting exhausted cycles and escalating on its first review.
 export function nextAction(state, branch, tip, blockingCount) {
-  const key = `${branch}`;
-  const entry = state[key]?.tipFamily === tip.slice(0, 8) || state[key] ? state[key] : { cycles: 0 };
-  if (blockingCount === 0) return { action: 'record', cycles: entry.cycles ?? 0 };
+  const entry = state[branch] ?? { cycles: 0 };
+  if (blockingCount === 0) return { action: 'record', cycles: 0 };
   const cycles = (entry.cycles ?? 0) + 1;
   if (cycles > MAX_CYCLES) return { action: 'escalate', cycles };
   return { action: 'repair', cycles };
@@ -64,6 +66,10 @@ function reviewPrompt(branch) {
 
 function runReviewer(reviewer, branch, diff) {
   const cwd = mkdtempSync(path.join(tmpdir(), 'agentic-review-'));
+  // codex exec consumes stdin as ADDITIONAL input alongside a positional
+  // prompt — it prints "Reading additional input from stdin..." and echoes
+  // the diff between <stdin> markers in its transcript (observed on every
+  // run of this loop). The diff on stdin does reach the reviewer.
   const argv = reviewer === 'codex'
     ? ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', reviewPrompt(branch)]
     : ['-p', reviewPrompt(branch)];

@@ -723,10 +723,15 @@ export class App {
  // ticks at 4.5/9.0 push the refetch to 14.5 and leave the axis blind 10->14.5.
  // 4 min caps the blind window at 4.4 min, under half the 10 min it protects.
  //
- // Cheap at that rate: the limit=50 comms fetch early-returns from its own
- // module cache without touching the network, and the limit=5000 fusion fetch
- // snaps its window to a 15 min boundary, so extra ticks land on the sidecar
- // cache. Upstream stays <=96/day for either path regardless of cadence.
+ // Cheap at that rate because neither path's upstream rate is set by this
+ // interval, but they are bounded differently and only one is cadence-proof.
+ // The limit=5000 fusion fetch snaps its window to a 15 min boundary, so extra
+ // ticks land on the sidecar cache: <=96 upstream/day however often we tick.
+ // The limit=50 comms fetch early-returns from its own 10 min module cache
+ // without touching the network, so it reaches IODA about once per expiry,
+ // ~100-145/day. That one is NOT quantum-bounded — it builds an unsnapped
+ // second-resolution key, so every expiry is an upstream miss — but its rate
+ // is set by that 10 min module cache, not by this interval.
  { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 4 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'federalRegister', fn: () => this.dataLoader.loadFederalRegister(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'airQuality', fn: () => this.dataLoader.loadAirQuality(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

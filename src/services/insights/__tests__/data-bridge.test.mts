@@ -139,22 +139,21 @@ test('unconfigured key-gated provider cannot cast an "up" vote', () => {
   assert.doesNotMatch(String(net?.reason), /2 of 2 providers up/);
 });
 
-test('legacy-id key-gated diagnostics (FRED, EIA) are gated on the live path', () => {
+test('multi-upstream diagnostics (FRED, EIA) survive the gate on the live path', () => {
   resetInsightsState();
-  // The live diagnostics call these 'economic' and 'oil', not 'fred'/'eia'.
-  // A 'healthy' status here is the dangerous case: a stale successful update
-  // retained after the key went away would otherwise still vote up.
+  // These report under 'economic'/'oil' and both have keyless fallbacks that
+  // record success. A healthy status here is real data, not a phantom vote —
+  // demoting it would understate live redundancy.
   const snapshots = bridgeSourcesToProviderRedundancy([
     { id: 'economic', name: 'Economic Data (FRED)', status: 'healthy', lastUpdateMs: NOW },
     { id: 'oil', name: 'Oil Analytics (EIA)', status: 'healthy', lastUpdateMs: NOW },
   ]);
-  assert.equal(snapshots.find((s) => s.providerId === 'economic')?.level, 'failing');
-  assert.equal(snapshots.find((s) => s.providerId === 'oil')?.level, 'failing');
-
-  const report = getProviderRedundancyReport();
-  const econ = report.domains.find((d) => d.domain === 'economic');
-  assert.equal(econ?.verdict, 'not_configured');
-  assert.match(String(econ?.remediation), /FRED_API_KEY/);
+  assert.equal(snapshots.find((s) => s.providerId === 'economic')?.level, 'healthy');
+  assert.equal(snapshots.find((s) => s.providerId === 'oil')?.level, 'healthy');
+  assert.notEqual(
+    getProviderRedundancyReport().domains.find((d) => d.domain === 'economic')?.verdict,
+    'not_configured',
+  );
 });
 
 test('keyless providers are unaffected by the secret gate', () => {

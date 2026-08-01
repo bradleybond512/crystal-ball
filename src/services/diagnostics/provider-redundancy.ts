@@ -190,6 +190,12 @@ const VERDICT_RANK: Record<RedundancyVerdict, number> = {
   all_down: 7,
 };
 
+/** Severity of a verdict, ascending. Exported so renderers order rows the same
+ *  way the report does instead of re-deriving it from the coarser tone. */
+export function verdictRank(v: RedundancyVerdict): number {
+  return VERDICT_RANK[v];
+}
+
 const MULTIPLIER: Record<RedundancyVerdict, number> = {
   redundant_agreement: 1,
   // 2+ providers up (some redundancy) but agreement unverified — a small

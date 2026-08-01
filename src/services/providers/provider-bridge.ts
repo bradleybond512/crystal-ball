@@ -56,30 +56,18 @@ export function snapshotsFromRegistry(
  * runtime-config reads localStorage / Tauri IPC and must not leak into this
  * layer. There is deliberately no default — a call site that omits the
  * predicate should not silently fail open.
- */
-/**
- * Live-diagnostic ids for providers the registry knows under a different name.
  *
- * data-freshness.ts calls FRED 'economic' and EIA 'oil'; the registry calls them
- * 'fred' and 'eia'. Without this the lookup below misses and both cast an "up"
- * vote with no key configured.
- *
- * Deliberately consulted ONLY by the secret gate, not by getProviderDefinition
- * itself: a global alias would also make registrySnapshotFor match, regrouping
- * these rows out of the 'economic'/'oil' domains they report under today.
+ * Matched on registry id only. The live diagnostics 'economic' and 'oil' look
+ * like FRED and EIA but are aggregates over several upstreams — both fall back
+ * to keyless sources that record success — so aliasing them onto the keyed
+ * definitions would zero a domain that is actually delivering data.
  */
-const LEGACY_PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = {
-  economic: 'fred',
-  oil: 'eia',
-};
-
 export function demoteUnconfiguredProviders(
   snapshots: readonly ProviderSnapshot[],
   isSecretConfigured: (key: RuntimeSecretKey) => boolean,
 ): ProviderSnapshot[] {
   return snapshots.map((snap) => {
-    const id = LEGACY_PROVIDER_ID_ALIASES[snap.providerId] ?? snap.providerId;
-    const secret = getProviderDefinition(id)?.requiredSecret;
+    const secret = getProviderDefinition(snap.providerId)?.requiredSecret;
     if (!secret || isSecretConfigured(secret)) return snap;
     return {
       ...snap,

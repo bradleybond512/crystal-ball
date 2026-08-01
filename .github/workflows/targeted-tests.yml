@@ -4,8 +4,15 @@ name: Targeted tests
 # required checks run zero unit tests; the full sweep is too slow per-PR.
 # scripts/targeted-tests.mjs derives the mapping from package.json itself
 # (each test:* script lists its files; src/<area>/__tests__/ covers
-# src/<area>/) and runs only what the diff touches. Docs-only and
-# dependency-only PRs select nothing and pass in seconds after npm ci.
+# src/<area>/) and runs everything the diff touches — no cap. Docs-only and
+# dependency-only PRs select nothing and pass after npm ci.
+#
+# The selector is executed FROM origin/main, never from the PR head: a PR
+# must not control which tests judge it. (The test files themselves run from
+# the PR tree — that is inherent to CI and true of every check here.)
+#
+# Runs on fork PRs too: it needs no secrets, and a skipped job would satisfy
+# a required check vacuously.
 on:
   pull_request:
     branches:
@@ -17,8 +24,8 @@ permissions:
 
 jobs:
   targeted-tests:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -28,10 +35,12 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      # Branches cut before the selector landed don't carry it — pass them.
-      - run: |
-          if [ -f scripts/targeted-tests.mjs ]; then
-            node scripts/targeted-tests.mjs --ci
+      - name: Select and run targeted suites
+        run: |
+          git fetch origin main --quiet
+          if git cat-file -e origin/main:scripts/targeted-tests.mjs 2>/dev/null; then
+            git show origin/main:scripts/targeted-tests.mjs > "$RUNNER_TEMP/targeted-tests.mjs"
+            node "$RUNNER_TEMP/targeted-tests.mjs" --ci
           else
-            echo "targeted-tests.mjs not on this branch (predates the gate); passing."
+            echo "targeted-tests.mjs not on origin/main yet (gate rollout); passing."
           fi

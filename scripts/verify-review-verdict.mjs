@@ -9,14 +9,21 @@
 //   1. The reviewer examines the branch at commit R (the code tip).
 //   2. The loop records .agentic/reviews/<R>.json and commits it — that
 //      commit must touch NOTHING outside .agentic/reviews/.
-//   3. CI verifies: HEAD is a verdict-only commit, its first parent is R,
-//      the file pins R exactly, the reviewer is the required cross-agent,
-//      the verdict is "approve" with zero blocking findings, and quoted
-//      evidence is present.
+//   3. CI verifies: HEAD is a verdict-only commit (adds/modifies only, no
+//      deletes — rename tricks decompose to a delete under --no-renames),
+//      its first parent is R, the file pins R exactly, the reviewer is the
+//      required cross-agent, the verdict is "approve" with zero blocking
+//      findings, and quoted evidence is present.
 //
 // Any code pushed after the verdict makes HEAD a code commit again, so the
 // check goes red until a fresh review is recorded. A stale approval cannot
 // ride a new push into main.
+//
+// KNOWN LIMIT: without CI-side reviewer execution (CI_CODEX_REVIEW +
+// OPENAI_API_KEY), the reviewer identity is attested by the recording agent —
+// the protocol proves WHAT was approved and WHEN it went stale, not WHO
+// approved it. CI runs the copy of this script from origin/main, so a PR
+// cannot weaken or delete the verifier it is judged by.
 //
 // Usage:
 //   node scripts/verify-review-verdict.mjs [--ci]        verify HEAD
@@ -40,26 +47,33 @@ export function requiredReviewers(branch) {
   return null; // not an agent branch — no verdict required
 }
 
-export function validateVerdict({ branch, headFiles, headParent, verdictJson }) {
+// headEntries: [{ status, file }] from a --no-renames name-status diff of the
+// HEAD commit. Statuses other than A/M (deletes, type changes) can never be
+// part of a legitimate verdict commit; with rename detection disabled a
+// "rename a code file onto the verdict path" trick decomposes into D + A and
+// the D is rejected here.
+export function validateVerdict({ branch, headEntries, headParent, verdictJson }) {
   const reviewers = requiredReviewers(branch);
   if (reviewers === null) return { ok: true, reason: 'not an agent branch; verdict not required' };
 
   const failures = [];
   const expectedFile = `${REVIEWS_DIR}/${headParent}.json`;
 
-  const outside = headFiles.filter((f) => !f.startsWith(`${REVIEWS_DIR}/`));
-  if (headFiles.length === 0 || outside.length > 0) {
+  const offending = headEntries.filter(
+    (e) => !e.file.startsWith(`${REVIEWS_DIR}/`) || (e.status !== 'A' && e.status !== 'M'),
+  );
+  if (headEntries.length === 0 || offending.length > 0) {
     failures.push(
       'HEAD is not a verdict-only commit. The tip of an agent branch must be a commit '
-        + `touching only ${REVIEWS_DIR}/ that records the cross-agent review of its parent. `
-        + (outside.length > 0 ? `Files outside the protocol dir: ${outside.join(', ')}. ` : '')
+        + `that only adds or modifies files under ${REVIEWS_DIR}/, recording the cross-agent review of its parent. `
+        + (offending.length > 0 ? `Offending entries: ${offending.map((e) => [e.status, e.file].join(' ')).join(', ')}. ` : '')
         + 'Run the review, then: node scripts/verify-review-verdict.mjs --record --reviewer <agent> --evidence-file <transcript>',
     );
     return { ok: false, failures };
   }
-  if (!headFiles.includes(expectedFile)) {
+  if (!headEntries.some((e) => e.file === expectedFile)) {
     failures.push(
-      `HEAD does not record a verdict for its parent: expected ${expectedFile}, got ${headFiles.join(', ')}. `
+      `HEAD does not record a verdict for its parent: expected ${expectedFile}, got ${headEntries.map((e) => e.file).join(', ')}. `
         + 'The verdict must pin the exact commit the reviewer examined — re-run the review against the current tip.',
     );
     return { ok: false, failures };
@@ -102,9 +116,16 @@ function headState(cwd) {
   let headParent = '';
   try {
     headParent = git(['rev-parse', 'HEAD^'], { cwd });
-  } catch { /* root commit */ }
-  const headFiles = git(['show', '--name-only', '--format='], { cwd }).split('\n').filter(Boolean);
-  return { headSha, headParent, headFiles };
+  } catch { /* root commit — headEntries below still lists its files */ }
+  const raw = headParent
+    ? git(['diff-tree', '--no-renames', '--name-status', '-r', headParent, headSha], { cwd })
+    : git(['diff-tree', '--no-renames', '--name-status', '-r', '--root', headSha], { cwd })
+        .split('\n').slice(1).join('\n'); // --root prefixes the commit hash line
+  const headEntries = raw.split('\n').filter(Boolean).map((line) => {
+    const [status, ...rest] = line.split('\t');
+    return { status: status.trim(), file: rest.join('\t') };
+  });
+  return { headSha, headParent, headEntries };
 }
 
 function currentBranch(cwd) {
@@ -113,14 +134,14 @@ function currentBranch(cwd) {
 
 export function verify(cwd = process.cwd()) {
   const branch = currentBranch(cwd);
-  const { headParent, headFiles } = headState(cwd);
+  const { headParent, headEntries } = headState(cwd);
   let verdictJson = '';
   if (headParent) {
     try {
       verdictJson = git(['show', `HEAD:${REVIEWS_DIR}/${headParent}.json`], { cwd });
-    } catch { /* validated below via headFiles */ }
+    } catch { /* validated below via headEntries */ }
   }
-  return { branch, ...validateVerdict({ branch, headFiles, headParent, verdictJson }) };
+  return { branch, ...validateVerdict({ branch, headEntries, headParent, verdictJson }) };
 }
 
 function record(cwd, { reviewer, evidenceFile }) {
@@ -135,8 +156,8 @@ function record(cwd, { reviewer, evidenceFile }) {
   if (git(['status', '--porcelain', '--untracked-files=no'], { cwd })) {
     throw new Error('Tracked files have uncommitted changes; a verdict must pin an exact committed state.');
   }
-  const { headSha, headFiles } = headState(cwd);
-  if (headFiles.length > 0 && headFiles.every((f) => f.startsWith(`${REVIEWS_DIR}/`))) {
+  const { headSha, headEntries } = headState(cwd);
+  if (headEntries.length > 0 && headEntries.every((e) => e.file.startsWith(`${REVIEWS_DIR}/`))) {
     throw new Error('HEAD is already a verdict commit; do not stack verdicts. Push code first, then re-review.');
   }
   const evidence = readFileSync(evidenceFile, 'utf8').trim();

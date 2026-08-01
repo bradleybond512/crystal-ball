@@ -21,12 +21,19 @@ fi
 # The verdict must pin THIS tip; a stale or missing verdict is the #1601 bug.
 node scripts/verify-review-verdict.mjs
 
-git fetch origin --quiet
+# Resolve the canonical remote — it is `macos` on Bradley's Mac and `origin`
+# in most other clones (AGENTS.md "Branch Discipline"). Never assume the name.
+CANON=$(git remote -v | awk '/bradleybond512\/crystal-ball.*\(fetch\)/{print $1; exit}')
+if [ -z "$CANON" ]; then
+  printf 'pr-closeout: no remote points at bradleybond512/crystal-ball.\n' >&2
+  exit 1
+fi
+git fetch "$CANON" --quiet
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo "")
+REMOTE=$(git rev-parse "$CANON/$BRANCH" 2>/dev/null || echo "")
 if [ "$LOCAL" != "$REMOTE" ]; then
-  printf 'pr-closeout: local tip %s != origin/%s tip %s — push first, then rerun.\n' \
-    "${LOCAL:0:8}" "$BRANCH" "${REMOTE:0:8}" >&2
+  printf 'pr-closeout: local tip %s != %s/%s tip %s — push first, then rerun.\n' \
+    "${LOCAL:0:8}" "$CANON" "$BRANCH" "${REMOTE:0:8}" >&2
   exit 1
 fi
 

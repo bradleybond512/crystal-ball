@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
-import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted, commandToArgv } from '../scripts/targeted-tests.mjs';
+import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted, commandToStages } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -261,15 +261,21 @@ test('ciVerdict fails a source-touching PR with zero applicable suites', () => {
   assert.match(r.reason, /ZERO targeted suites/);
 });
 
-test('commandToArgv spawns main-trusted commands directly, bypassing PR package.json', () => {
+test('commandToStages spawns main-trusted commands directly, bypassing PR package.json', () => {
   // A PR rewriting test:weather to another allowlisted-but-inert runner
   // changes nothing: main-selected suites execute MAIN's command verbatim.
-  const tsx = commandToArgv('tsx --test src/services/weather/__tests__/a.test.mts', '/repo/node_modules/.bin');
+  const [tsx] = commandToStages('tsx --test src/services/weather/__tests__/a.test.mts', '/repo/node_modules/.bin');
   assert.equal(tsx.bin, '/repo/node_modules/.bin/tsx');
   assert.deepEqual(tsx.args, ['--test', 'src/services/weather/__tests__/a.test.mts']);
-  const node = commandToArgv('node --test tests/x.test.mjs');
-  assert.equal(node.bin, process.execPath);
-  assert.deepEqual(node.args, ['--test', 'tests/x.test.mjs']);
+  // Composite && commands (test:feed-health) split into sequential stages —
+  // `&&` must never be passed to tsx as a file argument.
+  const stages = commandToStages('tsx --test a.test.mts && node --test b.test.mjs', '/bin');
+  assert.equal(stages.length, 2);
+  assert.deepEqual(stages[0], { bin: '/bin/tsx', args: ['--test', 'a.test.mts'] });
+  assert.deepEqual(stages[1], { bin: process.execPath, args: ['--test', 'b.test.mjs'] });
+  assert.ok(stages.every((st) => !st.args.includes('&&')));
+  // A stage with an untrusted runner refuses instead of shelling out.
+  assert.throws(() => commandToStages('tsx --test a.mts && rm -rf /', '/bin'), /untrusted stage runner/);
 });
 
 test('ciVerdict fails a NEW uncovered source file; baselined gaps only warn', () => {

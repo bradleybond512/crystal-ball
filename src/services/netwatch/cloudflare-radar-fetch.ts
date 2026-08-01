@@ -74,8 +74,12 @@ const IODA_FUSION_LIMIT = 5000;
  * to reuse — ticks late in the quantum find it expired. A smaller quantum is
  * strictly WORSE, not neutral: every quantum boundary mints a fresh key, so a
  * 5 min quantum abandons a still-valid entry twice per TTL and triples the
- * upstream rate. Equality is the only setting where each cache entry is reused
- * for exactly as long as it is valid.
+ * upstream rate. Equality is simply the setting that wastes the least; it is
+ * not a perfect fit, because the TTL clock starts when the first request after
+ * a boundary arrives, not at the boundary itself. So the entry stays valid a
+ * little past the next boundary and is abandoned slightly early no matter what.
+ * That residue is bounded by one tick interval and does not change the
+ * steady-state cap: still one upstream request per quantum.
  *
  * Snapped UP (ceil), not down. Both directions give the same stable key, but
  * flooring also truncates the window at the boundary, so every onset between

@@ -721,7 +721,13 @@ export class App {
  // entirely; it only bounds it at one jittered tick, ~1.1x the interval. Exact
  // divisors buy nothing here: 5 min would line up only with zero jitter, and
  // ticks at 4.5/9.0 push the refetch to 14.5 and leave the axis blind 10->14.5.
- // 4 min caps the blind window at 4.4 min, under half the 10 min it protects —
+ //
+ // 3 min, not 4, because the gap is not just the jittered delay: the scheduler
+ // arms the next timer in a `finally` AFTER the loader resolves, so a cycle
+ // costs this loader's runtime too — worst case ~36s (an 18s comms fetch, then
+ // a Promise.all of the two fusion fetches capped at 18s). 4 min landed at
+ // 4.4 + 0.6 = exactly the 5 min budget rather than under it. 3 min caps the
+ // blind window at 3.9 min, under half the 10 min it protects —
  // AT THE DEFAULT CADENCE MULTIPLIER, the same scoping as the seismic entries
  // above. computeDelay also multiplies by the ghost (x5), context (x2 battery /
  // x4 low-power) and hidden (x10) factors, and under any of those this loader
@@ -743,7 +749,7 @@ export class App {
  // ~100-145/day. That one is NOT quantum-bounded — it builds an unsnapped
  // second-resolution key, so every expiry is an upstream miss — but its rate
  // is set by that 10 min module cache, not by this interval.
- { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 4 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 3 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'federalRegister', fn: () => this.dataLoader.loadFederalRegister(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'airQuality', fn: () => this.dataLoader.loadAirQuality(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'commsHealth', fn: () => this.dataLoader.loadCommsHealth(), intervalMs: 2 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

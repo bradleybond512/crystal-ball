@@ -79,8 +79,10 @@ const PROBES = [
     validate(j) {
       const p = [];
       if (j.result !== 'success') p.push(`result is ${JSON.stringify(j.result)} — a 200 body can still carry an error`);
-      const n = Object.keys(j.rates ?? {}).length;
-      if (n < 100) p.push(`only ${n} rates (probe saw 166)`);
+      const rates = j.rates;
+      if (typeof rates !== 'object' || rates === null || Array.isArray(rates)) return [...p, 'rates is not a plain object'];
+      if (Object.keys(rates).length < 100) p.push(`only ${Object.keys(rates).length} rates (probe saw 166)`);
+      if (typeof rates.EUR !== 'number') p.push('rates.EUR is not a number');
       return p;
     },
   },

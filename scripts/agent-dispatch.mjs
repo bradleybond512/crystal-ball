@@ -79,9 +79,12 @@ function main() {
   // commenting, count claim comments: if ours is not the only one, the other
   // dispatcher won — back off without touching the workspace.
   const comments = JSON.parse(gh(['issue', 'view', String(issue.number), '--json', 'comments']));
-  const claims = (comments.comments ?? []).filter((c) => c.body.startsWith('Claimed by agent dispatch'));
-  if (claims.length > 1) {
-    console.error(`[dispatch] #${issue.number} was claimed ${claims.length} times concurrently — backing off (first claim wins).`);
+  const claims = (comments.comments ?? []).filter((c) => c.body.startsWith('Claimed by agent dispatch'))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  // First-writer-wins: proceed only if OUR claim is the earliest, so exactly
+  // one of two racing dispatchers continues and none abandons the issue.
+  if (claims.length > 1 && !claims[0].body.includes(`.worktrees/${name}`)) {
+    console.error(`[dispatch] #${issue.number} claimed earlier by another dispatcher — backing off.`);
     process.exit(1);
   }
 

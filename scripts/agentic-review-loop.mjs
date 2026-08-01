@@ -89,7 +89,10 @@ function main() {
     process.exit(2);
   }
   const reviewer = reviewers[0];
-  const diff = execFileSync('git', ['diff', 'origin/main...HEAD'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  // Resolve the canonical remote (macos on Bradley's Mac, origin elsewhere).
+  const remotes = execFileSync('git', ['remote', '-v'], { cwd: root, encoding: 'utf8' });
+  const canon = remotes.split('\n').find((l) => l.includes('bradleybond512/crystal-ball') && l.endsWith('(fetch)'))?.split('\t')[0] ?? 'origin';
+  const diff = execFileSync('git', ['diff', `${canon}/main...HEAD`], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (!diff.trim()) {
     console.error('[review-loop] empty diff vs origin/main — nothing to review.');
     process.exit(2);

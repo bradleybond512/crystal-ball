@@ -14,7 +14,7 @@ const LIVE = {
   'coingecko-btc': '{"bitcoin":{"usd":63005}}',
   'coinbase-btc': '{"data":{"amount":"62993.975","base":"BTC","currency":"USD"}}',
   'frankfurter-usd': `{"base":"USD","rates":{${['EUR', ...Array.from({ length: 25 }, (_, i) => `C${i}`)].map((c) => `"${c}":0.87`).join(',')}}}`,
-  'open-er-api-usd': `{"result":"success","rates":{${Array.from({ length: 120 }, (_, i) => `"C${i}":1`).join(',')}}}`,
+  'open-er-api-usd': `{"result":"success","rates":{"EUR":0.87,${Array.from({ length: 120 }, (_, i) => `"C${i}":1`).join(',')}}}`,
   'swpc-kp': '[{"time_tag":"2026-07-25T00:00:00","Kp":1,"a_running":4,"station_count":8}]',
   'open-meteo-air-quality': '{"hourly":{"us_aqi":[43,44,45]}}',
 };
@@ -34,6 +34,8 @@ test('validators reject the documented drift classes', () => {
   assert.ok(runValidator(byId['coingecko-btc'], '{"bitcoin":{}}').length > 0);
   // Error carried inside a 200 body.
   assert.ok(runValidator(byId['open-er-api-usd'], '{"result":"error","rates":{}}').length > 0);
+  // Shape drift: rates degraded to an array/string must not fail open.
+  assert.ok(runValidator(byId['open-er-api-usd'], `{"result":"success","rates":"${'x'.repeat(200)}"}`).length > 0);
   // Format regression: SWPC's OTHER documented format (array-of-arrays).
   assert.ok(runValidator(byId['swpc-kp'], '[["time_tag","Kp"],["2026-08-01","3"]]').length > 0);
   // Bot-challenge page: HTTP 200 serving HTML.

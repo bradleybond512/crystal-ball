@@ -55,6 +55,16 @@ jobs:
       # miss regressions versus the reviewed baseline.
       - run: npm run bench:forecast
       - run: npm run bench:baselines
+      # ACC-501 correlation CI gate: replays the frozen golden-stream corpus
+      # through the REAL lead-lag miner and a REAL CorrelateEngine carrying the
+      # shipped built-in rules, and fails on coupling/pair precision-recall
+      # regression, near-miss decoy leakage, or learned-rule blast-radius growth
+      # versus the committed baseline
+      # (src/services/correlation/__bench__/bench-correlation-baseline.json).
+      # Tolerances are one-sided so ACC-502..506 improvements pass silently.
+      # Fully offline, frozen fixtures, injected timer + fixed `now` — sub-second
+      # runtime, cannot hang or become a slow step.
+      - run: npm run bench:correlation
       # Full MCP server suite (path-traversal sandbox, watchlist/alert tools,
       # trend/anomaly/correlate, sidecar client, etc.). It's a separate package
       # with its own deps (zod), so install + run it on its own — previously it

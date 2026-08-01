@@ -709,7 +709,7 @@ export class App {
  { name: 'ripeAtlas', fn: () => this.dataLoader.loadRipeAtlas(), intervalMs: 10 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeNcc', fn: () => this.dataLoader.loadRipeNcc(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  // Both votes of the internet_outages fusion domain, AND the warm cache the
- // survival comms axis reads synchronously. 4 min is set by the TIGHTER of the
+ // survival comms axis reads synchronously. The interval is set by the TIGHTER of the
  // two contracts: ioda's registry freshnessTtlMs is 15 min, but
  // internet-outages.getCachedIodaOutages() returns [] once its own cache is
  // >= 10 min old, and fetchIodaOutages() only refetches on a tick that finds

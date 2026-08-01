@@ -19,7 +19,7 @@
  * LIVE: wired in `storm-posture-state.withSupplyPosture` via the synchronous
  * `internet-outages.getCachedIodaOutages(now)` getter. `fetchIodaOutages` now
  * routes through the sidecar `/api/internet-outages` endpoint and is warmed by
- * the scheduled `loadInternetOutages` loader (full build, 4 min — the cadence
+ * the scheduled `loadInternetOutages` loader (full build, 3 min — the cadence
  * this axis DEPENDS on: `getCachedIodaOutages` returns [] once its cache is
  * >= 10 min old, and the refetch is lazy, so a slower loader leaves this axis
  * silently reporting no comms threats for part of every cycle). Because that sidecar

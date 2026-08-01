@@ -216,6 +216,16 @@ Every completed coding task must report:
 - rollback considerations;
 - proposed commit and draft PR description.
 
+### Postmortem-to-policy
+
+When a review cycle produces two or more blocking findings of the same class,
+the class belongs in this file, not in the PR thread. After the merge, add the
+generalized rule to "Crystal Ball architecture boundaries" (with the reference
+implementation) in a follow-up commit. The fail-open phantom vote, the
+allowlist rule, and the coordinate-truthiness rule all entered this file that
+way — a defect class written down here is one no future reviewer has to
+rediscover.
+
 ### Live-probe evidence (external data sources)
 
 `independent_reviewer` runs `sandbox_mode = "read-only"` and cannot reach the network,

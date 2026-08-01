@@ -1,0 +1,58 @@
+name: Live contract probes
+
+# Nightly body-shape validation of keyless fusion providers. An API that
+# drifts (empty collections behind 200s, renamed fields, bot-challenge pages)
+# is invisible to code review and to unit tests — this catches it in
+# production and files one issue per drift episode. No event-payload text is
+# interpolated into run: commands anywhere in this workflow.
+on:
+  schedule:
+    - cron: '17 9 * * *' # 09:17 UTC daily — off the top-of-hour stampede
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live-contract-probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+      - name: Run probes
+        id: probes
+        run: |
+          set +e
+          node scripts/live-contract-probes.mjs 2>&1 | tee /tmp/probe-output.txt
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      - name: File or update drift issue
+        if: steps.probes.outputs.exit != '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/probe-output.txt', 'utf8').slice(-4000);
+            const title = 'Live-contract drift: provider response shape changed';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'live-contract-drift',
+            });
+            const body = `Nightly probe run failed.\n\n\`\`\`\n${output}\n\`\`\`\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            if (issues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issues[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['live-contract-drift'],
+              });
+            }
+      - name: Fail the run on drift
+        if: steps.probes.outputs.exit != '0'
+        run: exit 1

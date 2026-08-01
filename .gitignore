@@ -72,3 +72,4 @@ data/attack-cache.json
 events.db
 events.db-wal
 events.db-shm
+.agentic/loop-state.json

@@ -39,6 +39,9 @@ export const OVERRIDES = {
   'scripts/verify-review-verdict.mjs': ['test:agentic-pipeline'],
   'scripts/targeted-tests.mjs': ['test:agentic-pipeline'],
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
+  'scripts/live-contract-probes.mjs': ['test:agentic-autonomy'],
+  'scripts/agentic-review-loop.mjs': ['test:agentic-autonomy'],
+  'scripts/agent-dispatch.mjs': ['test:agentic-autonomy'],
 };
 
 const RUNNER_ALLOWLIST = [

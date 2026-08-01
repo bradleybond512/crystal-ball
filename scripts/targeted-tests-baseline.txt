@@ -623,3 +623,7 @@ tools/mcp-server/tools/intelligence.mjs
 tools/mcp-server/tools/monitor-events.mjs
 tools/mcp-server/tools/monitor.mjs
 tools/mcp-server/tools/stateful.mjs
+scripts/agent-workspace.sh
+scripts/agent-dispatch.mjs
+scripts/agentic-review-loop.mjs
+scripts/live-contract-probes.mjs

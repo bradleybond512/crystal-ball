@@ -1,0 +1,19 @@
+{
+  "commit": "f3d33db8e89cc03e4226bc81c15432d045534487",
+  "files": [
+    "scripts/agentic-review-loop.mjs"
+  ],
+  "unmutated": [],
+  "tests": [
+    "test:agentic-pipeline"
+  ],
+  "green": {
+    "test:agentic-pipeline": "27 pass / 0 fail"
+  },
+  "red": {
+    "test:agentic-pipeline": "24 pass / 3 fail"
+  },
+  "behavioralReds": 3,
+  "restoredChecksumsVerified": true,
+  "provedAt": "2026-08-01T19:22:56.376Z"
+}

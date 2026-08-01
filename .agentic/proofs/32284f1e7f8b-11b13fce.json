@@ -1,0 +1,23 @@
+{
+  "commit": "32284f1e7f8ba3a4632af913b6df66796c71c934",
+  "files": [
+    "scripts/agent-dispatch.mjs"
+  ],
+  "unmutated": [
+    ".gitignore",
+    "scripts/agentic-review-loop.mjs",
+    "scripts/verify-review-verdict.mjs"
+  ],
+  "tests": [
+    "test:agentic-autonomy"
+  ],
+  "green": {
+    "test:agentic-autonomy": "16 pass / 0 fail"
+  },
+  "red": {
+    "test:agentic-autonomy": "13 pass / 3 fail"
+  },
+  "behavioralReds": 3,
+  "restoredChecksumsVerified": true,
+  "provedAt": "2026-08-01T19:21:40.801Z"
+}

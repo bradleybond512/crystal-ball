@@ -124,7 +124,11 @@ function resolveTolerances(
 ): CorrelationBenchTolerances {
   const tol = { ...DEFAULT_CORRELATION_BENCH_TOLERANCES };
   for (const [key, value] of Object.entries(raw ?? {})) {
-    if (!(key in tol)) {
+    // An own-property test, not `key in tol`: `in` walks the prototype chain,
+    // so "constructor" / "toString" / "__proto__" would pass as known gates —
+    // and `__proto__` assignment would reach the setter rather than the object.
+    // (`Object.hasOwn` is ES2022; this tsconfig's lib predates it.)
+    if (!Object.prototype.hasOwnProperty.call(tol, key)) {
       reasons.push(`tolerance "${key}" is not a known gate — the baseline is stale or corrupt`);
       continue;
     }

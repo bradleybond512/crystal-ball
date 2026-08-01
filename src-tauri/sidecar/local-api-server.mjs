@@ -3301,23 +3301,58 @@ async function loadSpacewxSubfeed(id, url, normalize, usable) {
   return entry;
 }
 
-// SWPC publishes x-ray and the planetary index continuously, so an empty
-// series means the payload was unusable, not that the sun went quiet.
+// SWPC publishes x-ray continuously, so an empty series means the payload was
+// unusable, not that the sun went quiet.
 const spacewxHasRows = (rows) => rows.length > 0;
+
+// Kp usability mirrors what the consumer will actually accept, because
+// "nonempty" and "usable" are not the same thing: kp-fusion-observations drops
+// rows outside the definitional 0..9 bound, and fetchSwpcKp drops rows outside
+// its rolling window. A payload that parses into rows the voter then throws
+// away is a failed subfeed wearing a success — it would hold the 5-minute TTL
+// while contributing nothing. Pure helper.
+//
+// The bound is definitional (Kp IS 0..9) so mirroring it here is safe. The
+// freshness limit deliberately is NOT the consumer's 12h window — that is a
+// fusion-overlap tuning knob the renderer owns, and copying it would silently
+// diverge the day it is retuned. This is a statement about SWPC's own cadence
+// instead: the index publishes in 3-hour bins, so a newest bin a day old is a
+// stuck feed by any reading. The narrow band between the two is left to the
+// consumer, which still fails closed on its own.
+const KP_SUBFEED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export function kpSubfeedUsable(points, now) {
+  return points.some(
+    (p) => p.kp >= 0 && p.kp <= 9 && now - Date.parse(p.time_tag) <= KP_SUBFEED_MAX_AGE_MS,
+  );
+}
+
+/**
+ * DELIBERATE asymmetry against the two products above: an EMPTY cme list is the
+ * sun's normal state — a real observation, not a failed fetch.
+ *
+ * Structural, never directional. filterEarthwardCmesSidecar drops every CME not
+ * aimed at Earth, so "nothing survived the filter" is the normal state of a
+ * perfectly healthy feed; keying usability off that would mark a working
+ * product failed every quiet week. A nonempty array carrying nothing
+ * DONKI-shaped, on the other hand, really is malformed.
+ */
+export function cmeSubfeedUsable(raw) {
+  if (!Array.isArray(raw)) return false;
+  if (raw.length === 0) return true;
+  return raw.some((cme) => cme && (cme.activityID != null || cme.startTime != null || Array.isArray(cme.cmeAnalyses)));
+}
 
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   const [xray, kp, cme] = await Promise.all([
     loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json', normalizeXrayPoints, spacewxHasRows),
-    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', normalizeKpPoints, spacewxHasRows),
-    // DELIBERATE asymmetry: an EMPTY cme list is the sun's normal state — a
-    // real observation, not a failed fetch — so only a non-array is unusable.
-    loadSpacewxSubfeed('cme', 'https://services.swpc.noaa.gov/json/donki/cme.json', (raw) => (Array.isArray(raw) ? raw : null), (list) => list !== null),
+    loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', normalizeKpPoints, (points) => kpSubfeedUsable(points, now)),
+    loadSpacewxSubfeed('cme', 'https://services.swpc.noaa.gov/json/donki/cme.json', (raw) => raw, cmeSubfeedUsable),
   ]);
   const status = buildSpaceweatherStatusSidecar({
     xrayFlux: xray.value,
     kpIndex: kp.value,
-    cmes: cme.value ?? [],
+    cmes: Array.isArray(cme.value) ? cme.value : [],
     now,
   });
   // Per-subfeed provenance so a consumer can tell "this product FAILED" from

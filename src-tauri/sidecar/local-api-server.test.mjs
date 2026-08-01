@@ -13,6 +13,8 @@ import {
   _resetSidecarCacheForTests,
   buildOllamaSummaryMessages,
   createLocalApiServer,
+  cmeSubfeedUsable,
+  kpSubfeedUsable,
   normalizeKpPoints,
   openMeteoForecastTtlMs,
   parseGfzKp,
@@ -3376,6 +3378,139 @@ test('/api/spaceweather/status — a total SWPC outage is flagged degraded', asy
     _resetSidecarCacheForTests();
     await app.cleanup();
   }
+});
+
+// "Nonempty" is not the same as "usable". A 200 can carry the right SHAPE with
+// nothing a consumer will accept: Kp is bounded 0..9 by definition, so
+// kpToObservations drops out-of-range rows, and fetchSwpcKp drops rows outside
+// its rolling window — either way the voter gets nothing while the subfeed
+// claims ok and holds the 5-minute success TTL. Same defect as the empty-200,
+// one layer in.
+
+test('/api/spaceweather/status — out-of-range Kp rows are unusable, not a reading', async () => {
+  let kpSane = false;
+  const tag = swpcTag(60_000);
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('xrays-6-hour')) {
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: `${tag}Z`, flux: 1e-6, energy: '0.1-0.8nm' }]) };
+    }
+    if (options.path.includes('noaa-planetary-k-index')) {
+      // 99 is a sentinel/parse artifact, never a Kp. The row parses and is
+      // finite, so it survives normalizeKpPoints — but kp-fusion-observations
+      // rejects it on the 0..9 bound and the voter gets nothing.
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: tag, Kp: kpSane ? 4.33 : 99 }]) };
+    }
+    return { statusCode: 200, body: '[]' };
+  });
+  try {
+    const status = await app.getJson('/api/spaceweather/status');
+    assert.equal(status.subfeeds.kp, false, 'a row the consumer must drop is not a healthy subfeed');
+
+    kpSane = true;
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      const recovered = await app.getJson('/api/spaceweather/status');
+      assert.equal(recovered.subfeeds.kp, true, 'and it recovers on the retry floor, not the success TTL');
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather/status — a frozen Kp product is unusable however well it parses', async () => {
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('noaa-planetary-k-index')) {
+      // SWPC publishes this index in 3-hour bins, continuously. A newest bin
+      // three days old is a stuck feed — the exact shape of the outage that
+      // left the geomag block silently dark for ~3 months.
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: swpcTag(3 * 24 * 60 * 60 * 1000), Kp: 4 }]) };
+    }
+    return { statusCode: 200, body: '[]' };
+  });
+  try {
+    const status = await app.getJson('/api/spaceweather/status');
+    assert.equal(status.subfeeds.kp, false, 'a stuck feed must not report healthy for 5 minutes at a time');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+const freshKpRow = (kp) => [{ time_tag: '2026-07-30T09:00:00Z', kp }];
+
+test('kpSubfeedUsable — bounds, freshness, and the empty case', () => {
+  const now = Date.parse('2026-07-30T12:00:00Z');
+  assert.equal(kpSubfeedUsable(freshKpRow(4.33), now), true);
+  assert.equal(kpSubfeedUsable(freshKpRow(0), now), true, '0 is a legitimate Kp, not a missing value');
+  assert.equal(kpSubfeedUsable(freshKpRow(9), now), true, 'and so is 9');
+  assert.equal(kpSubfeedUsable(freshKpRow(99), now), false, 'out of the definitional 0..9 bound');
+  assert.equal(kpSubfeedUsable(freshKpRow(-1), now), false);
+  assert.equal(kpSubfeedUsable([], now), false, 'SWPC publishes continuously — empty means broken, not calm');
+  assert.equal(
+    kpSubfeedUsable([{ time_tag: '2026-07-25T09:00:00Z', kp: 4 }], now),
+    false,
+    'a bin five days old is a frozen feed',
+  );
+});
+
+// The CME product carries the OPPOSITE rule, and the distinction is easy to get
+// wrong in a way that would break a healthy feed: filterEarthwardCmesSidecar
+// drops every CME not aimed at Earth, so "no rows survived the filter" is the
+// NORMAL state of a perfectly healthy nonempty feed. Usability here is therefore
+// structural — does this look like a DONKI record — never directional.
+
+test('/api/spaceweather/status — a nonempty CME feed aimed away from Earth is still healthy', async () => {
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('donki/cme')) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify([{
+          activityID: '2026-07-30T04:36:00-CME-001',
+          startTime: '2026-07-30T04:36Z',
+          // 140° off Earth: correctly filtered out of earthwardCmes, and NOT a
+          // sign the feed failed.
+          cmeAnalyses: [{ isMostAccurate: true, longitude: 140, speed: 700, time21_5: '2026-07-31T12:00Z' }],
+        }]),
+      };
+    }
+    return { statusCode: 200, body: '[]' };
+  });
+  try {
+    const status = await app.getJson('/api/spaceweather/status');
+    assert.equal(status.subfeeds.cme, true, 'a well-formed record is a healthy subfeed even when nothing is earthward');
+    assert.deepEqual(status.earthwardCmes, [], 'while still contributing no earthward CME');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('/api/spaceweather/status — a nonempty CME feed carrying no DONKI records is unusable', async () => {
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('donki/cme')) return { statusCode: 200, body: JSON.stringify([{}, {}]) };
+    return { statusCode: 200, body: '[]' };
+  });
+  try {
+    const status = await app.getJson('/api/spaceweather/status');
+    assert.equal(status.subfeeds.cme, false, 'rows with no DONKI fields at all are a malformed payload');
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
+test('cmeSubfeedUsable — empty is quiet, malformed is not, direction is irrelevant', () => {
+  assert.equal(cmeSubfeedUsable([]), true, 'no CMEs is the sun\'s normal state — a real observation');
+  assert.equal(cmeSubfeedUsable(null), false, 'a non-array is a failed fetch');
+  assert.equal(cmeSubfeedUsable([{}]), false, 'nonempty with nothing DONKI-shaped is malformed');
+  assert.equal(
+    cmeSubfeedUsable([{ activityID: '2026-07-30T04:36:00-CME-001' }]),
+    true,
+    'direction is deliberately NOT part of this check',
+  );
 });
 
 test('spacewxSubfeedTtlMs — a failed subfeed retries sooner than a successful one, but is still cached', () => {

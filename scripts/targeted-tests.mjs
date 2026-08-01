@@ -107,14 +107,19 @@ export function isRunnerAllowlisted(command) {
   return typeof command === 'string' && RUNNER_ALLOWLIST.some((re) => re.test(command));
 }
 
-// Turn a trusted (origin/main) runner command into a directly-spawnable argv,
+// Turn a trusted (origin/main) runner command into directly-spawnable stages,
 // so a main-selected suite executes MAIN's definition even if the PR rewrote
-// its package.json entry to another allowlisted-but-inert command.
-export function commandToArgv(command, binDir = 'node_modules/.bin') {
-  const tokens = command.split(/\s+/).filter(Boolean);
-  const [runner, ...rest] = tokens;
-  if (runner === 'node') return { bin: process.execPath, args: rest };
-  return { bin: path.join(binDir, runner), args: rest };
+// its package.json entry to another allowlisted-but-inert command. Commands
+// may chain runners with `&&` (e.g. test:feed-health); each stage must itself
+// be a plain tsx/node invocation or the whole command is refused.
+export function commandToStages(command, binDir = 'node_modules/.bin') {
+  return command.split('&&').map((stage) => {
+    const tokens = stage.trim().split(/\s+/).filter(Boolean);
+    const [runner, ...rest] = tokens;
+    if (runner === 'node') return { bin: process.execPath, args: rest };
+    if (runner === 'tsx') return { bin: path.join(binDir, 'tsx'), args: rest };
+    throw new Error(`untrusted stage runner "${runner}" in: ${command}`);
+  });
 }
 
 // Pure gate decision, unit-testable without git or npm.
@@ -234,10 +239,14 @@ function main() {
     // script to another allowlisted-but-inert runner changes nothing here.
     // PR-only (new) suites run via the PR's npm.
     if (mainSel.scripts.includes(script)) {
-      const { bin, args: argv } = commandToArgv(mainScripts[script], path.join(root, 'node_modules/.bin'));
       console.log(`\n==> [trusted:main] ${script}: ${mainScripts[script]}`);
-      const r = spawnSync(bin, argv, { cwd: root, stdio: 'inherit' });
-      if (r.status !== 0) failures.push(`${script} (exit ${r.status})`);
+      for (const { bin, args: argv } of commandToStages(mainScripts[script], path.join(root, 'node_modules/.bin'))) {
+        const r = spawnSync(bin, argv, { cwd: root, stdio: 'inherit' });
+        if (r.status !== 0) {
+          failures.push(`${script} (exit ${r.status})`);
+          break;
+        }
+      }
     } else {
       console.log(`\n==> npm run ${script}`);
       const r = spawnSync('npm', ['run', script], { cwd: root, stdio: 'inherit' });

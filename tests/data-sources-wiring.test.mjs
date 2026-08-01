@@ -125,7 +125,7 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
 
   // scheduleRefresh jitters +/-10% (refresh-scheduler.ts JITTER_FRACTION), so an
   // interval set EQUAL to the TTL lands over it on roughly half its ticks and
-  // the provider flaps healthy/stale. The budget must cover the worst case.
+  // the provider flaps healthy/stale, so every budget below carries it.
   //
   // SCOPE: jitter is the only factor modeled here. computeDelay also multiplies
   // by the ghost (x5), context (x2/x4) and hidden (x10) factors, under which
@@ -158,11 +158,11 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       // instead of silently pushing the domain past its TTL in production.
       // Same caveat as internetOutages below: the timeout bounds the network
       // wait, not the parse/normalize work after it.
-      const worstCycleMs = interval * JITTER + soleFetchTimeoutMs(fetchPath);
+      const modeledCycleMs = interval * JITTER + soleFetchTimeoutMs(fetchPath);
       assert.ok(
-        worstCycleMs <= ttl,
+        modeledCycleMs <= ttl,
         `${task} runs every ${interval / 60000} min but ${provider} declares a ${ttl / 60000} min TTL; ` +
-        `with jitter and a worst-case fetch that cycle reaches ${worstCycleMs / 60000} min ` +
+        `with jitter and a full-length fetch that cycle reaches ${modeledCycleMs / 60000} min ` +
         `and the domain drops to USGS alone`,
       );
     });
@@ -206,21 +206,21 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       return Number(m[1].replace(/_/g, ''));
     };
     const commsTimeout = product(outagesSrc.match(/AbortSignal\.timeout\(([0-9_]+)\)/)[1]);
-    const worstExecMs = commsTimeout + Math.max(
+    const modeledExecMs = commsTimeout + Math.max(
       timeoutMs(fetchSrc, 'IODA_RENDERER_TIMEOUT_MS'),
       timeoutMs(fetchSrc, 'CLOUDFLARE_RENDERER_TIMEOUT_MS'),
     );
     // Strict `<`, not `<=`: at a 4 min interval the sum lands on exactly
     // binding/2, and a bound met with zero margin is not a bound. (The parsed
     // timeouts themselves are covered either way — raising one raises
-    // worstExecMs and fails this assertion. What the strictness rejects is the
+    // modeledExecMs and fails this assertion. What the strictness rejects is the
     // exact-equality case, where the budget is satisfied only because nothing
     // outside the two terms below costs a single millisecond.)
-    const worstBlindMs = interval * JITTER + worstExecMs;
+    const modeledBlindMs = interval * JITTER + modeledExecMs;
     assert.ok(
-      worstBlindMs < binding / 2,
-      `worst-case blind window is ${worstBlindMs / 60000} min (${interval / 60000} min interval ` +
-      `x${JITTER} jitter + ${worstExecMs / 1000}s execution) out of the ${binding / 60000} min ` +
+      modeledBlindMs < binding / 2,
+      `modeled blind window is ${modeledBlindMs / 60000} min (${interval / 60000} min interval ` +
+      `x${JITTER} jitter + ${modeledExecMs / 1000}s execution) out of the ${binding / 60000} min ` +
       `it protects; keep it under half so the axis has data for most of each cycle`,
     );
   });

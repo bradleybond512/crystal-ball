@@ -798,3 +798,54 @@ export function decoyEventIds(): Set<string> {
 export function plantedCouplingIndex(): Map<string, PlantedCoupling> {
   return new Map(PLANTED_COUPLINGS.map((c) => [`${c.from}->${c.to}`, c]));
 }
+
+/**
+ * Content digest over every byte of the corpus that can change a benchmark
+ * number: each observation's identity/time/domain/type/severity/position, and
+ * all three layers of planted truth.
+ *
+ * Counting streams and observations is NOT corpus identity. Timestamps,
+ * domains, decoy labels, and planted-coupling kinds can all be edited while the
+ * counts hold steady, which is exactly how someone quietly makes the corpus
+ * easier and reports the resulting numbers as an improvement. The digest makes
+ * that impossible: any edit to the fixture invalidates the baseline and forces
+ * a deliberate re-seed.
+ *
+ * FNV-1a rather than a crypto hash because this module must stay importable in
+ * the renderer bundle (no `node:crypto`), and the threat here is accident and
+ * self-deception, not a motivated collision attacker.
+ */
+/** Code-unit order, not locale order: the digest must not move with the host locale. */
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+export function goldenCorpusDigest(): string {
+  let h = 0x81_1C_9D_C5;
+  const eat = (s: string): void => {
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.codePointAt(i)!;
+      // FNV prime 16777619, via shifts to stay in 32-bit integer math.
+      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+    }
+    h = (h ^ 0x5F) >>> 0;
+  };
+
+  for (const o of allGoldenObservations()) {
+    eat(
+      `${o.id}|${o.timestamp}|${o.domain}|${o.sourceId}|${o.severity}` +
+      `|${o.location?.lat ?? ''}|${o.location?.lon ?? ''}|${o.entityIds.join(',')}` +
+      `|${o.tags.join(',')}`,
+    );
+  }
+  for (const c of PLANTED_COUPLINGS) eat(`${c.from}->${c.to}|${c.kind}`);
+  // Set iteration order is insertion order, which an unrelated fixture edit can
+  // reshuffle without changing the CONTENT — sort so the digest tracks the
+  // truth labels themselves, not the order they happened to be declared in.
+  for (const k of [...plantedTruePairKeys()].sort(byCodeUnit)) eat(`true:${k}`);
+  for (const id of [...decoyEventIds()].sort(byCodeUnit)) eat(`decoy:${id}`);
+
+  return h.toString(16).padStart(8, '0');
+}

@@ -90,7 +90,7 @@ function main(): void {
     console.log(`    Pair blast radius       ${report.learnedRulePairCount}  ${C.dim}pairs attributed to learned:* rules${C.reset}\n`);
 
     console.log(`  ${C.bold}CorrelateEngine${C.reset}  ${C.dim}(built-in rules only, event-level truth)${C.reset}`);
-    console.log(`    Pair precision          ${pct(report.pairPrecision).padStart(6)}  ${C.dim}${report.enginePairCount} pairs emitted${C.reset}`);
+    console.log(`    Pair precision          ${pct(report.pairPrecision).padStart(6)}  ${C.dim}${report.distinctEnginePairCount} distinct pairs of ${report.enginePairCount} emissions${C.reset}`);
     console.log(`    Pair recall             ${pct(report.pairRecall).padStart(6)}`);
     console.log(`    Near-miss decoy pairs   ${report.decoyPairsEmitted === 0 ? `${C.green}0${C.reset}` : `${C.red}${report.decoyPairsEmitted}${C.reset}`}  ${C.dim}zero-tolerance${C.reset}`);
     console.log(`    Mean true confidence    ${report.meanTruePairConfidence}  ${C.dim}false ${fmt(report.meanFalsePairConfidence)}${C.reset}\n`);
@@ -119,12 +119,20 @@ function main(): void {
   const { ok, reasons } = compareCorrelationBenchToBaseline(report, baseline);
   const rel = BASELINE_PATH.replace(root + path.sep, '');
 
+  // `--json` promises parseable JSON on stdout, so the verdict goes to stderr
+  // in that mode. Exit codes are identical either way — a caller piping to jq
+  // still learns PASS/FAIL from the status, not from a trailing line it would
+  // have to strip.
+  const say = jsonOnly
+    ? (line: string): void => { console.error(line); }
+    : (line: string): void => { console.log(line); };
+
   if (ok) {
-    console.log(`${C.green}${C.bold}PASS${C.reset} — within tolerance of committed baseline (${rel}).`);
+    say(`${C.green}${C.bold}PASS${C.reset} — within tolerance of committed baseline (${rel}).`);
   } else {
-    console.log(`${C.red}${C.bold}FAIL${C.reset} — regression(s) versus committed baseline:`);
-    for (const reason of reasons) console.log(`  ${C.red}✗${C.reset} ${reason}`);
-    console.log(`\nIf this regression is intentional, update ${rel} in a reviewed diff.`);
+    say(`${C.red}${C.bold}FAIL${C.reset} — regression(s) versus committed baseline:`);
+    for (const reason of reasons) say(`  ${C.red}✗${C.reset} ${reason}`);
+    say(`\nIf this regression is intentional, update ${rel} in a reviewed diff.`);
     process.exitCode = 1;
   }
 }

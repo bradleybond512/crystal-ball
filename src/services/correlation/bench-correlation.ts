@@ -43,6 +43,7 @@ import {
 import {
   allGoldenObservations,
   decoyEventIds,
+  goldenCorpusDigest,
   pairKeyFor,
   plantedCouplingIndex,
   plantedTruePairKeys,
@@ -82,6 +83,14 @@ export interface CorrelationBenchReport {
   streamCount: number;
   observationCount: number;
   plantedCausalCount: number;
+  /**
+   * Content hash over every observation field, every planted coupling, every
+   * true pair key and every decoy id. Counts alone are NOT identity: timestamps,
+   * domains, severities and truth labels can all be edited while the three
+   * counts above stay constant, which is exactly how someone quietly makes the
+   * corpus easier and reports the resulting numbers as an improvement.
+   */
+  corpusDigest: string;
 
   // ── miner: discovery quality ──
   minedEdgeCount: number;
@@ -104,6 +113,12 @@ export interface CorrelationBenchReport {
   inhibitoryEdgesReported: number;
   /** Incidental cross-stream coincidences — ACC-502 multiple-comparison correction. */
   unplantedFalsePositives: number;
+  /**
+   * Every significant edge that is not planted-causal. Gated at zero growth:
+   * the corpus is deterministic, so one extra false edge is a real precision
+   * regression even when the precision RATIO still lands inside its tolerance.
+   */
+  falseEdgeCount: number;
 
   // ── miner: score separation ──
   /** Mean `strength` of planted-causal significant edges. */
@@ -136,6 +151,13 @@ export interface CorrelationBenchReport {
   /** Learned rules descended from a non-causal edge. */
   learnedRuleFalsePositives: number;
   /**
+   * Learned rules descended from a planted-causal edge — the pipeline's
+   * USEFULNESS, gated separately from its blast radius. Without this a miner
+   * that returns no rules at all scores zero false positives and zero pair
+   * volume, and a dead pipeline reads as a clean sweep.
+   */
+  causalLearnedRuleCount: number;
+  /**
    * Planted-causal couplings the miner FOUND but that lost their slot at the
    * `MAX_LEARNED_RULES` cap to a higher-strength false positive. Real signal
    * evicted by noise — a direct cost of the precision problem.
@@ -143,7 +165,10 @@ export interface CorrelationBenchReport {
   causalCouplingsLostToCap: string[];
 
   // ── engine pass A: built-in rules only ──
+  /** Raw emissions, including one event pair matched by two rules. */
   enginePairCount: number;
+  /** Distinct event pairs — the precision denominator. */
+  distinctEnginePairCount: number;
   pairPrecision: number;
   pairRecall: number;
   /** Pairs touching a near-miss decoy. Zero-tolerance gate. */
@@ -243,6 +268,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     streamCount: GOLDEN_STREAMS.length,
     observationCount: observations.length,
     plantedCausalCount: plantedCausal.length,
+    corpusDigest: goldenCorpusDigest(),
 
     minedEdgeCount: mined.length,
     significantEdgeCount: significant.length,
@@ -255,6 +281,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     independentFalsePositives: counts.independent,
     inhibitoryEdgesReported: counts.inhibitory,
     unplantedFalsePositives: counts.unplanted,
+    falseEdgeCount: falseEdges.length,
 
     meanCausalEdgeStrength: round4(meanCausalStrength),
     meanFalseEdgeStrength: meanFalseStrength === null ? null : round4(meanFalseStrength),
@@ -268,10 +295,12 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
 
     learnedRuleCount: learnedRules.length,
     learnedRuleFalsePositives,
+    causalLearnedRuleCount: learnedRules.length - learnedRuleFalsePositives,
     causalCouplingsLostToCap,
 
     enginePairCount: graded.pairCount,
-    pairPrecision: ratio(emittedTrueKeys.size, graded.pairCount),
+    distinctEnginePairCount: graded.distinctPairCount,
+    pairPrecision: ratio(emittedTrueKeys.size, graded.distinctPairCount),
     pairRecall: ratio(emittedTrueKeys.size, truePairs.size),
     decoyPairsEmitted,
     meanTruePairConfidence: round4(meanTrue),
@@ -302,7 +331,15 @@ function runEngine(
 }
 
 interface GradedPairs {
+  /** Raw emissions, including the same event pair matched by two rules. */
   pairCount: number;
+  /**
+   * DISTINCT event pairs emitted. Precision divides distinct true keys by this,
+   * never by `pairCount`: two legitimate rules matching one planted pair would
+   * otherwise inflate the denominator without touching the numerator and report
+   * a precision regression for correctly recognising the same true pair twice.
+   */
+  distinctPairCount: number;
   /** Distinct planted true pairs the engine actually emitted — the recall numerator. */
   emittedTrueKeys: ReadonlySet<string>;
   truePairConfidences: number[];
@@ -319,11 +356,13 @@ function gradeEnginePairs(
   const truePairConfidences: number[] = [];
   const falsePairConfidences: number[] = [];
   const emittedTrueKeys = new Set<string>();
+  const distinctKeys = new Set<string>();
   let decoyPairsEmitted = 0;
 
   for (const pair of pairs) {
     if (decoys.has(pair.eventA.id) || decoys.has(pair.eventB.id)) decoyPairsEmitted += 1;
     const key = pairKeyFor(pair.eventA.id, pair.eventB.id);
+    distinctKeys.add(key);
     if (truePairs.has(key)) {
       emittedTrueKeys.add(key);
       truePairConfidences.push(pair.confidence);
@@ -334,6 +373,7 @@ function gradeEnginePairs(
 
   return {
     pairCount: pairs.length,
+    distinctPairCount: distinctKeys.size,
     emittedTrueKeys,
     truePairConfidences,
     falsePairConfidences,
@@ -360,11 +400,22 @@ function finiteOrNull(v: number): number | null {
  * Averaging that poisons the whole metric, so clamp to a cap far above any
  * z a real corpus produces — an edge at z=50 and an edge at z=∞ are the same
  * verdict ("certain") and should not be distinguishable by the gate.
+ *
+ * ONLY positive infinity. `NaN` and `-Infinity` are miner bugs, not "certain",
+ * and mapping them to the cap would render broken evidence as the strongest
+ * possible evidence — a gate that reads maximally green precisely when the
+ * thing it guards has failed. Fail closed instead.
  */
 const Z_CAP = 50;
 
 function cappedZ(z: number): number {
-  if (!Number.isFinite(z)) return Z_CAP;
+  if (z === Number.POSITIVE_INFINITY) return Z_CAP;
+  if (!Number.isFinite(z)) {
+    throw new TypeError(
+      `lead-lag produced a non-finite, non-positive-infinite zScore (${z}) — ` +
+      'this is a miner defect; the benchmark fails closed rather than scoring it',
+    );
+  }
   return Math.min(Z_CAP, z);
 }
 

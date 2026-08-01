@@ -181,11 +181,12 @@ const VERDICT_RANK: Record<RedundancyVerdict, number> = {
   redundant_unverified: 1,
   unknown: 2,
   single_source: 3,
-  redundant_disagreement: 4,
-  primary_down_with_backup: 5,
-  // Below all_down: a domain that was never enabled is a gap to close, while a
-  // domain that WAS answering and stopped is a live problem.
-  not_configured: 6,
+  // Above single_source but below every live failure: a domain that was never
+  // switched on is a gap to close when convenient, while a domain that WAS
+  // answering and stopped is a problem right now.
+  not_configured: 4,
+  redundant_disagreement: 5,
+  primary_down_with_backup: 6,
   all_down: 7,
 };
 

@@ -57,12 +57,29 @@ export function snapshotsFromRegistry(
  * layer. There is deliberately no default — a call site that omits the
  * predicate should not silently fail open.
  */
+/**
+ * Live-diagnostic ids for providers the registry knows under a different name.
+ *
+ * data-freshness.ts calls FRED 'economic' and EIA 'oil'; the registry calls them
+ * 'fred' and 'eia'. Without this the lookup below misses and both cast an "up"
+ * vote with no key configured.
+ *
+ * Deliberately consulted ONLY by the secret gate, not by getProviderDefinition
+ * itself: a global alias would also make registrySnapshotFor match, regrouping
+ * these rows out of the 'economic'/'oil' domains they report under today.
+ */
+const LEGACY_PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = {
+  economic: 'fred',
+  oil: 'eia',
+};
+
 export function demoteUnconfiguredProviders(
   snapshots: readonly ProviderSnapshot[],
   isSecretConfigured: (key: RuntimeSecretKey) => boolean,
 ): ProviderSnapshot[] {
   return snapshots.map((snap) => {
-    const secret = getProviderDefinition(snap.providerId)?.requiredSecret;
+    const id = LEGACY_PROVIDER_ID_ALIASES[snap.providerId] ?? snap.providerId;
+    const secret = getProviderDefinition(id)?.requiredSecret;
     if (!secret || isSecretConfigured(secret)) return snap;
     return {
       ...snap,

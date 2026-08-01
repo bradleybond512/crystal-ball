@@ -37,11 +37,38 @@ export function nextAction(state, branch, tip, blockingCount) {
   return { action: 'repair', cycles };
 }
 
+// A missing state file is a legitimate first run, but a state file that EXISTS
+// and will not parse must not silently read as zero cycles: that is a one-line
+// corruption away from an uncapped review loop. Distinguish the two.
 function loadState() {
+  let raw;
   try {
-    return JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+    raw = readFileSync(STATE_FILE, 'utf8');
   } catch {
     return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+    return parsed;
+  } catch (err) {
+    console.error(`[review-loop] ${path.relative(root, STATE_FILE)} exists but is unreadable (${err.message}).`);
+    console.error('[review-loop] refusing to run: a corrupt state file would reset the mandatory cycle cap.');
+    process.exit(1);
+  }
+}
+
+// The state file is worktree-local and gitignored, so it alone cannot be the
+// authority on whether the cap is spent. GitHub is the durable record: once the
+// loop has escalated, it labels the PR needs-human, and that label outlives any
+// local cleanup, reclone, or agent that deletes .agentic/.
+function escalatedOnGitHub(branch) {
+  const r = spawnSync('gh', ['pr', 'view', branch, '--json', 'labels'], { cwd: root, encoding: 'utf8' });
+  if (r.status !== 0) return false;
+  try {
+    return JSON.parse(r.stdout).labels.some((l) => l.name === 'needs-human');
+  } catch {
+    return false;
   }
 }
 
@@ -113,7 +140,12 @@ function escalate(branch, summary, cycles) {
     }
   } else {
     console.error(`[review-loop] no PR exists for ${branch} yet, so no needs-human label can fire.`);
+    // This is the NORMAL path — the documented flow reviews before the PR
+    // exists — so the escalation file is deliberately NOT gitignored: it shows
+    // up as an untracked change and rides into the eventual PR diff instead of
+    // dying in a scratch directory nobody opens.
     console.error('[review-loop] ACTION REQUIRED: open the PR and apply needs-human, or resolve the findings above.');
+    console.error(`[review-loop] commit ${path.relative(root, file)} with the PR so the escalation is visible in review.`);
   }
   process.exit(2);
 }
@@ -143,6 +175,11 @@ function main() {
   // Preflight the cycle cap BEFORE spending a review: with the cap already
   // exhausted, the third invocation must escalate, not buy a third opinion.
   const preState = loadState();
+  if (escalatedOnGitHub(branch)) {
+    console.error(`[review-loop] ${branch} already carries the needs-human label — the cap is spent.`);
+    console.error('[review-loop] a human must clear the label; the loop will not review again on its own.');
+    process.exit(2);
+  }
   if ((preState[branch]?.cycles ?? 0) >= MAX_CYCLES) {
     escalate(branch, preState[branch]?.lastFindings ?? '(see prior cycle logs)', (preState[branch].cycles ?? 0) + 1);
     return; // unreachable — escalate exits — but keeps control flow explicit
@@ -184,7 +221,13 @@ function main() {
       process.exit(1);
     }
     const evidenceFile = path.join(tmpdir(), `evidence-${tip.slice(0, 8)}.txt`);
-    writeFileSync(evidenceFile, output.trim().split('\n').slice(-20).join('\n'));
+    // Evidence must CONTAIN the verdict. This used to be the last 20 lines of
+    // stdout AND stderr concatenated, so 20+ lines of reviewer progress chatter
+    // on stderr pushed the verdict out of the window and made a clean review
+    // impossible to record. Take context from stdout only, then append the
+    // already-parsed verdict last so truncation can never drop it.
+    const context = stdout.trim().split('\n').slice(-20).join('\n');
+    writeFileSync(evidenceFile, `${context}\n${JSON.stringify(verdict)}\n`);
     execFileSync('node', [path.join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', reviewer, '--evidence-file', evidenceFile], { cwd: root, stdio: 'inherit' });
     ledger({ type: 'verdict', branch, tip: tip.slice(0, 8), reviewer });
     console.log('[review-loop] verdict recorded — push, then run scripts/pr-closeout.sh.');

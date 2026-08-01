@@ -23,10 +23,28 @@
 // without surviving all of those.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { append as ledger } from './agent-ledger.mjs';
 import path from 'node:path';
 
 const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+const RACE_WINDOW_MS = 10 * 60_000;
+
+// First-writer-wins arbitration over the claim comments. Only comments from
+// THIS account count: an untrusted issue author can pre-post a fake "Claimed by
+// agent dispatch" and trusting it would make the dispatcher abandon the issue
+// forever. And only claims inside the race window count: a real race between
+// dispatchers is seconds wide, so a claim left behind by an earlier FAILED
+// dispatch is not a competitor — counting it meant every later nonce lost to a
+// dead comment and the issue could never be re-dispatched.
+export function weWonClaim(comments, me, nonce, now) {
+  const raceFloor = now - RACE_WINDOW_MS;
+  const claims = comments
+    .filter((c) => c.author?.login === me && c.body.startsWith('Claimed by agent dispatch'))
+    .filter((c) => new Date(c.createdAt).getTime() >= raceFloor)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return claims.length <= 1 || claims[0].body.includes(`claim-nonce ${nonce}`);
+}
 
 function gh(args) {
   return execFileSync('gh', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -111,12 +129,7 @@ function main() {
   // make the dispatcher label the issue claimed and abandon it forever.
   const me = JSON.parse(gh(['api', 'user'])).login;
   const comments = JSON.parse(gh(['issue', 'view', String(issue.number), '--json', 'comments']));
-  const claims = (comments.comments ?? [])
-    .filter((c) => c.author?.login === me && c.body.startsWith('Claimed by agent dispatch'))
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-  // First-writer-wins: proceed only if OUR claim is the earliest, so exactly
-  // one of two racing dispatchers continues and none abandons the issue.
-  if (claims.length > 1 && !claims[0].body.includes(`claim-nonce ${nonce}`)) {
+  if (!weWonClaim(comments.comments ?? [], me, nonce, Date.now())) {
     console.error(`[dispatch] #${issue.number} claimed earlier by another dispatcher — backing off.`);
     process.exit(1);
   }
@@ -154,8 +167,16 @@ function main() {
     const r = spawnSync('claude', ['-p', prompt, '--permission-mode', 'acceptEdits'], { cwd: wtDir, stdio: 'inherit' });
     process.exit(r.status ?? 1);
   }
+  // NEVER interpolate the prompt into a printed shell command. JSON.stringify
+  // is JSON quoting, not shell quoting: inside the resulting double quotes bash
+  // still expands $(...), backticks and $VAR, so an issue body containing them
+  // would execute in the operator's shell on paste — before Claude ever starts.
+  // The --run path above passes argv and was never exposed. Hand the operator a
+  // file instead; "$(cat ...)" substitutes without re-parsing the result.
+  const promptFile = path.join(wtDir, '.agent-prompt.txt');
+  writeFileSync(promptFile, prompt);
   console.log('\n[dispatch] workspace ready. Launch with:\n');
-  console.log(`  cd ${wtDir} && claude -p ${JSON.stringify(prompt)} --permission-mode acceptEdits\n`);
+  console.log(`  cd ${wtDir} && claude -p "$(cat .agent-prompt.txt)" --permission-mode acceptEdits\n`);
   console.log('(or rerun with --run to launch automatically)');
 }
 

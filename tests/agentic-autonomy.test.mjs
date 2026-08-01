@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { PROBES, runValidator } from '../scripts/live-contract-probes.mjs';
 import { nextAction } from '../scripts/agentic-review-loop.mjs';
-import { pickIssue, slugify, buildPrompt, contentHash } from '../scripts/agent-dispatch.mjs';
+import { pickIssue, slugify, buildPrompt, contentHash, weWonClaim } from '../scripts/agent-dispatch.mjs';
 import { parseCounts } from '../scripts/mutation-proof.mjs';
 import { evidenceApproves } from '../scripts/verify-review-verdict.mjs';
 import { aggregate } from '../scripts/agent-ledger.mjs';
@@ -156,4 +156,59 @@ test('ledger aggregation groups cycles, escalations, and verdicts per branch', (
   assert.deepEqual(rows['claude/x'], { dispatches: 0, cycles: 2, blocking: 5, escalations: 0, verdicts: 1, last: '3' });
   assert.equal(rows['claude/y'].escalations, 1);
   assert.equal(rows['issue #9'].dispatches, 1);
+});
+
+// ── verdict schema: malformed objects must not approve ──
+
+test('a verdict missing its findings array does not approve', () => {
+  // The schema requires both fields. The shape check used to run AFTER the
+  // object was accepted as a verdict, so {"blockingFindings":0} alone skipped
+  // the per-finding scan and approved — a fail-open on malformed input.
+  assert.equal(evidenceApproves('{"blockingFindings":0}'), false);
+  assert.equal(evidenceApproves('{"blockingFindings":0,"findings":null}'), false);
+  assert.equal(evidenceApproves('{"blockingFindings":0,"findings":"none"}'), false);
+  assert.equal(evidenceApproves('{"blockingFindings":0,"findings":{}}'), false);
+  // The well-formed clean verdict still approves.
+  assert.equal(evidenceApproves('{"blockingFindings":0,"findings":[]}'), true);
+});
+
+test('a verdict still approves when preceded by heavy reviewer chatter', () => {
+  // Evidence is context + the appended verdict. Recording used to take the last
+  // 20 lines of stdout AND stderr, so a chatty reviewer pushed the verdict out
+  // of the window and no clean review could ever be recorded.
+  const noise = Array.from({ length: 200 }, (_, i) => `tokens used ${i}`).join('\n');
+  assert.equal(evidenceApproves(`${noise}\n{"blockingFindings":0,"findings":[]}`), true);
+});
+
+// ── dispatch: claim arbitration ──
+
+test('claim arbitration ignores claims older than the race window', () => {
+  const now = Date.UTC(2026, 7, 1, 12, 0, 0);
+  const stale = new Date(now - 60 * 60_000).toISOString();
+  const mine = new Date(now - 1000).toISOString();
+  const comments = [
+    // A dead claim from an earlier failed dispatch. Counting it made every
+    // later nonce lose to it forever, stranding the issue permanently.
+    { author: { login: 'me' }, createdAt: stale, body: 'Claimed by agent dispatch; claim-nonce deadbeef.' },
+    { author: { login: 'me' }, createdAt: mine, body: 'Claimed by agent dispatch; claim-nonce abc123.' },
+  ];
+  assert.equal(weWonClaim(comments, 'me', 'abc123', now), true);
+});
+
+test('claim arbitration still yields to an earlier claim inside the window', () => {
+  const now = Date.UTC(2026, 7, 1, 12, 0, 0);
+  const comments = [
+    { author: { login: 'me' }, createdAt: new Date(now - 3000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce first1.' },
+    { author: { login: 'me' }, createdAt: new Date(now - 1000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce abc123.' },
+  ];
+  assert.equal(weWonClaim(comments, 'me', 'abc123', now), false);
+});
+
+test('a forged claim from another account cannot strand the issue', () => {
+  const now = Date.UTC(2026, 7, 1, 12, 0, 0);
+  const comments = [
+    { author: { login: 'attacker' }, createdAt: new Date(now - 5000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce forged.' },
+    { author: { login: 'me' }, createdAt: new Date(now - 1000).toISOString(), body: 'Claimed by agent dispatch; claim-nonce abc123.' },
+  ];
+  assert.equal(weWonClaim(comments, 'me', 'abc123', now), true);
 });

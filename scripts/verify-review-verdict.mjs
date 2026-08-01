@@ -65,10 +65,14 @@ export function evidenceApproves(evidence) {
     } catch {
       continue;
     }
-    if (typeof obj.blockingFindings !== 'number') continue;
+    // Both fields are REQUIRED by the verdict schema, and the shape check has
+    // to happen before sawVerdict: treating {"blockingFindings":0} with no
+    // findings array as a verdict let a malformed object approve by skipping
+    // the per-finding scan entirely. A schema violation is not a clean review.
+    if (typeof obj.blockingFindings !== 'number' || !Array.isArray(obj.findings)) continue;
     sawVerdict = true;
     if (obj.blockingFindings !== 0) return false;
-    if (Array.isArray(obj.findings) && obj.findings.some((f) => f?.blocking === true)) return false;
+    if (obj.findings.some((f) => f?.blocking === true)) return false;
   }
   return sawVerdict;
 }

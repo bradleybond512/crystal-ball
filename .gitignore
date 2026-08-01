@@ -74,4 +74,3 @@ events.db-wal
 events.db-shm
 .agentic/loop-state.json
 .agentic/ledger.jsonl
-.agentic/escalations/

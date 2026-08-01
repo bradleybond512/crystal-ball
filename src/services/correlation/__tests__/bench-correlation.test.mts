@@ -444,6 +444,19 @@ describe('the gate', () => {
     assert.match(reasons[0]!, /not a known gate/);
   });
 
+  it('rejects an inherited-property tolerance key, which `in` would have accepted', () => {
+    // `'constructor' in tol` is true via the prototype chain, so a membership
+    // test written with `in` would wave this through as a known gate.
+    const polluted = {
+      ...baseline,
+      tolerances: { ...baseline.tolerances, constructor: 0.5, toString: 1 },
+    } as unknown as CorrelationBenchBaseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, polluted);
+    assert.equal(ok, false);
+    assert.equal(reasons.length, 2, 'both inherited keys should be rejected');
+    for (const reason of reasons) assert.match(reason, /not a known gate/);
+  });
+
   it('accumulates every independent regression rather than short-circuiting', () => {
     const strict: CorrelationBenchBaseline = {
       ...baseline,

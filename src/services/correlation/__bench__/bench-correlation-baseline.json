@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "seededAt": "2026-07-31",
-  "note": "ACC-501 seed run against the UNCORRECTED miner: significantEdges() gates on fixed thresholds (minLift 2, minZ 2, minSupport 3) with no multiple-comparisons correction and no de-clustering, so 22 of 256 mined edges clear and only 5 are real — coupling precision 22.7%. Recall is 1.0 and the engine's built-in rules are perfect on event-level truth (precision 1.0, recall 1.0, zero decoy leakage), so every unit of headroom here is in the miner, not the rules. The 14 unplanted edges split into two kinds: 6 are a systematic near-coincidence (the S2 grid-storm anchors sit a fixed ~0.5d before the S8 chain triplets, so space/infra -> chain-x/y/z score z=4.63 and will SURVIVE a Bonferroni correction), and 8 are weak incidental noise (z 2.5-4.8) that a correction should kill. Two real couplings (macro->maritime, space->infra) were evicted at MAX_LEARNED_RULES by burst artefacts, which is what edgeStrengthSeparation=0.05 measures: `strength` saturates at 1.0, so the ranking that decides the cap is nearly flat. ACC-502 owns the correction, ACC-503 the mediated edge, ACC-504 the burst artefacts. schemaVersion 2 added corpusDigest (content identity, not counts), falseEdgeCount + causalLearnedRuleCount + meanTruePairConfidence gates, and fail-closed numeric validation — see bench-correlation-baseline.ts.",
+  "note": "ACC-501 seed run against the UNCORRECTED miner: significantEdges() gates on fixed thresholds (minLift 2, minZ 2, minSupport 3) with no multiple-comparisons correction and no de-clustering, so 22 of 256 mined edges clear and only 5 are real — coupling precision 22.7%. Recall is 1.0 and the engine's built-in rules are perfect on event-level truth (precision 1.0, recall 1.0, zero decoy leakage), so every unit of headroom here is in the miner, not the rules. The 14 unplanted edges split into two kinds: 6 are a systematic near-coincidence (the S2 grid-storm anchors sit a fixed ~0.5d before the S8 chain triplets, so space/infra -> chain-x/y/z score z=4.63 and will SURVIVE a Bonferroni correction), and 8 are weak incidental noise (z 2.5-4.8) that a correction should kill. Two real couplings (macro->maritime, space->infra) were evicted at MAX_LEARNED_RULES by burst artefacts, which is what edgeStrengthSeparation=0.05 measures: `strength` saturates at 1.0, so the ranking that decides the cap is nearly flat. ACC-502 owns the correction, ACC-503 the mediated edge, ACC-504 the burst artefacts. schemaVersion 2 added corpusDigest (content identity, not counts), falseEdgeCount + causalLearnedRuleCount + meanTruePairConfidence gates, and fail-closed numeric validation. schemaVersion 3 hardened the digest against array-boundary ambiguity (JSON-encoded, not delimiter-joined), added causalLearnedRulePairCount as a LIVENESS gate (synthesized rules that never fire), validates the tolerance block itself, and cross-checks the report against its own breakdown fields — see bench-correlation-baseline.ts.",
 
   "streamCount": 10,
   "observationCount": 378,
   "plantedCausalCount": 5,
-  "corpusDigest": "206cda25",
+  "corpusDigest": "13cd95ef",
 
   "couplingPrecision": 0.2273,
   "couplingRecall": 1,
@@ -26,6 +26,7 @@
   "decoyPairsEmitted": 0,
   "meanTruePairConfidence": 0.5401,
   "learnedRulePairCount": 101,
+  "causalLearnedRulePairCount": 19,
 
   "tolerances": {
     "couplingPrecisionDrop": 0.02,

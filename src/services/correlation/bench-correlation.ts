@@ -182,6 +182,13 @@ export interface CorrelationBenchReport {
   // ── engine pass B: built-ins + learned rules ──
   /** Pairs attributed to a `learned:*` rule — spurious-rule blast radius. */
   learnedRulePairCount: number;
+  /**
+   * The subset of those pairs whose rule descends from a planted-causal edge.
+   * Gated as LIVENESS, not as volume: shrinking `learnedRulePairCount` is a
+   * goal, but a run where the causal rules match nothing means the synthesize →
+   * install → match path broke, which every count-based gate would miss.
+   */
+  causalLearnedRulePairCount: number;
 
   // ── human-readable detail (not part of the gate) ──
   edges: BenchEdgeRow[];
@@ -260,8 +267,21 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     : null;
 
   // ── Engine pass B: built-ins + learned rules ──────────────────────────
-  const learnedRulePairCount = runEngine(observations, learnedRules)
-    .filter((p: CorrelatedPair) => p.ruleId.startsWith(LEARNED_RULE_PREFIX))
+  // Synthesizing a rule is not the same as that rule FIRING. Counting only the
+  // synthesized set would let the whole install/match path go dark — zero
+  // learned pairs — while the rule-count gates stayed perfectly green, so the
+  // causal subset's pair volume is measured separately as a liveness signal.
+  const causalLearnedRuleIds = new Set(
+    significant
+      .filter((e) => verdictFor(e, plantedIndex) === 'causal')
+      .map((e) => learnedRuleId(e))
+      .filter((id) => learnedIds.has(id)),
+  );
+  const learnedPairs = runEngine(observations, learnedRules)
+    .filter((p: CorrelatedPair) => p.ruleId.startsWith(LEARNED_RULE_PREFIX));
+  const learnedRulePairCount = learnedPairs.length;
+  const causalLearnedRulePairCount = learnedPairs
+    .filter((p: CorrelatedPair) => causalLearnedRuleIds.has(p.ruleId))
     .length;
 
   return {
@@ -308,6 +328,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     confidenceSeparation: meanFalse === null ? null : round4(meanTrue - meanFalse),
 
     learnedRulePairCount,
+    causalLearnedRulePairCount,
 
     edges,
   };
@@ -330,7 +351,7 @@ function runEngine(
   return engine.correlate(observations, BENCH_NOW).pairs;
 }
 
-interface GradedPairs {
+export interface GradedPairs {
   /** Raw emissions, including the same event pair matched by two rules. */
   pairCount: number;
   /**
@@ -348,7 +369,12 @@ interface GradedPairs {
 }
 
 /** Grades emitted pairs against event-level planted truth. */
-function gradeEnginePairs(
+/**
+ * Exported for its regression test only: the live corpus happens to emit one
+ * pair per distinct key, so a test driven through `runCorrelationBenchmark()`
+ * cannot tell the raw denominator from the distinct one.
+ */
+export function gradeEnginePairs(
   pairs: readonly CorrelatedPair[],
   truePairs: ReadonlySet<string>,
   decoys: ReadonlySet<string>,

@@ -145,6 +145,11 @@ function fixtureRepo(branch) {
   const dir = mkdtempSync(join(tmpdir(), 'verdict-fixture-'));
   const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: dir, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', branch);
+  // --record commits from its OWN git invocation, which carries no -c identity.
+  // CI runners have no global user.email, so the identity must live in the
+  // fixture repo's config or that commit fails with exit 1.
+  git('config', 'user.name', 't');
+  git('config', 'user.email', 't@t');
   writeFileSync(join(dir, 'code.txt'), 'v1\n');
   git('add', 'code.txt');
   git('commit', '-q', '-m', 'feat: code');

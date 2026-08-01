@@ -3049,10 +3049,48 @@ export function classifyGpsDisruptionSidecar(cls) {
   return 'none';
 }
 
+// Every SWPC alert message opens with "Space Weather Message Code: XXXXX", so
+// the first non-empty line is a product code, not a headline — reading it
+// classified all 119 live alerts as `summary`. The severity keyword sits on a
+// later line.
+//
+// These eight are the complete set emitted across a live 30-day window of
+// products/alerts.json — enumerated, not guessed. Longer phrases lead so the
+// CANCEL/CONTINUED/EXTENDED qualifiers are matched before the bare keyword.
+// The two CANCEL forms are all-clears and must never read as active.
+// Kept in lockstep with SEVERITY_PREFIXES in src/services/space-weather-parse.ts.
+const SPACEWX_SEVERITY_PREFIXES = [
+  ['CANCEL WARNING:', 'summary'],
+  ['CANCEL ALERT:', 'summary'],
+  ['CONTINUED ALERT:', 'alert'],
+  ['EXTENDED WARNING:', 'warning'],
+  ['WARNING:', 'warning'],
+  ['ALERT:', 'alert'],
+  ['WATCH:', 'watch'],
+  ['SUMMARY:', 'summary'],
+];
+
+export function extractAlertHeadlineSidecar(message) {
+  let firstLine = '';
+  for (const rawLine of String(message ?? '').split('\n')) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    if (firstLine === '') firstLine = line;
+    const upper = line.toUpperCase();
+    for (const [prefix] of SPACEWX_SEVERITY_PREFIXES) {
+      if (upper.startsWith(prefix)) return line;
+    }
+  }
+  // No keyword line at all — fall back to the opening line so the alert is
+  // still shown rather than silently dropped.
+  return firstLine;
+}
+
 function classifyAlertSeveritySidecar(headline) {
-  if (/\bALERT\b/i.test(headline)) return 'alert';
-  if (/\bWARNING\b/i.test(headline)) return 'warning';
-  if (/\bWATCH\b/i.test(headline)) return 'watch';
+  const upper = String(headline ?? '').trim().toUpperCase();
+  for (const [prefix, severity] of SPACEWX_SEVERITY_PREFIXES) {
+    if (upper.startsWith(prefix)) return severity;
+  }
   return 'summary';
 }
 
@@ -3115,15 +3153,21 @@ export function summarizeAlertsSidecar(raw, now, windowMs = SPACEWX_ALERTS_WINDO
   const out = [];
   for (const r of raw) {
     if (!r?.message) continue;
-    const t = Date.parse(r.issue_datetime);
+    // issue_datetime is space-separated naïve UTC ("2026-07-30 19:03:19.350").
+    // Un-stamped, Date.parse reads it as host-LOCAL, which on a UTC-4 host puts
+    // every alert from the last 4 hours past `now` — and the guard below then
+    // drops exactly the alerts that matter most. Same bug class the Kp path
+    // already fixed; this path never got it.
+    const issuedAt = toUtcIsoTag(r.issue_datetime);
+    const t = Date.parse(issuedAt);
     if (!Number.isFinite(t) || t < cutoff || t > now) continue;
-    const headline = String(r.message).split('\n').map((s) => s.trim()).find((s) => s.length > 0) || '';
+    const headline = extractAlertHeadlineSidecar(r.message);
     if (headline.length === 0) continue;
     out.push({
       id: `${r.product_id ?? 'swpc'}-${r.issue_datetime}`,
       severity: classifyAlertSeveritySidecar(headline),
       headline,
-      issuedAt: r.issue_datetime,
+      issuedAt,
     });
   }
   out.sort((a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt));
@@ -10489,12 +10533,31 @@ async function dispatch(requestUrl, req, routes, context) {
  entries.map(([, url]) => fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000)),
  );
  const result = {};
+ let usable = 0;
  for (const [i, [key]] of entries.entries()) {
  const r = settled[i];
- result[key] = (r.status === 'fulfilled' && r.value.ok) ? await r.value.json() : null;
+ // Each feed fails on its own: a malformed body from one SWPC product
+ // shouldn't 502 the other three. The json() parse is the failure point
+ // most likely to throw, so it gets its own guard.
+ let value = null;
+ if (r.status === 'fulfilled' && r.value.ok) {
+ try { value = await r.value.json(); } catch { value = null; }
+ }
+ result[key] = value;
+ if (value !== null) usable += 1;
+ }
+ // Health is derived from what the ADAPTER produced, not from the handler
+ // reaching this line. Reporting a four-way upstream outage as a healthy
+ // fetch — then caching the all-null envelope for five minutes — is what let
+ // this panel sit blank for months without anything flagging it.
+ if (usable === 0) {
+ trackFailure('swpc', new Error('all SWPC feeds unavailable'));
+ return json({ error: 'space-weather-feeds: no SWPC feed returned usable data' }, 502);
  }
  trackSuccess('swpc', 'primary');
- setCached('space-weather-feeds', result, 5 * 60 * 1000);
+ // A partial result gets a short TTL so one flaky product doesn't pin a hole
+ // in the panel for the full five minutes.
+ setCached('space-weather-feeds', result, usable === entries.length ? 5 * 60 * 1000 : 60 * 1000);
  return json(result);
  } catch (error) {
  trackFailure('swpc', error);

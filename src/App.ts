@@ -737,11 +737,15 @@ export class App {
  // even if they are off by orders of magnitude. Scoped, as ever,
  // AT THE DEFAULT CADENCE MULTIPLIER, the same scoping as the seismic entries
  // above. computeDelay also multiplies by the ghost (x5), context (x2 battery /
- // x4 low-power) and hidden (x10) factors, and under any of those this loader
- // ticks slower than the 10 min cache it warms, so the comms axis does go blind
- // for part of each cycle. That is the same freshness-for-battery trade those
- // modes exist to make, and it is NOT silently wrong the way the boot-only bug
- // was: the axis is quiet because the user asked for quiet. The default path —
+ // x4 low-power) and hidden (x10) factors. Ghost (15 min), low-power (12 min)
+ // and hidden (30 min) all push the tick past the 10 min cache it warms, so the
+ // comms axis goes blind for part of each cycle. The x2 battery factor does NOT
+ // — 6 min, 6.6 with jitter, still inside the window — though the lazy refetch
+ // means even that leaves a bounded gap, exactly as it does at the default
+ // cadence. Where the throttled modes do blind the axis it is the same
+ // freshness-for-battery trade those modes exist to make, and it is NOT
+ // silently wrong the way the boot-only bug was: the axis is quiet because the
+ // user asked for quiet. The default path —
  // where the user chose nothing — is what this interval fixes. If the comms axis
  // is ever deemed safety-critical enough to survive throttling, the fix is an
  // exemption in the scheduler, not a smaller interval here.

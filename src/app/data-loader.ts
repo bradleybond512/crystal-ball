@@ -4208,9 +4208,12 @@ export class DataLoaderManager implements AppModule {
     // every tick inside one quantum reuses the cached entry, which is what
     // keeps the scheduled cadence off the upstream API.
     //
-    // ONE `now` for both fetches and for the adapter: it is both the trailing
-    // window's end and the observations' occurredAt, and two clocks would put
-    // the providers on different windows.
+    // ONE `now` for both fetches and for the adapter: it is the observations'
+    // occurredAt and the instant the counting window is derived from, and two
+    // clocks would put the providers on different windows. Note it is no longer
+    // the IODA window's end itself — fetchIodaOutageEvents snaps that end up to
+    // the next quantum boundary, so the two coincide only when `now` lands
+    // exactly on one. The comms-axis counting window still runs back from `now`.
     // Exactly one record per provider per tick — recordDomainObservations
     // REPLACES a provider's set rather than accumulating.
     const now = Date.now();

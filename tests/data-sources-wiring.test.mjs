@@ -135,14 +135,33 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
   // the DEFAULT path, which is where the boot-only bug actually lived.
   const JITTER = 1.1;
 
-  for (const [task, provider] of [['emscSeismic', 'emsc-seismic'], ['geofonSeismic', 'geofon-seismic']]) {
+  /** Reads the single `AbortSignal.timeout(N)` out of a one-fetch service module. */
+  const soleFetchTimeoutMs = (relPath) => {
+    const src = readFileSync(resolve(root, relPath), 'utf8');
+    const all = [...src.matchAll(/AbortSignal\.timeout\(([0-9_]+)\)/g)];
+    assert.equal(all.length, 1, `${relPath} must have exactly one fetch timeout for this budget to be exact`);
+    return Number(all[0][1].replace(/_/g, ''));
+  };
+
+  for (const [task, provider, fetchPath] of [
+    ['emscSeismic', 'emsc-seismic', 'src/services/emsc-seismic.ts'],
+    ['geofonSeismic', 'geofon-seismic', 'src/services/geofon-seismic.ts'],
+  ]) {
     it(`${task} refreshes inside the ${provider} freshness TTL`, () => {
       const interval = schedulerIntervalMs(task);
       const ttl = registryTtlMs(provider);
+      // Same execution-aware budget as internetOutages below: the scheduler arms
+      // the next timer AFTER `await fn()`, so a cycle costs the loader's runtime
+      // on top of the interval. These loaders each await exactly one fetch, so
+      // their worst case is that fetch's own abort timeout — parsed from source
+      // rather than hardcoded, so raising a timeout fails HERE instead of
+      // silently pushing the domain past its TTL in production.
+      const worstCycleMs = interval * JITTER + soleFetchTimeoutMs(fetchPath);
       assert.ok(
-        interval * JITTER <= ttl,
+        worstCycleMs <= ttl,
         `${task} runs every ${interval / 60000} min but ${provider} declares a ${ttl / 60000} min TTL; ` +
-        `with jitter that reaches ${(interval * JITTER) / 60000} min and the domain drops to USGS alone`,
+        `with jitter and a worst-case fetch that cycle reaches ${worstCycleMs / 60000} min ` +
+        `and the domain drops to USGS alone`,
       );
     });
   }

@@ -3313,17 +3313,28 @@ const spacewxHasRows = (rows) => rows.length > 0;
 // while contributing nothing. Pure helper.
 //
 // The bound is definitional (Kp IS 0..9) so mirroring it here is safe. The
-// freshness limit deliberately is NOT the consumer's 12h window — that is a
-// fusion-overlap tuning knob the renderer owns, and copying it would silently
-// diverge the day it is retuned. This is a statement about SWPC's own cadence
-// instead: the index publishes in 3-hour bins, so a newest bin a day old is a
-// stuck feed by any reading. The narrow band between the two is left to the
-// consumer, which still fails closed on its own.
-const KP_SUBFEED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// freshness limit is NOT the consumer's 12h window — that is a fusion-overlap
+// tuning knob the renderer owns, and copying it would silently diverge the day
+// it is retuned. It is a statement about SWPC's own cadence instead: the index
+// publishes in 3-hour bins, so a newest bin older than two cycles is a stuck
+// feed by any reading.
+//
+// The invariant that matters is that this stays TIGHTER than the consumer's
+// window, never merely different. A row we call usable but the voter then trims
+// away would earn the full success TTL while contributing nothing — the exact
+// recovery block this whole change exists to remove. At 6h that holds for any
+// renderer window >= 6h, so retuning the knob cannot open a gap here.
+const KP_SUBFEED_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 export function kpSubfeedUsable(points, now) {
-  return points.some(
-    (p) => p.kp >= 0 && p.kp <= 9 && now - Date.parse(p.time_tag) <= KP_SUBFEED_MAX_AGE_MS,
-  );
+  return points.some((p) => {
+    if (!(p.kp >= 0 && p.kp <= 9)) return false;
+    const age = now - Date.parse(p.time_tag);
+    // NaN fails both comparisons, so an unparseable tag is unusable. The lower
+    // bound is not pedantry: without it a future bin has a NEGATIVE age and
+    // sails through any max-age test, so a clock-skewed or malformed payload
+    // would read as the freshest possible data.
+    return age >= 0 && age <= KP_SUBFEED_MAX_AGE_MS;
+  });
 }
 
 /**

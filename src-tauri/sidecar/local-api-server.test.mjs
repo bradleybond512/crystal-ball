@@ -3456,6 +3456,29 @@ test('kpSubfeedUsable — bounds, freshness, and the empty case', () => {
   );
 });
 
+// The two boundaries the five-day case doesn't reach. Both are the same defect
+// this PR exists to remove: a row that passes here earns the full success TTL,
+// so if the voter then discards it the subfeed is a failure wearing a success
+// and the recovery block survives the fix.
+test('kpSubfeedUsable — a row the voter will discard is not usable here either', () => {
+  const now = Date.parse('2026-07-30T12:00:00Z');
+  assert.equal(
+    kpSubfeedUsable([{ time_tag: '2026-07-29T23:00:00Z', kp: 4 }], now),
+    false,
+    '13h old: inside a day, but outside the window fetchSwpcKp trims to — it would fail the voter anyway',
+  );
+  assert.equal(
+    kpSubfeedUsable([{ time_tag: '2026-07-30T15:00:00Z', kp: 4 }], now),
+    false,
+    'a future bin is a broken clock, not a fresh reading — a negative age must not pass a max-age test',
+  );
+  assert.equal(
+    kpSubfeedUsable([{ time_tag: 'not-a-timestamp', kp: 4 }], now),
+    false,
+    'an unparseable tag is not a reading',
+  );
+});
+
 // The CME product carries the OPPOSITE rule, and the distinction is easy to get
 // wrong in a way that would break a healthy feed: filterEarthwardCmesSidecar
 // drops every CME not aimed at Earth, so "no rows survived the filter" is the

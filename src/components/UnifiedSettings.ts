@@ -1114,6 +1114,7 @@ export class UnifiedSettings {
  <h3>Open Source &amp; Contributing</h3>
  <p>Crystal Ball is free and open source under the AGPL-3.0 License. Originally forked from <a href="https://github.com/bradleybond512/crystal-ball" target="_blank" rel="noopener">bradleybond512/crystal-ball</a>.</p>
  <ul>
+ <li><a href="https://crystal-ball-observatory.bradleybond512.chatgpt.site/" target="_blank" rel="noopener">Website</a></li>
  <li><a href="https://github.com/bradleybond512/crystal-ball" target="_blank" rel="noopener">GitHub Repository</a></li>
  <li><a href="https://github.com/bradleybond512/crystal-ball/discussions" target="_blank" rel="noopener">Community Discussions</a></li>
  <li><a href="https://github.com/bradleybond512/crystal-ball/issues" target="_blank" rel="noopener">Report a Bug</a></li>

@@ -18,6 +18,7 @@ EOF
 
 TESTS=""
 NO_TESTS_REASON=""
+TEST_SCRIPTS=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,7 +42,14 @@ if [ -n "$TESTS" ] && [ -n "$NO_TESTS_REASON" ]; then
   exit 2
 fi
 
-if [ -z "$TESTS" ] && [ -z "$NO_TESTS_REASON" ]; then
+# Split before the emptiness check: `--tests "   "` is non-empty to `[ -n ]` but
+# expands to zero words, so a whitespace-only value would otherwise run no tests
+# and still print "gate passed" with a "Tests run:" line.
+if [ -n "$TESTS" ]; then
+  read -r -a TEST_SCRIPTS <<< "$TESTS"
+fi
+
+if [ ${#TEST_SCRIPTS[@]} -eq 0 ] && [ -z "${NO_TESTS_REASON//[[:space:]]/}" ]; then
   printf '\nRefusing to pass: no tests named.\n' >&2
   usage
 fi
@@ -54,20 +62,20 @@ run() {
 # Targeted behavioral tests run FIRST. A gate that reports success without having
 # executed a single test lets an agent truthfully write "validation gate passed"
 # for a change whose behavior was never exercised.
-if [ -n "$TESTS" ]; then
+if [ ${#TEST_SCRIPTS[@]} -gt 0 ]; then
   # Captured, not piped: `npm run | grep -q` makes grep exit on first match and
   # kills npm with SIGPIPE, which `set -o pipefail` then reports as exit 141.
   AVAILABLE_SCRIPTS="$(node -e 'const s=require("./package.json").scripts||{};console.log(Object.keys(s).join("\n"))')"
   # Validate every name BEFORE running any, so a typo in the last script cannot
   # burn several minutes of real test time before it is rejected.
-  for script in $TESTS; do
+  for script in "${TEST_SCRIPTS[@]}"; do
     if ! printf '%s\n' "$AVAILABLE_SCRIPTS" | grep -qxF "$script"; then
       printf '\nNo such npm script: %s\n' "$script" >&2
       printf 'Name real scripts from package.json; a typo must not read as coverage.\n' >&2
       exit 2
     fi
   done
-  for script in $TESTS; do
+  for script in "${TEST_SCRIPTS[@]}"; do
     run npm run "$script"
   done
 else
@@ -82,18 +90,13 @@ run npm run typecheck:all
 run npm run secrets:scan
 run npm run cross-agent:check
 
-# Advisory, not blocking. `docs:check` flags "PR #N not in CHANGELOG", but
-# CHANGELOG entries are written by `npm run release:prepare` at RELEASE time, so
-# between releases it is red on a pristine `main` for reasons unrelated to any
-# change. A gate that always fails trains agents to ignore it or to claim it
-# passed. It is also not a GitHub required check, so this matches CI reality.
-# Its output still prints in full — read it.
-printf '\n==> npm run docs:check (advisory)\n'
-if npm run docs:check; then
-  DOCS_STATUS="clean"
-else
-  DOCS_STATUS="stale — review the list above; blocking only if your change caused it"
-fi
+# Blocking, minus one heuristic. No CI workflow runs docs:check, so this gate is
+# the ONLY enforcement of README panel/layer/secret/locale counts and
+# docs/API_KEYS.md coverage — those must stay fatal. Only the "PR #N not in
+# CHANGELOG" backlog is demoted, and it still prints: nothing writes those
+# entries automatically, so it was 10 deep on a pristine `main` and failed every
+# branch for work the branch did not do.
+run npm run docs:check -- --changelog-advisory
 
 run npm run build
 

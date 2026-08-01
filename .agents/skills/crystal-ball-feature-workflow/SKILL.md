@@ -9,8 +9,11 @@ Follow these phases in order. AGENTS.md remains authoritative.
 
 ## 1. Branch and classify
 
-Confirm work is on a fresh `codex/*` branch based on `macos/main`, never local
-`main`. Classify the task as Fast, Standard, or High Assurance.
+Confirm work is on a fresh `codex/*` branch based on the canonical remote's
+`main`, never local `main`. Resolve the remote name rather than assuming it — it
+is `macos` on Bradley's Mac and `origin` in most other clones, and the wrong
+guess fails before any work starts. See "Branch Discipline" in `AGENTS.md` for
+the exact commands. Classify the task as Fast, Standard, or High Assurance.
 
 Prediction, calibration, correlation, scoring, self-tuning, promotion, Tauri
 IPC, permissions, secrets, networking boundaries, migrations, destructive

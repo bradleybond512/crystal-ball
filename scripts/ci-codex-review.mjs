@@ -12,9 +12,10 @@
 // machine-parsed, never inferred from prose.
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// CI extracts this script from origin/main into RUNNER_TEMP, so the repo root
+// is the working directory — never this file's location.
+const root = process.cwd();
 
 export function parseVerdictLine(output) {
   // The verdict must be the FINAL non-empty line, strictly schema-valid.

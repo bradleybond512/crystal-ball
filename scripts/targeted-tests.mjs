@@ -103,13 +103,39 @@ export function selectScripts(changedFiles, index, overrides = OVERRIDES) {
   return { scripts: [...selected].sort(), unmapped };
 }
 
+export function isRunnerAllowlisted(command) {
+  return typeof command === 'string' && RUNNER_ALLOWLIST.some((re) => re.test(command));
+}
+
 // Pure gate decision, unit-testable without git or npm.
-export function ciVerdict({ indexSize, selected, unmapped }) {
+// indexSize/selected derive from ORIGIN/MAIN's package.json — the PR's copy
+// only ADDS suites, so a PR cannot fabricate a compliant index of no-op
+// scripts or starve the floor. `neutered` lists main-selected suites the PR
+// removed or rewrote off the runner allowlist. `unbaselined` lists unmapped
+// source files absent from the coverage-ratchet baseline: pre-existing gaps
+// are listed there and warn; NEW uncovered files fail until covered or
+// explicitly baselined in a reviewable diff.
+export function ciVerdict({ indexSize, selected, unmapped, neutered = [], unbaselined = [] }) {
   if (indexSize < INDEX_FLOOR) {
     return {
       fail: true,
       reason: `derived index collapsed to ${indexSize} script(s) (floor ${INDEX_FLOOR}) — `
         + 'package.json runner formats changed or scripts were mass-removed; refusing to certify.',
+    };
+  }
+  if (neutered.length > 0) {
+    return {
+      fail: true,
+      reason: `the PR removed or rewrote suite(s) that guard its own changes: ${neutered.join(', ')} — `
+        + 'a suite selected by main\'s mapping must stay a real test runner in the PR.',
+    };
+  }
+  if (unbaselined.length > 0) {
+    return {
+      fail: true,
+      reason: 'changed source file(s) have no targeted suite and are not in the coverage baseline: '
+        + `${unbaselined.join(', ')} — add a suite, an OVERRIDES entry, or a reviewed baseline line `
+        + '(scripts/targeted-tests-baseline.txt).',
     };
   }
   if (unmapped.length > 0 && selected.length === 0) {
@@ -136,24 +162,60 @@ function summarize(lines) {
   }
 }
 
+function mainPackageScripts() {
+  // The DECISION index comes from origin/main's package.json so a PR cannot
+  // fabricate its own gate. Before the gate first lands on main, fall back to
+  // the working copy.
+  try {
+    const raw = execFileSync('git', ['show', 'origin/main:package.json'], { cwd: root, encoding: 'utf8' });
+    return JSON.parse(raw).scripts ?? {};
+  } catch {
+    return JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts ?? {};
+  }
+}
+
+function baselinePaths() {
+  try {
+    return new Set(
+      readFileSync(path.join(root, 'scripts/targeted-tests-baseline.txt'), 'utf8')
+        .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 function main() {
   const args = new Set(process.argv.slice(2));
-  const scripts = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts ?? {};
-  const index = deriveScriptIndex(scripts);
+  const prScripts = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts ?? {};
+  const mainScripts = mainPackageScripts();
+  const mainIndex = deriveScriptIndex(mainScripts);
+  const prIndex = deriveScriptIndex(prScripts);
   const changed = changedFilesFromGit();
-  const { scripts: selected, unmapped } = selectScripts(changed, index);
+
+  const mainSel = selectScripts(changed, mainIndex);
+  const prSel = selectScripts(changed, prIndex);
+  // Main's mapping decides what MUST run; the PR's copy may only add suites
+  // (new tests shipped alongside new code).
+  const selected = [...new Set([...mainSel.scripts, ...prSel.scripts])].sort();
+  const neutered = mainSel.scripts.filter((s) => !isRunnerAllowlisted(prScripts[s]));
+  // A file is a coverage gap only if NEITHER mapping covers it; the baseline
+  // ratchet decides whether the gap is pre-existing (warn) or new (fail).
+  const unmapped = mainSel.unmapped.filter((f) => prSel.unmapped.includes(f));
+  const baseline = baselinePaths();
+  const unbaselined = unmapped.filter((f) => !baseline.has(f));
 
   summarize([
     `[targeted-tests] ${changed.length} changed file(s) → ${selected.length} test script(s): ${selected.join(', ') || '(none)'}`,
     ...(unmapped.length > 0 ? [
       [
         `[targeted-tests] WARNING — ${unmapped.length} changed source file(s) map to no targeted suite; this gate proves nothing about them:`,
-        ...unmapped.map((f) => `  - ${f}`),
+        ...unmapped.map((f) => `  - ${f}${baseline.has(f) ? ' (baselined)' : ' (NEW GAP)'}`),
       ].join('\n'),
     ] : []),
   ]);
 
-  const gate = ciVerdict({ indexSize: index.size, selected, unmapped });
+  const gate = ciVerdict({ indexSize: mainIndex.size, selected, unmapped, neutered, unbaselined });
   if (gate.fail) {
     summarize([`[targeted-tests] FAIL: ${gate.reason}`]);
     process.exit(1);

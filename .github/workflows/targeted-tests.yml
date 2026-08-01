@@ -35,6 +35,14 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
+      # test:diagnostics reaches into tools/mcp-server/__tests__, whose imports
+      # resolve against that package's own node_modules. Without this the suite
+      # dies on ERR_MODULE_NOT_FOUND for zod on every PR touching
+      # src/services/diagnostics. smoke.yml already installs it the same way.
+      # (--prefix would read the root package name off the directory name and
+      # fail the lockfile-sync check, so run it from inside the package.)
+      - run: npm ci
+        working-directory: tools/mcp-server
       - name: Select and run targeted suites
         run: |
           git fetch origin main --quiet

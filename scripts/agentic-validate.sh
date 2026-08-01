@@ -3,6 +3,12 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# CB_DOCS_ROOT is the docs-checker's test seam. Inherited here it would point
+# docs:check at an arbitrary tree — CB_DOCS_ROOT=/var/empty makes every
+# structural doc check vacuously green — so the gate must never let it leak
+# through to the real run.
+unset CB_DOCS_ROOT
+
 usage() {
   cat >&2 <<'EOF'
 Usage:

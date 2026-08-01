@@ -17,7 +17,15 @@ const script = 'scripts/agentic-validate.sh';
 // Args are logged \037-delimited to preserve boundaries: `npm run x -- --y`
 // and `npm "run x -- --y"` must not produce the same record.
 const stubDir = mkdtempSync(join(tmpdir(), 'agentic-gate-stub-'));
-writeFileSync(join(stubDir, 'npm'), '#!/bin/sh\n{ printf \'%s\\037\' "$@"; printf \'\\n\'; } >> "$NPM_CALL_LOG"\nexit 0\n');
+writeFileSync(
+  join(stubDir, 'npm'),
+  '#!/bin/sh\n'
+    // A surviving CB_DOCS_ROOT means the gate leaked the docs-checker's test
+    // seam into a real run — record it as a call so deepEqual catches it.
+    + '[ -n "${CB_DOCS_ROOT:-}" ] && printf \'CB_DOCS_ROOT_LEAKED\\037\\n\' >> "$NPM_CALL_LOG"\n'
+    + '{ printf \'%s\\037\' "$@"; printf \'\\n\'; } >> "$NPM_CALL_LOG"\n'
+    + 'exit 0\n',
+);
 chmodSync(join(stubDir, 'npm'), 0o755);
 
 // Exported bash functions (BASH_FUNC_npm%%=...) resolve before PATH, and
@@ -35,12 +43,12 @@ function cleanEnv(extra) {
 
 let callSeq = 0;
 
-function gate(...args) {
+function gate(args, extraEnv = {}) {
   const logPath = join(stubDir, `calls-${callSeq++}.log`);
   const r = spawnSync('bash', [script, ...args], {
     cwd: root,
     encoding: 'utf8',
-    env: cleanEnv({ PATH: `${stubDir}:${process.env.PATH}`, NPM_CALL_LOG: logPath }),
+    env: cleanEnv({ PATH: `${stubDir}:${process.env.PATH}`, NPM_CALL_LOG: logPath, ...extraEnv }),
   });
   const npmCalls = existsSync(logPath)
     ? readFileSync(logPath, 'utf8').split('\n').filter(Boolean)
@@ -62,21 +70,21 @@ const MANDATORY_PIPELINE = [
 // ── Rejection paths: exit 2 and, critically, zero npm invocations ──
 
 test('no arguments is refused rather than passing silently', () => {
-  const { code, out, npmCalls } = gate();
+  const { code, out, npmCalls } = gate([]);
   assert.equal(code, 2);
   assert.match(out, /Refusing to pass: no tests named/);
   assert.deepEqual(npmCalls, []);
 });
 
 test('--tests and --no-tests together are refused', () => {
-  const { code, out, npmCalls } = gate('--tests', 'test:providers', '--no-tests', 'because');
+  const { code, out, npmCalls } = gate(['--tests', 'test:providers', '--no-tests', 'because']);
   assert.equal(code, 2);
   assert.match(out, /mutually exclusive/);
   assert.deepEqual(npmCalls, []);
 });
 
 test('an unknown npm script is refused before any script runs', () => {
-  const { code, out, npmCalls } = gate('--tests', 'test:providers test:doesnotexist');
+  const { code, out, npmCalls } = gate(['--tests', 'test:providers test:doesnotexist']);
   assert.equal(code, 2);
   assert.match(out, /No such npm script: test:doesnotexist/);
   // The regression this pins: validation used to live inside the run loop, so
@@ -85,7 +93,7 @@ test('an unknown npm script is refused before any script runs', () => {
 });
 
 test('a whitespace-only --tests value is refused, not treated as coverage', () => {
-  const { code, out, npmCalls } = gate('--tests', '   ');
+  const { code, out, npmCalls } = gate(['--tests', '   ']);
   assert.equal(code, 2);
   assert.match(out, /Refusing to pass: no tests named/);
   assert.deepEqual(npmCalls, []);
@@ -94,7 +102,7 @@ test('a whitespace-only --tests value is refused, not treated as coverage', () =
 test('a whitespace-only --no-tests reason is refused', () => {
   // Tabs included: a space-only strip would let "\t" through as a "reason".
   for (const reason of ['   ', '\t', ' \t \t ']) {
-    const { code, out, npmCalls } = gate('--no-tests', reason);
+    const { code, out, npmCalls } = gate(['--no-tests', reason]);
     assert.equal(code, 2);
     assert.match(out, /Refusing to pass: no tests named/);
     assert.deepEqual(npmCalls, []);
@@ -102,20 +110,20 @@ test('a whitespace-only --no-tests reason is refused', () => {
 });
 
 test('a glob in --tests stays a literal script name', () => {
-  const { code, out, npmCalls } = gate('--tests', '*');
+  const { code, out, npmCalls } = gate(['--tests', '*']);
   assert.equal(code, 2);
   assert.match(out, /No such npm script: \*/);
   assert.deepEqual(npmCalls, []);
 });
 
 test('--tests with no value is refused', () => {
-  const { code, npmCalls } = gate('--tests');
+  const { code, npmCalls } = gate(['--tests']);
   assert.equal(code, 2);
   assert.deepEqual(npmCalls, []);
 });
 
 test('an unrecognized argument is refused', () => {
-  const { code, out, npmCalls } = gate('--yolo');
+  const { code, out, npmCalls } = gate(['--yolo']);
   assert.equal(code, 2);
   assert.match(out, /Unknown argument: --yolo/);
   assert.deepEqual(npmCalls, []);
@@ -126,7 +134,7 @@ test('an unrecognized argument is refused', () => {
 // naming this suite would recurse into itself.
 
 test('a valid --tests invocation runs the named scripts then the full pipeline', () => {
-  const { code, out, npmCalls } = gate('--tests', 'test:settings test:datacenter');
+  const { code, out, npmCalls } = gate(['--tests', 'test:settings test:datacenter']);
   assert.equal(code, 0);
   assert.deepEqual(npmCalls, [
     ['run', 'test:settings'],
@@ -138,11 +146,24 @@ test('a valid --tests invocation runs the named scripts then the full pipeline',
 });
 
 test('a valid --no-tests waiver proceeds through the pipeline without running any test', () => {
-  const { code, out, npmCalls } = gate('--no-tests', 'docs-only change, no testable behavior');
+  const { code, out, npmCalls } = gate(['--no-tests', 'docs-only change, no testable behavior']);
   assert.equal(code, 0);
   assert.deepEqual(npmCalls, MANDATORY_PIPELINE);
   assert.match(out, /Tests waived: docs-only change, no testable behavior/);
   assert.match(out, /Agentic validation gate passed\./);
+});
+
+test('the gate neutralizes an inherited CB_DOCS_ROOT so the docs seam cannot bypass it', () => {
+  // Without the unset, CB_DOCS_ROOT=/var/empty makes every structural doc
+  // check vacuously green in a REAL gate run. The stub logs a leak marker if
+  // the variable survives into any npm invocation.
+  const { code, npmCalls } = gate(
+    ['--no-tests', 'seam-leak check'],
+    { CB_DOCS_ROOT: '/var/empty' },
+  );
+  assert.equal(code, 0);
+  assert.ok(!npmCalls.some((call) => call.includes('CB_DOCS_ROOT_LEAKED')));
+  assert.deepEqual(npmCalls, MANDATORY_PIPELINE);
 });
 
 // ── docs:check advisory split: only the CHANGELOG heuristic is demoted ──

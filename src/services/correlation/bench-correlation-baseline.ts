@@ -89,6 +89,7 @@ export interface CorrelationBenchBaseline {
   decoyPairsEmitted: number;
   meanTruePairConfidence: number;
   learnedRulePairCount: number;
+  causalLearnedRulePairCount: number;
 
   tolerances: CorrelationBenchTolerances;
 }
@@ -112,12 +113,50 @@ export const DEFAULT_CORRELATION_BENCH_TOLERANCES: CorrelationBenchTolerances = 
   learnedRulePairGrowth: 5,
 };
 
+/**
+ * The baseline is JSON on disk, so its tolerance block is untyped at runtime.
+ * A string or null operand makes every directional comparison NaN, and every
+ * `NaN > tolerance` is false — one bad edit silently disarms the whole gate.
+ */
+function resolveTolerances(
+  reasons: string[],
+  raw: Partial<CorrelationBenchTolerances> | undefined,
+): CorrelationBenchTolerances {
+  const tol = { ...DEFAULT_CORRELATION_BENCH_TOLERANCES };
+  for (const [key, value] of Object.entries(raw ?? {})) {
+    if (!(key in tol)) {
+      reasons.push(`tolerance "${key}" is not a known gate — the baseline is stale or corrupt`);
+      continue;
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      reasons.push(
+        `tolerance "${key}" is not a finite non-negative number (${String(value)}) — ` +
+        `it would make its comparison NaN, which passes every directional check`,
+      );
+      continue;
+    }
+    tol[key as keyof CorrelationBenchTolerances] = value;
+  }
+  return tol;
+}
+
+/**
+ * An explicit `null` separation is legitimate live — see the separation gate —
+ * and is excused from the finite check. A MISSING field must NOT be excused,
+ * which is exactly why this is an `=== null` branch and not `?? 0`.
+ */
+function separationOperand(value: number | null | undefined): unknown {
+  if (value === null) return 0;
+  return value;
+}
+
 export function compareCorrelationBenchToBaseline(
   report: CorrelationBenchReport,
   baseline: CorrelationBenchBaseline,
 ): CorrelationBenchComparison {
   const reasons: string[] = [];
-  const tol = { ...DEFAULT_CORRELATION_BENCH_TOLERANCES, ...baseline.tolerances };
+  const tol = resolveTolerances(reasons, baseline.tolerances);
+  if (reasons.length > 0) return { ok: false, reasons };
 
   // ── Corpus identity: any drift invalidates every comparison below ──────
   const identity: [string, unknown, unknown][] = [
@@ -155,13 +194,16 @@ export function compareCorrelationBenchToBaseline(
       report.learnedRuleFalsePositives,
     ],
     ['learned-rule pair volume', baseline.learnedRulePairCount, report.learnedRulePairCount],
+    [
+      'causal learned-rule pair volume',
+      baseline.causalLearnedRulePairCount,
+      report.causalLearnedRulePairCount,
+    ],
     ['near-miss decoy pairs', baseline.decoyPairsEmitted, report.decoyPairsEmitted],
     [
       'causal-vs-false edge evidence separation',
       baseline.edgeEvidenceSeparation,
-      // null is legitimate live — see the separation gate below — so it is
-      // excused here and handled there. Anything else non-finite is not.
-      report.edgeEvidenceSeparation ?? 0,
+      separationOperand(report.edgeEvidenceSeparation),
     ],
   ];
   for (const [label, want, got] of gated) {
@@ -178,6 +220,13 @@ export function compareCorrelationBenchToBaseline(
       );
     }
   }
+  if (reasons.length > 0) return { ok: false, reasons };
+
+  // ── Internal consistency: the report must agree with itself ────────────
+  // Several gates below trust a single summary field to stand for a set of
+  // detail fields. A report that disagrees with itself is not a passing run
+  // with one odd number in it — it is a report that cannot be graded at all.
+  checkReportConsistency(reasons, report);
   if (reasons.length > 0) return { ok: false, reasons };
 
   // ── Miner quality ──────────────────────────────────────────────────────
@@ -225,8 +274,63 @@ export function compareCorrelationBenchToBaseline(
     tol.learnedRuleFalsePositiveGrowth);
   checkGrowth(reasons, 'learned-rule pair volume',
     baseline.learnedRulePairCount, report.learnedRulePairCount, tol.learnedRulePairGrowth);
+  // Liveness, not volume: driving learned-rule pairs DOWN is a goal, so no
+  // shrink tolerance applies — but a run where the causal rules fire zero times
+  // means the synthesize → install → match path is dead, and every count-based
+  // gate above would still read green.
+  if (baseline.causalLearnedRulePairCount > 0 && report.causalLearnedRulePairCount === 0) {
+    reasons.push(
+      'causal learned rules matched nothing: baseline emitted ' +
+      `${baseline.causalLearnedRulePairCount} pairs, live emitted 0 while still synthesizing ` +
+      `${report.causalLearnedRuleCount} causal rule(s) — the rules are built but never fire`,
+    );
+  }
 
   return { ok: reasons.length === 0, reasons };
+}
+
+/**
+ * Cross-checks the summary fields the gates rely on against the detail fields
+ * they summarize. Without this, a report can claim a perfect miner
+ * (`falseEdgeCount: 0`) while its own breakdown still lists false positives,
+ * and the perfect-miner exception below would honor the claim.
+ */
+function checkReportConsistency(reasons: string[], report: CorrelationBenchReport): void {
+  const breakdown =
+    report.confoundedFalsePositives +
+    report.mediatedFalsePositives +
+    report.independentFalsePositives +
+    report.inhibitoryEdgesReported +
+    report.unplantedFalsePositives;
+  if (breakdown !== report.falseEdgeCount) {
+    reasons.push(
+      `report is internally inconsistent: falseEdgeCount=${report.falseEdgeCount} but the ` +
+      `false-positive breakdown sums to ${breakdown} (confounded/mediated/independent/` +
+      `inhibitory/unplanted) — the run cannot be graded`,
+    );
+  }
+  if (report.causalLearnedRuleCount + report.learnedRuleFalsePositives !== report.learnedRuleCount) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRuleCount=` +
+      `${report.causalLearnedRuleCount} plus learnedRuleFalsePositives=` +
+      `${report.learnedRuleFalsePositives} does not equal learnedRuleCount=` +
+      `${report.learnedRuleCount}`,
+    );
+  }
+  if (report.causalLearnedRulePairCount > report.learnedRulePairCount) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRulePairCount=` +
+      `${report.causalLearnedRulePairCount} exceeds learnedRulePairCount=` +
+      `${report.learnedRulePairCount}, which it is a subset of`,
+    );
+  }
+  if (report.distinctEnginePairCount > report.enginePairCount) {
+    reasons.push(
+      `report is internally inconsistent: distinctEnginePairCount=` +
+      `${report.distinctEnginePairCount} exceeds raw enginePairCount=` +
+      `${report.enginePairCount}`,
+    );
+  }
 }
 
 /**

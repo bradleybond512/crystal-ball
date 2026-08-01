@@ -833,14 +833,18 @@ export function goldenCorpusDigest(): string {
     h = (h ^ 0x5F) >>> 0;
   };
 
+  // JSON.stringify, not template joins: `['a','b']` and `['a,b']` flatten to the
+  // same delimited string, so a join-based digest lets an edit move content
+  // across an array boundary without moving the hash. JSON quotes and escapes
+  // every element, so the array shape is part of the hashed bytes.
   for (const o of allGoldenObservations()) {
-    eat(
-      `${o.id}|${o.timestamp}|${o.domain}|${o.sourceId}|${o.severity}` +
-      `|${o.location?.lat ?? ''}|${o.location?.lon ?? ''}|${o.entityIds.join(',')}` +
-      `|${o.tags.join(',')}`,
-    );
+    eat(JSON.stringify([
+      o.id, o.timestamp, o.domain, o.sourceId, o.severity,
+      o.location?.lat ?? null, o.location?.lon ?? null,
+      o.entityIds, o.tags,
+    ]));
   }
-  for (const c of PLANTED_COUPLINGS) eat(`${c.from}->${c.to}|${c.kind}`);
+  for (const c of PLANTED_COUPLINGS) eat(JSON.stringify([c.from, c.to, c.kind]));
   // Set iteration order is insertion order, which an unrelated fixture edit can
   // reshuffle without changing the CONTENT — sort so the digest tracks the
   // truth labels themselves, not the order they happened to be declared in.

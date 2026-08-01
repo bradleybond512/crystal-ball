@@ -934,7 +934,7 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 35 unit tests in
+- 41 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit).
@@ -968,6 +968,42 @@ that had stopped measuring anything:
   one planted pair inflated the denominator without the numerator.
 - **`--json` emits only JSON on stdout** — the verdict goes to stderr; exit
   codes are unchanged.
+
+Second-round hardening from the same reviewer (baseline `schemaVersion: 3`).
+Each of these was demonstrated live: the reviewer edited the corpus or the
+report, and the gate still returned PASS.
+
+- **The digest is JSON-encoded, not delimiter-joined.** `['a','b']` and
+  `['a,b']` flatten to the same delimited string, so content could move across
+  an array boundary — an entity id into a tag, a tag into the next field —
+  without moving the hash. `JSON.stringify` quotes and escapes every element,
+  so array shape is part of the hashed bytes. Digest `206cda25` → `13cd95ef`.
+- **A missing gated metric fails closed, not just a null one.** The separation
+  operand excused `null` (legitimate: a perfect miner) via a coercion that also
+  excused `undefined`. Deleting `edgeEvidenceSeparation` outright returned
+  `{ok: true, reasons: []}`. The null case is now matched exactly and everything
+  else falls through to the finite check.
+- **Learned rules are gated on FIRING, not on being synthesised.** Counting
+  synthesised rules cannot see the install → match path go dark. The new
+  `causalLearnedRulePairCount` is gated as *liveness* — no shrink tolerance,
+  because shrinking total pair volume is a goal — and trips only when the
+  baseline emitted pairs and the live run emits zero while still synthesising
+  causal rules.
+- **The report must agree with itself.** The perfect-miner exemption trusted
+  `falseEdgeCount === 0` without reconciling the five breakdown fields that sum
+  to it; setting that one field bought the exemption while 17 false edges sat
+  in the detail. Four cross-checks now run before any gate: the false-edge
+  breakdown must sum to the total, causal + FP learned rules must equal the
+  learned-rule count, and both causal-subset counts must not exceed their
+  supersets.
+- **The tolerance block is validated too.** It is untyped JSON on disk;
+  `couplingRecallDrop: "garbage"` made its comparison `NaN`, and `NaN > tol`
+  is false, so the gate reported PASS on a real recall collapse. Unknown keys
+  and non-finite / negative values are now rejected before any comparison runs.
+- **The distinct-pair denominator has an exercising test.** The live corpus
+  emits exactly one pair per key (22 === 22), so the existing
+  `distinct <= raw` assertion would stay green if the fix were reverted;
+  `gradeEnginePairs` is now driven directly with one pair matched by two rules.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

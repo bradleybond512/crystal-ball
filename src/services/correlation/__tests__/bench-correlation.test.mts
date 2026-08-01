@@ -18,7 +18,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runCorrelationBenchmark } from '../bench-correlation.ts';
+import { runCorrelationBenchmark, gradeEnginePairs } from '../bench-correlation.ts';
 import {
   compareCorrelationBenchToBaseline,
   DEFAULT_CORRELATION_BENCH_TOLERANCES,
@@ -153,6 +153,27 @@ describe('what the corpus is built to stress', () => {
     assert.ok(report.distinctEnginePairCount > 0);
   });
 
+  it('does not double-count one event pair matched by two rules', () => {
+    // The live corpus emits exactly one pair per distinct key, so it cannot
+    // tell the two denominators apart. This drives the grader directly with a
+    // pair matched twice: distinct must stay 1 while the raw count reaches 2.
+    const key = [...plantedTruePairKeys()][0]!;
+    const [a, b] = key.split('::') as [string, string];
+    const twice = ['rule-one', 'rule-two'].map((ruleId) => ({
+      ruleId,
+      eventA: { id: a },
+      eventB: { id: b },
+      confidence: 0.5,
+    })) as unknown as Parameters<typeof gradeEnginePairs>[0];
+
+    const graded = gradeEnginePairs(twice, plantedTruePairKeys(), decoyEventIds());
+    assert.equal(graded.pairCount, 2, 'both emissions should be counted raw');
+    assert.equal(graded.distinctPairCount, 1, 'one event pair, matched twice');
+    // Precision on the distinct denominator is 1/1; on the raw one it would be
+    // 1/2 — a phantom 50% regression for recognising a true pair twice.
+    assert.equal(graded.emittedTrueKeys.size / graded.distinctPairCount, 1);
+  });
+
   it('scores true pairs with a real confidence, not a placeholder', () => {
     assert.ok(
       report.meanTruePairConfidence > 0 && report.meanTruePairConfidence <= 1,
@@ -199,7 +220,7 @@ describe('the committed baseline', () => {
 
   it('carries its own tolerance block', () => {
     const baseline = loadBaseline();
-    assert.equal(baseline.schemaVersion, 2);
+    assert.equal(baseline.schemaVersion, 3);
     for (const key of Object.keys(DEFAULT_CORRELATION_BENCH_TOLERANCES)) {
       assert.ok(
         key in baseline.tolerances,
@@ -316,6 +337,7 @@ describe('the gate', () => {
       learnedRuleFalsePositives: 0,
       causalLearnedRuleCount: 0,
       learnedRulePairCount: 0,
+      causalLearnedRulePairCount: 0,
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(dead, baseline);
     assert.equal(ok, false);
@@ -354,6 +376,7 @@ describe('the gate', () => {
       meanFalseEdgeZ: null,
       edgeEvidenceSeparation: null,
       learnedRuleFalsePositives: 0,
+      learnedRuleCount: report.plantedCausalCount,
       causalLearnedRuleCount: report.plantedCausalCount,
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
@@ -366,6 +389,59 @@ describe('the gate', () => {
     const { ok, reasons } = compareCorrelationBenchToBaseline(broken, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('separation is null while false edges exist')));
+  });
+
+  it('fails closed when a gated metric is missing outright, not just null', () => {
+    // `null` separation is a legitimate perfect-miner state; a MISSING field is
+    // a report that never measured it. `?? 0` cannot tell them apart.
+    const { edgeEvidenceSeparation: _gone, ...partial } = report;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      partial as typeof report, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('separation: live value is not a finite')));
+  });
+
+  it('rejects a perfect-miner claim its own breakdown contradicts', () => {
+    // Zeroing only the summary field buys the separation exemption while the
+    // per-kind counts still report 17 false edges.
+    const lying = { ...report, falseEdgeCount: 0, edgeEvidenceSeparation: null };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(lying, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('internally inconsistent')));
+    assert.ok(reasons.some((r) => r.includes('breakdown sums to')));
+  });
+
+  it('fails when learned rules are synthesized but never fire', () => {
+    // Volume shrinking is a GOAL, so no shrink tolerance catches this: the
+    // rules still exist, the install/match path is simply dead.
+    const dark = { ...report, learnedRulePairCount: 0, causalLearnedRulePairCount: 0 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(dark, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('causal learned rules matched nothing')));
+  });
+
+  it('fails closed on a non-numeric tolerance instead of disarming its gate', () => {
+    // A string tolerance makes `delta > tol` NaN-false, which passes every
+    // directional check on the gate it was supposed to tighten.
+    const sabotaged = {
+      ...baseline,
+      tolerances: { ...baseline.tolerances, couplingRecallDrop: 'garbage' },
+    } as unknown as CorrelationBenchBaseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, sabotaged);
+    assert.equal(ok, false);
+    assert.equal(reasons.length, 1, 'tolerance validation must short-circuit');
+    assert.match(reasons[0]!, /tolerance "couplingRecallDrop" is not a finite/);
+  });
+
+  it('rejects an unknown tolerance key rather than ignoring it', () => {
+    const stale = {
+      ...baseline,
+      tolerances: { ...baseline.tolerances, pairPrecisionTolerance: 0.5 },
+    } as unknown as CorrelationBenchBaseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, stale);
+    assert.equal(ok, false);
+    assert.match(reasons[0]!, /not a known gate/);
   });
 
   it('accumulates every independent regression rather than short-circuiting', () => {

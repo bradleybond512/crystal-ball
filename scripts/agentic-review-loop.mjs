@@ -68,7 +68,10 @@ function runReviewer(reviewer, branch, diff) {
     ? ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', reviewPrompt(branch)]
     : ['-p', reviewPrompt(branch)];
   const r = spawnSync(reviewer, argv, { cwd, input: diff, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  return { status: r.status, output: `${r.stdout ?? ''}\n${r.stderr ?? ''}` };
+  // The verdict is parsed from STDOUT ONLY: codex prints progress ("tokens
+  // used") on stderr AFTER the verdict, and concatenating streams made that
+  // noise the final line — observed live on this script's first run.
+  return { status: r.status, stdout: r.stdout ?? '', output: `${r.stdout ?? ''}\n${r.stderr ?? ''}` };
 }
 
 function main() {
@@ -87,13 +90,13 @@ function main() {
   }
 
   console.log(`[review-loop] reviewing ${branch}@${tip.slice(0, 8)} with ${reviewer}...`);
-  const { status, output } = runReviewer(reviewer, branch, diff);
+  const { status, stdout, output } = runReviewer(reviewer, branch, diff);
   console.log(output);
   if (status !== 0) {
     console.error(`[review-loop] reviewer exited ${status}; not counting as a cycle.`);
     process.exit(1);
   }
-  const verdict = parseVerdictLine(output);
+  const verdict = parseVerdictLine(stdout);
   if (!verdict) {
     console.error('[review-loop] no strict final-line JSON verdict — refusing to interpret prose.');
     process.exit(1);

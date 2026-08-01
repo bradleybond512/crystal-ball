@@ -27,8 +27,12 @@ jobs:
         id: probes
         run: |
           set +e
-          node scripts/live-contract-probes.mjs 2>&1 | tee /tmp/probe-output.txt
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          # No pipe: `| tee` would make $? report tee's exit and drift would
+          # read as success. Capture, then print.
+          node scripts/live-contract-probes.mjs > /tmp/probe-output.txt 2>&1
+          code=$?
+          cat /tmp/probe-output.txt
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
       - name: File or update drift issue
         if: steps.probes.outputs.exit != '0'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3

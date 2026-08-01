@@ -1,0 +1,37 @@
+name: Targeted tests
+
+# Changed-path-scoped unit tests as a merge gate. Branch protection's other
+# required checks run zero unit tests; the full sweep is too slow per-PR.
+# scripts/targeted-tests.mjs derives the mapping from package.json itself
+# (each test:* script lists its files; src/<area>/__tests__/ covers
+# src/<area>/) and runs only what the diff touches. Docs-only and
+# dependency-only PRs select nothing and pass in seconds after npm ci.
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-tests:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      # Branches cut before the selector landed don't carry it — pass them.
+      - run: |
+          if [ -f scripts/targeted-tests.mjs ]; then
+            node scripts/targeted-tests.mjs --ci
+          else
+            echo "targeted-tests.mjs not on this branch (predates the gate); passing."
+          fi

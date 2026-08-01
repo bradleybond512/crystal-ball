@@ -125,5 +125,10 @@ Report summary, user-visible behavior, architecture and files changed,
 validation commands and actual results, review outcome, evidence, unresolved
 risks, manual verification, rollback, proposed commit, and draft PR text.
 
-Do not push, merge, enable auto-merge, release, install, deploy, change secrets,
-or alter production data without explicit human approval.
+When the review concludes clean, record the SHA-pinned verdict per the "Review
+Verdict Protocol" in `AGENTS.md` (`verify-review-verdict.mjs --record`), then
+finish with `bash scripts/pr-closeout.sh` — it verifies pushed-tip parity and
+the verdict before arming auto-merge. Never arm auto-merge by hand.
+
+Do not push, merge, release, install, deploy, change secrets, or alter
+production data without explicit human approval.

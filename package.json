@@ -203,7 +203,8 @@
     "postdesktop:build:full": "node scripts/local-install.mjs",
     "test:mcp-storage": "node --test tools/mcp-server/__tests__/storage.test.mjs",
     "test:mcp-intel": "node --test tools/mcp-server/__tests__/intel-expansion-tools.test.mjs",
-    "test:agentic-gate": "tsx --test tests/agentic-gate.test.mjs"
+    "test:agentic-gate": "tsx --test tests/agentic-gate.test.mjs",
+    "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

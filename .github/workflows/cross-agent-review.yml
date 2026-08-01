@@ -1,22 +1,30 @@
 name: Cross-agent review gate
 
+# Machine-verifiable cross-agent review. The old gate looked for a free-text
+# marker in the PR body — self-attestable, never tied to a commit, and #1601
+# merged mid-review because a new push did not invalidate the "approval".
+#
+# Two paths, strongest available wins:
+#   1. CI_CODEX_REVIEW variable 'on' + OPENAI_API_KEY secret -> Codex reviews
+#      the diff IN CI and the verdict comes from the reviewer itself (no
+#      self-attestation possible).
+#   2. Otherwise -> verify the SHA-pinned verdict commit recorded by the local
+#      review loop (scripts/verify-review-verdict.mjs). Any code push after
+#      the verdict turns the check red until a fresh review is recorded.
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
-  # Run inside the merge queue too. There is no PR (and no head_ref) in a
-  # merge_group event, so the marker cannot be re-verified here — but it was
-  # already enforced when the PR entered the queue, so we report success.
+  # No PR context inside the merge queue; the gate was already enforced when
+  # the PR entered the queue, so report success.
   merge_group:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   cross-agent-review:
-    name: Cross-agent review marker
     runs-on: ubuntu-latest
     steps:
       - name: Skip in merge queue
@@ -24,10 +32,31 @@ jobs:
         run: echo "Cross-agent gate is enforced at PR time; nothing to re-verify inside the merge queue."
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/'))
+        if: github.event_name == 'pull_request'
         with:
           fetch-depth: 0
 
-      - name: Check PR review marker
-        if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/'))
-        run: npm run cross-check -- --ci
+      - name: Codex review in CI (when CI_CODEX_REVIEW is on)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.CI_CODEX_REVIEW == 'on'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "CI_CODEX_REVIEW is on but the OPENAI_API_KEY secret is missing." >&2
+            exit 1
+          fi
+          npm install -g @openai/codex
+          node scripts/ci-codex-review.mjs
+
+      - name: Verify SHA-pinned review verdict
+        if: github.event_name == 'pull_request' && vars.CI_CODEX_REVIEW != 'on'
+        # Passes trivially on non-agent branches (dependabot, human PRs);
+        # on claude/* | codex/* | copilot/* it requires the verdict commit.
+        # Branches cut before the protocol landed don't carry the script —
+        # pass them rather than failing on a file they could not have.
+        run: |
+          if [ -f scripts/verify-review-verdict.mjs ]; then
+            node scripts/verify-review-verdict.mjs --ci
+          else
+            echo "verify-review-verdict.mjs not on this branch (predates the protocol); passing."
+          fi

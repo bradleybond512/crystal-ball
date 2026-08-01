@@ -49,7 +49,17 @@ independent review, and prepare the completion report.
    demoted to advisory: nothing writes those entries automatically, so it stood 10
    deep on a pristine `main` and failed every branch for work the branch did not do.
    A gate that fails before you touch anything teaches agents to ignore it.
-5. Existing GitHub required checks remain the final merge authority.
+5. GitHub required checks are the final merge authority — and they now measure
+   the workflow's own definition of done. `cross-agent-review` verifies a
+   SHA-pinned verdict commit (see "Review Verdict Protocol" in `AGENTS.md`),
+   so an approval dies the moment new code is pushed; with the
+   `CI_CODEX_REVIEW` variable on and an `OPENAI_API_KEY` secret, Codex reviews
+   the diff inside CI and self-attestation becomes structurally impossible.
+   `targeted-tests` runs the `test:*` suites whose files or covered source
+   directories intersect the PR diff (`scripts/targeted-tests.mjs` — mapping
+   derived from `package.json`, never hand-maintained). Close every agent PR
+   with `bash scripts/pr-closeout.sh`, which verifies pushed-tip parity and
+   the verdict before arming auto-merge.
 
 Instructions guide behavior; executable checks and branch protection enforce
 reality. A task is not complete when validation could not run.

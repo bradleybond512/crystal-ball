@@ -13,6 +13,37 @@
 - `main` is the only merge target.
 - Agent branches (`claude/*`, `codex/*`, `copilot/*`) must go through PRs and GitHub auto-merge after required checks pass.
 - Do not merge agent PRs directly with the REST merge endpoint or local `git merge` unless explicitly told.
+- Finish every agent PR with `bash scripts/pr-closeout.sh`: it verifies every
+  commit is pushed, the PR head equals the local tip, and the review verdict
+  pins that tip — then arms auto-merge. Arming by hand skips those checks and
+  has lost the race twice.
+
+## Review Verdict Protocol (replaces the PR-body marker)
+
+The cross-agent review gate verifies a SHA-pinned verdict commit, not free
+text. A marker sentence in the PR body proves nothing and is no longer read.
+
+1. Run the real cross-agent review (`claude/*` → Codex; `codex/*` → Claude)
+   against the branch tip.
+2. When it concludes with zero blocking findings, save the reviewer's actual
+   concluding output to a file and record it:
+
+   ```bash
+   node scripts/verify-review-verdict.mjs --record --reviewer codex --evidence-file /path/to/conclusion.txt
+   ```
+
+   This writes `.agentic/reviews/<tip-sha>.json` and commits it as the new tip.
+   The commit may touch nothing else.
+3. Push. CI re-derives everything: the tip must be a verdict-only commit whose
+   parent is the exact reviewed sha, the reviewer must be the required
+   cross-agent (self-review is rejected), and the evidence must be quoted
+   reviewer output.
+
+Pushing any code after the verdict makes the check red until a fresh review is
+recorded — a stale approval cannot ride a new push into main. That is the
+failure that merged #1601 mid-review. If the `CI_CODEX_REVIEW` repo variable is
+`on` (requires an `OPENAI_API_KEY` Actions secret), CI runs the Codex review
+itself and the verdict commit is not consulted.
 
 ## Branch Discipline (MANDATORY — start every session here)
 

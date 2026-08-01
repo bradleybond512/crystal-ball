@@ -173,7 +173,12 @@ function main() {
     restoredChecksumsVerified: true,
     provedAt: new Date().toISOString(),
   };
-  const out = path.join(root, '.agentic/proofs', `${commit.slice(0, 12)}.json`);
+  // A scoped proof covers part of a commit, so several can exist for one sha.
+  // Keying the file on the sha alone made the second one silently overwrite the
+  // first, and the surviving artifact then looked like whole-commit coverage.
+  const scopeKey = files.length === allFiles.filter((f) => !f.startsWith('tests/')).length
+    ? '' : `-${createHash('sha256').update(files.join('\n')).digest('hex').slice(0, 8)}`;
+  const out = path.join(root, '.agentic/proofs', `${commit.slice(0, 12)}${scopeKey}.json`);
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(artifact, null, 2)}\n`);
   console.log(`[mutation-proof] PROVEN: ${redFails} failure(s) without the fix, 0 with it. Artifact: ${path.relative(root, out)}`);

@@ -126,6 +126,13 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
   // scheduleRefresh jitters +/-10% (refresh-scheduler.ts JITTER_FRACTION), so an
   // interval set EQUAL to the TTL lands over it on roughly half its ticks and
   // the provider flaps healthy/stale. The budget must cover the worst case.
+  //
+  // SCOPE: jitter is the only factor modeled here. computeDelay also multiplies
+  // by the ghost (x5), context (x2/x4) and hidden (x10) factors, under which
+  // every interval below exceeds its contract — deliberately, since those modes
+  // trade freshness for battery (see the App.ts comments). Asserting against
+  // them would encode a budget no interval can satisfy. What these guards pin is
+  // the DEFAULT path, which is where the boot-only bug actually lived.
   const JITTER = 1.1;
 
   for (const [task, provider] of [['emscSeismic', 'emsc-seismic'], ['geofonSeismic', 'geofon-seismic']]) {

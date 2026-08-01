@@ -3302,8 +3302,15 @@ async function loadSpacewxSubfeed(id, url, normalize, usable) {
 }
 
 // SWPC publishes x-ray continuously, so an empty series means the payload was
-// unusable, not that the sun went quiet.
-const spacewxHasRows = (rows) => rows.length > 0;
+// unusable, not that the sun went quiet — but "nonempty" is not "usable" either.
+// normalizeXrayPoints keeps any row carrying a nonempty time_tag, while
+// summarizeXrayFluxSidecar drops everything outside its 6h window, so a stale or
+// future-dated payload normalizes to rows and still summarizes to null.
+//
+// Rather than restate that window here and let the two drift, health IS the
+// summary the status actually ships: if the consumer got nothing, the subfeed
+// did not succeed, whatever the row count says.
+const xraySubfeedUsable = (points, now) => summarizeXrayFluxSidecar(points, now) !== null;
 
 // Kp usability mirrors what the consumer will actually accept, because
 // "nonempty" and "usable" are not the same thing: kp-fusion-observations drops
@@ -3356,7 +3363,7 @@ export function cmeSubfeedUsable(raw) {
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   const [xray, kp, cme] = await Promise.all([
-    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json', normalizeXrayPoints, spacewxHasRows),
+    loadSpacewxSubfeed('xray', 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json', normalizeXrayPoints, (points) => xraySubfeedUsable(points, now)),
     loadSpacewxSubfeed('kp', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', normalizeKpPoints, (points) => kpSubfeedUsable(points, now)),
     loadSpacewxSubfeed('cme', 'https://services.swpc.noaa.gov/json/donki/cme.json', (raw) => raw, cmeSubfeedUsable),
   ]);

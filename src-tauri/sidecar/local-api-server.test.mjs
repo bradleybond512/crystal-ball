@@ -3274,6 +3274,45 @@ test('/api/spaceweather/status — a recovered Kp subfeed is not pinned empty by
   }
 });
 
+// The xray product has the same two-layer shape as Kp: normalizeXrayPoints keeps
+// any row with a nonempty time_tag, while summarizeXrayFluxSidecar drops every
+// row outside its 6h window. So a stale-but-parseable payload normalizes to rows
+// yet summarizes to null — a subfeed reporting health while the status it
+// produced carries no xray at all, holding the success TTL against recovery.
+test('/api/spaceweather/status — a stale-but-parseable xray payload is a failure, not a reading', async () => {
+  const freshTag = swpcTag(60_000);
+  let xrayFresh = false;
+  const app = await startRouteApp((options) => {
+    if (options.path.includes('xrays-6-hour')) {
+      const tag = xrayFresh ? freshTag : swpcTag(9 * 60 * 60 * 1000);
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: `${tag}Z`, flux: 1e-6, energy: '0.1-0.8nm' }]) };
+    }
+    if (options.path.includes('noaa-planetary-k-index')) {
+      return { statusCode: 200, body: JSON.stringify([{ time_tag: freshTag, Kp: 4.33 }]) };
+    }
+    if (options.path.includes('donki/cme')) return { statusCode: 200, body: '[]' };
+    return { statusCode: 500, body: 'unexpected request' };
+  });
+  try {
+    const stale = await app.getJson('/api/spaceweather/status');
+    assert.equal(stale.xray, null, 'nine hours old is outside the 6h window the summary accepts');
+    assert.equal(stale.subfeeds.xray, false, 'a product that summarizes to nothing has not succeeded');
+
+    xrayFresh = true;
+    const restoreClock = shiftClock(2 * 60 * 1000);
+    try {
+      const recovered = await app.getJson('/api/spaceweather/status');
+      assert.ok(recovered.xray, 'a recovered xray product must not wait out the full success TTL');
+      assert.equal(recovered.subfeeds.xray, true);
+    } finally {
+      restoreClock();
+    }
+  } finally {
+    _resetSidecarCacheForTests();
+    await app.cleanup();
+  }
+});
+
 test('/api/spaceweather/status — retrying a failed subfeed does not re-fetch the healthy ones', async () => {
   const tag = swpcTag(60_000);
   const app = await startRouteApp((options) => {

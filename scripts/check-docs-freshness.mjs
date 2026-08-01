@@ -5,7 +5,12 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// CB_DOCS_ROOT is a test seam: tests/agentic-gate.test.mjs points it at a
+// fixture tree to prove structural issues stay fatal under --changelog-advisory
+// (the real tree can't demonstrate that without inducing real doc drift).
+const root = process.env.CB_DOCS_ROOT
+  ? resolve(process.env.CB_DOCS_ROOT)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function read(rel) {
   const p = resolve(root, rel);

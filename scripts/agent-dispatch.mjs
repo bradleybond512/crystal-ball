@@ -22,12 +22,18 @@
 // and the human-visible PR. An injected instruction still cannot reach main
 // without surviving all of those.
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { append as ledger } from './agent-ledger.mjs';
 import path from 'node:path';
 
 const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 
 function gh(args) {
   return execFileSync('gh', args, { cwd: root, encoding: 'utf8' }).trim();
+}
+
+export function contentHash(issue) {
+  return createHash('sha256').update(`${issue.title}\n${issue.body ?? ''}`).digest('hex').slice(0, 16);
 }
 
 export function pickIssue(issues) {
@@ -73,7 +79,11 @@ function main() {
   console.log(`[dispatch] claiming #${issue.number}: ${issue.title}`);
   spawnSync('gh', ['label', 'create', 'agent-claimed', '--color', 'FBCA04', '--description', 'An agent session owns this'], { cwd: root });
   gh(['issue', 'edit', String(issue.number), '--add-label', 'agent-claimed']);
-  gh(['issue', 'comment', String(issue.number), '--body', `Claimed by agent dispatch; workspace \`.worktrees/${name}\`.`]);
+  // Pin the authorized content: the hash in the claim comment is what the
+  // human's agent-ok label approved. Edits after this point are detectable
+  // and abort the dispatch below.
+  const claimedHash = contentHash(issue);
+  gh(['issue', 'comment', String(issue.number), '--body', `Claimed by agent dispatch; workspace \`.worktrees/${name}\`; content-sha256 ${claimedHash}.`]);
 
   // Claiming is list-then-label, so two dispatchers can race. After
   // commenting, count claim comments: if ours is not the only one, the other
@@ -94,8 +104,19 @@ function main() {
     process.exit(1);
   }
 
+  // Re-read the issue AFTER claiming: if the author edited it in the window
+  // between labeling and dispatch, the text no longer matches what the label
+  // authorized — stop instead of executing unreviewed instructions.
+  const fresh = JSON.parse(gh(['issue', 'view', String(issue.number), '--json', 'title,body,number']));
+  if (contentHash(fresh) !== claimedHash) {
+    console.error(`[dispatch] #${issue.number} was edited after claim (hash ${contentHash(fresh)} != ${claimedHash}) — aborting; re-review and re-label.`);
+    gh(['issue', 'comment', String(issue.number), '--body', 'Dispatch aborted: issue content changed after the claim. Re-apply agent-ok after review to re-authorize.']);
+    process.exit(1);
+  }
+
   const prompt = buildPrompt(issue);
   const wtDir = path.join(root, '.worktrees', name);
+  ledger({ type: 'dispatch', issue: issue.number, branch: `claude/${name}`, run });
   if (run) {
     console.log(`[dispatch] launching headless Claude in ${wtDir}...`);
     const r = spawnSync('claude', ['-p', prompt, '--permission-mode', 'acceptEdits'], { cwd: wtDir, stdio: 'inherit' });

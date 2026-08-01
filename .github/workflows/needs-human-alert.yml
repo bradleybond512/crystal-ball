@@ -1,0 +1,33 @@
+name: Needs-human alert
+
+# The escalation label is passive — it only works if someone looks. Assigning
+# the owner converts it into a real GitHub notification (mobile push / email)
+# the moment an agent loop stops at its cycle cap. No event-payload text is
+# interpolated into run: commands; the only action taken is an assignment.
+on:
+  pull_request:
+    types: [labeled]
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  needs-human-alert:
+    if: github.event.label.name == 'needs-human'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assign the owner
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const number = context.payload.pull_request?.number ?? context.payload.issue?.number;
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: number, assignees: [context.repo.owner],
+            });
+            core.info(`Assigned ${context.repo.owner} to #${number} for needs-human escalation.`);

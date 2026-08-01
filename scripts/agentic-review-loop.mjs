@@ -18,6 +18,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { append as ledger } from './agent-ledger.mjs';
 import { parseVerdictLine } from './ci-codex-review.mjs';
 import { requiredReviewers } from './verify-review-verdict.mjs';
 
@@ -80,6 +81,19 @@ function runReviewer(reviewer, branch, diff) {
   return { status: r.status, stdout: r.stdout ?? '', output: `${r.stdout ?? ''}\n${r.stderr ?? ''}` };
 }
 
+function escalate(branch, summary, cycles) {
+  console.error(`[review-loop] cycle ${cycles} exceeds the ${MAX_CYCLES}-cycle cap — escalating to the human.`);
+  const body = `Automated review loop stopped after ${cycles} cycles with blocking findings still open:\n\n${summary}\n\nPer AGENTS.md, a third automatic cycle is prohibited — human decision required.`;
+  try {
+    spawnSync('gh', ['label', 'create', 'needs-human', '--color', 'B60205', '--description', 'Agent loop escalation'], { cwd: root });
+    execFileSync('gh', ['pr', 'comment', branch, '--body', body], { cwd: root, stdio: 'inherit' });
+    execFileSync('gh', ['pr', 'edit', branch, '--add-label', 'needs-human'], { cwd: root, stdio: 'inherit' });
+  } catch {
+    console.error('[review-loop] could not annotate the PR — deliver the escalation manually.');
+  }
+  process.exit(2);
+}
+
 function main() {
   const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   const tip = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
@@ -89,13 +103,25 @@ function main() {
     process.exit(2);
   }
   const reviewer = reviewers[0];
-  // Resolve the canonical remote (macos on Bradley's Mac, origin elsewhere).
+  // Resolve the canonical remote (macos on Bradley's Mac, origin elsewhere)
+  // and FETCH it first: a stale remote-tracking ref makes the reviewer audit
+  // the wrong range — observed live when a stale macos/main pulled merged
+  // tier-1 files back into the review diff.
   const remotes = execFileSync('git', ['remote', '-v'], { cwd: root, encoding: 'utf8' });
   const canon = remotes.split('\n').find((l) => l.includes('bradleybond512/crystal-ball') && l.endsWith('(fetch)'))?.split('\t')[0] ?? 'origin';
+  execFileSync('git', ['fetch', canon, 'main', '--quiet'], { cwd: root });
   const diff = execFileSync('git', ['diff', `${canon}/main...HEAD`], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (!diff.trim()) {
     console.error('[review-loop] empty diff vs origin/main — nothing to review.');
     process.exit(2);
+  }
+
+  // Preflight the cycle cap BEFORE spending a review: with the cap already
+  // exhausted, the third invocation must escalate, not buy a third opinion.
+  const preState = loadState();
+  if ((preState[branch]?.cycles ?? 0) >= MAX_CYCLES) {
+    escalate(branch, preState[branch]?.lastFindings ?? '(see prior cycle logs)', (preState[branch].cycles ?? 0) + 1);
+    return; // unreachable — escalate exits — but keeps control flow explicit
   }
 
   console.log(`[review-loop] reviewing ${branch}@${tip.slice(0, 8)} with ${reviewer}...`);
@@ -114,29 +140,30 @@ function main() {
   const state = loadState();
   const blocking = Math.max(verdict.blockingFindings, verdict.findings.filter((f) => f.blocking).length);
   const { action, cycles } = nextAction(state, branch, tip, blocking);
-  state[branch] = { cycles, lastTip: tip, lastRun: new Date().toISOString() };
+  const summary = verdict.findings.filter((f) => f.blocking)
+    .map((f) => `- [${f.severity}] ${f.file}:${f.line} — ${f.summary}`).join('\n');
+  state[branch] = { cycles, lastTip: tip, lastRun: new Date().toISOString(), lastFindings: summary };
   saveState(state);
+  ledger({ type: 'review-cycle', branch, tip: tip.slice(0, 8), blocking, action });
 
   if (action === 'record') {
+    // The verdict pins HEAD — if anything committed while the reviewer ran,
+    // recording now would approve code the reviewer never saw.
+    const tipNow = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    if (tipNow !== tip) {
+      console.error(`[review-loop] tip moved during review (${tip.slice(0, 8)} -> ${tipNow.slice(0, 8)}) — rerun against the new tip.`);
+      process.exit(1);
+    }
     const evidenceFile = path.join(tmpdir(), `evidence-${tip.slice(0, 8)}.txt`);
     writeFileSync(evidenceFile, output.trim().split('\n').slice(-20).join('\n'));
     execFileSync('node', [path.join(root, 'scripts/verify-review-verdict.mjs'), '--record', '--reviewer', reviewer, '--evidence-file', evidenceFile], { cwd: root, stdio: 'inherit' });
+    ledger({ type: 'verdict', branch, tip: tip.slice(0, 8), reviewer });
     console.log('[review-loop] verdict recorded — push, then run scripts/pr-closeout.sh.');
     return;
   }
   if (action === 'escalate') {
-    console.error(`[review-loop] cycle ${cycles} exceeds the ${MAX_CYCLES}-cycle cap — escalating to the human.`);
-    const summary = verdict.findings.filter((f) => f.blocking)
-      .map((f) => `- [${f.severity}] ${f.file}:${f.line} — ${f.summary}`).join('\n');
-    const body = `Automated review loop stopped after ${cycles} cycles with blocking findings still open:\n\n${summary}\n\nPer AGENTS.md, a third automatic cycle is prohibited — human decision required.`;
-    try {
-      spawnSync('gh', ['label', 'create', 'needs-human', '--color', 'B60205', '--description', 'Agent loop escalation'], { cwd: root });
-      execFileSync('gh', ['pr', 'comment', branch, '--body', body], { cwd: root, stdio: 'inherit' });
-      execFileSync('gh', ['pr', 'edit', branch, '--add-label', 'needs-human'], { cwd: root, stdio: 'inherit' });
-    } catch {
-      console.error('[review-loop] could not annotate the PR — deliver the escalation manually.');
-    }
-    process.exit(2);
+    ledger({ type: 'escalation', branch, tip: tip.slice(0, 8) });
+    escalate(branch, summary, cycles);
   }
   console.error(`[review-loop] cycle ${cycles}/${MAX_CYCLES}: ${blocking} blocking finding(s) — repair and rerun.`);
   process.exit(1);

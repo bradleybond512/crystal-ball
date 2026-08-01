@@ -42,6 +42,8 @@ export const OVERRIDES = {
   'scripts/live-contract-probes.mjs': ['test:agentic-autonomy'],
   'scripts/agentic-review-loop.mjs': ['test:agentic-autonomy'],
   'scripts/agent-dispatch.mjs': ['test:agentic-autonomy'],
+  'scripts/mutation-proof.mjs': ['test:agentic-autonomy'],
+  'scripts/agent-ledger.mjs': ['test:agentic-autonomy'],
 };
 
 const RUNNER_ALLOWLIST = [
@@ -51,8 +53,10 @@ const RUNNER_ALLOWLIST = [
 ];
 
 // Anything source-shaped that maps to no suite is a visible coverage gap.
-const SOURCE_SHAPED = /^(src|src-tauri\/(sidecar|src)|scripts|tests|api|tools)\//;
-const SOURCE_EXT = /\.(ts|mts|tsx|mjs|js|rs|sh)$/;
+// Workflows are included: they are security-critical executable config, and
+// silently mapping them to nothing hid gate edits from the ratchet.
+const SOURCE_SHAPED = /^(src|src-tauri\/(sidecar|src)|scripts|tests|api|tools|\.github\/workflows)\//;
+const SOURCE_EXT = /\.(ts|mts|tsx|mjs|js|rs|sh|ya?ml)$/;
 
 function isPathToken(token) {
   return token.includes('/') && /\.(mjs|mts|ts|js)$/.test(token) && !token.startsWith('--');

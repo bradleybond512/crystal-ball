@@ -122,6 +122,7 @@ test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejec
     [{ verdict: 'request_changes' }, /not "approve"/],
     [{ blockingFindings: 2 }, /blockingFindings is 2/],
     [{ evidence: 'looks good' }, /quote the reviewer's actual concluding output/],
+    [{ evidence: 'The reviewer found three blocking problems and requested substantial changes to this diff.' }, /no approval indicator/],
   ]) {
     const r = validateVerdict({
       branch: 'codex/feature',
@@ -244,9 +245,15 @@ test('unmapped source files are reported across api/, tools/, and src-tauri/src/
 
 test('lockfile- and docs-only changes select nothing and flag nothing', () => {
   const index = deriveScriptIndex(SCRIPTS);
-  const { scripts, unmapped } = selectScripts(['package-lock.json', 'docs/PLAN.md', '.github/workflows/x.yml'], index, {});
+  const { scripts, unmapped } = selectScripts(['package-lock.json', 'docs/PLAN.md'], index, {});
   assert.deepEqual(scripts, []);
   assert.deepEqual(unmapped, []);
+});
+
+test('workflow files are source-shaped: gate edits hit the ratchet, not silence', () => {
+  const index = deriveScriptIndex(SCRIPTS);
+  const { unmapped } = selectScripts(['.github/workflows/cross-agent-review.yml'], index, {});
+  assert.deepEqual(unmapped, ['.github/workflows/cross-agent-review.yml']);
 });
 
 test('ciVerdict fails a collapsed index instead of certifying vacuously', () => {

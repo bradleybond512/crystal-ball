@@ -41,9 +41,13 @@ function git(args, options = {}) {
 }
 
 export function requiredReviewers(branch) {
-  if (branch.startsWith('claude/')) return ['codex'];
-  if (branch.startsWith('codex/')) return ['claude'];
-  if (branch.startsWith('copilot/')) return ['codex', 'claude'];
+  // 'human' is the escalation exit lane: when the loop stops at the cycle cap
+  // the human decides, and that decision is recorded under their own name
+  // instead of fabricating a reviewer verdict. Same attested-trust level as
+  // the rest of the protocol until CI_CODEX_REVIEW is on.
+  if (branch.startsWith('claude/')) return ['codex', 'human'];
+  if (branch.startsWith('codex/')) return ['claude', 'human'];
+  if (branch.startsWith('copilot/')) return ['codex', 'claude', 'human'];
   return null; // not an agent branch — no verdict required
 }
 
@@ -106,6 +110,11 @@ export function validateVerdict({ branch, headEntries, headParent, verdictJson }
     failures.push(
       `evidence must quote the reviewer's actual concluding output (>= ${MIN_EVIDENCE_LENGTH} chars), `
         + 'never a paraphrase.',
+    );
+  } else if (!/approve|no blocking|"blockingFindings"\s*:\s*0|authoriz/i.test(verdict.evidence)) {
+    failures.push(
+      'evidence contains no approval indicator (approve / no blocking / blockingFindings: 0 / authorization) — '
+        + 'a transcript that reports open blockers cannot back an approve verdict.',
     );
   }
   return failures.length > 0 ? { ok: false, failures } : { ok: true, reason: `verdict by ${verdict.reviewer} for ${headParent}` };

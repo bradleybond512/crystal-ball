@@ -1,0 +1,76 @@
+name: Nightly full test sweep
+
+# The targeted-tests merge gate runs only the suites a diff touches — by
+# design, nothing in CI ever runs all ~11k tests per PR. This closes the tail:
+# the complete renderer sweep runs nightly on main, and a failure files one
+# deduplicated issue. Cross-suite regressions that per-PR selection cannot
+# see surface within a day instead of never. No event-payload text is
+# interpolated into run: commands.
+on:
+  schedule:
+    - cron: '43 7 * * *' # 07:43 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  nightly-full-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run the full renderer sweep
+        id: sweep
+        run: |
+          set +e
+          # Capture, then print — a pipe would report tee's exit, not the runner's.
+          npm run test:renderer > /tmp/sweep-output.txt 2>&1
+          code=$?
+          tail -200 /tmp/sweep-output.txt
+          grep -E "ℹ (tests|pass|fail)" /tmp/sweep-output.txt | tail -10
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+      - name: File or update failure issue
+        if: steps.sweep.outputs.exit != '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('/tmp/sweep-output.txt', 'utf8');
+            // Keep the failing-test names, not megabytes of transcript; strip
+            // fence/mention vectors from test-controlled strings.
+            const tail = raw.split('\n').filter((l) => /✖|ℹ (tests|pass|fail)/.test(l)).slice(-80).join('\n')
+              .replaceAll('`', "'").replaceAll('@', '@​');
+            const title = 'Nightly full sweep failed on main';
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner, repo: context.repo.repo,
+                name: 'nightly-sweep-failure', color: 'B60205',
+                description: 'Full renderer test sweep failed on main',
+              });
+            } catch { /* exists */ }
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'nightly-sweep-failure',
+            });
+            const body = `The complete renderer sweep failed on main.\n\n\`\`\`\n${tail}\n\`\`\`\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            if (issues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issues[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['nightly-sweep-failure'],
+              });
+            }
+      - name: Fail the run
+        if: steps.sweep.outputs.exit != '0'
+        run: exit 1

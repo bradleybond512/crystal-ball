@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import { PROBES, runValidator } from '../scripts/live-contract-probes.mjs';
 import { nextAction } from '../scripts/agentic-review-loop.mjs';
-import { pickIssue, slugify, buildPrompt } from '../scripts/agent-dispatch.mjs';
+import { pickIssue, slugify, buildPrompt, contentHash } from '../scripts/agent-dispatch.mjs';
+import { parseCounts } from '../scripts/mutation-proof.mjs';
+import { aggregate } from '../scripts/agent-ledger.mjs';
 
 // ── live-contract probes: validators against live-captured shapes ──
 // Fixtures below are trimmed from real responses captured 2026-08-01.
@@ -77,4 +79,40 @@ test('slug and prompt are self-contained', () => {
   assert.match(p, /issue #7/);
   assert.match(p, /agentic-review-loop/);
   assert.match(p, /Closes #7/);
+});
+
+// ── dispatcher: content pinning ──
+
+test('contentHash pins title+body; any edit changes it', () => {
+  const a = contentHash({ title: 'T', body: 'B' });
+  assert.equal(a, contentHash({ title: 'T', body: 'B' }));
+  assert.notEqual(a, contentHash({ title: 'T', body: 'B2' }));
+  assert.notEqual(a, contentHash({ title: 'T2', body: 'B' }));
+  assert.equal(contentHash({ title: 'T' }), contentHash({ title: 'T', body: '' }));
+});
+
+// ── mutation-proof: runner-output accounting ──
+
+test('parseCounts sums pass/fail lines and flags runner absence', () => {
+  const out = 'noise\nℹ pass 21\nℹ fail 2\nmore\nℹ pass 5\nℹ fail 0\n';
+  assert.deepEqual(parseCounts(out), { pass: 26, fail: 2, seen: true });
+  // No runner lines at all must be detectable — a crashed suite is not green.
+  assert.equal(parseCounts('Error: something exploded').seen, false);
+});
+
+// ── ledger: aggregation ──
+
+test('ledger aggregation groups cycles, escalations, and verdicts per branch', () => {
+  const lines = [
+    JSON.stringify({ ts: '1', type: 'review-cycle', branch: 'claude/x', blocking: 5, action: 'repair' }),
+    JSON.stringify({ ts: '2', type: 'review-cycle', branch: 'claude/x', blocking: 0, action: 'record' }),
+    JSON.stringify({ ts: '3', type: 'verdict', branch: 'claude/x' }),
+    JSON.stringify({ ts: '4', type: 'escalation', branch: 'claude/y' }),
+    JSON.stringify({ ts: '5', type: 'dispatch', issue: 9 }),
+    'not json — must be skipped, not crash',
+  ];
+  const rows = aggregate(lines);
+  assert.deepEqual(rows['claude/x'], { dispatches: 0, cycles: 2, blocking: 5, escalations: 0, verdicts: 1, last: '3' });
+  assert.equal(rows['claude/y'].escalations, 1);
+  assert.equal(rows['issue #9'].dispatches, 1);
 });

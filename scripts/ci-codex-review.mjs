@@ -80,7 +80,10 @@ function main() {
     console.error(`[ci-codex-review] codex exec failed (exit ${r.status}).`);
     process.exit(1);
   }
-  const verdict = parseVerdictLine(output);
+  // STDOUT only: codex prints progress on stderr AFTER the verdict, and the
+  // strict final-line parser must not see that noise (observed live in the
+  // local loop's first run).
+  const verdict = parseVerdictLine(r.stdout ?? '');
   if (!verdict) {
     console.error('[ci-codex-review] No parseable verdict line in reviewer output — refusing to pass on prose.');
     process.exit(1);

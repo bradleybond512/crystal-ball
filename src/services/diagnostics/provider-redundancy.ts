@@ -250,6 +250,13 @@ function describeVerdict(verdict: RedundancyVerdict, providers: readonly Provide
         : `No reachable source: ${keys.join(', ')} are not configured.`;
     }
     case 'all_down': {
+      // A mixed domain — something broke AND something was never switched on.
+      // The outage still leads, but naming only the outage would send the user
+      // to debug a network path for a source that has no key.
+      const keys = missingSecrets(providers);
+      if (keys.length > 0) {
+        return `${total} providers, none reachable: ${keys.join(', ')} not configured, the rest unreachable.`;
+      }
       return `${total} providers configured, none reachable.`;
     }
     case 'unknown': {
@@ -283,7 +290,10 @@ function pickRemediation(
       return `${domain}: add ${missingSecrets(providers).join(' or ')} in Settings → API Keys to enable this domain.`;
     }
     case 'all_down': {
-      return `${domain}: every provider is silent. Check the sidecar + network connectivity.`;
+      const keys = missingSecrets(providers);
+      return keys.length > 0
+        ? `${domain}: check the sidecar + network connectivity, and add ${keys.join(' or ')} in Settings → API Keys.`
+        : `${domain}: every provider is silent. Check the sidecar + network connectivity.`;
     }
     case 'unknown': {
       return `${domain}: no snapshots yet. Wire the provider registry into the diagnostics state.`;

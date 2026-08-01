@@ -149,7 +149,26 @@ test('an unconfigured provider next to a genuinely broken one stays all_down', (
       }),
     ],
   });
-  assert.equal(r.domains[0]?.verdict, 'all_down');
+  const d = r.domains[0]!;
+  assert.equal(d.verdict, 'all_down');
+  // The outage leads, but the copy must not claim every provider was configured
+  // and silent — one of them was never switched on, and hiding that sends the
+  // user to debug a network path for a source that has no key.
+  assert.doesNotMatch(d.reason, /2 providers configured/);
+  assert.match(d.reason, /CLOUDFLARE_API_TOKEN/);
+  assert.match(d.remediation, /CLOUDFLARE_API_TOKEN/);
+});
+
+test('all_down copy is unqualified when every provider really is configured', () => {
+  const r = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({ providerId: 'a', domain: 'weather', primary: true, level: 'silent' }),
+      snap({ providerId: 'b', domain: 'weather', primary: false, level: 'failing' }),
+    ],
+  });
+  assert.match(r.domains[0]!.reason, /2 providers configured/);
+  assert.match(r.domains[0]!.remediation, /sidecar/);
 });
 
 test('a live outage outranks a config gap in sort and recommendation order', () => {

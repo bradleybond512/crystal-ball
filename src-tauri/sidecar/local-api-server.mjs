@@ -10475,10 +10475,13 @@ async function dispatch(requestUrl, req, routes, context) {
  if (_swCached) return json(_swCached);
  const SW_URLS = {
  kp: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
- mag: 'https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json',
+ // Replaces the separate mag-5-minute + plasma-5-minute products, which SWPC
+ // retired — both 404 now, so Bz/speed/density arrived as null no matter what
+ // the renderer did with them. This single product carries speed, density AND
+ // bz, already propagated to Earth's bow shock.
+ wind: 'https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json',
  xray: 'https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json',
  alerts: 'https://services.swpc.noaa.gov/products/alerts.json',
- plasma: 'https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json',
  };
  try {
  const entries = Object.entries(SW_URLS);

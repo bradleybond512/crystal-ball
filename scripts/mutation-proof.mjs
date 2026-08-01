@@ -37,13 +37,20 @@ export function parseCounts(output) {
   return { pass, fail, seen };
 }
 
-function runSuites(tests) {
+function runSuites(tests, { phase }) {
   const results = {};
   for (const script of tests) {
     const r = spawnSync('npm', ['run', script], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     const counts = parseCounts(`${r.stdout ?? ''}${r.stderr ?? ''}`);
     if (!counts.seen) {
-      throw new Error(`${script} produced no "ℹ pass/fail" lines — not a node test runner, or it crashed before running. Exit ${r.status}.`);
+      // In GREEN, a runnerless output means the setup is broken — abort.
+      // In RED, the mutation crashing the suite outright IS a failure signal:
+      // count it as red instead of aborting mid-mutation.
+      if (phase === 'green') {
+        throw new Error(`${script} produced no "ℹ pass/fail" lines — not a node test runner, or it crashed before running. Exit ${r.status}.`);
+      }
+      results[script] = { pass: 0, fail: 1, crashed: true, exit: r.status };
+      continue;
     }
     results[script] = { ...counts, exit: r.status };
   }
@@ -77,30 +84,41 @@ function main() {
   // must keep its tests in place while the fix is removed, or the proof is
   // vacuous (the reverted tests would no longer demand the behavior).
   const allFiles = git(['diff', '--name-only', `${commit}^`, commit]).split('\n').filter(Boolean);
-  const files = allFiles.filter((f) => !f.startsWith('tests/') && !f.includes('/__tests__/'));
+  const files = allFiles.filter((f) => !f.startsWith('tests/') && !f.includes('/__tests__/')
+    // The runner cannot prove itself: reverting a commit that contains this
+    // script deletes the tool mid-proof (observed live on its first dogfood).
+    && f !== 'scripts/mutation-proof.mjs');
   if (files.length === 0) throw new Error(`${commit.slice(0, 8)} touches only test files — nothing to mutate.`);
   const patch = git(['diff', `${commit}^`, commit, '--', ...files]);
   if (!patch.trim()) throw new Error(`${commit.slice(0, 8)} has an empty non-test diff.`);
   const before = shasums(files);
 
   console.log(`[mutation-proof] GREEN baseline (${tests.join(', ')})...`);
-  const green = runSuites(tests);
+  const green = runSuites(tests, { phase: 'green' });
   const greenFails = Object.values(green).reduce((a, r) => a + r.fail, 0);
   if (greenFails > 0) throw new Error(`baseline is already red (${greenFails} failing) — fix that first.`);
 
   console.log(`[mutation-proof] reverting ${commit.slice(0, 8)} in the working tree...`);
-  const rev = spawnSync('git', ['apply', '-R', '--3way'], { cwd: root, input: patch, encoding: 'utf8' });
+  // Plain apply — NEVER --3way, which stages into the index and makes
+  // `git checkout --` restore the mutation instead of the fix (observed on
+  // the first dogfood: the "restored" tree was still mutated and staged).
+  const rev = spawnSync('git', ['apply', '-R'], { cwd: root, input: patch, encoding: 'utf8' });
   if (rev.status !== 0) throw new Error(`revert did not apply: ${rev.stderr}`);
   // THE load-bearing step: a revert that changed nothing reads exactly like a
   // passing test. The mutation must be visible in the tree.
   if (!git(['diff', '--name-only']).trim()) throw new Error('mutation applied but the tree is unchanged — refusing a vacuous proof.');
 
-  console.log('[mutation-proof] RED run...');
-  const red = runSuites(tests);
+  // From here the tree is mutated: whatever happens, restore before exiting —
+  // an abort that leaves the fix reverted is worse than no proof at all.
+  let red;
+  try {
+    console.log('[mutation-proof] RED run...');
+    red = runSuites(tests, { phase: 'red' });
+  } finally {
+    console.log('[mutation-proof] restoring...');
+    git(['checkout', 'HEAD', '--', ...files]);
+  }
   const redFails = Object.values(red).reduce((a, r) => a + r.fail, 0);
-
-  console.log('[mutation-proof] restoring...');
-  git(['checkout', '--', ...files]);
   const after = shasums(files);
   for (const f of files) {
     if (before[f] !== after[f]) throw new Error(`restore mismatch on ${f} — DO NOT TRUST THIS TREE; re-checkout.`);

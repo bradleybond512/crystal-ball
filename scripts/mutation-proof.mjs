@@ -97,10 +97,20 @@ function main() {
   // must keep its tests in place while the fix is removed, or the proof is
   // vacuous (the reverted tests would no longer demand the behavior).
   const allFiles = git(['diff', '--name-only', `${commit}^`, commit]).split('\n').filter(Boolean);
+  // --only scopes the mutation to a subset of the commit's files. This exists
+  // because reverting a WHOLE commit that adds a new export deletes it, the
+  // test file then throws at import, and the run is a load crash rather than a
+  // behavioral red — the runner rejects that, correctly, so a commit shipping
+  // an extraction plus a fix cannot be proved in one shot. The scope is
+  // recorded in the artifact: a reviewer must be able to see that a proof was
+  // narrowed, and to what, rather than reading a green artifact as full cover.
+  const only = (get('--only') ?? '').split(/[\s,]+/).filter(Boolean);
   const files = allFiles.filter((f) => !f.startsWith('tests/') && !f.includes('/__tests__/')
     // The runner cannot prove itself: reverting a commit that contains this
     // script deletes the tool mid-proof (observed live on its first dogfood).
-    && f !== 'scripts/mutation-proof.mjs');
+    && f !== 'scripts/mutation-proof.mjs'
+    && (only.length === 0 || only.includes(f)));
+  const unmutated = allFiles.filter((f) => !files.includes(f) && !f.startsWith('tests/') && !f.includes('/__tests__/'));
   if (files.length === 0) throw new Error(`${commit.slice(0, 8)} touches only test files — nothing to mutate.`);
   const patch = git(['diff', `${commit}^`, commit, '--', ...files]);
   if (!patch.trim()) throw new Error(`${commit.slice(0, 8)} has an empty non-test diff.`);
@@ -153,6 +163,9 @@ function main() {
   const artifact = {
     commit,
     files,
+    // Present and non-empty means the proof was NARROWED: these files changed
+    // in the commit and were never mutated, so nothing here is proven.
+    unmutated,
     tests,
     green: Object.fromEntries(Object.entries(green).map(([k, v]) => [k, `${v.pass} pass / ${v.fail} fail`])),
     red: Object.fromEntries(Object.entries(red).map(([k, v]) => [k, `${v.pass} pass / ${v.fail} fail${v.crashed ? ' (CRASH — not behavioral evidence)' : ''}`])),

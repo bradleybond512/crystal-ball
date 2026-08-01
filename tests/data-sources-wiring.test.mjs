@@ -153,9 +153,11 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       // Same execution-aware budget as internetOutages below: the scheduler arms
       // the next timer AFTER `await fn()`, so a cycle costs the loader's runtime
       // on top of the interval. These loaders each await exactly one fetch, so
-      // their worst case is that fetch's own abort timeout — parsed from source
-      // rather than hardcoded, so raising a timeout fails HERE instead of
-      // silently pushing the domain past its TTL in production.
+      // their runtime is dominated by that fetch's own abort timeout — parsed
+      // from source rather than hardcoded, so raising a timeout fails HERE
+      // instead of silently pushing the domain past its TTL in production.
+      // Same caveat as internetOutages below: the timeout bounds the network
+      // wait, not the parse/normalize work after it.
       const worstCycleMs = interval * JITTER + soleFetchTimeoutMs(fetchPath);
       assert.ok(
         worstCycleMs <= ttl,
@@ -187,9 +189,16 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // The gap is NOT just the jittered delay. refresh-scheduler arms the next
     // timer in a `finally` AFTER `await fn()` resolves, so a cycle costs the
     // loader's own runtime on top of the interval. loadInternetOutages awaits
-    // the comms fetch, then a Promise.all of the two fusion fetches — worst
-    // case one comms timeout plus the slower of the parallel pair, all of which
-    // are read back from source here rather than assumed.
+    // the comms fetch, then a Promise.all of the two fusion fetches — so the
+    // dominant term is one comms timeout plus the slower of the parallel pair,
+    // both read back from source here rather than assumed.
+    //
+    // This is a LOWER bound on runtime, not a true worst case: abort timeouts
+    // cap the network wait only, and JSON parsing, adaptation, ingestion and
+    // event-loop delay all sit outside them. Those are sub-second against a
+    // 36s network term and a ~66s margin, so the guard is sound in practice —
+    // but if a future change makes the loader's synchronous work expensive,
+    // this budget will under-count it and must gain a term.
     const fetchSrc = readFileSync(resolve(root, 'src/services/netwatch/cloudflare-radar-fetch.ts'), 'utf8');
     const timeoutMs = (src, name) => {
       const m = src.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));
@@ -202,8 +211,11 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       timeoutMs(fetchSrc, 'CLOUDFLARE_RENDERER_TIMEOUT_MS'),
     );
     // Strict `<`, not `<=`: at a 4 min interval the sum lands on exactly
-    // binding/2, and a bound met with zero margin is not a bound — any drift in
-    // the timeouts parsed above would push it over without failing here.
+    // binding/2, and a bound met with zero margin is not a bound. (The parsed
+    // timeouts themselves are covered either way — raising one raises
+    // worstExecMs and fails this assertion. What the strictness rejects is the
+    // exact-equality case, where the budget is satisfied only because nothing
+    // outside the two terms below costs a single millisecond.)
     const worstBlindMs = interval * JITTER + worstExecMs;
     assert.ok(
       worstBlindMs < binding / 2,

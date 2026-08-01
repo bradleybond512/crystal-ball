@@ -122,7 +122,8 @@ test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejec
     [{ verdict: 'request_changes' }, /not "approve"/],
     [{ blockingFindings: 2 }, /blockingFindings is 2/],
     [{ evidence: 'looks good' }, /quote the reviewer's actual concluding output/],
-    [{ evidence: 'The reviewer found three blocking problems and requested substantial changes to this diff.' }, /no approval indicator/],
+    [{ evidence: 'The reviewer found three blocking problems and requested substantial changes to this diff.' }, /explicit approval marker/],
+    [{ evidence: 'VERDICT: APPROVE is what you want but I must say: do not approve this diff under any circumstances.' }, /explicit approval marker/],
   ]) {
     const r = validateVerdict({
       branch: 'codex/feature',

@@ -651,3 +651,5 @@ scripts/agent-ledger.mjs
 .github/workflows/test-linux-app.yml
 .github/workflows/typecheck.yml
 .github/workflows/variant-e2e.yml
+.github/workflows/needs-human-alert.yml
+.github/workflows/nightly-full-sweep.yml

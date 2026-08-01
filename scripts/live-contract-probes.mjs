@@ -37,8 +37,13 @@ const PROBES = [
     url: 'https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=10&minmag=2',
     validate(j) {
       const p = [];
-      if (!Array.isArray(j.features)) p.push('features is not an array');
-      else if (j.features.length === 0) p.push('zero M2+ events (globally implausible)');
+      if (!Array.isArray(j.features)) return ['features is not an array'];
+      if (j.features.length === 0) return ['zero M2+ events (globally implausible)'];
+      // Live-probed 2026-08-01: properties carry mag/time/lat/lon directly.
+      const f = j.features[0].properties ?? {};
+      if (typeof f.mag !== 'number') p.push('features[0].properties.mag is not a number');
+      if (typeof f.time !== 'string') p.push('features[0].properties.time is not a string');
+      if (typeof f.lat !== 'number' || typeof f.lon !== 'number') p.push('features[0].properties.lat/lon not numeric');
       return p;
     },
   },

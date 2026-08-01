@@ -119,6 +119,9 @@ function main() {
     git(['checkout', 'HEAD', '--', ...files]);
   }
   const redFails = Object.values(red).reduce((a, r) => a + r.fail, 0);
+  // A crashed suite proves the code is load-bearing, not that any assertion
+  // observed the behavior red. Demand at least one non-crash assertion red.
+  const behavioralReds = Object.values(red).filter((r) => !r.crashed).reduce((a, r) => a + r.fail, 0);
   const after = shasums(files);
   for (const f of files) {
     if (before[f] !== after[f]) throw new Error(`restore mismatch on ${f} — DO NOT TRUST THIS TREE; re-checkout.`);
@@ -128,13 +131,18 @@ function main() {
     console.error('[mutation-proof] FAILED: the suite stayed green without the fix — the tests do not guard this change.');
     process.exit(1);
   }
+  if (behavioralReds === 0) {
+    console.error('[mutation-proof] FAILED: only import/startup crashes went red — no test assertion observed the behavior. Scope --tests to suites that run against the mutated code.');
+    process.exit(1);
+  }
 
   const artifact = {
     commit,
     files,
     tests,
     green: Object.fromEntries(Object.entries(green).map(([k, v]) => [k, `${v.pass} pass / ${v.fail} fail`])),
-    red: Object.fromEntries(Object.entries(red).map(([k, v]) => [k, `${v.pass} pass / ${v.fail} fail`])),
+    red: Object.fromEntries(Object.entries(red).map(([k, v]) => [k, `${v.pass} pass / ${v.fail} fail${v.crashed ? ' (CRASH — not behavioral evidence)' : ''}`])),
+    behavioralReds,
     restoredChecksumsVerified: true,
     provedAt: new Date().toISOString(),
   };

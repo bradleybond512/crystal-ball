@@ -12,7 +12,7 @@ import { aggregate } from '../scripts/agent-ledger.mjs';
 
 const LIVE = {
   'usgs-earthquakes': '{"features":[{"properties":{"mag":1.83},"geometry":{"coordinates":[-155.24,19.31,32]}}]}',
-  'emsc-earthquakes': '{"features":[{},{},{}]}',
+  'emsc-earthquakes': '{"features":[{"properties":{"mag":3,"time":"2026-08-01T03:54:30.0Z","lat":32.4,"lon":130.5}}]}',
   'coingecko-btc': '{"bitcoin":{"usd":63005}}',
   'coinbase-btc': '{"data":{"amount":"62993.975","base":"BTC","currency":"USD"}}',
   'frankfurter-usd': `{"base":"USD","rates":{${['EUR', ...Array.from({ length: 25 }, (_, i) => `C${i}`)].map((c) => `"${c}":0.87`).join(',')}}}`,
@@ -34,6 +34,8 @@ test('validators reject the documented drift classes', () => {
   assert.ok(runValidator(byId['usgs-earthquakes'], '{"features":[]}').length > 0);
   // Renamed/missing field.
   assert.ok(runValidator(byId['coingecko-btc'], '{"bitcoin":{}}').length > 0);
+  // Rows present but unusable (empty objects) must not read as healthy.
+  assert.ok(runValidator(byId['emsc-earthquakes'], '{"features":[{},{},{}]}').length > 0);
   // Error carried inside a 200 body.
   assert.ok(runValidator(byId['open-er-api-usd'], '{"result":"error","rates":{}}').length > 0);
   // Shape drift: rates degraded to an array/string must not fail open.

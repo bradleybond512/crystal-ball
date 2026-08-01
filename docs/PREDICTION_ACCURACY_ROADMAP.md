@@ -934,10 +934,40 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 24 unit tests in
+- 35 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit).
+
+Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
+Every item below is a way the first cut would have reported PASS on a benchmark
+that had stopped measuring anything:
+
+- **Corpus identity is a content digest, not three counts.**
+  `goldenCorpusDigest()` (FNV-1a over every observation field, every planted
+  coupling, every true-pair key, every decoy id) — timestamps, domains and
+  truth labels can all be edited while stream / observation / coupling counts
+  hold steady, which is how an easier corpus passes as an improvement.
+- **Fails closed on non-finite numbers.** `NaN > tolerance` is false, so a
+  missing baseline field or a corrupt report used to satisfy every directional
+  check. Both sides of every gated metric are now validated finite first.
+  `cappedZ` likewise throws on `NaN` / `−Infinity` instead of mapping them to
+  the cap.
+- **Usefulness is gated, not only blast radius.** A pipeline that emits zero
+  learned rules has zero false positives and zero pair volume — perfect on
+  every "lower is better" gate, and dead. `causalLearnedRuleCount` and
+  `meanTruePairConfidence` are gated against shrink, so neither the rule
+  pipeline nor the confidence kernel can quietly disappear.
+- **Discrete false-edge growth is gated at zero.** 22 → 24 significant edges
+  moves precision 0.2273 → 0.2083, inside the 0.02 ratio tolerance; on a
+  deterministic corpus that is still two new false edges.
+- **A perfect miner scores as an improvement.** Zero false edges makes
+  evidence separation `null`; coercing it to 0 reported an 8.49 regression for
+  achieving exactly what ACC-502..504 exist to achieve.
+- **Pair precision divides by DISTINCT pairs.** Two legitimate rules matching
+  one planted pair inflated the denominator without the numerator.
+- **`--json` emits only JSON on stdout** — the verdict goes to stderr; exit
+  codes are unchanged.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

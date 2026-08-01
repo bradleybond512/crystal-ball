@@ -43,9 +43,11 @@ independent review, and prepare the completion report.
 4. `scripts/agentic-validate.sh` supplies a repeatable local completion gate. It
    runs lint, typecheck, secrets, docs, and build — no tests of its own — so it
    refuses to run until you name the targeted test scripts via `--tests`, or state
-   why none apply via `--no-tests "<reason>"`. `docs:check` runs advisory: it flags
-   PRs missing a CHANGELOG entry, but CHANGELOG entries are written at release time
-   by `npm run release:prepare`, so it is red on a pristine `main` between releases.
+   why none apply via `--no-tests "<reason>"`. `docs:check` stays blocking for
+   README count drift and `docs/API_KEYS.md` coverage — no CI workflow runs it, so
+   this gate is their only enforcement. Its "PR #N not in CHANGELOG" backlog is
+   demoted to advisory: nothing writes those entries automatically, so it stood 10
+   deep on a pristine `main` and failed every branch for work the branch did not do.
    A gate that fails before you touch anything teaches agents to ignore it.
 5. Existing GitHub required checks remain the final merge authority.
 

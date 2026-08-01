@@ -208,13 +208,22 @@ const apiKeysIssues = checkApiKeysDocs();
 const changelogIssues = checkChangelog();
 const { categories = [], hints = [] } = detectChangedCategories();
 
-const allIssues = [...readmeIssues, ...apiKeysIssues, ...changelogIssues];
+// The CHANGELOG check flags every merged PR whose number is absent from
+// CHANGELOG.md. Nothing writes those entries automatically — `release:prepare`
+// does not touch CHANGELOG.md — so the backlog belongs to whoever merged those
+// PRs, not to the branch running this check, and it was 10 deep on a pristine
+// `main`. `--changelog-advisory` still reports it but keeps it out of the exit
+// code, so the structural checks below stay blocking on their own merits.
+const changelogAdvisory = process.argv.includes('--changelog-advisory');
+const advisoryIssues = changelogAdvisory ? changelogIssues : [];
+const allIssues = [...readmeIssues, ...apiKeysIssues, ...(changelogAdvisory ? [] : changelogIssues)];
 const needsUpdate = allIssues.length > 0;
 
 const result = {
   needsUpdate,
   staleCount: allIssues.length,
   issues: allIssues,
+  advisoryIssues,
   changedCategories: categories,
   hints,
   summary: needsUpdate
@@ -230,6 +239,10 @@ if (process.argv.includes('--json')) {
     for (const issue of allIssues) console.log(`  - ${issue}`);
   } else {
     console.log('[docs:check] Documentation appears fresh.');
+  }
+  if (advisoryIssues.length > 0) {
+    console.log('[docs:check] Advisory (not blocking) — CHANGELOG entries owed by earlier merges:');
+    for (const issue of advisoryIssues) console.log(`  - ${issue}`);
   }
   if (hints.length > 0) {
     console.log('[docs:check] Hints from recent changes:');

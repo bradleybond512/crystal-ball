@@ -117,8 +117,9 @@ For Standard and High Assurance work:
   phantom vote corrupts the corroboration count itself. Reference implementations:
   `kpVote()` in `spaceweather/kp-fusion-observations.ts`, `tempVote()` in
   `weather/weather-fusion-observations.ts`. Deliberate inversions must say so at the call
-  site and explain why (see `netwatch/outage-fusion-observations.ts`, where a quiet
-  internet is a real observation).
+  site and explain why — see the `recordDomainObservations('ioda', ...)` call in
+  `src/app/data-loader.ts`, where `ok` comes from the fetch precisely because an internet
+  with no outages anywhere is a real, healthy observation.
 - **Filter untrusted external fields with allowlists, never denylists.** `level !== 'normal'`
   admits `undefined`, a renamed level, and a typo as real observations; `LEVELS[value]`
   admits only what you have seen.

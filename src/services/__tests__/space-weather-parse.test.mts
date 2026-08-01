@@ -6,6 +6,7 @@ import {
   parseKpFeed,
   parseSolarWindFeed,
   parseXrayClass,
+  toUtcIsoTag,
 } from '../space-weather-parse.ts';
 
 // Every fixture below is the REAL payload shape, captured live 2026-07-30/31
@@ -52,27 +53,70 @@ test('parseKpFeed skips unusable rows without discarding the payload', () => {
   ]), 3.33);
 });
 
-test('parseKpFeed resolves the zone-less time_tag as UTC in any host timezone', () => {
-  // Without the stamped Z, Date.parse reads the tag as LOCAL time, so hosts in
-  // different zones order the bins differently and pick different "newest".
-  const spread = [
-    { time_tag: '2026-07-30T21:00:00', Kp: 1 },
-    { time_tag: '2026-07-30T09:00:00', Kp: 7 },
-  ];
+function inTimezone<T>(tz: string, fn: () => T): T {
   const original = process.env.TZ;
   try {
-    process.env.TZ = 'UTC';
-    const utc = parseKpFeed(spread);
-    process.env.TZ = 'America/Chicago';
-    const chicago = parseKpFeed(spread);
-    process.env.TZ = 'Asia/Tokyo';
-    const tokyo = parseKpFeed(spread);
-    assert.equal(utc, 1, 'newest bin wins');
-    assert.equal(chicago, utc, 'the answer must not depend on where the machine is');
-    assert.equal(tokyo, utc);
+    process.env.TZ = tz;
+    return fn();
   } finally {
     if (original === undefined) delete process.env.TZ;
     else process.env.TZ = original;
+  }
+}
+
+test('toUtcIsoTag stamps a zone-less tag and leaves an explicit zone alone', () => {
+  // Asserted on the string, so it holds in every host timezone. A test that
+  // only compared PARSED instants would agree with the buggy implementation on
+  // a UTC runner and fail only off-UTC — i.e. never in CI.
+  assert.equal(toUtcIsoTag('2026-07-30T21:00:00'), '2026-07-30T21:00:00Z');
+  assert.equal(toUtcIsoTag('2026-07-30 19:03:19.350'), '2026-07-30T19:03:19.350Z');
+  assert.equal(toUtcIsoTag('2026-07-30T21:00:00Z'), '2026-07-30T21:00:00Z');
+  assert.equal(toUtcIsoTag('2026-07-30T21:00:00+02:00'), '2026-07-30T21:00:00+02:00');
+  assert.equal(toUtcIsoTag('2026-07-30'), '2026-07-30', 'a bare date + Z parses to NaN');
+  assert.equal(toUtcIsoTag(null), '');
+});
+
+test('parseKpFeed resolves a zone-less time_tag as UTC in any host timezone', () => {
+  // The two bins are deliberately stamped DIFFERENTLY: one zone-less, one with
+  // an explicit Z. Reading the zone-less tag as local shifts only that bin, so
+  // west-of-UTC hosts flip which bin is newest. The previous version of this
+  // test shifted both tags equally, so the ordering never changed and it could
+  // not fail.
+  const spread = [
+    { time_tag: '2026-07-30T21:00:00', Kp: 1 },   // 21:00Z when read correctly
+    { time_tag: '2026-07-30T23:00:00Z', Kp: 7 },  // always 23:00Z — the newest
+  ];
+  // Guard: if TZ mutation stops taking effect, the assertions below become
+  // vacuous, so prove the runtime is actually honouring it first.
+  const shifts = new Set(['UTC', 'America/Chicago', 'Asia/Tokyo']
+    .map((tz) => inTimezone(tz, () => new Date('2026-07-30T21:00:00').getTime())));
+  assert.equal(shifts.size, 3, 'TZ mutation must actually move naïve parsing');
+
+  assert.equal(inTimezone('UTC', () => parseKpFeed(spread)), 7);
+  // Chicago is UTC-5: the un-stamped tag would land at 02:00Z the NEXT day and
+  // win, so a regression here returns 1.
+  assert.equal(inTimezone('America/Chicago', () => parseKpFeed(spread)), 7,
+    'the answer must not depend on where the machine is');
+  assert.equal(inTimezone('Asia/Tokyo', () => parseKpFeed(spread)), 7);
+});
+
+test('parseKpFeed rejects physically impossible Kp values', () => {
+  // Kp is a 0–9 scale. A corrupt 999 would trip the Kp≥5 storm alerting
+  // downstream, so it is dropped rather than rendered as fact.
+  assert.equal(parseKpFeed([{ time_tag: '2026-07-30T21:00:00', Kp: 999 }]), null);
+  assert.equal(parseKpFeed([{ time_tag: '2026-07-30T21:00:00', Kp: -1 }]), null);
+  assert.equal(parseKpFeed([
+    { time_tag: '2026-07-30T21:00:00', Kp: 999 },
+    { time_tag: '2026-07-30T18:00:00', Kp: 4 },
+  ]), 4, 'a corrupt newest row falls back to the newest sane one');
+});
+
+test('parseKpFeed rejects non-numeric types that Number() would coerce to 0', () => {
+  // Number(false), Number([]) and Number('   ') are all 0 — a valid-looking
+  // quiet reading. Type-gating, not coercion, is what keeps these out.
+  for (const bogus of [false, [], '   ', {}, [] as unknown]) {
+    assert.equal(parseKpFeed([{ time_tag: '2026-07-30T21:00:00', Kp: bogus }]), null,
+      `Kp: ${JSON.stringify(bogus)} must not read as 0`);
   }
 });
 
@@ -97,7 +141,7 @@ test('parseSolarWindFeed pulls speed, density and bz from the newest row', () =>
   assert.equal(wind.speed, 321.6);
   assert.equal(wind.density, 2.75);
   assert.equal(wind.bz, 3.22);
-  assert.equal(wind.observedAt, '2026-07-31T01:17:00Z');
+  assert.equal(wind.observedAt, '2026-07-31T01:17:00.000Z');
 });
 
 test('parseSolarWindFeed resolves columns by NAME, surviving a reordered header', () => {
@@ -123,7 +167,53 @@ test('parseSolarWindFeed falls back per-field when the trailing row has gaps', (
   assert.equal(wind.bz, 3.22, 'newest bz still wins');
   assert.equal(wind.speed, 321.9, 'a gap in the newest row must not null the whole panel');
   assert.equal(wind.density, 2.58);
-  assert.equal(wind.observedAt, '2026-07-31T01:17:00Z', 'timestamp comes from the newest contributing row');
+  assert.equal(wind.observedAt, '2026-07-31T01:17:00.000Z', 'timestamp comes from the newest contributing row');
+});
+
+test('parseSolarWindFeed orders rows by timestamp, not by array position', () => {
+  const outOfOrder = [
+    ['time_tag', 'speed', 'density', 'bz'],
+    ['2026-07-31T01:17:00Z', 321.6, 2.75, 3.22],
+    ['2026-07-31T01:15:00Z', 321.9, 2.58, 3.13],
+  ];
+  const wind = parseSolarWindFeed(outOfOrder);
+  assert.equal(wind.speed, 321.6, 'newest by clock wins even when it is not last');
+  assert.equal(wind.observedAt, '2026-07-31T01:17:00.000Z');
+});
+
+test('parseSolarWindFeed never reports an unparseable tag as observedAt', () => {
+  // Emitting observedAt: "not-a-date" hands every downstream staleness check an
+  // Invalid Date, which silently compares false against every threshold.
+  const bad = [
+    ['time_tag', 'speed', 'density', 'bz'],
+    ['not-a-date', 321.6, 2.75, 3.22],
+  ];
+  const wind = parseSolarWindFeed(bad);
+  assert.equal(wind.speed, 321.6, 'the readings are still usable');
+  assert.equal(wind.observedAt, null, 'but an undatable row cannot supply the timestamp');
+});
+
+test('parseSolarWindFeed drops physically impossible readings per field', () => {
+  const corrupt = [
+    ['time_tag', 'speed', 'density', 'bz'],
+    ['2026-07-31T01:15:00Z', 321.9, 2.58, 3.13],
+    ['2026-07-31T01:17:00Z', -9999, 1e9, 3.22],
+  ];
+  const wind = parseSolarWindFeed(corrupt);
+  assert.equal(wind.bz, 3.22, 'the sane field in the newest row is kept');
+  assert.equal(wind.speed, 321.9, 'a negative speed falls back to the prior row');
+  assert.equal(wind.density, 2.58, 'so does an impossible density');
+});
+
+test('parseSolarWindFeed rejects non-numeric cells rather than coercing them to 0', () => {
+  const bogus = [
+    ['time_tag', 'speed', 'density', 'bz'],
+    ['2026-07-31T01:17:00Z', false, '   ', []],
+  ];
+  const wind = parseSolarWindFeed(bogus);
+  assert.equal(wind.speed, null);
+  assert.equal(wind.density, null);
+  assert.equal(wind.bz, null);
 });
 
 test('parseSolarWindFeed returns all-null on malformed or header-only payloads', () => {
@@ -202,8 +292,11 @@ test('parseAlerts maps every keyword SWPC actually emits', () => {
     ['EXTENDED WARNING: Geomagnetic K-index of 5 expected', 'warning'],
     ['WATCH: Geomagnetic Storm Category G1 Predicted', 'watch'],
     ['SUMMARY: 10cm Radio Burst', 'summary'],
-    // An all-clear must never read as an active warning.
+    // Both all-clears must never read as active.
     ['CANCEL WARNING: Geomagnetic K-index of 4 expected', 'summary'],
+    ['CANCEL ALERT: Proton Event 100MeV Integral Flux exceeded 1pfu', 'summary'],
+    // A continuation is still an active alert.
+    ['CONTINUED ALERT: Electron 2MeV Integral Flux exceeded 1,000pfu', 'alert'],
   ];
   for (const [body, expected] of cases) {
     const [alert] = parseAlerts([{ issue_datetime: ALERT_AT, message: swpcMessage(body) }], NOW);
@@ -228,6 +321,17 @@ test('parseAlerts drops rows it cannot place in time rather than showing them', 
   assert.deepEqual(parseAlerts([{ issue_datetime: ALERT_AT, message: '' }], NOW), []);
   assert.deepEqual(parseAlerts(null, NOW), []);
   assert.deepEqual(parseAlerts([null, 'nope', 42], NOW), []);
+});
+
+test('parseAlerts drops far-future stamps but tolerates small clock skew', () => {
+  // NOW is 2026-07-30T20:00:00Z. A future-stamped alert would sort to the top
+  // and render "in 3 hours"; a few minutes of drift between this host and SWPC
+  // is normal and must NOT drop the newest alerts.
+  const far = parseAlerts([{ issue_datetime: '2026-07-30 23:00:00.000', message: swpcMessage('ALERT: from the future') }], NOW);
+  assert.deepEqual(far, [], 'three hours ahead is corrupt, not skew');
+
+  const skewed = parseAlerts([{ issue_datetime: '2026-07-30 20:02:00.000', message: swpcMessage('ALERT: two minutes ahead') }], NOW);
+  assert.equal(skewed.length, 1, 'a slow local clock must not hide brand-new alerts');
 });
 
 test('parseAlerts caps the returned list', () => {

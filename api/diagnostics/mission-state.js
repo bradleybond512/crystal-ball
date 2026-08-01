@@ -41,7 +41,10 @@ const CRITICAL_FEEDS = [
   {
     id: 'spaceweather-noaa',
     label: 'NOAA Space Weather',
-    url: 'https://services.swpc.noaa.gov/json/solar-wind/mag-5-minute.json',
+    // solar-wind/mag-5-minute.json was retired upstream and 404s. Because the
+    // probe below counted any sub-500 status as reachable, this feed reported
+    // NOMINAL for as long as the URL has been dead.
+    url: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
   },
 ];
 
@@ -59,7 +62,12 @@ async function probeOne(feed) {
       method: 'HEAD',
       signal: AbortSignal.timeout(5000),
     });
-    return { id: feed.id, label: feed.label, reachable: r.ok || r.status < 500 };
+    // A missing resource is NOT a reachable feed — 404/410 is exactly how a
+    // retired upstream product presents, and counting it as reachable is what
+    // hid the dead solar-wind URL. Other 4xx (401/403/405/429) still count:
+    // several of these hosts refuse HEAD or require a key while being healthy.
+    const gone = r.status === 404 || r.status === 410;
+    return { id: feed.id, label: feed.label, reachable: !gone && (r.ok || r.status < 500) };
   } catch {
     return { id: feed.id, label: feed.label, reachable: false };
   }

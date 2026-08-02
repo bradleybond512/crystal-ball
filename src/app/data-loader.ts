@@ -4342,8 +4342,13 @@ export class DataLoaderManager implements AppModule {
    * which is wrong twice over. `loadNatural` runs hourly against a 10 min
    * freshnessTtlMs, so the provider read `stale` for ~50 of every 60 min with
    * no upstream fault; and it is gated on `mapLayers.natural`, so turning a MAP
-   * LAYER off silently removed a fusion vote — the domain then ran on EMSC +
-   * GEOFON with no indication that the primary source had been switched off.
+   * LAYER off silently stopped refreshing a fusion vote. Not removed it —
+   * observations already recorded stay in the store and keep counting their
+   * independence group. What toggling the layer did was freeze them: the rows
+   * stopped advancing, the provider aged past its TTL into `stale`, and the
+   * freshness term in source-fusion decayed toward zero while the domain went
+   * on reporting USGS as one of its sources. A frozen vote with no upstream
+   * fault and no UI signal, which is the harder failure to notice.
    *
    * It also could not have been fixed by giving `loadNatural` a faster
    * interval. That path calls `fetchEarthquakes()`, which is cached twice over
@@ -4362,10 +4367,12 @@ export class DataLoaderManager implements AppModule {
  // ok comes from the ADAPTER's output, not the raw rows: a 200 whose rows
  // the adapter all drops is a format change, and recording it healthy would
  // put a phantom vote behind "verified by N independent sources". Empty is
- // therefore failure here — the route reads `all_hour` with NO magnitude
- // floor, where a genuinely empty hour does not occur, and every non-live
- // outcome (error envelope, degraded/fallback payload, malformed body)
- // already throws in the fetch. This is the OPPOSITE reading from
+ // therefore failure here — the narrowest window either implementation reads
+ // is the sidecar's `all_hour` with NO magnitude floor, and neither an empty
+ // seismic hour nor an empty M2.5+ day (the web route's window) occurs. Every
+ // non-live outcome (error envelope, cache replay, unrecognized source,
+ // malformed body) already throws in the fetch; a live all_day FALLBACK does
+ // not, and is parsed normally. This is the OPPOSITE reading from
  // outage-fusion-observations, where zero rows is a real observation; the
  // difference is that a quiet internet is common and a silent planet is not.
  const observations = usgsEventsToObservations(events);

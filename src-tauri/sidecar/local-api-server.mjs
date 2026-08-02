@@ -12651,8 +12651,13 @@ async function dispatch(requestUrl, req, routes, context) {
           source: result.source,
         };
       }).filter(Boolean);
-      setCached('usgs-earthquakes', events, 60_000);
-      return json({ events, degraded: result.degraded, source: result.source });
+      // Cache the ENVELOPE, not the bare array: a hit and a miss have to answer
+      // with the same shape. It cached `events` alone, so for the 60 s after
+      // each miss the route replied with a top-level array and any consumer
+      // reading `.events` / `.source` off the body saw undefined.
+      const payload = { events, degraded: result.degraded, source: result.source };
+      setCached('usgs-earthquakes', payload, 60_000);
+      return json(payload);
     } catch (error) {
       trackFailure('usgs', error);
       return json({ events: [], error: String(error.message ?? error), degraded: true }, 200);

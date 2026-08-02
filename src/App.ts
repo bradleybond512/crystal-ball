@@ -668,16 +668,17 @@ export class App {
  { name: 'natural', fn: () => this.dataLoader.loadNatural(), intervalMs: 60 * 60 * 1000, condition: () => this.state.mapLayers.natural },
  // The earthquakes fusion domain's three votes, all on the same cadence.
  // USGS is here rather than riding on `natural` above because that task is
- // hourly AND gated on a map layer, so the domain's primary source went
- // stale between ticks and vanished entirely when the layer was toggled off
- // (see loadUsgsSeismic for why a faster `natural` would not have fixed it).
+ // hourly AND gated on a map layer, so the domain's primary source went stale
+ // between ticks and stopped advancing altogether when the layer was toggled
+ // off — frozen, not removed; see loadUsgsSeismic for both that and for why a
+ // faster `natural` would not have fixed it either.
  // Same interval as its two siblings, because what these snapshots are for
  // is corroborating RECENT quakes. Matching is on event origin time (+/-120 s,
  // 50 km), so an old snapshot still matches old quakes fine — but a quake
- // that happened ten minutes ago is in EMSC's snapshot and simply absent from
- // an hour-old USGS one, and the domain reports a single source for the event
- // anyone is actually looking at. Equal cadences keep the three lists covering
- // the same tail.
+ // that happened ten minutes ago is in EMSC's and GEOFON's snapshots and
+ // simply absent from an hour-old USGS one, so the event anyone is actually
+ // looking at corroborates across two sources instead of three. Equal cadences
+ // keep the three lists covering the same tail.
  // All three providers declare
  // freshnessTtlMs: 10 min, and provider-health marks a provider `stale` once
  // now - lastSuccessAt exceeds it — so an unscheduled loader leaves the
@@ -698,7 +699,9 @@ export class App {
  // the user chose nothing and the domain went stale anyway.
  // All three routes are already sidecar-cached on a stable key (usgs 60 s,
  // emsc 2 min, geofon 5 min), so the cadence costs at most one upstream
- // request per tick.
+ // request per tick per route — except a USGS tick that times out on all_hour
+ // and retries all_day, which issues two. That is the failure path, not the
+ // steady state, and it is bounded at two.
  // usgsSeismic carries no variant condition, unlike its two siblings: tech
  // and finance ship the natural map layer, so `loadNatural` recorded this
  // provider for them before the split. The enclosing branch already excludes

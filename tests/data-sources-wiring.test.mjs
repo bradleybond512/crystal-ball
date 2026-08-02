@@ -116,14 +116,19 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     assert.ok(m, `${taskName} is not registered with the refresh scheduler in App.ts`);
     // Some entries point at the shared REFRESH_INTERVALS table rather than an
     // inline literal; resolve through it so the guard reads the real number.
-    const shared = m[1].trim().match(/^REFRESH_INTERVALS\.(\w+)/);
-    if (shared) {
+    // Substituted rather than returned outright: entries of the form
+    // `REFRESH_INTERVALS.markets * 2` must keep their multiplier, and an
+    // early return on the table lookup would silently halve the modeled cycle.
+    // When intervalMs is the LAST property the capture runs to the entry's
+    // closing brace (`REFRESH_INTERVALS.markets }`), so trim that off before
+    // parsing. The comma that bounds the capture is then the list separator.
+    const expr = m[1].trim().replace(/\s*\}\s*$/, '').replace(/REFRESH_INTERVALS\.(\w+)/g, (_, key) => {
       const baseSrc = readFileSync(resolve(root, 'src/config/variants/base.ts'), 'utf8');
-      const entry = baseSrc.match(new RegExp(`\\b${shared[1]}:\\s*([^,]+),`));
-      assert.ok(entry, `REFRESH_INTERVALS.${shared[1]} is not defined in variants/base.ts`);
-      return product(entry[1]);
-    }
-    return product(m[1]);
+      const entry = baseSrc.match(new RegExp(`\\b${key}:\\s*([^,]+),`));
+      assert.ok(entry, `REFRESH_INTERVALS.${key} is not defined in variants/base.ts`);
+      return String(product(entry[1]));
+    });
+    return product(expr);
   };
 
   const registryTtlMs = (providerId) => {
@@ -155,6 +160,7 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
   for (const [task, provider, fetchPath] of [
     ['emscSeismic', 'emsc-seismic', 'src/services/emsc-seismic.ts'],
     ['geofonSeismic', 'geofon-seismic', 'src/services/geofon-seismic.ts'],
+    ['usgsSeismic', 'usgs-earthquakes', 'src/services/earthquake/usgs-fusion-fetch.ts'],
   ]) {
     it(`${task} refreshes inside the ${provider} freshness TTL`, () => {
       const interval = schedulerIntervalMs(task);
@@ -180,36 +186,45 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     });
   }
 
-  it('usgsSeismic refreshes inside the usgs-earthquakes freshness TTL', () => {
-    // Separate from the loop above because this loader has no source-visible
-    // fetch timeout to add: fetchEarthquakes goes through the generated client
-    // and a circuit breaker, so there is no `AbortSignal.timeout(N)` literal to
-    // parse. The budget therefore models the jittered interval ONLY, and the
-    // remaining slack is what covers the request itself — which is why the
-    // assertion below is strict and why the interval is 8 min against a 10 min
-    // TTL rather than something closer.
-    const interval = schedulerIntervalMs('usgsSeismic');
-    const ttl = registryTtlMs('usgs-earthquakes');
-    assert.ok(
-      interval * JITTER < ttl,
-      `usgsSeismic runs every ${interval / 60000} min (${(interval * JITTER) / 60000} min jittered) ` +
-      `against a ${ttl / 60000} min TTL, leaving nothing for the fetch itself`,
+  /** Body of a `async name()` method on DataLoader, up to the next sibling method. */
+  const dataLoaderMethod = (name) => {
+    const start = dataLoaderSrc.indexOf(`async ${name}(`);
+    assert.ok(start > 0, `could not locate ${name} in data-loader.ts`);
+    const end = dataLoaderSrc.indexOf('\n  async ', start + 1);
+    assert.ok(end > start, `could not locate the method after ${name}`);
+    return dataLoaderSrc.slice(start, end);
+  };
+
+  // Quote style and line breaks are formatter territory, so the negative guard
+  // below must not be evadable by either. A literal substring check was: the
+  // record could come back as "usgs-earthquakes" or wrapped across lines and
+  // the assertion would still pass.
+  const RECORDS_USGS = /recordDomainObservations\(\s*['"]usgs-earthquakes['"]/;
+
+  it('the usgs-earthquakes vote is recorded on its own loader, from live rows', () => {
+    const body = dataLoaderMethod('loadUsgsSeismic');
+    // Split at the catch so the SUCCESS path is what gets asserted. Matching the
+    // whole method would have been satisfied by the catch-path
+    // `recordDomainObservations('usgs-earthquakes', [], false)` alone — i.e. a
+    // loader that never records a healthy vote would still have passed.
+    const catchAt = body.indexOf('} catch');
+    assert.ok(catchAt > 0, 'loadUsgsSeismic is expected to record a failure in a catch');
+    const tryBody = body.slice(0, catchAt);
+    assert.match(tryBody, RECORDS_USGS, 'loadUsgsSeismic must record the usgs-earthquakes vote on its success path');
+    assert.match(
+      tryBody,
+      /recordDomainObservations\(\s*['"]usgs-earthquakes['"],\s*observations,\s*observations\.length > 0\s*\)/,
+      'the ok flag must derive from the ADAPTER output: a 200 whose rows the adapter all drops is a ' +
+      'format change, and recording it healthy puts a phantom vote behind the corroboration count',
     );
+    assert.match(body.slice(catchAt), /recordDomainObservations\(\s*['"]usgs-earthquakes['"],\s*\[\],\s*false\s*\)/,
+      'a failed fetch must record a failing outcome, not go silent');
     // The fusion vote must NOT ride on `natural`: that task is hourly and gated
     // on a map layer, so recording there made a MAP TOGGLE silently remove a
     // provider. Pinned so the record cannot drift back.
-    assert.match(
-      dataLoaderSrc,
-      /async loadUsgsSeismic\(\)[\s\S]*?recordDomainObservations\('usgs-earthquakes'/,
-      'loadUsgsSeismic must own the usgs-earthquakes fusion record',
-    );
-    const naturalStart = dataLoaderSrc.indexOf('async loadNatural()');
-    assert.ok(naturalStart > 0, 'could not locate loadNatural');
-    const nextMethod = dataLoaderSrc.indexOf('\n  async ', naturalStart + 1);
-    assert.ok(nextMethod > naturalStart, 'could not locate the method after loadNatural');
-    const naturalBody = dataLoaderSrc.slice(naturalStart, nextMethod);
-    assert.ok(
-      !naturalBody.includes("recordDomainObservations('usgs-earthquakes'"),
+    assert.doesNotMatch(
+      dataLoaderMethod('loadNatural'),
+      RECORDS_USGS,
       'loadNatural must not record usgs-earthquakes: it reads through a 1-hour offline cache, ' +
       'so recording there stamps a fresh lastSuccessAt onto hour-old rows',
     );
@@ -221,17 +236,30 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // The binding contract is the TIGHTEST TTL across the fused set, since one
     // stale provider is enough to cost the domain a vote.
     const binding = Math.min(...priceProviders.map(registryTtlMs));
-    // Modeled as the jittered interval only. loadMarkets runs its panel phases
-    // before the fusion block, including up to 60 s of deliberate retry sleeps,
-    // so the real cycle is longer — the margin between this figure and the TTL
-    // is what absorbs that, and it is why the TTL is 12 min rather than 10.
-    // The cadence cannot be tightened instead: FMP's free tier is 250 req/day
-    // and 8 min already spends 180.
-    const modeledCycleMs = interval * JITTER;
+    // The panel phases that run BEFORE the fusion block contain deliberate
+    // fixed-length retry sleeps, so they are part of every cycle that retries
+    // and have to be paid for out of the budget. Parsed from the loader rather
+    // than hardcoded, so lengthening a sleep fails HERE instead of silently
+    // pushing the price providers past their TTL in production.
+    const marketsBody = dataLoaderMethod('loadMarkets');
+    const sleepMs = [...marketsBody.matchAll(/setTimeout\(r,\s*([0-9_]+)\)/g)]
+      .reduce((sum, m) => sum + Number(m[1].replace(/_/g, '')), 0);
+    assert.ok(sleepMs > 0, 'expected loadMarkets to still contain its retry sleeps');
+    const modeledCycleMs = interval * JITTER + sleepMs;
+    //
+    // SCOPE: this models the HEALTHY-PROCESS cycle — the jittered interval plus
+    // the sleeps the loader takes on itself. It does NOT model upstream latency:
+    // unlike the single-fetch seismic loaders above, six of the seven price
+    // fetches declare no AbortSignal.timeout, so there is no source-visible
+    // number to add and a hostile worst case (every one of the ~13 sequential
+    // awaits running to the platform's default request timeout) exceeds any
+    // TTL that would still be meaningful. That case going stale is CORRECT —
+    // the corroboration count should drop when the providers really are slow.
+    // What this pins is that the cadence itself never causes it.
     assert.ok(
-      modeledCycleMs + 60_000 < binding,
-      `markets runs every ${interval / 60000} min (${modeledCycleMs / 60000} min jittered, plus up to ` +
-      `1 min of in-loader retry sleeps) against a ${binding / 60000} min tightest TTL`,
+      modeledCycleMs < binding,
+      `markets runs every ${interval / 60000} min (${modeledCycleMs / 60000} min with jitter and ` +
+      `${sleepMs / 1000}s of in-loader retry sleeps) against a ${binding / 60000} min tightest TTL`,
     );
   });
 
@@ -240,9 +268,26 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     const aqProviders = ['open-meteo-aqi', 'openaq-v3', 'airnow', 'purpleair'];
     const binding = Math.min(...aqProviders.map(registryTtlMs));
     // All four are recorded from evaluateCompoundThreats, which loadAirQuality
-    // reaches through a trailing debounce — parsed from source rather than
-    // hardcoded, so lengthening the debounce fails HERE rather than pushing the
-    // domain past its TTL in production.
+    // reaches through a trailing debounce. The interval budget below is only
+    // meaningful while that chain is intact, so pin both links: without these,
+    // deleting the debounce callback from loadAirQuality would leave the four
+    // providers recorded at boot only and this test would still pass.
+    assert.match(
+      dataLoaderMethod('loadAirQuality'),
+      /scheduleCompoundThreatEvaluation\(\)/,
+      'loadAirQuality must trigger the compound-threat pass; that pass is where the four ' +
+      'air-quality providers record their fusion votes',
+    );
+    const compoundBody = dataLoaderMethod('evaluateCompoundThreats');
+    for (const provider of aqProviders) {
+      assert.match(
+        compoundBody,
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"]`),
+        `${provider} must record its vote from evaluateCompoundThreats for the airQuality cadence to reach it`,
+      );
+    }
+    // Debounce parsed from source rather than hardcoded, so lengthening it fails
+    // HERE rather than pushing the domain past its TTL in production.
     const debounceMatch = dataLoaderSrc.match(/private scheduleCompoundThreatEvaluation\(\)[\s\S]*?\}, ([0-9_]+)\);/);
     assert.ok(debounceMatch, 'could not read the compound-threat debounce out of data-loader.ts');
     const debounceMs = Number(debounceMatch[1].replace(/_/g, ''));

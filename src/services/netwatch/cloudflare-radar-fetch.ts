@@ -99,9 +99,13 @@ const IODA_FUSION_LIMIT = 5000;
  * Cloudflare's view can be up to one quantum old too. The two are the same
  * MAGNITUDE, not the same phase — IODA's window is aligned to the wall-clock
  * quantum while Cloudflare's fills whenever the first tick after an eviction
- * lands, so on any given tick either one may be the fresher of the pair. What
- * matters for corroboration is that neither races systematically ahead of the
- * other, so a disagreement is a real disagreement and not a phase artifact.
+ * lands, so on any given tick either one may be the fresher of the pair. That
+ * bounds the SYSTEMATIC error — neither source runs persistently ahead of the
+ * other, so a sustained disagreement is a real one. It does not eliminate the
+ * per-tick artifact: an onset landing between the two refreshes shows up in one
+ * view a quantum before the other, so a SINGLE-tick disagreement can still be
+ * pure phase. Nothing downstream currently distinguishes the two cases; the
+ * corroboration count treats both alike.
  *
  * None of this reaches the survival comms axis — that axis reads
  * `internet-outages.fetchIodaOutages()`, a separate limit=50 call on an

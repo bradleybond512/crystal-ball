@@ -2452,6 +2452,15 @@ function makeCorsHeaders(req) {
  'Access-Control-Allow-Origin': getSidecarCorsOrigin(req),
  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+ // The renderer runs at tauri://localhost and the sidecar at 127.0.0.1, so
+ // every call here is cross-origin — and `Date`/`Age` are NOT CORS-safelisted
+ // response headers, so without this they read back as null in the renderer.
+ // The fusion fetchers measure payload age against the SERVER's clock (see
+ // usgs-fusion-fetch.ts); denied those two headers they have only the browser
+ // clock, which a replay can hide behind. Both are non-sensitive by
+ // construction: they describe the response's own age, nothing about the
+ // requester.
+ 'Access-Control-Expose-Headers': 'Date, Age',
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };

@@ -25,26 +25,28 @@ const FEATURE = {
   properties: { mag: 5.2, magType: 'mww', place: 'off Chile', time: NOW - 60_000, url: 'https://x', tsunami: 0 },
 };
 
-/** `date` is the server's own clock; undefined stubs a response without it. */
-function stubFetch(body: unknown, ok = true, date?: string): () => void {
+/** Age is measured entirely from response headers, so every stub carries them. */
+interface Meta { date?: string | null; age?: string }
+
+function stubFetch(body: unknown, ok = true, meta: Meta = {}): () => void {
+  const date = meta.date === undefined ? new Date(NOW).toUTCString() : meta.date;
+  const headers: Record<string, string> = {};
+  if (date !== null) headers.date = date;
+  if (meta.age !== undefined) headers.age = meta.age;
   const original = globalThis.fetch;
   globalThis.fetch = (async () => ({
     ok,
     status: ok ? 200 : 503,
-    headers: new Headers(date ? { date } : {}),
+    headers: new Headers(headers),
     json: async () => body,
   })) as unknown as typeof globalThis.fetch;
   return () => { globalThis.fetch = original; };
 }
 
-async function run(
-  body: unknown,
-  now = NOW,
-  date?: string,
-): Promise<{ ok: boolean; count: number; message: string }> {
-  const restore = stubFetch(body, true, date);
+async function run(body: unknown, meta: Meta = {}): Promise<{ ok: boolean; count: number; message: string }> {
+  const restore = stubFetch(body, true, meta);
   try {
-    const events = await fetchUsgsSeismicForFusion(now);
+    const events = await fetchUsgsSeismicForFusion();
     return { ok: true, count: events.length, message: '' };
   } catch (error) {
     return { ok: false, count: 0, message: error instanceof Error ? error.message : String(error) };
@@ -99,33 +101,44 @@ test('accepts a payload inside the age cap', async () => {
   assert.equal(r.ok, true, `a legitimate cache hit must not be rejected: ${r.message}`);
 });
 
-test('measures age against the response Date header, not the browser clock', async () => {
-  // The two ends of the subtraction must come from one clock. Browser 10 min
-  // FAST: without the header the payload reads as 10 min old and the vote is
-  // lost, even though the server stamped it 5 s ago.
-  const skewedNow = NOW + 600_000;
-  const withoutHeader = await run({ events: [FLAT_ROW], source: 'primary', generatedAt: FRESH }, skewedNow);
-  assert.equal(withoutHeader.ok, false, 'no header leaves only the skewed browser clock');
-
-  const withHeader = await run(
-    { events: [FLAT_ROW], source: 'primary', generatedAt: FRESH },
-    skewedNow,
-    new Date(NOW).toUTCString(),
-  );
-  assert.equal(withHeader.ok, true, `the server's own clock must win: ${withHeader.message}`);
+test('refuses to age a payload with no server time reference', async () => {
+  // The browser clock is NOT a fallback. A slow client shrinks the computed
+  // age, so a genuine replay slides under the cap while the age stays
+  // positive — invisible to every later check. Unknowable fails closed.
+  const fresh = { events: [FLAT_ROW], source: 'primary', generatedAt: FRESH };
+  for (const date of [null, '', 'not-a-date']) {
+    const r = await run(fresh, { date });
+    assert.equal(r.ok, false, `no usable Date header must fail closed (date=${String(date)})`);
+    assert.match(r.message, /no server time reference/);
+  }
 });
 
-test('a slow browser clock cannot make a replay look fresh', async () => {
-  // Browser 10 min SLOW, no Date header: a 5 min old payload would otherwise
-  // subtract to a NEGATIVE age and sail past the staleness cap.
-  const r = await run({ events: [FLAT_ROW], source: 'primary', generatedAt: new Date(NOW - 300_000).toISOString() }, NOW - 600_000);
-  assert.equal(r.ok, false, 'a negative age is unestablishable, not extremely fresh');
-  assert.match(r.message, /clock skew/);
+test('honours Age: an intermediary replay is aged, not trusted for its Date', async () => {
+  // RFC 9111: a cache preserves the origin's Date and advances Age. A CDN
+  // replaying a 10 min old response reports Date unchanged, so Date alone
+  // computes a 5 s age and waves the replay through.
+  const fresh = { events: [FLAT_ROW], source: 'usgs.gov', generatedAt: FRESH };
+  const replayed = await run(fresh, { age: '600' });
+  assert.equal(replayed.ok, false, 'Date + Age is the instant the response was served');
+  assert.match(replayed.message, /stale replay/);
+
+  const direct = await run(fresh, { age: '0' });
+  assert.equal(direct.ok, true, `an uncached response carries Age: 0: ${direct.message}`);
 });
 
-test('tolerates sub-skew drift rather than failing on flight time', async () => {
-  const r = await run({ events: [FLAT_ROW], source: 'primary', generatedAt: new Date(NOW + 10_000).toISOString() }, NOW);
-  assert.equal(r.ok, true, `ordinary drift must not cost the vote: ${r.message}`);
+test('rejects a malformed Age rather than reading it as zero', async () => {
+  for (const age of ['-5', '1.5', 'abc', '600, 30']) {
+    const r = await run({ events: [FLAT_ROW], source: 'primary', generatedAt: FRESH }, { age });
+    assert.equal(r.ok, false, `a malformed Age is an unchecked shape (age=${age})`);
+    assert.match(r.message, /no server time reference/);
+  }
+});
+
+test('rejects timestamps the origin itself reports incoherently', async () => {
+  const ahead = new Date(NOW + 60_000).toISOString();
+  const r = await run({ events: [FLAT_ROW], source: 'primary', generatedAt: ahead });
+  assert.equal(r.ok, false, 'generatedAt after the response Date is not "extremely fresh"');
+  assert.match(r.message, /incoherent timestamps/);
 });
 
 test('rejects a payload whose age cannot be established', async () => {
@@ -160,6 +173,6 @@ test('rejects a malformed body', async () => {
 
 test('rejects a non-2xx response', async () => {
   const restore = stubFetch({ events: [FLAT_ROW], source: 'primary', generatedAt: FRESH }, false);
-  await assert.rejects(() => fetchUsgsSeismicForFusion(NOW), /503/);
+  await assert.rejects(() => fetchUsgsSeismicForFusion(), /503/);
   restore();
 });

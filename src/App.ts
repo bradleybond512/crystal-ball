@@ -758,8 +758,13 @@ export class App {
  // The limit=50 comms fetch early-returns from its own 10 min module cache
  // without touching the network, so it reaches IODA about once per expiry,
  // ~100-145/day. That one is NOT quantum-bounded — it builds an unsnapped
- // second-resolution key, so every expiry is an upstream miss — but its rate
- // is set by that 10 min module cache, not by this interval.
+ // second-resolution key, so every expiry is an upstream miss. Its rate is
+ // CAPPED by that 10 min module cache at <=144/day, but the cadence still
+ // moves it inside that cap: expiry is only noticed on a tick, so a slower
+ // interval means the expired cache waits longer before refetching. Hence the
+ // range rather than a single figure. Unlike the fusion path, then, this one
+ // does get cheaper if the interval grows — it just cannot get more expensive
+ // than the cache allows.
  { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 3 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'federalRegister', fn: () => this.dataLoader.loadFederalRegister(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'airQuality', fn: () => this.dataLoader.loadAirQuality(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

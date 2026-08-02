@@ -81,6 +81,21 @@ test('a live quiet sky resolves — silence with data is not a failure', async (
   assert.equal(error, null, 'a quiet sky with real readings is a healthy fetch');
 });
 
+test('a wind-only response is a working feed, even though this poller reads none of it', async () => {
+  // Nothing below the guard consumes speed/density/Bz, so it is tempting to
+  // leave wind out of the completeness check. But the sidecar route and
+  // fetchSpaceWeather both count a parsed wind series as a usable product; a
+  // guard that disagreed would report an outage on a feed that answered, which
+  // is the same false verdict as the swallowed-error bug, pointed the other way.
+  const error = await pollWith({
+    kp: null,
+    wind: [['time_tag', 'speed', 'density', 'bz'], ['2026-07-30 20:55:00.000', '412', '6.3', '-2.4']],
+    xray: null,
+    alerts: null,
+  });
+  assert.equal(error, null, 'a parsed wind series means SWPC answered');
+});
+
 test('bulletins alone are enough to count as a working feed', async () => {
   // Kp and X-ray can both legitimately fail to parse while alerts.json is fine.
   // Any one product yielding data means SWPC answered.

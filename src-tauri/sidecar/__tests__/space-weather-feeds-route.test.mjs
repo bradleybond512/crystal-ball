@@ -91,6 +91,16 @@ test('swpcFeedIsUsable rejects rows every downstream parser would discard', () =
   // fail-open shape as the empty array, one layer in.
   assert.equal(swpcFeedIsUsable('kp', [{ Kp: 4 }]), false, 'a Kp row with no time_tag parses to nothing');
   assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: null }]), false, 'Number(null) is 0, not a quiet sky');
+  // Same trap, different falsy value. Listing the absent values by identity
+  // caught null/undefined/'' and missed these, each of which coerces to a
+  // perfectly plausible Kp 0 — which is why the check is on TYPE now.
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: false }]), false, 'Number(false) is 0 too');
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: [] }]), false, 'Number([]) is 0 as well');
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: '   ' }]), false, 'and whitespace coerces to 0');
+  // Kp is a 0-9 index. A bogus extreme is corrupt data, and it would trip the
+  // Kp>=5 storm alerting downstream if it were vouched for here.
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: 47 }]), false, 'Kp 47 is not a measurement');
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: -1 }]), false, 'nor is a negative index');
   assert.equal(swpcFeedIsUsable('xray', [{}]), false, 'an object with no class field is not a flare');
   assert.equal(swpcFeedIsUsable('xray', ['maintenance']), false, 'a status string is not a flare');
   assert.equal(swpcFeedIsUsable('xray', [{ max_class: 'maintenance' }]), false, 'only A/B/C/M/X grammar counts as a class');

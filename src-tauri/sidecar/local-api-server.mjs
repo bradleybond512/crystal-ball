@@ -3353,6 +3353,20 @@ function toUtcIsoTag(raw) {
   return `${tag}Z`;
 }
 
+// Kp is a 0-9 planetary index. Anything outside that is corrupt, and a bogus
+// extreme would trip the Kp>=5 storm alerting downstream.
+const KP_MIN = 0;
+const KP_MAX = 9;
+
+function kpNumberOrNull(raw) {
+  let n;
+  if (typeof raw === 'number') n = raw;
+  else if (typeof raw === 'string' && raw.trim() !== '') n = Number(raw.trim());
+  else return null;
+  if (!Number.isFinite(n) || n < KP_MIN || n > KP_MAX) return null;
+  return n;
+}
+
 export function normalizeKpPoints(raw) {
   // products/noaa-planetary-k-index.json is an array of OBJECTS with a
   // capital-K `Kp` — NOT the header-row + array-of-arrays shape this used to
@@ -3364,12 +3378,13 @@ export function normalizeKpPoints(raw) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
     const time_tag = toUtcIsoTag(row.time_tag);
     if (!time_tag) continue;
-    // Number(null) is 0 — a plausible-looking "quiet" Kp — so reject the
-    // absent value on identity before coercing.
-    const rawKp = row.Kp;
-    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
-    const kp = Number(rawKp);
-    if (!Number.isFinite(kp)) continue;
+    // Number() maps null, '', '   ', false and [] all to 0 — a plausible-looking
+    // "quiet" Kp. Listing the absent values by identity misses the others, so
+    // reject on TYPE and bound the range, mirroring finiteOrNull/inRangeOrNull
+    // in src/services/space-weather-parse.ts: a looser vote here than the
+    // renderer's parse is a healthy verdict on a payload the panel discards.
+    const kp = kpNumberOrNull(row.Kp);
+    if (kp === null) continue;
     out.push({ time_tag, kp });
   }
   return out;

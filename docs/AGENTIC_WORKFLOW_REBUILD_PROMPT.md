@@ -73,6 +73,7 @@ Create or extend the repo's agent instruction file (`AGENTS.md` for Codex,
 have the other point at it). It must contain these sections:
 
 **Delivery path**
+
 - The default branch is the only merge target.
 - Agent branches go through PRs and auto-merge after required checks pass; never
   a local `git merge` or the REST merge endpoint.
@@ -80,19 +81,23 @@ have the other point at it). It must contain these sections:
   arming auto-merge by hand.
 
 **Branch discipline**
+
 - Never commit to local default branch. Every session starts from a fresh branch
   cut from the *freshly fetched canonical* default branch.
 - Resolve the remote name programmatically rather than assuming it:
-  ```bash
-  REMOTE=$(git remote -v | awk '/<org>\/<repo>.*\(fetch\)/{print $1; exit}')
-  git fetch "$REMOTE"
-  git checkout -b <prefix>/<feature-name> "$REMOTE/<default-branch>"
-  ```
+
+```bash
+REMOTE=$(git remote -v | awk '/<org>\/<repo>.*\(fetch\)/{print $1; exit}')
+git fetch "$REMOTE"
+git checkout -b <prefix>/<feature-name> "$REMOTE/<default-branch>"
+```
+
 - Re-sync **before** the first commit, not after — parallel sessions move the
   base branch mid-task, and conflicts are cheapest while the work is still in
   the agent's head.
 
 **Work classification** — three tiers, with routing consequences:
+
 - *Fast*: isolated docs, copy, formatting, obvious one-file fixes.
 - *Standard*: features, multi-file fixes, UI behavior, performance, tests.
 - *High assurance*: everything named in my answer to question 3, plus
@@ -101,6 +106,7 @@ have the other point at it). It must contain these sections:
   implementation**.
 
 **Required sequence** for Standard and High Assurance:
+
 1. Structured feature brief: goals, acceptance criteria, constraints, non-goals,
    unknowns, risk level, expected evidence.
 2. Read-only repository discovery delegated to a `repository_analyst` agent.
@@ -120,6 +126,7 @@ have the other point at it). It must contain these sections:
     production-data mutation without explicit human approval.
 
 **Testing and validation rules**
+
 - Never delete a test because it fails.
 - Never weaken assertions, lint rules, type checking, secret scanning, or
   security tests to obtain a pass.
@@ -164,6 +171,7 @@ numeric tolerances from a distribution of samples, never one.
 Also encode the repo's own recurring defect classes here — the bugs that shipped
 more than once. Write each as a rule with the reference implementation named.
 Generic examples worth keeping unless clearly inapplicable:
+
 - Filter untrusted external fields with **allowlists, never denylists**
   (`x !== 'normal'` admits `undefined`, a rename, and a typo; `MAP[x]` admits
   only what you have seen).
@@ -292,6 +300,7 @@ skips all of it and loses the race.
 Add workflows. The non-obvious requirements:
 
 **Cross-agent review gate** (`pull_request` on the default branch + `merge_group`).
+
 - Checkout `github.event.pull_request.head.sha` explicitly — the default
   `pull_request` checkout is the *synthetic merge commit*, and the verdict
   protocol must examine the real branch tip. Use `fetch-depth: 0`.
@@ -311,6 +320,7 @@ tests at all, so a PR that breaks every suite merges green. Add
 `scripts/targeted-tests.mjs` that selects the `test:*` scripts whose files or
 covered source directories intersect the PR diff, and runs **all** of them, no cap
 — a silently dropped suite cannot block a merge, which defeats the gate. Rules:
+
 - **Derive the mapping from `package.json`**, never hand-maintain it: each
   eligible script lists its test files, and a test at `src/<area>/__tests__/*`
   covers `src/<area>/`. Hand-maintained mappings drift; derived ones cannot.

@@ -31,6 +31,7 @@ import {
   PLANTED_COUPLINGS,
   allGoldenObservations,
   decoyEventIds,
+  digestRecords,
   pairKeyFor,
   plantedTruePairKeys,
 } from '../__bench__/golden-streams.ts';
@@ -67,6 +68,22 @@ describe('golden-streams corpus integrity', () => {
     // corpus could be made easier without invalidating the baseline.
     const digest = runCorrelationBenchmark().corpusDigest;
     assert.match(digest, /^[0-9a-f]{32}$/, `corpus digest ${digest} is not 128 bits of hex`);
+  });
+
+  it('frames each record by length, so no regrouping of the corpus collides', () => {
+    // A separator byte is just another code unit: hashing `decoy:first` then
+    // `decoy:second` with a `_` between them reaches exactly the state of
+    // hashing the single record `decoy:first_decoy:second`, at ANY digest
+    // width. That collision lets two real decoy ids be replaced by one
+    // synthetic id — removing both traps from grading — without moving the
+    // digest. Length-prefixing makes the encoding injective.
+    assert.notEqual(
+      digestRecords(['decoy:first', 'decoy:second']),
+      digestRecords(['decoy:first_decoy:second']),
+    );
+    assert.notEqual(digestRecords(['ab', 'c']), digestRecords(['a', 'bc']));
+    // Same records, same digest — framing must not be order- or run-sensitive.
+    assert.equal(digestRecords(['ab', 'c']), digestRecords(['ab', 'c']));
   });
 
   it('never plants a true pair on a decoy event', () => {
@@ -180,8 +197,11 @@ describe('what the corpus is built to stress', () => {
     assert.equal(graded.pairCount, 2, 'both emissions should be counted raw');
     assert.equal(graded.distinctPairCount, 1, 'one event pair, matched twice');
     // Precision on the distinct denominator is 1/1; on the raw one it would be
-    // 1/2 — a phantom 50% regression for recognising a true pair twice.
-    assert.equal(graded.emittedTrueKeys.size / graded.distinctPairCount, 1);
+    // 1/2 — a phantom 50% regression for recognising a true pair twice. This
+    // asserts the field the grader itself computed, not a re-derivation: the
+    // report reads `graded.pairPrecision`, so a denominator swap inside
+    // `gradeEnginePairs` has to fail here.
+    assert.equal(graded.pairPrecision, 1);
   });
 
   it('computes pair precision through the production denominator selection', () => {
@@ -252,7 +272,7 @@ describe('the committed baseline', () => {
 
   it('carries its own tolerance block', () => {
     const baseline = loadBaseline();
-    assert.equal(baseline.schemaVersion, 4);
+    assert.equal(baseline.schemaVersion, 5);
     for (const key of Object.keys(DEFAULT_CORRELATION_BENCH_TOLERANCES)) {
       assert.ok(
         key in baseline.tolerances,
@@ -370,6 +390,12 @@ describe('the gate', () => {
       causalLearnedRuleCount: 0,
       learnedRulePairCount: 0,
       causalLearnedRulePairCount: 0,
+      // Dead means dead all the way down: no rule rows in the ledger and no
+      // per-rule tallies. Leaving those behind trips the reconciliation checks
+      // instead, and this test stops proving anything about the shrink gate.
+      causalLearnedRulePairsPerRule: [],
+      minCausalLearnedRulePairCount: 0,
+      edges: report.edges.map((e) => ({ ...e, becameLearnedRule: false })),
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(dead, baseline);
     assert.equal(ok, false);
@@ -387,7 +413,12 @@ describe('the gate', () => {
       couplingPrecision: 0.2083,
       // The ledger has to grow with the summary or the consistency check fires
       // first and this test stops proving anything about the growth gate.
-      edges: [...report.edges, ...report.edges.slice(0, 2)],
+      edges: [
+        ...report.edges,
+        ...report.edges.slice(0, 2).map((e) => ({
+          ...e, verdict: 'unplanted' as const, becameLearnedRule: false,
+        })),
+      ],
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(looser, baseline);
     assert.equal(ok, false);
@@ -413,7 +444,14 @@ describe('the gate', () => {
       learnedRuleFalsePositives: 0,
       learnedRuleCount: report.plantedCausalCount,
       causalLearnedRuleCount: report.plantedCausalCount,
-      edges: report.edges.filter((e) => e.verdict === 'causal'),
+      // Five causal rules now, so the per-rule tally has to have five entries
+      // summing to the unchanged 19 — and none of them below the per-rule
+      // floor, or the liveness gate would fire instead of the run passing.
+      causalLearnedRulePairsPerRule: [5, 4, 4, 3, 3],
+      minCausalLearnedRulePairCount: 3,
+      edges: report.edges
+        .filter((e) => e.verdict === 'causal')
+        .map((e) => ({ ...e, becameLearnedRule: true })),
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
     assert.deepEqual(reasons, []);
@@ -451,7 +489,13 @@ describe('the gate', () => {
   it('fails when learned rules are synthesized but never fire', () => {
     // Volume shrinking is a GOAL, so no shrink tolerance catches this: the
     // rules still exist, the install/match path is simply dead.
-    const dark = { ...report, learnedRulePairCount: 0, causalLearnedRulePairCount: 0 };
+    const dark = {
+      ...report,
+      learnedRulePairCount: 0,
+      causalLearnedRulePairCount: 0,
+      causalLearnedRulePairsPerRule: [0, 0, 0],
+      minCausalLearnedRulePairCount: 0,
+    };
     const { ok, reasons } = compareCorrelationBenchToBaseline(dark, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
@@ -496,7 +540,12 @@ describe('the gate', () => {
   it('fails when the causal rules go nearly quiet, not just exactly silent', () => {
     // 19 -> 1 is the same broken install/match path as 19 -> 0, with one
     // survivor. An exactly-zero liveness check waves it straight through.
-    const nearlyDark = { ...report, causalLearnedRulePairCount: 1 };
+    const nearlyDark = {
+      ...report,
+      causalLearnedRulePairCount: 1,
+      causalLearnedRulePairsPerRule: [1, 0, 0],
+      minCausalLearnedRulePairCount: 0,
+    };
     const { ok, reasons } = compareCorrelationBenchToBaseline(nearlyDark, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
@@ -546,6 +595,10 @@ describe('the gate', () => {
       ...report,
       enginePairCount: report.enginePairCount - 4,
       distinctEnginePairCount: report.distinctEnginePairCount - 4,
+      // Four true pairs stopped being emitted, so recall has to fall with them
+      // — otherwise the two routes to the true-emission count disagree and the
+      // arithmetic reconciliation fires before the shrink gate is reached.
+      pairRecall: (report.distinctEnginePairCount - 4) / report.truePairUniverse,
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(fewer, baseline);
     assert.equal(ok, false);
@@ -595,6 +648,148 @@ describe('the gate', () => {
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, stale);
     assert.equal(ok, false);
     assert.match(reasons[0]!, /missing gate "causalLearnedRulePairShrinkRatio"/);
+  });
+
+  it('rejects a tolerance wide enough to absorb the whole measurement', () => {
+    // Each of these is finite and non-negative, so type validation passes them
+    // all. Together they disarm every liveness gate at once while the baseline
+    // still LOOKS armed — the widest PASS-on-nothing path of the fourth round.
+    const wide = {
+      ...baseline,
+      tolerances: {
+        ...baseline.tolerances,
+        couplingPrecisionDrop: 1,
+        couplingRecallDrop: 1,
+        pairRecallDrop: 1,
+        causalLearnedRulePairShrinkRatio: 1,
+        enginePairShrink: 22,
+      },
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, wide);
+    assert.equal(ok, false);
+    assert.equal(reasons.length, 5, 'every over-wide tolerance should be named');
+    for (const reason of reasons) assert.match(reason, /above its .* ceiling/);
+  });
+
+  it('rejects positive miner rates carried by an empty edge ledger', () => {
+    // Clearing the rows takes the row-level reconciliations with it, and the
+    // summary fields are all mutually consistent at zero — but a miner that
+    // reported no edges cannot have scored 22.7% precision on them.
+    const cleared = {
+      ...report,
+      edges: [],
+      significantEdgeCount: 0,
+      falseEdgeCount: 0,
+      confoundedFalsePositives: 0,
+      mediatedFalsePositives: 0,
+      independentFalsePositives: 0,
+      inhibitoryEdgesReported: 0,
+      unplantedFalsePositives: 0,
+      learnedRuleCount: 0,
+      causalLearnedRuleCount: 0,
+      edgeEvidenceSeparation: null,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(cleared, baseline);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('the miner produced zero significant edges')),
+      `expected a zero-edge reason, got ${JSON.stringify(reasons)}`,
+    );
+  });
+
+  it('reconciles the learned-rule summaries against the edge rows that claim them', () => {
+    // learnedRuleCount is a summary; edges[].becameLearnedRule is the ledger.
+    // Only cross-checking them catches a rule count invented out of nothing.
+    const unbacked = {
+      ...report,
+      edges: report.edges.map((e) => ({ ...e, becameLearnedRule: false })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(unbacked, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('becameLearnedRule')));
+  });
+
+  it('reconciles coupling recall against the couplings it names as missing', () => {
+    // Recall 1.0 while naming missing couplings is a contradiction the
+    // summary-only checks accepted, because both fields were self-consistent.
+    const contradictory = {
+      ...report,
+      missingCouplings: [{ from: 'nope-a', to: 'nope-b', kind: 'causal' as const }],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(contradictory, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('couplingRecall')));
+  });
+
+  it('rejects pair rates whose two routes to the true-emission count disagree', () => {
+    // `precision × distinct` and `recall × truePairUniverse` are independent
+    // routes to the same quantity. Inflating the denominator while holding both
+    // rates at 1.0 is arithmetically impossible, but each rate on its own still
+    // reads as a perfect pass.
+    const impossible = { ...report, distinctEnginePairCount: report.truePairUniverse + 1 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(impossible, baseline);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('implies')),
+      `expected a pair-arithmetic reason, got ${JSON.stringify(reasons)}`,
+    );
+  });
+
+  it('bounds the evidence separation instead of scoring a fabricated one', () => {
+    // z-scores are clamped to [2,50], so a separation of means lives in
+    // [-48,48]. 1e300 is not a large separation, it is a fabricated one — and
+    // higher-is-better, so every directional check reads it as an improvement.
+    const fabricated = { ...report, edgeEvidenceSeparation: 1e300 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(fabricated, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('outside [−48,48]')));
+  });
+
+  it('range-checks each false-positive component, not just their sum', () => {
+    // -1 confounded against +3 unplanted preserves falseEdgeCount exactly, so
+    // the sum reconciliation is satisfied by a negative count.
+    const offsetting = {
+      ...report,
+      confoundedFalsePositives: -1,
+      unplantedFalsePositives: report.unplantedFalsePositives + 3,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(offsetting, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('not a non-negative integer count')));
+  });
+
+  it('fails when one causal rule goes dark inside a healthy aggregate', () => {
+    // Per-rule volumes are 7/6/6 = 19. A 0.5 aggregate shrink ratio floors at
+    // 9.5, so 7/6/0 = 13 sails past it: sums hide their own zeros.
+    const oneDead = {
+      ...report,
+      causalLearnedRulePairsPerRule: [7, 6, 0],
+      minCausalLearnedRulePairCount: 0,
+      causalLearnedRulePairCount: 13,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(oneDead, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('a causal learned rule went dark')));
+  });
+
+  it('rejects a baseline that re-seeds the separation gate at zero', () => {
+    // The 8.49 -> 0 collapse is only visible because the baseline arms the
+    // gate. Re-seeding both sides at 0 while 17 false edges remain retires it.
+    const disarmed = { ...baseline, edgeEvidenceSeparation: 0 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, disarmed);
+    assert.equal(ok, false);
+    assert.match(reasons[0]!, /edgeEvidenceSeparation/);
+    assert.match(reasons[0]!, /permanently disarms the gate it feeds/);
+  });
+
+  it('rejects a per-rule tally that does not add up to its own summary', () => {
+    const mismatched = { ...report, causalLearnedRulePairsPerRule: [7, 6, 7] };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(mismatched, baseline);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('per-rule causal pair tallies sum to 20')),
+      `expected a per-rule tally reason, got ${JSON.stringify(reasons)}`,
+    );
   });
 
   it('accumulates every independent regression rather than short-circuiting', () => {

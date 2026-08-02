@@ -67,6 +67,33 @@ export interface CorrelationBenchTolerances {
   enginePairShrink: number;
 }
 
+/**
+ * The largest value each gate may be loosened to in a committed baseline.
+ *
+ * Validating tolerances as "finite and non-negative" only stops the NaN class.
+ * A reviewer walking a diff sees twelve plausible-looking numbers, and
+ * `causalLearnedRulePairShrinkRatio: 1` plus `enginePairShrink: 22` plus rate
+ * drops of `1` is a fully-armed-looking block under which a run that measures
+ * NOTHING — zero edges, zero rules, zero pairs, zero precision — still returns
+ * PASS. A ceiling makes the disarmed state unrepresentable rather than merely
+ * conspicuous. Every ceiling is comfortably above the value in the committed
+ * baseline; raising one is a source change, which is a different review.
+ */
+const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
+  couplingPrecisionDrop: 0.1,
+  couplingRecallDrop: 0.1,
+  pairPrecisionDrop: 0.1,
+  pairRecallDrop: 0.1,
+  edgeEvidenceSeparationDrop: 3,
+  meanTruePairConfidenceDrop: 0.1,
+  falseEdgeGrowth: 3,
+  causalLearnedRuleShrink: 1,
+  learnedRuleFalsePositiveGrowth: 3,
+  learnedRulePairGrowth: 25,
+  causalLearnedRulePairShrinkRatio: 0.5,
+  enginePairShrink: 2,
+};
+
 export interface CorrelationBenchBaseline {
   /** Bumped only when the baseline's own shape changes. */
   schemaVersion: number;
@@ -79,6 +106,7 @@ export interface CorrelationBenchBaseline {
   streamCount: number;
   observationCount: number;
   plantedCausalCount: number;
+  truePairUniverse: number;
   corpusDigest: string;
 
   // graded metrics
@@ -103,6 +131,7 @@ export interface CorrelationBenchBaseline {
   meanTruePairConfidence: number;
   learnedRulePairCount: number;
   causalLearnedRulePairCount: number;
+  minCausalLearnedRulePairCount: number;
 
   tolerances: CorrelationBenchTolerances;
 }
@@ -183,6 +212,14 @@ function resolveTolerances(
       );
       continue;
     }
+    const ceiling = TOLERANCE_CEILINGS[key as keyof CorrelationBenchTolerances];
+    if (value > ceiling) {
+      reasons.push(
+        `tolerance "${key}" is ${value}, above its ${ceiling} ceiling — a tolerance wide enough ` +
+        `to absorb the whole measurement disarms its gate while still looking armed`,
+      );
+      continue;
+    }
     tol[key as keyof CorrelationBenchTolerances] = value;
   }
   return tol;
@@ -199,7 +236,16 @@ function separationOperand(value: number | null | undefined): unknown {
 }
 
 /** The range a gated metric is DEFINED over — see `checkOperand`. */
-type GateRange = 'rate' | 'count' | 'free';
+type GateRange = 'rate' | 'count' | 'separation';
+
+/**
+ * `bench-correlation` clamps every edge z-score into `[0, 50]` before averaging,
+ * and `significantEdges` only admits edges at z ≥ 2, so the difference of two
+ * such means cannot leave `[-48, 48]`. Anything outside that is not a large
+ * separation, it is a fabricated one — and separation is a higher-is-better
+ * gate, so `1e300` reads as the largest improvement the gate can express.
+ */
+const SEPARATION_BOUND = 48;
 type GatedMetric = [label: string, kind: GateRange, want: unknown, got: unknown];
 
 const BASELINE_HINT =
@@ -228,6 +274,15 @@ function checkOperand(
   if (kind === 'count' && (value < 0 || !Number.isInteger(value))) {
     reasons.push(`${label} value ${value} is not a non-negative integer count`);
   }
+  // Negative is legitimate here — it means false edges outscore causal ones,
+  // which is a real regression the drop gate should report, not an invalid
+  // measurement. Only the magnitude is bounded.
+  if (kind === 'separation' && Math.abs(value) > SEPARATION_BOUND) {
+    reasons.push(
+      `${label} value ${value} is outside [−${SEPARATION_BOUND},${SEPARATION_BOUND}] — z-scores ` +
+      `are clamped to [2,50], so no real pass can separate by more than that`,
+    );
+  }
 }
 
 /**
@@ -243,7 +298,13 @@ const MUST_ARM_ITS_GATE: readonly (keyof CorrelationBenchBaseline)[] = [
   'learnedRuleCount',
   'causalLearnedRuleCount',
   'causalLearnedRulePairCount',
+  'minCausalLearnedRulePairCount',
   'learnedRulePairCount',
+  'truePairUniverse',
+  // Higher-is-better, so a zero seed silences it permanently: re-seeding both
+  // sides at 0 while 17 false edges remain would retire the 8.49 → 0 collapse
+  // from the gate entirely.
+  'edgeEvidenceSeparation',
   'enginePairCount',
   'distinctEnginePairCount',
   'couplingPrecision',
@@ -282,6 +343,7 @@ export function compareCorrelationBenchToBaseline(
     ['golden-stream count', baseline.streamCount, report.streamCount],
     ['observation count', baseline.observationCount, report.observationCount],
     ['planted causal coupling count', baseline.plantedCausalCount, report.plantedCausalCount],
+    ['planted true-pair universe', baseline.truePairUniverse, report.truePairUniverse],
     ['corpus content digest', baseline.corpusDigest, report.corpusDigest],
   ];
   for (const [label, want, got] of identity) {
@@ -331,10 +393,25 @@ export function compareCorrelationBenchToBaseline(
       baseline.distinctEnginePairCount, report.distinctEnginePairCount],
     ['near-miss decoy pairs', 'count',
       baseline.decoyPairsEmitted, report.decoyPairsEmitted],
-    // Unbounded on purpose: a separation is a difference of z-scores, so it is
-    // free to be large, and negative would mean false edges outscore causal
-    // ones — a real (and gated) regression, not an invalid measurement.
-    ['causal-vs-false edge evidence separation', 'free',
+    ['smallest per-rule causal learned pair volume', 'count',
+      baseline.minCausalLearnedRulePairCount, report.minCausalLearnedRulePairCount],
+    // The five false-positive components. They are summed against
+    // `falseEdgeCount` below, and a sum reconciles just as happily against
+    // `-1 + 17` as against `0 + 16` — so each component is range-checked too.
+    ['confounded false positives', 'count',
+      baseline.confoundedFalsePositives, report.confoundedFalsePositives],
+    ['mediated false positives', 'count',
+      baseline.mediatedFalsePositives, report.mediatedFalsePositives],
+    ['independent false positives', 'count',
+      baseline.independentFalsePositives, report.independentFalsePositives],
+    ['inhibitory edges reported', 'count',
+      baseline.inhibitoryEdgesReported, report.inhibitoryEdgesReported],
+    ['unplanted false positives', 'count',
+      baseline.unplantedFalsePositives, report.unplantedFalsePositives],
+    ['significant edges', 'count',
+      baseline.significantEdgeCount, report.significantEdgeCount],
+    ['learned rules', 'count', baseline.learnedRuleCount, report.learnedRuleCount],
+    ['causal-vs-false edge evidence separation', 'separation',
       baseline.edgeEvidenceSeparation, separationOperand(report.edgeEvidenceSeparation)],
   ];
   for (const [label, kind, want, got] of gated) {
@@ -416,6 +493,20 @@ export function compareCorrelationBenchToBaseline(
       `${report.causalLearnedRuleCount} causal rule(s) — the rules are built but barely fire`,
     );
   }
+  // The aggregate above is a sum, and a sum hides its own zeros: at 7/6/6 one
+  // rule can stop firing entirely and the total only falls 19 → 13, well inside
+  // a 9.5 floor. Apply the same proportional floor to the WEAKEST rule so a
+  // single dead matcher cannot hide behind two healthy ones.
+  const perRuleFloor =
+    baseline.minCausalLearnedRulePairCount * (1 - tol.causalLearnedRulePairShrinkRatio);
+  if (report.minCausalLearnedRulePairCount < perRuleFloor) {
+    reasons.push(
+      `a causal learned rule went dark: the weakest rule emitted ` +
+      `${report.minCausalLearnedRulePairCount} pair(s) against a baseline weakest of ` +
+      `${baseline.minCausalLearnedRulePairCount} (floor ${perRuleFloor.toFixed(2)}); per-rule ` +
+      `volumes were [${report.causalLearnedRulePairsPerRule.join(', ')}]`,
+    );
+  }
 
   // Built-in rules over a frozen corpus are deterministic, so their emission
   // volume shrinking at all means a rule stopped matching. Growth is left to
@@ -494,14 +585,57 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
       `ledger holds ${falseRows} non-causal verdict(s) — the summary does not describe the run`,
     );
   }
-  if (report.significantEdgeCount > 0) {
-    const derived = (report.significantEdgeCount - report.falseEdgeCount)
-      / report.significantEdgeCount;
-    if (Math.abs(derived - report.couplingPrecision) > RATIO_EPSILON) {
+  // Learned rules are synthesized FROM these rows, so the two rule summaries
+  // must be reproducible from the ledger. Without this, `learnedRuleCount` and
+  // its causal/false split are three more same-pass summaries agreeing with
+  // each other.
+  const ruleRows = report.edges.filter((e) => e.becameLearnedRule);
+  if (ruleRows.length !== report.learnedRuleCount) {
+    reasons.push(
+      `report is internally inconsistent: learnedRuleCount=${report.learnedRuleCount} but ` +
+      `${ruleRows.length} edge row(s) are marked becameLearnedRule`,
+    );
+  }
+  const causalRuleRows = ruleRows.filter((e) => e.verdict === 'causal').length;
+  if (causalRuleRows !== report.causalLearnedRuleCount) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRuleCount=` +
+      `${report.causalLearnedRuleCount} but ${causalRuleRows} causal edge row(s) became rules`,
+    );
+  }
+  if (report.significantEdgeCount === 0) {
+    // `ratio()` reports 0/0 as 0, so a pass that mined nothing cannot honestly
+    // claim a rate. A cleared ledger with the rates left at 1.0 is the whole
+    // PASS-on-nothing shape this function exists to reject.
+    if (report.couplingPrecision > 0 || report.couplingRecall > 0) {
       reasons.push(
-        `report is internally inconsistent: couplingPrecision=${report.couplingPrecision} but ` +
-        `${report.significantEdgeCount - report.falseEdgeCount}/${report.significantEdgeCount} ` +
-        `causal edges implies ${derived.toFixed(4)}`,
+        `report is internally inconsistent: couplingPrecision=${report.couplingPrecision} / ` +
+        `couplingRecall=${report.couplingRecall} are positive while the miner produced zero ` +
+        `significant edges — the miner measurement did not happen`,
+      );
+    }
+    return;
+  }
+  const derived = (report.significantEdgeCount - report.falseEdgeCount)
+    / report.significantEdgeCount;
+  if (Math.abs(derived - report.couplingPrecision) > RATIO_EPSILON) {
+    reasons.push(
+      `report is internally inconsistent: couplingPrecision=${report.couplingPrecision} but ` +
+      `${report.significantEdgeCount - report.falseEdgeCount}/${report.significantEdgeCount} ` +
+      `causal edges implies ${derived.toFixed(4)}`,
+    );
+  }
+  // Recall has its own independent witness: the couplings the miner MISSED are
+  // listed by name, so the rate is reproducible without trusting any count.
+  if (report.plantedCausalCount > 0) {
+    const recovered = report.plantedCausalCount - report.missingCouplings.length;
+    const derivedRecall = recovered / report.plantedCausalCount;
+    if (Math.abs(derivedRecall - report.couplingRecall) > RATIO_EPSILON) {
+      reasons.push(
+        `report is internally inconsistent: couplingRecall=${report.couplingRecall} but ` +
+        `${recovered}/${report.plantedCausalCount} recovered couplings ` +
+        `(${report.missingCouplings.length} listed as missing) implies ` +
+        `${derivedRecall.toFixed(4)}`,
       );
     }
   }
@@ -529,6 +663,56 @@ function checkPairLedger(reasons: string[], report: CorrelationBenchReport): voi
     reasons.push(
       `report is internally inconsistent: ${report.causalLearnedRulePairCount} causal ` +
       `learned-rule pair(s) were attributed to zero causal learned rules`,
+    );
+  }
+  if (report.causalLearnedRulePairsPerRule.length === report.causalLearnedRuleCount) {
+    const summed = report.causalLearnedRulePairsPerRule.reduce((a, b) => a + b, 0);
+    if (summed !== report.causalLearnedRulePairCount) {
+      reasons.push(
+        `report is internally inconsistent: per-rule causal pair tallies sum to ${summed} but ` +
+        `causalLearnedRulePairCount=${report.causalLearnedRulePairCount}`,
+      );
+    }
+    const min = Math.min(...report.causalLearnedRulePairsPerRule);
+    if (report.causalLearnedRulePairsPerRule.length > 0
+      && min !== report.minCausalLearnedRulePairCount) {
+      reasons.push(
+        `report is internally inconsistent: minCausalLearnedRulePairCount=` +
+        `${report.minCausalLearnedRulePairCount} but the smallest per-rule tally is ${min}`,
+      );
+    }
+  } else {
+    reasons.push(
+      `report is internally inconsistent: ${report.causalLearnedRulePairsPerRule.length} ` +
+      `per-rule causal pair tallies for ${report.causalLearnedRuleCount} causal learned rule(s)`,
+    );
+  }
+  checkPairArithmetic(reasons, report);
+}
+
+/**
+ * Precision and recall are two routes to the SAME quantity — how many planted
+ * true pairs this pass emitted — over different denominators. Checking each one
+ * for plausibility in isolation misses combinations that are arithmetically
+ * impossible together: with 22 planted true pairs, `distinct: 23` at precision
+ * 1.0 claims 23 true emissions out of a universe of 22.
+ */
+function checkPairArithmetic(reasons: string[], report: CorrelationBenchReport): void {
+  const fromPrecision = report.pairPrecision * report.distinctEnginePairCount;
+  const fromRecall = report.pairRecall * report.truePairUniverse;
+  if (Math.abs(fromPrecision - fromRecall) > report.distinctEnginePairCount * RATIO_EPSILON
+    + report.truePairUniverse * RATIO_EPSILON) {
+    reasons.push(
+      `report is internally inconsistent: pairPrecision × ${report.distinctEnginePairCount} ` +
+      `distinct pairs implies ${fromPrecision.toFixed(2)} true emissions, but pairRecall × ` +
+      `${report.truePairUniverse} planted true pairs implies ${fromRecall.toFixed(2)}`,
+    );
+  }
+  if (fromPrecision > report.truePairUniverse + 0.5) {
+    reasons.push(
+      `report is internally inconsistent: pairPrecision=${report.pairPrecision} over ` +
+      `${report.distinctEnginePairCount} distinct pairs claims ${fromPrecision.toFixed(2)} true ` +
+      `emissions from a universe of only ${report.truePairUniverse} planted true pairs`,
     );
   }
 }

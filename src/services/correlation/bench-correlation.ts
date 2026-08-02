@@ -78,6 +78,29 @@ export interface BenchEdgeRow {
   becameLearnedRule: boolean;
 }
 
+/**
+ * One DISTINCT emitted event pair, with every emission that produced it.
+ *
+ * The pair summaries — `enginePairCount`, `distinctEnginePairCount`,
+ * `pairPrecision`, `pairRecall`, `decoyPairsEmitted`, `meanTruePairConfidence`
+ * — were six numbers produced by one pass with nothing behind them: hand-set
+ * them coherently and the gate had no independent witness to contradict. This
+ * ledger is that witness, so every one of those summaries is re-derivable from
+ * row-level detail rather than merely self-consistent.
+ */
+export interface BenchPairRow {
+  /** Order-independent event-pair key, as `pairKeyFor` builds it. */
+  key: string;
+  /** One entry per RAW emission — two rules matching one pair is two entries. */
+  ruleIds: string[];
+  /** Confidence of each emission, index-aligned with `ruleIds`. */
+  confidences: number[];
+  /** Whether this pair is in the planted true-pair set. */
+  isTruePair: boolean;
+  /** Emissions of this pair that touched a near-miss decoy event. */
+  decoyEmissions: number;
+}
+
 export interface CorrelationBenchReport {
   // ── corpus identity (exact-equality drift detection) ──
   streamCount: number;
@@ -212,8 +235,9 @@ export interface CorrelationBenchReport {
    */
   minCausalLearnedRulePairCount: number;
 
-  // ── human-readable detail (not part of the gate) ──
+  // ── row-level ledgers: the gate re-derives the summaries above from these ──
   edges: BenchEdgeRow[];
+  pairs: BenchPairRow[];
 }
 
 export function runCorrelationBenchmark(): CorrelationBenchReport {
@@ -370,6 +394,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
       causalLearnedRulePairsPerRule[causalLearnedRulePairsPerRule.length - 1] ?? 0,
 
     edges,
+    pairs: graded.pairs,
   };
 }
 
@@ -411,6 +436,8 @@ export interface GradedPairs {
   truePairConfidences: number[];
   falsePairConfidences: number[];
   decoyPairsEmitted: number;
+  /** Per-distinct-pair detail, in first-emission order. */
+  pairs: BenchPairRow[];
 }
 
 /**
@@ -439,14 +466,23 @@ export function gradeEnginePairs(
   const truePairConfidences: number[] = [];
   const falsePairConfidences: number[] = [];
   const emittedTrueKeys = new Set<string>();
-  const distinctKeys = new Set<string>();
+  const rows = new Map<string, BenchPairRow>();
   let decoyPairsEmitted = 0;
 
   for (const pair of pairs) {
-    if (decoys.has(pair.eventA.id) || decoys.has(pair.eventB.id)) decoyPairsEmitted += 1;
+    const touchesDecoy = decoys.has(pair.eventA.id) || decoys.has(pair.eventB.id);
+    if (touchesDecoy) decoyPairsEmitted += 1;
     const key = pairKeyFor(pair.eventA.id, pair.eventB.id);
-    distinctKeys.add(key);
-    if (truePairs.has(key)) {
+    const isTruePair = truePairs.has(key);
+    let row = rows.get(key);
+    if (row === undefined) {
+      row = { key, ruleIds: [], confidences: [], isTruePair, decoyEmissions: 0 };
+      rows.set(key, row);
+    }
+    row.ruleIds.push(pair.ruleId);
+    row.confidences.push(pair.confidence);
+    if (touchesDecoy) row.decoyEmissions += 1;
+    if (isTruePair) {
       emittedTrueKeys.add(key);
       truePairConfidences.push(pair.confidence);
     } else {
@@ -456,9 +492,10 @@ export function gradeEnginePairs(
 
   return {
     pairCount: pairs.length,
-    distinctPairCount: distinctKeys.size,
+    distinctPairCount: rows.size,
+    pairs: [...rows.values()],
     emittedTrueKeys,
-    pairPrecision: enginePairPrecision({ emittedTrueKeys, distinctPairCount: distinctKeys.size }),
+    pairPrecision: enginePairPrecision({ emittedTrueKeys, distinctPairCount: rows.size }),
     truePairConfidences,
     falsePairConfidences,
     decoyPairsEmitted,

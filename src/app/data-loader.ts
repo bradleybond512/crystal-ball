@@ -2832,9 +2832,19 @@ export class DataLoaderManager implements AppModule {
 
  // Second air-quality source for fusion (OpenAQ ground stations). Fail-closed:
  // a degraded/failed fetch records ok=false so the provider health drops.
+ //
+ // All four providers below gate ok on BOTH stages, because there are two
+ // adapters between the wire and a vote. `r.ok` is derived inside the fetch
+ // module from ITS parse, so it already catches an unusable body — but a
+ // response whose readings survive that and are then all dropped by
+ // *ToObservations still reached recordDomainObservations as ok:true, with
+ // zero observations behind it. Which is the phantom healthy vote again, one
+ // stage further down: lastSuccessAt re-stamped, the provider green, and the
+ // domain counting a source that contributed nothing to the fused fact.
  if (openaqReadings.status === 'fulfilled') {
  const r = openaqReadings.value;
- recordDomainObservations('openaq-v3', openaqToObservations(r.readings), r.ok);
+ const openaqObs = openaqToObservations(r.readings);
+ recordDomainObservations('openaq-v3', openaqObs, r.ok && openaqObs.length > 0);
  } else {
  recordDomainObservations('openaq-v3', [], false);
  }
@@ -2842,7 +2852,8 @@ export class DataLoaderManager implements AppModule {
  // Third air-quality source for fusion (AirNow EPA ground stations, keyed).
  if (airnowReadings.status === 'fulfilled') {
  const r = airnowReadings.value;
- recordDomainObservations('airnow', airnowToObservations(r.readings), r.ok);
+ const airnowObs = airnowToObservations(r.readings);
+ recordDomainObservations('airnow', airnowObs, r.ok && airnowObs.length > 0);
  } else {
  recordDomainObservations('airnow', [], false);
  }
@@ -2850,7 +2861,8 @@ export class DataLoaderManager implements AppModule {
  // Fourth air-quality source for fusion (PurpleAir crowdsourced sensors, keyed).
  if (purpleairReadings.status === 'fulfilled') {
  const r = purpleairReadings.value;
- recordDomainObservations('purpleair', purpleairToObservations(r.readings), r.ok);
+ const purpleairObs = purpleairToObservations(r.readings);
+ recordDomainObservations('purpleair', purpleairObs, r.ok && purpleairObs.length > 0);
  } else {
  recordDomainObservations('purpleair', [], false);
  }

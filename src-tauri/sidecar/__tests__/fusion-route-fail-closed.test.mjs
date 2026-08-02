@@ -155,3 +155,30 @@ test('/api/fx-rates-erapi runs the payload gate before its 6-hour cache write', 
   const body = routeBody('/api/fx-rates-erapi');
   assert.match(body, /erApiReject\)[\s\S]{0,240}?degraded: true[\s\S]{0,120}?\}, 502\)/, 'a rejected payload returns 502 degraded and is never cached');
 });
+
+test('/api/earthquakes freezes generatedAt into the cache instead of re-stamping on a hit', () => {
+  // The fusion fetcher's whole replay defence rests on this. `source` stays
+  // 'primary' on a cache hit, so age is the only signal separating a live
+  // fetch from a 59-second-old replay — and age is only meaningful if the hit
+  // carries the ORIGINAL fetch instant. Stamping generatedAt on the way out
+  // (or rebuilding the envelope on the hit path) would make every replay read
+  // as zero seconds old and re-stamp lastSuccessAt onto stale rows.
+  //
+  // Source-scoped for the reason at the top of this file: fetchWithTimeout
+  // goes straight to node:https, so there is no seam to drive a real
+  // miss-then-hit through. What is checkable is that only one code path
+  // stamps the field and the hit path returns the stored object untouched.
+  const body = routeBody('/api/earthquakes');
+
+  const stamps = [...body.matchAll(/generatedAt:/g)];
+  assert.equal(stamps.length, 1, 'generatedAt must be stamped in exactly one place — a second stamp is a re-stamp');
+
+  const payloadAt = body.indexOf('generatedAt:');
+  const cacheAt = body.indexOf("setCached('usgs-earthquakes'");
+  assert.notEqual(cacheAt, -1, 'the earthquakes route must cache its envelope');
+  assert.ok(payloadAt < cacheAt, 'generatedAt must be stamped BEFORE the cache write so the hit replays it');
+
+  const hit = body.match(/const cached = getCached\('usgs-earthquakes'\);\s*if \(cached\) return json\(cached\);/);
+  assert.ok(hit, 'the hit path must return the cached envelope verbatim, with no rebuild or re-stamp');
+  assert.ok(body.indexOf('const cached =') < payloadAt, 'the cache read must short-circuit before the upstream fetch');
+});

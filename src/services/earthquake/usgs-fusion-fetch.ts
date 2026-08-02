@@ -56,6 +56,37 @@ interface UsgsRouteResponse {
 const MAX_PAYLOAD_AGE_MS = 150_000;
 
 /**
+ * How far into the future `generatedAt` may sit before the age is treated as
+ * unestablishable.
+ *
+ * Needed because the two ends of the subtraction can come from two different
+ * clocks. `referenceNow` below prefers the response's own `Date` header — the
+ * SAME machine that stamped `generatedAt`, so that pairing is skew-free — but
+ * the header can be absent (a stubbed or proxied response), and then the
+ * browser clock is the only reference available. A browser clock running slow
+ * shrinks `ageMs` and would wave a genuine replay through; a negative age is
+ * the visible symptom of exactly that, so past a small allowance it fails
+ * closed rather than reading as "extremely fresh".
+ *
+ * 30 s absorbs ordinary drift and the request's own flight time without
+ * absorbing a 60 s cache window.
+ */
+const MAX_CLOCK_SKEW_MS = 30_000;
+
+/**
+ * The instant to measure payload age against.
+ *
+ * Prefers the response `Date` header (CORS-safelisted, so readable on the web
+ * route too) because it and `generatedAt` are stamped by one clock. Falls back
+ * to the caller's `now` only when the header is missing or unparseable.
+ */
+function referenceNow(res: Response, now: number): number {
+  const header = res.headers?.get?.('date');
+  const parsed = header ? Date.parse(header) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : now;
+}
+
+/**
  * Which `source` values mean the rows were fetched live on this request.
  *
  * An ALLOWLIST, not a denylist: an unrecognized value has to fail closed. The
@@ -100,8 +131,16 @@ function normalizeRows(events: readonly unknown[]): unknown[] {
 }
 
 /**
- * Fail-closed: every non-live outcome throws so the caller records a failing
- * fetch outcome instead of corroborating against a replay.
+ * Fail-closed on everything it can distinguish: a non-2xx response, an error
+ * envelope behind a 200, a `source` outside the live allowlist, and a payload
+ * whose age is stale or unestablishable all throw, so the caller records a
+ * failing fetch outcome instead of corroborating against a replay.
+ *
+ * What it deliberately does NOT reject is a cache hit inside the age cap. That
+ * would turn a payload 10% into the provider's freshness window into a hard
+ * failure — the domain loses the vote entirely, which is strictly worse than
+ * counting it with an honest age. The cap is where "reusable" ends, not
+ * "live".
  */
 export async function fetchUsgsSeismicForFusion(now: number = Date.now()): Promise<UsgsEvent[]> {
   // 35s, not 18s: the sidecar gives EACH attempt a 15s deadline, so a tick that
@@ -126,9 +165,12 @@ export async function fetchUsgsSeismicForFusion(now: number = Date.now()): Promi
   // cannot be established — and an unknown age has to fail closed.
   const generatedAt = typeof data.generatedAt === 'string' ? Date.parse(data.generatedAt) : Number.NaN;
   if (!Number.isFinite(generatedAt)) throw new Error('usgs-earthquakes missing generatedAt');
-  const ageMs = now - generatedAt;
+  const ageMs = referenceNow(res, now) - generatedAt;
   if (ageMs > MAX_PAYLOAD_AGE_MS) {
     throw new Error(`usgs-earthquakes stale replay (${Math.round(ageMs / 1000)}s old)`);
+  }
+  if (ageMs < -MAX_CLOCK_SKEW_MS) {
+    throw new Error(`usgs-earthquakes clock skew (${Math.round(-ageMs / 1000)}s ahead)`);
   }
   return parseUsgsEvents(normalizeRows(data.events));
 }

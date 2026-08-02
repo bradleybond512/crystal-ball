@@ -104,6 +104,75 @@ test('response includes generatedAt ISO timestamp', async (t) => {
   } finally { restore(); }
 });
 
+/** Installs mockFetch, then records every URL the handler asks for. */
+function recordingFetch(responses) {
+  const restoreMock = mockFetch(responses);
+  const mocked = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url, ...args) => {
+    urls.push(typeof url === 'string' ? url : (url?.url ?? String(url)));
+    return mocked(url, ...args);
+  };
+  return { urls, restore: () => { globalThis.fetch = mocked; restoreMock(); } };
+}
+
+function swpcStatus(status) {
+  const m = allReachable();
+  m.set('services.swpc.noaa.gov', { status });
+  return m;
+}
+
+// A retired upstream product answers 404 forever. Because the probe counted any
+// sub-500 status as reachable, the dead solar-wind URL reported NOMINAL for as
+// long as it had been gone — the health surface asserted the opposite of the
+// truth, which is worse than having no health surface.
+for (const status of [404, 410]) {
+  test(`treats HTTP ${status} as a DOWN feed, not a reachable one`, async (t) => {
+    if (!handler) { t.skip('handler not available'); return; }
+    missionStateCache?.clear();
+    const restore = mockFetch(swpcStatus(status));
+    try {
+      const { res } = await invokeHandler(handler);
+      const swpc = res.body.feeds.find((f) => f.id === 'spaceweather-noaa');
+      assert.ok(swpc, 'the SWPC feed must still be probed');
+      assert.equal(swpc.reachable, false, `${status} means the resource is gone`);
+      assert.equal(res.body.downCount, 1);
+    } finally { restore(); }
+  });
+}
+
+// The complement, and the reason the guard is narrow: several of these hosts
+// refuse HEAD or want a key while being perfectly healthy. Widening the check to
+// "any 4xx is down" would turn those into permanent false alarms.
+for (const status of [401, 403, 405, 429]) {
+  test(`still counts HTTP ${status} as reachable`, async (t) => {
+    if (!handler) { t.skip('handler not available'); return; }
+    missionStateCache?.clear();
+    const restore = mockFetch(swpcStatus(status));
+    try {
+      const { res } = await invokeHandler(handler);
+      const swpc = res.body.feeds.find((f) => f.id === 'spaceweather-noaa');
+      assert.equal(swpc.reachable, true, `${status} is a live host refusing this request`);
+      assert.equal(res.body.downCount, 0);
+    } finally { restore(); }
+  });
+}
+
+test('probes a SWPC product that still exists', async (t) => {
+  if (!handler) { t.skip('handler not available'); return; }
+  missionStateCache?.clear();
+  const { urls, restore } = recordingFetch(allReachable());
+  try {
+    await invokeHandler(handler);
+    const swpcUrl = urls.find((u) => u.includes('services.swpc.noaa.gov'));
+    assert.ok(swpcUrl, 'the handler must probe SWPC');
+    // solar-wind/mag-5-minute.json and plasma-5-minute.json were both retired
+    // upstream. Probing either one can only ever report a false negative.
+    assert.ok(!swpcUrl.includes('mag-5-minute'), 'mag-5-minute.json is retired');
+    assert.ok(!swpcUrl.includes('plasma-5-minute'), 'plasma-5-minute.json is retired');
+  } finally { restore(); }
+});
+
 test('rejects non-GET methods with 405', async (t) => {
   if (!handler) { t.skip('handler not available'); return; }
   const { res } = await invokeHandler(handler, { method: 'POST' });

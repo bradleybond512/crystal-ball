@@ -334,6 +334,29 @@ test('parseAlerts drops far-future stamps but tolerates small clock skew', () =>
   assert.equal(skewed.length, 1, 'a slow local clock must not hide brand-new alerts');
 });
 
+test('parseAlerts keys alerts by product AND time so simultaneous ones survive', () => {
+  // SWPC routinely issues several products on the same second. A time-only id
+  // makes them collide in any consumer that dedupes or stores by id, so one
+  // silently replaces the other.
+  const alerts = parseAlerts([
+    { product_id: 'ALTPX1', issue_datetime: ALERT_AT, message: swpcMessage('ALERT: Proton flux') },
+    { product_id: 'ALTK07', issue_datetime: ALERT_AT, message: swpcMessage('ALERT: K-index of 7') },
+  ], NOW);
+  assert.equal(alerts.length, 2);
+  assert.equal(new Set(alerts.map((a) => a.id)).size, 2, 'ids must be distinct');
+  // Matches the id built by swpc-monitor and the sidecar — the three paths feed
+  // the same panel and must agree on identity, not just on content.
+  assert.deepEqual(alerts.map((a) => a.id).sort(), [
+    `ALTK07-${ALERT_AT}`,
+    `ALTPX1-${ALERT_AT}`,
+  ]);
+});
+
+test('parseAlerts falls back to a stable id when product_id is missing', () => {
+  const [alert] = parseAlerts([{ issue_datetime: ALERT_AT, message: swpcMessage('ALERT: no product') }], NOW);
+  assert.equal(alert!.id, `swpc-${ALERT_AT}`);
+});
+
 test('parseAlerts caps the returned list', () => {
   const many = Array.from({ length: 40 }, (_, i) => ({
     issue_datetime: `2026-07-30 1${String(i % 10)}:00:00.000`,

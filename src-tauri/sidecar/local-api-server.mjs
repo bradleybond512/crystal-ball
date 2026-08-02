@@ -3147,9 +3147,34 @@ export function summarizeKpSidecar(points, now, windowMs = SPACEWX_KP_WINDOW_MS)
   };
 }
 
+/**
+ * Every SWPC product /api/space-weather-feeds fans out to is a JSON array.
+ * Anything else — `{}`, `false`, an error envelope behind a 200 — is a
+ * wrong-shape body. Normalizing to null here means the shape is decided in one
+ * place rather than left for the renderer's parsers to reject silently.
+ */
+export function normalizeSwpcFeed(value) {
+  return Array.isArray(value) ? value : null;
+}
+
+/**
+ * A feed contributes only if it carries at least one row. An empty array is a
+ * successful HTTP response that says nothing, and counting it as a healthy vote
+ * is the fail-open pattern that let this panel sit blank without flagging.
+ */
+export function swpcFeedIsUsable(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+// Mirrors FUTURE_SKEW_TOLERANCE_MS in src/services/space-weather-parse.ts. The
+// renderer and this route both feed the space-weather panel, so an alert must
+// not be visible through one and missing through the other.
+const SPACEWX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+
 export function summarizeAlertsSidecar(raw, now, windowMs = SPACEWX_ALERTS_WINDOW_MS) {
   if (!Array.isArray(raw)) return [];
   const cutoff = now - windowMs;
+  const horizon = now + SPACEWX_FUTURE_SKEW_MS;
   const out = [];
   for (const r of raw) {
     if (!r?.message) continue;
@@ -3160,7 +3185,7 @@ export function summarizeAlertsSidecar(raw, now, windowMs = SPACEWX_ALERTS_WINDO
     // already fixed; this path never got it.
     const issuedAt = toUtcIsoTag(r.issue_datetime);
     const t = Date.parse(issuedAt);
-    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
+    if (!Number.isFinite(t) || t < cutoff || t > horizon) continue;
     const headline = extractAlertHeadlineSidecar(r.message);
     if (headline.length === 0) continue;
     out.push({
@@ -10515,7 +10540,10 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Space Weather proxy (NOAA SWPC, no API key) ───────────────────────────
   if (requestUrl.pathname === '/api/space-weather-feeds') {
- const _swCached = getCached('space-weather-feeds', 5 * 60 * 1000);
+ // No TTL argument: getCached prefers a supplied ttlMs over the stored one, so
+ // passing 5 min here would override the shorter TTL a partial result is
+ // deliberately written with and pin the hole for the full five minutes.
+ const _swCached = getCached('space-weather-feeds');
  if (_swCached) return json(_swCached);
  const SW_URLS = {
  kp: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
@@ -10543,13 +10571,16 @@ async function dispatch(requestUrl, req, routes, context) {
  if (r.status === 'fulfilled' && r.value.ok) {
  try { value = await r.value.json(); } catch { value = null; }
  }
- result[key] = value;
- if (value !== null) usable += 1;
+ result[key] = normalizeSwpcFeed(value);
+ if (swpcFeedIsUsable(value)) usable += 1;
  }
  // Health is derived from what the ADAPTER produced, not from the handler
  // reaching this line. Reporting a four-way upstream outage as a healthy
  // fetch — then caching the all-null envelope for five minutes — is what let
- // this panel sit blank for months without anything flagging it.
+ // this panel sit blank for months without anything flagging it. An empty
+ // array counts as a failure here for the same reason: SWPC never returns
+ // four simultaneously empty products, so that pattern means upstream trouble
+ // rather than a genuinely quiet sun.
  if (usable === 0) {
  trackFailure('swpc', new Error('all SWPC feeds unavailable'));
  return json({ error: 'space-weather-feeds: no SWPC feed returned usable data' }, 502);

@@ -239,7 +239,14 @@ export function classifyAlert(message: string): { headline: string; severity: Sp
  * message }. Entries outside the window are dropped and the remainder is sorted
  * newest-first here rather than trusting upstream order.
  */
-const FUTURE_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+/**
+ * Clock skew between this host and SWPC is normal and small; a genuinely
+ * future-stamped alert is corrupt. Exported so swpc-monitor uses the same
+ * number rather than its own — the two paths feeding the same panel must agree
+ * on whether a given alert exists. The sidecar's JS twin repeats the value and
+ * is held to it by __tests__/spaceweather-parity.test.mjs.
+ */
+export const FUTURE_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
 
 export function parseAlerts(
   raw: unknown,
@@ -249,11 +256,10 @@ export function parseAlerts(
 ): SpaceWeatherAlert[] {
   if (!Array.isArray(raw)) return [];
   const cutoff = nowMs - windowMs;
-  // Clock skew between this host and SWPC is normal and small; a genuinely
-  // future-stamped alert is corrupt and would sort to the top of the list and
-  // render "in 3 hours". Tolerating a few minutes keeps a slow local clock from
-  // dropping the newest alerts — the exact silent-drop this parser exists to
-  // avoid — while still rejecting nonsense.
+  // A future-stamped alert would sort to the top of the list and render "in 3
+  // hours". Tolerating a few minutes keeps a slow local clock from dropping the
+  // newest alerts — the exact silent-drop this parser exists to avoid — while
+  // still rejecting nonsense.
   const horizon = nowMs + FUTURE_SKEW_TOLERANCE_MS;
   const dated: { at: number; alert: SpaceWeatherAlert }[] = [];
   for (const row of raw) {
@@ -266,7 +272,14 @@ export function parseAlerts(
     // recent — drop it rather than render an Invalid Date.
     if (!Number.isFinite(at) || at < cutoff || at > horizon) continue;
     const { headline, severity } = classifyAlert(message);
-    dated.push({ at, alert: { id: tag, message: headline, issuedAt: new Date(at), severity } });
+    // Keyed on product AND time, matching swpc-monitor and the sidecar. SWPC
+    // routinely issues several products on the same second, so a time-only id
+    // lets them overwrite each other in any consumer that dedupes by id.
+    const productId = typeof row.product_id === 'string' && row.product_id ? row.product_id : 'swpc';
+    dated.push({
+      at,
+      alert: { id: `${productId}-${String(row.issue_datetime)}`, message: headline, issuedAt: new Date(at), severity },
+    });
   }
   dated.sort((a, b) => b.at - a.at);
   return dated.slice(0, cap).map((entry) => entry.alert);

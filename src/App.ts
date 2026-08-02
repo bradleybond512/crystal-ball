@@ -666,10 +666,22 @@ export class App {
  { name: 'predictions', fn: () => this.dataLoader.loadPredictions(), intervalMs: REFRESH_INTERVALS.predictions },
  { name: 'pizzint', fn: () => this.dataLoader.loadPizzInt(), intervalMs: 10 * 60 * 1000 },
  { name: 'natural', fn: () => this.dataLoader.loadNatural(), intervalMs: 60 * 60 * 1000, condition: () => this.state.mapLayers.natural },
- // The earthquakes fusion domain's 2nd and 3rd votes. Both providers declare
+ // The earthquakes fusion domain's three votes, all on the same cadence.
+ // USGS is here rather than riding on `natural` above because that task is
+ // hourly AND gated on a map layer, so the domain's primary source went
+ // stale between ticks and vanished entirely when the layer was toggled off
+ // (see loadUsgsSeismic for why a faster `natural` would not have fixed it).
+ // Same interval as its two siblings, because what these snapshots are for
+ // is corroborating RECENT quakes. Matching is on event origin time (+/-120 s,
+ // 50 km), so an old snapshot still matches old quakes fine — but a quake
+ // that happened ten minutes ago is in EMSC's snapshot and simply absent from
+ // an hour-old USGS one, and the domain reports a single source for the event
+ // anyone is actually looking at. Equal cadences keep the three lists covering
+ // the same tail.
+ // All three providers declare
  // freshnessTtlMs: 10 min, and provider-health marks a provider `stale` once
  // now - lastSuccessAt exceeds it — so an unscheduled loader leaves the domain
- // running on USGS alone ~10 min after launch, with no upstream fault.
+ // short a vote ~10 min after launch, with no upstream fault.
  // 8 min, not 10: scheduleRefresh applies +/-10% jitter, so an interval set
  // EQUAL to the TTL lands over it on roughly half its ticks and the provider
  // flaps healthy/stale. 8 min tops out at 8.8 min AT THE DEFAULT CADENCE
@@ -679,8 +691,10 @@ export class App {
  // exist to buy battery with freshness, and a provider whose data really is
  // 20 min old SHOULD read stale. What this fixes is the default path, where
  // the user chose nothing and the domain went stale anyway.
- // Both routes are already sidecar-cached on a stable key (emsc 2 min,
- // geofon 5 min), so the cadence costs at most one upstream request per tick.
+ // All three routes are already sidecar-cached on a stable key (usgs 60 s,
+ // emsc 2 min, geofon 5 min), so the cadence costs at most one upstream
+ // request per tick.
+ { name: 'usgsSeismic', fn: () => this.dataLoader.loadUsgsSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'emscSeismic', fn: () => this.dataLoader.loadEmscSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'geofonSeismic', fn: () => this.dataLoader.loadGeofonSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  // Safety-critical: drives the status chip + storm posture, so it must keep
@@ -757,7 +771,7 @@ export class App {
  // often we tick (a sidecar restart or an uncached 502 adds misses).
  // The limit=50 comms fetch early-returns from its own 10 min module cache
  // without touching the network, so it reaches IODA about once per expiry,
- // ~100-145/day. That one is NOT quantum-bounded — it builds an unsnapped
+ // ~100-144/day. That one is NOT quantum-bounded — it builds an unsnapped
  // second-resolution key, so every expiry is an upstream miss. Its rate is
  // CAPPED by that 10 min module cache at <=144/day, but the cadence still
  // moves it inside that cap: expiry is only noticed on a tick, so a slower

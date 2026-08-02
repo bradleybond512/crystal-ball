@@ -43,20 +43,54 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   { id: 'open-meteo-aqi', domain: 'air_quality', displayName: 'Open-Meteo Air Quality', authType: 'none', baseUrl: 'https://air-quality-api.open-meteo.com', rateLimitNote: '10k req/day non-commercial', freshnessTtlMs: HOUR, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'open-meteo' },
   { id: 'openaq-v3', domain: 'air_quality', displayName: 'OpenAQ v3', authType: 'none', baseUrl: 'https://api.openaq.org', rateLimitNote: 'anonymous reads ok; key raises limits', freshnessTtlMs: 2 * HOUR, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'openaq' },
   { id: 'airnow', domain: 'air_quality', displayName: 'AirNow (EPA)', authType: 'free_key', requiredSecret: 'AIRNOW_API_KEY', baseUrl: 'https://www.airnowapi.org', rateLimitNote: '500 req/hr keyed', freshnessTtlMs: HOUR, reliabilityWeight: 0.9, fallbackPriority: 3, independenceGroup: 'epa-airnow' },
-  { id: 'purpleair', domain: 'air_quality', displayName: 'PurpleAir', authType: 'free_key', requiredSecret: 'PURPLEAIR_API_KEY', baseUrl: 'https://api.purpleair.com', rateLimitNote: 'keyed, point-based', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.75, fallbackPriority: 4, independenceGroup: 'purpleair' },
+  // 45 min, not 30. All four air-quality providers are recorded from one
+  // place — the compound-threat evaluation that `loadAirQuality` schedules —
+  // and that task runs every 30 min, so a 30 min TTL was exactly equal to its
+  // own driver's interval. The +/-10% scheduler jitter alone puts the tick at
+  // up to 33 min, and the recording sits behind a 10 s debounce and the fetch
+  // itself, so PurpleAir flapped healthy/stale on roughly half its ticks with
+  // nothing wrong upstream. The other three (1 h, 1 h, 2 h) already had the
+  // headroom this one lacked; 45 min gives it the same and stays well inside
+  // the domain's 3 h match window. Not fixed by ticking faster: the fetch is
+  // an uncached bbox query against a keyed, point-metered API, and shortening
+  // the interval would speed up the whole compound-threat evaluation with it,
+  // not just this one source.
+  { id: 'purpleair', domain: 'air_quality', displayName: 'PurpleAir', authType: 'free_key', requiredSecret: 'PURPLEAIR_API_KEY', baseUrl: 'https://api.purpleair.com', rateLimitNote: 'keyed, point-based', freshnessTtlMs: 45 * MIN, reliabilityWeight: 0.75, fallbackPriority: 4, independenceGroup: 'purpleair' },
   // ── Crypto prices (fused by symbol: CoinGecko + Coinbase + CoinPaprika +
   // Kraken, all no-key) ──
-  { id: 'coingecko', domain: 'markets', displayName: 'CoinGecko', authType: 'none', baseUrl: 'https://api.coingecko.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'coingecko' },
-  { id: 'coinbase', domain: 'markets', displayName: 'Coinbase', authType: 'none', baseUrl: 'https://api.coinbase.com', rateLimitNote: 'public spot prices, no key', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 5, independenceGroup: 'coinbase' },
-  { id: 'coinpaprika', domain: 'markets', displayName: 'CoinPaprika', authType: 'none', baseUrl: 'https://api.coinpaprika.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 6, independenceGroup: 'coinpaprika' },
-  { id: 'kraken', domain: 'markets', displayName: 'Kraken', authType: 'none', baseUrl: 'https://api.kraken.com', rateLimitNote: 'public ticker, no key', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 7, independenceGroup: 'kraken' },
+  //
+  // 12 min TTL on all seven price providers (the four below plus the three
+  // equities ones), raised from 5 min. Their sole driver is the `markets`
+  // scheduler task at REFRESH_INTERVALS.markets = 8 min, so a 5 min TTL was a
+  // promise the app never had any way to keep: every provider read `stale` for
+  // most of each cycle with no upstream fault, and `stale` costs reliability
+  // through STATUS_RELIABILITY_FACTOR in source-fusion — a self-inflicted
+  // confidence penalty on seven healthy sources.
+  //
+  // Fixed by moving the TTL rather than the cadence because the cadence is
+  // externally capped: FMP's free tier allows 250 req/day and 8 min already
+  // spends 180 of them, so 6 min (240/day) would sit at the cap before the
+  // user pressed refresh once. 12 min covers a jittered tick (8.8 min) plus
+  // the loader's own runtime ahead of the fusion block — up to 60 s of
+  // deliberate retry sleeps for commodities and crypto, plus the sequential
+  // fetches, so ~11 min worst case — and leaves the rest as margin.
+  //
+  // Widening a TTL does not inflate fusion freshness here: source-fusion
+  // scores 1 - age/ttl against the OBSERVATION's timestamp, and these
+  // observations are fused in the same tick that records them, so their age is
+  // ~0 either way. The only behaviour that changes is the stale threshold,
+  // which is the thing that was wrong.
+  { id: 'coingecko', domain: 'markets', displayName: 'CoinGecko', authType: 'none', baseUrl: 'https://api.coingecko.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'coingecko' },
+  { id: 'coinbase', domain: 'markets', displayName: 'Coinbase', authType: 'none', baseUrl: 'https://api.coinbase.com', rateLimitNote: 'public spot prices, no key', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 5, independenceGroup: 'coinbase' },
+  { id: 'coinpaprika', domain: 'markets', displayName: 'CoinPaprika', authType: 'none', baseUrl: 'https://api.coinpaprika.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.8, fallbackPriority: 6, independenceGroup: 'coinpaprika' },
+  { id: 'kraken', domain: 'markets', displayName: 'Kraken', authType: 'none', baseUrl: 'https://api.kraken.com', rateLimitNote: 'public ticker, no key', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 7, independenceGroup: 'kraken' },
   // ── Stock prices (fused by ticker: Yahoo (no-key, primary) + Finnhub
   // (keyed, corroborating) + FMP (keyed, corroborating). Own 'equities'
   // domain so stock fingerprints don't collide with crypto's in the
   // per-domain redundancy group. ──
-  { id: 'yahoo-finance', domain: 'equities', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'yahoo' },
-  { id: 'finnhub', domain: 'equities', displayName: 'Finnhub', authType: 'free_key', requiredSecret: 'FINNHUB_API_KEY', baseUrl: 'https://finnhub.io', rateLimitNote: '60 req/min free tier', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'finnhub' },
-  { id: 'fmp', domain: 'equities', displayName: 'Financial Modeling Prep', authType: 'free_key', requiredSecret: 'FMP_API_KEY', baseUrl: 'https://financialmodelingprep.com', rateLimitNote: '250 req/day free tier', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 3, independenceGroup: 'fmp' },
+  { id: 'yahoo-finance', domain: 'equities', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'yahoo' },
+  { id: 'finnhub', domain: 'equities', displayName: 'Finnhub', authType: 'free_key', requiredSecret: 'FINNHUB_API_KEY', baseUrl: 'https://finnhub.io', rateLimitNote: '60 req/min free tier', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'finnhub' },
+  { id: 'fmp', domain: 'equities', displayName: 'Financial Modeling Prep', authType: 'free_key', requiredSecret: 'FMP_API_KEY', baseUrl: 'https://financialmodelingprep.com', rateLimitNote: '250 req/day free tier', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 3, independenceGroup: 'fmp' },
   // ── Intel Expansion Cluster 1: abuse.ch cyber trio ───────────────────────
   // All three share independenceGroup 'abuse-ch' — same operator, same data
   // pipeline. They MUST NOT count as 3 independent votes in corroboration.

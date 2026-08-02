@@ -777,6 +777,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'reliefWeb', task: () => runGuarded('reliefWeb', () => this.loadReliefWebCrises()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: () => runGuarded('bellingcat', () => this.loadBellingcat()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: () => runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'usgsSeismic', task: () => runGuarded('usgsSeismic', () => this.loadUsgsSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: () => runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'geofonSeismic', task: () => runGuarded('geofonSeismic', () => this.loadGeofonSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: () => runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
@@ -1539,14 +1540,15 @@ export class DataLoaderManager implements AppModule {
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
- recordDomainObservations('usgs-earthquakes', usgsEarthquakesToObservations(earthquakeResult.value), true);
+ // No recordDomainObservations here: this path reads through a 1-hour
+ // offline cache and is gated on a map layer, so it cannot honour the
+ // provider's 10 min TTL. loadUsgsSeismic owns the fusion vote.
  } else {
  this.ctx.intelligenceCache.earthquakes = [];
  this.ctx.map?.setEarthquakes([]);
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update([]);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'error' });
  dataFreshness.recordError('usgs', String(earthquakeResult.reason));
- recordDomainObservations('usgs-earthquakes', [], false);
  }
 
  if (eonetResult.status === 'fulfilled') {
@@ -4325,6 +4327,45 @@ export class DataLoaderManager implements AppModule {
  } catch (error) {
  console.warn('[geofon-seismic] fetch failed', error);
  recordDomainObservations('geofon-seismic', [], false);
+ }
+  }
+
+  /**
+   * The earthquakes fusion domain's FIRST vote, on its own cadence.
+   *
+   * USGS observations used to be recorded as a side effect of `loadNatural`,
+   * which is wrong twice over. `loadNatural` runs hourly against a 10 min
+   * freshnessTtlMs, so the provider read `stale` for ~50 of every 60 min with
+   * no upstream fault; and it is gated on `mapLayers.natural`, so turning a MAP
+   * LAYER off silently removed a fusion vote — the domain then ran on EMSC +
+   * GEOFON with no indication that the primary source had been switched off.
+   *
+   * It also could not simply be given a faster interval: the fetch there is
+   * wrapped in `withOfflineCache('earthquake-data', ..., 1 h)`, and since
+   * `recordDomainObservations` stamps `lastSuccessAt` at RECORD time rather
+   * than from the payload, a faster tick would just have re-stamped hour-old
+   * cached rows as a fresh success — a phantom healthy vote, which is worse
+   * than an honest stale one. Hence a separate call that skips that cache. The
+   * sidecar's own 60 s cache on `/api/earthquakes` still absorbs the load, so
+   * an 8 min cadence costs at most one upstream request per tick.
+   */
+  async loadUsgsSeismic(): Promise<void> {
+ try {
+ const quakes = await fetchEarthquakes();
+ // Fail-CLOSED on empty. `fetchEarthquakes` runs behind a circuit breaker
+ // whose fallback is an empty list, so `[]` is returned for an open circuit
+ // exactly as it would be for a genuinely quiet planet — and the two are
+ // distinguishable here only by the fact that this feed has no magnitude
+ // floor. Over the USGS window some quake is always present, so an empty
+ // list is the breaker talking, not the Earth. Note this is the OPPOSITE
+ // reading from outage-fusion-observations, where zero rows is a real
+ // observation; the difference is that a quiet internet is common and a
+ // silent planet is not.
+ const observations = usgsEarthquakesToObservations(quakes);
+ recordDomainObservations('usgs-earthquakes', observations, observations.length > 0);
+ } catch (error) {
+ console.warn('[usgs-seismic] fetch failed', error);
+ recordDomainObservations('usgs-earthquakes', [], false);
  }
   }
 

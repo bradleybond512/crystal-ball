@@ -114,13 +114,22 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // entry and pick up a later entry's intervalMs.
     const m = appSrc.match(new RegExp(`name: '${taskName}'.*?intervalMs:\\s*([^,]+),`));
     assert.ok(m, `${taskName} is not registered with the refresh scheduler in App.ts`);
+    // Some entries point at the shared REFRESH_INTERVALS table rather than an
+    // inline literal; resolve through it so the guard reads the real number.
+    const shared = m[1].trim().match(/^REFRESH_INTERVALS\.(\w+)/);
+    if (shared) {
+      const baseSrc = readFileSync(resolve(root, 'src/config/variants/base.ts'), 'utf8');
+      const entry = baseSrc.match(new RegExp(`\\b${shared[1]}:\\s*([^,]+),`));
+      assert.ok(entry, `REFRESH_INTERVALS.${shared[1]} is not defined in variants/base.ts`);
+      return product(entry[1]);
+    }
     return product(m[1]);
   };
 
   const registryTtlMs = (providerId) => {
     const m = registrySrc.match(new RegExp(`id: '${providerId}'.*?freshnessTtlMs:\\s*([^,]+),`));
     assert.ok(m, `${providerId} has no freshnessTtlMs in the provider registry`);
-    return product(m[1].replace(/\bMIN\b/g, '60000'));
+    return product(m[1].replace(/\bMIN\b/g, '60000').replace(/\bHOUR\b/g, '3600000'));
   };
 
   // scheduleRefresh jitters +/-10% (refresh-scheduler.ts JITTER_FRACTION), so an
@@ -166,10 +175,84 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
         modeledCycleMs < ttl,
         `${task} runs every ${interval / 60000} min but ${provider} declares a ${ttl / 60000} min TTL; ` +
         `with jitter and a full-length fetch that cycle reaches ${modeledCycleMs / 60000} min ` +
-        `and the domain drops to USGS alone`,
+        `and the earthquakes domain drops a vote`,
       );
     });
   }
+
+  it('usgsSeismic refreshes inside the usgs-earthquakes freshness TTL', () => {
+    // Separate from the loop above because this loader has no source-visible
+    // fetch timeout to add: fetchEarthquakes goes through the generated client
+    // and a circuit breaker, so there is no `AbortSignal.timeout(N)` literal to
+    // parse. The budget therefore models the jittered interval ONLY, and the
+    // remaining slack is what covers the request itself — which is why the
+    // assertion below is strict and why the interval is 8 min against a 10 min
+    // TTL rather than something closer.
+    const interval = schedulerIntervalMs('usgsSeismic');
+    const ttl = registryTtlMs('usgs-earthquakes');
+    assert.ok(
+      interval * JITTER < ttl,
+      `usgsSeismic runs every ${interval / 60000} min (${(interval * JITTER) / 60000} min jittered) ` +
+      `against a ${ttl / 60000} min TTL, leaving nothing for the fetch itself`,
+    );
+    // The fusion vote must NOT ride on `natural`: that task is hourly and gated
+    // on a map layer, so recording there made a MAP TOGGLE silently remove a
+    // provider. Pinned so the record cannot drift back.
+    assert.match(
+      dataLoaderSrc,
+      /async loadUsgsSeismic\(\)[\s\S]*?recordDomainObservations\('usgs-earthquakes'/,
+      'loadUsgsSeismic must own the usgs-earthquakes fusion record',
+    );
+    const naturalStart = dataLoaderSrc.indexOf('async loadNatural()');
+    assert.ok(naturalStart > 0, 'could not locate loadNatural');
+    const nextMethod = dataLoaderSrc.indexOf('\n  async ', naturalStart + 1);
+    assert.ok(nextMethod > naturalStart, 'could not locate the method after loadNatural');
+    const naturalBody = dataLoaderSrc.slice(naturalStart, nextMethod);
+    assert.ok(
+      !naturalBody.includes("recordDomainObservations('usgs-earthquakes'"),
+      'loadNatural must not record usgs-earthquakes: it reads through a 1-hour offline cache, ' +
+      'so recording there stamps a fresh lastSuccessAt onto hour-old rows',
+    );
+  });
+
+  it('markets refreshes inside every price provider freshness TTL', () => {
+    const interval = schedulerIntervalMs('markets');
+    const priceProviders = ['coingecko', 'coinbase', 'coinpaprika', 'kraken', 'yahoo-finance', 'finnhub', 'fmp'];
+    // The binding contract is the TIGHTEST TTL across the fused set, since one
+    // stale provider is enough to cost the domain a vote.
+    const binding = Math.min(...priceProviders.map(registryTtlMs));
+    // Modeled as the jittered interval only. loadMarkets runs its panel phases
+    // before the fusion block, including up to 60 s of deliberate retry sleeps,
+    // so the real cycle is longer — the margin between this figure and the TTL
+    // is what absorbs that, and it is why the TTL is 12 min rather than 10.
+    // The cadence cannot be tightened instead: FMP's free tier is 250 req/day
+    // and 8 min already spends 180.
+    const modeledCycleMs = interval * JITTER;
+    assert.ok(
+      modeledCycleMs + 60_000 < binding,
+      `markets runs every ${interval / 60000} min (${modeledCycleMs / 60000} min jittered, plus up to ` +
+      `1 min of in-loader retry sleeps) against a ${binding / 60000} min tightest TTL`,
+    );
+  });
+
+  it('airQuality refreshes inside every air-quality provider freshness TTL', () => {
+    const interval = schedulerIntervalMs('airQuality');
+    const aqProviders = ['open-meteo-aqi', 'openaq-v3', 'airnow', 'purpleair'];
+    const binding = Math.min(...aqProviders.map(registryTtlMs));
+    // All four are recorded from evaluateCompoundThreats, which loadAirQuality
+    // reaches through a trailing debounce — parsed from source rather than
+    // hardcoded, so lengthening the debounce fails HERE rather than pushing the
+    // domain past its TTL in production.
+    const debounceMatch = dataLoaderSrc.match(/private scheduleCompoundThreatEvaluation\(\)[\s\S]*?\}, ([0-9_]+)\);/);
+    assert.ok(debounceMatch, 'could not read the compound-threat debounce out of data-loader.ts');
+    const debounceMs = Number(debounceMatch[1].replace(/_/g, ''));
+    const modeledCycleMs = interval * JITTER + debounceMs;
+    assert.ok(
+      modeledCycleMs < binding,
+      `airQuality runs every ${interval / 60000} min; with jitter and the ${debounceMs / 1000}s debounce ` +
+      `that cycle reaches ${modeledCycleMs / 60000} min against a ${binding / 60000} min tightest TTL`,
+    );
+  });
 
   it('internetOutages refreshes inside the TIGHTER of its two contracts', () => {
     const interval = schedulerIntervalMs('internetOutages');

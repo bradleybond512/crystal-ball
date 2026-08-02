@@ -94,9 +94,14 @@ const IODA_FUSION_LIMIT = 5000;
  *
  * The residual lag is the cache freeze — every tick inside a quantum reuses the
  * first tick's payload, so the counts can be up to one quantum old. That is
- * inherent to caching and symmetric with the corroborating source: the
+ * inherent to caching, and it is not a lag this source carries alone: the
  * `/api/internet-outages-cf` route caches for 15 min on a FIXED key, so
- * Cloudflare's own view lags comparably rather than racing ahead.
+ * Cloudflare's view can be up to one quantum old too. The two are the same
+ * MAGNITUDE, not the same phase — IODA's window is aligned to the wall-clock
+ * quantum while Cloudflare's fills whenever the first tick after an eviction
+ * lands, so on any given tick either one may be the fresher of the pair. What
+ * matters for corroboration is that neither races systematically ahead of the
+ * other, so a disagreement is a real disagreement and not a phase artifact.
  *
  * None of this reaches the survival comms axis — that axis reads
  * `internet-outages.fetchIodaOutages()`, a separate limit=50 call on an

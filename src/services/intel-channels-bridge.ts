@@ -50,7 +50,12 @@ export async function pollSpaceWeather(): Promise<void> {
   // is not evidence of a working feed. Every product this poller reads being
   // null is the reassuring reading — no storm, no alerts — produced by an
   // outage, so it must surface as a failure rather than a quiet sky.
-  if (data.kpIndex === null && data.xrayClass === null && data.alertMessages.length === 0) {
+  // Wind counts even though nothing below reads it: the sidecar route and
+  // fetchSpaceWeather both treat a parsed wind series as a usable product, and a
+  // health verdict that disagrees with them would report an outage on a feed
+  // that answered.
+  if (data.kpIndex === null && data.xrayClass === null && data.alertMessages.length === 0
+    && data.solarWindSpeed === null && data.solarWindDensity === null && data.bz === null) {
     throw new Error('SWPC returned no usable space-weather data');
   }
   const out: UnifiedAlert[] = [];

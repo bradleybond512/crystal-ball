@@ -213,15 +213,19 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       const catchAt = body.indexOf('} catch');
       assert.ok(catchAt > 0, `${method} is expected to record a failure in a catch`);
       const tryBody = body.slice(0, catchAt);
-      assert.match(
-        tryBody,
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*\\w+,\\s*\\w+\\.length > 0\\s*\\)`),
-        `${method} must gate its ok flag on the adapter producing rows`,
+      // Same-identifier binding as the air-quality guard below: two `\w+` in a
+      // row would accept `record(id, observations, somethingElse.length > 0)`,
+      // which is exactly the drift this is meant to catch.
+      const call = tryBody.match(
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*(\\w+),([^;]*)\\)`),
       );
-      assert.doesNotMatch(
-        tryBody,
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],[^;]*,\\s*true\\s*\\)`),
-        `${method} must not hardcode a healthy vote`,
+      assert.ok(call, `${method} must record a vote on its success path`);
+      const [, observationsVar, okExpr] = call;
+      assert.match(
+        okExpr,
+        new RegExp(`\\b${observationsVar}\\.length > 0`),
+        `${method} must gate ok on ${observationsVar}.length — the variable it recorded — ` +
+        `not on a literal or an unrelated expression (found: ${okExpr.trim()})`,
       );
     }
   });
@@ -300,15 +304,39 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     const bootLine = dataLoaderSrc.split('\n').find((l) => l.includes("name: 'usgsSeismic'"));
     assert.ok(bootLine, 'could not find the usgsSeismic boot task in data-loader.ts');
     const gate = bootLine.slice(0, bootLine.indexOf('tasks.push'));
-    assert.match(gate, /SITE_VARIANT/, 'the usgsSeismic boot task is expected to carry a variant gate');
-    // Quote style and comparison form are both evadable, so the negative match
-    // covers every way of writing "full only": either quote, == or ===, and the
-    // membership form `['full'].includes(SITE_VARIANT)`.
-    assert.doesNotMatch(
-      gate,
-      /SITE_VARIANT\s*===?\s*['"]full['"]|\[\s*['"]full['"]\s*\]\.includes\(\s*SITE_VARIANT/,
-      'the usgsSeismic boot task must not be full-only: tech and finance ship the natural layer too',
+    const condition = gate.match(/^\s*if\s*\((.+?)\)\s*$/);
+    assert.ok(condition, `the usgsSeismic boot task must be a plain \`if (...)\` gate, got: ${gate.trim()}`);
+    const expr = condition[1];
+    // Constrained by SHAPE, not by enumerating spellings of "full only".
+    // A negative regex is an unwinnable game — `!== 'tech' && !== 'finance'`, a
+    // lookup table, a negated includes each do the same damage while matching
+    // nothing. Instead the gate is held to a form whose reach is decidable by
+    // reading it: an exclusion over SITE_VARIANT alone, naming only variants
+    // that do NOT ship the natural layer. Anything outside that shape fails
+    // here and has to be re-argued rather than quietly narrowing the domain.
+    const shipsNatural = ['full', 'tech', 'finance'];
+    const named = [...expr.matchAll(/['"]([^'"]*)['"]/g)].map((m) => m[1]);
+    const identifiers = [...new Set(expr.replace(/['"][^'"]*['"]/g, '').match(/[A-Za-z_$][\w$]*/g) ?? [])]
+      .filter((id) => id !== 'includes');
+    assert.deepEqual(
+      identifiers,
+      ['SITE_VARIANT'],
+      `the usgsSeismic gate must depend on SITE_VARIANT alone — an indirect lookup hides which ` +
+      `variants it reaches (gate: ${expr.trim()})`,
     );
+    assert.doesNotMatch(
+      expr,
+      /(?<![!=<>])==/,
+      `the usgsSeismic gate must be an EXCLUSION (!== / !includes): an equality gate ships the ` +
+      `vote to one variant and silently drops it from the others (gate: ${expr.trim()})`,
+    );
+    for (const variant of named) {
+      assert.ok(
+        !shipsNatural.includes(variant),
+        `the usgsSeismic boot task excludes the ${variant} variant, which ships the natural map ` +
+        `layer and would lose the earthquakes domain's USGS vote (gate: ${expr.trim()})`,
+      );
+    }
     const entry = appSrc.match(/name: 'usgsSeismic'[^\n]*/);
     assert.ok(entry, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
     assert.doesNotMatch(
@@ -433,19 +461,22 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       // false)` beside its success call, so merely matching the provider id
       // stayed green with every success path deleted — four providers recording
       // nothing but failures forever, under a passing cadence test.
-      assert.match(
-        compoundBody,
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*\\w+[(,]`),
-        `${provider} must record a vote built from its adapter, not just a failure row`,
+      // The ok flag must be tied to THE SAME identifier that was passed as the
+      // observations, so the two arguments cannot drift apart. Rejecting only a
+      // literal `true` was not enough: `record(id, observations, r.ok)` or
+      // `record(id, observations, raw.length > 0)` both pass such a check while
+      // reporting healthy for a response whose rows the adapter all dropped —
+      // an unrelated expression happening to be truthy is the whole failure.
+      const call = compoundBody.match(
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*(\\w+),([^;]*)\\)`),
       );
-      // ...and the ok flag must not be a LITERAL. `record(id, adapter(x), true)`
-      // satisfies the check above while reporting healthy for a 200 whose rows
-      // the adapter dropped entirely — lastSuccessAt re-stamped, the provider
-      // reading healthy, and the domain counting a source contributing nothing.
-      assert.doesNotMatch(
-        compoundBody,
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],[^;]*,\\s*true\\s*[),]`),
-        `${provider} must derive its ok flag from the adapter output, never hardcode true`,
+      assert.ok(call, `${provider} must record a vote built from its adapter, not just a failure row`);
+      const [, observationsVar, okExpr] = call;
+      assert.match(
+        okExpr,
+        new RegExp(`\\b${observationsVar}\\.length > 0`),
+        `${provider} must gate ok on ${observationsVar}.length — the variable it actually recorded — ` +
+        `not on a literal or an unrelated expression (found: ${okExpr.trim()})`,
       );
     }
     // Debounce parsed from source rather than hardcoded, so lengthening it fails

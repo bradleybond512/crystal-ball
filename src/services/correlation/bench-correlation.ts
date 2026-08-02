@@ -169,6 +169,15 @@ export interface CorrelationBenchReport {
   enginePairCount: number;
   /** Distinct event pairs — the precision denominator. */
   distinctEnginePairCount: number;
+  /**
+   * How many planted true pairs EXIST — the recall denominator, and the ceiling
+   * on how many true pairs any pass can have emitted. Reported so the gate can
+   * reconcile precision against recall: `precision × distinct` and
+   * `recall × universe` are two independent routes to the same true-pair count,
+   * and a hand-edited report that keeps both rates at 1.0 while inflating the
+   * pair counts is arithmetically impossible once they must agree.
+   */
+  truePairUniverse: number;
   pairPrecision: number;
   pairRecall: number;
   /** Pairs touching a near-miss decoy. Zero-tolerance gate. */
@@ -189,6 +198,19 @@ export interface CorrelationBenchReport {
    * install → match path broke, which every count-based gate would miss.
    */
   causalLearnedRulePairCount: number;
+  /**
+   * Per-causal-rule pair volume, descending. The AGGREGATE above is a sum, and a
+   * sum hides its own zeros: with three causal rules emitting 7/6/6, one of them
+   * dying outright only moves the total to 13, which any proportional floor on
+   * the aggregate waves through. Reported per rule so a single dead matcher is
+   * visible.
+   */
+  causalLearnedRulePairsPerRule: number[];
+  /**
+   * The smallest per-rule volume above — 0 when a synthesized causal rule never
+   * fired. This is the field the liveness gate reads.
+   */
+  minCausalLearnedRulePairCount: number;
 
   // ── human-readable detail (not part of the gate) ──
   edges: BenchEdgeRow[];
@@ -283,6 +305,17 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   const causalLearnedRulePairCount = learnedPairs
     .filter((p: CorrelatedPair) => causalLearnedRuleIds.has(p.ruleId))
     .length;
+  // Seeded from the rule IDS, not from the emitted pairs: a rule that fired
+  // nothing has no pairs to group by, and grouping by emission would drop it
+  // from the tally entirely — which is precisely the rule the gate needs to see.
+  const perCausalRule = new Map<string, number>(
+    [...causalLearnedRuleIds].map((id) => [id, 0]),
+  );
+  for (const p of learnedPairs) {
+    const seen = perCausalRule.get(p.ruleId);
+    if (seen !== undefined) perCausalRule.set(p.ruleId, seen + 1);
+  }
+  const causalLearnedRulePairsPerRule = [...perCausalRule.values()].sort((a, b) => b - a);
 
   return {
     streamCount: GOLDEN_STREAMS.length,
@@ -320,7 +353,8 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
 
     enginePairCount: graded.pairCount,
     distinctEnginePairCount: graded.distinctPairCount,
-    pairPrecision: enginePairPrecision(graded),
+    truePairUniverse: truePairs.size,
+    pairPrecision: graded.pairPrecision,
     pairRecall: ratio(emittedTrueKeys.size, truePairs.size),
     decoyPairsEmitted,
     meanTruePairConfidence: round4(meanTrue),
@@ -329,6 +363,11 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
 
     learnedRulePairCount,
     causalLearnedRulePairCount,
+    causalLearnedRulePairsPerRule,
+    // Sorted descending, so the last entry is the weakest rule. No rules at all
+    // reads as 0, which the baseline's must-arm check then rejects outright.
+    minCausalLearnedRulePairCount:
+      causalLearnedRulePairsPerRule[causalLearnedRulePairsPerRule.length - 1] ?? 0,
 
     edges,
   };
@@ -363,30 +402,35 @@ export interface GradedPairs {
   distinctPairCount: number;
   /** Distinct planted true pairs the engine actually emitted — the recall numerator. */
   emittedTrueKeys: ReadonlySet<string>;
+  /**
+   * Precision, computed HERE rather than at the report assembly, so the choice
+   * of denominator lives in exactly one place — next to the two counts that
+   * define it — and a test on this function is a test of the production value.
+   */
+  pairPrecision: number;
   truePairConfidences: number[];
   falsePairConfidences: number[];
   decoyPairsEmitted: number;
 }
 
-/** Grades emitted pairs against event-level planted truth. */
-/**
- * Exported for its regression test only: the live corpus happens to emit one
- * pair per distinct key, so a test driven through `runCorrelationBenchmark()`
- * cannot tell the raw denominator from the distinct one.
- */
 /**
  * Precision over DISTINCT event pairs, never over raw emissions.
  *
- * Exported and called from the report assembly above rather than inlined, so a
- * test can pin the denominator on a graded set where the two counts actually
- * differ. On the live corpus they happen to be equal (22 raw / 22 distinct), so
- * an inline `graded.pairCount` here would be indistinguishable from the correct
- * form in every end-to-end assertion.
+ * On the live corpus the two counts are equal (22 raw / 22 distinct), so NO
+ * end-to-end assertion driven through `runCorrelationBenchmark()` can tell the
+ * denominators apart. Two things stand in for that missing coverage: this is
+ * the only place in the module where a pair-precision denominator is chosen,
+ * and the baseline gate reconciles `precision × distinct` against
+ * `recall × truePairUniverse`, which diverges the moment a corpus does emit one
+ * pair twice.
  */
-export function enginePairPrecision(graded: GradedPairs): number {
+export function enginePairPrecision(
+  graded: Pick<GradedPairs, 'emittedTrueKeys' | 'distinctPairCount'>,
+): number {
   return ratio(graded.emittedTrueKeys.size, graded.distinctPairCount);
 }
 
+/** Grades emitted pairs against event-level planted truth. */
 export function gradeEnginePairs(
   pairs: readonly CorrelatedPair[],
   truePairs: ReadonlySet<string>,
@@ -414,6 +458,7 @@ export function gradeEnginePairs(
     pairCount: pairs.length,
     distinctPairCount: distinctKeys.size,
     emittedTrueKeys,
+    pairPrecision: enginePairPrecision({ emittedTrueKeys, distinctPairCount: distinctKeys.size }),
     truePairConfidences,
     falsePairConfidences,
     decoyPairsEmitted,

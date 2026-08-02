@@ -934,7 +934,7 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 54 unit tests in
+- 65 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit).
@@ -1045,6 +1045,62 @@ green.
   `graded.pairCount` left it green. Precision is now computed by an exported
   `enginePairPrecision()` that the report assembly calls, pinned on a graded set
   where the two counts differ.
+
+Fourth-round hardening from the same reviewer (baseline `schemaVersion: 5`).
+Eight more live PASS results. The theme has not changed — a gate that reports
+PASS on a benchmark that measured nothing — but each round reaches one level
+deeper into the reconciliation.
+
+- **The digest is LENGTH-PREFIXED, not separator-framed.** Width was never the
+  issue: a separator byte is just another code unit, so hashing `decoy:first`
+  then `decoy:second` reaches exactly the state of hashing the single record
+  `decoy:first_decoy:second` — two real decoy ids replaced by one synthetic id,
+  both traps removed from grading, digest unmoved. Prefixing each record with
+  its length makes the encoding injective, so no regrouping of the corpus can
+  collide. Digest `9bf277acf1747bf73f19e30e511b934f` → `a0e284431f365d35e1706fe6ca79adc4`.
+- **Every tolerance has a ceiling.** Validating tolerances as finite and
+  non-negative only stops the NaN class. A block of individually plausible wide
+  values (`causalLearnedRulePairShrinkRatio: 1`, `enginePairShrink: 22`, rate
+  drops of `1`) disarms every liveness gate at once while the baseline still
+  looks armed. Each key now has a per-key ceiling above which it is rejected.
+- **An empty edge ledger cannot carry positive miner rates.** Clearing `edges`
+  takes every row-level reconciliation with it, and zeroed summaries agree with
+  each other — but a miner that reported no edges cannot have scored 22.7%
+  precision on them.
+- **Coupling recall and the learned-rule summaries reconcile against detail.**
+  Recall now cross-checks against the couplings the report itself names as
+  missing, and `learnedRuleCount` / `causalLearnedRuleCount` against the
+  `edges[].becameLearnedRule` rows that claim them.
+- **Pair precision and recall must agree on the count they both imply.**
+  `precision × distinct` and `recall × truePairUniverse` are two independent
+  routes to the same quantity (true pairs emitted). Requiring agreement, and
+  capping the implied count at the universe size, makes `distinct: 23` at
+  precision and recall 1.0 — arithmetically impossible, previously a clean pass
+  — fail.
+- **The causal-pair liveness floor applies PER RULE.** Volumes are 7/6/6 = 19;
+  a 0.5 aggregate shrink ratio floors at 9.5, so one rule dying entirely
+  (19 → 13) passed. Sums hide their own zeros. The same proportional floor now
+  applies to the weakest rule, and the per-rule tally is seeded from the rule
+  IDs rather than from emitted pairs — a rule that fired nothing has no pairs
+  to group by, and grouping by emission would drop it from the tally entirely.
+- **Separation is bounded and each component is range-checked.** z-scores are
+  clamped to [2,50], so a separation of means lives in [−48,48]:
+  `edgeEvidenceSeparation: 1e300` is not a large separation but a fabricated
+  one, and higher-is-better made it read as an improvement. Separately,
+  `confoundedFalsePositives: -1` against `unplantedFalsePositives: +3` preserved
+  `falseEdgeCount` exactly, satisfying the sum reconciliation with a negative
+  count.
+- **`edgeEvidenceSeparation` joined the must-arm set.** Re-seeding both sides at
+  0 while 17 false edges remain retires the 8.49 → 0 collapse permanently.
+
+One residual is documented rather than claimed fixed: the live corpus emits 22
+raw / 22 distinct pairs, so **no** end-to-end assertion driven through
+`runCorrelationBenchmark()` can distinguish the raw pair denominator from the
+distinct one. It is mitigated structurally — precision is computed in exactly
+one place, `enginePairPrecision()` takes a `Pick<>` that does not have the raw
+count in scope, and the pair-arithmetic reconciliation fires on any corpus where
+the two counts differ — but a corpus that exercises the difference end-to-end
+would be a stronger proof.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

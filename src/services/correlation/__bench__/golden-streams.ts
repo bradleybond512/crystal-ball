@@ -818,7 +818,9 @@ export function plantedCouplingIndex(): Map<string, PlantedCoupling> {
  * committed digest exactly, so the corpus could be edited without invalidating
  * the baseline. 128 bits puts that out of reach, which matters because the
  * digest is the ONLY thing standing between "the fixture got easier" and "the
- * numbers improved".
+ * numbers improved". Records are LENGTH-PREFIXED rather than separator-joined —
+ * see `eat` for the regrouping collision that separators leave open at any
+ * width.
  */
 const FNV_OFFSET_128 = 0x6C_62_27_2E_07_BB_01_42_62_B8_21_75_62_95_C5_8Dn;
 const FNV_PRIME_128 = 0x00_00_00_00_01_00_00_00_00_00_00_00_00_00_01_3Bn;
@@ -830,40 +832,56 @@ function byCodeUnit(a: string, b: string): number {
   return 0;
 }
 
-export function goldenCorpusDigest(): string {
+/**
+ * The framing itself, exported so the collision property can be tested
+ * directly. `digestRecords(['a', 'b'])` must not equal `digestRecords(['a_b'])`
+ * — that inequality is the whole point of length-prefixing, and it is invisible
+ * from the corpus-level digest.
+ */
+export function digestRecords(records: Iterable<string>): string {
   let h = FNV_OFFSET_128;
   const eat = (s: string): void => {
+    // LENGTH-PREFIXED framing, not a trailing separator byte. A separator is
+    // just another code unit, so hashing `decoy:first` then `decoy:second` with
+    // a `_` between them reaches exactly the state of hashing the single record
+    // `decoy:first_decoy:second` — two real decoy ids could be replaced by one
+    // synthetic id, removing both traps from grading, without moving the digest.
+    // Prefixing each record with its length makes the encoding injective: the
+    // mixed sequence parses back to exactly one grouping, so no regrouping of
+    // the corpus can collide.
+    h = ((h ^ BigInt(s.length)) * FNV_PRIME_128) & MASK_128;
     // charCodeAt, not codePointAt: this loop advances one code UNIT at a time,
     // so codePointAt would read a surrogate pair whole at the lead and then the
     // trail again on its own — the same bytes hashed inconsistently.
     for (let i = 0; i < s.length; i++) {
-      // This loop advances one code UNIT at a time, so code POINTS would be
-      // hashed twice across a surrogate pair.
       // eslint-disable-next-line unicorn/prefer-code-point
       h = ((h ^ BigInt(s.charCodeAt(i))) * FNV_PRIME_128) & MASK_128;
     }
-    // Record-separator byte: without it, adjacent records concatenate and an
-    // edit can move content across a record boundary without moving the hash.
-    h = ((h ^ 0x5Fn) * FNV_PRIME_128) & MASK_128;
   };
 
+  for (const r of records) eat(r);
+  return h.toString(16).padStart(32, '0');
+}
+
+export function goldenCorpusDigest(): string {
+  const records: string[] = [];
   // JSON.stringify, not template joins: `['a','b']` and `['a,b']` flatten to the
   // same delimited string, so a join-based digest lets an edit move content
   // across an array boundary without moving the hash. JSON quotes and escapes
   // every element, so the array shape is part of the hashed bytes.
   for (const o of allGoldenObservations()) {
-    eat(JSON.stringify([
+    records.push(JSON.stringify([
       o.id, o.timestamp, o.domain, o.sourceId, o.severity,
       o.location?.lat ?? null, o.location?.lon ?? null,
       o.entityIds, o.tags,
     ]));
   }
-  for (const c of PLANTED_COUPLINGS) eat(JSON.stringify([c.from, c.to, c.kind]));
+  for (const c of PLANTED_COUPLINGS) records.push(JSON.stringify([c.from, c.to, c.kind]));
   // Set iteration order is insertion order, which an unrelated fixture edit can
   // reshuffle without changing the CONTENT — sort so the digest tracks the
   // truth labels themselves, not the order they happened to be declared in.
-  for (const k of [...plantedTruePairKeys()].sort(byCodeUnit)) eat(`true:${k}`);
-  for (const id of [...decoyEventIds()].sort(byCodeUnit)) eat(`decoy:${id}`);
+  for (const k of [...plantedTruePairKeys()].sort(byCodeUnit)) records.push(`true:${k}`);
+  for (const id of [...decoyEventIds()].sort(byCodeUnit)) records.push(`decoy:${id}`);
 
-  return h.toString(16).padStart(32, '0');
+  return digestRecords(records);
 }

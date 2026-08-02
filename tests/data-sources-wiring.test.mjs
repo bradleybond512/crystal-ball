@@ -193,12 +193,15 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // dominant term is one comms timeout plus the slower of the parallel pair,
     // both read back from source here rather than assumed.
     //
-    // This is a LOWER bound on runtime, not a true worst case: abort timeouts
-    // cap the network wait only, and JSON parsing, adaptation, ingestion and
-    // event-loop delay all sit outside them. Those are sub-second against a
-    // 36s network term and a ~66s margin, so the guard is sound in practice —
-    // but if a future change makes the loader's synchronous work expensive,
-    // this budget will under-count it and must gain a term.
+    // This is a bound in NEITHER direction, just a deliberately conservative
+    // estimate. It overshoots on the network term — real fetches usually
+    // return in well under their abort timeout, and charging every one the
+    // full timeout is the pessimistic choice — while omitting JSON parsing,
+    // adaptation, ingestion and event-loop delay, which sit outside those
+    // timeouts entirely. Both errors are small against a ~66s margin, and they
+    // point opposite ways, so the guard is sound in practice. What would break
+    // it is a future change that makes the loader's synchronous work
+    // expensive: that term is not modeled here and would have to be added.
     const fetchSrc = readFileSync(resolve(root, 'src/services/netwatch/cloudflare-radar-fetch.ts'), 'utf8');
     const timeoutMs = (src, name) => {
       const m = src.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`));

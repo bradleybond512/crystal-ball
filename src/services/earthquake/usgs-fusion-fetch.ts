@@ -30,9 +30,30 @@ interface UsgsRouteResponse {
   events?: unknown;
   degraded?: boolean;
   source?: unknown;
+  /** ISO instant of the UPSTREAM fetch, frozen into each route's cache. */
+  generatedAt?: unknown;
   error?: unknown;
   reason?: unknown;
 }
+
+/**
+ * How old the payload may be, measured from the upstream fetch.
+ *
+ * `source` cannot detect a replay on its own: both routes cache the whole
+ * envelope for 60 s, so a cache HIT still reports 'primary' / 'fallback-N' /
+ * 'usgs.gov'. Since `recordDomainObservations` stamps `lastSuccessAt` at RECORD
+ * time, a second caller inside that window (the globe heatmap and the nuclear
+ * monitor both hit this route) would re-stamp minute-old rows as a fresh
+ * success — the phantom healthy vote, just on a shorter clock. The allowlist
+ * rules out a LAST-GOOD replay; this rules out a TTL replay.
+ *
+ * 150 s = 2.5x the 60 s TTL both routes use. Wide enough that no legitimate
+ * cache hit is ever rejected, and it fails closed if either TTL is later raised
+ * past 2.5 min. It also stays at a quarter of the provider's 10 min
+ * freshnessTtlMs, so a re-stamp can never claim more than 25% of the window
+ * it is asserting freshness over.
+ */
+const MAX_PAYLOAD_AGE_MS = 150_000;
 
 /**
  * Which `source` values mean the rows were fetched live on this request.
@@ -82,7 +103,7 @@ function normalizeRows(events: readonly unknown[]): unknown[] {
  * Fail-closed: every non-live outcome throws so the caller records a failing
  * fetch outcome instead of corroborating against a replay.
  */
-export async function fetchUsgsSeismicForFusion(): Promise<UsgsEvent[]> {
+export async function fetchUsgsSeismicForFusion(now: number = Date.now()): Promise<UsgsEvent[]> {
   // 35s, not 18s: the sidecar gives EACH attempt a 15s deadline, so a tick that
   // times out on all_hour and then succeeds on all_day legitimately takes just
   // over 30s. A shorter client abort would reject those live rows as a failure.
@@ -99,6 +120,15 @@ export async function fetchUsgsSeismicForFusion(): Promise<UsgsEvent[]> {
   // payload without it is a shape this module has not been checked against.
   if (typeof data.source !== 'string' || !LIVE_SOURCES.test(data.source)) {
     throw new Error(`usgs-earthquakes not live (source=${String(data.source)})`);
+  }
+  // Absent or unparseable `generatedAt` is rejected too: both routes always
+  // send it, so a payload without one is an unrecognized shape whose age
+  // cannot be established — and an unknown age has to fail closed.
+  const generatedAt = typeof data.generatedAt === 'string' ? Date.parse(data.generatedAt) : Number.NaN;
+  if (!Number.isFinite(generatedAt)) throw new Error('usgs-earthquakes missing generatedAt');
+  const ageMs = now - generatedAt;
+  if (ageMs > MAX_PAYLOAD_AGE_MS) {
+    throw new Error(`usgs-earthquakes stale replay (${Math.round(ageMs / 1000)}s old)`);
   }
   return parseUsgsEvents(normalizeRows(data.events));
 }

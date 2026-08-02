@@ -12655,7 +12655,16 @@ async function dispatch(requestUrl, req, routes, context) {
       // with the same shape. It cached `events` alone, so for the 60 s after
       // each miss the route replied with a top-level array and any consumer
       // reading `.events` / `.source` off the body saw undefined.
-      const payload = { events, degraded: result.degraded, source: result.source };
+      //
+      // `generatedAt` is stamped HERE, on the upstream fetch, and then frozen
+      // into the cache — so a hit carries the ORIGINAL fetch instant, not the
+      // instant it was served. That is the only thing distinguishing a replay
+      // from a live fetch: `source` stays 'primary'/'fallback-N' on a hit too,
+      // so a consumer reading it alone cannot tell them apart. The fusion
+      // fetcher rejects on this age, and the field name matches the web edge
+      // function's (api/earthquakes.js) so one check covers both.
+      const payload = { events, degraded: result.degraded, source: result.source,
+                        generatedAt: new Date().toISOString() };
       setCached('usgs-earthquakes', payload, 60_000);
       return json(payload);
     } catch (error) {

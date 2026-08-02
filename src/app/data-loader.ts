@@ -2868,7 +2868,12 @@ export class DataLoaderManager implements AppModule {
 
  // Air quality signals — unhealthy or worse
  if (aqReadings.status === 'fulfilled') {
- recordDomainObservations('open-meteo-aqi', openMeteoAqToObservations(aqReadings.value), true);
+ // ok from the ADAPTER output, not from the promise fulfilling: the readings
+ // cover a FIXED city list, so zero observations means the adapter dropped
+ // every one of them — a format change recorded as a healthy vote, which is
+ // the phantom vote the three sibling providers below already guard against.
+ const openMeteoAqObservations = openMeteoAqToObservations(aqReadings.value);
+ recordDomainObservations('open-meteo-aqi', openMeteoAqObservations, openMeteoAqObservations.length > 0);
  for (const r of aqReadings.value) {
  if (r.aqiLevel === 'good' || r.aqiLevel === 'moderate' || r.aqiLevel === 'sensitive') continue;
  const sev = r.aqiLevel === 'hazardous' ? 'critical' : r.aqiLevel === 'very_unhealthy' ? 'high' : 'medium';
@@ -4317,7 +4322,15 @@ export class DataLoaderManager implements AppModule {
  try {
  const events = await fetchEmscSeismic();
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents(events);
- recordDomainObservations('emsc-seismic', emscEventsToObservations(events), true);
+ // ok from the ADAPTER output, not from the fetch resolving. A literal
+ // `true` here recorded a healthy vote whenever the request returned 200,
+ // including when a field rename made the adapter drop every row — which
+ // re-stamps lastSuccessAt and leaves the domain counting a source that
+ // contributes nothing. Empty is failure because the route reads M3.5+ over
+ // SEVEN DAYS: a week with no qualifying quake anywhere on earth does not
+ // occur, so zero rows means a shape change, not a quiet planet.
+ const emscObservations = emscEventsToObservations(events);
+ recordDomainObservations('emsc-seismic', emscObservations, emscObservations.length > 0);
  } catch (error) {
  console.warn('[emsc-seismic] fetch failed', error);
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
@@ -4328,7 +4341,11 @@ export class DataLoaderManager implements AppModule {
   async loadGeofonSeismic(): Promise<void> {
  try {
  const events = await fetchGeofonSeismic();
- recordDomainObservations('geofon-seismic', geofonEventsToObservations(events), true);
+ // ok from the ADAPTER output — same reasoning as loadEmscSeismic. The
+ // route asks for the 50 most recent M4.0+ events with NO time bound, so
+ // the feed is empty only if the FDSN text format changed under the parser.
+ const geofonObservations = geofonEventsToObservations(events);
+ recordDomainObservations('geofon-seismic', geofonObservations, geofonObservations.length > 0);
  } catch (error) {
  console.warn('[geofon-seismic] fetch failed', error);
  recordDomainObservations('geofon-seismic', [], false);

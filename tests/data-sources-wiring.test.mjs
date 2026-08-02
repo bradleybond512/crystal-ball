@@ -195,6 +195,37 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     });
   }
 
+  it('every earthquakes voter derives its ok flag from the adapter, not from the fetch', () => {
+    // All three used to pass a literal `true` on the success path, so a 200
+    // whose rows the adapter dropped — a renamed field, a changed format — was
+    // recorded as a healthy vote: lastSuccessAt re-stamped, the provider green,
+    // and the domain reporting three corroborating sources when one or more of
+    // them contributed nothing. Empty is a legitimate failure signal for all
+    // three because none of these feeds can honestly return zero: USGS all_hour
+    // has no magnitude floor, EMSC reads M3.5+ over seven days, and GEOFON asks
+    // for the 50 most recent M4.0+ events with no time bound at all.
+    for (const [method, provider] of [
+      ['loadUsgsSeismic', 'usgs-earthquakes'],
+      ['loadEmscSeismic', 'emsc-seismic'],
+      ['loadGeofonSeismic', 'geofon-seismic'],
+    ]) {
+      const body = dataLoaderMethod(method);
+      const catchAt = body.indexOf('} catch');
+      assert.ok(catchAt > 0, `${method} is expected to record a failure in a catch`);
+      const tryBody = body.slice(0, catchAt);
+      assert.match(
+        tryBody,
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*\\w+,\\s*\\w+\\.length > 0\\s*\\)`),
+        `${method} must gate its ok flag on the adapter producing rows`,
+      );
+      assert.doesNotMatch(
+        tryBody,
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],[^;]*,\\s*true\\s*\\)`),
+        `${method} must not hardcode a healthy vote`,
+      );
+    }
+  });
+
   /** Body of a `async name()` method on DataLoader, up to the next sibling method. */
   const dataLoaderMethod = (name) => {
     const start = dataLoaderSrc.indexOf(`async ${name}(`);
@@ -231,10 +262,18 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // ...and `observations` has to come from the adapter. Without this, swapping
     // the adapter call for `const observations = []` satisfies every regex above
     // while recording a permanent failure — the checks would be pinning names.
+    // The ARGUMENT matters, not just the call: `usgsEventsToObservations([])`
+    // matches a call-site-only check while recording a permanent failure, so
+    // the fetched rows have to be what is fed in.
     assert.match(
       tryBody,
-      /const observations = usgsEventsToObservations\(/,
-      'observations must be the adapter output, not a literal',
+      /const events = await fetchUsgsSeismicForFusion\(\)/,
+      'the rows must come from the fusion fetch, which is the path that rejects replays',
+    );
+    assert.match(
+      tryBody,
+      /const observations = usgsEventsToObservations\(\s*events\s*\)/,
+      'observations must be the adapter output over the FETCHED rows, not a literal',
     );
     // The fusion vote must NOT ride on `natural`: that task is hourly and gated
     // on a map layer, so recording there made a MAP TOGGLE silently remove a
@@ -262,9 +301,12 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     assert.ok(bootLine, 'could not find the usgsSeismic boot task in data-loader.ts');
     const gate = bootLine.slice(0, bootLine.indexOf('tasks.push'));
     assert.match(gate, /SITE_VARIANT/, 'the usgsSeismic boot task is expected to carry a variant gate');
+    // Quote style and comparison form are both evadable, so the negative match
+    // covers every way of writing "full only": either quote, == or ===, and the
+    // membership form `['full'].includes(SITE_VARIANT)`.
     assert.doesNotMatch(
       gate,
-      /SITE_VARIANT === 'full'/,
+      /SITE_VARIANT\s*===?\s*['"]full['"]|\[\s*['"]full['"]\s*\]\.includes\(\s*SITE_VARIANT/,
       'the usgsSeismic boot task must not be full-only: tech and finance ship the natural layer too',
     );
     const entry = appSrc.match(/name: 'usgsSeismic'[^\n]*/);
@@ -277,28 +319,23 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     );
   });
 
-  it('the usgs fusion fetch rejects cache replays but accepts the live fallback feed', () => {
-    // Executed, not name-matched: the allowlist regex is pulled out of the
-    // module and run against the exact `source` values the two implementations
-    // emit. Widening it to admit 'cached' — the last-good REPLAY that
-    // feed-resilience serves when every upstream fails — fails here, because
-    // recording a replay as a fresh success is the phantom healthy vote.
-    const src = readFileSync(resolve(root, 'src/services/earthquake/usgs-fusion-fetch.ts'), 'utf8');
-    const m = src.match(/const LIVE_SOURCES = (\/.+\/);/);
-    assert.ok(m, 'could not read the live-source allowlist out of usgs-fusion-fetch.ts');
-    // eslint-disable-next-line no-eval
-    const allow = eval(m[1]);
-    assert.ok(!allow.test('cached'), "'cached' is a last-good replay and must never count as live");
-    assert.ok(!allow.test(''), 'an empty source must not pass');
-    for (const live of ['primary', 'fallback-0', 'fallback-1', 'usgs.gov']) {
-      assert.ok(allow.test(live), `${live} is a live fetch and must be accepted`);
+  it('the usgs fusion trust boundary is covered by an EXECUTED test, not a text guard', () => {
+    // The acceptance and rejection rules (source allowlist, payload-age cap,
+    // both payload shapes, error envelopes) are exercised for real in
+    // src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts, which calls
+    // fetchUsgsSeismicForFusion against stubbed responses. Reading the module's
+    // source here could only prove the checks are WRITTEN, never that they still
+    // FIRE — an allowlist nothing calls reads identically. All this guard does
+    // is make sure that file has not been deleted or emptied, so the coverage
+    // cannot vanish silently.
+    const covering = readFileSync(
+      resolve(root, 'src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts'), 'utf8');
+    assert.match(covering, /from '\.\.\/usgs-fusion-fetch\.ts'/,
+      'the behavioral cover must import the real module');
+    for (const behavior of [/rejects a last-good cache replay/, /rejects a TTL replay/,
+                            /parses the web shape/, /accepts the live all_day fallback/]) {
+      assert.match(covering, behavior, `missing behavioral cover: ${behavior}`);
     }
-    // The check has to be REACHED, too — an allowlist nothing calls is inert.
-    assert.match(src, /LIVE_SOURCES\.test\(data\.source\)/, 'the allowlist must gate the returned rows');
-    // Both payload shapes have to survive the adapter. The web edge function
-    // sends raw GeoJSON features; parseUsgsEvents reads flat rows, so without
-    // normalization the web build records a permanent failure instead of a vote.
-    assert.match(src, /'geometry' in row && 'properties' in row/, 'raw GeoJSON features must be normalized');
   });
 
   it('markets refreshes inside every price provider freshness TTL', () => {
@@ -338,6 +375,10 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // fetch modules so raising any one deadline fails HERE. Five of the seven
     // share quotes-route-fetch, so its single timeout is counted once per
     // provider that routes through it.
+    // FMP is counted ONCE even though the sidecar may try stable then legacy-v3
+    // sequentially: those are two UPSTREAM attempts inside one renderer fetch,
+    // and its 25s deadline already covers the 10s + 10s pair. Counting it twice
+    // would double-charge a cost the client abort bounds once.
     const priceFetchDeadlines = [
       ['src/services/market/coingecko-fetch.ts', 1],
       ['src/services/market/fmp-fetch.ts', 1],
@@ -394,8 +435,17 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       // nothing but failures forever, under a passing cadence test.
       assert.match(
         compoundBody,
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*\\w+\\(`),
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*\\w+[(,]`),
         `${provider} must record a vote built from its adapter, not just a failure row`,
+      );
+      // ...and the ok flag must not be a LITERAL. `record(id, adapter(x), true)`
+      // satisfies the check above while reporting healthy for a 200 whose rows
+      // the adapter dropped entirely — lastSuccessAt re-stamped, the provider
+      // reading healthy, and the domain counting a source contributing nothing.
+      assert.doesNotMatch(
+        compoundBody,
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],[^;]*,\\s*true\\s*[),]`),
+        `${provider} must derive its ok flag from the adapter output, never hardcode true`,
       );
     }
     // Debounce parsed from source rather than hardcoded, so lengthening it fails

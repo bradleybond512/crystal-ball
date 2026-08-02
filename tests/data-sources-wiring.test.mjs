@@ -13,6 +13,50 @@ const sidecarSrc = readFileSync(resolve(root, 'src-tauri/sidecar/local-api-serve
 const dataLoaderSrc = readFileSync(resolve(root, 'src/app/data-loader.ts'), 'utf8');
 const appSrc = readFileSync(resolve(root, 'src/App.ts'), 'utf8');
 
+/**
+ * A fusion vote must be gated on the ADAPTER's output, not on the fetch flag —
+ * `recordDomainObservations` stamps lastSuccessAt at record time, so a vote
+ * carrying zero rows is a phantom healthy source.
+ *
+ * Constrained by GRAMMAR, not by keyword search. Asserting only that
+ * `obs.length > 0` appears SOMEWHERE in the expression is satisfied by
+ * `r.ok || obs.length > 0`, `true || obs.length > 0`, and `!obs.length > 0`,
+ * none of which gate anything. So the whole expression must be a conjunction
+ * of plain terms, one of which is exactly `<recorded>.length > 0`.
+ *
+ * @param scope       source text containing the record call
+ * @param provider    provider id, as written in the call
+ * @param label       what to name in the failure message
+ * @param mustInclude further conjuncts required verbatim (e.g. the fetch flag,
+ *                    which is a SEPARATE adapter stage and also mandatory)
+ */
+function assertVoteGatedOnAdapter(scope, provider, label, mustInclude = []) {
+  const call = scope.match(
+    new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*(\\w+),([^;]*)\\)`),
+  );
+  assert.ok(call, `${label} must record a vote built from its adapter, not just a failure row`);
+  const [, recorded, rawOk] = call;
+  const okExpr = rawOk.trim();
+  const terms = okExpr.split('&&').map((t) => t.trim());
+  assert.ok(
+    !okExpr.includes('||') && !terms.some((t) => t.startsWith('!')),
+    `${label} must gate ok on a plain conjunction — a disjunction or negation lets an empty ` +
+    `adapter result through while still mentioning it (found: ${okExpr})`,
+  );
+  assert.ok(
+    terms.includes(`${recorded}.length > 0`),
+    `${label} must gate ok on \`${recorded}.length > 0\` — the variable it actually recorded — ` +
+    `not on a literal or an unrelated expression (found: ${okExpr})`,
+  );
+  for (const required of mustInclude) {
+    assert.ok(
+      terms.includes(required),
+      `${label} must also require \`${required}\`: the fetch flag and the adapter are two ` +
+      `separate stages and either can empty the vote (found: ${okExpr})`,
+    );
+  }
+}
+
 describe('RIPE Atlas wiring', () => {
   it('sidecar has /api/ripe-atlas route', () => {
     assert.match(sidecarSrc, /\/api\/ripe-atlas/);
@@ -213,20 +257,9 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       const catchAt = body.indexOf('} catch');
       assert.ok(catchAt > 0, `${method} is expected to record a failure in a catch`);
       const tryBody = body.slice(0, catchAt);
-      // Same-identifier binding as the air-quality guard below: two `\w+` in a
-      // row would accept `record(id, observations, somethingElse.length > 0)`,
-      // which is exactly the drift this is meant to catch.
-      const call = tryBody.match(
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*(\\w+),([^;]*)\\)`),
-      );
-      assert.ok(call, `${method} must record a vote on its success path`);
-      const [, observationsVar, okExpr] = call;
-      assert.match(
-        okExpr,
-        new RegExp(`\\b${observationsVar}\\.length > 0`),
-        `${method} must gate ok on ${observationsVar}.length — the variable it recorded — ` +
-        `not on a literal or an unrelated expression (found: ${okExpr.trim()})`,
-      );
+      // These three fetchers throw on every non-live outcome, so the adapter
+      // result is the only stage left to gate on.
+      assertVoteGatedOnAdapter(tryBody, provider, method);
     }
   });
 
@@ -307,43 +340,45 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     const condition = gate.match(/^\s*if\s*\((.+?)\)\s*$/);
     assert.ok(condition, `the usgsSeismic boot task must be a plain \`if (...)\` gate, got: ${gate.trim()}`);
     const expr = condition[1];
-    // Constrained by SHAPE, not by enumerating spellings of "full only".
-    // A negative regex is an unwinnable game — `!== 'tech' && !== 'finance'`, a
-    // lookup table, a negated includes each do the same damage while matching
-    // nothing. Instead the gate is held to a form whose reach is decidable by
-    // reading it: an exclusion over SITE_VARIANT alone, naming only variants
-    // that do NOT ship the natural layer. Anything outside that shape fails
-    // here and has to be re-argued rather than quietly narrowing the domain.
+    // Held to an exact GRAMMAR rather than screened by negative patterns.
+    // Screening is an unwinnable game — `!== 'tech' && !== 'finance'`, a lookup
+    // table, `['full'].includes(...)`, `['happy'].includes(...)` each narrow the
+    // gate the same way while matching no reasonable denylist. The only form
+    // accepted here is a conjunction of `SITE_VARIANT !== '<variant>'`, whose
+    // reach is then computable exactly: every variant it does not name runs.
+    // Anything else fails and has to be re-argued rather than quietly retiring
+    // the domain's only vote in two of the three shipping variants.
     const shipsNatural = ['full', 'tech', 'finance'];
-    const named = [...expr.matchAll(/['"]([^'"]*)['"]/g)].map((m) => m[1]);
-    const identifiers = [...new Set(expr.replace(/['"][^'"]*['"]/g, '').match(/[A-Za-z_$][\w$]*/g) ?? [])]
-      .filter((id) => id !== 'includes');
-    assert.deepEqual(
-      identifiers,
-      ['SITE_VARIANT'],
-      `the usgsSeismic gate must depend on SITE_VARIANT alone — an indirect lookup hides which ` +
-      `variants it reaches (gate: ${expr.trim()})`,
-    );
-    assert.doesNotMatch(
-      expr,
-      /(?<![!=<>])==/,
-      `the usgsSeismic gate must be an EXCLUSION (!== / !includes): an equality gate ships the ` +
-      `vote to one variant and silently drops it from the others (gate: ${expr.trim()})`,
-    );
-    for (const variant of named) {
+    const excluded = [];
+    for (const term of expr.split('&&').map((t) => t.trim())) {
+      const clause = term.match(/^SITE_VARIANT\s*!==\s*['"]([^'"]+)['"]$/);
       assert.ok(
-        !shipsNatural.includes(variant),
+        clause,
+        `the usgsSeismic gate must be a conjunction of \`SITE_VARIANT !== '<variant>'\` terms, so ` +
+        `the set of variants it reaches is readable off the expression; got term: ${term}`,
+      );
+      excluded.push(clause[1]);
+    }
+    for (const variant of shipsNatural) {
+      assert.ok(
+        !excluded.includes(variant),
         `the usgsSeismic boot task excludes the ${variant} variant, which ships the natural map ` +
         `layer and would lose the earthquakes domain's USGS vote (gate: ${expr.trim()})`,
       );
     }
-    const entry = appSrc.match(/name: 'usgsSeismic'[^\n]*/);
-    assert.ok(entry, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
+    // Scoped to the whole registration STATEMENT, not the entry's own line: a
+    // `if (SITE_VARIANT === 'full') { ... }` wrapped around the push is
+    // invisible to a line-local read and does exactly the damage above.
+    const entryAt = appSrc.indexOf("name: 'usgsSeismic'");
+    assert.notEqual(entryAt, -1, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
+    const statement = appSrc.slice(Math.max(0, entryAt - 600), appSrc.indexOf('\n', entryAt));
+    const enclosing = statement.slice(statement.lastIndexOf(';') + 1);
     assert.doesNotMatch(
-      entry[0],
-      /condition:/,
-      'the usgsSeismic scheduler entry must stay unconditional; a variant or map-layer condition ' +
-      'reintroduces the boot-only staleness this task exists to fix',
+      enclosing,
+      /condition:|SITE_VARIANT|if\s*\(/,
+      'the usgsSeismic scheduler entry must stay unconditional — no per-entry condition and no ' +
+      'enclosing variant branch; either reintroduces the boot-only staleness this task exists to ' +
+      `fix (context: ${enclosing.trim().slice(0, 200)})`,
     );
   });
 
@@ -356,12 +391,24 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // FIRE — an allowlist nothing calls reads identically. All this guard does
     // is make sure that file has not been deleted or emptied, so the coverage
     // cannot vanish silently.
-    const covering = readFileSync(
-      resolve(root, 'src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts'), 'utf8');
+    const coveringPath = 'src/services/earthquake/__tests__/usgs-fusion-fetch.test.mts';
+    const covering = readFileSync(resolve(root, coveringPath), 'utf8');
     assert.match(covering, /from '\.\.\/usgs-fusion-fetch\.ts'/,
       'the behavioral cover must import the real module');
+    // Existing on disk is not the same as RUNNING. Dropping the file from the
+    // providers suite, or skipping its cases, leaves every phrase below intact
+    // while the coverage this guard vouches for stops executing entirely.
+    const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+    assert.ok(
+      pkg.scripts['test:providers']?.includes(coveringPath),
+      `${coveringPath} must be listed in the test:providers script — a file nobody runs proves nothing`,
+    );
+    assert.doesNotMatch(covering, /\btest\.skip\b|\bit\.skip\b|\{\s*skip:\s*true/,
+      'the behavioral cover must not skip its cases');
     for (const behavior of [/rejects a last-good cache replay/, /rejects a TTL replay/,
-                            /parses the web shape/, /accepts the live all_day fallback/]) {
+                            /parses the web shape/, /accepts the live all_day fallback/,
+                            /refuses to age a payload with no server time reference/,
+                            /honours Age/]) {
       assert.match(covering, behavior, `missing behavioral cover: ${behavior}`);
     }
   });
@@ -467,17 +514,12 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       // `record(id, observations, raw.length > 0)` both pass such a check while
       // reporting healthy for a response whose rows the adapter all dropped —
       // an unrelated expression happening to be truthy is the whole failure.
-      const call = compoundBody.match(
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*(\\w+),([^;]*)\\)`),
-      );
-      assert.ok(call, `${provider} must record a vote built from its adapter, not just a failure row`);
-      const [, observationsVar, okExpr] = call;
-      assert.match(
-        okExpr,
-        new RegExp(`\\b${observationsVar}\\.length > 0`),
-        `${provider} must gate ok on ${observationsVar}.length — the variable it actually recorded — ` +
-        `not on a literal or an unrelated expression (found: ${okExpr.trim()})`,
-      );
+      //
+      // The three keyed providers come through a settled result whose own
+      // `ok` is parse-derived, so BOTH stages are required. open-meteo-aqi has
+      // no such flag; its adapter is the only stage.
+      const fetchFlag = provider === 'open-meteo-aqi' ? [] : ['r.ok'];
+      assertVoteGatedOnAdapter(compoundBody, provider, provider, fetchFlag);
     }
     // Debounce parsed from source rather than hardcoded, so lengthening it fails
     // HERE rather than pushing the domain past its TTL in production.

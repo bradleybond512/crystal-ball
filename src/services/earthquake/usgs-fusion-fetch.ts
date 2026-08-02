@@ -56,34 +56,48 @@ interface UsgsRouteResponse {
 const MAX_PAYLOAD_AGE_MS = 150_000;
 
 /**
- * How far into the future `generatedAt` may sit before the age is treated as
- * unestablishable.
+ * How far ahead of `generatedAt` the reference instant may sit in the WRONG
+ * direction before the age is treated as unestablishable.
  *
- * Needed because the two ends of the subtraction can come from two different
- * clocks. `referenceNow` below prefers the response's own `Date` header — the
- * SAME machine that stamped `generatedAt`, so that pairing is skew-free — but
- * the header can be absent (a stubbed or proxied response), and then the
- * browser clock is the only reference available. A browser clock running slow
- * shrinks `ageMs` and would wave a genuine replay through; a negative age is
- * the visible symptom of exactly that, so past a small allowance it fails
- * closed rather than reading as "extremely fresh".
- *
- * 30 s absorbs ordinary drift and the request's own flight time without
- * absorbing a 60 s cache window.
+ * With both ends of the subtraction now stamped by the same machine this
+ * should never trip; a negative age means the origin's own two stamps
+ * disagree, and an incoherent pair has to fail closed rather than read as
+ * "extremely fresh". 1 s absorbs sub-second rounding between the two stamps.
  */
-const MAX_CLOCK_SKEW_MS = 30_000;
+const MAX_CLOCK_SKEW_MS = 1000;
 
 /**
- * The instant to measure payload age against.
+ * The origin's own "now", used to age the payload.
  *
- * Prefers the response `Date` header (CORS-safelisted, so readable on the web
- * route too) because it and `generatedAt` are stamped by one clock. Falls back
- * to the caller's `now` only when the header is missing or unparseable.
+ * The browser clock is deliberately NOT a fallback here. Measuring a
+ * server-stamped `generatedAt` against a client clock mixes two clocks, and
+ * the error is asymmetric: a fast client only costs a live vote, but a SLOW
+ * client shrinks the computed age and waves a genuine replay past the cap —
+ * precisely the phantom healthy vote this module exists to prevent. A slow
+ * clock is invisible while the age stays positive, so there is no check that
+ * recovers it. Without a server reference the age is unknowable, and unknowable
+ * fails closed.
+ *
+ * `Date` alone is not enough either: an intermediary cache preserves the
+ * origin's `Date` and advances `Age` instead, so a CDN replaying a ten-minute-
+ * old response reports `Date` unchanged and `Age: 600`. Per RFC 9111 the
+ * origin-relative instant of the response as served is `Date + Age`.
+ *
+ * Neither header is CORS-safelisted, so both ends of this contract had to be
+ * arranged: the sidecar sends `Access-Control-Expose-Headers: Date, Age`
+ * (makeCorsHeaders in local-api-server.mjs), and the web route is same-origin.
+ * Returns null when `Date` is missing or unparseable, or when `Age` is present
+ * but not a non-negative integer — a malformed `Age` is a shape this has not
+ * been checked against, not a zero.
  */
-function referenceNow(res: Response, now: number): number {
-  const header = res.headers?.get?.('date');
-  const parsed = header ? Date.parse(header) : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : now;
+function originNow(res: Response): number | null {
+  const date = res.headers?.get?.('date');
+  const parsedDate = date ? Date.parse(date) : Number.NaN;
+  if (!Number.isFinite(parsedDate)) return null;
+  const age = res.headers?.get?.('age')?.trim();
+  if (!age) return parsedDate;
+  if (!/^\d+$/.test(age)) return null;
+  return parsedDate + Number(age) * 1000;
 }
 
 /**
@@ -142,7 +156,7 @@ function normalizeRows(events: readonly unknown[]): unknown[] {
  * counting it with an honest age. The cap is where "reusable" ends, not
  * "live".
  */
-export async function fetchUsgsSeismicForFusion(now: number = Date.now()): Promise<UsgsEvent[]> {
+export async function fetchUsgsSeismicForFusion(): Promise<UsgsEvent[]> {
   // 35s, not 18s: the sidecar gives EACH attempt a 15s deadline, so a tick that
   // times out on all_hour and then succeeds on all_day legitimately takes just
   // over 30s. A shorter client abort would reject those live rows as a failure.
@@ -165,12 +179,14 @@ export async function fetchUsgsSeismicForFusion(now: number = Date.now()): Promi
   // cannot be established — and an unknown age has to fail closed.
   const generatedAt = typeof data.generatedAt === 'string' ? Date.parse(data.generatedAt) : Number.NaN;
   if (!Number.isFinite(generatedAt)) throw new Error('usgs-earthquakes missing generatedAt');
-  const ageMs = referenceNow(res, now) - generatedAt;
+  const serverNow = originNow(res);
+  if (serverNow === null) throw new Error('usgs-earthquakes no server time reference');
+  const ageMs = serverNow - generatedAt;
   if (ageMs > MAX_PAYLOAD_AGE_MS) {
     throw new Error(`usgs-earthquakes stale replay (${Math.round(ageMs / 1000)}s old)`);
   }
   if (ageMs < -MAX_CLOCK_SKEW_MS) {
-    throw new Error(`usgs-earthquakes clock skew (${Math.round(-ageMs / 1000)}s ahead)`);
+    throw new Error(`usgs-earthquakes incoherent timestamps (${Math.round(-ageMs / 1000)}s ahead)`);
   }
   return parseUsgsEvents(normalizeRows(data.events));
 }

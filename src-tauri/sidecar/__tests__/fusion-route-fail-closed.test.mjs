@@ -173,12 +173,29 @@ test('/api/earthquakes freezes generatedAt into the cache instead of re-stamping
   const stamps = [...body.matchAll(/generatedAt:/g)];
   assert.equal(stamps.length, 1, 'generatedAt must be stamped in exactly one place — a second stamp is a re-stamp');
 
-  const payloadAt = body.indexOf('generatedAt:');
-  const cacheAt = body.indexOf("setCached('usgs-earthquakes'");
-  assert.notEqual(cacheAt, -1, 'the earthquakes route must cache its envelope');
-  assert.ok(payloadAt < cacheAt, 'generatedAt must be stamped BEFORE the cache write so the hit replays it');
+  // Bound to the identifier, not just to ordering: caching `events` instead of
+  // `payload` leaves the single stamp and every ordering assertion intact while
+  // each hit replays a bare array with no timestamp at all.
+  const stamped = body.match(/const (\w+) = \{[^}]*generatedAt:[^}]*\}/);
+  assert.ok(stamped, 'generatedAt must be stamped into a named envelope the cache can hold');
+  const cached = body.match(/setCached\('usgs-earthquakes',\s*(\w+),/);
+  assert.ok(cached, 'the earthquakes route must cache its envelope');
+  assert.equal(
+    cached[1],
+    stamped[1],
+    `the cached value must BE the stamped envelope — caching ${cached[1]} instead of ${stamped[1]} ` +
+    'serves hits with no generatedAt, and the fusion fetcher then rejects every one of them',
+  );
+  assert.ok(body.indexOf('generatedAt:') < body.indexOf('setCached('),
+    'generatedAt must be stamped BEFORE the cache write so the hit replays it');
+  assert.match(
+    body,
+    new RegExp(String.raw`return json\(${stamped[1]}\)`),
+    'the miss must answer with the same envelope it cached, so a hit and a miss agree',
+  );
 
   const hit = body.match(/const cached = getCached\('usgs-earthquakes'\);\s*if \(cached\) return json\(cached\);/);
   assert.ok(hit, 'the hit path must return the cached envelope verbatim, with no rebuild or re-stamp');
-  assert.ok(body.indexOf('const cached =') < payloadAt, 'the cache read must short-circuit before the upstream fetch');
+  assert.ok(body.indexOf('const cached =') < body.indexOf('generatedAt:'),
+    'the cache read must short-circuit before the upstream fetch');
 });

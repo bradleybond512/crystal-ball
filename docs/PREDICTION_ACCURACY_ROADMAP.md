@@ -934,11 +934,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 78 unit tests in
+- 89 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
-  regression per demonstrated PASS-on-nothing across five review rounds).
+  regression per demonstrated PASS-on-nothing across six review rounds).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1143,6 +1143,48 @@ live PASS results on a benchmark that had stopped measuring.
   the corpus can no longer collide for free. That is a property of the framing.
   The recurrence itself is a custom FNV-like function over UTF-16 code units,
   not a cryptographic hash, and the comments no longer imply otherwise.
+
+Sixth-round hardening from the same reviewer (baseline `schemaVersion: 6`,
+corpus digest `a0e2844…` → `8411c23a6f009f2245ec779a7593685e`). Round 5 answered
+"the summaries agree with each other" with a row-level ledger; round 5's ledger
+then answered for itself. Five P1 + two P2 findings, all one defect: **the rows
+carried their own conclusions.** Each row stated its own `verdict`, its own
+`isTruePair`, its own `decoyEmissions`, and the gate believed them — so
+rewriting every endpoint to a fabricated id still returned PASS, because the
+rows and the summaries were written by the same pass and only ever checked
+against each other.
+
+- **The gate imports planted truth and derives every conclusion.**
+  `bench-correlation-baseline.ts` now imports `plantedCouplingIndex`,
+  `plantedTruePairKeys`, `decoyEventIds` and `pairKeyFor` from
+  `__bench__/golden-streams.ts` directly. Each edge row's verdict is re-graded
+  from its `from`/`to` endpoints; each pair row now carries `eventIdA`/`eventIdB`
+  so the gate can rebuild its key, re-look-up planted truth, and re-derive
+  whether the pair touches a near-miss decoy. Truth comes from the corpus or it
+  is not truth.
+- **The five false-positive categories reconcile individually.** They summed to
+  `falseEdgeCount`, so any reassignment between them was free — and the sum is
+  what hides which trap the miner actually fell into. Each category is now
+  reconciled against the rows that carry that verdict, and the causal row count
+  against the recovered count implied by `couplingRecall` and `missingCouplings`.
+- **Edge dedupe keys on the directed pair alone.** It included the lag window,
+  so one causal coupling reported at two windows counted twice — padding that
+  raises precision. The miner emits one edge per pair; a repeat is now rejected.
+- **The built-in rule inventory is pinned by exact set equality.** Deleting a
+  rule deletes the pairs it would have emitted, which reads as a smaller — and
+  therefore better — denominator. The report carries `builtInRuleIds`, and a
+  baseline that omits the list, or ships an empty one, fails closed.
+- **`minedEdgeCount` is a gated metric, not just a floor.** A miner that stops
+  mining improves precision *and* separation: fewer candidates, fewer false
+  positives. The candidate count is the only number that falls, so it now has
+  its own shrink tolerance and its own must-arm entry.
+- **Decoy leakage is absolute zero on both sides.** The check was
+  baseline-relative, so a baseline that admitted one leak licensed one leak
+  forever. Neither operand may emit a decoy pair.
+- **`pairKeyFor` is injective.** `${a}::${b}` made `('a','b::c')` and
+  `('a::b','c')` one key, silently merging two distinct pairs into one ledger
+  row. Each id is now length-prefixed, the same framing the corpus digest uses.
+  This is what moved the digest, and the baseline was re-seeded for it.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

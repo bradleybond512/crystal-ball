@@ -91,6 +91,13 @@ export interface BenchEdgeRow {
 export interface BenchPairRow {
   /** Order-independent event-pair key, as `pairKeyFor` builds it. */
   key: string;
+  /**
+   * The two event ids behind `key`, sorted, so the gate can REBUILD the key and
+   * re-look-up planted truth rather than believe the three fields below. A row
+   * that carries only its own conclusions is an assertion, not evidence.
+   */
+  eventIdA: string;
+  eventIdB: string;
   /** One entry per RAW emission — two rules matching one pair is two entries. */
   ruleIds: string[];
   /** Confidence of each emission, index-aligned with `ruleIds`. */
@@ -114,6 +121,17 @@ export interface CorrelationBenchReport {
    * corpus easier and reports the resulting numbers as an improvement.
    */
   corpusDigest: string;
+  /**
+   * Every built-in rule id registered for the graded pass, sorted.
+   *
+   * The engine measurements are membership-and-rate based, so a rule the corpus
+   * never exercises can be DELETED with every number holding steady — five of
+   * them were, and the gate passed. The inventory is pinned by exact set
+   * equality against the baseline: the benchmark then fails when the shipped
+   * rule set changes, which is the point at which a human should re-seed and
+   * say why.
+   */
+  builtInRuleIds: string[];
 
   // ── miner: discovery quality ──
   minedEdgeCount: number;
@@ -346,6 +364,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     observationCount: observations.length,
     plantedCausalCount: plantedCausal.length,
     corpusDigest: goldenCorpusDigest(),
+    builtInRuleIds: builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b)),
 
     minedEdgeCount: mined.length,
     significantEdgeCount: significant.length,
@@ -476,7 +495,13 @@ export function gradeEnginePairs(
     const isTruePair = truePairs.has(key);
     let row = rows.get(key);
     if (row === undefined) {
-      row = { key, ruleIds: [], confidences: [], isTruePair, decoyEmissions: 0 };
+      const [idA, idB] = pair.eventA.id < pair.eventB.id
+        ? [pair.eventA.id, pair.eventB.id]
+        : [pair.eventB.id, pair.eventA.id];
+      row = {
+        key, eventIdA: idA, eventIdB: idB,
+        ruleIds: [], confidences: [], isTruePair, decoyEmissions: 0,
+      };
       rows.set(key, row);
     }
     row.ruleIds.push(pair.ruleId);

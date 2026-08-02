@@ -132,6 +132,27 @@ describe('golden-streams corpus integrity', () => {
     );
   });
 
+  it('keys event pairs injectively, so two pairs cannot share one key', () => {
+    // A bare separator is not a boundary: with `${a}::${b}`, the pair
+    // ('a', 'b::c') and the pair ('a::b', 'c') collide into one key, and the
+    // ledger silently merges two distinct pairs into one row. Length-prefixing
+    // each id makes the encoding uniquely decodable.
+    assert.notEqual(pairKeyFor('a', 'b::c'), pairKeyFor('a::b', 'c'));
+    // Order must still not matter — the key names an unordered pair.
+    assert.equal(pairKeyFor('a', 'b::c'), pairKeyFor('b::c', 'a'));
+    const keys = new Set<string>();
+    const ids = ['x', 'x:', 'x::', ':x', '::x', 'xx', ''];
+    let pairs = 0;
+    for (const a of ids) {
+      for (const b of ids) {
+        if (a >= b) continue;
+        keys.add(pairKeyFor(a, b));
+        pairs += 1;
+      }
+    }
+    assert.equal(keys.size, pairs, 'two distinct event pairs collided onto one key');
+  });
+
   it('emits observations in a stable total order with unique ids', () => {
     const obs = allGoldenObservations();
     const ids = new Set(obs.map((o) => o.id));
@@ -289,12 +310,13 @@ describe('what the corpus is built to stress', () => {
     // The live corpus emits exactly one pair per distinct key, so it cannot
     // tell the two denominators apart. This drives the grader directly with a
     // pair matched twice: distinct must stay 1 while the raw count reaches 2.
-    const key = [...plantedTruePairKeys()][0]!;
-    const [a, b] = key.split('::') as [string, string];
+    // The key is length-prefixed and deliberately not splittable, so the two
+    // endpoints come from the ledger row that carries them.
+    const seed = report.pairs.find((p) => p.isTruePair)!;
     const twice = ['rule-one', 'rule-two'].map((ruleId) => ({
       ruleId,
-      eventA: { id: a },
-      eventB: { id: b },
+      eventA: { id: seed.eventIdA },
+      eventB: { id: seed.eventIdB },
       confidence: 0.5,
     })) as unknown as Parameters<typeof gradeEnginePairs>[0];
 
@@ -388,7 +410,7 @@ describe('the committed baseline', () => {
 
   it('carries its own tolerance block', () => {
     const baseline = loadBaseline();
-    assert.equal(baseline.schemaVersion, 5);
+    assert.equal(baseline.schemaVersion, 6);
     for (const key of Object.keys(DEFAULT_CORRELATION_BENCH_TOLERANCES)) {
       assert.ok(
         key in baseline.tolerances,
@@ -453,13 +475,31 @@ describe('the gate', () => {
   });
 
   it('treats decoy leakage as zero-tolerance', () => {
-    const leaked = withPairLedger(
-      report,
-      report.pairs.map((p, i) => (i === 0 ? { ...p, decoyEmissions: 1 } : p)),
-    );
+    // A decoy emission the corpus AGREES with: a real near-miss decoy event
+    // paired with a real event, keyed the way `pairKeyFor` keys it, so every
+    // row-level derivation reconciles and the zero-tolerance gate is the only
+    // thing left to reject it. Hand-setting `decoyEmissions` on a row that
+    // touches no decoy would trip the reconciliation instead and prove nothing.
+    const decoy = [...decoyEventIds()][0]!;
+    const partner = report.pairs[0]!.eventIdA;
+    const leaked = withPairLedger(report, [
+      ...report.pairs,
+      {
+        key: pairKeyFor(decoy, partner),
+        eventIdA: decoy < partner ? decoy : partner,
+        eventIdB: decoy < partner ? partner : decoy,
+        ruleIds: ['rule-leak'],
+        confidences: [0.5],
+        isTruePair: false,
+        decoyEmissions: 1,
+      },
+    ]);
     const { ok, reasons } = compareCorrelationBenchToBaseline(leaked, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('near-miss decoy pairs emitted')));
+    assert.ok(
+      reasons.some((r) => r.includes('near-miss decoy pair')),
+      `expected a decoy-leak reason, got: ${reasons.join(' | ')}`,
+    );
   });
 
   it('fails when learned rules spray more pairs than the tolerance allows', () => {
@@ -609,15 +649,18 @@ describe('the gate', () => {
   });
 
   it('rejects a null separation that is NOT explained by zero false edges', () => {
-    // A run where the miner graded NOTHING causal: separation is legitimately
-    // null (one of the two z buckets is empty) while 22 false edges stand. The
-    // ledger derives that null, so the gate — not the reconciliation — is what
-    // has to catch the unearned exemption.
+    // A run where the miner recovered NOTHING causal: separation is legitimately
+    // null (the causal z bucket is empty) while every false edge still stands.
+    // The verdicts stay corpus-true — the causal rows are simply absent, which
+    // is what "recovered nothing" means — so the gate, not the reconciliation,
+    // is what has to catch the unearned exemption.
+    const falseEdges = report.edges.filter((e) => e.verdict !== 'causal');
+    const byVerdict = (v: string): number =>
+      falseEdges.filter((e) => e.verdict === v).length;
     const broken = {
       ...report,
-      edges: report.edges.map((e) => ({
-        ...e, verdict: 'unplanted' as const, becameLearnedRule: false,
-      })),
+      edges: falseEdges.map((e) => ({ ...e, becameLearnedRule: false })),
+      significantEdgeCount: falseEdges.length,
       edgeEvidenceSeparation: null,
       couplingPrecision: 0,
       couplingRecall: 0,
@@ -625,12 +668,12 @@ describe('the gate', () => {
         { length: report.plantedCausalCount },
         (_, i) => `missing-${i}`,
       ),
-      falseEdgeCount: report.significantEdgeCount,
-      confoundedFalsePositives: 0,
-      mediatedFalsePositives: 0,
-      independentFalsePositives: 0,
-      inhibitoryEdgesReported: 0,
-      unplantedFalsePositives: report.significantEdgeCount,
+      falseEdgeCount: falseEdges.length,
+      confoundedFalsePositives: byVerdict('confounded'),
+      mediatedFalsePositives: byVerdict('mediated'),
+      independentFalsePositives: byVerdict('independent'),
+      inhibitoryEdgesReported: byVerdict('inhibitory'),
+      unplantedFalsePositives: byVerdict('unplanted'),
       learnedRuleCount: 0,
       causalLearnedRuleCount: 0,
       learnedRuleFalsePositives: 0,
@@ -1103,6 +1146,140 @@ describe('the gate rejects a run or a baseline that could not have happened', ()
     const { ok, reasons } = compareCorrelationBenchToBaseline(lying, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('internally inconsistent')));
+  });
+
+  // ── Sixth round: the ledgers used to carry their own conclusions. A row that
+  // states its own verdict, its own `isTruePair`, and its own decoy count is the
+  // report grading itself — rewrite every endpoint to a fabricated id and the
+  // rows still agree with the summaries they were generated alongside. Each
+  // fixture below rewrites truth and USED to return PASS.
+
+  it('rejects a pair ledger whose keys name pairs that do not exist', () => {
+    // Codex's proof: replace every key with a fabricated unique string. The six
+    // pair summaries still reconcile — they only ever counted rows — so nothing
+    // but a re-derivation from the corpus can notice.
+    const fabricated = withPairLedger(
+      report,
+      report.pairs.map((p, i) => ({ ...p, key: `fabricated-pair-${i}` })),
+    );
+    const { ok, reasons } = compareCorrelationBenchToBaseline(fabricated, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('does not name the pair the row claims')));
+  });
+
+  it('rejects a pair row whose endpoints do not build its key', () => {
+    // The endpoints are what make the key checkable. Swapping one for another
+    // real event id keeps the row well-formed and the totals intact.
+    const swapped = withPairLedger(
+      report,
+      report.pairs.map((p, i) => (i === 0 ? { ...p, eventIdA: report.pairs[1]!.eventIdA } : p)),
+    );
+    const { ok, reasons } = compareCorrelationBenchToBaseline(swapped, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('does not name the pair the row claims')));
+  });
+
+  it('rejects a pair row that relabels a true pair as a miss', () => {
+    // `isTruePair` came from the same grading pass as `pairPrecision`, so the
+    // two agree by construction. Planted truth is the only outside witness.
+    const relabelled = withPairLedger(
+      report,
+      report.pairs.map((p, i) => (i === 0 ? { ...p, isTruePair: !p.isTruePair } : p)),
+    );
+    const { ok, reasons } = compareCorrelationBenchToBaseline(relabelled, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('but the planted corpus says')));
+  });
+
+  it('rejects an edge row whose verdict contradicts the planted corpus', () => {
+    // Promoting one false edge to `causal` moves precision in the direction the
+    // gate rewards, and every FP category still sums to `falseEdgeCount`.
+    const promoted = report.edges.map((e, i) => (
+      i === report.edges.findIndex((x) => x.verdict !== 'causal')
+        ? { ...e, verdict: 'causal' as const }
+        : e
+    ));
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      { ...report, edges: promoted }, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('the planted corpus grades')));
+  });
+
+  it('rejects an edge row pointing at events the corpus never coupled', () => {
+    // Fabricated endpoints grade as `unplanted` no matter what the row claims,
+    // so a renamed causal edge cannot keep its verdict.
+    const renamed = report.edges.map((e, i) => (
+      i === 0 ? { ...e, from: 'fabricated-domain-a', to: 'fabricated-domain-b' } : e
+    ));
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      { ...report, edges: renamed }, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('the planted corpus grades')));
+  });
+
+  it('rejects the same directed pair reported twice at two lag windows', () => {
+    // The miner emits one edge per directed pair. A second row for the same
+    // pair is padding: it inflates the causal count, and under a z-keyed dedupe
+    // it slips through by carrying a different lag.
+    const causal = report.edges.find((e) => e.verdict === 'causal')!;
+    const padded = {
+      ...report,
+      significantEdgeCount: report.significantEdgeCount + 1,
+      edges: [...report.edges, { ...causal, windowHours: causal.windowHours + 1 }],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(padded, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('repeats an earlier row for the same')));
+  });
+
+  it('rejects a false-positive breakdown that reassigns rows between categories', () => {
+    // The five categories summing to `falseEdgeCount` is the check the report
+    // already satisfied. Moving one row from `confounded` to `mediated` keeps
+    // the sum and hides which trap the miner actually fell into.
+    const moved = {
+      ...report,
+      confoundedFalsePositives: report.confoundedFalsePositives - 1,
+      mediatedFalsePositives: report.mediatedFalsePositives + 1,
+    };
+    assert.ok(report.confoundedFalsePositives > 0, 'fixture needs a confounded row to move');
+    const { ok, reasons } = compareCorrelationBenchToBaseline(moved, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('confounded')));
+  });
+
+  it('rejects a baseline that drops rules out of the pinned inventory', () => {
+    // Deleting a built-in rule deletes the pairs it would have emitted, which
+    // reads as a smaller — and therefore "improved" — denominator. The rule set
+    // is pinned by exact set equality, not by a count or a floor.
+    const empty = compareCorrelationBenchToBaseline(report, { ...baseline, builtInRuleIds: [] });
+    assert.equal(empty.ok, false);
+    assert.ok(empty.reasons.some((r) => r.includes('builtInRuleIds is missing')));
+
+    const thinned = compareCorrelationBenchToBaseline(
+      report, { ...baseline, builtInRuleIds: baseline.builtInRuleIds.slice(1) },
+    );
+    assert.equal(thinned.ok, false);
+    assert.ok(thinned.reasons.some((r) => r.includes('built-in correlation rule set changed')));
+  });
+
+  it('gates the mined-candidate count, so a collapsed miner cannot read as clean', () => {
+    // Precision and separation both IMPROVE when the miner stops mining: fewer
+    // candidates, fewer false positives. Only the candidate count itself falls.
+    const collapsed = { ...report, minedEdgeCount: Math.floor(report.minedEdgeCount / 2) };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(collapsed, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('mined candidate edges')));
+  });
+
+  it('rejects a baseline that seeds a decoy emission as acceptable', () => {
+    // The decoy gate used to compare live against baseline, so a baseline that
+    // admitted one leak licensed one leak forever. Zero is the only value.
+    const seeded = { ...baseline, decoyPairsEmitted: 1 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, seeded);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('baseline emits')));
   });
 
   it('accepts the committed baseline against a live run', () => {

@@ -32,8 +32,15 @@
  */
 
 import type {
-  BenchEdgeRow, BenchPairRow, CorrelationBenchReport,
+  BenchEdgeRow, BenchPairRow, CorrelationBenchReport, EdgeVerdict,
 } from './bench-correlation';
+// The gate reads planted truth DIRECTLY. A ledger row that carries its own
+// verdict and its own `isTruePair` flag is the report grading itself: rewrite
+// every endpoint to a fabricated id and the rows still agree with the summaries
+// they were generated alongside. Truth comes from the corpus or it is not truth.
+import {
+  decoyEventIds, pairKeyFor, plantedCouplingIndex, plantedTruePairKeys,
+} from './__bench__/golden-streams';
 
 export interface CorrelationBenchTolerances {
   /** Max allowed absolute drop in miner coupling precision. */
@@ -67,6 +74,17 @@ export interface CorrelationBenchTolerances {
   causalLearnedRulePairShrinkRatio: number;
   /** Max allowed shrink in distinct built-in-rule pair emissions (count). */
   enginePairShrink: number;
+  /**
+   * Max allowed shrink in the CANDIDATE population the miner scored (count).
+   *
+   * `minedEdgeCount >= significantEdgeCount` is a shape check, not a gate: it is
+   * satisfied by a miner that stops generating candidates and only re-reports
+   * the 22 it already believes. Precision, recall and separation all hold
+   * steady while the search space collapses — and ACC-502's multiple-comparison
+   * correction divides by exactly this number, so a silently shrunken candidate
+   * set is a silently weakened correction.
+   */
+  minedEdgeCountShrink: number;
 }
 
 /**
@@ -94,6 +112,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
   learnedRulePairGrowth: 25,
   causalLearnedRulePairShrinkRatio: 0.5,
   enginePairShrink: 2,
+  minedEdgeCountShrink: 25,
 };
 
 /**
@@ -103,7 +122,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 5;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 6;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -129,10 +148,13 @@ export interface CorrelationBenchBaseline {
   plantedCausalCount: number;
   truePairUniverse: number;
   corpusDigest: string;
+  /** Every built-in rule id in the graded pass, sorted — pinned by set equality. */
+  builtInRuleIds: string[];
 
   // graded metrics
   couplingPrecision: number;
   couplingRecall: number;
+  minedEdgeCount: number;
   significantEdgeCount: number;
   confoundedFalsePositives: number;
   mediatedFalsePositives: number;
@@ -183,6 +205,7 @@ export const DEFAULT_CORRELATION_BENCH_TOLERANCES: CorrelationBenchTolerances = 
   learnedRulePairGrowth: 5,
   causalLearnedRulePairShrinkRatio: 0.5,
   enginePairShrink: 0,
+  minedEdgeCountShrink: 10,
 };
 
 /**
@@ -338,6 +361,7 @@ const MUST_ARM_ITS_GATE: readonly [
   ['edgeEvidenceSeparation', 'edgeEvidenceSeparationDrop'],
   ['enginePairCount', null],
   ['distinctEnginePairCount', 'enginePairShrink'],
+  ['minedEdgeCount', 'minedEdgeCountShrink'],
   ['couplingPrecision', 'couplingPrecisionDrop'],
   ['couplingRecall', 'couplingRecallDrop'],
   ['pairPrecision', 'pairPrecisionDrop'],
@@ -378,6 +402,50 @@ function checkBaselineArmsItsGates(
  * passing on the absence of identity — the one comparison that must never be
  * satisfiable by deleting a field from both operands.
  */
+/**
+ * The graded engine pass measures MEMBERSHIP and RATES over the pairs it emits,
+ * and a rule the corpus never exercises contributes to neither. Five built-in
+ * rules — earthquake-infrastructure, airquality-wildfire, biosurv-aviation,
+ * weather-aviation, conflict-displacement — can be deleted outright with all 22
+ * pairs and every rate unmoved, so the benchmark reported PASS on a smaller
+ * correlation engine than the one it claimed to be measuring.
+ *
+ * The inventory is therefore pinned by exact set equality. Adding or removing a
+ * shipped rule fails the gate and forces a deliberate re-seed, which is the
+ * moment a human should be reading the diff. This is coverage of the rule SET,
+ * not of each rule's behaviour: extending the corpus so every rule fires would
+ * be strictly stronger, and is left to a corpus-widening change.
+ */
+function checkRuleInventory(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): void {
+  const want = baseline.builtInRuleIds;
+  const got = report.builtInRuleIds;
+  if (!Array.isArray(want) || want.length === 0
+    || want.some((id) => typeof id !== 'string' || id === '')) {
+    reasons.push(
+      'baseline builtInRuleIds is missing or not a non-empty list of rule ids — the engine ' +
+      'inventory cannot be pinned, so rules can be deleted without moving a number',
+    );
+    return;
+  }
+  if (!Array.isArray(got)) {
+    reasons.push('live report carries no builtInRuleIds inventory');
+    return;
+  }
+  const missing = want.filter((id) => !got.includes(id));
+  const added = got.filter((id) => !want.includes(id));
+  if (missing.length > 0 || added.length > 0) {
+    reasons.push(
+      `built-in correlation rule set changed: ${missing.length} removed ` +
+      `[${missing.join(', ')}], ${added.length} added [${added.join(', ')}] — the graded pass ` +
+      `is no longer measuring the same engine (re-seed deliberately, in a reviewed diff)`,
+    );
+  }
+}
+
 function checkDigestFormat(
   reasons: string[],
   report: CorrelationBenchReport,
@@ -390,6 +458,34 @@ function checkDigestFormat(
       reasons.push(
         `${side} corpusDigest is not a 32-character hex digest (${JSON.stringify(digest)}) — ` +
         `corpus identity cannot be established, so no number below is comparable`,
+      );
+    }
+  }
+}
+
+/**
+ * The five facts that make a baseline and a run comparable at all. Any of them
+ * moving means the corpus was edited, and no metric below it is a measurement
+ * of the same thing the baseline measured.
+ */
+function checkCorpusIdentity(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): void {
+  const identity: [string, unknown, unknown][] = [
+    ['golden-stream count', baseline.streamCount, report.streamCount],
+    ['observation count', baseline.observationCount, report.observationCount],
+    ['planted causal coupling count', baseline.plantedCausalCount, report.plantedCausalCount],
+    ['planted true-pair universe', baseline.truePairUniverse, report.truePairUniverse],
+    ['corpus content digest', baseline.corpusDigest, report.corpusDigest],
+  ];
+  for (const [label, want, got] of identity) {
+    if (want !== got) {
+      reasons.push(
+        `${label} changed: baseline=${String(want)} live=${String(got)} ` +
+        `(golden-streams.ts was edited — re-seed bench-correlation-baseline.json ` +
+        `deliberately, in a reviewed diff)`,
       );
     }
   }
@@ -415,22 +511,8 @@ export function compareCorrelationBenchToBaseline(
   checkDigestFormat(reasons, report, baseline);
   if (reasons.length > 0) return { ok: false, reasons };
 
-  const identity: [string, unknown, unknown][] = [
-    ['golden-stream count', baseline.streamCount, report.streamCount],
-    ['observation count', baseline.observationCount, report.observationCount],
-    ['planted causal coupling count', baseline.plantedCausalCount, report.plantedCausalCount],
-    ['planted true-pair universe', baseline.truePairUniverse, report.truePairUniverse],
-    ['corpus content digest', baseline.corpusDigest, report.corpusDigest],
-  ];
-  for (const [label, want, got] of identity) {
-    if (want !== got) {
-      reasons.push(
-        `${label} changed: baseline=${String(want)} live=${String(got)} ` +
-        `(golden-streams.ts was edited — re-seed bench-correlation-baseline.json ` +
-        `deliberately, in a reviewed diff)`,
-      );
-    }
-  }
+  checkCorpusIdentity(reasons, report, baseline);
+  checkRuleInventory(reasons, report, baseline);
   if (reasons.length > 0) return { ok: false, reasons };
 
   // ── Fail closed on anything non-numeric BEFORE any directional check ───
@@ -463,6 +545,8 @@ export function compareCorrelationBenchToBaseline(
       baseline.learnedRulePairCount, report.learnedRulePairCount],
     ['causal learned-rule pair volume', 'count',
       baseline.causalLearnedRulePairCount, report.causalLearnedRulePairCount],
+    ['mined candidate edges', 'count',
+      baseline.minedEdgeCount, report.minedEdgeCount],
     ['raw built-in pair emissions', 'count',
       baseline.enginePairCount, report.enginePairCount],
     ['distinct built-in pair emissions', 'count',
@@ -544,11 +628,21 @@ export function compareCorrelationBenchToBaseline(
   // ── Zero-tolerance gate ────────────────────────────────────────────────
   // The near-miss decoys each fail exactly one rule clause. A pair here means
   // a rule got looser, which is how a correlation engine starts hallucinating.
-  if (report.decoyPairsEmitted > baseline.decoyPairsEmitted) {
-    reasons.push(
-      `near-miss decoy pairs emitted: baseline=${baseline.decoyPairsEmitted} ` +
-      `live=${report.decoyPairsEmitted} (a built-in rule clause loosened — zero tolerance)`,
-    );
+  // ABSOLUTE zero, not zero-relative-to-baseline. Every other gate here is
+  // baseline-relative, which is what makes them tolerant of a deliberate
+  // re-seed — but a baseline that seeds `decoyPairsEmitted: 1` re-seeds the
+  // defect as the standard, and the "zero tolerance" gate then tolerates it on
+  // both sides forever. The correct number of decoy emissions is zero, and it
+  // is zero regardless of what any baseline says.
+  for (const [side, emitted] of [
+    ['baseline', baseline.decoyPairsEmitted], ['live', report.decoyPairsEmitted],
+  ] as const) {
+    if (emitted !== 0) {
+      reasons.push(
+        `${side} emits ${emitted} near-miss decoy pair(s) — the decoys each fail exactly one ` +
+        `rule clause, so any emission means a clause loosened (absolute zero, not baseline-relative)`,
+      );
+    }
   }
 
   // ── Learned rules: usefulness first, then blast radius ─────────────────
@@ -596,6 +690,13 @@ export function compareCorrelationBenchToBaseline(
   // the precision and decoy gates above.
   checkDrop(reasons, 'distinct built-in pair emissions',
     baseline.distinctEnginePairCount, report.distinctEnginePairCount, tol.enginePairShrink);
+
+  // The candidate population is itself a measurement. `minedEdgeCount >=
+  // significantEdgeCount` is only a shape check — a miner that stops generating
+  // candidates and re-reports the 22 it already believes satisfies it while
+  // every rate holds steady, and ACC-502's correction divides by this number.
+  checkDrop(reasons, 'mined candidate edges',
+    baseline.minedEdgeCount, report.minedEdgeCount, tol.minedEdgeCountShrink);
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -828,9 +929,11 @@ const Z_CAP = 50;
  * evidence in the rows rather than merely asserted alongside them.
  */
 function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void {
+  const planted = plantedCouplingIndex();
   const seen = new Set<string>();
   const causalZ: number[] = [];
   const falseZ: number[] = [];
+  const byVerdict = new Map<EdgeVerdict, number>();
   for (const [i, e] of report.edges.entries()) {
     const where = `edge row ${i} (${String(e.from)}->${String(e.to)})`;
     if (typeof e.from !== 'string' || typeof e.to !== 'string' || e.from === '' || e.to === ''
@@ -838,20 +941,75 @@ function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void 
       reasons.push(`report is internally inconsistent: ${where} has no distinct endpoints`);
       continue;
     }
-    const key = `${e.from}->${e.to}@${String(e.windowHours)}`;
+    // Keyed on the DIRECTED PAIR, with no window component. The miner emits one
+    // edge per directed pair — it picks the best window, it does not report one
+    // row per window — so `a->b@1h` plus `a->b@6h` is not two findings, it is
+    // one finding counted twice, which inflates precision and separation alike.
+    const key = `${e.from}->${e.to}`;
     if (seen.has(key)) {
       reasons.push(
-        `report is internally inconsistent: ${where} repeats an earlier row at the same ` +
-        `window — the miner emits one edge per directed pair, so a duplicate is padding`,
+        `report is internally inconsistent: ${where} repeats an earlier row for the same ` +
+        `directed pair — the miner emits one edge per pair, so a duplicate is padding`,
       );
     }
     seen.add(key);
+    // The verdict is DERIVED, never read. Otherwise the whole edge ledger is
+    // the report telling the gate how to grade the report.
+    const truth: EdgeVerdict = planted.get(key)?.kind ?? 'unplanted';
+    if (e.verdict !== truth) {
+      reasons.push(
+        `report is internally inconsistent: ${where} claims verdict '${String(e.verdict)}' but ` +
+        `the planted corpus grades ${key} as '${truth}'`,
+      );
+    }
+    byVerdict.set(truth, (byVerdict.get(truth) ?? 0) + 1);
     if (!checkEdgeRowThresholds(reasons, where, e)) continue;
     // A null z is +Infinity upstream — "certain", capped rather than dropped,
     // exactly as the report's own mean does it.
-    (e.verdict === 'causal' ? causalZ : falseZ).push(Math.min(Z_CAP, e.zScore ?? Z_CAP));
+    (truth === 'causal' ? causalZ : falseZ).push(Math.min(Z_CAP, e.zScore ?? Z_CAP));
   }
+  checkVerdictBreakdown(reasons, report, byVerdict, causalZ.length);
   checkSeparationDerivation(reasons, report, causalZ, falseZ);
+}
+
+/**
+ * Each false-positive category has a named owner downstream (ACC-502..504), so
+ * each is gated separately — and each therefore needs its own witness. Summing
+ * to `falseEdgeCount` only proves the five agree in TOTAL: moving three rows
+ * from `confounded` to `unplanted` preserves the sum and silently reassigns
+ * whose gate is measuring them.
+ */
+function checkVerdictBreakdown(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  byVerdict: ReadonlyMap<EdgeVerdict, number>,
+  causalRows: number,
+): void {
+  const claimed: readonly (readonly [EdgeVerdict, number])[] = [
+    ['confounded', report.confoundedFalsePositives],
+    ['mediated', report.mediatedFalsePositives],
+    ['independent', report.independentFalsePositives],
+    ['inhibitory', report.inhibitoryEdgesReported],
+    ['unplanted', report.unplantedFalsePositives],
+  ];
+  for (const [verdict, count] of claimed) {
+    const actual = byVerdict.get(verdict) ?? 0;
+    if (actual !== count) {
+      reasons.push(
+        `report is internally inconsistent: ${verdict} false positives reported as ${count} ` +
+        `but the edge ledger grades ${actual} row(s) as '${verdict}'`,
+      );
+    }
+  }
+  // Recall's numerator, reached a third way: the summary says it, the missing
+  // list implies it, and now the ledger's own causal rows count it.
+  const recovered = report.plantedCausalCount - report.missingCouplings.length;
+  if (causalRows !== recovered) {
+    reasons.push(
+      `report is internally inconsistent: ${recovered} recovered coupling(s) implied by ` +
+      `couplingRecall and missingCouplings, but the edge ledger holds ${causalRows} causal row(s)`,
+    );
+  }
 }
 
 /**
@@ -925,8 +1083,14 @@ function checkSeparationDerivation(
   }
 }
 
-/** The report rounds its separation to 4dp; the re-derivation must allow that. */
-const SEPARATION_EPSILON = 1e-3;
+/**
+ * The report rounds its separation to 4dp, and the row z-scores it is derived
+ * from are rounded to 4dp too, so the re-derivation can legitimately differ by
+ * at most 5e-5 (the reported value) + 5e-5 (the mean of equally-rounded
+ * operands). Anything wider is slack a fabricated separation can hide inside:
+ * at 1e-3 the gate accepted twenty times the arithmetic it was excusing.
+ */
+const SEPARATION_EPSILON = 1.1e-4;
 
 function average(xs: readonly number[]): number {
   return xs.reduce((sum, v) => sum + v, 0) / xs.length;
@@ -1034,6 +1198,58 @@ function checkPairRowShape(
       `${p.ruleIds.length} emission(s)`,
     );
     return false;
+  }
+  return checkPairRowAgainstCorpus(reasons, bad, p, p.ruleIds);
+}
+
+/**
+ * The row's three CONCLUSIONS — its key, its planted-truth flag, and its decoy
+ * contact — re-derived from the two event ids behind it.
+ *
+ * Without this the pair ledger is a witness to nothing: rewriting every key to a
+ * fresh unique string keeps the row count, the emission count and every rate
+ * intact, so precision over fabricated pairs reads exactly like precision over
+ * real ones. The event ids are the only field a fabricated row cannot supply,
+ * because the corpus is what decides what they mean.
+ */
+function checkPairRowAgainstCorpus(
+  reasons: string[],
+  bad: string,
+  p: BenchPairRow,
+  ruleIds: readonly string[],
+): boolean {
+  if (typeof p.eventIdA !== 'string' || typeof p.eventIdB !== 'string'
+    || p.eventIdA === '' || p.eventIdB === '' || p.eventIdA === p.eventIdB) {
+    reasons.push(`${bad} has no distinct event ids behind its key`);
+    return false;
+  }
+  const rebuilt = pairKeyFor(p.eventIdA, p.eventIdB);
+  if (rebuilt !== p.key) {
+    reasons.push(
+      `${bad} has key ${p.key} but its event ids build ${rebuilt} — the key does not name ` +
+      `the pair the row claims to describe`,
+    );
+    return false;
+  }
+  const expectTrue = plantedTruePairKeys().has(rebuilt);
+  if (p.isTruePair !== expectTrue) {
+    reasons.push(
+      `${bad} claims isTruePair=${String(p.isTruePair)} but the planted corpus says ` +
+      `${String(expectTrue)} for ${rebuilt}`,
+    );
+  }
+  const decoys = decoyEventIds();
+  const touchesDecoy = decoys.has(p.eventIdA) || decoys.has(p.eventIdB);
+  // A pair either touches a decoy or it does not — the property is of the PAIR,
+  // so every emission of it is a decoy emission, or none is. Anything in
+  // between is a hand-lowered count under an emitted decoy.
+  const expectDecoy = touchesDecoy ? ruleIds.length : 0;
+  if (p.decoyEmissions !== expectDecoy) {
+    reasons.push(
+      `${bad} attributes ${p.decoyEmissions} decoy emission(s), but ${rebuilt} ` +
+      `${touchesDecoy ? 'touches a near-miss decoy' : 'touches no decoy'} across ` +
+      `${ruleIds.length} emission(s), so the count must be ${expectDecoy}`,
+    );
   }
   return true;
 }

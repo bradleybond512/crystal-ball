@@ -4,24 +4,23 @@
  * fetch, no globals — fixture-testable.
  */
 
-import type { Earthquake } from '@/generated/client/crystalball/seismology/v1/service_client';
+import type { UsgsEvent } from '@/services/earthquake/earthquake-intelligence';
 import type { EmscEvent } from '@/services/emsc-seismic';
 import type { GeofonEvent } from '@/services/geofon-seismic';
 import type { DomainObservation } from '@/services/providers/fusion-ingest';
 
-export function usgsEarthquakesToObservations(quakes: readonly Earthquake[]): DomainObservation[] {
+/** Rows from the sidecar `/api/earthquakes` route (see usgs-fusion-fetch.ts). */
+export function usgsEventsToObservations(events: readonly UsgsEvent[]): DomainObservation[] {
   const out: DomainObservation[] = [];
-  for (const q of quakes) {
-    const lat = q.location?.latitude;
-    const lon = q.location?.longitude;
-    if (lat == null || lon == null || !Number.isFinite(q.magnitude) || !Number.isFinite(q.occurredAt)) continue;
+  for (const e of events) {
+    if (!Number.isFinite(e.magnitude) || !Number.isFinite(e.lat) || !Number.isFinite(e.lon) || !Number.isFinite(e.time)) continue;
     out.push({
       providerId: 'usgs-earthquakes',
-      value: q.magnitude,
-      lat,
-      lon,
-      occurredAt: q.occurredAt,
-      externalId: q.id,
+      value: e.magnitude,
+      lat: e.lat,
+      lon: e.lon,
+      occurredAt: e.time,
+      externalId: e.id || undefined,
     });
   }
   return out;

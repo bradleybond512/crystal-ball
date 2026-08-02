@@ -51,15 +51,17 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // itself, so PurpleAir flapped healthy/stale on roughly half its ticks with
   // nothing wrong upstream. The other three (1 h, 1 h, 2 h) already had the
   // headroom this one lacked; 45 min gives it the same and stays well inside
-  // the domain's 3 h match window. Not fixed by ticking faster: the fetch is
-  // an uncached bbox query against a keyed, point-metered API, and shortening
-  // the interval would speed up the whole compound-threat evaluation with it,
-  // not just this one source.
+  // the domain's 3 h match window. Not fixed by ticking faster either: the
+  // knob is the shared compound-threat cadence, so shortening it would speed
+  // up all four providers and everything else that evaluation drives, to fix
+  // one source's TTL. (The sidecar does cache each bbox key for 5 min, so a
+  // faster tick would not be free-running against PurpleAir's point meter —
+  // it is the blast radius, not the upstream cost, that rules it out.)
   { id: 'purpleair', domain: 'air_quality', displayName: 'PurpleAir', authType: 'free_key', requiredSecret: 'PURPLEAIR_API_KEY', baseUrl: 'https://api.purpleair.com', rateLimitNote: 'keyed, point-based', freshnessTtlMs: 45 * MIN, reliabilityWeight: 0.75, fallbackPriority: 4, independenceGroup: 'purpleair' },
   // ── Crypto prices (fused by symbol: CoinGecko + Coinbase + CoinPaprika +
   // Kraken, all no-key) ──
   //
-  // 12 min TTL on all seven price providers (the four below plus the three
+  // 20 min TTL on all seven price providers (the four below plus the three
   // equities ones), raised from 5 min. Their sole driver is the `markets`
   // scheduler task at REFRESH_INTERVALS.markets = 8 min, so a 5 min TTL was a
   // promise the app never had any way to keep: every provider read `stale` for
@@ -68,29 +70,41 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // confidence penalty on seven healthy sources.
   //
   // Fixed by moving the TTL rather than the cadence because the cadence is
-  // externally capped: FMP's free tier allows 250 req/day and 8 min already
-  // spends 180 of them, so 6 min (240/day) would sit at the cap before the
-  // user pressed refresh once. 12 min covers a jittered tick (8.8 min) plus
-  // the loader's own runtime ahead of the fusion block — up to 60 s of
-  // deliberate retry sleeps for commodities and crypto, plus the sequential
-  // fetches, so ~11 min worst case — and leaves the rest as margin.
+  // externally capped: FMP's free tier allows 250 req/day, and 8 min is
+  // already ~180 automatic ticks/day nominal — more with negative jitter, and
+  // more again when a tick spends two calls falling back from the stable to
+  // the legacy endpoint. 6 min (240/day nominal) would therefore be over the
+  // cap in practice, not merely at it.
   //
-  // Widening a TTL does not inflate fusion freshness here: source-fusion
-  // scores 1 - age/ttl against the OBSERVATION's timestamp, and these
-  // observations are fused in the same tick that records them, so their age is
-  // ~0 either way. The only behaviour that changes is the stale threshold,
-  // which is the thing that was wrong.
-  { id: 'coingecko', domain: 'markets', displayName: 'CoinGecko', authType: 'none', baseUrl: 'https://api.coingecko.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'coingecko' },
-  { id: 'coinbase', domain: 'markets', displayName: 'Coinbase', authType: 'none', baseUrl: 'https://api.coinbase.com', rateLimitNote: 'public spot prices, no key', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 5, independenceGroup: 'coinbase' },
-  { id: 'coinpaprika', domain: 'markets', displayName: 'CoinPaprika', authType: 'none', baseUrl: 'https://api.coinpaprika.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.8, fallbackPriority: 6, independenceGroup: 'coinpaprika' },
-  { id: 'kraken', domain: 'markets', displayName: 'Kraken', authType: 'none', baseUrl: 'https://api.kraken.com', rateLimitNote: 'public ticker, no key', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 7, independenceGroup: 'kraken' },
+  // 20 min, not 12, because the cycle is much longer than the jittered tick:
+  // the scheduler arms the next timer AFTER the loader resolves, and
+  // `loadMarkets` runs its panel phases first — two deliberate 20 s retry
+  // sleeps plus a dozen sequential fetches with their own timeouts. Worst case
+  // is ~8.8 min jittered + ~3-4 min of runtime. 12 min left that within
+  // seconds of the TTL; 20 leaves real margin. This is an estimate, not a
+  // bound — the abort timeouts cap network waits only.
+  //
+  // The trade this makes, stated plainly: source-fusion's freshness term is
+  // 1 - age/ttl against the OBSERVATION's timestamp. Six of these seven stamp
+  // their rows with the fetch instant, so their age is ~0 and the TTL only
+  // moves the stale threshold. FMP is the exception — it carries the API's
+  // real quote timestamp — so widening its TTL genuinely relaxes its decay: a
+  // 10 min old quote now scores 0.5 where it used to score 0. That is
+  // accepted here because the alternative was marking FMP stale on every
+  // single cycle, a permanent false negative that costs more; the real fix is
+  // to separate the staleness threshold from the decay horizon in the
+  // registry, which is deliberately out of scope for this change.
+  { id: 'coingecko', domain: 'markets', displayName: 'CoinGecko', authType: 'none', baseUrl: 'https://api.coingecko.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'coingecko' },
+  { id: 'coinbase', domain: 'markets', displayName: 'Coinbase', authType: 'none', baseUrl: 'https://api.coinbase.com', rateLimitNote: 'public spot prices, no key', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.85, fallbackPriority: 5, independenceGroup: 'coinbase' },
+  { id: 'coinpaprika', domain: 'markets', displayName: 'CoinPaprika', authType: 'none', baseUrl: 'https://api.coinpaprika.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.8, fallbackPriority: 6, independenceGroup: 'coinpaprika' },
+  { id: 'kraken', domain: 'markets', displayName: 'Kraken', authType: 'none', baseUrl: 'https://api.kraken.com', rateLimitNote: 'public ticker, no key', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.85, fallbackPriority: 7, independenceGroup: 'kraken' },
   // ── Stock prices (fused by ticker: Yahoo (no-key, primary) + Finnhub
   // (keyed, corroborating) + FMP (keyed, corroborating). Own 'equities'
   // domain so stock fingerprints don't collide with crypto's in the
   // per-domain redundancy group. ──
-  { id: 'yahoo-finance', domain: 'equities', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'yahoo' },
-  { id: 'finnhub', domain: 'equities', displayName: 'Finnhub', authType: 'free_key', requiredSecret: 'FINNHUB_API_KEY', baseUrl: 'https://finnhub.io', rateLimitNote: '60 req/min free tier', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'finnhub' },
-  { id: 'fmp', domain: 'equities', displayName: 'Financial Modeling Prep', authType: 'free_key', requiredSecret: 'FMP_API_KEY', baseUrl: 'https://financialmodelingprep.com', rateLimitNote: '250 req/day free tier', freshnessTtlMs: 12 * MIN, reliabilityWeight: 0.85, fallbackPriority: 3, independenceGroup: 'fmp' },
+  { id: 'yahoo-finance', domain: 'equities', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'yahoo' },
+  { id: 'finnhub', domain: 'equities', displayName: 'Finnhub', authType: 'free_key', requiredSecret: 'FINNHUB_API_KEY', baseUrl: 'https://finnhub.io', rateLimitNote: '60 req/min free tier', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'finnhub' },
+  { id: 'fmp', domain: 'equities', displayName: 'Financial Modeling Prep', authType: 'free_key', requiredSecret: 'FMP_API_KEY', baseUrl: 'https://financialmodelingprep.com', rateLimitNote: '250 req/day free tier', freshnessTtlMs: 20 * MIN, reliabilityWeight: 0.85, fallbackPriority: 3, independenceGroup: 'fmp' },
   // ── Intel Expansion Cluster 1: abuse.ch cyber trio ───────────────────────
   // All three share independenceGroup 'abuse-ch' — same operator, same data
   // pipeline. They MUST NOT count as 3 independent votes in corroboration.

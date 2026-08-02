@@ -342,7 +342,8 @@ import {
   getLatestFusion,
   recordDomainObservations,
 } from '@/services/providers/fusion-publish';
-import { usgsEarthquakesToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { usgsEventsToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { fetchUsgsSeismicForFusion } from '@/services/earthquake/usgs-fusion-fetch';
 import { openMeteoAqToObservations, openaqToObservations, airnowToObservations, purpleairToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { fetchAirnowCurrent } from '@/services/airquality/airnow-fusion-fetch';
 import { fetchPurpleairNearby } from '@/services/airquality/purpleair-fusion-fetch';
@@ -777,7 +778,11 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'reliefWeb', task: () => runGuarded('reliefWeb', () => this.loadReliefWebCrises()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: () => runGuarded('bellingcat', () => this.loadBellingcat()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: () => runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'usgsSeismic', task: () => runGuarded('usgsSeismic', () => this.loadUsgsSeismic()) });
+ // Not 'full'-only like its two siblings: tech and finance ship the natural
+ // map layer too, so `loadNatural` used to record this provider for them.
+ // Gating the replacement on 'full' would have silently retired the
+ // earthquakes domain's only vote in those variants.
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'usgsSeismic', task: () => runGuarded('usgsSeismic', () => this.loadUsgsSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: () => runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'geofonSeismic', task: () => runGuarded('geofonSeismic', () => this.loadGeofonSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: () => runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
@@ -4340,28 +4345,30 @@ export class DataLoaderManager implements AppModule {
    * LAYER off silently removed a fusion vote — the domain then ran on EMSC +
    * GEOFON with no indication that the primary source had been switched off.
    *
-   * It also could not simply be given a faster interval: the fetch there is
-   * wrapped in `withOfflineCache('earthquake-data', ..., 1 h)`, and since
+   * It also could not have been fixed by giving `loadNatural` a faster
+   * interval. That path calls `fetchEarthquakes()`, which is cached twice over
+   * — `withOfflineCache('earthquake-data', ..., 1 h)` here, and a 30 min
+   * circuit-breaker cache inside the service — and since
    * `recordDomainObservations` stamps `lastSuccessAt` at RECORD time rather
-   * than from the payload, a faster tick would just have re-stamped hour-old
-   * cached rows as a fresh success — a phantom healthy vote, which is worse
-   * than an honest stale one. Hence a separate call that skips that cache. The
-   * sidecar's own 60 s cache on `/api/earthquakes` still absorbs the load, so
-   * an 8 min cadence costs at most one upstream request per tick.
+   * than from the payload, a faster tick would just have re-stamped old cached
+   * rows as a fresh success. A phantom healthy vote is worse than an honest
+   * stale one, so this uses `fetchUsgsSeismicForFusion` instead: the sidecar's
+   * own `/api/earthquakes` route, cached 60 s, which the 8 min cadence cannot
+   * outrun.
    */
   async loadUsgsSeismic(): Promise<void> {
  try {
- const quakes = await fetchEarthquakes();
- // Fail-CLOSED on empty. `fetchEarthquakes` runs behind a circuit breaker
- // whose fallback is an empty list, so `[]` is returned for an open circuit
- // exactly as it would be for a genuinely quiet planet — and the two are
- // distinguishable here only by the fact that this feed has no magnitude
- // floor. Over the USGS window some quake is always present, so an empty
- // list is the breaker talking, not the Earth. Note this is the OPPOSITE
- // reading from outage-fusion-observations, where zero rows is a real
- // observation; the difference is that a quiet internet is common and a
- // silent planet is not.
- const observations = usgsEarthquakesToObservations(quakes);
+ const events = await fetchUsgsSeismicForFusion();
+ // ok comes from the ADAPTER's output, not the raw rows: a 200 whose rows
+ // the adapter all drops is a format change, and recording it healthy would
+ // put a phantom vote behind "verified by N independent sources". Empty is
+ // therefore failure here — the route reads `all_hour` with NO magnitude
+ // floor, where a genuinely empty hour does not occur, and every non-live
+ // outcome (error envelope, degraded/fallback payload, malformed body)
+ // already throws in the fetch. This is the OPPOSITE reading from
+ // outage-fusion-observations, where zero rows is a real observation; the
+ // difference is that a quiet internet is common and a silent planet is not.
+ const observations = usgsEventsToObservations(events);
  recordDomainObservations('usgs-earthquakes', observations, observations.length > 0);
  } catch (error) {
  console.warn('[usgs-seismic] fetch failed', error);

@@ -127,10 +127,19 @@ export interface GoldenStream {
   decoyEventIds: readonly string[];
 }
 
-/** Direction-independent pair key. Deliberately NOT `|`-separated:
- *  correlation-outcomes.ts splits prediction ids on `|`. */
+/**
+ * Direction-independent pair key. Deliberately NOT `|`-separated:
+ * correlation-outcomes.ts splits prediction ids on `|`.
+ *
+ * Each id is LENGTH-PREFIXED, for the same reason the corpus digest is: a bare
+ * separator is not a boundary, it is just more characters in the key. With
+ * plain `a::b`, `pairKeyFor('a', 'b::c')` and `pairKeyFor('a::b', 'c')` produce
+ * the identical key, so two distinct planted pairs collapse into one truth row
+ * and one ledger row — one of them silently stops being graded.
+ */
 export function pairKeyFor(aId: string, bId: string): string {
-  return aId < bId ? `${aId}::${bId}` : `${bId}::${aId}`;
+  const [a, b] = aId < bId ? [aId, bId] : [bId, aId];
+  return `${a.length}:${a}::${b.length}:${b}`;
 }
 
 // ── Observation builder ─────────────────────────────────────────────────────

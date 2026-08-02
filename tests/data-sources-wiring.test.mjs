@@ -160,7 +160,10 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       // wait, not the parse/normalize work after it.
       const modeledCycleMs = interval * JITTER + soleFetchTimeoutMs(fetchPath);
       assert.ok(
-        modeledCycleMs <= ttl,
+        // Strict, for the same reason as internetOutages below: the parse and
+        // normalize work sits outside the fetch timeout, so an equality case
+        // would be a cycle that really does exceed the TTL.
+        modeledCycleMs < ttl,
         `${task} runs every ${interval / 60000} min but ${provider} declares a ${ttl / 60000} min TTL; ` +
         `with jitter and a full-length fetch that cycle reaches ${modeledCycleMs / 60000} min ` +
         `and the domain drops to USGS alone`,

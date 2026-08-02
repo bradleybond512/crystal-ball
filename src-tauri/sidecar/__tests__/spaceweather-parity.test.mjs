@@ -151,6 +151,25 @@ test('summarizeAlertsSidecar keeps recent alerts stamped with naïve-UTC issue t
   assert.equal(a[0].issuedAt, '2026-05-06T10:00:00.000Z');
 });
 
+// parseAlerts in src/services/space-weather-parse.ts tolerates 5 minutes of
+// clock skew. Both paths feed the same panel, so an alert must not be visible
+// through one and absent through the other.
+test('summarizeAlertsSidecar tolerates the same clock skew as the renderer', () => {
+  const at = (offsetMin) => new Date(NOW + offsetMin * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+  const build = (offsetMin) => [{
+    product_id: 'K07',
+    message: swpcMessage('ALERT: Geomagnetic K-index of 7'),
+    issue_datetime: at(offsetMin),
+  }];
+
+  // A local clock a couple of minutes slow must not drop the newest alerts —
+  // the exact silent-drop this whole change set exists to prevent.
+  assert.equal(summarizeAlertsSidecar(build(2), NOW).length, 1, '+2 min is skew');
+  assert.equal(summarizeAlertsSidecar(build(-1), NOW).length, 1, 'the past is always fine');
+  // Far-future stamps are corrupt: they sort to the top and render "in 3 hours".
+  assert.equal(summarizeAlertsSidecar(build(180), NOW).length, 0, '+3 h is corrupt');
+});
+
 test('filterEarthwardCmesSidecar keeps |lon| ≤ 30°, drops stale arrivals', () => {
   const cmes = [
     { activityID: 'cme-eward', startTime: isoMinus(2),

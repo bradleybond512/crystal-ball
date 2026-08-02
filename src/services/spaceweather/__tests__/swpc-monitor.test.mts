@@ -214,6 +214,20 @@ test('summarizeAlerts keeps recent alerts stamped with naïve-UTC issue times', 
   assert.equal(a[0].issuedAt, '2026-05-06T10:00:00.000Z');
 });
 
+// parseAlerts tolerates 5 minutes of clock skew. This path and that one feed
+// the same panel, so an alert must not exist in one and not the other.
+test('summarizeAlerts tolerates the same clock skew as parseAlerts', () => {
+  const at = (offsetMin: number) =>
+    new Date(NOW + offsetMin * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+  const build = (offsetMin: number): SwpcAlertRaw[] => [
+    { product_id: 'K07', message: swpcMessage('ALERT: Geomagnetic K-index of 7'), issue_datetime: at(offsetMin) },
+  ];
+
+  assert.equal(summarizeAlerts(build(2), NOW).length, 1, '+2 min is skew');
+  assert.equal(summarizeAlerts(build(-1), NOW).length, 1, 'the past is always fine');
+  assert.equal(summarizeAlerts(build(180), NOW).length, 0, '+3 h is corrupt');
+});
+
 // ── Full status ────────────────────────────────────────────────────────────
 
 test('buildStatus returns null xray/geomag for empty inputs but stable shape', () => {

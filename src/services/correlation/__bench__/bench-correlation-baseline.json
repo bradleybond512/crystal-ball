@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "seededAt": "2026-07-31",
-  "note": "ACC-501 seed run against the UNCORRECTED miner: significantEdges() gates on fixed thresholds (minLift 2, minZ 2, minSupport 3) with no multiple-comparisons correction and no de-clustering, so 22 of 256 mined edges clear and only 5 are real — coupling precision 22.7%. Recall is 1.0 and the engine's built-in rules are perfect on event-level truth (precision 1.0, recall 1.0, zero decoy leakage), so every unit of headroom here is in the miner, not the rules. The 14 unplanted edges split into two kinds: 6 are a systematic near-coincidence (the S2 grid-storm anchors sit a fixed ~0.5d before the S8 chain triplets, so space/infra -> chain-x/y/z score z=4.63 and will SURVIVE a Bonferroni correction), and 8 are weak incidental noise (z 2.5-4.8) that a correction should kill. Two real couplings (macro->maritime, space->infra) were evicted at MAX_LEARNED_RULES by burst artefacts, which is what edgeStrengthSeparation=0.05 measures: `strength` saturates at 1.0, so the ranking that decides the cap is nearly flat. ACC-502 owns the correction, ACC-503 the mediated edge, ACC-504 the burst artefacts. schemaVersion 2 added corpusDigest (content identity, not counts), falseEdgeCount + causalLearnedRuleCount + meanTruePairConfidence gates, and fail-closed numeric validation. schemaVersion 3 hardened the digest against array-boundary ambiguity (JSON-encoded, not delimiter-joined), added causalLearnedRulePairCount as a LIVENESS gate (synthesized rules that never fire), validates the tolerance block itself, and cross-checks the report against its own breakdown fields — see bench-correlation-baseline.ts.",
+  "note": "ACC-501 seed run against the UNCORRECTED miner: significantEdges() gates on fixed thresholds (minLift 2, minZ 2, minSupport 3) with no multiple-comparisons correction and no de-clustering, so 22 of 256 mined edges clear and only 5 are real — coupling precision 22.7%. Recall is 1.0 and the engine's built-in rules are perfect on event-level truth (precision 1.0, recall 1.0, zero decoy leakage), so every unit of headroom here is in the miner, not the rules. The 14 unplanted edges split into two kinds: 6 are a systematic near-coincidence (the S2 grid-storm anchors sit a fixed ~0.5d before the S8 chain triplets, so space/infra -> chain-x/y/z score z=4.63 and will SURVIVE a Bonferroni correction), and 8 are weak incidental noise (z 2.5-4.8) that a correction should kill. Two real couplings (macro->maritime, space->infra) were evicted at MAX_LEARNED_RULES by burst artefacts, which is what edgeStrengthSeparation=0.05 measures: `strength` saturates at 1.0, so the ranking that decides the cap is nearly flat. ACC-502 owns the correction, ACC-503 the mediated edge, ACC-504 the burst artefacts. schemaVersion 2 added corpusDigest (content identity, not counts), falseEdgeCount + causalLearnedRuleCount + meanTruePairConfidence gates, and fail-closed numeric validation. schemaVersion 3 hardened the digest against array-boundary ambiguity (JSON-encoded, not delimiter-joined), added causalLearnedRulePairCount as a LIVENESS gate (synthesized rules that never fire), validates the tolerance block itself, and cross-checks the report against its own breakdown fields. schemaVersion 4 answers a third review round that demonstrated seven live PASS-on-nothing paths: the digest is 128-bit (a 32-bit preimage was found in seconds), the causal-pair liveness gate is proportional rather than exactly-zero, the edge and pair summaries reconcile against the row-level ledger and the derived precision ratio, rates and counts are range-checked (pairPrecision 2 used to read as an improvement), the baseline must ARM every gate it feeds (no zero seeds), and the tolerance block must be a complete object rather than a partial overlay on compiled defaults — see bench-correlation-baseline.ts.",
 
   "streamCount": 10,
   "observationCount": 378,
   "plantedCausalCount": 5,
-  "corpusDigest": "13cd95ef",
+  "corpusDigest": "9bf277acf1747bf73f19e30e511b934f",
 
   "couplingPrecision": 0.2273,
   "couplingRecall": 1,
@@ -21,6 +21,8 @@
   "learnedRuleCount": 12,
   "learnedRuleFalsePositives": 9,
   "causalLearnedRuleCount": 3,
+  "enginePairCount": 22,
+  "distinctEnginePairCount": 22,
   "pairPrecision": 1,
   "pairRecall": 1,
   "decoyPairsEmitted": 0,
@@ -38,6 +40,8 @@
     "falseEdgeGrowth": 0,
     "causalLearnedRuleShrink": 0,
     "learnedRuleFalsePositiveGrowth": 0,
-    "learnedRulePairGrowth": 5
+    "learnedRulePairGrowth": 5,
+    "causalLearnedRulePairShrinkRatio": 0.5,
+    "enginePairShrink": 0
   }
 }

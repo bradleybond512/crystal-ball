@@ -812,9 +812,17 @@ export function plantedCouplingIndex(): Map<string, PlantedCoupling> {
  * a deliberate re-seed.
  *
  * FNV-1a rather than a crypto hash because this module must stay importable in
- * the renderer bundle (no `node:crypto`), and the threat here is accident and
- * self-deception, not a motivated collision attacker.
+ * the renderer bundle (no `node:crypto`). It runs at 128 bits, not 32: a 32-bit
+ * digest is brute-forceable in seconds, and a review of this file found a live
+ * preimage — swapping a decoy id for a 7-character string reproduced the
+ * committed digest exactly, so the corpus could be edited without invalidating
+ * the baseline. 128 bits puts that out of reach, which matters because the
+ * digest is the ONLY thing standing between "the fixture got easier" and "the
+ * numbers improved".
  */
+const FNV_OFFSET_128 = 0x6C_62_27_2E_07_BB_01_42_62_B8_21_75_62_95_C5_8Dn;
+const FNV_PRIME_128 = 0x00_00_00_00_01_00_00_00_00_00_00_00_00_00_01_3Bn;
+const MASK_128 = (1n << 128n) - 1n;
 /** Code-unit order, not locale order: the digest must not move with the host locale. */
 function byCodeUnit(a: string, b: string): number {
   if (a < b) return -1;
@@ -823,14 +831,20 @@ function byCodeUnit(a: string, b: string): number {
 }
 
 export function goldenCorpusDigest(): string {
-  let h = 0x81_1C_9D_C5;
+  let h = FNV_OFFSET_128;
   const eat = (s: string): void => {
+    // charCodeAt, not codePointAt: this loop advances one code UNIT at a time,
+    // so codePointAt would read a surrogate pair whole at the lead and then the
+    // trail again on its own — the same bytes hashed inconsistently.
     for (let i = 0; i < s.length; i++) {
-      h ^= s.codePointAt(i)!;
-      // FNV prime 16777619, via shifts to stay in 32-bit integer math.
-      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+      // This loop advances one code UNIT at a time, so code POINTS would be
+      // hashed twice across a surrogate pair.
+      // eslint-disable-next-line unicorn/prefer-code-point
+      h = ((h ^ BigInt(s.charCodeAt(i))) * FNV_PRIME_128) & MASK_128;
     }
-    h = (h ^ 0x5F) >>> 0;
+    // Record-separator byte: without it, adjacent records concatenate and an
+    // edit can move content across a record boundary without moving the hash.
+    h = ((h ^ 0x5Fn) * FNV_PRIME_128) & MASK_128;
   };
 
   // JSON.stringify, not template joins: `['a','b']` and `['a,b']` flatten to the
@@ -851,5 +865,5 @@ export function goldenCorpusDigest(): string {
   for (const k of [...plantedTruePairKeys()].sort(byCodeUnit)) eat(`true:${k}`);
   for (const id of [...decoyEventIds()].sort(byCodeUnit)) eat(`decoy:${id}`);
 
-  return h.toString(16).padStart(8, '0');
+  return h.toString(16).padStart(32, '0');
 }

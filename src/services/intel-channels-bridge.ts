@@ -39,43 +39,53 @@ function centroidForCountry(code: string): { lat: number; lon: number } | undefi
 }
 
 // ── Space weather (global, no location) ───────────────────────────────────
-async function pollSpaceWeather(): Promise<void> {
-  try {
-    const data = await fetchSpaceWeather();
-    const out: UnifiedAlert[] = [];
-    // Kp-based rolling alert
-    if (data.kpIndex !== null && data.kpIndex >= 5) {
-      const sev: AlertSeverity = data.kpIndex >= 7 ? 'critical' : (data.kpIndex >= 6 ? 'high' : 'medium');
-      out.push({
-        id: 'space-wx-kp-rolling',
-        source: 'space-weather',
-        severity: sev,
-        title: `Geomagnetic storm — Kp ${data.kpIndex.toFixed(1)} (${data.kpClass.replace('_', ' ')})`,
-        body: `Solar wind ${data.solarWindSpeed ?? '?'} km/s, Bz ${data.bz ?? '?'} nT, X-ray ${data.xrayClass ?? 'quiet'}.`,
-        timestamp: Date.now(),
-        relevanceScore: sev === 'critical' ? 90 : 70,
-        acknowledged: false,
-        pinned: false,
-      });
-    }
-    // SWPC-issued bulletins (watches/warnings/alerts)
-    for (const m of data.alertMessages.slice(0, 10)) {
-      if (m.severity === 'summary') continue;
-      const sev: AlertSeverity = m.severity === 'alert' ? 'high' : (m.severity === 'warning' ? 'medium' : 'low');
-      out.push({
-        id: `space-wx-${m.id}`,
-        source: 'space-weather',
-        severity: sev,
-        title: `SWPC ${m.severity.toUpperCase()}`,
-        body: m.message.slice(0, 400),
-        timestamp: m.issuedAt.getTime(),
-        relevanceScore: 50,
-        acknowledged: false,
-        pinned: false,
-      });
-    }
-    if (out.length > 0) unifiedAlertStore.ingest(out);
-  } catch { /* noop */ }
+/**
+ * No try/catch here on purpose: tracked() is the handler, and swallowing the
+ * error locally meant it recorded ok:true on every tick no matter what SWPC
+ * did. A throw is how this reaches the Source Health overlay as a failure.
+ */
+export async function pollSpaceWeather(): Promise<void> {
+  const data = await fetchSpaceWeather();
+  // fetchSpaceWeather resolves even when nothing parsed, so a returned object
+  // is not evidence of a working feed. Every product this poller reads being
+  // null is the reassuring reading — no storm, no alerts — produced by an
+  // outage, so it must surface as a failure rather than a quiet sky.
+  if (data.kpIndex === null && data.xrayClass === null && data.alertMessages.length === 0) {
+    throw new Error('SWPC returned no usable space-weather data');
+  }
+  const out: UnifiedAlert[] = [];
+  // Kp-based rolling alert
+  if (data.kpIndex !== null && data.kpIndex >= 5) {
+    const sev: AlertSeverity = data.kpIndex >= 7 ? 'critical' : (data.kpIndex >= 6 ? 'high' : 'medium');
+    out.push({
+      id: 'space-wx-kp-rolling',
+      source: 'space-weather',
+      severity: sev,
+      title: `Geomagnetic storm — Kp ${data.kpIndex.toFixed(1)} (${data.kpClass.replace('_', ' ')})`,
+      body: `Solar wind ${data.solarWindSpeed ?? '?'} km/s, Bz ${data.bz ?? '?'} nT, X-ray ${data.xrayClass ?? 'quiet'}.`,
+      timestamp: Date.now(),
+      relevanceScore: sev === 'critical' ? 90 : 70,
+      acknowledged: false,
+      pinned: false,
+    });
+  }
+  // SWPC-issued bulletins (watches/warnings/alerts)
+  for (const m of data.alertMessages.slice(0, 10)) {
+    if (m.severity === 'summary') continue;
+    const sev: AlertSeverity = m.severity === 'alert' ? 'high' : (m.severity === 'warning' ? 'medium' : 'low');
+    out.push({
+      id: `space-wx-${m.id}`,
+      source: 'space-weather',
+      severity: sev,
+      title: `SWPC ${m.severity.toUpperCase()}`,
+      body: m.message.slice(0, 400),
+      timestamp: m.issuedAt.getTime(),
+      relevanceScore: 50,
+      acknowledged: false,
+      pinned: false,
+    });
+  }
+  if (out.length > 0) unifiedAlertStore.ingest(out);
 }
 
 // ── SPC convective outlooks + storm reports ───────────────────────────────

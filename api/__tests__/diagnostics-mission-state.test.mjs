@@ -7,10 +7,12 @@ import { invokeHandler, mockFetch } from './_test-utils.mjs';
 
 let handler;
 let missionStateCache;
+let isReachableProbeStatus;
 try {
   const mod = await import('../diagnostics/mission-state.js');
   handler = mod.default;
   missionStateCache = mod.cache;
+  isReachableProbeStatus = mod.isReachableProbeStatus;
 } catch (err) {
   console.warn('Handler diagnostics/mission-state.js failed to import:', err.message);
   handler = null;
@@ -157,6 +159,36 @@ for (const status of [401, 403, 405, 429]) {
     } finally { restore(); }
   });
 }
+
+// The flip that matters: reachability is now an ALLOWLIST. The previous version
+// enumerated what was broken (404/410) and let everything else through, so every
+// status nobody thought of read as healthy — the same fail-open shape that hid
+// the retired solar-wind URL, just narrower.
+for (const status of [400, 408, 418, 422, 451, 500, 502, 503, 504]) {
+  test(`treats HTTP ${status} as a DOWN feed — unlisted statuses are not assumed healthy`, async (t) => {
+    if (!handler) { t.skip('handler not available'); return; }
+    missionStateCache?.clear();
+    const restore = mockFetch(swpcStatus(status));
+    try {
+      const { res } = await invokeHandler(handler);
+      const swpc = res.body.feeds.find((f) => f.id === 'spaceweather-noaa');
+      assert.equal(swpc.reachable, false, `${status} is not a recognized sign of life`);
+      assert.equal(res.body.downCount, 1);
+    } finally { restore(); }
+  });
+}
+
+test('isReachableProbeStatus admits 2xx/3xx and exactly four tolerated refusals', async (t) => {
+  if (!isReachableProbeStatus) { t.skip('handler not available'); return; }
+  for (const ok of [200, 204, 206, 301, 302, 304, 399, 401, 403, 405, 429]) {
+    assert.equal(isReachableProbeStatus(ok), true, String(ok));
+  }
+  // 402/404/406/407/409… are all deliberately absent. Adding one is a decision,
+  // not a default — which is the whole point of an allowlist.
+  for (const down of [100, 402, 404, 406, 407, 409, 410, 428, 430, 500, 599]) {
+    assert.equal(isReachableProbeStatus(down), false, String(down));
+  }
+});
 
 test('probes a SWPC product that still exists', async (t) => {
   if (!handler) { t.skip('handler not available'); return; }

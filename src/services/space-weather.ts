@@ -20,13 +20,24 @@ export interface SpaceWeatherData {
   solarWindDensity: number | null;  // protons/cm³
   bz: number | null; // nT — southward Bz (<0) drives geomagnetic storms
   xrayClass: string | null; // 'A', 'B', 'C', 'M', 'X' + number
+  /**
+   * When the solar-wind row was measured, or null when the payload carried no
+   * parseable timestamp. `fetchedAt` says when WE asked, which is not the same
+   * thing — without this, telemetry of unknown age is indistinguishable from
+   * current data.
+   */
+  windObservedAt: string | null;
   alertMessages: SpaceWeatherAlert[];
   fetchedAt: Date;
   donkiEvents: DonkiEvent[];
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-let cache: { data: SpaceWeatherData; fetchedAt: number } | null = null;
+// A result missing one or more products is held only briefly. The sidecar
+// deliberately gives a partial envelope a 60 s TTL; caching it here for the
+// full five minutes would override that and pin the hole anyway.
+const PARTIAL_CACHE_TTL_MS = 60 * 1000;
+let cache: { data: SpaceWeatherData; fetchedAt: number; ttlMs: number } | null = null;
 
 function kpClass(kp: number): SpaceWeatherData['kpClass'] {
   if (kp >= 7) return 'severe_storm';
@@ -56,7 +67,7 @@ interface SpaceWeatherFeeds {
 }
 
 export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
+  if (cache && Date.now() - cache.fetchedAt < cache.ttlMs) {
     return cache.data;
   }
 
@@ -78,6 +89,7 @@ export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
     solarWindDensity: wind.density,
     bz: wind.bz,
     xrayClass,
+    windObservedAt: wind.observedAt,
     alertMessages,
     donkiEvents: [],
     fetchedAt: new Date(),
@@ -96,7 +108,13 @@ export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
     return data;
   }
   dataFreshness.recordUpdate('space-weather', parsedCount);
-  cache = { data, fetchedAt: now };
+  // Alerts are excluded from the completeness test on purpose: an empty alert
+  // list is a legitimate quiet sky, not a missing product. The three
+  // measurement products are not — each one has a current value at all times,
+  // so a null there means we failed to get it.
+  const complete = kpIndex !== null && xrayClass !== null
+    && wind.speed !== null && wind.density !== null && wind.bz !== null;
+  cache = { data, fetchedAt: now, ttlMs: complete ? CACHE_TTL_MS : PARTIAL_CACHE_TTL_MS };
   return data;
 }
 

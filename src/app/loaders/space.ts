@@ -23,7 +23,8 @@ export async function loadSpaceWeather(ctx: AppContext): Promise<void> {
  console.warn('[space-weather] fetch failed', error);
  (ctx.panels['space-weather'] as SpaceWeatherPanel | undefined)?.update({
  kpIndex: null, kpClass: 'quiet', solarWindSpeed: null, solarWindDensity: null,
- bz: null, xrayClass: null, alertMessages: [], fetchedAt: new Date(), donkiEvents: [],
+ bz: null, windObservedAt: null, xrayClass: null, alertMessages: [],
+ fetchedAt: new Date(), donkiEvents: [],
  });
   }
 }

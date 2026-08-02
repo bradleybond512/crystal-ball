@@ -51,12 +51,12 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // itself, so PurpleAir flapped healthy/stale on roughly half its ticks with
   // nothing wrong upstream. The other three (1 h, 1 h, 2 h) already had the
   // headroom this one lacked; 45 min gives it the same and stays well inside
-  // the domain's 3 h match window. Not fixed by ticking faster either: the
-  // knob is the shared compound-threat cadence, so shortening it would speed
-  // up all four providers and everything else that evaluation drives, to fix
-  // one source's TTL. (The sidecar does cache each bbox key for 5 min, so a
-  // faster tick would not be free-running against PurpleAir's point meter —
-  // it is the blast radius, not the upstream cost, that rules it out.)
+  // the domain's 3 h match window. Ticking faster WOULD also fix it — the knob
+  // is real and the sidecar caches each bbox key for 5 min, so it would not be
+  // free-running against PurpleAir's point meter. It is rejected on blast
+  // radius, not on effectiveness: that cadence drives all four providers and
+  // the whole compound-threat evaluation, so shortening it changes the
+  // behavior of everything downstream to fix one source's TTL.
   { id: 'purpleair', domain: 'air_quality', displayName: 'PurpleAir', authType: 'free_key', requiredSecret: 'PURPLEAIR_API_KEY', baseUrl: 'https://api.purpleair.com', rateLimitNote: 'keyed, point-based', freshnessTtlMs: 45 * MIN, reliabilityWeight: 0.75, fallbackPriority: 4, independenceGroup: 'purpleair' },
   // ── Crypto prices (fused by symbol: CoinGecko + Coinbase + CoinPaprika +
   // Kraken, all no-key) ──
@@ -77,12 +77,26 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // cap in practice, not merely at it.
   //
   // 20 min, not 12, because the cycle is much longer than the jittered tick:
-  // the scheduler arms the next timer AFTER the loader resolves, and
-  // `loadMarkets` runs its panel phases first — two deliberate 20 s retry
-  // sleeps plus a dozen sequential fetches with their own timeouts. Worst case
-  // is ~8.8 min jittered + ~3-4 min of runtime. 12 min left that within
-  // seconds of the TTL; 20 leaves real margin. This is an estimate, not a
-  // bound — the abort timeouts cap network waits only.
+  // the scheduler arms the next timer AFTER the loader resolves. The
+  // MEASURABLE floor is ~11.9 min — 8.8 min jittered, up to 60 s of deliberate
+  // retry sleeps (two commodities retries plus one crypto retry), and 125 s of
+  // sequential fetch deadlines, since the seven price fetches are awaited one
+  // at a time (CoinGecko 10 s, FMP 25 s, the other five 15 s each through
+  // quotes-route-fetch, plus the FX pair's 15 s). 12 min sat inside that floor.
+  //
+  // On TOP of the floor sit the panel phases, which have NO deadline at all:
+  // fetchMultipleStocks and fetchCrypto go through a circuit breaker and the
+  // generated client, neither of which sets one. So the worst cycle is not
+  // computable and 20 min is headroom for it, not a proof about it — the
+  // wiring test asserts the ratio rather than pretending to a bound.
+  //
+  // The cost of that headroom, stated plainly: a hung panel-phase fetch
+  // records no failure outcome, so the seven providers keep their previous
+  // `lastSuccessAt` and read healthy for up to 20 min instead of 5. Widening
+  // the TTL genuinely delays detection of that case. It is accepted because
+  // the case it replaces — every provider reading stale on every normal cycle
+  // — was not a detection at all, just noise that made a real outage
+  // indistinguishable from the steady state.
   //
   // The trade this makes, stated plainly: source-fusion's freshness term is
   // 1 - age/ttl against the OBSERVATION's timestamp. Six of these seven stamp

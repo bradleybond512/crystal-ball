@@ -149,13 +149,22 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
   // the DEFAULT path, which is where the boot-only bug actually lived.
   const JITTER = 1.1;
 
+  const fetchTimeoutsMs = (relPath) => {
+    const src = readFileSync(resolve(root, relPath), 'utf8');
+    const all = [...src.matchAll(/AbortSignal\.timeout\(([0-9_]+)\)/g)].map((m) => Number(m[1].replace(/_/g, '')));
+    assert.ok(all.length > 0, `${relPath} declares no fetch timeout, so no budget over it can be exact`);
+    return all;
+  };
+
   /** Reads the single `AbortSignal.timeout(N)` out of a one-fetch service module. */
   const soleFetchTimeoutMs = (relPath) => {
-    const src = readFileSync(resolve(root, relPath), 'utf8');
-    const all = [...src.matchAll(/AbortSignal\.timeout\(([0-9_]+)\)/g)];
+    const all = fetchTimeoutsMs(relPath);
     assert.equal(all.length, 1, `${relPath} must have exactly one fetch timeout for this budget to be exact`);
-    return Number(all[0][1].replace(/_/g, ''));
+    return all[0];
   };
+
+  /** Longest deadline in a module whose fetches run concurrently. */
+  const maxFetchTimeoutMs = (relPath) => Math.max(...fetchTimeoutsMs(relPath));
 
   for (const [task, provider, fetchPath] of [
     ['emscSeismic', 'emsc-seismic', 'src/services/emsc-seismic.ts'],
@@ -219,6 +228,14 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     );
     assert.match(body.slice(catchAt), /recordDomainObservations\(\s*['"]usgs-earthquakes['"],\s*\[\],\s*false\s*\)/,
       'a failed fetch must record a failing outcome, not go silent');
+    // ...and `observations` has to come from the adapter. Without this, swapping
+    // the adapter call for `const observations = []` satisfies every regex above
+    // while recording a permanent failure — the checks would be pinning names.
+    assert.match(
+      tryBody,
+      /const observations = usgsEventsToObservations\(/,
+      'observations must be the adapter output, not a literal',
+    );
     // The fusion vote must NOT ride on `natural`: that task is hourly and gated
     // on a map layer, so recording there made a MAP TOGGLE silently remove a
     // provider. Pinned so the record cannot drift back.
@@ -228,6 +245,60 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
       'loadNatural must not record usgs-earthquakes: it reads through a 1-hour offline cache, ' +
       'so recording there stamps a fresh lastSuccessAt onto hour-old rows',
     );
+  });
+
+  it('the usgs-earthquakes vote reaches every variant that ships the map layer', () => {
+    // Both halves of round one's second blocking bug. `natural` is on in full,
+    // tech and finance, and loadNatural used to carry this provider's record for
+    // all three — so gating the replacement on the full variant, at EITHER the
+    // boot task or the scheduler entry, silently retires the earthquakes
+    // domain's only vote in the other two. Neither is caught by an interval
+    // budget, so both are pinned here.
+    // Anchored on the boot-task LINE and read backwards to the statement start,
+    // so the capture is the gate that actually guards this push. A lazy
+    // `SITE_VARIANT...usgsSeismic` match instead captured the bare identifier
+    // and asserted nothing — restoring the full-only gate left it green.
+    const bootLine = dataLoaderSrc.split('\n').find((l) => l.includes("name: 'usgsSeismic'"));
+    assert.ok(bootLine, 'could not find the usgsSeismic boot task in data-loader.ts');
+    const gate = bootLine.slice(0, bootLine.indexOf('tasks.push'));
+    assert.match(gate, /SITE_VARIANT/, 'the usgsSeismic boot task is expected to carry a variant gate');
+    assert.doesNotMatch(
+      gate,
+      /SITE_VARIANT === 'full'/,
+      'the usgsSeismic boot task must not be full-only: tech and finance ship the natural layer too',
+    );
+    const entry = appSrc.match(/name: 'usgsSeismic'[^\n]*/);
+    assert.ok(entry, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
+    assert.doesNotMatch(
+      entry[0],
+      /condition:/,
+      'the usgsSeismic scheduler entry must stay unconditional; a variant or map-layer condition ' +
+      'reintroduces the boot-only staleness this task exists to fix',
+    );
+  });
+
+  it('the usgs fusion fetch rejects cache replays but accepts the live fallback feed', () => {
+    // Executed, not name-matched: the allowlist regex is pulled out of the
+    // module and run against the exact `source` values the two implementations
+    // emit. Widening it to admit 'cached' — the last-good REPLAY that
+    // feed-resilience serves when every upstream fails — fails here, because
+    // recording a replay as a fresh success is the phantom healthy vote.
+    const src = readFileSync(resolve(root, 'src/services/earthquake/usgs-fusion-fetch.ts'), 'utf8');
+    const m = src.match(/const LIVE_SOURCES = (\/.+\/);/);
+    assert.ok(m, 'could not read the live-source allowlist out of usgs-fusion-fetch.ts');
+    // eslint-disable-next-line no-eval
+    const allow = eval(m[1]);
+    assert.ok(!allow.test('cached'), "'cached' is a last-good replay and must never count as live");
+    assert.ok(!allow.test(''), 'an empty source must not pass');
+    for (const live of ['primary', 'fallback-0', 'fallback-1', 'usgs.gov']) {
+      assert.ok(allow.test(live), `${live} is a live fetch and must be accepted`);
+    }
+    // The check has to be REACHED, too — an allowlist nothing calls is inert.
+    assert.match(src, /LIVE_SOURCES\.test\(data\.source\)/, 'the allowlist must gate the returned rows');
+    // Both payload shapes have to survive the adapter. The web edge function
+    // sends raw GeoJSON features; parseUsgsEvents reads flat rows, so without
+    // normalization the web build records a permanent failure instead of a vote.
+    assert.match(src, /'geometry' in row && 'properties' in row/, 'raw GeoJSON features must be normalized');
   });
 
   it('markets refreshes inside every price provider freshness TTL', () => {
@@ -242,24 +313,60 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // than hardcoded, so lengthening a sleep fails HERE instead of silently
     // pushing the price providers past their TTL in production.
     const marketsBody = dataLoaderMethod('loadMarkets');
-    const sleepMs = [...marketsBody.matchAll(/setTimeout\(r,\s*([0-9_]+)\)/g)]
-      .reduce((sum, m) => sum + Number(m[1].replace(/_/g, '')), 0);
+    // EXECUTIONS, not call sites. The commodities sleep sits inside a bounded
+    // retry loop and can run once per retry, so summing the literals undercounts
+    // the worst cycle — which is the only cycle this budget is about.
+    const retryLoop = marketsBody.match(/for \(let attempt = 0; attempt < (\d+)/);
+    assert.ok(retryLoop, 'expected loadMarkets to still retry commodities in a bounded loop');
+    const loopStart = marketsBody.indexOf('{', marketsBody.indexOf(retryLoop[0]));
+    let depth = 0, loopEnd = loopStart;
+    while (loopEnd < marketsBody.length) {
+      if (marketsBody[loopEnd] === '{') depth++;
+      else if (marketsBody[loopEnd] === '}' && --depth === 0) break;
+      loopEnd++;
+    }
+    assert.ok(depth === 0 && loopEnd > loopStart, 'could not brace-match the commodities retry loop');
+    const sleepMs = [...marketsBody.matchAll(/setTimeout\(r,\s*([0-9_]+)\)/g)].reduce((sum, m) => {
+      // The loop sleeps on every attempt after the first, hence N-1.
+      const runs = m.index > loopStart && m.index < loopEnd ? Number(retryLoop[1]) - 1 : 1;
+      return sum + Number(m[1].replace(/_/g, '')) * runs;
+    }, 0);
     assert.ok(sleepMs > 0, 'expected loadMarkets to still contain its retry sleeps');
-    const modeledCycleMs = interval * JITTER + sleepMs;
+    // The seven price fetches are AWAITED ONE AT A TIME, so their abort
+    // deadlines add up rather than overlapping, and that sum dominates the
+    // interval — it is the reason the TTL is 20 min and not 12. Parsed from the
+    // fetch modules so raising any one deadline fails HERE. Five of the seven
+    // share quotes-route-fetch, so its single timeout is counted once per
+    // provider that routes through it.
+    const priceFetchDeadlines = [
+      ['src/services/market/coingecko-fetch.ts', 1],
+      ['src/services/market/fmp-fetch.ts', 1],
+      ['src/services/market/quotes-route-fetch.ts', 5],
+    ].reduce((sum, [relPath, calls]) => sum + soleFetchTimeoutMs(relPath) * calls, 0)
+      // Frankfurter + open.er-api are the fx module's two fetches, but they run
+      // under one Promise.all, so the pair costs the LONGER of the two, not the
+      // sum — which is why this one cannot go through soleFetchTimeoutMs.
+      + maxFetchTimeoutMs('src/services/market/fx-fusion-fetch.ts');
+    const modeledCycleMs = interval * JITTER + sleepMs + priceFetchDeadlines;
     //
-    // SCOPE: this models the HEALTHY-PROCESS cycle — the jittered interval plus
-    // the sleeps the loader takes on itself. It does NOT model upstream latency:
-    // unlike the single-fetch seismic loaders above, six of the seven price
-    // fetches declare no AbortSignal.timeout, so there is no source-visible
-    // number to add and a hostile worst case (every one of the ~13 sequential
-    // awaits running to the platform's default request timeout) exceeds any
-    // TTL that would still be meaningful. That case going stale is CORRECT —
-    // the corroboration count should drop when the providers really are slow.
-    // What this pins is that the cadence itself never causes it.
+    // This is a FLOOR on the cycle, not a bound. The panel phases that run
+    // before the fusion block — three fetchMultipleStocks calls plus up to two
+    // retries, and up to two fetchCrypto calls — go through a circuit breaker
+    // and the generated client, neither of which declares a deadline, so there
+    // is no source-visible number for them and no honest way to compute the
+    // worst case. Headroom is the only protection available against that
+    // unmodeled tail, so this asserts a headroom RATIO. The ratio is a declared
+    // policy, not a derivation: it is what makes the difference between a TTL
+    // chosen to fit the measurable work and one chosen with room for the work
+    // that cannot be measured. A TTL merely larger than the floor would satisfy
+    // an assertion and protect nothing.
+    const HEADROOM = 1.5;
     assert.ok(
-      modeledCycleMs < binding,
-      `markets runs every ${interval / 60000} min (${modeledCycleMs / 60000} min with jitter and ` +
-      `${sleepMs / 1000}s of in-loader retry sleeps) against a ${binding / 60000} min tightest TTL`,
+      modeledCycleMs * HEADROOM < binding,
+      `markets runs every ${interval / 60000} min; the measurable floor is ${modeledCycleMs / 60000} min ` +
+      `(jitter + ${sleepMs / 1000}s of retry sleeps + ${priceFetchDeadlines / 1000}s of sequential fetch ` +
+      `deadlines), which needs a TTL of at least ${(modeledCycleMs * HEADROOM) / 60000} min to leave room ` +
+      `for the undeadlined panel phases, but the tightest price TTL is ${binding / 60000} min`,
     );
   });
 
@@ -280,10 +387,15 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     );
     const compoundBody = dataLoaderMethod('evaluateCompoundThreats');
     for (const provider of aqProviders) {
+      // The second argument must be an ADAPTER CALL, not a literal. Each of
+      // these providers has a rejected-branch `recordDomainObservations(id, [],
+      // false)` beside its success call, so merely matching the provider id
+      // stayed green with every success path deleted — four providers recording
+      // nothing but failures forever, under a passing cadence test.
       assert.match(
         compoundBody,
-        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"]`),
-        `${provider} must record its vote from evaluateCompoundThreats for the airQuality cadence to reach it`,
+        new RegExp(`recordDomainObservations\\(\\s*['"]${provider}['"],\\s*\\w+\\(`),
+        `${provider} must record a vote built from its adapter, not just a failure row`,
       );
     }
     // Debounce parsed from source rather than hardcoded, so lengthening it fails

@@ -934,7 +934,7 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 41 unit tests in
+- 54 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit).
@@ -1004,6 +1004,47 @@ report, and the gate still returned PASS.
   emits exactly one pair per key (22 === 22), so the existing
   `distinct <= raw` assertion would stay green if the fix were reverted;
   `gradeEnginePairs` is now driven directly with one pair matched by two rules.
+
+Third-round hardening from the same reviewer (baseline `schemaVersion: 4`).
+The round-2 fixes held, but the reviewer demonstrated seven further live PASS
+results — each one an edit that removed real measurement while the gate stayed
+green.
+
+- **The digest is 128-bit.** A 32-bit FNV digest is brute-forceable in seconds,
+  and the reviewer found a preimage: replacing the decoy id `s10-wildfire-wa`
+  with a 7-character string reproduced `13cd95ef` exactly, dropping that decoy
+  from grading with corpus identity intact. FNV-1a now runs at 128 bits over
+  BigInt (still no `node:crypto`, so the module stays renderer-importable).
+  Digest `13cd95ef` → `9bf277acf1747bf73f19e30e511b934f`.
+- **Causal-rule liveness is proportional, not exactly-zero.** 19 → 1 causal
+  learned-rule pairs is the same dead install/match path as 19 → 0, with one
+  survivor, and the exact-zero check passed it. Gated at a 0.5 shrink ratio.
+- **The baseline must ARM every gate it feeds.** Every gate here is
+  baseline-relative, so re-seeding `causalLearnedRulePairCount: 0` disabled its
+  gate permanently — and a re-seed is reviewed by a human reading numbers.
+  Fifteen baseline fields must now be positive or the run fails.
+- **Summaries reconcile against the row-level ledger.** Zeroing
+  `falseEdgeCount` *and* all five breakdown fields made the report agree with
+  itself and bought the perfect-miner exemption while `edges` still listed 17
+  false verdicts. The ledger is now cross-checked, as is `couplingPrecision`
+  against the edge counts it is derived from.
+- **Positive pair rates require pairs behind them.** Both engine pair counts at
+  0 with precision and recall at 1.0 passed — `0 > 0` satisfied the only
+  consistency check. Distinct emissions are now a gated metric with a
+  zero shrink tolerance, and positive rates over zero pairs are rejected.
+- **Impossible values are rejected, not scored as improvements.**
+  `pairPrecision: 2` is finite and reads as better than 1.0 against every
+  directional check. Rates are range-checked to [0,1] and counts to
+  non-negative integers, on both sides.
+- **Tolerance validation runs in both directions.** It validated only the keys
+  that were present, so `tolerances: null`, a scalar, or a block missing half
+  its keys fell back to the compiled defaults and could still pass. The block
+  must now be a complete object.
+- **The distinct-pair denominator test drives production code.** The round-2
+  test computed its own ratio, so reverting the production line to
+  `graded.pairCount` left it green. Precision is now computed by an exported
+  `enginePairPrecision()` that the report assembly calls, pinned on a graded set
+  where the two counts differ.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

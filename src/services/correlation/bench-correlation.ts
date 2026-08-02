@@ -320,7 +320,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
 
     enginePairCount: graded.pairCount,
     distinctEnginePairCount: graded.distinctPairCount,
-    pairPrecision: ratio(emittedTrueKeys.size, graded.distinctPairCount),
+    pairPrecision: enginePairPrecision(graded),
     pairRecall: ratio(emittedTrueKeys.size, truePairs.size),
     decoyPairsEmitted,
     meanTruePairConfidence: round4(meanTrue),
@@ -374,6 +374,19 @@ export interface GradedPairs {
  * pair per distinct key, so a test driven through `runCorrelationBenchmark()`
  * cannot tell the raw denominator from the distinct one.
  */
+/**
+ * Precision over DISTINCT event pairs, never over raw emissions.
+ *
+ * Exported and called from the report assembly above rather than inlined, so a
+ * test can pin the denominator on a graded set where the two counts actually
+ * differ. On the live corpus they happen to be equal (22 raw / 22 distinct), so
+ * an inline `graded.pairCount` here would be indistinguishable from the correct
+ * form in every end-to-end assertion.
+ */
+export function enginePairPrecision(graded: GradedPairs): number {
+  return ratio(graded.emittedTrueKeys.size, graded.distinctPairCount);
+}
+
 export function gradeEnginePairs(
   pairs: readonly CorrelatedPair[],
   truePairs: ReadonlySet<string>,

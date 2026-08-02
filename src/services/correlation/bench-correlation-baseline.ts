@@ -54,6 +54,17 @@ export interface CorrelationBenchTolerances {
   learnedRuleFalsePositiveGrowth: number;
   /** Max allowed growth in learned-rule pair volume (count). */
   learnedRulePairGrowth: number;
+  /**
+   * Max allowed FRACTIONAL shrink in causal learned-rule pair volume.
+   *
+   * Absolute volume is not the goal here — ACC-502..504 legitimately thin the
+   * learned-rule set — but the causal subset going almost dark is a broken
+   * install/match path, not a win. A bare "must not be exactly 0" check missed
+   * 19 → 1, which is the same failure with one pair left alive.
+   */
+  causalLearnedRulePairShrinkRatio: number;
+  /** Max allowed shrink in distinct built-in-rule pair emissions (count). */
+  enginePairShrink: number;
 }
 
 export interface CorrelationBenchBaseline {
@@ -84,6 +95,8 @@ export interface CorrelationBenchBaseline {
   learnedRuleCount: number;
   learnedRuleFalsePositives: number;
   causalLearnedRuleCount: number;
+  enginePairCount: number;
+  distinctEnginePairCount: number;
   pairPrecision: number;
   pairRecall: number;
   decoyPairsEmitted: number;
@@ -99,7 +112,14 @@ export interface CorrelationBenchComparison {
   reasons: string[];
 }
 
-/** Fallback used only when a baseline omits its own `tolerances` block. */
+/**
+ * The required shape of a baseline's `tolerances` block, and the value each
+ * gate takes. This is NOT a fallback: a baseline that omits the block, or omits
+ * any single key in it, is rejected. Silently substituting compiled defaults
+ * for a corrupt on-disk block is exactly the failure mode the rest of this file
+ * exists to prevent — the gate would still report PASS while comparing against
+ * numbers nobody reviewed.
+ */
 export const DEFAULT_CORRELATION_BENCH_TOLERANCES: CorrelationBenchTolerances = {
   couplingPrecisionDrop: 0.02,
   couplingRecallDrop: 0,
@@ -111,19 +131,43 @@ export const DEFAULT_CORRELATION_BENCH_TOLERANCES: CorrelationBenchTolerances = 
   causalLearnedRuleShrink: 0,
   learnedRuleFalsePositiveGrowth: 0,
   learnedRulePairGrowth: 5,
+  causalLearnedRulePairShrinkRatio: 0.5,
+  enginePairShrink: 0,
 };
 
 /**
  * The baseline is JSON on disk, so its tolerance block is untyped at runtime.
  * A string or null operand makes every directional comparison NaN, and every
  * `NaN > tolerance` is false — one bad edit silently disarms the whole gate.
+ *
+ * Validation runs in BOTH directions. Checking only the keys that are present
+ * is a one-way gate: `tolerances: null`, a scalar, or a block missing half its
+ * keys all fall through to the compiled defaults and can still report PASS.
  */
 function resolveTolerances(
   reasons: string[],
-  raw: Partial<CorrelationBenchTolerances> | undefined,
+  // `unknown`, not the declared type: the declared type is a lie about a value
+  // that was parsed out of JSON, and every check below exists to catch the
+  // shapes the type system has already promised are impossible.
+  raw: unknown,
 ): CorrelationBenchTolerances {
   const tol = { ...DEFAULT_CORRELATION_BENCH_TOLERANCES };
-  for (const [key, value] of Object.entries(raw ?? {})) {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    reasons.push(
+      `baseline "tolerances" is not an object (${String(raw)}) — every gate would fall back ` +
+      `to the compiled defaults and compare against numbers nobody reviewed`,
+    );
+    return tol;
+  }
+  for (const key of Object.keys(DEFAULT_CORRELATION_BENCH_TOLERANCES)) {
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+      reasons.push(
+        `baseline "tolerances" is missing gate "${key}" — the baseline predates a gate that ` +
+        `now exists; re-seed it rather than silently applying the compiled default`,
+      );
+    }
+  }
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     // An own-property test, not `key in tol`: `in` walks the prototype chain,
     // so "constructor" / "toString" / "__proto__" would pass as known gates —
     // and `__proto__` assignment would reach the setter rather than the object.
@@ -152,6 +196,77 @@ function resolveTolerances(
 function separationOperand(value: number | null | undefined): unknown {
   if (value === null) return 0;
   return value;
+}
+
+/** The range a gated metric is DEFINED over — see `checkOperand`. */
+type GateRange = 'rate' | 'count' | 'free';
+type GatedMetric = [label: string, kind: GateRange, want: unknown, got: unknown];
+
+const BASELINE_HINT =
+  'the committed baseline is missing a field or corrupt; re-seed it rather than trusting this run';
+const LIVE_HINT =
+  'the benchmark did not measure this metric, which fails closed rather than scoring as ' +
+  'no-regression';
+
+function checkOperand(
+  reasons: string[],
+  label: string,
+  kind: GateRange,
+  value: unknown,
+  hint: string,
+): void {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    reasons.push(`${label} value is not a finite number (${String(value)}) — ${hint}`);
+    return;
+  }
+  if (kind === 'rate' && (value < 0 || value > 1)) {
+    reasons.push(
+      `${label} value ${value} is outside [0,1] — a rate cannot exceed 1, and an impossible ` +
+      `value reads as an improvement against every directional check`,
+    );
+  }
+  if (kind === 'count' && (value < 0 || !Number.isInteger(value))) {
+    reasons.push(`${label} value ${value} is not a non-negative integer count`);
+  }
+}
+
+/**
+ * Every gate below is baseline-relative, so a baseline that seeds a gate at
+ * zero (or at a perfect rate with nothing behind it) disarms that gate for
+ * good. These fields must be positive for their gate to have any teeth.
+ */
+const MUST_ARM_ITS_GATE: readonly (keyof CorrelationBenchBaseline)[] = [
+  'streamCount',
+  'observationCount',
+  'plantedCausalCount',
+  'significantEdgeCount',
+  'learnedRuleCount',
+  'causalLearnedRuleCount',
+  'causalLearnedRulePairCount',
+  'learnedRulePairCount',
+  'enginePairCount',
+  'distinctEnginePairCount',
+  'couplingPrecision',
+  'couplingRecall',
+  'pairPrecision',
+  'pairRecall',
+  'meanTruePairConfidence',
+];
+
+function checkBaselineArmsItsGates(
+  reasons: string[],
+  baseline: CorrelationBenchBaseline,
+): void {
+  for (const field of MUST_ARM_ITS_GATE) {
+    const value: unknown = baseline[field];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      const shown = typeof value === 'number' ? String(value) : JSON.stringify(value);
+      reasons.push(
+        `baseline "${String(field)}" is ${shown} — a non-positive baseline permanently ` +
+        `disarms the gate it feeds; re-seed from a run that actually measured it`,
+      );
+    }
+  }
 }
 
 export function compareCorrelationBenchToBaseline(
@@ -184,46 +299,54 @@ export function compareCorrelationBenchToBaseline(
   // A missing JSON field or a corrupt report yields NaN, and `NaN > tolerance`
   // is false — every gate below would silently pass on a benchmark that
   // measured nothing.
-  const gated: [string, unknown, unknown][] = [
-    ['miner coupling precision', baseline.couplingPrecision, report.couplingPrecision],
-    ['miner coupling recall', baseline.couplingRecall, report.couplingRecall],
-    ['built-in pair precision', baseline.pairPrecision, report.pairPrecision],
-    ['built-in pair recall', baseline.pairRecall, report.pairRecall],
-    ['mean true-pair confidence', baseline.meanTruePairConfidence, report.meanTruePairConfidence],
-    ['graded false edges', baseline.falseEdgeCount, report.falseEdgeCount],
-    ['causal learned rules', baseline.causalLearnedRuleCount, report.causalLearnedRuleCount],
-    [
-      'learned-rule false positives',
-      baseline.learnedRuleFalsePositives,
-      report.learnedRuleFalsePositives,
-    ],
-    ['learned-rule pair volume', baseline.learnedRulePairCount, report.learnedRulePairCount],
-    [
-      'causal learned-rule pair volume',
-      baseline.causalLearnedRulePairCount,
-      report.causalLearnedRulePairCount,
-    ],
-    ['near-miss decoy pairs', baseline.decoyPairsEmitted, report.decoyPairsEmitted],
-    [
-      'causal-vs-false edge evidence separation',
-      baseline.edgeEvidenceSeparation,
-      separationOperand(report.edgeEvidenceSeparation),
-    ],
+  //
+  // Finiteness alone is not enough: `pairPrecision: 2` is finite, and every
+  // directional check reads it as an improvement over 1.0. Each gated metric
+  // therefore declares the range it is DEFINED over — a rate outside [0,1] or a
+  // negative count is an impossible measurement, not a good one.
+  const gated: GatedMetric[] = [
+    ['miner coupling precision', 'rate',
+      baseline.couplingPrecision, report.couplingPrecision],
+    ['miner coupling recall', 'rate',
+      baseline.couplingRecall, report.couplingRecall],
+    ['built-in pair precision', 'rate',
+      baseline.pairPrecision, report.pairPrecision],
+    ['built-in pair recall', 'rate',
+      baseline.pairRecall, report.pairRecall],
+    ['mean true-pair confidence', 'rate',
+      baseline.meanTruePairConfidence, report.meanTruePairConfidence],
+    ['graded false edges', 'count',
+      baseline.falseEdgeCount, report.falseEdgeCount],
+    ['causal learned rules', 'count',
+      baseline.causalLearnedRuleCount, report.causalLearnedRuleCount],
+    ['learned-rule false positives', 'count',
+      baseline.learnedRuleFalsePositives, report.learnedRuleFalsePositives],
+    ['learned-rule pair volume', 'count',
+      baseline.learnedRulePairCount, report.learnedRulePairCount],
+    ['causal learned-rule pair volume', 'count',
+      baseline.causalLearnedRulePairCount, report.causalLearnedRulePairCount],
+    ['raw built-in pair emissions', 'count',
+      baseline.enginePairCount, report.enginePairCount],
+    ['distinct built-in pair emissions', 'count',
+      baseline.distinctEnginePairCount, report.distinctEnginePairCount],
+    ['near-miss decoy pairs', 'count',
+      baseline.decoyPairsEmitted, report.decoyPairsEmitted],
+    // Unbounded on purpose: a separation is a difference of z-scores, so it is
+    // free to be large, and negative would mean false edges outscore causal
+    // ones — a real (and gated) regression, not an invalid measurement.
+    ['causal-vs-false edge evidence separation', 'free',
+      baseline.edgeEvidenceSeparation, separationOperand(report.edgeEvidenceSeparation)],
   ];
-  for (const [label, want, got] of gated) {
-    if (typeof want !== 'number' || !Number.isFinite(want)) {
-      reasons.push(
-        `${label}: baseline value is not a finite number (${String(want)}) — the committed ` +
-        `baseline is missing a field or corrupt; re-seed it rather than trusting this run`,
-      );
-    }
-    if (typeof got !== 'number' || !Number.isFinite(got)) {
-      reasons.push(
-        `${label}: live value is not a finite number (${String(got)}) — the benchmark did not ` +
-        `measure this metric, which fails closed rather than scoring as no-regression`,
-      );
-    }
+  for (const [label, kind, want, got] of gated) {
+    checkOperand(reasons, `${label}: baseline`, kind, want, BASELINE_HINT);
+    checkOperand(reasons, `${label}: live`, kind, got, LIVE_HINT);
   }
+  if (reasons.length > 0) return { ok: false, reasons };
+
+  // A gate armed off a zero baseline is a gate that cannot fire. Re-seeding is
+  // a reviewed diff, but "reviewed" is a human reading numbers — make the
+  // dead-gate seeds impossible to commit rather than merely unlikely.
+  checkBaselineArmsItsGates(reasons, baseline);
   if (reasons.length > 0) return { ok: false, reasons };
 
   // ── Internal consistency: the report must agree with itself ────────────
@@ -278,17 +401,27 @@ export function compareCorrelationBenchToBaseline(
     tol.learnedRuleFalsePositiveGrowth);
   checkGrowth(reasons, 'learned-rule pair volume',
     baseline.learnedRulePairCount, report.learnedRulePairCount, tol.learnedRulePairGrowth);
-  // Liveness, not volume: driving learned-rule pairs DOWN is a goal, so no
-  // shrink tolerance applies — but a run where the causal rules fire zero times
-  // means the synthesize → install → match path is dead, and every count-based
-  // gate above would still read green.
-  if (baseline.causalLearnedRulePairCount > 0 && report.causalLearnedRulePairCount === 0) {
+  // Liveness, not volume: driving TOTAL learned-rule pairs down is a goal, so
+  // no absolute shrink tolerance applies to them — but the causal subset going
+  // dark means the synthesize → install → match path broke, and every
+  // count-based gate above would still read green. Gated proportionally rather
+  // than at exactly zero, because 19 → 1 is the same failure with one survivor.
+  const floor = baseline.causalLearnedRulePairCount * (1 - tol.causalLearnedRulePairShrinkRatio);
+  if (report.causalLearnedRulePairCount < floor) {
     reasons.push(
-      'causal learned rules matched nothing: baseline emitted ' +
-      `${baseline.causalLearnedRulePairCount} pairs, live emitted 0 while still synthesizing ` +
-      `${report.causalLearnedRuleCount} causal rule(s) — the rules are built but never fire`,
+      `causal learned rules went quiet: baseline emitted ` +
+      `${baseline.causalLearnedRulePairCount} pairs, live emitted ` +
+      `${report.causalLearnedRulePairCount} (floor ${floor.toFixed(2)} at a ` +
+      `${tol.causalLearnedRulePairShrinkRatio} shrink ratio) while still synthesizing ` +
+      `${report.causalLearnedRuleCount} causal rule(s) — the rules are built but barely fire`,
     );
   }
+
+  // Built-in rules over a frozen corpus are deterministic, so their emission
+  // volume shrinking at all means a rule stopped matching. Growth is left to
+  // the precision and decoy gates above.
+  checkDrop(reasons, 'distinct built-in pair emissions',
+    baseline.distinctEnginePairCount, report.distinctEnginePairCount, tol.enginePairShrink);
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -335,7 +468,73 @@ function checkReportConsistency(reasons: string[], report: CorrelationBenchRepor
       `${report.enginePairCount}`,
     );
   }
+  checkEdgeLedger(reasons, report);
+  checkPairLedger(reasons, report);
 }
+
+/**
+ * The five breakdown fields summing correctly proves the summary agrees with
+ * five OTHER summaries, all produced by the same pass — coordinated edits set
+ * every one of them to 0 and buy the perfect-miner exemption while `edges`
+ * still lists 17 false verdicts. Reconcile against the row-level detail and
+ * against the precision ratio, which is derived independently.
+ */
+function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): void {
+  if (report.edges.length !== report.significantEdgeCount) {
+    reasons.push(
+      `report is internally inconsistent: significantEdgeCount=${report.significantEdgeCount} ` +
+      `but the edge ledger holds ${report.edges.length} row(s)`,
+    );
+    return; // every check below reads that ledger
+  }
+  const falseRows = report.edges.filter((e) => e.verdict !== 'causal').length;
+  if (falseRows !== report.falseEdgeCount) {
+    reasons.push(
+      `report is internally inconsistent: falseEdgeCount=${report.falseEdgeCount} but the edge ` +
+      `ledger holds ${falseRows} non-causal verdict(s) — the summary does not describe the run`,
+    );
+  }
+  if (report.significantEdgeCount > 0) {
+    const derived = (report.significantEdgeCount - report.falseEdgeCount)
+      / report.significantEdgeCount;
+    if (Math.abs(derived - report.couplingPrecision) > RATIO_EPSILON) {
+      reasons.push(
+        `report is internally inconsistent: couplingPrecision=${report.couplingPrecision} but ` +
+        `${report.significantEdgeCount - report.falseEdgeCount}/${report.significantEdgeCount} ` +
+        `causal edges implies ${derived.toFixed(4)}`,
+      );
+    }
+  }
+}
+
+/**
+ * Pair rates are ratios over `distinctEnginePairCount`, and `0/0` is reported
+ * as 0 — but a hand-edited report can keep precision and recall at 1.0 with
+ * both pair counts at zero, which reads as a flawless pass over no measurement
+ * at all. A positive rate requires pairs behind it.
+ */
+function checkPairLedger(reasons: string[], report: CorrelationBenchReport): void {
+  const claimsPairs = report.pairPrecision > 0
+    || report.pairRecall > 0
+    || report.meanTruePairConfidence > 0;
+  if (claimsPairs && report.distinctEnginePairCount === 0) {
+    reasons.push(
+      `report is internally inconsistent: pairPrecision=${report.pairPrecision} / ` +
+      `pairRecall=${report.pairRecall} / meanTruePairConfidence=` +
+      `${report.meanTruePairConfidence} are positive while the pass emitted zero distinct ` +
+      `pairs — the built-in-rule measurement did not happen`,
+    );
+  }
+  if (report.causalLearnedRulePairCount > 0 && report.causalLearnedRuleCount === 0) {
+    reasons.push(
+      `report is internally inconsistent: ${report.causalLearnedRulePairCount} causal ` +
+      `learned-rule pair(s) were attributed to zero causal learned rules`,
+    );
+  }
+}
+
+/** `ratio()` rounds to 4dp, so a derived cross-check must allow that rounding. */
+const RATIO_EPSILON = 1.1e-4;
 
 /**
  * Evidence separation is `null` when the miner reported no false edges at all —

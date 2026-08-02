@@ -18,7 +18,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runCorrelationBenchmark, gradeEnginePairs } from '../bench-correlation.ts';
+import {
+  runCorrelationBenchmark, gradeEnginePairs, enginePairPrecision,
+} from '../bench-correlation.ts';
 import {
   compareCorrelationBenchToBaseline,
   DEFAULT_CORRELATION_BENCH_TOLERANCES,
@@ -57,6 +59,14 @@ describe('golden-streams corpus integrity', () => {
         `corpus not time-sorted at index ${i}`,
       );
     }
+  });
+
+  it('digests the corpus at 128 bits, not at a brute-forceable width', () => {
+    // A 32-bit digest was preimaged in seconds during review: a 7-character
+    // replacement for a decoy id reproduced the committed hash exactly, so the
+    // corpus could be made easier without invalidating the baseline.
+    const digest = runCorrelationBenchmark().corpusDigest;
+    assert.match(digest, /^[0-9a-f]{32}$/, `corpus digest ${digest} is not 128 bits of hex`);
   });
 
   it('never plants a true pair on a decoy event', () => {
@@ -174,6 +184,28 @@ describe('what the corpus is built to stress', () => {
     assert.equal(graded.emittedTrueKeys.size / graded.distinctPairCount, 1);
   });
 
+  it('computes pair precision through the production denominator selection', () => {
+    // The live corpus emits 22 raw / 22 distinct, so an end-to-end assertion
+    // cannot tell the two denominators apart — reverting the report assembly to
+    // `graded.pairCount` would leave every other test green. This drives the
+    // exported function the assembly actually calls, on a graded set where the
+    // counts differ.
+    const graded = {
+      pairCount: 4,
+      distinctPairCount: 2,
+      emittedTrueKeys: new Set(['a::b']),
+      truePairConfidences: [0.5],
+      falsePairConfidences: [0.4],
+      decoyPairsEmitted: 0,
+    };
+    assert.equal(enginePairPrecision(graded), 0.5, 'precision must divide by distinct pairs');
+    assert.notEqual(
+      enginePairPrecision(graded),
+      graded.emittedTrueKeys.size / graded.pairCount,
+      'the raw-emission denominator must not be what production uses',
+    );
+  });
+
   it('scores true pairs with a real confidence, not a placeholder', () => {
     assert.ok(
       report.meanTruePairConfidence > 0 && report.meanTruePairConfidence <= 1,
@@ -220,7 +252,7 @@ describe('the committed baseline', () => {
 
   it('carries its own tolerance block', () => {
     const baseline = loadBaseline();
-    assert.equal(baseline.schemaVersion, 3);
+    assert.equal(baseline.schemaVersion, 4);
     for (const key of Object.keys(DEFAULT_CORRELATION_BENCH_TOLERANCES)) {
       assert.ok(
         key in baseline.tolerances,
@@ -353,6 +385,9 @@ describe('the gate', () => {
       falseEdgeCount: report.falseEdgeCount + 2,
       unplantedFalsePositives: report.unplantedFalsePositives + 2,
       couplingPrecision: 0.2083,
+      // The ledger has to grow with the summary or the consistency check fires
+      // first and this test stops proving anything about the growth gate.
+      edges: [...report.edges, ...report.edges.slice(0, 2)],
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(looser, baseline);
     assert.equal(ok, false);
@@ -378,6 +413,7 @@ describe('the gate', () => {
       learnedRuleFalsePositives: 0,
       learnedRuleCount: report.plantedCausalCount,
       causalLearnedRuleCount: report.plantedCausalCount,
+      edges: report.edges.filter((e) => e.verdict === 'causal'),
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
     assert.deepEqual(reasons, []);
@@ -418,7 +454,7 @@ describe('the gate', () => {
     const dark = { ...report, learnedRulePairCount: 0, causalLearnedRulePairCount: 0 };
     const { ok, reasons } = compareCorrelationBenchToBaseline(dark, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('causal learned rules matched nothing')));
+    assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
   });
 
   it('fails closed on a non-numeric tolerance instead of disarming its gate', () => {
@@ -457,11 +493,115 @@ describe('the gate', () => {
     for (const reason of reasons) assert.match(reason, /not a known gate/);
   });
 
+  it('fails when the causal rules go nearly quiet, not just exactly silent', () => {
+    // 19 -> 1 is the same broken install/match path as 19 -> 0, with one
+    // survivor. An exactly-zero liveness check waves it straight through.
+    const nearlyDark = { ...report, causalLearnedRulePairCount: 1 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(nearlyDark, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
+  });
+
+  it('rejects a perfect-miner claim that zeroes the breakdown too', () => {
+    // Zeroing the summary AND all five breakdown fields makes the report agree
+    // with itself, so only the row-level ledger still knows the truth.
+    const coordinated = {
+      ...report,
+      falseEdgeCount: 0,
+      confoundedFalsePositives: 0,
+      mediatedFalsePositives: 0,
+      independentFalsePositives: 0,
+      inhibitoryEdgesReported: 0,
+      unplantedFalsePositives: 0,
+      edgeEvidenceSeparation: null,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(coordinated, baseline);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('non-causal verdict')),
+      `expected an edge-ledger reason, got ${JSON.stringify(reasons)}`,
+    );
+  });
+
+  it('rejects a coupling precision its own edge counts contradict', () => {
+    const inflated = { ...report, couplingPrecision: 0.9 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(inflated, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('couplingPrecision=0.9')));
+  });
+
+  it('rejects perfect pair rates emitted over zero pairs', () => {
+    // precision 1.0 / recall 1.0 with nothing behind them is a flawless pass
+    // over a measurement that never happened.
+    const hollow = { ...report, enginePairCount: 0, distinctEnginePairCount: 0 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(hollow, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('zero distinct')));
+  });
+
+  it('fails when built-in pair emissions shrink at all', () => {
+    // Deterministic corpus: a built-in rule that stops matching is a defect,
+    // and the ratio gates cannot see it because they divide by the new total.
+    const fewer = {
+      ...report,
+      enginePairCount: report.enginePairCount - 4,
+      distinctEnginePairCount: report.distinctEnginePairCount - 4,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(fewer, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('distinct built-in pair emissions regressed')));
+  });
+
+  it('rejects impossible metric values instead of scoring them as improvements', () => {
+    // Every one of these is finite, and every directional check reads it as
+    // better than the baseline.
+    const impossible = {
+      ...report, pairPrecision: 2, pairRecall: 2, meanTruePairConfidence: 2,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(impossible, baseline);
+    assert.equal(ok, false);
+    assert.equal(reasons.length, 3, `expected one reason per rate, got ${reasons.length}`);
+    for (const reason of reasons) assert.match(reason, /outside \[0,1\]/);
+  });
+
+  it('rejects a fractional count', () => {
+    const fractional = { ...report, falseEdgeCount: 16.5 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(fractional, baseline);
+    assert.equal(ok, false);
+    assert.match(reasons[0]!, /not a non-negative integer count/);
+  });
+
+  it('rejects a baseline that seeds a gate at zero', () => {
+    // A zero seed does not fail the run — it permanently disarms the gate it
+    // feeds, which is worse, because the gate keeps reporting PASS.
+    const disarmed = { ...baseline, causalLearnedRulePairCount: 0 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, disarmed);
+    assert.equal(ok, false);
+    assert.match(reasons[0]!, /permanently disarms the gate it feeds/);
+  });
+
+  it('rejects a tolerance block that is not an object', () => {
+    for (const bad of [null, 3, 'none', []]) {
+      const sabotaged = { ...baseline, tolerances: bad } as unknown as CorrelationBenchBaseline;
+      const { ok, reasons } = compareCorrelationBenchToBaseline(report, sabotaged);
+      assert.equal(ok, false, `tolerances=${JSON.stringify(bad)} should be rejected`);
+      assert.match(reasons[0]!, /is not an object|is missing gate/);
+    }
+  });
+
+  it('rejects a tolerance block missing a gate rather than defaulting it', () => {
+    const { causalLearnedRulePairShrinkRatio: _gone, ...partial } = baseline.tolerances;
+    const stale = { ...baseline, tolerances: partial } as unknown as CorrelationBenchBaseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, stale);
+    assert.equal(ok, false);
+    assert.match(reasons[0]!, /missing gate "causalLearnedRulePairShrinkRatio"/);
+  });
+
   it('accumulates every independent regression rather than short-circuiting', () => {
     const strict: CorrelationBenchBaseline = {
       ...baseline,
       couplingPrecision: 1,
-      pairPrecision: 1.5,
+      meanTruePairConfidence: 0.99,
       learnedRuleFalsePositives: 0,
     };
     const { reasons } = compareCorrelationBenchToBaseline(report, strict);

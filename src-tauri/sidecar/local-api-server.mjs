@@ -3158,12 +3158,71 @@ export function normalizeSwpcFeed(value) {
 }
 
 /**
- * A feed contributes only if it carries at least one row. An empty array is a
- * successful HTTP response that says nothing, and counting it as a healthy vote
- * is the fail-open pattern that let this panel sit blank without flagging.
+ * Does this product carry a row the RENDERER'S PARSER would actually accept?
+ *
+ * Row-presence alone is not the question. `[{}]`, `['maintenance']`, a Kp row
+ * with no `time_tag` and a wind payload that is nothing but its header row are
+ * all non-empty arrays that every downstream parser discards — so counting them
+ * as healthy votes reports a fetch as good while the panel stays blank. That is
+ * the same fail-open shape as the empty array, one layer in.
+ *
+ * Each predicate mirrors the MINIMUM its parser needs, reusing the sidecar's
+ * existing normalizers where one already exists so the two can't drift.
  */
-export function swpcFeedIsUsable(value) {
-  return Array.isArray(value) && value.length > 0;
+// GOES flare classes are a letter A/B/C/M/X plus an optional magnitude, and
+// nothing else. Mirrors XRAY_CLASS_RE in src/services/space-weather-parse.ts:
+// without the grammar, a status string like "maintenance" reads as a flare.
+const SWPC_XRAY_CLASS_RE = /^[ABCMX]\d*(?:\.\d+)?$/i;
+
+function isXrayClassString(value) {
+  return typeof value === 'string' && SWPC_XRAY_CLASS_RE.test(value.trim());
+}
+
+// Null-prototype: on a plain object literal, a key like `hasOwnProperty` resolves
+// up the chain to a real function, and invoking it as a bare predicate throws
+// (`this` is undefined under ESM strict mode) — so an unknown product named after
+// a prototype key would 500 the route instead of simply failing the allowlist.
+const SWPC_FEED_USABLE = Object.assign(Object.create(null), {
+  kp: (value) => normalizeKpPoints(value).length > 0,
+  alerts: (value) => normalizeAlertRaw(value).length > 0,
+  // xray-flares-latest carries the class on an object, unlike the flux-series
+  // product normalizeXrayPoints handles, so it needs its own check.
+  xray: (value) => Array.isArray(value)
+    && value.some((row) => row && typeof row === 'object' && !Array.isArray(row)
+      && ['max_class', 'current_class', 'class'].some((k) => isXrayClassString(row[k]))),
+  // Header row plus at least one data row — a lone header parses to nothing. The
+  // slice(1) test carries the row count on its own; a separate length check would
+  // be unfalsifiable, which is how dead guards get mistaken for live ones.
+  wind: (value) => Array.isArray(value)
+    && Array.isArray(value[0])
+    && value.slice(1).some((row) => Array.isArray(row) && row.length > 0),
+});
+
+export function swpcFeedIsUsable(key, value) {
+  const predicate = SWPC_FEED_USABLE[key];
+  // An unrecognized product is not assumed good: allowlist, never denylist.
+  // Coerced, so a predicate returning a truthy non-boolean can't leak out.
+  return typeof predicate === 'function' ? predicate(value) === true : false;
+}
+
+/**
+ * The route's fan-out reduction, extracted so it is reachable from a test.
+ *
+ * Keeping this inline meant the guarding tests could only assert on helper
+ * bodies and source ordering — swapping the call site for `value !== null` left
+ * all 539 sidecar tests green. Reducing here means a mutation to this logic is
+ * caught by behaviour rather than by grepping the file.
+ *
+ * @param {[string, unknown][]} entries decoded [productKey, body] pairs
+ */
+export function buildSwpcEnvelope(entries) {
+  const feeds = {};
+  let usable = 0;
+  for (const [key, value] of entries) {
+    feeds[key] = normalizeSwpcFeed(value);
+    if (swpcFeedIsUsable(key, value)) usable += 1;
+  }
+  return { feeds, usable, total: entries.length };
 }
 
 // Mirrors FUTURE_SKEW_TOLERANCE_MS in src/services/space-weather-parse.ts. The
@@ -3344,15 +3403,19 @@ export async function fetchSpaceweatherStatusSidecar() {
     fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
     fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
   ]);
+  const xrayFlux = normalizeXrayPoints(xrayRaw);
+  const kpIndex = normalizeKpPoints(kpRaw);
   const status = buildSpaceweatherStatusSidecar({
-    xrayFlux: normalizeXrayPoints(xrayRaw),
-    kpIndex: normalizeKpPoints(kpRaw),
+    xrayFlux,
+    kpIndex,
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
     now,
   });
-  // Don't cache a total upstream failure: serving the empty payload for the
-  // whole TTL turns one blip into every swpc-kp tick recording ok:false.
-  if (xrayRaw !== null || kpRaw !== null || cmeRaw !== null) {
+  // Cache on what the ADAPTERS produced, not on the raw bodies being non-null.
+  // A 200 carrying `[]` is non-null, so the old raw check happily cached a
+  // status with no flux and no Kp — which renders as "Nominal", indistinguishable
+  // from a genuinely quiet sun, for the whole TTL.
+  if (xrayFlux.length > 0 || kpIndex.length > 0) {
     spacewxStatusCache = status;
     spacewxStatusCachedAt = now;
   }
@@ -3366,8 +3429,15 @@ export async function fetchSpaceweatherAlertsSidecar() {
   }
   const raw = await fetchJsonSidecar('https://services.swpc.noaa.gov/products/alerts.json');
   const alerts = summarizeAlertsSidecar(normalizeAlertRaw(raw), now);
-  spacewxAlertsCache = alerts;
-  spacewxAlertsCachedAt = now;
+  // A failed fetch yields [] here, which the panel renders as "No active alerts"
+  // — the reassuring reading, produced by an outage. Caching it would hold that
+  // false all-clear for the full TTL, so only a real fetch is cached. The test
+  // is the SHAPE, not alerts.length: a genuinely quiet window is a legitimate
+  // empty array and should still be cached, while `{}` behind a 200 should not.
+  if (Array.isArray(raw)) {
+    spacewxAlertsCache = alerts;
+    spacewxAlertsCachedAt = now;
+  }
   return alerts;
 }
 
@@ -10560,8 +10630,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const settled = await Promise.allSettled(
  entries.map(([, url]) => fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000)),
  );
- const result = {};
- let usable = 0;
+ const decoded = [];
  for (const [i, [key]] of entries.entries()) {
  const r = settled[i];
  // Each feed fails on its own: a malformed body from one SWPC product
@@ -10571,9 +10640,10 @@ async function dispatch(requestUrl, req, routes, context) {
  if (r.status === 'fulfilled' && r.value.ok) {
  try { value = await r.value.json(); } catch { value = null; }
  }
- result[key] = normalizeSwpcFeed(value);
- if (swpcFeedIsUsable(value)) usable += 1;
+ decoded.push([key, value]);
  }
+ // Shape + health decided in buildSwpcEnvelope so a test can reach them.
+ const { feeds: result, usable, total } = buildSwpcEnvelope(decoded);
  // Health is derived from what the ADAPTER produced, not from the handler
  // reaching this line. Reporting a four-way upstream outage as a healthy
  // fetch — then caching the all-null envelope for five minutes — is what let
@@ -10588,7 +10658,7 @@ async function dispatch(requestUrl, req, routes, context) {
  trackSuccess('swpc', 'primary');
  // A partial result gets a short TTL so one flaky product doesn't pin a hole
  // in the panel for the full five minutes.
- setCached('space-weather-feeds', result, usable === entries.length ? 5 * 60 * 1000 : 60 * 1000);
+ setCached('space-weather-feeds', result, usable === total ? 5 * 60 * 1000 : 60 * 1000);
  return json(result);
  } catch (error) {
  trackFailure('swpc', error);

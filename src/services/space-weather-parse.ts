@@ -185,6 +185,19 @@ export function parseSolarWindFeed(raw: unknown): SolarWindSample {
 }
 
 /**
+ * A GOES flare class is a letter A/B/C/M/X with an optional magnitude ("M2.4",
+ * "X1", "C9.9") and nothing else.
+ *
+ * Without the grammar, any non-empty string passed through: a status or
+ * maintenance placeholder like "unknown" would be displayed as the current
+ * flare class AND counted as a successfully parsed field, which clears the
+ * freshness error and caches the result. Rejecting on shape keeps a non-reading
+ * from being mistaken for a reading. Mirrored by SWPC_XRAY_CLASS_RE in the
+ * sidecar.
+ */
+const XRAY_CLASS_RE = /^[ABCMX]\d*(?:\.\d+)?$/i;
+
+/**
  * json/goes/primary/xray-flares-latest.json — a single-element array describing
  * the latest flare. `max_class` is the peak, `current_class` the live reading.
  */
@@ -194,7 +207,9 @@ export function parseXrayClass(raw: unknown): string | null {
     if (!isRecord(row)) continue;
     for (const key of ['max_class', 'current_class', 'class']) {
       const value = row[key];
-      if (typeof value === 'string' && value.trim()) return value.trim();
+      if (typeof value !== 'string') continue;
+      const trimmed = value.trim();
+      if (XRAY_CLASS_RE.test(trimmed)) return trimmed.toUpperCase();
     }
   }
   return null;

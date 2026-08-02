@@ -56,18 +56,29 @@ const j = (payload, status, cors) =>
     headers: { 'content-type': 'application/json; charset=utf-8', ...cors },
   });
 
+/**
+ * HEAD statuses that count as "the feed is there".
+ *
+ * Allowlist, not denylist. Enumerating what's BROKEN means every status nobody
+ * thought of — 400, 408, 422, 451 — silently reads as healthy, which is the
+ * failure mode that hid the retired solar-wind URL in the first place. These
+ * four are tolerated deliberately: several of these hosts refuse HEAD (405),
+ * gate on a key (401/403), or rate-limit (429) while being perfectly alive.
+ */
+const REACHABLE_PROBE_STATUSES = new Set([401, 403, 405, 429]);
+
+export function isReachableProbeStatus(status) {
+  if (status >= 200 && status < 400) return true;
+  return REACHABLE_PROBE_STATUSES.has(status);
+}
+
 async function probeOne(feed) {
   try {
     const r = await fetch(feed.url, {
       method: 'HEAD',
       signal: AbortSignal.timeout(5000),
     });
-    // A missing resource is NOT a reachable feed — 404/410 is exactly how a
-    // retired upstream product presents, and counting it as reachable is what
-    // hid the dead solar-wind URL. Other 4xx (401/403/405/429) still count:
-    // several of these hosts refuse HEAD or require a key while being healthy.
-    const gone = r.status === 404 || r.status === 410;
-    return { id: feed.id, label: feed.label, reachable: !gone && (r.ok || r.status < 500) };
+    return { id: feed.id, label: feed.label, reachable: isReachableProbeStatus(r.status) };
   } catch {
     return { id: feed.id, label: feed.label, reachable: false };
   }

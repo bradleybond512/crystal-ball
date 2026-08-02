@@ -259,6 +259,32 @@ test('parseXrayClass also accepts a bare object, not just a wrapping array', () 
   assert.equal(parseXrayClass({ max_class: 'X2.1' }), 'X2.1');
 });
 
+test('parseXrayClass accepts the whole A–X grammar, with or without a magnitude', () => {
+  for (const [raw, expected] of [
+    ['A1.0', 'A1.0'], ['B7', 'B7'], ['C9.9', 'C9.9'], ['M2.4', 'M2.4'], ['X28', 'X28'],
+    ['X', 'X'], ['  m1.5  ', 'M1.5'],
+  ] as const) {
+    assert.equal(parseXrayClass([{ max_class: raw }]), expected, raw);
+  }
+});
+
+test('parseXrayClass rejects any string that is not a flare class', () => {
+  // Without the grammar, ANY non-empty string passed through — so a status or
+  // maintenance placeholder was rendered as the current flare class AND counted
+  // as a successfully parsed field, which clears the freshness error and caches
+  // the result. A non-reading must not be mistaken for a reading.
+  for (const junk of ['unknown', 'maintenance', 'n/a', 'null', 'none', '-', 'Z1.0', 'M2.4 (est)', '2.4', 'MM1']) {
+    assert.equal(parseXrayClass([{ max_class: junk }]), null, junk);
+  }
+});
+
+test('parseXrayClass skips a junk field and keeps looking', () => {
+  // Rejection must not abort the scan: a placeholder in max_class shouldn't
+  // hide a real current_class sitting right beside it.
+  assert.equal(parseXrayClass([{ max_class: 'unknown', current_class: 'C1.2' }]), 'C1.2');
+  assert.equal(parseXrayClass([{ max_class: 'unknown' }, { max_class: 'M1.9' }]), 'M1.9');
+});
+
 // ── Alerts — products/alerts.json ──────────────────────────────────────────
 // Every message opens with "Space Weather Message Code: ...", so the old
 // first-line read showed the message CODE and classified everything 'summary'.

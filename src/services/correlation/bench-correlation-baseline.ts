@@ -31,7 +31,9 @@
  * Pure deterministic. No DOM, no fetch, no globals at import time.
  */
 
-import type { CorrelationBenchReport } from './bench-correlation';
+import type {
+  BenchEdgeRow, BenchPairRow, CorrelationBenchReport,
+} from './bench-correlation';
 
 export interface CorrelationBenchTolerances {
   /** Max allowed absolute drop in miner coupling precision. */
@@ -93,6 +95,25 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
   causalLearnedRulePairShrinkRatio: 0.5,
   enginePairShrink: 2,
 };
+
+/**
+ * The baseline shape this module knows how to compare. A baseline from an older
+ * schema is missing fields that now feed gates, and every missing field reads as
+ * `undefined` — which the operand checks catch one at a time, with a pile of
+ * confusing reasons, only for the fields that happen to be gated. Pin the
+ * version and say so once, plainly.
+ */
+export const CORRELATION_BENCH_SCHEMA_VERSION = 5;
+
+/**
+ * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
+ * the two digests with a bare `!==` treats "both sides absent" as agreement:
+ * delete the field from the baseline JSON and from the report and
+ * `undefined === undefined` passes corpus identity, which is the one check that
+ * makes every number below comparable at all. Both operands must LOOK like a
+ * digest before their equality means anything.
+ */
+const DIGEST_PATTERN = /^[\da-f]{32}$/;
 
 export interface CorrelationBenchBaseline {
   /** Bumped only when the baseline's own shape changes. */
@@ -289,42 +310,86 @@ function checkOperand(
  * Every gate below is baseline-relative, so a baseline that seeds a gate at
  * zero (or at a perfect rate with nothing behind it) disarms that gate for
  * good. These fields must be positive for their gate to have any teeth.
+ *
+ * Positive is necessary but NOT sufficient wherever the gate is a TOLERANCE on
+ * the distance from the baseline. `meanTruePairConfidence: 0.05` under a 0.05
+ * drop tolerance is positive, passes every check, and accepts a live value of
+ * exactly 0 — a metric that measured nothing, scored as no-regression. Each
+ * such field therefore names the tolerance it is spent against, and must exceed
+ * it, so the gate still has somewhere to fall.
  */
-const MUST_ARM_ITS_GATE: readonly (keyof CorrelationBenchBaseline)[] = [
-  'streamCount',
-  'observationCount',
-  'plantedCausalCount',
-  'significantEdgeCount',
-  'learnedRuleCount',
-  'causalLearnedRuleCount',
-  'causalLearnedRulePairCount',
-  'minCausalLearnedRulePairCount',
-  'learnedRulePairCount',
-  'truePairUniverse',
+const MUST_ARM_ITS_GATE: readonly [
+  field: keyof CorrelationBenchBaseline,
+  spentAgainst: keyof CorrelationBenchTolerances | null,
+][] = [
+  ['streamCount', null],
+  ['observationCount', null],
+  ['plantedCausalCount', null],
+  ['significantEdgeCount', null],
+  ['learnedRuleCount', null],
+  ['causalLearnedRuleCount', 'causalLearnedRuleShrink'],
+  ['causalLearnedRulePairCount', null],
+  ['minCausalLearnedRulePairCount', null],
+  ['learnedRulePairCount', null],
+  ['truePairUniverse', null],
   // Higher-is-better, so a zero seed silences it permanently: re-seeding both
   // sides at 0 while 17 false edges remain would retire the 8.49 → 0 collapse
   // from the gate entirely.
-  'edgeEvidenceSeparation',
-  'enginePairCount',
-  'distinctEnginePairCount',
-  'couplingPrecision',
-  'couplingRecall',
-  'pairPrecision',
-  'pairRecall',
-  'meanTruePairConfidence',
+  ['edgeEvidenceSeparation', 'edgeEvidenceSeparationDrop'],
+  ['enginePairCount', null],
+  ['distinctEnginePairCount', 'enginePairShrink'],
+  ['couplingPrecision', 'couplingPrecisionDrop'],
+  ['couplingRecall', 'couplingRecallDrop'],
+  ['pairPrecision', 'pairPrecisionDrop'],
+  ['pairRecall', 'pairRecallDrop'],
+  ['meanTruePairConfidence', 'meanTruePairConfidenceDrop'],
 ];
 
 function checkBaselineArmsItsGates(
   reasons: string[],
   baseline: CorrelationBenchBaseline,
+  tol: CorrelationBenchTolerances,
 ): void {
-  for (const field of MUST_ARM_ITS_GATE) {
+  for (const [field, spentAgainst] of MUST_ARM_ITS_GATE) {
     const value: unknown = baseline[field];
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
       const shown = typeof value === 'number' ? String(value) : JSON.stringify(value);
       reasons.push(
         `baseline "${String(field)}" is ${shown} — a non-positive baseline permanently ` +
         `disarms the gate it feeds; re-seed from a run that actually measured it`,
+      );
+      continue;
+    }
+    if (spentAgainst === null) continue;
+    const allowance = tol[spentAgainst];
+    if (value <= allowance) {
+      reasons.push(
+        `baseline "${String(field)}" is ${value}, at or below its own "${spentAgainst}" ` +
+        `tolerance of ${allowance} — the gate would accept a live value of 0, scoring a ` +
+        `metric that measured nothing as no-regression`,
+      );
+    }
+  }
+}
+
+/**
+ * Corpus identity is checked for FORMAT before it is checked for equality: two
+ * absent digests are `undefined === undefined`, which is the identity gate
+ * passing on the absence of identity — the one comparison that must never be
+ * satisfiable by deleting a field from both operands.
+ */
+function checkDigestFormat(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): void {
+  for (const [side, digest] of [
+    ['baseline', baseline.corpusDigest], ['live', report.corpusDigest],
+  ] as const) {
+    if (typeof digest !== 'string' || !DIGEST_PATTERN.test(digest)) {
+      reasons.push(
+        `${side} corpusDigest is not a 32-character hex digest (${JSON.stringify(digest)}) — ` +
+        `corpus identity cannot be established, so no number below is comparable`,
       );
     }
   }
@@ -338,7 +403,18 @@ export function compareCorrelationBenchToBaseline(
   const tol = resolveTolerances(reasons, baseline.tolerances);
   if (reasons.length > 0) return { ok: false, reasons };
 
-  // ── Corpus identity: any drift invalidates every comparison below ──────
+  // ── Schema: an older baseline is missing fields that now feed gates ────
+  if (baseline.schemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {
+    reasons.push(
+      `baseline schemaVersion is ${String(baseline.schemaVersion)}, expected ` +
+      `${CORRELATION_BENCH_SCHEMA_VERSION} — it predates fields this gate reads; re-seed it`,
+    );
+    return { ok: false, reasons };
+  }
+
+  checkDigestFormat(reasons, report, baseline);
+  if (reasons.length > 0) return { ok: false, reasons };
+
   const identity: [string, unknown, unknown][] = [
     ['golden-stream count', baseline.streamCount, report.streamCount],
     ['observation count', baseline.observationCount, report.observationCount],
@@ -423,13 +499,20 @@ export function compareCorrelationBenchToBaseline(
   // A gate armed off a zero baseline is a gate that cannot fire. Re-seeding is
   // a reviewed diff, but "reviewed" is a human reading numbers — make the
   // dead-gate seeds impossible to commit rather than merely unlikely.
-  checkBaselineArmsItsGates(reasons, baseline);
+  checkBaselineArmsItsGates(reasons, baseline, tol);
   if (reasons.length > 0) return { ok: false, reasons };
 
-  // ── Internal consistency: the report must agree with itself ────────────
+  // ── Internal consistency: BOTH sides must agree with themselves ────────
   // Several gates below trust a single summary field to stand for a set of
   // detail fields. A report that disagrees with itself is not a passing run
   // with one odd number in it — it is a report that cannot be graded at all.
+  //
+  // The same is true of the baseline, and for a while only the live side was
+  // checked: a committed baseline claiming 99 learned-rule false positives out
+  // of 12 learned rules is not a strict reference to measure against, it is a
+  // number with no run behind it, and every "no growth since baseline" gate
+  // spends its whole budget against the fiction.
+  checkSummaryArithmetic(reasons, 'baseline', baseline);
   checkReportConsistency(reasons, report);
   if (reasons.length > 0) return { ok: false, reasons };
 
@@ -518,47 +601,145 @@ export function compareCorrelationBenchToBaseline(
 }
 
 /**
- * Cross-checks the summary fields the gates rely on against the detail fields
- * they summarize. Without this, a report can claim a perfect miner
- * (`falseEdgeCount: 0`) while its own breakdown still lists false positives,
- * and the perfect-miner exception below would honor the claim.
+ * The numeric surface both a live report and a committed baseline expose. The
+ * arithmetic below holds of any real correlation pass, so it is checked against
+ * BOTH — a baseline that could not have come from a run is not a reference.
  */
-function checkReportConsistency(reasons: string[], report: CorrelationBenchReport): void {
-  const breakdown =
-    report.confoundedFalsePositives +
-    report.mediatedFalsePositives +
-    report.independentFalsePositives +
-    report.inhibitoryEdgesReported +
-    report.unplantedFalsePositives;
-  if (breakdown !== report.falseEdgeCount) {
+type BenchSummary = Pick<CorrelationBenchBaseline,
+  | 'plantedCausalCount' | 'truePairUniverse'
+  | 'couplingPrecision' | 'couplingRecall' | 'significantEdgeCount'
+  | 'confoundedFalsePositives' | 'mediatedFalsePositives' | 'independentFalsePositives'
+  | 'inhibitoryEdgesReported' | 'unplantedFalsePositives' | 'falseEdgeCount'
+  | 'learnedRuleCount' | 'learnedRuleFalsePositives' | 'causalLearnedRuleCount'
+  | 'enginePairCount' | 'distinctEnginePairCount' | 'pairPrecision' | 'pairRecall'
+  | 'decoyPairsEmitted' | 'meanTruePairConfidence'
+  | 'learnedRulePairCount' | 'causalLearnedRulePairCount' | 'minCausalLearnedRulePairCount'>;
+
+/**
+ * Every rate here is a ratio of two integers the same pass also reports, so a
+ * rate that cannot be one — `couplingRecall` implying 3.4 recovered couplings
+ * out of 7 — describes no run that ever happened. `ratio()` rounds to 4dp, so
+ * the implied count is allowed to miss an integer by the rounding slack its own
+ * denominator carries.
+ */
+function checkImpliedCount(
+  reasons: string[],
+  side: string,
+  label: string,
+  rate: number,
+  denominator: number,
+): number | null {
+  const implied = rate * denominator;
+  const nearest = Math.round(implied);
+  if (Math.abs(implied - nearest) > Math.max(denominator, 1) * RATIO_EPSILON) {
     reasons.push(
-      `report is internally inconsistent: falseEdgeCount=${report.falseEdgeCount} but the ` +
+      `${side} is internally inconsistent: ${label}=${rate} over ${denominator} implies ` +
+      `${implied.toFixed(4)} items, which is not a whole count — no run produces a fractional ` +
+      `numerator`,
+    );
+    return null;
+  }
+  return nearest;
+}
+
+/**
+ * Cross-checks the summary fields the gates rely on against each other. Without
+ * this, a side can claim a perfect miner (`falseEdgeCount: 0`) while its own
+ * breakdown still lists false positives, and the perfect-miner exception below
+ * would honor the claim.
+ */
+function checkSummaryArithmetic(reasons: string[], side: string, s: BenchSummary): void {
+  const breakdown =
+    s.confoundedFalsePositives +
+    s.mediatedFalsePositives +
+    s.independentFalsePositives +
+    s.inhibitoryEdgesReported +
+    s.unplantedFalsePositives;
+  if (breakdown !== s.falseEdgeCount) {
+    reasons.push(
+      `${side} is internally inconsistent: falseEdgeCount=${s.falseEdgeCount} but the ` +
       `false-positive breakdown sums to ${breakdown} (confounded/mediated/independent/` +
       `inhibitory/unplanted) — the run cannot be graded`,
     );
   }
-  if (report.causalLearnedRuleCount + report.learnedRuleFalsePositives !== report.learnedRuleCount) {
+  if (s.falseEdgeCount > s.significantEdgeCount) {
     reasons.push(
-      `report is internally inconsistent: causalLearnedRuleCount=` +
-      `${report.causalLearnedRuleCount} plus learnedRuleFalsePositives=` +
-      `${report.learnedRuleFalsePositives} does not equal learnedRuleCount=` +
-      `${report.learnedRuleCount}`,
+      `${side} is internally inconsistent: falseEdgeCount=${s.falseEdgeCount} exceeds ` +
+      `significantEdgeCount=${s.significantEdgeCount}, which it is a subset of`,
     );
   }
-  if (report.causalLearnedRulePairCount > report.learnedRulePairCount) {
+  if (s.causalLearnedRuleCount + s.learnedRuleFalsePositives !== s.learnedRuleCount) {
     reasons.push(
-      `report is internally inconsistent: causalLearnedRulePairCount=` +
-      `${report.causalLearnedRulePairCount} exceeds learnedRulePairCount=` +
-      `${report.learnedRulePairCount}, which it is a subset of`,
+      `${side} is internally inconsistent: causalLearnedRuleCount=` +
+      `${s.causalLearnedRuleCount} plus learnedRuleFalsePositives=` +
+      `${s.learnedRuleFalsePositives} does not equal learnedRuleCount=` +
+      `${s.learnedRuleCount}`,
     );
   }
-  if (report.distinctEnginePairCount > report.enginePairCount) {
+  if (s.causalLearnedRulePairCount > s.learnedRulePairCount) {
     reasons.push(
-      `report is internally inconsistent: distinctEnginePairCount=` +
-      `${report.distinctEnginePairCount} exceeds raw enginePairCount=` +
-      `${report.enginePairCount}`,
+      `${side} is internally inconsistent: causalLearnedRulePairCount=` +
+      `${s.causalLearnedRulePairCount} exceeds learnedRulePairCount=` +
+      `${s.learnedRulePairCount}, which it is a subset of`,
     );
   }
+  // The weakest rule cannot out-emit the whole causal set, and every one of the
+  // `causalLearnedRuleCount` rules emits at least the weakest volume.
+  if (s.minCausalLearnedRulePairCount * s.causalLearnedRuleCount > s.causalLearnedRulePairCount) {
+    reasons.push(
+      `${side} is internally inconsistent: ${s.causalLearnedRuleCount} causal rule(s) each ` +
+      `emitting at least ${s.minCausalLearnedRulePairCount} pair(s) needs at least ` +
+      `${s.minCausalLearnedRulePairCount * s.causalLearnedRuleCount}, but ` +
+      `causalLearnedRulePairCount=${s.causalLearnedRulePairCount}`,
+    );
+  }
+  if (s.distinctEnginePairCount > s.enginePairCount) {
+    reasons.push(
+      `${side} is internally inconsistent: distinctEnginePairCount=` +
+      `${s.distinctEnginePairCount} exceeds raw enginePairCount=${s.enginePairCount}`,
+    );
+  }
+  if (s.decoyPairsEmitted > s.enginePairCount) {
+    reasons.push(
+      `${side} is internally inconsistent: decoyPairsEmitted=${s.decoyPairsEmitted} exceeds ` +
+      `raw enginePairCount=${s.enginePairCount}`,
+    );
+  }
+  if (s.significantEdgeCount === 0) {
+    // `ratio()` reports 0/0 as 0, so a pass that mined nothing cannot honestly
+    // claim a rate. A cleared ledger with the rates left at 1.0 is the whole
+    // PASS-on-nothing shape this function exists to reject.
+    if (s.couplingPrecision > 0 || s.couplingRecall > 0) {
+      reasons.push(
+        `${side} is internally inconsistent: couplingPrecision=${s.couplingPrecision} / ` +
+        `couplingRecall=${s.couplingRecall} are positive while the miner produced zero ` +
+        `significant edges — the miner measurement did not happen`,
+      );
+    }
+  } else {
+    const derived = (s.significantEdgeCount - s.falseEdgeCount) / s.significantEdgeCount;
+    if (Math.abs(derived - s.couplingPrecision) > RATIO_EPSILON) {
+      reasons.push(
+        `${side} is internally inconsistent: couplingPrecision=${s.couplingPrecision} but ` +
+        `${s.significantEdgeCount - s.falseEdgeCount}/${s.significantEdgeCount} ` +
+        `causal edges implies ${derived.toFixed(4)}`,
+      );
+    }
+  }
+  const recovered = checkImpliedCount(
+    reasons, side, 'couplingRecall', s.couplingRecall, s.plantedCausalCount,
+  );
+  if (recovered !== null && recovered > s.plantedCausalCount) {
+    reasons.push(
+      `${side} is internally inconsistent: couplingRecall=${s.couplingRecall} claims ` +
+      `${recovered} recovered couplings from only ${s.plantedCausalCount} planted`,
+    );
+  }
+  checkPairArithmetic(reasons, side, s);
+}
+
+function checkReportConsistency(reasons: string[], report: CorrelationBenchReport): void {
+  checkSummaryArithmetic(reasons, 'report', report);
   checkEdgeLedger(reasons, report);
   checkPairLedger(reasons, report);
 }
@@ -571,6 +752,17 @@ function checkReportConsistency(reasons: string[], report: CorrelationBenchRepor
  * against the precision ratio, which is derived independently.
  */
 function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): void {
+  // `significantEdges()` filters the mined set, so the mined population is an
+  // upper bound on it. `minedEdgeCount: 0` alongside a populated ledger says the
+  // miner never ran and the rows came from somewhere else.
+  if (!Number.isInteger(report.minedEdgeCount)
+    || report.minedEdgeCount < report.significantEdgeCount) {
+    reasons.push(
+      `report is internally inconsistent: minedEdgeCount=${String(report.minedEdgeCount)} is ` +
+      `below significantEdgeCount=${report.significantEdgeCount}, but significant edges are a ` +
+      `filtered subset of the mined ones`,
+    );
+  }
   if (report.edges.length !== report.significantEdgeCount) {
     reasons.push(
       `report is internally inconsistent: significantEdgeCount=${report.significantEdgeCount} ` +
@@ -603,28 +795,7 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
       `${report.causalLearnedRuleCount} but ${causalRuleRows} causal edge row(s) became rules`,
     );
   }
-  if (report.significantEdgeCount === 0) {
-    // `ratio()` reports 0/0 as 0, so a pass that mined nothing cannot honestly
-    // claim a rate. A cleared ledger with the rates left at 1.0 is the whole
-    // PASS-on-nothing shape this function exists to reject.
-    if (report.couplingPrecision > 0 || report.couplingRecall > 0) {
-      reasons.push(
-        `report is internally inconsistent: couplingPrecision=${report.couplingPrecision} / ` +
-        `couplingRecall=${report.couplingRecall} are positive while the miner produced zero ` +
-        `significant edges — the miner measurement did not happen`,
-      );
-    }
-    return;
-  }
-  const derived = (report.significantEdgeCount - report.falseEdgeCount)
-    / report.significantEdgeCount;
-  if (Math.abs(derived - report.couplingPrecision) > RATIO_EPSILON) {
-    reasons.push(
-      `report is internally inconsistent: couplingPrecision=${report.couplingPrecision} but ` +
-      `${report.significantEdgeCount - report.falseEdgeCount}/${report.significantEdgeCount} ` +
-      `causal edges implies ${derived.toFixed(4)}`,
-    );
-  }
+  checkEdgeRows(reasons, report);
   // Recall has its own independent witness: the couplings the miner MISSED are
   // listed by name, so the rate is reproducible without trusting any count.
   if (report.plantedCausalCount > 0) {
@@ -639,6 +810,126 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
       );
     }
   }
+}
+
+/**
+ * `bench-correlation` clamps `+Infinity` z to this before averaging, and the
+ * separation re-derivation below has to clamp identically or it would
+ * "discover" a mismatch on every corpus containing a certainty edge.
+ */
+const Z_CAP = 50;
+
+/**
+ * Two fields of each edge row were read — `verdict` and `becameLearnedRule` —
+ * and everything else in the row went unexamined, so a ledger of stub rows
+ * carrying only those two fields reconciled perfectly against every summary.
+ * A row has to look like something the miner could have produced, and the
+ * separation the gate spends its budget on has to be RE-DERIVABLE from the
+ * evidence in the rows rather than merely asserted alongside them.
+ */
+function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void {
+  const seen = new Set<string>();
+  const causalZ: number[] = [];
+  const falseZ: number[] = [];
+  for (const [i, e] of report.edges.entries()) {
+    const where = `edge row ${i} (${String(e.from)}->${String(e.to)})`;
+    if (typeof e.from !== 'string' || typeof e.to !== 'string' || e.from === '' || e.to === ''
+      || e.from === e.to) {
+      reasons.push(`report is internally inconsistent: ${where} has no distinct endpoints`);
+      continue;
+    }
+    const key = `${e.from}->${e.to}@${String(e.windowHours)}`;
+    if (seen.has(key)) {
+      reasons.push(
+        `report is internally inconsistent: ${where} repeats an earlier row at the same ` +
+        `window — the miner emits one edge per directed pair, so a duplicate is padding`,
+      );
+    }
+    seen.add(key);
+    if (!checkEdgeRowThresholds(reasons, where, e)) continue;
+    // A null z is +Infinity upstream — "certain", capped rather than dropped,
+    // exactly as the report's own mean does it.
+    (e.verdict === 'causal' ? causalZ : falseZ).push(Math.min(Z_CAP, e.zScore ?? Z_CAP));
+  }
+  checkSeparationDerivation(reasons, report, causalZ, falseZ);
+}
+
+/**
+ * `significantEdges()` admits nothing below lift 2 / z 2 / support 3, so a row
+ * under any of those thresholds cannot have come through that filter.
+ *
+ * Returns whether the row's z-score is usable for the separation derivation.
+ */
+function checkEdgeRowThresholds(
+  reasons: string[],
+  where: string,
+  e: BenchEdgeRow,
+): boolean {
+  const bad = `report is internally inconsistent: ${where} has`;
+  if (!Number.isInteger(e.support) || e.support < 3) {
+    reasons.push(
+      `${bad} support=${String(e.support)}, below the minimum 3 that significantEdges() admits`,
+    );
+  }
+  if (!Number.isInteger(e.antecedents) || e.antecedents < e.support) {
+    reasons.push(
+      `${bad} ${String(e.antecedents)} antecedent(s) carrying ${String(e.support)} support — ` +
+      `support counts a subset of the antecedents`,
+    );
+  }
+  if (e.lift !== null && (!Number.isFinite(e.lift) || e.lift < 2)) {
+    reasons.push(
+      `${bad} lift=${String(e.lift)}, below the minimum 2 that significantEdges() admits`,
+    );
+  }
+  if (!Number.isFinite(e.strength) || e.strength < 0 || e.strength > 1) {
+    reasons.push(
+      `${bad} strength=${String(e.strength)}, outside the [0,1] blend the miner produces`,
+    );
+  }
+  if (e.zScore !== null && (!Number.isFinite(e.zScore) || e.zScore < 2)) {
+    reasons.push(
+      `${bad} zScore=${String(e.zScore)}, below the minimum 2 that significantEdges() admits`,
+    );
+    return false;
+  }
+  return true;
+}
+
+/** `null` separation means "no false edges at all" on both routes, or neither. */
+function checkSeparationDerivation(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  causalZ: readonly number[],
+  falseZ: readonly number[],
+): void {
+  const derived = falseZ.length === 0 || causalZ.length === 0
+    ? null
+    : average(causalZ) - average(falseZ);
+  if (derived === null || report.edgeEvidenceSeparation === null) {
+    if (derived !== report.edgeEvidenceSeparation) {
+      reasons.push(
+        `report is internally inconsistent: edgeEvidenceSeparation=` +
+        `${String(report.edgeEvidenceSeparation)} but the edge ledger derives ` +
+        `${String(derived)} (${causalZ.length} causal / ${falseZ.length} false z-score(s))`,
+      );
+    }
+    return;
+  }
+  if (Math.abs(derived - report.edgeEvidenceSeparation) > SEPARATION_EPSILON) {
+    reasons.push(
+      `report is internally inconsistent: edgeEvidenceSeparation=` +
+      `${report.edgeEvidenceSeparation} but the ledger's ${causalZ.length} causal and ` +
+      `${falseZ.length} false z-score(s) derive ${derived.toFixed(4)}`,
+    );
+  }
+}
+
+/** The report rounds its separation to 4dp; the re-derivation must allow that. */
+const SEPARATION_EPSILON = 1e-3;
+
+function average(xs: readonly number[]): number {
+  return xs.reduce((sum, v) => sum + v, 0) / xs.length;
 }
 
 /**
@@ -687,7 +978,145 @@ function checkPairLedger(reasons: string[], report: CorrelationBenchReport): voi
       `per-rule causal pair tallies for ${report.causalLearnedRuleCount} causal learned rule(s)`,
     );
   }
-  checkPairArithmetic(reasons, report);
+  checkPairRows(reasons, report);
+}
+
+/**
+ * The pair half of the run had no row-level detail at all: six summaries —
+ * raw count, distinct count, precision, recall, decoy count, mean true
+ * confidence — produced by one pass, reconciled only against each other. Set
+ * them coherently by hand and nothing could contradict them. Every one of the
+ * six is now re-derived from the emitted pairs themselves.
+ */
+/**
+ * One row of the pair ledger, as something the grader could have emitted.
+ *
+ * Returns whether the row's tallies may be folded into the totals — a row that
+ * fails here has already been reported, and counting it would produce a second,
+ * derivative complaint about the same defect.
+ */
+function checkPairRowShape(
+  reasons: string[],
+  where: string,
+  p: BenchPairRow,
+  seen: Set<string>,
+): boolean {
+  const bad = `report is internally inconsistent: ${where}`;
+  if (typeof p.key !== 'string' || p.key === '' || seen.has(p.key)) {
+    reasons.push(
+      `${bad} has a missing or duplicated key — the ledger is one row per DISTINCT pair, so a ` +
+      `repeat inflates the precision denominator`,
+    );
+    return false;
+  }
+  seen.add(p.key);
+  if (!Array.isArray(p.ruleIds) || !Array.isArray(p.confidences)
+    || p.ruleIds.length !== p.confidences.length || p.ruleIds.length === 0) {
+    reasons.push(
+      `${bad} carries ${Array.isArray(p.ruleIds) ? p.ruleIds.length : String(p.ruleIds)} rule ` +
+      `id(s) against ` +
+      `${Array.isArray(p.confidences) ? p.confidences.length : String(p.confidences)} ` +
+      `confidence(s) — a distinct pair exists because at least one rule emitted it`,
+    );
+    return false;
+  }
+  if (p.ruleIds.some((id) => typeof id !== 'string' || id === '')) {
+    reasons.push(`${bad} has an unnamed emitting rule`);
+  }
+  if (p.confidences.some((c) => typeof c !== 'number' || !Number.isFinite(c) || c < 0 || c > 1)) {
+    reasons.push(`${bad} has a confidence outside [0,1] (${p.confidences.join(', ')})`);
+    return false;
+  }
+  if (!Number.isInteger(p.decoyEmissions)
+    || p.decoyEmissions < 0 || p.decoyEmissions > p.ruleIds.length) {
+    reasons.push(
+      `${bad} attributes ${String(p.decoyEmissions)} decoy emission(s) to ` +
+      `${p.ruleIds.length} emission(s)`,
+    );
+    return false;
+  }
+  return true;
+}
+
+function checkPairRows(reasons: string[], report: CorrelationBenchReport): void {
+  const rows = report.pairs;
+  if (!Array.isArray(rows) || rows.length !== report.distinctEnginePairCount) {
+    reasons.push(
+      `report is internally inconsistent: distinctEnginePairCount=` +
+      `${report.distinctEnginePairCount} but the pair ledger holds ` +
+      `${Array.isArray(rows) ? rows.length : String(rows)} row(s)`,
+    );
+    return; // every check below reads that ledger
+  }
+  const seen = new Set<string>();
+  let emissions = 0;
+  let decoyEmissions = 0;
+  const trueConfidences: number[] = [];
+  let trueRows = 0;
+  for (const [i, p] of rows.entries()) {
+    if (!checkPairRowShape(reasons, `pair row ${i} (${String(p.key)})`, p, seen)) continue;
+    emissions += p.ruleIds.length;
+    decoyEmissions += p.decoyEmissions;
+    if (p.isTruePair) {
+      trueRows += 1;
+      trueConfidences.push(...p.confidences);
+    }
+  }
+  checkPairLedgerTotals(reasons, report, { emissions, decoyEmissions, trueRows, trueConfidences });
+}
+
+/** The five pair summaries the ledger's tallies reproduce, or contradict. */
+function checkPairLedgerTotals(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  tally: {
+    emissions: number;
+    decoyEmissions: number;
+    trueRows: number;
+    trueConfidences: readonly number[];
+  },
+): void {
+  const { emissions, decoyEmissions, trueRows, trueConfidences } = tally;
+  if (emissions !== report.enginePairCount) {
+    reasons.push(
+      `report is internally inconsistent: enginePairCount=${report.enginePairCount} but the ` +
+      `pair ledger accounts for ${emissions} raw emission(s)`,
+    );
+  }
+  if (decoyEmissions !== report.decoyPairsEmitted) {
+    reasons.push(
+      `report is internally inconsistent: decoyPairsEmitted=${report.decoyPairsEmitted} but the ` +
+      `pair ledger accounts for ${decoyEmissions} decoy-touching emission(s)`,
+    );
+  }
+  // Precision and recall share this numerator over two different denominators,
+  // so the ledger pins both rates at once.
+  const expectPrecision = report.distinctEnginePairCount === 0
+    ? 0
+    : trueRows / report.distinctEnginePairCount;
+  if (Math.abs(expectPrecision - report.pairPrecision) > RATIO_EPSILON) {
+    reasons.push(
+      `report is internally inconsistent: pairPrecision=${report.pairPrecision} but ` +
+      `${trueRows}/${report.distinctEnginePairCount} true pair row(s) implies ` +
+      `${expectPrecision.toFixed(4)}`,
+    );
+  }
+  const expectRecall = report.truePairUniverse === 0 ? 0 : trueRows / report.truePairUniverse;
+  if (Math.abs(expectRecall - report.pairRecall) > RATIO_EPSILON) {
+    reasons.push(
+      `report is internally inconsistent: pairRecall=${report.pairRecall} but ` +
+      `${trueRows}/${report.truePairUniverse} planted true pair(s) implies ` +
+      `${expectRecall.toFixed(4)}`,
+    );
+  }
+  const expectMean = trueConfidences.length === 0 ? 0 : average(trueConfidences);
+  if (Math.abs(expectMean - report.meanTruePairConfidence) > RATIO_EPSILON) {
+    reasons.push(
+      `report is internally inconsistent: meanTruePairConfidence=` +
+      `${report.meanTruePairConfidence} but the ${trueConfidences.length} true-pair emission(s) ` +
+      `in the ledger average ${expectMean.toFixed(4)}`,
+    );
+  }
 }
 
 /**
@@ -697,24 +1126,26 @@ function checkPairLedger(reasons: string[], report: CorrelationBenchReport): voi
  * impossible together: with 22 planted true pairs, `distinct: 23` at precision
  * 1.0 claims 23 true emissions out of a universe of 22.
  */
-function checkPairArithmetic(reasons: string[], report: CorrelationBenchReport): void {
-  const fromPrecision = report.pairPrecision * report.distinctEnginePairCount;
-  const fromRecall = report.pairRecall * report.truePairUniverse;
-  if (Math.abs(fromPrecision - fromRecall) > report.distinctEnginePairCount * RATIO_EPSILON
-    + report.truePairUniverse * RATIO_EPSILON) {
+function checkPairArithmetic(reasons: string[], side: string, s: BenchSummary): void {
+  const fromPrecision = s.pairPrecision * s.distinctEnginePairCount;
+  const fromRecall = s.pairRecall * s.truePairUniverse;
+  if (Math.abs(fromPrecision - fromRecall) > s.distinctEnginePairCount * RATIO_EPSILON
+    + s.truePairUniverse * RATIO_EPSILON) {
     reasons.push(
-      `report is internally inconsistent: pairPrecision × ${report.distinctEnginePairCount} ` +
+      `${side} is internally inconsistent: pairPrecision × ${s.distinctEnginePairCount} ` +
       `distinct pairs implies ${fromPrecision.toFixed(2)} true emissions, but pairRecall × ` +
-      `${report.truePairUniverse} planted true pairs implies ${fromRecall.toFixed(2)}`,
+      `${s.truePairUniverse} planted true pairs implies ${fromRecall.toFixed(2)}`,
     );
   }
-  if (fromPrecision > report.truePairUniverse + 0.5) {
+  if (fromPrecision > s.truePairUniverse + 0.5) {
     reasons.push(
-      `report is internally inconsistent: pairPrecision=${report.pairPrecision} over ` +
-      `${report.distinctEnginePairCount} distinct pairs claims ${fromPrecision.toFixed(2)} true ` +
-      `emissions from a universe of only ${report.truePairUniverse} planted true pairs`,
+      `${side} is internally inconsistent: pairPrecision=${s.pairPrecision} over ` +
+      `${s.distinctEnginePairCount} distinct pairs claims ${fromPrecision.toFixed(2)} true ` +
+      `emissions from a universe of only ${s.truePairUniverse} planted true pairs`,
     );
   }
+  checkImpliedCount(reasons, side, 'pairPrecision', s.pairPrecision, s.distinctEnginePairCount);
+  checkImpliedCount(reasons, side, 'pairRecall', s.pairRecall, s.truePairUniverse);
 }
 
 /** `ratio()` rounds to 4dp, so a derived cross-check must allow that rounding. */

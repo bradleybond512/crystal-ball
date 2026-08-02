@@ -833,10 +833,10 @@ function byCodeUnit(a: string, b: string): number {
 }
 
 /**
- * The framing itself, exported so the collision property can be tested
- * directly. `digestRecords(['a', 'b'])` must not equal `digestRecords(['a_b'])`
- * — that inequality is the whole point of length-prefixing, and it is invisible
- * from the corpus-level digest.
+ * The framing itself, exported so the unique-decodability property can be
+ * tested directly. `digestRecords(['a', 'b'])` must not equal
+ * `digestRecords(['a_b'])` — that inequality is the whole point of
+ * length-prefixing, and it is invisible from the corpus-level digest.
  */
 export function digestRecords(records: Iterable<string>): string {
   let h = FNV_OFFSET_128;
@@ -846,9 +846,12 @@ export function digestRecords(records: Iterable<string>): string {
     // a `_` between them reaches exactly the state of hashing the single record
     // `decoy:first_decoy:second` — two real decoy ids could be replaced by one
     // synthetic id, removing both traps from grading, without moving the digest.
-    // Prefixing each record with its length makes the encoding injective: the
-    // mixed sequence parses back to exactly one grouping, so no regrouping of
-    // the corpus can collide.
+    // Prefixing each record with its length makes the ENCODING uniquely
+    // decodable: the mixed sequence parses back to exactly one grouping, so a
+    // regrouping is no longer free. That is a property of the framing, not of
+    // the hash — this is a custom FNV-like recurrence over UTF-16 code units,
+    // not a cryptographic digest, so it is not collision-RESISTANT and no
+    // claim here should be read as "collisions are impossible".
     h = ((h ^ BigInt(s.length)) * FNV_PRIME_128) & MASK_128;
     // charCodeAt, not codePointAt: this loop advances one code UNIT at a time,
     // so codePointAt would read a surrogate pair whole at the lead and then the

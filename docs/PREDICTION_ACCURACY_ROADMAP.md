@@ -934,10 +934,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 65 unit tests in
+- 78 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
-  tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit).
+  tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
+  regression per demonstrated PASS-on-nothing across five review rounds).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1101,6 +1102,47 @@ one place, `enginePairPrecision()` takes a `Pick<>` that does not have the raw
 count in scope, and the pair-arithmetic reconciliation fires on any corpus where
 the two counts differ — but a corpus that exercises the difference end-to-end
 would be a stronger proof.
+
+Fifth-round hardening from the same reviewer (baseline `schemaVersion: 5`, now
+pinned by exact equality rather than a floor). Six more findings, four of them
+live PASS results on a benchmark that had stopped measuring.
+
+- **Schema version is pinned, and the digest must be a digest.** A baseline
+  written before a field existed reads that field as `undefined`, which is not
+  a number, which no directional comparison rejects; `schemaVersion` is now
+  compared against a pinned `CORRELATION_BENCH_SCHEMA_VERSION` constant. Worse,
+  corpus identity was checked with `===` on two values that could both be
+  absent — `undefined === undefined` is the identity gate passing on the absence
+  of identity. Both operands must now match a 32-hex-character pattern before
+  any number below them is treated as comparable.
+- **Every must-arm field is paired with its tolerance floor.** A field seeded
+  positive still disarms its gate if the tolerance that reads it is itself set
+  to the width of the metric. The must-arm set and the per-key ceilings are now
+  one table, so a gate cannot be armed on one side and disarmed on the other.
+- **Internal consistency is checked on the BASELINE too, not only the report.**
+  Every reconciliation ran against the live run; the committed baseline — the
+  side a human edits — was trusted. `learnedRuleFalsePositives: 99` in the
+  baseline sailed through.
+- **A rate implies a whole number of things.** A rate is a ratio of two
+  integers, so `rate × denominator` must land on an integer within the 4dp
+  rounding slack. `pairPrecision: 0.5123` over 22 distinct pairs implies 11.27
+  true pairs — a value no grading pass can produce, and previously a clean
+  improvement over 0.2273.
+- **The gate re-derives the summaries from a row-level ledger.** Round 4 caught
+  summaries that disagreed with each other; the reply was summaries that agreed
+  because they were all written by the same hand. `CorrelationBenchReport` now
+  carries `edges[]` and `pairs[]` — per-edge support/lift/z/verdict and per-pair
+  rule ids/confidences — and the gate re-derives `edgeEvidenceSeparation`,
+  `pairPrecision`, `pairRecall`, `meanTruePairConfidence`, `enginePairCount` and
+  `decoyPairsEmitted` from them, checks every row against the miner's own
+  thresholds (`minLift 2` / `minZ 2` / `minSupport 3`), and rejects
+  `minedEdgeCount` below the number of edges that survived them. Forging a
+  summary now means forging a self-consistent corpus of rows behind it.
+- **The digest claims unique decodability, not collision resistance.** The
+  round-4 length-prefix framing makes the encoding injective — a regrouping of
+  the corpus can no longer collide for free. That is a property of the framing.
+  The recurrence itself is a custom FNV-like function over UTF-16 code units,
+  not a cryptographic hash, and the comments no longer imply otherwise.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

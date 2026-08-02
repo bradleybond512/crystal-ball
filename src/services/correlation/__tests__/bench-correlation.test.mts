@@ -15,14 +15,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   runCorrelationBenchmark, gradeEnginePairs, enginePairPrecision,
+  type BenchPairRow, type CorrelationBenchReport,
 } from '../bench-correlation.ts';
 import {
   compareCorrelationBenchToBaseline,
+  CORRELATION_BENCH_SCHEMA_VERSION,
   DEFAULT_CORRELATION_BENCH_TOLERANCES,
   type CorrelationBenchBaseline,
 } from '../bench-correlation-baseline.ts';
@@ -43,6 +46,63 @@ function loadBaseline(): CorrelationBenchBaseline {
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as CorrelationBenchBaseline;
 }
 
+const round4 = (v: number): number => Math.round(v * 10_000) / 10_000;
+
+/**
+ * Swaps a report's pair ledger and re-derives all six pair summaries from it.
+ *
+ * Every fixture below that changes a pair number has to change the rows that
+ * witness it — that is the whole point of the ledger. Doing it by hand means a
+ * fixture trips a reconciliation reason instead of the gate it was written to
+ * prove, so the arithmetic lives here once, in the same direction the
+ * production assembly computes it.
+ */
+function withPairLedger(
+  report: CorrelationBenchReport,
+  pairs: readonly BenchPairRow[],
+): CorrelationBenchReport {
+  const trueRows = pairs.filter((p) => p.isTruePair);
+  const trueConfidences = trueRows.flatMap((p) => p.confidences);
+  const sum = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0);
+  return {
+    ...report,
+    pairs: [...pairs],
+    enginePairCount: sum(pairs.map((p) => p.ruleIds.length)),
+    distinctEnginePairCount: pairs.length,
+    pairPrecision: pairs.length === 0 ? 0 : round4(trueRows.length / pairs.length),
+    pairRecall: report.truePairUniverse === 0
+      ? 0
+      : round4(trueRows.length / report.truePairUniverse),
+    decoyPairsEmitted: sum(pairs.map((p) => p.decoyEmissions)),
+    meanTruePairConfidence: trueConfidences.length === 0
+      ? 0
+      : round4(sum(trueConfidences) / trueConfidences.length),
+  };
+}
+
+/**
+ * A baseline whose miner graded `causalEdges` of its `significantEdgeCount` as
+ * causal — precision and the five-way false-positive breakdown moved together,
+ * because a baseline that could not have come from a run is now rejected before
+ * any gate is reached.
+ */
+function baselineWithCausalEdges(
+  baseline: CorrelationBenchBaseline,
+  causalEdges: number,
+): CorrelationBenchBaseline {
+  const falseEdges = baseline.significantEdgeCount - causalEdges;
+  return {
+    ...baseline,
+    couplingPrecision: round4(causalEdges / baseline.significantEdgeCount),
+    falseEdgeCount: falseEdges,
+    confoundedFalsePositives: falseEdges,
+    mediatedFalsePositives: 0,
+    independentFalsePositives: 0,
+    inhibitoryEdgesReported: 0,
+    unplantedFalsePositives: 0,
+  };
+}
+
 describe('golden-streams corpus integrity', () => {
   it('is deterministic across runs', () => {
     const a = runCorrelationBenchmark();
@@ -50,16 +110,49 @@ describe('golden-streams corpus integrity', () => {
     assert.deepEqual(a, b);
   });
 
+  it('is deterministic across a fresh module registry, not just a warm one', () => {
+    // Two calls in ONE process share every module-level cache the corpus or the
+    // miner holds, so they agree even if the first call is what fixed the
+    // answer. CI runs the benchmark in its own process; this reproduces that.
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--import', 'tsx',
+        '-e',
+        "import('./src/services/correlation/bench-correlation.ts')" +
+        '.then((m) => console.log(JSON.stringify(m.runCorrelationBenchmark())))',
+      ],
+      { cwd: path.join(here, '..', '..', '..', '..'), encoding: 'utf8' },
+    );
+    assert.equal(child.status, 0, `cold-start benchmark failed: ${child.stderr}`);
+    assert.deepEqual(
+      JSON.parse(child.stdout) as CorrelationBenchReport,
+      JSON.parse(JSON.stringify(runCorrelationBenchmark())) as CorrelationBenchReport,
+      'the benchmark depends on process state — the baseline would drift under CI',
+    );
+  });
+
   it('emits observations in a stable total order with unique ids', () => {
     const obs = allGoldenObservations();
     const ids = new Set(obs.map((o) => o.id));
     assert.equal(ids.size, obs.length, 'duplicate observation id in the corpus');
+    let ties = 0;
     for (let i = 1; i < obs.length; i++) {
-      assert.ok(
-        obs[i - 1]!.timestamp <= obs[i]!.timestamp,
-        `corpus not time-sorted at index ${i}`,
-      );
+      const prev = obs[i - 1]!;
+      const cur = obs[i]!;
+      assert.ok(prev.timestamp <= cur.timestamp, `corpus not time-sorted at index ${i}`);
+      // Timestamp order alone leaves same-millisecond records free to permute
+      // between runs, which is exactly what would move the digest under a
+      // different sort implementation. The id is the tiebreak.
+      if (prev.timestamp === cur.timestamp) {
+        ties += 1;
+        assert.ok(
+          prev.id < cur.id,
+          `equal timestamps at index ${i} are not id-ordered (${prev.id}, ${cur.id})`,
+        );
+      }
     }
+    assert.ok(ties > 0, 'no equal-timestamp records left — the tiebreak is no longer exercised');
   });
 
   it('digests the corpus at 128 bits, not at a brute-forceable width', () => {
@@ -70,13 +163,15 @@ describe('golden-streams corpus integrity', () => {
     assert.match(digest, /^[0-9a-f]{32}$/, `corpus digest ${digest} is not 128 bits of hex`);
   });
 
-  it('frames each record by length, so no regrouping of the corpus collides', () => {
+  it('frames each record by length, so a regrouping of the corpus is not free', () => {
     // A separator byte is just another code unit: hashing `decoy:first` then
     // `decoy:second` with a `_` between them reaches exactly the state of
     // hashing the single record `decoy:first_decoy:second`, at ANY digest
     // width. That collision lets two real decoy ids be replaced by one
     // synthetic id — removing both traps from grading — without moving the
-    // digest. Length-prefixing makes the encoding injective.
+    // digest. Length-prefixing makes the ENCODING uniquely decodable, which
+    // closes that structural route; the hash is a custom FNV-like recurrence,
+    // not a cryptographic digest, so nothing here claims collision resistance.
     assert.notEqual(
       digestRecords(['decoy:first', 'decoy:second']),
       digestRecords(['decoy:first_decoy:second']),
@@ -178,6 +273,16 @@ describe('what the corpus is built to stress', () => {
   it('measures pair precision on distinct pairs, not on raw emissions', () => {
     assert.ok(report.distinctEnginePairCount <= report.enginePairCount);
     assert.ok(report.distinctEnginePairCount > 0);
+    // Bounding the two counts says nothing about which one the rate divided by.
+    // The ledger names every distinct pair and flags the true ones, so the
+    // denominator is checkable rather than assumed.
+    assert.equal(report.distinctEnginePairCount, report.pairs.length);
+    const trueRows = report.pairs.filter((p) => p.isTruePair).length;
+    assert.equal(
+      report.pairPrecision,
+      Math.round((trueRows / report.pairs.length) * 10_000) / 10_000,
+      'reported pair precision does not divide the ledger by the distinct denominator',
+    );
   });
 
   it('does not double-count one event pair matched by two rules', () => {
@@ -223,6 +328,17 @@ describe('what the corpus is built to stress', () => {
       enginePairPrecision(graded),
       graded.emittedTrueKeys.size / graded.pairCount,
       'the raw-emission denominator must not be what production uses',
+    );
+    // …and the assembly really routes through it: the same function, fed the
+    // report's OWN ledger, has to reproduce the number the report published.
+    assert.equal(
+      enginePairPrecision({
+        ...graded,
+        emittedTrueKeys: new Set(report.pairs.filter((p) => p.isTruePair).map((p) => p.key)),
+        distinctPairCount: report.pairs.length,
+      }),
+      report.pairPrecision,
+      'the report published a precision this function would not have produced',
     );
   });
 
@@ -291,7 +407,14 @@ describe('the gate', () => {
   const baseline = loadBaseline();
 
   it('fails closed on corpus drift and reports nothing else', () => {
-    const drifted = { ...baseline, observationCount: baseline.observationCount + 1 };
+    // The baseline also carries a metric regression the gate would otherwise
+    // report, so "nothing else" is a claim about the short-circuit rather than
+    // about a baseline that had nothing else to say.
+    const drifted = {
+      ...baselineWithCausalEdges(baseline, baseline.significantEdgeCount),
+      observationCount: baseline.observationCount + 1,
+    };
+    assert.ok(drifted.couplingPrecision - report.couplingPrecision > 0.5);
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, drifted);
     assert.equal(ok, false);
     assert.equal(reasons.length, 1, 'metric noise leaked past a corpus-identity failure');
@@ -300,21 +423,28 @@ describe('the gate', () => {
   });
 
   it('fails on a coupling-precision regression past tolerance', () => {
-    const strict = { ...baseline, couplingPrecision: report.couplingPrecision + 0.5 };
+    // 17/22 causal is precision 0.7727 — half a point above the live 0.2273,
+    // and coherent with its own breakdown so the gate is what rejects the run.
+    const strict = baselineWithCausalEdges(baseline, 17);
+    assert.ok(strict.couplingPrecision - report.couplingPrecision > 0.5);
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, strict);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('miner coupling precision regressed')));
   });
 
   it('passes silently on improvement — tolerances are one-sided', () => {
+    // Worse on every axis, but still a baseline a real (bad) run could have
+    // produced: one causal edge out of 22, one recovered coupling, one true
+    // pair emitted. An incoherent "worse" baseline — 99 false-positive rules
+    // out of 12 rules — proves nothing about one-sidedness, because the gate
+    // now rejects it before any tolerance is spent.
     const worse: CorrelationBenchBaseline = {
-      ...baseline,
-      couplingPrecision: 0.01,
-      couplingRecall: 0.1,
-      pairPrecision: 0.1,
-      pairRecall: 0.1,
-      edgeEvidenceSeparation: 0.1,
-      learnedRuleFalsePositives: 99,
+      ...baselineWithCausalEdges(baseline, 1),
+      couplingRecall: round4(1 / baseline.plantedCausalCount),
+      pairPrecision: round4(1 / baseline.distinctEnginePairCount),
+      pairRecall: round4(1 / baseline.truePairUniverse),
+      edgeEvidenceSeparation: 1.5,
+      meanTruePairConfidence: 0.1,
       learnedRulePairCount: 9999,
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, worse);
@@ -323,7 +453,10 @@ describe('the gate', () => {
   });
 
   it('treats decoy leakage as zero-tolerance', () => {
-    const leaked = { ...report, decoyPairsEmitted: 1 };
+    const leaked = withPairLedger(
+      report,
+      report.pairs.map((p, i) => (i === 0 ? { ...p, decoyEmissions: 1 } : p)),
+    );
     const { ok, reasons } = compareCorrelationBenchToBaseline(leaked, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('near-miss decoy pairs emitted')));
@@ -345,7 +478,7 @@ describe('the gate', () => {
     // truth label changes nothing about stream/observation/coupling COUNTS, so
     // a counts-only identity check would compare incomparable numbers and call
     // the easier corpus an improvement.
-    const restyled = { ...baseline, corpusDigest: 'deadbeef' };
+    const restyled = { ...baseline, corpusDigest: 'deadbeef'.repeat(4) };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, restyled);
     assert.equal(ok, false);
     assert.equal(reasons.length, 1);
@@ -374,7 +507,12 @@ describe('the gate', () => {
   it('fails when the confidence kernel collapses under passing membership gates', () => {
     // Precision and recall stay at 1.0 — the right pairs are still emitted,
     // just scored worthlessly.
-    const flat = { ...report, meanTruePairConfidence: 0 };
+    const flat = withPairLedger(
+      report,
+      report.pairs.map((p) => ({ ...p, confidences: p.confidences.map(() => 0) })),
+    );
+    assert.equal(flat.meanTruePairConfidence, 0);
+    assert.equal(flat.pairPrecision, report.pairPrecision);
     const { ok, reasons } = compareCorrelationBenchToBaseline(flat, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('mean true-pair confidence regressed')));
@@ -412,11 +550,23 @@ describe('the gate', () => {
       unplantedFalsePositives: report.unplantedFalsePositives + 2,
       couplingPrecision: 0.2083,
       // The ledger has to grow with the summary or the consistency check fires
-      // first and this test stops proving anything about the growth gate.
+      // first and this test stops proving anything about the growth gate. The
+      // fillers carry distinct endpoints (a cloned row is padding) and sit at
+      // the existing false-edge z mean, so the derived separation is unmoved
+      // and this stays a test of the false-edge count alone.
       edges: [
         ...report.edges,
-        ...report.edges.slice(0, 2).map((e) => ({
-          ...e, verdict: 'unplanted' as const, becameLearnedRule: false,
+        ...[0, 1].map((i) => ({
+          from: `filler-${i}`,
+          to: `filler-${i}-sink`,
+          verdict: 'unplanted' as const,
+          support: 3,
+          antecedents: 10,
+          lift: 2.5,
+          zScore: report.meanFalseEdgeZ ?? 2,
+          strength: 0.5,
+          windowHours: 6,
+          becameLearnedRule: false,
         })),
       ],
     };
@@ -459,7 +609,35 @@ describe('the gate', () => {
   });
 
   it('rejects a null separation that is NOT explained by zero false edges', () => {
-    const broken = { ...report, edgeEvidenceSeparation: null };
+    // A run where the miner graded NOTHING causal: separation is legitimately
+    // null (one of the two z buckets is empty) while 22 false edges stand. The
+    // ledger derives that null, so the gate — not the reconciliation — is what
+    // has to catch the unearned exemption.
+    const broken = {
+      ...report,
+      edges: report.edges.map((e) => ({
+        ...e, verdict: 'unplanted' as const, becameLearnedRule: false,
+      })),
+      edgeEvidenceSeparation: null,
+      couplingPrecision: 0,
+      couplingRecall: 0,
+      missingCouplings: Array.from(
+        { length: report.plantedCausalCount },
+        (_, i) => `missing-${i}`,
+      ),
+      falseEdgeCount: report.significantEdgeCount,
+      confoundedFalsePositives: 0,
+      mediatedFalsePositives: 0,
+      independentFalsePositives: 0,
+      inhibitoryEdgesReported: 0,
+      unplantedFalsePositives: report.significantEdgeCount,
+      learnedRuleCount: 0,
+      causalLearnedRuleCount: 0,
+      learnedRuleFalsePositives: 0,
+      learnedRulePairCount: 0,
+      causalLearnedRulePairCount: 0,
+      causalLearnedRulePairsPerRule: [],
+    };
     const { ok, reasons } = compareCorrelationBenchToBaseline(broken, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('separation is null while false edges exist')));
@@ -591,15 +769,10 @@ describe('the gate', () => {
   it('fails when built-in pair emissions shrink at all', () => {
     // Deterministic corpus: a built-in rule that stops matching is a defect,
     // and the ratio gates cannot see it because they divide by the new total.
-    const fewer = {
-      ...report,
-      enginePairCount: report.enginePairCount - 4,
-      distinctEnginePairCount: report.distinctEnginePairCount - 4,
-      // Four true pairs stopped being emitted, so recall has to fall with them
-      // — otherwise the two routes to the true-emission count disagree and the
-      // arithmetic reconciliation fires before the shrink gate is reached.
-      pairRecall: (report.distinctEnginePairCount - 4) / report.truePairUniverse,
-    };
+    // Dropping the rows is what drops the counts: every pair summary is
+    // re-derived from the shortened ledger, so this stays a test of the shrink
+    // gate rather than of the reconciliation that now precedes it.
+    const fewer = withPairLedger(report, report.pairs.slice(0, -4));
     const { ok, reasons } = compareCorrelationBenchToBaseline(fewer, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('distinct built-in pair emissions regressed')));
@@ -793,13 +966,151 @@ describe('the gate', () => {
   });
 
   it('accumulates every independent regression rather than short-circuiting', () => {
+    // A perfect-miner baseline — coherent with its own breakdown, so it clears
+    // reconciliation and every gate below it gets to fire independently.
     const strict: CorrelationBenchBaseline = {
-      ...baseline,
-      couplingPrecision: 1,
+      ...baselineWithCausalEdges(baseline, baseline.significantEdgeCount),
       meanTruePairConfidence: 0.99,
       learnedRuleFalsePositives: 0,
+      learnedRuleCount: baseline.causalLearnedRuleCount,
     };
     const { reasons } = compareCorrelationBenchToBaseline(report, strict);
     assert.ok(reasons.length >= 3, `expected several reasons, got ${reasons.length}`);
+  });
+});
+
+/**
+ * The gate reached PASS six review rounds running by measuring nothing: the
+ * summaries it read were produced by one pass and only ever checked against
+ * each other, and a baseline that no run could have produced still spent its
+ * tolerances. These are the reconciliation checks that close that route — each
+ * one is a fixture that USED to pass.
+ */
+describe('the gate rejects a run or a baseline that could not have happened', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('rejects a baseline written against an older schema', () => {
+    // Fields the gate now reads did not exist at v4, so every check that
+    // touches one would read `undefined` and quietly pass.
+    const stale = { ...baseline, schemaVersion: CORRELATION_BENCH_SCHEMA_VERSION - 1 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, stale);
+    assert.equal(ok, false);
+    assert.equal(reasons.length, 1, 'a stale schema must stop the gate, not annotate it');
+    assert.match(reasons[0]!, /predates fields this gate reads/);
+  });
+
+  it('rejects a corpus digest missing from BOTH operands', () => {
+    // `undefined === undefined` is the identity check passing on the absence of
+    // identity — the one comparison that must never be satisfiable by deletion.
+    const { corpusDigest: _a, ...blindReport } = report;
+    const { corpusDigest: _b, ...blindBaseline } = baseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      blindReport as typeof report,
+      blindBaseline as typeof baseline,
+    );
+    assert.equal(ok, false);
+    assert.equal(reasons.length, 2, 'both sides are unidentified, both must say so');
+    for (const r of reasons) assert.match(r, /not a 32-character hex digest/);
+  });
+
+  it('rejects a malformed digest before comparing it', () => {
+    const short = { ...baseline, corpusDigest: 'deadbeef' };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, short);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('not a 32-character hex digest')));
+  });
+
+  it('rejects a baseline metric sitting at or below its own tolerance', () => {
+    // 0.05 confidence under a 0.05 drop allowance accepts a live 0 — a kernel
+    // that stopped scoring anything would be graded as no regression. Positive
+    // is not the bar; the bar is the tolerance the gate will spend.
+    const tol = baseline.tolerances.meanTruePairConfidenceDrop;
+    const disarmed = { ...baseline, meanTruePairConfidence: tol };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, disarmed);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('scoring a metric that measured nothing')));
+  });
+
+  it('rejects a baseline whose learned-rule split exceeds its own rule count', () => {
+    // 99 false-positive rules out of 12 rules is not a worse run, it is not a
+    // run — and it was accepted, because reconciliation only ever ran on the
+    // live report.
+    const impossible = { ...baseline, learnedRuleFalsePositives: 99 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, impossible);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('baseline is internally inconsistent')));
+  });
+
+  it('rejects a rate that no whole number of hits could produce', () => {
+    // A rate is a ratio of two integers. 0.5 over 22 distinct pairs implies 11
+    // true pairs; 0.5123 implies 11.27 of them, which is a hand-typed number.
+    const fractional = { ...baseline, pairPrecision: 0.5123 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, fractional);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('implies')));
+  });
+
+  it('rejects a report claiming fewer mined edges than it called significant', () => {
+    // `minedEdgeCount: 0` beside 22 significant edges says the filter admitted
+    // more than it was given.
+    const unmined = { ...report, minedEdgeCount: 0 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(unmined, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('minedEdgeCount=0')));
+  });
+
+  it('rejects stub edge rows that only carry the two fields the gate used to read', () => {
+    // Rows keeping `verdict` + `becameLearnedRule` reconciled against every
+    // summary while describing edges `significantEdges()` would have filtered.
+    const stubbed = {
+      ...report,
+      edges: report.edges.map((e) => ({ ...e, support: 1, lift: 0.5, zScore: 0.1 })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stubbed, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('below the minimum 3 that significantEdges()')));
+    assert.ok(reasons.some((r) => r.includes('below the minimum 2 that significantEdges()')));
+  });
+
+  it('rejects a separation the edge rows do not derive', () => {
+    // The gate spends its largest budget on this number; before the ledger it
+    // was simply asserted next to the rows rather than computed from them.
+    const inflated = { ...report, edgeEvidenceSeparation: (report.edgeEvidenceSeparation ?? 0) + 5 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(inflated, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('z-score(s) derive')));
+  });
+
+  it('rejects a pair ledger padded with a duplicate key', () => {
+    // Distinct pairs are the precision denominator, so a repeated key inflates
+    // the count the gate divides by.
+    const padded = {
+      ...report,
+      pairs: [...report.pairs, { ...report.pairs[0]!, isTruePair: false }],
+      distinctEnginePairCount: report.distinctEnginePairCount + 1,
+      enginePairCount: report.enginePairCount + 1,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(padded, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('internally inconsistent')));
+  });
+
+  it('rejects pair summaries the ledger does not reproduce', () => {
+    // The six pair numbers agreeing with each other is not evidence; the rows
+    // that produced them are.
+    const lying = { ...report, meanTruePairConfidence: 0.99 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(lying, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('internally inconsistent')));
+  });
+
+  it('accepts the committed baseline against a live run', () => {
+    // Every check above is a rejection; this is the one that proves the gate
+    // still has a passing state, so a stricter gate cannot be mistaken for a
+    // working one.
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, baseline);
+    assert.deepEqual(reasons, []);
+    assert.equal(ok, true);
   });
 });

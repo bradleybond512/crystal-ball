@@ -934,11 +934,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 108 unit tests in
+- 113 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
-  regression per demonstrated PASS-on-nothing across eight review rounds).
+  regression per demonstrated PASS-on-nothing across nine review rounds).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1250,6 +1250,42 @@ each demonstrated as a PASS against the round-7 gate:
   index" and "not in the corpus" were the same answer, so renaming the 14
   false-positive rows to invented domains kept them graded `unplanted` and
   reconciled against every summary.
+
+Ninth-round hardening, and the one that ends the sequence. Eight rounds all
+found the same shape of defect, because eight rounds all answered the same
+question: *could* a run have produced these numbers? A careful enough forgery
+answers yes every time — the reviewer deranged all 22 pair attributions onto
+other registered rules, replaced every edge-evidence field with varied
+admissible values and recomputed the separation off them, rebuilt the 101-row
+pass-B ledger out of four rows citing a nonexistent rule, and deleted seven
+advertised measurements outright. Each returned PASS.
+
+The corpus is frozen and `runCorrelationBenchmark()` is deterministic and takes
+no inputs, so the gate does not have to keep inferring. It now RE-RUNS the
+benchmark and requires the submitted report to reproduce it field for field
+(`checkReportIsReproducible`, memoized, reported as field paths). Every
+self-authored number becomes uncheckable-in-principle → impossible. This runs
+LAST: the named checks above still fire first, because a specific reason is what
+a human re-seeding a baseline needs to read.
+
+Two consequences worth stating plainly:
+
+- **It does not block a real improvement.** The comparator re-runs the same
+  miner the report came from, so when ACC-502 corrects the miner, both sides
+  move together and only the baseline-relative gates have an opinion. What it
+  blocks is a report that no run produced.
+- **The constant-column heuristic was deleted, not kept as defence in depth.**
+  It rejected a legitimate report whose ten edge rows naturally shared a support
+  of 6. A heuristic that guesses at "did this measure anything" is strictly
+  worse than re-deriving the answer, and worse than nothing when it is wrong.
+
+Three gaps re-derivation does not close, because they are on the BASELINE side —
+a committed file, with no run to reproduce it from — and each is now checked
+directly: `minedEdgeCount` below its own `significantEdgeCount` (which licensed
+the live candidate population collapsing from 256 to 22), `minedEdgeCount` above
+what the corpus can produce (the ceiling was ordered-pairs × windows; the miner
+returns one best window per ordered pair, so it is 272, not 1088), and a padded
+pinned roster (the set check ran on the live side only).
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

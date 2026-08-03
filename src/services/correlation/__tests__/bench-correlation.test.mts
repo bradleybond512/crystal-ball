@@ -783,9 +783,13 @@ describe('the gate', () => {
       ),
     );
     assert.deepEqual(perfect.causalLearnedRulePairsPerRule, [5, 4, 4, 3, 3]);
-    const { ok, reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
-    assert.deepEqual(reasons, []);
-    assert.equal(ok, true);
+    const { reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
+    // A hand-authored report cannot reproduce against a re-run of the frozen
+    // corpus, and that reason is expected here — the property under test is
+    // that NOTHING ELSE fires: no drop, no growth, no separation regression.
+    // A real perfect miner reproduces (the gate re-runs the same miner), so it
+    // reaches this same all-clear on the directional gates.
+    assert.deepEqual(reasons.filter((r) => !r.includes('does not reproduce')), []);
   });
 
   it('rejects a null separation that is NOT explained by zero false edges', () => {
@@ -1608,7 +1612,7 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
         { ...report, minedEdgeCount: inflated }, baseline,
       );
       assert.equal(ok, false);
-      assert.ok(reasons.some((r) => r.includes('ordered domain-pair/window candidates')));
+      assert.ok(reasons.some((r) => r.includes('ordered domain-pair candidates')));
     }
   });
 
@@ -1633,20 +1637,100 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
     assert.ok(reasons.some((r) => r.includes("probe names 'fabricated-rule'")));
   });
 
-  it('rejects edge evidence filled with one admissible constant', () => {
-    // Every threshold on a row is a per-row FLOOR, so a single admissible value
-    // repeated across all 22 rows cleared all of them — and separation, derived
-    // from those same z-scores, agreed. A miner that ranks nothing is not mining.
+  it('rejects fabricated edge evidence that clears every per-row floor', () => {
+    // The per-row checks are FLOORS and the column checks are shape checks, so
+    // evidence invented to clear both — varied, admissible, internally
+    // reconciled — satisfied all of them. Only re-running the miner over the
+    // frozen corpus can say whether these are the values it produces.
     const stubbed = {
       ...report,
-      edges: report.edges.map((e) => ({
-        ...e, support: 3, antecedents: 3, lift: 2,
-        zScore: e.verdict === 'causal' ? 10.4898 : 2, strength: 0.5, windowHours: 1,
+      edges: report.edges.map((e, i) => ({
+        ...e,
+        support: 3 + (i % 4),
+        antecedents: 12 + i,
+        lift: 2.5 + (i % 3) / 10,
+        zScore: (e.verdict === 'causal' ? 9 : 2.5) + (i % 5) / 10,
+        strength: 0.4 + (i % 6) / 100,
       })),
     };
-    const { ok, reasons } = compareCorrelationBenchToBaseline(stubbed, baseline);
+    // …with the derived z means and separation recomputed off the invented
+    // rows, so the derivation checks reconcile against them too.
+    const zOf = (v: 'causal' | 'false'): number[] => stubbed.edges
+      .filter((e) => (v === 'causal' ? e.verdict === 'causal' : e.verdict !== 'causal'))
+      .map((e) => e.zScore ?? 50);
+    const mean = (xs: number[]): number => round4(xs.reduce((a, b) => a + b, 0) / xs.length);
+    const forged = {
+      ...stubbed,
+      meanCausalEdgeZ: mean(zOf('causal')),
+      meanFalseEdgeZ: mean(zOf('false')),
+      edgeEvidenceSeparation: round4(mean(zOf('causal')) - mean(zOf('false'))),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('carry the identical support')));
+    assert.ok(reasons.some((r) => r.includes('does not reproduce')));
+    assert.ok(reasons.some((r) => r.includes('edges[0].support')));
+  });
+
+  it('rejects a pair ledger that attributes every emission to the wrong rule', () => {
+    // Deranging the attributions keeps every count, every rate and every
+    // coverage set intact: each rule is registered, each emission is one row.
+    // What it destroys is which matcher decided what, which no summary carries.
+    const ids = [...new Set(report.pairs.flatMap((p) => p.ruleIds))].sort();
+    const deranged = report.pairs.map((p) => ({
+      ...p,
+      ruleIds: p.ruleIds.map((id) => ids[(ids.indexOf(id) + 1) % ids.length]!),
+    }));
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      { ...report, pairs: deranged }, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('does not reproduce')));
+  });
+
+  it('re-runs the rule probes instead of reading what they reported', () => {
+    // The probe gate reads the two booleans, so everything ELSE a probe row
+    // carries — including which clause its near-miss violates, the whole reason
+    // the probe means anything — was unchecked. The re-run reproduces the row.
+    const [first, ...rest] = report.ruleProbes;
+    const rewritten = [{ ...first!, nearMiss: 'some other clause entirely' }, ...rest];
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      { ...report, ruleProbes: rewritten }, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('ruleProbes[0].nearMiss')));
+  });
+
+  it('rejects a report that drops an advertised measurement outright', () => {
+    // `meanCausalEdgeStrength` and friends are presented as benchmark evidence
+    // but feed no gate, so deleting them changed no number the gate read.
+    const { meanCausalEdgeStrength: _drop, ...trimmed } = report;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      trimmed as typeof report, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('meanCausalEdgeStrength')));
+  });
+
+  it('rejects a baseline whose candidate population sits below its own edges', () => {
+    // Only the live side derived this from a ledger, so a baseline could pin
+    // `minedEdgeCount` under its own `significantEdgeCount` — and the shrink
+    // gate then licensed the live population collapsing from 256 to 22.
+    const starved = { ...baseline, minedEdgeCount: baseline.significantEdgeCount - 2 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, starved);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('baseline is internally inconsistent: minedEdgeCount')));
+  });
+
+  it('rejects a padded roster on the baseline side too', () => {
+    // The set check ran on the live roster only, so both committed pins could
+    // be padded without moving the symmetric difference they are compared by.
+    const padded = {
+      ...baseline,
+      builtInRuleIds: [...baseline.builtInRuleIds, baseline.builtInRuleIds[0]!],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, padded);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('baseline builtInRuleIds repeats')));
   });
 
   it('rejects an edge between domains the corpus never observed', () => {

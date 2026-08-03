@@ -18,6 +18,7 @@ This file is the canonical to-do list across all build sessions. Update status m
 
 | Status | Feature | Notes |
 |--------|---------|-------|
+| ACTIVE | Quality and release reliability | Active execution board: `docs/QUALITY_RELIABILITY_ROADMAP.md`. Current focus is restoring main-to-Mac delivery, worker recovery, honest diagnostics, and trustworthy release gates. |
 | ✅ | `cve-tracker` panel | NVD API + CVSS scoring — `CveTrackerPanel.ts` |
 | ✅ | `vulners-cve` panel | NVD + EPSS exploit probability — `VulnersCvePanel.ts` |
 | ✅ | `hibp-breaches` panel | Have I Been Pwned — `HibpBreachesPanel.ts`, `api/hibp-breaches.js` |

@@ -2,6 +2,11 @@
 
 ## Active Roadmap
 
+- Desktop delivery, worker reliability, diagnostics, UI readiness, QA-gate,
+  feed-health, native-quality, or release-proof work must start with
+  `docs/QUALITY_RELIABILITY_ROADMAP.md`.
+- Claim one `REL-NNN` task through a draft PR before production implementation
+  and update its status and evidence in the completing PR.
 - Prediction, calibration, correlation, or self-tuning work must start with
   `docs/PREDICTION_ACCURACY_ROADMAP.md`.
 - Claim one `ACC-NNN` task through a draft PR before implementation and update

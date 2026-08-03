@@ -145,8 +145,10 @@ test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejec
 
 function fixtureRepo(branch) {
   const dir = mkdtempSync(join(tmpdir(), 'verdict-fixture-'));
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: dir, encoding: 'utf8' }).trim();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', branch);
+  git('config', 'user.name', 'fixture');
+  git('config', 'user.email', 'fixture@invalid.test');
   writeFileSync(join(dir, 'code.txt'), 'v1\n');
   git('add', 'code.txt');
   git('commit', '-q', '-m', 'feat: code');

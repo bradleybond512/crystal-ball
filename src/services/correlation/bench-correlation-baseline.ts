@@ -32,7 +32,7 @@
  */
 
 import type {
-  BenchEdgeRow, BenchPairRow, CorrelationBenchReport, EdgeVerdict,
+  BenchEdgeRow, BenchLearnedPairRow, BenchPairRow, CorrelationBenchReport, EdgeVerdict,
 } from './bench-correlation';
 // The gate reads planted truth DIRECTLY. A ledger row that carries its own
 // verdict and its own `isTruePair` flag is the report grading itself: rewrite
@@ -41,6 +41,17 @@ import type {
 import {
   decoyEventIds, pairKeyFor, plantedCouplingIndex, plantedTruePairKeys,
 } from './__bench__/golden-streams';
+import { DEFAULT_WINDOWS_MS } from './lead-lag';
+import { LEARNED_RULE_PREFIX, learnedRuleId } from './learned-rules';
+
+/**
+ * The lag windows the miner is configured with, in hours. An edge row reports
+ * the window its evidence was counted over, and only these exist — a row at any
+ * other window is describing a mining run that did not happen.
+ */
+const ALLOWED_WINDOW_HOURS: ReadonlySet<number> = new Set(
+  DEFAULT_WINDOWS_MS.map((ms) => Math.round(ms / 3_600_000)),
+);
 
 export interface CorrelationBenchTolerances {
   /** Max allowed absolute drop in miner coupling precision. */
@@ -122,7 +133,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 6;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 7;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -150,6 +161,13 @@ export interface CorrelationBenchBaseline {
   corpusDigest: string;
   /** Every built-in rule id in the graded pass, sorted — pinned by set equality. */
   builtInRuleIds: string[];
+  /**
+   * The built-in rules that actually EMIT over this corpus, sorted — also
+   * pinned by set equality. Inventory pins which rules ship; this pins which of
+   * them the graded pass exercises, so a rule going dark is a benchmark
+   * failure rather than a rate too small to trip a tolerance.
+   */
+  ruleCoverage: string[];
 
   // graded metrics
   couplingPrecision: number;
@@ -421,27 +439,137 @@ function checkRuleInventory(
   report: CorrelationBenchReport,
   baseline: CorrelationBenchBaseline,
 ): void {
-  const want = baseline.builtInRuleIds;
-  const got = report.builtInRuleIds;
+  checkIdSet(reasons, {
+    label: 'built-in correlation rule set',
+    field: 'builtInRuleIds',
+    want: baseline.builtInRuleIds,
+    got: report.builtInRuleIds,
+    consequence: 'the graded pass is no longer measuring the same engine',
+  });
+}
+
+/**
+ * Which shipped rules the corpus actually exercises.
+ *
+ * The inventory pin catches DELETION; this catches a rule quietly ceasing to
+ * fire. Four of the nine built-ins emit over this corpus, and each of the four
+ * contributes a handful of pairs out of twenty-two — small enough that one of
+ * them going dark moves precision and recall by less than their tolerances
+ * allow. Coverage is a set, so it moves discretely or not at all.
+ */
+function checkRuleCoverage(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): void {
+  checkIdSet(reasons, {
+    label: 'built-in rule coverage over the corpus',
+    field: 'ruleCoverage',
+    want: baseline.ruleCoverage,
+    got: report.ruleCoverage,
+    consequence: 'a rule that used to emit over this corpus no longer does (or a new one now does)',
+  });
+  if (!Array.isArray(report.ruleCoverage) || !Array.isArray(report.builtInRuleIds)) return;
+  const stray = report.ruleCoverage.filter((id) => !report.builtInRuleIds.includes(id));
+  if (stray.length > 0) {
+    reasons.push(
+      `report is internally inconsistent: ruleCoverage names [${stray.join(', ')}], which are ` +
+      `not in the built-in inventory the graded pass registered`,
+    );
+  }
+  // Coverage is DERIVED, never read: without this the field is one more number
+  // the report authors about itself.
+  const derived = [...new Set(report.pairs.flatMap((p) => p.ruleIds))]
+    .filter((id) => report.builtInRuleIds.includes(id))
+    .sort((a, b) => a.localeCompare(b));
+  const claimed = [...report.ruleCoverage].sort((a, b) => a.localeCompare(b));
+  if (derived.join('|') !== claimed.join('|')) {
+    reasons.push(
+      `report is internally inconsistent: ruleCoverage claims [${claimed.join(', ')}] but the ` +
+      `pair ledger attributes emissions to [${derived.join(', ')}]`,
+    );
+  }
+}
+
+/** Exact set equality between a committed roster and a live one. */
+function checkIdSet(
+  reasons: string[],
+  spec: {
+    label: string;
+    field: string;
+    want: unknown;
+    got: unknown;
+    consequence: string;
+  },
+): void {
+  const { label, field, want, got, consequence } = spec;
   if (!Array.isArray(want) || want.length === 0
     || want.some((id) => typeof id !== 'string' || id === '')) {
     reasons.push(
-      'baseline builtInRuleIds is missing or not a non-empty list of rule ids — the engine ' +
-      'inventory cannot be pinned, so rules can be deleted without moving a number',
+      `baseline ${field} is missing or not a non-empty list of ids — ${label} cannot be ` +
+      `pinned, so it can change without moving a number`,
     );
     return;
   }
   if (!Array.isArray(got)) {
-    reasons.push('live report carries no builtInRuleIds inventory');
+    reasons.push(`live report carries no ${field} roster`);
     return;
   }
-  const missing = want.filter((id) => !got.includes(id));
-  const added = got.filter((id) => !want.includes(id));
+  const missing = (want as string[]).filter((id) => !got.includes(id));
+  const added = (got as string[]).filter((id) => !want.includes(id));
   if (missing.length > 0 || added.length > 0) {
     reasons.push(
-      `built-in correlation rule set changed: ${missing.length} removed ` +
-      `[${missing.join(', ')}], ${added.length} added [${added.join(', ')}] — the graded pass ` +
-      `is no longer measuring the same engine (re-seed deliberately, in a reviewed diff)`,
+      `${label} changed: ${missing.length} removed [${missing.join(', ')}], ` +
+      `${added.length} added [${added.join(', ')}] — ${consequence} ` +
+      `(re-seed deliberately, in a reviewed diff)`,
+    );
+  }
+}
+
+/**
+ * Every shipped rule matched its positive fixture and rejected its near-miss.
+ *
+ * An id in the inventory proves a rule is still REGISTERED, not that its
+ * matcher still decides anything: five of the nine built-ins fire nowhere in
+ * the corpus, and forcing all five to return false left every benchmark number
+ * — and the gate's verdict — unchanged. The probes are the only evidence the
+ * gate has about those five, so a missing probe fails as loudly as a failing one.
+ */
+function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): void {
+  const probes = report.ruleProbes;
+  if (!Array.isArray(probes) || !Array.isArray(report.builtInRuleIds)) {
+    reasons.push('live report carries no per-rule coverage probes');
+    return;
+  }
+  const probed = new Set<string>();
+  for (const p of probes) {
+    if (!p || typeof p !== 'object' || typeof p.ruleId !== 'string' || p.ruleId === '') {
+      reasons.push('a rule coverage probe names no rule');
+      continue;
+    }
+    if (probed.has(p.ruleId)) {
+      reasons.push(`rule coverage probe for '${p.ruleId}' appears twice`);
+      continue;
+    }
+    probed.add(p.ruleId);
+    if (p.positiveMatched !== true) {
+      reasons.push(
+        `rule '${p.ruleId}' did not match its positive fixture — the rule is registered but ` +
+        `its matcher no longer fires on a pair it is defined to catch`,
+      );
+    }
+    if (p.nearMissRejected !== true) {
+      reasons.push(
+        `rule '${p.ruleId}' matched its near-miss fixture (${String(p.nearMiss)}) — the rule ` +
+        `got looser, which is how a correlation engine starts hallucinating`,
+      );
+    }
+  }
+  const unprobed = report.builtInRuleIds.filter((id) => !probed.has(id));
+  if (unprobed.length > 0) {
+    reasons.push(
+      `[${unprobed.join(', ')}] ship without a coverage probe — nothing in this benchmark ` +
+      `would notice their matchers being disabled`,
     );
   }
 }
@@ -513,6 +641,8 @@ export function compareCorrelationBenchToBaseline(
 
   checkCorpusIdentity(reasons, report, baseline);
   checkRuleInventory(reasons, report, baseline);
+  checkRuleCoverage(reasons, report, baseline);
+  checkRuleProbes(reasons, report);
   if (reasons.length > 0) return { ok: false, reasons };
 
   // ── Fail closed on anything non-numeric BEFORE any directional check ───
@@ -611,6 +741,30 @@ export function compareCorrelationBenchToBaseline(
   // them discretely too.
   checkGrowth(reasons, 'graded false edges',
     baseline.falseEdgeCount, report.falseEdgeCount, tol.falseEdgeGrowth);
+
+  // …and the TOTAL alone is still too coarse. The five categories have five
+  // different owners downstream (ACC-502 unplanted, ACC-503 mediated, ACC-504
+  // confounded and the base-rate trap), and a total gate reconciles just as
+  // happily against `0/0/0/0/17` as against the committed `2/1/0/0/14`: the
+  // base-rate trap could regress from 0 to 3 while the header number never
+  // moves. Each category carries its own no-growth gate, so a defect migrating
+  // between owners fails on the owner it migrated TO — and a genuine fix still
+  // passes silently, because every one of these is one-sided.
+  const byCategory: readonly (readonly [string, number, number])[] = [
+    ['confounded false positives',
+      baseline.confoundedFalsePositives, report.confoundedFalsePositives],
+    ['mediated false positives',
+      baseline.mediatedFalsePositives, report.mediatedFalsePositives],
+    ['independent false positives',
+      baseline.independentFalsePositives, report.independentFalsePositives],
+    ['inhibitory edges reported',
+      baseline.inhibitoryEdgesReported, report.inhibitoryEdgesReported],
+    ['unplanted false positives',
+      baseline.unplantedFalsePositives, report.unplantedFalsePositives],
+  ];
+  for (const [label, want, got] of byCategory) {
+    checkGrowth(reasons, label, want, got, tol.falseEdgeGrowth);
+  }
 
   checkSeparation(reasons, report, baseline, tol.edgeEvidenceSeparationDrop);
 
@@ -843,6 +997,154 @@ function checkReportConsistency(reasons: string[], report: CorrelationBenchRepor
   checkSummaryArithmetic(reasons, 'report', report);
   checkEdgeLedger(reasons, report);
   checkPairLedger(reasons, report);
+  checkLearnedPairLedger(reasons, report);
+}
+
+/**
+ * Pass B — synthesize learned rules from the mined edges, install them, run the
+ * engine again — reported four bare counters and no rows. Forcing that second
+ * pass to emit nothing at all and restoring only `101 / 19 / [7,6,6] / 6` into
+ * the report produced `{ok:true, reasons:[]}`: a dead synthesize→install→match
+ * path passed the gate that exists to prove it runs.
+ *
+ * So pass B now ships its emissions as rows, and all four counters are DERIVED
+ * here. The roster of causal learned rule IDs is re-derived too — from the
+ * causal edge rows that became rules — so the roster cannot be widened to
+ * launder a false rule's volume into the causal tally.
+ */
+function checkLearnedPairLedger(reasons: string[], report: CorrelationBenchReport): void {
+  const rows = report.learnedPairs;
+  if (!Array.isArray(rows)) {
+    reasons.push(
+      `report is internally inconsistent: learnedPairs is ${String(rows)}, so the four ` +
+      `learned-rule pair counters have no row-level witness at all`,
+    );
+    return;
+  }
+  const roster = checkCausalLearnedRoster(reasons, report);
+  const seen = new Set<string>();
+  let total = 0;
+  const perRule = new Map<string, number>();
+  for (const id of roster) perRule.set(id, 0);
+  for (const [i, r] of rows.entries()) {
+    if (!checkLearnedPairRowShape(reasons, `learned pair row ${i} (${String(r.key)})`, r, seen)) {
+      continue;
+    }
+    total += r.emissions;
+    const tally = perRule.get(r.ruleId);
+    if (tally !== undefined) perRule.set(r.ruleId, tally + r.emissions);
+  }
+  if (total !== report.learnedRulePairCount) {
+    reasons.push(
+      `report is internally inconsistent: learnedRulePairCount=${report.learnedRulePairCount} ` +
+      `but the learned-pair ledger accounts for ${total} emission(s)`,
+    );
+  }
+  const causalTotal = [...perRule.values()].reduce((a, b) => a + b, 0);
+  if (causalTotal !== report.causalLearnedRulePairCount) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRulePairCount=` +
+      `${report.causalLearnedRulePairCount} but the ledger attributes ${causalTotal} ` +
+      `emission(s) to the ${roster.length} causal learned rule(s)`,
+    );
+  }
+  const derivedPerRule = [...perRule.values()].sort((a, b) => b - a);
+  if (derivedPerRule.join(',') !== [...report.causalLearnedRulePairsPerRule].join(',')) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRulePairsPerRule=` +
+      `[${report.causalLearnedRulePairsPerRule.join(', ')}] but the ledger derives ` +
+      `[${derivedPerRule.join(', ')}]`,
+    );
+  }
+  const derivedMin = derivedPerRule.length === 0
+    ? 0
+    : derivedPerRule[derivedPerRule.length - 1];
+  if (derivedMin !== report.minCausalLearnedRulePairCount) {
+    reasons.push(
+      `report is internally inconsistent: minCausalLearnedRulePairCount=` +
+      `${report.minCausalLearnedRulePairCount} but the ledger's weakest causal rule emitted ` +
+      `${derivedMin} pair(s)`,
+    );
+  }
+}
+
+/**
+ * The causal roster, re-derived from the edge ledger rather than read from the
+ * report — a rule is causal because the edge it was synthesized from was graded
+ * causal against planted truth, and `learnedRuleId` is the same naming the
+ * synthesizer uses.
+ */
+function checkCausalLearnedRoster(
+  reasons: string[],
+  report: CorrelationBenchReport,
+): string[] {
+  const derived = report.edges
+    .filter((e) => e.becameLearnedRule && e.verdict === 'causal')
+    .map((e) => learnedRuleId({ from: e.from, to: e.to }))
+    .sort((a, b) => a.localeCompare(b));
+  const claimed = Array.isArray(report.causalLearnedRuleIds)
+    ? [...report.causalLearnedRuleIds].sort((a, b) => a.localeCompare(b))
+    : [];
+  if (derived.join('|') !== claimed.join('|')) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRuleIds=[${claimed.join(', ')}] but the ` +
+      `causal edge rows that became rules name [${derived.join(', ')}] — the roster decides which ` +
+      `emissions count as causal, so it cannot be authored separately from the grading`,
+    );
+  }
+  if (derived.length !== report.causalLearnedRuleCount) {
+    reasons.push(
+      `report is internally inconsistent: causalLearnedRuleCount=` +
+      `${report.causalLearnedRuleCount} against ${derived.length} causal rule id(s) derived from ` +
+      `the edge ledger`,
+    );
+  }
+  return derived;
+}
+
+function checkLearnedPairRowShape(
+  reasons: string[],
+  where: string,
+  r: BenchLearnedPairRow,
+  seen: Set<string>,
+): boolean {
+  const bad = `report is internally inconsistent: ${where}`;
+  if (typeof r.ruleId !== 'string' || !r.ruleId.startsWith(LEARNED_RULE_PREFIX)) {
+    reasons.push(
+      `${bad} is attributed to ${String(r.ruleId)}, which is not a ${LEARNED_RULE_PREFIX}* rule — ` +
+      `pass B filters to the synthesized rules and nothing else can appear here`,
+    );
+    return false;
+  }
+  const rowKey = `${r.ruleId.length}:${r.ruleId}${String(r.key)}`;
+  if (seen.has(rowKey)) {
+    reasons.push(`${bad} repeats a (rule, pair) the ledger already holds — it is one row each`);
+    return false;
+  }
+  seen.add(rowKey);
+  if (typeof r.eventIdA !== 'string' || typeof r.eventIdB !== 'string'
+    || r.eventIdA === '' || r.eventIdA === r.eventIdB) {
+    reasons.push(
+      `${bad} joins ${String(r.eventIdA)} to ${String(r.eventIdB)} — a pair needs two distinct ` +
+      `corpus events`,
+    );
+    return false;
+  }
+  if (pairKeyFor(r.eventIdA, r.eventIdB) !== r.key) {
+    reasons.push(
+      `${bad} does not match its own endpoints (${r.eventIdA} + ${r.eventIdB} keys as ` +
+      `${pairKeyFor(r.eventIdA, r.eventIdB)}) — the key is what the volume is counted by`,
+    );
+    return false;
+  }
+  if (!Number.isInteger(r.emissions) || r.emissions < 1) {
+    reasons.push(
+      `${bad} claims ${String(r.emissions)} emission(s); a row exists because the rule fired at ` +
+      `least once`,
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -1040,6 +1342,23 @@ function checkEdgeRowThresholds(
       `${bad} lift=${String(e.lift)}, below the minimum 2 that significantEdges() admits`,
     );
   }
+  // A null lift is not "missing", it is the specific upstream condition where
+  // the consequent's chance rate is zero — which makes the z-score infinite by
+  // the same division. Nulling either one alone is a hand edit, and nulling
+  // BOTH across every row was worth doing: `null` reads as "certain", so the
+  // separation derivation scored 22 fabricated rows at the cap and passed.
+  if ((e.lift === null) !== (e.zScore === null)) {
+    reasons.push(
+      `${bad} lift=${String(e.lift)} against zScore=${String(e.zScore)} — both are the same ` +
+      `zero-chance-rate division, so they are non-finite together or not at all`,
+    );
+  }
+  if (!ALLOWED_WINDOW_HOURS.has(e.windowHours)) {
+    reasons.push(
+      `${bad} windowHours=${String(e.windowHours)}, which is not one of the miner's configured ` +
+      `windows [${[...ALLOWED_WINDOW_HOURS].join(', ')}] — the row cannot have come from it`,
+    );
+  }
   if (!Number.isFinite(e.strength) || e.strength < 0 || e.strength > 1) {
     reasons.push(
       `${bad} strength=${String(e.strength)}, outside the [0,1] blend the miner produces`,
@@ -1164,6 +1483,7 @@ function checkPairRowShape(
   where: string,
   p: BenchPairRow,
   seen: Set<string>,
+  registered: readonly string[],
 ): boolean {
   const bad = `report is internally inconsistent: ${where}`;
   if (typeof p.key !== 'string' || p.key === '' || seen.has(p.key)) {
@@ -1186,6 +1506,19 @@ function checkPairRowShape(
   }
   if (p.ruleIds.some((id) => typeof id !== 'string' || id === '')) {
     reasons.push(`${bad} has an unnamed emitting rule`);
+  }
+  // "Non-empty string" was the whole attribution check, so rewriting every
+  // emitter to `not-a-registered-rule` changed no count and passed. Pass A
+  // registers the built-in inventory and nothing else, so any other name is a
+  // row that no rule in the graded engine could have produced.
+  const unregistered = p.ruleIds.filter(
+    (id) => typeof id === 'string' && id !== '' && !registered.includes(id),
+  );
+  if (unregistered.length > 0) {
+    reasons.push(
+      `${bad} attributes emissions to [${[...new Set(unregistered)].join(', ')}], which the ` +
+      `graded pass never registered — pass A carries the built-in inventory only`,
+    );
   }
   if (p.confidences.some((c) => typeof c !== 'number' || !Number.isFinite(c) || c < 0 || c > 1)) {
     reasons.push(`${bad} has a confidence outside [0,1] (${p.confidences.join(', ')})`);
@@ -1265,20 +1598,62 @@ function checkPairRows(reasons: string[], report: CorrelationBenchReport): void 
     return; // every check below reads that ledger
   }
   const seen = new Set<string>();
+  const registered = Array.isArray(report.builtInRuleIds) ? report.builtInRuleIds : [];
   let emissions = 0;
   let decoyEmissions = 0;
   const trueConfidences: number[] = [];
+  const allConfidences: number[] = [];
   let trueRows = 0;
   for (const [i, p] of rows.entries()) {
-    if (!checkPairRowShape(reasons, `pair row ${i} (${String(p.key)})`, p, seen)) continue;
+    if (!checkPairRowShape(reasons, `pair row ${i} (${String(p.key)})`, p, seen, registered)) {
+      continue;
+    }
     emissions += p.ruleIds.length;
     decoyEmissions += p.decoyEmissions;
+    allConfidences.push(...p.confidences);
     if (p.isTruePair) {
       trueRows += 1;
       trueConfidences.push(...p.confidences);
     }
   }
+  checkConfidenceEvidence(reasons, allConfidences);
   checkPairLedgerTotals(reasons, report, { emissions, decoyEmissions, trueRows, trueConfidences });
+}
+
+/**
+ * The ledger's confidences must look like a SCORE, not like a placeholder.
+ *
+ * `meanTruePairConfidence` is derived from these values, and a derivation is
+ * only evidence if the values it reads carry information: setting every
+ * confidence to a constant `1` and reporting mean `1` reconciled perfectly and
+ * passed, while describing a kernel that had stopped discriminating entirely.
+ *
+ * Two properties, both of which the live kernel satisfies with room to spare —
+ * it spreads 22 emissions across 22 distinct values in [0.2634, 0.8132]:
+ *
+ *   - nothing saturates. The kernel is a product of bounded factors, so exactly
+ *     1 means every factor was perfect and exactly 0 means the pair should not
+ *     have been emitted at all. Both are stubs, not measurements.
+ *   - the values are not all identical. One repeated number ranks nothing, and
+ *     any mean-based gate reads it as a flawless score.
+ */
+function checkConfidenceEvidence(reasons: string[], confidences: readonly number[]): void {
+  if (confidences.length === 0) return; // the empty-ledger case is reported elsewhere
+  const saturated = confidences.filter((c) => c >= 1 || c <= 0);
+  if (saturated.length > 0) {
+    reasons.push(
+      `report is internally inconsistent: ${saturated.length} pair emission(s) carry a ` +
+      `saturated confidence (${[...new Set(saturated)].join(', ')}) — the kernel blends bounded ` +
+      `factors, so an exact 0 or 1 is a placeholder rather than a score`,
+    );
+  }
+  if (confidences.length > 1 && new Set(confidences).size === 1) {
+    reasons.push(
+      `report is internally inconsistent: all ${confidences.length} pair emission(s) carry the ` +
+      `identical confidence ${String(confidences[0])} — the kernel ranked nothing, and every ` +
+      `mean-based gate reads that as a clean score`,
+    );
+  }
 }
 
 /** The five pair summaries the ledger's tallies reproduce, or contradict. */

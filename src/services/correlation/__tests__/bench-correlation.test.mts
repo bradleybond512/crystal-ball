@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   runCorrelationBenchmark, gradeEnginePairs, enginePairPrecision,
+  type BenchLearnedPairRow,
   type BenchPairRow, type CorrelationBenchReport,
 } from '../bench-correlation.ts';
 import {
@@ -38,6 +39,7 @@ import {
   pairKeyFor,
   plantedTruePairKeys,
 } from '../__bench__/golden-streams.ts';
+import { learnedRuleId } from '../learned-rules.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = path.join(here, '..', '__bench__', 'bench-correlation-baseline.json');
@@ -89,18 +91,95 @@ function withPairLedger(
 function baselineWithCausalEdges(
   baseline: CorrelationBenchBaseline,
   causalEdges: number,
+  live?: CorrelationBenchReport,
 ): CorrelationBenchBaseline {
   const falseEdges = baseline.significantEdgeCount - causalEdges;
+  // Each category is now gated for growth on its own, so a "worse everywhere"
+  // baseline has to stay at or above the live count in EVERY category or it
+  // reports a per-category regression the test never meant to make. Where the
+  // budget allows it, the live breakdown is the floor and the surplus lands in
+  // the unplanted bucket; where it does not, the whole budget is confounded.
+  const floors = live && falseEdges >= live.falseEdgeCount
+    ? {
+      confoundedFalsePositives: live.confoundedFalsePositives,
+      mediatedFalsePositives: live.mediatedFalsePositives,
+      independentFalsePositives: live.independentFalsePositives,
+      inhibitoryEdgesReported: live.inhibitoryEdgesReported,
+      unplantedFalsePositives:
+        live.unplantedFalsePositives + (falseEdges - live.falseEdgeCount),
+    }
+    : {
+      confoundedFalsePositives: falseEdges,
+      mediatedFalsePositives: 0,
+      independentFalsePositives: 0,
+      inhibitoryEdgesReported: 0,
+      unplantedFalsePositives: 0,
+    };
   return {
     ...baseline,
     couplingPrecision: round4(causalEdges / baseline.significantEdgeCount),
     falseEdgeCount: falseEdges,
-    confoundedFalsePositives: falseEdges,
-    mediatedFalsePositives: 0,
-    independentFalsePositives: 0,
-    inhibitoryEdgesReported: 0,
-    unplantedFalsePositives: 0,
+    ...floors,
   };
+}
+
+/**
+ * A report whose learned-pair ledger IS the four pass-B counters.
+ *
+ * Same reason as `withPairLedger`: the counters are derived from the rows now,
+ * so a fixture that edits one without the other trips a reconciliation reason
+ * instead of the gate it was written to prove. The causal roster comes from the
+ * report (which derives it from the graded edge rows), so rows attributed to a
+ * non-causal learned rule move the volume total only.
+ */
+function withLearnedPairRows(
+  report: CorrelationBenchReport,
+  rows: readonly BenchLearnedPairRow[],
+): CorrelationBenchReport {
+  const perRule = new Map<string, number>();
+  for (const id of report.causalLearnedRuleIds) perRule.set(id, 0);
+  let total = 0;
+  for (const r of rows) {
+    total += r.emissions;
+    const tally = perRule.get(r.ruleId);
+    if (tally !== undefined) perRule.set(r.ruleId, tally + r.emissions);
+  }
+  const per = [...perRule.values()].sort((a, b) => b - a);
+  return {
+    ...report,
+    learnedPairs: [...rows],
+    learnedRulePairCount: total,
+    causalLearnedRulePairCount: per.reduce((a, b) => a + b, 0),
+    causalLearnedRulePairsPerRule: per,
+    minCausalLearnedRulePairCount: per.length === 0 ? 0 : per[per.length - 1]!,
+  };
+}
+
+/**
+ * Learned-pair rows carrying `count` emissions for each named rule, keyed off
+ * real corpus pairs so every row-shape check (distinct endpoints, key derived
+ * from those endpoints, one row per rule/pair) reconciles.
+ */
+function learnedRowsFor(
+  report: CorrelationBenchReport,
+  counts: readonly (readonly [string, number])[],
+): BenchLearnedPairRow[] {
+  const rows: BenchLearnedPairRow[] = [];
+  let i = 0;
+  for (const [ruleId, count] of counts) {
+    for (let n = 0; n < count; n += 1) {
+      const src = report.pairs[i % report.pairs.length]!;
+      i += 1;
+      rows.push({
+        ruleId,
+        key: src.key,
+        eventIdA: src.eventIdA,
+        eventIdB: src.eventIdB,
+        emissions: 1,
+      });
+    }
+  }
+  return rows;
 }
 
 describe('golden-streams corpus integrity', () => {
@@ -237,15 +316,28 @@ describe('what the corpus is built to stress', () => {
     );
   });
 
-  it('still exposes the confounded burst pair in both directions', () => {
-    // Load-bearing for ACC-504: if this drops to 0 without ACC-504 landing,
-    // the fixture stopped confounding rather than the miner getting smarter.
-    assert.equal(report.confoundedFalsePositives, 2);
+  it('still exposes the confounded burst pair', () => {
+    // Load-bearing for ACC-504: the fixture has to keep CONFOUNDING, so this
+    // asserts the defect is still reachable rather than pinning its exact size.
+    // `test:renderer` runs before `bench:correlation` in smoke.yml, so an exact
+    // `=== 2` here would fail an ACC-504 improvement before the one-sided
+    // benchmark gate could pass it — the "improvements pass silently" property
+    // has to hold for the whole CI path, not just for the gate in isolation.
+    assert.ok(
+      report.confoundedFalsePositives > 0,
+      'the confounded burst pair vanished — either ACC-504 landed (re-seed the baseline and '
+      + 'delete this test) or the fixture stopped confounding',
+    );
   });
 
   it('still exposes the transitive mediated edge', () => {
-    // Load-bearing for ACC-503 in exactly the same way.
-    assert.equal(report.mediatedFalsePositives, 1);
+    // Load-bearing for ACC-503 in exactly the same way, and one-sided for the
+    // same CI-ordering reason.
+    assert.ok(
+      report.mediatedFalsePositives > 0,
+      'the transitive mediated edge vanished — either ACC-503 landed (re-seed the baseline and '
+      + 'delete this test) or the fixture stopped mediating',
+    );
   });
 
   it('reports no positive edge on the inhibitory pair', () => {
@@ -410,7 +502,7 @@ describe('the committed baseline', () => {
 
   it('carries its own tolerance block', () => {
     const baseline = loadBaseline();
-    assert.equal(baseline.schemaVersion, 6);
+    assert.equal(baseline.schemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
     for (const key of Object.keys(DEFAULT_CORRELATION_BENCH_TOLERANCES)) {
       assert.ok(
         key in baseline.tolerances,
@@ -461,7 +553,7 @@ describe('the gate', () => {
     // out of 12 rules — proves nothing about one-sidedness, because the gate
     // now rejects it before any tolerance is spent.
     const worse: CorrelationBenchBaseline = {
-      ...baselineWithCausalEdges(baseline, 1),
+      ...baselineWithCausalEdges(baseline, 1, report),
       couplingRecall: round4(1 / baseline.plantedCausalCount),
       pairPrecision: round4(1 / baseline.distinctEnginePairCount),
       pairRecall: round4(1 / baseline.truePairUniverse),
@@ -488,7 +580,7 @@ describe('the gate', () => {
         key: pairKeyFor(decoy, partner),
         eventIdA: decoy < partner ? decoy : partner,
         eventIdB: decoy < partner ? partner : decoy,
-        ruleIds: ['rule-leak'],
+        ruleIds: [report.pairs[0]!.ruleIds[0]!],
         confidences: [0.5],
         isTruePair: false,
         decoyEmissions: 1,
@@ -503,11 +595,23 @@ describe('the gate', () => {
   });
 
   it('fails when learned rules spray more pairs than the tolerance allows', () => {
-    const noisy = {
-      ...report,
-      learnedRulePairCount:
-        baseline.learnedRulePairCount + baseline.tolerances.learnedRulePairGrowth + 1,
-    };
+    // Volume lives in the ledger now, so the spray is extra emissions on a
+    // NON-causal learned rule — the causal tallies stay put and the growth gate
+    // is the only thing the fixture moves.
+    const target =
+      baseline.learnedRulePairCount + baseline.tolerances.learnedRulePairGrowth + 1;
+    const causal = new Set(report.causalLearnedRuleIds);
+    const idx = report.learnedPairs.findIndex((r) => !causal.has(r.ruleId));
+    assert.ok(idx >= 0, 'no non-causal learned rule to spray from');
+    const noisy = withLearnedPairRows(
+      report,
+      report.learnedPairs.map((r, i) => (
+        i === idx
+          ? { ...r, emissions: r.emissions + (target - report.learnedRulePairCount) }
+          : r
+      )),
+    );
+    assert.equal(noisy.learnedRulePairCount, target);
     const { ok, reasons } = compareCorrelationBenchToBaseline(noisy, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('learned-rule pair volume grew')));
@@ -547,11 +651,17 @@ describe('the gate', () => {
   it('fails when the confidence kernel collapses under passing membership gates', () => {
     // Precision and recall stay at 1.0 — the right pairs are still emitted,
     // just scored worthlessly.
+    // Collapsed, not degenerate: an exact 0 (or one constant across the whole
+    // ledger) is rejected as a placeholder before any gate is reached, so the
+    // scores stay distinct and merely worthless.
     const flat = withPairLedger(
       report,
-      report.pairs.map((p) => ({ ...p, confidences: p.confidences.map(() => 0) })),
+      report.pairs.map((p, i) => ({
+        ...p,
+        confidences: p.confidences.map(() => 0.01 + (i % 5) / 10_000),
+      })),
     );
-    assert.equal(flat.meanTruePairConfidence, 0);
+    assert.ok(flat.meanTruePairConfidence < 0.02);
     assert.equal(flat.pairPrecision, report.pairPrecision);
     const { ok, reasons } = compareCorrelationBenchToBaseline(flat, baseline);
     assert.equal(ok, false);
@@ -561,7 +671,7 @@ describe('the gate', () => {
   it('fails when the learned-rule pipeline disappears entirely', () => {
     // Zero rules means zero false positives and zero blast radius: perfect on
     // every "lower is better" gate, and a dead feature.
-    const dead = {
+    const deadCounters = {
       ...report,
       learnedRuleCount: 0,
       learnedRuleFalsePositives: 0,
@@ -571,10 +681,10 @@ describe('the gate', () => {
       // Dead means dead all the way down: no rule rows in the ledger and no
       // per-rule tallies. Leaving those behind trips the reconciliation checks
       // instead, and this test stops proving anything about the shrink gate.
-      causalLearnedRulePairsPerRule: [],
-      minCausalLearnedRulePairCount: 0,
+      causalLearnedRuleIds: [],
       edges: report.edges.map((e) => ({ ...e, becameLearnedRule: false })),
     };
+    const dead = withLearnedPairRows(deadCounters, []);
     const { ok, reasons } = compareCorrelationBenchToBaseline(dead, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules regressed')));
@@ -619,7 +729,11 @@ describe('the gate', () => {
     // Zero false edges makes separation undefined. Coercing that to 0 would
     // report an 8.49 regression for achieving exactly what ACC-502..504 exist
     // to achieve — the fastest way to get a gate deleted.
-    const perfect = {
+    const causalEdgeRows = report.edges
+      .filter((e) => e.verdict === 'causal')
+      .map((e) => ({ ...e, becameLearnedRule: true }));
+    const causalRuleIds = causalEdgeRows.map((e) => learnedRuleId({ from: e.from, to: e.to }));
+    const perfectCounters = {
       ...report,
       couplingPrecision: 1,
       significantEdgeCount: report.plantedCausalCount,
@@ -634,15 +748,20 @@ describe('the gate', () => {
       learnedRuleFalsePositives: 0,
       learnedRuleCount: report.plantedCausalCount,
       causalLearnedRuleCount: report.plantedCausalCount,
-      // Five causal rules now, so the per-rule tally has to have five entries
-      // summing to the unchanged 19 — and none of them below the per-rule
-      // floor, or the liveness gate would fire instead of the run passing.
-      causalLearnedRulePairsPerRule: [5, 4, 4, 3, 3],
-      minCausalLearnedRulePairCount: 3,
-      edges: report.edges
-        .filter((e) => e.verdict === 'causal')
-        .map((e) => ({ ...e, becameLearnedRule: true })),
+      causalLearnedRuleIds: causalRuleIds,
+      edges: causalEdgeRows,
     };
+    // Five causal rules now, so the ledger has to witness five live rules
+    // summing to the unchanged 19 — and none of them below the per-rule floor,
+    // or the liveness gate would fire instead of the run passing.
+    const perfect = withLearnedPairRows(
+      perfectCounters,
+      learnedRowsFor(
+        perfectCounters,
+        causalRuleIds.map((id, i) => [id, [5, 4, 4, 3, 3][i]!] as const),
+      ),
+    );
+    assert.deepEqual(perfect.causalLearnedRulePairsPerRule, [5, 4, 4, 3, 3]);
     const { ok, reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
     assert.deepEqual(reasons, []);
     assert.equal(ok, true);
@@ -657,7 +776,7 @@ describe('the gate', () => {
     const falseEdges = report.edges.filter((e) => e.verdict !== 'causal');
     const byVerdict = (v: string): number =>
       falseEdges.filter((e) => e.verdict === v).length;
-    const broken = {
+    const brokenCounters = {
       ...report,
       edges: falseEdges.map((e) => ({ ...e, becameLearnedRule: false })),
       significantEdgeCount: falseEdges.length,
@@ -679,8 +798,9 @@ describe('the gate', () => {
       learnedRuleFalsePositives: 0,
       learnedRulePairCount: 0,
       causalLearnedRulePairCount: 0,
-      causalLearnedRulePairsPerRule: [],
+      causalLearnedRuleIds: [],
     };
+    const broken = withLearnedPairRows(brokenCounters, []);
     const { ok, reasons } = compareCorrelationBenchToBaseline(broken, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('separation is null while false edges exist')));
@@ -710,13 +830,7 @@ describe('the gate', () => {
   it('fails when learned rules are synthesized but never fire', () => {
     // Volume shrinking is a GOAL, so no shrink tolerance catches this: the
     // rules still exist, the install/match path is simply dead.
-    const dark = {
-      ...report,
-      learnedRulePairCount: 0,
-      causalLearnedRulePairCount: 0,
-      causalLearnedRulePairsPerRule: [0, 0, 0],
-      minCausalLearnedRulePairCount: 0,
-    };
+    const dark = withLearnedPairRows(report, []);
     const { ok, reasons } = compareCorrelationBenchToBaseline(dark, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
@@ -761,12 +875,11 @@ describe('the gate', () => {
   it('fails when the causal rules go nearly quiet, not just exactly silent', () => {
     // 19 -> 1 is the same broken install/match path as 19 -> 0, with one
     // survivor. An exactly-zero liveness check waves it straight through.
-    const nearlyDark = {
-      ...report,
-      causalLearnedRulePairCount: 1,
-      causalLearnedRulePairsPerRule: [1, 0, 0],
-      minCausalLearnedRulePairCount: 0,
-    };
+    const nearlyDark = withLearnedPairRows(
+      report,
+      learnedRowsFor(report, [[report.causalLearnedRuleIds[0]!, 1]]),
+    );
+    assert.deepEqual(nearlyDark.causalLearnedRulePairsPerRule, [1, 0, 0]);
     const { ok, reasons } = compareCorrelationBenchToBaseline(nearlyDark, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
@@ -977,12 +1090,16 @@ describe('the gate', () => {
   it('fails when one causal rule goes dark inside a healthy aggregate', () => {
     // Per-rule volumes are 7/6/6 = 19. A 0.5 aggregate shrink ratio floors at
     // 9.5, so 7/6/0 = 13 sails past it: sums hide their own zeros.
-    const oneDead = {
-      ...report,
-      causalLearnedRulePairsPerRule: [7, 6, 0],
-      minCausalLearnedRulePairCount: 0,
-      causalLearnedRulePairCount: 13,
-    };
+    const emissionsFor = (id: string): number => report.learnedPairs
+      .filter((r) => r.ruleId === id)
+      .reduce((a, r) => a + r.emissions, 0);
+    const silenced = [...report.causalLearnedRuleIds]
+      .sort((a, b) => emissionsFor(a) - emissionsFor(b))[0]!;
+    const oneDead = withLearnedPairRows(
+      report,
+      report.learnedPairs.filter((r) => r.ruleId !== silenced),
+    );
+    assert.deepEqual(oneDead.causalLearnedRulePairsPerRule, [7, 6, 0]);
     const { ok, reasons } = compareCorrelationBenchToBaseline(oneDead, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('a causal learned rule went dark')));
@@ -1289,5 +1406,165 @@ describe('the gate rejects a run or a baseline that could not have happened', ()
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, baseline);
     assert.deepEqual(reasons, []);
     assert.equal(ok, true);
+  });
+});
+
+/**
+ * Round 7. Every case below is a mutation that PASSED the round-6 gate and was
+ * demonstrated against it read-only. They share one shape: a conclusion the
+ * report authored about itself, accepted because nothing independent had to
+ * agree with it.
+ */
+describe('the gate rejects a conclusion the report authored about itself', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('rejects a dead pass B that kept its four counters', () => {
+    // The demonstrated mutation exactly: force the second engine pass to emit
+    // nothing, restore 101 / 19 / [7,6,6] / 6 into the report, PASS.
+    const dead = { ...report, learnedPairs: [] };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(dead, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('accounts for 0 emission(s)')));
+  });
+
+  it('rejects a learned-pair row attributed to a rule pass B never installed', () => {
+    const [first, ...rest] = report.learnedPairs;
+    const forged = {
+      ...report,
+      learnedPairs: [{ ...first!, ruleId: 'earthquake-tsunami' }, ...rest],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('is not a learned:* rule')));
+  });
+
+  it('rejects a learned-pair row whose key does not match its own endpoints', () => {
+    const [first, ...rest] = report.learnedPairs;
+    const forged = {
+      ...report,
+      learnedPairs: [{ ...first!, eventIdA: 'fabricated-event-id' }, ...rest],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('does not match its own endpoints')));
+  });
+
+  it('rejects a causal-rule roster widened past the causal edge rows', () => {
+    // The roster decides which learned emissions count as causal volume, so
+    // authoring it separately from the grading launders a false rule's pairs.
+    const widened = {
+      ...report,
+      causalLearnedRuleIds: [...report.causalLearnedRuleIds, 'learned:bursty-a->bursty-b'],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(widened, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('cannot be authored separately from the grading')));
+  });
+
+  it('rejects pair emissions attributed to a rule the graded pass never registered', () => {
+    // Appended rather than substituted: relabelling every emission would empty
+    // the DERIVED coverage set and trip the coverage reconciliation first, which
+    // short-circuits before the pair rows are ever read.
+    const [first, ...rest] = report.pairs;
+    const relabelled = {
+      ...report,
+      pairs: [
+        {
+          ...first!,
+          ruleIds: [...first!.ruleIds, 'not-a-rule'],
+          confidences: [...first!.confidences, 0.5],
+        },
+        ...rest,
+      ],
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(relabelled, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('the graded pass never registered')));
+  });
+
+  it('rejects a run that ships a built-in rule with no coverage probe', () => {
+    // Inventory equality proves the ID exists. Five of the nine rules are dark
+    // over this corpus, so without a probe their matchers could be permanently
+    // false and every number in the report would be unchanged.
+    const unprobed = { ...report, ruleProbes: report.ruleProbes.slice(1) };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(unprobed, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('ship without a coverage probe')));
+  });
+
+  it('rejects a probe whose positive fixture did not match', () => {
+    const broken = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (i === 0 ? { ...p, positiveMatched: false } : p)),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(broken, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('did not match its positive fixture')));
+  });
+
+  it('rejects a probe whose near-miss was accepted', () => {
+    // A matcher that says yes to everything passes every positive fixture.
+    const permissive = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, nearMissRejected: false } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(permissive, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('matched its near-miss fixture')));
+  });
+
+  it('rejects a ledger whose confidences are all a saturated constant', () => {
+    const flat = {
+      ...report,
+      pairs: report.pairs.map((p) => ({ ...p, confidences: p.confidences.map(() => 1) })),
+      meanTruePairConfidence: 1,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(flat, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('saturated confidence')));
+    assert.ok(reasons.some((r) => r.includes('identical confidence')));
+  });
+
+  it('rejects a baseline that moves false positives between categories', () => {
+    // 2/1/0/0/14 rewritten to 0/0/0/0/17 keeps the total the gate used to read,
+    // and retires the confounded and mediated traps in silence.
+    const laundered = {
+      ...baseline,
+      confoundedFalsePositives: 0,
+      mediatedFalsePositives: 0,
+      unplantedFalsePositives: baseline.unplantedFalsePositives
+        + baseline.confoundedFalsePositives + baseline.mediatedFalsePositives,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, laundered);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('confounded false positives')));
+    assert.ok(reasons.some((r) => r.includes('mediated false positives')));
+  });
+
+  it('rejects an edge row at a window the miner is not configured for', () => {
+    const [first, ...rest] = report.edges;
+    const impossible = { ...report, edges: [{ ...first!, windowHours: -999 }, ...rest] };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(impossible, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('not one of the miner')));
+  });
+
+  it('rejects a null lift reported alongside a finite z-score', () => {
+    // Both are the same zero-chance-rate division. Nulling every lift while
+    // keeping the z-scores buys the infinity exemption on 22 finite rows.
+    const nulled = { ...report, edges: report.edges.map((e) => ({ ...e, lift: null })) };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(nulled, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('the same zero-chance-rate division')));
+  });
+
+  it('rejects a coverage claim that does not match the pair ledger', () => {
+    const dropped = { ...report, ruleCoverage: report.ruleCoverage.slice(1) };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(dropped, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('built-in rule coverage over the corpus')));
   });
 });

@@ -12,13 +12,30 @@
  * Usage:
  *   npm run bench:correlation            # print report, fail (exit 1) on regression
  *   npm run bench:correlation -- --json  # print report as JSON only
+ *   npm run bench:correlation -- --seed  # print the baseline block to commit
  *
  * This is the gate ACC-502 through ACC-506 have to clear: every one of those
- * tasks claims to improve correlation quality, and this is where the claim
- * gets measured instead of asserted. Tolerances are one-sided, so an
- * improvement passes silently; a regression past tolerance fails. Update the
- * baseline only deliberately, in a reviewed diff. Wired as a step in
- * .github/workflows/smoke.yml.
+ * tasks claims to improve correlation quality, and this is where the claim gets
+ * measured instead of asserted.
+ *
+ * How it fails is worth stating plainly, because it is stricter than a
+ * tolerance band. The baseline pins a digest of the WHOLE report, so ANY change
+ * that moves ANY reported number — a regression, an improvement, a refactor
+ * that shifts a rounding — fails on identity. The one-sided tolerances then
+ * decide, at re-seed time, whether the new numbers are ALLOWED to replace the
+ * old ones. So the workflow for a real change is:
+ *
+ *   1. make the change, run this; it fails on `reportDigest`;
+ *   2. `npm run bench:correlation -- --seed > /tmp/seed.json` and read it —
+ *      this is the moment the new numbers get looked at by a human;
+ *   3. copy it over bench-correlation-baseline.json, append a `note` paragraph
+ *      saying what moved and why;
+ *   4. re-run; the tolerances now gate the new numbers against the old ones,
+ *      and the PR diff shows a reviewer exactly what changed.
+ *
+ * The earlier design — pin the aggregates, re-derive everything else — let a
+ * producer-side change move the report and its own witness together. Wired as a
+ * step in .github/workflows/smoke.yml.
  *
  * Fully offline, fully deterministic (frozen fixtures, fixed-seed jitter,
  * injected `timer: () => 0`, fixed `now`, no fetch) — typical runtime is well
@@ -32,6 +49,7 @@ import { fileURLToPath } from 'node:url';
 import { runCorrelationBenchmark } from '../src/services/correlation/bench-correlation.ts';
 import {
   compareCorrelationBenchToBaseline,
+  seedCorrelationBenchBaseline,
   type CorrelationBenchBaseline,
 } from '../src/services/correlation/bench-correlation-baseline.ts';
 
@@ -60,9 +78,42 @@ function verdictColor(verdict: string): string {
   return C.yellow;
 }
 
+/** null when unreadable — the caller decides whether that is fatal. */
+function loadBaseline(): CorrelationBenchBaseline | null {
+  try {
+    return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as CorrelationBenchBaseline;
+  } catch (err) {
+    console.error(`${C.red}Baseline file not found or unreadable: ${BASELINE_PATH}${C.reset}\n${String(err)}`);
+    return null;
+  }
+}
+
 function main(): void {
   const jsonOnly = process.argv.includes('--json');
   const report = runCorrelationBenchmark();
+
+  // Re-seed mode. Prints to STDOUT and nothing else, so it can be redirected
+  // straight over the baseline file — after reading it, which is the entire
+  // point of making a re-seed a deliberate step.
+  if (process.argv.includes('--seed')) {
+    const prev = loadBaseline();
+    if (prev === null) {
+      process.exitCode = 2;
+      return;
+    }
+    const seeded = seedCorrelationBenchBaseline(
+      report,
+      { note: prev.note, tolerances: prev.tolerances },
+      new Date().toISOString(),
+    );
+    console.log(JSON.stringify(seeded, null, 2));
+    console.error(
+      `${C.yellow}Seeded from the current run.${C.reset} Read it, then append a note ` +
+      `paragraph saying what moved and why — the tolerances and the note are carried ` +
+      `over verbatim and are yours to justify.`,
+    );
+    return;
+  }
 
   if (jsonOnly) {
     console.log(JSON.stringify(report, null, 2));
@@ -107,11 +158,8 @@ function main(): void {
     console.log('');
   }
 
-  let baseline: CorrelationBenchBaseline;
-  try {
-    baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as CorrelationBenchBaseline;
-  } catch (err) {
-    console.error(`${C.red}Baseline file not found or unreadable: ${BASELINE_PATH}${C.reset}\n${String(err)}`);
+  const baseline = loadBaseline();
+  if (baseline === null) {
     process.exitCode = 2;
     return;
   }
@@ -132,7 +180,11 @@ function main(): void {
   } else {
     say(`${C.red}${C.bold}FAIL${C.reset} — regression(s) versus committed baseline:`);
     for (const reason of reasons) say(`  ${C.red}✗${C.reset} ${reason}`);
-    say(`\nIf this regression is intentional, update ${rel} in a reviewed diff.`);
+    say(
+      `\nIf this change is intentional — including an IMPROVEMENT, which fails the ` +
+      `reportDigest like anything else that moves a number — re-seed ${rel} in a reviewed ` +
+      `diff:\n  npm run bench:correlation -- --seed > ${rel}`,
+    );
     process.exitCode = 1;
   }
 }

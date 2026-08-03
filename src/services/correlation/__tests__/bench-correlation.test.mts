@@ -25,10 +25,11 @@ import {
   type BenchPairRow, type CorrelationBenchReport,
 } from '../bench-correlation.ts';
 import {
-  benchLedgerDigest,
+  benchReportDigest,
   compareCorrelationBenchToBaseline,
   CORRELATION_BENCH_SCHEMA_VERSION,
   DEFAULT_CORRELATION_BENCH_TOLERANCES,
+  seedCorrelationBenchBaseline,
   type CorrelationBenchBaseline,
 } from '../bench-correlation-baseline.ts';
 import {
@@ -52,6 +53,50 @@ function loadBaseline(): CorrelationBenchBaseline {
 
 const round4 = (v: number): number => Math.round(v * 10_000) / 10_000;
 
+type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
+
+/** Drop one own key, returning a report a producer could plausibly have emitted. */
+function omit<K extends keyof CorrelationBenchReport>(
+  report: CorrelationBenchReport, key: K,
+): CorrelationBenchReport {
+  const copy = { ...report };
+  delete copy[key];
+  return copy;
+}
+
+/** Every leaf position in the report, as a path of keys and array indices. */
+function leafPaths(value: Json, prefix: (string | number)[] = []): (string | number)[][] {
+  if (Array.isArray(value)) {
+    return value.flatMap((v, i) => leafPaths(v, [...prefix, i]));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.keys(value).flatMap((k) => leafPaths(value[k]!, [...prefix, k]));
+  }
+  return [prefix];
+}
+
+/**
+ * A structural clone with the leaf at `path` changed to something a producer
+ * could have emitted in its place — a different number, a flipped boolean, a
+ * different string, a non-null.
+ */
+function perturbAt(value: Json, path: (string | number)[]): Json {
+  if (path.length === 0) return perturbLeaf(value);
+  const [head, ...rest] = path;
+  if (Array.isArray(value)) {
+    return value.map((v, i) => (i === head ? perturbAt(v, rest) : v));
+  }
+  const obj = value as { [k: string]: Json };
+  return { ...obj, [head as string]: perturbAt(obj[head as string]!, rest) };
+}
+
+function perturbLeaf(value: Json): Json {
+  if (typeof value === 'number') return value + 1;
+  if (typeof value === 'boolean') return !value;
+  if (typeof value === 'string') return `${value}~`;
+  return 0; // null → a value, which is exactly the "metric went missing" case
+}
+
 /**
  * The two IDENTITY reasons, which any hand-authored fixture necessarily trips.
  *
@@ -62,7 +107,7 @@ const round4 = (v: number): number => Math.round(v * 10_000) / 10_000;
  */
 function isIdentityReason(reason: string): boolean {
   return reason.includes('does not reproduce')
-    || reason.includes('do not match the committed baseline');
+    || reason.includes('match the committed baseline');
 }
 
 /**
@@ -1786,18 +1831,24 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
  * place of 101, forged probe text and a deleted metric all PASSED when injected
  * into the producer rather than into the report.
  *
- * The tests below cannot mutate the producer (it is the module under test), so
+ * A later round found the anchor pinned the wrong half: it covered the row
+ * ledgers, so deleting `meanCausalEdgeStrength` or `meanCausalEdgeZ` inside the
+ * producer, or forging `causalCouplingsLostToCap`, still returned a clean PASS.
+ * It now covers every field, which the exhaustive leaf sweep below asserts
+ * field by field rather than by argument.
+ *
+ * The tests here cannot mutate the producer (it is the module under test), so
  * they exercise the anchor directly: whatever a mutated producer would emit,
- * `benchLedgerDigest` of it must not equal the digest committed in the baseline
+ * `benchReportDigest` of it must not equal the digest committed in the baseline
  * JSON — a file no source change can move.
  */
-describe('the committed ledger digest anchors the producer itself', () => {
+describe('the committed report digest anchors the producer itself', () => {
   const report = runCorrelationBenchmark();
   const baseline = loadBaseline();
 
   it('pins the live run, and re-pins it identically', () => {
-    assert.equal(benchLedgerDigest(report), baseline.ledgerDigest);
-    assert.equal(benchLedgerDigest(runCorrelationBenchmark()), baseline.ledgerDigest);
+    assert.equal(benchReportDigest(report), baseline.reportDigest);
+    assert.equal(benchReportDigest(runCorrelationBenchmark()), baseline.reportDigest);
   });
 
   it('moves when a producer collapses 101 learned-pair rows to four', () => {
@@ -1811,7 +1862,7 @@ describe('the committed ledger digest anchors the producer itself', () => {
         ...report.learnedPairs.slice(0, 3),
       ],
     };
-    assert.notEqual(benchLedgerDigest(collapsed), baseline.ledgerDigest);
+    assert.notEqual(benchReportDigest(collapsed), baseline.reportDigest);
   });
 
   it('moves when a producer deranges pair attribution', () => {
@@ -1820,22 +1871,22 @@ describe('the committed ledger digest anchors the producer itself', () => {
       ...p,
       ruleIds: p.ruleIds.map((id) => ids[(ids.indexOf(id) + 1) % ids.length]!),
     }));
-    assert.notEqual(benchLedgerDigest({ ...report, pairs: deranged }), baseline.ledgerDigest);
+    assert.notEqual(benchReportDigest({ ...report, pairs: deranged }), baseline.reportDigest);
   });
 
   it('moves when a producer forges probe text or edge evidence', () => {
     const [first, ...rest] = report.ruleProbes;
     assert.notEqual(
-      benchLedgerDigest({
+      benchReportDigest({
         ...report,
         ruleProbes: [{ ...first!, nearMiss: 'some other clause entirely' }, ...rest],
       }),
-      baseline.ledgerDigest,
+      baseline.reportDigest,
     );
     const [edge, ...others] = report.edges;
     assert.notEqual(
-      benchLedgerDigest({ ...report, edges: [{ ...edge!, support: edge!.support + 1 }, ...others] }),
-      baseline.ledgerDigest,
+      benchReportDigest({ ...report, edges: [{ ...edge!, support: edge!.support + 1 }, ...others] }),
+      baseline.reportDigest,
     );
   });
 
@@ -1852,25 +1903,70 @@ describe('the committed ledger digest anchors the producer itself', () => {
         strength: e.strength + Number.EPSILON * 4,
       })),
     };
-    assert.equal(benchLedgerDigest(jittered), baseline.ledgerDigest);
+    assert.equal(benchReportDigest(jittered), baseline.reportDigest);
+  });
+
+  it('moves when a producer deletes or forges a SUMMARY field', () => {
+    // The four the review demonstrated passing against the row-only digest.
+    // These are aggregates: no row moves, no re-derivation notices, and each
+    // one is an advertised measurement of the thing under test.
+    const forgeries: [string, CorrelationBenchReport][] = [
+      ['meanCausalEdgeStrength deleted', omit(report, 'meanCausalEdgeStrength')],
+      ['meanCausalEdgeZ deleted', omit(report, 'meanCausalEdgeZ')],
+      ['causalCouplingsLostToCap emptied', { ...report, causalCouplingsLostToCap: [] }],
+      ['confidenceSeparation forged', { ...report, confidenceSeparation: 0.5 }],
+      ['meanFalsePairConfidence forged', { ...report, meanFalsePairConfidence: 0.1 }],
+    ];
+    for (const [label, forged] of forgeries) {
+      assert.notEqual(benchReportDigest(forged), baseline.reportDigest, label);
+    }
+  });
+
+  it('moves on ANY single leaf of the report, exhaustively', () => {
+    // The claim "the digest covers every field" is checked field by field
+    // rather than asserted: walk the whole report, perturb one leaf at a time,
+    // and require the digest to move. This is the sweep that would have caught
+    // the summary-layer gap on the round it shipped, and it needs no source
+    // mutation to do it — a producer change is only interesting here through
+    // the values it emits, and this covers all of them.
+    const paths = leafPaths(report as unknown as Json);
+    assert.ok(paths.length > 500, `expected a large report, walked ${paths.length} leaves`);
+    const missed: string[] = [];
+    for (const path of paths) {
+      const mutated = perturbAt(report as unknown as Json, path);
+      if (benchReportDigest(mutated as unknown as CorrelationBenchReport)
+        === baseline.reportDigest) missed.push(path.join('.'));
+    }
+    assert.deepEqual(missed, [], 'these leaves are invisible to the digest');
+  });
+
+  it('sees a change five orders of magnitude below the old rounding step', () => {
+    // At 4 decimals a uniform `strength - 0.00001` across the whole producer
+    // reproduced the digest exactly. 9 decimals closes that band without
+    // reopening the cross-platform one the test above pins.
+    const shaved = {
+      ...report,
+      edges: report.edges.map((e) => ({ ...e, strength: e.strength - 0.00001 })),
+    };
+    assert.notEqual(benchReportDigest(shaved), baseline.reportDigest);
   });
 
   it('reports the mismatch as a re-seed, not as a quality regression', () => {
-    const stale = { ...baseline, ledgerDigest: 'f'.repeat(32) };
+    const stale = { ...baseline, reportDigest: 'f'.repeat(32) };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, stale);
     assert.equal(ok, false);
-    const reason = reasons.find((r) => r.includes('do not match the committed baseline'));
+    const reason = reasons.find((r) => r.includes('match the committed baseline'));
     assert.ok(reason, `expected a ledger-digest reason, got ${JSON.stringify(reasons)}`);
     assert.ok(reason.includes('re-seed'), 'the reason must tell a human what to do');
   });
 
   it('rejects a baseline that pins the ledger to nothing', () => {
-    const { ledgerDigest: _gone, ...naked } = baseline;
+    const { reportDigest: _gone, ...naked } = baseline;
     const { ok, reasons } = compareCorrelationBenchToBaseline(
       report, naked as CorrelationBenchBaseline,
     );
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('baseline ledgerDigest is not a 32-character')));
+    assert.ok(reasons.some((r) => r.includes('baseline reportDigest is not a 32-character')));
   });
 });
 
@@ -1916,7 +2012,43 @@ describe('the reproduction walk demands a plain, own-keyed report', () => {
     const tagged = { ...report, [Symbol.for('cb.bench')]: 'x' } as CorrelationBenchReport;
     const { ok, reasons } = compareCorrelationBenchToBaseline(tagged, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('symbol-keyed properties')));
+    assert.ok(reasons.some((r) => r.includes('symbol-keyed property')));
+  });
+
+  it('rejects a field that is an accessor rather than a stored value', () => {
+    // A getter can answer differently on each read: once for the shape check,
+    // once for the value comparison. The walk reads `descriptor.value`, so an
+    // accessor never gets a second chance to tell a second story — and it is
+    // refused outright rather than read once, which is why this getter is
+    // HONEST. Nothing about the numbers is wrong here; the mechanism is.
+    const forged = { ...report };
+    Object.defineProperty(forged, 'pairPrecision', {
+      enumerable: true,
+      configurable: true,
+      get: () => report.pairPrecision,
+    });
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('is an accessor, not a data property')));
+  });
+
+  it('rejects a non-enumerable own field the key walk would skip', () => {
+    // `Object.keys` skips it, `JSON.stringify` skips it, and a comparator built
+    // on either would call the report unchanged while it carries a field.
+    const forged = { ...report };
+    Object.defineProperty(forged, 'smuggled', {
+      enumerable: false, configurable: true, value: 'hidden',
+    });
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('is a non-enumerable own property')));
+  });
+
+  it('still accepts the array length every real ledger carries', () => {
+    // `length` is non-enumerable and own on every array — the exemption above
+    // it must not be so tight that a genuine report trips the rule.
+    const { ok } = compareCorrelationBenchToBaseline(runCorrelationBenchmark(), baseline);
+    assert.equal(ok, true);
   });
 
   it('distinguishes -0 from 0', () => {
@@ -1976,10 +2108,92 @@ describe('a perfect miner can become the next baseline', () => {
     assert.ok(reasons.some((r) => r.includes('null but falseEdgeCount is')));
   });
 
+  it('allows a perfect baseline exactly zero free false edges', () => {
+    // The separation gate is skipped against a perfect baseline because
+    // `falseEdgeGrowth` is said to cover it instead — which was only true if
+    // that tolerance happened to be 0, and the shipped value is 3. So a perfect
+    // baseline could have carried three ungated false edges with no separation
+    // gate at all. Read the tolerance the reason reports rather than trusting
+    // the comment.
+    const slack = {
+      ...perfectBaseline(),
+      tolerances: { ...loadBaseline().tolerances, falseEdgeGrowth: 3 },
+    };
+    const { reasons } = compareCorrelationBenchToBaseline(report, slack);
+    const grew = reasons.find((r) => r.startsWith('graded false edges grew'));
+    assert.ok(grew, `expected a growth reason, got ${JSON.stringify(reasons)}`);
+    assert.match(grew, /exceeds 0 tolerance/);
+  });
+
+  it('leaves the ordinary tolerance alone for an imperfect baseline', () => {
+    // The clamp above is scoped to the exemption, not a global tightening: a
+    // baseline that armed the separation gate keeps its shipped slack.
+    // Four fewer unplanted false edges than the committed run, kept coherent:
+    // the total, the significant-edge count and the precision all move with it,
+    // or the reconciliation fires before any tolerance is consulted.
+    const lower = {
+      ...loadBaseline(),
+      unplantedFalsePositives: 10,
+      falseEdgeCount: 13,
+      significantEdgeCount: 18,
+      couplingPrecision: round4(5 / 18),
+      tolerances: { ...loadBaseline().tolerances, falseEdgeGrowth: 3 },
+    };
+    const { reasons } = compareCorrelationBenchToBaseline(report, lower);
+    const grew = reasons.find((r) => r.startsWith('graded false edges grew'));
+    assert.ok(grew, `expected a growth reason, got ${JSON.stringify(reasons)}`);
+    assert.match(grew, /exceeds 3 tolerance/);
+  });
+
   it('rejects a separation the baseline could not have measured', () => {
     const impossible = { ...loadBaseline(), falseEdgeCount: 0 };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, impossible);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('no false z-scores to separate from')));
+  });
+});
+
+/**
+ * Pinning the whole report by digest means every real change — an improvement
+ * included — fails on identity and has to be re-seeded. That is the intended
+ * cost, but it is only a reasonable one if re-seeding is a command rather than
+ * a hand-transcription of thirty numbers and a digest, because a transcription
+ * error produces a baseline that passes and measures the wrong thing.
+ */
+describe('the re-seed emitter produces a baseline that passes', () => {
+  const report = runCorrelationBenchmark();
+  const committed = loadBaseline();
+  const carriedOver = { note: committed.note, tolerances: committed.tolerances };
+
+  it('round-trips the live run into a baseline the gate accepts', () => {
+    const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, seeded);
+    assert.equal(ok, true, `re-seeded baseline should pass: ${JSON.stringify(reasons)}`);
+  });
+
+  it('reproduces the committed baseline field for field', () => {
+    // The committed file was produced by this emitter. If the two ever diverge,
+    // either the file was hand-edited or the emitter stopped pinning a field —
+    // both of which mean the gate is measuring something nobody reviewed.
+    const seeded = seedCorrelationBenchBaseline(
+      report, carriedOver, committed.seededAt,
+    );
+    assert.deepEqual(seeded, committed);
+  });
+
+  it('carries the note and tolerances over verbatim rather than generating them', () => {
+    // Both encode human judgement: what a number means and how far it may move.
+    // A re-seed must not quietly widen a tolerance to make itself pass.
+    const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
+    assert.equal(seeded.note, committed.note);
+    assert.deepEqual(seeded.tolerances, committed.tolerances);
+  });
+
+  it('emits JSON — no undefined, no non-finite, nothing that vanishes on write', () => {
+    const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
+    const written = JSON.parse(JSON.stringify(seeded)) as CorrelationBenchBaseline;
+    assert.deepEqual(written, seeded);
+    const { ok } = compareCorrelationBenchToBaseline(report, written);
+    assert.equal(ok, true);
   });
 });

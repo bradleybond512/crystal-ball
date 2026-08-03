@@ -3704,15 +3704,21 @@ export function buildDonkiCmeUrlSidecar(now) {
  *
  * An EMPTY array stays healthy on purpose: a week with no CMEs is ordinary, and
  * treating it as drift would cry wolf most of the time. It is a non-empty
- * response in which nothing is recognizable that means the shape moved.
- * `activityID` is the identity field the filter keys on, so it is the right
- * canary — checking `cmeAnalyses` instead would false-alarm on a week of
- * genuinely unanalyzed events.
+ * response in which no row carries the fields the filter reads that means the
+ * shape moved.
+ *
+ * Both fields are required on the SAME row, because partial drift is the likely
+ * kind: `activityID` surviving a rename of `cmeAnalyses` would otherwise pass
+ * this check while every row falls out of the filter. Requiring `cmeAnalyses`
+ * does not false-alarm on unanalyzed events — DONKI ships those as an empty
+ * array, which is still an array.
  */
 export function donkiCmeFeedHealthySidecar(raw) {
   if (!Array.isArray(raw)) return false;
   if (raw.length === 0) return true;
-  return raw.some((row) => row && typeof row.activityID === 'string');
+  return raw.some((row) => row
+    && typeof row.activityID === 'string'
+    && Array.isArray(row.cmeAnalyses));
 }
 
 export async function fetchSpaceweatherStatusSidecar() {

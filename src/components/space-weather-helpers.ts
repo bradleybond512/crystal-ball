@@ -189,8 +189,13 @@ export function windObservationAge(
   return { label, stale: ageMs > WIND_STALE_AFTER_MS };
 }
 
-function bzSubtitle(bz: number | null): string {
+function bzSubtitle(bz: number | null, stale: boolean): string {
   if (bz === null) return 'No magnetometer reading';
+  // "Northward is quiet" is a claim about the present tense. Said over an
+  // hour-old sample it is an all-clear issued from evidence that has nothing to
+  // say about now — the same fault as the green badge, in words instead of
+  // colour. Greying the badge and leaving this sentence would only move it.
+  if (stale) return 'Last known — not current';
   return bz < 0 ? 'Southward — storm driver' : 'Northward is quiet';
 }
 
@@ -266,7 +271,7 @@ export function buildWindStrip(
         // Three states, not two. A missing Bz must not read as "Northward is
         // quiet" — that is the magnetometer going dark reported as an all-clear,
         // and Bz is the single best short-horizon storm predictor we have.
-        sub: bzSubtitle(bz),
+        sub: bzSubtitle(bz, age.stale),
       },
     ],
   };

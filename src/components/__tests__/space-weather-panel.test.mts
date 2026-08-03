@@ -157,10 +157,32 @@ test('buildWindStrip formats a live reading with units', () => {
 
 test('buildWindStrip signs a northward Bz so the sign is never ambiguous', () => {
   const view = buildWindStrip({
-    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13, windObservedAt: null,
+    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13,
+    windObservedAt: new Date(NOW - 60 * 1000).toISOString(),
   }, NOW);
   assert.equal(view.cells[2]?.value, '+7.1 nT');
   assert.equal(view.cells[2]?.sub, 'Northward is quiet');
+});
+
+test('buildWindStrip stops a stale Bz from claiming the sky is quiet', () => {
+  // The present-tense form of the stale-colour bug: greying the badge but
+  // leaving "Northward is quiet" just moves the all-clear from the colour into
+  // the words, where it reads as more authoritative rather than less.
+  const view = buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13,
+    windObservedAt: new Date(NOW - 2 * HOUR_MS).toISOString(),
+  }, NOW);
+  assert.equal(view.cells[2]?.value, '+7.1 nT', 'the reading itself is still shown');
+  assert.equal(view.cells[2]?.sub, 'Last known — not current');
+  assert.notEqual(view.cells[2]?.sub, 'Northward is quiet');
+  // Unknown age is at least as bad as known-old.
+  assert.equal(buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13, windObservedAt: null,
+  }, NOW).cells[2]?.sub, 'Last known — not current');
+  // But a missing reading still says so, rather than borrowing the stale copy.
+  assert.equal(buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: null, windObservedAt: null,
+  }, NOW).cells[2]?.sub, 'No magnetometer reading');
 });
 
 test('buildWindStrip renders absent values as dashes, never as zero', () => {

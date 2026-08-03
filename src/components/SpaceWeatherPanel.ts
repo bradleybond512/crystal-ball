@@ -293,11 +293,17 @@ export class SpaceWeatherPanel extends Panel {
     // from a build that predates the flag, and it carries no evidence either
     // way — reading it as healthy would restore the fail-open for exactly as
     // long as that cache lives.
+    //
+    // The gate is "has the status fetch settled", not "do we have a status":
+    // when the status endpoint fails while the legacy feed succeeds, render()
+    // still draws the full view with `status` null, and returning '' there
+    // would delete the section as silently as a quiet sun does. Before the
+    // first fetch settles there is genuinely nothing to say, so stay quiet.
     const feedOk = this.status?.cmeFeedOk;
-    if (this.status !== null && feedOk !== true) {
-      const why = feedOk === false
-        ? 'CME feed unavailable'
-        : 'CME feed not reported by this source';
+    if (this.statusFetchedAt !== null && feedOk !== true) {
+      let why = 'CME feed not reported by this source';
+      if (this.status === null) why = 'CME feed unreachable';
+      else if (feedOk === false) why = 'CME feed unavailable';
       return `<div class="sw-alerts">
         <div class="sw-alerts-header">Earthward CMEs</div>
         <div class="sw-alert-row sw-warning">${why} — Earthward CMEs unknown</div>

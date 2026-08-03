@@ -237,13 +237,27 @@ test('donkiCmeFeedHealthySidecar keeps an empty week healthy but catches schema 
   // same as a 200 we can read. If DONKI renames its fields, every row falls out
   // of the filter and the section renders as "nothing Earthward" — the outage
   // wearing the all-clear's clothes one level deeper than the 404 did.
+  const good = { activityID: '2026-08-01T00:00:00-CME-001', cmeAnalyses: [{ longitude: 5 }] };
   assert.equal(donkiCmeFeedHealthySidecar([]), true, 'a quiet week is not drift');
-  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: '2026-08-01T00:00:00-CME-001' }]), true);
+  assert.equal(donkiCmeFeedHealthySidecar([good]), true);
+  // An UNANALYZED CME is normal, not drift: DONKI ships those with an empty
+  // analyses array, which is still an array.
+  assert.equal(
+    donkiCmeFeedHealthySidecar([{ activityID: 'unanalyzed', cmeAnalyses: [] }]),
+    true,
+  );
   // Container is right, contents are unrecognizable.
   assert.equal(donkiCmeFeedHealthySidecar([{ id: 'renamed' }, { id: 'also-renamed' }]), false);
   assert.equal(donkiCmeFeedHealthySidecar([null, 42, 'nope']), false);
+  // PARTIAL drift is the likely kind, and the one that hides best: the identity
+  // field survives while the field the filter reads is renamed away, so every
+  // row silently falls out and the section renders as "nothing Earthward".
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { activityID: 'b' }]), false);
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a', analyses: [{}] }]), false);
+  // Both fields must be on the SAME row — one each across two rows is drift.
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { cmeAnalyses: [] }]), false);
   // One good row is enough — DONKI legitimately mixes in sparse records.
-  assert.equal(donkiCmeFeedHealthySidecar([{ id: 'x' }, { activityID: 'y' }]), true);
+  assert.equal(donkiCmeFeedHealthySidecar([{ id: 'x' }, good]), true);
   // Not an array at all is the fetch having failed.
   assert.equal(donkiCmeFeedHealthySidecar(null), false);
   assert.equal(donkiCmeFeedHealthySidecar({ result: [] }), false);

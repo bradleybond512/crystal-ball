@@ -43,8 +43,8 @@
  */
 
 import type {
-  BenchEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, CorrelationBenchReport,
-  EdgeVerdict,
+  BenchEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchRuleProbe,
+  CorrelationBenchReport, EdgeVerdict,
 } from './bench-correlation';
 // The gate reads planted truth DIRECTLY. A ledger row that carries its own
 // verdict and its own `isTruePair` flag is the report grading itself: rewrite
@@ -147,7 +147,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 10;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 11;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -658,13 +658,9 @@ function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): voi
         `its matcher no longer fires on a pair it is defined to catch`,
       );
     }
-    if (p.nearMissRejected !== true) {
-      reasons.push(
-        `rule '${p.ruleId}' matched its near-miss fixture (${String(p.nearMiss)}) — the rule ` +
-        `got looser, which is how a correlation engine starts hallucinating`,
-      );
-    }
-    // The two booleans above are the ANSWER; this is the question. Without it
+    checkProbeSemantics(reasons, p);
+    checkProbeNearMisses(reasons, p);
+    // The verdicts above are the ANSWER; this is the question. Without it
     // the report holds still while a fixture is quietly re-aimed at a clause
     // the rule still has, and both booleans stay true about nothing.
     if (typeof p.fixtureDigest !== 'string' || !DIGEST_PATTERN.test(p.fixtureDigest)) {
@@ -680,6 +676,70 @@ function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): voi
     reasons.push(
       `[${unprobed.join(', ')}] ship without a coverage probe — nothing in this benchmark ` +
       `would notice their matchers being disabled`,
+    );
+  }
+}
+
+/**
+ * What the rule CLAIMED, not merely that it spoke.
+ *
+ * Five built-ins never fire over the corpus, so their probe is the only place
+ * their semantics are observed anywhere in the benchmark. With the verdict
+ * reduced to a boolean, rewriting `airquality-wildfire` from `causal-candidate`
+ * to `contradicts` — the opposite assertion — moved nothing.
+ */
+function checkProbeSemantics(reasons: string[], p: BenchRuleProbe): void {
+  if (!PAIR_EDGE_TYPES.has(p.positiveEdgeType as string)) {
+    reasons.push(
+      `rule '${p.ruleId}' reports edge type ${JSON.stringify(p.positiveEdgeType)} on its ` +
+      `positive fixture — a probe that does not record what the rule asserted cannot notice ` +
+      `the assertion being inverted`,
+    );
+  }
+  if (typeof p.positiveDirection !== 'string' || !p.positiveDirection.includes('→')) {
+    reasons.push(
+      `rule '${p.ruleId}' reports direction ${JSON.stringify(p.positiveDirection)} on its ` +
+      `positive fixture — cause and effect are not interchangeable`,
+    );
+  }
+}
+
+/**
+ * Every clause of the rule, each defeated on its own.
+ *
+ * One near-miss per rule proved only that SOME guard survived. The reviewer
+ * deleted the earthquake-tsunami GDACS source clause — a guard no fixture
+ * exercised, because the single near-miss tested distance — and the report was
+ * byte-identical while the rule had started accepting any nearby humanitarian
+ * event.
+ */
+function checkProbeNearMisses(reasons: string[], p: BenchRuleProbe): void {
+  const misses = p.nearMisses;
+  if (!Array.isArray(misses) || misses.length < 2) {
+    reasons.push(
+      `rule '${p.ruleId}' carries ` +
+      `${Array.isArray(misses) ? misses.length : String(misses)} near-miss fixture(s) — every ` +
+      `rule here applies at least two independent guards, and an unexercised guard can be ` +
+      `deleted in silence`,
+    );
+    return;
+  }
+  const clauses = misses.map((m) => (m as { clause?: unknown }).clause);
+  if (clauses.some((c) => typeof c !== 'string' || c === '')) {
+    reasons.push(`rule '${p.ruleId}' has a near-miss fixture that names no clause`);
+  }
+  if (new Set(clauses).size !== clauses.length) {
+    reasons.push(
+      `rule '${p.ruleId}' repeats a near-miss clause — duplicates inflate the coverage count ` +
+      `without covering anything`,
+    );
+  }
+  const accepted = misses.filter((m) => m.rejected !== true);
+  if (accepted.length > 0) {
+    reasons.push(
+      `rule '${p.ruleId}' matched ${accepted.length} near-miss fixture(s) ` +
+      `(${accepted.map((m) => String(m.clause)).join('; ')}) — the rule got looser, which is ` +
+      `how a correlation engine starts hallucinating`,
     );
   }
 }
@@ -1204,9 +1264,9 @@ function checkLearnedPairLedger(reasons: string[], report: CorrelationBenchRepor
     if (!checkLearnedPairRowShape(reasons, `learned pair row ${i} (${String(r.key)})`, r, seen)) {
       continue;
     }
-    total += r.emissions;
+    total += r.emissions.length;
     const tally = perRule.get(r.ruleId);
-    if (tally !== undefined) perRule.set(r.ruleId, tally + r.emissions);
+    if (tally !== undefined) perRule.set(r.ruleId, tally + r.emissions.length);
   }
   if (total !== report.learnedRulePairCount) {
     reasons.push(
@@ -1311,10 +1371,28 @@ function checkLearnedPairRowShape(
     );
     return false;
   }
-  if (!Number.isInteger(r.emissions) || r.emissions < 1) {
+  if (!Array.isArray(r.emissions) || r.emissions.length === 0
+    || r.emissions.some((e) => (e as unknown) === null || typeof e !== 'object')) {
     reasons.push(
-      `${bad} claims ${String(r.emissions)} emission(s); a row exists because the rule fired at ` +
-      `least once`,
+      `${bad} carries ` +
+      `${Array.isArray(r.emissions) ? r.emissions.length : String(r.emissions)} ` +
+      `emission(s); a row exists because the rule fired at least once, and each firing is a ` +
+      `claim with an edge type and a direction, not a tick on a counter`,
+    );
+    return false;
+  }
+  if (!checkPairEmissions(
+    reasons, bad, r.emissions, [r.ruleId],
+    `a learned-pair row is grouped BY its rule, so every emission in it is ${r.ruleId}`,
+  )) return false;
+  const stray = r.emissions.filter(
+    (e) => typeof e.fromId !== 'string' || typeof e.toId !== 'string'
+      || pairKeyFor(e.fromId, e.toId) !== r.key,
+  );
+  if (stray.length > 0) {
+    reasons.push(
+      `${bad} has ${stray.length} emission(s) whose endpoints ` +
+      `(${stray.map((e) => describeEndpoints(e)).join(', ')}) do not build ${r.key}`,
     );
     return false;
   }
@@ -1806,6 +1884,20 @@ export function benchWitnessedFields(report: CorrelationBenchReport): Correlatio
 }
 
 /**
+ * An INJECTIVE serialisation of a list — the whole point of comparing one.
+ *
+ * The first cut compared `causalCouplingsLostToCap` through `.join(',')`, which
+ * collapses shape: the single element `"macro->maritime,space->infra"` joins to
+ * the same string as the real two-element array, and the reviewer passed that
+ * forgery through the gate. JSON keeps element boundaries, so it cannot.
+ */
+function canonicalList(value: unknown): string {
+  return Array.isArray(value)
+    ? JSON.stringify(value)
+    : `not-a-list:${JSON.stringify(value)}`;
+}
+
+/**
  * Equality per witnessed field, so drift is NAMED before the digest reports it.
  *
  * Runs immediately before `checkReportDigest` and never instead of it: this
@@ -1837,8 +1929,8 @@ function checkWitnessedFields(
     ['confidenceSeparation', want.confidenceSeparation, got.confidenceSeparation],
     [
       'causalCouplingsLostToCap',
-      [...(want.causalCouplingsLostToCap ?? [])].join(','),
-      got.causalCouplingsLostToCap.join(','),
+      canonicalList(want.causalCouplingsLostToCap),
+      canonicalList(got.causalCouplingsLostToCap),
     ],
     ...(['pairs', 'edges', 'learnedPairs', 'probes'] as const).map(
       (k) => [`${k} ledger digest`, want.sectionDigests[k], got.sectionDigests[k]] as const,
@@ -2159,6 +2251,7 @@ function checkPairEmissions(
   bad: string,
   emissions: readonly BenchPairEmission[],
   registered: readonly string[],
+  inventory = 'pass A carries the built-in inventory only',
 ): boolean {
   if (emissions.some((e) => typeof e.ruleId !== 'string' || e.ruleId === '')) {
     reasons.push(`${bad} has an unnamed emitting rule`);
@@ -2173,7 +2266,7 @@ function checkPairEmissions(
   if (unregistered.length > 0) {
     reasons.push(
       `${bad} attributes emissions to [${[...new Set(unregistered)].join(', ')}], which the ` +
-      `graded pass never registered — pass A carries the built-in inventory only`,
+      `graded pass never registered — ${inventory}`,
     );
   }
   const unknownTypes = emissions

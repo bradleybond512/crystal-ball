@@ -937,11 +937,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 161 unit tests in
+- 174 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, a
-  regression per demonstrated PASS-on-nothing across twelve review rounds, and
+  regression per demonstrated PASS-on-nothing across thirteen review rounds, and
   an exhaustive leaf sweep proving the report digest covers every field).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
@@ -1401,6 +1401,43 @@ Two narrower items from the same round:
   rather than generates, and a second test proves the real defense —
   `TOLERANCE_CEILINGS` rejects a widened tolerance that tries to launder itself
   through a re-seed.
+
+Round 13 (`schemaVersion: 11`) found that each round-12 fix had been applied to
+half of the surface it named. Every case below was reproduced as a live
+`{ok: true, reasons: []}` against the shipped `schemaVersion: 10` gate. No
+graded number moved in the re-seed.
+
+- **The learned-pair ledger still counted.** Round 12 made emissions
+  first-class rows in `BenchPairRow` and missed `BenchLearnedPairRow`, which
+  kept `emissions: number`. Rewriting every learned rule from
+  `causal-candidate` to `contradicts` — the opposite assertion, and a different
+  evidence edge downstream — left all 101 rows and the report digest
+  byte-identical. Learned rows now carry the same `BenchPairEmission[]`, and
+  every emission must name its own row's rule and hash to its own row's key.
+- **Probes pinned what was asked, not what was answered.** Five of the nine
+  shipped rules never fire over the golden corpus, so the probe row is their
+  only observation anywhere in the benchmark. Inverting `airquality-wildfire`
+  to `contradicts` preserved both probe booleans, the fixture digest and the
+  report digest. Probes now record `positiveEdgeType` and `positiveDirection`
+  (the emitted endpoints in EMISSION order), and the gate range-checks both.
+- **One clause per rule is not coverage.** The earthquake→tsunami near-miss
+  held the GDACS source gate valid and varied only distance, so deleting the
+  source clause left the rule accepting any nearby humanitarian event while the
+  probe still reported a clean rejection. Near-misses are now *patches* on the
+  positive fixture, one per independently-defeatable clause — **59 clauses
+  across 9 rules**, up from 9 — so a near-miss cannot drift from its positive
+  except in the field it names. Two clauses per rule is an enforced floor and
+  duplicate clause labels are refused.
+- **A measured engine finding fell out of writing those fixtures.**
+  `domainMatches()` (`correlate-engine.ts:208`) is a DISJUNCTION over the pair:
+  `domainSet.has(a.domain) || domainSet.has(b.domain)`. Moving one event out of
+  a rule's declared domains does not reject the pair — `CorrelationRule.domains`
+  constrains considerably less than its name suggests. The domain-gate
+  near-misses move both events.
+- **The witnessed list comparison was not injective.** `causalCouplingsLostToCap`
+  was compared through `.join(',')`, so the single element
+  `"macro->maritime,space->infra"` compared equal to the real two-element array
+  and passed. Lists now compare through JSON, which keeps element boundaries.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

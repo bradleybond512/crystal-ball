@@ -44,7 +44,12 @@ import {
   plantedTruePairKeys,
 } from '../__bench__/golden-streams.ts';
 import { learnedRuleId } from '../learned-rules.ts';
-import { RULE_FIXTURES, digestRuleFixture } from '../__bench__/rule-probes.ts';
+import {
+  RULE_FIXTURES,
+  digestRuleFixture,
+  nearMissEvents,
+  positiveEvents,
+} from '../__bench__/rule-probes.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = path.join(here, '..', '__bench__', 'bench-correlation-baseline.json');
@@ -212,9 +217,9 @@ function withLearnedPairRows(
   for (const id of report.causalLearnedRuleIds) perRule.set(id, 0);
   let total = 0;
   for (const r of rows) {
-    total += r.emissions;
+    total += r.emissions.length;
     const tally = perRule.get(r.ruleId);
-    if (tally !== undefined) perRule.set(r.ruleId, tally + r.emissions);
+    if (tally !== undefined) perRule.set(r.ruleId, tally + r.emissions.length);
   }
   const per = [...perRule.values()].sort((a, b) => b - a);
   return {
@@ -247,7 +252,7 @@ function learnedRowsFor(
         key: src.key,
         eventIdA: src.eventIdA,
         eventIdB: src.eventIdB,
-        emissions: 1,
+        emissions: [{ ...src.emissions[0]!, ruleId }],
       });
     }
   }
@@ -704,7 +709,16 @@ describe('the gate', () => {
       report,
       report.learnedPairs.map((r, i) => (
         i === idx
-          ? { ...r, emissions: r.emissions + (target - report.learnedRulePairCount) }
+          ? {
+            ...r,
+            emissions: [
+              ...r.emissions,
+              ...Array.from(
+                { length: target - report.learnedRulePairCount },
+                () => r.emissions[0]!,
+              ),
+            ],
+          }
           : r
       )),
     );
@@ -1194,7 +1208,7 @@ describe('the gate', () => {
     // 9.5, so 7/6/0 = 13 sails past it: sums hide their own zeros.
     const emissionsFor = (id: string): number => report.learnedPairs
       .filter((r) => r.ruleId === id)
-      .reduce((a, r) => a + r.emissions, 0);
+      .reduce((a, r) => a + r.emissions.length, 0);
     const silenced = [...report.causalLearnedRuleIds]
       .sort((a, b) => emissionsFor(a) - emissionsFor(b))[0]!;
     const oneDead = withLearnedPairRows(
@@ -1609,12 +1623,14 @@ describe('the gate rejects a conclusion the report authored about itself', () =>
     const permissive = {
       ...report,
       ruleProbes: report.ruleProbes.map((p, i) => (
-        i === 0 ? { ...p, nearMissRejected: false } : p
+        i === 0
+          ? { ...p, nearMisses: p.nearMisses.map((m, j) => (j === 0 ? { ...m, rejected: false } : m)) }
+          : p
       )),
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(permissive, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('matched its near-miss fixture')));
+    assert.ok(reasons.some((r) => r.includes('near-miss fixture')));
   });
 
   it('rejects a ledger whose confidences are all a saturated constant', () => {
@@ -1768,16 +1784,24 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
   });
 
   it('re-runs the rule probes instead of reading what they reported', () => {
-    // The probe gate reads the two booleans, so everything ELSE a probe row
-    // carries — including which clause its near-miss violates, the whole reason
+    // The probe gate reads the verdict booleans, so everything ELSE a probe row
+    // carries — including which clause each near-miss violates, the whole reason
     // the probe means anything — was unchecked. The re-run reproduces the row.
     const [first, ...rest] = report.ruleProbes;
-    const rewritten = [{ ...first!, nearMiss: 'some other clause entirely' }, ...rest];
+    const rewritten = [
+      {
+        ...first!,
+        nearMisses: first!.nearMisses.map((m, j) => (
+          j === 0 ? { ...m, clause: 'some other clause entirely' } : m
+        )),
+      },
+      ...rest,
+    ];
     const { ok, reasons } = compareCorrelationBenchToBaseline(
       { ...report, ruleProbes: rewritten }, baseline,
     );
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('ruleProbes[0].nearMiss')));
+    assert.ok(reasons.some((r) => r.includes('ruleProbes[0].nearMisses')));
   });
 
   it('rejects a report that drops an advertised measurement outright', () => {
@@ -1874,7 +1898,19 @@ describe('the committed report digest anchors the producer itself', () => {
     const collapsed = {
       ...report,
       learnedPairs: [
-        { ruleId: 'learned:not-real->not-real', key: 'a|b', eventIdA: 'a', eventIdB: 'b', emissions: 1 },
+        {
+          ruleId: 'learned:not-real->not-real',
+          key: 'a|b',
+          eventIdA: 'a',
+          eventIdB: 'b',
+          emissions: [{
+            ruleId: 'learned:not-real->not-real',
+            edgeType: 'causal-candidate' as const,
+            fromId: 'a',
+            toId: 'b',
+            confidence: 0.5,
+          }],
+        },
         ...report.learnedPairs.slice(0, 3),
       ],
     };
@@ -1897,7 +1933,15 @@ describe('the committed report digest anchors the producer itself', () => {
     assert.notEqual(
       benchReportDigest({
         ...report,
-        ruleProbes: [{ ...first!, nearMiss: 'some other clause entirely' }, ...rest],
+        ruleProbes: [
+          {
+            ...first!,
+            nearMisses: first!.nearMisses.map((m, j) => (
+              j === 0 ? { ...m, clause: 'some other clause entirely' } : m
+            )),
+          },
+          ...rest,
+        ],
       }),
       baseline.reportDigest,
     );
@@ -2252,6 +2296,11 @@ describe('the re-seed emitter produces a baseline that passes', () => {
  * radius it was written to test. The golden corpus carries no distance
  * counterexample, so nothing else notices, and `positiveMatched: true,
  * nearMissRejected: true` is reported about a clause that no longer exists.
+ *
+ * Round 13 closed the other half: one near-miss per rule tested ONE clause, so
+ * every other guard the rule applies could be deleted with the probe still
+ * reporting a clean rejection. Near-misses are now patches on the positive,
+ * one per independently-defeatable clause.
  */
 describe('rule probes pin the fixture, not only the verdict', () => {
   const report = runCorrelationBenchmark();
@@ -2269,14 +2318,23 @@ describe('rule probes pin the fixture, not only the verdict', () => {
     assert.equal(digests.size, report.ruleProbes.length);
   });
 
+  it('covers more than one clause on every rule', () => {
+    // The whole round-13 finding: a single near-miss is not coverage.
+    for (const f of RULE_FIXTURES) {
+      assert.ok(f.nearMisses.length >= 2, `${f.ruleId} tests ${f.nearMisses.length} clause(s)`);
+      const clauses = new Set(f.nearMisses.map((m) => m.clause));
+      assert.equal(clauses.size, f.nearMisses.length, `${f.ruleId} repeats a clause`);
+    }
+  });
+
   it('moves when a near-miss is re-aimed at a different clause', () => {
     const quake = RULE_FIXTURES.find((f) => f.ruleId === 'earthquake-tsunami')!;
     const before = digestRuleFixture(quake);
     // Codex's exact scenario: the near-miss now fails on SOURCE, not distance.
     const reaimed = {
       ...quake,
-      negative: quake.negative.map((e) => (
-        e.id === 'n1b' ? { ...e, sourceId: 'some-other-feed' } : e
+      nearMisses: quake.nearMisses.map((m, i) => (
+        i === 0 ? { ...m, patch: { 1: { sourceId: 'some-other-feed' } } } : m
       )),
     };
     assert.notEqual(digestRuleFixture(reaimed), before);
@@ -2285,7 +2343,21 @@ describe('rule probes pin the fixture, not only the verdict', () => {
   it('moves when the near-miss RATIONALE is rewritten', () => {
     const first = RULE_FIXTURES[0]!;
     assert.notEqual(
-      digestRuleFixture({ ...first, nearMiss: 'something else entirely' }),
+      digestRuleFixture({
+        ...first,
+        nearMisses: first.nearMisses.map((m, i) => (
+          i === 0 ? { ...m, clause: 'something else entirely' } : m
+        )),
+      }),
+      digestRuleFixture(first),
+    );
+  });
+
+  it('moves when a clause is dropped from the probe outright', () => {
+    // Deleting a fixture is how a rule quietly stops being covered.
+    const first = RULE_FIXTURES[0]!;
+    assert.notEqual(
+      digestRuleFixture({ ...first, nearMisses: first.nearMisses.slice(1) }),
       digestRuleFixture(first),
     );
   });
@@ -2293,7 +2365,7 @@ describe('rule probes pin the fixture, not only the verdict', () => {
   it('moves on any single field of a positive fixture', () => {
     const first = RULE_FIXTURES[0]!;
     const before = digestRuleFixture(first);
-    for (const key of ['sourceId', 'domain', 'timestamp', 'severity'] as const) {
+    for (const key of ['sourceId', 'domain', 'offsetMs', 'severity'] as const) {
       const nudged = {
         ...first,
         positive: first.positive.map((e, i) => (
@@ -2306,6 +2378,17 @@ describe('rule probes pin the fixture, not only the verdict', () => {
     }
   });
 
+  it('records the edge type and direction the positive fixture actually emitted', () => {
+    // Five rules never fire over the corpus, so this is the ONLY observation of
+    // what they assert. While the probe carried booleans alone, inverting
+    // airquality-wildfire to `contradicts` moved no number in the report.
+    const known = new Set(['co-located', 'temporally-adjacent', 'causal-candidate', 'contradicts']);
+    for (const p of report.ruleProbes) {
+      assert.ok(known.has(p.positiveEdgeType ?? ''), `${p.ruleId}: ${p.positiveEdgeType}`);
+      assert.match(p.positiveDirection ?? '', /^\S+→\S+$/, p.ruleId);
+    }
+  });
+
   it('holds still when only the KEY ORDER of a fixture event changes', () => {
     // Otherwise a harmless reshuffle inside `ev()` reads as nine simultaneous
     // regressions and the next reviewer learns to re-seed without looking.
@@ -2314,7 +2397,7 @@ describe('rule probes pin the fixture, not only the verdict', () => {
       ...first,
       positive: first.positive.map((e) => Object.fromEntries(
         Object.entries(e).reverse(),
-      ) as typeof e),
+      ) as typeof e) as unknown as typeof first.positive,
     };
     assert.equal(digestRuleFixture(reordered), digestRuleFixture(first));
   });
@@ -2469,5 +2552,147 @@ describe('the baseline itemises what the digest anchors', () => {
     const { reasons } = compareCorrelationBenchToBaseline(forged, baseline);
     assert.ok(reasons.some((r) => r.startsWith('pairs ledger digest moved')));
     assert.ok(!reasons.some((r) => r.startsWith('edges ledger digest moved')));
+  });
+});
+
+/**
+ * Round 13: the round-12 fixes each covered half of the surface they named.
+ *
+ * Every case below was demonstrated against the schemaVersion-10 gate as a
+ * clean `{ok: true, reasons: []}` before the fix, so each test is a recording
+ * of a forgery that used to work rather than a hypothesis about one.
+ */
+describe('round 13 — the halves round 12 missed', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('moves the digest when LEARNED rules invert their assertion', () => {
+    // The pair ledger kept edge type; the learned ledger counted. Rewriting
+    // every learned rule to the opposite claim left 101 rows byte-identical.
+    const flipped = {
+      ...report,
+      learnedPairs: report.learnedPairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, edgeType: 'contradicts' as const })),
+      })),
+    };
+    assert.notEqual(benchReportDigest(flipped), baseline.reportDigest);
+  });
+
+  it('moves the digest when a learned emission is REVERSED', () => {
+    const reversed = {
+      ...report,
+      learnedPairs: report.learnedPairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, fromId: e.toId, toId: e.fromId })),
+      })),
+    };
+    assert.notEqual(benchReportDigest(reversed), baseline.reportDigest);
+  });
+
+  it('rejects a learned emission whose endpoints are not this row"s pair', () => {
+    const strayed = {
+      ...report,
+      learnedPairs: report.learnedPairs.map((r, i) => (
+        i === 0
+          ? { ...r, emissions: r.emissions.map((e) => ({ ...e, toId: 'no-such-event' })) }
+          : r
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(strayed, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('learned')), reasons.join(' | '));
+  });
+
+  it('moves the digest when a rule the CORPUS never exercises inverts', () => {
+    // Five of nine rules never fire over the golden corpus, so their probe row
+    // is the only place their semantics are observed at all.
+    const exercised = new Set(report.pairs.flatMap((p) => p.emissions.map((e) => e.ruleId)));
+    const dark = report.ruleProbes.filter((p) => !exercised.has(p.ruleId));
+    assert.ok(dark.length >= 4, `only ${dark.length} rules are dark to the corpus`);
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p) => (
+        p.ruleId === dark[0]!.ruleId ? { ...p, positiveEdgeType: 'contradicts' } : p
+      )),
+    };
+    assert.notEqual(benchReportDigest(forged), baseline.reportDigest);
+  });
+
+  it('refuses a probe reporting an edge type the engine cannot emit', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, positiveEdgeType: 'vibes' } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('assertion being inverted')), reasons.join(' | '));
+  });
+
+  it('refuses a probe that reports no direction for its positive', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, positiveDirection: null } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('not interchangeable')), reasons.join(' | '));
+  });
+
+  it('gives every clause a fixture that differs from the positive', () => {
+    // A near-miss identical to the positive would "reject" nothing; a patch
+    // that names a field it does not change is the silent version of that.
+    for (const f of RULE_FIXTURES) {
+      const pos = JSON.stringify(positiveEvents(f));
+      for (const m of f.nearMisses) {
+        assert.notEqual(JSON.stringify(nearMissEvents(f, m)), pos, `${f.ruleId}: ${m.clause}`);
+      }
+    }
+  });
+
+  it('refuses a probe carrying fewer than two clauses', () => {
+    const thin = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, nearMisses: p.nearMisses.slice(0, 1) } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(thin, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('near-miss')), reasons.join(' | '));
+  });
+
+  it('refuses a probe that pads its clause count by repeating one', () => {
+    const padded = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, nearMisses: [p.nearMisses[0]!, p.nearMisses[0]!] } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(padded, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('near-miss')), reasons.join(' | '));
+  });
+
+  it('rejects the comma-join forgery of a witnessed list', () => {
+    // `['macro->maritime','space->infra'].join(',')` and the single element
+    // 'macro->maritime,space->infra' are the same string. They are not the
+    // same claim, and the schemaVersion-10 gate passed the second one.
+    const lost = baseline.witnessed.causalCouplingsLostToCap;
+    assert.ok(lost.length >= 2, 'fixture needs a multi-element list');
+    const forged = {
+      ...baseline,
+      witnessed: { ...baseline.witnessed, causalCouplingsLostToCap: [lost.join(',')] },
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, forged);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('causalCouplingsLostToCap')),
+      reasons.join(' | '),
+    );
   });
 });

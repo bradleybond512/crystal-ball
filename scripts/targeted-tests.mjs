@@ -42,6 +42,9 @@ export const OVERRIDES = {
   'scripts/lint-changed.mjs': ['test:eslint-runner'],
   'scripts/run-eslint.mjs': ['test:eslint-runner'],
   'scripts/bundle-budget-policy.mjs': ['test:bundle-budget-policy'],
+  'tools/mcp-server/local-lock.mjs': ['test:mcp-evaluation-report'],
+  'tools/mcp-server/tools/evaluation-report.mjs': ['test:mcp-evaluation-report'],
+  'tools/mcp-server/weekly-evaluation-report.mjs': ['test:mcp-evaluation-report'],
 };
 
 const RUNNER_ALLOWLIST = [

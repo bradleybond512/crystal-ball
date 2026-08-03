@@ -94,6 +94,8 @@ not after, so conflicts surface while the work is still in your head.
 ## Local Sync Agent
 
 - Bootstrap or repair the sync agent with `npm run main-sync:setup`.
+- Setup must resolve a stable Node executable whose major matches
+  `.node-version`; never persist a Homebrew `Cellar` version path in the plist.
 - Trigger a one-off sync manually with `npm run main-sync:run`.
 - The agent state lives under `~/.crystalball-main-sync/`:
   - `repo/` clean clone

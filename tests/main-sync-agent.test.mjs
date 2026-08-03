@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { buildLaunchAgentPlist } from '../scripts/setup-main-sync-agent.mjs';
+import * as mainSyncSetup from '../scripts/setup-main-sync-agent.mjs';
 import {
   buildSyncPaths,
   collectCheckStates,
@@ -16,6 +16,7 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 const syncScriptPath = path.join(repoRoot, 'scripts', 'sync-main-to-mac.mjs');
 const setupScriptPath = path.join(repoRoot, 'scripts', 'setup-main-sync-agent.mjs');
 const packageJsonPath = path.join(repoRoot, 'package.json');
+const { buildLaunchAgentPlist } = mainSyncSetup;
 
 function readIfExists(filePath) {
   if (!existsSync(filePath)) {
@@ -33,6 +34,14 @@ test('main sync helper paths stay inside the dedicated sync root', () => {
  lockFile: '/Users/bradleybond/.crystalball-main-sync/sync.lock',
  logDir: '/Users/bradleybond/.crystalball-main-sync/logs',
   });
+});
+
+test('main sync required Node major matches the repository runtime policy', () => {
+  const configuredMajor = Number.parseInt(
+ readFileSync(path.join(repoRoot, '.node-version'), 'utf8').trim(),
+ 10,
+  );
+  assert.equal(mainSyncSetup.REQUIRED_NODE_MAJOR, configuredMajor);
 });
 
 test('main sync can fall back to a merged PR status rollup when merge-commit checks are sparse', () => {
@@ -95,19 +104,71 @@ test('main sync can identify the merged pull request that produced a main commit
   assert.equal(pull?.number, 92);
 });
 
-test('main sync launch agent plist runs Node on a fixed interval', () => {
+test('main sync selects a stable Node 22 launcher instead of a Homebrew Cellar path', () => {
+  assert.equal(typeof mainSyncSetup.buildStableNodeCandidates, 'function');
+  assert.equal(typeof mainSyncSetup.selectStableNodePath, 'function');
+
+  const candidates = mainSyncSetup.buildStableNodeCandidates({
+ execPath: '/opt/homebrew/Cellar/node@22/22.23.1/bin/node',
+ envPath: '/Users/test-user/bin:/opt/homebrew/Cellar/node@22/22.23.1/bin:/opt/homebrew/opt/node@22/bin:/usr/bin:/bin',
+  });
+  assert.ok(candidates.includes('/opt/homebrew/opt/node@22/bin/node'));
+  assert.equal(candidates.some(candidate => candidate.includes('/Cellar/')), false);
+  assert.equal(candidates.includes('/Users/test-user/bin/node'), false);
+
+  const selected = mainSyncSetup.selectStableNodePath(candidates, candidate => (
+ candidate === '/opt/homebrew/opt/node@22/bin/node' ? 22 : 26
+  ));
+  assert.equal(selected, '/opt/homebrew/opt/node@22/bin/node');
+});
+
+test('main sync refuses to install without a compatible stable Node launcher', () => {
+  assert.equal(typeof mainSyncSetup.selectStableNodePath, 'function');
+  assert.throws(
+ () => mainSyncSetup.selectStableNodePath(
+ ['/opt/homebrew/bin/node', '/usr/local/bin/node'],
+ () => 26,
+ ),
+ /stable Node 22 executable/,
+  );
+});
+
+test('main sync launch PATH contains only stable tool directories', () => {
+  assert.equal(typeof mainSyncSetup.buildLaunchAgentPath, 'function');
+
+  const launchPath = mainSyncSetup.buildLaunchAgentPath(
+ '/opt/homebrew/opt/node@22/bin/node',
+ '/Users/test-user',
+  );
+  assert.deepEqual(launchPath.split(':'), [
+ '/opt/homebrew/opt/node@22/bin',
+ '/opt/homebrew/bin',
+ '/opt/homebrew/sbin',
+ '/usr/local/bin',
+ '/usr/bin',
+ '/bin',
+ '/usr/sbin',
+ '/sbin',
+ '/Users/test-user/.cargo/bin',
+  ]);
+  assert.doesNotMatch(launchPath, /Cellar|plugins|unknown\/bin/);
+});
+
+test('main sync launch agent plist runs validated Node on a fixed interval', () => {
   const plist = buildLaunchAgentPlist({
- label: 'com.bradleybond.crystalball.main-sync',
- nodePath: '/opt/homebrew/bin/node',
- syncScriptPath: '/Users/bradleybond/developer/crystalball/scripts/sync-main-to-mac.mjs',
- syncRoot: '/Users/bradleybond/.crystalball-main-sync',
- logDir: '/Users/bradleybond/.crystalball-main-sync/logs',
+ label: 'com.bradleybond.crystalball.main-sync&test',
+ nodePath: '/opt/homebrew/opt/node@22/bin/node',
+ syncScriptPath: '/Users/bradleybond/developer/crystalball/scripts/sync-main-to-mac<&>.mjs',
+ syncRoot: '/Users/bradleybond/.crystalball-main-sync<&>',
+ logDir: '/Users/bradleybond/.crystalball-main-sync/logs<&>',
  intervalSeconds: 60,
+ envPath: '/opt/homebrew/opt/node@22/bin:/usr/bin:/bin',
   });
 
-  assert.match(plist, /<string>com\.bradleybond\.crystalball\.main-sync<\/string>/);
-  assert.match(plist, /<string>\/opt\/homebrew\/bin\/node<\/string>/);
-  assert.match(plist, /sync-main-to-mac\.mjs/);
+  assert.match(plist, /<string>com\.bradleybond\.crystalball\.main-sync&amp;test<\/string>/);
+  assert.match(plist, /<string>\/opt\/homebrew\/opt\/node@22\/bin\/node<\/string>/);
+  assert.match(plist, /sync-main-to-mac&lt;&amp;&gt;\.mjs/);
+  assert.doesNotMatch(plist, /<string>[^<]*<&/);
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(plist, /<key>StartInterval<\/key>\s*<integer>60<\/integer>/);
 });

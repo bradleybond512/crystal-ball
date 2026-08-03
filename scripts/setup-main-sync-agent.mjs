@@ -11,6 +11,81 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const DEFAULT_LABEL = 'com.bradleybond.crystalball.main-sync';
 const DEFAULT_INTERVAL_SECONDS = 60;
+const LAUNCHCTL_PATH = '/bin/launchctl';
+export const REQUIRED_NODE_MAJOR = 22;
+const NODE_FORMULA = `node@${REQUIRED_NODE_MAJOR}`;
+const UNSTABLE_NODE_PATH = /\/(?:Cellar|\.nvm\/versions\/node|\.fnm\/node-versions)\//;
+const TRUSTED_NODE_DIRECTORIES = new Set([
+  `/opt/homebrew/opt/${NODE_FORMULA}/bin`,
+  `/usr/local/opt/${NODE_FORMULA}/bin`,
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  '/usr/bin',
+]);
+
+function escapeXml(value) {
+  return String(value)
+ .replaceAll('&', '&amp;')
+ .replaceAll('<', '&lt;')
+ .replaceAll('>', '&gt;')
+ .replaceAll('"', '&quot;')
+ .replaceAll("'", '&apos;');
+}
+
+export function buildStableNodeCandidates({ execPath = '', envPath = '' } = {}) {
+  const candidates = [
+ `/opt/homebrew/opt/${NODE_FORMULA}/bin/node`,
+ `/usr/local/opt/${NODE_FORMULA}/bin/node`,
+  ];
+  const cellarMatch = execPath.match(/^(.*)\/Cellar\/(node@\d+)\/[^/]+\/bin\/node$/);
+  if (cellarMatch?.[2] === NODE_FORMULA) {
+ candidates.unshift(`${cellarMatch[1]}/opt/${cellarMatch[2]}/bin/node`);
+  }
+  for (const directory of envPath.split(path.delimiter).filter(Boolean)) {
+ const candidate = path.join(directory, 'node');
+ if (TRUSTED_NODE_DIRECTORIES.has(directory) && !UNSTABLE_NODE_PATH.test(candidate)) {
+ candidates.push(candidate);
+ }
+  }
+  if (execPath && TRUSTED_NODE_DIRECTORIES.has(path.dirname(execPath)) && !UNSTABLE_NODE_PATH.test(execPath)) {
+ candidates.push(execPath);
+  }
+  return [...new Set(candidates)];
+}
+
+function probeNodeMajor(nodePath) {
+  const result = spawnSync(nodePath, ['--version'], { encoding: 'utf8', stdio: 'pipe' });
+  if ((result.status ?? 1) !== 0) return null;
+  const match = result.stdout.trim().match(/^v(\d+)\./);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+export function selectStableNodePath(candidates, probe = probeNodeMajor) {
+  for (const candidate of candidates) {
+ try {
+ if (!UNSTABLE_NODE_PATH.test(candidate) && probe(candidate) === REQUIRED_NODE_MAJOR) {
+ return candidate;
+ }
+ } catch {
+ // Try the next stable candidate.
+ }
+  }
+  throw new Error('Could not find a stable Node 22 executable; install node@22 and rerun setup');
+}
+
+export function buildLaunchAgentPath(nodePath, homeDir = os.homedir()) {
+  return [...new Set([
+ path.dirname(nodePath),
+ '/opt/homebrew/bin',
+ '/opt/homebrew/sbin',
+ '/usr/local/bin',
+ '/usr/bin',
+ '/bin',
+ '/usr/sbin',
+ '/sbin',
+ path.join(homeDir, '.cargo', 'bin'),
+  ])].join(path.delimiter);
+}
 
 export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoot, logDir, intervalSeconds, envPath }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -18,32 +93,39 @@ export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoo
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>${label}</string>
+  <string>${escapeXml(label)}</string>
   <key>ProgramArguments</key>
   <array>
- <string>${nodePath}</string>
- <string>${syncScriptPath}</string>
+ <string>${escapeXml(nodePath)}</string>
+ <string>${escapeXml(syncScriptPath)}</string>
  <string>--sync-root</string>
- <string>${syncRoot}</string>
+ <string>${escapeXml(syncRoot)}</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
  <key>PATH</key>
- <string>${envPath}</string>
+ <string>${escapeXml(envPath)}</string>
   </dict>
   <key>WorkingDirectory</key>
-  <string>${repoRoot}</string>
+  <string>${escapeXml(repoRoot)}</string>
   <key>RunAtLoad</key>
   <true/>
   <key>StartInterval</key>
   <integer>${intervalSeconds}</integer>
   <key>StandardOutPath</key>
-  <string>${path.join(logDir, 'main-sync.stdout.log')}</string>
+  <string>${escapeXml(path.join(logDir, 'main-sync.stdout.log'))}</string>
   <key>StandardErrorPath</key>
-  <string>${path.join(logDir, 'main-sync.stderr.log')}</string>
+  <string>${escapeXml(path.join(logDir, 'main-sync.stderr.log'))}</string>
 </dict>
 </plist>
 `;
+}
+
+function validateOptions(options) {
+  if (!Number.isInteger(options.intervalSeconds) || options.intervalSeconds < 30) {
+ throw new Error('intervalSeconds must be an integer >= 30');
+  }
+  return options;
 }
 
 function parseArgs(argv) {
@@ -98,11 +180,7 @@ function parseArgs(argv) {
  throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (!Number.isInteger(options.intervalSeconds) || options.intervalSeconds < 30) {
- throw new Error('intervalSeconds must be an integer >= 30');
-  }
-
-  return options;
+  return validateOptions(options);
 }
 
 function runCommand(command, args, options = {}) {
@@ -117,19 +195,25 @@ function runCommand(command, args, options = {}) {
 }
 
 async function installLaunchAgent(options) {
+  const nodePath = selectStableNodePath(buildStableNodeCandidates({
+ execPath: process.execPath,
+ envPath: process.env.PATH,
+  }));
+  const envPath = buildLaunchAgentPath(nodePath);
   await mkdir(path.dirname(options.launchAgentPath), { recursive: true });
   await mkdir(options.logDir, { recursive: true });
   const plist = buildLaunchAgentPlist({
  label: options.label,
- nodePath: process.execPath,
+ nodePath,
  syncScriptPath: path.join(repoRoot, 'scripts', 'sync-main-to-mac.mjs'),
  syncRoot: options.syncRoot,
  logDir: options.logDir,
  intervalSeconds: options.intervalSeconds,
- envPath: process.env.PATH ?? '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+ envPath,
   });
   await writeFile(options.launchAgentPath, plist);
   await chmod(options.launchAgentPath, 0o644);
+  return nodePath;
 }
 
 function reloadLaunchAgent(launchAgentPath, label) {
@@ -137,15 +221,15 @@ function reloadLaunchAgent(launchAgentPath, label) {
   if (!uid) {
  throw new Error('Could not determine user id for launchctl bootstrap');
   }
-  spawnSync('launchctl', ['bootout', `gui/${uid}`, launchAgentPath], { stdio: 'ignore' });
-  runCommand('launchctl', ['bootstrap', `gui/${uid}`, launchAgentPath]);
-  runCommand('launchctl', ['enable', `gui/${uid}/${label}`]);
-  runCommand('launchctl', ['kickstart', '-k', `gui/${uid}/${label}`]);
+  spawnSync(LAUNCHCTL_PATH, ['bootout', `gui/${uid}`, launchAgentPath], { stdio: 'ignore' });
+  runCommand(LAUNCHCTL_PATH, ['bootstrap', `gui/${uid}`, launchAgentPath]);
+  runCommand(LAUNCHCTL_PATH, ['enable', `gui/${uid}/${label}`]);
+  runCommand(LAUNCHCTL_PATH, ['kickstart', '-k', `gui/${uid}/${label}`]);
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  await installLaunchAgent(options);
+  const nodePath = await installLaunchAgent(options);
   if (options.start) {
  reloadLaunchAgent(options.launchAgentPath, options.label);
   }
@@ -153,6 +237,7 @@ async function main() {
  label: options.label,
  launchAgentPath: options.launchAgentPath,
  syncRoot: options.syncRoot,
+ nodePath,
  intervalSeconds: options.intervalSeconds,
  started: options.start,
   }, null, 2));
@@ -161,8 +246,10 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
-  main().catch((error) => {
+  try {
+ await main();
+  } catch (error) {
  console.error(`[setup-main-sync-agent] Failed: ${error instanceof Error ? error.message : String(error)}`);
  process.exit(1);
-  });
+  }
 }

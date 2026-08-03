@@ -56,7 +56,7 @@ roadmap was created, so each task must reproduce its finding against fresh
 | Finding | Audit evidence | Initial disposition |
 |---|---|---|
 | Broken main-sync agent | LaunchAgent references removed Homebrew Node 25.8.2; exits `EX_CONFIG` every interval | Confirmed in current setup source |
-| Stale installed application | Sync state at `dfbf72ce`; canonical main later than installed state | Confirm after REL-001 repair |
+| Stale installed application | Repaired sync installed canonical main `a57e901e` on 2026-08-02 | REL-001 live acceptance passed |
 | ML worker failure | 184 `Offset should not be negative` errors; ready state survives fatal error | Confirmed in current manager source |
 | Misleading prediction RED | Raw score mixes 270 proxy and 297 late labels; rigorous holdout had only 26 usable direct records | Revalidate under an `ACC-NNN` task |
 | UI startup/input defects | God's Vision readiness, Escape ownership, pointer interception, zero-coordinate URL, initial APT load | Reproduce individually on current main |
@@ -105,11 +105,13 @@ roadmap was created, so each task must reproduce its finding against fresh
 
 ### REL-001 — Stable main-sync executable
 
-Status: `DESIGN`
+Status: `IN REVIEW`
 
 Owner: Codex
 
 Branch: `codex/reliability-remediation-20260802`
+
+PR: [#1612](https://github.com/bradleybond512/crystal-ball/pull/1612)
 
 Risk: High Assurance
 
@@ -147,6 +149,28 @@ Verify:
 
 Rollback: rerun the previous setup script or boot out the user LaunchAgent;
 never install an unchecked build manually as fallback.
+
+Evidence (2026-08-02):
+
+- reproduced LaunchAgent exit `78` with a missing Homebrew Cellar executable;
+- red-green mutation proof progressed from 4 failing / 6 passing focused tests
+  to 11 passing tests after stable-launcher, policy, PATH, and XML coverage;
+- temporary-root setup selected `/opt/homebrew/opt/node@22/bin/node`, and
+  `plutil -lint` accepted the generated plist;
+- the repaired live agent installed checked main `a57e901e` to
+  `~/Applications/Crystal Ball.app`, recorded SHA-256
+  `5ced3abd6d0a7bcbf44e153250f0be91bb1a96065c0f74e3502c8f782d5a93ed`,
+  and relaunched the application and sidecar. A second setup completed
+  idempotently and reported the same commit as already installed and healthy;
+- focused ESLint, `lint:strict`, `docs:check`, `secrets:scan`, and
+  `typecheck:all` passed. The broad `test:data` run passed 810 of 812 tests;
+  the two failures are pre-existing REL-402/REL-406 inputs: a panels bundle
+  budget overage and a stale workflow action-pin assertion. The required
+  agentic gate was executed and stopped at those same two failures.
+- security/privacy review found no new data collection, credentials, network
+  destinations, or untrusted PATH entries. Runtime overhead is unchanged;
+  executable probing occurs only during setup. Recovery is rerunning setup
+  after installing Node 22, or booting out the user LaunchAgent.
 
 ### REL-002 — Main-sync health, retention, and commit visibility
 

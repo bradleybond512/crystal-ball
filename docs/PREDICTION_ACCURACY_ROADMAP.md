@@ -934,11 +934,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 89 unit tests in
+- 102 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
-  regression per demonstrated PASS-on-nothing across six review rounds).
+  regression per demonstrated PASS-on-nothing across seven review rounds).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1185,6 +1185,46 @@ against each other.
   `('a::b','c')` one key, silently merging two distinct pairs into one ledger
   row. Each id is now length-prefixed, the same framing the corpus digest uses.
   This is what moved the digest, and the baseline was re-seeded for it.
+
+Seventh-round hardening from the same reviewer (baseline `schemaVersion: 7`,
+corpus digest unchanged at `8411c23a6f009f2245ec779a7593685e` — nothing here
+perturbs the corpus). Round 6 made every EDGE and PAIR conclusion derivable from
+planted truth. The reviewer then showed that the conclusions round 6 did not
+reach were still authored by the pass that reported them: three P1 + two P2 + one
+P3, each demonstrated as a mutation that PASSED the round-6 gate.
+
+- **Pass B has a row ledger too.** The four learned-rule counters (`101 / 19 /
+  [7,6,6] / 6`) had no row-level witness at all: forcing the second engine pass
+  to emit nothing and restoring the four numbers returned PASS. The report now
+  persists `learnedPairs` — one row per (learned rule, event pair) with both
+  endpoints — and the gate derives all four counters from it. The row key is
+  length-prefixed (`${ruleId.length}:${ruleId}${key}`) for the same reason
+  `pairKeyFor` is: a bare separator is not a boundary.
+- **The causal roster is re-derived from the graded edge rows.** It decides
+  which learned emissions count as causal volume, so authoring it next to the
+  grading launders a false rule's pairs. `checkCausalLearnedRoster` rebuilds it
+  with `learnedRuleId()` from the edges graded causal against planted truth.
+- **Rules are probed, not just inventoried.** An id in `builtInRuleIds` proves a
+  rule is REGISTERED, not that its matcher still decides anything: five of the
+  nine built-ins fire nowhere in the corpus, and forcing all five to return
+  false left every number — and the verdict — unchanged. `__bench__/rule-probes.ts`
+  gives each of the nine a positive fixture and a near-miss violating exactly one
+  clause; the fixtures sit OUTSIDE the corpus, so they perturb no metric and no
+  digest. A missing probe fails as loudly as a failing one. `ruleCoverage` (which
+  four rules actually emit) is pinned by set equality and re-derived from the
+  pair ledger, and a pair emission attributed to a rule the graded pass never
+  registered is rejected.
+- **Confidence cannot be a placeholder.** An exact 0 or 1, or one constant
+  across the whole ledger, means the kernel ranked nothing — and every mean-based
+  gate reads that as a clean score.
+- **The baseline's false-positive breakdown is gated per category.** Rewriting
+  `2/1/0/0/14` to `0/0/0/0/17` preserved the total the gate read and retired the
+  confounded and mediated traps in silence. Each category now has its own
+  zero-growth gate.
+- **Edge rows validate their own window and their null coupling.** `windowHours`
+  must be one of the miner's configured windows (`DEFAULT_WINDOWS_MS`), and
+  `lift` and `zScore` are the same zero-chance-rate division — nulling every
+  lift while keeping 22 finite z-scores bought the infinity exemption.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

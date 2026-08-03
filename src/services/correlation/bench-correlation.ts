@@ -53,6 +53,9 @@ import {
   PLANTED_COUPLINGS,
   type PlantedCouplingKind,
 } from './__bench__/golden-streams';
+import { probeBuiltInRules, type BenchRuleProbe } from './__bench__/rule-probes';
+
+export type { BenchRuleProbe } from './__bench__/rule-probes';
 
 const DAY_MS = 86_400_000;
 
@@ -108,6 +111,26 @@ export interface BenchPairRow {
   decoyEmissions: number;
 }
 
+/**
+ * One DISTINCT event pair emitted by ONE learned rule in pass B.
+ *
+ * Pass B used to report four bare counters — total pair volume, the causal
+ * subset, the per-rule breakdown and its minimum — reconciled against nothing.
+ * Forcing pass B to emit no pairs at all and restoring only those four numbers
+ * produced a clean PASS: a dead synthesize → install → match path reads exactly
+ * like a live one. The counters are now derived from these rows.
+ */
+export interface BenchLearnedPairRow {
+  /** The emitting `learned:*` rule. */
+  ruleId: string;
+  key: string;
+  /** The two event ids behind `key`, sorted, so the gate can rebuild it. */
+  eventIdA: string;
+  eventIdB: string;
+  /** Raw emissions of this pair by this rule. */
+  emissions: number;
+}
+
 export interface CorrelationBenchReport {
   // ── corpus identity (exact-equality drift detection) ──
   streamCount: number;
@@ -132,6 +155,25 @@ export interface CorrelationBenchReport {
    * say why.
    */
   builtInRuleIds: string[];
+  /**
+   * Per-rule positive/near-miss coverage, from `probeBuiltInRules()`.
+   *
+   * Inventory equality proves an ID still exists, not that the matcher behind
+   * it still works — and only four of the nine rules fire anywhere in the
+   * corpus, so the other five could be turned permanently false with every
+   * benchmark number unchanged. Each rule is therefore exercised against two
+   * hand-built fixtures outside the corpus, and the gate requires all of them
+   * to match their positive and reject their near-miss.
+   */
+  ruleProbes: BenchRuleProbe[];
+  /**
+   * Built-in rules that emitted at least one pair over the corpus, sorted.
+   *
+   * Pinned by exact set equality: a rule that fires today and stops firing
+   * tomorrow changes no rate enough to trip a tolerance, but it does change
+   * this set.
+   */
+  ruleCoverage: string[];
 
   // ── miner: discovery quality ──
   minedEdgeCount: number;
@@ -252,10 +294,20 @@ export interface CorrelationBenchReport {
    * fired. This is the field the liveness gate reads.
    */
   minCausalLearnedRulePairCount: number;
+  /**
+   * Every synthesized rule descended from a planted-causal edge, sorted.
+   *
+   * The roster, not the firing set: a causal rule that emitted nothing still
+   * appears here, which is what makes `minCausalLearnedRulePairCount` able to
+   * report a zero. Independently re-derivable by the gate from the causal edge
+   * rows that carry `becameLearnedRule`.
+   */
+  causalLearnedRuleIds: string[];
 
   // ── row-level ledgers: the gate re-derives the summaries above from these ──
   edges: BenchEdgeRow[];
   pairs: BenchPairRow[];
+  learnedPairs: BenchLearnedPairRow[];
 }
 
 export function runCorrelationBenchmark(): CorrelationBenchReport {
@@ -341,10 +393,11 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
       .map((e) => learnedRuleId(e))
       .filter((id) => learnedIds.has(id)),
   );
-  const learnedPairs = runEngine(observations, learnedRules)
+  const emitted = runEngine(observations, learnedRules)
     .filter((p: CorrelatedPair) => p.ruleId.startsWith(LEARNED_RULE_PREFIX));
-  const learnedRulePairCount = learnedPairs.length;
-  const causalLearnedRulePairCount = learnedPairs
+  const learnedPairs = ledgerLearnedPairs(emitted);
+  const learnedRulePairCount = emitted.length;
+  const causalLearnedRulePairCount = emitted
     .filter((p: CorrelatedPair) => causalLearnedRuleIds.has(p.ruleId))
     .length;
   // Seeded from the rule IDS, not from the emitted pairs: a rule that fired
@@ -353,11 +406,13 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   const perCausalRule = new Map<string, number>(
     [...causalLearnedRuleIds].map((id) => [id, 0]),
   );
-  for (const p of learnedPairs) {
+  for (const p of emitted) {
     const seen = perCausalRule.get(p.ruleId);
     if (seen !== undefined) perCausalRule.set(p.ruleId, seen + 1);
   }
   const causalLearnedRulePairsPerRule = [...perCausalRule.values()].sort((a, b) => b - a);
+
+  const emittingRules = new Set(graded.pairs.flatMap((p) => p.ruleIds));
 
   return {
     streamCount: GOLDEN_STREAMS.length,
@@ -365,6 +420,11 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     plantedCausalCount: plantedCausal.length,
     corpusDigest: goldenCorpusDigest(),
     builtInRuleIds: builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b)),
+    ruleProbes: probeBuiltInRules(),
+    ruleCoverage: builtInCorrelationRules
+      .map((r) => r.id)
+      .filter((id) => emittingRules.has(id))
+      .sort((a, b) => a.localeCompare(b)),
 
     minedEdgeCount: mined.length,
     significantEdgeCount: significant.length,
@@ -411,10 +471,38 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     // reads as 0, which the baseline's must-arm check then rejects outright.
     minCausalLearnedRulePairCount:
       causalLearnedRulePairsPerRule[causalLearnedRulePairsPerRule.length - 1] ?? 0,
+    causalLearnedRuleIds: [...causalLearnedRuleIds].sort((a, b) => a.localeCompare(b)),
 
     edges,
     pairs: graded.pairs,
+    learnedPairs,
   };
+}
+
+/**
+ * Pass B's emissions, grouped one row per (rule, distinct event pair).
+ *
+ * Sorted by rule then key so the ledger is byte-stable across runs — the report
+ * is committed as a baseline, and an unstable row order is a diff every re-seed
+ * has to read past.
+ */
+function ledgerLearnedPairs(pairs: readonly CorrelatedPair[]): BenchLearnedPairRow[] {
+  const rows = new Map<string, BenchLearnedPairRow>();
+  for (const pair of pairs) {
+    const key = pairKeyFor(pair.eventA.id, pair.eventB.id);
+    const rowKey = `${pair.ruleId.length}:${pair.ruleId}${key}`;
+    const row = rows.get(rowKey);
+    if (row === undefined) {
+      const [idA, idB] = pair.eventA.id < pair.eventB.id
+        ? [pair.eventA.id, pair.eventB.id]
+        : [pair.eventB.id, pair.eventA.id];
+      rows.set(rowKey, { ruleId: pair.ruleId, key, eventIdA: idA, eventIdB: idB, emissions: 1 });
+      continue;
+    }
+    row.emissions += 1;
+  }
+  return [...rows.values()].sort((a, b) =>
+    a.ruleId.localeCompare(b.ruleId) || a.key.localeCompare(b.key));
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

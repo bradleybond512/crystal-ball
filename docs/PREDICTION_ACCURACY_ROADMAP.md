@@ -934,11 +934,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 102 unit tests in
+- 108 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
-  regression per demonstrated PASS-on-nothing across seven review rounds).
+  regression per demonstrated PASS-on-nothing across eight review rounds).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1225,6 +1225,31 @@ P3, each demonstrated as a mutation that PASSED the round-6 gate.
   must be one of the miner's configured windows (`DEFAULT_WINDOWS_MS`), and
   `lift` and `zScore` are the same zero-chance-rate division — nulling every
   lift while keeping 22 finite z-scores bought the infinity exemption.
+
+Eighth-round hardening from the same reviewer (corpus digest still unchanged).
+Round 7 gave every conclusion a row-level witness. The reviewer then showed the
+remaining soft spots are the numbers the gate never RE-DERIVES — five mutations,
+each demonstrated as a PASS against the round-7 gate:
+
+- **The mined-candidate count has a ceiling, not just a floor.** It was gated
+  for shrink only, so `minedEdgeCount: Number.MAX_SAFE_INTEGER` passed. The
+  miner tests each ordered pair of OBSERVED domains at each configured window,
+  and that product (1088 here) is a hard upper bound on any run.
+- **Pinned rosters are sets on the live side too.** Set equality is
+  symmetric-difference, so a repeated id is invisible to it — and the inventory
+  is what the per-rule counters are denominated in. Repeats are now rejected.
+- **Coverage probes must name a registered rule.** Probes are counted, so an
+  invented passing probe was free coverage; a probe outside the inventory the
+  graded pass registered is rejected.
+- **Edge evidence has to look like a measurement.** Every threshold on a row is
+  a per-row FLOOR, so one admissible constant repeated across all 22 rows
+  cleared all of them, and separation — derived from those same z-scores —
+  agreed. A constant `support`, `lift` or `zScore` column is rejected: a miner
+  that ranked nothing is not mining.
+- **Edge endpoints must be domains the corpus observed.** "Not in the planted
+  index" and "not in the corpus" were the same answer, so renaming the 14
+  false-positive rows to invented domains kept them graded `unplanted` and
+  reconciled against every summary.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

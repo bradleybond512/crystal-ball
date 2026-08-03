@@ -39,7 +39,7 @@ import type {
 // every endpoint to a fabricated id and the rows still agree with the summaries
 // they were generated alongside. Truth comes from the corpus or it is not truth.
 import {
-  decoyEventIds, pairKeyFor, plantedCouplingIndex, plantedTruePairKeys,
+  corpusDomains, decoyEventIds, pairKeyFor, plantedCouplingIndex, plantedTruePairKeys,
 } from './__bench__/golden-streams';
 import { DEFAULT_WINDOWS_MS } from './lead-lag';
 import { LEARNED_RULE_PREFIX, learnedRuleId } from './learned-rules';
@@ -515,6 +515,18 @@ function checkIdSet(
     reasons.push(`live report carries no ${field} roster`);
     return;
   }
+  // Set equality is symmetric-difference, so a repeat is invisible to it: a
+  // roster can be padded without changing what it pins. A roster is a set on
+  // both sides or the counts derived from it are not counts.
+  const repeated = [...new Set((got as string[]).filter(
+    (id, i) => (got as string[]).indexOf(id) !== i,
+  ))];
+  if (repeated.length > 0) {
+    reasons.push(
+      `report is internally inconsistent: ${field} repeats [${repeated.join(', ')}] — ${label} ` +
+      `is a set, and a padded roster is one more number the report authored about itself`,
+    );
+  }
   const missing = (want as string[]).filter((id) => !got.includes(id));
   const added = (got as string[]).filter((id) => !want.includes(id));
   if (missing.length > 0 || added.length > 0) {
@@ -549,6 +561,16 @@ function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): voi
     }
     if (probed.has(p.ruleId)) {
       reasons.push(`rule coverage probe for '${p.ruleId}' appears twice`);
+      continue;
+    }
+    if (!report.builtInRuleIds.includes(p.ruleId)) {
+      // Otherwise the probe roster and the inventory can diverge: padding the
+      // probes with a fabricated rule satisfies the "every rule is probed"
+      // check against a rule that does not exist.
+      reasons.push(
+        `rule coverage probe names '${p.ruleId}', which is not in the built-in inventory the ` +
+        `graded pass registered — a probe is evidence about a shipped rule or it is nothing`,
+      );
       continue;
     }
     probed.add(p.ruleId);
@@ -1165,6 +1187,15 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
       `below significantEdgeCount=${report.significantEdgeCount}, but significant edges are a ` +
       `filtered subset of the mined ones`,
     );
+  } else if (report.minedEdgeCount > maxMinableEdges()) {
+    // The candidate population is gated for SHRINK, so it had an unbounded
+    // ceiling: `minedEdgeCount: Number.MAX_SAFE_INTEGER` passed. The miner tests
+    // each ordered pair of observed domains at each configured window, and that
+    // product is a hard upper bound on what any run could have mined.
+    reasons.push(
+      `report is internally inconsistent: minedEdgeCount=${report.minedEdgeCount} exceeds the ` +
+      `${maxMinableEdges()} ordered domain-pair/window candidates this corpus can produce`,
+    );
   }
   if (report.edges.length !== report.significantEdgeCount) {
     reasons.push(
@@ -1215,6 +1246,12 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
   }
 }
 
+/** Ordered pairs of observed domains × configured windows — the miner's ceiling. */
+function maxMinableEdges(): number {
+  const d = corpusDomains().size;
+  return d * (d - 1) * DEFAULT_WINDOWS_MS.length;
+}
+
 /**
  * `bench-correlation` clamps `+Infinity` z to this before averaging, and the
  * separation re-derivation below has to clamp identically or it would
@@ -1232,6 +1269,8 @@ const Z_CAP = 50;
  */
 function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void {
   const planted = plantedCouplingIndex();
+  const domains = corpusDomains();
+  const evidence: BenchEdgeRow[] = [];
   const seen = new Set<string>();
   const causalZ: number[] = [];
   const falseZ: number[] = [];
@@ -1241,6 +1280,20 @@ function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void 
     if (typeof e.from !== 'string' || typeof e.to !== 'string' || e.from === '' || e.to === ''
       || e.from === e.to) {
       reasons.push(`report is internally inconsistent: ${where} has no distinct endpoints`);
+      continue;
+    }
+    // An endpoint the corpus never observed grades as 'unplanted' — which is
+    // precisely the verdict a fabricated name is reaching for. Renaming the 14
+    // unplanted rows to invented domains reconciled against every summary,
+    // because "not in the planted index" and "not in the corpus" were the same
+    // answer. The miner can only name domains it observed.
+    const strays = [e.from, e.to].filter((d) => !domains.has(d));
+    if (strays.length > 0) {
+      reasons.push(
+        `report is internally inconsistent: ${where} names [${strays.join(', ')}], which the ` +
+        `corpus never observed — the miner cannot emit an edge between domains it never saw, ` +
+        `and an unknown endpoint grades as 'unplanted' for free`,
+      );
       continue;
     }
     // Keyed on the DIRECTED PAIR, with no window component. The miner emits one
@@ -1269,9 +1322,38 @@ function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void 
     // A null z is +Infinity upstream — "certain", capped rather than dropped,
     // exactly as the report's own mean does it.
     (truth === 'causal' ? causalZ : falseZ).push(Math.min(Z_CAP, e.zScore ?? Z_CAP));
+    evidence.push(e);
   }
+  checkEdgeEvidenceSpread(reasons, evidence);
   checkVerdictBreakdown(reasons, report, byVerdict, causalZ.length);
   checkSeparationDerivation(reasons, report, causalZ, falseZ);
+}
+
+/**
+ * The miner's evidence columns have to look like a measurement, not a fill.
+ *
+ * Every threshold check below is a per-row floor, so rewriting `support`,
+ * `lift` and `zScore` to the same admissible constant on all 22 rows passed
+ * each of them — and separation is derived from those same z-scores, so it
+ * agreed too. A miner that assigns every edge identical evidence has ranked
+ * nothing, which is the same defect the pair-confidence guard catches one layer
+ * down: the numbers are present and the measurement is gone.
+ */
+function checkEdgeEvidenceSpread(reasons: string[], rows: readonly BenchEdgeRow[]): void {
+  if (rows.length < 2) return;
+  const columns: readonly (readonly [string, readonly (number | null)[]])[] = [
+    ['support', rows.map((e) => e.support)],
+    ['lift', rows.map((e) => e.lift)],
+    ['zScore', rows.map((e) => e.zScore)],
+  ];
+  for (const [name, values] of columns) {
+    if (new Set(values).size > 1) continue;
+    reasons.push(
+      `report is internally inconsistent: all ${rows.length} edge row(s) carry the identical ` +
+      `${name} ${String(values[0])} — the miner ranked nothing, and every threshold check is a ` +
+      `per-row floor an admissible constant clears`,
+    );
+  }
 }
 
 /**

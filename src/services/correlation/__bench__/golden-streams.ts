@@ -798,6 +798,18 @@ export function plantedTruePairKeys(): Set<string> {
   return new Set(GOLDEN_STREAMS.flatMap((s) => [...s.truePairKeys]));
 }
 
+/**
+ * Every domain the corpus actually contains.
+ *
+ * The lead-lag miner only ever names domains it observed, so an edge row
+ * pointing at anything else did not come from this corpus — and an endpoint the
+ * planted index does not know grades as `unplanted`, which is exactly the
+ * verdict a fabricated name wants.
+ */
+export function corpusDomains(): Set<string> {
+  return new Set(GOLDEN_STREAMS.flatMap((s) => s.observations.map((o) => o.domain)));
+}
+
 /** Events that must never appear in any emitted pair. */
 export function decoyEventIds(): Set<string> {
   return new Set(GOLDEN_STREAMS.flatMap((s) => [...s.decoyEventIds]));

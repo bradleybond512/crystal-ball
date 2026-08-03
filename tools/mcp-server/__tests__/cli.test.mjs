@@ -23,13 +23,96 @@ test('CLI exposes stable help and offline capability contracts', () => {
   assert.match(help.stdout, /doctor/);
   assert.match(help.stdout, /safeguard-demo/);
   assert.match(help.stdout, /evidence/);
+  assert.match(help.stdout, /evaluation-report/);
 
   const capabilities = run(['capabilities', '--json']);
   assert.equal(capabilities.status, 0, capabilities.stderr);
   const payload = JSON.parse(capabilities.stdout);
-  assert.equal(payload.tools.length, 59);
+  assert.equal(payload.tools.length, 61);
   assert.equal(payload.compatibility.protocol, '2025-03-26');
   assert.ok(payload.tools.every((tool) => tool.permission?.label));
+});
+
+test('CLI reads latest weekly evaluation reports in human and JSON formats', () => {
+  const home = mkdtempSync(join(tmpdir(), 'crystalball-cli-evaluation-'));
+  const currentWeek = utcMonday(Date.now());
+  const weekStart = currentWeek - 7 * 24 * 60 * 60_000;
+  const directory = join(home, '.crystal-ball', 'monitor', 'evaluation-reports');
+  mkdirSync(directory, { recursive: true });
+  const report = unavailableReport(weekStart, currentWeek);
+  writeFileSync(join(directory, `weekly-${dateOnly(weekStart)}.json`), JSON.stringify(report));
+
+  const human = run(['evaluation-report'], { HOME: home });
+  assert.equal(human.status, 0, human.stderr);
+  assert.match(human.stdout, new RegExp(dateOnly(weekStart)));
+  assert.match(human.stdout, /restore_monitor/);
+
+  const json = run(['evaluation-report', '--json', '--week', dateOnly(weekStart)], { HOME: home });
+  assert.equal(json.status, 0, json.stderr);
+  assert.deepEqual(JSON.parse(json.stdout), {
+    available: true,
+    reasonCode: null,
+    report,
+  });
+});
+
+test('CLI weekly evaluation uses closed no-data and usage exit semantics', () => {
+  const home = mkdtempSync(join(tmpdir(), 'crystalball-cli-evaluation-empty-'));
+  const missing = run(['evaluation-report', '--json'], { HOME: home });
+  assert.equal(missing.status, 2, missing.stderr);
+  assert.deepEqual(JSON.parse(missing.stdout), {
+    available: false,
+    reasonCode: 'no_weekly_report',
+    report: null,
+  });
+
+  const generate = run(['evaluation-report', '--generate', '--json'], { HOME: home });
+  assert.equal(generate.status, 2, generate.stderr);
+  assert.deepEqual(JSON.parse(generate.stdout), {
+    available: false,
+    reasonCode: 'no_weekly_accumulator',
+    finalizedReports: [],
+    reports: [],
+    accumulator: null,
+  });
+
+  const currentWeek = utcMonday(Date.now());
+  const initializedWeekStart = currentWeek - 7 * 24 * 60 * 60_000;
+  const monitorDirectory = join(home, '.crystal-ball', 'monitor');
+  mkdirSync(monitorDirectory, { recursive: true });
+  writeFileSync(join(monitorDirectory, 'weekly-accumulator.json'), JSON.stringify({
+    schemaVersion: 1,
+    initializedWeekStart,
+    lastFinalizedWeekStart: null,
+    omittedCatchupWeeks: 0,
+    weeks: [],
+  }));
+  const generated = run(['evaluation-report', '--generate', '--json'], { HOME: home });
+  assert.equal(generated.status, 0, generated.stderr);
+  const generatedPayload = JSON.parse(generated.stdout);
+  assert.equal(generatedPayload.available, true);
+  assert.equal(generatedPayload.finalizedReports.length, 1);
+  assert.equal(generatedPayload.finalizedReports[0].period.weekStart, initializedWeekStart);
+
+  const generatedSelection = run([
+    'evaluation-report',
+    '--generate',
+    '--week',
+    dateOnly(initializedWeekStart),
+    '--json',
+  ], { HOME: home });
+  assert.equal(generatedSelection.status, 0, generatedSelection.stderr);
+  assert.equal(JSON.parse(generatedSelection.stdout).report.period.weekStart, initializedWeekStart);
+
+  for (const args of [
+    ['evaluation-report', '--week', '2026-07-28'],
+    ['evaluation-report', '--week'],
+    ['evaluation-report', '--unknown'],
+    ['evaluation-report', '--json', '--json'],
+  ]) {
+    const invalid = run(args, { HOME: home });
+    assert.equal(invalid.status, 64, `${args.join(' ')}\n${invalid.stderr}`);
+  }
 });
 
 test('CLI safeguard demo never depends on local runtime state', () => {
@@ -121,3 +204,70 @@ test('CLI doctor does not treat an unrelated Codex config as Crystal Ball regist
   report = JSON.parse(result.stdout);
   assert.equal(report.checks.clients.configured, 0);
 });
+
+function utcMonday(at) {
+  const date = new Date(at);
+  const midnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return midnight - ((date.getUTCDay() + 6) % 7) * 24 * 60 * 60_000;
+}
+
+function dateOnly(at) {
+  return new Date(at).toISOString().slice(0, 10);
+}
+
+function unavailableReport(weekStart, generatedAt) {
+  return {
+    schemaVersion: 1,
+    reportType: 'weekly_evaluation',
+    generatedAt,
+    period: {
+      weekStart,
+      weekEnd: weekStart + 7 * 24 * 60 * 60_000,
+      timezone: 'UTC',
+      complete: true,
+    },
+    availability: 'unavailable',
+    coverage: {
+      observations: 0,
+      fresh: 0,
+      stale: 0,
+      unavailable: 0,
+      firstObservedAt: null,
+      lastObservedAt: null,
+    },
+    championChallenger: { availability: 'unavailable', active: null, challengers: [] },
+    predictions: { availability: 'unavailable', endOfWeek: null, changeDuringWeek: null },
+    drift: {
+      model: {
+        availability: 'unavailable',
+        brierStart: null,
+        brierEnd: null,
+        brierDelta: null,
+        resolutionCoverageStart: null,
+        resolutionCoverageEnd: null,
+        largestVersionLossShare: null,
+      },
+      providers: { availability: 'unavailable', rows: [] },
+    },
+    changes: {
+      promoted: { availability: 'unavailable', count: null, rows: [], omitted: 0 },
+      rejected: {
+        availability: 'unavailable',
+        count: null,
+        reasonCode: 'no_runtime_rejection_history',
+      },
+    },
+    nextRecommendedTask: {
+      availability: 'available',
+      scope: 'operational',
+      code: 'restore_monitor',
+      roadmapTask: null,
+    },
+    limitations: [
+      'app_closed',
+      'partial_week',
+      'no_rejection_ledger',
+      'roadmap_metadata_unavailable',
+    ],
+  };
+}

@@ -2,7 +2,7 @@
   "name": "crystalball-mcp",
   "version": "0.3.0",
   "private": true,
-  "description": "Crystal Ball MCP server — 59 tools across 9 categories",
+  "description": "Crystal Ball MCP server — 61 tools across 9 categories",
   "type": "module",
   "bin": {
     "crystalball": "./cli.mjs",
@@ -17,6 +17,7 @@
     "doctor.mjs",
     "evidence-packet.mjs",
     "forecast-evaluation-public.mjs",
+    "local-lock.mjs",
     "tools",
     "index.mjs",
     "install-monitor.mjs",
@@ -29,7 +30,8 @@
     "server-meta.mjs",
     "sidecar-client.mjs",
     "storage.mjs",
-    "tool-registry.mjs"
+    "tool-registry.mjs",
+    "weekly-evaluation-report.mjs"
   ],
   "scripts": {
     "start": "node index.mjs",

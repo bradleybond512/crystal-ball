@@ -40,8 +40,15 @@ import {
 import { getCalibrationStore } from './intelligence/forecast-calibration-adapter';
 import { getSpotPriceDiagnostics } from './market/spot-price-store';
 import { getLatestStormReportBatch } from './spc-outlook';
+import {
+  buildEvaluationReportProjectionV1,
+  composeChampionStatusRuntime,
+  type ChampionStatusRuntimeSnapshot,
+  type EvaluationReportProjectionV1,
+} from './cognition/champion-status-runtime';
 
 const ENDPOINT = '/api/analyst-state';
+const EVALUATION_REPORT_REFRESH_MS = 15 * 60_000;
 
 interface AccuracyRow { kind: string; hits: number; misses: number; ratio: number }
 interface ThreadRow {
@@ -76,6 +83,8 @@ interface PushPayload {
   pipelineTrace?: ReturnType<ReturnType<typeof getPipelineTraceRegistry>['snapshot']>;
   /** Compact algorithm health, latency, tuning, and evaluation snapshot. */
   algorithmDiagnostics?: AlgorithmDiagnosticsSnapshot;
+  /** Strictly bounded weekly-evaluation input projection. */
+  evaluationReportProjection?: EvaluationReportProjectionV1;
 }
 
 let lastPushAt = 0;
@@ -83,6 +92,7 @@ const MIN_PUSH_INTERVAL_MS = 2000; // debounce to coalesce burst events
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingPayload: PushPayload = { timestamp: 0 };
 let flushInFlight = false;
+let lastEvaluationReportProjectionAt: number | null = null;
 
 async function flush(): Promise<void> {
   pendingTimer = null;
@@ -121,7 +131,8 @@ function hasPendingPayload(): boolean {
     || pendingPayload.debugErrorCounts !== undefined
     || pendingPayload.metrics !== undefined
     || pendingPayload.pipelineTrace !== undefined
-    || pendingPayload.algorithmDiagnostics !== undefined;
+    || pendingPayload.algorithmDiagnostics !== undefined
+    || pendingPayload.evaluationReportProjection !== undefined;
 }
 
 function schedule(): void {
@@ -173,7 +184,7 @@ function refreshDiagnosticPayload(): void {
   pendingPayload.debugErrorCounts = { ...getErrorCounts() };
   pendingPayload.metrics = getMetricsSnapshot();
   pendingPayload.pipelineTrace = getPipelineTraceRegistry().snapshot();
-  pendingPayload.algorithmDiagnostics = buildAlgorithmDiagnosticsSnapshot({
+  const algorithmDiagnostics = buildAlgorithmDiagnosticsSnapshot({
     definitions: getAlgorithmDefinitions(),
     records: getAlgorithmEvaluationLedger().all(),
     forecastPredictions: getCalibrationStore().all(),
@@ -183,6 +194,76 @@ function refreshDiagnosticPayload(): void {
     tunings: getTunings(),
     tuningDecisions: getTuningDecisions(),
   });
+  pendingPayload.algorithmDiagnostics = algorithmDiagnostics;
+
+  const now = Date.now();
+  if (!evaluationReportProjectionRefreshDue(lastEvaluationReportProjectionAt, now)) return;
+  lastEvaluationReportProjectionAt = now;
+  let champion: ChampionStatusRuntimeSnapshot | null = null;
+  try {
+    champion = composeChampionStatusRuntime();
+  } catch {
+    // Champion evidence is optional in the projection; fail closed as unavailable.
+  }
+  const projection = buildEvaluationReportProjectionFromDiagnostics(
+    algorithmDiagnostics,
+    champion,
+  );
+  if (projection) pendingPayload.evaluationReportProjection = projection;
+}
+
+export function evaluationReportProjectionRefreshDue(
+  lastRefreshAt: number | null,
+  now: number,
+): boolean {
+  return lastRefreshAt === null
+    || (Number.isFinite(lastRefreshAt)
+      && Number.isFinite(now)
+      && now >= lastRefreshAt + EVALUATION_REPORT_REFRESH_MS);
+}
+
+export function buildEvaluationReportProjectionFromDiagnostics(
+  diagnostics: AlgorithmDiagnosticsSnapshot,
+  champion: ChampionStatusRuntimeSnapshot | null,
+): EvaluationReportProjectionV1 | null {
+  const forecast = diagnostics.forecastCalibration;
+  const summary = forecast.summary;
+  const overall = forecast.evaluation.overall;
+  const versionLossShares = forecast.evaluation.lossAttribution.byAlgorithmVersion
+    .map((row) => row.shareOfBrierLoss)
+    .filter((share) => Number.isFinite(share) && share >= 0 && share <= 1);
+  return buildEvaluationReportProjectionV1({
+    generatedAt: diagnostics.generatedAt,
+    forecast: {
+      total: summary.total,
+      resolved: summary.resolved,
+      pending: summary.pending,
+      overduePending: summary.overduePending,
+      expired: summary.expired,
+      resolutionCoverage: finiteRatioOrNull(
+        forecast.resolutionQuality.summary.resolutionCoverage,
+      ),
+      expirationRate: summary.total > 0
+        ? finiteRatioOrNull(summary.expired / summary.total)
+        : null,
+      metrics: {
+        brier: overall.brier,
+        logLoss: overall.logLoss,
+        brierSkill: overall.brierSkill,
+        equalMassEce: overall.equalMassEce,
+      },
+      largestVersionLossShare: versionLossShares.length > 0
+        ? Math.max(...versionLossShares)
+        : null,
+      quarantinedCount: diagnostics.health.algorithms
+        .filter((algorithm) => algorithm.status === 'unsafe').length,
+    },
+    champion,
+  }, () => diagnostics.generatedAt);
+}
+
+function finiteRatioOrNull(value: number): number | null {
+  return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────

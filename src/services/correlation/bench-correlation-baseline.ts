@@ -6,13 +6,14 @@
  * baseline next to this module, a pure comparison function, consumed by a CLI
  * script for the CI gate).
  *
- * Every tolerance below is ONE-SIDED. Improving a metric passes silently —
- * ACC-502 through ACC-506 are supposed to move these numbers in the good
- * direction, and a gate that fails on improvement is a gate people delete.
- * Regression past the tolerance fails. Corpus-identity fields are compared for
- * EXACT equality: if `golden-streams.ts` changes, the numbers are not
- * comparable and the baseline must be re-seeded deliberately, in a reviewed
- * diff.
+ * Every tolerance below is ONE-SIDED: regression past the tolerance fails, and
+ * an improvement never reads as one. Identity fields — the corpus digest, the
+ * rule inventory and the LEDGER DIGEST — are compared for exact equality, so a
+ * change that actually moves the miner does not pass silently either: it fails
+ * on identity and must be re-seeded deliberately, in a reviewed diff. That is
+ * the intended cost. The alternative is a benchmark whose row-level detail is
+ * pinned only to the process that generated it, where a producer change and its
+ * own witness move together (see `benchLedgerDigest`).
  *
  * Two properties are load-bearing and easy to lose:
  *
@@ -40,7 +41,8 @@ import type {
 // they were generated alongside. Truth comes from the corpus or it is not truth.
 import { runCorrelationBenchmark } from './bench-correlation';
 import {
-  corpusDomains, decoyEventIds, pairKeyFor, plantedCouplingIndex, plantedTruePairKeys,
+  corpusDomains, decoyEventIds, digestRecords, pairKeyFor, plantedCouplingIndex,
+  plantedTruePairKeys,
 } from './__bench__/golden-streams';
 import { DEFAULT_WINDOWS_MS } from './lead-lag';
 import { LEARNED_RULE_PREFIX, learnedRuleId } from './learned-rules';
@@ -134,7 +136,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 7;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 8;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -160,6 +162,12 @@ export interface CorrelationBenchBaseline {
   plantedCausalCount: number;
   truePairUniverse: number;
   corpusDigest: string;
+  /**
+   * Digest of the row-level ledgers the last reviewed run produced — see
+   * `benchLedgerDigest`. This is the only pin in the file that a change to
+   * `bench-correlation.ts` cannot move along with itself.
+   */
+  ledgerDigest: string;
   /** Every built-in rule id in the graded pass, sorted — pinned by set equality. */
   builtInRuleIds: string[];
   /**
@@ -181,7 +189,13 @@ export interface CorrelationBenchBaseline {
   inhibitoryEdgesReported: number;
   unplantedFalsePositives: number;
   falseEdgeCount: number;
-  edgeEvidenceSeparation: number;
+  /**
+   * `null` when the run this baseline was seeded from reported NO false edges —
+   * the perfect miner ACC-502..504 are aiming at, which has nothing to separate
+   * from. Requiring a number here made that outcome un-seedable: it passes the
+   * gate as an improvement, and then cannot become the next baseline.
+   */
+  edgeEvidenceSeparation: number | null;
   learnedRuleCount: number;
   learnedRuleFalsePositives: number;
   causalLearnedRuleCount: number;
@@ -298,6 +312,16 @@ function separationOperand(value: number | null | undefined): unknown {
   return value;
 }
 
+/**
+ * A committed `null` separation is a measured outcome — no false edges to
+ * separate from — only when the same baseline says so. Everywhere else it is a
+ * missing number wearing the perfect miner's clothes, and it must fail the
+ * finite-operand check like any other absent field.
+ */
+function baselineSeparationIsPerfect(baseline: CorrelationBenchBaseline): boolean {
+  return baseline.edgeEvidenceSeparation === null && baseline.falseEdgeCount === 0;
+}
+
 /** The range a gated metric is DEFINED over — see `checkOperand`. */
 type GateRange = 'rate' | 'count' | 'separation';
 
@@ -388,12 +412,42 @@ const MUST_ARM_ITS_GATE: readonly [
   ['meanTruePairConfidence', 'meanTruePairConfidenceDrop'],
 ];
 
+/**
+ * `edgeEvidenceSeparation` and `falseEdgeCount` describe the same run and must
+ * agree about whether that run had false edges at all. Allowing a null
+ * separation opened exactly one new way to disarm the gate: `null` with false
+ * edges still on the books skips the separation drop check entirely.
+ */
+function checkBaselineSeparationCoherence(
+  reasons: string[],
+  baseline: CorrelationBenchBaseline,
+): void {
+  const sep = baseline.edgeEvidenceSeparation;
+  if (sep === null && baseline.falseEdgeCount !== 0) {
+    reasons.push(
+      `baseline edgeEvidenceSeparation is null but falseEdgeCount is ` +
+      `${baseline.falseEdgeCount} — null means the seed run had nothing to separate FROM, ` +
+      `so a baseline with false edges and no separation is a missing number, not a perfect run`,
+    );
+  }
+  if (sep !== null && baseline.falseEdgeCount === 0) {
+    reasons.push(
+      `baseline edgeEvidenceSeparation is ${sep} but falseEdgeCount is 0 — a run with no ` +
+      `false edges has no false z-scores to separate from`,
+    );
+  }
+}
+
 function checkBaselineArmsItsGates(
   reasons: string[],
   baseline: CorrelationBenchBaseline,
   tol: CorrelationBenchTolerances,
 ): void {
   for (const [field, spentAgainst] of MUST_ARM_ITS_GATE) {
+    // The one field with a legal non-number: a baseline seeded from a run with
+    // zero false edges has no separation to arm, and `falseEdgeGrowth` (which
+    // that same run pins at 0) is what fails if false edges come back.
+    if (field === 'edgeEvidenceSeparation' && baselineSeparationIsPerfect(baseline)) continue;
     const value: unknown = baseline[field];
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
       const shown = typeof value === 'number' ? String(value) : JSON.stringify(value);
@@ -675,6 +729,10 @@ export function compareCorrelationBenchToBaseline(
   checkRuleInventory(reasons, report, baseline);
   checkRuleCoverage(reasons, report, baseline);
   checkRuleProbes(reasons, report);
+  // Before the operand loop below: a null separation is either the perfect
+  // run's legitimate answer or a missing number, and `falseEdgeCount` is what
+  // decides which. Saying that plainly beats "not a finite number (null)".
+  checkBaselineSeparationCoherence(reasons, baseline);
   if (reasons.length > 0) return { ok: false, reasons };
 
   // ── Fail closed on anything non-numeric BEFORE any directional check ───
@@ -734,7 +792,8 @@ export function compareCorrelationBenchToBaseline(
       baseline.significantEdgeCount, report.significantEdgeCount],
     ['learned rules', 'count', baseline.learnedRuleCount, report.learnedRuleCount],
     ['causal-vs-false edge evidence separation', 'separation',
-      baseline.edgeEvidenceSeparation, separationOperand(report.edgeEvidenceSeparation)],
+      baselineSeparationIsPerfect(baseline) ? 0 : baseline.edgeEvidenceSeparation,
+      separationOperand(report.edgeEvidenceSeparation)],
   ];
   for (const [label, kind, want, got] of gated) {
     checkOperand(reasons, `${label}: baseline`, kind, want, BASELINE_HINT);
@@ -887,6 +946,9 @@ export function compareCorrelationBenchToBaseline(
   // Last, and the widest net: everything above asks whether a run COULD have
   // produced these numbers. This produces the run.
   checkReportIsReproducible(reasons, report);
+  // …and re-running the benchmark only proves the report matches THIS commit's
+  // producer. The committed digest is what the producer is measured against.
+  checkLedgerDigest(reasons, report, baseline);
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -1401,7 +1463,47 @@ function arrayDivergences(
     out.push(`${path}: ${b.length} row(s), expected ${a.length}`);
     return;
   }
+  // Own-key comparison, not just indices: an array can carry extra own
+  // properties, and `edges.note = '...'` is invisible to a length-and-elements
+  // walk while still riding along in whatever consumes the report.
+  if (!keyShapeAgrees(a, b, path, out)) return;
   for (const [i, v] of a.entries()) divergences(v, b[i], `${path}[${i}]`, out, limit);
+}
+
+/**
+ * Own ENUMERABLE keys on both sides, compared as sets.
+ *
+ * A union of `Object.keys()` read through normal property lookup accepts three
+ * separate forgeries: an object whose own field was deleted and re-supplied by
+ * its PROTOTYPE (`Object.create(realReport)` has no own keys at all and passed),
+ * an extra own key whose value is `undefined` (present on one side only, both
+ * reads `undefined`, compares equal), and a symbol or non-enumerable key that
+ * `Object.keys` never reports. The report is JSON on the wire; anything that is
+ * not a plain, own-keyed object is not a report.
+ *
+ * Returns false when the shapes already disagree, so the caller skips the
+ * per-key walk rather than emitting the same defect once per field.
+ */
+function keyShapeAgrees(a: object, b: object, path: string, out: string[]): boolean {
+  const proto = Object.getPrototypeOf(b) as unknown;
+  const wantProto = Array.isArray(b) ? Array.prototype : Object.prototype;
+  if (proto !== wantProto && proto !== null) {
+    out.push(`${path || '<report>'}: not a plain object (inherits from a prototype chain)`);
+    return false;
+  }
+  if (Object.getOwnPropertySymbols(b).length > 0) {
+    out.push(`${path || '<report>'}: carries symbol-keyed properties`);
+    return false;
+  }
+  const want = new Set(Object.keys(a));
+  const got = new Set(Object.keys(b));
+  const missing = [...want].filter((k) => !got.has(k));
+  const extra = [...got].filter((k) => !want.has(k));
+  if (missing.length === 0 && extra.length === 0) return true;
+  const at = path === '' ? '<report>' : path;
+  if (missing.length > 0) out.push(`${at}: missing own field(s) [${missing.join(', ')}]`);
+  if (extra.length > 0) out.push(`${at}: unexpected own field(s) [${extra.join(', ')}]`);
+  return false;
 }
 
 /** First `limit` structural divergences between two values, as field paths. */
@@ -1414,8 +1516,8 @@ function divergences(
     return;
   }
   if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
-    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    for (const k of [...keys].sort((x, y) => x.localeCompare(y))) {
+    if (!keyShapeAgrees(a, b, path, out)) return;
+    for (const k of Object.keys(a).sort((x, y) => x.localeCompare(y))) {
       divergences(
         (a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k],
         path === '' ? k : `${path}.${k}`, out, limit,
@@ -1423,7 +1525,9 @@ function divergences(
     }
     return;
   }
-  if (a !== b) out.push(`${path}: ${JSON.stringify(b)}, expected ${JSON.stringify(a)}`);
+  // `Object.is`, not `!==`: `-0 === 0` is true, and a sign flip on a mean is
+  // exactly the kind of thing this walk exists to notice.
+  if (!Object.is(a, b)) out.push(`${path}: ${JSON.stringify(b)}, expected ${JSON.stringify(a)}`);
 }
 
 /**
@@ -1442,6 +1546,93 @@ function divergences(
  * is what a human re-seeding a baseline needs to read, and this one catches
  * everything else.
  */
+/**
+ * Numbers enter the digest ROUNDED, at the precision the baseline already
+ * trusts. `zScore` and `lift` come off `Math.log`/`Math.exp`, which are
+ * implementation-defined to the last bit — pinning raw doubles would make the
+ * digest a cross-platform flake (seeded on macOS, verified on Linux CI) rather
+ * than a statement about the miner.
+ */
+function q(v: number | null): string {
+  return v === null ? 'null' : v.toFixed(4);
+}
+
+/**
+ * A digest of the report's ROW-LEVEL detail, pinned in the committed baseline.
+ *
+ * Every other check in this file is computed inside the same process that
+ * produced the report, against truth from the same commit. That is enough to
+ * catch a tampered report, and it is NOT enough to catch a tampered PRODUCER: a
+ * change inside `runCorrelationBenchmark()` moves the report and the
+ * comparator's re-run identically, and re-derivation agrees with itself.
+ * Deranged pair attribution, collapsed learned-pair rows and forged probe text
+ * all pass that way, because they move no aggregate the committed baseline pins.
+ *
+ * This digest is the anchor that lives OUTSIDE the process: it was written into
+ * the baseline JSON by a human re-seeding it, so it cannot move with the code
+ * that generates it. The cost is explicit and intended — a real change to the
+ * miner now fails here and must be re-seeded in a reviewed diff. That is the
+ * moment someone is supposed to read these rows.
+ */
+export function benchLedgerDigest(report: CorrelationBenchReport): string {
+  const records: string[] = [];
+  for (const e of report.edges) {
+    records.push(JSON.stringify([
+      'edge', e.from, e.to, e.verdict, e.support, e.antecedents,
+      q(e.lift), q(e.zScore), q(e.strength), e.windowHours, e.becameLearnedRule,
+    ]));
+  }
+  for (const p of report.pairs) {
+    records.push(JSON.stringify([
+      'pair', p.key, p.eventIdA, p.eventIdB, p.ruleIds,
+      p.confidences.map((c) => q(c)), p.isTruePair, p.decoyEmissions,
+    ]));
+  }
+  for (const l of report.learnedPairs) {
+    records.push(JSON.stringify([
+      'learnedPair', l.ruleId, l.key, l.eventIdA, l.eventIdB, l.emissions,
+    ]));
+  }
+  for (const p of report.ruleProbes) {
+    records.push(JSON.stringify([
+      'probe', p.ruleId, p.positiveMatched, p.nearMissRejected, p.nearMiss,
+    ]));
+  }
+  for (const id of report.causalLearnedRuleIds) records.push(`causalLearnedRule:${id}`);
+  return digestRecords(records);
+}
+
+/**
+ * The one gate a source-level change cannot move with itself.
+ *
+ * Format first, then equality — for exactly the reason `corpusDigest` is
+ * checked that way: two absent digests compare equal, which is the identity
+ * gate passing on the absence of identity.
+ */
+function checkLedgerDigest(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): void {
+  const want = baseline.ledgerDigest;
+  if (typeof want !== 'string' || !DIGEST_PATTERN.test(want)) {
+    reasons.push(
+      `baseline ledgerDigest is not a 32-character hex digest (${JSON.stringify(want)}) — ` +
+      `without it the row-level ledgers are pinned to nothing outside the process that ` +
+      `produced them`,
+    );
+    return;
+  }
+  const got = benchLedgerDigest(report);
+  if (got === want) return;
+  reasons.push(
+    `the row-level ledgers do not match the committed baseline (ledgerDigest ${got}, ` +
+    `expected ${want}) — either the edge/pair/learned-pair/probe rows were altered after ` +
+    `the run, or the miner itself changed. The second reading is not a regression: re-seed ` +
+    `the baseline in a reviewed diff, which is the moment to read these rows`,
+  );
+}
+
 function checkReportIsReproducible(reasons: string[], report: CorrelationBenchReport): void {
   const diffs: string[] = [];
   divergences(referenceReport(), report, '', diffs, 6);
@@ -1940,6 +2131,12 @@ function checkSeparation(
       'causal-vs-false edge evidence separation is null while false edges exist ' +
       `(${report.falseEdgeCount}) — the benchmark failed to score them`,
     );
+    return;
+  }
+  if (baseline.edgeEvidenceSeparation === null) {
+    // Seeded from a run with no false edges. There is no separation to fall
+    // below; the false edges themselves are what regressed, and
+    // `falseEdgeGrowth` against a baseline of 0 has already said so.
     return;
   }
   checkDrop(reasons, 'causal-vs-false edge evidence separation',

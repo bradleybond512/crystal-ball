@@ -934,11 +934,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 113 unit tests in
+- 130 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
-  regression per demonstrated PASS-on-nothing across nine review rounds).
+  regression per demonstrated PASS-on-nothing across ten review rounds).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1286,6 +1286,45 @@ the live candidate population collapsing from 256 to 22), `minedEdgeCount` above
 what the corpus can produce (the ceiling was ordered-pairs × windows; the miner
 returns one best window per ordered pair, so it is 272, not 1088), and a padded
 pinned roster (the set check ran on the live side only).
+
+Tenth-round hardening — the last circular seam. Re-derivation proves the report
+matches THIS commit's producer, and nothing more: a change *inside*
+`runCorrelationBenchmark()` moves the report and the comparator's re-run
+identically, and the gate agrees with itself. The reviewer injected the
+round-nine forgeries into the producer instead of the report — deranged pair
+attribution, 101 learned-pair rows collapsed to four (one citing
+`learned:not-real->not-real`), forged probe text, an advertised metric deleted —
+and every one returned `ok: true, reasons: []`. None of them move an aggregate
+the committed file pins.
+
+`ledgerDigest` (`schemaVersion: 8`) is the anchor that lives outside the
+process: a 128-bit digest over the edge, pair, learned-pair and probe rows,
+written into `bench-correlation-baseline.json` by the human who re-seeded it, so
+no source change can move it along with itself. Both producer-side forgeries
+above now fail the gate. Numbers enter the digest rounded to 4 dp — `zScore` and
+`lift` come off `Math.log`/`Math.exp`, which are implementation-defined to the
+last bit, and a digest that flaked between a macOS seed and Linux CI would be
+deleted within a week.
+
+The cost is explicit and intended, and it revises the header contract: a real
+change to the miner now fails on IDENTITY and must be re-seeded in a reviewed
+diff. Tolerances stay one-sided and still govern everything after a re-seed;
+what is gone is the ability for a change that moves the ledgers to pass in
+silence. The failure message says which reading applies.
+
+Two narrower defects closed in the same round:
+
+- **A perfect miner could pass the gate and then not become the baseline.**
+  Zero false edges means `edgeEvidenceSeparation` is `null`, and the committed
+  side demanded a finite, positive number — so the ACC-502..504 goal state was
+  un-seedable. It is nullable now, legal *only* when the same baseline pins
+  `falseEdgeCount: 0`, with the separation gate ceding to `falseEdgeGrowth`.
+- **The reproduction walk accepted a report that owned none of its fields.**
+  `Object.create(realReport)` has zero own keys, serializes as `{}`, and answers
+  every read from the prototype — it reproduced exactly. The walk now compares
+  own enumerable key SETS, rejects non-plain prototypes, symbol keys and extra
+  own properties (including array-object properties), and uses `Object.is`, so
+  `-0` no longer equals `0`.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

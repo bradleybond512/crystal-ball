@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "d303d51fa416efe25ca3837a330973f1f4f6bb41",
+  "reviewer": "claude",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-03T17:17:17.794Z",
+  "evidence": "APPROVE\n\nSHA d303d51fa416efe25ca3837a330973f1f4f6bb41 is safe to merge. The CI-gate fix is mechanically correct: targeted-tests-baseline.txt is read from the working tree, so adding scripts/bundle-budget-policy.mjs to it correctly prevents the ciVerdict failure without touching origin/main's selector script. The resolveManifestChunkFile implementation is exact-match correct, both error paths are exercised, and the ESLint timeout fix reduces flakiness. The outstanding concerns — a dead baseline entry that should be cleaned up post-merge, and the undocumented re-routing of Intelligence*Panel from panels-feeds to panels-analysis — are not blocking for a tools/CI-infrastructure PR of this scope."
+}

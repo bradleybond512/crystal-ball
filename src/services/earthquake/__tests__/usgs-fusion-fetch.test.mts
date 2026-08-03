@@ -127,7 +127,11 @@ test('honours Age: an intermediary replay is aged, not trusted for its Date', as
 });
 
 test('rejects a malformed Age rather than reading it as zero', async () => {
-  for (const age of ['-5', '1.5', 'abc', '600, 30']) {
+  // '' and '   ' are the ones worth spelling out: a present-but-blank Age is
+  // NOT an absent one. An intermediary can hold a response for ten minutes and
+  // still send the origin's Date, so reading blank as "no cache in between"
+  // recomputes a near-zero age and accepts the replay.
+  for (const age of ['', '   ', '-5', '1.5', 'abc', '600, 30']) {
     const r = await run({ events: [FLAT_ROW], source: 'primary', generatedAt: FRESH }, { age });
     assert.equal(r.ok, false, `a malformed Age is an unchecked shape (age=${age})`);
     assert.match(r.message, /no server time reference/);

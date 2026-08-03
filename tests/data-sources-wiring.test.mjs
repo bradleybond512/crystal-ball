@@ -14,6 +14,72 @@ const dataLoaderSrc = readFileSync(resolve(root, 'src/app/data-loader.ts'), 'utf
 const appSrc = readFileSync(resolve(root, 'src/App.ts'), 'utf8');
 
 /**
+ * Overwrite string, template and comment content with spaces, preserving every
+ * index. Brace scanning has to see code only — a `}` inside a message string or
+ * a `{` in a comment otherwise unbalances the stack and the block structure
+ * read off it is fiction.
+ */
+function blankNonCode(src, { strings = true } = {}) {
+  const out = src.split('');
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') out[i++] = ' ';
+    } else if (c === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      for (; i < stop; i++) if (src[i] !== '\n') out[i] = ' ';
+    } else if (strings && (c === "'" || c === '"' || c === '`')) {
+      out[i++] = ' ';
+      while (i < src.length && src[i] !== c) {
+        if (src[i] === '\\') out[i++] = ' ';
+        if (i < src.length && src[i] !== '\n') out[i] = ' ';
+        i++;
+      }
+      if (i < src.length) out[i++] = ' ';
+    } else {
+      i++;
+    }
+  }
+  return out.join('');
+}
+
+/**
+ * The header of every `{` block still open at `index`, outermost first — e.g.
+ * `if (SITE_VARIANT === 'full') {`.
+ *
+ * Reading a fixed window of characters before a call site cannot answer "what
+ * guards this": a branch opened 900 characters earlier is just as controlling
+ * as one on the same line, and a semicolon anywhere in the window truncates the
+ * read. Walking the brace stack gives the enclosing blocks exactly, however far
+ * away they were opened.
+ */
+function enclosingBlockHeaders(src, index) {
+  const code = blankNonCode(src);
+  // Blocks opened by the anchor's OWN statement (an object literal being
+  // pushed, a callback body) are not guards on it — the statement itself is
+  // checked directly by its caller. Only what was already open at the start of
+  // its line encloses it.
+  const lineStart = code.lastIndexOf('\n', index) + 1;
+  const stack = [];
+  for (let i = 0; i < lineStart; i++) {
+    if (code[i] === '{') stack.push(i);
+    else if (code[i] === '}') stack.pop();
+  }
+  return stack.map((at) => {
+    const cut = Math.max(
+      code.lastIndexOf(';', at), code.lastIndexOf('{', at - 1), code.lastIndexOf('}', at - 1),
+    );
+    // Comments stripped, string LITERALS kept: a mention of SITE_VARIANT in a
+    // comment above a block is not a branch, but the variant name a branch
+    // compares against is the whole point and must survive to the caller.
+    return blankNonCode(src.slice(cut + 1, at + 1), { strings: false })
+      .replace(/\s+/g, ' ').trim();
+  });
+}
+
+/**
  * A fusion vote must be gated on the ADAPTER's output, not on the fetch flag —
  * `recordDomainObservations` stamps lastSuccessAt at record time, so a vote
  * carrying zero rows is a phantom healthy source.
@@ -36,6 +102,21 @@ function assertVoteGatedOnAdapter(scope, provider, label, mustInclude = []) {
   );
   assert.ok(call, `${label} must record a vote built from its adapter, not just a failure row`);
   const [, recorded, rawOk] = call;
+  // Binding the ok flag to the recorded identifier is only half the contract —
+  // it says the two arguments agree, not that either came from the adapter.
+  // Rebuilding `const obs = rows.map(...)` or a sentinel `[{}]` keeps both
+  // assertions green while a format change the adapter would have dropped to
+  // zero instead produces a nonempty, healthy-looking vote. The domain's
+  // adapters are all named `<source>ToObservations`, so requiring the
+  // assignment to be one of those calls pins the value to the stage that knows
+  // the schema.
+  const origin = scope.match(new RegExp(String.raw`\b${recorded}\s*=\s*(\w+)\(`));
+  assert.ok(
+    origin && origin[1].endsWith('ToObservations'),
+    `${label} must build \`${recorded}\` from a *ToObservations adapter — a hand-rolled or ` +
+    `sentinel array reports healthy for rows the adapter would have dropped ` +
+    `(found: ${origin ? `${origin[1]}(` : 'no assignment'})`,
+  );
   const okExpr = rawOk.trim();
   const terms = okExpr.split('&&').map((t) => t.trim());
   assert.ok(
@@ -336,10 +417,41 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // and asserted nothing — restoring the full-only gate left it green.
     const bootLine = dataLoaderSrc.split('\n').find((l) => l.includes("name: 'usgsSeismic'"));
     assert.ok(bootLine, 'could not find the usgsSeismic boot task in data-loader.ts');
-    const gate = bootLine.slice(0, bootLine.indexOf('tasks.push'));
-    const condition = gate.match(/^\s*if\s*\((.+?)\)\s*$/);
-    assert.ok(condition, `the usgsSeismic boot task must be a plain \`if (...)\` gate, got: ${gate.trim()}`);
-    const expr = condition[1];
+    const bootGate = bootLine.slice(0, bootLine.indexOf('tasks.push'));
+    const condition = bootGate.match(/^\s*if\s*\((.+?)\)\s*$/);
+    assert.ok(condition, `the usgsSeismic boot task must be a plain \`if (...)\` gate, got: ${bootGate.trim()}`);
+
+    // Its own gate is only the INNERMOST one. An `if (SITE_VARIANT === 'full')
+    // { ... }` wrapped around the surrounding block narrows the task exactly as
+    // effectively while leaving that line — and any fixed-window read of the
+    // text before it — untouched. Enclosing blocks come off the brace stack, so
+    // how far away the branch was opened buys nothing.
+    const bootAt = dataLoaderSrc.indexOf("name: 'usgsSeismic'");
+    assert.notEqual(bootAt, -1, 'usgsSeismic is not registered as a boot task in data-loader.ts');
+    const entryAt = appSrc.indexOf("name: 'usgsSeismic'");
+    assert.notEqual(entryAt, -1, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
+    const entryLine = appSrc.slice(appSrc.lastIndexOf('\n', entryAt) + 1, appSrc.indexOf('\n', entryAt));
+    assert.doesNotMatch(
+      entryLine,
+      /condition:|SITE_VARIANT/,
+      'the usgsSeismic scheduler entry must carry no per-entry variant condition — that ' +
+      `reintroduces the boot-only staleness this task exists to fix (found: ${entryLine.trim()})`,
+    );
+
+    // Every gate on the path to each call site, not just the nearest. The
+    // scheduler entry legitimately sits inside App.ts's `SITE_VARIANT !==
+    // 'happy'` block, so an enclosing branch is not per se wrong — what has to
+    // hold is that the CONJUNCTION of all of them still reaches all three
+    // variants that ship the natural layer.
+    const gates = [
+      ['the usgsSeismic boot gate', condition[1]],
+      ...enclosingBlockHeaders(dataLoaderSrc, bootAt)
+        .filter((h) => h.includes('SITE_VARIANT'))
+        .map((h) => ['a block enclosing the usgsSeismic boot task', h]),
+      ...enclosingBlockHeaders(appSrc, entryAt)
+        .filter((h) => h.includes('SITE_VARIANT'))
+        .map((h) => ['a block enclosing the usgsSeismic scheduler entry', h]),
+    ];
     // Held to an exact GRAMMAR rather than screened by negative patterns.
     // Screening is an unwinnable game — `!== 'tech' && !== 'finance'`, a lookup
     // table, `['full'].includes(...)`, `['happy'].includes(...)` each narrow the
@@ -349,37 +461,23 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // Anything else fails and has to be re-argued rather than quietly retiring
     // the domain's only vote in two of the three shipping variants.
     const shipsNatural = ['full', 'tech', 'finance'];
-    const excluded = [];
-    for (const term of expr.split('&&').map((t) => t.trim())) {
-      const clause = term.match(/^SITE_VARIANT\s*!==\s*['"]([^'"]+)['"]$/);
-      assert.ok(
-        clause,
-        `the usgsSeismic gate must be a conjunction of \`SITE_VARIANT !== '<variant>'\` terms, so ` +
-        `the set of variants it reaches is readable off the expression; got term: ${term}`,
-      );
-      excluded.push(clause[1]);
+    for (const [where, raw] of gates) {
+      // A header arrives as `if (<expr>) {`; the boot gate as the bare expr.
+      const expr = (raw.match(/^if\s*\((.+)\)\s*\{$/)?.[1] ?? raw).trim();
+      for (const term of expr.split('&&').map((t) => t.trim())) {
+        const clause = term.match(/^SITE_VARIANT\s*!==\s*['"]([^'"]+)['"]$/);
+        assert.ok(
+          clause,
+          `${where} must be a conjunction of \`SITE_VARIANT !== '<variant>'\` terms, so the set ` +
+          `of variants it reaches is readable off the expression; got term: ${term}`,
+        );
+        assert.ok(
+          !shipsNatural.includes(clause[1]),
+          `${where} excludes the ${clause[1]} variant, which ships the natural map layer and ` +
+          `would lose the earthquakes domain's USGS vote (gate: ${expr})`,
+        );
+      }
     }
-    for (const variant of shipsNatural) {
-      assert.ok(
-        !excluded.includes(variant),
-        `the usgsSeismic boot task excludes the ${variant} variant, which ships the natural map ` +
-        `layer and would lose the earthquakes domain's USGS vote (gate: ${expr.trim()})`,
-      );
-    }
-    // Scoped to the whole registration STATEMENT, not the entry's own line: a
-    // `if (SITE_VARIANT === 'full') { ... }` wrapped around the push is
-    // invisible to a line-local read and does exactly the damage above.
-    const entryAt = appSrc.indexOf("name: 'usgsSeismic'");
-    assert.notEqual(entryAt, -1, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
-    const statement = appSrc.slice(Math.max(0, entryAt - 600), appSrc.indexOf('\n', entryAt));
-    const enclosing = statement.slice(statement.lastIndexOf(';') + 1);
-    assert.doesNotMatch(
-      enclosing,
-      /condition:|SITE_VARIANT|if\s*\(/,
-      'the usgsSeismic scheduler entry must stay unconditional — no per-entry condition and no ' +
-      'enclosing variant branch; either reintroduces the boot-only staleness this task exists to ' +
-      `fix (context: ${enclosing.trim().slice(0, 200)})`,
-    );
   });
 
   it('the usgs fusion trust boundary is covered by an EXECUTED test, not a text guard', () => {
@@ -398,13 +496,26 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // Existing on disk is not the same as RUNNING. Dropping the file from the
     // providers suite, or skipping its cases, leaves every phrase below intact
     // while the coverage this guard vouches for stops executing entirely.
+    // Tokenized, not substring-matched: the path appearing anywhere in the
+    // script text also matches an `echo`/`printf` argument or a comment, which
+    // runs nothing. It has to be an argument of the command that actually runs
+    // the tests, before any `&&` chaining to something else.
     const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+    const providers = pkg.scripts['test:providers'] ?? '';
+    const runner = providers.split('&&').map((s) => s.trim())
+      .find((s) => /(^|\s)(tsx|node)\s/.test(s) && s.includes('--test'));
+    assert.ok(runner, 'test:providers must invoke a --test runner');
     assert.ok(
-      pkg.scripts['test:providers']?.includes(coveringPath),
-      `${coveringPath} must be listed in the test:providers script — a file nobody runs proves nothing`,
+      runner.split(/\s+/).includes(coveringPath),
+      `${coveringPath} must be an argument of the test:providers runner — a file nobody runs ` +
+      `proves nothing (runner: ${runner.slice(0, 200)})`,
     );
-    assert.doesNotMatch(covering, /\btest\.skip\b|\bit\.skip\b|\{\s*skip:\s*true/,
-      'the behavioral cover must not skip its cases');
+    // Every form that leaves a case listed but unexecuted: skip, todo, and the
+    // options-object variants that take a string or an expression rather than
+    // `true`. Each keeps the phrase assertions below green while the check the
+    // phrase names never fires.
+    assert.doesNotMatch(covering, /\b(test|it|describe)\.(skip|todo)\b|\b(skip|todo):/,
+      'the behavioral cover must not skip or defer its cases');
     for (const behavior of [/rejects a last-good cache replay/, /rejects a TTL replay/,
                             /parses the web shape/, /accepts the live all_day fallback/,
                             /refuses to age a payload with no server time reference/,

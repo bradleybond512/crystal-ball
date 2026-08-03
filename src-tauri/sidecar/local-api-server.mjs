@@ -19747,6 +19747,13 @@ export async function createLocalApiServer(options = {}) {
  const corsOrigin = getSidecarCorsOrigin(req);
  headers['access-control-allow-origin'] = corsOrigin;
  headers['vary'] = appendVary(headers['vary'], 'Origin');
+ // Applied HERE, not per-route: only a minority of routes spread
+ // makeCorsHeaders() into their response, and `Access-Control-Expose-Headers`
+ // on a preflight does nothing — the browser reads it off the ACTUAL response.
+ // /api/earthquakes answers with a bare json(payload), so without this the
+ // renderer sees null for `Date`/`Age` and every live USGS fetch records a
+ // failing vote. See the originNow() contract in usgs-fusion-fetch.ts.
+ headers['access-control-expose-headers'] = 'Date, Age';
 
  if (!skipRecord) {
  recordTraffic({

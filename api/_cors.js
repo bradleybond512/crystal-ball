@@ -33,6 +33,13 @@ export function getCorsHeaders(req, methods = 'GET, OPTIONS') {
  'Access-Control-Allow-Origin': allowOrigin,
  'Access-Control-Allow-Methods': methods,
  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CrystalBall-Key',
+ // `Date`/`Age` are NOT CORS-safelisted response headers. The fusion fetchers
+ // age a payload against the SERVER's clock (see usgs-fusion-fetch.ts), and
+ // the desktop build falls back to this edge route cross-origin whenever the
+ // sidecar is unavailable — denied these two the age is unknowable and the
+ // vote fails closed. Both describe the response's own age, nothing about the
+ // requester, so exposing them leaks nothing.
+ 'Access-Control-Expose-Headers': 'Date, Age',
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };

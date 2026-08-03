@@ -3666,6 +3666,28 @@ function normalizeAlertRaw(raw) {
   return out;
 }
 
+// A CME takes one to four days to cross to Earth, and filterEarthwardCmesSidecar
+// still shows one for 12h after its predicted arrival — so the window has to
+// reach back far enough to cover the slowest event still in transit. Seven days
+// is comfortably past that; DONKI's endDate is inclusive by DATE, so the +1 day
+// keeps today's events from falling off the end for a host running behind UTC.
+export const SPACEWX_CME_LOOKBACK_DAYS = 7;
+
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * The CME list used to come from services.swpc.noaa.gov/json/donki/cme.json,
+ * which now 404s — and since fetchJsonSidecar swallows that into null, the
+ * Earthward CMEs section rendered as a confident "none" rather than as an
+ * error, for every user, indefinitely. CCMC runs the DONKI web service that
+ * feeds api.nasa.gov, in the same JSON shape, without needing a NASA key.
+ */
+export function buildDonkiCmeUrlSidecar(now) {
+  const start = isoDay(now - SPACEWX_CME_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const end = isoDay(now + 24 * 60 * 60 * 1000);
+  return `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${start}&endDate=${end}`;
+}
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   if (spacewxStatusCache && now - spacewxStatusCachedAt < SPACEWX_CACHE_TTL_MS) {
@@ -3674,7 +3696,7 @@ export async function fetchSpaceweatherStatusSidecar() {
   const [xrayRaw, kpRaw, cmeRaw] = await Promise.all([
     fetchJsonSidecar('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
     fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-    fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
+    fetchJsonSidecar(buildDonkiCmeUrlSidecar(now)),
   ]);
   const xrayFlux = normalizeXrayPoints(xrayRaw);
   const kpIndex = normalizeKpPoints(kpRaw);

@@ -26,6 +26,7 @@ import {
 } from '../bench-correlation.ts';
 import {
   benchReportDigest,
+  benchWitnessedFields,
   compareCorrelationBenchToBaseline,
   CORRELATION_BENCH_SCHEMA_VERSION,
   DEFAULT_CORRELATION_BENCH_TOLERANCES,
@@ -43,6 +44,7 @@ import {
   plantedTruePairKeys,
 } from '../__bench__/golden-streams.ts';
 import { learnedRuleId } from '../learned-rules.ts';
+import { RULE_FIXTURES, digestRuleFixture } from '../__bench__/rule-probes.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = path.join(here, '..', '__bench__', 'bench-correlation-baseline.json');
@@ -107,8 +109,14 @@ function perturbLeaf(value: Json): Json {
  */
 function isIdentityReason(reason: string): boolean {
   return reason.includes('does not reproduce')
-    || reason.includes('match the committed baseline');
+    || reason.includes('match the committed baseline')
+    // the itemised half of the same pin — a hand-authored report moves these
+    // for the same reason it moves the whole-report digest
+    || reason.includes('pinned by value in the baseline');
 }
+
+const confidencesOf = (p: BenchPairRow): number[] => p.emissions.map((e) => e.confidence);
+const ruleIdsOf = (p: BenchPairRow): string[] => p.emissions.map((e) => e.ruleId);
 
 /**
  * Swaps a report's pair ledger and re-derives all six pair summaries from it.
@@ -124,12 +132,12 @@ function withPairLedger(
   pairs: readonly BenchPairRow[],
 ): CorrelationBenchReport {
   const trueRows = pairs.filter((p) => p.isTruePair);
-  const trueConfidences = trueRows.flatMap((p) => p.confidences);
+  const trueConfidences = trueRows.flatMap(confidencesOf);
   const sum = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0);
   return {
     ...report,
     pairs: [...pairs],
-    enginePairCount: sum(pairs.map((p) => p.ruleIds.length)),
+    enginePairCount: sum(pairs.map((p) => p.emissions.length)),
     distinctEnginePairCount: pairs.length,
     pairPrecision: pairs.length === 0 ? 0 : round4(trueRows.length / pairs.length),
     pairRecall: report.truePairUniverse === 0
@@ -664,8 +672,13 @@ describe('the gate', () => {
         key: pairKeyFor(decoy, partner),
         eventIdA: decoy < partner ? decoy : partner,
         eventIdB: decoy < partner ? partner : decoy,
-        ruleIds: [report.pairs[0]!.ruleIds[0]!],
-        confidences: [0.5],
+        emissions: [{
+          ruleId: report.pairs[0]!.emissions[0]!.ruleId,
+          edgeType: 'co-located' as const,
+          fromId: decoy,
+          toId: partner,
+          confidence: 0.5,
+        }],
         isTruePair: false,
         decoyEmissions: 1,
       },
@@ -742,7 +755,7 @@ describe('the gate', () => {
       report,
       report.pairs.map((p, i) => ({
         ...p,
-        confidences: p.confidences.map(() => 0.01 + (i % 5) / 10_000),
+        emissions: p.emissions.map((e) => ({ ...e, confidence: 0.01 + (i % 5) / 10_000 })),
       })),
     );
     assert.ok(flat.meanTruePairConfidence < 0.02);
@@ -1561,8 +1574,7 @@ describe('the gate rejects a conclusion the report authored about itself', () =>
       pairs: [
         {
           ...first!,
-          ruleIds: [...first!.ruleIds, 'not-a-rule'],
-          confidences: [...first!.confidences, 0.5],
+          emissions: [...first!.emissions, { ...first!.emissions[0]!, ruleId: 'not-a-rule' }],
         },
         ...rest,
       ],
@@ -1608,7 +1620,9 @@ describe('the gate rejects a conclusion the report authored about itself', () =>
   it('rejects a ledger whose confidences are all a saturated constant', () => {
     const flat = {
       ...report,
-      pairs: report.pairs.map((p) => ({ ...p, confidences: p.confidences.map(() => 1) })),
+      pairs: report.pairs.map((p) => ({
+        ...p, emissions: p.emissions.map((e) => ({ ...e, confidence: 1 })),
+      })),
       meanTruePairConfidence: 1,
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(flat, baseline);
@@ -1739,10 +1753,12 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
     // Deranging the attributions keeps every count, every rate and every
     // coverage set intact: each rule is registered, each emission is one row.
     // What it destroys is which matcher decided what, which no summary carries.
-    const ids = [...new Set(report.pairs.flatMap((p) => p.ruleIds))].sort();
+    const ids = [...new Set(report.pairs.flatMap(ruleIdsOf))].sort();
     const deranged = report.pairs.map((p) => ({
       ...p,
-      ruleIds: p.ruleIds.map((id) => ids[(ids.indexOf(id) + 1) % ids.length]!),
+      emissions: p.emissions.map((e) => ({
+        ...e, ruleId: ids[(ids.indexOf(e.ruleId) + 1) % ids.length]!,
+      })),
     }));
     const { ok, reasons } = compareCorrelationBenchToBaseline(
       { ...report, pairs: deranged }, baseline,
@@ -1866,10 +1882,12 @@ describe('the committed report digest anchors the producer itself', () => {
   });
 
   it('moves when a producer deranges pair attribution', () => {
-    const ids = [...new Set(report.pairs.flatMap((p) => p.ruleIds))].sort();
+    const ids = [...new Set(report.pairs.flatMap(ruleIdsOf))].sort();
     const deranged = report.pairs.map((p) => ({
       ...p,
-      ruleIds: p.ruleIds.map((id) => ids[(ids.indexOf(id) + 1) % ids.length]!),
+      emissions: p.emissions.map((e) => ({
+        ...e, ruleId: ids[(ids.indexOf(e.ruleId) + 1) % ids.length]!,
+      })),
     }));
     assert.notEqual(benchReportDigest({ ...report, pairs: deranged }), baseline.reportDigest);
   });
@@ -2181,12 +2199,38 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     assert.deepEqual(seeded, committed);
   });
 
-  it('carries the note and tolerances over verbatim rather than generating them', () => {
+  it('copies the note and tolerances it is handed rather than generating them', () => {
     // Both encode human judgement: what a number means and how far it may move.
-    // A re-seed must not quietly widen a tolerance to make itself pass.
-    const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
-    assert.equal(seeded.note, committed.note);
-    assert.deepEqual(seeded.tolerances, committed.tolerances);
+    // Feeding the COMMITTED block back in and finding it unchanged proves
+    // nothing — equal in, equal out. Feeding a different block in is what shows
+    // the emitter transcribes rather than invents. It cannot police the value:
+    // it has no opinion about how wide a gate should be, and the test below is
+    // what proves something does.
+    const handEdited = {
+      note: 'a re-seed carrying a hand-widened gate',
+      tolerances: { ...committed.tolerances, falseEdgeGrowth: 2 },
+    };
+    const seeded = seedCorrelationBenchBaseline(report, handEdited, '2026-08-03');
+    assert.equal(seeded.note, handEdited.note);
+    assert.deepEqual(seeded.tolerances, handEdited.tolerances);
+    assert.notDeepEqual(seeded.tolerances, committed.tolerances);
+  });
+
+  it('cannot launder a tolerance past its ceiling by re-seeding through it', () => {
+    // The emitter passes tolerances through, so the ceiling is the only thing
+    // standing between "I widened a gate by hand" and a green run.
+    const overCeiling = {
+      note: committed.note,
+      tolerances: { ...committed.tolerances, falseEdgeGrowth: 99 },
+    };
+    const seeded = seedCorrelationBenchBaseline(report, overCeiling, '2026-08-03');
+    assert.equal(seeded.tolerances.falseEdgeGrowth, 99);
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, seeded);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('falseEdgeGrowth')),
+      `expected the ceiling to refuse it, got ${JSON.stringify(reasons)}`,
+    );
   });
 
   it('emits JSON — no undefined, no non-finite, nothing that vanishes on write', () => {
@@ -2195,5 +2239,235 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     assert.deepEqual(written, seeded);
     const { ok } = compareCorrelationBenchToBaseline(report, written);
     assert.equal(ok, true);
+  });
+});
+
+/**
+ * A probe reported two booleans and a sentence about fixtures the report did
+ * not contain, so the fixtures were free to move underneath them.
+ *
+ * The demonstrated attack: move `n1b` off GDACS and delete the
+ * earthquake-tsunami distance clause in the same commit. The positive still
+ * matches. The near-miss still rejects — on the source gate now, not on the
+ * radius it was written to test. The golden corpus carries no distance
+ * counterexample, so nothing else notices, and `positiveMatched: true,
+ * nearMissRejected: true` is reported about a clause that no longer exists.
+ */
+describe('rule probes pin the fixture, not only the verdict', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('gives every probe a well-formed fixture digest', () => {
+    assert.ok(report.ruleProbes.length >= 9);
+    for (const p of report.ruleProbes) {
+      assert.match(p.fixtureDigest, /^[0-9a-f]{32}$/, p.ruleId);
+    }
+  });
+
+  it('gives every rule a DIFFERENT fixture digest', () => {
+    const digests = new Set(report.ruleProbes.map((p) => p.fixtureDigest));
+    assert.equal(digests.size, report.ruleProbes.length);
+  });
+
+  it('moves when a near-miss is re-aimed at a different clause', () => {
+    const quake = RULE_FIXTURES.find((f) => f.ruleId === 'earthquake-tsunami')!;
+    const before = digestRuleFixture(quake);
+    // Codex's exact scenario: the near-miss now fails on SOURCE, not distance.
+    const reaimed = {
+      ...quake,
+      negative: quake.negative.map((e) => (
+        e.id === 'n1b' ? { ...e, sourceId: 'some-other-feed' } : e
+      )),
+    };
+    assert.notEqual(digestRuleFixture(reaimed), before);
+  });
+
+  it('moves when the near-miss RATIONALE is rewritten', () => {
+    const first = RULE_FIXTURES[0]!;
+    assert.notEqual(
+      digestRuleFixture({ ...first, nearMiss: 'something else entirely' }),
+      digestRuleFixture(first),
+    );
+  });
+
+  it('moves on any single field of a positive fixture', () => {
+    const first = RULE_FIXTURES[0]!;
+    const before = digestRuleFixture(first);
+    for (const key of ['sourceId', 'domain', 'timestamp', 'severity'] as const) {
+      const nudged = {
+        ...first,
+        positive: first.positive.map((e, i) => (
+          i === 0
+            ? { ...e, [key]: typeof e[key] === 'number' ? (e[key] as number) + 1 : `${e[key]}~` }
+            : e
+        )),
+      };
+      assert.notEqual(digestRuleFixture(nudged as typeof first), before, key);
+    }
+  });
+
+  it('holds still when only the KEY ORDER of a fixture event changes', () => {
+    // Otherwise a harmless reshuffle inside `ev()` reads as nine simultaneous
+    // regressions and the next reviewer learns to re-seed without looking.
+    const first = RULE_FIXTURES[0]!;
+    const reordered = {
+      ...first,
+      positive: first.positive.map((e) => Object.fromEntries(
+        Object.entries(e).reverse(),
+      ) as typeof e),
+    };
+    assert.equal(digestRuleFixture(reordered), digestRuleFixture(first));
+  });
+
+  it('refuses a probe carrying no fixture digest', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, fixtureDigest: '' } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('carries no fixture digest')));
+  });
+
+  it('names the probe ledger — not the whole report — when a fixture moves', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, fixtureDigest: 'f'.repeat(32) } : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.startsWith('probes ledger digest moved')));
+  });
+});
+
+/**
+ * The pair ledger keyed emissions by an ORDER-INDEPENDENT key and recorded a
+ * rule id and a confidence — so the two things the engine actually asserts
+ * about a pair, its direction and its edge type, were erased before hashing.
+ *
+ * Production does not treat those as interchangeable: `situation-store-v2`
+ * maps both into the evidence graph, so flipping `causal-candidate A→B` to
+ * `contradicts B→A` changes what the user is told. It used to change nothing
+ * here.
+ */
+describe('the pair ledger keeps direction and edge type', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('records a known edge type and this pair"s own endpoints per emission', () => {
+    const known = ['co-located', 'temporally-adjacent', 'causal-candidate', 'contradicts'];
+    for (const row of report.pairs) {
+      assert.ok(row.emissions.length > 0, row.key);
+      for (const e of row.emissions) {
+        assert.ok(known.includes(e.edgeType), `${row.key}: ${e.edgeType}`);
+        assert.equal(pairKeyFor(e.fromId, e.toId), row.key);
+        assert.notEqual(e.fromId, e.toId);
+      }
+    }
+  });
+
+  it('at least one emission is directed against the sorted key order', () => {
+    // Without this the "directed" fields could be the sorted endpoints under
+    // another name, and every inversion test below would pass on a tautology.
+    const flipped = report.pairs.flatMap((p) => p.emissions).filter((e) => e.fromId > e.toId);
+    assert.ok(flipped.length > 0, 'no emission runs against sort order — direction is not carried');
+  });
+
+  it('moves the report digest when every emission is INVERTED', () => {
+    const inverted = {
+      ...report,
+      pairs: report.pairs.map((p) => ({
+        ...p,
+        emissions: p.emissions.map((e) => ({ ...e, fromId: e.toId, toId: e.fromId })),
+      })),
+    };
+    assert.notEqual(benchReportDigest(inverted), baseline.reportDigest);
+  });
+
+  it('moves the report digest when an edge type is rewritten', () => {
+    const contradicted = {
+      ...report,
+      pairs: report.pairs.map((p) => ({
+        ...p,
+        emissions: p.emissions.map((e) => ({ ...e, edgeType: 'contradicts' as const })),
+      })),
+    };
+    assert.notEqual(benchReportDigest(contradicted), baseline.reportDigest);
+  });
+
+  it('refuses an emission pointing at events that are not this pair', () => {
+    const stray = withPairLedger(report, report.pairs.map((p, i) => (
+      i === 0
+        ? { ...p, emissions: p.emissions.map((e) => ({ ...e, toId: 'no-such-event' })) }
+        : p
+    )));
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stray, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('do not build')));
+  });
+
+  it('refuses an edge type the engine cannot produce', () => {
+    const bogus = withPairLedger(report, report.pairs.map((p, i) => (
+      i === 0
+        ? {
+          ...p,
+          emissions: p.emissions.map((e) => ({
+            ...e, edgeType: 'definitely-caused' as unknown as typeof e.edgeType,
+          })),
+        }
+        : p
+    )));
+    const { ok, reasons } = compareCorrelationBenchToBaseline(bogus, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('the engine cannot produce')));
+  });
+});
+
+/**
+ * `reportDigest` pins every number in the report. What it does not do is show
+ * them: following the re-seed workflow after deleting a summary field produced
+ * a diff in which one opaque 32-character string changed and nothing else.
+ */
+describe('the baseline itemises what the digest anchors', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('commits the advertised measurements by value', () => {
+    assert.deepEqual(baseline.witnessed, benchWitnessedFields(report));
+    assert.equal(typeof baseline.witnessed.meanCausalEdgeStrength, 'number');
+    assert.match(baseline.witnessed.sectionDigests.pairs, /^[0-9a-f]{32}$/);
+  });
+
+  it('refuses a baseline with no witnessed block at all', () => {
+    const { witnessed: _dropped, ...rest } = baseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      report, rest as CorrelationBenchBaseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('no "witnessed" block')));
+  });
+
+  it('NAMES the moved measurement instead of only reporting a digest', () => {
+    const forged = { ...report, meanCausalEdgeZ: report.meanCausalEdgeZ + 1 };
+    const { reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.ok(
+      reasons.some((r) => r.startsWith('meanCausalEdgeZ moved from')),
+      `expected a named reason, got ${JSON.stringify(reasons)}`,
+    );
+  });
+
+  it('names the ledger that moved, not just that something did', () => {
+    const forged = withPairLedger(report, report.pairs.map((p, i) => (
+      i === 0
+        ? { ...p, emissions: p.emissions.map((e) => ({ ...e, confidence: 0.4321 })) }
+        : p
+    )));
+    const { reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.ok(reasons.some((r) => r.startsWith('pairs ledger digest moved')));
+    assert.ok(!reasons.some((r) => r.startsWith('edges ledger digest moved')));
   });
 });

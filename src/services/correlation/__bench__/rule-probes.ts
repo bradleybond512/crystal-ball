@@ -26,6 +26,7 @@
 import type { ObservationEvent } from '@/types/intelligence';
 import { CorrelateEngine } from '../../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../../intelligence/built-in-correlation-rules';
+import { digestRecords } from './golden-streams';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -63,7 +64,7 @@ function ev(spec: ProbeSpec): ObservationEvent {
   };
 }
 
-interface RuleFixture {
+export interface RuleFixture {
   ruleId: string;
   /** Why the negative fixture must be rejected — the single clause it fails. */
   nearMiss: string;
@@ -78,7 +79,7 @@ interface RuleFixture {
  * two would still be rejected after a matcher lost one of them, which is the
  * regression the probe exists to catch.
  */
-const RULE_FIXTURES: readonly RuleFixture[] = [
+export const RULE_FIXTURES: readonly RuleFixture[] = [
   {
     ruleId: 'earthquake-tsunami',
     nearMiss: 'ocean bulletin is ~1500 km away, past the 800 km radius',
@@ -306,6 +307,55 @@ export interface BenchRuleProbe {
   nearMissRejected: boolean;
   /** Which single clause the near-miss fixture violates. */
   nearMiss: string;
+  /**
+   * Digest over the probe's INPUTS and expected outcomes, not its verdicts.
+   *
+   * Two booleans do not pin a probe. Move `n1b.sourceId` off GDACS and delete
+   * the earthquake-tsunami distance clause together and the positive still
+   * matches, the near-miss still rejects — on the SOURCE gate now, not on the
+   * radius the fixture was built to test — the corpus carries no distance
+   * counterexample, and every leaf of the report holds still. The probe would
+   * be reporting `true, true` about a clause that no longer exists.
+   *
+   * This digest covers every field of both fixtures plus the near-miss text, so
+   * re-aiming a fixture moves the report digest and lands in a reviewed diff.
+   * It pins WHAT WAS ASKED; the booleans stay as the answer.
+   */
+  fixtureDigest: string;
+}
+
+/**
+ * Canonical, key-sorted serialisation of one fixture event.
+ *
+ * Key-SORTED rather than `JSON.stringify` over the literal: the object's key
+ * order is an artefact of how `ev()` happens to spread its optional location,
+ * so a harmless reordering there would move every probe digest at once and
+ * present as nine simultaneous regressions.
+ */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((v) => canonical(v)).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const entries = Object.keys(obj)
+      .sort((a, b) => a.localeCompare(b))
+      .map((k) => `${JSON.stringify(k)}:${canonical(obj[k])}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+/** The records that make up one fixture's digest — inputs and expectations. */
+function fixtureRecords(f: RuleFixture): string[] {
+  return [
+    `rule:${f.ruleId}`,
+    `nearMiss:${f.nearMiss}`,
+    // Constant today, recorded anyway: an inverted probe that expects the
+    // positive to be REJECTED must not be able to inherit this digest.
+    'expect:positive=matched',
+    'expect:negative=rejected',
+    ...f.positive.map((e, i) => `pos:${i}:${canonical(e)}`),
+    ...f.negative.map((e, i) => `neg:${i}:${canonical(e)}`),
+  ];
 }
 
 /** Runs one fixture through the whole shipped rule set; true when `ruleId` fired. */
@@ -313,6 +363,15 @@ function fires(ruleId: string, observations: readonly ObservationEvent[]): boole
   const engine = new CorrelateEngine({ timer: () => 0 });
   for (const rule of builtInCorrelationRules) engine.registerRule(rule);
   return engine.correlate(observations, PROBE_NOW).pairs.some((p) => p.ruleId === ruleId);
+}
+
+/**
+ * Exported so a test can perturb a fixture and watch the digest move — the
+ * fixtures themselves are what this pins, and a digest nobody has seen react is
+ * indistinguishable from a constant.
+ */
+export function digestRuleFixture(f: RuleFixture): string {
+  return digestRecords(fixtureRecords(f));
 }
 
 /**
@@ -329,6 +388,7 @@ export function probeBuiltInRules(): BenchRuleProbe[] {
       positiveMatched: fires(f.ruleId, f.positive),
       nearMissRejected: !fires(f.ruleId, f.negative),
       nearMiss: f.nearMiss,
+      fixtureDigest: digestRuleFixture(f),
     }))
     .sort((a, b) => a.ruleId.localeCompare(b.ruleId));
 }

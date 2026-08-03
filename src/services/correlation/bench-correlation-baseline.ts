@@ -43,7 +43,8 @@
  */
 
 import type {
-  BenchEdgeRow, BenchLearnedPairRow, BenchPairRow, CorrelationBenchReport, EdgeVerdict,
+  BenchEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, CorrelationBenchReport,
+  EdgeVerdict,
 } from './bench-correlation';
 // The gate reads planted truth DIRECTLY. A ledger row that carries its own
 // verdict and its own `isTruePair` flag is the report grading itself: rewrite
@@ -146,7 +147,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 9;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 10;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -218,6 +219,9 @@ export interface CorrelationBenchBaseline {
   learnedRulePairCount: number;
   causalLearnedRulePairCount: number;
   minCausalLearnedRulePairCount: number;
+
+  /** Advertised-but-ungated measurements + per-ledger digests, pinned by value. */
+  witnessed: CorrelationBenchWitnessed;
 
   tolerances: CorrelationBenchTolerances;
 }
@@ -544,7 +548,7 @@ function checkRuleCoverage(
   }
   // Coverage is DERIVED, never read: without this the field is one more number
   // the report authors about itself.
-  const derived = [...new Set(report.pairs.flatMap((p) => p.ruleIds))]
+  const derived = [...new Set(report.pairs.flatMap((p) => p.emissions.map((e) => e.ruleId)))]
     .filter((id) => report.builtInRuleIds.includes(id))
     .sort((a, b) => a.localeCompare(b));
   const claimed = [...report.ruleCoverage].sort((a, b) => a.localeCompare(b));
@@ -658,6 +662,16 @@ function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): voi
       reasons.push(
         `rule '${p.ruleId}' matched its near-miss fixture (${String(p.nearMiss)}) — the rule ` +
         `got looser, which is how a correlation engine starts hallucinating`,
+      );
+    }
+    // The two booleans above are the ANSWER; this is the question. Without it
+    // the report holds still while a fixture is quietly re-aimed at a clause
+    // the rule still has, and both booleans stay true about nothing.
+    if (typeof p.fixtureDigest !== 'string' || !DIGEST_PATTERN.test(p.fixtureDigest)) {
+      reasons.push(
+        `rule coverage probe for '${p.ruleId}' carries no fixture digest ` +
+        `(${JSON.stringify(p.fixtureDigest)}) — its verdicts are then unattached to any ` +
+        `particular fixture`,
       );
     }
   }
@@ -981,7 +995,9 @@ export function compareCorrelationBenchToBaseline(
   // produced these numbers. This produces the run.
   checkReportIsReproducible(reasons, report);
   // …and re-running the benchmark only proves the report matches THIS commit's
-  // producer. The committed digest is what the producer is measured against.
+  // producer. The committed values are what the producer is measured against —
+  // itemised first so drift is named, then anchored by the whole-report digest.
+  checkWitnessedFields(reasons, report, baseline);
   checkReportDigest(reasons, report, baseline);
 
   return { ok: reasons.length === 0, reasons };
@@ -1738,6 +1754,106 @@ export function benchReportDigest(report: CorrelationBenchReport): string {
 }
 
 /**
+ * The measurements the baseline advertises but no directional gate reads, and
+ * one digest per report SECTION — pinned by value, in the file, in the diff.
+ *
+ * `reportDigest` pins all of this already. What it does not do is SHOW it: the
+ * re-seed workflow the digest prescribes ("read these numbers in a reviewed
+ * diff") produced a diff in which a deleted summary field moved one opaque
+ * 32-character string and nothing else. There was nothing on the page to read.
+ *
+ * These fields make the diff legible. A dropped `meanCausalEdgeStrength`
+ * appears as a dropped number; a re-aimed rule probe appears as a moved
+ * `probes` digest rather than as a moved report digest that could equally mean
+ * an edge row changed. Nothing here is a second source of truth — every value
+ * is copied from the same report the digest covers — it is the digest, itemised.
+ */
+export interface CorrelationBenchWitnessed {
+  meanCausalEdgeStrength: number;
+  meanCausalEdgeZ: number;
+  meanFalsePairConfidence: number | null;
+  confidenceSeparation: number | null;
+  causalCouplingsLostToCap: string[];
+  /** One digest per ledger, so a moved digest names the ledger that moved. */
+  sectionDigests: {
+    pairs: string;
+    edges: string;
+    learnedPairs: string;
+    probes: string;
+  };
+}
+
+function sectionDigest(value: unknown): string {
+  const records: string[] = [];
+  canonicalRecords(value, '', records);
+  return digestRecords(records);
+}
+
+export function benchWitnessedFields(report: CorrelationBenchReport): CorrelationBenchWitnessed {
+  return {
+    meanCausalEdgeStrength: report.meanCausalEdgeStrength,
+    meanCausalEdgeZ: report.meanCausalEdgeZ,
+    meanFalsePairConfidence: report.meanFalsePairConfidence,
+    confidenceSeparation: report.confidenceSeparation,
+    causalCouplingsLostToCap: [...report.causalCouplingsLostToCap],
+    sectionDigests: {
+      pairs: sectionDigest(report.pairs),
+      edges: sectionDigest(report.edges),
+      learnedPairs: sectionDigest(report.learnedPairs),
+      probes: sectionDigest(report.ruleProbes),
+    },
+  };
+}
+
+/**
+ * Equality per witnessed field, so drift is NAMED before the digest reports it.
+ *
+ * Runs immediately before `checkReportDigest` and never instead of it: this
+ * reads the same report through the same producer, so on its own it is
+ * re-derivation. The digest is the anchor; this is the caption.
+ */
+function checkWitnessedFields(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): void {
+  // `unknown`, not the declared type: this was parsed out of JSON, and a
+  // baseline predating the block satisfies the compiler and nothing else.
+  const want = baseline.witnessed as unknown as CorrelationBenchWitnessed | null | undefined;
+  if (want === null || want === undefined || typeof want !== 'object'
+    || typeof want.sectionDigests !== 'object'
+    || (want.sectionDigests as unknown) === null) {
+    reasons.push(
+      `baseline carries no "witnessed" block — the advertised measurements and the per-ledger ` +
+      `digests would be pinned only inside an opaque report digest`,
+    );
+    return;
+  }
+  const got = benchWitnessedFields(report);
+  const named: readonly (readonly [string, unknown, unknown])[] = [
+    ['meanCausalEdgeStrength', want.meanCausalEdgeStrength, got.meanCausalEdgeStrength],
+    ['meanCausalEdgeZ', want.meanCausalEdgeZ, got.meanCausalEdgeZ],
+    ['meanFalsePairConfidence', want.meanFalsePairConfidence, got.meanFalsePairConfidence],
+    ['confidenceSeparation', want.confidenceSeparation, got.confidenceSeparation],
+    [
+      'causalCouplingsLostToCap',
+      [...(want.causalCouplingsLostToCap ?? [])].join(','),
+      got.causalCouplingsLostToCap.join(','),
+    ],
+    ...(['pairs', 'edges', 'learnedPairs', 'probes'] as const).map(
+      (k) => [`${k} ledger digest`, want.sectionDigests[k], got.sectionDigests[k]] as const,
+    ),
+  ];
+  for (const [label, expected, actual] of named) {
+    if (expected === actual) continue;
+    reasons.push(
+      `${label} moved from ${JSON.stringify(expected)} to ${JSON.stringify(actual)} — this is ` +
+      `pinned by value in the baseline, so it changes only in a reviewed re-seed`,
+    );
+  }
+}
+
+/**
  * The one gate a source-level change cannot move with itself.
  *
  * Format first, then equality — for exactly the reason `corpusDigest` is
@@ -2000,45 +2116,81 @@ function checkPairRowShape(
     return false;
   }
   seen.add(p.key);
-  if (!Array.isArray(p.ruleIds) || !Array.isArray(p.confidences)
-    || p.ruleIds.length !== p.confidences.length || p.ruleIds.length === 0) {
+  if (!Array.isArray(p.emissions) || p.emissions.length === 0
+    || p.emissions.some((e) => (e as unknown) === null || typeof e !== 'object')) {
     reasons.push(
-      `${bad} carries ${Array.isArray(p.ruleIds) ? p.ruleIds.length : String(p.ruleIds)} rule ` +
-      `id(s) against ` +
-      `${Array.isArray(p.confidences) ? p.confidences.length : String(p.confidences)} ` +
-      `confidence(s) — a distinct pair exists because at least one rule emitted it`,
+      `${bad} carries ` +
+      `${Array.isArray(p.emissions) ? p.emissions.length : String(p.emissions)} ` +
+      `emission(s) — a distinct pair exists because at least one rule emitted it`,
     );
     return false;
   }
-  if (p.ruleIds.some((id) => typeof id !== 'string' || id === '')) {
+  if (!checkPairEmissions(reasons, bad, p.emissions, registered)) return false;
+  if (!Number.isInteger(p.decoyEmissions)
+    || p.decoyEmissions < 0 || p.decoyEmissions > p.emissions.length) {
+    reasons.push(
+      `${bad} attributes ${String(p.decoyEmissions)} decoy emission(s) to ` +
+      `${p.emissions.length} emission(s)`,
+    );
+    return false;
+  }
+  return checkPairRowAgainstCorpus(reasons, bad, p, p.emissions.map((e) => e.ruleId));
+}
+
+function describeEndpoints(e: BenchPairEmission): string {
+  return `${String(e.fromId)}→${String(e.toId)}`;
+}
+
+/** Every `EdgeType` the engine can attach to a pair. */
+const PAIR_EDGE_TYPES: ReadonlySet<string> = new Set([
+  'co-located', 'temporally-adjacent', 'causal-candidate', 'contradicts',
+]);
+
+/**
+ * Per-emission attribution, semantics and score.
+ *
+ * `edgeType` is checked against the shipped union rather than merely for
+ * non-emptiness: production reads it as the claim ("these co-occurred" vs
+ * "these contradict"), so a row carrying an unknown or blank type is a row
+ * whose meaning the gate cannot compare to anything.
+ */
+function checkPairEmissions(
+  reasons: string[],
+  bad: string,
+  emissions: readonly BenchPairEmission[],
+  registered: readonly string[],
+): boolean {
+  if (emissions.some((e) => typeof e.ruleId !== 'string' || e.ruleId === '')) {
     reasons.push(`${bad} has an unnamed emitting rule`);
   }
   // "Non-empty string" was the whole attribution check, so rewriting every
   // emitter to `not-a-registered-rule` changed no count and passed. Pass A
   // registers the built-in inventory and nothing else, so any other name is a
   // row that no rule in the graded engine could have produced.
-  const unregistered = p.ruleIds.filter(
-    (id) => typeof id === 'string' && id !== '' && !registered.includes(id),
-  );
+  const unregistered = emissions
+    .map((e) => e.ruleId)
+    .filter((id) => typeof id === 'string' && id !== '' && !registered.includes(id));
   if (unregistered.length > 0) {
     reasons.push(
       `${bad} attributes emissions to [${[...new Set(unregistered)].join(', ')}], which the ` +
       `graded pass never registered — pass A carries the built-in inventory only`,
     );
   }
-  if (p.confidences.some((c) => typeof c !== 'number' || !Number.isFinite(c) || c < 0 || c > 1)) {
-    reasons.push(`${bad} has a confidence outside [0,1] (${p.confidences.join(', ')})`);
-    return false;
-  }
-  if (!Number.isInteger(p.decoyEmissions)
-    || p.decoyEmissions < 0 || p.decoyEmissions > p.ruleIds.length) {
+  const unknownTypes = emissions
+    .map((e) => e.edgeType)
+    .filter((t) => !PAIR_EDGE_TYPES.has(t as string));
+  if (unknownTypes.length > 0) {
     reasons.push(
-      `${bad} attributes ${String(p.decoyEmissions)} decoy emission(s) to ` +
-      `${p.ruleIds.length} emission(s)`,
+      `${bad} carries edge type(s) [${[...new Set(unknownTypes)].map(String).join(', ')}] the ` +
+      `engine cannot produce — the row asserts a relationship that does not exist`,
     );
+  }
+  const confidences = emissions.map((e) => e.confidence);
+  if (confidences.some((c) => typeof c !== 'number' || !Number.isFinite(c) || c < 0 || c > 1)) {
+    reasons.push(`${bad} has a confidence outside [0,1] (${confidences.join(', ')})`);
     return false;
   }
-  return checkPairRowAgainstCorpus(reasons, bad, p, p.ruleIds);
+  return true;
 }
 
 /**
@@ -2069,6 +2221,20 @@ function checkPairRowAgainstCorpus(
       `the pair the row claims to describe`,
     );
     return false;
+  }
+  // Each emission names its own DIRECTED endpoints; they have to be this pair's
+  // two events. Otherwise direction is a free-text field: a row could carry the
+  // real key while its emissions point at events that never met.
+  const strayEndpoints = p.emissions.filter(
+    (e) => typeof e.fromId !== 'string' || typeof e.toId !== 'string'
+      || pairKeyFor(e.fromId, e.toId) !== p.key,
+  );
+  if (strayEndpoints.length > 0) {
+    reasons.push(
+      `${bad} has ${strayEndpoints.length} emission(s) whose endpoints ` +
+      `(${strayEndpoints.map((e) => describeEndpoints(e)).join(', ')}) ` +
+      `do not build ${p.key} — a direction is only meaningful between the pair's own events`,
+    );
   }
   const expectTrue = plantedTruePairKeys().has(rebuilt);
   if (p.isTruePair !== expectTrue) {
@@ -2114,12 +2280,13 @@ function checkPairRows(reasons: string[], report: CorrelationBenchReport): void 
     if (!checkPairRowShape(reasons, `pair row ${i} (${String(p.key)})`, p, seen, registered)) {
       continue;
     }
-    emissions += p.ruleIds.length;
+    emissions += p.emissions.length;
     decoyEmissions += p.decoyEmissions;
-    allConfidences.push(...p.confidences);
+    const rowConfidences = p.emissions.map((e) => e.confidence);
+    allConfidences.push(...rowConfidences);
     if (p.isTruePair) {
       trueRows += 1;
-      trueConfidences.push(...p.confidences);
+      trueConfidences.push(...rowConfidences);
     }
   }
   checkConfidenceEvidence(reasons, allConfidences);
@@ -2368,6 +2535,8 @@ export function seedCorrelationBenchBaseline(
     learnedRulePairCount: report.learnedRulePairCount,
     causalLearnedRulePairCount: report.causalLearnedRulePairCount,
     minCausalLearnedRulePairCount: report.minCausalLearnedRulePairCount,
+
+    witnessed: benchWitnessedFields(report),
 
     tolerances: { ...carriedOver.tolerances },
   };

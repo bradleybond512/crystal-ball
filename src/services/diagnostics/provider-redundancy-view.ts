@@ -12,6 +12,7 @@ import type {
   RedundancyVerdict,
   ProviderSnapshot,
 } from './provider-redundancy.ts';
+import { verdictRank } from './provider-redundancy.ts';
 
 export type RedundancyTone = 'good' | 'warn' | 'bad' | 'neutral';
 
@@ -43,6 +44,7 @@ const VERDICT_LABEL: Record<RedundancyVerdict, string> = {
   redundant_disagreement: 'Sources disagree',
   single_source: 'Single source',
   primary_down_with_backup: 'Primary down',
+  not_configured: 'Not configured',
   all_down: 'All down',
   unknown: 'Unknown',
 };
@@ -53,6 +55,9 @@ const VERDICT_TONE: Record<RedundancyVerdict, RedundancyTone> = {
   redundant_disagreement: 'warn',
   single_source: 'warn',
   primary_down_with_backup: 'bad',
+  // A gap the user can close, not something that broke — 'warn' keeps live
+  // outages ahead of it in the TONE_RANK sort.
+  not_configured: 'warn',
   all_down: 'bad',
   unknown: 'neutral',
 };
@@ -95,7 +100,15 @@ export function buildRedundancyView(report: ProviderRedundancyReport): Redundanc
     };
   });
 
-  rows.sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone] || a.domain.localeCompare(b.domain));
+  // Tone first (it drives the visual grouping), then verdict severity — tone is
+  // too coarse to separate a config gap from a live disagreement, which share
+  // 'warn' and would otherwise fall back to alphabetical order.
+  rows.sort(
+    (a, b) =>
+      TONE_RANK[a.tone] - TONE_RANK[b.tone]
+      || verdictRank(b.verdict) - verdictRank(a.verdict)
+      || a.domain.localeCompare(b.domain),
+  );
 
   const healthyCount = rows.filter((r) => r.tone === 'good').length;
   const stressedCount = rows.length - healthyCount;

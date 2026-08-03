@@ -131,6 +131,7 @@ import type { S2UndergroundEvent } from '@/services/s2-underground';
 import type { TechHubActivity } from '@/services/tech-activity';
 import { getSigintPoints, getSigintClusters, type SigintEvent, type SigintConvergenceCluster } from '@/services/sigint-convergence';
 import { getRadarTileUrl, type RadarState } from '@/services/rainviewer-radar';
+import { getSmokeForecastTileUrl, smokeForecastHoursFromNow, type SmokeForecastState } from '@/services/firework-smoke';
 import { strikeColor, strikeOpacity, type LightningStrike } from '@/services/lightning';
 import { getGoesWmsTileUrl, gibsHourTimestamp } from '@/services/satellite-weather';
 import { getOwmTileUrl, type OwmTileLayer } from '@/services/owm-weather-tiles';
@@ -637,6 +638,8 @@ export class DeckGLMap {
   private theaterUnsubscribe: (() => void) | null = null;
   private convergenceSeenAlerts = new Set<string>();
   private radarState: RadarState | null = null;
+  private fireworkState: SmokeForecastState | null = null;
+  private fireworkAppliedUrl: string | null = null;
   // GIBS GOES GeoColor publishes each hourly frame with a ~15–40 min latency,
   // so the latest top-of-hour is often a 404. Start one hour back and step
   // further on tile errors (see recoverSatelliteTiles).
@@ -1525,7 +1528,6 @@ export class DeckGLMap {
  this.ensureSmokeOverlayData();
  layers.push(...this.createAirSmokeLayers());
  }
- this.syncSmokeScrubber(mapLayers.airSmoke);
 
  // Iran events layer
  if (mapLayers.iranAttacks && this.iranEvents.length > 0) {
@@ -2527,11 +2529,24 @@ export class DeckGLMap {
  return layers;
   }
 
+  /** Hours driving the map's smoke scrubber: the per-place Open-Meteo field
+   *  when loaded, else the FireWork frame times (from the current hour on)
+   *  when the WMS overlay is enabled — the scrubber works with either. */
+  private smokeScrubberHours(): number[] | null {
+ const field = this.smokeForecastField;
+ if (field && field.hoursMs.length > 0) return field.hoursMs;
+ if (this.state.layers.smokeForecast && this.fireworkState) {
+ const hours = smokeForecastHoursFromNow(this.fireworkState);
+ if (hours.length > 0) return hours;
+ }
+ return null;
+  }
+
   /** Show/hide + sync the forecast time scrubber pinned to the map. All
    *  content is set via textContent/attributes — no HTML-string sinks. */
   private syncSmokeScrubber(show: boolean): void {
- const field = this.smokeForecastField;
- if (!show || !field || field.hoursMs.length === 0) {
+ const hours = this.smokeScrubberHours();
+ if (!show || !hours) {
  this.smokeScrubberEl?.remove();
  this.smokeScrubberEl = null;
  this.smokeScrubberInput = null;
@@ -2568,22 +2583,22 @@ export class DeckGLMap {
  this.smokeScrubberLabel = label;
  }
  if (this.smokeScrubberInput) {
- this.smokeScrubberInput.max = String(field.hoursMs.length - 1);
- this.smokeScrubberInput.value = String(Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1));
+ this.smokeScrubberInput.max = String(hours.length - 1);
+ this.smokeScrubberInput.value = String(Math.min(this.smokeForecastHourIdx, hours.length - 1));
  }
  this.updateSmokeScrubberLabel();
   }
 
   private updateSmokeScrubberLabel(): void {
- const field = this.smokeForecastField;
- if (!field || !this.smokeScrubberLabel) return;
- const idx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
+ const hours = this.smokeScrubberHours();
+ if (!hours || !this.smokeScrubberLabel) return;
+ const idx = Math.min(this.smokeForecastHourIdx, hours.length - 1);
  // "Now" only while hour 0 actually covers the present — a field kept
  // alive through an outage must not claim an aged frame is current.
- const hourIsNow = idx === 0 && Math.abs(field.hoursMs[0]! - Date.now()) < 90 * 60 * 1000;
+ const hourIsNow = idx === 0 && Math.abs(hours[0]! - Date.now()) < 90 * 60 * 1000;
  this.smokeScrubberLabel.textContent = hourIsNow
  ? 'Now'
- : `+${idx}h · ${new Date(field.hoursMs[idx]!).toLocaleString([], { weekday: 'short', hour: 'numeric' })}`;
+ : `+${idx}h · ${new Date(hours[idx]!).toLocaleString([], { weekday: 'short', hour: 'numeric' })}`;
   }
 
   private createIranEventsLayer(): ScatterplotLayer {
@@ -4631,6 +4646,7 @@ export class DeckGLMap {
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
  { key: 'airSmoke', label: 'Air & Smoke', icon: '💨' },
+ { key: 'smokeForecast', label: 'Smoke Forecast (72h)', icon: '🌫' },
  { key: 'waterways', label: t('components.deckgl.layers.strategicWaterways'), icon: '&#9875;' },
  { key: 'economic', label: t('components.deckgl.layers.economicCenters'), icon: '&#128176;' },
  { key: 'minerals', label: t('components.deckgl.layers.criticalMinerals'), icon: '&#128142;' },
@@ -6694,6 +6710,28 @@ export class DeckGLMap {
  return url ? [url] : null;
  }, 0.7);
  }
+
+ // ECCC FireWork wildfire-smoke PM2.5 forecast (GeoMet WMS). The scrubber's
+ // selected hour pins the WMS TIME dimension, so the URL changes as the user
+ // scrubs — rebuild the source, which syncRasterTileLayer otherwise keeps
+ // pinned to the URL it was first created with.
+ const fireworkHours = this.smokeScrubberHours();
+ const fireworkTarget = fireworkHours
+ ? fireworkHours[Math.min(this.smokeForecastHourIdx, fireworkHours.length - 1)]
+ : undefined;
+ const fireworkUrl = getSmokeForecastTileUrl(this.fireworkState, fireworkTarget);
+ if (ml.smokeForecast
+ && this.fireworkAppliedUrl !== null
+ && this.fireworkAppliedUrl !== fireworkUrl) {
+ if (map.getLayer('wm-firework-layer')) map.removeLayer('wm-firework-layer');
+ if (map.getSource('wm-firework-src')) map.removeSource('wm-firework-src');
+ }
+ this.syncRasterTileLayer(map, 'wm-firework', ml.smokeForecast, () => [fireworkUrl], 0.55);
+ if (ml.smokeForecast) this.fireworkAppliedUrl = fireworkUrl;
+ // Scrubber lives here rather than in buildLayers(): that call is behind
+ // `this.deckOverlay?.`, so it is skipped entirely when the deck overlay
+ // failed to construct — the raster would render with no way to scrub it.
+ this.syncSmokeScrubber(ml.airSmoke || ml.smokeForecast);
   }
 
   private syncRasterTileLayer(
@@ -6789,6 +6827,11 @@ export class DeckGLMap {
 
   public setRadarState(state: RadarState): void {
  this.radarState = state;
+ this.rafUpdateLayers();
+  }
+
+  public setFireworkForecast(state: SmokeForecastState): void {
+ this.fireworkState = state;
  this.rafUpdateLayers();
   }
 

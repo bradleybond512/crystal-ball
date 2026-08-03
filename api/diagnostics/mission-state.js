@@ -41,7 +41,10 @@ const CRITICAL_FEEDS = [
   {
     id: 'spaceweather-noaa',
     label: 'NOAA Space Weather',
-    url: 'https://services.swpc.noaa.gov/json/solar-wind/mag-5-minute.json',
+    // solar-wind/mag-5-minute.json was retired upstream and 404s. Because the
+    // probe below counted any sub-500 status as reachable, this feed reported
+    // NOMINAL for as long as the URL has been dead.
+    url: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
   },
 ];
 
@@ -53,13 +56,29 @@ const j = (payload, status, cors) =>
     headers: { 'content-type': 'application/json; charset=utf-8', ...cors },
   });
 
+/**
+ * HEAD statuses that count as "the feed is there".
+ *
+ * Allowlist, not denylist. Enumerating what's BROKEN means every status nobody
+ * thought of — 400, 408, 422, 451 — silently reads as healthy, which is the
+ * failure mode that hid the retired solar-wind URL in the first place. These
+ * four are tolerated deliberately: several of these hosts refuse HEAD (405),
+ * gate on a key (401/403), or rate-limit (429) while being perfectly alive.
+ */
+const REACHABLE_PROBE_STATUSES = new Set([401, 403, 405, 429]);
+
+export function isReachableProbeStatus(status) {
+  if (status >= 200 && status < 400) return true;
+  return REACHABLE_PROBE_STATUSES.has(status);
+}
+
 async function probeOne(feed) {
   try {
     const r = await fetch(feed.url, {
       method: 'HEAD',
       signal: AbortSignal.timeout(5000),
     });
-    return { id: feed.id, label: feed.label, reachable: r.ok || r.status < 500 };
+    return { id: feed.id, label: feed.label, reachable: isReachableProbeStatus(r.status) };
   } catch {
     return { id: feed.id, label: feed.label, reachable: false };
   }

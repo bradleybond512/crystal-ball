@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "62b019dac7d6d63bf80649ede46834fad9d307bc",
+  "reviewer": "codex",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-01T19:14:07.991Z",
+  "evidence": "## QA/QC Report\n\nRisk tier: Medium\n\nChecks passed:\n\n- Independent diff review of WMS correctness, raster lifecycle, scrubber state, CSP, globe integration, and tests.\n- No P0/P1 or blocking defects found.\n- CSP addition is limited to the exact GeoMet origin.\n\nChecks not run:\n\n- Tests and type checks — explicitly excluded by request.\n- Target-branch file inspection — commit was unavailable locally; review used the supplied diff.\n\nFindings:\n\n- P2 — The shared scrubber can display a later timestamp while FireWork is clamped to its final frame.\n- P2 — GetMap failures are not reflected in freshness state, leaving a blank overlay reported as healthy.\n\nRelease stance: Ready with stated non-blocking risks.\n\n{\"blockingFindings\":0,\"findings\":[{\"severity\":\"P2\",\"file\":\"src/components/DeckGLMap.ts\",\"line\":2532,\"summary\":\"smokeScrubberHours() always prefers the loaded Open-Meteo time domain. If that domain extends beyond FireWork's horizon, the UI and Air & Smoke layer advance while getSmokeForecastTileUrl() clamps the WMS raster to its final frame, silently displaying a different forecast time.\",\"blocking\":false},{\"severity\":\"P2\",\"file\":\"src/services/firework-smoke.ts\",\"line\":75,\"summary\":\"Freshness is marked successful from GetCapabilities alone. If GetMap returns a 200 XML/HTML error or an undecodable image, the overlay remains blank without recovery while firework-smoke continues to be reported as fresh.\",\"blocking\":false}]}"
+}

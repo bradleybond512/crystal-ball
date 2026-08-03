@@ -120,8 +120,17 @@ export async function fetchIodaOutages(): Promise<IodaOutage[]> {
     const base = getApiBaseUrl();
     const url = `${base}/api/internet-outages?from=${from}&until=${nowSec}&limit=50`;
 
+    // 18s, deliberately ABOVE the sidecar's own 15s IODA upstream deadline
+    // (local-api-server.mjs `/api/internet-outages`) — the same ordering
+    // geofon-seismic-fetch.ts states explicitly. Racing below it is not a
+    // harmless early give-up here: on a slow upstream the sidecar still
+    // completes and caches the payload, but this caller has already aborted,
+    // and because the key carries an unsnapped second-resolution `until` the
+    // retry asks a DIFFERENT key — so it misses that warm entry and starts
+    // another 15s upstream fetch, which it abandons again. That starves the
+    // comms axis indefinitely while every layer reports a plain timeout.
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(18_000),
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) {

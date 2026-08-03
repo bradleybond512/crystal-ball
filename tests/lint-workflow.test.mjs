@@ -8,11 +8,15 @@ const workflow = readFileSync(
   path.join(repoRoot, '.github', 'workflows', 'lint.yml'),
   'utf8',
 );
+const eslintWorkflow = readFileSync(
+  path.join(repoRoot, '.github', 'workflows', 'eslint.yml'),
+  'utf8',
+);
 
 test('markdown lint workflow only lints markdown files changed in the pull request', () => {
   assert.match(
  workflow,
- /actions\/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10[\s\S]*fetch-depth: 0/,
+ /actions\/checkout@[a-f0-9]{40}[\s\S]*fetch-depth: 0/,
  'lint workflow should fetch enough history to diff against the base branch',
   );
   // Two valid strategies — either fetch the base ref shallowly and diff
@@ -32,5 +36,13 @@ test('markdown lint workflow only lints markdown files changed in the pull reque
  workflow,
  /if: github\.event_name == 'merge_group'\s+run: npm run lint:md/,
  'merge groups should lint the complete repository after combining changes',
+  );
+});
+
+test('ESLint workflow has a bounded completion time', () => {
+  assert.match(
+ eslintWorkflow,
+ /eslint:[\s\S]*timeout-minutes: 12/,
+ 'ESLint workflow should stop a stuck lint process before consuming an entire runner allocation',
   );
 });

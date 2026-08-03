@@ -100,6 +100,76 @@ test('summarizeAlertsSidecar classifies severities', () => {
   assert.deepEqual(a.map((x) => x.severity), ['alert', 'watch', 'warning']);
 });
 
+// Real SWPC messages open with a product-code preamble, so the severity keyword
+// is never on line 0. Reading line 0 classified all 117 live alerts as
+// `summary` and surfaced "Space Weather Message Code: ALTK07" as the headline.
+const swpcMessage = (body) =>
+  `Space Weather Message Code: ALTK07\r\nSerial Number: 366\r\nIssue Time: 2026 May 06 1000 UTC\r\n\r\n${body}\r\n`;
+
+test('summarizeAlertsSidecar reads past the SWPC message-code preamble', () => {
+  const raw = [
+    { product_id: 'K07', message: swpcMessage('ALERT: Geomagnetic K-index of 7\r\nThreshold Reached: 2026 May 06 0958 UTC'), issue_datetime: isoMinus(2) },
+  ];
+  const [a] = summarizeAlertsSidecar(raw, NOW);
+  assert.equal(a.severity, 'alert');
+  assert.equal(a.headline, 'ALERT: Geomagnetic K-index of 7');
+});
+
+// The eight keyword forms enumerated from a live 30-day products/alerts.json.
+// CANCEL_* are stand-downs; CONTINUED ALERT is still active.
+test('summarizeAlertsSidecar maps every keyword SWPC actually emits', () => {
+  const cases = [
+    ['CANCEL WARNING: Geomagnetic K-index of 4',                    'summary'],
+    ['CANCEL ALERT: Proton Event 100MeV Integral Flux exceeded 1pfu', 'summary'],
+    ['CONTINUED ALERT: Electron 2MeV Integral Flux exceeded 1,000pfu', 'alert'],
+    ['EXTENDED WARNING: Geomagnetic K-index of 5',                  'warning'],
+    ['WARNING: Geomagnetic K-index of 5 expected',                  'warning'],
+    ['ALERT: Geomagnetic K-index of 7',                             'alert'],
+    ['WATCH: Geomagnetic Storm Category G3 Predicted',              'watch'],
+    ['SUMMARY: X-ray Event exceeded M5',                            'summary'],
+  ];
+  for (const [body, expected] of cases) {
+    const [a] = summarizeAlertsSidecar(
+      [{ product_id: 'P', message: swpcMessage(body), issue_datetime: isoMinus(1) }], NOW);
+    assert.equal(a.severity, expected, body);
+    assert.equal(a.headline, body);
+  }
+});
+
+test('summarizeAlertsSidecar keeps recent alerts stamped with naïve-UTC issue times', () => {
+  // "2026-05-06 10:00:00.000" — space-separated, no zone. Parsed as host-local
+  // on a UTC-negative host this lands AFTER `now` and the `t > now` guard drops
+  // it, silently hiding the newest alerts on exactly the machines that need them.
+  const raw = [
+    { product_id: 'K07', message: swpcMessage('ALERT: Geomagnetic K-index of 7'), issue_datetime: '2026-05-06 10:00:00.000' },
+  ];
+  const a = summarizeAlertsSidecar(raw, NOW);
+  assert.equal(a.length, 1);
+  // Asserted on the STAMPED string, not on Date.parse of it: comparing parsed
+  // instants would agree with the buggy output on a UTC runner and only fail
+  // off-UTC, so the regression could land green in CI.
+  assert.equal(a[0].issuedAt, '2026-05-06T10:00:00.000Z');
+});
+
+// parseAlerts in src/services/space-weather-parse.ts tolerates 5 minutes of
+// clock skew. Both paths feed the same panel, so an alert must not be visible
+// through one and absent through the other.
+test('summarizeAlertsSidecar tolerates the same clock skew as the renderer', () => {
+  const at = (offsetMin) => new Date(NOW + offsetMin * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+  const build = (offsetMin) => [{
+    product_id: 'K07',
+    message: swpcMessage('ALERT: Geomagnetic K-index of 7'),
+    issue_datetime: at(offsetMin),
+  }];
+
+  // A local clock a couple of minutes slow must not drop the newest alerts —
+  // the exact silent-drop this whole change set exists to prevent.
+  assert.equal(summarizeAlertsSidecar(build(2), NOW).length, 1, '+2 min is skew');
+  assert.equal(summarizeAlertsSidecar(build(-1), NOW).length, 1, 'the past is always fine');
+  // Far-future stamps are corrupt: they sort to the top and render "in 3 hours".
+  assert.equal(summarizeAlertsSidecar(build(180), NOW).length, 0, '+3 h is corrupt');
+});
+
 test('filterEarthwardCmesSidecar keeps |lon| ≤ 30°, drops stale arrivals', () => {
   const cmes = [
     { activityID: 'cme-eward', startTime: isoMinus(2),

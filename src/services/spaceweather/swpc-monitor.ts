@@ -13,6 +13,12 @@
  * fetch, no globals — deterministic for fixture-based tests.
  */
 
+// space-weather-parse is import-free, so pulling the shared alert helpers in
+// keeps this module fixture-testable while removing a third copy of the SWPC
+// message-shape logic. The sidecar's JS twin is duplicated by necessity and is
+// held in lockstep by __tests__/spaceweather-parity.test.mjs.
+import { classifyAlert, toUtcIsoTag, FUTURE_SKEW_TOLERANCE_MS } from '../space-weather-parse';
+
 export type XrayClass = 'A' | 'B' | 'C' | 'M' | 'X';
 
 export type GeomagStormLevel = 'G0' | 'G1' | 'G2' | 'G3' | 'G4' | 'G5';
@@ -315,31 +321,35 @@ function summarizeKp(
   };
 }
 
-function classifyAlertSeverity(headline: string): SwpcAlertSeverity {
-  if (/\bALERT\b/i.test(headline)) return 'alert';
-  if (/\bWARNING\b/i.test(headline)) return 'warning';
-  if (/\bWATCH\b/i.test(headline)) return 'watch';
-  return 'summary';
-}
-
 export function summarizeAlerts(
   raw: SwpcAlertRaw[],
   now: number,
   windowMs: number = DAY_MS,
 ): SpaceWxAlert[] {
   const cutoff = now - windowMs;
+  // Same tolerance as parseAlerts, imported rather than repeated: this path and
+  // that one feed the same panel, so an alert must not exist in one and not the
+  // other.
+  const horizon = now + FUTURE_SKEW_TOLERANCE_MS;
   const out: SpaceWxAlert[] = [];
   for (const r of raw) {
     if (!r?.message) continue;
-    const t = Date.parse(r.issue_datetime);
-    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
-    const headline = r.message.split('\n').map((s) => s.trim()).find((s) => s.length > 0) ?? '';
+    // issue_datetime is space-separated naïve UTC ("2026-07-30 19:03:19.350").
+    // Un-stamped, Date.parse reads it as host-LOCAL, which on a UTC-4 host puts
+    // every alert from the last 4 hours past `now` — and the guard below then
+    // drops exactly the alerts that matter most.
+    const issuedAt = toUtcIsoTag(r.issue_datetime);
+    const t = Date.parse(issuedAt);
+    if (!Number.isFinite(t) || t < cutoff || t > horizon) continue;
+    // The headline is the severity line, NOT line 0: every SWPC message opens
+    // with "Space Weather Message Code: XXXXX".
+    const { headline, severity } = classifyAlert(r.message);
     if (headline.length === 0) continue;
     out.push({
       id: `${r.product_id ?? 'swpc'}-${r.issue_datetime}`,
-      severity: classifyAlertSeverity(headline),
+      severity,
       headline,
-      issuedAt: r.issue_datetime,
+      issuedAt,
     });
   }
   out.sort((a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt));

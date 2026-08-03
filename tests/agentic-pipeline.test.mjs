@@ -7,7 +7,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
-import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted, commandToStages } from '../scripts/targeted-tests.mjs';
+import {
+  OVERRIDES,
+  deriveScriptIndex,
+  selectScripts,
+  ciVerdict,
+  isRunnerAllowlisted,
+  commandToStages,
+} from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -138,8 +145,10 @@ test('non-approve verdicts, nonzero blocking counts, and thin evidence are rejec
 
 function fixtureRepo(branch) {
   const dir = mkdtempSync(join(tmpdir(), 'verdict-fixture-'));
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: dir, encoding: 'utf8' }).trim();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', branch);
+  git('config', 'user.name', 'fixture');
+  git('config', 'user.email', 'fixture@invalid.test');
   writeFileSync(join(dir, 'code.txt'), 'v1\n');
   git('add', 'code.txt');
   git('commit', '-q', '-m', 'feat: code');
@@ -221,6 +230,15 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   const index = deriveScriptIndex(SCRIPTS);
   const { scripts } = selectScripts(['src/app/data-loader.ts'], index, { 'src/app/data-loader.ts': ['test:providers'] });
   assert.deepEqual(scripts, ['test:providers']);
+});
+
+test('the ESLint runner override selects its focused behavioral suite', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:eslint-runner': 'node --test tests/eslint-runner.test.mjs tests/lint-workflow.test.mjs',
+  });
+  const result = selectScripts(['scripts/run-eslint.mjs', 'scripts/lint-changed.mjs'], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:eslint-runner'], unmapped: [] });
 });
 
 test('unmapped source files are reported across api/, tools/, and src-tauri/src/', () => {

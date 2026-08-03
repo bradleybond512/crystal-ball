@@ -121,6 +121,49 @@ test('Provider redundancy report reads from the bridged snapshots', () => {
   assert.notEqual(wx?.verdict, 'redundant_agreement');
 });
 
+test('unconfigured key-gated provider cannot cast an "up" vote', () => {
+  resetInsightsState();
+  // No secrets are loaded in the test runtime, so CLOUDFLARE_API_TOKEN is
+  // unconfigured. Even though the diagnostic reports 'degraded' (the state a
+  // single boot failure produces), the provider is structurally unreachable
+  // and must not corroborate IODA.
+  const snapshots = bridgeSourcesToProviderRedundancy([
+    { id: 'ioda', name: 'IODA', status: 'healthy', lastUpdateMs: NOW },
+    { id: 'cloudflare-radar', name: 'Cloudflare Radar', status: 'degraded', lastUpdateMs: NOW },
+  ]);
+  const cf = snapshots.find((s) => s.providerId === 'cloudflare-radar');
+  assert.equal(cf?.level, 'failing');
+
+  const net = getProviderRedundancyReport().domains.find((d) => d.domain === 'internet_health');
+  assert.equal(net?.verdict, 'single_source');
+  assert.doesNotMatch(String(net?.reason), /2 of 2 providers up/);
+});
+
+test('multi-upstream diagnostics (FRED, EIA) survive the gate on the live path', () => {
+  resetInsightsState();
+  // These report under 'economic'/'oil' and both have keyless fallbacks that
+  // record success. A healthy status here is real data, not a phantom vote —
+  // demoting it would understate live redundancy.
+  const snapshots = bridgeSourcesToProviderRedundancy([
+    { id: 'economic', name: 'Economic Data (FRED)', status: 'healthy', lastUpdateMs: NOW },
+    { id: 'oil', name: 'Oil Analytics (EIA)', status: 'healthy', lastUpdateMs: NOW },
+  ]);
+  assert.equal(snapshots.find((s) => s.providerId === 'economic')?.level, 'healthy');
+  assert.equal(snapshots.find((s) => s.providerId === 'oil')?.level, 'healthy');
+  assert.notEqual(
+    getProviderRedundancyReport().domains.find((d) => d.domain === 'economic')?.verdict,
+    'not_configured',
+  );
+});
+
+test('keyless providers are unaffected by the secret gate', () => {
+  resetInsightsState();
+  const snapshots = bridgeSourcesToProviderRedundancy([
+    { id: 'ioda', name: 'IODA', status: 'healthy', lastUpdateMs: NOW },
+  ]);
+  assert.equal(snapshots.find((s) => s.providerId === 'ioda')?.level, 'healthy');
+});
+
 test('bridgeSavedPlacesToProfile updates only savedPlaces', () => {
   resetInsightsState();
   bridgeSavedPlacesToProfile([HOME]);

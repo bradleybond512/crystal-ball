@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -10,6 +11,22 @@ import { OUTAGE_COUNT_WINDOW_MS, outageCountsToObservations } from '../outage-fu
 import { ingestDomain } from '../../providers/fusion-ingest.ts';
 import { emptyProviderHealthState, recordFetchOutcome } from '../../providers/provider-health.ts';
 import type { ProviderHealthState } from '../../providers/provider-health.ts';
+
+/**
+ * Reads a `const NAME = <a> * <b> * ...;` millisecond literal back out of a
+ * source file. Used to pin two constants that live in different runtimes
+ * (renderer + sidecar) and cannot be imported into one another.
+ */
+function readConstMs(fileUrl: URL, name: string): number {
+  const src = readFileSync(fileUrl, 'utf8');
+  const m = src.match(new RegExp(`const ${name} = ([^;]+);`));
+  assert.ok(m, `${name} not found in ${fileUrl.pathname}`);
+  return m[1].split('*').reduce((acc, part) => {
+    const n = Number(part.trim().replace(/_/g, ''));
+    assert.ok(Number.isFinite(n), `unparseable factor '${part}' in ${name}`);
+    return acc * n;
+  }, 1);
+}
 
 interface StubCall { url: string }
 
@@ -296,6 +313,72 @@ test('fetchIodaOutageEvents asks for limit=5000 over a 24h window', async (t) =>
   const until = Number(url.searchParams.get('until'));
   assert.equal(until, Math.floor(NOW / 1000));
   assert.equal(until - from, 24 * 60 * 60);
+});
+
+test('fetchIodaOutageEvents snaps its window so ticks inside one quantum share a cache key', async (t) => {
+  // The route's cache key is `ioda-outages:${from}:${until}:${limit}`. An
+  // unsnapped `now` makes every call's key unique, so the sidecar's 15 min
+  // cache is provably never hit and each scheduled tick is a fresh limit=5000
+  // request against a keyless fair-use API. This is what bounds the upstream
+  // rate to one request per quantum regardless of the loader's cadence.
+  //
+  // NOTE: the limit=5000 test above uses a NOW that already sits exactly on a
+  // 15 min boundary, so it cannot observe snapping at all. These instants are
+  // deliberately off-boundary.
+  // Read the quantum out of BOTH sides rather than restating it. Every
+  // assertion below is relative to the quantum, so a local constant would let
+  // the production value drift freely: at a 30 min quantum these same
+  // instants still share a key and `until` still lands on BOUNDARY+15min,
+  // and the test stays green while each cache key outlives the 15 min entry
+  // it is meant to reuse. Pinning the two together is the actual contract.
+  const QUANTUM_MS = readConstMs(
+    new URL('../cloudflare-radar-fetch.ts', import.meta.url),
+    'IODA_WINDOW_QUANTUM_MS',
+  );
+  const sidecarTtlMs = readConstMs(
+    new URL('../../../../src-tauri/sidecar/local-api-server.mjs', import.meta.url),
+    'IODA_TTL',
+  );
+  assert.equal(
+    QUANTUM_MS,
+    sidecarTtlMs,
+    'the fusion window quantum must equal the route\'s IODA_TTL: larger and every key outlives its ' +
+    'cache entry, smaller and each boundary abandons a still-valid entry and multiplies the upstream rate',
+  );
+  const BOUNDARY = Date.parse('2026-07-30T12:15:00.000Z');
+  const call = stubFetch(t, { alerts: [] });
+
+  await fetchIodaOutageEvents(BOUNDARY + 20_000);
+  const first = call.url;
+  await fetchIodaOutageEvents(BOUNDARY + 14 * 60_000);
+  const second = call.url;
+  assert.equal(second, first, 'two ticks 14 min apart inside one quantum reuse the same key');
+
+  const url = new URL(first, 'http://sidecar.test');
+  const until = Number(url.searchParams.get('until'));
+  const from = Number(url.searchParams.get('from'));
+  assert.equal(until, (BOUNDARY + QUANTUM_MS) / 1000, 'until snaps UP to the next boundary');
+  assert.equal(until - from, 24 * 60 * 60, 'snapping moves the window without resizing it');
+
+  // The reason it snaps up rather than down. A floored `until` ends BEFORE the
+  // caller instant, so every onset published between the boundary and this tick
+  // is truncated away — and since the adapter emits no observation at all for a
+  // country with zero rows, that silently drops the country to a single vote
+  // while Cloudflare still reports it.
+  for (const offsetMs of [20_000, 14 * 60_000, QUANTUM_MS - 1]) {
+    await fetchIodaOutageEvents(BOUNDARY + offsetMs);
+    const tickUntil = Number(new URL(call.url, 'http://sidecar.test').searchParams.get('until')) * 1000;
+    assert.ok(
+      tickUntil >= BOUNDARY + offsetMs,
+      `until (${tickUntil}) must never end before the caller instant (${BOUNDARY + offsetMs})`,
+    );
+  }
+
+  // Crossing the boundary must produce a NEW key, or the window would freeze
+  // and the domain would count outages over a receding 24 h forever. Under ceil
+  // the boundary instant itself still belongs to the OLD quantum, so step past.
+  await fetchIodaOutageEvents(BOUNDARY + QUANTUM_MS + 1000);
+  assert.notEqual(call.url, first, 'the next quantum fetches fresh');
 });
 
 test('fetchIodaOutageEvents outlives the 15s deadline on the route it races', async (t) => {

@@ -666,6 +666,49 @@ export class App {
  { name: 'predictions', fn: () => this.dataLoader.loadPredictions(), intervalMs: REFRESH_INTERVALS.predictions },
  { name: 'pizzint', fn: () => this.dataLoader.loadPizzInt(), intervalMs: 10 * 60 * 1000 },
  { name: 'natural', fn: () => this.dataLoader.loadNatural(), intervalMs: 60 * 60 * 1000, condition: () => this.state.mapLayers.natural },
+ // The earthquakes fusion domain's three votes, all on the same cadence.
+ // USGS is here rather than riding on `natural` above because that task is
+ // hourly AND gated on a map layer, so the domain's primary source went stale
+ // between ticks and stopped advancing altogether when the layer was toggled
+ // off — frozen, not removed; see loadUsgsSeismic for both that and for why a
+ // faster `natural` would not have fixed it either.
+ // Same interval as its two siblings, because what these snapshots are for
+ // is corroborating RECENT quakes. Matching is on event origin time (+/-120 s,
+ // 50 km), so an old snapshot still matches old quakes fine — but a quake
+ // that happened ten minutes ago is in EMSC's and GEOFON's snapshots and
+ // simply absent from an hour-old USGS one, so the event anyone is actually
+ // looking at corroborates across two sources instead of three. Equal cadences
+ // keep the three lists covering the same tail.
+ // All three providers declare
+ // freshnessTtlMs: 10 min, and provider-health marks a provider `stale` once
+ // now - lastSuccessAt exceeds it — so an unscheduled loader leaves the
+ // provider permanently stale ~10 min after launch, with no upstream fault.
+ // Stale does not remove the vote: source-fusion still counts its
+ // independence group toward independentSourceCount, it just multiplies the
+ // reliability term by STATUS_RELIABILITY_FACTOR['stale']. So the damage is a
+ // silent confidence haircut on a healthy source, not a visible loss of
+ // corroboration — which is exactly why it went unnoticed.
+ // 8 min, not 10: scheduleRefresh applies +/-10% jitter, so an interval set
+ // EQUAL to the TTL lands over it on roughly half its ticks and the provider
+ // flaps healthy/stale. 8 min tops out at 8.8 min AT THE DEFAULT CADENCE
+ // MULTIPLIER — computeDelay also multiplies by the ghost (x5) and context
+ // (x2 battery / x4 low-power) factors, under which these do exceed the TTL
+ // and report stale. That is the intended trade, not a regression: those modes
+ // exist to buy battery with freshness, and a provider whose data really is
+ // 20 min old SHOULD read stale. What this fixes is the default path, where
+ // the user chose nothing and the domain went stale anyway.
+ // All three routes are already sidecar-cached on a stable key (usgs 60 s,
+ // emsc 2 min, geofon 5 min), so the cadence costs at most one upstream
+ // request per tick per route — except a USGS tick that times out on all_hour
+ // and retries all_day, which issues two. That is the failure path, not the
+ // steady state, and it is bounded at two.
+ // usgsSeismic carries no variant condition, unlike its two siblings: tech
+ // and finance ship the natural map layer, so `loadNatural` recorded this
+ // provider for them before the split. The enclosing branch already excludes
+ // happy, which is the only variant with the layer off.
+ { name: 'usgsSeismic', fn: () => this.dataLoader.loadUsgsSeismic(), intervalMs: 8 * 60 * 1000 },
+ { name: 'emscSeismic', fn: () => this.dataLoader.loadEmscSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ { name: 'geofonSeismic', fn: () => this.dataLoader.loadGeofonSeismic(), intervalMs: 8 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  // Safety-critical: drives the status chip + storm posture, so it must keep
  // refreshing even when the weather map layer is toggled off.
  { name: 'weather', fn: () => this.dataLoader.loadWeatherAlerts(), intervalMs: 10 * 60 * 1000 },
@@ -691,6 +734,67 @@ export class App {
  { name: 'humanitarianCrises', fn: () => this.dataLoader.loadHumanitarianCrises(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeAtlas', fn: () => this.dataLoader.loadRipeAtlas(), intervalMs: 10 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeNcc', fn: () => this.dataLoader.loadRipeNcc(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ // Both votes of the internet_outages fusion domain, AND the warm cache the
+ // survival comms axis reads synchronously. The interval is set by the TIGHTER of the
+ // two contracts: ioda's registry freshnessTtlMs is 15 min, but
+ // internet-outages.getCachedIodaOutages() returns [] once its own cache is
+ // >= 10 min old, and fetchIodaOutages() only refetches on a tick that finds
+ // the cache already >= 10 min old. At a 15 min cadence that getter is empty
+ // for a third of every cycle and the comms axis silently reports no threats.
+ //
+ // Because the refetch is LAZY — triggered by the first tick that finds the
+ // cache already expired, not by expiry itself — no interval closes the gap
+ // entirely; it only bounds it at one jittered tick, ~1.1x the interval. Exact
+ // divisors buy nothing here: 5 min would line up only with zero jitter, and
+ // ticks at 4.5/9.0 push the refetch to 14.5 and leave the axis blind 10->14.5.
+ //
+ // 3 min, not 4, because the gap is not just the jittered delay: the scheduler
+ // arms the next timer in a `finally` AFTER the loader resolves, so a cycle
+ // costs this loader's runtime too — ~36s of network waits (an 18s comms fetch,
+ // then a Promise.all of the two fusion fetches capped at 18s). That is the
+ // dominant term, not a complete bound: the abort timeouts cap the network wait
+ // only, so parse/adapt/ingest and event-loop delay sit outside it. Sub-second
+ // here, and the margin below absorbs them. 4 min landed at
+ // 4.4 + 0.6 = exactly the 5 min budget rather than under it. 3 min models the
+ // blind window at 3.9 min — an estimate, not a cap, for the reason just
+ // given — leaving ~6 min of headroom against the 10 min it protects. Half is
+ // the target precisely BECAUSE the estimate is incomplete: the unmodeled
+ // terms are sub-second and the slack is minutes, so the conclusion survives
+ // even if they are off by orders of magnitude. Scoped, as ever,
+ // AT THE DEFAULT CADENCE MULTIPLIER, the same scoping as the seismic entries
+ // above. computeDelay also multiplies by the ghost (x5), context (x2 battery /
+ // x4 low-power) and hidden (x10) factors. Ghost (15 min), low-power (12 min)
+ // and hidden (30 min) all push the tick past the 10 min cache it warms, so the
+ // comms axis goes blind for part of each cycle. The x2 battery factor does NOT
+ // — 6 min, 6.6 with jitter, still inside the window — though the lazy refetch
+ // means even that leaves a bounded gap, exactly as it does at the default
+ // cadence. Where the throttled modes do blind the axis it is the same
+ // freshness-for-battery trade those modes exist to make, and it is NOT
+ // silently wrong the way the boot-only bug was: the axis is quiet because the
+ // user asked for quiet. The default path —
+ // where the user chose nothing — is what this interval fixes. If the comms axis
+ // is ever deemed safety-critical enough to survive throttling, the fix is an
+ // exemption in the scheduler, not a smaller interval here.
+ //
+ // Cheap at that rate because neither path's upstream rate is set by this
+ // interval, but they are bounded differently and only one is cadence-proof.
+ // The limit=5000 fusion fetch snaps its window to a 15 min boundary, so extra
+ // ticks land on the sidecar cache: <=96 upstream/day in steady state however
+ // often we tick (a sidecar restart or an uncached 502 adds misses).
+ // The limit=50 comms fetch early-returns from its own 10 min module cache
+ // without touching the network, so it reaches IODA about once per expiry,
+ // ~100-144/day. That one is NOT quantum-bounded — it builds an unsnapped
+ // second-resolution key, so every expiry is an upstream miss. The cadence
+ // moves it inside that range: expiry is only noticed on a tick, so a slower
+ // interval means the expired cache waits longer before refetching. Hence the
+ // range rather than a single figure. <=144/day is the HEALTHY-PROCESS
+ // figure, not a hard cap: a failed fetch does not renew the module cache
+ // (internet-outages.ts returns the prior list without re-stamping
+ // fetchedAt), so a sustained upstream failure makes every 3 min tick a fresh
+ // attempt, and a renderer restart resets the cache outright. Unlike the
+ // fusion path, then, this one does get cheaper if the interval grows — but
+ // only while it is succeeding.
+ { name: 'internetOutages', fn: () => this.dataLoader.loadInternetOutages(), intervalMs: 3 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'federalRegister', fn: () => this.dataLoader.loadFederalRegister(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'airQuality', fn: () => this.dataLoader.loadAirQuality(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'commsHealth', fn: () => this.dataLoader.loadCommsHealth(), intervalMs: 2 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

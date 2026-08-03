@@ -33,6 +33,17 @@ export function getCorsHeaders(req, methods = 'GET, OPTIONS') {
  'Access-Control-Allow-Origin': allowOrigin,
  'Access-Control-Allow-Methods': methods,
  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CrystalBall-Key',
+ // `Date`/`Age` are NOT CORS-safelisted response headers. The fusion fetchers
+ // age a payload against the SERVER's clock (see usgs-fusion-fetch.ts), and
+ // the desktop build falls back to this edge route cross-origin whenever the
+ // sidecar is unavailable — denied these two the age is unknowable and the
+ // vote fails closed. Neither carries anything about the requester; what they
+ // do reveal is this response's own cache age and the server clock, which a
+ // cross-origin reader can already infer from response timing. `Date` itself is
+ // emitted by Vercel's HTTP layer rather than by the handler, so if that ever
+ // stops the fetcher loses the vote — an availability cost, never a false
+ // healthy one.
+ 'Access-Control-Expose-Headers': 'Date, Age',
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };

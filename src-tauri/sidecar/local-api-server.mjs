@@ -2452,6 +2452,15 @@ function makeCorsHeaders(req) {
  'Access-Control-Allow-Origin': getSidecarCorsOrigin(req),
  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+ // The renderer runs at tauri://localhost and the sidecar at 127.0.0.1, so
+ // every call here is cross-origin — and `Date`/`Age` are NOT CORS-safelisted
+ // response headers, so without this they read back as null in the renderer.
+ // The fusion fetchers measure payload age against the SERVER's clock (see
+ // usgs-fusion-fetch.ts); denied those two headers they have only the browser
+ // clock, which a replay can hide behind. Both are non-sensitive by
+ // construction: they describe the response's own age, nothing about the
+ // requester.
+ 'Access-Control-Expose-Headers': 'Date, Age',
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };
@@ -3040,10 +3049,48 @@ export function classifyGpsDisruptionSidecar(cls) {
   return 'none';
 }
 
+// Every SWPC alert message opens with "Space Weather Message Code: XXXXX", so
+// the first non-empty line is a product code, not a headline — reading it
+// classified all 119 live alerts as `summary`. The severity keyword sits on a
+// later line.
+//
+// These eight are the complete set emitted across a live 30-day window of
+// products/alerts.json — enumerated, not guessed. Longer phrases lead so the
+// CANCEL/CONTINUED/EXTENDED qualifiers are matched before the bare keyword.
+// The two CANCEL forms are all-clears and must never read as active.
+// Kept in lockstep with SEVERITY_PREFIXES in src/services/space-weather-parse.ts.
+const SPACEWX_SEVERITY_PREFIXES = [
+  ['CANCEL WARNING:', 'summary'],
+  ['CANCEL ALERT:', 'summary'],
+  ['CONTINUED ALERT:', 'alert'],
+  ['EXTENDED WARNING:', 'warning'],
+  ['WARNING:', 'warning'],
+  ['ALERT:', 'alert'],
+  ['WATCH:', 'watch'],
+  ['SUMMARY:', 'summary'],
+];
+
+export function extractAlertHeadlineSidecar(message) {
+  let firstLine = '';
+  for (const rawLine of String(message ?? '').split('\n')) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    if (firstLine === '') firstLine = line;
+    const upper = line.toUpperCase();
+    for (const [prefix] of SPACEWX_SEVERITY_PREFIXES) {
+      if (upper.startsWith(prefix)) return line;
+    }
+  }
+  // No keyword line at all — fall back to the opening line so the alert is
+  // still shown rather than silently dropped.
+  return firstLine;
+}
+
 function classifyAlertSeveritySidecar(headline) {
-  if (/\bALERT\b/i.test(headline)) return 'alert';
-  if (/\bWARNING\b/i.test(headline)) return 'warning';
-  if (/\bWATCH\b/i.test(headline)) return 'watch';
+  const upper = String(headline ?? '').trim().toUpperCase();
+  for (const [prefix, severity] of SPACEWX_SEVERITY_PREFIXES) {
+    if (upper.startsWith(prefix)) return severity;
+  }
   return 'summary';
 }
 
@@ -3100,21 +3147,111 @@ export function summarizeKpSidecar(points, now, windowMs = SPACEWX_KP_WINDOW_MS)
   };
 }
 
+/**
+ * Every SWPC product /api/space-weather-feeds fans out to is a JSON array.
+ * Anything else — `{}`, `false`, an error envelope behind a 200 — is a
+ * wrong-shape body. Normalizing to null here means the shape is decided in one
+ * place rather than left for the renderer's parsers to reject silently.
+ */
+export function normalizeSwpcFeed(value) {
+  return Array.isArray(value) ? value : null;
+}
+
+/**
+ * Does this product carry a row the RENDERER'S PARSER would actually accept?
+ *
+ * Row-presence alone is not the question. `[{}]`, `['maintenance']`, a Kp row
+ * with no `time_tag` and a wind payload that is nothing but its header row are
+ * all non-empty arrays that every downstream parser discards — so counting them
+ * as healthy votes reports a fetch as good while the panel stays blank. That is
+ * the same fail-open shape as the empty array, one layer in.
+ *
+ * Each predicate mirrors the MINIMUM its parser needs, reusing the sidecar's
+ * existing normalizers where one already exists so the two can't drift.
+ */
+// GOES flare classes are a letter A/B/C/M/X plus an optional magnitude, and
+// nothing else. Mirrors XRAY_CLASS_RE in src/services/space-weather-parse.ts:
+// without the grammar, a status string like "maintenance" reads as a flare.
+const SWPC_XRAY_CLASS_RE = /^[ABCMX]\d*(?:\.\d+)?$/i;
+
+function isXrayClassString(value) {
+  return typeof value === 'string' && SWPC_XRAY_CLASS_RE.test(value.trim());
+}
+
+// Null-prototype: on a plain object literal, a key like `hasOwnProperty` resolves
+// up the chain to a real function, and invoking it as a bare predicate throws
+// (`this` is undefined under ESM strict mode) — so an unknown product named after
+// a prototype key would 500 the route instead of simply failing the allowlist.
+const SWPC_FEED_USABLE = Object.assign(Object.create(null), {
+  kp: (value) => normalizeKpPoints(value).length > 0,
+  alerts: (value) => normalizeAlertRaw(value).length > 0,
+  // xray-flares-latest carries the class on an object, unlike the flux-series
+  // product normalizeXrayPoints handles, so it needs its own check.
+  xray: (value) => Array.isArray(value)
+    && value.some((row) => row && typeof row === 'object' && !Array.isArray(row)
+      && ['max_class', 'current_class', 'class'].some((k) => isXrayClassString(row[k]))),
+  // Header row plus at least one data row — a lone header parses to nothing. The
+  // slice(1) test carries the row count on its own; a separate length check would
+  // be unfalsifiable, which is how dead guards get mistaken for live ones.
+  wind: (value) => Array.isArray(value)
+    && Array.isArray(value[0])
+    && value.slice(1).some((row) => Array.isArray(row) && row.length > 0),
+});
+
+export function swpcFeedIsUsable(key, value) {
+  const predicate = SWPC_FEED_USABLE[key];
+  // An unrecognized product is not assumed good: allowlist, never denylist.
+  // Coerced, so a predicate returning a truthy non-boolean can't leak out.
+  return typeof predicate === 'function' ? predicate(value) === true : false;
+}
+
+/**
+ * The route's fan-out reduction, extracted so it is reachable from a test.
+ *
+ * Keeping this inline meant the guarding tests could only assert on helper
+ * bodies and source ordering — swapping the call site for `value !== null` left
+ * all 539 sidecar tests green. Reducing here means a mutation to this logic is
+ * caught by behaviour rather than by grepping the file.
+ *
+ * @param {[string, unknown][]} entries decoded [productKey, body] pairs
+ */
+export function buildSwpcEnvelope(entries) {
+  const feeds = {};
+  let usable = 0;
+  for (const [key, value] of entries) {
+    feeds[key] = normalizeSwpcFeed(value);
+    if (swpcFeedIsUsable(key, value)) usable += 1;
+  }
+  return { feeds, usable, total: entries.length };
+}
+
+// Mirrors FUTURE_SKEW_TOLERANCE_MS in src/services/space-weather-parse.ts. The
+// renderer and this route both feed the space-weather panel, so an alert must
+// not be visible through one and missing through the other.
+const SPACEWX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+
 export function summarizeAlertsSidecar(raw, now, windowMs = SPACEWX_ALERTS_WINDOW_MS) {
   if (!Array.isArray(raw)) return [];
   const cutoff = now - windowMs;
+  const horizon = now + SPACEWX_FUTURE_SKEW_MS;
   const out = [];
   for (const r of raw) {
     if (!r?.message) continue;
-    const t = Date.parse(r.issue_datetime);
-    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
-    const headline = String(r.message).split('\n').map((s) => s.trim()).find((s) => s.length > 0) || '';
+    // issue_datetime is space-separated naïve UTC ("2026-07-30 19:03:19.350").
+    // Un-stamped, Date.parse reads it as host-LOCAL, which on a UTC-4 host puts
+    // every alert from the last 4 hours past `now` — and the guard below then
+    // drops exactly the alerts that matter most. Same bug class the Kp path
+    // already fixed; this path never got it.
+    const issuedAt = toUtcIsoTag(r.issue_datetime);
+    const t = Date.parse(issuedAt);
+    if (!Number.isFinite(t) || t < cutoff || t > horizon) continue;
+    const headline = extractAlertHeadlineSidecar(r.message);
     if (headline.length === 0) continue;
     out.push({
       id: `${r.product_id ?? 'swpc'}-${r.issue_datetime}`,
       severity: classifyAlertSeveritySidecar(headline),
       headline,
-      issuedAt: r.issue_datetime,
+      issuedAt,
     });
   }
   out.sort((a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt));
@@ -3216,6 +3353,31 @@ function toUtcIsoTag(raw) {
   return `${tag}Z`;
 }
 
+// Mirrors instantOrNull in src/services/space-weather-parse.ts. toUtcIsoTag
+// passes a tag it can't recognize through UNCHANGED, so `'not-a-date'` and
+// `12345` both survive a truthiness check while the renderer's Date.parse
+// discards them — a healthy vote on a payload the panel throws away. A stamp
+// that can't be placed in time also can't be windowed, so it is not a reading.
+function swpcInstantOrNull(raw) {
+  if (typeof raw !== 'string') return null;
+  const at = Date.parse(toUtcIsoTag(raw));
+  return Number.isFinite(at) ? at : null;
+}
+
+// Kp is a 0-9 planetary index. Anything outside that is corrupt, and a bogus
+// extreme would trip the Kp>=5 storm alerting downstream.
+const KP_MIN = 0;
+const KP_MAX = 9;
+
+function kpNumberOrNull(raw) {
+  let n;
+  if (typeof raw === 'number') n = raw;
+  else if (typeof raw === 'string' && raw.trim() !== '') n = Number(raw.trim());
+  else return null;
+  if (!Number.isFinite(n) || n < KP_MIN || n > KP_MAX) return null;
+  return n;
+}
+
 export function normalizeKpPoints(raw) {
   // products/noaa-planetary-k-index.json is an array of OBJECTS with a
   // capital-K `Kp` — NOT the header-row + array-of-arrays shape this used to
@@ -3225,14 +3387,15 @@ export function normalizeKpPoints(raw) {
   const out = [];
   for (const row of raw) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    if (swpcInstantOrNull(row.time_tag) === null) continue;
     const time_tag = toUtcIsoTag(row.time_tag);
-    if (!time_tag) continue;
-    // Number(null) is 0 — a plausible-looking "quiet" Kp — so reject the
-    // absent value on identity before coercing.
-    const rawKp = row.Kp;
-    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
-    const kp = Number(rawKp);
-    if (!Number.isFinite(kp)) continue;
+    // Number() maps null, '', '   ', false and [] all to 0 — a plausible-looking
+    // "quiet" Kp. Listing the absent values by identity misses the others, so
+    // reject on TYPE and bound the range, mirroring finiteOrNull/inRangeOrNull
+    // in src/services/space-weather-parse.ts: a looser vote here than the
+    // renderer's parse is a healthy verdict on a payload the panel discards.
+    const kp = kpNumberOrNull(row.Kp);
+    if (kp === null) continue;
     out.push({ time_tag, kp });
   }
   return out;
@@ -3242,9 +3405,16 @@ function normalizeAlertRaw(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const r of raw) {
-    if (!r || typeof r.message !== 'string') continue;
-    const issue = r.issue_datetime ? String(r.issue_datetime) : null;
-    if (!issue) continue;
+    // Empty and whitespace-only messages are dropped by parseAlerts in
+    // src/services/space-weather-parse.ts (`if (!message) continue`), so
+    // counting them here would vote healthy on a bulletin that renders as
+    // nothing. There is no such thing as a blank SWPC bulletin.
+    if (!r || typeof r.message !== 'string' || r.message.trim() === '') continue;
+    // Same reason as the Kp stamp: an unparseable issue time can't be windowed,
+    // so parseAlerts discards it. String(...) would happily turn 99999 into a
+    // tag that reads as present and parses to nothing.
+    if (swpcInstantOrNull(r.issue_datetime) === null) continue;
+    const issue = r.issue_datetime;
     // SWPC's issue_datetime is naïve UTC; append Z so Date.parse works.
     const issueIso = issue.endsWith('Z') ? issue : `${issue.replace(' ', 'T')}Z`;
     out.push({
@@ -3266,15 +3436,19 @@ export async function fetchSpaceweatherStatusSidecar() {
     fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
     fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
   ]);
+  const xrayFlux = normalizeXrayPoints(xrayRaw);
+  const kpIndex = normalizeKpPoints(kpRaw);
   const status = buildSpaceweatherStatusSidecar({
-    xrayFlux: normalizeXrayPoints(xrayRaw),
-    kpIndex: normalizeKpPoints(kpRaw),
+    xrayFlux,
+    kpIndex,
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
     now,
   });
-  // Don't cache a total upstream failure: serving the empty payload for the
-  // whole TTL turns one blip into every swpc-kp tick recording ok:false.
-  if (xrayRaw !== null || kpRaw !== null || cmeRaw !== null) {
+  // Cache on what the ADAPTERS produced, not on the raw bodies being non-null.
+  // A 200 carrying `[]` is non-null, so the old raw check happily cached a
+  // status with no flux and no Kp — which renders as "Nominal", indistinguishable
+  // from a genuinely quiet sun, for the whole TTL.
+  if (xrayFlux.length > 0 || kpIndex.length > 0) {
     spacewxStatusCache = status;
     spacewxStatusCachedAt = now;
   }
@@ -3288,8 +3462,15 @@ export async function fetchSpaceweatherAlertsSidecar() {
   }
   const raw = await fetchJsonSidecar('https://services.swpc.noaa.gov/products/alerts.json');
   const alerts = summarizeAlertsSidecar(normalizeAlertRaw(raw), now);
-  spacewxAlertsCache = alerts;
-  spacewxAlertsCachedAt = now;
+  // A failed fetch yields [] here, which the panel renders as "No active alerts"
+  // — the reassuring reading, produced by an outage. Caching it would hold that
+  // false all-clear for the full TTL, so only a real fetch is cached. The test
+  // is the SHAPE, not alerts.length: a genuinely quiet window is a legitimate
+  // empty array and should still be cached, while `{}` behind a 200 should not.
+  if (Array.isArray(raw)) {
+    spacewxAlertsCache = alerts;
+    spacewxAlertsCachedAt = now;
+  }
   return alerts;
 }
 
@@ -10462,27 +10643,55 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Space Weather proxy (NOAA SWPC, no API key) ───────────────────────────
   if (requestUrl.pathname === '/api/space-weather-feeds') {
- const _swCached = getCached('space-weather-feeds', 5 * 60 * 1000);
+ // No TTL argument: getCached prefers a supplied ttlMs over the stored one, so
+ // passing 5 min here would override the shorter TTL a partial result is
+ // deliberately written with and pin the hole for the full five minutes.
+ const _swCached = getCached('space-weather-feeds');
  if (_swCached) return json(_swCached);
  const SW_URLS = {
  kp: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
- mag: 'https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json',
+ // Replaces the separate mag-5-minute + plasma-5-minute products, which SWPC
+ // retired — both 404 now, so Bz/speed/density arrived as null no matter what
+ // the renderer did with them. This single product carries speed, density AND
+ // bz, already propagated to Earth's bow shock.
+ wind: 'https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json',
  xray: 'https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json',
  alerts: 'https://services.swpc.noaa.gov/products/alerts.json',
- plasma: 'https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json',
  };
  try {
  const entries = Object.entries(SW_URLS);
  const settled = await Promise.allSettled(
  entries.map(([, url]) => fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000)),
  );
- const result = {};
+ const decoded = [];
  for (const [i, [key]] of entries.entries()) {
  const r = settled[i];
- result[key] = (r.status === 'fulfilled' && r.value.ok) ? await r.value.json() : null;
+ // Each feed fails on its own: a malformed body from one SWPC product
+ // shouldn't 502 the other three. The json() parse is the failure point
+ // most likely to throw, so it gets its own guard.
+ let value = null;
+ if (r.status === 'fulfilled' && r.value.ok) {
+ try { value = await r.value.json(); } catch { value = null; }
+ }
+ decoded.push([key, value]);
+ }
+ // Shape + health decided in buildSwpcEnvelope so a test can reach them.
+ const { feeds: result, usable, total } = buildSwpcEnvelope(decoded);
+ // Health is derived from what the ADAPTER produced, not from the handler
+ // reaching this line. Reporting a four-way upstream outage as a healthy
+ // fetch — then caching the all-null envelope for five minutes — is what let
+ // this panel sit blank for months without anything flagging it. An empty
+ // array counts as a failure here for the same reason: SWPC never returns
+ // four simultaneously empty products, so that pattern means upstream trouble
+ // rather than a genuinely quiet sun.
+ if (usable === 0) {
+ trackFailure('swpc', new Error('all SWPC feeds unavailable'));
+ return json({ error: 'space-weather-feeds: no SWPC feed returned usable data' }, 502);
  }
  trackSuccess('swpc', 'primary');
- setCached('space-weather-feeds', result, 5 * 60 * 1000);
+ // A partial result gets a short TTL so one flaky product doesn't pin a hole
+ // in the panel for the full five minutes.
+ setCached('space-weather-feeds', result, usable === total ? 5 * 60 * 1000 : 60 * 1000);
  return json(result);
  } catch (error) {
  trackFailure('swpc', error);
@@ -12651,8 +12860,22 @@ async function dispatch(requestUrl, req, routes, context) {
           source: result.source,
         };
       }).filter(Boolean);
-      setCached('usgs-earthquakes', events, 60_000);
-      return json({ events, degraded: result.degraded, source: result.source });
+      // Cache the ENVELOPE, not the bare array: a hit and a miss have to answer
+      // with the same shape. It cached `events` alone, so for the 60 s after
+      // each miss the route replied with a top-level array and any consumer
+      // reading `.events` / `.source` off the body saw undefined.
+      //
+      // `generatedAt` is stamped HERE, on the upstream fetch, and then frozen
+      // into the cache — so a hit carries the ORIGINAL fetch instant, not the
+      // instant it was served. That is the only thing distinguishing a replay
+      // from a live fetch: `source` stays 'primary'/'fallback-N' on a hit too,
+      // so a consumer reading it alone cannot tell them apart. The fusion
+      // fetcher rejects on this age, and the field name matches the web edge
+      // function's (api/earthquakes.js) so one check covers both.
+      const payload = { events, degraded: result.degraded, source: result.source,
+                        generatedAt: new Date().toISOString() };
+      setCached('usgs-earthquakes', payload, 60_000);
+      return json(payload);
     } catch (error) {
       trackFailure('usgs', error);
       return json({ events: [], error: String(error.message ?? error), degraded: true }, 200);
@@ -19724,6 +19947,16 @@ export async function createLocalApiServer(options = {}) {
  const corsOrigin = getSidecarCorsOrigin(req);
  headers['access-control-allow-origin'] = corsOrigin;
  headers['vary'] = appendVary(headers['vary'], 'Origin');
+ // Applied HERE, not per-route: only a minority of routes spread
+ // makeCorsHeaders() into their response, and `Access-Control-Expose-Headers`
+ // on a preflight does nothing — the browser reads it off the ACTUAL response.
+ // /api/earthquakes answers with a bare json(payload), so without this the
+ // renderer sees null for `Date`/`Age` and every live USGS fetch records a
+ // failing vote. See the originNow() contract in usgs-fusion-fetch.ts.
+ // Covers every response that comes back through this writer — a handler that
+ // writes to the socket directly, or streams, bypasses it and would have to
+ // send the header itself.
+ headers['access-control-expose-headers'] = 'Date, Age';
 
  if (!skipRecord) {
  recordTraffic({

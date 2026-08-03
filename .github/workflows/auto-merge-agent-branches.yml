@@ -31,7 +31,12 @@ jobs:
         shell: bash
         run: |
           BRANCH="${{ github.ref_name }}"
-          COMMITS=$(git log origin/main..HEAD --oneline --no-merges | head -20)
+          # Cap inside git, not with `| head -20`. Under this step's
+          # `-e -o pipefail`, head closes the pipe once it has 20 lines; if
+          # git log is still writing it dies of SIGPIPE (141), pipefail
+          # promotes that to the pipeline status and -e aborts the step.
+          # Only reachable past 20 commits (observed on a 29-commit branch).
+          COMMITS=$(git log origin/main..HEAD --oneline --no-merges --max-count=20)
           FILE_COUNT=$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')
           TITLE=${BRANCH##*/}
           TITLE=${TITLE//-/ }

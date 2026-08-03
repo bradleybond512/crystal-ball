@@ -155,3 +155,65 @@ test('/api/fx-rates-erapi runs the payload gate before its 6-hour cache write', 
   const body = routeBody('/api/fx-rates-erapi');
   assert.match(body, /erApiReject\)[\s\S]{0,240}?degraded: true[\s\S]{0,120}?\}, 502\)/, 'a rejected payload returns 502 degraded and is never cached');
 });
+
+test('/api/earthquakes freezes generatedAt into the cache instead of re-stamping on a hit', () => {
+  // The fusion fetcher's whole replay defence rests on this. `source` stays
+  // 'primary' on a cache hit, so age is the only signal separating a live
+  // fetch from a 59-second-old replay — and age is only meaningful if the hit
+  // carries the ORIGINAL fetch instant. Stamping generatedAt on the way out
+  // (or rebuilding the envelope on the hit path) would make every replay read
+  // as zero seconds old and re-stamp lastSuccessAt onto stale rows.
+  //
+  // Source-scoped for the reason at the top of this file: fetchWithTimeout
+  // goes straight to node:https, so there is no seam to drive a real
+  // miss-then-hit through. What is checkable is that only one code path
+  // stamps the field and the hit path returns the stored object untouched.
+  const body = routeBody('/api/earthquakes');
+
+  const stamps = [...body.matchAll(/generatedAt:/g)];
+  assert.equal(stamps.length, 1, 'generatedAt must be stamped in exactly one place — a second stamp is a re-stamp');
+
+  // Bound to the identifier, not just to ordering: caching `events` instead of
+  // `payload` leaves the single stamp and every ordering assertion intact while
+  // each hit replays a bare array with no timestamp at all.
+  const stamped = body.match(/const (\w+) = \{[^}]*generatedAt:[^}]*\}/);
+  assert.ok(stamped, 'generatedAt must be stamped into a named envelope the cache can hold');
+  // EVERY write, not the first: a second `setCached('usgs-earthquakes', events)`
+  // appended after the correct one satisfies a first-match assertion while
+  // being the write that actually survives, so hits replay the unstamped array.
+  // And every write UNCONDITIONALLY: keying the count off the literal
+  // `'usgs-earthquakes'` means a second write under "usgs-earthquakes" or under
+  // a `const KEY` — the same cache entry either way — is invisible to the count.
+  const writes = [...body.matchAll(/setCached\s*\(\s*('[^']*'|"[^"]*"|\w+),\s*(\w+),/g)];
+  assert.equal(
+    writes.length, (body.match(/\bsetCached\b/g) ?? []).length,
+    'every setCached call in this route must be in the recognized `setCached(<key>, <value>,` ' +
+    'shape — one this pattern cannot read is one it cannot count. Counted on the bare ' +
+    'IDENTIFIER, because a total that shares the recognizer\'s blind spots (a comment between ' +
+    'the name and its parens, say) only ever compares a pattern against itself',
+  );
+  assert.equal(writes.length, 1, 'the earthquakes cache must be written in exactly one place — a later write wins');
+  const cached = writes[0];
+  assert.match(
+    cached[1].trim(), /^['"]usgs-earthquakes['"]$/,
+    `the write must use the same literal key the hit path reads (found: ${cached[1].trim()})`,
+  );
+  assert.equal(
+    cached[2],
+    stamped[1],
+    `the cached value must BE the stamped envelope — caching ${cached[2]} instead of ${stamped[1]} ` +
+    'serves hits with no generatedAt, and the fusion fetcher then rejects every one of them',
+  );
+  assert.ok(body.indexOf('generatedAt:') < body.indexOf('setCached('),
+    'generatedAt must be stamped BEFORE the cache write so the hit replays it');
+  assert.match(
+    body,
+    new RegExp(String.raw`return json\(${stamped[1]}\)`),
+    'the miss must answer with the same envelope it cached, so a hit and a miss agree',
+  );
+
+  const hit = body.match(/const cached = getCached\('usgs-earthquakes'\);\s*if \(cached\) return json\(cached\);/);
+  assert.ok(hit, 'the hit path must return the cached envelope verbatim, with no rebuild or re-stamp');
+  assert.ok(body.indexOf('const cached =') < body.indexOf('generatedAt:'),
+    'the cache read must short-circuit before the upstream fetch');
+});

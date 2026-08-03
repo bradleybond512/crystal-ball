@@ -41,6 +41,7 @@ export const OVERRIDES = {
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
   'scripts/lint-changed.mjs': ['test:eslint-runner'],
   'scripts/run-eslint.mjs': ['test:eslint-runner'],
+  'scripts/bundle-budget-policy.mjs': ['test:bundle-budget-policy'],
 };
 
 const RUNNER_ALLOWLIST = [

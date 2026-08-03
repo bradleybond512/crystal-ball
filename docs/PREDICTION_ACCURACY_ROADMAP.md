@@ -988,13 +988,15 @@ Phase exit:
 
 ### ACC-701 — Drift and cohort-health monitor
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
 Branch: `codex/acc-701-mcp-hardening`
 
 Evidence: PR #1597
+
+Merged: `93d94aa1`
 
 Verification: the MCP monitor persists bounded snapshots and deduplicated
 findings for holdout Brier regression, feed readiness changes, evaluation
@@ -1022,7 +1024,11 @@ Detect:
 
 ### ACC-702 — Scheduled evaluation report
 
-Status: `WAITING`
+Status: `IN REVIEW`
+
+Owner: Codex
+
+Branch: `codex/acc-702-scheduled-evaluation-report`
 
 Dependencies: ACC-701
 

@@ -2,7 +2,8 @@
 
 Date: 2026-08-03
 
-Baseline commit: `59a822eb96cb53cd9f0afe6a28bc6a139a8d9f4a`
+Baseline commits: `59a822eb96cb53cd9f0afe6a28bc6a139a8d9f4a`,
+`b8ce8d05`, and `4676530f`.
 
 Every proof started with an empty `git status --short`, recorded
 `shasum -a 256`, applied the listed patch, confirmed a nonempty
@@ -247,6 +248,153 @@ the exit codes were `64` rather than the expected success and no-data codes.
 
 ## Restored validation
 
-After all ten proofs, all six file checksums matched their baselines,
+After the original ten proofs, all six file checksums matched their baselines,
 `git status --short` and `git diff` produced no output, and the focused restored
 matrix passed at 87 tests and 0 failures.
+
+## 11. Complete-week internal cadence gap
+
+Baseline commit: `b8ce8d05`.
+
+File: `tools/mcp-server/weekly-evaluation-report.mjs`
+
+Baseline and restored SHA-256:
+`c3ed5b39dd07b782543d4170c12cdf884f3215ba44483300c68cfe4ce00ff6dc`
+
+```diff
+     && aggregate.firstObservedAt <= aggregate.weekStart + INSTALLED_CADENCE_MS
+     && aggregate.lastObservedAt !== null
+-    && aggregate.lastObservedAt >= aggregate.weekStart + WEEK_MS - INSTALLED_CADENCE_MS
+-    && aggregate.maxObservationGapMs !== null
+-    && aggregate.maxObservationGapMs <= MAX_COMPLETE_OBSERVATION_GAP_MS;
++    && aggregate.lastObservedAt >= aggregate.weekStart + WEEK_MS - INSTALLED_CADENCE_MS;
+```
+
+Command:
+
+```bash
+node --test tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs
+```
+
+Raw summary: `ℹ tests 24`, `ℹ pass 23`, `ℹ fail 1` (baseline: `24`,
+`0`).
+
+Failure: `rejects burst-filled cadence with a multi-day internal observation
+gap` returned `complete` instead of `partial`.
+
+## 12. Preserved projection age
+
+File and checksum: same as proof 11.
+
+```diff
+-  if (
+-    observation.diagnosticsStale
+-    || observation.at - observation.projection.generatedAt > MAX_PROJECTION_AGE_MS
+-  ) {
++  if (observation.diagnosticsStale) {
+```
+
+Command:
+
+```bash
+node --test tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs
+```
+
+Raw summary: `ℹ tests 24`, `ℹ pass 23`, `ℹ fail 1` (baseline: `24`,
+`0`).
+
+Failure: `treats preserved old projections as stale and future-invalid
+projections as unavailable` changed coverage from `fresh: 0, stale: 1` to
+`fresh: 1, stale: 0`, proving the old projection entered evidence.
+
+## 13. Champion-derived promotion availability
+
+File and checksum: same as proof 11.
+
+```diff
+-  const promotionCount = !championAvailable
++  const promotionCount = forecastAvailability === 'unavailable'
+     ? null
+     : boundedCount(aggregate.champion.promotions.length + aggregate.champion.promotionsOmitted);
+```
+
+Command:
+
+```bash
+node --test tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs
+```
+
+Raw summary: `ℹ tests 24`, `ℹ pass 23`, `ℹ fail 1` (baseline: `24`,
+`0`).
+
+Failure: `requires complete installed cadence and derives promotion evidence
+from champion availability` returned promotion `count: 0` instead of `null`
+when champion history was unavailable.
+
+## 14. Promotion-kind filtering
+
+Baseline commit: `4676530f`.
+
+File: `tools/mcp-server/weekly-evaluation-report.mjs`
+
+Baseline and restored SHA-256:
+`cc87804efa1663c52bc32e3f40d21ca8c9d275624a9066440390db46de676d78`
+
+```diff
+ function addPromotions(target, promotions, weekStart) {
+   const weekEnd = weekStart + WEEK_MS;
+   for (const promotion of promotions) {
+-    if (promotion.kind !== 'promotion') continue;
+     if (promotion.at < weekStart || promotion.at >= weekEnd) continue;
+@@
+-    && value.promotions.every((promotion) => (
+-      validPromotion(promotion) && promotion.kind === 'promotion'
+-    ))
++    && value.promotions.every(validPromotion)
+@@
+-    && promoted.rows.every((promotion) => (
+-      validPromotion(promotion) && promotion.kind === 'promotion'
+-    ))
++    && promoted.rows.every(validPromotion)
+```
+
+Command:
+
+```bash
+node --test tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs
+```
+
+Raw summary: `ℹ tests 24`, `ℹ pass 23`, `ℹ fail 1` (baseline: `24`,
+`0`).
+
+Failure: `promoted changes exclude initial activation and rollback rows`
+returned promotion count `3` instead of `1`.
+
+## 15. Cadence-gap recommendation
+
+File and checksum: same as proof 14.
+
+```diff
+ function recommendationCode({
+@@
+   cadenceComplete,
+ }) {
+-  if (!cadenceComplete) return 'restore_monitor';
+   if (aggregate.observationCount === 0 || aggregate.unavailableCount > 0) return 'restore_monitor';
+```
+
+Command:
+
+```bash
+node --test tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs
+```
+
+Raw summary: `ℹ tests 24`, `ℹ pass 23`, `ℹ fail 1` (baseline: `24`,
+`0`).
+
+Failure: `rejects burst-filled cadence with a multi-day internal observation
+gap` recommended `resolve_overdue_predictions` instead of `restore_monitor`.
+
+After the five repair proofs, each confirmed a nonempty production diff before
+the red run. Every file checksum returned to its baseline, `git status --short`
+was empty, and `git diff --exit-code` returned 0.

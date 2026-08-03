@@ -141,6 +141,23 @@ function withStorage(fn) {
   }
 }
 
+function completeCadenceCoverage(storage, {
+  fresh = EXPECTED_WEEKLY_OBSERVATIONS,
+  stale = 0,
+  unavailable = 0,
+} = {}) {
+  const accumulator = storage.readJSON('monitor/weekly-accumulator.json');
+  const aggregate = accumulator.weeks.at(-1);
+  aggregate.observationCount = fresh + stale + unavailable;
+  aggregate.freshCount = fresh;
+  aggregate.staleCount = stale;
+  aggregate.unavailableCount = unavailable;
+  aggregate.firstObservedAt = aggregate.weekStart;
+  aggregate.lastObservedAt = aggregate.weekStart + WEEK_MS - CADENCE_MS;
+  aggregate.maxObservationGapMs = CADENCE_MS;
+  storage.writeJSON('monitor/weekly-accumulator.json', accumulator);
+}
+
 test('uses Monday 00:00 UTC boundaries across year and leap-day rollovers', () => {
   assert.equal(utcWeekStart(Date.UTC(2027, 0, 1, 23, 59)), Date.UTC(2026, 11, 28));
   assert.equal(utcWeekStart(Date.UTC(2024, 1, 29, 12)), Date.UTC(2024, 1, 26));
@@ -316,6 +333,7 @@ test('rejects burst-filled cadence with a multi-day internal observation gap', (
   }).finalizedReports[0];
   assert.equal(report.availability, 'partial');
   assert.equal(report.predictions.availability, 'partial');
+  assert.equal(report.nextRecommendedTask.code, 'restore_monitor');
 }));
 
 test('fails closed when persisted aggregates omit max observation gap evidence', () => withStorage((storage) => {
@@ -457,6 +475,7 @@ test('reports bookend prediction/model deltas and allowlisted provider transitio
     },
   });
   record(storage, MONDAY + 2 * 60_000, { monitor: { feeds }, projection: second });
+  completeCadenceCoverage(storage);
   const report = record(storage, MONDAY + WEEK_MS).finalizedReports[0];
   assert.deepEqual(report.predictions.changeDuringWeek, { pending: -5, overduePending: -2, expired: 5 });
   assert.equal(report.drift.model.brierDelta, 0.03);
@@ -496,6 +515,7 @@ test('marks mixed fresh/stale coverage partial and prioritizes provider drift af
       forecast: { ...projection().forecast, overduePending: 0 },
     }),
   });
+  completeCadenceCoverage(storage);
   report = record(storage, nextWeek + WEEK_MS, {
     projection: projection({
       generatedAt: nextWeek + WEEK_MS,
@@ -511,6 +531,7 @@ test('marks mixed fresh/stale coverage partial and prioritizes provider drift af
 
 test('uses deterministic recommendation precedence', () => withStorage((storage) => {
   record(storage, MONDAY + 60_000, { diagnosticsStale: true });
+  completeCadenceCoverage(storage, { fresh: 0, stale: EXPECTED_WEEKLY_OBSERVATIONS });
   let report = record(storage, MONDAY + WEEK_MS).finalizedReports[0];
   assert.equal(report.nextRecommendedTask.code, 'restore_fresh_diagnostics');
 
@@ -520,6 +541,7 @@ test('uses deterministic recommendation precedence', () => withStorage((storage)
     forecast: { ...projection().forecast, overduePending: 4 },
   });
   record(storage, nextWeek + 60_000, { projection: overdue });
+  completeCadenceCoverage(storage);
   report = record(storage, nextWeek + WEEK_MS).finalizedReports[0];
   assert.equal(report.nextRecommendedTask.code, 'resolve_overdue_predictions');
 }));

@@ -937,11 +937,11 @@ Outcome — delivered:
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 142 unit tests in
+- 161 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
   tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, a
-  regression per demonstrated PASS-on-nothing across eleven review rounds, and
+  regression per demonstrated PASS-on-nothing across twelve review rounds, and
   an exhaustive leaf sweep proving the report digest covers every field).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
@@ -1362,6 +1362,45 @@ Two narrower defects closed in the same round:
   own enumerable key SETS, rejects non-plain prototypes, symbol keys and extra
   own properties (including array-object properties), and uses `Object.is`, so
   `-0` no longer equals `0`.
+
+Round 12 (`schemaVersion: 10`) closed the last two places where the digest
+covered a *field* but not the *claim* that field stood for. No graded number
+moved in the re-seed — every metric in the table below is identical to
+`schemaVersion: 9`'s.
+
+- **Rule coverage probes recorded verdicts, not what was tested.** Each probe
+  carried two booleans and free text, so a near-miss fixture could be re-aimed
+  at a clause the rule still has — move `n1b.sourceId` off GDACS *and* delete
+  the earthquake→tsunami distance clause, and both booleans stay true about a
+  clause that no longer exists, with the report byte-identical. Probes now carry
+  `fixtureDigest`: a digest over every field of the positive and negative
+  fixtures plus the expected outcomes, canonicalised key-order-insensitively.
+  Re-aiming a fixture lands in a reviewed diff.
+- **The pair ledger erased direction and edge semantics before hashing.** Rows
+  stored a sorted key with parallel `ruleIds` / `confidences` arrays, so
+  rewriting a rule from `causal-candidate cause→effect` to
+  `contradicts effect→cause` — two different claims, mapped differently into the
+  evidence graph at `situation-store-v2.ts:335` — produced an identical report.
+  Emissions are first-class rows now (`ruleId`, `edgeType`, and the endpoints in
+  EMISSION order), and the gate rejects an emission whose endpoints do not build
+  the row's own key. The pair KEY stays unordered on purpose: planted truth is
+  about two events being related, not about which came first.
+
+Two narrower items from the same round:
+
+- **The digest said "something moved" without saying what.** A `witnessed` block
+  now pins by value the five advertised-but-otherwise-ungated measurements
+  (`meanCausalEdgeStrength`, `meanCausalEdgeZ`, `meanFalsePairConfidence`,
+  `confidenceSeparation`, `causalCouplingsLostToCap`) plus one digest per
+  ledger, and is checked immediately *before* the whole-report digest — so a
+  re-seed diff names which measurement moved instead of only asserting that one
+  did.
+- **A tolerance test asserted its own input.** It fed the committed tolerances
+  back through the seeder and checked they came out unchanged, which passes for
+  any value. It now feeds a hand-edited block and proves the seeder transcribes
+  rather than generates, and a second test proves the real defense —
+  `TOLERANCE_CEILINGS` rejects a widened tolerance that tries to launder itself
+  through a re-seed.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

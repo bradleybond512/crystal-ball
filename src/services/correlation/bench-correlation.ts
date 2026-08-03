@@ -30,7 +30,7 @@
 
 import type { ObservationEvent } from '@/types/intelligence';
 import {
-  CorrelateEngine, type CorrelatedPair, type CorrelationRule,
+  CorrelateEngine, type CorrelatedPair, type CorrelationRule, type EdgeType,
 } from '../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../intelligence/built-in-correlation-rules';
 import { mineLeadLag, significantEdges, type LeadLagEdge } from './lead-lag';
@@ -82,6 +82,33 @@ export interface BenchEdgeRow {
 }
 
 /**
+ * One RAW emission of a pair, with the semantics the engine attached to it.
+ *
+ * The ledger used to record an emission as a rule id and a confidence, keyed by
+ * an ORDER-INDEPENDENT pair key — so the two things the engine actually asserts
+ * about a pair, its direction and its edge type, were erased before hashing.
+ * Rewriting a rule from `causal-candidate cause→effect` to `contradicts
+ * effect→cause` left every row, every count and the report digest byte-identical
+ * (measured, not hypothesised). Production does not treat those as the same
+ * claim: `situation-store-v2.ts:335` maps both the endpoint order and the edge
+ * type into the evidence graph, so an inversion there changes what the user is
+ * told while the benchmark reads unchanged.
+ *
+ * The pair KEY stays unordered on purpose — planted truth is a statement about
+ * two events being related, not about which came first — so direction lives
+ * here, per emission, where the engine produced it.
+ */
+export interface BenchPairEmission {
+  ruleId: string;
+  /** The engine's claim about the pair — a semantic, not a formatting detail. */
+  edgeType: EdgeType;
+  /** Emission endpoints in EMISSION order, not sorted: `fromId` → `toId`. */
+  fromId: string;
+  toId: string;
+  confidence: number;
+}
+
+/**
  * One DISTINCT emitted event pair, with every emission that produced it.
  *
  * The pair summaries — `enginePairCount`, `distinctEnginePairCount`,
@@ -102,9 +129,7 @@ export interface BenchPairRow {
   eventIdA: string;
   eventIdB: string;
   /** One entry per RAW emission — two rules matching one pair is two entries. */
-  ruleIds: string[];
-  /** Confidence of each emission, index-aligned with `ruleIds`. */
-  confidences: number[];
+  emissions: BenchPairEmission[];
   /** Whether this pair is in the planted true-pair set. */
   isTruePair: boolean;
   /** Emissions of this pair that touched a near-miss decoy event. */
@@ -412,7 +437,9 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   }
   const causalLearnedRulePairsPerRule = [...perCausalRule.values()].sort((a, b) => b - a);
 
-  const emittingRules = new Set(graded.pairs.flatMap((p) => p.ruleIds));
+  const emittingRules = new Set(
+    graded.pairs.flatMap((p) => p.emissions.map((e) => e.ruleId)),
+  );
 
   return {
     streamCount: GOLDEN_STREAMS.length,
@@ -588,12 +615,17 @@ export function gradeEnginePairs(
         : [pair.eventB.id, pair.eventA.id];
       row = {
         key, eventIdA: idA, eventIdB: idB,
-        ruleIds: [], confidences: [], isTruePair, decoyEmissions: 0,
+        emissions: [], isTruePair, decoyEmissions: 0,
       };
       rows.set(key, row);
     }
-    row.ruleIds.push(pair.ruleId);
-    row.confidences.push(pair.confidence);
+    row.emissions.push({
+      ruleId: pair.ruleId,
+      edgeType: pair.edgeType,
+      fromId: pair.eventA.id,
+      toId: pair.eventB.id,
+      confidence: pair.confidence,
+    });
     if (touchesDecoy) row.decoyEmissions += 1;
     if (isTruePair) {
       emittedTrueKeys.add(key);

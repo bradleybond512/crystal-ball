@@ -3353,6 +3353,17 @@ function toUtcIsoTag(raw) {
   return `${tag}Z`;
 }
 
+// Mirrors instantOrNull in src/services/space-weather-parse.ts. toUtcIsoTag
+// passes a tag it can't recognize through UNCHANGED, so `'not-a-date'` and
+// `12345` both survive a truthiness check while the renderer's Date.parse
+// discards them — a healthy vote on a payload the panel throws away. A stamp
+// that can't be placed in time also can't be windowed, so it is not a reading.
+function swpcInstantOrNull(raw) {
+  if (typeof raw !== 'string') return null;
+  const at = Date.parse(toUtcIsoTag(raw));
+  return Number.isFinite(at) ? at : null;
+}
+
 // Kp is a 0-9 planetary index. Anything outside that is corrupt, and a bogus
 // extreme would trip the Kp>=5 storm alerting downstream.
 const KP_MIN = 0;
@@ -3376,8 +3387,8 @@ export function normalizeKpPoints(raw) {
   const out = [];
   for (const row of raw) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    if (swpcInstantOrNull(row.time_tag) === null) continue;
     const time_tag = toUtcIsoTag(row.time_tag);
-    if (!time_tag) continue;
     // Number() maps null, '', '   ', false and [] all to 0 — a plausible-looking
     // "quiet" Kp. Listing the absent values by identity misses the others, so
     // reject on TYPE and bound the range, mirroring finiteOrNull/inRangeOrNull
@@ -3394,9 +3405,16 @@ function normalizeAlertRaw(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const r of raw) {
-    if (!r || typeof r.message !== 'string') continue;
-    const issue = r.issue_datetime ? String(r.issue_datetime) : null;
-    if (!issue) continue;
+    // Empty and whitespace-only messages are dropped by parseAlerts in
+    // src/services/space-weather-parse.ts (`if (!message) continue`), so
+    // counting them here would vote healthy on a bulletin that renders as
+    // nothing. There is no such thing as a blank SWPC bulletin.
+    if (!r || typeof r.message !== 'string' || r.message.trim() === '') continue;
+    // Same reason as the Kp stamp: an unparseable issue time can't be windowed,
+    // so parseAlerts discards it. String(...) would happily turn 99999 into a
+    // tag that reads as present and parses to nothing.
+    if (swpcInstantOrNull(r.issue_datetime) === null) continue;
+    const issue = r.issue_datetime;
     // SWPC's issue_datetime is naïve UTC; append Z so Date.parse works.
     const issueIso = issue.endsWith('Z') ? issue : `${issue.replace(' ', 'T')}Z`;
     out.push({

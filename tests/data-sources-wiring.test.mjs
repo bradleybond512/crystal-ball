@@ -14,35 +14,83 @@ const dataLoaderSrc = readFileSync(resolve(root, 'src/app/data-loader.ts'), 'utf
 const appSrc = readFileSync(resolve(root, 'src/App.ts'), 'utf8');
 
 /**
- * Overwrite string, template and comment content with spaces, preserving every
- * index. Brace scanning has to see code only — a `}` inside a message string or
- * a `{` in a comment otherwise unbalances the stack and the block structure
- * read off it is fiction.
+ * Overwrite comment, string and regex-literal content with spaces, preserving
+ * every index. Brace scanning has to see code only — a `}` inside a message
+ * string, a `{` in a comment or the `}` in `/\}/` otherwise moves the stack and
+ * the block structure read off it is fiction.
+ *
+ * Regex literals matter for a specific reason: they are the one construct that
+ * can make the scanner MISS an enclosing branch rather than invent one. A stray
+ * `/}/` pops a real `if (SITE_VARIANT === 'full') {` off the stack, and a guard
+ * that reports "nothing encloses this" is a guard that passes. So `/` is
+ * resolved by the preceding token — division after a value, a literal
+ * otherwise — which is the standard disambiguation.
+ *
+ * This is a best-effort scanner, NOT a lexer. Callers that depend on the brace
+ * structure must reject the shapes it cannot resolve (see assertLexable) rather
+ * than trust a reading it cannot make.
  */
 function blankNonCode(src, { strings = true } = {}) {
   const out = src.split('');
+  const blank = (i) => { if (src[i] !== '\n') out[i] = ' '; };
+  // 'value' after an identifier/number/closer/literal — where `/` is division.
+  let prev = 'op';
   let i = 0;
   while (i < src.length) {
     const c = src[i];
     if (c === '/' && src[i + 1] === '/') {
-      while (i < src.length && src[i] !== '\n') out[i++] = ' ';
+      while (i < src.length && src[i] !== '\n') blank(i++);
     } else if (c === '/' && src[i + 1] === '*') {
       const end = src.indexOf('*/', i + 2);
       const stop = end === -1 ? src.length : end + 2;
-      for (; i < stop; i++) if (src[i] !== '\n') out[i] = ' ';
-    } else if (strings && (c === "'" || c === '"' || c === '`')) {
-      out[i++] = ' ';
-      while (i < src.length && src[i] !== c) {
-        if (src[i] === '\\') out[i++] = ' ';
-        if (i < src.length && src[i] !== '\n') out[i] = ' ';
-        i++;
+      while (i < stop) blank(i++);
+    } else if (c === '/' && prev === 'op') {
+      blank(i++);
+      let inClass = false;
+      while (i < src.length && src[i] !== '\n') {
+        const d = src[i];
+        if (d === '\\') { blank(i++); if (i < src.length) blank(i++); continue; }
+        if (d === '[') inClass = true;
+        else if (d === ']') inClass = false;
+        else if (d === '/' && !inClass) { blank(i++); break; }
+        blank(i++);
       }
-      if (i < src.length) out[i++] = ' ';
+      while (i < src.length && /[a-z]/.test(src[i])) blank(i++);
+      prev = 'value';
+    } else if (strings && (c === "'" || c === '"' || c === '`')) {
+      blank(i++);
+      while (i < src.length && src[i] !== c) {
+        if (src[i] === '\\') blank(i++);
+        if (i < src.length) blank(i++);
+        else break;
+      }
+      if (i < src.length) blank(i++);
+      prev = 'value';
     } else {
+      if (!/\s/.test(c)) prev = /[\w$)\]]/.test(c) ? 'value' : 'op';
       i++;
     }
   }
   return out.join('');
+}
+
+/**
+ * Fail loudly on the constructs blankNonCode cannot resolve, over the span a
+ * caller is about to read block structure from.
+ *
+ * A nested template — a backtick inside a `${}` expression — terminates the
+ * outer literal early for this scanner, after which real code is read as string
+ * and string as code. That is exactly the direction that hides an enclosing
+ * gate, so the answer is to refuse the reading, not to approximate it.
+ */
+function assertLexable(src, upTo, what) {
+  const span = src.slice(0, upTo);
+  const nested = span.match(/\$\{[^{}]*`/);
+  assert.ok(
+    !nested,
+    `${what} contains a nested template literal, which this scanner cannot lex — the block ` +
+    `structure it would report is not trustworthy (near: ${nested?.[0]})`,
+  );
 }
 
 /**
@@ -52,8 +100,9 @@ function blankNonCode(src, { strings = true } = {}) {
  * Reading a fixed window of characters before a call site cannot answer "what
  * guards this": a branch opened 900 characters earlier is just as controlling
  * as one on the same line, and a semicolon anywhere in the window truncates the
- * read. Walking the brace stack gives the enclosing blocks exactly, however far
- * away they were opened.
+ * read. Walking the brace stack finds the enclosing blocks however far away
+ * they were opened — as exactly as blankNonCode can resolve the source, which
+ * is why the caller-facing helpers call assertLexable on the same span.
  */
 function enclosingBlockHeaders(src, index) {
   const code = blankNonCode(src);
@@ -77,6 +126,33 @@ function enclosingBlockHeaders(src, index) {
     return blankNonCode(src.slice(cut + 1, at + 1), { strings: false })
       .replace(/\s+/g, ' ').trim();
   });
+}
+
+/**
+ * The whole `{ ... }` the anchor sits directly inside, comments stripped.
+ *
+ * A registration entry's own line is not the entry: `{ name: 'x',\n condition:
+ * () => SITE_VARIANT === 'full' }` restricts it on a line the anchor-line read
+ * never sees, and the property carries no enclosing brace of its own so the
+ * block-header walk skips it too.
+ */
+function enclosingObjectText(src, index) {
+  const code = blankNonCode(src);
+  const stack = [];
+  for (let i = 0; i < index; i++) {
+    if (code[i] === '{') stack.push(i);
+    else if (code[i] === '}') stack.pop();
+  }
+  const open = stack.at(-1);
+  assert.notEqual(open, undefined, 'expected the anchor to sit inside a block');
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    else if (code[i] === '}' && --depth === 0) {
+      return blankNonCode(src.slice(open, i + 1), { strings: false }).replace(/\s+/g, ' ');
+    }
+  }
+  return assert.fail('the block containing the anchor is never closed');
 }
 
 /**
@@ -110,12 +186,37 @@ function assertVoteGatedOnAdapter(scope, provider, label, mustInclude = []) {
   // adapters are all named `<source>ToObservations`, so requiring the
   // assignment to be one of those calls pins the value to the stage that knows
   // the schema.
-  const origin = scope.match(new RegExp(String.raw`\b${recorded}\s*=\s*(\w+)\(`));
+  const binds = [...scope.matchAll(new RegExp(String.raw`(const\s+|)\b${recorded}\s*=\s*([^=][^;]*)`, 'g'))];
+  assert.equal(
+    binds.length, 1,
+    `${label} must bind \`${recorded}\` exactly once — a later \`${recorded} = [{}]\` is what ` +
+    `actually reaches the recorder while the first assignment keeps this guard green ` +
+    `(found ${binds.length} assignments)`,
+  );
+  const [, declarator, initializer] = binds[0];
+  assert.equal(
+    declarator.trim(), 'const',
+    `${label} must declare \`${recorded}\` as a const — a \`let\` can be reassigned between the ` +
+    `adapter call and the recorder, and this guard reads the source, not the value`,
+  );
+  const callee = initializer.match(/^(\w+)\(/)?.[1];
   assert.ok(
-    origin && origin[1].endsWith('ToObservations'),
+    callee && callee.endsWith('ToObservations'),
     `${label} must build \`${recorded}\` from a *ToObservations adapter — a hand-rolled or ` +
     `sentinel array reports healthy for rows the adapter would have dropped ` +
-    `(found: ${origin ? `${origin[1]}(` : 'no assignment'})`,
+    `(found: ${initializer.trim().slice(0, 60)})`,
+  );
+  // The NAME is not the contract. `function sentinelToObservations() { return
+  // [{}]; }` declared in this file satisfies the suffix while knowing nothing
+  // about the schema, so the callee has to be imported from a module whose job
+  // this is — the fusion adapters all live in `*-fusion-observations`.
+  const imported = new RegExp(
+    String.raw`import\s*\{[^}]*\b${callee}\b[^}]*\}\s*from\s*['"][^'"]*-fusion-observations['"]`,
+  );
+  assert.match(
+    dataLoaderSrc, imported,
+    `${label}'s \`${callee}\` must be imported from a *-fusion-observations module — a locally ` +
+    `defined function matching the naming convention knows none of the domain's schema`,
   );
   const okExpr = rawOk.trim();
   const terms = okExpr.split('&&').map((t) => t.trim());
@@ -430,12 +531,17 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     assert.notEqual(bootAt, -1, 'usgsSeismic is not registered as a boot task in data-loader.ts');
     const entryAt = appSrc.indexOf("name: 'usgsSeismic'");
     assert.notEqual(entryAt, -1, 'usgsSeismic is not registered with the refresh scheduler in App.ts');
-    const entryLine = appSrc.slice(appSrc.lastIndexOf('\n', entryAt) + 1, appSrc.indexOf('\n', entryAt));
+    // The WHOLE entry object, not its first line: the formatter is free to put
+    // `condition: () => SITE_VARIANT === 'full',` on the line after `name:`, and
+    // a property carries no brace of its own so the block-header walk below
+    // never sees it either.
+    assertLexable(appSrc, entryAt, 'the App.ts scheduler registration');
+    const entryObject = enclosingObjectText(appSrc, entryAt);
     assert.doesNotMatch(
-      entryLine,
+      entryObject,
       /condition:|SITE_VARIANT/,
       'the usgsSeismic scheduler entry must carry no per-entry variant condition — that ' +
-      `reintroduces the boot-only staleness this task exists to fix (found: ${entryLine.trim()})`,
+      `reintroduces the boot-only staleness this task exists to fix (found: ${entryObject})`,
     );
 
     // Every gate on the path to each call site, not just the nearest. The
@@ -443,6 +549,7 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // 'happy'` block, so an enclosing branch is not per se wrong — what has to
     // hold is that the CONJUNCTION of all of them still reaches all three
     // variants that ship the natural layer.
+    assertLexable(dataLoaderSrc, bootAt, 'the data-loader.ts boot registration');
     const gates = [
       ['the usgsSeismic boot gate', condition[1]],
       ...enclosingBlockHeaders(dataLoaderSrc, bootAt)
@@ -502,14 +609,27 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // the tests, before any `&&` chaining to something else.
     const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
     const providers = pkg.scripts['test:providers'] ?? '';
-    const runner = providers.split('&&').map((s) => s.trim())
-      .find((s) => /(^|\s)(tsx|node)\s/.test(s) && s.includes('--test'));
+    // `&&` is not the only separator a shell honours: `;`, `||` and a pipe each
+    // start a new command too, so splitting on `&&` alone lets the runner segment
+    // swallow trailing text that is really a different command.
+    const runner = providers.split(/&&|\|\||[;|]/).map((s) => s.trim())
+      .find((s) => /(^|\s)(tsx|node)\s/.test(s) && s.split(/\s+/).includes('--test'));
     assert.ok(runner, 'test:providers must invoke a --test runner');
+    const argv = runner.split(/\s+/);
     assert.ok(
-      runner.split(/\s+/).includes(coveringPath),
+      argv.includes(coveringPath),
       `${coveringPath} must be an argument of the test:providers runner — a file nobody runs ` +
       `proves nothing (runner: ${runner.slice(0, 200)})`,
     );
+    // Listing the file is not running its cases: the runner's own filters can
+    // deselect every one of them while the path stays on the command line.
+    for (const filter of ['--test-name-pattern', '--test-skip-pattern', '--test-only']) {
+      assert.ok(
+        !argv.some((a) => a === filter || a.startsWith(`${filter}=`)),
+        `the test:providers runner must not pass ${filter} — it can deselect every case in ` +
+        `${coveringPath} while leaving the path on the command line`,
+      );
+    }
     // Every form that leaves a case listed but unexecuted: skip, todo, and the
     // options-object variants that take a string or an expression rather than
     // `true`. Each keeps the phrase assertions below green while the check the

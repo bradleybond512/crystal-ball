@@ -61,7 +61,11 @@ jobs:
       # regression, near-miss decoy leakage, or learned-rule blast-radius growth
       # versus the committed baseline
       # (src/services/correlation/__bench__/bench-correlation-baseline.json).
-      # Tolerances are one-sided so ACC-502..506 improvements pass silently.
+      # Tolerances are one-sided, but the committed `reportDigest` pins the
+      # whole report: any change that moves any reported number — including an
+      # ACC-502..506 improvement — fails on identity and must be re-seeded with
+      # `npm run bench:correlation -- --seed` in a reviewed diff. The tolerances
+      # then gate the new numbers against the old ones at that moment.
       # Fully offline, frozen fixtures, injected timer + fixed `now` — sub-second
       # runtime, cannot hang or become a slow step.
       - run: npm run bench:correlation

@@ -6,14 +6,24 @@
  * baseline next to this module, a pure comparison function, consumed by a CLI
  * script for the CI gate).
  *
- * Every tolerance below is ONE-SIDED: regression past the tolerance fails, and
- * an improvement never reads as one. Identity fields — the corpus digest, the
- * rule inventory and the LEDGER DIGEST — are compared for exact equality, so a
- * change that actually moves the miner does not pass silently either: it fails
- * on identity and must be re-seeded deliberately, in a reviewed diff. That is
- * the intended cost. The alternative is a benchmark whose row-level detail is
- * pinned only to the process that generated it, where a producer change and its
- * own witness move together (see `benchLedgerDigest`).
+ * Every tolerance below is ONE-SIDED: a regression past the tolerance fails and
+ * an improvement never reads as one — but the tolerances are no longer the last
+ * word. Identity fields — the corpus digest, the rule inventory and the REPORT
+ * DIGEST — are compared for exact equality, and the report digest covers every
+ * field of the report. So the honest summary of this gate is:
+ *
+ *   a change that does not move the benchmark at all      → passes;
+ *   a change that moves ANY reported number, in EITHER    → fails on identity,
+ *     direction                                             and must be
+ *                                                           re-seeded.
+ *
+ * The re-seed is the point, not a wart: it is a reviewed diff in which a human
+ * reads the new rows and the one-sided tolerances then say whether the new
+ * numbers are allowed to replace the old ones. `npm run bench:correlation
+ * --seed` prints the block to paste. The alternative — pinning only aggregates,
+ * and re-deriving the rest inside the process that produced them — is a gate
+ * whose witness moves with the code it is meant to witness (see
+ * `benchReportDigest`).
  *
  * Two properties are load-bearing and easy to lose:
  *
@@ -136,7 +146,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 8;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 9;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -163,11 +173,11 @@ export interface CorrelationBenchBaseline {
   truePairUniverse: number;
   corpusDigest: string;
   /**
-   * Digest of the row-level ledgers the last reviewed run produced — see
-   * `benchLedgerDigest`. This is the only pin in the file that a change to
+   * Digest of the ENTIRE report the last reviewed run produced — see
+   * `benchReportDigest`. This is the only pin in the file that a change to
    * `bench-correlation.ts` cannot move along with itself.
    */
-  ledgerDigest: string;
+  reportDigest: string;
   /** Every built-in rule id in the graded pass, sorted — pinned by set equality. */
   builtInRuleIds: string[];
   /**
@@ -705,6 +715,42 @@ function checkCorpusIdentity(
   }
 }
 
+/**
+ * Everything that must hold before a single number is compared.
+ *
+ * Ordering is the whole point: a schema mismatch, a malformed digest or a
+ * corpus that no longer matches make every downstream gate meaningless, so
+ * they short-circuit rather than adding a reason to a longer list.
+ */
+function checkPreflight(
+  report: CorrelationBenchReport,
+  baseline: CorrelationBenchBaseline,
+): string[] {
+  const reasons: string[] = [];
+
+  // ── Schema: an older baseline is missing fields that now feed gates ────
+  if (baseline.schemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {
+    reasons.push(
+      `baseline schemaVersion is ${String(baseline.schemaVersion)}, expected ` +
+      `${CORRELATION_BENCH_SCHEMA_VERSION} — it predates fields this gate reads; re-seed it`,
+    );
+    return reasons;
+  }
+
+  checkDigestFormat(reasons, report, baseline);
+  if (reasons.length > 0) return reasons;
+
+  checkCorpusIdentity(reasons, report, baseline);
+  checkRuleInventory(reasons, report, baseline);
+  checkRuleCoverage(reasons, report, baseline);
+  checkRuleProbes(reasons, report);
+  // Before the operand loop in the caller: a null separation is either the
+  // perfect run's legitimate answer or a missing number, and `falseEdgeCount`
+  // is what decides which. Saying that plainly beats "not a finite number".
+  checkBaselineSeparationCoherence(reasons, baseline);
+  return reasons;
+}
+
 export function compareCorrelationBenchToBaseline(
   report: CorrelationBenchReport,
   baseline: CorrelationBenchBaseline,
@@ -713,27 +759,8 @@ export function compareCorrelationBenchToBaseline(
   const tol = resolveTolerances(reasons, baseline.tolerances);
   if (reasons.length > 0) return { ok: false, reasons };
 
-  // ── Schema: an older baseline is missing fields that now feed gates ────
-  if (baseline.schemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {
-    reasons.push(
-      `baseline schemaVersion is ${String(baseline.schemaVersion)}, expected ` +
-      `${CORRELATION_BENCH_SCHEMA_VERSION} — it predates fields this gate reads; re-seed it`,
-    );
-    return { ok: false, reasons };
-  }
-
-  checkDigestFormat(reasons, report, baseline);
-  if (reasons.length > 0) return { ok: false, reasons };
-
-  checkCorpusIdentity(reasons, report, baseline);
-  checkRuleInventory(reasons, report, baseline);
-  checkRuleCoverage(reasons, report, baseline);
-  checkRuleProbes(reasons, report);
-  // Before the operand loop below: a null separation is either the perfect
-  // run's legitimate answer or a missing number, and `falseEdgeCount` is what
-  // decides which. Saying that plainly beats "not a finite number (null)".
-  checkBaselineSeparationCoherence(reasons, baseline);
-  if (reasons.length > 0) return { ok: false, reasons };
+  const preflight = checkPreflight(report, baseline);
+  if (preflight.length > 0) return { ok: false, reasons: preflight };
 
   // ── Fail closed on anything non-numeric BEFORE any directional check ───
   // A missing JSON field or a corrupt report yields NaN, and `NaN > tolerance`
@@ -827,11 +854,18 @@ export function compareCorrelationBenchToBaseline(
   checkDrop(reasons, 'miner coupling recall',
     baseline.couplingRecall, report.couplingRecall, tol.couplingRecallDrop);
 
+  // A baseline seeded from a run with no false edges is exempted from arming
+  // the separation gate, and the comment there says `falseEdgeGrowth` is what
+  // covers it instead. That was only true if the tolerance happened to be 0 —
+  // the ceiling permits 3, so a perfect baseline could ship with three free
+  // false edges and no separation gate at all. Make the claim true.
+  const falseEdgeGrowth = baselineSeparationIsPerfect(baseline) ? 0 : tol.falseEdgeGrowth;
+
   // The precision RATIO alone is too coarse: on a deterministic corpus two
   // extra false edges move 0.2273 → 0.2083, inside the 0.02 tolerance. Count
   // them discretely too.
   checkGrowth(reasons, 'graded false edges',
-    baseline.falseEdgeCount, report.falseEdgeCount, tol.falseEdgeGrowth);
+    baseline.falseEdgeCount, report.falseEdgeCount, falseEdgeGrowth);
 
   // …and the TOTAL alone is still too coarse. The five categories have five
   // different owners downstream (ACC-502 unplanted, ACC-503 mediated, ACC-504
@@ -854,7 +888,7 @@ export function compareCorrelationBenchToBaseline(
       baseline.unplantedFalsePositives, report.unplantedFalsePositives],
   ];
   for (const [label, want, got] of byCategory) {
-    checkGrowth(reasons, label, want, got, tol.falseEdgeGrowth);
+    checkGrowth(reasons, label, want, got, falseEdgeGrowth);
   }
 
   checkSeparation(reasons, report, baseline, tol.edgeEvidenceSeparationDrop);
@@ -948,7 +982,7 @@ export function compareCorrelationBenchToBaseline(
   checkReportIsReproducible(reasons, report);
   // …and re-running the benchmark only proves the report matches THIS commit's
   // producer. The committed digest is what the producer is measured against.
-  checkLedgerDigest(reasons, report, baseline);
+  checkReportDigest(reasons, report, baseline);
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -1466,44 +1500,107 @@ function arrayDivergences(
   // Own-key comparison, not just indices: an array can carry extra own
   // properties, and `edges.note = '...'` is invisible to a length-and-elements
   // walk while still riding along in whatever consumes the report.
-  if (!keyShapeAgrees(a, b, path, out)) return;
-  for (const [i, v] of a.entries()) divergences(v, b[i], `${path}[${i}]`, out, limit);
+  const shapes = keyShapesAgree(a, b, path, out);
+  if (shapes === null) return;
+  for (const [i] of a.entries()) {
+    divergences(shapes.want.get(String(i)), shapes.got.get(String(i)), `${path}[${i}]`, out, limit);
+  }
 }
 
 /**
- * Own ENUMERABLE keys on both sides, compared as sets.
+ * Every own property of a candidate report node, read ONCE, from its descriptor.
  *
- * A union of `Object.keys()` read through normal property lookup accepts three
- * separate forgeries: an object whose own field was deleted and re-supplied by
- * its PROTOTYPE (`Object.create(realReport)` has no own keys at all and passed),
- * an extra own key whose value is `undefined` (present on one side only, both
- * reads `undefined`, compares equal), and a symbol or non-enumerable key that
- * `Object.keys` never reports. The report is JSON on the wire; anything that is
- * not a plain, own-keyed object is not a report.
+ * `Object.keys()` plus a normal property read is not enough, and the gap is not
+ * theoretical — all three of these were demonstrated passing:
  *
- * Returns false when the shapes already disagree, so the caller skips the
- * per-key walk rather than emitting the same defect once per field.
+ *   an object whose own field was deleted and re-supplied by its PROTOTYPE
+ *     (`Object.create(realReport)` has no own keys at all);
+ *   an own key defined as an enumerable GETTER, which returned the real value to
+ *     the comparator and a different value to its next consumer — a normal read
+ *     is a call, and a call can answer differently every time;
+ *   an extra NON-ENUMERABLE own property, invisible to `Object.keys` and to
+ *     `JSON.stringify`, but perfectly visible to anything doing a plain read.
+ *
+ * So: `Reflect.ownKeys` (symbols included), data descriptors only, enumerable
+ * only, and the value taken from `descriptor.value` so the walk reads each field
+ * exactly once and cannot be told two different stories.
+ *
+ * The one thing this cannot do is unmask a Proxy that lies CONSISTENTLY through
+ * both its `ownKeys` and `getOwnPropertyDescriptor` traps. Nothing in JavaScript
+ * can. That is not the hole it looks like: a consistent liar has to produce a
+ * report that reproduces the live run field for field, and the committed
+ * `reportDigest` is computed over exactly those answers.
+ *
+ * Returns null when the node is not a plain own-keyed object (reason pushed), so
+ * the caller skips the per-key walk rather than emitting the same defect once
+ * per field.
  */
-function keyShapeAgrees(a: object, b: object, path: string, out: string[]): boolean {
-  const proto = Object.getPrototypeOf(b) as unknown;
-  const wantProto = Array.isArray(b) ? Array.prototype : Object.prototype;
+function ownDataProps(
+  node: object, path: string, out: string[],
+): Map<string, unknown> | null {
+  const at = path === '' ? '<report>' : path;
+  const proto = Object.getPrototypeOf(node) as unknown;
+  const wantProto = Array.isArray(node) ? Array.prototype : Object.prototype;
   if (proto !== wantProto && proto !== null) {
-    out.push(`${path || '<report>'}: not a plain object (inherits from a prototype chain)`);
-    return false;
+    out.push(`${at}: not a plain object (inherits from a prototype chain)`);
+    return null;
   }
-  if (Object.getOwnPropertySymbols(b).length > 0) {
-    out.push(`${path || '<report>'}: carries symbol-keyed properties`);
-    return false;
+  const props = new Map<string, unknown>();
+  for (const key of Reflect.ownKeys(node)) {
+    const held = readDataProp(node, key, at);
+    if (held.kind === 'disqualified') {
+      out.push(held.reason);
+      return null;
+    }
+    if (held.kind === 'value') props.set(String(key), held.value);
   }
-  const want = new Set(Object.keys(a));
-  const got = new Set(Object.keys(b));
-  const missing = [...want].filter((k) => !got.has(k));
-  const extra = [...got].filter((k) => !want.has(k));
-  if (missing.length === 0 && extra.length === 0) return true;
+  return props;
+}
+
+/** One own property, classified: usable, skippable, or disqualifying. */
+type OwnProp =
+  | { kind: 'value'; value: unknown }
+  | { kind: 'skip' }
+  | { kind: 'disqualified'; reason: string };
+
+function readDataProp(node: object, key: string | symbol, at: string): OwnProp {
+  if (typeof key === 'symbol') {
+    return { kind: 'disqualified', reason: `${at}: carries a symbol-keyed property` };
+  }
+  const d = Object.getOwnPropertyDescriptor(node, key);
+  if (d === undefined) return { kind: 'skip' };
+  if (!('value' in d)) {
+    return {
+      kind: 'disqualified', reason: `${at}.${key}: is an accessor, not a data property`,
+    };
+  }
+  if (d.enumerable) return { kind: 'value', value: d.value };
+  // `length` is the one non-enumerable own property a real array has.
+  if (Array.isArray(node) && key === 'length') return { kind: 'skip' };
+  return {
+    kind: 'disqualified', reason: `${at}.${key}: is a non-enumerable own property`,
+  };
+}
+
+/**
+ * Own data properties on both sides, compared as sets.
+ *
+ * Returns the validated property maps, or null when the shapes already disagree
+ * — same contract as `ownDataProps`, so the caller skips the per-key walk.
+ */
+function keyShapesAgree(
+  a: object, b: object, path: string, out: string[],
+): { want: Map<string, unknown>; got: Map<string, unknown> } | null {
+  const want = ownDataProps(a, path, []);
+  const got = ownDataProps(b, path, out);
+  if (want === null || got === null) return null;
+  const missing = [...want.keys()].filter((k) => !got.has(k));
+  const extra = [...got.keys()].filter((k) => !want.has(k));
+  if (missing.length === 0 && extra.length === 0) return { want, got };
   const at = path === '' ? '<report>' : path;
   if (missing.length > 0) out.push(`${at}: missing own field(s) [${missing.join(', ')}]`);
   if (extra.length > 0) out.push(`${at}: unexpected own field(s) [${extra.join(', ')}]`);
-  return false;
+  return null;
 }
 
 /** First `limit` structural divergences between two values, as field paths. */
@@ -1516,10 +1613,11 @@ function divergences(
     return;
   }
   if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
-    if (!keyShapeAgrees(a, b, path, out)) return;
-    for (const k of Object.keys(a).sort((x, y) => x.localeCompare(y))) {
+    const shapes = keyShapesAgree(a, b, path, out);
+    if (shapes === null) return;
+    for (const k of [...shapes.want.keys()].sort((x, y) => x.localeCompare(y))) {
       divergences(
-        (a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k],
+        shapes.want.get(k), shapes.got.get(k),
         path === '' ? k : `${path}.${k}`, out, limit,
       );
     }
@@ -1547,18 +1645,66 @@ function divergences(
  * everything else.
  */
 /**
- * Numbers enter the digest ROUNDED, at the precision the baseline already
- * trusts. `zScore` and `lift` come off `Math.log`/`Math.exp`, which are
- * implementation-defined to the last bit — pinning raw doubles would make the
+ * Numbers enter the digest ROUNDED — but only just.
+ *
+ * `zScore` and `lift` come off `Math.log`/`Math.exp`, which are
+ * implementation-defined to the last bit, so pinning raw doubles would make the
  * digest a cross-platform flake (seeded on macOS, verified on Linux CI) rather
- * than a statement about the miner.
+ * than a statement about the miner. Rounding buys that back, and every rounded
+ * digit is a band the digest cannot see: at the 4 decimals this started with, a
+ * uniform `strength - 0.00001` applied across the whole producer reproduced the
+ * committed digest exactly.
+ *
+ * 9 decimals is the compromise, and the margins are not close on either side.
+ * These values live in `[0, 50]`, where a double's ULP is ~1e-14; a handful of
+ * differing libm last bits accumulates to perhaps 1e-13, five orders of
+ * magnitude below the rounding step. On the other side the blind band is now
+ * 1e-9 — far below any per-row tolerance in this file, and far below the
+ * precision at which any of these numbers means anything.
  */
 function q(v: number | null): string {
-  return v === null ? 'null' : v.toFixed(4);
+  if (v === null) return 'null';
+  // `(-0).toFixed()` is "0", and a mean whose sign flipped is exactly the kind
+  // of change this exists to catch.
+  if (Object.is(v, -0)) return '-0';
+  return Number.isFinite(v) ? v.toFixed(9) : String(v);
 }
 
 /**
- * A digest of the report's ROW-LEVEL detail, pinned in the committed baseline.
+ * The report, flattened into one record per leaf, in a canonical order.
+ *
+ * Containers emit a record of their own BEFORE their contents: an array emits
+ * its length, an object emits its sorted key list. Without those a deleted
+ * field would simply produce fewer records, and "fewer records" is what a
+ * shorter run also looks like — the digest would be pinning the values that
+ * remain rather than the shape that was supposed to be there.
+ */
+function canonicalRecords(value: unknown, path: string, out: string[]): void {
+  if (Array.isArray(value)) {
+    out.push(`${path}[]=${value.length}`);
+    for (const [i, v] of value.entries()) canonicalRecords(v, `${path}[${i}]`, out);
+    return;
+  }
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(value).sort((x, y) => x.localeCompare(y));
+    out.push(`${path}{}=${keys.join(',')}`);
+    for (const k of keys) {
+      canonicalRecords((value as Record<string, unknown>)[k], path === '' ? k : `${path}.${k}`, out);
+    }
+    return;
+  }
+  out.push(`${path}=${leafRecord(value)}`);
+}
+
+function leafRecord(value: unknown): string {
+  if (typeof value === 'number') return q(value);
+  // An own key holding `undefined` survives `Object.keys` and vanishes under
+  // `JSON.stringify` — it is a distinguishable state, so it gets a token.
+  return value === undefined ? 'undefined' : JSON.stringify(value);
+}
+
+/**
+ * A digest of the WHOLE report, pinned in the committed baseline.
  *
  * Every other check in this file is computed inside the same process that
  * produced the report, against truth from the same commit. That is enough to
@@ -1570,35 +1716,24 @@ function q(v: number | null): string {
  *
  * This digest is the anchor that lives OUTSIDE the process: it was written into
  * the baseline JSON by a human re-seeding it, so it cannot move with the code
- * that generates it. The cost is explicit and intended — a real change to the
- * miner now fails here and must be re-seeded in a reviewed diff. That is the
- * moment someone is supposed to read these rows.
+ * that generates it.
+ *
+ * It covers every field, and it has to. Pinning only the row-level ledgers left
+ * the report's own summary layer unpinned, and the summary layer is where the
+ * advertised measurements live: with the ledgers digested and the rest merely
+ * re-derived, DELETING `meanCausalEdgeStrength` or `meanCausalEdgeZ`, or forging
+ * `causalCouplingsLostToCap`, `meanFalsePairConfidence` or `confidenceSeparation`
+ * inside the producer, still returned a clean PASS. A field nobody gates is a
+ * field anybody can move; the digest gates all of them at once.
+ *
+ * The cost is explicit and intended — any real change to the benchmark now
+ * fails here and must be re-seeded in a reviewed diff (`--seed`, see
+ * `seedCorrelationBenchBaseline`). That is the moment someone is supposed to
+ * read these numbers.
  */
-export function benchLedgerDigest(report: CorrelationBenchReport): string {
+export function benchReportDigest(report: CorrelationBenchReport): string {
   const records: string[] = [];
-  for (const e of report.edges) {
-    records.push(JSON.stringify([
-      'edge', e.from, e.to, e.verdict, e.support, e.antecedents,
-      q(e.lift), q(e.zScore), q(e.strength), e.windowHours, e.becameLearnedRule,
-    ]));
-  }
-  for (const p of report.pairs) {
-    records.push(JSON.stringify([
-      'pair', p.key, p.eventIdA, p.eventIdB, p.ruleIds,
-      p.confidences.map((c) => q(c)), p.isTruePair, p.decoyEmissions,
-    ]));
-  }
-  for (const l of report.learnedPairs) {
-    records.push(JSON.stringify([
-      'learnedPair', l.ruleId, l.key, l.eventIdA, l.eventIdB, l.emissions,
-    ]));
-  }
-  for (const p of report.ruleProbes) {
-    records.push(JSON.stringify([
-      'probe', p.ruleId, p.positiveMatched, p.nearMissRejected, p.nearMiss,
-    ]));
-  }
-  for (const id of report.causalLearnedRuleIds) records.push(`causalLearnedRule:${id}`);
+  canonicalRecords(report, '', records);
   return digestRecords(records);
 }
 
@@ -1609,27 +1744,27 @@ export function benchLedgerDigest(report: CorrelationBenchReport): string {
  * checked that way: two absent digests compare equal, which is the identity
  * gate passing on the absence of identity.
  */
-function checkLedgerDigest(
+function checkReportDigest(
   reasons: string[],
   report: CorrelationBenchReport,
   baseline: CorrelationBenchBaseline,
 ): void {
-  const want = baseline.ledgerDigest;
+  const want = baseline.reportDigest;
   if (typeof want !== 'string' || !DIGEST_PATTERN.test(want)) {
     reasons.push(
-      `baseline ledgerDigest is not a 32-character hex digest (${JSON.stringify(want)}) — ` +
-      `without it the row-level ledgers are pinned to nothing outside the process that ` +
-      `produced them`,
+      `baseline reportDigest is not a 32-character hex digest (${JSON.stringify(want)}) — ` +
+      `without it the report is pinned to nothing outside the process that produced it`,
     );
     return;
   }
-  const got = benchLedgerDigest(report);
+  const got = benchReportDigest(report);
   if (got === want) return;
   reasons.push(
-    `the row-level ledgers do not match the committed baseline (ledgerDigest ${got}, ` +
-    `expected ${want}) — either the edge/pair/learned-pair/probe rows were altered after ` +
-    `the run, or the miner itself changed. The second reading is not a regression: re-seed ` +
-    `the baseline in a reviewed diff, which is the moment to read these rows`,
+    `the report does not match the committed baseline (reportDigest ${got}, expected ` +
+    `${want}) — either the report was altered after the run, or the benchmark itself ` +
+    `changed. The second reading is not a regression: re-seed the baseline with ` +
+    `\`npm run bench:correlation -- --seed\` in a reviewed diff, which is the moment to ` +
+    `read these numbers`,
   );
 }
 
@@ -2175,4 +2310,65 @@ function checkGrowth(
       `(Δ=+${delta} exceeds ${tolerance} tolerance)`,
     );
   }
+}
+
+/**
+ * The report's numbers, arranged as the baseline block to commit.
+ *
+ * Pinning the whole report by digest means every real change to the benchmark
+ * fails on identity and has to be re-seeded — which is the intended cost, and
+ * which is only a reasonable cost if re-seeding is one command rather than a
+ * hand-transcription of thirty numbers and two digests. `npm run
+ * bench:correlation -- --seed` prints this.
+ *
+ * `note` and `tolerances` are carried over, never generated: they are the two
+ * parts of the file that encode a human judgement about what the numbers are
+ * allowed to do, and a re-seed is not the moment to quietly widen them. The
+ * new `note` paragraph is written by the person doing the re-seed.
+ */
+export function seedCorrelationBenchBaseline(
+  report: CorrelationBenchReport,
+  carriedOver: Pick<CorrelationBenchBaseline, 'note' | 'tolerances'>,
+  seededAt: string,
+): CorrelationBenchBaseline {
+  return {
+    schemaVersion: CORRELATION_BENCH_SCHEMA_VERSION,
+    seededAt,
+    note: carriedOver.note,
+
+    streamCount: report.streamCount,
+    observationCount: report.observationCount,
+    plantedCausalCount: report.plantedCausalCount,
+    truePairUniverse: report.truePairUniverse,
+    corpusDigest: report.corpusDigest,
+    reportDigest: benchReportDigest(report),
+    builtInRuleIds: [...report.builtInRuleIds],
+    ruleCoverage: [...report.ruleCoverage],
+
+    couplingPrecision: report.couplingPrecision,
+    couplingRecall: report.couplingRecall,
+    minedEdgeCount: report.minedEdgeCount,
+    significantEdgeCount: report.significantEdgeCount,
+    confoundedFalsePositives: report.confoundedFalsePositives,
+    mediatedFalsePositives: report.mediatedFalsePositives,
+    independentFalsePositives: report.independentFalsePositives,
+    inhibitoryEdgesReported: report.inhibitoryEdgesReported,
+    unplantedFalsePositives: report.unplantedFalsePositives,
+    falseEdgeCount: report.falseEdgeCount,
+    edgeEvidenceSeparation: report.edgeEvidenceSeparation,
+    learnedRuleCount: report.learnedRuleCount,
+    learnedRuleFalsePositives: report.learnedRuleFalsePositives,
+    causalLearnedRuleCount: report.causalLearnedRuleCount,
+    enginePairCount: report.enginePairCount,
+    distinctEnginePairCount: report.distinctEnginePairCount,
+    pairPrecision: report.pairPrecision,
+    pairRecall: report.pairRecall,
+    decoyPairsEmitted: report.decoyPairsEmitted,
+    meanTruePairConfidence: report.meanTruePairConfidence,
+    learnedRulePairCount: report.learnedRulePairCount,
+    causalLearnedRulePairCount: report.causalLearnedRulePairCount,
+    minCausalLearnedRulePairCount: report.minCausalLearnedRulePairCount,
+
+    tolerances: { ...carriedOver.tolerances },
+  };
 }

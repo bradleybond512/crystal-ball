@@ -928,17 +928,21 @@ Outcome — delivered:
   learned rules mined from the same corpus.
 - `src/services/correlation/bench-correlation-baseline.ts` +
   `__bench__/bench-correlation-baseline.json` — committed baseline with
-  **one-sided** tolerances (improvement passes silently) and an
-  exact-equality corpus-identity check that short-circuits before any
-  metric comparison.
+  **one-sided** tolerances and exact-equality identity checks (corpus digest,
+  rule inventory, whole-report digest) that short-circuit before any metric
+  comparison. Identity is the strict half: any change that moves ANY reported
+  number — regression *or* improvement — fails and must be re-seeded via
+  `npm run bench:correlation -- --seed`, and the one-sided tolerances then
+  decide, at re-seed time, whether the new numbers may replace the old.
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
-- 130 unit tests in
+- 142 unit tests in
   `src/services/correlation/__tests__/bench-correlation.test.mts`,
   covering both the corpus (the traps still trap) and the gate (one-sided
-  tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, and a
-  regression per demonstrated PASS-on-nothing across ten review rounds).
+  tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, a
+  regression per demonstrated PASS-on-nothing across eleven review rounds, and
+  an exhaustive leaf sweep proving the report digest covers every field).
 
 Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
 Every item below is a way the first cut would have reported PASS on a benchmark
@@ -1297,14 +1301,47 @@ attribution, 101 learned-pair rows collapsed to four (one citing
 and every one returned `ok: true, reasons: []`. None of them move an aggregate
 the committed file pins.
 
-`ledgerDigest` (`schemaVersion: 8`) is the anchor that lives outside the
-process: a 128-bit digest over the edge, pair, learned-pair and probe rows,
-written into `bench-correlation-baseline.json` by the human who re-seeded it, so
-no source change can move it along with itself. Both producer-side forgeries
-above now fail the gate. Numbers enter the digest rounded to 4 dp — `zScore` and
-`lift` come off `Math.log`/`Math.exp`, which are implementation-defined to the
-last bit, and a digest that flaked between a macOS seed and Linux CI would be
-deleted within a week.
+`reportDigest` (`schemaVersion: 9`) is the anchor that lives outside the
+process: a 128-bit digest over the WHOLE report, written into
+`bench-correlation-baseline.json` by the human who re-seeded it, so no source
+change can move it along with itself. Both producer-side forgeries above now
+fail the gate.
+
+Round 11 found the first cut of this anchor pinned the wrong half. At
+`schemaVersion: 8` it covered only the row-level ledgers (edges / pairs /
+learned pairs / probes), which left the SUMMARY layer — where the advertised
+measurements live — pinned by nothing but in-process re-derivation: deleting
+`meanCausalEdgeStrength` or `meanCausalEdgeZ` inside the producer, or forging
+`causalCouplingsLostToCap`, still returned `ok: true, reasons: []`. It now
+covers every field, containers included: an array emits its length and an
+object its sorted key list before their contents, so a deleted field reads as a
+changed shape rather than merely as a shorter run. An exhaustive leaf sweep in
+the test file perturbs every leaf of the live report in turn and requires the
+digest to move, so the coverage claim is asserted field by field rather than by
+argument.
+
+Numbers enter the digest rounded to 9 dp. At the original 4 dp a uniform
+`strength - 0.00001` across the producer reproduced the committed digest
+exactly; values live in `[0, 50]` where a ULP is ~1e-14, so 9 dp keeps about
+five orders of margin over the last-bit noise of `Math.log`/`Math.exp` — which
+are implementation-defined, and a digest that flaked between a macOS seed and
+Linux CI would be deleted within a week — while shrinking the blind band to
+1e-9.
+
+The walk that compares a report to its re-run is descriptor-based
+(`Reflect.ownKeys` + `getOwnPropertyDescriptor`, data descriptors only, value
+read once from `descriptor.value`), so an accessor cannot answer the shape check
+and the value check differently, and a non-enumerable own property cannot ride
+along invisibly. A Proxy that lies CONSISTENTLY through both traps is out of
+scope and documented as such — it would have to reproduce the live run field for
+field, which is what the digest is computed over.
+
+Re-seeding is one command rather than a hand-transcription of thirty numbers:
+`npm run bench:correlation -- --seed` emits the complete baseline block from the
+live run, carrying `note` and `tolerances` over verbatim because those encode
+human judgement. A test round-trips the emitter against the committed file field
+for field, so a hand-edit that quietly widens a tolerance shows up as a test
+failure rather than as a gate measuring something nobody reviewed.
 
 The cost is explicit and intended, and it revises the header contract: a real
 change to the miner now fails on IDENTITY and must be re-seeded in a reviewed

@@ -1003,6 +1003,7 @@ export default defineConfig({
  },
   },
   build: {
+ manifest: true,
  // Geospatial bundles (maplibre/deck) are expected to be large even when split.
  // Raise warning threshold to reduce noisy false alarms in CI.
  chunkSizeWarningLimit: 1200,
@@ -1087,6 +1088,42 @@ export default defineConfig({
  || file.startsWith('AnalystHud')
  ) {
  return 'panels-diagnostic';
+ }
+ // Analysis / cognition panels — calibration, hypotheses, scenarios,
+ // and operator decision support. Keep this fast-growing family out
+ // of the general-purpose panel chunk so both have meaningful,
+ // independently enforced budgets. The established `panels` name
+ // remains the catch-all ownership anchor for shared service modules.
+ if (
+ file.startsWith('Belief')
+ || file.startsWith('Insights')
+ || file.startsWith('Strategic')
+ || file.startsWith('Operator')
+ || file.startsWith('Synthesis')
+ || file.startsWith('Intelligence')
+ || file.startsWith('Counterfactual')
+ || file.startsWith('Backtest')
+ || file.startsWith('AnalystNotebook')
+ || file.startsWith('Scenario')
+ || file.startsWith('Shadow')
+ || file.startsWith('Assumption')
+ || file.startsWith('ActiveLearning')
+ || file.startsWith('QualityDebt')
+ || file.startsWith('Experiment')
+ || file.startsWith('CognitiveBias')
+ || file.startsWith('WorldState')
+ || file.startsWith('CrisisSignature')
+ || file.startsWith('ObservationRules')
+ || file.startsWith('PersistentQuery')
+ || file.startsWith('RepairRecommendations')
+ || file.startsWith('MissionControl')
+ || file.startsWith('Hypothesis')
+ || file.startsWith('Calibration')
+ || file.startsWith('Forecast')
+ || file.startsWith('Correlation')
+ || file.startsWith('Decision')
+ ) {
+ return 'panels-analysis';
  }
  // Security / cyber / OSINT panels — phishing, IOC, sanctions,
  // threat intel. Checked BEFORE the panels-feeds rule so panels

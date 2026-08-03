@@ -101,6 +101,33 @@ test('swpcFeedIsUsable rejects rows every downstream parser would discard', () =
   // Kp>=5 storm alerting downstream if it were vouched for here.
   assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: 47 }]), false, 'Kp 47 is not a measurement');
   assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: -1 }]), false, 'nor is a negative index');
+  // toUtcIsoTag passes an unrecognized tag through UNCHANGED, so a truthiness
+  // check on its output says "present" for all three of these while the
+  // renderer's Date.parse discards them. A reading that cannot be placed in
+  // time cannot be windowed, so it is not a reading.
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: 'not-a-date', Kp: 2 }]), false, 'an unparseable stamp is not a time');
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: 12_345, Kp: 2 }]), false, 'a non-string stamp is not a time either');
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: 'aa:bb', Kp: 2 }]), false, 'nor is anything merely shaped like a clock');
+  // The complement: SWPC ships this product zone-less, and the space-separated
+  // form shows up on the sibling routes. Both must survive the tightening.
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06T10:00:00', Kp: 2 }]), true, 'the real zone-less shape still counts');
+  assert.equal(swpcFeedIsUsable('kp', [{ time_tag: '2026-05-06 10:00:00', Kp: 5 }]), true, 'and so does the space-separated one');
+});
+
+test('alert usability matches what parseAlerts keeps', () => {
+  // Same divergence class as the Kp stamp, on the other product. parseAlerts in
+  // src/services/space-weather-parse.ts drops both of these; counting them here
+  // is a healthy verdict on a bulletin that renders as nothing.
+  const stamp = '2026-05-06 10:00:00';
+  assert.equal(swpcFeedIsUsable('alerts', [{ product_id: 'X', issue_datetime: stamp, message: '' }]), false, 'there is no blank SWPC bulletin');
+  assert.equal(swpcFeedIsUsable('alerts', [{ product_id: 'X', issue_datetime: stamp, message: '   ' }]), false, 'nor a whitespace-only one');
+  assert.equal(swpcFeedIsUsable('alerts', [{ product_id: 'X', issue_datetime: 'not-a-date', message: 'ALERT: real text' }]), false, 'an unwindowable alert is dropped downstream');
+  // String(99999) reads as present and parses to nothing — the same trap as
+  // Number(null) on the Kp field, one type over.
+  assert.equal(swpcFeedIsUsable('alerts', [{ product_id: 'X', issue_datetime: 99_999, message: 'ALERT: real text' }]), false, 'a numeric stamp is not a timestamp');
+  assert.equal(
+    swpcFeedIsUsable('alerts', [{ product_id: 'ALTK07', issue_datetime: stamp, message: 'ALERT: Geomagnetic K-index of 7' }]),
+    true, 'a real bulletin still counts');
   assert.equal(swpcFeedIsUsable('xray', [{}]), false, 'an object with no class field is not a flare');
   assert.equal(swpcFeedIsUsable('xray', ['maintenance']), false, 'a status string is not a flare');
   assert.equal(swpcFeedIsUsable('xray', [{ max_class: 'maintenance' }]), false, 'only A/B/C/M/X grammar counts as a class');

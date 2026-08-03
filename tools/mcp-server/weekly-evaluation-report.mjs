@@ -355,16 +355,17 @@ function appendObservation(accumulator, weekStart, observation) {
 
 function compileReport(aggregate, generatedAt, catchupTruncated) {
   const cadenceComplete = aggregate.observationCount >= EXPECTED_WEEKLY_OBSERVATIONS
-    && aggregate.freshCount === aggregate.observationCount
     && aggregate.firstObservedAt !== null
     && aggregate.firstObservedAt <= aggregate.weekStart + INSTALLED_CADENCE_MS
     && aggregate.lastObservedAt !== null
     && aggregate.lastObservedAt >= aggregate.weekStart + WEEK_MS - INSTALLED_CADENCE_MS
     && aggregate.maxObservationGapMs !== null
     && aggregate.maxObservationGapMs <= MAX_COMPLETE_OBSERVATION_GAP_MS;
+  const reportComplete = cadenceComplete
+    && aggregate.freshCount === aggregate.observationCount;
   const overallAvailability = aggregate.freshCount === 0
     ? 'unavailable'
-    : cadenceComplete
+    : reportComplete
       ? 'complete'
       : 'partial';
   const detailAvailability = overallAvailability === 'complete'
@@ -413,6 +414,7 @@ function compileReport(aggregate, generatedAt, catchupTruncated) {
     lastChampion,
     brierDelta,
     providerDrift,
+    cadenceComplete,
   });
   const report = {
     schemaVersion: 1,
@@ -493,7 +495,15 @@ function compileReport(aggregate, generatedAt, catchupTruncated) {
   return report;
 }
 
-function recommendationCode({ aggregate, lastForecast, lastChampion, brierDelta, providerDrift }) {
+function recommendationCode({
+  aggregate,
+  lastForecast,
+  lastChampion,
+  brierDelta,
+  providerDrift,
+  cadenceComplete,
+}) {
+  if (!cadenceComplete) return 'restore_monitor';
   if (aggregate.observationCount === 0 || aggregate.unavailableCount > 0) return 'restore_monitor';
   if (aggregate.staleCount > 0) return 'restore_fresh_diagnostics';
   if ((lastForecast?.overduePending ?? 0) > 0) return 'resolve_overdue_predictions';

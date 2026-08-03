@@ -12,8 +12,13 @@ const workflow = readFileSync(
 test('markdown lint workflow only lints markdown files changed in the pull request', () => {
   assert.match(
  workflow,
- /actions\/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10[\s\S]*fetch-depth: 0/,
+ /actions\/checkout@[a-f0-9]{40}[\s\S]*fetch-depth: 0/,
  'lint workflow should fetch enough history to diff against the base branch',
+  );
+  assert.match(
+ workflow,
+ /static-lint:[\s\S]*timeout-minutes: 12/,
+ 'lint workflow should have a bounded completion time',
   );
   // Two valid strategies — either fetch the base ref shallowly and diff
  // against it, or rely on a checkout with fetch-depth: 0 and diff against

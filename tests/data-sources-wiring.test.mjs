@@ -30,6 +30,12 @@ const appSrc = readFileSync(resolve(root, 'src/App.ts'), 'utf8');
  * structure must reject the shapes it cannot resolve (see assertLexable) rather
  * than trust a reading it cannot make.
  */
+/** Identifiers a `/` may follow as a regex literal rather than as division. */
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw',
+  'case', 'do', 'else', 'yield', 'await', 'if', 'while', 'for', 'switch', 'catch',
+]);
+
 function blankNonCode(src, { strings = true } = {}) {
   const out = src.split('');
   const blank = (i) => { if (src[i] !== '\n') out[i] = ' '; };
@@ -66,8 +72,17 @@ function blankNonCode(src, { strings = true } = {}) {
       }
       if (i < src.length) blank(i++);
       prev = 'value';
+    } else if (/[A-Za-z_$]/.test(c)) {
+      // Read the whole word, because `return /}/` is a regex while `x / y` is
+      // division and only the identity of the identifier separates them. Taking
+      // every identifier for a value made a regex after a keyword scan as
+      // division, and its `}` then popped a real enclosing branch off the stack.
+      let j = i;
+      while (j < src.length && /[\w$]/.test(src[j])) j++;
+      prev = REGEX_PRECEDING_KEYWORDS.has(src.slice(i, j)) ? 'op' : 'value';
+      i = j;
     } else {
-      if (!/\s/.test(c)) prev = /[\w$)\]]/.test(c) ? 'value' : 'op';
+      if (!/\s/.test(c)) prev = /[\d)\]]/.test(c) ? 'value' : 'op';
       i++;
     }
   }
@@ -217,6 +232,15 @@ function assertVoteGatedOnAdapter(scope, provider, label, mustInclude = []) {
     dataLoaderSrc, imported,
     `${label}'s \`${callee}\` must be imported from a *-fusion-observations module — a locally ` +
     `defined function matching the naming convention knows none of the domain's schema`,
+  );
+  // An import in scope is not the binding that gets CALLED. A local
+  // `const usgsEventsToObservations = () => [{}]` shadows it inside the method
+  // while leaving the import statement — and the assertion above — untouched.
+  const shadow = new RegExp(String.raw`(?:const|let|var|function)\s+${callee}\b`);
+  assert.doesNotMatch(
+    dataLoaderSrc, shadow,
+    `${label}'s \`${callee}\` must resolve to the import — a local declaration of the same name ` +
+    `shadows it and this guard reads names, not bindings`,
   );
   const okExpr = rawOk.trim();
   const terms = okExpr.split('&&').map((t) => t.trim());
@@ -609,11 +633,29 @@ describe('fused-domain loaders stay inside their freshness contracts', () => {
     // the tests, before any `&&` chaining to something else.
     const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
     const providers = pkg.scripts['test:providers'] ?? '';
-    // `&&` is not the only separator a shell honours: `;`, `||` and a pipe each
-    // start a new command too, so splitting on `&&` alone lets the runner segment
-    // swallow trailing text that is really a different command.
-    const runner = providers.split(/&&|\|\||[;|]/).map((s) => s.trim())
-      .find((s) => /(^|\s)(tsx|node)\s/.test(s) && s.split(/\s+/).includes('--test'));
+    // Reading the runner segment out of arbitrary shell text cannot establish
+    // that it RUNS: `exit 0; tsx --test <path>` and `false && tsx --test <path>;
+    // true` both contain a well-formed runner command that never executes. So
+    // the script's whole SHAPE is constrained instead — an `&&` chain of runner
+    // invocations and nothing else. Every separator that can short-circuit or
+    // discard a segment is rejected outright, which leaves `&&` semantics
+    // (everything before it succeeded) as the only reading.
+    for (const sep of [';', '||', '|', '&']) {
+      assert.ok(
+        !providers.split('&&').some((s) => s.includes(sep)),
+        `test:providers must be a plain \`&&\` chain — \`${sep}\` can leave a runner segment ` +
+        `present in the text but unexecuted (script: ${providers})`,
+      );
+    }
+    const segments = providers.split('&&').map((s) => s.trim());
+    for (const segment of segments) {
+      assert.match(
+        segment, /^(?:npx\s+)?(?:tsx|node)\s/,
+        `every test:providers segment must be a test runner invocation — anything else can ` +
+        `decide whether the runners after it run at all (found: ${segment})`,
+      );
+    }
+    const runner = segments.find((s) => s.split(/\s+/).includes('--test'));
     assert.ok(runner, 'test:providers must invoke a --test runner');
     const argv = runner.split(/\s+/);
     assert.ok(

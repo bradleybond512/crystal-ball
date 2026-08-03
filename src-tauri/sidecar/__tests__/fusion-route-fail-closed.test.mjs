@@ -184,11 +184,13 @@ test('/api/earthquakes freezes generatedAt into the cache instead of re-stamping
   // And every write UNCONDITIONALLY: keying the count off the literal
   // `'usgs-earthquakes'` means a second write under "usgs-earthquakes" or under
   // a `const KEY` — the same cache entry either way — is invisible to the count.
-  const writes = [...body.matchAll(/setCached\(\s*('[^']*'|"[^"]*"|\w+),\s*(\w+),/g)];
+  const writes = [...body.matchAll(/setCached\s*\(\s*('[^']*'|"[^"]*"|\w+),\s*(\w+),/g)];
   assert.equal(
-    writes.length, (body.match(/setCached\(/g) ?? []).length,
+    writes.length, (body.match(/\bsetCached\b/g) ?? []).length,
     'every setCached call in this route must be in the recognized `setCached(<key>, <value>,` ' +
-    'shape — one this pattern cannot read is one it cannot count',
+    'shape — one this pattern cannot read is one it cannot count. Counted on the bare ' +
+    'IDENTIFIER, because a total that shares the recognizer\'s blind spots (a comment between ' +
+    'the name and its parens, say) only ever compares a pattern against itself',
   );
   assert.equal(writes.length, 1, 'the earthquakes cache must be written in exactly one place — a later write wins');
   const cached = writes[0];

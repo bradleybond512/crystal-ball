@@ -66,6 +66,7 @@
     "test:e2e": "npm run test:e2e:runtime && npm run test:e2e:full && npm run test:e2e:tech && npm run test:e2e:finance",
     "test:globe-overlay": "tsx --test src/services/globe/__tests__/overlay-helpers.test.mts",
     "test:data": "tsx --test tests/*.test.mjs tests/*.test.mts",
+    "test:eslint-runner": "node --test tests/eslint-runner.test.mjs tests/lint-workflow.test.mjs",
     "test:sanitize": "tsx --test src/utils/__tests__/sanitize.test.mts src/utils/__tests__/degraded-response.test.mts",
     "test:reasoning": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
     "test:settings": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",

@@ -1034,6 +1034,8 @@ Evidence: PR #1618
 
 Implementation: `59a822eb`
 
+Mutation evidence: `docs/validation/ACC-702-MUTATION-PROOFS.md`
+
 Verification: weekly UTC aggregation, bounded catch-up and retention,
 privacy allowlists, stale and unavailable diagnostics, committed-generation
 gating, immutable mode-0600 persistence, CLI/MCP registration, portable

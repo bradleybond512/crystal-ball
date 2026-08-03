@@ -17,14 +17,14 @@ test('bundle budget policy resolves exact manifest chunk names independent of en
   const { resolveManifestChunkFile } = await import(pathToFileURL(policyPath).href);
   const manifest = {
     '_panels-security.js': { file: 'assets/panels-security-AAAA1111.js', name: 'panels-security' },
-    '_panels-core.js': { file: 'assets/panels-core-BBBB2222.js', name: 'panels-core' },
+    '_panels.js': { file: 'assets/panels-BBBB2222.js', name: 'panels' },
     '_panels-analysis.js': { file: 'assets/panels-analysis-CCCC3333.js', name: 'panels-analysis' },
   };
 
-  assert.equal(resolveManifestChunkFile(manifest, 'panels-core'), 'assets/panels-core-BBBB2222.js');
+  assert.equal(resolveManifestChunkFile(manifest, 'panels'), 'assets/panels-BBBB2222.js');
   assert.equal(
-    resolveManifestChunkFile(Object.fromEntries(Object.entries(manifest).reverse()), 'panels-core'),
-    'assets/panels-core-BBBB2222.js',
+    resolveManifestChunkFile(Object.fromEntries(Object.entries(manifest).reverse()), 'panels'),
+    'assets/panels-BBBB2222.js',
   );
 });
 
@@ -33,14 +33,14 @@ test('bundle budget policy rejects missing and duplicate exact manifest names', 
   const { resolveManifestChunkFile } = await import(pathToFileURL(policyPath).href);
 
   assert.throws(
-    () => resolveManifestChunkFile({ other: { file: 'assets/panels-core-AAAA1111.js', name: 'other' } }, 'panels-core'),
-    /exactly one manifest chunk named "panels-core"; found 0/,
+    () => resolveManifestChunkFile({ other: { file: 'assets/panels-AAAA1111.js', name: 'other' } }, 'panels'),
+    /exactly one manifest chunk named "panels"; found 0/,
   );
   assert.throws(
     () => resolveManifestChunkFile({
-      first: { file: 'assets/one.js', name: 'panels-core' },
-      second: { file: 'assets/two.js', name: 'panels-core' },
-    }, 'panels-core'),
-    /exactly one manifest chunk named "panels-core"; found 2/,
+      first: { file: 'assets/one.js', name: 'panels' },
+      second: { file: 'assets/two.js', name: 'panels' },
+    }, 'panels'),
+    /exactly one manifest chunk named "panels"; found 2/,
   );
 });

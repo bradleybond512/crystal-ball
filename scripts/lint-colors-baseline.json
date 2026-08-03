@@ -371,7 +371,7 @@
     "src/components/sovereign-debt-crisis-helpers.ts": 22,
     "src/components/sovereign-debt-helpers.ts": 26,
     "src/components/space-debris-helpers.ts": 5,
-    "src/components/space-weather-helpers.ts": 16,
+    "src/components/space-weather-helpers.ts": 7,
     "src/components/state-capacity-helpers.ts": 5,
     "src/components/state-fragility-helpers.ts": 17,
     "src/components/tech-competition-helpers.ts": 11,

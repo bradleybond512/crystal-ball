@@ -6,6 +6,27 @@ import type {
 
 const HOUR_MS = 60 * 60 * 1000;
 
+/**
+ * One severity ramp, shared by every badge in this panel. X-ray class, Kp storm
+ * level, GPS risk, wind speed and Bz all mean "how bad is this" on the same
+ * scale, so they should be the same colour at the same tier — four independent
+ * copies of these hues drift apart the moment one of them is adjusted.
+ *
+ * Literal hues rather than CSS vars: these are read into inline `style=`
+ * attributes, not stylesheets, and `unknown` in particular must be a real grey
+ * — a var() that fails to resolve renders as inherited text colour, which reads
+ * as a confident value rather than as no value.
+ */
+const SEVERITY_HEX = {
+  unknown: '#9e9e9e',
+  calm: '#4caf50',
+  low: '#ffeb3b',
+  moderate: '#ff9800',
+  high: '#ff5722',
+  severe: '#ff453a',
+  extreme: '#b71c1c',
+} as const;
+
 export function stormLevelLabel(level: GeomagStormLevel): string {
   switch (level) {
     case 'G0': { return 'Quiet';
@@ -44,29 +65,29 @@ export function alertSeverityClass(sev: string): string {
 }
 
 export function xrayBadgeColor(cls: string | null): string {
-  if (!cls) return '#9e9e9e';
+  if (!cls) return SEVERITY_HEX.unknown;
   const head = cls.charAt(0).toUpperCase();
-  if (head === 'X') return '#ff453a';
-  if (head === 'M') return '#ff5722';
-  if (head === 'C') return '#ffeb3b';
-  if (head === 'B') return '#4caf50';
-  return '#9e9e9e';
+  if (head === 'X') return SEVERITY_HEX.severe;
+  if (head === 'M') return SEVERITY_HEX.high;
+  if (head === 'C') return SEVERITY_HEX.low;
+  if (head === 'B') return SEVERITY_HEX.calm;
+  return SEVERITY_HEX.unknown;
 }
 
 export const G_LEVEL_COLOR: Record<GeomagStormLevel, string> = {
-  G0: '#9e9e9e',
-  G1: '#ffeb3b',
-  G2: '#ff9800',
-  G3: '#ff5722',
-  G4: '#ff453a',
-  G5: '#b71c1c',
+  G0: SEVERITY_HEX.unknown,
+  G1: SEVERITY_HEX.low,
+  G2: SEVERITY_HEX.moderate,
+  G3: SEVERITY_HEX.high,
+  G4: SEVERITY_HEX.severe,
+  G5: SEVERITY_HEX.extreme,
 };
 
 export const RISK_COLOR: Record<RiskBand, string> = {
-  none: '#9e9e9e',
-  low: '#ffeb3b',
-  moderate: '#ff9800',
-  high: '#ff453a',
+  none: SEVERITY_HEX.unknown,
+  low: SEVERITY_HEX.low,
+  moderate: SEVERITY_HEX.moderate,
+  high: SEVERITY_HEX.severe,
 };
 
 export interface ArrivalCountdown {
@@ -109,20 +130,20 @@ export function legacyAlertToStatus(a: {
  * "large absolute value is bad" scale would cry wolf on the calmest conditions.
  */
 export function bzBadgeColor(bz: number | null): string {
-  if (bz === null || !Number.isFinite(bz)) return '#9e9e9e';
-  if (bz <= -15) return '#ff453a';
-  if (bz <= -10) return '#ff5722';
-  if (bz <= -5) return '#ff9800';
-  return '#4caf50';
+  if (bz === null || !Number.isFinite(bz)) return SEVERITY_HEX.unknown;
+  if (bz <= -15) return SEVERITY_HEX.severe;
+  if (bz <= -10) return SEVERITY_HEX.high;
+  if (bz <= -5) return SEVERITY_HEX.moderate;
+  return SEVERITY_HEX.calm;
 }
 
 /** Ambient solar wind runs 300–500 km/s; a coronal-hole stream runs 600–800. */
 export function windSpeedBadgeColor(speedKmS: number | null): string {
-  if (speedKmS === null || !Number.isFinite(speedKmS)) return '#9e9e9e';
-  if (speedKmS >= 800) return '#ff453a';
-  if (speedKmS >= 600) return '#ff9800';
-  if (speedKmS >= 500) return '#ffeb3b';
-  return '#4caf50';
+  if (speedKmS === null || !Number.isFinite(speedKmS)) return SEVERITY_HEX.unknown;
+  if (speedKmS >= 800) return SEVERITY_HEX.severe;
+  if (speedKmS >= 600) return SEVERITY_HEX.moderate;
+  if (speedKmS >= 500) return SEVERITY_HEX.low;
+  return SEVERITY_HEX.calm;
 }
 
 /**
@@ -209,7 +230,9 @@ export function buildWindStrip(
       {
         label: 'Density',
         value: density === null ? '—' : `${density.toFixed(1)} p/cm³`,
-        color: '#9e9e9e',
+        // Density alone carries no severity — a dense slow wind is unremarkable
+        // — so it is deliberately neutral rather than scaled.
+        color: SEVERITY_HEX.unknown,
         sub: 'Protons per cm³',
       },
       {

@@ -139,8 +139,13 @@ export interface SpaceWxStatus {
    * False when the CME feed did not answer. An empty `earthwardCmes` is
    * otherwise ambiguous: "DONKI reports nothing Earthward" and "DONKI never
    * replied" render identically, and the reassuring reading is the one the
-   * outage produces. Optional so an older cached envelope is not read as an
-   * outage — absent means "this producer predates the flag", not "down".
+   * outage produces.
+   *
+   * Optional because older cached envelopes and the parity-only `buildStatus`
+   * do not set it — but absent is NOT healthy. Only an explicit `true` is
+   * evidence the feed answered; consumers must render anything else as
+   * unknown, or a cache written before this flag existed silently restores the
+   * fail-open for as long as it lives.
    */
   cmeFeedOk?: boolean;
   asOf: string;

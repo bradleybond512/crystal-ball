@@ -3550,8 +3550,10 @@ export function buildSpaceweatherStatusSidecar(input) {
     // non-200 or throw still becomes null here, and an empty CME list renders
     // as a confident "no Earthward CMEs" — an outage that looks like good news.
     // The renderer needs to tell "the feed says none" apart from "the feed
-    // never answered", so say which one this is.
-    cmeFeedOk: input.cmeFeedOk !== false,
+    // never answered", so say which one this is. Only an explicit true counts
+    // as healthy: defaulting an absent flag to true reinstates exactly the
+    // fail-open this field exists to close.
+    cmeFeedOk: input.cmeFeedOk === true,
     asOf: new Date(now).toISOString(),
   };
 }
@@ -3694,6 +3696,25 @@ export function buildDonkiCmeUrlSidecar(now) {
   return `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${start}&endDate=${end}`;
 }
 
+/**
+ * A 200 carrying a well-formed array is not the same as a 200 carrying CMEs we
+ * can read. If DONKI renames its fields, every row falls out of
+ * filterEarthwardCmesSidecar and the section renders as "nothing Earthward" —
+ * the outage wearing the all-clear's clothes again, one level deeper.
+ *
+ * An EMPTY array stays healthy on purpose: a week with no CMEs is ordinary, and
+ * treating it as drift would cry wolf most of the time. It is a non-empty
+ * response in which nothing is recognizable that means the shape moved.
+ * `activityID` is the identity field the filter keys on, so it is the right
+ * canary — checking `cmeAnalyses` instead would false-alarm on a week of
+ * genuinely unanalyzed events.
+ */
+export function donkiCmeFeedHealthySidecar(raw) {
+  if (!Array.isArray(raw)) return false;
+  if (raw.length === 0) return true;
+  return raw.some((row) => row && typeof row.activityID === 'string');
+}
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   if (spacewxStatusCache && now - spacewxStatusCachedAt < SPACEWX_CACHE_TTL_MS) {
@@ -3710,7 +3731,7 @@ export async function fetchSpaceweatherStatusSidecar() {
     xrayFlux,
     kpIndex,
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
-    cmeFeedOk: Array.isArray(cmeRaw),
+    cmeFeedOk: donkiCmeFeedHealthySidecar(cmeRaw),
     now,
   });
   // Cache on what the ADAPTERS produced, not on the raw bodies being non-null.

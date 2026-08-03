@@ -189,6 +189,40 @@ test('buildWindStrip warns when the reading is real but stale', () => {
   assert.equal(view.metaWarn, true);
 });
 
+test('buildWindStrip strips severity colour off a stale reading', () => {
+  // metaWarn only decorates the small age line. The badge colour is what gets
+  // read at a glance, so a green "calm" on an hour-old sample still asserts
+  // "quiet right now" from evidence that says nothing about right now.
+  const stale = buildWindStrip({
+    solarWindSpeed: 380, solarWindDensity: 4, bz: -18,
+    windObservedAt: new Date(NOW - 2 * HOUR_MS).toISOString(),
+  }, NOW);
+  assert.equal(stale.cells[0]?.color, '#9e9e9e', 'speed must not read as calm-green');
+  assert.equal(stale.cells[2]?.color, '#9e9e9e', 'nor may Bz read as severe-red');
+  // The numbers themselves survive — they are real, just old — and the subtitle
+  // says which.
+  assert.equal(stale.cells[0]?.value, '380 km/s');
+  assert.equal(stale.cells[0]?.sub, 'Last known — not current');
+
+  // Fresh, same numbers: colours come back.
+  const fresh = buildWindStrip({
+    solarWindSpeed: 380, solarWindDensity: 4, bz: -18,
+    windObservedAt: new Date(NOW - 60 * 1000).toISOString(),
+  }, NOW);
+  assert.equal(fresh.cells[0]?.color, '#4caf50');
+  assert.equal(fresh.cells[2]?.color, '#ff453a');
+  assert.equal(fresh.cells[0]?.sub, 'Ambient 300–500');
+});
+
+test('buildWindStrip greys an unknown-age reading too', () => {
+  // No stamp at all is strictly worse than a stamp we can see is old.
+  const view = buildWindStrip({
+    solarWindSpeed: 380, solarWindDensity: 4, bz: -18, windObservedAt: null,
+  }, NOW);
+  assert.equal(view.cells[0]?.color, '#9e9e9e');
+  assert.equal(view.cells[2]?.color, '#9e9e9e');
+});
+
 test('buildWindStrip treats non-finite readings as missing, not as numbers', () => {
   // NaN and Infinity survive a `=== null` check and format as "NaN km/s" with
   // confident units. The badge helpers already call them unknown, so without

@@ -19,6 +19,7 @@ import {
   filterEarthwardCmesSidecar,
   buildSpaceweatherStatusSidecar,
   buildDonkiCmeUrlSidecar,
+  donkiCmeFeedHealthySidecar,
   SPACEWX_CME_LOOKBACK_DAYS,
 } from '../local-api-server.mjs';
 
@@ -226,9 +227,26 @@ test('buildSpaceweatherStatusSidecar distinguishes "no CMEs" from "no CME feed"'
   const down = buildSpaceweatherStatusSidecar({ ...base, cmes: [], cmeFeedOk: false });
   assert.equal(down.cmeFeedOk, false);
   assert.deepEqual(down.earthwardCmes, [], 'still empty — the flag is the only signal');
-  // An omitted flag must not read as an outage: a quiet sun is the common case,
-  // and defaulting to false would cry wolf on every well-formed empty response.
-  assert.equal(buildSpaceweatherStatusSidecar({ ...base, cmes: [] }).cmeFeedOk, true);
+  // An omitted flag is NOT healthy. Defaulting it to true is the same fail-open
+  // one level up: a caller that forgets to pass it gets the reassuring answer.
+  assert.equal(buildSpaceweatherStatusSidecar({ ...base, cmes: [] }).cmeFeedOk, false);
+});
+
+test('donkiCmeFeedHealthySidecar keeps an empty week healthy but catches schema drift', () => {
+  // The distinction that matters: a 200 with a well-formed array is not the
+  // same as a 200 we can read. If DONKI renames its fields, every row falls out
+  // of the filter and the section renders as "nothing Earthward" — the outage
+  // wearing the all-clear's clothes one level deeper than the 404 did.
+  assert.equal(donkiCmeFeedHealthySidecar([]), true, 'a quiet week is not drift');
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: '2026-08-01T00:00:00-CME-001' }]), true);
+  // Container is right, contents are unrecognizable.
+  assert.equal(donkiCmeFeedHealthySidecar([{ id: 'renamed' }, { id: 'also-renamed' }]), false);
+  assert.equal(donkiCmeFeedHealthySidecar([null, 42, 'nope']), false);
+  // One good row is enough — DONKI legitimately mixes in sparse records.
+  assert.equal(donkiCmeFeedHealthySidecar([{ id: 'x' }, { activityID: 'y' }]), true);
+  // Not an array at all is the fetch having failed.
+  assert.equal(donkiCmeFeedHealthySidecar(null), false);
+  assert.equal(donkiCmeFeedHealthySidecar({ result: [] }), false);
 });
 
 test('buildSpaceweatherStatusSidecar mirrors TS top-level shape', () => {

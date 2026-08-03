@@ -23,6 +23,11 @@ const MAX_AGGREGATE_WEEKS = 9;
 const MAX_AGGREGATE_PROMOTIONS = 16;
 const MAX_REPORT_PROMOTIONS = 8;
 const MODEL_DRIFT_BRIER_THRESHOLD = 0.02;
+const INSTALLED_CADENCE_MS = 15 * 60_000;
+const EXPECTED_WEEKLY_OBSERVATIONS = 672;
+const MAX_PROJECTION_AGE_MS = 30 * 60_000;
+const MAX_PROJECTION_FUTURE_SKEW_MS = 5 * 60_000;
+const MAX_COMPLETE_OBSERVATION_GAP_MS = 30 * 60_000;
 const ACCUMULATOR_PATH = 'monitor/weekly-accumulator.json';
 const REPORT_DIRECTORY = 'monitor/evaluation-reports';
 const REPORT_LOCK_PATH = 'monitor/report.lock';
@@ -299,15 +304,28 @@ function appendObservation(accumulator, weekStart, observation) {
   if (aggregate.observationCount >= MAX_WEEKLY_OBSERVATIONS) return result;
   aggregate.observationCount += 1;
   aggregate.firstObservedAt ??= observation.at;
+  if (aggregate.lastObservedAt !== null) {
+    aggregate.maxObservationGapMs = maximum(
+      aggregate.maxObservationGapMs,
+      observation.at - aggregate.lastObservedAt,
+    );
+  }
   aggregate.lastObservedAt = observation.at;
 
   const monitorReady = observation.monitor.sidecarAvailable === true
     && observation.monitor.algorithmDiagnosticsAvailable === true;
-  if (!monitorReady || observation.projection === null) {
+  if (
+    !monitorReady
+    || observation.projection === null
+    || observation.projection.generatedAt > observation.at + MAX_PROJECTION_FUTURE_SKEW_MS
+  ) {
     aggregate.unavailableCount += 1;
     return result;
   }
-  if (observation.diagnosticsStale) {
+  if (
+    observation.diagnosticsStale
+    || observation.at - observation.projection.generatedAt > MAX_PROJECTION_AGE_MS
+  ) {
     aggregate.staleCount += 1;
     return result;
   }
@@ -336,9 +354,17 @@ function appendObservation(accumulator, weekStart, observation) {
 }
 
 function compileReport(aggregate, generatedAt, catchupTruncated) {
+  const cadenceComplete = aggregate.observationCount >= EXPECTED_WEEKLY_OBSERVATIONS
+    && aggregate.freshCount === aggregate.observationCount
+    && aggregate.firstObservedAt !== null
+    && aggregate.firstObservedAt <= aggregate.weekStart + INSTALLED_CADENCE_MS
+    && aggregate.lastObservedAt !== null
+    && aggregate.lastObservedAt >= aggregate.weekStart + WEEK_MS - INSTALLED_CADENCE_MS
+    && aggregate.maxObservationGapMs !== null
+    && aggregate.maxObservationGapMs <= MAX_COMPLETE_OBSERVATION_GAP_MS;
   const overallAvailability = aggregate.freshCount === 0
     ? 'unavailable'
-    : aggregate.freshCount === aggregate.observationCount
+    : cadenceComplete
       ? 'complete'
       : 'partial';
   const detailAvailability = overallAvailability === 'complete'
@@ -364,7 +390,7 @@ function compileReport(aggregate, generatedAt, catchupTruncated) {
     aggregate.champion.promotionsOmitted
       + Math.max(0, aggregate.champion.promotions.length - MAX_REPORT_PROMOTIONS),
   );
-  const promotionCount = forecastAvailability === 'unavailable'
+  const promotionCount = !championAvailable
     ? null
     : boundedCount(aggregate.champion.promotions.length + aggregate.champion.promotionsOmitted);
   const modelAvailability = firstForecast === null || lastForecast === null
@@ -442,7 +468,7 @@ function compileReport(aggregate, generatedAt, catchupTruncated) {
     },
     changes: {
       promoted: {
-        availability: promotionCount === null ? 'unavailable' : detailAvailability,
+        availability: promotionCount === null ? 'unavailable' : championAvailability,
         count: promotionCount,
         rows: promotionCount === null ? [] : promotionRows,
         omitted: promotionCount === null ? 0 : promotionOmitted,
@@ -512,6 +538,7 @@ function emptyAggregate(weekStart) {
     unavailableCount: 0,
     firstObservedAt: null,
     lastObservedAt: null,
+    maxObservationGapMs: null,
     forecast: {
       firstFresh: null,
       lastFresh: null,
@@ -556,6 +583,7 @@ function championValues(champion) {
 function addPromotions(target, promotions, weekStart) {
   const weekEnd = weekStart + WEEK_MS;
   for (const promotion of promotions) {
+    if (promotion.kind !== 'promotion') continue;
     if (promotion.at < weekStart || promotion.at >= weekEnd) continue;
     const duplicate = target.promotions.some((existing) => (
       existing.at === promotion.at
@@ -607,7 +635,7 @@ function sanitizeProjection(value) {
   const forecast = sanitizeForecast(input.forecast);
   const champion = sanitizeChampion(input.champion);
   if (forecast === null || champion === null) return null;
-  return { forecast, champion };
+  return { generatedAt: input.generatedAt, forecast, champion };
 }
 
 function sanitizeForecast(value) {
@@ -752,7 +780,8 @@ function validAccumulator(value) {
 function validAggregate(value) {
   if (!exactRecord(value, [
     'weekStart', 'observationCount', 'freshCount', 'staleCount', 'unavailableCount',
-    'firstObservedAt', 'lastObservedAt', 'forecast', 'champion', 'providers',
+    'firstObservedAt', 'lastObservedAt', 'maxObservationGapMs', 'forecast', 'champion',
+    'providers',
   ])) return false;
   if (!validWeekStart(value.weekStart)) return false;
   for (const key of ['observationCount', 'freshCount', 'staleCount', 'unavailableCount']) {
@@ -761,6 +790,7 @@ function validAggregate(value) {
   if (value.observationCount > MAX_WEEKLY_OBSERVATIONS) return false;
   if (value.freshCount + value.staleCount + value.unavailableCount !== value.observationCount) return false;
   if (!nullableEpoch(value.firstObservedAt) || !nullableEpoch(value.lastObservedAt)) return false;
+  if (!nullableBounded(value.maxObservationGapMs, 0, WEEK_MS)) return false;
   if (!validAggregateForecast(value.forecast) || !validAggregateChampion(value.champion)) return false;
   if (!exactRecord(value.providers, KNOWN_PROVIDERS)) return false;
   return KNOWN_PROVIDERS.every((provider) => validProviderAggregate(value.providers[provider]));
@@ -798,7 +828,9 @@ function validAggregateChampion(value) {
     && (value.lastFresh === null || validChampionValues(value.lastFresh))
     && Array.isArray(value.promotions)
     && value.promotions.length <= MAX_AGGREGATE_PROMOTIONS
-    && value.promotions.every(validPromotion)
+    && value.promotions.every((promotion) => (
+      validPromotion(promotion) && promotion.kind === 'promotion'
+    ))
     && countOf(value.promotionsOmitted) !== null;
 }
 
@@ -981,7 +1013,9 @@ function validChangesReport(value) {
     && (promoted.count === null || countOf(promoted.count) !== null)
     && Array.isArray(promoted.rows)
     && promoted.rows.length <= MAX_REPORT_PROMOTIONS
-    && promoted.rows.every(validPromotion)
+    && promoted.rows.every((promotion) => (
+      validPromotion(promotion) && promotion.kind === 'promotion'
+    ))
     && countOf(promoted.omitted) !== null
     && exactRecord(rejected, ['availability', 'count', 'reasonCode'])
     && rejected.availability === 'unavailable'

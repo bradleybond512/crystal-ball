@@ -27,6 +27,8 @@ import {
 
 const MONDAY = Date.UTC(2026, 6, 27);
 const WEEK_MS = 7 * 24 * 60 * 60_000;
+const CADENCE_MS = 15 * 60_000;
+const EXPECTED_WEEKLY_OBSERVATIONS = 672;
 
 function projection(overrides = {}) {
   return {
@@ -232,7 +234,10 @@ test('finalizes immutable idempotent reports with exact privacy-safe recursive k
   const result = record(storage, MONDAY + WEEK_MS);
   assert.equal(result.finalizedReports.length, 1);
   const report = result.finalizedReports[0];
-  assert.equal(report.availability, 'complete');
+  assert.equal(report.availability, 'partial');
+  assert.equal(report.predictions.availability, 'partial');
+  assert.equal(report.championChallenger.availability, 'partial');
+  assert.equal(report.changes.promoted.availability, 'partial');
   assert.deepEqual(Object.keys(report), [
     'schemaVersion', 'reportType', 'generatedAt', 'period', 'availability', 'coverage',
     'championChallenger', 'predictions', 'drift', 'changes', 'nextRecommendedTask', 'limitations',
@@ -251,6 +256,77 @@ test('finalizes immutable idempotent reports with exact privacy-safe recursive k
   assert.deepEqual(readFileSync(path), before);
   assert.equal(statSync(path).mode & 0o777, 0o600);
   assert.equal(statSync(storage.resolve('monitor/weekly-accumulator.json')).mode & 0o777, 0o600);
+}));
+
+test('requires complete installed cadence and derives promotion evidence from champion availability', () => withStorage((storage) => {
+  const unavailableChampion = {
+    availability: 'unavailable',
+    active: null,
+    challengers: [],
+    promotions: [],
+    rejectionHistory: {
+      availability: 'unavailable',
+      reasonCode: 'no_runtime_rejection_history',
+    },
+  };
+  for (let index = 0; index < EXPECTED_WEEKLY_OBSERVATIONS; index += 1) {
+    const at = MONDAY + index * CADENCE_MS;
+    record(storage, at, {
+      projection: projection({ generatedAt: at, champion: unavailableChampion }),
+    });
+  }
+  const beforeFinalization = storage.readJSON('monitor/weekly-accumulator.json');
+  assert.equal(beforeFinalization.weeks[0].maxObservationGapMs, CADENCE_MS);
+  const report = generateWeeklyEvaluationReports({
+    storage,
+    at: MONDAY + WEEK_MS,
+  }).finalizedReports[0];
+  assert.equal(report.coverage.observations, EXPECTED_WEEKLY_OBSERVATIONS);
+  assert.ok(report.coverage.observations < MAX_WEEKLY_OBSERVATIONS);
+  assert.equal(report.availability, 'complete');
+  assert.equal(report.predictions.availability, 'available');
+  assert.equal(report.championChallenger.availability, 'unavailable');
+  assert.deepEqual(report.changes.promoted, {
+    availability: 'unavailable',
+    count: null,
+    rows: [],
+    omitted: 0,
+  });
+  const aggregate = storage.readJSON('monitor/weekly-accumulator.json');
+  assert.deepEqual(aggregate.weeks, []);
+}));
+
+test('rejects burst-filled cadence with a multi-day internal observation gap', () => withStorage((storage) => {
+  const burstSize = EXPECTED_WEEKLY_OBSERVATIONS / 2;
+  const finalBurstEnd = MONDAY + WEEK_MS - CADENCE_MS;
+  for (let index = 0; index < burstSize; index += 1) {
+    const at = MONDAY + index;
+    record(storage, at, { projection: projection({ generatedAt: at }) });
+  }
+  for (let index = 0; index < burstSize; index += 1) {
+    const at = finalBurstEnd - burstSize + 1 + index;
+    record(storage, at, { projection: projection({ generatedAt: at }) });
+  }
+  const accumulator = storage.readJSON('monitor/weekly-accumulator.json');
+  assert.equal(accumulator.weeks[0].observationCount, EXPECTED_WEEKLY_OBSERVATIONS);
+  assert.ok(accumulator.weeks[0].maxObservationGapMs > 24 * 60 * 60_000);
+  const report = generateWeeklyEvaluationReports({
+    storage,
+    at: MONDAY + WEEK_MS,
+  }).finalizedReports[0];
+  assert.equal(report.availability, 'partial');
+  assert.equal(report.predictions.availability, 'partial');
+}));
+
+test('fails closed when persisted aggregates omit max observation gap evidence', () => withStorage((storage) => {
+  record(storage, MONDAY + 60_000);
+  const accumulator = storage.readJSON('monitor/weekly-accumulator.json');
+  delete accumulator.weeks[0].maxObservationGapMs;
+  storage.writeJSON('monitor/weekly-accumulator.json', accumulator);
+  assert.throws(() => generateWeeklyEvaluationReports({
+    storage,
+    at: MONDAY + WEEK_MS,
+  }), /accumulator is malformed/i);
 }));
 
 test('fails closed for mismatched monitor generations and malformed existing reports', () => withStorage((storage) => {
@@ -313,6 +389,42 @@ test('classifies stale and app-closed observations without ingesting their metri
     'roadmap_metadata_unavailable',
   ]);
   assert.equal(report.nextRecommendedTask.code, 'restore_monitor');
+}));
+
+test('treats preserved old projections as stale and future-invalid projections as unavailable', () => withStorage((storage) => {
+  const oldAt = MONDAY + 31 * 60_000;
+  record(storage, oldAt, {
+    projection: projection({
+      generatedAt: MONDAY,
+      forecast: { ...projection().forecast, pending: 777 },
+    }),
+  });
+  const futureAt = MONDAY + 32 * 60_000;
+  record(storage, futureAt, {
+    projection: projection({
+      generatedAt: futureAt + 5 * 60_000 + 1,
+      forecast: { ...projection().forecast, pending: 888 },
+    }),
+  });
+  const report = generateWeeklyEvaluationReports({
+    storage,
+    at: MONDAY + WEEK_MS,
+  }).finalizedReports[0];
+  assert.deepEqual(report.coverage, {
+    observations: 2,
+    fresh: 0,
+    stale: 1,
+    unavailable: 1,
+    firstObservedAt: oldAt,
+    lastObservedAt: futureAt,
+  });
+  assert.equal(report.predictions.endOfWeek, null);
+  assert.equal(report.championChallenger.active, null);
+  assert.deepEqual(report.changes.promoted, {
+    availability: 'unavailable', count: null, rows: [], omitted: 0,
+  });
+  assert.equal(report.drift.model.brierEnd, null);
+  assert.deepEqual(report.drift.providers.rows, []);
 }));
 
 test('reports bookend prediction/model deltas and allowlisted provider transitions', () => withStorage((storage) => {
@@ -488,6 +600,37 @@ test('caps unique promotion history and records omitted rows without changing de
   assert.equal(report.changes.promoted.count, 18);
   assert.equal(report.changes.promoted.rows.length, 8);
   assert.equal(report.changes.promoted.omitted, 10);
+}));
+
+test('promoted changes exclude initial activation and rollback rows', () => withStorage((storage) => {
+  const promotions = [
+    { at: MONDAY + 1_000, kind: 'initial', model: 'production' },
+    { at: MONDAY + 2_000, kind: 'promotion', model: 'superforecast' },
+    { at: MONDAY + 3_000, kind: 'rollback', model: 'production' },
+  ];
+  record(storage, MONDAY + 60_000, {
+    projection: projection({
+      generatedAt: MONDAY + 60_000,
+      champion: { ...projection().champion, promotions },
+    }),
+  });
+  const report = generateWeeklyEvaluationReports({
+    storage,
+    at: MONDAY + WEEK_MS,
+  }).finalizedReports[0];
+  assert.equal(report.changes.promoted.count, 1);
+  assert.deepEqual(report.changes.promoted.rows, [promotions[1]]);
+  assert.equal(report.changes.promoted.omitted, 0);
+  assert.equal(validateWeeklyEvaluationReport({
+    ...report,
+    changes: {
+      ...report.changes,
+      promoted: {
+        ...report.changes.promoted,
+        rows: [promotions[2]],
+      },
+    },
+  }), false);
 }));
 
 test('serializes concurrent writers and preserves the prior accumulator on atomic failure', () => withStorage((storage) => {

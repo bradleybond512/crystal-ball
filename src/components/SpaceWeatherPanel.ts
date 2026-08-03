@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/no-nested-template-literals, sonarjs/no-nested-conditional */
 import { Panel } from './Panel';
 import type { SpaceWeatherData } from '@/services/space-weather';
 import type {
@@ -18,6 +17,7 @@ import { t } from '@/services/i18n';
 import { getApiBaseUrl } from '@/services/runtime';
 import {
   alertSeverityClass,
+  buildWindStrip,
   formatArrivalCountdown,
   G_LEVEL_COLOR,
   gpsRiskBlurb,
@@ -168,6 +168,7 @@ export class SpaceWeatherPanel extends Panel {
   private renderStatus(): string {
     return [
       this.renderHeadlineGrid(),
+      this.renderSolarWind(),
       this.renderAuroraStrip(),
       this.renderEarthwardCmes(),
       this.renderAlerts(),
@@ -220,6 +221,35 @@ export class SpaceWeatherPanel extends Panel {
         <div class="sw-metric-value" style="color:${hfColor};">${escapeHtml(hfLabel)}</div>
         <div class="sw-metric-sub">${escapeHtml(hfSub)}</div>
       </div>
+    </div>`;
+  }
+
+  // ── Solar wind ────────────────────────────────────────────────────────
+
+  /**
+   * Speed / density / Bz come only from fetchSpaceWeather(); /api/spaceweather/
+   * status carries no solar-wind fields, so `this.data` is the sole source and
+   * a status-only render has nothing to say here.
+   *
+   * When `this.data` IS present the strip renders even if all three values are
+   * null. That reads as "SWPC answered but the wind product did not parse",
+   * which is a different and more useful statement than the row vanishing —
+   * a hidden section is indistinguishable from a section that was never wired.
+   */
+  private renderSolarWind(): string {
+    if (!this.data) return '';
+    const view = buildWindStrip(this.data);
+    const cells = view.cells.map((c) => `<div class="sw-wind-cell">
+        <div class="sw-wind-label">${escapeHtml(c.label)}</div>
+        <div class="sw-wind-value" style="color:${c.color};">${escapeHtml(c.value)}</div>
+        <div class="sw-wind-sub">${escapeHtml(c.sub)}</div>
+      </div>`).join('');
+    return `<div class="sw-wind">
+      <div class="sw-wind-header">
+        <span class="sw-wind-title">Solar wind (L1)</span>
+        <span class="${view.metaWarn ? 'sw-wind-stale' : 'sw-wind-age'}">${escapeHtml(view.meta)}</span>
+      </div>
+      <div class="sw-wind-grid">${cells}</div>
     </div>`;
   }
 

@@ -298,6 +298,15 @@
 .sw-metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
 .sw-metric-value { font-size: 18px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .sw-metric-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.sw-wind { background: var(--overlay-subtle); border: 1px solid var(--border); border-radius: var(--r-xs); padding: 8px 10px; margin-bottom: 8px; }
+.sw-wind-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.sw-wind-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.sw-wind-age { font-size: 11px; color: var(--text-dim); }
+.sw-wind-stale { font-size: 11px; color: var(--semantic-warning, var(--mac-orange, #ff9f0a)); }
+.sw-wind-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sw-wind-label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.sw-wind-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.sw-wind-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
 .sw-danger { color: var(--semantic-critical, var(--mac-red, #ff453a)) !important; }
 .sw-warning { color: var(--semantic-high, #f97316) !important; }
 .sw-info { color: var(--accent); }

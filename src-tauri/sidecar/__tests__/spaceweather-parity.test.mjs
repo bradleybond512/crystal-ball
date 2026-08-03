@@ -18,6 +18,8 @@ import {
   summarizeAlertsSidecar,
   filterEarthwardCmesSidecar,
   buildSpaceweatherStatusSidecar,
+  buildDonkiCmeUrlSidecar,
+  SPACEWX_CME_LOOKBACK_DAYS,
 } from '../local-api-server.mjs';
 
 const NOW = Date.parse('2026-05-06T12:00:00Z');
@@ -185,6 +187,33 @@ test('filterEarthwardCmesSidecar keeps |lon| ≤ 30°, drops stale arrivals', ()
   const out = filterEarthwardCmesSidecar(cmes, NOW);
   assert.equal(out.length, 1);
   assert.equal(out[0].id, 'cme-eward');
+});
+
+test('buildDonkiCmeUrlSidecar targets the live DONKI web service, not the dead SWPC mirror', () => {
+  // services.swpc.noaa.gov/json/donki/cme.json is a hard 404. fetchJsonSidecar
+  // turns that into null, and a null CME list renders as a confident "no
+  // Earthward CMEs" — an outage that looks exactly like good news.
+  const url = buildDonkiCmeUrlSidecar(NOW);
+  assert.ok(!url.includes('services.swpc.noaa.gov'), 'the SWPC mirror no longer exists');
+  assert.ok(url.startsWith('https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?'));
+  // Keyless by design: the api.nasa.gov mirror of this same service would put
+  // the CME list behind DEMO_KEY's shared 30-req/hour IP quota.
+  assert.ok(!/api_key/.test(url), 'must not require a NASA key');
+});
+
+test('buildDonkiCmeUrlSidecar spans slow CMEs still in transit', () => {
+  // A slow CME takes ~4 days to arrive and stays listed for 12h after that, so
+  // a window shorter than the transit time would drop the event mid-flight —
+  // precisely while it is the one worth showing.
+  const url = buildDonkiCmeUrlSidecar(NOW);
+  const start = new URL(url).searchParams.get('startDate');
+  const end = new URL(url).searchParams.get('endDate');
+  assert.equal(start, '2026-04-29');
+  assert.ok(SPACEWX_CME_LOOKBACK_DAYS >= 5, 'must outlast the slowest transit');
+  // endDate is inclusive by date; reaching a day past "now" keeps today's
+  // events from falling off the end on a host running behind UTC.
+  assert.equal(end, '2026-05-07');
+  assert.ok(Date.parse(end) > NOW);
 });
 
 test('buildSpaceweatherStatusSidecar mirrors TS top-level shape', () => {

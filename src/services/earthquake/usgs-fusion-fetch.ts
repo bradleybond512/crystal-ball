@@ -84,8 +84,11 @@ const MAX_CLOCK_SKEW_MS = 1000;
  * origin-relative instant of the response as served is `Date + Age`.
  *
  * Neither header is CORS-safelisted, so both ends of this contract had to be
- * arranged: the sidecar sends `Access-Control-Expose-Headers: Date, Age`
- * (makeCorsHeaders in local-api-server.mjs), and the web route is same-origin.
+ * arranged, and BOTH routes are reachable cross-origin: the sidecar answers at
+ * 127.0.0.1 while the renderer runs at tauri://localhost, and when the sidecar
+ * is unavailable `runtime.ts` deliberately falls back to the remote edge route.
+ * So the sidecar's final response writer and the edge `getCorsHeaders`
+ * (api/_cors.js) both send `Access-Control-Expose-Headers: Date, Age`.
  * Returns null when `Date` is missing or unparseable, or when `Age` is present
  * but not a non-negative integer — a malformed `Age` is a shape this has not
  * been checked against, not a zero.
@@ -94,8 +97,14 @@ function originNow(res: Response): number | null {
   const date = res.headers?.get?.('date');
   const parsedDate = date ? Date.parse(date) : Number.NaN;
   if (!Number.isFinite(parsedDate)) return null;
-  const age = res.headers?.get?.('age')?.trim();
-  if (!age) return parsedDate;
+  // A PRESENT-but-empty `Age` is not an absent one. An intermediary that caches
+  // for ten minutes while emitting `Age:` blank still preserves the origin's
+  // `Date`, so reading blank as absent computes a near-zero age and waves the
+  // replay through — the exact hole `Age` was added to close. Only a header
+  // that was never sent means "no intermediary".
+  const rawAge = res.headers?.get?.('age');
+  if (typeof rawAge !== 'string') return parsedDate;
+  const age = rawAge.trim();
   if (!/^\d+$/.test(age)) return null;
   return parsedDate + Number(age) * 1000;
 }
@@ -108,7 +117,8 @@ function originNow(res: Response): number | null {
  * `primary` (all_hour), `fallback-N` (all_day, live and a superset of the
  * primary feed, so genuinely usable) and `cached` (a last-good REPLAY, stale by
  * construction, and the one that must never corroborate). The edge function
- * reports `usgs.gov` and has no replay path at all.
+ * reports `usgs.gov` and has no LAST-GOOD path — it does have a 60 s in-memory
+ * TTL replay (api/earthquakes.js), which is what the age cap below covers.
  *
  * This is why `degraded` alone is not the test: the sidecar sets it for both
  * `fallback-N` and `cached`, so rejecting on it discarded live all_day rows.

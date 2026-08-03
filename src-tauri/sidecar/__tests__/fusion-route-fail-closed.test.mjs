@@ -178,8 +178,12 @@ test('/api/earthquakes freezes generatedAt into the cache instead of re-stamping
   // each hit replays a bare array with no timestamp at all.
   const stamped = body.match(/const (\w+) = \{[^}]*generatedAt:[^}]*\}/);
   assert.ok(stamped, 'generatedAt must be stamped into a named envelope the cache can hold');
-  const cached = body.match(/setCached\('usgs-earthquakes',\s*(\w+),/);
-  assert.ok(cached, 'the earthquakes route must cache its envelope');
+  // EVERY write, not the first: a second `setCached('usgs-earthquakes', events)`
+  // appended after the correct one satisfies a first-match assertion while
+  // being the write that actually survives, so hits replay the unstamped array.
+  const writes = [...body.matchAll(/setCached\('usgs-earthquakes',\s*(\w+),/g)];
+  assert.equal(writes.length, 1, 'the earthquakes cache must be written in exactly one place — a later write wins');
+  const cached = writes[0];
   assert.equal(
     cached[1],
     stamped[1],

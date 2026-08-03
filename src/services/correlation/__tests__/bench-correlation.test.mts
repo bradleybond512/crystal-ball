@@ -25,6 +25,7 @@ import {
   type BenchPairRow, type CorrelationBenchReport,
 } from '../bench-correlation.ts';
 import {
+  benchLedgerDigest,
   compareCorrelationBenchToBaseline,
   CORRELATION_BENCH_SCHEMA_VERSION,
   DEFAULT_CORRELATION_BENCH_TOLERANCES,
@@ -50,6 +51,19 @@ function loadBaseline(): CorrelationBenchBaseline {
 }
 
 const round4 = (v: number): number => Math.round(v * 10_000) / 10_000;
+
+/**
+ * The two IDENTITY reasons, which any hand-authored fixture necessarily trips.
+ *
+ * A fixture built in a test is not a run: it cannot reproduce a re-run of the
+ * frozen corpus, and its rows cannot digest to the committed ledger. Fixtures
+ * that assert "nothing else fires" filter these two out and say so — filtering
+ * anything wider would hide the gate under test.
+ */
+function isIdentityReason(reason: string): boolean {
+  return reason.includes('does not reproduce')
+    || reason.includes('do not match the committed baseline');
+}
 
 /**
  * Swaps a report's pair ledger and re-derives all six pair summaries from it.
@@ -120,6 +134,10 @@ function baselineWithCausalEdges(
     ...baseline,
     couplingPrecision: round4(causalEdges / baseline.significantEdgeCount),
     falseEdgeCount: falseEdges,
+    // No false edges means no false z-scores, so a separation here would be a
+    // number the seed run could not have measured — the two fields describe
+    // one run, and the gate says so before any tolerance is consulted.
+    edgeEvidenceSeparation: falseEdges === 0 ? null : baseline.edgeEvidenceSeparation,
     ...floors,
   };
 }
@@ -784,12 +802,13 @@ describe('the gate', () => {
     );
     assert.deepEqual(perfect.causalLearnedRulePairsPerRule, [5, 4, 4, 3, 3]);
     const { reasons } = compareCorrelationBenchToBaseline(perfect, baseline);
-    // A hand-authored report cannot reproduce against a re-run of the frozen
-    // corpus, and that reason is expected here — the property under test is
-    // that NOTHING ELSE fires: no drop, no growth, no separation regression.
-    // A real perfect miner reproduces (the gate re-runs the same miner), so it
-    // reaches this same all-clear on the directional gates.
-    assert.deepEqual(reasons.filter((r) => !r.includes('does not reproduce')), []);
+    // A hand-authored report reproduces neither the re-run nor the committed
+    // ledger digest, and both reasons are expected here — the property under
+    // test is that NOTHING ELSE fires: no drop, no growth, no separation
+    // regression. A real perfect miner would be re-seeded (identity fields are
+    // exact by design), and reaches this same all-clear on the directional
+    // gates.
+    assert.deepEqual(reasons.filter((r) => !isIdentityReason(r)), []);
   });
 
   it('rejects a null separation that is NOT explained by zero false edges', () => {
@@ -1753,5 +1772,214 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, baseline);
     assert.deepEqual(reasons, []);
     assert.equal(ok, true);
+  });
+});
+
+/**
+ * The seam re-derivation cannot reach.
+ *
+ * Re-running the benchmark proves the report matches THIS commit's producer. It
+ * says nothing about whether the producer still does what the last human to
+ * read it thought it did: a change inside `runCorrelationBenchmark()` moves the
+ * report and the re-run together, and the comparator agrees with itself. A
+ * review demonstrated it — deranged pair attribution, four learned-pair rows in
+ * place of 101, forged probe text and a deleted metric all PASSED when injected
+ * into the producer rather than into the report.
+ *
+ * The tests below cannot mutate the producer (it is the module under test), so
+ * they exercise the anchor directly: whatever a mutated producer would emit,
+ * `benchLedgerDigest` of it must not equal the digest committed in the baseline
+ * JSON — a file no source change can move.
+ */
+describe('the committed ledger digest anchors the producer itself', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('pins the live run, and re-pins it identically', () => {
+    assert.equal(benchLedgerDigest(report), baseline.ledgerDigest);
+    assert.equal(benchLedgerDigest(runCorrelationBenchmark()), baseline.ledgerDigest);
+  });
+
+  it('moves when a producer collapses 101 learned-pair rows to four', () => {
+    // The exact pass-B forgery from the review: four rows, one of them naming a
+    // rule for a coupling that does not exist. Every counter it feeds was
+    // re-derived from the rows, so the rows and the counters agreed.
+    const collapsed = {
+      ...report,
+      learnedPairs: [
+        { ruleId: 'learned:not-real->not-real', key: 'a|b', eventIdA: 'a', eventIdB: 'b', emissions: 1 },
+        ...report.learnedPairs.slice(0, 3),
+      ],
+    };
+    assert.notEqual(benchLedgerDigest(collapsed), baseline.ledgerDigest);
+  });
+
+  it('moves when a producer deranges pair attribution', () => {
+    const ids = [...new Set(report.pairs.flatMap((p) => p.ruleIds))].sort();
+    const deranged = report.pairs.map((p) => ({
+      ...p,
+      ruleIds: p.ruleIds.map((id) => ids[(ids.indexOf(id) + 1) % ids.length]!),
+    }));
+    assert.notEqual(benchLedgerDigest({ ...report, pairs: deranged }), baseline.ledgerDigest);
+  });
+
+  it('moves when a producer forges probe text or edge evidence', () => {
+    const [first, ...rest] = report.ruleProbes;
+    assert.notEqual(
+      benchLedgerDigest({
+        ...report,
+        ruleProbes: [{ ...first!, nearMiss: 'some other clause entirely' }, ...rest],
+      }),
+      baseline.ledgerDigest,
+    );
+    const [edge, ...others] = report.edges;
+    assert.notEqual(
+      benchLedgerDigest({ ...report, edges: [{ ...edge!, support: edge!.support + 1 }, ...others] }),
+      baseline.ledgerDigest,
+    );
+  });
+
+  it('survives the last-bit noise a cross-platform re-run can produce', () => {
+    // Rounded to the precision the baseline already trusts: `zScore` and `lift`
+    // come off Math.log/Math.exp, which are implementation-defined to the last
+    // bit, and a digest that flaked between macOS and Linux CI would be deleted
+    // within a week.
+    const jittered = {
+      ...report,
+      edges: report.edges.map((e) => ({
+        ...e,
+        zScore: e.zScore === null ? null : e.zScore + Number.EPSILON * 4,
+        strength: e.strength + Number.EPSILON * 4,
+      })),
+    };
+    assert.equal(benchLedgerDigest(jittered), baseline.ledgerDigest);
+  });
+
+  it('reports the mismatch as a re-seed, not as a quality regression', () => {
+    const stale = { ...baseline, ledgerDigest: 'f'.repeat(32) };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, stale);
+    assert.equal(ok, false);
+    const reason = reasons.find((r) => r.includes('do not match the committed baseline'));
+    assert.ok(reason, `expected a ledger-digest reason, got ${JSON.stringify(reasons)}`);
+    assert.ok(reason.includes('re-seed'), 'the reason must tell a human what to do');
+  });
+
+  it('rejects a baseline that pins the ledger to nothing', () => {
+    const { ledgerDigest: _gone, ...naked } = baseline;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      report, naked as CorrelationBenchBaseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('baseline ledgerDigest is not a 32-character')));
+  });
+});
+
+describe('the reproduction walk demands a plain, own-keyed report', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('rejects a report whose fields come from its prototype', () => {
+    // `Object.create(realReport)` has zero own keys, serializes as `{}`, and
+    // answers every property read with the real value. A union of Object.keys()
+    // read through normal lookup reproduced it exactly.
+    const shell = Object.create(report) as CorrelationBenchReport;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(shell, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('not a plain object')));
+  });
+
+  it('rejects a field deleted and re-supplied by a prototype', () => {
+    const proto = { pairPrecision: report.pairPrecision };
+    const forged = Object.assign(Object.create(proto) as object, report) as CorrelationBenchReport;
+    delete (forged as Partial<CorrelationBenchReport>).pairPrecision;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('not a plain object')));
+  });
+
+  it('rejects an extra own field, including one holding undefined', () => {
+    const padded = { ...report, smuggled: undefined } as CorrelationBenchReport;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(padded, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('unexpected own field(s) [smuggled]')));
+  });
+
+  it('rejects a ledger array carrying extra own properties', () => {
+    const edges = [...report.edges] as typeof report.edges & { note?: string };
+    edges.note = 'ignore the rows, read this';
+    const { ok, reasons } = compareCorrelationBenchToBaseline({ ...report, edges }, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('unexpected own field(s) [note]')));
+  });
+
+  it('rejects symbol-keyed properties the key walk never reports', () => {
+    const tagged = { ...report, [Symbol.for('cb.bench')]: 'x' } as CorrelationBenchReport;
+    const { ok, reasons } = compareCorrelationBenchToBaseline(tagged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('symbol-keyed properties')));
+  });
+
+  it('distinguishes -0 from 0', () => {
+    const negZero = { ...report, meanFalsePairConfidence: -0 } as CorrelationBenchReport;
+    const { reasons } = compareCorrelationBenchToBaseline(negZero, baseline);
+    assert.ok(reasons.some((r) => r.includes('does not reproduce')));
+  });
+});
+
+describe('a perfect miner can become the next baseline', () => {
+  const report = runCorrelationBenchmark();
+
+  /** The committed baseline as a perfect run would have re-seeded it. */
+  function perfectBaseline(): CorrelationBenchBaseline {
+    return {
+      ...loadBaseline(),
+      couplingPrecision: 1,
+      significantEdgeCount: report.plantedCausalCount,
+      falseEdgeCount: 0,
+      confoundedFalsePositives: 0,
+      mediatedFalsePositives: 0,
+      independentFalsePositives: 0,
+      inhibitoryEdgesReported: 0,
+      unplantedFalsePositives: 0,
+      learnedRuleFalsePositives: 0,
+      // No false edges means no false learned rules, so the roster is exactly
+      // the causal one — otherwise the baseline disagrees with itself and the
+      // reconciliation fires before any gate does.
+      learnedRuleCount: loadBaseline().causalLearnedRuleCount,
+      edgeEvidenceSeparation: null,
+    };
+  }
+
+  it('accepts a null separation on the committed side when no false edges exist', () => {
+    // Round 9 left this un-seedable: a perfect run PASSED the old baseline and
+    // then could not become the new one, because the committed side demanded a
+    // finite, positive separation that a perfect run does not have.
+    const { reasons } = compareCorrelationBenchToBaseline(report, perfectBaseline());
+    assert.ok(
+      !reasons.some((r) => r.includes('edgeEvidenceSeparation')),
+      `separation should not be gated against a perfect baseline: ${JSON.stringify(reasons)}`,
+    );
+  });
+
+  it('still fails the live run on the false edges it grew', () => {
+    // The exemption must not become an escape hatch: the run being compared has
+    // 17 false edges against a baseline of 0, and that is what should fail.
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, perfectBaseline());
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('graded false edges grew')));
+  });
+
+  it('rejects a null separation the baseline has not earned', () => {
+    const unearned = { ...loadBaseline(), edgeEvidenceSeparation: null };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, unearned);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('null but falseEdgeCount is')));
+  });
+
+  it('rejects a separation the baseline could not have measured', () => {
+    const impossible = { ...loadBaseline(), falseEdgeCount: 0 };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, impossible);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('no false z-scores to separate from')));
   });
 });

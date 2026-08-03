@@ -284,6 +284,16 @@ export class SpaceWeatherPanel extends Panel {
 
   private renderEarthwardCmes(): string {
     const cmes = this.status?.earthwardCmes ?? [];
+    // An outage must not borrow the appearance of an all-clear. When the feed
+    // failed the list is empty for a reason that has nothing to do with the
+    // sun, so say so rather than letting the section quietly disappear —
+    // absence of a section is indistinguishable from absence of a threat.
+    if (this.status?.cmeFeedOk === false) {
+      return `<div class="sw-alerts">
+        <div class="sw-alerts-header">Earthward CMEs</div>
+        <div class="sw-alert-row sw-warning">CME feed unavailable — Earthward CMEs unknown</div>
+      </div>`;
+    }
     if (cmes.length === 0) return '';
     const now = Date.now();
     const rows = cmes.slice(0, 5).map((cme) => this.renderCmeRow(cme, now)).join('');

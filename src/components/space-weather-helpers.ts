@@ -1,3 +1,4 @@
+import { toUtcIsoTag } from '@/services/space-weather-parse';
 import type {
   GeomagStormLevel,
   RiskBand,
@@ -163,6 +164,9 @@ export const WIND_STALE_AFTER_MS = 30 * 60 * 1000;
  */
 const WIND_FUTURE_SKEW_TOLERANCE_MS = 15 * 60 * 1000;
 
+const finiteOrNull = (n: number | null): number | null =>
+  n !== null && Number.isFinite(n) ? n : null;
+
 export interface WindObservationAge {
   label: string;
   stale: boolean;
@@ -173,12 +177,21 @@ export function windObservationAge(
   now = Date.now(),
 ): WindObservationAge {
   if (!observedAt) return { label: 'age unknown', stale: true };
-  const at = Date.parse(observedAt);
+  // parseSolarWindFeed already hands us a Z-stamped ISO string, but this helper
+  // is exported and SWPC's raw tags are naïve UTC — which bare Date.parse reads
+  // as host-LOCAL. That has silently shifted timestamps twice in this codebase
+  // already, so normalize here rather than trust every future caller.
+  const at = Date.parse(toUtcIsoTag(observedAt));
   if (!Number.isFinite(at)) return { label: 'age unknown', stale: true };
   const ageMs = now - at;
   if (ageMs < -WIND_FUTURE_SKEW_TOLERANCE_MS) return { label: 'age unknown', stale: true };
   const label = timeAgo(new Date(at), now);
   return { label, stale: ageMs > WIND_STALE_AFTER_MS };
+}
+
+function bzSubtitle(bz: number | null): string {
+  if (bz === null) return 'No magnetometer reading';
+  return bz < 0 ? 'Southward — storm driver' : 'Northward is quiet';
 }
 
 export interface WindCell {
@@ -211,7 +224,13 @@ export function buildWindStrip(
   },
   now = Date.now(),
 ): WindStripView {
-  const { solarWindSpeed: speed, solarWindDensity: density, bz } = wind;
+  // A null is not the only way a reading goes missing: NaN and Infinity survive
+  // a `=== null` check and format as "NaN km/s" with confident units. The badge
+  // helpers already treat non-finite as unknown, so the value formatting has to
+  // agree with them or the number and its colour tell different stories.
+  const speed = finiteOrNull(wind.solarWindSpeed);
+  const density = finiteOrNull(wind.solarWindDensity);
+  const bz = finiteOrNull(wind.bz);
   const missing = speed === null && density === null && bz === null;
   const age = windObservationAge(wind.windObservedAt, now);
   // The sign carries the whole meaning of Bz, so a positive value is written
@@ -239,7 +258,10 @@ export function buildWindStrip(
         label: 'Bz',
         value: bz === null ? '—' : `${bzSign}${bz.toFixed(1)} nT`,
         color: bzBadgeColor(bz),
-        sub: bz !== null && bz < 0 ? 'Southward — storm driver' : 'Northward is quiet',
+        // Three states, not two. A missing Bz must not read as "Northward is
+        // quiet" — that is the magnetometer going dark reported as an all-clear,
+        // and Bz is the single best short-horizon storm predictor we have.
+        sub: bzSubtitle(bz),
       },
     ],
   };

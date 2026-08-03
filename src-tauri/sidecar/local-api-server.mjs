@@ -3546,6 +3546,12 @@ export function buildSpaceweatherStatusSidecar(input) {
     gpsDisruption: classifyGpsDisruptionSidecar(peakClass),
     hfRadioBlackout: !!xray && xray.peakFlux >= 1e-4,
     earthwardCmes,
+    // Repointing the dead URL fixed the 404 but not the failure MODE: any
+    // non-200 or throw still becomes null here, and an empty CME list renders
+    // as a confident "no Earthward CMEs" — an outage that looks like good news.
+    // The renderer needs to tell "the feed says none" apart from "the feed
+    // never answered", so say which one this is.
+    cmeFeedOk: input.cmeFeedOk !== false,
     asOf: new Date(now).toISOString(),
   };
 }
@@ -3704,6 +3710,7 @@ export async function fetchSpaceweatherStatusSidecar() {
     xrayFlux,
     kpIndex,
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
+    cmeFeedOk: Array.isArray(cmeRaw),
     now,
   });
   // Cache on what the ADAPTERS produced, not on the raw bodies being non-null.

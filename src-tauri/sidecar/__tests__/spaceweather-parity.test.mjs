@@ -216,6 +216,21 @@ test('buildDonkiCmeUrlSidecar spans slow CMEs still in transit', () => {
   assert.ok(Date.parse(end) > NOW);
 });
 
+test('buildSpaceweatherStatusSidecar distinguishes "no CMEs" from "no CME feed"', () => {
+  // Repointing the dead URL fixed the 404 but not the failure MODE:
+  // fetchJsonSidecar turns any non-200 or throw into null, and an empty CME
+  // list renders as a confident "no Earthward CMEs". Both cases carry
+  // earthwardCmes: [] — only this flag tells them apart.
+  const base = { xrayFlux: [], kpIndex: [], now: NOW };
+  assert.equal(buildSpaceweatherStatusSidecar({ ...base, cmes: [], cmeFeedOk: true }).cmeFeedOk, true);
+  const down = buildSpaceweatherStatusSidecar({ ...base, cmes: [], cmeFeedOk: false });
+  assert.equal(down.cmeFeedOk, false);
+  assert.deepEqual(down.earthwardCmes, [], 'still empty — the flag is the only signal');
+  // An omitted flag must not read as an outage: a quiet sun is the common case,
+  // and defaulting to false would cry wolf on every well-formed empty response.
+  assert.equal(buildSpaceweatherStatusSidecar({ ...base, cmes: [] }).cmeFeedOk, true);
+});
+
 test('buildSpaceweatherStatusSidecar mirrors TS top-level shape', () => {
   const xray = [{ time_tag: isoMinus(0.5), flux: 1.5e-4 }];
   const kp = [{ time_tag: isoMinus(2), kp: 7 }];

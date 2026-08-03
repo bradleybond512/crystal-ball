@@ -236,6 +236,11 @@ export function buildWindStrip(
   // The sign carries the whole meaning of Bz, so a positive value is written
   // with an explicit "+" rather than left bare next to its negative sibling.
   const bzSign = bz !== null && bz > 0 ? '+' : '';
+  // A stale reading keeps its numbers — they are real, just old — but loses its
+  // badge colour. Green on an hour-old sample asserts "calm right now" off
+  // evidence that says nothing about right now, and the colour is the part of
+  // the cell read at a glance; the small age line beside it is not.
+  const tint = (c: string): string => (age.stale ? SEVERITY_HEX.unknown : c);
   return {
     meta: missing ? 'no solar-wind telemetry in this fetch' : `measured ${age.label}`,
     metaWarn: missing || age.stale,
@@ -243,8 +248,8 @@ export function buildWindStrip(
       {
         label: 'Speed',
         value: speed === null ? '—' : `${Math.round(speed)} km/s`,
-        color: windSpeedBadgeColor(speed),
-        sub: 'Ambient 300–500',
+        color: tint(windSpeedBadgeColor(speed)),
+        sub: age.stale && speed !== null ? 'Last known — not current' : 'Ambient 300–500',
       },
       {
         label: 'Density',
@@ -257,7 +262,7 @@ export function buildWindStrip(
       {
         label: 'Bz',
         value: bz === null ? '—' : `${bzSign}${bz.toFixed(1)} nT`,
-        color: bzBadgeColor(bz),
+        color: tint(bzBadgeColor(bz)),
         // Three states, not two. A missing Bz must not read as "Northward is
         // quiet" — that is the magnetometer going dark reported as an all-clear,
         // and Bz is the single best short-horizon storm predictor we have.

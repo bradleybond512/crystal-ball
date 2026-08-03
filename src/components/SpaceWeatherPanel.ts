@@ -288,10 +288,19 @@ export class SpaceWeatherPanel extends Panel {
     // failed the list is empty for a reason that has nothing to do with the
     // sun, so say so rather than letting the section quietly disappear —
     // absence of a section is indistinguishable from absence of a threat.
-    if (this.status?.cmeFeedOk === false) {
+    //
+    // Only an explicit true clears this. An ABSENT flag is a cached envelope
+    // from a build that predates the flag, and it carries no evidence either
+    // way — reading it as healthy would restore the fail-open for exactly as
+    // long as that cache lives.
+    const feedOk = this.status?.cmeFeedOk;
+    if (this.status !== null && feedOk !== true) {
+      const why = feedOk === false
+        ? 'CME feed unavailable'
+        : 'CME feed not reported by this source';
       return `<div class="sw-alerts">
         <div class="sw-alerts-header">Earthward CMEs</div>
-        <div class="sw-alert-row sw-warning">CME feed unavailable — Earthward CMEs unknown</div>
+        <div class="sw-alert-row sw-warning">${why} — Earthward CMEs unknown</div>
       </div>`;
     }
     if (cmes.length === 0) return '';

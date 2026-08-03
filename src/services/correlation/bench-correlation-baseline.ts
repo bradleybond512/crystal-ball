@@ -38,6 +38,7 @@ import type {
 // verdict and its own `isTruePair` flag is the report grading itself: rewrite
 // every endpoint to a fabricated id and the rows still agree with the summaries
 // they were generated alongside. Truth comes from the corpus or it is not truth.
+import { runCorrelationBenchmark } from './bench-correlation';
 import {
   corpusDomains, decoyEventIds, pairKeyFor, plantedCouplingIndex, plantedTruePairKeys,
 } from './__bench__/golden-streams';
@@ -511,6 +512,15 @@ function checkIdSet(
     );
     return;
   }
+  const wantRepeats = [...new Set((want as string[]).filter(
+    (id, i) => (want as string[]).indexOf(id) !== i,
+  ))];
+  if (wantRepeats.length > 0) {
+    reasons.push(
+      `baseline ${field} repeats [${wantRepeats.join(', ')}] — ${label} is a set on the ` +
+      `committed side too, and a padded pin is one more number with no run behind it`,
+    );
+  }
   if (!Array.isArray(got)) {
     reasons.push(`live report carries no ${field} roster`);
     return;
@@ -874,6 +884,10 @@ export function compareCorrelationBenchToBaseline(
   checkDrop(reasons, 'mined candidate edges',
     baseline.minedEdgeCount, report.minedEdgeCount, tol.minedEdgeCountShrink);
 
+  // Last, and the widest net: everything above asks whether a run COULD have
+  // produced these numbers. This produces the run.
+  checkReportIsReproducible(reasons, report);
+
   return { ok: reasons.length === 0, reasons };
 }
 
@@ -889,6 +903,7 @@ type BenchSummary = Pick<CorrelationBenchBaseline,
   | 'inhibitoryEdgesReported' | 'unplantedFalsePositives' | 'falseEdgeCount'
   | 'learnedRuleCount' | 'learnedRuleFalsePositives' | 'causalLearnedRuleCount'
   | 'enginePairCount' | 'distinctEnginePairCount' | 'pairPrecision' | 'pairRecall'
+  | 'minedEdgeCount'
   | 'decoyPairsEmitted' | 'meanTruePairConfidence'
   | 'learnedRulePairCount' | 'causalLearnedRulePairCount' | 'minCausalLearnedRulePairCount'>;
 
@@ -920,6 +935,30 @@ function checkImpliedCount(
 }
 
 /**
+ * The candidate population bracketed on both sides.
+ *
+ * Only the LIVE side derived this from its edge ledger, so a baseline could
+ * commit `minedEdgeCount` BELOW its own `significantEdgeCount` — and the shrink
+ * gate then licensed the live population collapsing onto the 22 edges it
+ * already believes.
+ */
+function checkMinedPopulation(reasons: string[], side: string, s: BenchSummary): void {
+  if (s.minedEdgeCount < s.significantEdgeCount) {
+    reasons.push(
+      `${side} is internally inconsistent: minedEdgeCount=${s.minedEdgeCount} is below ` +
+      `significantEdgeCount=${s.significantEdgeCount}, but significant edges are a filtered ` +
+      `subset of the mined ones`,
+    );
+  }
+  if (s.minedEdgeCount > maxMinableEdges()) {
+    reasons.push(
+      `${side} is internally inconsistent: minedEdgeCount=${s.minedEdgeCount} exceeds the ` +
+      `${maxMinableEdges()} ordered domain-pair candidates this corpus can produce`,
+    );
+  }
+}
+
+/**
  * Cross-checks the summary fields the gates rely on against each other. Without
  * this, a side can claim a perfect miner (`falseEdgeCount: 0`) while its own
  * breakdown still lists false positives, and the perfect-miner exception below
@@ -939,6 +978,7 @@ function checkSummaryArithmetic(reasons: string[], side: string, s: BenchSummary
       `inhibitory/unplanted) — the run cannot be graded`,
     );
   }
+  checkMinedPopulation(reasons, side, s);
   if (s.falseEdgeCount > s.significantEdgeCount) {
     reasons.push(
       `${side} is internally inconsistent: falseEdgeCount=${s.falseEdgeCount} exceeds ` +
@@ -1194,7 +1234,7 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
     // product is a hard upper bound on what any run could have mined.
     reasons.push(
       `report is internally inconsistent: minedEdgeCount=${report.minedEdgeCount} exceeds the ` +
-      `${maxMinableEdges()} ordered domain-pair/window candidates this corpus can produce`,
+      `${maxMinableEdges()} ordered domain-pair candidates this corpus can produce`,
     );
   }
   if (report.edges.length !== report.significantEdgeCount) {
@@ -1246,10 +1286,18 @@ function checkEdgeLedger(reasons: string[], report: CorrelationBenchReport): voi
   }
 }
 
-/** Ordered pairs of observed domains × configured windows — the miner's ceiling. */
+/**
+ * Ordered pairs of observed domains — the miner's ceiling.
+ *
+ * NOT multiplied by the window count: `mineLeadLag` evaluates every configured
+ * window per ordered pair and returns the best ONE, so the windows are a search
+ * dimension, not a multiplier on the candidate population. The looser product
+ * (1088 here) admitted a run claiming four times as many candidates as the
+ * corpus can produce.
+ */
 function maxMinableEdges(): number {
   const d = corpusDomains().size;
-  return d * (d - 1) * DEFAULT_WINDOWS_MS.length;
+  return d * (d - 1);
 }
 
 /**
@@ -1270,7 +1318,6 @@ const Z_CAP = 50;
 function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void {
   const planted = plantedCouplingIndex();
   const domains = corpusDomains();
-  const evidence: BenchEdgeRow[] = [];
   const seen = new Set<string>();
   const causalZ: number[] = [];
   const falseZ: number[] = [];
@@ -1322,38 +1369,89 @@ function checkEdgeRows(reasons: string[], report: CorrelationBenchReport): void 
     // A null z is +Infinity upstream — "certain", capped rather than dropped,
     // exactly as the report's own mean does it.
     (truth === 'causal' ? causalZ : falseZ).push(Math.min(Z_CAP, e.zScore ?? Z_CAP));
-    evidence.push(e);
   }
-  checkEdgeEvidenceSpread(reasons, evidence);
   checkVerdictBreakdown(reasons, report, byVerdict, causalZ.length);
   checkSeparationDerivation(reasons, report, causalZ, falseZ);
 }
 
 /**
- * The miner's evidence columns have to look like a measurement, not a fill.
+ * The whole report, recomputed from the frozen corpus.
  *
- * Every threshold check below is a per-row floor, so rewriting `support`,
- * `lift` and `zScore` to the same admissible constant on all 22 rows passed
- * each of them — and separation is derived from those same z-scores, so it
- * agreed too. A miner that assigns every edge identical evidence has ranked
- * nothing, which is the same defect the pair-confidence guard catches one layer
- * down: the numbers are present and the measurement is gone.
+ * `runCorrelationBenchmark()` takes no inputs and is deterministic over the
+ * committed golden streams, so the gate does not have to INFER whether a
+ * reported number could have come from a run — it can produce the run. Memoized
+ * because the comparator is called many times per process and the pass is the
+ * same pass every time.
  */
-function checkEdgeEvidenceSpread(reasons: string[], rows: readonly BenchEdgeRow[]): void {
-  if (rows.length < 2) return;
-  const columns: readonly (readonly [string, readonly (number | null)[]])[] = [
-    ['support', rows.map((e) => e.support)],
-    ['lift', rows.map((e) => e.lift)],
-    ['zScore', rows.map((e) => e.zScore)],
-  ];
-  for (const [name, values] of columns) {
-    if (new Set(values).size > 1) continue;
-    reasons.push(
-      `report is internally inconsistent: all ${rows.length} edge row(s) carry the identical ` +
-      `${name} ${String(values[0])} — the miner ranked nothing, and every threshold check is a ` +
-      `per-row floor an admissible constant clears`,
-    );
+let reference: CorrelationBenchReport | null = null;
+function referenceReport(): CorrelationBenchReport {
+  reference ??= runCorrelationBenchmark();
+  return reference;
+}
+
+/** Array arm of `divergences`: shape first, then element-wise. */
+function arrayDivergences(
+  a: unknown, b: unknown, path: string, out: string[], limit: number,
+): void {
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+    out.push(`${path}: ${Array.isArray(b) ? 'not an array' : 'unexpected array'}`);
+    return;
   }
+  if (a.length !== b.length) {
+    out.push(`${path}: ${b.length} row(s), expected ${a.length}`);
+    return;
+  }
+  for (const [i, v] of a.entries()) divergences(v, b[i], `${path}[${i}]`, out, limit);
+}
+
+/** First `limit` structural divergences between two values, as field paths. */
+function divergences(
+  a: unknown, b: unknown, path: string, out: string[], limit: number,
+): void {
+  if (out.length >= limit) return;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    arrayDivergences(a, b, path, out, limit);
+    return;
+  }
+  if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of [...keys].sort((x, y) => x.localeCompare(y))) {
+      divergences(
+        (a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k],
+        path === '' ? k : `${path}.${k}`, out, limit,
+      );
+    }
+    return;
+  }
+  if (a !== b) out.push(`${path}: ${JSON.stringify(b)}, expected ${JSON.stringify(a)}`);
+}
+
+/**
+ * The report is the run, or it is a story about a run.
+ *
+ * Every consistency check above answers "could a run have produced this?", and
+ * a sufficiently careful forgery answers yes to all of them: fabricated edge
+ * evidence that clears each per-row floor, a pair ledger attributing every
+ * emission to the wrong (but registered) rule, probe booleans that simply
+ * assert themselves, an advertised measurement deleted outright. All of them
+ * survive because the gate re-derives PROPERTIES of the numbers and never the
+ * numbers themselves.
+ *
+ * The corpus is frozen and the pass is deterministic, so it does not have to.
+ * This runs LAST: the checks above name the specific defect they catch, which
+ * is what a human re-seeding a baseline needs to read, and this one catches
+ * everything else.
+ */
+function checkReportIsReproducible(reasons: string[], report: CorrelationBenchReport): void {
+  const diffs: string[] = [];
+  divergences(referenceReport(), report, '', diffs, 6);
+  if (diffs.length === 0) return;
+  reasons.push(
+    `the report does not reproduce: re-running the benchmark over the same frozen corpus ` +
+    `yields different values at ${diffs.join('; ')}` +
+    `${diffs.length === 6 ? ' (and possibly more)' : ''} — the corpus is deterministic, so a ` +
+    `field that cannot be reproduced was not measured`,
+  );
 }
 
 /**

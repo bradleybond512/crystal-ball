@@ -181,13 +181,25 @@ test('/api/earthquakes freezes generatedAt into the cache instead of re-stamping
   // EVERY write, not the first: a second `setCached('usgs-earthquakes', events)`
   // appended after the correct one satisfies a first-match assertion while
   // being the write that actually survives, so hits replay the unstamped array.
-  const writes = [...body.matchAll(/setCached\('usgs-earthquakes',\s*(\w+),/g)];
+  // And every write UNCONDITIONALLY: keying the count off the literal
+  // `'usgs-earthquakes'` means a second write under "usgs-earthquakes" or under
+  // a `const KEY` — the same cache entry either way — is invisible to the count.
+  const writes = [...body.matchAll(/setCached\(\s*('[^']*'|"[^"]*"|\w+),\s*(\w+),/g)];
+  assert.equal(
+    writes.length, (body.match(/setCached\(/g) ?? []).length,
+    'every setCached call in this route must be in the recognized `setCached(<key>, <value>,` ' +
+    'shape — one this pattern cannot read is one it cannot count',
+  );
   assert.equal(writes.length, 1, 'the earthquakes cache must be written in exactly one place — a later write wins');
   const cached = writes[0];
+  assert.match(
+    cached[1].trim(), /^['"]usgs-earthquakes['"]$/,
+    `the write must use the same literal key the hit path reads (found: ${cached[1].trim()})`,
+  );
   assert.equal(
-    cached[1],
+    cached[2],
     stamped[1],
-    `the cached value must BE the stamped envelope — caching ${cached[1]} instead of ${stamped[1]} ` +
+    `the cached value must BE the stamped envelope — caching ${cached[2]} instead of ${stamped[1]} ` +
     'serves hits with no generatedAt, and the fusion fetcher then rejects every one of them',
   );
   assert.ok(body.indexOf('generatedAt:') < body.indexOf('setCached('),

@@ -19753,6 +19753,9 @@ export async function createLocalApiServer(options = {}) {
  // /api/earthquakes answers with a bare json(payload), so without this the
  // renderer sees null for `Date`/`Age` and every live USGS fetch records a
  // failing vote. See the originNow() contract in usgs-fusion-fetch.ts.
+ // Covers every response that comes back through this writer — a handler that
+ // writes to the socket directly, or streams, bypasses it and would have to
+ // send the header itself.
  headers['access-control-expose-headers'] = 'Date, Age';
 
  if (!skipRecord) {

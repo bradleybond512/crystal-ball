@@ -34,6 +34,7 @@ import {
   GOLDEN_STREAMS,
   PLANTED_COUPLINGS,
   allGoldenObservations,
+  corpusDomains,
   decoyEventIds,
   digestRecords,
   pairKeyFor,
@@ -180,6 +181,26 @@ function learnedRowsFor(
     }
   }
   return rows;
+}
+
+/**
+ * Ordered domain pairs the corpus could have produced but this run did not
+ * emit. Fixtures that need an extra edge row use these: an invented domain name
+ * is rejected as a stray endpoint before any verdict or count check is reached.
+ */
+function freeDomainPairs(report: CorrelationBenchReport, n: number): [string, string][] {
+  const domains = [...corpusDomains()].sort();
+  const used = new Set(report.edges.map((e) => `${e.from}->${e.to}`));
+  const out: [string, string][] = [];
+  for (const a of domains) {
+    for (const b of domains) {
+      if (out.length >= n) return out;
+      if (a === b || used.has(`${a}->${b}`)) continue;
+      used.add(`${a}->${b}`);
+      out.push([a, b]);
+    }
+  }
+  return out;
 }
 
 describe('golden-streams corpus integrity', () => {
@@ -706,9 +727,9 @@ describe('the gate', () => {
       // and this stays a test of the false-edge count alone.
       edges: [
         ...report.edges,
-        ...[0, 1].map((i) => ({
-          from: `filler-${i}`,
-          to: `filler-${i}-sink`,
+        ...freeDomainPairs(report, 2).map(([from, to]) => ({
+          from,
+          to,
           verdict: 'unplanted' as const,
           support: 3,
           antecedents: 10,
@@ -1324,11 +1345,11 @@ describe('the gate rejects a run or a baseline that could not have happened', ()
   });
 
   it('rejects an edge row pointing at events the corpus never coupled', () => {
-    // Fabricated endpoints grade as `unplanted` no matter what the row claims,
-    // so a renamed causal edge cannot keep its verdict.
-    const renamed = report.edges.map((e, i) => (
-      i === 0 ? { ...e, from: 'fabricated-domain-a', to: 'fabricated-domain-b' } : e
-    ));
+    // Real domains the corpus never coupled grade as `unplanted` no matter what
+    // the row claims, so a re-pointed causal edge cannot keep its verdict.
+    // (Invented names are rejected one check earlier, as stray endpoints.)
+    const [from, to] = freeDomainPairs(report, 1)[0]!;
+    const renamed = report.edges.map((e, i) => (i === 0 ? { ...e, from, to } : e));
     const { ok, reasons } = compareCorrelationBenchToBaseline(
       { ...report, edges: renamed }, baseline,
     );
@@ -1566,5 +1587,87 @@ describe('the gate rejects a conclusion the report authored about itself', () =>
     const { ok, reasons } = compareCorrelationBenchToBaseline(dropped, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('built-in rule coverage over the corpus')));
+  });
+});
+
+/**
+ * Round 8. Same reviewer, one layer deeper: every case below is a number the
+ * round-7 gate carried through without ever re-deriving it from the corpus, the
+ * inventory, or the row it claims to summarize.
+ */
+describe('the gate re-derives the numbers it used to take on the report\'s word', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('rejects a mined-candidate count the corpus could not have produced', () => {
+    // The candidate population was gated for SHRINK only, so its ceiling was
+    // unbounded: MAX_SAFE_INTEGER passed. The miner tests each ordered pair of
+    // OBSERVED domains at each configured window, and that product is a hard cap.
+    for (const inflated of [1_000_000, Number.MAX_SAFE_INTEGER]) {
+      const { ok, reasons } = compareCorrelationBenchToBaseline(
+        { ...report, minedEdgeCount: inflated }, baseline,
+      );
+      assert.equal(ok, false);
+      assert.ok(reasons.some((r) => r.includes('ordered domain-pair/window candidates')));
+    }
+  });
+
+  it('rejects a padded rule inventory', () => {
+    // Set equality is symmetric-difference, so a repeat is invisible to it. The
+    // inventory is what the per-rule counters are denominated in.
+    const padded = { ...report, builtInRuleIds: [...report.builtInRuleIds, report.builtInRuleIds[0]!] };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(padded, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('builtInRuleIds repeats')));
+  });
+
+  it('rejects a coverage probe for a rule the engine never registered', () => {
+    // Probes are counted, so an invented passing probe was free coverage.
+    const probes = [...report.ruleProbes, {
+      ...report.ruleProbes[0]!, ruleId: 'fabricated-rule',
+    }];
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      { ...report, ruleProbes: probes }, baseline,
+    );
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes("probe names 'fabricated-rule'")));
+  });
+
+  it('rejects edge evidence filled with one admissible constant', () => {
+    // Every threshold on a row is a per-row FLOOR, so a single admissible value
+    // repeated across all 22 rows cleared all of them — and separation, derived
+    // from those same z-scores, agreed. A miner that ranks nothing is not mining.
+    const stubbed = {
+      ...report,
+      edges: report.edges.map((e) => ({
+        ...e, support: 3, antecedents: 3, lift: 2,
+        zScore: e.verdict === 'causal' ? 10.4898 : 2, strength: 0.5, windowHours: 1,
+      })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stubbed, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('carry the identical support')));
+  });
+
+  it('rejects an edge between domains the corpus never observed', () => {
+    // 'not in the planted index' and 'not in the corpus' used to be the same
+    // answer, so renaming the false-positive rows to invented domains kept them
+    // graded as 'unplanted' and reconciled against every summary.
+    const invented = {
+      ...report,
+      edges: report.edges.map((e, i) => (e.verdict === 'unplanted'
+        ? { ...e, from: `fabricated-${i}`, to: `fabricated-sink-${i}` }
+        : e)),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(invented, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('the corpus never observed')));
+  });
+
+  it('still accepts the untouched live run', () => {
+    // Five new rejections, and the passing state survives all of them.
+    const { ok, reasons } = compareCorrelationBenchToBaseline(report, baseline);
+    assert.deepEqual(reasons, []);
+    assert.equal(ok, true);
   });
 });

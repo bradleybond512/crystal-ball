@@ -28,7 +28,7 @@
     "mcp:install-local": "node scripts/install-crystalball-mcp.mjs",
     "secrets:scan": "node scripts/secret-scan.mjs",
     "secrets:scan:staged": "node scripts/secret-scan.mjs --staged",
-    "lint": "eslint .",
+    "lint": "node scripts/run-eslint.mjs .",
     "lint:ci": "node scripts/lint-changed.mjs",
     "lint:fix": "eslint . --fix",
     "lockfile:check": "node scripts/check-package-lock.mjs",

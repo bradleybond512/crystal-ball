@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 
+import { runEslint } from './run-eslint.mjs';
+
 const eslintFilePattern = /\.(?:[cm]?[jt]sx?)$/u;
 const ignoredPrefixes = [
   'node_modules/',
@@ -50,12 +52,8 @@ if (baseRef) {
       console.log('[lint:ci] No changed JavaScript or TypeScript files to lint.');
     } else {
       console.log(`[lint:ci] Linting ${files.length} changed file(s).`);
-      const eslint = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      const result = spawnSync(eslint, ['eslint', ...files], {
-        stdio: 'inherit',
-        shell: process.platform === 'win32',
-      });
-      process.exitCode = result.status ?? 1;
+      const result = await runEslint(files);
+      process.exitCode = result.exitCode;
     }
   } else {
     console.error((diff.stderr || diff.stdout || '').trim() || '[lint:ci] Failed to list changed files.');

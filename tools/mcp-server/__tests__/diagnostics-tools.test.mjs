@@ -124,6 +124,55 @@ test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated 
   assert.equal('analyst' in result, false);
 });
 
+test('get_algorithm_diagnostics allowlists the weekly evaluation projection', async () => {
+  const projection = evaluationProjectionFixture();
+  projection.forecast.secret = 'FORECAST-SENTINEL';
+  projection.champion.active.secret = 'ACTIVE-SENTINEL';
+  projection.champion.challengers[0].evidence = 'CHALLENGER-SENTINEL';
+  projection.champion.promotions[0].reason = 'PROMOTION-SENTINEL';
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/analyst-state': {
+      available: true,
+      stale: false,
+      algorithmDiagnostics: {
+        health: { status: 'healthy', algorithms: [] },
+        ledger: { total: 1, graded: 1, pending: 0 },
+        runtime: [],
+      },
+      evaluationReportProjection: projection,
+    },
+  }));
+
+  const result = await tools.get_algorithm_diagnostics({});
+
+  assert.deepEqual(result.evaluationReportProjection, evaluationProjectionFixture());
+  assert.doesNotMatch(
+    JSON.stringify(result.evaluationReportProjection),
+    /SENTINEL|"secret"|"evidence"|"reason"/,
+  );
+});
+
+test('get_algorithm_diagnostics rejects malformed weekly evaluation projections', async () => {
+  const malformed = evaluationProjectionFixture();
+  malformed.forecast.metrics.brier.value = 2;
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/analyst-state': {
+      available: true,
+      stale: false,
+      algorithmDiagnostics: {
+        health: { status: 'healthy', algorithms: [] },
+        ledger: { total: 1, graded: 1, pending: 0 },
+        runtime: [],
+      },
+      evaluationReportProjection: malformed,
+    },
+  }));
+
+  const result = await tools.get_algorithm_diagnostics({});
+
+  assert.equal(result.evaluationReportProjection, null);
+});
+
 test('get_algorithm_diagnostics bounds and strips unexpected cohort detail', async () => {
   const lossRows = Array.from({ length: 12 }, (_, index) => ({
     key: `source-${index}\u0000`,
@@ -434,3 +483,52 @@ test('diagnostics tools rank invalid and uncertain resolution labels', async () 
     (finding) => finding.id === 'forecast.resolutions_late',
   ));
 });
+
+function evaluationProjectionFixture() {
+  return {
+    schemaVersion: 1,
+    generatedAt: 1_785_000_000_000,
+    forecast: {
+      total: 103,
+      resolved: 80,
+      pending: 20,
+      overduePending: 2,
+      expired: 3,
+      resolutionCoverage: 0.8,
+      expirationRate: 0.03,
+      metrics: {
+        brier: { status: 'ok', sampleSize: 80, value: 0.2 },
+        logLoss: { status: 'ok', sampleSize: 80, value: 0.4 },
+        brierSkill: { status: 'insufficient_evidence', sampleSize: 80, minSampleSize: 100 },
+        equalMassEce: { status: 'unavailable' },
+      },
+      largestVersionLossShare: 0.4,
+      quarantinedCount: 0,
+    },
+    champion: {
+      availability: 'available',
+      active: {
+        model: 'production',
+        version: '1.0.0',
+        activatedAt: 1_784_000_000_000,
+      },
+      challengers: [{
+        model: 'superforecast',
+        status: 'promotable',
+        evidenceCount: 40,
+        proxyShare: 0.1,
+        perDomain: [{ domain: 'weather', count: 40 }],
+        deltas: [{ metric: 'brier', delta: -0.02, ciLow: -0.04, ciHigh: -0.01 }],
+      }],
+      promotions: [{
+        at: 1_784_000_000_000,
+        kind: 'initial',
+        model: 'production',
+      }],
+      rejectionHistory: {
+        availability: 'unavailable',
+        reasonCode: 'no_runtime_rejection_history',
+      },
+    },
+  };
+}

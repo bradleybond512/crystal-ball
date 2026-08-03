@@ -44,7 +44,7 @@ test('get_capabilities reports domain readiness and credential coverage', async 
     name: 'crystalball',
     version: '0.3.0',
     skillContractVersion: 1,
-    tools: 59,
+      tools: 61,
     categories: 9,
   });
   assert.match(result.summary, /2 ready, 3 partial, 1 unavailable/);

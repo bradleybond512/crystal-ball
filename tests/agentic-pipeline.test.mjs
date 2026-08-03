@@ -241,6 +241,15 @@ test('the ESLint runner override selects its focused behavioral suite', () => {
   assert.deepEqual(result, { scripts: ['test:eslint-runner'], unmapped: [] });
 });
 
+test('the bundle budget policy override selects its focused behavioral suite', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:bundle-budget-policy': 'node --test tests/bundle-budget-policy.test.mjs',
+  });
+  const result = selectScripts(['scripts/bundle-budget-policy.mjs'], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:bundle-budget-policy'], unmapped: [] });
+});
+
 test('unmapped source files are reported across api/, tools/, and src-tauri/src/', () => {
   const index = deriveScriptIndex(SCRIPTS);
   const changed = [

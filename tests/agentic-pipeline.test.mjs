@@ -7,7 +7,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
-import { deriveScriptIndex, selectScripts, ciVerdict, isRunnerAllowlisted, commandToStages } from '../scripts/targeted-tests.mjs';
+import {
+  OVERRIDES,
+  deriveScriptIndex,
+  selectScripts,
+  ciVerdict,
+  isRunnerAllowlisted,
+  commandToStages,
+} from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -221,6 +228,15 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   const index = deriveScriptIndex(SCRIPTS);
   const { scripts } = selectScripts(['src/app/data-loader.ts'], index, { 'src/app/data-loader.ts': ['test:providers'] });
   assert.deepEqual(scripts, ['test:providers']);
+});
+
+test('the ESLint runner override selects its focused behavioral suite', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:eslint-runner': 'node --test tests/eslint-runner.test.mjs tests/lint-workflow.test.mjs',
+  });
+  const result = selectScripts(['scripts/run-eslint.mjs', 'scripts/lint-changed.mjs'], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:eslint-runner'], unmapped: [] });
 });
 
 test('unmapped source files are reported across api/, tools/, and src-tauri/src/', () => {

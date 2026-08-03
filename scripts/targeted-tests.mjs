@@ -39,6 +39,8 @@ export const OVERRIDES = {
   'scripts/verify-review-verdict.mjs': ['test:agentic-pipeline'],
   'scripts/targeted-tests.mjs': ['test:agentic-pipeline'],
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
+  'scripts/lint-changed.mjs': ['test:eslint-runner'],
+  'scripts/run-eslint.mjs': ['test:eslint-runner'],
 };
 
 const RUNNER_ALLOWLIST = [

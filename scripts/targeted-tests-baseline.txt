@@ -171,6 +171,7 @@ scripts/lint-colors.mjs
 scripts/lint-conflicts.mjs
 scripts/lint-json.mjs
 scripts/lint-markdown.mjs
+scripts/run-eslint.mjs
 scripts/lint-shell.mjs
 scripts/lint-yaml.mjs
 scripts/local-install.mjs

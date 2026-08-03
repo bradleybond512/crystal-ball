@@ -152,8 +152,16 @@ export interface BenchLearnedPairRow {
   /** The two event ids behind `key`, sorted, so the gate can rebuild it. */
   eventIdA: string;
   eventIdB: string;
-  /** Raw emissions of this pair by this rule. */
-  emissions: number;
+  /**
+   * Raw emissions, each carrying its own claim.
+   *
+   * A count is not a ledger of claims. While this was `emissions: number`,
+   * rewriting every learned rule from `causal-candidate` to `contradicts` — the
+   * opposite assertion, and a different evidence edge downstream — left all 101
+   * rows and the report digest byte-identical. Same reason `BenchPairRow` keeps
+   * `BenchPairEmission[]`; the learned ledger had simply been missed.
+   */
+  emissions: BenchPairEmission[];
 }
 
 export interface CorrelationBenchReport {
@@ -506,6 +514,17 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   };
 }
 
+/** One raw emission, keeping the claim the engine made rather than a tally. */
+function emissionOf(pair: CorrelatedPair): BenchPairEmission {
+  return {
+    ruleId: pair.ruleId,
+    edgeType: pair.edgeType,
+    fromId: pair.eventA.id,
+    toId: pair.eventB.id,
+    confidence: pair.confidence,
+  };
+}
+
 /**
  * Pass B's emissions, grouped one row per (rule, distinct event pair).
  *
@@ -523,10 +542,12 @@ function ledgerLearnedPairs(pairs: readonly CorrelatedPair[]): BenchLearnedPairR
       const [idA, idB] = pair.eventA.id < pair.eventB.id
         ? [pair.eventA.id, pair.eventB.id]
         : [pair.eventB.id, pair.eventA.id];
-      rows.set(rowKey, { ruleId: pair.ruleId, key, eventIdA: idA, eventIdB: idB, emissions: 1 });
+      rows.set(rowKey, {
+        ruleId: pair.ruleId, key, eventIdA: idA, eventIdB: idB, emissions: [emissionOf(pair)],
+      });
       continue;
     }
-    row.emissions += 1;
+    row.emissions.push(emissionOf(pair));
   }
   return [...rows.values()].sort((a, b) =>
     a.ruleId.localeCompare(b.ruleId) || a.key.localeCompare(b.key));
@@ -619,13 +640,7 @@ export function gradeEnginePairs(
       };
       rows.set(key, row);
     }
-    row.emissions.push({
-      ruleId: pair.ruleId,
-      edgeType: pair.edgeType,
-      fromId: pair.eventA.id,
-      toId: pair.eventB.id,
-      confidence: pair.confidence,
-    });
+    row.emissions.push(emissionOf(pair));
     if (touchesDecoy) row.decoyEmissions += 1;
     if (isTruePair) {
       emittedTrueKeys.add(key);

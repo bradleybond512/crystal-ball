@@ -133,6 +133,7 @@ api/youtube/live.js
 scripts/acc404-first-decision.mts
 scripts/backup-keys.sh
 scripts/baseline-pairing-benchmark.mts
+scripts/bundle-budget-policy.mjs
 scripts/build-military-bases-final.mjs
 scripts/build-sidecar-sebuf.mjs
 scripts/build-sidecar-xmpp.mjs

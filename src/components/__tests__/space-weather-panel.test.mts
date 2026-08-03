@@ -189,6 +189,44 @@ test('buildWindStrip warns when the reading is real but stale', () => {
   assert.equal(view.metaWarn, true);
 });
 
+test('buildWindStrip treats non-finite readings as missing, not as numbers', () => {
+  // NaN and Infinity survive a `=== null` check and format as "NaN km/s" with
+  // confident units. The badge helpers already call them unknown, so without
+  // this the number and its colour tell the user two different stories.
+  const view = buildWindStrip({
+    solarWindSpeed: Number.NaN,
+    solarWindDensity: Number.POSITIVE_INFINITY,
+    bz: Number.NaN,
+    windObservedAt: new Date(NOW).toISOString(),
+  }, NOW);
+  assert.deepEqual(view.cells.map((c) => c.value), ['—', '—', '—']);
+  assert.equal(view.meta, 'no solar-wind telemetry in this fetch');
+  assert.equal(view.metaWarn, true);
+});
+
+test('buildWindStrip does not call a missing Bz quiet', () => {
+  // Bz is the best short-horizon storm predictor there is. "Northward is quiet"
+  // off a null reading is the magnetometer going dark reported as an all-clear.
+  const view = buildWindStrip({
+    solarWindSpeed: 420, solarWindDensity: 4, bz: null, windObservedAt: null,
+  }, NOW);
+  assert.equal(view.cells[2]?.value, '—');
+  assert.equal(view.cells[2]?.sub, 'No magnetometer reading');
+  assert.notEqual(view.cells[2]?.sub, 'Northward is quiet');
+});
+
+test('windObservationAge reads a naïve SWPC stamp as UTC, not host-local', () => {
+  // SWPC ships "2026-05-06 11:30:00" with no zone. Bare Date.parse reads that
+  // as host-LOCAL, so a UTC-5 host would age it by an extra five hours and call
+  // a live reading stale — the same bug already fixed twice in the parse path.
+  const naive = '2026-05-06 11:30:00';
+  const r = windObservationAge(naive, NOW);
+  assert.equal(r.label, '30m ago');
+  assert.equal(r.stale, false);
+  // And it must agree with the explicitly-stamped form of the same instant.
+  assert.deepEqual(windObservationAge('2026-05-06T11:30:00Z', NOW), r);
+});
+
 test('windObservationAge tolerates the small forward skew of a propagated stamp', () => {
   // Rows are propagated from L1 to the bow shock, so a stamp a few minutes
   // ahead of the wall clock is routine. Beyond the tolerance it is corrupt.

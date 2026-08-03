@@ -135,6 +135,14 @@ export interface SpaceWxStatus {
   /** True iff peak X-ray flux ≥ 1e-4 W/m² in the window. */
   hfRadioBlackout: boolean;
   earthwardCmes: EarthwardCme[];
+  /**
+   * False when the CME feed did not answer. An empty `earthwardCmes` is
+   * otherwise ambiguous: "DONKI reports nothing Earthward" and "DONKI never
+   * replied" render identically, and the reassuring reading is the one the
+   * outage produces. Optional so an older cached envelope is not read as an
+   * outage — absent means "this producer predates the flag", not "down".
+   */
+  cmeFeedOk?: boolean;
   asOf: string;
 }
 

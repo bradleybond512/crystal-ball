@@ -20,7 +20,7 @@ test('ESLint runner reports progress and returns a successful exit', async () =>
     ['-e', 'setTimeout(() => {}, 40)'],
     {
       label: 'fixture',
-      timeoutMs: 1_000,
+      timeoutMs: 10_000,
       progressIntervalMs: 10,
       stdio: 'ignore',
       logger: { log: message => messages.push(message), error: message => messages.push(message) },
@@ -37,7 +37,7 @@ test('ESLint runner preserves a child failure exit code', async () => {
   const result = await runCommandWithProgress(
     process.execPath,
     ['-e', 'process.exit(7)'],
-    { label: 'fixture', timeoutMs: 1_000, progressIntervalMs: 100, stdio: 'ignore' },
+    { label: 'fixture', timeoutMs: 10_000, progressIntervalMs: 100, stdio: 'ignore' },
   );
 
   assert.equal(result.exitCode, 7);

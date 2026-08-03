@@ -164,7 +164,7 @@ Evidence (2026-08-02):
   idempotently and reported the same commit as already installed and healthy;
 - focused ESLint, `lint:strict`, `docs:check`, `secrets:scan`, and
   `typecheck:all` passed. The broad `test:data` run passed 810 of 812 tests;
-  the two failures are pre-existing REL-402/REL-406 inputs: a panels bundle
+  the two failures are pre-existing REL-404/REL-406 inputs: a panels bundle
   budget overage and a stale workflow action-pin assertion. The required
   agentic gate was executed and stopped at those same two failures.
 - security/privacy review found no new data collection, credentials, network

@@ -250,6 +250,20 @@ test('the bundle budget policy override selects its focused behavioral suite', (
   assert.deepEqual(result, { scripts: ['test:bundle-budget-policy'], unmapped: [] });
 });
 
+test('weekly evaluation report sources select their focused MCP suite', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:mcp-evaluation-report': 'node --test tools/mcp-server/__tests__/evaluation-report-tools.test.mjs tools/mcp-server/__tests__/weekly-evaluation-report.test.mjs',
+  });
+  const changed = [
+    'tools/mcp-server/local-lock.mjs',
+    'tools/mcp-server/tools/evaluation-report.mjs',
+    'tools/mcp-server/weekly-evaluation-report.mjs',
+  ];
+  const result = selectScripts(changed, index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:mcp-evaluation-report'], unmapped: [] });
+});
+
 test('unmapped source files are reported across api/, tools/, and src-tauri/src/', () => {
   const index = deriveScriptIndex(SCRIPTS);
   const changed = [

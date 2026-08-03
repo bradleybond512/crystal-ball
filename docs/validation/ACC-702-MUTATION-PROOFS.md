@@ -398,3 +398,35 @@ gap` recommended `resolve_overdue_predictions` instead of `restore_monitor`.
 After the five repair proofs, each confirmed a nonempty production diff before
 the red run. Every file checksum returned to its baseline, `git status --short`
 was empty, and `git diff --exit-code` returned 0.
+
+## 16. Targeted-test routing for the weekly report subsystem
+
+Baseline commit: `c891ccaa`.
+
+File: `scripts/targeted-tests.mjs`
+
+Baseline and restored SHA-256:
+`b7ff8b4c0a43a56d58ee24b6c260b43437915522e70cc63f66c27e55d06adda7`
+
+```diff
+-  'tools/mcp-server/local-lock.mjs': ['test:mcp-evaluation-report'],
+-  'tools/mcp-server/tools/evaluation-report.mjs': ['test:mcp-evaluation-report'],
+-  'tools/mcp-server/weekly-evaluation-report.mjs': ['test:mcp-evaluation-report'],
+```
+
+Command:
+
+```bash
+node --test tests/agentic-pipeline.test.mjs
+```
+
+Raw summary: `ℹ tests 26`, `ℹ pass 25`, `ℹ fail 1` (baseline: `26`,
+`0`).
+
+Failure: `weekly evaluation report sources select their focused MCP suite`
+reported all three production files as unmapped and selected no script,
+proving the focused suite cannot silently disappear from CI routing.
+
+The mutation produced a nonempty diff before the red run. The checksum returned
+to the baseline value, `git status --short` was empty, and the restored suite
+returned `ℹ pass 26`, `ℹ fail 0`.

@@ -604,6 +604,10 @@ tools/mcp-server/generate-docs.mjs
 tools/mcp-server/index.mjs
 tools/mcp-server/install-monitor.mjs
 tools/mcp-server/launch-agent.mjs
+# ACC-702 rollout bridge: main's trusted runner cannot see this PR's OVERRIDES.
+# The same commit maps these paths to test:mcp-evaluation-report; remove these
+# three bridge entries after that mapping is present on main.
+tools/mcp-server/local-lock.mjs
 tools/mcp-server/monitor-once.mjs
 tools/mcp-server/result.mjs
 tools/mcp-server/route-policy.mjs
@@ -617,6 +621,7 @@ tools/mcp-server/tools/aggregate.mjs
 tools/mcp-server/tools/analyst.mjs
 tools/mcp-server/tools/capabilities.mjs
 tools/mcp-server/tools/diagnostics.mjs
+tools/mcp-server/tools/evaluation-report.mjs
 tools/mcp-server/tools/foundation.mjs
 tools/mcp-server/tools/granular.mjs
 tools/mcp-server/tools/help.mjs
@@ -625,3 +630,4 @@ tools/mcp-server/tools/intelligence.mjs
 tools/mcp-server/tools/monitor-events.mjs
 tools/mcp-server/tools/monitor.mjs
 tools/mcp-server/tools/stateful.mjs
+tools/mcp-server/weekly-evaluation-report.mjs

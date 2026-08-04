@@ -95,7 +95,9 @@
         "get_monitor_status": "Read the latest persistent drift and quarantine monitor result.",
         "run_monitor_cycle": "Run and persist a drift and quarantine monitor cycle.",
         "diagnose_runtime": "Ranked live runtime findings with optional deep route probes.",
-        "get_algorithm_diagnostics": "Read bounded algorithm evaluation and tuning health."
+        "get_algorithm_diagnostics": "Read bounded algorithm evaluation and tuning health.",
+        "get_weekly_evaluation_report": "Read the latest or a selected completed weekly algorithm evaluation report.",
+        "generate_weekly_evaluation_report": "Finalize accumulated completed weeks into immutable local evaluation reports."
       }
     },
     "Help": {

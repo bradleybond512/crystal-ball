@@ -14,6 +14,10 @@ import { makeHelpTools, schemas as helpSchemas } from './tools/help.mjs';
 import { makeIntelExpansionTools } from './tools/intel-expansion.mjs';
 import { makeCapabilityTools } from './tools/capabilities.mjs';
 import {
+  makeEvaluationReportTools,
+  schemas as evaluationReportSchemas,
+} from './tools/evaluation-report.mjs';
+import {
   makeMonitorTools,
   monitorIntervalMs,
   schemas as monitorSchemas,
@@ -43,6 +47,7 @@ const monitor = makeMonitorTools({
   diagnostics,
   scheduleOptions: { expectedIntervalMs: monitorCadenceMs || undefined },
 });
+const evaluationReports = makeEvaluationReportTools({ storage });
 
 const server = new McpServer(
   { name: SERVER_NAME, version: SERVER_VERSION },
@@ -112,6 +117,12 @@ registerTool('get_monitor_status', monitorSchemas.get_monitor_status, async () =
 
 registerTool('run_monitor_cycle', monitorSchemas.run_monitor_cycle, async () =>
   textResult(await monitor.run_monitor_cycle()));
+
+registerTool('get_weekly_evaluation_report', evaluationReportSchemas.get_weekly_evaluation_report, async (args) =>
+  textResult(evaluationReports.get_weekly_evaluation_report(args)));
+
+registerTool('generate_weekly_evaluation_report', evaluationReportSchemas.generate_weekly_evaluation_report, async () =>
+  textResult(evaluationReports.generate_weekly_evaluation_report()));
 
 registerTool('sitrep_bundle', {
   description: 'Pre-filtered intelligence bundle with per-domain severity scores (1-5). Returns all domains in one call, pre-filtered by severity (quiet domains compressed). Use this instead of calling multiple aggregate tools.',

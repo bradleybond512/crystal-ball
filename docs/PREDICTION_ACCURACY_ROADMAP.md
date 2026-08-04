@@ -988,13 +988,15 @@ Phase exit:
 
 ### ACC-701 — Drift and cohort-health monitor
 
-Status: `IN REVIEW`
+Status: `DONE`
 
 Owner: Codex
 
 Branch: `codex/acc-701-mcp-hardening`
 
 Evidence: PR #1597
+
+Merged: `93d94aa1`
 
 Verification: the MCP monitor persists bounded snapshots and deduplicated
 findings for holdout Brier regression, feed readiness changes, evaluation
@@ -1022,7 +1024,26 @@ Detect:
 
 ### ACC-702 — Scheduled evaluation report
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-702-scheduled-evaluation-report`
+
+Evidence: PR #1618
+
+Implementation: `59a822eb`, `b8ce8d05`, `4676530f`
+
+Mutation evidence: `docs/validation/ACC-702-MUTATION-PROOFS.md`
+
+Verification: weekly UTC aggregation, bounded catch-up and retention,
+privacy allowlists, stale and unavailable diagnostics, committed-generation
+gating, immutable mode-0600 persistence, CLI/MCP registration, portable
+package installation, cadence-completeness enforcement, and fifteen mutation
+proofs passed. Repaired weekly and monitor validation finished at 46 pass / 0
+fail; the full MCP suite finished at 199 pass / 0 fail. Cognition regression
+finished at 654 pass / 0 fail and the frozen benchmark remained Brier 0.1681,
+conformal coverage 100.0%, analog precision@5 75.0%, and schema TPR 75.0%.
 
 Dependencies: ACC-701
 

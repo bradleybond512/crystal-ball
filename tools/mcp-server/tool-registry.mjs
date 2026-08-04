@@ -151,6 +151,8 @@ const CATEGORY_TOOLS = {
     run_monitor_cycle: 'Run and persist a drift and quarantine monitor cycle.',
     diagnose_runtime: 'Ranked live runtime findings with optional deep route probes.',
     get_algorithm_diagnostics: 'Read bounded algorithm evaluation and tuning health.',
+    get_weekly_evaluation_report: 'Read the latest or a selected completed weekly algorithm evaluation report.',
+    generate_weekly_evaluation_report: 'Finalize accumulated completed weeks into immutable local evaluation reports.',
   },
   Help: {
     help: 'Read the tool index, man pages, conceptual guides, and examples.',
@@ -164,6 +166,8 @@ const ANNOTATION_OVERRIDES = {
   get_pipeline_trace: READ_ONLY_LOCAL,
   get_algorithm_diagnostics: READ_ONLY_LOCAL,
   get_monitor_status: READ_ONLY_LOCAL,
+  get_weekly_evaluation_report: READ_ONLY_LOCAL,
+  generate_weekly_evaluation_report: { ...MUTATING_LOCAL, idempotentHint: true },
   run_monitor_cycle: MUTATING_REMOTE,
   watchlist_manage: DESTRUCTIVE_LOCAL,
   watchlist_check: MUTATING_REMOTE,

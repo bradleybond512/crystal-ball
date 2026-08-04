@@ -8,6 +8,8 @@ import {
   readLocalMonitorStatus,
 } from './doctor.mjs';
 import { buildEvidencePacket, writeEvidencePacket } from './evidence-packet.mjs';
+import { createStorage } from './storage.mjs';
+import { makeEvaluationReportTools, parseEvaluationWeek } from './tools/evaluation-report.mjs';
 import { runSafeguardDemo } from './safeguard-demo.mjs';
 import { COMPATIBILITY } from './server-meta.mjs';
 import { TOOL_CATALOG } from './tool-registry.mjs';
@@ -20,6 +22,8 @@ Commands:
   doctor [--json]                 Check install, runtime, clients, monitor, and compatibility
   capabilities [--json]           List tools and their plain-language permissions
   monitor [--json]                Read the latest local safety-monitor status
+  evaluation-report [--json] [--week YYYY-MM-DD] [--generate]
+                                   Read or finalize completed UTC weekly evaluations
   safeguard-demo [--json]         Run a synthetic read-only boundary demonstration
   evidence --input FILE --output FILE [--json]
                                    Export a redacted Evidence Packet v1
@@ -55,6 +59,17 @@ try {
       && state.schedule?.status === 'running'
       ? DOCTOR_EXIT.READY
       : DOCTOR_EXIT.DEGRADED;
+  } else if (command === 'evaluation-report') {
+    const options = evaluationReportOptions(args);
+    const tools = makeEvaluationReportTools({ storage: createStorage() });
+    const generated = options.generate
+      ? tools.generate_weekly_evaluation_report()
+      : null;
+    const result = options.week || !options.generate
+      ? tools.get_weekly_evaluation_report(options.week ? { week: options.week } : {})
+      : generated;
+    output(result, options.json, formatEvaluationReport(result, options.generate));
+    process.exitCode = result.available ? DOCTOR_EXIT.READY : DOCTOR_EXIT.UNAVAILABLE;
   } else if (command === 'safeguard-demo') {
     const report = runSafeguardDemo();
     output(report, json, `${report.passed ? 'PASS' : 'FAIL'}: ${report.summary}\n`);
@@ -87,6 +102,55 @@ function output(value, asJson, human) {
 function optionValue(args, name) {
   const index = args.indexOf(name);
   return index === -1 ? null : args[index + 1] ?? null;
+}
+
+function evaluationReportOptions(args) {
+  const result = { json: false, generate: false, week: null };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--json') {
+      if (result.json) usageError('evaluation-report accepts --json only once.');
+      result.json = true;
+      continue;
+    }
+    if (arg === '--generate') {
+      if (result.generate) usageError('evaluation-report accepts --generate only once.');
+      result.generate = true;
+      continue;
+    }
+    if (arg === '--week') {
+      if (result.week !== null) usageError('evaluation-report accepts --week only once.');
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) usageError('evaluation-report requires a value after --week.');
+      try {
+        parseEvaluationWeek(value);
+      } catch (error) {
+        usageError(error.message);
+      }
+      result.week = value;
+      index += 1;
+      continue;
+    }
+    usageError(`Unknown evaluation-report option: ${arg}`);
+  }
+  return result;
+}
+
+function formatEvaluationReport(result, generated) {
+  if (!result.available) {
+    return `Weekly evaluation unavailable (${result.reasonCode}).\n`;
+  }
+  if (generated && Array.isArray(result.reports)) {
+    return `Weekly evaluation generation complete: ${result.finalizedReports.length} finalized; ${result.reports.length} report(s) available.\n`;
+  }
+  const report = result.report;
+  const week = new Date(report.period.weekStart).toISOString().slice(0, 10);
+  return [
+    `Weekly evaluation ${week} UTC: ${report.availability}`,
+    `Observations: ${report.coverage.observations} (${report.coverage.fresh} fresh)`,
+    `Next recommendation: ${report.nextRecommendedTask.code}`,
+    '',
+  ].join('\n');
 }
 
 function usageError(message) {

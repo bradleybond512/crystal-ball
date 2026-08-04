@@ -27,7 +27,7 @@ test('doctor runs independent privacy-safe checks and reports compatible health'
   assert.equal(JSON.stringify(report).includes('secret'), false);
   assert.equal(JSON.stringify(report).includes('/Users/alice'), false);
   assert.equal(report.compatibility.verdict, 'compatible');
-  assert.equal(report.capabilities.tools, 59);
+  assert.equal(report.capabilities.tools, 61);
 });
 
 test('doctor continues partial checks and uses stable degraded and unavailable exit codes', async () => {

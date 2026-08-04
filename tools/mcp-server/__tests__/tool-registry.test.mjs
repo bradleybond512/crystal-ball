@@ -49,7 +49,7 @@ test('createToolConfig adds annotations and a structured output schema', () => {
 });
 
 test('catalog summary reflects the canonical registry', () => {
-  assert.match(catalogSummary(), /^59 tools across 9 categories$/);
+  assert.match(catalogSummary(), /^61 tools across 9 categories$/);
 });
 
 test('checked-in help index is generated from the canonical registry', async () => {
@@ -69,6 +69,8 @@ test('package metadata and executable match the server contract', async () => {
   assert.equal(packageJson.bin['crystalball-monitor'], './monitor-once.mjs');
   assert.equal(packageJson.bin['crystalball-monitor-install'], './install-monitor.mjs');
   assert.equal(packageJson.bin.crystalball, './cli.mjs');
+  assert.ok(packageJson.files.includes('local-lock.mjs'));
+  assert.ok(packageJson.files.includes('weekly-evaluation-report.mjs'));
   assert.match(indexSource, /^#!\/usr\/bin\/env node/);
   assert.ok(indexStat.mode & 0o111);
   assert.ok(monitorStat.mode & 0o111);

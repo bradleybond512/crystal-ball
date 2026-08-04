@@ -110,6 +110,32 @@ test('refresh routes only promoting edges into learned rules and publishes inhib
   assert.equal(getInhibitorySnapshot(123)?.evidence[0]?.from, 'wildfire');
 });
 
+test('default cadence miner uses now as complete coverage and publishes mature inhibition', () => {
+  const base = 1_000_000_000;
+  const history = Array.from({ length: 20 }, (_, index) => {
+    const day = base + index * 24 * HOUR_MS;
+    return [
+      { domain: 'a', at: day },
+      { domain: 'b', at: day + 8 * HOUR_MS },
+      { domain: 'b', at: day + 16 * HOUR_MS },
+    ];
+  }).flat();
+  const now = base + 20 * 24 * HOUR_MS;
+
+  refreshLearnedCascades(history, {
+    now,
+    engine: engine(),
+    inhibitionEnabled: () => true,
+  });
+
+  const evidence = getInhibitorySnapshot(now)?.evidence
+    .find((item) => item.from === 'a' && item.to === 'b');
+  assert.ok(evidence, 'mature absent-follow trials must reach the production snapshot');
+  assert.equal(evidence.support, 0);
+  assert.equal(evidence.antecedents, 20);
+  assert.equal(evidence.windowMs, 6 * HOUR_MS);
+});
+
 test('refresh evaluates the previous snapshot before replacement and stores anonymous counts only', () => {
   const previous = { ...inhibitory('a', 'b'), windowMs: 10 };
   replaceInhibitorySnapshot([previous], 4, 100);

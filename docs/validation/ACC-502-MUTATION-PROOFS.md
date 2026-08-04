@@ -1,7 +1,7 @@
 # ACC-502 Mutation Proofs
 
 Date: 2026-08-04  
-Reviewed implementation commit: `e851a7e15c84aead2cf2d916a771ddf7582379f7`
+Reviewed implementation commit: `aadd71a284b3dec2027363ba3b079ed2b37c1888`
 
 This audit replaces the earlier ACC-502 evidence in full. The obsolete score
 dampening proof is intentionally absent because inhibitory evidence is now
@@ -19,7 +19,7 @@ a `node_modules` symlink.
 
 - File: `src/services/correlation/lead-lag.ts`
 - Original SHA-256:
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`
 - Mutation: removed the `windows.length` multiplier from `pairWindowTests`.
 - Applied diff:
 
@@ -53,13 +53,13 @@ a `node_modules` symlink.
   `criticalAbsZ: 3.396563261826216`; actual values were `4` and
   `3.1859610214922047`.
 - Restored SHA-256:
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Restored `git status --short` raw output: `""`.
 
 ## 2. The correction remains two-tailed
 
 - File and original SHA-256: `src/services/correlation/lead-lag.ts`,
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Mutation: removed the two-tail factor from the critical-value expression.
 - Applied diff:
 
@@ -84,13 +84,13 @@ a `node_modules` symlink.
 - Failing assertion: deep equality expected
   `criticalAbsZ: 3.396563261826216`; actual was `3.1859610214922047`.
 - Restored SHA-256:
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Restored `git status --short` raw output: `""`.
 
 ## 3. Zero-support trials remain eligible for inhibitory discovery
 
 - File and original SHA-256: `src/services/correlation/lead-lag.ts`,
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Mutation: required positive support before retaining an inhibitory edge.
 - Applied diff:
 
@@ -124,13 +124,13 @@ a `node_modules` symlink.
 
 - Failing assertion: `assert.ok(inhibitory)` received `undefined`.
 - Restored SHA-256:
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Restored `git status --short` raw output: `""`.
 
 ## 4. Inhibitory admission retains antecedent and base-rate gates
 
 - File and original SHA-256: `src/services/correlation/lead-lag.ts`,
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Command for both independent sub-mutations:
 
   ```sh
@@ -191,7 +191,7 @@ a `node_modules` symlink.
 - Failing assertion:
   `assert.ok(!lowBase.inhibitory.some((edge) => edge.from === 'a' && edge.to === 'b'))`.
 - Restored SHA-256:
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Restored `git status --short` raw output: `""`.
 
 ## 5. Inhibitory edges cannot become learned promoting rules
@@ -200,7 +200,7 @@ a `node_modules` symlink.
   - `src/services/correlation/learned-rules.ts`:
     `5f96ebbd460397ef75aef59ec50023d4b4e5d6a3420aed5975b6943a2bb38546`
   - `src/services/intelligence/cascade-registration.ts`:
-    `d256c15f12f33568ba4dcdae1aa63ae15de78c0f0dcee7d8ea50eb9adc6d390b`
+    `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`
 - Mutation: widened the learned-rule API to the promoting/inhibitory union and
   routed both result sets into synthesis.
 - Applied diff:
@@ -251,7 +251,7 @@ a `node_modules` symlink.
 ## 6. Expired snapshots are neutral
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Mutation and applied diff:
 
   ```diff
@@ -368,7 +368,7 @@ a `node_modules` symlink.
 ## 9. Invalid rows cannot alter the observation span
 
 - File and original SHA-256: `src/services/correlation/lead-lag.ts`,
-  `243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7`.
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Mutation and applied diff:
 
   ```diff
@@ -406,7 +406,7 @@ a `node_modules` symlink.
 ## 10. Snapshot publication enforces statistical admission
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Mutation and applied diff:
 
   ```diff
@@ -442,7 +442,7 @@ a `node_modules` symlink.
 ## 11. Shadow evaluation preserves direction and window semantics
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Mutation and applied diff:
 
   ```diff
@@ -608,7 +608,7 @@ a `node_modules` symlink.
 
 - File and original SHA-256:
   `src/services/intelligence/cascade-registration.ts`,
-  `d256c15f12f33568ba4dcdae1aa63ae15de78c0f0dcee7d8ea50eb9adc6d390b`.
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
 - Command for both independent sub-mutations:
 
   ```sh
@@ -666,13 +666,13 @@ a `node_modules` symlink.
 - Failing assertion: expected diagnostic status `'error'`; actual retained
   status was `'fresh'`.
 - Restored SHA-256:
-  `d256c15f12f33568ba4dcdae1aa63ae15de78c0f0dcee7d8ea50eb9adc6d390b`.
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
 - Restored `git status --short` raw output: `""`.
 
 ## 16. The 1,000-event bound keeps the newest valid events
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Mutation and applied diff:
 
   ```diff
@@ -710,7 +710,7 @@ a `node_modules` symlink.
 
 - Files and original SHA-256 values:
   - `src/services/intelligence/cascade-registration.ts`:
-    `d256c15f12f33568ba4dcdae1aa63ae15de78c0f0dcee7d8ea50eb9adc6d390b`
+    `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`
   - `src/services/algorithms/algorithm-diagnostics.ts`:
     `4edb481454b74a54995d932f6b121a4d7bca3e2c12c88681abb146d1cbfaaf1d`
 - Mutation: removed shadow evaluation from the learned-cascade refresh path and
@@ -759,7 +759,7 @@ a `node_modules` symlink.
 ## 18. Relevant-domain allocation prevents global and cross-domain starvation
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Mutation: replaced the fair relevant-domain allocator with the prior global
   valid-event sort and newest-1,000 slice.
 - Applied diff:
@@ -841,13 +841,13 @@ a `node_modules` symlink.
   - The cross-relevant-domain fairness case also expected `confirmed: 1`;
     actual was `0` after the newer domain consumed the global bound.
 - Restored SHA-256:
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Restored `git status --short` raw output: `""`.
 
 ## 19. Empty statistical admission clears active and fresh state
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
 - Mutation: removed the `evidence.length === 0` fail-closed branch.
 - Applied diff:
 
@@ -898,7 +898,238 @@ a `node_modules` symlink.
 - Probe failing assertion: expected `'unavailable'`; actual was `'fresh'`.
   The temporary probe was removed before restoration verification.
 - Restored SHA-256:
-  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
+- Restored `git status --short` raw output: `""`.
+
+## 20. Finite zero-admission cadence invalidates prior diagnostics
+
+- File and original SHA-256:
+  `src/services/intelligence/cascade-registration.ts`,
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
+- Mutation: used `clearInhibitorySnapshot()` instead of
+  `invalidateInhibitorySnapshot()` after a finite refresh admitted no
+  inhibitory evidence.
+- Applied diff:
+
+  ```diff
+  @@ -79,7 +79,7 @@ export function refreshLearnedCascades(
+         return;
+       }
+       if (!result.family || result.inhibitory.length === 0) {
+  -      if (Number.isFinite(now)) invalidateInhibitorySnapshot();
+  +      if (Number.isFinite(now)) clearInhibitorySnapshot();
+         else clearInhibitorySnapshot();
+         return;
+       }
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='zero-admission refresh clears the active snapshot' \
+    src/services/intelligence/__tests__/cascade-registration.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: diagnostics expected status `'unavailable'`, null
+  timestamps, and zero counts; actual status remained `'fresh'` for snapshot
+  `100`, evaluated at `120`, with `evidenceEvaluated: 1` and `confirmed: 1`.
+- Restored SHA-256:
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
+- Restored `git status --short` raw output: `""`.
+
+## 21. Non-finite replacement invalidates prior diagnostics
+
+- File and original SHA-256: `src/services/correlation/inhibition.ts`,
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
+- Mutation: used `clearInhibitorySnapshot()` instead of
+  `invalidateInhibitorySnapshot()` when `publishedAt` was non-finite.
+- Applied diff:
+
+  ```diff
+  @@ -48,7 +48,7 @@ export function replaceInhibitorySnapshot(
+     publishedAt: number = Date.now(),
+   ): InhibitorySnapshot {
+     if (!Number.isFinite(publishedAt)) {
+  -    invalidateInhibitorySnapshot();
+  +    clearInhibitorySnapshot();
+       return NEUTRAL_SNAPSHOT;
+     }
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='non-finite publication time invalidates' \
+    src/services/correlation/__tests__/inhibition.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: diagnostics expected status `'unavailable'`, null
+  timestamps, and zero evidence; actual status remained `'fresh'`, evaluated
+  at snapshot publication time `1785844800000`, with `evidenceEvaluated: 1`.
+- Restored SHA-256:
+  `841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211`.
+- Restored `git status --short` raw output: `""`.
+
+## 22. Inhibition uses only antecedents with complete follow windows
+
+- File and original SHA-256: `src/services/correlation/lead-lag.ts`,
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Mutation: replaced the explicit-coverage maturity guard with all
+  antecedents, including pending trials and histories with no coverage end.
+- Applied diff:
+
+  ```diff
+  @@ -271,9 +271,7 @@ function bestEdgesAcrossWindows(
+         const edge = promotingEdge(promotingTrial);
+         if (!bestPromoting || comparePromoting(edge, bestPromoting) < 0) bestPromoting = edge;
+       }
+  -    const matureAntecedents = observationEndMs === undefined
+  -      ? []
+  -      : antecedents.filter((at) => at <= observationEndMs - windowMs);
+  +    const matureAntecedents = antecedents;
+       if (matureAntecedents.length === 0) continue;
+       const inhibitoryTrial = minePair(
+         from,
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='right-censors antecedents|omitted observation coverage fails closed' \
+    src/services/correlation/__tests__/lead-lag.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 2
+  ℹ pass 0
+  ℹ fail 2
+  ```
+
+- Failing assertions:
+  - Right-censoring expected `antecedents: 20`; the mutation counted the three
+    pending boundary trials and returned `23`.
+  - Omitted observation coverage expected no `a→b` inhibitory edge; the
+    mutation emitted one.
+- Restored SHA-256:
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Restored `git status --short` raw output: `""`.
+
+## 23. Events after the observation boundary cannot enter mining
+
+- File and original SHA-256: `src/services/correlation/lead-lag.ts`,
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Mutation: removed the `event.at <= observationEndMs` boundary filter.
+- Applied diff:
+
+  ```diff
+  @@ -104,9 +104,7 @@ export function mineLeadLag(
+       return emptyMiningResult();
+     }
+
+  -  const validEvents = events.filter((event) =>
+  -    isValidDomainEvent(event)
+  -      && (observationEndMs === undefined || event.at <= observationEndMs));
+  +  const validEvents = events.filter((event) => isValidDomainEvent(event));
+     const byDomain = groupTimesByDomain(validEvents);
+     const promotingSpanMs = observedSpanMs(validEvents, undefined);
+     const inhibitorySpanMs = observedSpanMs(validEvents, observationEndMs);
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='explicit observation coverage excludes later events' \
+    src/services/correlation/__tests__/lead-lag.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: contaminated mining no longer deep-equaled the covered
+  baseline. It gained an `a→b` promoting candidate with `support: 1` and
+  changed both inhibitory edges' expected rates and z-scores.
+- Restored SHA-256:
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Restored `git status --short` raw output: `""`.
+
+## 24. Explicit inhibition coverage cannot distort promoting statistics
+
+- File and original SHA-256: `src/services/correlation/lead-lag.ts`,
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Mutation: used the silent coverage-through-end span for promoting trials as
+  well as inhibitory trials.
+- Applied diff:
+
+  ```diff
+  @@ -108,7 +108,7 @@ export function mineLeadLag(
+       isValidDomainEvent(event)
+         && (observationEndMs === undefined || event.at <= observationEndMs));
+     const byDomain = groupTimesByDomain(validEvents);
+  -  const promotingSpanMs = observedSpanMs(validEvents, undefined);
+  +  const promotingSpanMs = observedSpanMs(validEvents, observationEndMs);
+     const inhibitorySpanMs = observedSpanMs(validEvents, observationEndMs);
+     if (promotingSpanMs <= 0) return emptyMiningResult();
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='silent explicit coverage does not change promoting statistics|pins the live run, and re-pins it identically' \
+    src/services/correlation/__tests__/lead-lag.test.mts \
+    src/services/correlation/__tests__/bench-correlation.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 2
+  ℹ pass 0
+  ℹ fail 2
+  ```
+
+- Failing assertions:
+  - Positive statistics expected `expectedRate: 0.06920214070383657`,
+    `lift: 14.450420027896044`, and `zScore: 8.983458140792791`; the silent
+    coverage mutation returned `0.03535970651687692`,
+    `28.280777712979816`, and `12.793930837622925`.
+  - The benchmark expected committed report digest
+    `354a7790613214a893698b1882eda0ae`; actual mutated digest was
+    `6d5cae0c4b784d99757745bfbfb28a5b`.
+- Restored SHA-256:
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Restored `git status --short` raw output: `""`.
 
 ## Restored-state verification
@@ -909,7 +1140,7 @@ fully restored implementation:
 ```sh
 NODE_OPTIONS=--disable-warning=ExperimentalWarning \
   /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
-  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|algorithm diagnostics expose only bounded anonymous' \
+  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|non-finite publication time invalidates|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|zero-admission refresh clears the active snapshot|algorithm diagnostics expose only bounded anonymous|right-censors antecedents|omitted observation coverage fails closed|explicit observation coverage excludes later events|inhibitory base rate includes silent coverage|silent explicit coverage does not change promoting statistics|pins the live run, and re-pins it identically' \
   src/services/correlation/__tests__/lead-lag.test.mts \
   src/services/correlation/__tests__/learned-rules-boundary.test.mts \
   src/services/intelligence/__tests__/cascade-registration.test.mts \
@@ -925,19 +1156,19 @@ NODE_OPTIONS=--disable-warning=ExperimentalWarning \
 Final raw result lines:
 
 ```text
-ℹ tests 22
-ℹ suites 1
-ℹ pass 22
+ℹ tests 30
+ℹ suites 2
+ℹ pass 30
 ℹ fail 0
 ```
 
 Final restored implementation checksums:
 
 ```text
-243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7  src/services/correlation/lead-lag.ts
+25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c  src/services/correlation/lead-lag.ts
 5f96ebbd460397ef75aef59ec50023d4b4e5d6a3420aed5975b6943a2bb38546  src/services/correlation/learned-rules.ts
-d256c15f12f33568ba4dcdae1aa63ae15de78c0f0dcee7d8ea50eb9adc6d390b  src/services/intelligence/cascade-registration.ts
-ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b  src/services/correlation/inhibition.ts
+7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae  src/services/intelligence/cascade-registration.ts
+841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211  src/services/correlation/inhibition.ts
 7129502d4e0e708f7471def6acca68bbcd0390af5961da77747a3c0052a9b0ca  src/services/insights/notification-ladder.ts
 b04d5cd12aadc9ac53b3f3008fca007b4a1e007773ecec10a2745f20a9a336bb  src/services/correlation/bench-correlation-baseline.ts
 a29ee6c4dfe548441a1ffa399d53fbc3ca8412a4016b7c825d2c5ee8cb099412  src/services/correlation/compound-risk-cadence.ts

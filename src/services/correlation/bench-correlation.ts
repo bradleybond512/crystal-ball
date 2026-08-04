@@ -33,6 +33,7 @@ import {
   CorrelateEngine, type CorrelatedPair, type CorrelationRule, type EdgeType,
 } from '../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../intelligence/built-in-correlation-rules';
+import { pairToEdge } from '../intelligence/situation-store-v2';
 import {
   mineLeadLag,
   type InhibitoryLeadLagEdge,
@@ -48,6 +49,7 @@ import {
 import {
   allGoldenObservations,
   decoyEventIds,
+  digestRecords,
   goldenCorpusDigest,
   goldenStreamDigests,
   pairKeyFor,
@@ -128,6 +130,36 @@ export interface BenchPairEmission {
   fromId: string;
   toId: string;
   confidence: number;
+  /**
+   * `detectedAt` as epoch ms — the pair's own recency, which downstream filters
+   * on.
+   *
+   * Constant here by construction (the benchmark injects a fixed `now`), and
+   * pinned anyway: replacing `correlate-engine.ts:136`'s `detectedAt: now` with
+   * `new Date(0)` left every count, every rate and the report digest identical,
+   * while live pairs would have been discarded as ancient the moment they were
+   * emitted.
+   */
+  detectedAtMs: number;
+  /**
+   * Digest over the confidence FACTORS, not just the scalar they collapse to.
+   *
+   * `confidence` is one number six factors multiply into, so dropping
+   * `confidenceDetail` entirely preserved it — and with it every mean, every
+   * separation and the digest — while the analyst-facing explanation and the
+   * factor chips silently became undefined. `null` when the emission carries no
+   * detail at all, which is itself the regression, visible as a moved digest.
+   */
+  confidenceDetailDigest: string | null;
+  /**
+   * The evidence-graph edge type SituationStoreV2 projects this pair to, via the
+   * real `pairToEdge()`. `edgeType` above is the engine's raw claim; this is
+   * what the analyst is actually told.
+   */
+  evidenceEdgeType: string;
+  /** Projected endpoints — direction survives the translation, or it does not. */
+  evidenceFromId: string;
+  evidenceToId: string;
 }
 
 /**
@@ -223,6 +255,18 @@ export interface CorrelationBenchReport {
    * to match their positive and reject their near-miss.
    */
   ruleProbes: BenchRuleProbe[];
+  /**
+   * The learned-rule SYNC lifecycle, exercised on a live engine.
+   *
+   * Every other learned-rule number here comes from `runEngine()`, which builds
+   * a fresh engine every time — so it can only ever observe an install, never a
+   * removal. Deleting `engine.unregisterRule(existing.id)` from
+   * `syncLearnedRules()` left a retired coupling permanently installed and still
+   * matching live events, while the function REPORTED it removed and the whole
+   * benchmark passed unchanged. This probe re-syncs one engine with a smaller
+   * set and records what is actually installed afterwards.
+   */
+  learnedRuleResync: BenchResyncProbe;
   /**
    * Built-in rules that emitted at least one pair over the corpus, sorted.
    *
@@ -514,6 +558,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     streamDigests: goldenStreamDigests(),
     builtInRuleIds: builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b)),
     ruleProbes: probeBuiltInRules(),
+    learnedRuleResync: probeLearnedRuleResync(learnedRules),
     ruleCoverage: builtInCorrelationRules
       .map((r) => r.id)
       .filter((id) => emittingRules.has(id))
@@ -613,7 +658,55 @@ function emissionOf(pair: CorrelatedPair): BenchPairEmission {
     fromId: pair.eventA.id,
     toId: pair.eventB.id,
     confidence: pair.confidence,
+    detectedAtMs: pair.detectedAt.getTime(),
+    confidenceDetailDigest: confidenceDetailDigest(pair),
+    ...projectedEdge(pair),
   };
+}
+
+/**
+ * The pair as SituationStoreV2 actually projects it — the shape the evidence
+ * graph and the analyst see.
+ *
+ * Everything else in this ledger describes the engine's own output, one
+ * translation short of production. `EDGE_TYPE_MAP` is that translation, and
+ * inverting a row of it ('causal-candidate' → contradicts) emitted real
+ * situation edges claiming the opposite relationship while the benchmark, digest
+ * included, read unchanged. So the benchmark calls the real projection rather
+ * than restating the mapping it is supposed to be checking.
+ */
+function projectedEdge(pair: CorrelatedPair): {
+  evidenceEdgeType: string;
+  evidenceFromId: string;
+  evidenceToId: string;
+} {
+  const edge = pairToEdge(pair);
+  return {
+    evidenceEdgeType: edge.type,
+    evidenceFromId: edge.sourceEventId,
+    evidenceToId: edge.targetEventId,
+  };
+}
+
+/**
+ * The factor breakdown behind `confidence`, as a digest.
+ *
+ * Factor VALUES rather than the explanation string alone: the explanation is
+ * rendered prose and would move on any wording change, while the six factors
+ * are the claim. Sorted by key so the record does not depend on how
+ * `computeEdgeConfidence` happens to build the object.
+ */
+function confidenceDetailDigest(pair: CorrelatedPair): string | null {
+  const detail = pair.confidenceDetail;
+  if (detail === undefined) return null;
+  const factors = detail.factors as unknown as Record<string, number>;
+  return digestRecords([
+    `value:${detail.value}`,
+    `explained:${detail.explanation.length > 0}`,
+    ...Object.keys(factors)
+      .sort((a, b) => a.localeCompare(b))
+      .map((k) => `${k}:${factors[k]}`),
+  ]);
 }
 
 /**
@@ -651,6 +744,62 @@ function ledgerLearnedPairs(pairs: readonly CorrelatedPair[]): BenchLearnedPairR
  * must not leak into the built-ins-only measurement, so pass A and pass B never
  * share an instance. `timer: () => 0` removes the only clock read in the engine.
  */
+/**
+ * What `syncLearnedRules()` leaves installed across a retirement.
+ *
+ * `getRules()` after the fact, not the {added, removed} the function returns:
+ * those counters are the CLAIM, and the defect this catches is precisely a
+ * claim that no longer matches the engine.
+ */
+export interface BenchResyncProbe {
+  /** learned:* ids installed after syncing the full mined set, sorted. */
+  installed: readonly string[];
+  /** The id deliberately retired on the second sync. */
+  retiredId: string;
+  /** learned:* ids installed after the retirement, sorted — must exclude `retiredId`. */
+  afterRetirement: readonly string[];
+  /** The second sync's own report of what it did. */
+  reportedAdded: number;
+  reportedRemoved: number;
+  /** Built-in ids present and unchanged after both syncs — sync must not touch them. */
+  builtInsIntact: boolean;
+}
+
+function probeLearnedRuleResync(learned: readonly CorrelationRule[]): BenchResyncProbe {
+  const engine = new CorrelateEngine({ timer: () => 0 });
+  for (const rule of builtInCorrelationRules) engine.registerRule(rule);
+  const builtInIds = builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b));
+
+  const learnedIdsOf = (): string[] => engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  syncLearnedRules(engine, learned);
+  const installed = learnedIdsOf();
+
+  // Retire the LAST rule by id order rather than the first: a first-element
+  // retirement is the one case a truncating loop bug would also produce.
+  const retiredId = installed[installed.length - 1] ?? '';
+  const kept = learned.filter((r) => r.id !== retiredId);
+  const { added, removed } = syncLearnedRules(engine, kept);
+
+  const nowBuiltIn = engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => !id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    installed,
+    retiredId,
+    afterRetirement: learnedIdsOf(),
+    reportedAdded: added,
+    reportedRemoved: removed,
+    builtInsIntact: nowBuiltIn.length === builtInIds.length
+      && nowBuiltIn.every((id, i) => id === builtInIds[i]),
+  };
+}
+
 function runEngine(
   observations: readonly ObservationEvent[],
   learned: readonly CorrelationRule[] = [],

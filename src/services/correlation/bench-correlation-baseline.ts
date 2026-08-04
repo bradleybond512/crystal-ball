@@ -55,6 +55,7 @@ import {
   corpusDomains, decoyEventIds, digestRecords, pairKeyFor, plantedCouplingIndex,
   plantedTruePairKeys,
 } from './__bench__/golden-streams';
+import { verifyRuleProbes } from './__bench__/rule-probe-verify';
 import { DEFAULT_WINDOWS_MS, type MultipleTestingFamily } from './lead-lag';
 import { LEARNED_RULE_PREFIX, learnedRuleId } from './learned-rules';
 
@@ -147,7 +148,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 12;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 13;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -233,6 +234,97 @@ export interface CorrelationBenchBaseline {
   witnessed: CorrelationBenchWitnessed;
 
   tolerances: CorrelationBenchTolerances;
+}
+
+/**
+ * The v12 → v13 transition: ADDITIVE ONLY.
+ *
+ * Round 15 adds observations to the report (independent probe re-execution,
+ * reversed positives, per-branch disjunct positives, the real `pairToEdge()`
+ * projection, a learned-rule retirement probe, `detectedAt` and the confidence
+ * breakdown). It changes no corpus and no engine behaviour, so the honest
+ * statement of this migration is that EVERY graded number and every corpus
+ * digest is byte-identical and only `reportDigest` moves — because the report
+ * now carries fields it did not carry before.
+ *
+ * That is a stronger claim than the ordinary one-sided tolerances make, and it
+ * is the only claim that fits: a schema bump short-circuits the normal
+ * comparator before its tolerance loop runs, so without this the re-seed would
+ * be waved through by a check that never executed.
+ */
+export interface CorrelationBenchMigrationV12ToV13 {
+  fromSchemaVersion: 12;
+  toSchemaVersion: 13;
+  previousCorpusDigest: string;
+  previousReportDigest: string;
+  reason: string;
+}
+
+export const CORRELATION_BENCH_V12_TO_V13_MIGRATION: CorrelationBenchMigrationV12ToV13 = {
+  fromSchemaVersion: 12,
+  toSchemaVersion: 13,
+  previousCorpusDigest: '1a0377333099795fe0ccff8dc5a7a2cf',
+  previousReportDigest: '354a7790613214a893698b1882eda0ae',
+  reason:
+    'ACC-501 round 15 adds probe/emission observations to the report. No corpus edit, '
+    + 'no engine change, no graded metric movement.',
+};
+
+/**
+ * Fields the migration allows to differ. Everything else in the baseline has to
+ * match the previous one exactly — an allowlist, so a field added later is
+ * refused by default rather than silently exempted.
+ */
+const V13_MAY_MOVE: ReadonlySet<string> = new Set([
+  'schemaVersion', 'seededAt', 'note', 'reportDigest', 'witnessed', 'tolerances',
+]);
+
+export function validateCorrelationBenchV12ToV13Migration(
+  report: CorrelationBenchReport,
+  previousV12: CorrelationBenchBaseline,
+  manifest: CorrelationBenchMigrationV12ToV13,
+): CorrelationBenchComparison {
+  const reasons: string[] = [];
+  if (JSON.stringify(manifest) !== JSON.stringify(CORRELATION_BENCH_V12_TO_V13_MIGRATION)) {
+    reasons.push('v12→v13 migration manifest does not match the pinned additive transition');
+    return { ok: false, reasons };
+  }
+  if (previousV12.schemaVersion !== 12) {
+    reasons.push(`v12→v13 migration source is schemaVersion ${previousV12.schemaVersion}, not 12`);
+  }
+  if (previousV12.corpusDigest !== manifest.previousCorpusDigest) {
+    reasons.push('v12→v13 migration source is not the reviewed v12 corpus');
+  }
+  if (previousV12.reportDigest !== manifest.previousReportDigest) {
+    reasons.push('v12→v13 migration source is not the reviewed v12 report');
+  }
+  if (report.corpusDigest !== manifest.previousCorpusDigest) {
+    reasons.push(
+      'v13 corpus digest moved — this migration is additive-only and permits no corpus edit',
+    );
+  }
+  // Seed the candidate from the live report and demand exact equality field by
+  // field. Anything that moved is a behaviour change wearing a schema bump.
+  const candidate = seedCorrelationBenchBaseline(
+    report,
+    { note: previousV12.note, tolerances: previousV12.tolerances },
+    previousV12.seededAt,
+  ) as unknown as Record<string, unknown>;
+  const before = previousV12 as unknown as Record<string, unknown>;
+  for (const key of Object.keys(candidate).sort(compareStrings)) {
+    if (V13_MAY_MOVE.has(key)) continue;
+    if (JSON.stringify(candidate[key]) !== JSON.stringify(before[key])) {
+      reasons.push(
+        `v12→v13 is additive-only, but ${key} moved from `
+        + `${JSON.stringify(before[key])} to ${JSON.stringify(candidate[key])}`,
+      );
+    }
+  }
+  if (candidate.reportDigest === before.reportDigest) {
+    reasons.push('v12→v13 report digest did not move — nothing was actually added');
+  }
+  checkReportConsistency(reasons, report);
+  return { ok: reasons.length === 0, reasons };
 }
 
 export interface CorrelationBenchMigrationV11ToV12 {
@@ -1031,12 +1123,76 @@ function checkIdSet(
  * — and the gate's verdict — unchanged. The probes are the only evidence the
  * gate has about those five, so a missing probe fails as loudly as a failing one.
  */
+/**
+ * A retired learned rule has to actually leave the engine.
+ *
+ * `runEngine()` builds a fresh engine per pass, so every learned-rule number in
+ * this report describes an INSTALL. Removing `engine.unregisterRule()` from
+ * `syncLearnedRules()` therefore changed nothing here, while a coupling the
+ * miner had retired stayed registered and went on matching live events — and
+ * the function still reported it removed. This checks the engine's own
+ * inventory afterwards, not that report.
+ */
+function checkLearnedRuleResync(reasons: string[], report: CorrelationBenchReport): void {
+  const p = report.learnedRuleResync;
+  if (!p || typeof p !== 'object') {
+    reasons.push('the report carries no learned-rule resync probe — the removal path is unmeasured');
+    return;
+  }
+  if (!Array.isArray(p.installed) || !Array.isArray(p.afterRetirement)
+    || typeof p.retiredId !== 'string') {
+    reasons.push('the learned-rule resync probe is malformed');
+    return;
+  }
+  // An empty install makes every assertion below vacuously true, which is the
+  // shape a probe that silently stopped syncing anything would take.
+  if (p.installed.length < 2) {
+    reasons.push(
+      `the learned-rule resync probe installed ${p.installed.length} rule(s) — with fewer than ` +
+      `two there is no retirement to observe`,
+    );
+    return;
+  }
+  if (!p.installed.includes(p.retiredId)) {
+    reasons.push(`the resync probe retired ${p.retiredId}, which it never installed`);
+  }
+  if (p.afterRetirement.includes(p.retiredId)) {
+    reasons.push(
+      `${p.retiredId} is still registered after being retired — syncLearnedRules reported it ` +
+      `removed, and a coupling the miner no longer believes in keeps matching live events`,
+    );
+  }
+  if (p.afterRetirement.length !== p.installed.length - 1) {
+    reasons.push(
+      `retiring one learned rule left ${p.afterRetirement.length} installed, not ` +
+      `${p.installed.length - 1} — the sync removed the wrong number of rules`,
+    );
+  }
+  if (p.reportedRemoved !== 1 || p.reportedAdded !== 0) {
+    reasons.push(
+      `the resync reported {added ${p.reportedAdded}, removed ${p.reportedRemoved}} for a ` +
+      `single retirement — callers act on those counters`,
+    );
+  }
+  if (p.builtInsIntact !== true) {
+    reasons.push(
+      'syncing learned rules changed the BUILT-IN inventory — the learned:* prefix is the only ' +
+      'thing keeping a mined coupling from evicting a shipped rule',
+    );
+  }
+}
+
 function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): void {
   const probes = report.ruleProbes;
   if (!Array.isArray(probes) || !Array.isArray(report.builtInRuleIds)) {
     reasons.push('live report carries no per-rule coverage probes');
     return;
   }
+  // The gate's own execution of the same fixtures. Everything below reads the
+  // report; this reads the engine. Replacing the producer's near-miss
+  // executions with constants left every digest identical — the report can
+  // only be evidence about a matcher if something independent still runs it.
+  const live = new Map(verifyRuleProbes().map((p) => [p.ruleId, p]));
   const probed = new Set<string>();
   for (const p of probes) {
     if (!p || typeof p !== 'object' || typeof p.ruleId !== 'string' || p.ruleId === '') {
@@ -1066,6 +1222,8 @@ function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): voi
     }
     checkProbeSemantics(reasons, p);
     checkProbeNearMisses(reasons, p);
+    checkProbeDisjuncts(reasons, p);
+    checkProbeAgainstLiveExecution(reasons, p, live.get(p.ruleId));
     // The verdicts above are the ANSWER; this is the question. Without it
     // the report holds still while a fixture is quietly re-aimed at a clause
     // the rule still has, and both booleans stay true about nothing.
@@ -1094,6 +1252,94 @@ function checkRuleProbes(reasons: string[], report: CorrelationBenchReport): voi
  * reduced to a boolean, rewriting `airquality-wildfire` from `causal-candidate`
  * to `contradicts` — the opposite assertion — moved nothing.
  */
+/**
+ * The report's probe verdicts, re-derived by the gate from the same fixtures.
+ *
+ * This is the only check here that does not take the report's word for
+ * anything. It exists because the reviewer deleted all 73 near-miss engine
+ * executions — `rejected: true`, hardcoded — and every digest in the report
+ * stayed byte-identical, because the honest answer to those questions was also
+ * `true`. Truthful output is not evidence that a question was asked.
+ */
+function checkProbeAgainstLiveExecution(
+  reasons: string[],
+  p: BenchRuleProbe,
+  live: BenchRuleProbe | undefined,
+): void {
+  if (live === undefined) {
+    reasons.push(
+      `rule coverage probe for '${p.ruleId}' has no fixture in the gate's own fixture set — ` +
+      `the report is reporting on a rule this gate cannot independently exercise`,
+    );
+    return;
+  }
+  const scalar: [string, unknown, unknown][] = [
+    ['positiveMatched', p.positiveMatched, live.positiveMatched],
+    ['positiveEdgeType', p.positiveEdgeType, live.positiveEdgeType],
+    ['positiveDirection', p.positiveDirection, live.positiveDirection],
+    ['reversedMatched', p.reversedMatched, live.reversedMatched],
+    ['reversedDirection', p.reversedDirection, live.reversedDirection],
+    ['fixtureDigest', p.fixtureDigest, live.fixtureDigest],
+  ];
+  for (const [field, got, want] of scalar) {
+    if (got !== want) {
+      reasons.push(
+        `rule '${p.ruleId}' reports ${field}=${JSON.stringify(got)}, but running its fixtures ` +
+        `here produced ${JSON.stringify(want)} — the benchmark's probe verdicts are not what ` +
+        `the shipped rule set actually does`,
+      );
+    }
+  }
+  const asked = (probe: BenchRuleProbe): string => JSON.stringify({
+    misses: probe.nearMisses.map((m) => [m.clause, m.rejected]),
+    branches: probe.disjuncts.map((d) => [d.branch, d.matched]),
+  });
+  if (asked(p) !== asked(live)) {
+    reasons.push(
+      `rule '${p.ruleId}' reports clause verdicts the gate's own run does not reproduce — ` +
+      `reported ${asked(p)}, executed ${asked(live)}`,
+    );
+  }
+}
+
+/**
+ * Every branch of every disjunctive clause still gets accepted on its own.
+ *
+ * A near-miss must defeat BOTH sides of a disjunction to reject at all, so the
+ * near-misses say nothing about the branches individually. Narrowing
+ * `weather-wildfire` to accept only a red-flag warning — dropping
+ * fire-weather-watch — kept the positive matching and every near-miss
+ * rejecting.
+ */
+function checkProbeDisjuncts(reasons: string[], p: BenchRuleProbe): void {
+  const branches = p.disjuncts;
+  if (!Array.isArray(branches)) {
+    reasons.push(
+      `rule '${p.ruleId}' carries no disjunct roster — rules with an OR in the matcher can ` +
+      `then lose a branch in silence`,
+    );
+    return;
+  }
+  const names = branches.map((d) => (d as { branch?: unknown }).branch);
+  if (names.some((b) => typeof b !== 'string' || b === '')) {
+    reasons.push(`rule '${p.ruleId}' has a disjunct fixture that names no branch`);
+  }
+  if (new Set(names).size !== names.length) {
+    reasons.push(
+      `rule '${p.ruleId}' repeats a disjunct branch — duplicates inflate branch coverage ` +
+      `without covering anything`,
+    );
+  }
+  const lost = branches.filter((d) => d.matched !== true);
+  if (lost.length > 0) {
+    reasons.push(
+      `rule '${p.ruleId}' stopped accepting ${lost.length} advertised branch(es) ` +
+      `(${lost.map((d) => String(d.branch)).join('; ')}) — the rule got narrower, and a rule ` +
+      `that quietly covers half of what it documents is a silent miss`,
+    );
+  }
+}
+
 function checkProbeSemantics(reasons: string[], p: BenchRuleProbe): void {
   if (!PAIR_EDGE_TYPES.has(p.positiveEdgeType as string)) {
     reasons.push(
@@ -1106,6 +1352,21 @@ function checkProbeSemantics(reasons: string[], p: BenchRuleProbe): void {
     reasons.push(
       `rule '${p.ruleId}' reports direction ${JSON.stringify(p.positiveDirection)} on its ` +
       `positive fixture — cause and effect are not interchangeable`,
+    );
+  }
+  // The engine tries `matchFn(a, b)` and then `matchFn(b, a)`. Every fixture
+  // and every corpus stream is antecedent-first, so deleting the second attempt
+  // moved nothing at all — half the matching contract was unobserved.
+  if (p.reversedMatched !== true) {
+    reasons.push(
+      `rule '${p.ruleId}' did not match its positive fixture fed back-to-front — the engine ` +
+      `promises rule authors both orientations, and this rule now depends on input order`,
+    );
+  }
+  if (typeof p.reversedDirection !== 'string' || !p.reversedDirection.includes('→')) {
+    reasons.push(
+      `rule '${p.ruleId}' reports reversed direction ${JSON.stringify(p.reversedDirection)} — ` +
+      `a reversed feed that emits nothing to describe is the defect above, unrecorded`,
     );
   }
 }
@@ -1228,6 +1489,7 @@ function checkPreflight(
   checkRuleInventory(reasons, report, baseline);
   checkRuleCoverage(reasons, report, baseline);
   checkRuleProbes(reasons, report);
+  checkLearnedRuleResync(reasons, report);
   // Before the operand loop in the caller: a null separation is either the
   // perfect run's legitimate answer or a missing number, and `falseEdgeCount`
   // is what decides which. Saying that plainly beats "not a finite number".
@@ -2794,8 +3056,75 @@ function checkPairEmissions(
     reasons.push(`${bad} has a confidence outside [0,1] (${confidences.join(', ')})`);
     return false;
   }
+  // `detectedAt` is what downstream recency filters read, and it left no trace
+  // in the report at all: `new Date(0)` for every pair moved no count, no rate
+  // and no digest, while live pairs would have been discarded as ancient on
+  // emission. The benchmark injects one fixed `now`, so a real emission is a
+  // finite positive instant — zero and NaN are the shapes the mutation makes.
+  if (emissions.some((e) => typeof e.detectedAtMs !== 'number'
+    || !Number.isFinite(e.detectedAtMs) || e.detectedAtMs <= 0)) {
+    reasons.push(
+      `${bad} carries a detectedAt that is not a real instant — a pair emitted at the epoch is ` +
+      `already too old to survive recency filtering`,
+    );
+    return false;
+  }
+  // Six factors multiply into one scalar, so DROPPING the breakdown preserves
+  // `confidence` exactly and the analyst-facing explanation silently becomes
+  // undefined. `null` is that regression, and it has to be a FAIL rather than a
+  // tolerated shape: the engine populates `confidenceDetail` on every pair.
+  const detailless = emissions.filter((e) => e.confidenceDetailDigest === null).length;
+  if (detailless > 0) {
+    reasons.push(
+      `${bad} has ${detailless} emission(s) with no confidence breakdown — the scalar survives ` +
+      `but the explanation and factor chips do not`,
+    );
+    return false;
+  }
+  if (emissions.some((e) => typeof e.confidenceDetailDigest !== 'string'
+    || !/^[0-9a-f]{32}$/.test(e.confidenceDetailDigest))) {
+    reasons.push(`${bad} has a malformed confidence-breakdown digest`);
+    return false;
+  }
+  // The engine's `edgeType` is one translation short of what the analyst reads:
+  // SituationStoreV2 maps it through EDGE_TYPE_MAP on the way into the evidence
+  // graph. Inverting a row there — 'causal-candidate' to `contradicts` — flipped
+  // the meaning of real situation edges without moving a number here, so the
+  // ledger now carries the PROJECTION and the gate checks it against the raw
+  // claim it came from. Direction has to survive the translation too: a
+  // projection that silently swapped endpoints would reverse causality.
+  const projected = emissions.filter((e) => {
+    const want = PROJECTED_EDGE_TYPE[e.edgeType as string];
+    return want === undefined || e.evidenceEdgeType !== want
+      || e.evidenceFromId !== e.fromId || e.evidenceToId !== e.toId;
+  });
+  if (projected.length > 0) {
+    const sample = projected[0]!;
+    reasons.push(
+      `${bad} projects ${sample.edgeType} (${sample.fromId}→${sample.toId}) into the evidence ` +
+      `graph as ${sample.evidenceEdgeType} (${sample.evidenceFromId}→${sample.evidenceToId}) — ` +
+      `the analyst is told something the engine did not conclude`,
+    );
+    // Deliberately not an early return: a stray endpoint shows up here AND in
+    // the row-shape check below, and the endpoint reason is the more precise
+    // one. Short-circuiting would hide it.
+  }
   return true;
 }
+
+/**
+ * The one legitimate reading of each engine edge type, restated here on purpose.
+ *
+ * Importing SituationStoreV2's map would make this check tautological: the map
+ * would be compared against itself and any inversion would agree with itself.
+ * This table is the SECOND opinion, and it is a table a reviewer can read.
+ */
+const PROJECTED_EDGE_TYPE: Record<string, string> = {
+  'causal-candidate': 'caused_by',
+  'co-located': 'co-located',
+  'temporally-adjacent': 'temporally-adjacent',
+  contradicts: 'contradicts',
+};
 
 /**
  * The row's three CONCLUSIONS — its key, its planted-truth flag, and its decoy

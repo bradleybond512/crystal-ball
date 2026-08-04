@@ -337,7 +337,14 @@ interface DraftSituation {
   edges: EvidenceEdge[];
 }
 
-function pairToEdge(pair: CorrelatedPair): EvidenceEdge {
+/**
+ * Exported for the ACC-501 correlation benchmark, which pins the PROJECTED
+ * evidence-edge type per emission rather than only the engine's raw `edgeType`.
+ * Inverting a row of `EDGE_TYPE_MAP` — `'causal-candidate'` to `contradicts` —
+ * produced real situation edges asserting the opposite relationship while every
+ * number in the benchmark, digest included, stayed identical.
+ */
+export function pairToEdge(pair: CorrelatedPair): EvidenceEdge {
   return {
     type: EDGE_TYPE_MAP[pair.edgeType],
     sourceEventId: pair.eventA.id,

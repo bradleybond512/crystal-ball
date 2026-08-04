@@ -1468,6 +1468,46 @@ shell truncated the previous evidence before the process could read it.
 - Focused red/green and strict mutation evidence is recorded in
   `docs/validation/ACC-501-MUTATION-PROOFS.md`.
 
+Round 15 (`schemaVersion: 13`) attacked the round-13 gate itself — a separate
+audit from the round-14 reseed work above, landed after it. Every case below was
+reproduced as a live `{ok: true, reasons: []}` against the shipped gate. No
+graded number moved in the re-seed: round 15 adds observations, it does not
+change engine behaviour.
+
+- **The probes reported without being asked.** Deleting all 73 near-miss engine
+  executions and hardcoding `rejected: true` left every digest in the report
+  byte-identical, because the honest answer to those questions was also `true`.
+  Truthful output is not evidence that a question was asked. The gate now runs
+  the fixtures itself (`__bench__/rule-probe-verify.ts`, a deliberate second
+  implementation) and refuses any verdict its own execution does not reproduce.
+- **Near-misses were not boundary-adjacent, and disjunctions had no per-branch
+  positive.** A near-miss at 400 km against a 150 km radius cannot see the
+  radius widen to 200 km; a positive satisfying BOTH branches of an OR cannot
+  see one branch die. Clauses went 59 → 73 with boundary-adjacent cases
+  (155 km, 24 h 1 min), and every disjunctive branch now has its own isolated
+  positive.
+- **Every fixture was antecedent-first.** `correlate-engine.ts:177` retries
+  `(b, a)` when `(a, b)` misses; deleting that branch changed nothing in the
+  benchmark. Each positive is now also fed back-to-front and `reversedMatched`
+  is pinned.
+- **The evidence projection was unobserved.** Inverting `EDGE_TYPE_MAP` in
+  `situation-store-v2.ts` made every situation edge assert the opposite
+  relationship while every benchmark number held. Emissions now carry the real
+  `pairToEdge()` output, checked against a restated table the gate owns — the
+  second opinion, not an import of the map under test.
+- **Learned-rule RETIREMENT was never exercised.** `runEngine()` builds a fresh
+  engine per pass, so every learned-rule number described an install. Removing
+  `engine.unregisterRule()` from `syncLearnedRules()` moved nothing here while a
+  retired coupling stayed registered and kept matching live events — and the
+  function still reported it removed. A live resync probe now reads the engine's
+  inventory after a retirement instead of trusting the returned counters.
+- **`detectedAt` and the confidence BREAKDOWN left no trace.** `new Date(0)` on
+  every pair moved no count and no digest, though live pairs would have been
+  discarded as ancient; and the scalar confidence hid which factor produced it.
+  Both are in the emission ledger now.
+- **`--seed` could not gate itself.** Found independently in this audit; already
+  closed by the round-14 reseed guard above, so round 15 changed nothing here.
+
 Seed measurements (uncorrected miner, 2026-07-30):
 
 | Metric | Value |

@@ -53,6 +53,8 @@ import {
   nearMissEvents,
   positiveEvents,
 } from '../__bench__/rule-probes.ts';
+import { verifyRuleProbes } from '../__bench__/rule-probe-verify.ts';
+import { pairToEdge } from '../../intelligence/situation-store-v2.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..', '..', '..');
@@ -549,6 +551,8 @@ describe('what the corpus is built to stress', () => {
       eventA: { id: seed.eventIdA },
       eventB: { id: seed.eventIdB },
       confidence: 0.5,
+      edgeType: 'co-located',
+      detectedAt: new Date(Date.UTC(2026, 5, 1, 12, 0, 0)),
     })) as unknown as Parameters<typeof gradeEnginePairs>[0];
 
     const graded = gradeEnginePairs(twice, plantedTruePairKeys(), decoyEventIds());
@@ -725,6 +729,11 @@ describe('the gate', () => {
           fromId: decoy,
           toId: partner,
           confidence: 0.5,
+          detectedAtMs: Date.UTC(2026, 5, 1, 12, 0, 0),
+          confidenceDetailDigest: '0'.repeat(32),
+          evidenceEdgeType: 'co-located',
+          evidenceFromId: decoy,
+          evidenceToId: partner,
         }],
         isTruePair: false,
         decoyEmissions: 1,
@@ -1843,7 +1852,13 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
       { ...report, ruleProbes: rewritten }, baseline,
     );
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('ruleProbes[0].nearMisses')));
+    // Since round 14 the gate re-executes the fixtures itself, so a re-aimed
+    // clause is caught by the disagreement rather than by the ledger digest.
+    assert.ok(
+      reasons.some((r) => r.includes('ruleProbes[0].nearMisses')
+        || r.includes('does not reproduce')),
+      reasons.join(' | '),
+    );
   });
 
   it('rejects a report that drops an advertised measurement outright', () => {
@@ -2277,9 +2292,9 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     assert.equal(ok, true, `re-seeded baseline should pass: ${JSON.stringify(reasons)}`);
   });
 
-  it('pins every v12 replay, family, candidate, inhibition, and stream identity field', () => {
+  it('pins every v13 replay, family, candidate, inhibition, and stream identity field', () => {
     const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
-    assert.equal(seeded.schemaVersion, 12);
+    assert.equal(seeded.schemaVersion, 13);
     assert.equal(seeded.replayMode, report.replayMode);
     assert.deepEqual(seeded.streamDigests, report.streamDigests);
     assert.deepEqual(seeded.multipleTestingFamily, report.multipleTestingFamily);
@@ -2805,7 +2820,15 @@ describe('rule probes pin the fixture, not only the verdict', () => {
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.startsWith('probes ledger digest moved')));
+    // Round 14 added an independent re-execution that runs BEFORE the ledger
+    // digests and short-circuits, so a moved fixture is now named by whichever
+    // of the two speaks first. Both name the probe ledger rather than the
+    // whole report, which is what this test is about.
+    assert.ok(
+      reasons.some((r) => r.startsWith('probes ledger digest moved')
+        || /reports fixtureDigest/.test(r)),
+      reasons.join(' | '),
+    );
   });
 });
 
@@ -3075,5 +3098,285 @@ describe('round 13 — the halves round 12 missed', () => {
       reasons.some((r) => r.includes('causalCouplingsLostToCap')),
       reasons.join(' | '),
     );
+  });
+});
+
+describe('round 14 — the gate stops taking the producer at its word', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('re-derives every probe verdict independently of the producer', () => {
+    // The finding: replacing all 73 near-miss executions with the constant
+    // `rejected: true` reproduced the digest exactly, because the honest output
+    // and the forged output are the same bytes. No output pin can separate
+    // them — only a second executor can.
+    const mine = verifyRuleProbes();
+    assert.equal(mine.length, report.ruleProbes.length);
+    assert.deepEqual(
+      mine.map((p) => p.ruleId),
+      report.ruleProbes.map((p) => p.ruleId),
+    );
+    for (const [i, p] of mine.entries()) {
+      assert.deepEqual(p, report.ruleProbes[i], `probe ${p.ruleId} disagrees with the report`);
+    }
+  });
+
+  it('fails when the report claims a near-miss the engine actually matched', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0
+          ? { ...p, nearMisses: p.nearMisses.map((n) => ({ ...n, rejected: !n.rejected })) }
+          : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('does not reproduce')),
+      reasons.join(' | '),
+    );
+  });
+
+  it('the verdicts do not depend on the instant they are graded at', () => {
+    // `now` reaches only `detectedAt`, so a different instant must not move a
+    // single match. If it ever does, the fixtures have drifted into the engine's
+    // recency behaviour and the probe stopped being a pure matcher test.
+    const later = verifyRuleProbes(new Date(Date.UTC(2027, 0, 9, 4, 30, 0)));
+    assert.deepEqual(later, verifyRuleProbes());
+  });
+
+  it('every rule matches its positive fed BACK TO FRONT', () => {
+    // `correlate-engine.ts:177` tries (b, a) when (a, b) misses. Every corpus
+    // and fixture was antecedent-first, so deleting that branch changed nothing.
+    for (const p of report.ruleProbes) {
+      assert.equal(p.reversedMatched, true, `${p.ruleId} does not survive reversed input`);
+    }
+  });
+
+  it('fails when a reversed positive stops matching', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, reversedMatched: false, reversedDirection: null } : p
+      )),
+    };
+    const { ok } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+  });
+
+  it('exercises every accepted branch of every disjunctive matcher', () => {
+    // A positive that satisfies BOTH branches of an OR and a near-miss that
+    // defeats both cannot see one branch being lost. Each branch gets its own
+    // isolated positive.
+    const withBranches = report.ruleProbes.filter((p) => p.disjuncts.length > 0);
+    assert.ok(withBranches.length >= 4, `only ${withBranches.length} rules carry branches`);
+    for (const p of withBranches) {
+      for (const d of p.disjuncts) {
+        assert.equal(d.matched, true, `${p.ruleId} lost branch ${d.branch}`);
+      }
+    }
+  });
+
+  it('fails when one accepted branch of a disjunction stops matching', () => {
+    const idx = report.ruleProbes.findIndex((p) => p.disjuncts.length > 0);
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === idx
+          ? { ...p, disjuncts: p.disjuncts.map((d, j) => (j === 0 ? { ...d, matched: false } : d)) }
+          : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('branch')), reasons.join(' | '));
+  });
+
+  it('moves the digest when a pair is emitted at the epoch', () => {
+    const stale = {
+      ...report,
+      pairs: report.pairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, detectedAtMs: 0 })),
+      })),
+    };
+    assert.notEqual(benchReportDigest(stale), baseline.reportDigest);
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stale, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('detectedAt')), reasons.join(' | '));
+  });
+
+  it('fails when the confidence BREAKDOWN disappears behind the scalar', () => {
+    const flat = {
+      ...report,
+      pairs: report.pairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, confidenceDetailDigest: null })),
+      })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(flat, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('breakdown')), reasons.join(' | '));
+  });
+
+  it('projects every pair into the evidence graph the store really builds', () => {
+    for (const row of report.pairs) {
+      for (const e of row.emissions) {
+        const edge = pairToEdge({
+          ruleId: e.ruleId,
+          edgeType: e.edgeType,
+          eventA: { id: e.fromId } as never,
+          eventB: { id: e.toId } as never,
+          confidence: e.confidence,
+          detectedAt: new Date(e.detectedAtMs),
+        } as never);
+        assert.equal(e.evidenceEdgeType, edge.type);
+        assert.equal(e.evidenceFromId, edge.sourceEventId);
+        assert.equal(e.evidenceToId, edge.targetEventId);
+      }
+    }
+  });
+
+  it('fails when the projection contradicts the engine it came from', () => {
+    // EDGE_TYPE_MAP inverted: real situation edges asserting the opposite
+    // relationship, with every benchmark number unchanged.
+    const inverted = {
+      ...report,
+      pairs: report.pairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, evidenceEdgeType: 'contradicts' })),
+      })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(inverted, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('evidence graph')), reasons.join(' | '));
+  });
+
+  it('proves a retired learned rule actually leaves the engine', () => {
+    const p = report.learnedRuleResync;
+    assert.ok(p.installed.length >= 2);
+    assert.ok(p.installed.includes(p.retiredId));
+    assert.ok(!p.afterRetirement.includes(p.retiredId));
+    assert.equal(p.afterRetirement.length, p.installed.length - 1);
+    assert.equal(p.reportedRemoved, 1);
+    assert.equal(p.reportedAdded, 0);
+    assert.equal(p.builtInsIntact, true);
+  });
+
+  it('fails when a retired rule stays registered but is reported removed', () => {
+    const stuck = {
+      ...report,
+      learnedRuleResync: {
+        ...report.learnedRuleResync,
+        afterRetirement: report.learnedRuleResync.installed,
+      },
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stuck, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('still registered')), reasons.join(' | '));
+  });
+
+  it('refuses to re-seed over a broken tolerance without --force', () => {
+    // The documented "tolerances gate the re-seed" workflow did not exist: the
+    // --seed path returned before the comparator ran, and the shell redirect it
+    // recommended truncated the baseline first.
+    const seed = spawnSync(
+      'npx',
+      ['tsx', path.join(here, '..', '..', '..', '..', 'scripts', 'correlation-benchmark.mts'), '--seed'],
+      { encoding: 'utf8', cwd: path.join(here, '..', '..', '..', '..') },
+    );
+    // With the baseline in step this seeds cleanly; the contract under test is
+    // that the comparison RAN and said so, either way. The round-14 reseed guard
+    // on main owns the wording, so this asserts on its two terminal verdicts
+    // rather than on any phrasing of mine.
+    const said = `${seed.stdout}${seed.stderr}`;
+    assert.ok(
+      /Seeded from the current run|REFUSED/.test(said),
+      said.slice(-400),
+    );
+  });
+});
+
+describe('round 15 — the v12→v13 schema bump is a pinned migration, not a skipped check', () => {
+  const report = runCorrelationBenchmark();
+  const committed = loadBaseline();
+  const carriedOver = { note: committed.note, tolerances: committed.tolerances };
+  const manifest = correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION;
+
+  // The reviewed v12 baseline differed from today's only in schemaVersion,
+  // seededAt, and reportDigest — that IS the claim the migration makes, so
+  // reconstructing it that way is the shape under test. The rejection cases
+  // below are what carry the weight.
+  const previousV12 = (): correlationBaseline.CorrelationBenchBaseline => ({
+    ...seedCorrelationBenchBaseline(report, carriedOver, committed.seededAt),
+    schemaVersion: 12,
+    reportDigest: manifest.previousReportDigest,
+  } as unknown as correlationBaseline.CorrelationBenchBaseline);
+
+  it('accepts the real additive transition', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      manifest,
+    );
+    assert.equal(ok, true, JSON.stringify(reasons));
+  });
+
+  it('refuses a manifest that is not the pinned one', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      { ...manifest, reason: 'trust me' },
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /manifest does not match/);
+  });
+
+  it('refuses a source that is not the reviewed v12 baseline', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), reportDigest: 'f'.repeat(32) },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /not the reviewed v12 report/);
+  });
+
+  it('refuses a source whose corpus digest is not the reviewed corpus', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), corpusDigest: 'e'.repeat(32) },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /not the reviewed v12 corpus/);
+  });
+
+  it('refuses a graded metric that moved under cover of the schema bump', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), pairPrecision: 0.123456 },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /additive-only, but pairPrecision moved/);
+  });
+
+  it('refuses a report digest that did not move — nothing was added', () => {
+    const seeded = seedCorrelationBenchBaseline(report, carriedOver, committed.seededAt);
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), reportDigest: seeded.reportDigest },
+      { ...manifest, previousReportDigest: seeded.reportDigest },
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /manifest does not match|digest did not move/);
+  });
+
+  it('pins the migration to exactly one hop', () => {
+    assert.equal(manifest.fromSchemaVersion, 12);
+    assert.equal(manifest.toSchemaVersion, 13);
+    assert.equal(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
   });
 });

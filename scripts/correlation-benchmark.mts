@@ -53,6 +53,8 @@ import { fileURLToPath } from 'node:url';
 import { runCorrelationBenchmark } from '../src/services/correlation/bench-correlation.ts';
 import {
   CORRELATION_BENCH_V11_TO_V12_MIGRATION,
+  CORRELATION_BENCH_V12_TO_V13_MIGRATION,
+  validateCorrelationBenchV12ToV13Migration,
   compareCorrelationBenchReseedToPrevious,
   compareCorrelationBenchToBaseline,
   seedCorrelationBenchBaseline,
@@ -122,13 +124,25 @@ function main(): void {
       process.exitCode = 2;
       return;
     }
-    const comparison = prev.schemaVersion === 11
-      ? validateCorrelationBenchV11ToV12Migration(
+    // A schema bump short-circuits the normal comparator before its tolerance
+    // loop, so each one gets an explicit, pinned migration instead of a pass
+    // from a check that never ran.
+    let comparison;
+    if (prev.schemaVersion === 11) {
+      comparison = validateCorrelationBenchV11ToV12Migration(
         report,
         prev,
         CORRELATION_BENCH_V11_TO_V12_MIGRATION,
-      )
-      : compareCorrelationBenchReseedToPrevious(report, prev);
+      );
+    } else if (prev.schemaVersion === 12) {
+      comparison = validateCorrelationBenchV12ToV13Migration(
+        report,
+        prev,
+        CORRELATION_BENCH_V12_TO_V13_MIGRATION,
+      );
+    } else {
+      comparison = compareCorrelationBenchReseedToPrevious(report, prev);
+    }
     if (!comparison.ok) {
       console.error(
         `${C.red}${C.bold}REFUSED${C.reset} — re-seed candidate regresses against or is ` +

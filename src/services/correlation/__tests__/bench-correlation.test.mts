@@ -2438,6 +2438,11 @@ describe('the re-seed guard compares against the previous baseline', () => {
     const workflow = readFileSync(path.join(ROOT, '.github', 'workflows', 'smoke.yml'), 'utf8');
     assert.match(workflow, /github\.event\.pull_request\.base\.sha/);
     assert.match(workflow, /github\.event\.merge_group\.base_sha/);
+    assert.match(
+      workflow,
+      /if ! git cat-file -e "\$BASE_SHA:\$BASELINE_PATH"; then[\s\S]*?exit 0[\s\S]*?fi/,
+      'the first baseline addition has no base-branch baseline to compare against',
+    );
     assert.match(workflow, /git show "\$BASE_SHA:\$BASELINE_PATH"/);
     assert.match(workflow, /--seed --previous-baseline "\$PREVIOUS_BASELINE"/);
     assert.match(workflow, /> "\$RUNNER_TEMP\/bench-correlation-baseline\.candidate\.json"/);

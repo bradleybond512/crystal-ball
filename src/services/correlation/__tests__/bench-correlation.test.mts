@@ -2440,6 +2440,11 @@ describe('the re-seed guard compares against the previous baseline', () => {
     assert.match(workflow, /github\.event\.merge_group\.base_sha/);
     assert.match(
       workflow,
+      /if ! git cat-file -e "\$BASE_SHA\^\{commit\}"; then[\s\S]*?exit 1[\s\S]*?fi[\s\S]*?if ! git cat-file -e "\$BASE_SHA:\$BASELINE_PATH"/,
+      'an unavailable base commit must fail closed before checking for an initial baseline',
+    );
+    assert.match(
+      workflow,
       /if ! git cat-file -e "\$BASE_SHA:\$BASELINE_PATH"; then[\s\S]*?exit 0[\s\S]*?fi/,
       'the first baseline addition has no base-branch baseline to compare against',
     );

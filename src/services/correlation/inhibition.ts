@@ -55,6 +55,11 @@ export function replaceInhibitorySnapshot(
     .sort(compareEvidence)
     .slice(0, MAX_INHIBITORY_EVIDENCE)
     .map((item) => Object.freeze(item));
+  if (evidence.length === 0) {
+    activeSnapshot = null;
+    shadowDiagnostics = emptyShadowDiagnostics();
+    return NEUTRAL_SNAPSHOT;
+  }
   const snapshot = Object.freeze({
     evidence: Object.freeze(evidence),
     publishedAt,
@@ -104,7 +109,7 @@ export function evaluateInhibitionShadow(
 
   const valid = snapshot.evidence.filter((evidence) => validPublishedEvidence(evidence));
   if (valid.length === 0) return emptyShadowSummary();
-  const byDomain = boundedEventsByDomain(events, snapshot.publishedAt, now);
+  const byDomain = boundedEventsByDomain(events, valid, snapshot.publishedAt, now);
   let confirmed = 0;
   let refuted = 0;
   let pending = 0;
@@ -223,23 +228,102 @@ function compareEvidence(a: InhibitoryEvidence, b: InhibitoryEvidence): number {
 
 function boundedEventsByDomain(
   events: readonly InhibitionShadowEvent[],
+  evidence: readonly Readonly<InhibitoryEvidence>[],
   publishedAt: number,
   now: number,
 ): Map<string, number[]> {
-  const bounded = events
-    .filter((event) => validDomain(event.domain)
-      && Number.isFinite(event.at)
-      && event.at >= publishedAt
-      && event.at <= now)
-    .sort((a, b) => a.at - b.at || a.domain.localeCompare(b.domain))
-    .slice(-MAX_INHIBITION_SHADOW_EVENTS);
-  const byDomain = new Map<string, number[]>();
-  for (const event of bounded) {
-    const times = byDomain.get(event.domain) ?? [];
-    times.push(event.at);
-    byDomain.set(event.domain, times);
+  const domains = [...new Set(evidence.flatMap((item) => [item.from, item.to]))]
+    .sort((a, b) => a.localeCompare(b));
+  const baseBudget = Math.floor(MAX_INHIBITION_SHADOW_EVENTS / domains.length);
+  const remainder = MAX_INHIBITION_SHADOW_EVENTS % domains.length;
+  const budgets = new Map(domains.map((domain, index) => [
+    domain,
+    baseBudget + (index < remainder ? 1 : 0),
+  ]));
+  const byDomain = new Map(domains.map((domain) => [domain, [] as number[]]));
+  let retained = 0;
+  for (const event of events) {
+    const budget = budgets.get(event.domain);
+    if (!budget
+      || !Number.isFinite(event.at)
+      || event.at < publishedAt
+      || event.at > now) continue;
+    const times = byDomain.get(event.domain)!;
+    if (retained < MAX_INHIBITION_SHADOW_EVENTS) {
+      pushTime(times, event.at);
+      retained += 1;
+      continue;
+    }
+    const underBudget = times.length < budget;
+    const evictionDomain = oldestEvictableDomain(domains, byDomain, budgets, event.domain, underBudget);
+    if (!evictionDomain) continue;
+    const evictionTimes = byDomain.get(evictionDomain)!;
+    const oldest = evictionTimes[0]!;
+    if (!underBudget && compareShadowEvent(event.domain, event.at, evictionDomain, oldest) <= 0) continue;
+    popOldestTime(evictionTimes);
+    pushTime(times, event.at);
   }
+  for (const times of byDomain.values()) times.sort((a, b) => a - b);
   return byDomain;
+}
+
+function oldestEvictableDomain(
+  domains: readonly string[],
+  byDomain: ReadonlyMap<string, number[]>,
+  budgets: ReadonlyMap<string, number>,
+  incomingDomain: string,
+  incomingUnderBudget: boolean,
+): string | null {
+  let oldestDomain: string | null = null;
+  let oldestAt = Number.POSITIVE_INFINITY;
+  for (const domain of domains) {
+    const times = byDomain.get(domain)!;
+    const overBudget = times.length > budgets.get(domain)!;
+    if (!overBudget && (incomingUnderBudget || domain !== incomingDomain)) continue;
+    const at = times[0];
+    if (at === undefined) continue;
+    if (compareShadowEvent(domain, at, oldestDomain, oldestAt) < 0) {
+      oldestDomain = domain;
+      oldestAt = at;
+    }
+  }
+  return oldestDomain;
+}
+
+function compareShadowEvent(
+  domain: string,
+  at: number,
+  otherDomain: string | null,
+  otherAt: number,
+): number {
+  return at - otherAt || (otherDomain === null ? -1 : domain.localeCompare(otherDomain));
+}
+
+function pushTime(times: number[], at: number): void {
+  times.push(at);
+  let child = times.length - 1;
+  while (child > 0) {
+    const parent = Math.floor((child - 1) / 2);
+    if (times[parent]! <= times[child]!) break;
+    [times[parent], times[child]] = [times[child]!, times[parent]!];
+    child = parent;
+  }
+}
+
+function popOldestTime(times: number[]): void {
+  const last = times.pop();
+  if (times.length === 0 || last === undefined) return;
+  times[0] = last;
+  let parent = 0;
+  while (true) {
+    const left = parent * 2 + 1;
+    if (left >= times.length) return;
+    const right = left + 1;
+    const child = right < times.length && times[right]! < times[left]! ? right : left;
+    if (times[parent]! <= times[child]!) return;
+    [times[parent], times[child]] = [times[child]!, times[parent]!];
+    parent = child;
+  }
 }
 
 function hasFollowingWithin(

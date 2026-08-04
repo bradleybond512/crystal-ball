@@ -52,9 +52,11 @@ import { fileURLToPath } from 'node:url';
 
 import { runCorrelationBenchmark } from '../src/services/correlation/bench-correlation.ts';
 import {
+  CORRELATION_BENCH_V11_TO_V12_MIGRATION,
   compareCorrelationBenchReseedToPrevious,
   compareCorrelationBenchToBaseline,
   seedCorrelationBenchBaseline,
+  validateCorrelationBenchV11ToV12Migration,
   type CorrelationBenchBaseline,
 } from '../src/services/correlation/bench-correlation-baseline.ts';
 
@@ -120,7 +122,13 @@ function main(): void {
       process.exitCode = 2;
       return;
     }
-    const comparison = compareCorrelationBenchReseedToPrevious(report, prev);
+    const comparison = prev.schemaVersion === 11
+      ? validateCorrelationBenchV11ToV12Migration(
+        report,
+        prev,
+        CORRELATION_BENCH_V11_TO_V12_MIGRATION,
+      )
+      : compareCorrelationBenchReseedToPrevious(report, prev);
     if (!comparison.ok) {
       console.error(
         `${C.red}${C.bold}REFUSED${C.reset} — re-seed candidate regresses against or is ` +

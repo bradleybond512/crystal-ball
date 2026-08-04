@@ -15,7 +15,7 @@ import type { DomainEvent } from '../intelligence/learned-cascades';
 
 export type { DomainEvent } from '../intelligence/learned-cascades';
 
-export interface LeadLagEdge {
+interface LeadLagEdgeBase {
   from: string;
   to: string;
   /** The window scale (ms) this edge scored best at. */
@@ -32,12 +32,39 @@ export interface LeadLagEdge {
   lift: number;
   /** Binomial z-score of `support` against the chance rate. */
   zScore: number;
-  medianLagMs: number;
-  /** 90th-percentile lag — a sound rule window for the learned rule. */
-  lagP90Ms: number;
   /** Bounded blend of lift and z in 0..1 for ranking. */
   strength: number;
   explanation: string;
+}
+
+export interface PromotingLeadLagEdge extends LeadLagEdgeBase {
+  effect: 'promoting';
+  medianLagMs: number;
+  /** 90th-percentile lag — a sound rule window for the learned rule. */
+  lagP90Ms: number;
+}
+
+export interface InhibitoryLeadLagEdge extends LeadLagEdgeBase {
+  effect: 'inhibitory';
+}
+
+export type LeadLagEdge = PromotingLeadLagEdge | InhibitoryLeadLagEdge;
+
+export interface MultipleTestingFamily {
+  alpha: number;
+  eligibleOrderedPairs: number;
+  windowCount: number;
+  pairWindowTests: number;
+  tails: 2;
+  criticalAbsZ: number;
+  method: 'gaussian-union-bound';
+}
+
+export interface LeadLagMiningResult {
+  family: MultipleTestingFamily | null;
+  candidates: readonly PromotingLeadLagEdge[];
+  promoting: readonly PromotingLeadLagEdge[];
+  inhibitory: readonly InhibitoryLeadLagEdge[];
 }
 
 export interface MineLeadLagOptions {
@@ -48,17 +75,10 @@ export interface MineLeadLagOptions {
   windowsMs?: readonly number[];
   /** Minimum A-event count for the pair to be eligible. Default 3. */
   minAntecedents?: number;
-  /** Skip A→A. Default true. */
-  excludeSelf?: boolean;
-}
-
-export interface SignificanceOptions {
-  /** Minimum lift over chance. Default 2. */
-  minLift?: number;
-  /** Minimum binomial z-score. Default 2. */
+  /** Family-wise error rate for the two-tailed union bound. Default 0.05. */
+  alpha?: number;
+  /** Minimum positive z-score before family correction. Default 2. */
   minZ?: number;
-  /** Minimum absolute support. Default 3. */
-  minSupport?: number;
 }
 
 const HOUR_MS = 3_600_000;
@@ -70,55 +90,155 @@ export const DEFAULT_WINDOWS_MS: readonly number[] = [
 export function mineLeadLag(
   events: readonly DomainEvent[],
   options: MineLeadLagOptions = {},
-): LeadLagEdge[] {
+): LeadLagMiningResult {
   const windows = options.windowsMs ?? DEFAULT_WINDOWS_MS;
   const minAntecedents = options.minAntecedents ?? 3;
-  const excludeSelf = options.excludeSelf ?? true;
+  const alpha = options.alpha ?? 0.05;
+  const minZ = options.minZ ?? 2;
+
+  if (!validConfiguration(windows, alpha, minAntecedents, minZ)) return emptyMiningResult();
 
   const byDomain = groupTimesByDomain(events);
   const span = observedSpanMs(events);
-  if (span <= 0 || windows.length === 0) return [];
+  if (span <= 0) return emptyMiningResult();
 
-  const out: LeadLagEdge[] = [];
-  for (const [from, antecedents] of byDomain) {
-    if (antecedents.length < minAntecedents) continue;
-    for (const [to, consequents] of byDomain) {
-      if (excludeSelf && to === from) continue;
-      const best = bestEdgeAcrossWindows(from, to, antecedents, consequents, windows, span);
-      if (best) out.push(best);
-    }
-  }
-  out.sort((a, b) => b.strength - a.strength || b.support - a.support);
-  return out;
+  const eligibleOrigins = [...byDomain].filter(([, times]) => times.length >= minAntecedents);
+  const eligibleOrderedPairs = eligibleOrigins.reduce(
+    (count, [from]) => count + [...byDomain.keys()].filter((to) => to !== from).length,
+    0,
+  );
+  const pairWindowTests = eligibleOrderedPairs * windows.length;
+  if (pairWindowTests === 0) return emptyMiningResult();
+  const family: MultipleTestingFamily = {
+    alpha,
+    eligibleOrderedPairs,
+    windowCount: windows.length,
+    pairWindowTests,
+    tails: 2,
+    criticalAbsZ: Math.sqrt(2 * Math.log((2 * pairWindowTests) / alpha)),
+    method: 'gaussian-union-bound',
+  };
+
+  const result = mineEligiblePairs(
+    eligibleOrigins,
+    byDomain,
+    windows,
+    span,
+    family,
+    minZ,
+  );
+  result.candidates.sort(comparePromoting);
+  result.promoting.sort(comparePromoting);
+  result.inhibitory.sort(compareInhibitory);
+  return { family, ...result };
 }
 
-function bestEdgeAcrossWindows(
+function mineEligiblePairs(
+  eligibleOrigins: readonly (readonly [string, number[]])[],
+  byDomain: ReadonlyMap<string, readonly number[]>,
+  windows: readonly number[],
+  spanMs: number,
+  family: MultipleTestingFamily,
+  minZ: number,
+): {
+  candidates: PromotingLeadLagEdge[];
+  promoting: PromotingLeadLagEdge[];
+  inhibitory: InhibitoryLeadLagEdge[];
+} {
+  const candidates: PromotingLeadLagEdge[] = [];
+  const promoting: PromotingLeadLagEdge[] = [];
+  const inhibitory: InhibitoryLeadLagEdge[] = [];
+  for (const [from, antecedents] of eligibleOrigins) {
+    for (const [to, consequents] of byDomain) {
+      if (to === from) continue;
+      const best = bestEdgesAcrossWindows(from, to, antecedents, consequents, windows, spanMs);
+      recordBestEdges(best, family, minZ, candidates, promoting, inhibitory);
+    }
+  }
+  return { candidates, promoting, inhibitory };
+}
+
+function recordBestEdges(
+  best: { promoting: PromotingLeadLagEdge | null; inhibitory: InhibitoryLeadLagEdge },
+  family: MultipleTestingFamily,
+  minZ: number,
+  candidates: PromotingLeadLagEdge[],
+  promoting: PromotingLeadLagEdge[],
+  inhibitory: InhibitoryLeadLagEdge[],
+): void {
+  if (best.promoting) {
+    candidates.push(best.promoting);
+    if (isPromotingSignificant(best.promoting, family, minZ)) promoting.push(best.promoting);
+  }
+  if (isInhibitorySignificant(best.inhibitory, family)) inhibitory.push(best.inhibitory);
+}
+
+function isPromotingSignificant(
+  edge: PromotingLeadLagEdge,
+  family: MultipleTestingFamily,
+  minZ: number,
+): boolean {
+  return edge.lift >= 2
+    && edge.support >= 3
+    && edge.zScore >= Math.max(minZ, family.criticalAbsZ);
+}
+
+function isInhibitorySignificant(
+  edge: InhibitoryLeadLagEdge,
+  family: MultipleTestingFamily,
+): boolean {
+  return edge.antecedents >= 5
+    && edge.expectedRate >= 0.2
+    && edge.lift <= 0.5
+    && edge.zScore <= -Math.max(2, family.criticalAbsZ);
+}
+
+function validConfiguration(
+  windows: readonly number[],
+  alpha: number,
+  minAntecedents: number,
+  minZ: number,
+): boolean {
+  return Number.isFinite(alpha)
+    && alpha > 0
+    && alpha < 1
+    && Number.isInteger(minAntecedents)
+    && minAntecedents > 0
+    && Number.isFinite(minZ)
+    && minZ >= 0
+    && windows.length > 0
+    && windows.every((windowMs) => Number.isFinite(windowMs) && windowMs > 0)
+    && new Set(windows).size === windows.length;
+}
+
+function emptyMiningResult(): LeadLagMiningResult {
+  return { family: null, candidates: [], promoting: [], inhibitory: [] };
+}
+
+interface PairTrial extends LeadLagEdgeBase {
+  lags: readonly number[];
+}
+
+function bestEdgesAcrossWindows(
   from: string,
   to: string,
   antecedents: readonly number[],
   consequents: readonly number[],
   windows: readonly number[],
   spanMs: number,
-): LeadLagEdge | null {
-  let best: LeadLagEdge | null = null;
+): { promoting: PromotingLeadLagEdge | null; inhibitory: InhibitoryLeadLagEdge } {
+  let bestPromoting: PromotingLeadLagEdge | null = null;
+  let bestInhibitory: InhibitoryLeadLagEdge | null = null;
   for (const windowMs of windows) {
-    const edge = minePair(from, to, antecedents, consequents, windowMs, spanMs);
-    if (edge && (!best || edge.strength > best.strength)) best = edge;
+    const trial = minePair(from, to, antecedents, consequents, windowMs, spanMs);
+    if (trial.support > 0) {
+      const edge = promotingEdge(trial);
+      if (!bestPromoting || comparePromoting(edge, bestPromoting) < 0) bestPromoting = edge;
+    }
+    const edge = inhibitoryEdge(trial);
+    if (!bestInhibitory || compareInhibitory(edge, bestInhibitory) < 0) bestInhibitory = edge;
   }
-  return best;
-}
-
-/** Edges beating chance on every gate — safe to turn into rules. */
-export function significantEdges(
-  edges: readonly LeadLagEdge[],
-  options: SignificanceOptions = {},
-): LeadLagEdge[] {
-  const minLift = options.minLift ?? 2;
-  const minZ = options.minZ ?? 2;
-  const minSupport = options.minSupport ?? 3;
-  return edges.filter(
-    (e) => e.lift >= minLift && e.zScore >= minZ && e.support >= minSupport,
-  );
+  return { promoting: bestPromoting, inhibitory: bestInhibitory! };
 }
 
 function minePair(
@@ -128,7 +248,7 @@ function minePair(
   consequents: readonly number[],
   windowMs: number,
   spanMs: number,
-): LeadLagEdge | null {
+): PairTrial {
   let support = 0;
   const lags: number[] = [];
   for (const a of antecedents) {
@@ -138,8 +258,6 @@ function minePair(
       lags.push(lag);
     }
   }
-  if (support === 0) return null;
-
   const n = antecedents.length;
   const followRate = support / n;
   // Poisson base rate of the consequent over the observed span → the
@@ -151,21 +269,74 @@ function minePair(
   const strength = clamp01(
     (Math.min(lift, 4) / 4) * 0.6 + (Math.min(Math.max(zScore, 0), 4) / 4) * 0.4,
   );
-  const medianLagMs = quantile(lags, 0.5);
-  const lagP90Ms = quantile(lags, 0.9);
   return {
     from, to, windowMs, support, antecedents: n,
-    followRate: round4(followRate),
-    expectedRate: round4(expectedRate),
-    lift: round2(lift),
-    zScore: round2(zScore),
-    medianLagMs, lagP90Ms,
-    strength: round4(strength),
+    followRate,
+    expectedRate,
+    lift,
+    zScore,
+    strength,
+    lags,
     explanation:
       `${from}→${to}: ${support}/${n} followed within ${(windowMs / HOUR_MS).toFixed(0)}h ` +
       `(chance ${(expectedRate * 100).toFixed(0)}%, lift ${round2(lift)}, z ${round2(zScore)}, ` +
-      `median lag ${(medianLagMs / HOUR_MS).toFixed(1)}h)`,
+      `median lag ${(quantile(lags, 0.5) / HOUR_MS).toFixed(1)}h)`,
   };
+}
+
+function promotingEdge(trial: PairTrial): PromotingLeadLagEdge {
+  return {
+    effect: 'promoting',
+    ...sharedEdgeFields(trial),
+    medianLagMs: quantile(trial.lags, 0.5),
+    lagP90Ms: quantile(trial.lags, 0.9),
+  };
+}
+
+function inhibitoryEdge(trial: PairTrial): InhibitoryLeadLagEdge {
+  return {
+    effect: 'inhibitory',
+    ...sharedEdgeFields(trial),
+    explanation:
+      `${trial.from}→${trial.to}: ${trial.from} suppresses ${trial.to}; ` +
+      `${trial.support}/${trial.antecedents} followed within ` +
+      `${(trial.windowMs / HOUR_MS).toFixed(0)}h vs ` +
+      `${(trial.expectedRate * 100).toFixed(0)}% expected ` +
+      `(lift ${round2(trial.lift)}, z ${round2(trial.zScore)})`,
+  };
+}
+
+function sharedEdgeFields(trial: PairTrial): LeadLagEdgeBase {
+  return {
+    from: trial.from,
+    to: trial.to,
+    windowMs: trial.windowMs,
+    support: trial.support,
+    antecedents: trial.antecedents,
+    followRate: trial.followRate,
+    expectedRate: trial.expectedRate,
+    lift: trial.lift,
+    zScore: trial.zScore,
+    strength: trial.strength,
+    explanation: trial.explanation,
+  };
+}
+
+function comparePromoting(a: PromotingLeadLagEdge, b: PromotingLeadLagEdge): number {
+  return b.strength - a.strength
+    || b.support - a.support
+    || a.from.localeCompare(b.from)
+    || a.to.localeCompare(b.to)
+    || a.windowMs - b.windowMs;
+}
+
+function compareInhibitory(a: InhibitoryLeadLagEdge, b: InhibitoryLeadLagEdge): number {
+  return a.zScore - b.zScore
+    || a.lift - b.lift
+    || b.antecedents - a.antecedents
+    || a.from.localeCompare(b.from)
+    || a.to.localeCompare(b.to)
+    || a.windowMs - b.windowMs;
 }
 
 /** z = (support − n·p0) / sqrt(n·p0·(1−p0)); 0 when the variance is 0. */
@@ -227,8 +398,4 @@ function clamp01(v: number): number {
 
 function round2(v: number): number {
   return Number.isFinite(v) ? Math.round(v * 100) / 100 : v;
-}
-
-function round4(v: number): number {
-  return Number.isFinite(v) ? Math.round(v * 10_000) / 10_000 : v;
 }

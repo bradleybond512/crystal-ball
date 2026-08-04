@@ -1,14 +1,22 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import {
   buildAlgorithmDiagnosticsSnapshot,
   type BuildAlgorithmDiagnosticsInput,
 } from '../algorithm-diagnostics.ts';
 import type { PredictionRecord } from '../../intelligence/forecast-calibration.ts';
+import {
+  __resetCorrelationLivenessForTests,
+  recordCorrelationBatch,
+  recordLearnedRulesInstalled,
+  registerCorrelationRuntime,
+} from '../../correlation/correlation-liveness.ts';
 
 const NOW = 1_800_000_000_000;
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
+
+beforeEach(() => __resetCorrelationLivenessForTests());
 
 function baseInput(): BuildAlgorithmDiagnosticsInput {
   return {
@@ -345,6 +353,59 @@ test('buildAlgorithmDiagnosticsSnapshot bounds recent evaluations and omits raw 
   assert.equal('detail' in snapshot.recentEvaluations[0]!, false);
   assert.equal('notes' in snapshot.recentEvaluations[0]!, false);
   assert.equal('inputHash' in snapshot.recentEvaluations[0]!, false);
+});
+
+test('correlation liveness fails neutral when runtime telemetry is unavailable', () => {
+  const snapshot = buildAlgorithmDiagnosticsSnapshot(baseInput());
+
+  assert.deepEqual(snapshot.correlationLiveness, {
+    schemaVersion: 1,
+    status: 'unavailable',
+    reason: 'no_live_activity',
+    recentBatchLimit: 24,
+    recentWindowMs: 21_600_000,
+    minimumLiveBatches: 3,
+    live: {
+      learnedRulesInstalled: 0,
+      batchCount: 0,
+      learnedPairsEmitted: 0,
+      lastBatchAt: null,
+      batchSizeDistribution: {
+        singleton: 0,
+        small: 0,
+        medium: 0,
+        large: 0,
+      },
+    },
+    offlineReplay: {
+      learnedRulesInstalled: 0,
+      batchCount: 0,
+      learnedPairsEmitted: 0,
+      lastBatchAt: null,
+      batchSizeDistribution: {
+        singleton: 0,
+        small: 0,
+        medium: 0,
+        large: 0,
+      },
+    },
+  });
+});
+
+test('algorithm diagnostics surface degraded learned-rule liveness from live telemetry', () => {
+  const runtime = {};
+  registerCorrelationRuntime(runtime, 'live');
+  recordLearnedRulesInstalled(runtime, 2);
+  recordCorrelationBatch(runtime, 1, [], NOW - 2);
+  recordCorrelationBatch(runtime, 1, [], NOW - 1);
+  recordCorrelationBatch(runtime, 1, [], NOW);
+
+  const liveness = buildAlgorithmDiagnosticsSnapshot(baseInput()).correlationLiveness;
+
+  assert.equal(liveness.status, 'degraded');
+  assert.equal(liveness.reason, 'learned_rules_dormant_on_singletons');
+  assert.equal(liveness.live.batchCount, 3);
+  assert.equal(liveness.live.learnedPairsEmitted, 0);
 });
 
 test('forecast evaluation diagnostics expose bounded leakage-safe holdout cohorts', () => {

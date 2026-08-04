@@ -43,7 +43,7 @@
  */
 
 import type {
-  BenchEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchRuleProbe,
+  BenchEdgeRow, BenchInhibitoryEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchRuleProbe,
   CorrelationBenchReport, EdgeVerdict,
 } from './bench-correlation';
 // The gate reads planted truth DIRECTLY. A ledger row that carries its own
@@ -55,7 +55,7 @@ import {
   corpusDomains, decoyEventIds, digestRecords, pairKeyFor, plantedCouplingIndex,
   plantedTruePairKeys,
 } from './__bench__/golden-streams';
-import { DEFAULT_WINDOWS_MS } from './lead-lag';
+import { DEFAULT_WINDOWS_MS, type MultipleTestingFamily } from './lead-lag';
 import { LEARNED_RULE_PREFIX, learnedRuleId } from './learned-rules';
 
 /**
@@ -147,7 +147,7 @@ const TOLERANCE_CEILINGS: CorrelationBenchTolerances = {
  * confusing reasons, only for the fields that happen to be gated. Pin the
  * version and say so once, plainly.
  */
-export const CORRELATION_BENCH_SCHEMA_VERSION = 11;
+export const CORRELATION_BENCH_SCHEMA_VERSION = 12;
 
 /**
  * `goldenCorpusDigest()` emits exactly 32 lowercase hex characters. Comparing
@@ -166,6 +166,7 @@ export interface CorrelationBenchBaseline {
   seededAt: string;
   /** Human note on what the numbers meant when they were frozen. */
   note: string;
+  replayMode: 'offline-whole-corpus';
 
   // corpus identity — exact equality
   streamCount: number;
@@ -173,6 +174,7 @@ export interface CorrelationBenchBaseline {
   plantedCausalCount: number;
   truePairUniverse: number;
   corpusDigest: string;
+  streamDigests: Record<string, string>;
   /**
    * Digest of the ENTIRE report the last reviewed run produced — see
    * `benchReportDigest`. This is the only pin in the file that a change to
@@ -188,6 +190,7 @@ export interface CorrelationBenchBaseline {
    * failure rather than a rate too small to trip a tolerance.
    */
   ruleCoverage: string[];
+  multipleTestingFamily: MultipleTestingFamily;
 
   // graded metrics
   couplingPrecision: number;
@@ -207,6 +210,12 @@ export interface CorrelationBenchBaseline {
    * gate as an improvement, and then cannot become the next baseline.
    */
   edgeEvidenceSeparation: number | null;
+  fixedCandidateEvidenceSeparation: number;
+  plantedInhibitoryCount: number;
+  inhibitoryTruePositiveCount: number;
+  inhibitoryFalsePositiveCount: number;
+  inhibitoryPrecision: number | null;
+  inhibitoryRecall: number;
   learnedRuleCount: number;
   learnedRuleFalsePositives: number;
   causalLearnedRuleCount: number;
@@ -226,12 +235,255 @@ export interface CorrelationBenchBaseline {
   tolerances: CorrelationBenchTolerances;
 }
 
+export interface CorrelationBenchMigrationV11ToV12 {
+  fromSchemaVersion: 11;
+  toSchemaVersion: 12;
+  previousCorpusDigest: string;
+  previousReportDigest: string;
+  changedStream: {
+    id: 'inhibitory-pair';
+    beforeDigest: string;
+    afterDigest: string;
+    reason: string;
+  };
+  unchangedStreamDigests: Record<string, string>;
+}
+
+export const CORRELATION_BENCH_V11_ANCHORS = {
+  schemaVersion: 11,
+  streamCount: 10,
+  observationCount: 378,
+  plantedCausalCount: 5,
+  truePairUniverse: 22,
+  corpusDigest: '8411c23a6f009f2245ec779a7593685e',
+  reportDigest: '4f63dfad203f2c37be09a1ec73d9d54d',
+  builtInRuleIds: [
+    'airquality-wildfire',
+    'biosurv-aviation',
+    'conflict-displacement',
+    'earthquake-infrastructure',
+    'earthquake-tsunami',
+    'sanctions-maritime',
+    'space-weather-infrastructure',
+    'weather-aviation',
+    'weather-wildfire',
+  ],
+  ruleCoverage: [
+    'earthquake-tsunami',
+    'sanctions-maritime',
+    'space-weather-infrastructure',
+    'weather-wildfire',
+  ],
+  streamDigests: {
+    'seismic-ocean': 'ae54d9c42578ce17054e5777debcc393',
+    'grid-storm': 'b7aaafd294d86ba448ab849fa9342b3c',
+    'fire-weather': '2bb7290d92eda4ac03119468aed464a2',
+    'sanctions-shipping': '05f6aed01fa9c4175eeab162d962a39e',
+    'quiet-independents': 'ce0c70183afa142cf59261dd8a74efae',
+    'chatty-independent': 'b2c11c3fc6c54eca3bdca3850d8a2d0e',
+    'bursty-confounder': 'ead374295c9b5e46558f99be1ccab7c5',
+    'mediated-chain': '6b3057b78e35ac18c481c2cde6d8783c',
+    'inhibitory-pair': 'b5928d67004617f2b938c676d64c3950',
+    'decoy-near-miss': '7777eed12b0db17bb7cdbfc0aa705696',
+  },
+  tolerances: {
+    couplingPrecisionDrop: 0.02,
+    couplingRecallDrop: 0,
+    pairPrecisionDrop: 0,
+    pairRecallDrop: 0,
+    edgeEvidenceSeparationDrop: 1,
+    meanTruePairConfidenceDrop: 0.05,
+    falseEdgeGrowth: 0,
+    causalLearnedRuleShrink: 0,
+    learnedRuleFalsePositiveGrowth: 0,
+    learnedRulePairGrowth: 5,
+    causalLearnedRulePairShrinkRatio: 0.5,
+    enginePairShrink: 0,
+    minedEdgeCountShrink: 10,
+  },
+} as const;
+
+const CORRELATION_BENCH_V12_CORPUS_DIGEST = '1a0377333099795fe0ccff8dc5a7a2cf';
+
+const UNCHANGED_V11_STREAM_DIGESTS = Object.fromEntries(
+  Object.entries(CORRELATION_BENCH_V11_ANCHORS.streamDigests)
+    .filter(([id]) => id !== 'inhibitory-pair'),
+);
+
+export const CORRELATION_BENCH_V11_TO_V12_MIGRATION: CorrelationBenchMigrationV11ToV12 = {
+  fromSchemaVersion: 11,
+  toSchemaVersion: 12,
+  previousCorpusDigest: CORRELATION_BENCH_V11_ANCHORS.corpusDigest,
+  previousReportDigest: CORRELATION_BENCH_V11_ANCHORS.reportDigest,
+  changedStream: {
+    id: 'inhibitory-pair',
+    beforeDigest: CORRELATION_BENCH_V11_ANCHORS.streamDigests['inhibitory-pair'],
+    afterDigest: '90452e3558cea0460e09e372b04ecca6',
+    reason: 'ACC-502 adds sufficient nonoverlapping suppression trials with an informative base rate.',
+  },
+  unchangedStreamDigests: UNCHANGED_V11_STREAM_DIGESTS,
+};
+
 export interface CorrelationBenchComparison {
   ok: boolean;
   reasons: string[];
 }
 
-const WITNESSED_DIGEST_KEYS = ['pairs', 'edges', 'learnedPairs', 'probes'] as const;
+export function validateCorrelationBenchV11ToV12Migration(
+  report: CorrelationBenchReport,
+  previousV11: CorrelationBenchBaseline,
+  manifest: CorrelationBenchMigrationV11ToV12,
+): CorrelationBenchComparison {
+  const reasons: string[] = [];
+  checkV11MigrationSource(reasons, previousV11);
+  checkV11MigrationManifest(reasons, report, manifest);
+  checkV12MigrationEvidence(reasons, report, previousV11);
+  return { ok: reasons.length === 0, reasons };
+}
+
+function checkV11MigrationSource(
+  reasons: string[],
+  previous: CorrelationBenchBaseline,
+): void {
+  const exact: readonly (readonly [string, unknown, unknown])[] = [
+    ['schemaVersion', CORRELATION_BENCH_V11_ANCHORS.schemaVersion, previous.schemaVersion],
+    ['streamCount', CORRELATION_BENCH_V11_ANCHORS.streamCount, previous.streamCount],
+    ['observationCount', CORRELATION_BENCH_V11_ANCHORS.observationCount, previous.observationCount],
+    ['plantedCausalCount', CORRELATION_BENCH_V11_ANCHORS.plantedCausalCount,
+      previous.plantedCausalCount],
+    ['truePairUniverse', CORRELATION_BENCH_V11_ANCHORS.truePairUniverse,
+      previous.truePairUniverse],
+    ['corpusDigest', CORRELATION_BENCH_V11_ANCHORS.corpusDigest, previous.corpusDigest],
+    ['reportDigest', CORRELATION_BENCH_V11_ANCHORS.reportDigest, previous.reportDigest],
+    ['builtInRuleIds', JSON.stringify(CORRELATION_BENCH_V11_ANCHORS.builtInRuleIds),
+      JSON.stringify(previous.builtInRuleIds)],
+    ['ruleCoverage', JSON.stringify(CORRELATION_BENCH_V11_ANCHORS.ruleCoverage),
+      JSON.stringify(previous.ruleCoverage)],
+    ['tolerances', JSON.stringify(CORRELATION_BENCH_V11_ANCHORS.tolerances),
+      JSON.stringify(previous.tolerances)],
+  ];
+  for (const [field, expected, actual] of exact) {
+    if (actual !== expected) {
+      reasons.push(
+        `v11 migration source ${field} is not the pinned reviewed anchor ` +
+        `(expected ${String(expected)}, got ${String(actual)})`,
+      );
+    }
+  }
+}
+
+function checkV11MigrationManifest(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  manifest: CorrelationBenchMigrationV11ToV12,
+): void {
+  if (JSON.stringify(manifest) !== JSON.stringify(CORRELATION_BENCH_V11_TO_V12_MIGRATION)) {
+    reasons.push('v11→v12 migration manifest does not match the pinned S9-only transition');
+    return;
+  }
+  const currentKeys = Object.keys(report.streamDigests).sort(compareStrings);
+  const expectedKeys = Object.keys(CORRELATION_BENCH_V11_ANCHORS.streamDigests).sort(compareStrings);
+  if (JSON.stringify(currentKeys) !== JSON.stringify(expectedKeys)) {
+    reasons.push('v12 streamDigests does not name exactly the ten reviewed streams');
+  }
+  for (const [id, digest] of Object.entries(manifest.unchangedStreamDigests)) {
+    if (report.streamDigests[id] !== digest) {
+      reasons.push(`v12 changed non-S9 stream ${id}; migration permits only inhibitory-pair`);
+    }
+  }
+  if (manifest.changedStream.beforeDigest === manifest.changedStream.afterDigest) {
+    reasons.push('v11→v12 changed stream digest did not change');
+  }
+  if (manifest.changedStream.reason.trim() === '') {
+    reasons.push('v11→v12 changed stream requires a nonempty reason');
+  }
+  if (report.streamDigests['inhibitory-pair'] !== manifest.changedStream.afterDigest) {
+    reasons.push('v12 inhibitory-pair digest does not match the reviewed afterDigest');
+  }
+  if (report.corpusDigest !== CORRELATION_BENCH_V12_CORPUS_DIGEST) {
+    reasons.push('v12 corpus digest does not match the reviewed S9-only corpus transition');
+  }
+}
+
+function checkV12MigrationEvidence(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  previous: CorrelationBenchBaseline,
+): void {
+  if (report.replayMode !== 'offline-whole-corpus') {
+    reasons.push('v12 migration replayMode must be offline-whole-corpus');
+  }
+  checkMigrationFamily(reasons, report.multipleTestingFamily);
+  if (report.plantedInhibitoryCount !== 1
+    || report.inhibitoryTruePositiveCount !== 1
+    || report.inhibitoryRecall !== 1) {
+    reasons.push('v12 migration must recover the one planted inhibitory coupling');
+  }
+  if (report.inhibitoryPrecision === null) {
+    reasons.push('v12 migration cannot seed null inhibitory precision from no discoveries');
+  } else if (report.inhibitoryPrecision !== 1 || report.inhibitoryFalsePositiveCount !== 0) {
+    reasons.push('v12 migration requires inhibitory precision 1 with zero false positives');
+  }
+  if (!Number.isFinite(report.fixedCandidateEvidenceSeparation)
+    || report.fixedCandidateEvidenceSeparation < previous.edgeEvidenceSeparation!) {
+    reasons.push(
+      `fixed candidate evidence separation regressed below the reviewed v11 evidence floor`,
+    );
+  }
+  checkMigrationSharedGates(reasons, report, previous);
+}
+
+function checkMigrationFamily(
+  reasons: string[],
+  family: MultipleTestingFamily,
+): void {
+  const expectedCritical = Math.sqrt(
+    2 * Math.log((2 * family.pairWindowTests) / family.alpha),
+  );
+  if (family.alpha !== 0.05
+    || !Number.isInteger(family.eligibleOrderedPairs)
+    || family.eligibleOrderedPairs <= 0
+    || family.windowCount !== DEFAULT_WINDOWS_MS.length
+    || family.pairWindowTests !== family.eligibleOrderedPairs * family.windowCount
+    || family.tails !== 2
+    || family.method !== 'gaussian-union-bound'
+    || !Number.isFinite(family.criticalAbsZ)
+    || family.criticalAbsZ !== expectedCritical) {
+    reasons.push('v12 multiple-testing family is invalid or not exactly reproducible');
+  }
+}
+
+function checkMigrationSharedGates(
+  reasons: string[],
+  report: CorrelationBenchReport,
+  previous: CorrelationBenchBaseline,
+): void {
+  const tol = previous.tolerances;
+  checkDrop(reasons, 'miner coupling precision', previous.couplingPrecision,
+    report.couplingPrecision, tol.couplingPrecisionDrop);
+  checkDrop(reasons, 'miner coupling recall', previous.couplingRecall,
+    report.couplingRecall, tol.couplingRecallDrop);
+  checkGrowth(reasons, 'graded false edges', previous.falseEdgeCount,
+    report.falseEdgeCount, tol.falseEdgeGrowth);
+  checkDrop(reasons, 'mined candidate edges', previous.minedEdgeCount,
+    report.minedEdgeCount, tol.minedEdgeCountShrink);
+  checkDrop(reasons, 'causal learned rules', previous.causalLearnedRuleCount,
+    report.causalLearnedRuleCount, tol.causalLearnedRuleShrink);
+  checkGrowth(reasons, 'learned-rule false positives', previous.learnedRuleFalsePositives,
+    report.learnedRuleFalsePositives, tol.learnedRuleFalsePositiveGrowth);
+  checkGrowth(reasons, 'learned-rule pair volume', previous.learnedRulePairCount,
+    report.learnedRulePairCount, tol.learnedRulePairGrowth);
+  checkDrop(reasons, 'built-in pair precision', previous.pairPrecision,
+    report.pairPrecision, tol.pairPrecisionDrop);
+  checkDrop(reasons, 'built-in pair recall', previous.pairRecall,
+    report.pairRecall, tol.pairRecallDrop);
+  checkDrop(reasons, 'mean true-pair confidence', previous.meanTruePairConfidence,
+    report.meanTruePairConfidence, tol.meanTruePairConfidenceDrop);
+}
+
+const WITNESSED_DIGEST_KEYS = [
+  'pairs', 'edges', 'inhibitoryEdges', 'learnedPairs', 'probes',
+] as const;
 const compareStrings = (a: string, b: string): number => a.localeCompare(b);
 
 /**
@@ -455,16 +707,6 @@ function resolveTolerances(
 }
 
 /**
- * An explicit `null` separation is legitimate live — see the separation gate —
- * and is excused from the finite check. A MISSING field must NOT be excused,
- * which is exactly why this is an `=== null` branch and not `?? 0`.
- */
-function separationOperand(value: number | null | undefined): unknown {
-  if (value === null) return 0;
-  return value;
-}
-
-/**
  * A committed `null` separation is a measured outcome — no false edges to
  * separate from — only when the same baseline says so. Everywhere else it is a
  * missing number wearing the perfect miner's clothes, and it must fail the
@@ -553,7 +795,7 @@ const MUST_ARM_ITS_GATE: readonly [
   // Higher-is-better, so a zero seed silences it permanently: re-seeding both
   // sides at 0 while 17 false edges remain would retire the 8.49 → 0 collapse
   // from the gate entirely.
-  ['edgeEvidenceSeparation', 'edgeEvidenceSeparationDrop'],
+  ['fixedCandidateEvidenceSeparation', 'edgeEvidenceSeparationDrop'],
   ['enginePairCount', null],
   ['distinctEnginePairCount', 'enginePairShrink'],
   ['minedEdgeCount', 'minedEdgeCountShrink'],
@@ -599,7 +841,6 @@ function checkBaselineArmsItsGates(
     // The one field with a legal non-number: a baseline seeded from a run with
     // zero false edges has no separation to arm, and `falseEdgeGrowth` (which
     // that same run pins at 0) is what fails if false edges come back.
-    if (field === 'edgeEvidenceSeparation' && baselineSeparationIsPerfect(baseline)) continue;
     const value: unknown = baseline[field];
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
       const shown = typeof value === 'number' ? String(value) : JSON.stringify(value);
@@ -915,6 +1156,10 @@ function checkCorpusIdentity(
     ['planted causal coupling count', baseline.plantedCausalCount, report.plantedCausalCount],
     ['planted true-pair universe', baseline.truePairUniverse, report.truePairUniverse],
     ['corpus content digest', baseline.corpusDigest, report.corpusDigest],
+    ['replay mode', baseline.replayMode, report.replayMode],
+    ['stream digests', JSON.stringify(baseline.streamDigests), JSON.stringify(report.streamDigests)],
+    ['multiple-testing family', JSON.stringify(baseline.multipleTestingFamily),
+      JSON.stringify(report.multipleTestingFamily)],
   ];
   for (const [label, want, got] of identity) {
     if (want !== got) {
@@ -1030,9 +1275,16 @@ export function compareCorrelationBenchToBaseline(
     ['significant edges', 'count',
       baseline.significantEdgeCount, report.significantEdgeCount],
     ['learned rules', 'count', baseline.learnedRuleCount, report.learnedRuleCount],
-    ['causal-vs-false edge evidence separation', 'separation',
-      baselineSeparationIsPerfect(baseline) ? 0 : baseline.edgeEvidenceSeparation,
-      separationOperand(report.edgeEvidenceSeparation)],
+    ['fixed-candidate evidence separation', 'separation',
+      baseline.fixedCandidateEvidenceSeparation, report.fixedCandidateEvidenceSeparation],
+    ['planted inhibitory couplings', 'count',
+      baseline.plantedInhibitoryCount, report.plantedInhibitoryCount],
+    ['inhibitory true positives', 'count',
+      baseline.inhibitoryTruePositiveCount, report.inhibitoryTruePositiveCount],
+    ['inhibitory false positives', 'count',
+      baseline.inhibitoryFalsePositiveCount, report.inhibitoryFalsePositiveCount],
+    ['inhibitory precision', 'rate', baseline.inhibitoryPrecision, report.inhibitoryPrecision],
+    ['inhibitory recall', 'rate', baseline.inhibitoryRecall, report.inhibitoryRecall],
   ];
   for (const [label, kind, want, got] of gated) {
     checkOperand(reasons, `${label}: baseline`, kind, want, BASELINE_HINT);
@@ -1103,7 +1355,14 @@ export function compareCorrelationBenchToBaseline(
     checkGrowth(reasons, label, want, got, falseEdgeGrowth);
   }
 
-  checkSeparation(reasons, report, baseline, tol.edgeEvidenceSeparationDrop);
+  checkDrop(reasons, 'fixed-candidate evidence separation',
+    baseline.fixedCandidateEvidenceSeparation, report.fixedCandidateEvidenceSeparation,
+    tol.edgeEvidenceSeparationDrop);
+  checkDrop(reasons, 'inhibitory precision',
+    baseline.inhibitoryPrecision!, report.inhibitoryPrecision!, 0);
+  checkDrop(reasons, 'inhibitory recall', baseline.inhibitoryRecall, report.inhibitoryRecall, 0);
+  checkGrowth(reasons, 'inhibitory false positives',
+    baseline.inhibitoryFalsePositiveCount, report.inhibitoryFalsePositiveCount, 0);
 
   // ── Engine quality (built-in rules only) ───────────────────────────────
   checkDrop(reasons, 'built-in pair precision',
@@ -1368,8 +1627,90 @@ function checkSummaryArithmetic(reasons: string[], side: string, s: BenchSummary
 function checkReportConsistency(reasons: string[], report: CorrelationBenchReport): void {
   checkSummaryArithmetic(reasons, 'report', report);
   checkEdgeLedger(reasons, report);
+  checkInhibitoryEdgeLedger(reasons, report);
   checkPairLedger(reasons, report);
   checkLearnedPairLedger(reasons, report);
+}
+
+function checkInhibitoryEdgeLedger(
+  reasons: string[],
+  report: CorrelationBenchReport,
+): void {
+  if (!Array.isArray(report.inhibitoryEdges)) {
+    reasons.push('report is internally inconsistent: inhibitoryEdges is not an array');
+    return;
+  }
+  const planted = plantedCouplingIndex();
+  const seen = new Set<string>();
+  let truePositives = 0;
+  for (const [index, edge] of report.inhibitoryEdges.entries()) {
+    checkInhibitoryEdgeRow(reasons, edge, index, planted, seen, report.multipleTestingFamily);
+    if (planted.get(`${edge.from}->${edge.to}`)?.kind === 'inhibitory') truePositives += 1;
+  }
+  const falsePositives = report.inhibitoryEdges.length - truePositives;
+  const precision = report.inhibitoryEdges.length === 0
+    ? null
+    : roundRatio(truePositives, report.inhibitoryEdges.length);
+  const recall = roundRatio(truePositives, report.plantedInhibitoryCount);
+  const claimed: readonly (readonly [string, unknown, unknown])[] = [
+    ['inhibitoryTruePositiveCount', report.inhibitoryTruePositiveCount, truePositives],
+    ['inhibitoryFalsePositiveCount', report.inhibitoryFalsePositiveCount, falsePositives],
+    ['inhibitoryPrecision', report.inhibitoryPrecision, precision],
+    ['inhibitoryRecall', report.inhibitoryRecall, recall],
+  ];
+  for (const [field, got, expected] of claimed) {
+    if (got !== expected) {
+      reasons.push(
+        `report is internally inconsistent: ${field}=${String(got)} but inhibitory truth ` +
+        `re-derivation yields ${String(expected)}`,
+      );
+    }
+  }
+}
+
+function checkInhibitoryEdgeRow(
+  reasons: string[],
+  edge: BenchInhibitoryEdgeRow,
+  index: number,
+  planted: ReturnType<typeof plantedCouplingIndex>,
+  seen: Set<string>,
+  family: MultipleTestingFamily,
+): void {
+  const where = `inhibitory edge row ${index}`;
+  const expectedId = `inhibits:${edge.from}->${edge.to}`;
+  if (edge.id !== expectedId || seen.has(edge.id)) {
+    reasons.push(`${where} has invalid or duplicate id ${String(edge.id)}`);
+  }
+  seen.add(edge.id);
+  const truth = planted.get(`${edge.from}->${edge.to}`)?.kind === 'inhibitory'
+    ? 'inhibitory'
+    : 'false-positive';
+  if (edge.verdict !== truth) {
+    reasons.push(`${where} verdict=${edge.verdict} but planted truth derives ${truth}`);
+  }
+  const expectedFollow = edge.support / edge.antecedents;
+  const expectedLift = edge.expectedRate > 0
+    ? expectedFollow / edge.expectedRate
+    : Number.POSITIVE_INFINITY;
+  const variance = edge.antecedents * edge.expectedRate * (1 - edge.expectedRate);
+  const expectedZ = variance > 0
+    ? (edge.support - edge.antecedents * edge.expectedRate) / Math.sqrt(variance)
+    : 0;
+  if (!Number.isInteger(edge.antecedents) || edge.antecedents < 5
+    || !Number.isInteger(edge.support) || edge.support < 0 || edge.support > edge.antecedents
+    || !Number.isFinite(edge.expectedRate) || edge.expectedRate < 0.2 || edge.expectedRate > 1
+    || edge.lift > 0.5
+    || edge.zScore > -Math.max(2, family.criticalAbsZ)
+    || Math.abs(edge.followRate - expectedFollow) > Number.EPSILON
+    || Math.abs(edge.lift - expectedLift) > 1e-12
+    || Math.abs(edge.zScore - expectedZ) > 1e-12) {
+    reasons.push(`${where} does not reproduce the inhibitory admission statistics`);
+  }
+}
+
+function roundRatio(numerator: number, denominator: number): number {
+  if (denominator === 0) return 0;
+  return Math.round((numerator / denominator) * 10_000) / 10_000;
 }
 
 /**
@@ -1990,10 +2331,12 @@ export interface CorrelationBenchWitnessed {
   meanFalsePairConfidence: number | null;
   confidenceSeparation: number | null;
   causalCouplingsLostToCap: string[];
+  edgeEvidenceSeparation: number | null;
   /** One digest per ledger, so a moved digest names the ledger that moved. */
   sectionDigests: {
     pairs: string;
     edges: string;
+    inhibitoryEdges: string;
     learnedPairs: string;
     probes: string;
   };
@@ -2012,9 +2355,11 @@ export function benchWitnessedFields(report: CorrelationBenchReport): Correlatio
     meanFalsePairConfidence: report.meanFalsePairConfidence,
     confidenceSeparation: report.confidenceSeparation,
     causalCouplingsLostToCap: [...report.causalCouplingsLostToCap],
+    edgeEvidenceSeparation: report.edgeEvidenceSeparation,
     sectionDigests: {
       pairs: sectionDigest(report.pairs),
       edges: sectionDigest(report.edges),
+      inhibitoryEdges: sectionDigest(report.inhibitoryEdges),
       learnedPairs: sectionDigest(report.learnedPairs),
       probes: sectionDigest(report.ruleProbes),
     },
@@ -2065,6 +2410,7 @@ function checkWitnessedFields(
     ['meanCausalEdgeZ', want.meanCausalEdgeZ, got.meanCausalEdgeZ],
     ['meanFalsePairConfidence', want.meanFalsePairConfidence, got.meanFalsePairConfidence],
     ['confidenceSeparation', want.confidenceSeparation, got.confidenceSeparation],
+    ['edgeEvidenceSeparation', want.edgeEvidenceSeparation, got.edgeEvidenceSeparation],
     [
       'causalCouplingsLostToCap',
       canonicalList(want.causalCouplingsLostToCap),
@@ -2646,36 +2992,6 @@ function checkPairArithmetic(reasons: string[], side: string, s: BenchSummary): 
 /** `ratio()` rounds to 4dp, so a derived cross-check must allow that rounding. */
 const RATIO_EPSILON = 1.1e-4;
 
-/**
- * Evidence separation is `null` when the miner reported no false edges at all —
- * a perfect miner, which is the goal of ACC-502..504. Coercing that to 0 turns
- * the best possible outcome into the single largest regression the gate can
- * report, so it is scored as the improvement it is.
- */
-function checkSeparation(
-  reasons: string[],
-  report: CorrelationBenchReport,
-  baseline: CorrelationBenchBaseline,
-  tolerance: number,
-): void {
-  if (report.edgeEvidenceSeparation === null) {
-    if (report.falseEdgeCount === 0) return; // nothing to separate FROM — improvement
-    reasons.push(
-      'causal-vs-false edge evidence separation is null while false edges exist ' +
-      `(${report.falseEdgeCount}) — the benchmark failed to score them`,
-    );
-    return;
-  }
-  if (baseline.edgeEvidenceSeparation === null) {
-    // Seeded from a run with no false edges. There is no separation to fall
-    // below; the false edges themselves are what regressed, and
-    // `falseEdgeGrowth` against a baseline of 0 has already said so.
-    return;
-  }
-  checkDrop(reasons, 'causal-vs-false edge evidence separation',
-    baseline.edgeEvidenceSeparation, report.edgeEvidenceSeparation, tolerance);
-}
-
 /** Higher is better: fail when `live` falls more than `tolerance` below baseline. */
 function checkDrop(
   reasons: string[],
@@ -2733,15 +3049,18 @@ export function seedCorrelationBenchBaseline(
     schemaVersion: CORRELATION_BENCH_SCHEMA_VERSION,
     seededAt,
     note: carriedOver.note,
+    replayMode: report.replayMode,
 
     streamCount: report.streamCount,
     observationCount: report.observationCount,
     plantedCausalCount: report.plantedCausalCount,
     truePairUniverse: report.truePairUniverse,
     corpusDigest: report.corpusDigest,
+    streamDigests: { ...report.streamDigests },
     reportDigest: benchReportDigest(report),
     builtInRuleIds: [...report.builtInRuleIds],
     ruleCoverage: [...report.ruleCoverage],
+    multipleTestingFamily: { ...report.multipleTestingFamily },
 
     couplingPrecision: report.couplingPrecision,
     couplingRecall: report.couplingRecall,
@@ -2754,6 +3073,12 @@ export function seedCorrelationBenchBaseline(
     unplantedFalsePositives: report.unplantedFalsePositives,
     falseEdgeCount: report.falseEdgeCount,
     edgeEvidenceSeparation: report.edgeEvidenceSeparation,
+    fixedCandidateEvidenceSeparation: report.fixedCandidateEvidenceSeparation,
+    plantedInhibitoryCount: report.plantedInhibitoryCount,
+    inhibitoryTruePositiveCount: report.inhibitoryTruePositiveCount,
+    inhibitoryFalsePositiveCount: report.inhibitoryFalsePositiveCount,
+    inhibitoryPrecision: report.inhibitoryPrecision,
+    inhibitoryRecall: report.inhibitoryRecall,
     learnedRuleCount: report.learnedRuleCount,
     learnedRuleFalsePositives: report.learnedRuleFalsePositives,
     causalLearnedRuleCount: report.causalLearnedRuleCount,

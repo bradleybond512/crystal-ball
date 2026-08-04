@@ -546,45 +546,47 @@ function buildMediatedChain(): GoldenStream {
 }
 
 // ── S9 — inhibitory pair (ACC-502 target) ───────────────────────────────────
-// `calm-signal` suppresses `escalation`: each calm sits at the centre of a
-// ~4-day escalation-free gap it caused. Because the current miner only tests
-// for follow rates ABOVE chance, an inhibitory coupling is invisible to it —
-// support is 0 in both directions and no edge is produced. That absence is
-// the baseline; ACC-502's negative-edge support fills the slot.
+// `calm-signal` suppresses `escalation`. Twenty-eight calm antecedents are separated
+// by 24h, so their 6h trials do not overlap. Escalations remain common outside
+// those windows (8h and 16h after each calm), making absence informative rather
+// than an artefact of a rare consequent.
 
 function buildInhibitoryPair(): GoldenStream {
   const observations: ObservationEvent[] = [];
-  const blocks = [0.2, 10, 20];
-  let seq = 0;
-
-  for (const start of blocks) {
-    for (let k = 0; k < 6; k++) {
+  const calmTimes = Array.from(
+    { length: 28 },
+    (_, i) => at(1 + i) + ((i * 5) % 13) * HOUR,
+  );
+  for (const [i, calmAt] of calmTimes.entries()) {
+    observations.push(obs({
+      id: `s9-calm-${i}`,
+      sourceId: 'ceasefire-monitor',
+      domain: 'calm-signal',
+      timestamp: calmAt,
+      severity: 'LOW',
+      title: `De-escalation confirmation (fixture ${i})`,
+      tags: ['de-escalation'],
+    }));
+    const nextCalm = calmTimes[i + 1];
+    const escalationTimes = nextCalm === undefined
+      ? [calmAt + 7 * HOUR, calmAt + 13 * HOUR, calmAt + 19 * HOUR]
+      : [calmAt + 7 * HOUR, calmAt + 8 * HOUR, nextCalm - 2 * HOUR];
+    for (const [offsetIndex, escalationAt] of escalationTimes.entries()) {
       observations.push(obs({
-        id: `s9-escalation-${seq++}`,
+        id: `s9-escalation-${i}-${offsetIndex}`,
         sourceId: 'acled-events',
         domain: 'escalation',
-        timestamp: at(start + k * 0.4),
+        timestamp: escalationAt,
         severity: 'MEDIUM',
         title: 'Escalation report',
         tags: ['escalation'],
       }));
     }
   }
-  for (const [i, day] of [6, 16, 26].entries()) {
-    observations.push(obs({
-      id: `s9-calm-${i}`,
-      sourceId: 'ceasefire-monitor',
-      domain: 'calm-signal',
-      timestamp: at(day),
-      severity: 'LOW',
-      title: `De-escalation confirmation (fixture ${i})`,
-      tags: ['de-escalation'],
-    }));
-  }
 
   return {
     id: 'inhibitory-pair',
-    description: 'A calm signal that suppresses escalation — a negative edge today\'s miner cannot see.',
+    description: 'Twenty-eight nonoverlapping calm-signal trials suppress an otherwise frequent escalation stream.',
     observations,
     truePairKeys: [],
     decoyEventIds: [],
@@ -885,6 +887,13 @@ export function digestRecords(records: Iterable<string>): string {
 
   for (const r of records) eat(r);
   return h.toString(16).padStart(32, '0');
+}
+
+/** Per-stream identity anchors used by the one-shot ACC-502 migration. */
+export function goldenStreamDigests(): Record<string, string> {
+  return Object.fromEntries(
+    GOLDEN_STREAMS.map((stream) => [stream.id, digestRecords([JSON.stringify(stream)])]),
+  );
 }
 
 export function goldenCorpusDigest(): string {

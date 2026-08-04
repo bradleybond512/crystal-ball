@@ -11,7 +11,8 @@
  */
 
 import type { CorrelateEngine, CorrelationRule } from '../intelligence/correlate-engine';
-import type { LeadLagEdge } from './lead-lag';
+import type { PromotingLeadLagEdge } from './lead-lag';
+import { recordLearnedRulesInstalled } from './correlation-liveness';
 
 export const LEARNED_RULE_PREFIX = 'learned:';
 export const MAX_LEARNED_RULES = 12;
@@ -20,19 +21,19 @@ const HOUR_MS = 3_600_000;
 const MIN_WINDOW_MS = HOUR_MS;
 const MAX_WINDOW_MS = 7 * 24 * HOUR_MS;
 
-export function learnedRuleId(edge: Pick<LeadLagEdge, 'from' | 'to'>): string {
+export function learnedRuleId(edge: Pick<PromotingLeadLagEdge, 'from' | 'to'>): string {
   return `${LEARNED_RULE_PREFIX}${edge.from}->${edge.to}`;
 }
 
 /** Build capped, strength-ranked rules from significant edges. */
-export function learnedRulesFromEdges(edges: readonly LeadLagEdge[]): CorrelationRule[] {
+export function learnedRulesFromEdges(edges: readonly PromotingLeadLagEdge[]): CorrelationRule[] {
   const ranked = [...edges]
     .sort((a, b) => b.strength - a.strength || b.support - a.support)
     .slice(0, MAX_LEARNED_RULES);
   return ranked.map((edge) => toRule(edge));
 }
 
-function toRule(edge: LeadLagEdge): CorrelationRule {
+function toRule(edge: PromotingLeadLagEdge): CorrelationRule {
   const from = edge.from;
   const to = edge.to;
   const windowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, edge.lagP90Ms));
@@ -72,6 +73,13 @@ export function syncLearnedRules(
     if (!rule.id.startsWith(LEARNED_RULE_PREFIX)) continue;
     if (!current.has(rule.id)) added += 1;
     engine.registerRule(rule);
+  }
+  try {
+    const installed = engine.getRules().filter((rule) =>
+      rule.id.startsWith(LEARNED_RULE_PREFIX)).length;
+    recordLearnedRulesInstalled(engine, installed);
+  } catch {
+    // Diagnostics are fail-neutral and never affect rule installation.
   }
   return { added, removed };
 }

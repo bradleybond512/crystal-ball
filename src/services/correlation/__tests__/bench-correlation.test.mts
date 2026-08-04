@@ -448,6 +448,44 @@ describe('what the corpus is built to stress', () => {
     assert.equal(report.inhibitoryEdgesReported, 0);
   });
 
+  it('reports explicit offline replay, correction-family, and inhibitory evidence', () => {
+    const report = runCorrelationBenchmark() as unknown as Record<string, unknown>;
+    const family = report.multipleTestingFamily as Record<string, unknown> | undefined;
+    const rows = report.inhibitoryEdges as Array<Record<string, unknown>> | undefined;
+
+    assert.equal(report.replayMode, 'offline-whole-corpus');
+    assert.equal(family?.method, 'gaussian-union-bound');
+    assert.equal(family?.tails, 2);
+    assert.equal(report.plantedInhibitoryCount, 1);
+    assert.equal(report.inhibitoryTruePositiveCount, 1);
+    assert.equal(report.inhibitoryFalsePositiveCount, 0);
+    assert.equal(report.inhibitoryPrecision, 1);
+    assert.equal(report.inhibitoryRecall, 1);
+    assert.equal(rows?.length, 1);
+    assert.equal(rows?.[0]?.id, 'inhibits:calm-signal->escalation');
+    assert.equal(rows?.[0]?.verdict, 'inhibitory');
+    assert.ok((rows?.[0]?.antecedents as number) >= 5);
+    assert.ok((rows?.[0]?.expectedRate as number) >= 0.2);
+    assert.ok((rows?.[0]?.zScore as number) < 0);
+  });
+
+  it('re-derives inhibitory truth and summaries from the row ledger', () => {
+    const report = runCorrelationBenchmark();
+    const forged = {
+      ...report,
+      inhibitoryEdges: report.inhibitoryEdges.map((edge) => ({
+        ...edge, verdict: 'false-positive' as const,
+      })),
+      inhibitoryTruePositiveCount: 0,
+      inhibitoryFalsePositiveCount: 1,
+      inhibitoryPrecision: 0,
+      inhibitoryRecall: 0,
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, loadBaseline());
+    assert.equal(ok, false);
+    assert.ok(reasons.some((reason) => reason.includes('planted truth derives inhibitory')));
+  });
+
   it('leaks zero near-miss decoy pairs', () => {
     assert.equal(report.decoyPairsEmitted, 0);
   });
@@ -810,10 +848,10 @@ describe('the gate', () => {
     // 0.02 tolerance. On a deterministic corpus that is still two new lies.
     const looser = {
       ...report,
-      significantEdgeCount: report.significantEdgeCount + 2,
-      falseEdgeCount: report.falseEdgeCount + 2,
-      unplantedFalsePositives: report.unplantedFalsePositives + 2,
-      couplingPrecision: 0.2083,
+      significantEdgeCount: report.significantEdgeCount + 1,
+      falseEdgeCount: report.falseEdgeCount + 1,
+      unplantedFalsePositives: report.unplantedFalsePositives + 1,
+      couplingPrecision: round4(5 / (report.significantEdgeCount + 1)),
       // The ledger has to grow with the summary or the consistency check fires
       // first and this test stops proving anything about the growth gate. The
       // fillers carry distinct endpoints (a cloned row is padding) and sit at
@@ -821,7 +859,7 @@ describe('the gate', () => {
       // and this stays a test of the false-edge count alone.
       edges: [
         ...report.edges,
-        ...freeDomainPairs(report, 2).map(([from, to]) => ({
+        ...freeDomainPairs(report, 1).map(([from, to]) => ({
           from,
           to,
           verdict: 'unplanted' as const,
@@ -887,7 +925,7 @@ describe('the gate', () => {
     assert.deepEqual(reasons.filter((r) => !isIdentityReason(r)), []);
   });
 
-  it('rejects a null separation that is NOT explained by zero false edges', () => {
+  it('retains a null survivor separation as witnessed evidence', () => {
     // A run where the miner recovered NOTHING causal: separation is legitimately
     // null (the causal z bucket is empty) while every false edge still stands.
     // The verdicts stay corpus-true — the causal rows are simply absent, which
@@ -923,13 +961,13 @@ describe('the gate', () => {
     const broken = withLearnedPairRows(brokenCounters, []);
     const { ok, reasons } = compareCorrelationBenchToBaseline(broken, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('separation is null while false edges exist')));
+    assert.ok(reasons.some((r) => r.includes('edgeEvidenceSeparation')));
   });
 
   it('fails closed when a gated metric is missing outright, not just null', () => {
     // `null` separation is a legitimate perfect-miner state; a MISSING field is
     // a report that never measured it. `?? 0` cannot tell them apart.
-    const { edgeEvidenceSeparation: _gone, ...partial } = report;
+    const { fixedCandidateEvidenceSeparation: _gone, ...partial } = report;
     const { ok, reasons } = compareCorrelationBenchToBaseline(
       partial as typeof report, baseline,
     );
@@ -999,7 +1037,7 @@ describe('the gate', () => {
       report,
       learnedRowsFor(report, [[report.causalLearnedRuleIds[0]!, 1]]),
     );
-    assert.deepEqual(nearlyDark.causalLearnedRulePairsPerRule, [1, 0, 0]);
+    assert.deepEqual(nearlyDark.causalLearnedRulePairsPerRule, [1, 0, 0, 0, 0]);
     const { ok, reasons } = compareCorrelationBenchToBaseline(nearlyDark, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('causal learned rules went quiet')));
@@ -1188,7 +1226,7 @@ describe('the gate', () => {
     // z-scores are clamped to [2,50], so a separation of means lives in
     // [-48,48]. 1e300 is not a large separation, it is a fabricated one — and
     // higher-is-better, so every directional check reads it as an improvement.
-    const fabricated = { ...report, edgeEvidenceSeparation: 1e300 };
+    const fabricated = { ...report, fixedCandidateEvidenceSeparation: 1e300 };
     const { ok, reasons } = compareCorrelationBenchToBaseline(fabricated, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('outside [−48,48]')));
@@ -1219,7 +1257,7 @@ describe('the gate', () => {
       report,
       report.learnedPairs.filter((r) => r.ruleId !== silenced),
     );
-    assert.deepEqual(oneDead.causalLearnedRulePairsPerRule, [7, 6, 0]);
+    assert.equal(oneDead.causalLearnedRulePairsPerRule.at(-1), 0);
     const { ok, reasons } = compareCorrelationBenchToBaseline(oneDead, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('a causal learned rule went dark')));
@@ -1228,10 +1266,10 @@ describe('the gate', () => {
   it('rejects a baseline that re-seeds the separation gate at zero', () => {
     // The 8.49 -> 0 collapse is only visible because the baseline arms the
     // gate. Re-seeding both sides at 0 while 17 false edges remain retires it.
-    const disarmed = { ...baseline, edgeEvidenceSeparation: 0 };
+    const disarmed = { ...baseline, fixedCandidateEvidenceSeparation: 0 };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, disarmed);
     assert.equal(ok, false);
-    assert.match(reasons[0]!, /edgeEvidenceSeparation/);
+    assert.match(reasons[0]!, /fixedCandidateEvidenceSeparation/);
     assert.match(reasons[0]!, /permanently disarms the gate it feeds/);
   });
 
@@ -1240,7 +1278,7 @@ describe('the gate', () => {
     const { ok, reasons } = compareCorrelationBenchToBaseline(mismatched, baseline);
     assert.equal(ok, false);
     assert.ok(
-      reasons.some((r) => r.includes('per-rule causal pair tallies sum to 20')),
+      reasons.some((r) => r.includes('per-rule causal pair tallies')),
       `expected a per-rule tally reason, got ${JSON.stringify(reasons)}`,
     );
   });
@@ -1979,7 +2017,9 @@ describe('the committed report digest anchors the producer itself', () => {
     const forgeries: [string, CorrelationBenchReport][] = [
       ['meanCausalEdgeStrength deleted', omit(report, 'meanCausalEdgeStrength')],
       ['meanCausalEdgeZ deleted', omit(report, 'meanCausalEdgeZ')],
-      ['causalCouplingsLostToCap emptied', { ...report, causalCouplingsLostToCap: [] }],
+      ['causalCouplingsLostToCap forged', {
+        ...report, causalCouplingsLostToCap: ['forged->coupling'],
+      }],
       ['confidenceSeparation forged', { ...report, confidenceSeparation: 0.5 }],
       ['meanFalsePairConfidence forged', { ...report, meanFalsePairConfidence: 0.1 }],
     ];
@@ -2199,10 +2239,10 @@ describe('a perfect miner can become the next baseline', () => {
     // or the reconciliation fires before any tolerance is consulted.
     const lower = {
       ...loadBaseline(),
-      unplantedFalsePositives: 10,
-      falseEdgeCount: 13,
-      significantEdgeCount: 18,
-      couplingPrecision: round4(5 / 18),
+      unplantedFalsePositives: 5,
+      falseEdgeCount: 8,
+      significantEdgeCount: 13,
+      couplingPrecision: round4(5 / 13),
       tolerances: { ...loadBaseline().tolerances, falseEdgeGrowth: 3 },
     };
     const { reasons } = compareCorrelationBenchToBaseline(report, lower);
@@ -2235,6 +2275,23 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, seeded);
     assert.equal(ok, true, `re-seeded baseline should pass: ${JSON.stringify(reasons)}`);
+  });
+
+  it('pins every v12 replay, family, candidate, inhibition, and stream identity field', () => {
+    const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
+    assert.equal(seeded.schemaVersion, 12);
+    assert.equal(seeded.replayMode, report.replayMode);
+    assert.deepEqual(seeded.streamDigests, report.streamDigests);
+    assert.deepEqual(seeded.multipleTestingFamily, report.multipleTestingFamily);
+    assert.equal(
+      seeded.fixedCandidateEvidenceSeparation,
+      report.fixedCandidateEvidenceSeparation,
+    );
+    assert.equal(seeded.plantedInhibitoryCount, report.plantedInhibitoryCount);
+    assert.equal(seeded.inhibitoryTruePositiveCount, report.inhibitoryTruePositiveCount);
+    assert.equal(seeded.inhibitoryFalsePositiveCount, report.inhibitoryFalsePositiveCount);
+    assert.equal(seeded.inhibitoryPrecision, report.inhibitoryPrecision);
+    assert.equal(seeded.inhibitoryRecall, report.inhibitoryRecall);
   });
 
   it('reproduces the committed baseline field for field', () => {
@@ -2451,6 +2508,96 @@ describe('the re-seed guard compares against the previous baseline', () => {
     assert.match(workflow, /git show "\$BASE_SHA:\$BASELINE_PATH"/);
     assert.match(workflow, /--seed --previous-baseline "\$PREVIOUS_BASELINE"/);
     assert.match(workflow, /> "\$RUNNER_TEMP\/bench-correlation-baseline\.candidate\.json"/);
+  });
+});
+
+describe('the one-shot v11 to v12 migration gate', () => {
+  const live = runCorrelationBenchmark();
+  const previous: CorrelationBenchBaseline = {
+    ...loadBaseline(),
+    schemaVersion: 11,
+    observationCount: 378,
+    corpusDigest: '8411c23a6f009f2245ec779a7593685e',
+    reportDigest: '4f63dfad203f2c37be09a1ec73d9d54d',
+    couplingPrecision: 0.2273,
+    couplingRecall: 1,
+    minedEdgeCount: 256,
+    significantEdgeCount: 22,
+    falseEdgeCount: 17,
+    edgeEvidenceSeparation: 8.4898,
+    learnedRuleCount: 12,
+    learnedRuleFalsePositives: 9,
+    causalLearnedRuleCount: 3,
+    learnedRulePairCount: 101,
+    causalLearnedRulePairCount: 19,
+    minCausalLearnedRulePairCount: 6,
+  };
+  const api = correlationBaseline as typeof correlationBaseline & {
+    CORRELATION_BENCH_V11_TO_V12_MIGRATION?: unknown;
+    validateCorrelationBenchV11ToV12Migration?: (
+      report: CorrelationBenchReport,
+      prior: CorrelationBenchBaseline,
+      manifest: unknown,
+    ) => { ok: boolean; reasons: string[] };
+  };
+
+  it('accepts only the pinned S9-only transition with all new gates armed', () => {
+    assert.ok(api.CORRELATION_BENCH_V11_TO_V12_MIGRATION);
+    assert.ok(api.validateCorrelationBenchV11ToV12Migration);
+    const verdict = api.validateCorrelationBenchV11ToV12Migration(
+      live,
+      previous,
+      api.CORRELATION_BENCH_V11_TO_V12_MIGRATION,
+    );
+    assert.deepEqual(verdict.reasons, []);
+    assert.equal(verdict.ok, true);
+  });
+
+  it('fails closed on altered previous anchors, tolerances, manifest, family, or inhibition', () => {
+    assert.ok(api.validateCorrelationBenchV11ToV12Migration);
+    const validate = api.validateCorrelationBenchV11ToV12Migration;
+    const manifest = api.CORRELATION_BENCH_V11_TO_V12_MIGRATION as Record<string, unknown>;
+    const changed = manifest.changedStream as Record<string, unknown>;
+    const unchanged = manifest.unchangedStreamDigests as Record<string, string>;
+    const cases: Array<[string, CorrelationBenchReport, CorrelationBenchBaseline, unknown]> = [
+      ['previous report anchor', live, { ...previous, reportDigest: 'a'.repeat(32) }, manifest],
+      ['previous tolerance', live, {
+        ...previous,
+        tolerances: { ...previous.tolerances, couplingPrecisionDrop: 0.03 },
+      }, manifest],
+      ['changed stream id', live, previous, {
+        ...manifest, changedStream: { ...changed, id: 'bursty-confounder' },
+      }],
+      ['empty reason', live, previous, {
+        ...manifest, changedStream: { ...changed, reason: '' },
+      }],
+      ['unchanged stream anchor', live, previous, {
+        ...manifest,
+        unchangedStreamDigests: { ...unchanged, 'grid-storm': 'a'.repeat(32) },
+      }],
+      ['live unchanged stream drift', {
+        ...live,
+        streamDigests: { ...live.streamDigests, 'grid-storm': 'b'.repeat(32) },
+      }, previous, manifest],
+      ['invalid family', {
+        ...live,
+        multipleTestingFamily: { ...live.multipleTestingFamily, tails: 1 as 2 },
+      }, previous, manifest],
+      ['missing inhibitory precision', { ...live, inhibitoryPrecision: null }, previous, manifest],
+      ['lost inhibitory recall', { ...live, inhibitoryRecall: 0 }, previous, manifest],
+      ['inhibitory false positive', {
+        ...live, inhibitoryFalsePositiveCount: 1,
+      }, previous, manifest],
+      ['candidate separation regression', {
+        ...live, fixedCandidateEvidenceSeparation: 0,
+      }, previous, manifest],
+    ];
+
+    for (const [label, report, prior, candidateManifest] of cases) {
+      const verdict = validate(report, prior, candidateManifest);
+      assert.equal(verdict.ok, false, label);
+      assert.ok(verdict.reasons.length > 0, label);
+    }
   });
 });
 
@@ -2850,8 +2997,7 @@ describe('round 13 — the halves round 12 missed', () => {
     // `['macro->maritime','space->infra'].join(',')` and the single element
     // 'macro->maritime,space->infra' are the same string. They are not the
     // same claim, and the schemaVersion-10 gate passed the second one.
-    const lost = baseline.witnessed.causalCouplingsLostToCap;
-    assert.ok(lost.length >= 2, 'fixture needs a multi-element list');
+    const lost = ['macro->maritime', 'space->infra'];
     const forged = {
       ...baseline,
       witnessed: { ...baseline.witnessed, causalCouplingsLostToCap: [lost.join(',')] },

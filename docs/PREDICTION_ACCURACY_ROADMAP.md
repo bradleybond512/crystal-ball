@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-07-27
+> Updated: 2026-08-04
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -888,11 +888,12 @@ These tasks retain their detailed designs in
 | ID | Status | Work | Dependencies |
 |---|---|---|---|
 | ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
-| ACC-502 | IN REVIEW | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
+| ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
 | ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
 | ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
+| ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 
 Safety invariant: learned inhibitory or dampening evidence may soften
 confidence but must never suppress a safety-critical delivery rung.
@@ -901,6 +902,8 @@ Phase exit:
 
 - correlation changes improve or preserve frozen precision/recall;
 - false learned edges fall on confounded and bursty streams;
+- live ingestion supplies bounded cross-event batches and diagnostics witness
+  learned-rule pair production;
 - tuning cannot bypass the benchmark or safety fixtures.
 
 ### ACC-501 — Frozen correlation benchmark and `bench:correlation` CI gate
@@ -1498,6 +1501,75 @@ Findings the benchmark surfaced, each now a concrete target:
   as reported-only evidence of the defect.
 - The engine's built-in rules are already perfect on event-level truth,
   so **all** the available headroom in Phase 5 is in the miner.
+
+### ACC-502 — Multiple-comparison correction and inhibitory edges
+
+Status: `DONE`
+
+Owner: Codex
+Branch: `codex/acc-502-multiple-testing-inhibition`
+PR: #1624
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+- the lead-lag miner now reports the complete pre-filter hypothesis family and
+  applies a two-tailed Gaussian union-bound threshold across every eligible
+  ordered domain pair and configured lag window;
+- zero-support candidates remain in the family denominator, while promoting
+  and inhibitory results use separate discriminated types and fail closed on
+  invalid configuration;
+- inhibitory evidence requires at least five antecedents, a 20% expected event
+  rate, lift at or below 0.5, and a negative z-score beyond both the fixed and
+  family-adjusted thresholds;
+- only promoting edges can become learned correlation rules; inhibition is a
+  bounded, expiring, fail-safe-on score modifier whose strongest effect is a
+  15% reduction and whose state cannot suppress or demote safety-critical
+  notification delivery;
+- identifier-free liveness diagnostics distinguish offline replay from live
+  ingestion and flag three consecutive singleton live batches when learned
+  rules are installed but cannot produce event pairs;
+- the frozen benchmark migrated once from schema 11 to 12, pinning the prior
+  corpus/report/stream digests and permitting only the reviewed inhibitory
+  fixture change.
+
+Verification evidence:
+
+- `npm run test:correlation`: 367 pass / 0 fail;
+- `npm run test:algorithms`: 384 pass / 0 fail;
+- `npm run test:diagnostics`: pass, including 27 MCP/sidecar diagnostics tests;
+- focused cascade, compound-risk, notification, and inhibition-boundary suite:
+  37 pass / 0 fail;
+- `npm run typecheck:all`: pass;
+- `npm run bench:correlation`: PASS over 10 streams / 469 observations, with
+  5/5 causal promoting couplings recovered, 1/1 inhibitory coupling recovered,
+  0 inhibitory false positives, 12 promoting false positives, and no decoy
+  event-pair emissions. The family contained 272 ordered pairs x 4 windows =
+  1,088 hypotheses and used `zcrit = 4.6218991511`.
+
+Known limitation and rollback:
+
+- production currently calls `SituationStoreV2.ingest()` with singleton event
+  batches. ACC-502 diagnoses this fail-closed instead of adding unbounded
+  history or work to the hot path; ACC-507 owns the bounded ingestion repair;
+- rollback is removal of inhibition snapshot publication/application and
+  restoration of the schema-11 benchmark, without changing built-in
+  safety-notification rules.
+
+### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
+
+Status: `TODO`
+
+Dependencies: ACC-502 (DONE)
+
+Production `SituationStoreV2.ingest()` is invoked with one event at a time, so
+the correlation engine cannot form learned-rule pairs even when rules are
+installed. Introduce a bounded, time-windowed event handoff that preserves
+startup and ingest latency, deduplicates events, expires history, and never
+allows learned correlation to delay safety-critical ingestion. Prove the live
+path with a deterministic multi-call fixture and require liveness diagnostics
+to recover from degraded to healthy after a learned pair is emitted.
 
 ## Phase 6 — Evaluate better statistical models
 

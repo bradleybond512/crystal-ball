@@ -14,10 +14,13 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import * as correlationBaseline from '../bench-correlation-baseline.ts';
 
 import {
   runCorrelationBenchmark, gradeEnginePairs, enginePairPrecision,
@@ -52,6 +55,7 @@ import {
 } from '../__bench__/rule-probes.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(here, '..', '..', '..', '..');
 const BASELINE_PATH = path.join(here, '..', '__bench__', 'bench-correlation-baseline.json');
 
 function loadBaseline(): CorrelationBenchBaseline {
@@ -2283,6 +2287,143 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     assert.deepEqual(written, seeded);
     const { ok } = compareCorrelationBenchToBaseline(report, written);
     assert.equal(ok, true);
+  });
+});
+
+describe('the re-seed guard compares against the previous baseline', () => {
+  const report = runCorrelationBenchmark();
+  const committed = loadBaseline();
+  const reseedComparison = (
+    previous: CorrelationBenchBaseline,
+  ): { ok: boolean; reasons: string[] } => {
+    const compare = (
+      correlationBaseline as typeof correlationBaseline & {
+        compareCorrelationBenchReseedToPrevious?: (
+          live: CorrelationBenchReport,
+          prior: CorrelationBenchBaseline,
+        ) => { ok: boolean; reasons: string[] };
+      }
+    ).compareCorrelationBenchReseedToPrevious;
+    assert.ok(compare, 'the CLI needs a dedicated previous-baseline reseed guard');
+    return compare(report, previous);
+  };
+
+  it('refuses a candidate that regresses beyond the previous one-sided tolerance', () => {
+    const previous = {
+      ...baselineWithCausalEdges(committed, 17),
+      reportDigest: 'a'.repeat(32),
+    };
+    const { ok, reasons } = reseedComparison(previous);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((reason) => reason.includes('miner coupling precision regressed')),
+      `expected the previous quality floor to reject the candidate: ${reasons.join(' | ')}`,
+    );
+    assert.ok(
+      reasons.every((reason) => !reason.includes('reportDigest')),
+      `a reseed must name the regression, not only identity drift: ${reasons.join(' | ')}`,
+    );
+  });
+
+  it('allows a same-corpus improvement while replacing only reviewed exact anchors', () => {
+    const previous: CorrelationBenchBaseline = {
+      ...baselineWithCausalEdges(committed, 1, report),
+      couplingRecall: round4(1 / committed.plantedCausalCount),
+      pairPrecision: round4(1 / committed.distinctEnginePairCount),
+      pairRecall: round4(1 / committed.truePairUniverse),
+      edgeEvidenceSeparation: 1.5,
+      meanTruePairConfidence: 0.1,
+      learnedRulePairCount: 9999,
+      reportDigest: 'a'.repeat(32),
+      ruleCoverage: committed.ruleCoverage.slice(0, -1),
+      witnessed: {
+        ...committed.witnessed,
+        meanCausalEdgeStrength: committed.witnessed.meanCausalEdgeStrength / 2,
+        sectionDigests: {
+          ...committed.witnessed.sectionDigests,
+          edges: 'b'.repeat(32),
+        },
+      },
+    };
+    const { ok, reasons } = reseedComparison(previous);
+    assert.deepEqual(reasons, []);
+    assert.equal(ok, true);
+  });
+
+  it('fails closed when the previous baseline is malformed', () => {
+    const malformed = {
+      ...committed,
+      reportDigest: 'not-a-digest',
+      witnessed: {
+        ...committed.witnessed,
+        sectionDigests: { ...committed.witnessed.sectionDigests, pairs: 'missing' },
+      },
+    };
+    const { ok, reasons } = reseedComparison(malformed);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((reason) => reason.includes('previous reportDigest')));
+    assert.ok(reasons.some((reason) => reason.includes('previous pairs ledger digest')));
+  });
+
+  it('refuses corpus drift instead of comparing incomparable measurements', () => {
+    const drifted = { ...committed, corpusDigest: 'c'.repeat(32) };
+    const { ok, reasons } = reseedComparison(drifted);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((reason) => reason.includes('corpus content digest changed')));
+  });
+
+  it('keeps the built-in rule inventory pinned across a reseed', () => {
+    const drifted = { ...committed, builtInRuleIds: committed.builtInRuleIds.slice(1) };
+    const { ok, reasons } = reseedComparison(drifted);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((reason) => reason.includes('built-in correlation rule set changed')));
+  });
+
+  it('makes --seed refuse a regression before emitting candidate JSON', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'crystalball-correlation-reseed-'));
+    const previousPath = path.join(dir, 'previous.json');
+    try {
+      writeFileSync(
+        previousPath,
+        JSON.stringify({
+          ...baselineWithCausalEdges(committed, 17),
+          reportDigest: 'a'.repeat(32),
+        }),
+      );
+      const child = spawnSync(
+        process.execPath,
+        [
+          '--import', 'tsx', 'scripts/correlation-benchmark.mts', '--seed',
+          '--previous-baseline', previousPath,
+        ],
+        { cwd: ROOT, encoding: 'utf8' },
+      );
+      assert.equal(child.status, 1, child.stderr);
+      assert.equal(child.stdout, '', 'a refused seed must not emit candidate JSON');
+      assert.match(child.stderr, /REFUSED/);
+      assert.match(child.stderr, /miner coupling precision regressed/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('directs every tracked-baseline replacement through a temporary candidate file', () => {
+    const script = readFileSync(path.join(ROOT, 'scripts', 'correlation-benchmark.mts'), 'utf8');
+    assert.doesNotMatch(
+      script,
+      /--seed\s*>\s*\$\{rel\}/,
+      'operator guidance must never redirect stdout onto the tracked baseline before validation',
+    );
+    assert.match(script, /bench-correlation-baseline\.candidate\.json/);
+  });
+
+  it('guards a changed PR baseline against the base branch before the normal CI gate', () => {
+    const workflow = readFileSync(path.join(ROOT, '.github', 'workflows', 'smoke.yml'), 'utf8');
+    assert.match(workflow, /github\.event\.pull_request\.base\.sha/);
+    assert.match(workflow, /github\.event\.merge_group\.base_sha/);
+    assert.match(workflow, /git show "\$BASE_SHA:\$BASELINE_PATH"/);
+    assert.match(workflow, /--seed --previous-baseline "\$PREVIOUS_BASELINE"/);
+    assert.match(workflow, /> "\$RUNNER_TEMP\/bench-correlation-baseline\.candidate\.json"/);
   });
 });
 

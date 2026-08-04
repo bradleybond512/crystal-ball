@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: '22'
@@ -64,10 +66,26 @@ jobs:
       # Tolerances are one-sided, but the committed `reportDigest` pins the
       # whole report: any change that moves any reported number — including an
       # ACC-502..506 improvement — fails on identity and must be re-seeded with
-      # `npm run bench:correlation -- --seed` in a reviewed diff. The tolerances
-      # then gate the new numbers against the old ones at that moment.
+      # `npm run bench:correlation -- --seed` into a temporary candidate file.
+      # When a PR or merge queue entry changes the tracked baseline, the step
+      # below extracts the BASE branch baseline and requires the candidate to
+      # pass its one-sided gates before the normal exact-identity gate runs.
       # Fully offline, frozen fixtures, injected timer + fixed `now` — sub-second
       # runtime, cannot hang or become a slow step.
+      - name: Guard correlation baseline reseed against base branch
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          BASELINE_PATH=src/services/correlation/__bench__/bench-correlation-baseline.json
+          if git diff --quiet "$BASE_SHA" -- "$BASELINE_PATH"; then
+            exit 0
+          fi
+          PREVIOUS_BASELINE="$RUNNER_TEMP/bench-correlation-baseline.previous.json"
+          git show "$BASE_SHA:$BASELINE_PATH" > "$PREVIOUS_BASELINE"
+          npm run bench:correlation -- --seed --previous-baseline "$PREVIOUS_BASELINE" \
+            > "$RUNNER_TEMP/bench-correlation-baseline.candidate.json"
       - run: npm run bench:correlation
       # Full MCP server suite (path-traversal sandbox, watchlist/alert tools,
       # trend/anomaly/correlate, sidecar client, etc.). It's a separate package

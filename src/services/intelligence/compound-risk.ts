@@ -21,11 +21,6 @@
  */
 
 import type { FactDomain } from './types';
-import {
-  inhibitionAdjustmentFor,
-  type InhibitionProvenance,
-  type InhibitorySnapshot,
-} from '../correlation/inhibition';
 
 // ── Inputs the engine accepts ────────────────────────────────────────────
 
@@ -40,8 +35,6 @@ export interface CompoundRiskInput {
   domain: FactDomain;
   /** All domains the underlying facts touch (cross-domain situations). */
   domains: readonly FactDomain[];
-  /** Original situation/observation domains retained for learned directional matching. */
-  sourceDomains?: readonly string[];
   /** 0-100 severity score. */
   severityScore: number;
   /** 0-1 confidence in the situation. */
@@ -105,8 +98,6 @@ export interface CompoundRiskResult {
   watchItems: WatchItem[];
   /** Human-readable headline for the UI. */
   headline: string;
-  /** Learned negative evidence applied only to `score`, when present. */
-  inhibition?: InhibitionProvenance;
 }
 
 // ── Top-level API ───────────────────────────────────────────────────────
@@ -120,8 +111,6 @@ export interface CompoundRiskOptions {
   /** Score threshold for `elevated` (default 35), `severe` (60),
    *  `critical` (80). */
   thresholds?: { elevated?: number; severe?: number; critical?: number };
-  /** Immutable learned-inhibition snapshot supplied by the runtime cadence. */
-  inhibitorySnapshot?: InhibitorySnapshot | null;
 }
 
 export function computeCompoundRisk(
@@ -142,7 +131,7 @@ export function computeCompoundRisk(
   const results: CompoundRiskResult[] = [];
   for (const members of groups) {
     if (members.length === 0) continue;
-    results.push(buildResult(members, opts.thresholds, options.inhibitorySnapshot ?? null));
+    results.push(buildResult(members, opts.thresholds));
   }
   results.sort((a, b) => b.score - a.score);
   return results;
@@ -210,23 +199,16 @@ function overlap(
 function buildResult(
   members: readonly CompoundRiskInput[],
   thresholds: Required<NonNullable<CompoundRiskOptions['thresholds']>>,
-  inhibitorySnapshot: InhibitorySnapshot | null,
 ): CompoundRiskResult {
   const sorted = [...members].sort((a, b) => b.severityScore * b.confidence - a.severityScore * a.confidence);
   const memberIds = sorted.map((m) => m.id);
   const affectedDomains = uniqueDomains(sorted.flatMap((m) => [m.domain, ...m.domains]));
   const impactCategories = deriveImpactCategories(affectedDomains);
-  const undampenedScore = computeScore(sorted, affectedDomains.length);
-  const adjustment = inhibitionAdjustmentFor(
-    undampenedScore,
-    sorted.flatMap((member) => member.sourceDomains ?? [member.domain]),
-    inhibitorySnapshot,
-  );
-  const score = adjustment.score;
-  const level = labelFor(undampenedScore, thresholds);
+  const score = computeScore(sorted, affectedDomains.length);
+  const level = labelFor(score, thresholds);
   const cascadePaths = buildCascadePaths(sorted);
   const watchItems = buildWatchItems(affectedDomains, sorted);
-  const headline = buildHeadline(sorted, affectedDomains, undampenedScore);
+  const headline = buildHeadline(sorted, affectedDomains, score);
 
   return {
     id: `compound:${memberIds[0] ?? 'empty'}`,
@@ -238,7 +220,6 @@ function buildResult(
     cascadePaths,
     watchItems,
     headline,
-    ...(adjustment.provenance ? { inhibition: adjustment.provenance } : {}),
   };
 }
 

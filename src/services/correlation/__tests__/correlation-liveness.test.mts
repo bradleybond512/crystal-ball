@@ -51,6 +51,45 @@ test('diagnoses installed learned rules as degraded when recent live batches are
   assert.equal(diagnostics.live.learnedPairsEmitted, 0);
 });
 
+test('diagnoses the last three eligible singleton batches and recovers on new learned-pair activity', () => {
+  const runtime = {};
+  telemetry.registerCorrelationRuntime(runtime, 'live');
+  telemetry.recordLearnedRulesInstalled(runtime, 1);
+  for (const [index, observationCount] of [2, 1, 1, 1].entries()) {
+    telemetry.recordCorrelationBatch(runtime, observationCount, [], NOW - 4 + index);
+  }
+  telemetry.recordCorrelationBatch(
+    runtime,
+    2,
+    [{ ruleId: 'learned:future->pair' }],
+    NOW + 1,
+  );
+
+  const degraded = telemetry.getCorrelationLivenessDiagnostics(NOW);
+
+  assert.equal(degraded.status, 'degraded');
+  assert.equal(degraded.reason, 'learned_rules_dormant_on_singletons');
+  assert.deepEqual(degraded.live.batchSizeDistribution, {
+    singleton: 3,
+    small: 1,
+    medium: 0,
+    large: 0,
+  });
+  assert.equal(degraded.live.learnedPairsEmitted, 0);
+
+  telemetry.recordCorrelationBatch(
+    runtime,
+    2,
+    [{ ruleId: 'learned:weather->infra' }],
+    NOW,
+  );
+  const recovered = telemetry.getCorrelationLivenessDiagnostics(NOW);
+
+  assert.equal(recovered.status, 'healthy');
+  assert.equal(recovered.reason, 'learned_rules_active');
+  assert.equal(recovered.live.learnedPairsEmitted, 1);
+});
+
 test('live situation ingest and learned-rule sync automatically feed liveness diagnostics', () => {
   const options = {
     clock: () => NOW,

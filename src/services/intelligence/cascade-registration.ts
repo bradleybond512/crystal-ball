@@ -25,7 +25,9 @@ import type { CorrelateEngine } from './correlate-engine';
 import {
   INHIBITION_REFRESH_INTERVAL_MS,
   clearInhibitorySnapshot,
+  evaluateActiveInhibitionShadow,
   readInhibitionEnabled,
+  recordInhibitionShadowError,
   replaceInhibitorySnapshot,
 } from '@/services/correlation/inhibition';
 
@@ -51,12 +53,15 @@ export function refreshLearnedCascades(
   history: readonly DomainEvent[],
   options: RefreshLearnedCascadeOptions = {},
 ): void {
+  const now = options.now ?? Date.now();
   try {
     if (isGhostMode()) {
+      evaluateActiveInhibitionShadow(history, now, false);
       clearInhibitorySnapshot();
       return;
     }
     const enabled = (options.inhibitionEnabled ?? readInhibitionEnabled)();
+    evaluateActiveInhibitionShadow(history, now, enabled);
     if (!enabled) clearInhibitorySnapshot();
     const result = (options.mine ?? mineLeadLag)(history);
     const promoting = result.promoting;
@@ -73,9 +78,10 @@ export function refreshLearnedCascades(
     replaceInhibitorySnapshot(
       result.inhibitory,
       result.family.criticalAbsZ,
-      options.now ?? Date.now(),
+      now,
     );
   } catch {
+    recordInhibitionShadowError(now);
     clearInhibitorySnapshot();
   }
 }

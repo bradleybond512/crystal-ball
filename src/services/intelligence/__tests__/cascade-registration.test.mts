@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import {
   computeCascadeKeys,
   refreshLearnedCascades,
 } from '../cascade-registration.ts';
 import {
+  __resetInhibitionShadowDiagnosticsForTests,
   clearInhibitorySnapshot,
+  getInhibitionShadowDiagnostics,
   getInhibitorySnapshot,
   replaceInhibitorySnapshot,
 } from '../../correlation/inhibition.ts';
@@ -16,6 +18,11 @@ import type {
 } from '../../correlation/lead-lag.ts';
 
 const HOUR_MS = 3_600_000;
+
+beforeEach(() => {
+  __resetInhibitionShadowDiagnosticsForTests();
+  clearInhibitorySnapshot();
+});
 
 test('computeCascadeKeys yields the expected pair key for a lagged cause→effect history', () => {
   const base = 1_000_000_000;
@@ -103,6 +110,39 @@ test('refresh routes only promoting edges into learned rules and publishes inhib
   assert.equal(getInhibitorySnapshot(123)?.evidence[0]?.from, 'wildfire');
 });
 
+test('refresh evaluates the previous snapshot before replacement and stores anonymous counts only', () => {
+  const previous = { ...inhibitory('a', 'b'), windowMs: 10 };
+  replaceInhibitorySnapshot([previous], 4, 100);
+
+  refreshLearnedCascades([
+    { domain: 'b', at: 101 },
+    { domain: 'a', at: 102 },
+    { domain: 'a', at: 120 },
+    { domain: 'b', at: 125 },
+    { domain: 'a', at: 128 },
+  ], {
+    now: 130,
+    engine: engine(),
+    mine: () => result(),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'fresh',
+    evaluatedAt: 130,
+    snapshotPublishedAt: 100,
+    evidenceEvaluated: 1,
+    confirmed: 1,
+    refuted: 1,
+    pending: 1,
+  });
+  assert.equal(getInhibitorySnapshot(130)?.publishedAt, 130);
+  assert.doesNotMatch(
+    JSON.stringify(getInhibitionShadowDiagnostics()),
+    /\ba\b|\bb\b|domain|event/i,
+  );
+});
+
 test('disabled, empty, and mining-error refreshes clear inhibition immediately', () => {
   const fakeEngine = engine();
   const seed = (): void => { replaceInhibitorySnapshot([inhibitory()], 4, 1); };
@@ -120,6 +160,7 @@ test('disabled, empty, and mining-error refreshes clear inhibition immediately',
   });
   assert.equal(clearedBeforeMining, true, 'kill switch clears before mining starts');
   assert.equal(getInhibitorySnapshot(2), null);
+  assert.equal(getInhibitionShadowDiagnostics().status, 'disabled');
 
   seed();
   refreshLearnedCascades([], {
@@ -138,6 +179,7 @@ test('disabled, empty, and mining-error refreshes clear inhibition immediately',
     inhibitionEnabled: () => true,
   });
   assert.equal(getInhibitorySnapshot(2), null);
+  assert.equal(getInhibitionShadowDiagnostics().status, 'error');
 });
 
 test('failed positive-rule sync clears instead of publishing a partial inhibitory snapshot', () => {

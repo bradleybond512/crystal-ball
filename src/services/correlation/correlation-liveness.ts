@@ -71,13 +71,20 @@ function emptyActivity(): CorrelationLivenessActivity {
 export function getCorrelationLivenessDiagnostics(
   now: number = Date.now(),
 ): CorrelationLivenessDiagnostics {
+  const minimumAt = Number.isFinite(now)
+    ? now - CORRELATION_LIVENESS_WINDOW_MS
+    : null;
+  const maximumAt = Number.isFinite(now) ? now : null;
   const live = summarize(
     states.live,
-    Number.isFinite(now) ? now - CORRELATION_LIVENESS_WINDOW_MS : null,
-    Number.isFinite(now) ? now : null,
+    minimumAt,
+    maximumAt,
   );
   const offlineReplay = summarize(states.offline_replay, null, null);
-  const assessment = assessLive(live);
+  const assessment = assessLive(
+    live,
+    eligibleBatchTail(states.live, minimumAt, maximumAt),
+  );
   return {
     schemaVersion: 1,
     ...assessment,
@@ -202,7 +209,29 @@ function batchSizeBucket(
   return 'large';
 }
 
-function assessLive(live: CorrelationLivenessActivity): Pick<
+function eligibleBatchTail(
+  state: CorrelationLivenessState,
+  minimumAt: number | null,
+  maximumAt: number | null,
+): CorrelationBatchSample[] {
+  const tail: CorrelationBatchSample[] = [];
+  for (
+    let index = state.batches.length - 1;
+    index >= 0 && tail.length < CORRELATION_LIVENESS_MIN_BATCHES;
+    index -= 1
+  ) {
+    const batch = state.batches[index]!;
+    if (minimumAt !== null && batch.at < minimumAt) continue;
+    if (maximumAt !== null && batch.at > maximumAt) continue;
+    tail.push(batch);
+  }
+  return tail;
+}
+
+function assessLive(
+  live: CorrelationLivenessActivity,
+  eligibleTail: readonly CorrelationBatchSample[],
+): Pick<
   CorrelationLivenessDiagnostics,
   'status' | 'reason'
 > {
@@ -216,8 +245,10 @@ function assessLive(live: CorrelationLivenessActivity): Pick<
     return { status: 'healthy', reason: 'no_learned_rules_installed' };
   }
   if (
-    live.batchSizeDistribution.singleton === live.batchCount
-    && live.learnedPairsEmitted === 0
+    eligibleTail.length === CORRELATION_LIVENESS_MIN_BATCHES
+    && eligibleTail.every((batch) => (
+      batch.observationCount === 1 && batch.learnedPairsEmitted === 0
+    ))
   ) {
     return {
       status: 'degraded',

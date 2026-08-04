@@ -9,6 +9,8 @@ import {
   situationsToCompoundInputs,
 } from '../compound-risk-cadence.ts';
 import type { Situation } from '../../intelligence/situation-store-v2.ts';
+import { makeCorrelationContributor } from '../../survival/correlation-contributor.ts';
+import { computeMultiAxisPosture } from '../../survival/survival-posture.ts';
 
 const T0 = Date.UTC(2026, 7, 4, 12);
 
@@ -52,46 +54,52 @@ beforeEach(() => {
   resetCompoundRiskCadence();
 });
 
-test('mapper preserves raw situation domains while retaining normalized compound domains', () => {
+test('mapper retains normalized compound domains without a shadow-only source-domain field', () => {
   const [input] = situationsToCompoundInputs([
     situation({ id: 'w', relatedDomains: ['infrastructure'] }),
   ]);
 
-  assert.deepEqual(input?.sourceDomains, ['wildfire', 'infrastructure']);
   assert.deepEqual(input?.domains, ['weather', 'infra']);
+  assert.equal(input ? 'sourceDomains' in input : true, false);
 });
 
-test('active learned inhibition dampens only the grouped compound score and records provenance', () => {
+test('active learned inhibition cannot change compound results or downstream posture', () => {
   const situations = [
     situation({ id: 'w' }),
     situation({ id: 'i', domain: 'infrastructure' }),
   ];
-  const inputsBefore = situationsToCompoundInputs(situations);
-  const undampened = recomputeCompoundRisk(situations, T0).results[0]!;
+  const undampened = recomputeCompoundRisk(situations, T0).results;
+  const threatsBefore = makeCorrelationContributor(undampened).contribute(T0);
+  const postureBefore = computeMultiAxisPosture({
+    contributors: [makeCorrelationContributor(undampened)],
+    freshness: [],
+    capturedAtMs: T0,
+  }, { now: T0 });
   replaceInhibitorySnapshot([inhibitor()], 4, T0);
 
-  const dampened = recomputeCompoundRisk(situations, T0 + 1).results[0]!;
+  const shadowActive = recomputeCompoundRisk(situations, T0 + 1).results;
+  const threatsAfter = makeCorrelationContributor(shadowActive).contribute(T0);
+  const postureAfter = computeMultiAxisPosture({
+    contributors: [makeCorrelationContributor(shadowActive)],
+    freshness: [],
+    capturedAtMs: T0,
+  }, { now: T0 });
 
-  assert.ok(dampened.score < undampened.score);
-  assert.deepEqual(dampened.memberIds, undampened.memberIds);
-  assert.deepEqual(dampened.affectedDomains, undampened.affectedDomains);
-  assert.equal(dampened.level, undampened.level);
-  assert.equal(dampened.inhibition?.fromDomain, 'wildfire');
-  assert.equal(dampened.inhibition?.toDomain, 'infrastructure');
-  assert.deepEqual(situationsToCompoundInputs(situations), inputsBefore);
+  assert.deepEqual(shadowActive, undampened);
+  assert.deepEqual(threatsAfter, threatsBefore);
+  assert.deepEqual(postureAfter, postureBefore);
   assert.equal(situations[0]!.severity, 'critical');
   assert.equal(situations[0]!.confidence, 1);
 });
 
-test('expired learned inhibition is neutral at compound cadence', () => {
+test('active and expired learned inhibition are both operationally neutral', () => {
   const situations = [
     situation({ id: 'w' }),
     situation({ id: 'i', domain: 'infrastructure' }),
   ];
   replaceInhibitorySnapshot([inhibitor()], 4, T0);
-  const active = recomputeCompoundRisk(situations, T0 + 1).results[0]!;
-  const expired = recomputeCompoundRisk(situations, T0 + 2 * 3_600_000 + 1).results[0]!;
+  const active = recomputeCompoundRisk(situations, T0 + 1).results;
+  const expired = recomputeCompoundRisk(situations, T0 + 2 * 3_600_000 + 1).results;
 
-  assert.ok(active.score < expired.score);
-  assert.equal(expired.inhibition, undefined);
+  assert.deepEqual(active, expired);
 });

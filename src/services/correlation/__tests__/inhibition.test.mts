@@ -3,9 +3,10 @@ import test, { beforeEach } from 'node:test';
 
 import {
   INHIBITION_TTL_MS,
+  MAX_INHIBITION_SHADOW_EVENTS,
   clearInhibitorySnapshot,
+  evaluateInhibitionShadow,
   getInhibitorySnapshot,
-  inhibitionAdjustmentFor,
   readInhibitionEnabled,
   replaceInhibitorySnapshot,
 } from '../inhibition.ts';
@@ -66,33 +67,133 @@ test('malformed evidence is neutral and cannot displace valid evidence', () => {
   assert.equal(snapshot.evidence.length, 1);
   assert.equal(snapshot.evidence[0]!.from, 'wildfire');
   assert.equal(snapshot.evidence[0]!.zScore, -6);
-  assert.equal(inhibitionAdjustmentFor(80, ['wildfire', 'infrastructure'], snapshot).score, 71);
-  assert.equal(inhibitionAdjustmentFor(80, ['wildfire', 'infrastructure'], {
-    ...snapshot,
-    evidence: [{ ...snapshot.evidence[0]!, criticalAbsZ: 0 }],
-  }).score, 80);
 });
 
-test('score dampening uses the strongest single directional inhibitor without stacking and floors at 0.85', () => {
-  const snapshot = replaceInhibitorySnapshot([
-    edge({ zScore: -4 }),
-    edge({ from: 'infrastructure', to: 'wildfire', zScore: -40 }),
-    edge({ from: 'wildfire', to: 'markets', zScore: -8 }),
-  ], 4, T0);
+test('publication rejects evidence that misses any inhibitory statistical gate', () => {
+  const invalid = [
+    edge({ antecedents: 4 }),
+    edge({ expectedRate: 0.19 }),
+    edge({ lift: 0.51 }),
+    edge({ zScore: -3.99 }),
+    edge({ antecedents: 1, lift: 100, zScore: -0.1 }),
+  ];
 
-  const adjusted = inhibitionAdjustmentFor(
-    80,
-    ['wildfire', 'infrastructure', 'markets'],
+  for (const candidate of invalid) {
+    const snapshot = replaceInhibitorySnapshot([candidate], 4, T0);
+    assert.deepEqual(snapshot.evidence, [], JSON.stringify(candidate));
+  }
+});
+
+test('shadow evaluation rejects forged snapshots that miss statistical gates or have invalid time bounds', () => {
+  const valid = replaceInhibitorySnapshot([edge()], 4, T0);
+  const invalidEvidence = [
+    { ...valid.evidence[0]!, antecedents: 4 },
+    { ...valid.evidence[0]!, expectedRate: 0.19 },
+    { ...valid.evidence[0]!, lift: 0.51 },
+    { ...valid.evidence[0]!, zScore: -3.99 },
+    { ...valid.evidence[0]!, criticalAbsZ: 0.01, zScore: -0.1 },
+  ];
+
+  for (const evidence of invalidEvidence) {
+    assert.deepEqual(evaluateInhibitionShadow([], {
+      ...valid,
+      evidence: [evidence],
+    }, T0), { evidenceEvaluated: 0, confirmed: 0, refuted: 0, pending: 0 });
+  }
+  assert.deepEqual(evaluateInhibitionShadow([], {
+    ...valid,
+    publishedAt: Number.NaN,
+  }, T0), { evidenceEvaluated: 0, confirmed: 0, refuted: 0, pending: 0 });
+  assert.deepEqual(evaluateInhibitionShadow([], {
+    ...valid,
+    expiresAt: Number.POSITIVE_INFINITY,
+  }, T0), { evidenceEvaluated: 0, confirmed: 0, refuted: 0, pending: 0 });
+});
+
+test('non-finite publication time returns a finite neutral snapshot and installs nothing', () => {
+  for (const publishedAt of [Number.NaN, Number.POSITIVE_INFINITY]) {
+    const snapshot = replaceInhibitorySnapshot([edge()], 4, publishedAt);
+    assert.deepEqual(snapshot.evidence, []);
+    assert.equal(Number.isFinite(snapshot.publishedAt), true);
+    assert.equal(Number.isFinite(snapshot.expiresAt), true);
+    assert.equal(getInhibitorySnapshot(T0), null);
+  }
+});
+
+test('shadow evaluator classifies only B-after-A and returns anonymous aggregate counts', () => {
+  const windowMs = 10_000;
+  const snapshot = replaceInhibitorySnapshot([edge({
+    from: 'a', to: 'b', windowMs,
+  })], 4, T0);
+  const summary = evaluateInhibitionShadow([
+    { domain: 'b', at: T0 + 1_000 },
+    { domain: 'a', at: T0 + 2_000 },
+    { domain: 'a', at: T0 + 20_000 },
+    { domain: 'b', at: T0 + 25_000 },
+    { domain: 'a', at: T0 + 40_000 },
+  ], snapshot, T0 + 45_000);
+
+  assert.deepEqual(summary, {
+    evidenceEvaluated: 1,
+    confirmed: 1,
+    refuted: 1,
+    pending: 1,
+  });
+  assert.deepEqual(Object.keys(summary).sort(), [
+    'confirmed', 'evidenceEvaluated', 'pending', 'refuted',
+  ]);
+});
+
+test('shadow evaluator is neutral for stale snapshots, malformed events, and pre-publication time', () => {
+  const snapshot = replaceInhibitorySnapshot([edge({ from: 'a', to: 'b' })], 4, T0);
+  const malformed = [
+    { domain: '', at: T0 + 1 },
+    { domain: 'a', at: Number.NaN },
+    { domain: 'a', at: T0 + INHIBITION_TTL_MS + 10 },
+  ];
+  const empty = { evidenceEvaluated: 0, confirmed: 0, refuted: 0, pending: 0 };
+
+  assert.deepEqual(evaluateInhibitionShadow(malformed, snapshot, T0 - 1), empty);
+  assert.deepEqual(evaluateInhibitionShadow(malformed, snapshot, T0 + INHIBITION_TTL_MS + 1), empty);
+  assert.deepEqual(evaluateInhibitionShadow(malformed, snapshot, Number.NaN), empty);
+});
+
+test('shadow evaluator bounds work and output counts', () => {
+  const snapshot = replaceInhibitorySnapshot([edge({ from: 'a', to: 'b', windowMs: 1 })], 4, T0);
+  const events = Array.from({ length: MAX_INHIBITION_SHADOW_EVENTS + 5 }, (_, index) => ({
+    domain: 'a',
+    at: T0 + index + 1,
+  }));
+  const summary = evaluateInhibitionShadow(
+    events,
     snapshot,
+    T0 + MAX_INHIBITION_SHADOW_EVENTS + 10,
   );
 
-  assert.equal(adjusted.score, 68);
-  assert.equal(adjusted.provenance?.factor, 0.85);
-  assert.equal(adjusted.provenance?.evidenceStrength, 1);
-  assert.equal(adjusted.provenance?.fromDomain, 'infrastructure');
-  assert.equal(adjusted.provenance?.toDomain, 'wildfire');
-  assert.equal(inhibitionAdjustmentFor(80, ['markets', 'wildfire'], snapshot).score, 68);
-  assert.equal(inhibitionAdjustmentFor(80, ['infrastructure'], snapshot).score, 80);
+  assert.equal(summary.confirmed, MAX_INHIBITION_SHADOW_EVENTS);
+  assert.ok(summary.confirmed <= MAX_INHIBITION_SHADOW_EVENTS);
+});
+
+test('shadow evaluator keeps the newest valid events when input is not chronological', () => {
+  const snapshot = replaceInhibitorySnapshot([edge({ from: 'a', to: 'b', windowMs: 1 })], 4, T0);
+  const events = [
+    { domain: 'a', at: T0 + MAX_INHIBITION_SHADOW_EVENTS + 1 },
+    ...Array.from({ length: MAX_INHIBITION_SHADOW_EVENTS }, (_, index) => ({
+      domain: 'irrelevant',
+      at: T0 + index + 1,
+    })),
+  ];
+
+  assert.deepEqual(evaluateInhibitionShadow(
+    events,
+    snapshot,
+    T0 + MAX_INHIBITION_SHADOW_EVENTS + 10,
+  ), {
+    evidenceEvaluated: 1,
+    confirmed: 1,
+    refuted: 0,
+    pending: 0,
+  });
 });
 
 test('disabled and failed setting reads are fail-safe: explicit false disables, unavailable storage stays on', () => {

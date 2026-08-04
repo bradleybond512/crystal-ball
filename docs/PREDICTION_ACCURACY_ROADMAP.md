@@ -895,8 +895,8 @@ These tasks retain their detailed designs in
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
 | ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 
-Safety invariant: learned inhibitory or dampening evidence may soften
-confidence but must never suppress a safety-critical delivery rung.
+Safety invariant: learned inhibitory evidence remains shadow-only and cannot
+change operational scores, confidence, posture, alerts, or delivery rungs.
 
 Phase exit:
 
@@ -1514,6 +1514,10 @@ Dependencies: ACC-501 (DONE)
 
 Outcome — delivered:
 
+The shadow-only operational boundary was explicitly approved on 2026-08-04
+after independent review showed that dampening an observed A+B compound would
+reverse the semantics of “A suppresses future B.”
+
 - the lead-lag miner now reports the complete pre-filter hypothesis family and
   applies a two-tailed Gaussian union-bound threshold across every eligible
   ordered domain pair and configured lag window;
@@ -1523,10 +1527,10 @@ Outcome — delivered:
 - inhibitory evidence requires at least five antecedents, a 20% expected event
   rate, lift at or below 0.5, and a negative z-score beyond both the fixed and
   family-adjusted thresholds;
-- only promoting edges can become learned correlation rules; inhibition is a
-  bounded, expiring, fail-safe-on score modifier whose strongest effect is a
-  15% reduction and whose state cannot suppress or demote safety-critical
-  notification delivery;
+- only promoting edges can become learned correlation rules; inhibitory
+  evidence is bounded, expiring, fail-safe-on, and evaluated in shadow with
+  direction- and window-aware confirmed/refuted/pending counts. It has no path
+  into operational scores, confidence, posture, alerts, or delivery;
 - identifier-free liveness diagnostics distinguish offline replay from live
   ingestion and flag three consecutive singleton live batches when learned
   rules are installed but cannot produce event pairs;
@@ -1537,10 +1541,10 @@ Outcome — delivered:
 Verification evidence:
 
 - `npm run test:correlation`: 367 pass / 0 fail;
-- `npm run test:algorithms`: 384 pass / 0 fail;
+- `npm run test:algorithms`: 306 pass / 0 fail;
 - `npm run test:diagnostics`: pass, including 27 MCP/sidecar diagnostics tests;
-- focused cascade, compound-risk, notification, and inhibition-boundary suite:
-  37 pass / 0 fail;
+- focused cascade, compound-risk, notification, shadow-diagnostics, and
+  inhibition-boundary suite: 61 pass / 0 fail;
 - `npm run typecheck:all`: pass;
 - `npm run bench:correlation`: PASS over 10 streams / 469 observations, with
   5/5 causal promoting couplings recovered, 1/1 inhibitory coupling recovered,
@@ -1553,9 +1557,9 @@ Known limitation and rollback:
 - production currently calls `SituationStoreV2.ingest()` with singleton event
   batches. ACC-502 diagnoses this fail-closed instead of adding unbounded
   history or work to the hot path; ACC-507 owns the bounded ingestion repair;
-- rollback is removal of inhibition snapshot publication/application and
-  restoration of the schema-11 benchmark, without changing built-in
-  safety-notification rules.
+- rollback is removal of inhibition snapshot publication/shadow diagnostics and
+  restoration of the schema-11 benchmark, without changing operational scores
+  or built-in safety-notification rules.
 
 ### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
 

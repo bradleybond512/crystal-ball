@@ -79,6 +79,14 @@ jobs:
         run: |
           set -euo pipefail
           BASELINE_PATH=src/services/correlation/__bench__/bench-correlation-baseline.json
+          if ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo "Base commit is unavailable; refusing to bypass correlation baseline comparison." >&2
+            exit 1
+          fi
+          if ! git cat-file -e "$BASE_SHA:$BASELINE_PATH"; then
+            echo "No base-branch correlation baseline exists; normal benchmark and review gate initial addition."
+            exit 0
+          fi
           if git diff --quiet "$BASE_SHA" -- "$BASELINE_PATH"; then
             exit 0
           fi

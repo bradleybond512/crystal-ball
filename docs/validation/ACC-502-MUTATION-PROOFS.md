@@ -1,7 +1,7 @@
 # ACC-502 Mutation Proofs
 
 Date: 2026-08-04  
-Reviewed implementation commit: `839b8417cecd83fa44ff483f65af431854a42fd8`
+Reviewed implementation commit: `e851a7e15c84aead2cf2d916a771ddf7582379f7`
 
 This audit replaces the earlier ACC-502 evidence in full. The obsolete score
 dampening proof is intentionally absent because inhibitory evidence is now
@@ -251,7 +251,7 @@ a `node_modules` symlink.
 ## 6. Expired snapshots are neutral
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `4f6fead129be69192266edca451e930fe9f294b37ca6167923a4872810e525ee`.
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
 - Mutation and applied diff:
 
   ```diff
@@ -406,7 +406,7 @@ a `node_modules` symlink.
 ## 10. Snapshot publication enforces statistical admission
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `4f6fead129be69192266edca451e930fe9f294b37ca6167923a4872810e525ee`.
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
 - Mutation and applied diff:
 
   ```diff
@@ -442,7 +442,7 @@ a `node_modules` symlink.
 ## 11. Shadow evaluation preserves direction and window semantics
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `4f6fead129be69192266edca451e930fe9f294b37ca6167923a4872810e525ee`.
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
 - Mutation and applied diff:
 
   ```diff
@@ -672,7 +672,7 @@ a `node_modules` symlink.
 ## 16. The 1,000-event bound keeps the newest valid events
 
 - File and original SHA-256: `src/services/correlation/inhibition.ts`,
-  `4f6fead129be69192266edca451e930fe9f294b37ca6167923a4872810e525ee`.
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
 - Mutation and applied diff:
 
   ```diff
@@ -756,6 +756,151 @@ a `node_modules` symlink.
 - Both restored SHA-256 values matched their originals.
 - Restored `git status --short` raw output: `""`.
 
+## 18. Relevant-domain allocation prevents global and cross-domain starvation
+
+- File and original SHA-256: `src/services/correlation/inhibition.ts`,
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+- Mutation: replaced the fair relevant-domain allocator with the prior global
+  valid-event sort and newest-1,000 slice.
+- Applied diff:
+
+  ```diff
+  @@ -228,42 +228,23 @@ function boundedEventsByDomain(
+     events: readonly InhibitionShadowEvent[],
+  -  evidence: readonly Readonly<InhibitoryEvidence>[],
+  +  _evidence: readonly Readonly<InhibitoryEvidence>[],
+     publishedAt: number,
+     now: number,
+   ): Map<string, number[]> {
+  -  const domains = [...new Set(evidence.flatMap((item) => [item.from, item.to]))]
+  -    .sort((a, b) => a.localeCompare(b));
+  -  const baseBudget = Math.floor(MAX_INHIBITION_SHADOW_EVENTS / domains.length);
+  -  const remainder = MAX_INHIBITION_SHADOW_EVENTS % domains.length;
+  -  const budgets = new Map(domains.map((domain, index) => [
+  -    domain,
+  -    baseBudget + (index < remainder ? 1 : 0),
+  -  ]));
+  -  const byDomain = new Map(domains.map((domain) => [domain, [] as number[]]));
+  -  let retained = 0;
+  -  for (const event of events) {
+  -    const budget = budgets.get(event.domain);
+  -    if (!budget
+  -      || !Number.isFinite(event.at)
+  -      || event.at < publishedAt
+  -      || event.at > now) continue;
+  -    const times = byDomain.get(event.domain)!;
+  -    if (retained < MAX_INHIBITION_SHADOW_EVENTS) {
+  -      pushTime(times, event.at);
+  -      retained += 1;
+  -      continue;
+  -    }
+  -    const underBudget = times.length < budget;
+  -    const evictionDomain = oldestEvictableDomain(domains, byDomain, budgets, event.domain, underBudget);
+  -    if (!evictionDomain) continue;
+  -    const evictionTimes = byDomain.get(evictionDomain)!;
+  -    const oldest = evictionTimes[0]!;
+  -    if (!underBudget && compareShadowEvent(event.domain, event.at, evictionDomain, oldest) <= 0) continue;
+  -    popOldestTime(evictionTimes);
+  -    pushTime(times, event.at);
+  +  const bounded = events
+  +    .filter((event) => validDomain(event.domain)
+  +      && Number.isFinite(event.at)
+  +      && event.at >= publishedAt
+  +      && event.at <= now)
+  +    .sort((a, b) => a.at - b.at || a.domain.localeCompare(b.domain))
+  +    .slice(-MAX_INHIBITION_SHADOW_EVENTS);
+  +  const byDomain = new Map<string, number[]>();
+  +  for (const event of bounded) {
+  +    const times = byDomain.get(event.domain) ?? [];
+  +    times.push(event.at);
+  +    byDomain.set(event.domain, times);
+     }
+  -  for (const times of byDomain.values()) times.sort((a, b) => a - b);
+     return byDomain;
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='retains relevant trials|gives each referenced domain' \
+    src/services/correlation/__tests__/inhibition.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 2
+  ℹ pass 0
+  ℹ fail 2
+  ```
+
+- Failing assertions:
+  - The oldest relevant-domain trial expected `confirmed: 1`; actual was `0`.
+  - The cross-relevant-domain fairness case also expected `confirmed: 1`;
+    actual was `0` after the newer domain consumed the global bound.
+- Restored SHA-256:
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+- Restored `git status --short` raw output: `""`.
+
+## 19. Empty statistical admission clears active and fresh state
+
+- File and original SHA-256: `src/services/correlation/inhibition.ts`,
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+- Mutation: removed the `evidence.length === 0` fail-closed branch.
+- Applied diff:
+
+  ```diff
+  @@ -55,11 +55,6 @@ export function replaceInhibitorySnapshot(
+       .sort(compareEvidence)
+       .slice(0, MAX_INHIBITORY_EVIDENCE)
+       .map((item) => Object.freeze(item));
+  -  if (evidence.length === 0) {
+  -    activeSnapshot = null;
+  -    shadowDiagnostics = emptyShadowDiagnostics();
+  -    return NEUTRAL_SNAPSHOT;
+  -  }
+     const snapshot = Object.freeze({
+  ```
+
+- Shipped-test command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='replacement with no admitted evidence' \
+    src/services/correlation/__tests__/inhibition.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: expected `getInhibitorySnapshot(T0 + 1) === null`; actual
+  was an active snapshot with `evidence: []`, `publishedAt: T0 + 1`, and a
+  finite future `expiresAt`.
+- Independent diagnostic probe: an isolated `/tmp` `node:test` asserted
+  `evaluateActiveInhibitionShadow([], T0 + 1, true).status === 'unavailable'`
+  immediately after the same empty admission.
+- Probe raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Probe failing assertion: expected `'unavailable'`; actual was `'fresh'`.
+  The temporary probe was removed before restoration verification.
+- Restored SHA-256:
+  `ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b`.
+- Restored `git status --short` raw output: `""`.
+
 ## Restored-state verification
 
 The final combined command selects every assertion exercised above from the
@@ -764,7 +909,7 @@ fully restored implementation:
 ```sh
 NODE_OPTIONS=--disable-warning=ExperimentalWarning \
   /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
-  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|shadow evaluator classifies only B-after-A|keeps the newest valid events|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|algorithm diagnostics expose only bounded anonymous' \
+  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|algorithm diagnostics expose only bounded anonymous' \
   src/services/correlation/__tests__/lead-lag.test.mts \
   src/services/correlation/__tests__/learned-rules-boundary.test.mts \
   src/services/intelligence/__tests__/cascade-registration.test.mts \
@@ -780,9 +925,9 @@ NODE_OPTIONS=--disable-warning=ExperimentalWarning \
 Final raw result lines:
 
 ```text
-ℹ tests 20
+ℹ tests 22
 ℹ suites 1
-ℹ pass 20
+ℹ pass 22
 ℹ fail 0
 ```
 
@@ -792,7 +937,7 @@ Final restored implementation checksums:
 243fee97e6aef99c50e6a0152c176e7384ad8fe8f08c6c84120d7d40d0b030a7  src/services/correlation/lead-lag.ts
 5f96ebbd460397ef75aef59ec50023d4b4e5d6a3420aed5975b6943a2bb38546  src/services/correlation/learned-rules.ts
 d256c15f12f33568ba4dcdae1aa63ae15de78c0f0dcee7d8ea50eb9adc6d390b  src/services/intelligence/cascade-registration.ts
-4f6fead129be69192266edca451e930fe9f294b37ca6167923a4872810e525ee  src/services/correlation/inhibition.ts
+ed553e302636d548308747d0b3c0593a9d50dd2eeb5443e94cd9c14544384c1b  src/services/correlation/inhibition.ts
 7129502d4e0e708f7471def6acca68bbcd0390af5961da77747a3c0052a9b0ca  src/services/insights/notification-ladder.ts
 b04d5cd12aadc9ac53b3f3008fca007b4a1e007773ecec10a2745f20a9a336bb  src/services/correlation/bench-correlation-baseline.ts
 a29ee6c4dfe548441a1ffa399d53fbc3ca8412a4016b7c825d2c5ee8cb099412  src/services/correlation/compound-risk-cadence.ts

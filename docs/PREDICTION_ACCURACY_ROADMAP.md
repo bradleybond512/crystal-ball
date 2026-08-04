@@ -932,8 +932,10 @@ Outcome — delivered:
   rule inventory, whole-report digest) that short-circuit before any metric
   comparison. Identity is the strict half: any change that moves ANY reported
   number — regression *or* improvement — fails and must be re-seeded via
-  `npm run bench:correlation -- --seed`, and the one-sided tolerances then
-  decide, at re-seed time, whether the new numbers may replace the old.
+  `npm run bench:correlation -- --seed` into
+  `/tmp/bench-correlation-baseline.candidate.json`. Before emitting JSON, the
+  seed path compares the candidate against the PREVIOUS reviewed baseline;
+  the one-sided tolerances decide whether the new numbers may replace the old.
 - `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
   wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
   `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
@@ -1438,6 +1440,30 @@ graded number moved in the re-seed.
   was compared through `.join(',')`, so the single element
   `"macro->maritime,space->infra"` compared equal to the real two-element array
   and passed. Lists now compare through JSON, which keeps element boundaries.
+
+Round 14 closed the reseed bypass found in the final independent review. The
+normal exact-identity comparator was sound, but `--seed` generated a candidate
+from the live report and never compared its metrics to the baseline it was
+replacing. Redirecting stdout directly onto the tracked JSON was worse: the
+shell truncated the previous evidence before the process could read it.
+
+- `compareCorrelationBenchReseedToPrevious()` validates the previous reviewed
+  anchors, substitutes only the candidate's `reportDigest`, `witnessed`, and
+  `ruleCoverage` into a private comparison view, and then runs the unchanged
+  normal comparator. Schema, corpus identity, built-in rule inventory, all old
+  metric values, all old tolerances, liveness floors, and blast-radius ceilings
+  remain the reference. Same-corpus improvement may seed; regression,
+  malformed prior evidence, and corpus drift fail closed.
+- `--seed` refuses a disallowed candidate with exit 1 and no JSON on stdout.
+  Every instruction writes to
+  `/tmp/bench-correlation-baseline.candidate.json`, never to the tracked
+  baseline.
+- Pull-request and merge-queue CI extract the baseline from the base commit
+  whenever the tracked baseline changes and run this reseed guard before the
+  normal exact-identity benchmark. Editing the candidate and then comparing it
+  only to itself cannot bypass the previous baseline in CI.
+- Focused red/green and strict mutation evidence is recorded in
+  `docs/validation/ACC-501-MUTATION-PROOFS.md`.
 
 Seed measurements (uncorrected miner, 2026-07-30):
 

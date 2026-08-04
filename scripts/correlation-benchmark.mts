@@ -12,7 +12,9 @@
  * Usage:
  *   npm run bench:correlation            # print report, fail (exit 1) on regression
  *   npm run bench:correlation -- --json  # print report as JSON only
- *   npm run bench:correlation -- --seed  # print the baseline block to commit
+ *   npm run bench:correlation -- --seed > /tmp/bench-correlation-baseline.candidate.json
+ *                                      # validate against the previous baseline,
+ *                                      # then print a candidate for review
  *
  * This is the gate ACC-502 through ACC-506 have to clear: every one of those
  * tasks claims to improve correlation quality, and this is where the claim gets
@@ -26,8 +28,10 @@
  * old ones. So the workflow for a real change is:
  *
  *   1. make the change, run this; it fails on `reportDigest`;
- *   2. `npm run bench:correlation -- --seed > /tmp/seed.json` and read it —
- *      this is the moment the new numbers get looked at by a human;
+ *   2. `npm run bench:correlation -- --seed >
+ *      /tmp/bench-correlation-baseline.candidate.json` — this first refuses
+ *      regressions against the PREVIOUS baseline, then gives a human-readable
+ *      candidate to inspect;
  *   3. copy it over bench-correlation-baseline.json, append a `note` paragraph
  *      saying what moved and why;
  *   4. re-run; the tolerances now gate the new numbers against the old ones,
@@ -48,6 +52,7 @@ import { fileURLToPath } from 'node:url';
 
 import { runCorrelationBenchmark } from '../src/services/correlation/bench-correlation.ts';
 import {
+  compareCorrelationBenchReseedToPrevious,
   compareCorrelationBenchToBaseline,
   seedCorrelationBenchBaseline,
   type CorrelationBenchBaseline,
@@ -57,6 +62,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_PATH = path.join(
   root, 'src', 'services', 'correlation', '__bench__', 'bench-correlation-baseline.json',
 );
+const CANDIDATE_PATH = '/tmp/bench-correlation-baseline.candidate.json';
 
 const isTTY = process.stdout.isTTY;
 const C = {
@@ -79,26 +85,51 @@ function verdictColor(verdict: string): string {
 }
 
 /** null when unreadable — the caller decides whether that is fatal. */
-function loadBaseline(): CorrelationBenchBaseline | null {
+function loadBaseline(baselinePath = BASELINE_PATH): CorrelationBenchBaseline | null {
   try {
-    return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as CorrelationBenchBaseline;
+    return JSON.parse(readFileSync(baselinePath, 'utf8')) as CorrelationBenchBaseline;
   } catch (err) {
-    console.error(`${C.red}Baseline file not found or unreadable: ${BASELINE_PATH}${C.reset}\n${String(err)}`);
+    console.error(`${C.red}Baseline file not found or unreadable: ${baselinePath}${C.reset}\n${String(err)}`);
     return null;
   }
+}
+
+function optionValue(name: string): string | null {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return null;
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`${name} requires a file path`);
+  }
+  return value;
 }
 
 function main(): void {
   const jsonOnly = process.argv.includes('--json');
   const report = runCorrelationBenchmark();
 
-  // Re-seed mode. Prints to STDOUT and nothing else, so it can be redirected
-  // straight over the baseline file — after reading it, which is the entire
-  // point of making a re-seed a deliberate step.
+  // Re-seed mode prints candidate JSON to STDOUT only after the new run passes
+  // every one-sided gate against the PREVIOUS reviewed baseline. Operator and
+  // CI instructions always redirect to a temporary candidate path: truncating
+  // the tracked baseline before this process reads it destroys the reference
+  // the guard exists to enforce.
   if (process.argv.includes('--seed')) {
-    const prev = loadBaseline();
+    const previousPath = optionValue('--previous-baseline') ?? BASELINE_PATH;
+    const prev = loadBaseline(previousPath);
     if (prev === null) {
       process.exitCode = 2;
+      return;
+    }
+    const comparison = compareCorrelationBenchReseedToPrevious(report, prev);
+    if (!comparison.ok) {
+      console.error(
+        `${C.red}${C.bold}REFUSED${C.reset} — re-seed candidate regresses against or is ` +
+        `incomparable with the previous baseline (${previousPath}):`,
+      );
+      for (const reason of comparison.reasons) {
+        console.error(`  ${C.red}✗${C.reset} ${reason}`);
+      }
+      process.exitCode = 1;
       return;
     }
     const seeded = seedCorrelationBenchBaseline(
@@ -110,7 +141,8 @@ function main(): void {
     console.error(
       `${C.yellow}Seeded from the current run.${C.reset} Read it, then append a note ` +
       `paragraph saying what moved and why — the tolerances and the note are carried ` +
-      `over verbatim and are yours to justify.`,
+      `over verbatim and are yours to justify. Keep the candidate at ${CANDIDATE_PATH} ` +
+      `until that review is complete.`,
     );
     return;
   }
@@ -183,7 +215,7 @@ function main(): void {
     say(
       `\nIf this change is intentional — including an IMPROVEMENT, which fails the ` +
       `reportDigest like anything else that moves a number — re-seed ${rel} in a reviewed ` +
-      `diff:\n  npm run bench:correlation -- --seed > ${rel}`,
+      `diff:\n  npm run bench:correlation -- --seed > ${CANDIDATE_PATH}`,
     );
     process.exitCode = 1;
   }

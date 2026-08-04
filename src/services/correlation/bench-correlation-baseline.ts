@@ -231,6 +231,129 @@ export interface CorrelationBenchComparison {
   reasons: string[];
 }
 
+const WITNESSED_DIGEST_KEYS = ['pairs', 'edges', 'learnedPairs', 'probes'] as const;
+const compareStrings = (a: string, b: string): number => a.localeCompare(b);
+
+/**
+ * Validate the reviewed anchors before a reseed comparison replaces them with
+ * the candidate's values. Replacing a malformed anchor would turn corruption
+ * into an apparent clean comparison, which is the same fail-open shape as
+ * comparing the candidate only to itself.
+ */
+function checkPreviousReseedAnchors(baseline: CorrelationBenchBaseline): string[] {
+  const reasons: string[] = [];
+  if (typeof baseline.reportDigest !== 'string' || !DIGEST_PATTERN.test(baseline.reportDigest)) {
+    reasons.push(
+      `previous reportDigest is not a 32-character hex digest ` +
+      `(${JSON.stringify(baseline.reportDigest)}) — the reviewed report anchor is malformed`,
+    );
+  }
+  checkPreviousRuleCoverage(reasons, baseline);
+  checkPreviousWitnessed(reasons, baseline.witnessed as unknown);
+  return reasons;
+}
+
+function checkPreviousRuleCoverage(
+  reasons: string[], baseline: CorrelationBenchBaseline,
+): void {
+  const coverage = baseline.ruleCoverage as unknown;
+  if (Array.isArray(coverage)) {
+    if (coverage.some((id) => typeof id !== 'string' || id === '')) {
+      reasons.push('previous ruleCoverage contains an empty or non-string rule id');
+    }
+    if (new Set(coverage).size !== coverage.length) {
+      reasons.push('previous ruleCoverage repeats a rule id — the reviewed set is malformed');
+    }
+    const inventory = baseline.builtInRuleIds as unknown;
+    if (Array.isArray(inventory)) {
+      const unknown = coverage.filter((id) => !inventory.includes(id));
+      if (unknown.length > 0) {
+        reasons.push(
+          `previous ruleCoverage names rule(s) outside the reviewed inventory: ` +
+          `[${unknown.join(', ')}]`,
+        );
+      }
+    }
+    return;
+  }
+  reasons.push('previous ruleCoverage is not an array — rule liveness cannot be established');
+}
+
+function checkPreviousWitnessed(reasons: string[], witnessed: unknown): void {
+  if (witnessed === null || typeof witnessed !== 'object' || Array.isArray(witnessed)) {
+    reasons.push('previous witnessed block is not an object — reviewed measurements are missing');
+    return;
+  }
+  const block = witnessed as Record<string, unknown>;
+  for (const field of ['meanCausalEdgeStrength', 'meanCausalEdgeZ'] as const) {
+    if (typeof block[field] !== 'number' || !Number.isFinite(block[field])) {
+      reasons.push(`previous witnessed.${field} is not a finite number`);
+    }
+  }
+  for (const field of ['meanFalsePairConfidence', 'confidenceSeparation'] as const) {
+    const value = block[field];
+    if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {
+      reasons.push(`previous witnessed.${field} is neither null nor a finite number`);
+    }
+  }
+  const lost = block.causalCouplingsLostToCap;
+  if (!Array.isArray(lost) || lost.some((value) => typeof value !== 'string')) {
+    reasons.push('previous witnessed.causalCouplingsLostToCap is not a string array');
+  }
+  checkPreviousWitnessedDigests(reasons, block.sectionDigests);
+}
+
+function checkPreviousWitnessedDigests(reasons: string[], digests: unknown): void {
+  if (digests === null || typeof digests !== 'object' || Array.isArray(digests)) {
+    reasons.push('previous witnessed.sectionDigests is not an object');
+    return;
+  }
+  const digestBlock = digests as Record<string, unknown>;
+  const actualKeys = Object.keys(digestBlock).sort(compareStrings);
+  const expectedKeys = [...WITNESSED_DIGEST_KEYS].sort(compareStrings);
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    reasons.push(
+      `previous witnessed.sectionDigests has keys [${actualKeys.join(', ')}], expected ` +
+      `[${expectedKeys.join(', ')}]`,
+    );
+  }
+  for (const key of WITNESSED_DIGEST_KEYS) {
+    const digest = digestBlock[key];
+    if (typeof digest !== 'string' || !DIGEST_PATTERN.test(digest)) {
+      reasons.push(
+        `previous ${key} ledger digest is not a 32-character hex digest ` +
+        `(${JSON.stringify(digest)})`,
+      );
+    }
+  }
+}
+
+/**
+ * Decide whether the current run may replace a PREVIOUS reviewed baseline.
+ *
+ * Only the three exact anchors that necessarily move with an intentional
+ * producer change are substituted in a private comparison view. Every old
+ * metric and tolerance remains the reference consumed by the normal gate, as
+ * do schema, corpus identity and the built-in rule inventory. This keeps the
+ * normal comparator unchanged while preventing `--seed` from comparing a new
+ * candidate only to itself.
+ */
+export function compareCorrelationBenchReseedToPrevious(
+  report: CorrelationBenchReport,
+  previous: CorrelationBenchBaseline,
+): CorrelationBenchComparison {
+  const malformed = checkPreviousReseedAnchors(previous);
+  if (malformed.length > 0) return { ok: false, reasons: malformed };
+
+  const comparisonBaseline: CorrelationBenchBaseline = {
+    ...previous,
+    reportDigest: benchReportDigest(report),
+    witnessed: benchWitnessedFields(report),
+    ruleCoverage: Array.isArray(report.ruleCoverage) ? [...report.ruleCoverage] : report.ruleCoverage,
+  };
+  return compareCorrelationBenchToBaseline(report, comparisonBaseline);
+}
+
 /**
  * The required shape of a baseline's `tolerances` block, and the value each
  * gate takes. This is NOT a fallback: a baseline that omits the block, or omits

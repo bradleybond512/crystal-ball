@@ -1553,7 +1553,7 @@ Verification evidence:
 - `npm run test:algorithms`: 307 pass / 0 fail;
 - `npm run test:diagnostics`: 384 renderer pass / 0 fail plus 27 MCP/sidecar
   diagnostics pass / 0 fail;
-- restored ACC-502 mutation selection: 31 pass / 0 fail after 26 independently
+- restored ACC-502 mutation selection: 33 pass / 0 fail after 29 independently
   applied and checksum-restored mutations;
 - `npm run typecheck:all`: pass;
 - `npm run bench:correlation`: PASS over 10 streams / 469 observations, with

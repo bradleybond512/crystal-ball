@@ -888,7 +888,7 @@ These tasks retain their detailed designs in
 | ID | Status | Work | Dependencies |
 |---|---|---|---|
 | ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
-| ACC-502 | TODO | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
+| ACC-502 | IN REVIEW | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
 | ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
 | ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |

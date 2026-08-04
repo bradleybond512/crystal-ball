@@ -1,7 +1,7 @@
 # ACC-502 Mutation Proofs
 
 Date: 2026-08-04  
-Reviewed implementation commit: `aadd71a284b3dec2027363ba3b079ed2b37c1888`
+Reviewed implementation commit: `5849f51e70caf26e3af4d9302dcf5615f1ea2fa4`
 
 This audit replaces the earlier ACC-502 evidence in full. The obsolete score
 dampening proof is intentionally absent because inhibitory evidence is now
@@ -1132,6 +1132,100 @@ a `node_modules` symlink.
   `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
 - Restored `git status --short` raw output: `""`.
 
+## 25. Inhibitory base rates include silent coverage through the boundary
+
+- File and original SHA-256: `src/services/correlation/lead-lag.ts`,
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Mutation: reused the event-bounded promoting span for inhibitory trials,
+  omitting silent coverage between the final event and explicit observation
+  end.
+- Applied diff:
+
+  ```diff
+  @@ -109,7 +109,7 @@ export function mineLeadLag(
+         && (observationEndMs === undefined || event.at <= observationEndMs));
+     const byDomain = groupTimesByDomain(validEvents);
+     const promotingSpanMs = observedSpanMs(validEvents, undefined);
+  -  const inhibitorySpanMs = observedSpanMs(validEvents, observationEndMs);
+  +  const inhibitorySpanMs = promotingSpanMs;
+     if (promotingSpanMs <= 0) return emptyMiningResult();
+
+     const eligibleOrigins = [...byDomain].filter(([, times]) => times.length >= minAntecedents);
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='inhibitory base rate includes silent coverage|pins the live run, and re-pins it identically' \
+    src/services/correlation/__tests__/lead-lag.test.mts \
+    src/services/correlation/__tests__/bench-correlation.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 2
+  ℹ suites 1
+  ℹ pass 0
+  ℹ fail 2
+  ```
+
+- Failing assertions:
+  - The silent-coverage rate expected `0.3934693402873666`; the event-bounded
+    span returned `0.39858771197553267`.
+  - The benchmark expected committed report digest
+    `354a7790613214a893698b1882eda0ae`; actual mutated digest was
+    `3965b438bbfaa35882232a51342e9806`.
+- Restored SHA-256:
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Restored `git status --short` raw output: `""`.
+
+## 26. Production cadence supplies its complete observation boundary
+
+- File and original SHA-256:
+  `src/services/intelligence/cascade-registration.ts`,
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
+- Mutation: removed `{ observationEndMs: now }` from the default cadence
+  miner call.
+- Applied diff:
+
+  ```diff
+  @@ -66,7 +66,7 @@ export function refreshLearnedCascades(
+       if (!enabled) clearInhibitorySnapshot();
+       const result = options.mine
+         ? options.mine(history)
+  -      : mineLeadLag(history, { observationEndMs: now });
+  +      : mineLeadLag(history);
+       const promoting = result.promoting;
+       syncLearnedRules(
+         options.engine ?? getSituationStoreV2().getEngine(),
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='default cadence miner uses now' \
+    src/services/intelligence/__tests__/cascade-registration.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: `mature absent-follow trials must reach the production
+  snapshot`; actual inhibitory evidence was `undefined`.
+- Restored SHA-256:
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
+- Restored `git status --short` raw output: `""`.
+
 ## Restored-state verification
 
 The final combined command selects every assertion exercised above from the
@@ -1140,7 +1234,7 @@ fully restored implementation:
 ```sh
 NODE_OPTIONS=--disable-warning=ExperimentalWarning \
   /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
-  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|non-finite publication time invalidates|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|zero-admission refresh clears the active snapshot|algorithm diagnostics expose only bounded anonymous|right-censors antecedents|omitted observation coverage fails closed|explicit observation coverage excludes later events|inhibitory base rate includes silent coverage|silent explicit coverage does not change promoting statistics|pins the live run, and re-pins it identically' \
+  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|non-finite publication time invalidates|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|zero-admission refresh clears the active snapshot|default cadence miner uses now|algorithm diagnostics expose only bounded anonymous|right-censors antecedents|omitted observation coverage fails closed|explicit observation coverage excludes later events|inhibitory base rate includes silent coverage|silent explicit coverage does not change promoting statistics|pins the live run, and re-pins it identically' \
   src/services/correlation/__tests__/lead-lag.test.mts \
   src/services/correlation/__tests__/learned-rules-boundary.test.mts \
   src/services/intelligence/__tests__/cascade-registration.test.mts \
@@ -1156,9 +1250,9 @@ NODE_OPTIONS=--disable-warning=ExperimentalWarning \
 Final raw result lines:
 
 ```text
-ℹ tests 30
+ℹ tests 31
 ℹ suites 2
-ℹ pass 30
+ℹ pass 31
 ℹ fail 0
 ```
 

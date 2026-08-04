@@ -385,9 +385,12 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   const plantedIndex = plantedCouplingIndex();
 
   // ── Miner ──────────────────────────────────────────────────────────────
-  // Same call shape as cascade-registration.computeSignificantEdges().
+  // The frozen corpus has complete coverage through its declared end. Passing
+  // that boundary keeps inhibitory absence right-censored and deterministic.
   const domainEvents = observations.map((o) => ({ domain: o.domain, at: o.timestamp }));
-  const mining = mineLeadLag(domainEvents);
+  const mining = mineLeadLag(domainEvents, {
+    observationEndMs: CORPUS_T0 + CORPUS_SPAN_DAYS * DAY_MS,
+  });
   if (mining.family === null) throw new Error('correlation benchmark mining family is invalid');
   const significant = mining.promoting;
 

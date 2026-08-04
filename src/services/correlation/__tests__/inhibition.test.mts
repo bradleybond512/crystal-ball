@@ -144,13 +144,25 @@ test('shadow evaluation rejects forged snapshots that miss statistical gates or 
   }, T0), { evidenceEvaluated: 0, confirmed: 0, refuted: 0, pending: 0 });
 });
 
-test('non-finite publication time returns a finite neutral snapshot and installs nothing', () => {
+test('non-finite publication time invalidates the active snapshot and diagnostics', () => {
   for (const publishedAt of [Number.NaN, Number.POSITIVE_INFINITY]) {
+    replaceInhibitorySnapshot([edge()], 4, T0);
+    assert.equal(evaluateActiveInhibitionShadow([], T0, true).status, 'fresh');
+
     const snapshot = replaceInhibitorySnapshot([edge()], 4, publishedAt);
     assert.deepEqual(snapshot.evidence, []);
     assert.equal(Number.isFinite(snapshot.publishedAt), true);
     assert.equal(Number.isFinite(snapshot.expiresAt), true);
     assert.equal(getInhibitorySnapshot(T0), null);
+    assert.deepEqual(getInhibitionShadowDiagnostics(), {
+      status: 'unavailable',
+      evaluatedAt: null,
+      snapshotPublishedAt: null,
+      evidenceEvaluated: 0,
+      confirmed: 0,
+      refuted: 0,
+      pending: 0,
+    });
   }
 });
 

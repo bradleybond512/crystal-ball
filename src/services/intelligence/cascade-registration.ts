@@ -26,6 +26,7 @@ import {
   INHIBITION_REFRESH_INTERVAL_MS,
   clearInhibitorySnapshot,
   evaluateActiveInhibitionShadow,
+  invalidateInhibitorySnapshot,
   readInhibitionEnabled,
   recordInhibitionShadowError,
   replaceInhibitorySnapshot,
@@ -63,7 +64,9 @@ export function refreshLearnedCascades(
     const enabled = (options.inhibitionEnabled ?? readInhibitionEnabled)();
     evaluateActiveInhibitionShadow(history, now, enabled);
     if (!enabled) clearInhibitorySnapshot();
-    const result = (options.mine ?? mineLeadLag)(history);
+    const result = options.mine
+      ? options.mine(history)
+      : mineLeadLag(history, { observationEndMs: now });
     const promoting = result.promoting;
     syncLearnedRules(
       options.engine ?? getSituationStoreV2().getEngine(),
@@ -71,7 +74,17 @@ export function refreshLearnedCascades(
     );
     registerLearnedCascadePairs(promoting.map((edge) => `${edge.from}|${edge.to}`));
 
-    if (!enabled || !result.family || result.inhibitory.length === 0) {
+    if (!enabled) {
+      clearInhibitorySnapshot();
+      return;
+    }
+    if (!result.family || result.inhibitory.length === 0) {
+      if (Number.isFinite(now)) invalidateInhibitorySnapshot();
+      else clearInhibitorySnapshot();
+      return;
+    }
+    if (!Number.isFinite(now)) {
+      recordInhibitionShadowError(now);
       clearInhibitorySnapshot();
       return;
     }

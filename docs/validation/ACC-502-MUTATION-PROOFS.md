@@ -1,7 +1,7 @@
 # ACC-502 Mutation Proofs
 
 Date: 2026-08-04  
-Reviewed implementation commit: `5849f51e70caf26e3af4d9302dcf5615f1ea2fa4`
+Reviewed implementation commit: `60329823f6fffcfb7222ca83f49c4af6090fa0e4`
 
 This audit replaces the earlier ACC-502 evidence in full. The obsolete score
 dampening proof is intentionally absent because inhibitory evidence is now
@@ -1226,6 +1226,143 @@ a `node_modules` symlink.
   `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
 - Restored `git status --short` raw output: `""`.
 
+## 27. Non-finite cadence time preserves explicit error diagnostics
+
+- File and original SHA-256:
+  `src/services/intelligence/cascade-registration.ts`,
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
+- Mutation: removed the non-finite-time guard before snapshot replacement, so
+  the lower-level fail-closed replacement invalidated all diagnostics instead
+  of preserving the cadence error.
+- Applied diff:
+
+  ```diff
+  @@ -83,11 +83,6 @@ export function refreshLearnedCascades(
+         else clearInhibitorySnapshot();
+         return;
+       }
+  -    if (!Number.isFinite(now)) {
+  -      recordInhibitionShadowError(now);
+  -      clearInhibitorySnapshot();
+  -      return;
+  -    }
+       replaceInhibitorySnapshot(
+         result.inhibitory,
+         result.family.criticalAbsZ,
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='non-finite cadence time records an error' \
+    src/services/intelligence/__tests__/cascade-registration.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: expected status `'error'` with
+  `snapshotPublishedAt: 100`; actual status was `'unavailable'` with a null
+  snapshot timestamp. Counts and `evaluatedAt` remained neutral in both.
+- Restored SHA-256:
+  `7af786737e468334f70bdb791b15485006e3d6319423a4e3e3eb7e73242466ae`.
+- Restored `git status --short` raw output: `""`.
+
+## 28. Non-finite observation boundaries fail configuration closed
+
+- File and original SHA-256: `src/services/correlation/lead-lag.ts`,
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Mutation: removed the finite `observationEndMs` validation clause.
+- Applied diff:
+
+  ```diff
+  @@ -232,7 +232,6 @@ function validConfiguration(
+       && minAntecedents > 0
+       && Number.isFinite(minZ)
+       && minZ >= 0
+  -    && (observationEndMs === undefined || Number.isFinite(observationEndMs))
+       && windows.length > 0
+       && windows.every((windowMs) => Number.isFinite(windowMs) && windowMs > 0)
+       && new Set(windows).size === windows.length;
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='fails closed when alpha or configured windows are invalid' \
+    src/services/correlation/__tests__/lead-lag.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: the non-finite coverage case expected the neutral result
+  with `family: null`; the mutation returned a family of eight pair-window
+  tests plus the `seismic→infra` promoting candidate and edge.
+- Restored SHA-256:
+  `25e99757346be463929543298da6e2f4e1260bb46a3475420d0bb555aa35895c`.
+- Restored `git status --short` raw output: `""`.
+
+## 29. The offline benchmark supplies its complete corpus boundary
+
+- File and original SHA-256:
+  `src/services/correlation/bench-correlation.ts`,
+  `c6fcc60603c76ab32a04f8cc3c93ce4c01291d0bd3efc0b12a901208f8d67464`.
+- Mutation: removed the benchmark caller's explicit corpus-end coverage.
+- Applied diff:
+
+  ```diff
+  @@ -388,9 +388,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
+     // The frozen corpus has complete coverage through its declared end. Passing
+     // that boundary keeps inhibitory absence right-censored and deterministic.
+     const domainEvents = observations.map((o) => ({ domain: o.domain, at: o.timestamp }));
+  -  const mining = mineLeadLag(domainEvents, {
+  -    observationEndMs: CORPUS_T0 + CORPUS_SPAN_DAYS * DAY_MS,
+  -  });
+  +  const mining = mineLeadLag(domainEvents);
+     if (mining.family === null) throw new Error('correlation benchmark mining family is invalid');
+     const significant = mining.promoting;
+  ```
+
+- Command:
+
+  ```sh
+  NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
+    --test-name-pattern='pins the live run, and re-pins it identically' \
+    src/services/correlation/__tests__/bench-correlation.test.mts
+  ```
+
+- Raw result lines:
+
+  ```text
+  ℹ tests 1
+  ℹ suites 1
+  ℹ pass 0
+  ℹ fail 1
+  ```
+
+- Failing assertion: the benchmark expected committed report digest
+  `354a7790613214a893698b1882eda0ae`; omitting coverage changed it to
+  `a151ed3a5fa73d8c536078f14e7893ac`.
+- Restored SHA-256:
+  `c6fcc60603c76ab32a04f8cc3c93ce4c01291d0bd3efc0b12a901208f8d67464`.
+- Restored `git status --short` raw output: `""`.
+
 ## Restored-state verification
 
 The final combined command selects every assertion exercised above from the
@@ -1234,7 +1371,7 @@ fully restored implementation:
 ```sh
 NODE_OPTIONS=--disable-warning=ExperimentalWarning \
   /Users/bradleybond/Developer/crystalball/node_modules/.bin/tsx --test \
-  --test-name-pattern='records the exact two-tailed|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|non-finite publication time invalidates|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|zero-admission refresh clears the active snapshot|default cadence miner uses now|algorithm diagnostics expose only bounded anonymous|right-censors antecedents|omitted observation coverage fails closed|explicit observation coverage excludes later events|inhibitory base rate includes silent coverage|silent explicit coverage does not change promoting statistics|pins the live run, and re-pins it identically' \
+  --test-name-pattern='records the exact two-tailed|fails closed when alpha or configured windows are invalid|retains zero-support|rejects inhibitory claims with low n|invalid events cannot alter|learned-rule synthesis|refresh routes only promoting|replace publishes an immutable|publication rejects evidence|replacement with no admitted evidence|non-finite publication time invalidates|shadow evaluator classifies only B-after-A|keeps the newest valid events|retains relevant trials|gives each referenced domain|production alert and notification|emergency and critical delivery rungs|fails closed on altered previous anchors|learned execution path collapses|one dark causal learned rule|active learned inhibition cannot change compound results|last three eligible singleton batches|disabled, empty, and mining-error|refresh evaluates the previous snapshot|zero-admission refresh clears the active snapshot|default cadence miner uses now|non-finite cadence time records an error|algorithm diagnostics expose only bounded anonymous|right-censors antecedents|omitted observation coverage fails closed|explicit observation coverage excludes later events|inhibitory base rate includes silent coverage|silent explicit coverage does not change promoting statistics|pins the live run, and re-pins it identically' \
   src/services/correlation/__tests__/lead-lag.test.mts \
   src/services/correlation/__tests__/learned-rules-boundary.test.mts \
   src/services/intelligence/__tests__/cascade-registration.test.mts \
@@ -1250,9 +1387,9 @@ NODE_OPTIONS=--disable-warning=ExperimentalWarning \
 Final raw result lines:
 
 ```text
-ℹ tests 31
+ℹ tests 33
 ℹ suites 2
-ℹ pass 31
+ℹ pass 33
 ℹ fail 0
 ```
 
@@ -1265,6 +1402,7 @@ Final restored implementation checksums:
 841a14329e0989a30501998909f817591cbfea0b2ed9b9edfd9aa7da64fc9211  src/services/correlation/inhibition.ts
 7129502d4e0e708f7471def6acca68bbcd0390af5961da77747a3c0052a9b0ca  src/services/insights/notification-ladder.ts
 b04d5cd12aadc9ac53b3f3008fca007b4a1e007773ecec10a2745f20a9a336bb  src/services/correlation/bench-correlation-baseline.ts
+c6fcc60603c76ab32a04f8cc3c93ce4c01291d0bd3efc0b12a901208f8d67464  src/services/correlation/bench-correlation.ts
 a29ee6c4dfe548441a1ffa399d53fbc3ca8412a4016b7c825d2c5ee8cb099412  src/services/correlation/compound-risk-cadence.ts
 b7c55037a07a9fa32f30001066ef9d7669ed3a2716d726f3ff2bff0c7b62793d  src/services/correlation/correlation-liveness.ts
 4edb481454b74a54995d932f6b121a4d7bca3e2c12c88681abb146d1cbfaaf1d  src/services/algorithms/algorithm-diagnostics.ts

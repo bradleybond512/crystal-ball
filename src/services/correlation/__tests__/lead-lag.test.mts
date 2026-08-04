@@ -72,6 +72,8 @@ test('fails closed when alpha or configured windows are invalid', () => {
     { windowsMs: [0] },
     { windowsMs: [Number.POSITIVE_INFINITY] },
     { windowsMs: [HOUR, HOUR] },
+    { observationEndMs: Number.NaN },
+    { observationEndMs: Number.POSITIVE_INFINITY },
   ] as const;
 
   for (const options of invalidOptions) {
@@ -91,7 +93,10 @@ test('retains zero-support trials for inhibitory discovery without adding them t
     events.push(ev('a', day), ev('b', day + 8 * HOUR), ev('b', day + 16 * HOUR));
   }
 
-  const result = mineLeadLag(events, { windowsMs: [6 * HOUR] });
+  const result = mineLeadLag(events, {
+    windowsMs: [6 * HOUR],
+    observationEndMs: T0 + 20 * 24 * HOUR,
+  });
   const inhibitory = result.inhibitory.find((edge) => edge.from === 'a' && edge.to === 'b');
 
   assert.equal(result.family?.pairWindowTests, 2);
@@ -100,6 +105,78 @@ test('retains zero-support trials for inhibitory discovery without adding them t
   assert.equal(inhibitory.effect, 'inhibitory');
   assert.equal(inhibitory.support, 0);
   assert.equal('medianLagMs' in inhibitory, false);
+});
+
+test('right-censors antecedents whose follow window extends beyond explicit observation coverage', () => {
+  const coverageEnd = T0 + 20 * 24 * HOUR;
+  const events = absentFollowHistory(20, [8, 16]);
+  events.push(
+    ev('a', coverageEnd - 5 * HOUR),
+    ev('a', coverageEnd - 4 * HOUR),
+    ev('a', coverageEnd - 3 * HOUR),
+  );
+
+  const result = mineLeadLag(events, {
+    windowsMs: [6 * HOUR],
+    observationEndMs: coverageEnd,
+  });
+  const inhibitory = result.inhibitory.find((edge) => edge.from === 'a' && edge.to === 'b');
+
+  assert.ok(inhibitory);
+  assert.equal(inhibitory.antecedents, 20, 'pending antecedents must not become negative trials');
+});
+
+test('omitted observation coverage fails closed for inhibition without hiding promoting evidence', () => {
+  const absent = mineLeadLag(absentFollowHistory(20, [8, 16]), { windowsMs: [6 * HOUR] });
+  const coupled = mineLeadLag(coupledHistory());
+
+  assert.ok(!absent.inhibitory.some((edge) => edge.from === 'a' && edge.to === 'b'));
+  assert.ok(coupled.promoting.some((edge) => edge.from === 'seismic' && edge.to === 'infra'));
+});
+
+test('explicit observation coverage excludes later events from every mining result', () => {
+  const coverageEnd = T0 + 20 * 24 * HOUR;
+  const covered = absentFollowHistory(20, [8, 16]);
+  const baseline = mineLeadLag(covered, {
+    windowsMs: [6 * HOUR],
+    observationEndMs: coverageEnd,
+  });
+  const contaminated = mineLeadLag([
+    ...covered,
+    ev('a', coverageEnd + HOUR),
+    ev('b', coverageEnd + 2 * HOUR),
+    ev('b', coverageEnd + 3 * HOUR),
+  ], {
+    windowsMs: [6 * HOUR],
+    observationEndMs: coverageEnd,
+  });
+
+  assert.deepEqual(contaminated, baseline);
+});
+
+test('inhibitory base rate includes silent coverage through the explicit observation end', () => {
+  const coverageEnd = T0 + 20 * 24 * HOUR;
+  const events = absentFollowHistory(20, [8, 16]);
+  const result = mineLeadLag(events, {
+    windowsMs: [6 * HOUR],
+    observationEndMs: coverageEnd,
+  });
+  const inhibitory = result.inhibitory.find((edge) => edge.from === 'a' && edge.to === 'b');
+  const expectedRate = 1 - Math.exp(-(40 / (coverageEnd - T0)) * 6 * HOUR);
+
+  assert.ok(inhibitory);
+  assert.equal(inhibitory.expectedRate, expectedRate);
+});
+
+test('silent explicit coverage does not change promoting statistics', () => {
+  const events = coupledHistory();
+  const omittedCoverage = mineLeadLag(events);
+  const explicitCoverage = mineLeadLag(events, {
+    observationEndMs: T0 + 1_000 * HOUR,
+  });
+
+  assert.deepEqual(explicitCoverage.candidates, omittedCoverage.candidates);
+  assert.deepEqual(explicitCoverage.promoting, omittedCoverage.promoting);
 });
 
 test('selects promoting and inhibitory windows independently and explains suppression', () => {
@@ -115,7 +192,10 @@ test('selects promoting and inhibitory windows independently and explains suppre
     );
   }
 
-  const result = mineLeadLag(events, { windowsMs: [HOUR, 6 * HOUR] });
+  const result = mineLeadLag(events, {
+    windowsMs: [HOUR, 6 * HOUR],
+    observationEndMs: T0 + 40 * 24 * HOUR,
+  });
   const promoting = result.promoting.find((edge) => edge.from === 'c' && edge.to === 'd');
   const inhibitory = result.inhibitory.find((edge) => edge.from === 'a' && edge.to === 'b');
 
@@ -137,7 +217,11 @@ function absentFollowHistory(antecedentCount: number, bOffsetsHours: readonly nu
 test('rejects inhibitory claims with low n, low base rate, or weak corrected z', () => {
   const lowN = mineLeadLag(
     absentFollowHistory(4, [7, 9, 11, 13, 15, 17, 19, 21, 23]),
-    { windowsMs: [6 * HOUR], minAntecedents: 3 },
+    {
+      windowsMs: [6 * HOUR],
+      minAntecedents: 3,
+      observationEndMs: T0 + 4 * 24 * HOUR,
+    },
   );
   assert.ok(!lowN.inhibitory.some((edge) => edge.from === 'a' && edge.to === 'b'));
 
@@ -147,12 +231,15 @@ test('rejects inhibitory claims with low n, low base rate, or weak corrected z',
     lowBaseEvents.push(ev('a', day));
     if (i % 10 === 0) lowBaseEvents.push(ev('b', day + 12 * HOUR));
   }
-  const lowBase = mineLeadLag(lowBaseEvents, { windowsMs: [6 * HOUR] });
+  const lowBase = mineLeadLag(lowBaseEvents, {
+    windowsMs: [6 * HOUR],
+    observationEndMs: T0 + 400 * 24 * HOUR,
+  });
   assert.ok(!lowBase.inhibitory.some((edge) => edge.from === 'a' && edge.to === 'b'));
 
   const weakZ = mineLeadLag(
     absentFollowHistory(10, [8, 16]),
-    { windowsMs: [6 * HOUR] },
+    { windowsMs: [6 * HOUR], observationEndMs: T0 + 10 * 24 * HOUR },
   );
   assert.ok(!weakZ.inhibitory.some((edge) => edge.from === 'a' && edge.to === 'b'));
 });

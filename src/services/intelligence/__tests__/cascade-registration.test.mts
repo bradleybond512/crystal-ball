@@ -143,6 +143,52 @@ test('refresh evaluates the previous snapshot before replacement and stores anon
   );
 });
 
+test('zero-admission refresh clears the active snapshot and makes diagnostics unavailable', () => {
+  replaceInhibitorySnapshot([{ ...inhibitory('a', 'b'), windowMs: 10 }], 4, 100);
+
+  refreshLearnedCascades([
+    { domain: 'a', at: 101 },
+  ], {
+    now: 120,
+    engine: engine(),
+    mine: () => result({ family: null, candidates: [], promoting: [], inhibitory: [] }),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.equal(getInhibitorySnapshot(120), null);
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'unavailable',
+    evaluatedAt: null,
+    snapshotPublishedAt: null,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
+});
+
+test('non-finite cadence time records an error instead of publishing evidence', () => {
+  replaceInhibitorySnapshot([inhibitory('a', 'b')], 4, 100);
+
+  refreshLearnedCascades([], {
+    now: Number.NaN,
+    engine: engine(),
+    mine: () => result(),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.equal(getInhibitorySnapshot(120), null);
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'error',
+    evaluatedAt: null,
+    snapshotPublishedAt: 100,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
+});
+
 test('disabled, empty, and mining-error refreshes clear inhibition immediately', () => {
   const fakeEngine = engine();
   const seed = (): void => { replaceInhibitorySnapshot([inhibitory()], 4, 1); };

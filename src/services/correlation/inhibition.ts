@@ -48,7 +48,7 @@ export function replaceInhibitorySnapshot(
   publishedAt: number = Date.now(),
 ): InhibitorySnapshot {
   if (!Number.isFinite(publishedAt)) {
-    activeSnapshot = null;
+    invalidateInhibitorySnapshot();
     return NEUTRAL_SNAPSHOT;
   }
   const evidence = validEvidence(edges, criticalAbsZ)
@@ -56,8 +56,7 @@ export function replaceInhibitorySnapshot(
     .slice(0, MAX_INHIBITORY_EVIDENCE)
     .map((item) => Object.freeze(item));
   if (evidence.length === 0) {
-    activeSnapshot = null;
-    shadowDiagnostics = emptyShadowDiagnostics();
+    invalidateInhibitorySnapshot();
     return NEUTRAL_SNAPSHOT;
   }
   const snapshot = Object.freeze({
@@ -71,6 +70,11 @@ export function replaceInhibitorySnapshot(
 
 export function clearInhibitorySnapshot(): void {
   activeSnapshot = null;
+}
+
+export function invalidateInhibitorySnapshot(): void {
+  activeSnapshot = null;
+  shadowDiagnostics = emptyShadowDiagnostics();
 }
 
 export function getInhibitorySnapshot(

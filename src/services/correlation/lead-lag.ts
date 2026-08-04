@@ -79,6 +79,9 @@ export interface MineLeadLagOptions {
   alpha?: number;
   /** Minimum positive z-score before family correction. Default 2. */
   minZ?: number;
+  /** Inclusive end of complete observation coverage. Required for
+   *  inhibitory evidence so incomplete follow windows remain pending. */
+  observationEndMs?: number;
 }
 
 const HOUR_MS = 3_600_000;
@@ -95,13 +98,19 @@ export function mineLeadLag(
   const minAntecedents = options.minAntecedents ?? 3;
   const alpha = options.alpha ?? 0.05;
   const minZ = options.minZ ?? 2;
+  const observationEndMs = options.observationEndMs;
 
-  if (!validConfiguration(windows, alpha, minAntecedents, minZ)) return emptyMiningResult();
+  if (!validConfiguration(windows, alpha, minAntecedents, minZ, observationEndMs)) {
+    return emptyMiningResult();
+  }
 
-  const validEvents = events.filter((event) => isValidDomainEvent(event));
+  const validEvents = events.filter((event) =>
+    isValidDomainEvent(event)
+      && (observationEndMs === undefined || event.at <= observationEndMs));
   const byDomain = groupTimesByDomain(validEvents);
-  const span = observedSpanMs(validEvents);
-  if (span <= 0) return emptyMiningResult();
+  const promotingSpanMs = observedSpanMs(validEvents, undefined);
+  const inhibitorySpanMs = observedSpanMs(validEvents, observationEndMs);
+  if (promotingSpanMs <= 0) return emptyMiningResult();
 
   const eligibleOrigins = [...byDomain].filter(([, times]) => times.length >= minAntecedents);
   const eligibleOrderedPairs = eligibleOrigins.reduce(
@@ -124,9 +133,11 @@ export function mineLeadLag(
     eligibleOrigins,
     byDomain,
     windows,
-    span,
+    promotingSpanMs,
+    inhibitorySpanMs,
     family,
     minZ,
+    observationEndMs,
   );
   result.candidates.sort(comparePromoting);
   result.promoting.sort(comparePromoting);
@@ -138,9 +149,11 @@ function mineEligiblePairs(
   eligibleOrigins: readonly (readonly [string, number[]])[],
   byDomain: ReadonlyMap<string, readonly number[]>,
   windows: readonly number[],
-  spanMs: number,
+  promotingSpanMs: number,
+  inhibitorySpanMs: number,
   family: MultipleTestingFamily,
   minZ: number,
+  observationEndMs: number | undefined,
 ): {
   candidates: PromotingLeadLagEdge[];
   promoting: PromotingLeadLagEdge[];
@@ -152,7 +165,16 @@ function mineEligiblePairs(
   for (const [from, antecedents] of eligibleOrigins) {
     for (const [to, consequents] of byDomain) {
       if (to === from) continue;
-      const best = bestEdgesAcrossWindows(from, to, antecedents, consequents, windows, spanMs);
+      const best = bestEdgesAcrossWindows(
+        from,
+        to,
+        antecedents,
+        consequents,
+        windows,
+        promotingSpanMs,
+        inhibitorySpanMs,
+        observationEndMs,
+      );
       recordBestEdges(best, family, minZ, candidates, promoting, inhibitory);
     }
   }
@@ -160,7 +182,7 @@ function mineEligiblePairs(
 }
 
 function recordBestEdges(
-  best: { promoting: PromotingLeadLagEdge | null; inhibitory: InhibitoryLeadLagEdge },
+  best: { promoting: PromotingLeadLagEdge | null; inhibitory: InhibitoryLeadLagEdge | null },
   family: MultipleTestingFamily,
   minZ: number,
   candidates: PromotingLeadLagEdge[],
@@ -171,7 +193,9 @@ function recordBestEdges(
     candidates.push(best.promoting);
     if (isPromotingSignificant(best.promoting, family, minZ)) promoting.push(best.promoting);
   }
-  if (isInhibitorySignificant(best.inhibitory, family)) inhibitory.push(best.inhibitory);
+  if (best.inhibitory && isInhibitorySignificant(best.inhibitory, family)) {
+    inhibitory.push(best.inhibitory);
+  }
 }
 
 function isPromotingSignificant(
@@ -199,6 +223,7 @@ function validConfiguration(
   alpha: number,
   minAntecedents: number,
   minZ: number,
+  observationEndMs: number | undefined,
 ): boolean {
   return Number.isFinite(alpha)
     && alpha > 0
@@ -207,6 +232,7 @@ function validConfiguration(
     && minAntecedents > 0
     && Number.isFinite(minZ)
     && minZ >= 0
+    && (observationEndMs === undefined || Number.isFinite(observationEndMs))
     && windows.length > 0
     && windows.every((windowMs) => Number.isFinite(windowMs) && windowMs > 0)
     && new Set(windows).size === windows.length;
@@ -226,20 +252,41 @@ function bestEdgesAcrossWindows(
   antecedents: readonly number[],
   consequents: readonly number[],
   windows: readonly number[],
-  spanMs: number,
-): { promoting: PromotingLeadLagEdge | null; inhibitory: InhibitoryLeadLagEdge } {
+  promotingSpanMs: number,
+  inhibitorySpanMs: number,
+  observationEndMs: number | undefined,
+): { promoting: PromotingLeadLagEdge | null; inhibitory: InhibitoryLeadLagEdge | null } {
   let bestPromoting: PromotingLeadLagEdge | null = null;
   let bestInhibitory: InhibitoryLeadLagEdge | null = null;
   for (const windowMs of windows) {
-    const trial = minePair(from, to, antecedents, consequents, windowMs, spanMs);
-    if (trial.support > 0) {
-      const edge = promotingEdge(trial);
+    const promotingTrial = minePair(
+      from,
+      to,
+      antecedents,
+      consequents,
+      windowMs,
+      promotingSpanMs,
+    );
+    if (promotingTrial.support > 0) {
+      const edge = promotingEdge(promotingTrial);
       if (!bestPromoting || comparePromoting(edge, bestPromoting) < 0) bestPromoting = edge;
     }
-    const edge = inhibitoryEdge(trial);
+    const matureAntecedents = observationEndMs === undefined
+      ? []
+      : antecedents.filter((at) => at <= observationEndMs - windowMs);
+    if (matureAntecedents.length === 0) continue;
+    const inhibitoryTrial = minePair(
+      from,
+      to,
+      matureAntecedents,
+      consequents,
+      windowMs,
+      inhibitorySpanMs,
+    );
+    const edge = inhibitoryEdge(inhibitoryTrial);
     if (!bestInhibitory || compareInhibitory(edge, bestInhibitory) < 0) bestInhibitory = edge;
   }
-  return { promoting: bestPromoting, inhibitory: bestInhibitory! };
+  return { promoting: bestPromoting, inhibitory: bestInhibitory };
 }
 
 function minePair(
@@ -364,13 +411,16 @@ function isValidDomainEvent(event: DomainEvent): boolean {
     && event.domain.length > 0;
 }
 
-function observedSpanMs(events: readonly DomainEvent[]): number {
+function observedSpanMs(
+  events: readonly DomainEvent[],
+  observationEndMs: number | undefined,
+): number {
   let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
+  let max = observationEndMs ?? Number.NEGATIVE_INFINITY;
   for (const e of events) {
     if (!Number.isFinite(e.at)) continue;
     if (e.at < min) min = e.at;
-    if (e.at > max) max = e.at;
+    if (observationEndMs === undefined && e.at > max) max = e.at;
   }
   return max > min ? max - min : 0;
 }

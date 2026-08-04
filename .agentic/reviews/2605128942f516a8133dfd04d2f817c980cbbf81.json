@@ -1,8 +1,0 @@
-{
-  "reviewedSha": "2605128942f516a8133dfd04d2f817c980cbbf81",
-  "reviewer": "claude",
-  "verdict": "approve",
-  "blockingFindings": 0,
-  "reviewedAt": "2026-08-04T21:43:41.269Z",
-  "evidence": "### Summary\n\nZero blocking defects. The statistical formulation is correct (two-tailed Gaussian union bound, verified numerically). The type system enforces the promoting/inhibitory separation at compile time. The shadow-only boundary is enforced both structurally (0 inhibition imports in operational paths) and via static test. Right-censoring is implemented correctly and the S9 corpus exhaustively exercises the mature-antecedent filter. Atomic invalidation correctly distinguishes disabled vs error vs unavailable states. The 29 mutation proofs were independently verified to the restored 33/0 result.\n\nCONCLUSION: PASS — zero blocking findings at 2605128942f516a8133dfd04d2f817c980cbbf81."
-}

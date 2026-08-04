@@ -11,12 +11,16 @@ import {
   recordLearnedRulesInstalled,
   registerCorrelationRuntime,
 } from '../../correlation/correlation-liveness.ts';
+import { __resetInhibitionShadowDiagnosticsForTests } from '../../correlation/inhibition.ts';
 
 const NOW = 1_800_000_000_000;
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
 
-beforeEach(() => __resetCorrelationLivenessForTests());
+beforeEach(() => {
+  __resetCorrelationLivenessForTests();
+  __resetInhibitionShadowDiagnosticsForTests();
+});
 
 function baseInput(): BuildAlgorithmDiagnosticsInput {
   return {
@@ -406,6 +410,25 @@ test('algorithm diagnostics surface degraded learned-rule liveness from live tel
   assert.equal(liveness.reason, 'learned_rules_dormant_on_singletons');
   assert.equal(liveness.live.batchCount, 3);
   assert.equal(liveness.live.learnedPairsEmitted, 0);
+});
+
+test('algorithm diagnostics expose only bounded anonymous inhibition shadow counts', () => {
+  const shadow = buildAlgorithmDiagnosticsSnapshot(baseInput()).inhibitionShadow;
+
+  assert.deepEqual(shadow, {
+    status: 'unavailable',
+    evaluatedAt: null,
+    snapshotPublishedAt: null,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
+  assert.deepEqual(Object.keys(shadow).sort(), [
+    'confirmed', 'evaluatedAt', 'evidenceEvaluated', 'pending', 'refuted',
+    'snapshotPublishedAt', 'status',
+  ]);
+  assert.doesNotMatch(JSON.stringify(shadow), /domain|event|identifier|\bid\b/i);
 });
 
 test('forecast evaluation diagnostics expose bounded leakage-safe holdout cohorts', () => {

@@ -8,7 +8,6 @@
 import type { CompoundRiskInput, CompoundRiskResult } from '../intelligence/compound-risk';
 import { trackedComputeCompoundRisk } from '../algorithms/tracked-algorithms';
 import { factDomainFor } from './correlation-outcomes';
-import { getInhibitorySnapshot } from './inhibition';
 import {
   getSituationStoreV2,
   type Situation,
@@ -34,7 +33,6 @@ export function situationsToCompoundInputs(
       title: s.name,
       domain: factDomainFor(s.domain),
       domains: [...new Set([s.domain, ...s.relatedDomains].map((d) => factDomainFor(d)))],
-      sourceDomains: [...new Set([s.domain, ...s.relatedDomains])],
       severityScore: SEVERITY_SCORE[s.severity] ?? 30,
       confidence: s.confidence,
       entities: [...s.entityIds],
@@ -80,9 +78,7 @@ export function recomputeCompoundRisk(
   situations: readonly Situation[],
   now: number = Date.now(),
 ): CompoundRiskSnapshot {
-  const results = trackedComputeCompoundRisk(situationsToCompoundInputs(situations), {
-    inhibitorySnapshot: getInhibitorySnapshot(now),
-  });
+  const results = trackedComputeCompoundRisk(situationsToCompoundInputs(situations));
   latest = { results, computedAt: now };
   for (const l of listeners) {
     try { l(latest); } catch { /* listener crash isolation */ }

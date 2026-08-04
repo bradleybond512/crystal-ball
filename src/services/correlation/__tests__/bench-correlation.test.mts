@@ -2553,6 +2553,73 @@ describe('the one-shot v11 to v12 migration gate', () => {
     assert.equal(verdict.ok, true);
   });
 
+  it('rejects a migrated report whose learned execution path collapses behind one survivor', () => {
+    assert.ok(api.validateCorrelationBenchV11ToV12Migration);
+    const collapsed = {
+      ...live,
+      learnedRulePairCount: 1,
+      causalLearnedRulePairCount: 1,
+      causalLearnedRulePairsPerRule: [1, 0, 0, 0, 0],
+      minCausalLearnedRulePairCount: 0,
+      learnedPairs: [],
+    };
+    const verdict = api.validateCorrelationBenchV11ToV12Migration(
+      collapsed,
+      previous,
+      api.CORRELATION_BENCH_V11_TO_V12_MIGRATION,
+    );
+    assert.equal(verdict.ok, false, verdict.reasons.join(' | '));
+    assert.ok(
+      verdict.reasons.some((reason) => reason.includes('causal learned rules went quiet')),
+      verdict.reasons.join(' | '),
+    );
+    assert.ok(
+      verdict.reasons.some((reason) => reason.includes('a causal learned rule went dark')),
+      verdict.reasons.join(' | '),
+    );
+    assert.ok(
+      verdict.reasons.some((reason) => reason.includes('learned-pair ledger accounts for 0')),
+      verdict.reasons.join(' | '),
+    );
+  });
+
+  it('rejects one dark causal learned rule even when aggregate learned volume stays healthy', () => {
+    assert.ok(api.validateCorrelationBenchV11ToV12Migration);
+    const counts = live.causalLearnedRuleIds.map(
+      (ruleId, index) => [ruleId, index === live.causalLearnedRuleIds.length - 1 ? 0 : 8] as const,
+    );
+    const oneDarkRule = withLearnedPairRows(live, learnedRowsFor(live, counts));
+    const verdict = api.validateCorrelationBenchV11ToV12Migration(
+      oneDarkRule,
+      previous,
+      api.CORRELATION_BENCH_V11_TO_V12_MIGRATION,
+    );
+    assert.equal(verdict.ok, false, verdict.reasons.join(' | '));
+    assert.ok(
+      verdict.reasons.some((reason) => reason.includes('a causal learned rule went dark')),
+      verdict.reasons.join(' | '),
+    );
+  });
+
+  it('rejects collapsed built-in engine volume even when rates remain unchanged', () => {
+    assert.ok(api.validateCorrelationBenchV11ToV12Migration);
+    const collapsedEngine = {
+      ...live,
+      enginePairCount: 1,
+      distinctEnginePairCount: 1,
+    };
+    const verdict = api.validateCorrelationBenchV11ToV12Migration(
+      collapsedEngine,
+      previous,
+      api.CORRELATION_BENCH_V11_TO_V12_MIGRATION,
+    );
+    assert.equal(verdict.ok, false, verdict.reasons.join(' | '));
+    assert.ok(
+      verdict.reasons.some((reason) => reason.includes('distinct built-in pair emissions regressed')),
+      verdict.reasons.join(' | '),
+    );
+  });
+
   it('fails closed on altered previous anchors, tolerances, manifest, family, or inhibition', () => {
     assert.ok(api.validateCorrelationBenchV11ToV12Migration);
     const validate = api.validateCorrelationBenchV11ToV12Migration;

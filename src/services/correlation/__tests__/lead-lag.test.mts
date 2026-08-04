@@ -257,12 +257,15 @@ test('degenerate inputs: empty history, single domain, zero span', () => {
   assert.deepEqual(mineLeadLag(sameInstant).candidates, []);
 });
 
-test('non-finite timestamps and empty domains are filtered, not crashing', () => {
-  const edges = mineLeadLag([
-    ev('a', Number.NaN), ev('', T0),
+test('invalid events cannot alter the eligible family or valid edge statistics', () => {
+  const valid = mineLeadLag(coupledHistory());
+  const contaminated = mineLeadLag([
     ...coupledHistory(),
+    ev('a', Number.NaN),
+    ev('', T0 + 1_000_000 * HOUR),
   ]);
-  assert.ok(edges.candidates.some((e) => e.from === 'seismic' && e.to === 'infra'));
+
+  assert.deepEqual(contaminated, valid);
 });
 
 test('every mined edge carries an explanation', () => {

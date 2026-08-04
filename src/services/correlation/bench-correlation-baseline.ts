@@ -430,6 +430,10 @@ function checkV12MigrationEvidence(
       `fixed candidate evidence separation regressed below the reviewed v11 evidence floor`,
     );
   }
+  // The one-shot gate still consumes a schema-12 REPORT. Only the historical
+  // baseline is schema 11, so applying the normal report coherence checks here
+  // does not demand fields that the migration source never carried.
+  checkReportConsistency(reasons, report);
   checkMigrationSharedGates(reasons, report, previous);
 }
 
@@ -473,12 +477,35 @@ function checkMigrationSharedGates(
     report.learnedRuleFalsePositives, tol.learnedRuleFalsePositiveGrowth);
   checkGrowth(reasons, 'learned-rule pair volume', previous.learnedRulePairCount,
     report.learnedRulePairCount, tol.learnedRulePairGrowth);
+  const causalFloor = previous.causalLearnedRulePairCount
+    * (1 - tol.causalLearnedRulePairShrinkRatio);
+  if (report.causalLearnedRulePairCount < causalFloor) {
+    reasons.push(
+      `causal learned rules went quiet: baseline emitted ` +
+      `${previous.causalLearnedRulePairCount} pairs, live emitted ` +
+      `${report.causalLearnedRulePairCount} (floor ${causalFloor.toFixed(2)} at a ` +
+      `${tol.causalLearnedRulePairShrinkRatio} shrink ratio) while still synthesizing ` +
+      `${report.causalLearnedRuleCount} causal rule(s) — the rules are built but barely fire`,
+    );
+  }
+  const perRuleFloor = previous.minCausalLearnedRulePairCount
+    * (1 - tol.causalLearnedRulePairShrinkRatio);
+  if (report.minCausalLearnedRulePairCount < perRuleFloor) {
+    reasons.push(
+      `a causal learned rule went dark: the weakest rule emitted ` +
+      `${report.minCausalLearnedRulePairCount} pair(s) against a baseline weakest of ` +
+      `${previous.minCausalLearnedRulePairCount} (floor ${perRuleFloor.toFixed(2)}); per-rule ` +
+      `volumes were [${report.causalLearnedRulePairsPerRule.join(', ')}]`,
+    );
+  }
   checkDrop(reasons, 'built-in pair precision', previous.pairPrecision,
     report.pairPrecision, tol.pairPrecisionDrop);
   checkDrop(reasons, 'built-in pair recall', previous.pairRecall,
     report.pairRecall, tol.pairRecallDrop);
   checkDrop(reasons, 'mean true-pair confidence', previous.meanTruePairConfidence,
     report.meanTruePairConfidence, tol.meanTruePairConfidenceDrop);
+  checkDrop(reasons, 'distinct built-in pair emissions', previous.distinctEnginePairCount,
+    report.distinctEnginePairCount, tol.enginePairShrink);
 }
 
 const WITNESSED_DIGEST_KEYS = [

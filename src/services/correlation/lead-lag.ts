@@ -98,8 +98,9 @@ export function mineLeadLag(
 
   if (!validConfiguration(windows, alpha, minAntecedents, minZ)) return emptyMiningResult();
 
-  const byDomain = groupTimesByDomain(events);
-  const span = observedSpanMs(events);
+  const validEvents = events.filter((event) => isValidDomainEvent(event));
+  const byDomain = groupTimesByDomain(validEvents);
+  const span = observedSpanMs(validEvents);
   if (span <= 0) return emptyMiningResult();
 
   const eligibleOrigins = [...byDomain].filter(([, times]) => times.length >= minAntecedents);
@@ -347,9 +348,7 @@ function binomialZ(support: number, n: number, p0: number): number {
 }
 
 function groupTimesByDomain(events: readonly DomainEvent[]): Map<string, number[]> {
-  const ordered = [...events]
-    .filter((e) => Number.isFinite(e.at) && typeof e.domain === 'string' && e.domain.length > 0)
-    .sort((a, b) => a.at - b.at);
+  const ordered = [...events].sort((a, b) => a.at - b.at);
   const byDomain = new Map<string, number[]>();
   for (const e of ordered) {
     const list = byDomain.get(e.domain) ?? [];
@@ -357,6 +356,12 @@ function groupTimesByDomain(events: readonly DomainEvent[]): Map<string, number[
     byDomain.set(e.domain, list);
   }
   return byDomain;
+}
+
+function isValidDomainEvent(event: DomainEvent): boolean {
+  return Number.isFinite(event.at)
+    && typeof event.domain === 'string'
+    && event.domain.length > 0;
 }
 
 function observedSpanMs(events: readonly DomainEvent[]): number {

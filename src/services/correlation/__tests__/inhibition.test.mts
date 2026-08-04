@@ -4,8 +4,11 @@ import test, { beforeEach } from 'node:test';
 import {
   INHIBITION_TTL_MS,
   MAX_INHIBITION_SHADOW_EVENTS,
+  __resetInhibitionShadowDiagnosticsForTests,
   clearInhibitorySnapshot,
+  evaluateActiveInhibitionShadow,
   evaluateInhibitionShadow,
+  getInhibitionShadowDiagnostics,
   getInhibitorySnapshot,
   readInhibitionEnabled,
   replaceInhibitorySnapshot,
@@ -32,7 +35,10 @@ function edge(overrides: Partial<InhibitoryLeadLagEdge> = {}): InhibitoryLeadLag
   };
 }
 
-beforeEach(() => clearInhibitorySnapshot());
+beforeEach(() => {
+  clearInhibitorySnapshot();
+  __resetInhibitionShadowDiagnosticsForTests();
+});
 
 test('replace publishes an immutable, deterministically capped snapshot for two cadence intervals', () => {
   const edges = Array.from({ length: 15 }, (_, index) => edge({
@@ -82,6 +88,34 @@ test('publication rejects evidence that misses any inhibitory statistical gate',
     const snapshot = replaceInhibitorySnapshot([candidate], 4, T0);
     assert.deepEqual(snapshot.evidence, [], JSON.stringify(candidate));
   }
+});
+
+test('replacement with no admitted evidence clears the active snapshot and shadow diagnostics', () => {
+  replaceInhibitorySnapshot([edge()], 4, T0);
+  assert.equal(evaluateActiveInhibitionShadow([], T0, true).status, 'fresh');
+
+  const rejected = replaceInhibitorySnapshot([edge({ antecedents: 4 })], 4, T0 + 1);
+
+  assert.deepEqual(rejected.evidence, []);
+  assert.equal(getInhibitorySnapshot(T0 + 1), null);
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'unavailable',
+    evaluatedAt: null,
+    snapshotPublishedAt: null,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
+  assert.deepEqual(evaluateActiveInhibitionShadow([], T0 + 1, true), {
+    status: 'unavailable',
+    evaluatedAt: T0 + 1,
+    snapshotPublishedAt: null,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
 });
 
 test('shadow evaluation rejects forged snapshots that miss statistical gates or have invalid time bounds', () => {
@@ -174,13 +208,13 @@ test('shadow evaluator bounds work and output counts', () => {
   assert.ok(summary.confirmed <= MAX_INHIBITION_SHADOW_EVENTS);
 });
 
-test('shadow evaluator keeps the newest valid events when input is not chronological', () => {
+test('shadow evaluator retains relevant trials ahead of newer unrelated noise', () => {
   const snapshot = replaceInhibitorySnapshot([edge({ from: 'a', to: 'b', windowMs: 1 })], 4, T0);
   const events = [
-    { domain: 'a', at: T0 + MAX_INHIBITION_SHADOW_EVENTS + 1 },
-    ...Array.from({ length: MAX_INHIBITION_SHADOW_EVENTS }, (_, index) => ({
+    { domain: 'a', at: T0 + 1 },
+    ...Array.from({ length: MAX_INHIBITION_SHADOW_EVENTS + 1 }, (_, index) => ({
       domain: 'irrelevant',
-      at: T0 + index + 1,
+      at: T0 + index + 10,
     })),
   ];
 
@@ -188,6 +222,28 @@ test('shadow evaluator keeps the newest valid events when input is not chronolog
     events,
     snapshot,
     T0 + MAX_INHIBITION_SHADOW_EVENTS + 10,
+  ), {
+    evidenceEvaluated: 1,
+    confirmed: 1,
+    refuted: 0,
+    pending: 0,
+  });
+});
+
+test('shadow evaluator gives each referenced domain a fair deterministic event budget', () => {
+  const snapshot = replaceInhibitorySnapshot([edge({ from: 'a', to: 'b', windowMs: 1 })], 4, T0);
+  const events = [
+    { domain: 'a', at: T0 + 1 },
+    ...Array.from({ length: MAX_INHIBITION_SHADOW_EVENTS + 1 }, (_, index) => ({
+      domain: 'b',
+      at: T0 + index + 10,
+    })),
+  ];
+
+  assert.deepEqual(evaluateInhibitionShadow(
+    events,
+    snapshot,
+    T0 + MAX_INHIBITION_SHADOW_EVENTS + 20,
   ), {
     evidenceEvaluated: 1,
     confirmed: 1,

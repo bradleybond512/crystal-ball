@@ -33,7 +33,12 @@ import {
   CorrelateEngine, type CorrelatedPair, type CorrelationRule, type EdgeType,
 } from '../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../intelligence/built-in-correlation-rules';
-import { mineLeadLag, significantEdges, type LeadLagEdge } from './lead-lag';
+import {
+  mineLeadLag,
+  type InhibitoryLeadLagEdge,
+  type LeadLagEdge,
+  type MultipleTestingFamily,
+} from './lead-lag';
 import {
   learnedRulesFromEdges,
   learnedRuleId,
@@ -44,6 +49,7 @@ import {
   allGoldenObservations,
   decoyEventIds,
   goldenCorpusDigest,
+  goldenStreamDigests,
   pairKeyFor,
   plantedCouplingIndex,
   plantedTruePairKeys,
@@ -79,6 +85,22 @@ export interface BenchEdgeRow {
   windowHours: number;
   /** Whether this edge survived the MAX_LEARNED_RULES cap into a live rule. */
   becameLearnedRule: boolean;
+}
+
+export interface BenchInhibitoryEdgeRow {
+  id: `inhibits:${string}->${string}`;
+  from: string;
+  to: string;
+  windowMs: number;
+  antecedents: number;
+  support: number;
+  followRate: number;
+  expectedRate: number;
+  lift: number;
+  zScore: number;
+  strength: number;
+  verdict: 'inhibitory' | 'false-positive';
+  explanation: string;
 }
 
 /**
@@ -166,6 +188,7 @@ export interface BenchLearnedPairRow {
 
 export interface CorrelationBenchReport {
   // ── corpus identity (exact-equality drift detection) ──
+  replayMode: 'offline-whole-corpus';
   streamCount: number;
   observationCount: number;
   plantedCausalCount: number;
@@ -177,6 +200,7 @@ export interface CorrelationBenchReport {
    * corpus easier and reports the resulting numbers as an improvement.
    */
   corpusDigest: string;
+  streamDigests: Record<string, string>;
   /**
    * Every built-in rule id registered for the graded pass, sorted.
    *
@@ -207,6 +231,8 @@ export interface CorrelationBenchReport {
    * this set.
    */
   ruleCoverage: string[];
+
+  multipleTestingFamily: MultipleTestingFamily;
 
   // ── miner: discovery quality ──
   minedEdgeCount: number;
@@ -261,6 +287,14 @@ export interface CorrelationBenchReport {
    * transitive edge shows up here immediately.
    */
   edgeEvidenceSeparation: number | null;
+  /** Fixed candidate-population z separation; the correction cannot improve it by thinning. */
+  fixedCandidateEvidenceSeparation: number;
+
+  plantedInhibitoryCount: number;
+  inhibitoryTruePositiveCount: number;
+  inhibitoryFalsePositiveCount: number;
+  inhibitoryPrecision: number | null;
+  inhibitoryRecall: number;
 
   // ── learned rules ──
   learnedRuleCount: number;
@@ -339,6 +373,7 @@ export interface CorrelationBenchReport {
 
   // ── row-level ledgers: the gate re-derives the summaries above from these ──
   edges: BenchEdgeRow[];
+  inhibitoryEdges: BenchInhibitoryEdgeRow[];
   pairs: BenchPairRow[];
   learnedPairs: BenchLearnedPairRow[];
 }
@@ -352,8 +387,9 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   // ── Miner ──────────────────────────────────────────────────────────────
   // Same call shape as cascade-registration.computeSignificantEdges().
   const domainEvents = observations.map((o) => ({ domain: o.domain, at: o.timestamp }));
-  const mined = mineLeadLag(domainEvents);
-  const significant = significantEdges(mined);
+  const mining = mineLeadLag(domainEvents);
+  if (mining.family === null) throw new Error('correlation benchmark mining family is invalid');
+  const significant = mining.promoting;
 
   const learnedRules = learnedRulesFromEdges(significant);
   const learnedIds = new Set(learnedRules.map((r) => r.id));
@@ -407,6 +443,23 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     ? mean(falseEdges.map((e) => cappedZ(e.zScore)))
     : null;
 
+  const causalCandidates = mining.candidates.filter(
+    (edge) => verdictFor(edge, plantedIndex) === 'causal',
+  );
+  const falseCandidates = mining.candidates.filter(
+    (edge) => verdictFor(edge, plantedIndex) !== 'causal',
+  );
+  const fixedCandidateEvidenceSeparation = mean(
+    causalCandidates.map((edge) => cappedZ(edge.zScore)),
+  ) - mean(falseCandidates.map((edge) => cappedZ(edge.zScore)));
+
+  const plantedInhibitoryCount = PLANTED_COUPLINGS.filter((c) => c.kind === 'inhibitory').length;
+  const inhibitoryEdges = mining.inhibitory.map((edge) => inhibitoryRow(edge, plantedIndex));
+  const inhibitoryTruePositiveCount = inhibitoryEdges.filter(
+    (edge) => edge.verdict === 'inhibitory',
+  ).length;
+  const inhibitoryFalsePositiveCount = inhibitoryEdges.length - inhibitoryTruePositiveCount;
+
   // ── Engine pass A: built-ins only ─────────────────────────────────────
   const graded = gradeEnginePairs(runEngine(observations), truePairs, decoys);
   const { emittedTrueKeys, decoyPairsEmitted } = graded;
@@ -450,18 +503,21 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   );
 
   return {
+    replayMode: 'offline-whole-corpus',
     streamCount: GOLDEN_STREAMS.length,
     observationCount: observations.length,
     plantedCausalCount: plantedCausal.length,
     corpusDigest: goldenCorpusDigest(),
+    streamDigests: goldenStreamDigests(),
     builtInRuleIds: builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b)),
     ruleProbes: probeBuiltInRules(),
     ruleCoverage: builtInCorrelationRules
       .map((r) => r.id)
       .filter((id) => emittingRules.has(id))
       .sort((a, b) => a.localeCompare(b)),
+    multipleTestingFamily: mining.family,
 
-    minedEdgeCount: mined.length,
+    minedEdgeCount: mining.candidates.length,
     significantEdgeCount: significant.length,
     couplingPrecision: ratio(counts.causal, significant.length),
     couplingRecall: ratio(counts.causal, plantedCausal.length),
@@ -483,6 +539,15 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     meanFalseEdgeZ: meanFalseZ === null ? null : round4(meanFalseZ),
     edgeEvidenceSeparation:
       meanFalseZ === null ? null : round4(meanCausalZ - meanFalseZ),
+    fixedCandidateEvidenceSeparation: round4(fixedCandidateEvidenceSeparation),
+
+    plantedInhibitoryCount,
+    inhibitoryTruePositiveCount,
+    inhibitoryFalsePositiveCount,
+    inhibitoryPrecision: inhibitoryEdges.length === 0
+      ? null
+      : ratio(inhibitoryTruePositiveCount, inhibitoryEdges.length),
+    inhibitoryRecall: ratio(inhibitoryTruePositiveCount, plantedInhibitoryCount),
 
     learnedRuleCount: learnedRules.length,
     learnedRuleFalsePositives,
@@ -509,8 +574,31 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     causalLearnedRuleIds: [...causalLearnedRuleIds].sort((a, b) => a.localeCompare(b)),
 
     edges,
+    inhibitoryEdges,
     pairs: graded.pairs,
     learnedPairs,
+  };
+}
+
+function inhibitoryRow(
+  edge: InhibitoryLeadLagEdge,
+  plantedIndex: ReadonlyMap<string, { kind: PlantedCouplingKind }>,
+): BenchInhibitoryEdgeRow {
+  const planted = plantedIndex.get(`${edge.from}->${edge.to}`);
+  return {
+    id: `inhibits:${edge.from}->${edge.to}`,
+    from: edge.from,
+    to: edge.to,
+    windowMs: edge.windowMs,
+    antecedents: edge.antecedents,
+    support: edge.support,
+    followRate: edge.followRate,
+    expectedRate: edge.expectedRate,
+    lift: edge.lift,
+    zScore: edge.zScore,
+    strength: edge.strength,
+    verdict: planted?.kind === 'inhibitory' ? 'inhibitory' : 'false-positive',
+    explanation: edge.explanation,
   };
 }
 

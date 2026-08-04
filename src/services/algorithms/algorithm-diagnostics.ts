@@ -30,6 +30,10 @@ import {
   type ResolutionQualityAudit,
 } from '../intelligence/resolution-quality-audit';
 import {
+  getCorrelationLivenessDiagnostics,
+  type CorrelationLivenessDiagnostics,
+} from '../correlation/correlation-liveness';
+import {
   evaluateForecastCohort,
   forecastLossAttribution,
   horizonBucket,
@@ -107,6 +111,7 @@ export interface AlgorithmDiagnosticsSnapshot {
   };
   health: AlgorithmHealthReport;
   forecastCalibration: ForecastCalibrationDiagnostics;
+  correlationLiveness: CorrelationLivenessDiagnostics;
   runtime: readonly AlgorithmRuntimeDiagnostics[];
   tunings: readonly AlgorithmAdjustmentTuning[];
   proposals: readonly AdjustmentProposal[];
@@ -305,6 +310,7 @@ export function buildAlgorithmDiagnosticsSnapshot(
       input.marketSpotPrices,
       input.weatherReportBatch,
     ),
+    correlationLiveness: getCorrelationLivenessDiagnostics(generatedAt),
     runtime: buildRuntimeRows(input.definitions, records),
     tunings: input.tunings.map((tuning) => copyTuning(tuning)),
     proposals: proposeAdjustments(

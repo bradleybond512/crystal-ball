@@ -24,6 +24,11 @@
 
 import { CorrelateEngine, type CorrelatedPair, type EdgeType } from './correlate-engine';
 import { builtInCorrelationRules } from './built-in-correlation-rules';
+import {
+  recordCorrelationBatch,
+  registerCorrelationRuntime,
+  type CorrelationRuntimeMode,
+} from '../correlation/correlation-liveness';
 import { resolve as resolveEntity } from './entity-registry';
 import type { ObservationEvent } from './observation-adapters';
 import { getSourceTrust } from '../source-trust';
@@ -487,6 +492,8 @@ export interface SituationStoreV2Options {
   engine?: CorrelateEngine;
   /** Override Date.now() — useful for deterministic tests. */
   clock?: () => number;
+  /** Runtime diagnostics are opt-in except for the live singleton. */
+  diagnosticsMode?: CorrelationRuntimeMode | 'disabled';
 }
 
 export class SituationStoreV2 {
@@ -504,6 +511,9 @@ export class SituationStoreV2 {
   constructor(options: SituationStoreV2Options = {}) {
     this.engine = options.engine ?? this.defaultEngine();
     this.clock = options.clock ?? (() => Date.now());
+    if (options.diagnosticsMode && options.diagnosticsMode !== 'disabled') {
+      registerCorrelationRuntime(this.engine, options.diagnosticsMode);
+    }
   }
 
   private defaultEngine(): CorrelateEngine {
@@ -611,7 +621,9 @@ export class SituationStoreV2 {
       this.notify();
       return;
     }
-    const result = this.engine.correlate(observations, new Date(this.clock()));
+    const correlatedAt = this.clock();
+    const result = this.engine.correlate(observations, new Date(correlatedAt));
+    recordCorrelationBatch(this.engine, observations.length, result.pairs, correlatedAt);
     if (result.pairs.length > 0) {
       for (const listener of this.pairListeners) {
         try { listener(result.pairs); } catch { /* listener crash isolation */ }
@@ -843,7 +855,7 @@ function cloneSituation(s: Situation): Situation {
 let _singleton: SituationStoreV2 | null = null;
 
 export function getSituationStoreV2(): SituationStoreV2 {
-  _singleton ??= new SituationStoreV2();
+  _singleton ??= new SituationStoreV2({ diagnosticsMode: 'live' });
   return _singleton;
 }
 

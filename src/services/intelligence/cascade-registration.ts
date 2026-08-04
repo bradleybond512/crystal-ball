@@ -15,13 +15,24 @@ import type { DomainEvent } from './learned-cascades';
 import { registerLearnedCascadePairs } from './compound-risk';
 import { getSituationStoreV2 } from './situation-store-v2';
 import { isGhostMode } from '@/services/mode-manager';
-import { mineLeadLag, significantEdges, type LeadLagEdge } from '@/services/correlation/lead-lag';
+import {
+  mineLeadLag,
+  type LeadLagMiningResult,
+  type PromotingLeadLagEdge,
+} from '@/services/correlation/lead-lag';
 import { learnedRulesFromEdges, syncLearnedRules } from '@/services/correlation/learned-rules';
+import type { CorrelateEngine } from './correlate-engine';
+import {
+  INHIBITION_REFRESH_INTERVAL_MS,
+  clearInhibitorySnapshot,
+  readInhibitionEnabled,
+  replaceInhibitorySnapshot,
+} from '@/services/correlation/inhibition';
 
-const REFRESH_TICK_MS = 60 * 60 * 1000;
+const REFRESH_TICK_MS = INHIBITION_REFRESH_INTERVAL_MS;
 
-export function computeSignificantEdges(history: readonly DomainEvent[]): LeadLagEdge[] {
-  return significantEdges(mineLeadLag(history));
+export function computeSignificantEdges(history: readonly DomainEvent[]): PromotingLeadLagEdge[] {
+  return [...mineLeadLag(history).promoting];
 }
 
 /** "from|to" keys for compound-risk (same contract as the old miner). */
@@ -29,14 +40,43 @@ export function computeCascadeKeys(history: readonly DomainEvent[]): string[] {
   return computeSignificantEdges(history).map((e) => `${e.from}|${e.to}`);
 }
 
-export function refreshLearnedCascades(history: readonly DomainEvent[]): void {
+interface RefreshLearnedCascadeOptions {
+  now?: number;
+  engine?: Pick<CorrelateEngine, 'registerRule' | 'unregisterRule' | 'getRules'>;
+  mine?: (events: readonly DomainEvent[]) => LeadLagMiningResult;
+  inhibitionEnabled?: () => boolean;
+}
+
+export function refreshLearnedCascades(
+  history: readonly DomainEvent[],
+  options: RefreshLearnedCascadeOptions = {},
+): void {
   try {
-    if (isGhostMode()) return;
-    const edges = computeSignificantEdges(history);
-    registerLearnedCascadePairs(edges.map((e) => `${e.from}|${e.to}`));
-    syncLearnedRules(getSituationStoreV2().getEngine(), learnedRulesFromEdges(edges));
+    if (isGhostMode()) {
+      clearInhibitorySnapshot();
+      return;
+    }
+    const enabled = (options.inhibitionEnabled ?? readInhibitionEnabled)();
+    if (!enabled) clearInhibitorySnapshot();
+    const result = (options.mine ?? mineLeadLag)(history);
+    const promoting = result.promoting;
+    syncLearnedRules(
+      options.engine ?? getSituationStoreV2().getEngine(),
+      learnedRulesFromEdges(promoting),
+    );
+    registerLearnedCascadePairs(promoting.map((edge) => `${edge.from}|${edge.to}`));
+
+    if (!enabled || !result.family || result.inhibitory.length === 0) {
+      clearInhibitorySnapshot();
+      return;
+    }
+    replaceInhibitorySnapshot(
+      result.inhibitory,
+      result.family.criticalAbsZ,
+      options.now ?? Date.now(),
+    );
   } catch {
-    // Never let cascade mining crash the caller.
+    clearInhibitorySnapshot();
   }
 }
 

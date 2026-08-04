@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { computeCompoundRisk } from '../compound-risk.ts';
 import type { CompoundRiskInput } from '../compound-risk.ts';
+import { replaceInhibitorySnapshot, clearInhibitorySnapshot } from '../../correlation/inhibition.ts';
 
 function inp(overrides: Partial<CompoundRiskInput>): CompoundRiskInput {
   return {
@@ -90,6 +91,44 @@ test('score: low-confidence members produce a low score', () => {
   const a = inp({ severityScore: 90, confidence: 0.2 });
   const result = computeCompoundRisk([a]);
   assert.ok(result[0]!.score < 30);
+});
+
+test('score: inhibitory evidence applies after grouping, floors at 15%, and leaves membership and level unchanged', () => {
+  clearInhibitorySnapshot();
+  const a = inp({
+    id: 'a', domain: 'weather', domains: ['weather'], sourceDomains: ['wildfire'],
+    severityScore: 80, confidence: 1, entities: ['shared'],
+  });
+  const b = inp({
+    id: 'b', domain: 'infra', domains: ['infra'], sourceDomains: ['infrastructure'],
+    severityScore: 80, confidence: 1, entities: ['shared'],
+  });
+  const originalInputs = structuredClone([a, b]);
+  const baseline = computeCompoundRisk([a, b])[0]!;
+  const snapshot = replaceInhibitorySnapshot([{
+    effect: 'inhibitory', from: 'wildfire', to: 'infrastructure', windowMs: 1,
+    support: 0, antecedents: 12, followRate: 0, expectedRate: 0.5, lift: 0,
+    zScore: -100, strength: 0, explanation: 'learned suppression',
+  }], 4, 1);
+
+  const adjusted = computeCompoundRisk([a, b], { inhibitorySnapshot: snapshot })[0]!;
+
+  assert.equal(adjusted.score, Math.round(baseline.score * 0.85));
+  assert.deepEqual(adjusted.memberIds, baseline.memberIds);
+  assert.deepEqual(adjusted.affectedDomains, baseline.affectedDomains);
+  assert.equal(adjusted.level, baseline.level);
+  assert.deepEqual([a, b], originalInputs);
+  assert.deepEqual(adjusted.inhibition, {
+    kind: 'learned-inhibition',
+    fromDomain: 'wildfire',
+    toDomain: 'infrastructure',
+    zScore: -100,
+    criticalAbsZ: 4,
+    evidenceStrength: 1,
+    factor: 0.85,
+    explanation: 'learned suppression',
+    publishedAt: 1,
+  });
 });
 
 // ── Level labels ──────────────────────────────────────────────────────

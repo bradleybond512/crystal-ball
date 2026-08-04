@@ -63,6 +63,20 @@ confirmed with `git diff` before the targeted test ran, then reverted with
   tracked baseline before validation”.
 - Restored checksum: `30f83fd2642cb48f1a02da85647dd1b0d741ea20b42a69db518f707a4c53c3a9`.
 
+## Covered-rule liveness floor
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`
+- Before checksum: `cb714f0f7b91f706b378221a02c486410c054b4c94fc2c16b3ba0d20ba2b4ffe`
+- Mutation: removed `checkReseedRuleCoverage(previous, report)` from reseed
+  preflight, recreating the path where a previously firing built-in rule could
+  disappear while aggregate metrics stayed healthy.
+- Confirmed diff: the preflight array no longer invoked the coverage subset
+  check.
+- Targeted result: `0 pass / 1 fail`.
+- Failing assertion: `true !== false` in “refuses to reseed when a previously
+  covered built-in rule goes dark”.
+- Restored checksum: `cb714f0f7b91f706b378221a02c486410c054b4c94fc2c16b3ba0d20ba2b4ffe`.
+
 ## Restoration
 
 Final checksums matched all pre-mutation values and final

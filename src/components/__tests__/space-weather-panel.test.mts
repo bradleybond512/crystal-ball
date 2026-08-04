@@ -283,6 +283,29 @@ test('windObservationAge reads a naïve SWPC stamp as UTC, not host-local', () =
   assert.deepEqual(windObservationAge('2026-05-06T11:30:00Z', NOW), r);
 });
 
+test('buildWindStrip rejects sentinel and impossible readings, not just non-finite ones', () => {
+  // SWPC pads gaps with -9999. It is finite, so a finiteness check passes it
+  // straight through to windSpeedBadgeColor, which calls anything under 500
+  // calm — rendering "-9999 km/s" in confident green. A wind of 0 km/s would
+  // be the end of the world; neither is a reading.
+  for (const speed of [-9999, 0, 12, 99999]) {
+    const view = buildWindStrip({
+      solarWindSpeed: speed, solarWindDensity: 4, bz: -3,
+      windObservedAt: new Date(NOW).toISOString(),
+    }, NOW);
+    assert.equal(view.cells[0]?.value, '—', `${speed} km/s is not a solar wind`);
+    assert.equal(view.cells[0]?.color, '#9e9e9e', `${speed} must not render calm`);
+  }
+  // A genuinely extreme but real event must still survive — the bounds are a
+  // plausibility filter, not a severity clamp.
+  const fast = buildWindStrip({
+    solarWindSpeed: 2400, solarWindDensity: 40, bz: -48,
+    windObservedAt: new Date(NOW).toISOString(),
+  }, NOW);
+  assert.deepEqual(fast.cells.map((c) => c.value), ['2400 km/s', '40.0 p/cm³', '-48.0 nT']);
+  assert.equal(fast.cells[0]?.color, '#ff453a');
+});
+
 test('windObservationAge tolerates the small forward skew of a propagated stamp', () => {
   // Rows are propagated from L1 to the bow shock, so a stamp a few minutes
   // ahead of the wall clock is routine. Beyond the tolerance it is corrupt.

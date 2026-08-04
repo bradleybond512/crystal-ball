@@ -164,8 +164,28 @@ export const WIND_STALE_AFTER_MS = 30 * 60 * 1000;
  */
 const WIND_FUTURE_SKEW_TOLERANCE_MS = 15 * 60 * 1000;
 
-const finiteOrNull = (n: number | null): number | null =>
-  n !== null && Number.isFinite(n) ? n : null;
+/**
+ * Physical plausibility bounds, not display clamps. Finiteness alone is not
+ * enough: SWPC pads gaps with sentinels like -9999, and `windSpeedBadgeColor`
+ * calls everything under 500 calm — so a sentinel speed renders as a confident
+ * green "-9999 km/s". A solar wind of 0 km/s would be the end of the world;
+ * a negative one is not a reading at all. Anything outside these ranges is an
+ * instrument or encoding artifact, and the honest rendering of it is "—".
+ *
+ * Ranges are deliberately generous — the widest values ever observed sit well
+ * inside them, so a real extreme event is never suppressed as implausible.
+ */
+const WIND_PLAUSIBLE = {
+  speed: { min: 100, max: 5000 },   // km/s; ambient ~300–500, fastest CMEs ~3000
+  density: { min: 0, max: 1000 },   // protons/cm³; ambient ~1–10
+  bz: { min: -500, max: 500 },      // nT; the strongest storms reach ~±50
+} as const;
+
+const plausibleOrNull = (
+  n: number | null,
+  range: { min: number; max: number },
+): number | null =>
+  n !== null && Number.isFinite(n) && n >= range.min && n <= range.max ? n : null;
 
 export interface WindObservationAge {
   label: string;
@@ -229,13 +249,14 @@ export function buildWindStrip(
   },
   now = Date.now(),
 ): WindStripView {
-  // A null is not the only way a reading goes missing: NaN and Infinity survive
-  // a `=== null` check and format as "NaN km/s" with confident units. The badge
-  // helpers already treat non-finite as unknown, so the value formatting has to
+  // A null is not the only way a reading goes missing. NaN and Infinity survive
+  // a `=== null` check and format as "NaN km/s" with confident units, and a
+  // -9999 sentinel survives a finiteness check and formats as a calm green
+  // speed. The badge helpers call these unknown, so the value formatting has to
   // agree with them or the number and its colour tell different stories.
-  const speed = finiteOrNull(wind.solarWindSpeed);
-  const density = finiteOrNull(wind.solarWindDensity);
-  const bz = finiteOrNull(wind.bz);
+  const speed = plausibleOrNull(wind.solarWindSpeed, WIND_PLAUSIBLE.speed);
+  const density = plausibleOrNull(wind.solarWindDensity, WIND_PLAUSIBLE.density);
+  const bz = plausibleOrNull(wind.bz, WIND_PLAUSIBLE.bz);
   const missing = speed === null && density === null && bz === null;
   const age = windObservationAge(wind.windObservedAt, now);
   // The sign carries the whole meaning of Bz, so a positive value is written

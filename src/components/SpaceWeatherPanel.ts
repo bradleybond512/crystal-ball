@@ -237,8 +237,16 @@ export class SpaceWeatherPanel extends Panel {
    * a hidden section is indistinguishable from a section that was never wired.
    */
   private renderSolarWind(): string {
-    if (!this.data) return '';
-    const view = buildWindStrip(this.data);
+    // Only bail when there is no panel at all — render() has already returned
+    // the empty state in that case. When the status request succeeded but the
+    // legacy wind request did not, the panel still draws, and returning '' here
+    // would delete the section rather than report it: the same "outage wearing
+    // the appearance of an all-clear" the CME section guards against. Feeding
+    // buildWindStrip nulls renders dashes and says the telemetry is missing.
+    if (!this.data && !this.status) return '';
+    const view = buildWindStrip(this.data ?? {
+      solarWindSpeed: null, solarWindDensity: null, bz: null, windObservedAt: null,
+    });
     const cells = view.cells.map((c) => `<div class="sw-wind-cell">
         <div class="sw-wind-label">${escapeHtml(c.label)}</div>
         <div class="sw-wind-value" style="color:${c.color};">${escapeHtml(c.value)}</div>

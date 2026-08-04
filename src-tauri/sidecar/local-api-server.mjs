@@ -3707,18 +3707,25 @@ export function buildDonkiCmeUrlSidecar(now) {
  * response in which no row carries the fields the filter reads that means the
  * shape moved.
  *
- * Both fields are required on the SAME row, because partial drift is the likely
- * kind: `activityID` surviving a rename of `cmeAnalyses` would otherwise pass
- * this check while every row falls out of the filter. Requiring `cmeAnalyses`
- * does not false-alarm on unanalyzed events — DONKI ships those as an empty
- * array, which is still an array.
+ * The bar is "at least one row the filter could actually act on", checked all
+ * the way down to `longitude` — the field that decides Earthward. Partial drift
+ * is the likely kind and it hides at every level: `activityID` can survive a
+ * rename of `cmeAnalyses`, and `cmeAnalyses` can survive a rename of
+ * `longitude`. Stopping at either outer level leaves the same empty-and-healthy
+ * result one layer down.
+ *
+ * A window of exclusively UNANALYZED CMEs (`cmeAnalyses: []`) therefore reads
+ * as unhealthy, and that is the honest answer rather than a false alarm: we
+ * genuinely cannot determine Earthward status from it. It is rare over seven
+ * days, and "unknown" is the correct direction to fail.
  */
 export function donkiCmeFeedHealthySidecar(raw) {
   if (!Array.isArray(raw)) return false;
   if (raw.length === 0) return true;
   return raw.some((row) => row
     && typeof row.activityID === 'string'
-    && Array.isArray(row.cmeAnalyses));
+    && Array.isArray(row.cmeAnalyses)
+    && row.cmeAnalyses.some((a) => a && typeof a.longitude === 'number'));
 }
 
 export async function fetchSpaceweatherStatusSidecar() {

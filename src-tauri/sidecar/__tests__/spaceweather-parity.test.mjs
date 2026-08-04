@@ -240,11 +240,23 @@ test('donkiCmeFeedHealthySidecar keeps an empty week healthy but catches schema 
   const good = { activityID: '2026-08-01T00:00:00-CME-001', cmeAnalyses: [{ longitude: 5 }] };
   assert.equal(donkiCmeFeedHealthySidecar([]), true, 'a quiet week is not drift');
   assert.equal(donkiCmeFeedHealthySidecar([good]), true);
-  // An UNANALYZED CME is normal, not drift: DONKI ships those with an empty
-  // analyses array, which is still an array.
+  // A window of exclusively UNANALYZED CMEs reads as unhealthy, and that is
+  // the honest answer rather than a false alarm: with no analysis there is no
+  // longitude, so Earthward status is genuinely undeterminable from it. Rare
+  // over seven days, and "unknown" is the correct direction to fail.
   assert.equal(
     donkiCmeFeedHealthySidecar([{ activityID: 'unanalyzed', cmeAnalyses: [] }]),
-    true,
+    false,
+  );
+  // Drift hides at every level, so the check goes all the way down to the field
+  // the filter actually reads. An analyses array full of objects that have lost
+  // `longitude` produces exactly the same empty-and-healthy result as a rename
+  // one level up would have.
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a', cmeAnalyses: [{}] }]), false);
+  assert.equal(
+    donkiCmeFeedHealthySidecar([{ activityID: 'a', cmeAnalyses: [{ lon: 5 }] }]),
+    false,
+    'a renamed longitude is drift, not a quiet sun',
   );
   // Container is right, contents are unrecognizable.
   assert.equal(donkiCmeFeedHealthySidecar([{ id: 'renamed' }, { id: 'also-renamed' }]), false);
@@ -254,8 +266,11 @@ test('donkiCmeFeedHealthySidecar keeps an empty week healthy but catches schema 
   // row silently falls out and the section renders as "nothing Earthward".
   assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { activityID: 'b' }]), false);
   assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a', analyses: [{}] }]), false);
-  // Both fields must be on the SAME row — one each across two rows is drift.
-  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { cmeAnalyses: [] }]), false);
+  // Every field must be on the SAME row — one each across two rows is drift.
+  assert.equal(
+    donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { cmeAnalyses: [{ longitude: 1 }] }]),
+    false,
+  );
   // One good row is enough — DONKI legitimately mixes in sparse records.
   assert.equal(donkiCmeFeedHealthySidecar([{ id: 'x' }, good]), true);
   // Not an array at all is the fetch having failed.

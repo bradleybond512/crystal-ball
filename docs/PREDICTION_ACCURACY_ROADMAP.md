@@ -1540,7 +1540,7 @@ reverse the semantics of “A suppresses future B.”
 
 Verification evidence:
 
-- `npm run test:correlation`: 377 pass / 0 fail;
+- `npm run test:correlation`: 379 pass / 0 fail;
 - `npm run test:algorithms`: 307 pass / 0 fail;
 - `npm run test:diagnostics`: pass, including 27 MCP/sidecar diagnostics tests;
 - focused cascade, compound-risk, notification, shadow-diagnostics, and

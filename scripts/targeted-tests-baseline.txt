@@ -148,6 +148,7 @@ scripts/checkup-log-audit.mjs
 scripts/checkup.mjs
 scripts/cognition-benchmark.mts
 scripts/cognition-shadow-report.mjs
+scripts/correlation-benchmark.mts
 scripts/cross-agent-check.mjs
 scripts/desktop-package.mjs
 scripts/doctor-core.mjs

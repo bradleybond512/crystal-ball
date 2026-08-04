@@ -2379,6 +2379,23 @@ describe('the re-seed guard compares against the previous baseline', () => {
     assert.ok(reasons.some((reason) => reason.includes('built-in correlation rule set changed')));
   });
 
+  it('refuses to reseed when a previously covered built-in rule goes dark', () => {
+    const previouslyCovered = committed.builtInRuleIds.find(
+      (id) => !report.ruleCoverage.includes(id),
+    );
+    assert.ok(previouslyCovered, 'fixture needs a registered rule outside live corpus coverage');
+    const previous = {
+      ...committed,
+      ruleCoverage: [...committed.ruleCoverage, previouslyCovered].sort(),
+    };
+    const { ok, reasons } = reseedComparison(previous);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((reason) => reason.includes('previously covered rule went dark')),
+      reasons.join(' | '),
+    );
+  });
+
   it('makes --seed refuse a regression before emitting candidate JSON', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'crystalball-correlation-reseed-'));
     const previousPath = path.join(dir, 'previous.json');

@@ -279,6 +279,18 @@ function checkPreviousRuleCoverage(
   reasons.push('previous ruleCoverage is not an array — rule liveness cannot be established');
 }
 
+function checkReseedRuleCoverage(
+  previous: CorrelationBenchBaseline,
+  report: CorrelationBenchReport,
+): string[] {
+  if (!Array.isArray(previous.ruleCoverage) || !Array.isArray(report.ruleCoverage)) return [];
+  const liveCoverage = new Set(report.ruleCoverage);
+  const lost = previous.ruleCoverage.filter((id) => !liveCoverage.has(id));
+  return lost.length === 0
+    ? []
+    : [`previously covered rule went dark during reseed: [${lost.join(', ')}]`];
+}
+
 function checkPreviousWitnessed(reasons: string[], witnessed: unknown): void {
   if (witnessed === null || typeof witnessed !== 'object' || Array.isArray(witnessed)) {
     reasons.push('previous witnessed block is not an object — reviewed measurements are missing');
@@ -342,8 +354,11 @@ export function compareCorrelationBenchReseedToPrevious(
   report: CorrelationBenchReport,
   previous: CorrelationBenchBaseline,
 ): CorrelationBenchComparison {
-  const malformed = checkPreviousReseedAnchors(previous);
-  if (malformed.length > 0) return { ok: false, reasons: malformed };
+  const preflightReasons = [
+    ...checkPreviousReseedAnchors(previous),
+    ...checkReseedRuleCoverage(previous, report),
+  ];
+  if (preflightReasons.length > 0) return { ok: false, reasons: preflightReasons };
 
   const comparisonBaseline: CorrelationBenchBaseline = {
     ...previous,

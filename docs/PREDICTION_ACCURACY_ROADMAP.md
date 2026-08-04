@@ -1527,10 +1527,18 @@ reverse the semantics of “A suppresses future B.”
 - inhibitory evidence requires at least five antecedents, a 20% expected event
   rate, lift at or below 0.5, and a negative z-score beyond both the fixed and
   family-adjusted thresholds;
+- inhibitory absence is right-censored against an explicit observation end:
+  incomplete follow windows remain pending, post-boundary events are excluded,
+  and silent covered time contributes to the inhibitory base rate without
+  changing promoting-edge statistics. Calls without a coverage boundary fail
+  closed for inhibition;
 - only promoting edges can become learned correlation rules; inhibitory
   evidence is bounded, expiring, fail-safe-on, and evaluated in shadow with
   direction- and window-aware confirmed/refuted/pending counts. It has no path
   into operational scores, confidence, posture, alerts, or delivery;
+- successful refreshes that admit no inhibition now clear both the active
+  snapshot and its diagnostics atomically; disabled and error paths retain
+  distinct statuses, and invalid publication times fail closed;
 - identifier-free liveness diagnostics distinguish offline replay from live
   ingestion and flag three consecutive singleton live batches when learned
   rules are installed but cannot produce event pairs;
@@ -1540,17 +1548,21 @@ reverse the semantics of “A suppresses future B.”
 
 Verification evidence:
 
-- `npm run test:correlation`: 379 pass / 0 fail;
+- `npm run test:correlation`: 384 pass / 0 fail;
+- `npm run test:intelligence`: 587 pass / 0 fail;
 - `npm run test:algorithms`: 307 pass / 0 fail;
-- `npm run test:diagnostics`: pass, including 27 MCP/sidecar diagnostics tests;
-- focused cascade, compound-risk, notification, shadow-diagnostics, and
-  inhibition-boundary suite: 61 pass / 0 fail;
+- `npm run test:diagnostics`: 384 renderer pass / 0 fail plus 27 MCP/sidecar
+  diagnostics pass / 0 fail;
+- restored ACC-502 mutation selection: 31 pass / 0 fail after 26 independently
+  applied and checksum-restored mutations;
 - `npm run typecheck:all`: pass;
 - `npm run bench:correlation`: PASS over 10 streams / 469 observations, with
   5/5 causal promoting couplings recovered, 1/1 inhibitory coupling recovered,
   0 inhibitory false positives, 12 promoting false positives, and no decoy
   event-pair emissions. The family contained 272 ordered pairs x 4 windows =
-  1,088 hypotheses and used `zcrit = 4.6218991511`.
+  1,088 hypotheses and used `zcrit = 4.6218991511`; the right-censored S9
+  inhibitor retained 28 mature trials with expected rate 0.503415 and
+  `z = -5.327765`.
 
 Known limitation and rollback:
 

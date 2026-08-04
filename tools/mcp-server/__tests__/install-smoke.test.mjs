@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,5 +29,13 @@ test('temporary-prefix install exposes both new and existing command names', { t
     timeout: 3_000,
   });
   assert.equal(probe.status, 0, probe.stderr);
-  assert.equal(JSON.parse(probe.stdout).tools.length, 59);
+  assert.equal(JSON.parse(probe.stdout).tools.length, 61);
+  const installedRoot = join(prefix, 'lib', 'node_modules', 'crystalball-mcp');
+  for (const file of [
+    'local-lock.mjs',
+    'weekly-evaluation-report.mjs',
+    join('tools', 'evaluation-report.mjs'),
+  ]) {
+    assert.equal(existsSync(join(installedRoot, file)), true, file);
+  }
 });

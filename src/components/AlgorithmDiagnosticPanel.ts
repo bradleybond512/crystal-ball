@@ -44,22 +44,12 @@ import type { AlgorithmDefinition as HealthAlgorithmDefinition } from '@/service
 import type { PolicyDecision } from '@/services/governance/policy-engine';
 import { escapeHtml } from '@/utils/sanitize';
 import { getKindAccuracy } from '@/services/hypothesis-accuracy';
-import { getChampionRegistry } from '@/services/cognition/champion-registry';
-import { collectJoinedEvidence, RUN_IDS } from '@/services/cognition/shadow-rollout';
 import {
-  evaluatePromotionGate,
-  safetyEvidenceFromBaselineRegression,
-} from '@/services/cognition/promotion-gate';
-import {
-  buildChampionStatusView,
   type ChallengerRow,
   type ChallengerStatus,
   type ChampionStatusView,
 } from '@/services/cognition/champion-status-view';
-import { runReplay } from '@/services/ops/replay-harness';
-import { buildCatalogReplayFixtures } from '@/services/ops/replay-fixtures-catalog';
-import type { ReplayBaseline } from '@/services/ops/replay-baseline';
-import panelReplayBaseline from '@/services/ops/replay-baseline.json';
+import { composeChampionStatusRuntime } from '@/services/cognition/champion-status-runtime';
 
 const REFRESH_MS = 15_000;
 
@@ -297,65 +287,16 @@ export class AlgorithmDiagnosticPanel extends Panel {
 
 // ── ACC-403: champion/challenger status surface ──────────────────────
 
-/** The forecast slot the first ACC-404 promotion decision will govern. */
-const CHAMPION_SLOT = 'forecast-primary';
-
-/** Shadow runs surfaced as challengers. Superforecast pairs carry no
- *  join keys yet, so it honestly reads insufficient-evidence until its
- *  producer emits them. */
-const CHALLENGER_RUNS = [
-  { runId: RUN_IDS.SUPERFORECAST, challengerId: 'superforecast' },
-  { runId: RUN_IDS.BASELINE_HIERARCHICAL, challengerId: 'hierarchical-base-rate' },
-  { runId: RUN_IDS.BASELINE_PERSISTENCE, challengerId: 'persistence-baseline' },
-  { runId: RUN_IDS.BASELINE_MOMENTUM, challengerId: 'momentum-baseline' },
-] as const;
-
 const CHALLENGER_STATUS_DISPLAY: Record<ChallengerStatus, { label: string; color: string }> = {
   promotable: { label: 'PROMOTABLE', color: 'var(--status-ok, #4caf50)' },
   rejected: { label: 'REJECTED', color: 'var(--status-error, #ff453a)' },
   'insufficient-evidence': { label: 'INSUFFICIENT EVIDENCE', color: 'var(--status-warn, #ff9800)' },
 };
 
-function composeChampionStatus(): ChampionStatusView {
-  const registry = getChampionRegistry();
-  const active = registry.getActiveChampion(CHAMPION_SLOT);
-  const fixtures = buildCatalogReplayFixtures();
-  // ACC-404 correction: the catalog fixtures are intentionally-failing
-  // historical-miss cases — the safety gate consumes NO-NEW-REGRESSIONS
-  // vs the committed baseline, never their raw pass rate.
-  const safety = safetyEvidenceFromBaselineRegression(
-    runReplay({ fixtures }),
-    fixtures,
-    panelReplayBaseline as ReplayBaseline,
-  );
-  const incumbentId = active?.modelId ?? 'production';
-  const challengers = CHALLENGER_RUNS.map(({ runId, challengerId }) => {
-    const pairs = collectJoinedEvidence(runId);
-    const decision = evaluatePromotionGate({
-      challengerId,
-      incumbentId,
-      pairs,
-      // No per-domain deployment floors declared yet — the overall
-      // 200-pair floor still applies. ACC-404 declares domains when the
-      // first promotion decision is made.
-      enabledDomains: [],
-      safety,
-      evaluatedAt: Date.now(),
-    });
-    return { runId, challengerId, pairs, decision };
-  });
-  return buildChampionStatusView({
-    slot: CHAMPION_SLOT,
-    ...(active === undefined ? {} : { active }),
-    history: registry.getHistory(CHAMPION_SLOT),
-    challengers,
-  });
-}
-
 function renderChampionChallenger(): string {
   let view: ChampionStatusView;
   try {
-    view = composeChampionStatus();
+    view = composeChampionStatusRuntime().view;
   } catch {
     return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">Champion status unavailable.</div>`;
   }

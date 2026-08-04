@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { publicAlgorithmDiagnostics } from '../forecast-evaluation-public.mjs';
+import {
+  publicAlgorithmDiagnostics,
+  publicEvaluationReportProjection,
+} from '../forecast-evaluation-public.mjs';
 import { quarantinedAlgorithmIds } from '../safety-policy.mjs';
 
 const HEALTHY = new Set(['healthy', 'ok', 'fresh', 'up', 'operational']);
@@ -199,6 +202,9 @@ export function makeDiagnosticsTools(client) {
         summary: summarizeAlgorithms(diagnostics),
         stale: state.stale === true,
         diagnostics,
+        evaluationReportProjection: publicEvaluationReportProjection(
+          state.evaluationReportProjection,
+        ),
         timestamp: new Date().toISOString(),
       };
     },

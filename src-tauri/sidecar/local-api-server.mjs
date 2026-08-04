@@ -2039,6 +2039,31 @@ async function buildRouteTable(root) {
 const REQUEST_BODY_CACHE = Symbol('requestBodyCache');
 const REQUEST_BODY_OVERFLOW = Symbol('requestBodyOverflow');
 const MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024; // 16 MB
+const EVALUATION_REPORT_MAX_BYTES = 32 * 1024;
+const EVALUATION_REPORT_MAX_COUNT = 1_000_000_000;
+const EVALUATION_REPORT_FUTURE_SKEW_MS = 5 * 60_000;
+const EVALUATION_REPORT_MODELS = new Set([
+  'production',
+  'superforecast',
+  'hierarchical-base-rate',
+  'persistence-baseline',
+  'momentum-baseline',
+  'unknown',
+]);
+const EVALUATION_REPORT_DOMAINS = new Set([
+  'weather',
+  'cyber',
+  'aviation',
+  'maritime',
+  'markets',
+  'conflict',
+  'humanitarian',
+  'space',
+  'infra',
+  'macro',
+  'other',
+]);
+const EVALUATION_REPORT_VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
 class RequestBodyTooLargeError extends Error {
   constructor(limit) {
@@ -2070,6 +2095,221 @@ function sanitizeDeep(value, depth = 0) {
 function stripProtoKeys(obj) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
   return sanitizeDeep(obj);
+}
+
+export function validateEvaluationReportProjection(value, now = Date.now()) {
+  try {
+    const input = exactRecord(value, ['schemaVersion', 'generatedAt', 'forecast', 'champion']);
+    const generatedAt = evaluationTimestamp(input?.generatedAt, now);
+    const forecast = validateEvaluationForecast(input?.forecast);
+    const champion = validateEvaluationChampion(input?.champion, now);
+    if (input?.schemaVersion !== 1 || generatedAt === null || !forecast || !champion) return null;
+    const projection = { schemaVersion: 1, generatedAt, forecast, champion };
+    return Buffer.byteLength(JSON.stringify(projection), 'utf8') <= EVALUATION_REPORT_MAX_BYTES
+      ? projection
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function validateEvaluationForecast(value) {
+  const input = exactRecord(value, [
+    'total',
+    'resolved',
+    'pending',
+    'overduePending',
+    'expired',
+    'resolutionCoverage',
+    'expirationRate',
+    'metrics',
+    'largestVersionLossShare',
+    'quarantinedCount',
+  ]);
+  if (!input) return null;
+  const counts = ['total', 'resolved', 'pending', 'overduePending', 'expired', 'quarantinedCount']
+    .map((key) => evaluationCount(input[key]));
+  if (counts.includes(null)) return null;
+  const [total, resolved, pending, overduePending, expired, quarantinedCount] = counts;
+  if (resolved + pending + expired !== total || overduePending > pending) return null;
+  const resolutionCoverage = evaluationNullableRatio(input.resolutionCoverage);
+  const expirationRate = evaluationNullableRatio(input.expirationRate);
+  const largestVersionLossShare = evaluationNullableRatio(input.largestVersionLossShare);
+  if (resolutionCoverage === undefined || expirationRate === undefined
+      || largestVersionLossShare === undefined) return null;
+  const metrics = exactRecord(input.metrics, ['brier', 'logLoss', 'brierSkill', 'equalMassEce']);
+  if (!metrics) return null;
+  const brier = validateEvaluationMetric(metrics.brier, 0, 1);
+  const logLoss = validateEvaluationMetric(metrics.logLoss, 0, 100);
+  const brierSkill = validateEvaluationMetric(metrics.brierSkill, -10, 1);
+  const equalMassEce = validateEvaluationMetric(metrics.equalMassEce, 0, 1);
+  if (!brier || !logLoss || !brierSkill || !equalMassEce) return null;
+  return {
+    total,
+    resolved,
+    pending,
+    overduePending,
+    expired,
+    resolutionCoverage,
+    expirationRate,
+    metrics: { brier, logLoss, brierSkill, equalMassEce },
+    largestVersionLossShare,
+    quarantinedCount,
+  };
+}
+
+function validateEvaluationMetric(value, minimum, maximum) {
+  if (!plainRecord(value) || typeof value.status !== 'string') return null;
+  if (value.status === 'unavailable') {
+    return exactRecord(value, ['status']) ? { status: 'unavailable' } : null;
+  }
+  if (value.status === 'ok') {
+    const input = exactRecord(value, ['status', 'sampleSize', 'value']);
+    const sampleSize = evaluationCount(input?.sampleSize);
+    const metricValue = evaluationBoundedNumber(input?.value, minimum, maximum);
+    return input && sampleSize !== null && metricValue !== null
+      ? { status: 'ok', sampleSize, value: metricValue }
+      : null;
+  }
+  if (value.status === 'insufficient_evidence') {
+    const input = exactRecord(value, ['status', 'sampleSize', 'minSampleSize']);
+    const sampleSize = evaluationCount(input?.sampleSize);
+    const minSampleSize = evaluationCount(input?.minSampleSize);
+    return input && sampleSize !== null && minSampleSize !== null
+      ? { status: 'insufficient_evidence', sampleSize, minSampleSize }
+      : null;
+  }
+  return null;
+}
+
+function validateEvaluationChampion(value, now) {
+  const input = exactRecord(value, [
+    'availability',
+    'active',
+    'challengers',
+    'promotions',
+    'rejectionHistory',
+  ]);
+  if (!input || (input.availability !== 'available' && input.availability !== 'unavailable')) return null;
+  const active = input.active === null ? null : validateEvaluationActive(input.active, now);
+  if (input.active !== null && !active) return null;
+  if (!Array.isArray(input.challengers) || input.challengers.length > 4
+      || !Array.isArray(input.promotions) || input.promotions.length > 6) return null;
+  const challengers = input.challengers.map(validateEvaluationChallenger);
+  const promotions = input.promotions.map((row) => validateEvaluationPromotion(row, now));
+  if (challengers.some((row) => !row) || promotions.some((row) => !row)) return null;
+  const rejectionHistory = exactRecord(input.rejectionHistory, ['availability', 'reasonCode']);
+  if (rejectionHistory?.availability !== 'unavailable'
+      || rejectionHistory.reasonCode !== 'no_runtime_rejection_history') return null;
+  if (input.availability === 'unavailable'
+      && (active !== null || challengers.length !== 0 || promotions.length !== 0)) return null;
+  return {
+    availability: input.availability,
+    active,
+    challengers,
+    promotions,
+    rejectionHistory: {
+      availability: 'unavailable',
+      reasonCode: 'no_runtime_rejection_history',
+    },
+  };
+}
+
+function validateEvaluationActive(value, now) {
+  const input = exactRecord(value, ['model', 'version', 'activatedAt']);
+  const activatedAt = evaluationTimestamp(input?.activatedAt, now);
+  if (!input || !EVALUATION_REPORT_MODELS.has(input.model) || activatedAt === null) return null;
+  if (input.version !== null
+      && (typeof input.version !== 'string' || !EVALUATION_REPORT_VERSION.test(input.version))) return null;
+  return { model: input.model, version: input.version, activatedAt };
+}
+
+function validateEvaluationChallenger(value) {
+  const input = exactRecord(value, [
+    'model',
+    'status',
+    'evidenceCount',
+    'proxyShare',
+    'perDomain',
+    'deltas',
+  ]);
+  if (!input || !EVALUATION_REPORT_MODELS.has(input.model)
+      || !['promotable', 'rejected', 'insufficient_evidence'].includes(input.status)) return null;
+  const evidenceCount = evaluationCount(input.evidenceCount);
+  const proxyShare = evaluationBoundedNumber(input.proxyShare, 0, 1);
+  if (evidenceCount === null || proxyShare === null
+      || !Array.isArray(input.perDomain) || input.perDomain.length > 11
+      || !Array.isArray(input.deltas) || input.deltas.length > 2) return null;
+  const perDomain = input.perDomain.map((row) => {
+    const domain = exactRecord(row, ['domain', 'count']);
+    const count = evaluationCount(domain?.count);
+    return domain && EVALUATION_REPORT_DOMAINS.has(domain.domain) && count !== null
+      ? { domain: domain.domain, count }
+      : null;
+  });
+  const deltas = input.deltas.map((row) => {
+    const delta = exactRecord(row, ['metric', 'delta', 'ciLow', 'ciHigh']);
+    if (!delta || (delta.metric !== 'brier' && delta.metric !== 'logLoss')) return null;
+    const point = evaluationBoundedNumber(delta.delta, -100, 100);
+    const ciLow = evaluationBoundedNumber(delta.ciLow, -100, 100);
+    const ciHigh = evaluationBoundedNumber(delta.ciHigh, -100, 100);
+    return point !== null && ciLow !== null && ciHigh !== null && ciLow <= ciHigh
+      ? { metric: delta.metric, delta: point, ciLow, ciHigh }
+      : null;
+  });
+  if (perDomain.some((row) => !row) || deltas.some((row) => !row)
+      || new Set(perDomain.map((row) => row.domain)).size !== perDomain.length
+      || new Set(deltas.map((row) => row.metric)).size !== deltas.length) return null;
+  return { model: input.model, status: input.status, evidenceCount, proxyShare, perDomain, deltas };
+}
+
+function validateEvaluationPromotion(value, now) {
+  const input = exactRecord(value, ['at', 'kind', 'model']);
+  const at = evaluationTimestamp(input?.at, now);
+  if (!input || at === null || !['initial', 'promotion', 'rollback'].includes(input.kind)
+      || !EVALUATION_REPORT_MODELS.has(input.model)) return null;
+  return { at, kind: input.kind, model: input.model };
+}
+
+function exactRecord(value, keys) {
+  if (!plainRecord(value)) return null;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
+    ? value
+    : null;
+}
+
+function plainRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function evaluationCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= EVALUATION_REPORT_MAX_COUNT
+    ? value
+    : null;
+}
+
+function evaluationBoundedNumber(value, minimum, maximum) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum
+    ? value
+    : null;
+}
+
+function evaluationNullableRatio(value) {
+  if (value === null) return null;
+  const ratio = evaluationBoundedNumber(value, 0, 1);
+  return ratio === null ? undefined : ratio;
+}
+
+function evaluationTimestamp(value, now) {
+  return Number.isSafeInteger(value) && value >= 0
+    && Number.isSafeInteger(now) && now >= 0
+    && value <= now + EVALUATION_REPORT_FUTURE_SKEW_MS
+    ? value
+    : null;
 }
 
 async function readBody(req) {
@@ -6632,6 +6872,11 @@ async function dispatch(requestUrl, req, routes, context) {
               ? stripProtoKeys(body.algorithmDiagnostics)
               : null)
             : (previous.algorithmDiagnostics ?? null),
+          evaluationReportProjection: has('evaluationReportProjection')
+            ? (validateEvaluationReportProjection(body.evaluationReportProjection)
+              ?? previous.evaluationReportProjection
+              ?? null)
+            : (previous.evaluationReportProjection ?? null),
         };
         context._analystState = safe;
         return json({ ok: true });

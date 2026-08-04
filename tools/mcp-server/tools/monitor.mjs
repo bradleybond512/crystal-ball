@@ -1,17 +1,14 @@
 import { z } from 'zod';
 import {
-  closeSync,
   mkdirSync,
-  openSync,
-  readFileSync,
   renameSync,
   rmSync,
-  statSync,
-  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
+import { acquireLocalLock } from '../local-lock.mjs';
 import { quarantinedAlgorithmIds } from '../safety-policy.mjs';
+import { recordWeeklyEvaluation as recordWeeklyEvaluationDefault } from '../weekly-evaluation-report.mjs';
 import {
   monitorGenerationId,
   publicMonitorEvents,
@@ -41,11 +38,12 @@ export function makeMonitorTools({
   diagnostics,
   lockOptions,
   now = Date.now,
+  recordWeeklyEvaluation = recordWeeklyEvaluationDefault,
   scheduleOptions,
   writeJSONAtomic = writeMonitorJSONAtomic,
 }) {
   async function run_monitor_cycle() {
-    const releaseLock = acquireMonitorCycleLock(storage, lockOptions);
+    const releaseLock = acquireLocalLock(storage.resolve('monitor/cycle.lock'), lockOptions);
     try {
       const [feedHealth, algorithmResult] = await Promise.all([
         granular.check_feed_health(),
@@ -99,7 +97,19 @@ export function makeMonitorTools({
         snapshot,
       });
       writeJSONAtomic(storage, HISTORY_PATH, rows.slice(-MAX_HISTORY));
-      return publicState(state, eventState, snapshot.at);
+      const committed = committedGeneration(storage, generationId);
+      if (committed === null) {
+        throw new Error('Weekly evaluation requires a valid committed monitor generation.');
+      }
+      await recordWeeklyEvaluation({
+        storage,
+        at: snapshot.at,
+        monitorState: committed.state,
+        monitorEvents: committed.events,
+        evaluationProjection: algorithmResult?.evaluationReportProjection ?? null,
+        diagnosticsStale: snapshot.algorithmDiagnosticsStale,
+      });
+      return publicState(committed.state, committed.events, snapshot.at);
     } finally {
       releaseLock();
     }
@@ -166,95 +176,6 @@ export function writeMonitorJSONAtomic(storage, relPath, data, {
   }
 }
 
-function acquireMonitorCycleLock(storage, {
-  closeSyncFn = closeSync,
-  lockNow = Date.now,
-  openSyncFn = openSync,
-  readFileSyncFn = readFileSync,
-  statSyncFn = statSync,
-  unlinkSyncFn = unlinkSync,
-  writeFileSyncFn = writeFileSync,
-} = {}) {
-  const lockPath = storage.resolve('monitor/cycle.lock');
-  mkdirSync(dirname(lockPath), { recursive: true });
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    let descriptor;
-    try {
-      descriptor = openSyncFn(lockPath, 'wx', 0o600);
-    } catch (error) {
-      if (error?.code !== 'EEXIST') throw error;
-      if (attempt === 0 && removeDeadOwnerLock(lockPath, {
-        lockNow,
-        readFileSyncFn,
-        statSyncFn,
-        unlinkSyncFn,
-      })) continue;
-      throw new Error('A monitor cycle is already running for this storage directory.');
-    }
-    try {
-      writeFileSyncFn(descriptor, JSON.stringify({ pid: process.pid, startedAt: lockNow() }));
-      closeSyncFn(descriptor);
-    } catch (error) {
-      try {
-        closeSyncFn(descriptor);
-      } catch {
-        // Preserve the initialization error while still clearing its lock below.
-      }
-      try {
-        unlinkSyncFn(lockPath);
-      } catch {
-        // The failed owner must not leave a lock behind; a missing file is already clean.
-      }
-      throw error;
-    }
-    return () => {
-      try {
-        unlinkSyncFn(lockPath);
-      } catch (error) {
-        if (error?.code !== 'ENOENT') throw error;
-      }
-    };
-  }
-  throw new Error('A monitor cycle is already running for this storage directory.');
-}
-
-function removeDeadOwnerLock(lockPath, {
-  lockNow,
-  readFileSyncFn,
-  statSyncFn,
-  unlinkSyncFn,
-}) {
-  let owner;
-  try {
-    owner = JSON.parse(readFileSyncFn(lockPath, 'utf8'));
-  } catch {
-    try {
-      if (lockNow() - statSyncFn(lockPath).mtimeMs < 30_000) return false;
-    } catch {
-      return false;
-    }
-    return removeLock(lockPath, unlinkSyncFn);
-  }
-  if (!Number.isInteger(owner?.pid) || owner.pid <= 0) return false;
-  try {
-    process.kill(owner.pid, 0);
-    return false;
-  } catch (error) {
-    if (error?.code !== 'ESRCH') return false;
-  }
-  return removeLock(lockPath, unlinkSyncFn);
-}
-
-function removeLock(lockPath, unlinkSyncFn) {
-  try {
-    unlinkSyncFn(lockPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function captureSnapshot(feedHealth, algorithmResult, at) {
   const diagnostics = algorithmResult?.diagnostics ?? {};
   const forecast = diagnostics.forecastCalibration ?? {};
@@ -264,6 +185,7 @@ function captureSnapshot(feedHealth, algorithmResult, at) {
     at,
     sidecarAvailable: !feedHealth?.data?.sidecar?.error,
     algorithmDiagnosticsAvailable: algorithmResult?.available === true,
+    algorithmDiagnosticsStale: algorithmResult?.stale === true,
     feeds: Object.fromEntries((feedHealth?.data?.feeds ?? [])
       .map((feed) => [feed.route, feed.status])),
     brier: metricValue(evaluation.overall?.brier),
@@ -295,6 +217,14 @@ function detectFindings(previous, current) {
       severity: 'red',
       summary: 'Algorithm diagnostics are unavailable.',
       nextAction: 'Restore renderer diagnostics before trusting derived conclusions.',
+    });
+  }
+  if (current.algorithmDiagnosticsStale) {
+    findings.push({
+      id: 'collection.algorithm-diagnostics-stale',
+      severity: 'red',
+      summary: 'Algorithm diagnostics are stale.',
+      nextAction: 'Restore fresh renderer diagnostics before trusting weekly evaluation metrics.',
     });
   }
   findings.push(...current.quarantinedAlgorithms.map((algorithmId) => ({
@@ -398,6 +328,21 @@ function publicState(state, eventState, at) {
     schedule: monitorEvents.schedule,
     events: monitorEvents.events,
   };
+}
+
+function committedGeneration(storage, generationId) {
+  const state = storage.readJSON(STATE_PATH);
+  const events = storage.readJSON(EVENTS_PATH);
+  const history = storage.readJSON(HISTORY_PATH);
+  const latest = Array.isArray(history) ? history.at(-1) : null;
+  if (
+    !validCommittedMonitorState(state, events)
+    || state.generationId !== generationId
+    || latest?.schemaVersion !== 1
+    || latest?.generationId !== generationId
+    || latest?.at !== state.lastRunAt
+  ) return null;
+  return { state, events };
 }
 
 function metricValue(metric) {

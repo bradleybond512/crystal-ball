@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -13,6 +14,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { createStorage } from '../storage.mjs';
+import { acquireLocalLock } from '../local-lock.mjs';
 import {
   makeMonitorTools,
   monitorIntervalMs,
@@ -63,6 +65,8 @@ function createTools(baseDir, currentRef, {
   stoppedGraceMs,
   eventCooldownMs,
   maxEvents,
+  recordWeeklyEvaluation,
+  writeJSONAtomic,
 } = {}) {
   return makeMonitorTools({
     storage: createStorage(baseDir),
@@ -73,6 +77,8 @@ function createTools(baseDir, currentRef, {
       get_algorithm_diagnostics: async () => currentRef.value.algorithmDiagnostics,
     },
     now: () => clock.value,
+    recordWeeklyEvaluation,
+    writeJSONAtomic,
     scheduleOptions: {
       expectedIntervalMs,
       stoppedGraceMs,
@@ -81,6 +87,70 @@ function createTools(baseDir, currentRef, {
     },
   });
 }
+
+test('monitor marks stale diagnostics red and hands fresh projections to weekly evaluation', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false }) };
+  const projection = { schemaVersion: 1, marker: 'public-projection' };
+  current.value.algorithmDiagnostics.evaluationReportProjection = projection;
+  const recorded = [];
+  const tools = createTools(dir, current, {
+    recordWeeklyEvaluation: (input) => recorded.push(input),
+  });
+
+  const fresh = await tools.run_monitor_cycle();
+  assert.equal(fresh.snapshot.algorithmDiagnosticsStale, false);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].evaluationProjection, projection);
+  assert.equal(recorded[0].diagnosticsStale, false);
+  assert.equal(recorded[0].monitorState.generationId, recorded[0].monitorEvents.generationId);
+
+  current.value.algorithmDiagnostics.stale = true;
+  const stale = await tools.run_monitor_cycle();
+  assert.equal(stale.snapshot.algorithmDiagnosticsStale, true);
+  assert.ok(stale.findings.some((finding) => (
+    finding.id === 'collection.algorithm-diagnostics-stale' && finding.severity === 'red'
+  )));
+  assert.equal(recorded.length, 2);
+  assert.equal(recorded[1].diagnosticsStale, true);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor refuses weekly recording when the committed history generation mismatches', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false }) };
+  let reporterCalls = 0;
+  const tools = createTools(dir, current, {
+    recordWeeklyEvaluation() { reporterCalls += 1; },
+    writeJSONAtomic(storage, path, value) {
+      writeMonitorJSONAtomic(storage, path, path === 'monitor/history.json'
+        ? value.map((row) => ({ ...row, generationId: 'mismatched-generation' }))
+        : value);
+    },
+  });
+
+  await assert.rejects(tools.run_monitor_cycle(), /committed monitor generation/i);
+  assert.equal(reporterCalls, 0);
+  rmSync(dir, { recursive: true });
+});
+
+test('weekly reporter failure preserves the committed monitor generation', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const storage = createStorage(dir);
+  const current = { value: fixture({ unsafe: false }) };
+  const tools = createTools(dir, current, {
+    recordWeeklyEvaluation() { throw new Error('simulated weekly report failure'); },
+  });
+
+  await assert.rejects(tools.run_monitor_cycle(), /simulated weekly report failure/);
+  const state = storage.readJSON('monitor/state.json');
+  const events = storage.readJSON('monitor/events.json');
+  const history = storage.readJSON('monitor/history.json');
+  assert.equal(state.generationId, events.generationId);
+  assert.equal(history.at(-1).generationId, state.generationId);
+  assert.equal(history.length, 1);
+  rmSync(dir, { recursive: true });
+});
 
 test('monitor persists quarantine findings and deduplicates repeated alerts', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
@@ -243,6 +313,28 @@ test('monitor recovers an old malformed lock but preserves a recent initializing
   await createTools(dir, current).run_monitor_cycle();
 
   assert.equal(storage.readJSON('monitor/cycle.lock'), null);
+  rmSync(dir, { recursive: true });
+});
+
+test('local lock is private, recovers dead owners, and fails closed for live or ambiguous owners', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-local-lock-'));
+  const lockPath = join(dir, 'cycle.lock');
+  const deadPid = 2_147_483_647;
+
+  const release = acquireLocalLock(lockPath);
+  assert.equal(statSync(lockPath).mode & 0o777, 0o600);
+  assert.throws(() => acquireLocalLock(lockPath), /already running/i);
+  release();
+
+  writeFileSync(lockPath, JSON.stringify({ pid: deadPid, startedAt: Date.now() - 60_000 }));
+  const releaseRecovered = acquireLocalLock(lockPath);
+  releaseRecovered();
+
+  writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+  assert.throws(() => acquireLocalLock(lockPath), /already running/i);
+
+  writeFileSync(lockPath, JSON.stringify({ pid: 0, startedAt: Date.now() }));
+  assert.throws(() => acquireLocalLock(lockPath), /already running/i);
   rmSync(dir, { recursive: true });
 });
 

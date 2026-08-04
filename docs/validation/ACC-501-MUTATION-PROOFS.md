@@ -91,6 +91,20 @@ confirmed with `git diff` before the targeted test ran, then reverted with
   to compare against”.
 - Restored checksum: `a2f7d64dbbe6cdca5608fdbac4f23bb94c70f17c3a3989d7cdf4432b62f98efc`.
 
+## Unavailable base commit fails closed
+
+- File: `.github/workflows/smoke.yml`
+- Before checksum: `852aa154f9cd1eb8027abdc2d70f0ce4b9af0cef95bbf21fa209145e138353c5`
+- Mutation: removed the independent `git cat-file` validation for the base
+  commit, recreating the path where an invalid or unavailable SHA is mistaken
+  for a legitimate initial baseline.
+- Confirmed diff: the workflow again proceeded directly to the path lookup,
+  whose failure exits successfully.
+- Targeted result: `0 pass / 1 fail`.
+- Failing assertion: “an unavailable base commit must fail closed before
+  checking for an initial baseline”.
+- Restored checksum: `852aa154f9cd1eb8027abdc2d70f0ce4b9af0cef95bbf21fa209145e138353c5`.
+
 ## Restoration
 
 Final checksums matched all pre-mutation values and final

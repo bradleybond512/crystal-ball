@@ -1,7 +1,7 @@
 # ACC-502 Mutation Proofs
 
 Date: 2026-08-04  
-Reviewed implementation commit: `60329823f6fffcfb7222ca83f49c4af6090fa0e4`
+Reviewed implementation commit: `fd2d0bbd43f47dfa2ca418a5de92d9121a4fc185`
 
 This audit replaces the earlier ACC-502 evidence in full. The obsolete score
 dampening proof is intentionally absent because inhibitory evidence is now

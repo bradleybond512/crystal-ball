@@ -53,6 +53,8 @@ import {
   nearMissEvents,
   positiveEvents,
 } from '../__bench__/rule-probes.ts';
+import { verifyRuleProbes } from '../__bench__/rule-probe-verify.ts';
+import { pairToEdge } from '../../intelligence/situation-store-v2.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..', '..', '..');
@@ -549,6 +551,8 @@ describe('what the corpus is built to stress', () => {
       eventA: { id: seed.eventIdA },
       eventB: { id: seed.eventIdB },
       confidence: 0.5,
+      edgeType: 'co-located',
+      detectedAt: new Date(Date.UTC(2026, 5, 1, 12, 0, 0)),
     })) as unknown as Parameters<typeof gradeEnginePairs>[0];
 
     const graded = gradeEnginePairs(twice, plantedTruePairKeys(), decoyEventIds());
@@ -725,6 +729,11 @@ describe('the gate', () => {
           fromId: decoy,
           toId: partner,
           confidence: 0.5,
+          detectedAtMs: Date.UTC(2026, 5, 1, 12, 0, 0),
+          confidenceDetailDigest: '0'.repeat(32),
+          evidenceEdgeType: 'co-located',
+          evidenceFromId: decoy,
+          evidenceToId: partner,
         }],
         isTruePair: false,
         decoyEmissions: 1,
@@ -1843,7 +1852,13 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
       { ...report, ruleProbes: rewritten }, baseline,
     );
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('ruleProbes[0].nearMisses')));
+    // Since round 14 the gate re-executes the fixtures itself, so a re-aimed
+    // clause is caught by the disagreement rather than by the ledger digest.
+    assert.ok(
+      reasons.some((r) => r.includes('ruleProbes[0].nearMisses')
+        || r.includes('does not reproduce')),
+      reasons.join(' | '),
+    );
   });
 
   it('rejects a report that drops an advertised measurement outright', () => {
@@ -2277,9 +2292,9 @@ describe('the re-seed emitter produces a baseline that passes', () => {
     assert.equal(ok, true, `re-seeded baseline should pass: ${JSON.stringify(reasons)}`);
   });
 
-  it('pins every v12 replay, family, candidate, inhibition, and stream identity field', () => {
+  it('pins every v13 replay, family, candidate, inhibition, and stream identity field', () => {
     const seeded = seedCorrelationBenchBaseline(report, carriedOver, '2026-08-03');
-    assert.equal(seeded.schemaVersion, 12);
+    assert.equal(seeded.schemaVersion, 13);
     assert.equal(seeded.replayMode, report.replayMode);
     assert.deepEqual(seeded.streamDigests, report.streamDigests);
     assert.deepEqual(seeded.multipleTestingFamily, report.multipleTestingFamily);
@@ -2805,7 +2820,15 @@ describe('rule probes pin the fixture, not only the verdict', () => {
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.startsWith('probes ledger digest moved')));
+    // Round 14 added an independent re-execution that runs BEFORE the ledger
+    // digests and short-circuits, so a moved fixture is now named by whichever
+    // of the two speaks first. Both name the probe ledger rather than the
+    // whole report, which is what this test is about.
+    assert.ok(
+      reasons.some((r) => r.startsWith('probes ledger digest moved')
+        || /reports fixtureDigest/.test(r)),
+      reasons.join(' | '),
+    );
   });
 });
 
@@ -3074,6 +3097,542 @@ describe('round 13 — the halves round 12 missed', () => {
     assert.ok(
       reasons.some((r) => r.includes('causalCouplingsLostToCap')),
       reasons.join(' | '),
+    );
+  });
+});
+
+describe('round 14 — the gate stops taking the producer at its word', () => {
+  const report = runCorrelationBenchmark();
+  const baseline = loadBaseline();
+
+  it('re-derives every probe verdict independently of the producer', () => {
+    // The finding: replacing all 73 near-miss executions with the constant
+    // `rejected: true` reproduced the digest exactly, because the honest output
+    // and the forged output are the same bytes. No output pin can separate
+    // them — only a second executor can.
+    const mine = verifyRuleProbes();
+    assert.equal(mine.length, report.ruleProbes.length);
+    assert.deepEqual(
+      mine.map((p) => p.ruleId),
+      report.ruleProbes.map((p) => p.ruleId),
+    );
+    for (const [i, p] of mine.entries()) {
+      assert.deepEqual(p, report.ruleProbes[i], `probe ${p.ruleId} disagrees with the report`);
+    }
+  });
+
+  it('fails when the report claims a near-miss the engine actually matched', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0
+          ? { ...p, nearMisses: p.nearMisses.map((n) => ({ ...n, rejected: !n.rejected })) }
+          : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((r) => r.includes('does not reproduce')),
+      reasons.join(' | '),
+    );
+  });
+
+  it('the verdicts do not depend on the instant they are graded at', () => {
+    // `now` reaches only `detectedAt`, so a different instant must not move a
+    // single match. If it ever does, the fixtures have drifted into the engine's
+    // recency behaviour and the probe stopped being a pure matcher test.
+    const later = verifyRuleProbes(new Date(Date.UTC(2027, 0, 9, 4, 30, 0)));
+    assert.deepEqual(later, verifyRuleProbes());
+  });
+
+  it('every rule matches its positive fed BACK TO FRONT', () => {
+    // `correlate-engine.ts:177` tries (b, a) when (a, b) misses. Every corpus
+    // and fixture was antecedent-first, so deleting that branch changed nothing.
+    for (const p of report.ruleProbes) {
+      assert.equal(p.reversedMatched, true, `${p.ruleId} does not survive reversed input`);
+    }
+  });
+
+  it('fails when a reversed positive stops matching', () => {
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === 0 ? { ...p, reversedMatched: false, reversedDirection: null } : p
+      )),
+    };
+    const { ok } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+  });
+
+  it('exercises every accepted branch of every disjunctive matcher', () => {
+    // A positive that satisfies BOTH branches of an OR and a near-miss that
+    // defeats both cannot see one branch being lost. Each branch gets its own
+    // isolated positive.
+    // Pinned per rule, OUTSIDE the fixture roster both the producer and the
+    // independent executor read. `>= 4` let three rules lose every disjunct
+    // they have and still pass, because both witnesses would simply stop
+    // asking about them together.
+    const EXPECTED_BRANCH_COUNTS: Readonly<Record<string, number>> = {
+      'airquality-wildfire': 2,
+      'conflict-displacement': 4,
+      'earthquake-infrastructure': 2,
+      'earthquake-tsunami': 1,
+      'space-weather-infrastructure': 4,
+      'weather-aviation': 1,
+      'weather-wildfire': 3,
+    };
+    const withBranches = report.ruleProbes.filter((p) => p.disjuncts.length > 0);
+    assert.deepEqual(
+      Object.fromEntries(withBranches.map((p) => [p.ruleId, p.disjuncts.length])),
+      EXPECTED_BRANCH_COUNTS,
+      'the disjunct roster moved — add or remove the pin in a reviewed diff',
+    );
+    for (const p of withBranches) {
+      for (const d of p.disjuncts) {
+        assert.equal(d.matched, true, `${p.ruleId} lost branch ${d.branch}`);
+      }
+    }
+  });
+
+  it('fails when one accepted branch of a disjunction stops matching', () => {
+    const idx = report.ruleProbes.findIndex((p) => p.disjuncts.length > 0);
+    const forged = {
+      ...report,
+      ruleProbes: report.ruleProbes.map((p, i) => (
+        i === idx
+          ? { ...p, disjuncts: p.disjuncts.map((d, j) => (j === 0 ? { ...d, matched: false } : d)) }
+          : p
+      )),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('branch')), reasons.join(' | '));
+  });
+
+  it('moves the digest when a pair is emitted at the epoch', () => {
+    const stale = {
+      ...report,
+      pairs: report.pairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, detectedAtMs: 0 })),
+      })),
+    };
+    assert.notEqual(benchReportDigest(stale), baseline.reportDigest);
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stale, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('detectedAt')), reasons.join(' | '));
+  });
+
+  it('fails when the confidence BREAKDOWN disappears behind the scalar', () => {
+    const flat = {
+      ...report,
+      pairs: report.pairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, confidenceDetailDigest: null })),
+      })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(flat, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('breakdown')), reasons.join(' | '));
+  });
+
+  it('projects every pair into the evidence graph the store really builds', () => {
+    for (const row of report.pairs) {
+      for (const e of row.emissions) {
+        const edge = pairToEdge({
+          ruleId: e.ruleId,
+          edgeType: e.edgeType,
+          eventA: { id: e.fromId } as never,
+          eventB: { id: e.toId } as never,
+          confidence: e.confidence,
+          detectedAt: new Date(e.detectedAtMs),
+        } as never);
+        assert.equal(e.evidenceEdgeType, edge.type);
+        assert.equal(e.evidenceFromId, edge.sourceEventId);
+        assert.equal(e.evidenceToId, edge.targetEventId);
+      }
+    }
+  });
+
+  it('fails when the projection contradicts the engine it came from', () => {
+    // EDGE_TYPE_MAP inverted: real situation edges asserting the opposite
+    // relationship, with every benchmark number unchanged.
+    const inverted = {
+      ...report,
+      pairs: report.pairs.map((r) => ({
+        ...r,
+        emissions: r.emissions.map((e) => ({ ...e, evidenceEdgeType: 'contradicts' })),
+      })),
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(inverted, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('evidence graph')), reasons.join(' | '));
+  });
+
+  it('proves a retired learned rule actually leaves the engine', () => {
+    const p = report.learnedRuleResync;
+    assert.ok(p.installed.length >= 2);
+    assert.ok(p.installed.includes(p.retiredId));
+    assert.ok(!p.afterRetirement.includes(p.retiredId));
+    assert.equal(p.afterRetirement.length, p.installed.length - 1);
+    assert.equal(p.reportedRemoved, 1);
+    assert.equal(p.reportedAdded, 0);
+    assert.equal(p.builtInsIntact, true);
+  });
+
+  it('fails when a retired rule stays registered but is reported removed', () => {
+    const stuck = {
+      ...report,
+      learnedRuleResync: {
+        ...report.learnedRuleResync,
+        afterRetirement: report.learnedRuleResync.installed,
+      },
+    };
+    const { ok, reasons } = compareCorrelationBenchToBaseline(stuck, baseline);
+    assert.equal(ok, false);
+    assert.ok(reasons.some((r) => r.includes('still registered')), reasons.join(' | '));
+  });
+
+  const scriptPath = path.join(here, '..', '..', '..', '..', 'scripts', 'correlation-benchmark.mts');
+  const repoRoot = path.join(here, '..', '..', '..', '..');
+
+  it('refuses to re-seed against a --previous-baseline whose tolerance the live run actually violates', () => {
+    // Round 15: the prior version of this test only ran --seed against the
+    // committed baseline, which passes today, so it could not distinguish a
+    // working refusal path from one that always prints "Seeded" — a CLI that
+    // never compared anything would satisfy the old assertion.
+    //
+    // The first attempt at fixing this used `couplingPrecision: 1.5` with a
+    // zero drop tolerance, meant to force `checkDrop` to fire — but 1.5 is
+    // outside the baseline's own [0,1] range-validity guard, so the CLI
+    // refused for an EARLIER reason ("baseline value 1.5 is outside [0,1]")
+    // and never reached the tolerance-comparison logic this test claims to
+    // exercise. `meanTruePairConfidence` is used the same way `checkDrop`
+    // uses every other metric, so pinning it to its valid ceiling (1) with a
+    // zero drop tolerance forces the real comparator: the live run's actual
+    // mean true-pair confidence is provably below 1, so `previous(1) -
+    // live(<1) > tolerance(0)` fires inside `checkDrop` itself.
+    const committed = loadBaseline();
+    const dir = mkdtempSync(path.join(tmpdir(), 'acc501-broken-tolerance-'));
+    const brokenPath = path.join(dir, 'broken-previous-baseline.json');
+    try {
+      const broken: CorrelationBenchBaseline = {
+        ...committed,
+        meanTruePairConfidence: 1,
+        tolerances: { ...committed.tolerances, meanTruePairConfidenceDrop: 0 },
+      };
+      writeFileSync(brokenPath, JSON.stringify(broken, null, 2));
+
+      const seed = spawnSync(
+        'npx',
+        ['tsx', scriptPath, '--seed', '--previous-baseline', brokenPath],
+        { encoding: 'utf8', cwd: repoRoot },
+      );
+
+      assert.equal(seed.status, 1, `${seed.stdout}${seed.stderr}`.slice(-600));
+      assert.match(seed.stderr, /REFUSED/);
+      assert.match(seed.stderr, /mean true-pair confidence/);
+      assert.match(seed.stderr, /exceeds .* tolerance/);
+      // A refusal must not also hand back a usable candidate on stdout.
+      assert.doesNotMatch(seed.stdout, /"schemaVersion"/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('seeds cleanly against a --previous-baseline the live run genuinely satisfies', () => {
+    // The counterpart to the refusal case above: the same
+    // --previous-baseline mechanism, but pointed at an unmodified, internally
+    // consistent copy of the reviewed baseline (which today's live run
+    // legitimately meets), so the positive control proves the comparator ran
+    // and passed on its own merits rather than the CLI having skipped it.
+    const committed = loadBaseline();
+    const dir = mkdtempSync(path.join(tmpdir(), 'acc501-satisfied-tolerance-'));
+    const copyPath = path.join(dir, 'unmodified-previous-baseline.json');
+    try {
+      writeFileSync(copyPath, JSON.stringify(committed, null, 2));
+
+      const seed = spawnSync(
+        'npx',
+        ['tsx', scriptPath, '--seed', '--previous-baseline', copyPath],
+        { encoding: 'utf8', cwd: repoRoot },
+      );
+
+      assert.equal(seed.status, 0, `${seed.stdout}${seed.stderr}`.slice(-600));
+      assert.match(seed.stderr, /Seeded from the current run/);
+      assert.doesNotMatch(seed.stderr, /REFUSED/);
+      const seeded = JSON.parse(seed.stdout) as CorrelationBenchBaseline;
+      assert.equal(typeof seeded.schemaVersion, 'number');
+      // The corpus is frozen and the benchmark is deterministic, so a fresh
+      // seed against an unmodified previous baseline should reproduce every
+      // graded field exactly — including schemaVersion, note, reportDigest,
+      // and witnessed, none of which an ordinary reseed is entitled to
+      // change. Only seededAt (a wall-clock timestamp) genuinely differs
+      // between two runs. A wider exclusion set here would pass even if the
+      // CLI emitted a forged schemaVersion, a stale reportDigest, or a
+      // missing witness block — Codex caught this in round 16.
+      const mayDiffer = new Set(['seededAt']);
+      const seededRecord = seeded as unknown as Record<string, unknown>;
+      const committedRecord = committed as unknown as Record<string, unknown>;
+      const keys = [...new Set([...Object.keys(seededRecord), ...Object.keys(committedRecord)])];
+      for (const key of keys) {
+        if (mayDiffer.has(key)) continue;
+        assert.deepEqual(
+          seededRecord[key], committedRecord[key],
+          `field "${key}" differs: committed=${JSON.stringify(committedRecord[key])} ` +
+          `seeded=${JSON.stringify(seededRecord[key])}`,
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('round 15 — the v12→v13 schema bump is a pinned migration, not a skipped check', () => {
+  const report = runCorrelationBenchmark();
+  const committed = loadBaseline();
+  const carriedOver = { note: committed.note, tolerances: committed.tolerances };
+  const manifest = correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION;
+
+  // The reviewed v12 baseline differed from today's only in schemaVersion,
+  // seededAt, and reportDigest — that IS the claim the migration makes. The
+  // reconstruction is only admissible because `previousPayloadDigest` pins it:
+  // if any forbidden field differed from the real reviewed v12 baseline, this
+  // object would digest to something else and the validator would refuse it.
+  // The test below asserts exactly that before using it.
+  const previousV12 = (): correlationBaseline.CorrelationBenchBaseline => ({
+    ...seedCorrelationBenchBaseline(report, carriedOver, committed.seededAt),
+    schemaVersion: 12,
+    reportDigest: manifest.previousReportDigest,
+  } as unknown as correlationBaseline.CorrelationBenchBaseline);
+
+  it('reconstructs the reviewed v12 payload exactly — the pin says so', () => {
+    assert.equal(
+      correlationBaseline.benchBaselinePayloadDigest(previousV12()),
+      manifest.previousPayloadDigest,
+    );
+  });
+
+  it('refuses a previous baseline whose payload is not the reviewed one', () => {
+    // The reviewer moved minedEdgeCount in BOTH the report and the supplied
+    // previous baseline and the field-by-field loop compared the moved value to
+    // itself. The payload pin is what makes that self-consistent forgery fail.
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      { ...report, minedEdgeCount: report.minedEdgeCount + 1 },
+      { ...previousV12(), minedEdgeCount: report.minedEdgeCount + 1 },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /does not carry the reviewed v12 payload/);
+  });
+
+  it('sees a forbidden field that was DROPPED, not just moved', () => {
+    const prev = previousV12() as unknown as Record<string, unknown>;
+    delete prev['minedEdgeCount'];
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      prev as unknown as correlationBaseline.CorrelationBenchBaseline,
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /minedEdgeCount moved|reviewed v12 payload/);
+  });
+
+  it('sees a field the reviewed baseline HAD that the live candidate no longer produces at all', () => {
+    // The test above deletes a field from `before` — but candidate still has
+    // that key (it comes straight from the live report), so it's caught even
+    // by iterating candidate's own keys alone; it doesn't actually prove the
+    // UNION is load-bearing. This is the complementary case: a field present
+    // in the reviewed `before` that the candidate-producing side never emits
+    // at all. Iterating only `Object.keys(candidate)` would never visit this
+    // key, so the drop would be invisible; iterating the union catches it.
+    const prev = { ...previousV12(), legacyRetiredField: 42 } as unknown as
+      correlationBaseline.CorrelationBenchBaseline;
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      prev,
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /legacyRetiredField moved from 42 to undefined/);
+  });
+
+  it('accepts the real additive transition', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      manifest,
+    );
+    assert.equal(ok, true, JSON.stringify(reasons));
+  });
+
+  it('refuses a manifest that is not the pinned one', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      { ...manifest, reason: 'trust me' },
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /manifest does not match/);
+  });
+
+  it('refuses a source that is not the reviewed v12 baseline', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), reportDigest: 'f'.repeat(32) },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /not the reviewed v12 report/);
+  });
+
+  it('refuses a source whose corpus digest is not the reviewed corpus', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), corpusDigest: 'e'.repeat(32) },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /not the reviewed v12 corpus/);
+  });
+
+  it('refuses a graded metric that moved under cover of the schema bump', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), pairPrecision: 0.123456 },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /additive-only, but pairPrecision moved/);
+  });
+
+  it('refuses a report digest that did not move — nothing was added', () => {
+    const seeded = seedCorrelationBenchBaseline(report, carriedOver, committed.seededAt);
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      { ...previousV12(), reportDigest: seeded.reportDigest },
+      { ...manifest, previousReportDigest: seeded.reportDigest },
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /manifest does not match|digest did not move/);
+  });
+
+  it('pins the migration to exactly one hop', () => {
+    assert.equal(manifest.fromSchemaVersion, 12);
+    assert.equal(manifest.toSchemaVersion, 13);
+    assert.equal(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
+  });
+
+  it('the runtime one-hop check is real code, not just a test-level assertion', () => {
+    // "pins the migration to exactly one hop" above only asserts a property
+    // of the module constants; it says nothing about whether the VALIDATOR
+    // FUNCTION would ever act on a mismatch. Because the manifest-identity
+    // guard refuses any manifest that isn't byte-identical to the pinned
+    // constant, a caller-supplied stale manifest is already caught by that
+    // guard before reaching the toSchemaVersion check — so exercising the
+    // toSchemaVersion check THROUGH validateCorrelationBenchV12ToV13Migration
+    // is only reachable by mutating the pinned constant itself (recorded as
+    // a genuine mutation proof, including the combined "guard code also
+    // disabled" proof Codex asked for in round 18, in
+    // docs/validation/ACC-501-MUTATION-PROOFS.md). To make the check's own
+    // logic — not just the module constant — permanently, directly testable
+    // without any source mutation, the comparison was extracted into
+    // oneHopSchemaVersionCheckReason(). The tests immediately below call
+    // that function directly, proving the check's own logic is correct.
+    // Round 18b (Codex): that alone doesn't prove the VALIDATOR still calls
+    // it — deleting the call site left those helper tests, and this test,
+    // both green (removing a refusal only produces false negatives). The
+    // manifest-identity guard was restructured to exclude toSchemaVersion
+    // from its blanket comparison so a manifest differing ONLY in that
+    // field reaches the check through the real validator; see the
+    // "validator wiring, not just the helper" test below for the
+    // permanent, mutation-free proof that the call site itself is intact.
+    assert.equal(
+      correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion,
+      CORRELATION_BENCH_SCHEMA_VERSION,
+    );
+    const { ok } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      manifest,
+    );
+    assert.equal(ok, true);
+  });
+
+  it('oneHopSchemaVersionCheckReason refuses a manifest that no longer targets the compiled schema', () => {
+    // This is the real function the validator calls (not a copy) — a future
+    // edit that weakens or deletes this check fails this test directly,
+    // without requiring a source-mutation experiment.
+    const reason = correlationBaseline.oneHopSchemaVersionCheckReason(99, CORRELATION_BENCH_SCHEMA_VERSION);
+    assert.equal(
+      reason,
+      'v12→v13 migration manifest targets schemaVersion 99, but the compiled gate is schemaVersion ' +
+      `${String(CORRELATION_BENCH_SCHEMA_VERSION)} — this migration is no longer the one-hop path to the live schema`,
+    );
+  });
+
+  it('oneHopSchemaVersionCheckReason accepts a manifest that targets the compiled schema', () => {
+    assert.equal(
+      correlationBaseline.oneHopSchemaVersionCheckReason(CORRELATION_BENCH_SCHEMA_VERSION, CORRELATION_BENCH_SCHEMA_VERSION),
+      null,
+    );
+  });
+
+  it('refuses a caller-supplied manifest whose toSchemaVersion alone drifts from the compiled schema — validator wiring, not just the helper', () => {
+    // Round 18b (Codex): testing oneHopSchemaVersionCheckReason() directly
+    // proves the CHECK is correct, but not that the VALIDATOR still CALLS
+    // it — deleting that call site left both the helper tests and the
+    // "matching-input" validator test green. The old manifest-identity
+    // guard made this untestable through the public validator (any
+    // toSchemaVersion mismatch was swallowed by the blanket identity
+    // refusal before reaching the specific check), so the guard was
+    // restructured to exclude toSchemaVersion from that blanket comparison
+    // and check it separately. This test constructs a manifest identical to
+    // the pinned migration in every OTHER field and calls the real
+    // validator — no source mutation required.
+    const staleManifest = { ...manifest, toSchemaVersion: 99 };
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      staleManifest,
+    );
+    assert.equal(ok, false);
+    assert.match(
+      reasons.join(' '),
+      /targets schemaVersion 99, but the compiled gate is schemaVersion/,
+    );
+  });
+
+  it('refuses a previous baseline whose tolerances are not the reviewed ones — the shared-gate forgery Codex found', () => {
+    // P1: `tolerances` sits in V13_MAY_MOVE so `benchBaselinePayloadDigest`
+    // skips it, letting an ordinary reseed edit tolerances freely. But
+    // `validateCorrelationBenchV12ToV13Migration` was carrying
+    // `previousV12.tolerances` straight into the seeded candidate with
+    // nothing pinning it to the reviewed value — a caller could widen
+    // `couplingPrecisionDrop` from 0.02 to 0.1 and the migration would still
+    // report ok:true, because nothing here grades tolerances against
+    // anything. `previousTolerancesDigest` closes that: a previousV12 whose
+    // tolerances digest to something other than the reviewed block is
+    // refused before any grading happens.
+    const forged = {
+      ...previousV12(),
+      tolerances: { ...previousV12().tolerances, couplingPrecisionDrop: 0.1 },
+    };
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      forged,
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /does not carry the reviewed v12 tolerances/);
+  });
+
+  it('accepts the real additive transition with its real, unforged tolerances', () => {
+    assert.equal(
+      correlationBaseline.benchTolerancesDigest(previousV12().tolerances),
+      manifest.previousTolerancesDigest,
     );
   });
 });

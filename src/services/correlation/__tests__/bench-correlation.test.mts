@@ -3540,9 +3540,15 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     // logic — not just the module constant — permanently, directly testable
     // without any source mutation, the comparison was extracted into
     // oneHopSchemaVersionCheckReason(). The tests immediately below call
-    // that function directly: this is the real code path the validator
-    // calls, not a re-implementation, so deleting or breaking the guard's
-    // logic fails these tests without needing a manual mutation experiment.
+    // that function directly, proving the check's own logic is correct.
+    // Round 18b (Codex): that alone doesn't prove the VALIDATOR still calls
+    // it — deleting the call site left those helper tests, and this test,
+    // both green (removing a refusal only produces false negatives). The
+    // manifest-identity guard was restructured to exclude toSchemaVersion
+    // from its blanket comparison so a manifest differing ONLY in that
+    // field reaches the check through the real validator; see the
+    // "validator wiring, not just the helper" test below for the
+    // permanent, mutation-free proof that the call site itself is intact.
     assert.equal(
       correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion,
       CORRELATION_BENCH_SCHEMA_VERSION,
@@ -3571,6 +3577,31 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     assert.equal(
       correlationBaseline.oneHopSchemaVersionCheckReason(CORRELATION_BENCH_SCHEMA_VERSION, CORRELATION_BENCH_SCHEMA_VERSION),
       null,
+    );
+  });
+
+  it('refuses a caller-supplied manifest whose toSchemaVersion alone drifts from the compiled schema — validator wiring, not just the helper', () => {
+    // Round 18b (Codex): testing oneHopSchemaVersionCheckReason() directly
+    // proves the CHECK is correct, but not that the VALIDATOR still CALLS
+    // it — deleting that call site left both the helper tests and the
+    // "matching-input" validator test green. The old manifest-identity
+    // guard made this untestable through the public validator (any
+    // toSchemaVersion mismatch was swallowed by the blanket identity
+    // refusal before reaching the specific check), so the guard was
+    // restructured to exclude toSchemaVersion from that blanket comparison
+    // and check it separately. This test constructs a manifest identical to
+    // the pinned migration in every OTHER field and calls the real
+    // validator — no source mutation required.
+    const staleManifest = { ...manifest, toSchemaVersion: 99 };
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      staleManifest,
+    );
+    assert.equal(ok, false);
+    assert.match(
+      reasons.join(' '),
+      /targets schemaVersion 99, but the compiled gate is schemaVersion/,
     );
   });
 

@@ -374,9 +374,24 @@ export function validateCorrelationBenchV12ToV13Migration(
   manifest: CorrelationBenchMigrationV12ToV13,
 ): CorrelationBenchComparison {
   const reasons: string[] = [];
-  if (JSON.stringify(manifest) !== JSON.stringify(CORRELATION_BENCH_V12_TO_V13_MIGRATION)) {
+  // toSchemaVersion is deliberately excluded from this identity comparison —
+  // it gets its OWN check below via oneHopSchemaVersionCheckReason(), so a
+  // caller-supplied manifest that matches the pinned migration in every
+  // OTHER field still reaches that check instead of being swallowed here.
+  // Round 18: Codex found that folding toSchemaVersion into this blanket
+  // identity guard made the schema check unreachable through the public
+  // validator — the only way to exercise it was to mutate the pinned module
+  // constant, which can't be a permanent regression test.
+  const { toSchemaVersion: manifestToSchemaVersion, ...manifestRest } = manifest;
+  const pinnedRest: Partial<CorrelationBenchMigrationV12ToV13> = { ...CORRELATION_BENCH_V12_TO_V13_MIGRATION };
+  delete pinnedRest.toSchemaVersion;
+  if (JSON.stringify(manifestRest) !== JSON.stringify(pinnedRest)) {
     reasons.push('v12→v13 migration manifest does not match the pinned additive transition');
     return { ok: false, reasons };
+  }
+  const oneHopReason = oneHopSchemaVersionCheckReason(manifestToSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
+  if (oneHopReason !== null) {
+    reasons.push(oneHopReason);
   }
   if (previousV12.schemaVersion !== 12) {
     reasons.push(`v12→v13 migration source is schemaVersion ${previousV12.schemaVersion}, not 12`);
@@ -401,10 +416,6 @@ export function validateCorrelationBenchV12ToV13Migration(
       'grade the live report against whatever tolerances the caller supplies, so an unpinned ' +
       'tolerance here would grade leniently against a value nobody reviewed',
     );
-  }
-  const oneHopReason = oneHopSchemaVersionCheckReason(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
-  if (oneHopReason !== null) {
-    reasons.push(oneHopReason);
   }
   if (report.corpusDigest !== manifest.previousCorpusDigest) {
     reasons.push(

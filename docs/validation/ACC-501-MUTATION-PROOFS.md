@@ -569,15 +569,118 @@ directly (not a re-implementation):
 - `oneHopSchemaVersionCheckReason accepts a manifest that targets the
   compiled schema` — asserts `null` for matching versions.
 
-Because these tests call the exact function the validator invokes, deleting
-the guard's call-site, weakening its condition, or changing its return value
-fails these tests directly on every run — no manual mutation experiment
-required to catch a future regression. Full suite after this change:
-`222 pass / 0 fail`. `npm run typecheck:all` → 0 errors.
+These tests call the exact function the validator invokes, so deleting or
+weakening `oneHopSchemaVersionCheckReason`'s own logic fails them directly.
+Full suite after this change: `222 pass / 0 fail`. `npm run typecheck:all` →
+0 errors.
+
+**This claim turned out to be incomplete** — see round 18b below.
+
+## Round 18b (Codex round-4 REQUEST_CHANGES)
+
+> [P2] The permanent regression test still does not exercise validator
+> wiring. Deleting the call at bench-correlation-baseline.ts:405 leaves both
+> helper tests and the matching-input validator test green. Thus the claim
+> at ACC-501-MUTATION-PROOFS.md:572 is false, and round 17's requested
+> validator-level regression test remains missing. The combined manual
+> mutation is valid evidence, but it is not permanent coverage.
+
+Correct. Testing `oneHopSchemaVersionCheckReason()` directly proves the
+check's own logic is right, but proves nothing about whether
+`validateCorrelationBenchV12ToV13Migration` still *calls* it — removing a
+refusal check only produces false negatives (missed refusals), never false
+positives on already-correct input, so deleting the call site left every
+existing test green (the helper's own tests, and the validator's
+matching-input `ok === true` test).
+
+### Root cause: the manifest-identity guard, again
+
+The reason this was untestable through the public validator is the same
+guard flagged in round 15/17: `validateCorrelationBenchV12ToV13Migration`
+did a blanket `JSON.stringify(manifest) !== JSON.stringify(pinned)`
+comparison that early-returned before ANY caller-supplied manifest
+differing in even one field — including `toSchemaVersion` — could reach a
+field-specific check. A manifest built to differ from the pinned constant
+only in `toSchemaVersion` was swallowed by the generic "manifest does not
+match" refusal before ever reaching the one-hop check.
+
+### Fix: exclude `toSchemaVersion` from the blanket identity comparison
+
+`validateCorrelationBenchV12ToV13Migration` now destructures `toSchemaVersion`
+out of the caller manifest, and strips it from a shallow copy of the pinned
+constant, before the identity comparison — then checks it separately via
+`oneHopSchemaVersionCheckReason` immediately after. (An initial destructuring
+form of the pinned-side omission, `const { toSchemaVersion: _pinned, ...pinnedRest }`,
+tripped `@typescript-eslint/no-unused-vars` / `sonarjs/no-unused-vars`; the
+`delete`-based form below is what actually shipped.)
+
+```ts
+const { toSchemaVersion: manifestToSchemaVersion, ...manifestRest } = manifest;
+const pinnedRest: Partial<CorrelationBenchMigrationV12ToV13> = { ...CORRELATION_BENCH_V12_TO_V13_MIGRATION };
+delete pinnedRest.toSchemaVersion;
+if (JSON.stringify(manifestRest) !== JSON.stringify(pinnedRest)) {
+  reasons.push('v12→v13 migration manifest does not match the pinned additive transition');
+  return { ok: false, reasons };
+}
+const oneHopReason = oneHopSchemaVersionCheckReason(manifestToSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
+if (oneHopReason !== null) {
+  reasons.push(oneHopReason);
+}
+```
+
+The comparison is against the independently-compiled `CORRELATION_BENCH_SCHEMA_VERSION`
+constant, not the pinned constant's own `toSchemaVersion` field — comparing
+against the latter would silently defeat the check's purpose, since it would
+just compare the pinned constant against a caller manifest copying it,
+never catching the pinned constant itself drifting from the compiled schema.
+
+### New permanent test — through the real validator
+
+`refuses a caller-supplied manifest whose toSchemaVersion alone drifts from
+the compiled schema — validator wiring, not just the helper` builds
+`{ ...manifest, toSchemaVersion: 99 }` (identical to the pinned migration in
+every other field) and calls `validateCorrelationBenchV12ToV13Migration`
+directly, asserting `ok === false` and the exact refusal text. This is now
+reachable through the public validator for the first time, closing the gap
+round 18b identified.
+
+### Mutation proof — deleting the call site fails the new test
+
+Checksum before mutation: `4eb7e5a3c4f7d18f35cccca85980db7857e685328c8311367586d566a8ee07dc`.
+
+**Mutation** — removed the validator's call to `oneHopSchemaVersionCheckReason`
+(the four lines pushing `oneHopReason` into `reasons`), leaving everything
+else, including `manifestToSchemaVersion`'s extraction, intact.
+
+**Result**: `223 pass / 1 fail`. The new validator-level test failed exactly
+as expected:
+
+```
+✖ refuses a caller-supplied manifest whose toSchemaVersion alone drifts from
+  the compiled schema — validator wiring, not just the helper
+  AssertionError: Expected values to be strictly equal: true !== false
+```
+
+`round 15 — the v12→v13 schema bump is a pinned migration, not a skipped
+check` also failed, matching round 18's earlier combined-mutation proof —
+consistent evidence that this is the same load-bearing check, now reachable
+without mutating a module constant.
+
+**Restoration**: re-added the four-line call site. Checksum after restore:
+`4eb7e5a3c4f7d18f35cccca85980db7857e685328c8311367586d566a8ee07dc` — exact
+match. `git diff --stat` showed only the legitimate (committed) guard
+restructuring, no residual mutation.
+
+**Full verification chain after this fix**:
+
+- `bench-correlation.test.mts` — `223 pass / 0 fail`
+- `npm run typecheck:all` — 0 errors
+- `npm run bench:correlation` — PASS, within tolerance of the committed baseline
+- `npm run test:correlation` — `416 pass / 0 fail`
 
 ## Restoration
 
 Final checksums matched all pre-mutation values for every mutated file across
-round 14, round 15, round 16, round 17, and round 18, and `git status --short`
-after each restoration showed only the legitimate source diff for that round
-— no residual mutation.
+round 14, round 15, round 16, round 17, round 18, and round 18b, and
+`git status --short` after each restoration showed only the legitimate
+source diff for that round — no residual mutation.

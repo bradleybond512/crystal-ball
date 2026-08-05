@@ -472,9 +472,112 @@ Full suite after all three round-17 fixes: `220 pass / 0 fail`
 (`bench-correlation.test.mts`), `npx tsc --noEmit` (both tsconfig.json and
 tsconfig.api.json) → 0 errors.
 
+## Round 18 (Codex round-3 REQUEST_CHANGES)
+
+Codex's third review of PR #1625 found a real flaw in the round-17 proof
+above:
+
+> "[P2] The one-hop guard still lacks the required revert-the-fix mutation
+> proof. Round 17 mutated the manifest value, not the guard at
+> bench-correlation-baseline.ts:383. I independently short-circuited that
+> guard; all three relevant tests remained green (3 pass / 0 fail).
+> Therefore the test comment and the evidence write-up incorrectly say guard
+> deletion was performed and disproved. The toSchemaVersion: 99 mutation
+> does prove the negative path is reachable, but not that removing the fix
+> turns the suite red. Add a test that asserts the one-hop refusal reason
+> through the validator and fails when this guard is disabled."
+
+This is correct. Round 17 mutated only the pinned constant's *value*
+(`toSchemaVersion: 99`) with the guard's *code* intact, and confirmed 3
+tests failed. But with the real, unmutated inputs the constant and the
+compiled schema version are always in sync (13 === 13), so the guard's
+branch condition (`manifest.toSchemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION`)
+is never true whether or not the guard code exists — disabling the guard
+alone, with in-sync inputs, is a no-op test that proves nothing about the
+guard's necessity.
+
+### Combined mutation — the genuine revert-the-fix proof
+
+To prove the guard's *code* (not just the drifted value) is load-bearing,
+both mutations were applied simultaneously: drift the constant AND disable
+the guard that would have caught the drift.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Before checksum: `081b535902de7c75eeb090b8c18083af17ccbdf32af6d227202cc1a50577a511`.
+
+**Step 1 — guard restored, constant drifted only** (reproduces round 17's
+proof, captured with exact identities this time):
+
+- Mutation: `toSchemaVersion: 13,` → `toSchemaVersion: 99 as unknown as 13,`
+  on `CORRELATION_BENCH_V12_TO_V13_MIGRATION` (line 288). Guard code at line
+  383 untouched.
+- Result: `bench-correlation.test.mts` → `217 pass / 3 fail`.
+- Failing tests, with exact assertion text:
+  1. `round 15 — the v12→v13 schema bump is a pinned migration, not a
+     skipped check` — `false !== true` against the expected refusal reason
+     `"v12→v13 migration manifest targets schemaVersion 99, but the
+     compiled gate is schemaVersion 13 — this migration is no longer the
+     one-hop path to the live schema"`.
+  2. `pins the migration to exactly one hop` — `99 !== 13`.
+  3. `the runtime one-hop check is real code, not just a test-level
+     assertion` — `99 !== 13`.
+
+**Step 2 — guard ALSO disabled, constant still drifted** (the genuine
+revert-the-fix proof):
+
+- Additional mutation: `if (manifest.toSchemaVersion !==
+  CORRELATION_BENCH_SCHEMA_VERSION) {` → `if (false &&
+  manifest.toSchemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {` (line
+  383), applied on top of the still-active `toSchemaVersion: 99` mutation.
+- Result: `bench-correlation.test.mts` → `218 pass / 2 fail`.
+- The two remaining failures are exactly `pins the migration to exactly one
+  hop` and `the runtime one-hop check is real code, not just a test-level
+  assertion` — both fail on the raw constant-value assertion (`99 !== 13`),
+  which is unrelated to the guard's presence and would fail regardless.
+- Critically, `round 15 — the v12→v13 schema bump is a pinned migration, not
+  a skipped check` (test 1 above) — which had failed on `false !== true` in
+  Step 1 — now **passes** in Step 2. With the guard's code disabled, the
+  validator's `ok` result flips back to `true` even though the manifest
+  still targets a stale schema (99 vs the compiled 13). This is the
+  false-positive accept: disabling the guard's *code*, not just having a
+  drifted value, is what causes the migration to be silently accepted. This
+  is the genuine revert-the-fix proof Codex asked for.
+- Restored checksum after reverting both mutations:
+  `081b535902de7c75eeb090b8c18083af17ccbdf32af6d227202cc1a50577a511`
+  (matches before checksum exactly). `git diff --stat` on the file showed no
+  diff.
+- Full suite after restoration: `bench-correlation.test.mts` →
+  `220 pass / 0 fail`.
+
+### Permanent test (not just a doc-recorded mutation experiment)
+
+Codex explicitly asked for "a test that asserts the one-hop refusal reason
+through the validator and fails when this guard is disabled." Because the
+manifest-identity guard at line 355 makes the `toSchemaVersion` branch
+unreachable via any caller-supplied manifest — the only way to exercise it
+through `validateCorrelationBenchV12ToV13Migration` is to mutate the pinned
+module constant itself, which cannot be part of a permanent, always-runnable
+unit test — the comparison was extracted into a new exported pure function,
+`oneHopSchemaVersionCheckReason(manifestToSchemaVersion, compiledSchemaVersion)`,
+and the validator now calls it instead of inlining the check. Two new
+permanent tests in `bench-correlation.test.mts` call this real function
+directly (not a re-implementation):
+
+- `oneHopSchemaVersionCheckReason refuses a manifest that no longer targets
+  the compiled schema` — asserts the exact refusal reason string for
+  `(99, CORRELATION_BENCH_SCHEMA_VERSION)`.
+- `oneHopSchemaVersionCheckReason accepts a manifest that targets the
+  compiled schema` — asserts `null` for matching versions.
+
+Because these tests call the exact function the validator invokes, deleting
+the guard's call-site, weakening its condition, or changing its return value
+fails these tests directly on every run — no manual mutation experiment
+required to catch a future regression. Full suite after this change:
+`222 pass / 0 fail`. `npm run typecheck:all` → 0 errors.
+
 ## Restoration
 
 Final checksums matched all pre-mutation values for every mutated file across
-round 14, round 15, round 16, and round 17, and `git status --short` after
-each restoration showed only the legitimate source diff for that round — no
-residual mutation.
+round 14, round 15, round 16, round 17, and round 18, and `git status --short`
+after each restoration showed only the legitimate source diff for that round
+— no residual mutation.

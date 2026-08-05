@@ -346,6 +346,28 @@ export function benchTolerancesDigest(tolerances: CorrelationBenchBaseline['tole
   return digestRecords(records);
 }
 
+/**
+ * Pure one-hop schema check, extracted so it is directly testable without
+ * routing through the manifest-identity guard (which makes the branch inside
+ * validateCorrelationBenchV12ToV13Migration unreachable via any caller-supplied
+ * manifest — the only way to exercise it there is to mutate the pinned constant
+ * itself). Returns the refusal reason string, or null when the manifest still
+ * targets the compiled schema.
+ */
+export function oneHopSchemaVersionCheckReason(
+  manifestToSchemaVersion: number,
+  compiledSchemaVersion: number,
+): string | null {
+  if (manifestToSchemaVersion !== compiledSchemaVersion) {
+    return (
+      `v12→v13 migration manifest targets schemaVersion ${String(manifestToSchemaVersion)}, but the ` +
+      `compiled gate is schemaVersion ${String(compiledSchemaVersion)} — this migration is ` +
+      'no longer the one-hop path to the live schema'
+    );
+  }
+  return null;
+}
+
 export function validateCorrelationBenchV12ToV13Migration(
   report: CorrelationBenchReport,
   previousV12: CorrelationBenchBaseline,
@@ -380,12 +402,9 @@ export function validateCorrelationBenchV12ToV13Migration(
       'tolerance here would grade leniently against a value nobody reviewed',
     );
   }
-  if (manifest.toSchemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {
-    reasons.push(
-      `v12→v13 migration manifest targets schemaVersion ${String(manifest.toSchemaVersion)}, but the ` +
-      `compiled gate is schemaVersion ${String(CORRELATION_BENCH_SCHEMA_VERSION)} — this migration is ` +
-      'no longer the one-hop path to the live schema',
-    );
+  const oneHopReason = oneHopSchemaVersionCheckReason(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
+  if (oneHopReason !== null) {
+    reasons.push(oneHopReason);
   }
   if (report.corpusDigest !== manifest.previousCorpusDigest) {
     reasons.push(

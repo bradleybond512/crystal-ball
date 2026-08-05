@@ -3531,19 +3531,18 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     // FUNCTION would ever act on a mismatch. Because the manifest-identity
     // guard refuses any manifest that isn't byte-identical to the pinned
     // constant, a caller-supplied stale manifest is already caught by that
-    // guard before reaching the toSchemaVersion check — so the toSchemaVersion
-    // check's only reachable failure mode is the pinned constant itself
-    // drifting from CORRELATION_BENCH_SCHEMA_VERSION (e.g. a v13→v14 bump
-    // that forgot to retire or rev this migration). A genuine mutation proof
-    // for that failure mode (mutating CORRELATION_BENCH_V12_TO_V13_MIGRATION.
-    // toSchemaVersion in the source, confirmed the real validator refuses
-    // with the expected reason text, then restored) is recorded in
-    // docs/validation/ACC-501-MUTATION-PROOFS.md — a prior version of this
-    // comment incorrectly claimed deleting the runtime check would leave
-    // this test green; that mutation was actually performed and disproved
-    // the claim, so the comment was corrected rather than left stale. This
-    // test itself asserts the module constant currently satisfies the
-    // invariant and that the real validator accepts the real inputs.
+    // guard before reaching the toSchemaVersion check — so exercising the
+    // toSchemaVersion check THROUGH validateCorrelationBenchV12ToV13Migration
+    // is only reachable by mutating the pinned constant itself (recorded as
+    // a genuine mutation proof, including the combined "guard code also
+    // disabled" proof Codex asked for in round 18, in
+    // docs/validation/ACC-501-MUTATION-PROOFS.md). To make the check's own
+    // logic — not just the module constant — permanently, directly testable
+    // without any source mutation, the comparison was extracted into
+    // oneHopSchemaVersionCheckReason(). The tests immediately below call
+    // that function directly: this is the real code path the validator
+    // calls, not a re-implementation, so deleting or breaking the guard's
+    // logic fails these tests without needing a manual mutation experiment.
     assert.equal(
       correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion,
       CORRELATION_BENCH_SCHEMA_VERSION,
@@ -3554,6 +3553,25 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
       manifest,
     );
     assert.equal(ok, true);
+  });
+
+  it('oneHopSchemaVersionCheckReason refuses a manifest that no longer targets the compiled schema', () => {
+    // This is the real function the validator calls (not a copy) — a future
+    // edit that weakens or deletes this check fails this test directly,
+    // without requiring a source-mutation experiment.
+    const reason = correlationBaseline.oneHopSchemaVersionCheckReason(99, CORRELATION_BENCH_SCHEMA_VERSION);
+    assert.equal(
+      reason,
+      'v12→v13 migration manifest targets schemaVersion 99, but the compiled gate is schemaVersion ' +
+      `${String(CORRELATION_BENCH_SCHEMA_VERSION)} — this migration is no longer the one-hop path to the live schema`,
+    );
+  });
+
+  it('oneHopSchemaVersionCheckReason accepts a manifest that targets the compiled schema', () => {
+    assert.equal(
+      correlationBaseline.oneHopSchemaVersionCheckReason(CORRELATION_BENCH_SCHEMA_VERSION, CORRELATION_BENCH_SCHEMA_VERSION),
+      null,
+    );
   });
 
   it('refuses a previous baseline whose tolerances are not the reviewed ones — the shared-gate forgery Codex found', () => {

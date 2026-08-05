@@ -652,8 +652,8 @@ Checksum before mutation: `4eb7e5a3c4f7d18f35cccca85980db7857e685328c8311367586d
 (the four lines pushing `oneHopReason` into `reasons`), leaving everything
 else, including `manifestToSchemaVersion`'s extraction, intact.
 
-**Result**: `223 pass / 1 fail`. The new validator-level test failed exactly
-as expected:
+**Result**: `223 tests / 222 pass / 1 fail`. The new validator-level test
+failed exactly as expected:
 
 ```
 ✖ refuses a caller-supplied manifest whose toSchemaVersion alone drifts from

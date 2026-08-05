@@ -347,11 +347,12 @@ export function benchTolerancesDigest(tolerances: CorrelationBenchBaseline['tole
 }
 
 /**
- * Pure one-hop schema check, extracted so it is directly testable without
- * routing through the manifest-identity guard (which makes the branch inside
- * validateCorrelationBenchV12ToV13Migration unreachable via any caller-supplied
- * manifest — the only way to exercise it there is to mutate the pinned constant
- * itself). Returns the refusal reason string, or null when the manifest still
+ * Pure one-hop schema check, extracted so it is directly testable in
+ * isolation from the rest of validateCorrelationBenchV12ToV13Migration.
+ * The validator's manifest-identity guard excludes toSchemaVersion from its
+ * blanket comparison specifically so a caller-supplied manifest differing
+ * only in this field reaches this check instead of being swallowed there.
+ * Returns the refusal reason string, or null when the manifest still
  * targets the compiled schema.
  */
 export function oneHopSchemaVersionCheckReason(

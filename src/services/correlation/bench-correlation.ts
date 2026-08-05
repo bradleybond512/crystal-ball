@@ -33,7 +33,13 @@ import {
   CorrelateEngine, type CorrelatedPair, type CorrelationRule, type EdgeType,
 } from '../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../intelligence/built-in-correlation-rules';
-import { mineLeadLag, significantEdges, type LeadLagEdge } from './lead-lag';
+import { pairToEdge } from '../intelligence/situation-store-v2';
+import {
+  mineLeadLag,
+  type InhibitoryLeadLagEdge,
+  type LeadLagEdge,
+  type MultipleTestingFamily,
+} from './lead-lag';
 import {
   learnedRulesFromEdges,
   learnedRuleId,
@@ -43,7 +49,9 @@ import {
 import {
   allGoldenObservations,
   decoyEventIds,
+  digestRecords,
   goldenCorpusDigest,
+  goldenStreamDigests,
   pairKeyFor,
   plantedCouplingIndex,
   plantedTruePairKeys,
@@ -53,7 +61,7 @@ import {
   PLANTED_COUPLINGS,
   type PlantedCouplingKind,
 } from './__bench__/golden-streams';
-import { probeBuiltInRules, type BenchRuleProbe } from './__bench__/rule-probes';
+import { probeBuiltInRules, RESYNC_FIXTURE_RULES, type BenchRuleProbe } from './__bench__/rule-probes';
 
 export type { BenchRuleProbe } from './__bench__/rule-probes';
 
@@ -81,6 +89,22 @@ export interface BenchEdgeRow {
   becameLearnedRule: boolean;
 }
 
+export interface BenchInhibitoryEdgeRow {
+  id: `inhibits:${string}->${string}`;
+  from: string;
+  to: string;
+  windowMs: number;
+  antecedents: number;
+  support: number;
+  followRate: number;
+  expectedRate: number;
+  lift: number;
+  zScore: number;
+  strength: number;
+  verdict: 'inhibitory' | 'false-positive';
+  explanation: string;
+}
+
 /**
  * One RAW emission of a pair, with the semantics the engine attached to it.
  *
@@ -106,6 +130,36 @@ export interface BenchPairEmission {
   fromId: string;
   toId: string;
   confidence: number;
+  /**
+   * `detectedAt` as epoch ms — the pair's own recency, which downstream filters
+   * on.
+   *
+   * Constant here by construction (the benchmark injects a fixed `now`), and
+   * pinned anyway: replacing `correlate-engine.ts:136`'s `detectedAt: now` with
+   * `new Date(0)` left every count, every rate and the report digest identical,
+   * while live pairs would have been discarded as ancient the moment they were
+   * emitted.
+   */
+  detectedAtMs: number;
+  /**
+   * Digest over the confidence FACTORS, not just the scalar they collapse to.
+   *
+   * `confidence` is one number six factors multiply into, so dropping
+   * `confidenceDetail` entirely preserved it — and with it every mean, every
+   * separation and the digest — while the analyst-facing explanation and the
+   * factor chips silently became undefined. `null` when the emission carries no
+   * detail at all, which is itself the regression, visible as a moved digest.
+   */
+  confidenceDetailDigest: string | null;
+  /**
+   * The evidence-graph edge type SituationStoreV2 projects this pair to, via the
+   * real `pairToEdge()`. `edgeType` above is the engine's raw claim; this is
+   * what the analyst is actually told.
+   */
+  evidenceEdgeType: string;
+  /** Projected endpoints — direction survives the translation, or it does not. */
+  evidenceFromId: string;
+  evidenceToId: string;
 }
 
 /**
@@ -166,6 +220,7 @@ export interface BenchLearnedPairRow {
 
 export interface CorrelationBenchReport {
   // ── corpus identity (exact-equality drift detection) ──
+  replayMode: 'offline-whole-corpus';
   streamCount: number;
   observationCount: number;
   plantedCausalCount: number;
@@ -177,6 +232,7 @@ export interface CorrelationBenchReport {
    * corpus easier and reports the resulting numbers as an improvement.
    */
   corpusDigest: string;
+  streamDigests: Record<string, string>;
   /**
    * Every built-in rule id registered for the graded pass, sorted.
    *
@@ -200,6 +256,18 @@ export interface CorrelationBenchReport {
    */
   ruleProbes: BenchRuleProbe[];
   /**
+   * The learned-rule SYNC lifecycle, exercised on a live engine.
+   *
+   * Every other learned-rule number here comes from `runEngine()`, which builds
+   * a fresh engine every time — so it can only ever observe an install, never a
+   * removal. Deleting `engine.unregisterRule(existing.id)` from
+   * `syncLearnedRules()` left a retired coupling permanently installed and still
+   * matching live events, while the function REPORTED it removed and the whole
+   * benchmark passed unchanged. This probe re-syncs one engine with a smaller
+   * set and records what is actually installed afterwards.
+   */
+  learnedRuleResync: BenchResyncProbe;
+  /**
    * Built-in rules that emitted at least one pair over the corpus, sorted.
    *
    * Pinned by exact set equality: a rule that fires today and stops firing
@@ -207,6 +275,8 @@ export interface CorrelationBenchReport {
    * this set.
    */
   ruleCoverage: string[];
+
+  multipleTestingFamily: MultipleTestingFamily;
 
   // ── miner: discovery quality ──
   minedEdgeCount: number;
@@ -261,6 +331,14 @@ export interface CorrelationBenchReport {
    * transitive edge shows up here immediately.
    */
   edgeEvidenceSeparation: number | null;
+  /** Fixed candidate-population z separation; the correction cannot improve it by thinning. */
+  fixedCandidateEvidenceSeparation: number;
+
+  plantedInhibitoryCount: number;
+  inhibitoryTruePositiveCount: number;
+  inhibitoryFalsePositiveCount: number;
+  inhibitoryPrecision: number | null;
+  inhibitoryRecall: number;
 
   // ── learned rules ──
   learnedRuleCount: number;
@@ -339,6 +417,7 @@ export interface CorrelationBenchReport {
 
   // ── row-level ledgers: the gate re-derives the summaries above from these ──
   edges: BenchEdgeRow[];
+  inhibitoryEdges: BenchInhibitoryEdgeRow[];
   pairs: BenchPairRow[];
   learnedPairs: BenchLearnedPairRow[];
 }
@@ -350,10 +429,14 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   const plantedIndex = plantedCouplingIndex();
 
   // ── Miner ──────────────────────────────────────────────────────────────
-  // Same call shape as cascade-registration.computeSignificantEdges().
+  // The frozen corpus has complete coverage through its declared end. Passing
+  // that boundary keeps inhibitory absence right-censored and deterministic.
   const domainEvents = observations.map((o) => ({ domain: o.domain, at: o.timestamp }));
-  const mined = mineLeadLag(domainEvents);
-  const significant = significantEdges(mined);
+  const mining = mineLeadLag(domainEvents, {
+    observationEndMs: CORPUS_T0 + CORPUS_SPAN_DAYS * DAY_MS,
+  });
+  if (mining.family === null) throw new Error('correlation benchmark mining family is invalid');
+  const significant = mining.promoting;
 
   const learnedRules = learnedRulesFromEdges(significant);
   const learnedIds = new Set(learnedRules.map((r) => r.id));
@@ -407,6 +490,23 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     ? mean(falseEdges.map((e) => cappedZ(e.zScore)))
     : null;
 
+  const causalCandidates = mining.candidates.filter(
+    (edge) => verdictFor(edge, plantedIndex) === 'causal',
+  );
+  const falseCandidates = mining.candidates.filter(
+    (edge) => verdictFor(edge, plantedIndex) !== 'causal',
+  );
+  const fixedCandidateEvidenceSeparation = mean(
+    causalCandidates.map((edge) => cappedZ(edge.zScore)),
+  ) - mean(falseCandidates.map((edge) => cappedZ(edge.zScore)));
+
+  const plantedInhibitoryCount = PLANTED_COUPLINGS.filter((c) => c.kind === 'inhibitory').length;
+  const inhibitoryEdges = mining.inhibitory.map((edge) => inhibitoryRow(edge, plantedIndex));
+  const inhibitoryTruePositiveCount = inhibitoryEdges.filter(
+    (edge) => edge.verdict === 'inhibitory',
+  ).length;
+  const inhibitoryFalsePositiveCount = inhibitoryEdges.length - inhibitoryTruePositiveCount;
+
   // ── Engine pass A: built-ins only ─────────────────────────────────────
   const graded = gradeEnginePairs(runEngine(observations), truePairs, decoys);
   const { emittedTrueKeys, decoyPairsEmitted } = graded;
@@ -450,18 +550,22 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
   );
 
   return {
+    replayMode: 'offline-whole-corpus',
     streamCount: GOLDEN_STREAMS.length,
     observationCount: observations.length,
     plantedCausalCount: plantedCausal.length,
     corpusDigest: goldenCorpusDigest(),
+    streamDigests: goldenStreamDigests(),
     builtInRuleIds: builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b)),
     ruleProbes: probeBuiltInRules(),
+    learnedRuleResync: probeLearnedRuleResync(RESYNC_FIXTURE_RULES),
     ruleCoverage: builtInCorrelationRules
       .map((r) => r.id)
       .filter((id) => emittingRules.has(id))
       .sort((a, b) => a.localeCompare(b)),
+    multipleTestingFamily: mining.family,
 
-    minedEdgeCount: mined.length,
+    minedEdgeCount: mining.candidates.length,
     significantEdgeCount: significant.length,
     couplingPrecision: ratio(counts.causal, significant.length),
     couplingRecall: ratio(counts.causal, plantedCausal.length),
@@ -483,6 +587,15 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     meanFalseEdgeZ: meanFalseZ === null ? null : round4(meanFalseZ),
     edgeEvidenceSeparation:
       meanFalseZ === null ? null : round4(meanCausalZ - meanFalseZ),
+    fixedCandidateEvidenceSeparation: round4(fixedCandidateEvidenceSeparation),
+
+    plantedInhibitoryCount,
+    inhibitoryTruePositiveCount,
+    inhibitoryFalsePositiveCount,
+    inhibitoryPrecision: inhibitoryEdges.length === 0
+      ? null
+      : ratio(inhibitoryTruePositiveCount, inhibitoryEdges.length),
+    inhibitoryRecall: ratio(inhibitoryTruePositiveCount, plantedInhibitoryCount),
 
     learnedRuleCount: learnedRules.length,
     learnedRuleFalsePositives,
@@ -509,8 +622,31 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     causalLearnedRuleIds: [...causalLearnedRuleIds].sort((a, b) => a.localeCompare(b)),
 
     edges,
+    inhibitoryEdges,
     pairs: graded.pairs,
     learnedPairs,
+  };
+}
+
+function inhibitoryRow(
+  edge: InhibitoryLeadLagEdge,
+  plantedIndex: ReadonlyMap<string, { kind: PlantedCouplingKind }>,
+): BenchInhibitoryEdgeRow {
+  const planted = plantedIndex.get(`${edge.from}->${edge.to}`);
+  return {
+    id: `inhibits:${edge.from}->${edge.to}`,
+    from: edge.from,
+    to: edge.to,
+    windowMs: edge.windowMs,
+    antecedents: edge.antecedents,
+    support: edge.support,
+    followRate: edge.followRate,
+    expectedRate: edge.expectedRate,
+    lift: edge.lift,
+    zScore: edge.zScore,
+    strength: edge.strength,
+    verdict: planted?.kind === 'inhibitory' ? 'inhibitory' : 'false-positive',
+    explanation: edge.explanation,
   };
 }
 
@@ -522,7 +658,55 @@ function emissionOf(pair: CorrelatedPair): BenchPairEmission {
     fromId: pair.eventA.id,
     toId: pair.eventB.id,
     confidence: pair.confidence,
+    detectedAtMs: pair.detectedAt.getTime(),
+    confidenceDetailDigest: confidenceDetailDigest(pair),
+    ...projectedEdge(pair),
   };
+}
+
+/**
+ * The pair as SituationStoreV2 actually projects it — the shape the evidence
+ * graph and the analyst see.
+ *
+ * Everything else in this ledger describes the engine's own output, one
+ * translation short of production. `EDGE_TYPE_MAP` is that translation, and
+ * inverting a row of it ('causal-candidate' → contradicts) emitted real
+ * situation edges claiming the opposite relationship while the benchmark, digest
+ * included, read unchanged. So the benchmark calls the real projection rather
+ * than restating the mapping it is supposed to be checking.
+ */
+function projectedEdge(pair: CorrelatedPair): {
+  evidenceEdgeType: string;
+  evidenceFromId: string;
+  evidenceToId: string;
+} {
+  const edge = pairToEdge(pair);
+  return {
+    evidenceEdgeType: edge.type,
+    evidenceFromId: edge.sourceEventId,
+    evidenceToId: edge.targetEventId,
+  };
+}
+
+/**
+ * The factor breakdown behind `confidence`, as a digest.
+ *
+ * Factor VALUES rather than the explanation string alone: the explanation is
+ * rendered prose and would move on any wording change, while the six factors
+ * are the claim. Sorted by key so the record does not depend on how
+ * `computeEdgeConfidence` happens to build the object.
+ */
+function confidenceDetailDigest(pair: CorrelatedPair): string | null {
+  const detail = pair.confidenceDetail;
+  if (detail === undefined) return null;
+  const factors = detail.factors as unknown as Record<string, number>;
+  return digestRecords([
+    `value:${detail.value}`,
+    `explained:${detail.explanation.length > 0}`,
+    ...Object.keys(factors)
+      .sort((a, b) => a.localeCompare(b))
+      .map((k) => `${k}:${factors[k]}`),
+  ]);
 }
 
 /**
@@ -560,6 +744,62 @@ function ledgerLearnedPairs(pairs: readonly CorrelatedPair[]): BenchLearnedPairR
  * must not leak into the built-ins-only measurement, so pass A and pass B never
  * share an instance. `timer: () => 0` removes the only clock read in the engine.
  */
+/**
+ * What `syncLearnedRules()` leaves installed across a retirement.
+ *
+ * `getRules()` after the fact, not the {added, removed} the function returns:
+ * those counters are the CLAIM, and the defect this catches is precisely a
+ * claim that no longer matches the engine.
+ */
+export interface BenchResyncProbe {
+  /** learned:* ids installed after syncing the full mined set, sorted. */
+  installed: readonly string[];
+  /** The id deliberately retired on the second sync. */
+  retiredId: string;
+  /** learned:* ids installed after the retirement, sorted — must exclude `retiredId`. */
+  afterRetirement: readonly string[];
+  /** The second sync's own report of what it did. */
+  reportedAdded: number;
+  reportedRemoved: number;
+  /** Built-in ids present and unchanged after both syncs — sync must not touch them. */
+  builtInsIntact: boolean;
+}
+
+function probeLearnedRuleResync(learned: readonly CorrelationRule[]): BenchResyncProbe {
+  const engine = new CorrelateEngine({ timer: () => 0 });
+  for (const rule of builtInCorrelationRules) engine.registerRule(rule);
+  const builtInIds = builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b));
+
+  const learnedIdsOf = (): string[] => engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  syncLearnedRules(engine, learned);
+  const installed = learnedIdsOf();
+
+  // Retire the LAST rule by id order rather than the first: a first-element
+  // retirement is the one case a truncating loop bug would also produce.
+  const retiredId = installed[installed.length - 1] ?? '';
+  const kept = learned.filter((r) => r.id !== retiredId);
+  const { added, removed } = syncLearnedRules(engine, kept);
+
+  const nowBuiltIn = engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => !id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    installed,
+    retiredId,
+    afterRetirement: learnedIdsOf(),
+    reportedAdded: added,
+    reportedRemoved: removed,
+    builtInsIntact: nowBuiltIn.length === builtInIds.length
+      && nowBuiltIn.every((id, i) => id === builtInIds[i]),
+  };
+}
+
 function runEngine(
   observations: readonly ObservationEvent[],
   learned: readonly CorrelationRule[] = [],

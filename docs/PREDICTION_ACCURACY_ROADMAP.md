@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-07-27
+> Updated: 2026-08-04
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -888,19 +888,22 @@ These tasks retain their detailed designs in
 | ID | Status | Work | Dependencies |
 |---|---|---|---|
 | ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
-| ACC-502 | TODO | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
+| ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
 | ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
 | ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
+| ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 
-Safety invariant: learned inhibitory or dampening evidence may soften
-confidence but must never suppress a safety-critical delivery rung.
+Safety invariant: learned inhibitory evidence remains shadow-only and cannot
+change operational scores, confidence, posture, alerts, or delivery rungs.
 
 Phase exit:
 
 - correlation changes improve or preserve frozen precision/recall;
 - false learned edges fall on confounded and bursty streams;
+- live ingestion supplies bounded cross-event batches and diagnostics witness
+  learned-rule pair production;
 - tuning cannot bypass the benchmark or safety fixtures.
 
 ### ACC-501 — Frozen correlation benchmark and `bench:correlation` CI gate
@@ -1465,6 +1468,46 @@ shell truncated the previous evidence before the process could read it.
 - Focused red/green and strict mutation evidence is recorded in
   `docs/validation/ACC-501-MUTATION-PROOFS.md`.
 
+Round 15 (`schemaVersion: 13`) attacked the round-13 gate itself — a separate
+audit from the round-14 reseed work above, landed after it. Every case below was
+reproduced as a live `{ok: true, reasons: []}` against the shipped gate. No
+graded number moved in the re-seed: round 15 adds observations, it does not
+change engine behaviour.
+
+- **The probes reported without being asked.** Deleting all 73 near-miss engine
+  executions and hardcoding `rejected: true` left every digest in the report
+  byte-identical, because the honest answer to those questions was also `true`.
+  Truthful output is not evidence that a question was asked. The gate now runs
+  the fixtures itself (`__bench__/rule-probe-verify.ts`, a deliberate second
+  implementation) and refuses any verdict its own execution does not reproduce.
+- **Near-misses were not boundary-adjacent, and disjunctions had no per-branch
+  positive.** A near-miss at 400 km against a 150 km radius cannot see the
+  radius widen to 200 km; a positive satisfying BOTH branches of an OR cannot
+  see one branch die. Clauses went 59 → 73 with boundary-adjacent cases
+  (155 km, 24 h 1 min), and every disjunctive branch now has its own isolated
+  positive.
+- **Every fixture was antecedent-first.** `correlate-engine.ts:177` retries
+  `(b, a)` when `(a, b)` misses; deleting that branch changed nothing in the
+  benchmark. Each positive is now also fed back-to-front and `reversedMatched`
+  is pinned.
+- **The evidence projection was unobserved.** Inverting `EDGE_TYPE_MAP` in
+  `situation-store-v2.ts` made every situation edge assert the opposite
+  relationship while every benchmark number held. Emissions now carry the real
+  `pairToEdge()` output, checked against a restated table the gate owns — the
+  second opinion, not an import of the map under test.
+- **Learned-rule RETIREMENT was never exercised.** `runEngine()` builds a fresh
+  engine per pass, so every learned-rule number described an install. Removing
+  `engine.unregisterRule()` from `syncLearnedRules()` moved nothing here while a
+  retired coupling stayed registered and kept matching live events — and the
+  function still reported it removed. A live resync probe now reads the engine's
+  inventory after a retirement instead of trusting the returned counters.
+- **`detectedAt` and the confidence BREAKDOWN left no trace.** `new Date(0)` on
+  every pair moved no count and no digest, though live pairs would have been
+  discarded as ancient; and the scalar confidence hid which factor produced it.
+  Both are in the emission ledger now.
+- **`--seed` could not gate itself.** Found independently in this audit; already
+  closed by the round-14 reseed guard above, so round 15 changed nothing here.
+
 Seed measurements (uncorrected miner, 2026-07-30):
 
 | Metric | Value |
@@ -1498,6 +1541,91 @@ Findings the benchmark surfaced, each now a concrete target:
   as reported-only evidence of the defect.
 - The engine's built-in rules are already perfect on event-level truth,
   so **all** the available headroom in Phase 5 is in the miner.
+
+### ACC-502 — Multiple-comparison correction and inhibitory edges
+
+Status: `DONE`
+
+Owner: Codex
+Branch: `codex/acc-502-multiple-testing-inhibition`
+PR: #1624
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+The shadow-only operational boundary was explicitly approved on 2026-08-04
+after independent review showed that dampening an observed A+B compound would
+reverse the semantics of “A suppresses future B.”
+
+- the lead-lag miner now reports the complete pre-filter hypothesis family and
+  applies a two-tailed Gaussian union-bound threshold across every eligible
+  ordered domain pair and configured lag window;
+- zero-support candidates remain in the family denominator, while promoting
+  and inhibitory results use separate discriminated types and fail closed on
+  invalid configuration;
+- inhibitory evidence requires at least five antecedents, a 20% expected event
+  rate, lift at or below 0.5, and a negative z-score beyond both the fixed and
+  family-adjusted thresholds;
+- inhibitory absence is right-censored against an explicit observation end:
+  incomplete follow windows remain pending, post-boundary events are excluded,
+  and silent covered time contributes to the inhibitory base rate without
+  changing promoting-edge statistics. Calls without a coverage boundary fail
+  closed for inhibition;
+- only promoting edges can become learned correlation rules; inhibitory
+  evidence is bounded, expiring, fail-safe-on, and evaluated in shadow with
+  direction- and window-aware confirmed/refuted/pending counts. It has no path
+  into operational scores, confidence, posture, alerts, or delivery;
+- successful refreshes that admit no inhibition now clear both the active
+  snapshot and its diagnostics atomically; disabled and error paths retain
+  distinct statuses, and invalid publication times fail closed;
+- identifier-free liveness diagnostics distinguish offline replay from live
+  ingestion and flag three consecutive singleton live batches when learned
+  rules are installed but cannot produce event pairs;
+- the frozen benchmark migrated once from schema 11 to 12, pinning the prior
+  corpus/report/stream digests and permitting only the reviewed inhibitory
+  fixture change.
+
+Verification evidence:
+
+- `npm run test:correlation`: 384 pass / 0 fail;
+- `npm run test:intelligence`: 587 pass / 0 fail;
+- `npm run test:algorithms`: 307 pass / 0 fail;
+- `npm run test:diagnostics`: 384 renderer pass / 0 fail plus 27 MCP/sidecar
+  diagnostics pass / 0 fail;
+- restored ACC-502 mutation selection: 33 pass / 0 fail after 29 independently
+  applied and checksum-restored mutations;
+- `npm run typecheck:all`: pass;
+- `npm run bench:correlation`: PASS over 10 streams / 469 observations, with
+  5/5 causal promoting couplings recovered, 1/1 inhibitory coupling recovered,
+  0 inhibitory false positives, 12 promoting false positives, and no decoy
+  event-pair emissions. The family contained 272 ordered pairs x 4 windows =
+  1,088 hypotheses and used `zcrit = 4.6218991511`; the right-censored S9
+  inhibitor retained 28 mature trials with expected rate 0.503415 and
+  `z = -5.327765`.
+
+Known limitation and rollback:
+
+- production currently calls `SituationStoreV2.ingest()` with singleton event
+  batches. ACC-502 diagnoses this fail-closed instead of adding unbounded
+  history or work to the hot path; ACC-507 owns the bounded ingestion repair;
+- rollback is removal of inhibition snapshot publication/shadow diagnostics and
+  restoration of the schema-11 benchmark, without changing operational scores
+  or built-in safety-notification rules.
+
+### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
+
+Status: `TODO`
+
+Dependencies: ACC-502 (DONE)
+
+Production `SituationStoreV2.ingest()` is invoked with one event at a time, so
+the correlation engine cannot form learned-rule pairs even when rules are
+installed. Introduce a bounded, time-windowed event handoff that preserves
+startup and ingest latency, deduplicates events, expires history, and never
+allows learned correlation to delay safety-critical ingestion. Prove the live
+path with a deterministic multi-call fixture and require liveness diagnostics
+to recover from degraded to healthy after a learned pair is emitted.
 
 ## Phase 6 — Evaluate better statistical models
 

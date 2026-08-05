@@ -3546,6 +3546,14 @@ export function buildSpaceweatherStatusSidecar(input) {
     gpsDisruption: classifyGpsDisruptionSidecar(peakClass),
     hfRadioBlackout: !!xray && xray.peakFlux >= 1e-4,
     earthwardCmes,
+    // Repointing the dead URL fixed the 404 but not the failure MODE: any
+    // non-200 or throw still becomes null here, and an empty CME list renders
+    // as a confident "no Earthward CMEs" — an outage that looks like good news.
+    // The renderer needs to tell "the feed says none" apart from "the feed
+    // never answered", so say which one this is. Only an explicit true counts
+    // as healthy: defaulting an absent flag to true reinstates exactly the
+    // fail-open this field exists to close.
+    cmeFeedOk: input.cmeFeedOk === true,
     asOf: new Date(now).toISOString(),
   };
 }
@@ -3666,6 +3674,60 @@ function normalizeAlertRaw(raw) {
   return out;
 }
 
+// A CME takes one to four days to cross to Earth, and filterEarthwardCmesSidecar
+// still shows one for 12h after its predicted arrival — so the window has to
+// reach back far enough to cover the slowest event still in transit. Seven days
+// is comfortably past that; DONKI's endDate is inclusive by DATE, so the +1 day
+// keeps today's events from falling off the end for a host running behind UTC.
+export const SPACEWX_CME_LOOKBACK_DAYS = 7;
+
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * The CME list used to come from services.swpc.noaa.gov/json/donki/cme.json,
+ * which now 404s — and since fetchJsonSidecar swallows that into null, the
+ * Earthward CMEs section rendered as a confident "none" rather than as an
+ * error, for every user, indefinitely. CCMC runs the DONKI web service that
+ * feeds api.nasa.gov, in the same JSON shape, without needing a NASA key.
+ */
+export function buildDonkiCmeUrlSidecar(now) {
+  const start = isoDay(now - SPACEWX_CME_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const end = isoDay(now + 24 * 60 * 60 * 1000);
+  return `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${start}&endDate=${end}`;
+}
+
+/**
+ * A 200 carrying a well-formed array is not the same as a 200 carrying CMEs we
+ * can read. If DONKI renames its fields, every row falls out of
+ * filterEarthwardCmesSidecar and the section renders as "nothing Earthward" —
+ * the outage wearing the all-clear's clothes again, one level deeper.
+ *
+ * An EMPTY array stays healthy on purpose: a week with no CMEs is ordinary, and
+ * treating it as drift would cry wolf most of the time. It is a non-empty
+ * response in which no row carries the fields the filter reads that means the
+ * shape moved.
+ *
+ * The bar is "at least one row the filter could actually act on", checked all
+ * the way down to `longitude` — the field that decides Earthward. Partial drift
+ * is the likely kind and it hides at every level: `activityID` can survive a
+ * rename of `cmeAnalyses`, and `cmeAnalyses` can survive a rename of
+ * `longitude`. Stopping at either outer level leaves the same empty-and-healthy
+ * result one layer down.
+ *
+ * A window of exclusively UNANALYZED CMEs (`cmeAnalyses: []`) therefore reads
+ * as unhealthy, and that is the honest answer rather than a false alarm: we
+ * genuinely cannot determine Earthward status from it. It is rare over seven
+ * days, and "unknown" is the correct direction to fail.
+ */
+export function donkiCmeFeedHealthySidecar(raw) {
+  if (!Array.isArray(raw)) return false;
+  if (raw.length === 0) return true;
+  return raw.some((row) => row
+    && typeof row.activityID === 'string'
+    && Array.isArray(row.cmeAnalyses)
+    && row.cmeAnalyses.some((a) => a && typeof a.longitude === 'number'));
+}
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   if (spacewxStatusCache && now - spacewxStatusCachedAt < SPACEWX_CACHE_TTL_MS) {
@@ -3674,7 +3736,7 @@ export async function fetchSpaceweatherStatusSidecar() {
   const [xrayRaw, kpRaw, cmeRaw] = await Promise.all([
     fetchJsonSidecar('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
     fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-    fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
+    fetchJsonSidecar(buildDonkiCmeUrlSidecar(now)),
   ]);
   const xrayFlux = normalizeXrayPoints(xrayRaw);
   const kpIndex = normalizeKpPoints(kpRaw);
@@ -3682,6 +3744,7 @@ export async function fetchSpaceweatherStatusSidecar() {
     xrayFlux,
     kpIndex,
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
+    cmeFeedOk: donkiCmeFeedHealthySidecar(cmeRaw),
     now,
   });
   // Cache on what the ADAPTERS produced, not on the raw bodies being non-null.

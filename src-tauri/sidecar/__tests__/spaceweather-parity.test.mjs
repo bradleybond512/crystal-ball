@@ -18,6 +18,9 @@ import {
   summarizeAlertsSidecar,
   filterEarthwardCmesSidecar,
   buildSpaceweatherStatusSidecar,
+  buildDonkiCmeUrlSidecar,
+  donkiCmeFeedHealthySidecar,
+  SPACEWX_CME_LOOKBACK_DAYS,
 } from '../local-api-server.mjs';
 
 const NOW = Date.parse('2026-05-06T12:00:00Z');
@@ -185,6 +188,94 @@ test('filterEarthwardCmesSidecar keeps |lon| ≤ 30°, drops stale arrivals', ()
   const out = filterEarthwardCmesSidecar(cmes, NOW);
   assert.equal(out.length, 1);
   assert.equal(out[0].id, 'cme-eward');
+});
+
+test('buildDonkiCmeUrlSidecar targets the live DONKI web service, not the dead SWPC mirror', () => {
+  // services.swpc.noaa.gov/json/donki/cme.json is a hard 404. fetchJsonSidecar
+  // turns that into null, and a null CME list renders as a confident "no
+  // Earthward CMEs" — an outage that looks exactly like good news.
+  const url = buildDonkiCmeUrlSidecar(NOW);
+  assert.ok(!url.includes('services.swpc.noaa.gov'), 'the SWPC mirror no longer exists');
+  assert.ok(url.startsWith('https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?'));
+  // Keyless by design: the api.nasa.gov mirror of this same service would put
+  // the CME list behind DEMO_KEY's shared 30-req/hour IP quota.
+  assert.ok(!/api_key/.test(url), 'must not require a NASA key');
+});
+
+test('buildDonkiCmeUrlSidecar spans slow CMEs still in transit', () => {
+  // A slow CME takes ~4 days to arrive and stays listed for 12h after that, so
+  // a window shorter than the transit time would drop the event mid-flight —
+  // precisely while it is the one worth showing.
+  const url = buildDonkiCmeUrlSidecar(NOW);
+  const start = new URL(url).searchParams.get('startDate');
+  const end = new URL(url).searchParams.get('endDate');
+  assert.equal(start, '2026-04-29');
+  assert.ok(SPACEWX_CME_LOOKBACK_DAYS >= 5, 'must outlast the slowest transit');
+  // endDate is inclusive by date; reaching a day past "now" keeps today's
+  // events from falling off the end on a host running behind UTC.
+  assert.equal(end, '2026-05-07');
+  assert.ok(Date.parse(end) > NOW);
+});
+
+test('buildSpaceweatherStatusSidecar distinguishes "no CMEs" from "no CME feed"', () => {
+  // Repointing the dead URL fixed the 404 but not the failure MODE:
+  // fetchJsonSidecar turns any non-200 or throw into null, and an empty CME
+  // list renders as a confident "no Earthward CMEs". Both cases carry
+  // earthwardCmes: [] — only this flag tells them apart.
+  const base = { xrayFlux: [], kpIndex: [], now: NOW };
+  assert.equal(buildSpaceweatherStatusSidecar({ ...base, cmes: [], cmeFeedOk: true }).cmeFeedOk, true);
+  const down = buildSpaceweatherStatusSidecar({ ...base, cmes: [], cmeFeedOk: false });
+  assert.equal(down.cmeFeedOk, false);
+  assert.deepEqual(down.earthwardCmes, [], 'still empty — the flag is the only signal');
+  // An omitted flag is NOT healthy. Defaulting it to true is the same fail-open
+  // one level up: a caller that forgets to pass it gets the reassuring answer.
+  assert.equal(buildSpaceweatherStatusSidecar({ ...base, cmes: [] }).cmeFeedOk, false);
+});
+
+test('donkiCmeFeedHealthySidecar keeps an empty week healthy but catches schema drift', () => {
+  // The distinction that matters: a 200 with a well-formed array is not the
+  // same as a 200 we can read. If DONKI renames its fields, every row falls out
+  // of the filter and the section renders as "nothing Earthward" — the outage
+  // wearing the all-clear's clothes one level deeper than the 404 did.
+  const good = { activityID: '2026-08-01T00:00:00-CME-001', cmeAnalyses: [{ longitude: 5 }] };
+  assert.equal(donkiCmeFeedHealthySidecar([]), true, 'a quiet week is not drift');
+  assert.equal(donkiCmeFeedHealthySidecar([good]), true);
+  // A window of exclusively UNANALYZED CMEs reads as unhealthy, and that is
+  // the honest answer rather than a false alarm: with no analysis there is no
+  // longitude, so Earthward status is genuinely undeterminable from it. Rare
+  // over seven days, and "unknown" is the correct direction to fail.
+  assert.equal(
+    donkiCmeFeedHealthySidecar([{ activityID: 'unanalyzed', cmeAnalyses: [] }]),
+    false,
+  );
+  // Drift hides at every level, so the check goes all the way down to the field
+  // the filter actually reads. An analyses array full of objects that have lost
+  // `longitude` produces exactly the same empty-and-healthy result as a rename
+  // one level up would have.
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a', cmeAnalyses: [{}] }]), false);
+  assert.equal(
+    donkiCmeFeedHealthySidecar([{ activityID: 'a', cmeAnalyses: [{ lon: 5 }] }]),
+    false,
+    'a renamed longitude is drift, not a quiet sun',
+  );
+  // Container is right, contents are unrecognizable.
+  assert.equal(donkiCmeFeedHealthySidecar([{ id: 'renamed' }, { id: 'also-renamed' }]), false);
+  assert.equal(donkiCmeFeedHealthySidecar([null, 42, 'nope']), false);
+  // PARTIAL drift is the likely kind, and the one that hides best: the identity
+  // field survives while the field the filter reads is renamed away, so every
+  // row silently falls out and the section renders as "nothing Earthward".
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { activityID: 'b' }]), false);
+  assert.equal(donkiCmeFeedHealthySidecar([{ activityID: 'a', analyses: [{}] }]), false);
+  // Every field must be on the SAME row — one each across two rows is drift.
+  assert.equal(
+    donkiCmeFeedHealthySidecar([{ activityID: 'a' }, { cmeAnalyses: [{ longitude: 1 }] }]),
+    false,
+  );
+  // One good row is enough — DONKI legitimately mixes in sparse records.
+  assert.equal(donkiCmeFeedHealthySidecar([{ id: 'x' }, good]), true);
+  // Not an array at all is the fetch having failed.
+  assert.equal(donkiCmeFeedHealthySidecar(null), false);
+  assert.equal(donkiCmeFeedHealthySidecar({ result: [] }), false);
 });
 
 test('buildSpaceweatherStatusSidecar mirrors TS top-level shape', () => {

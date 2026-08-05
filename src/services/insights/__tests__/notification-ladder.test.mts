@@ -7,6 +7,13 @@ import {
 } from '../notification-ladder.ts';
 import type { BigEventInput, BigEventResult } from '../big-event-detector.ts';
 import { createNotificationTraceRegistry } from '../../diagnostics/notification-trace.ts';
+import {
+  INHIBITION_TTL_MS,
+  clearInhibitorySnapshot,
+  getInhibitorySnapshot,
+  replaceInhibitorySnapshot,
+} from '../../correlation/inhibition.ts';
+import type { InhibitoryLeadLagEdge } from '../../correlation/lead-lag.ts';
 
 const NOW = 1_745_000_000_000;
 
@@ -191,4 +198,77 @@ test('non-safety notify_now stays at banner_sound (no over-escalation)', () => {
   };
   const decision = routeBigEventToLadder(reg, ordinary, input(), { domain: 'market', now: () => NOW });
   assert.equal(decision.rung, 'banner_sound');
+});
+
+test('emergency and critical delivery rungs are invariant across every inhibition state', () => {
+  const edge = (zScore: number): InhibitoryLeadLagEdge => ({
+    effect: 'inhibitory',
+    from: 'weather',
+    to: 'infra',
+    windowMs: 60_000,
+    support: 0,
+    antecedents: 10,
+    followRate: 0,
+    expectedRate: 0.5,
+    lift: 0,
+    zScore,
+    strength: 0,
+    explanation: 'fixture',
+  });
+  const inhibitionStates: Array<{ name: string; apply: () => void }> = [
+    {
+      name: 'disabled',
+      apply: () => {
+        replaceInhibitorySnapshot([edge(-8)], 4, NOW);
+        assert.equal(getInhibitorySnapshot(NOW, false), null);
+      },
+    },
+    {
+      name: 'stale',
+      apply: () => {
+        replaceInhibitorySnapshot([edge(-8)], 4, NOW - INHIBITION_TTL_MS - 1);
+        assert.equal(getInhibitorySnapshot(NOW, true), null);
+      },
+    },
+    {
+      name: 'malformed',
+      apply: () => {
+        const snapshot = replaceInhibitorySnapshot([edge(Number.NaN)], 4, NOW);
+        assert.equal(snapshot.evidence.length, 0);
+      },
+    },
+    {
+      name: 'maximal',
+      apply: () => {
+        const snapshot = replaceInhibitorySnapshot([edge(-1_000_000)], 1, NOW);
+        assert.equal(snapshot.evidence.length, 1);
+      },
+    },
+  ];
+
+  try {
+    for (const state of inhibitionStates) {
+      state.apply();
+      for (const tier of ['emergency', 'critical'] as const) {
+        resetNotificationLadderState();
+        const reg = createNotificationTraceRegistry({ now: () => NOW });
+        const result: BigEventResult = {
+          ...critical(),
+          tier,
+          deliveryPriority: 'notify_now',
+        };
+        const decision = routeBigEventToLadder(reg, result, input(), {
+          domain: 'weather',
+          now: () => NOW,
+        });
+        assert.deepEqual(
+          { dispatched: decision.dispatched, rung: decision.rung },
+          { dispatched: true, rung: 'critical' },
+          `${tier} rung changed while inhibition was ${state.name}`,
+        );
+      }
+    }
+  } finally {
+    clearInhibitorySnapshot();
+  }
 });

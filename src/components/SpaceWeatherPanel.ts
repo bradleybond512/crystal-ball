@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/no-nested-template-literals, sonarjs/no-nested-conditional */
 import { Panel } from './Panel';
 import type { SpaceWeatherData } from '@/services/space-weather';
 import type {
@@ -18,6 +17,7 @@ import { t } from '@/services/i18n';
 import { getApiBaseUrl } from '@/services/runtime';
 import {
   alertSeverityClass,
+  buildWindStrip,
   formatArrivalCountdown,
   G_LEVEL_COLOR,
   gpsRiskBlurb,
@@ -168,6 +168,7 @@ export class SpaceWeatherPanel extends Panel {
   private renderStatus(): string {
     return [
       this.renderHeadlineGrid(),
+      this.renderSolarWind(),
       this.renderAuroraStrip(),
       this.renderEarthwardCmes(),
       this.renderAlerts(),
@@ -223,6 +224,43 @@ export class SpaceWeatherPanel extends Panel {
     </div>`;
   }
 
+  // ── Solar wind ────────────────────────────────────────────────────────
+
+  /**
+   * Speed / density / Bz come only from fetchSpaceWeather(); /api/spaceweather/
+   * status carries no solar-wind fields, so `this.data` is the sole source and
+   * a status-only render has nothing to say here.
+   *
+   * When `this.data` IS present the strip renders even if all three values are
+   * null. That reads as "SWPC answered but the wind product did not parse",
+   * which is a different and more useful statement than the row vanishing —
+   * a hidden section is indistinguishable from a section that was never wired.
+   */
+  private renderSolarWind(): string {
+    // Only bail when there is no panel at all — render() has already returned
+    // the empty state in that case. When the status request succeeded but the
+    // legacy wind request did not, the panel still draws, and returning '' here
+    // would delete the section rather than report it: the same "outage wearing
+    // the appearance of an all-clear" the CME section guards against. Feeding
+    // buildWindStrip nulls renders dashes and says the telemetry is missing.
+    if (!this.data && !this.status) return '';
+    const view = buildWindStrip(this.data ?? {
+      solarWindSpeed: null, solarWindDensity: null, bz: null, windObservedAt: null,
+    });
+    const cells = view.cells.map((c) => `<div class="sw-wind-cell">
+        <div class="sw-wind-label">${escapeHtml(c.label)}</div>
+        <div class="sw-wind-value" style="color:${c.color};">${escapeHtml(c.value)}</div>
+        <div class="sw-wind-sub">${escapeHtml(c.sub)}</div>
+      </div>`).join('');
+    return `<div class="sw-wind">
+      <div class="sw-wind-header">
+        <span class="sw-wind-title">Solar wind (L1)</span>
+        <span class="${view.metaWarn ? 'sw-wind-stale' : 'sw-wind-age'}">${escapeHtml(view.meta)}</span>
+      </div>
+      <div class="sw-wind-grid">${cells}</div>
+    </div>`;
+  }
+
   // ── Aurora visibility strip ───────────────────────────────────────────
 
   private renderAuroraStrip(): string {
@@ -254,6 +292,31 @@ export class SpaceWeatherPanel extends Panel {
 
   private renderEarthwardCmes(): string {
     const cmes = this.status?.earthwardCmes ?? [];
+    // An outage must not borrow the appearance of an all-clear. When the feed
+    // failed the list is empty for a reason that has nothing to do with the
+    // sun, so say so rather than letting the section quietly disappear —
+    // absence of a section is indistinguishable from absence of a threat.
+    //
+    // Only an explicit true clears this. An ABSENT flag is a cached envelope
+    // from a build that predates the flag, and it carries no evidence either
+    // way — reading it as healthy would restore the fail-open for exactly as
+    // long as that cache lives.
+    //
+    // The gate is "has the status fetch settled", not "do we have a status":
+    // when the status endpoint fails while the legacy feed succeeds, render()
+    // still draws the full view with `status` null, and returning '' there
+    // would delete the section as silently as a quiet sun does. Before the
+    // first fetch settles there is genuinely nothing to say, so stay quiet.
+    const feedOk = this.status?.cmeFeedOk;
+    if (this.statusFetchedAt !== null && feedOk !== true) {
+      let why = 'CME feed not reported by this source';
+      if (this.status === null) why = 'CME feed unreachable';
+      else if (feedOk === false) why = 'CME feed unavailable';
+      return `<div class="sw-alerts">
+        <div class="sw-alerts-header">Earthward CMEs</div>
+        <div class="sw-alert-row sw-warning">${why} — Earthward CMEs unknown</div>
+      </div>`;
+    }
     if (cmes.length === 0) return '';
     const now = Date.now();
     const rows = cmes.slice(0, 5).map((cme) => this.renderCmeRow(cme, now)).join('');

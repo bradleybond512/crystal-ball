@@ -1,19 +1,35 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { computeCascadeKeys } from '../cascade-registration.ts';
+import test, { beforeEach } from 'node:test';
+import {
+  computeCascadeKeys,
+  refreshLearnedCascades,
+} from '../cascade-registration.ts';
+import {
+  __resetInhibitionShadowDiagnosticsForTests,
+  clearInhibitorySnapshot,
+  getInhibitionShadowDiagnostics,
+  getInhibitorySnapshot,
+  replaceInhibitorySnapshot,
+} from '../../correlation/inhibition.ts';
+import type {
+  InhibitoryLeadLagEdge,
+  LeadLagMiningResult,
+  PromotingLeadLagEdge,
+} from '../../correlation/lead-lag.ts';
 
 const HOUR_MS = 3_600_000;
 
+beforeEach(() => {
+  __resetInhibitionShadowDiagnosticsForTests();
+  clearInhibitorySnapshot();
+});
+
 test('computeCascadeKeys yields the expected pair key for a lagged cause→effect history', () => {
   const base = 1_000_000_000;
-  const history = [
-    { domain: 'weather', at: base },
-    { domain: 'infra', at: base + 2 * HOUR_MS },
-    { domain: 'weather', at: base + 30 * HOUR_MS },
-    { domain: 'infra', at: base + 32 * HOUR_MS },
-    { domain: 'weather', at: base + 60 * HOUR_MS },
-    { domain: 'infra', at: base + 62 * HOUR_MS },
-  ];
+  const history = Array.from({ length: 10 }, (_, index) => [
+    { domain: 'weather', at: base + index * 30 * HOUR_MS },
+    { domain: 'infra', at: base + (index * 30 + 2) * HOUR_MS },
+  ]).flat();
 
   const keys = computeCascadeKeys(history);
 
@@ -30,4 +46,223 @@ test('computeCascadeKeys yields no pairs for sparse unrelated history', () => {
   const keys = computeCascadeKeys(history);
 
   assert.deepEqual(keys, []);
+});
+
+function promoting(): PromotingLeadLagEdge {
+  return {
+    effect: 'promoting', from: 'weather', to: 'infra', windowMs: HOUR_MS,
+    support: 5, antecedents: 5, followRate: 1, expectedRate: 0.2, lift: 5,
+    zScore: 8, strength: 1, medianLagMs: HOUR_MS, lagP90Ms: HOUR_MS,
+    explanation: 'promoting',
+  };
+}
+
+function inhibitory(from = 'wildfire', to = 'infrastructure'): InhibitoryLeadLagEdge {
+  return {
+    effect: 'inhibitory', from, to, windowMs: 6 * HOUR_MS,
+    support: 0, antecedents: 12, followRate: 0, expectedRate: 0.5, lift: 0,
+    zScore: -8, strength: 0, explanation: 'inhibitory',
+  };
+}
+
+function result(overrides: Partial<LeadLagMiningResult> = {}): LeadLagMiningResult {
+  return {
+    family: {
+      alpha: 0.05, eligibleOrderedPairs: 2, windowCount: 1,
+      pairWindowTests: 2, tails: 2, criticalAbsZ: 4,
+      method: 'gaussian-union-bound',
+    },
+    candidates: [promoting()],
+    promoting: [promoting()],
+    inhibitory: [inhibitory()],
+    ...overrides,
+  };
+}
+
+function engine(options: { throwOnRegister?: boolean } = {}) {
+  const rules: Array<{ id: string }> = [];
+  return {
+    rules,
+    getRules: () => rules,
+    unregisterRule: (id: string) => {
+      const index = rules.findIndex((rule) => rule.id === id);
+      if (index >= 0) rules.splice(index, 1);
+    },
+    registerRule: (rule: { id: string }) => {
+      if (options.throwOnRegister) throw new Error('sync failed');
+      rules.push(rule);
+    },
+  };
+}
+
+test('refresh routes only promoting edges into learned rules and publishes inhibitors after positive sync', () => {
+  clearInhibitorySnapshot();
+  const fakeEngine = engine();
+
+  refreshLearnedCascades([], {
+    now: 123,
+    engine: fakeEngine,
+    mine: () => result(),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.deepEqual(fakeEngine.rules.map((rule) => rule.id), ['learned:weather->infra']);
+  assert.equal(getInhibitorySnapshot(123)?.evidence[0]?.from, 'wildfire');
+});
+
+test('default cadence miner uses now as complete coverage and publishes mature inhibition', () => {
+  const base = 1_000_000_000;
+  const history = Array.from({ length: 20 }, (_, index) => {
+    const day = base + index * 24 * HOUR_MS;
+    return [
+      { domain: 'a', at: day },
+      { domain: 'b', at: day + 8 * HOUR_MS },
+      { domain: 'b', at: day + 16 * HOUR_MS },
+    ];
+  }).flat();
+  const now = base + 20 * 24 * HOUR_MS;
+
+  refreshLearnedCascades(history, {
+    now,
+    engine: engine(),
+    inhibitionEnabled: () => true,
+  });
+
+  const evidence = getInhibitorySnapshot(now)?.evidence
+    .find((item) => item.from === 'a' && item.to === 'b');
+  assert.ok(evidence, 'mature absent-follow trials must reach the production snapshot');
+  assert.equal(evidence.support, 0);
+  assert.equal(evidence.antecedents, 20);
+  assert.equal(evidence.windowMs, 6 * HOUR_MS);
+});
+
+test('refresh evaluates the previous snapshot before replacement and stores anonymous counts only', () => {
+  const previous = { ...inhibitory('a', 'b'), windowMs: 10 };
+  replaceInhibitorySnapshot([previous], 4, 100);
+
+  refreshLearnedCascades([
+    { domain: 'b', at: 101 },
+    { domain: 'a', at: 102 },
+    { domain: 'a', at: 120 },
+    { domain: 'b', at: 125 },
+    { domain: 'a', at: 128 },
+  ], {
+    now: 130,
+    engine: engine(),
+    mine: () => result(),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'fresh',
+    evaluatedAt: 130,
+    snapshotPublishedAt: 100,
+    evidenceEvaluated: 1,
+    confirmed: 1,
+    refuted: 1,
+    pending: 1,
+  });
+  assert.equal(getInhibitorySnapshot(130)?.publishedAt, 130);
+  assert.doesNotMatch(
+    JSON.stringify(getInhibitionShadowDiagnostics()),
+    /\ba\b|\bb\b|domain|event/i,
+  );
+});
+
+test('zero-admission refresh clears the active snapshot and makes diagnostics unavailable', () => {
+  replaceInhibitorySnapshot([{ ...inhibitory('a', 'b'), windowMs: 10 }], 4, 100);
+
+  refreshLearnedCascades([
+    { domain: 'a', at: 101 },
+  ], {
+    now: 120,
+    engine: engine(),
+    mine: () => result({ family: null, candidates: [], promoting: [], inhibitory: [] }),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.equal(getInhibitorySnapshot(120), null);
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'unavailable',
+    evaluatedAt: null,
+    snapshotPublishedAt: null,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
+});
+
+test('non-finite cadence time records an error instead of publishing evidence', () => {
+  replaceInhibitorySnapshot([inhibitory('a', 'b')], 4, 100);
+
+  refreshLearnedCascades([], {
+    now: Number.NaN,
+    engine: engine(),
+    mine: () => result(),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.equal(getInhibitorySnapshot(120), null);
+  assert.deepEqual(getInhibitionShadowDiagnostics(), {
+    status: 'error',
+    evaluatedAt: null,
+    snapshotPublishedAt: 100,
+    evidenceEvaluated: 0,
+    confirmed: 0,
+    refuted: 0,
+    pending: 0,
+  });
+});
+
+test('disabled, empty, and mining-error refreshes clear inhibition immediately', () => {
+  const fakeEngine = engine();
+  const seed = (): void => { replaceInhibitorySnapshot([inhibitory()], 4, 1); };
+
+  seed();
+  let clearedBeforeMining = false;
+  refreshLearnedCascades([], {
+    now: 2,
+    engine: fakeEngine,
+    mine: () => {
+      clearedBeforeMining = getInhibitorySnapshot(2) === null;
+      return result();
+    },
+    inhibitionEnabled: () => false,
+  });
+  assert.equal(clearedBeforeMining, true, 'kill switch clears before mining starts');
+  assert.equal(getInhibitorySnapshot(2), null);
+  assert.equal(getInhibitionShadowDiagnostics().status, 'disabled');
+
+  seed();
+  refreshLearnedCascades([], {
+    now: 2,
+    engine: fakeEngine,
+    mine: () => result({ family: null, candidates: [], promoting: [], inhibitory: [] }),
+    inhibitionEnabled: () => true,
+  });
+  assert.equal(getInhibitorySnapshot(2), null);
+
+  seed();
+  refreshLearnedCascades([], {
+    now: 2,
+    engine: fakeEngine,
+    mine: () => { throw new Error('mining failed'); },
+    inhibitionEnabled: () => true,
+  });
+  assert.equal(getInhibitorySnapshot(2), null);
+  assert.equal(getInhibitionShadowDiagnostics().status, 'error');
+});
+
+test('failed positive-rule sync clears instead of publishing a partial inhibitory snapshot', () => {
+  replaceInhibitorySnapshot([inhibitory('old', 'edge')], 4, 1);
+
+  refreshLearnedCascades([], {
+    now: 2,
+    engine: engine({ throwOnRegister: true }),
+    mine: () => result(),
+    inhibitionEnabled: () => true,
+  });
+
+  assert.equal(getInhibitorySnapshot(2), null);
 });

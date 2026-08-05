@@ -27,6 +27,8 @@ import type { ObservationEvent } from '@/types/intelligence';
 import { CorrelateEngine } from '../../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../../intelligence/built-in-correlation-rules';
 import { digestRecords } from './golden-streams';
+import { LEARNED_RULE_PREFIX } from '../learned-rules';
+import type { CorrelationRule } from '../../intelligence/correlate-engine';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -845,3 +847,43 @@ export function probeBuiltInRules(): BenchRuleProbe[] {
     })
     .sort((a, b) => a.ruleId.localeCompare(b.ruleId));
 }
+
+/**
+ * A frozen learned-rule set for the retirement probe.
+ *
+ * The probe used to run against the live mined rules, which made it impossible
+ * for the gate to re-execute: the gate holds a report, not a miner. So the
+ * producer's account of the retirement was the only account, and a probe that
+ * swapped `engine.getRules()` for `installed.filter(id => id !== retiredId)`
+ * moved no digest at all — the removal path stopped being measured and the
+ * benchmark still said PASS.
+ *
+ * Freezing the input is what makes a second opinion possible: both the producer
+ * and `verifyResyncProbe()` in rule-probe-verify.ts run this exact set through
+ * their own engines, so a producer that stops consulting its engine disagrees
+ * with a gate that still does.
+ *
+ * The realism this gives up is already covered elsewhere: `learnedRuleCount`
+ * and `learnedRulePairCount` pin the installation of the REAL mined set, and
+ * both are inside `reportDigest`. What lives here is the retirement mechanic.
+ *
+ * Five rules, so retiring one leaves an unambiguous four. Ids are the real
+ * `learned:` shape because the prefix is the only thing separating a mined
+ * coupling from a shipped rule.
+ */
+export const RESYNC_FIXTURE_RULES: readonly CorrelationRule[] = [
+  ['quake', 'tsunami'],
+  ['grid', 'outage'],
+  ['space', 'aviation'],
+  ['cyber', 'finance'],
+  ['weather', 'power'],
+].map(([from, to]) => ({
+  id: `${LEARNED_RULE_PREFIX}${from}->${to}`,
+  name: `Learned: ${from} → ${to}`,
+  description: `Frozen resync fixture — ${from} leads ${to}`,
+  domains: [from as string, to as string],
+  timeWindowMs: 6 * 60 * 60 * 1000,
+  edgeType: 'causal-candidate' as const,
+  matchFn: (a: ObservationEvent, b: ObservationEvent): boolean =>
+    a.domain === from && b.domain === to && b.timestamp > a.timestamp,
+}));

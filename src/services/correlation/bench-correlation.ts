@@ -61,7 +61,7 @@ import {
   PLANTED_COUPLINGS,
   type PlantedCouplingKind,
 } from './__bench__/golden-streams';
-import { probeBuiltInRules, type BenchRuleProbe } from './__bench__/rule-probes';
+import { probeBuiltInRules, RESYNC_FIXTURE_RULES, type BenchRuleProbe } from './__bench__/rule-probes';
 
 export type { BenchRuleProbe } from './__bench__/rule-probes';
 
@@ -558,7 +558,7 @@ export function runCorrelationBenchmark(): CorrelationBenchReport {
     streamDigests: goldenStreamDigests(),
     builtInRuleIds: builtInCorrelationRules.map((r) => r.id).sort((a, b) => a.localeCompare(b)),
     ruleProbes: probeBuiltInRules(),
-    learnedRuleResync: probeLearnedRuleResync(learnedRules),
+    learnedRuleResync: probeLearnedRuleResync(RESYNC_FIXTURE_RULES),
     ruleCoverage: builtInCorrelationRules
       .map((r) => r.id)
       .filter((id) => emittingRules.has(id))

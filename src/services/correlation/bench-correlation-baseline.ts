@@ -43,8 +43,8 @@
  */
 
 import type {
-  BenchEdgeRow, BenchInhibitoryEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchRuleProbe,
-  CorrelationBenchReport, EdgeVerdict,
+  BenchEdgeRow, BenchInhibitoryEdgeRow, BenchLearnedPairRow, BenchPairEmission, BenchPairRow, BenchResyncProbe,
+  BenchRuleProbe, CorrelationBenchReport, EdgeVerdict,
 } from './bench-correlation';
 // The gate reads planted truth DIRECTLY. A ledger row that carries its own
 // verdict and its own `isTruePair` flag is the report grading itself: rewrite
@@ -55,7 +55,7 @@ import {
   corpusDomains, decoyEventIds, digestRecords, pairKeyFor, plantedCouplingIndex,
   plantedTruePairKeys,
 } from './__bench__/golden-streams';
-import { verifyRuleProbes } from './__bench__/rule-probe-verify';
+import { verifyResyncProbe, verifyRuleProbes } from './__bench__/rule-probe-verify';
 import { DEFAULT_WINDOWS_MS, type MultipleTestingFamily } from './lead-lag';
 import { LEARNED_RULE_PREFIX, learnedRuleId } from './learned-rules';
 
@@ -257,6 +257,17 @@ export interface CorrelationBenchMigrationV12ToV13 {
   toSchemaVersion: 13;
   previousCorpusDigest: string;
   previousReportDigest: string;
+  /**
+   * Digest over the previous baseline's own carried-over payload.
+   *
+   * `previousReportDigest` names the reviewed v12 report but does not BIND the
+   * baseline handed in to it: the reviewer moved `minedEdgeCount` in both the
+   * report and the supplied previous baseline, left this manifest's report
+   * digest alone, and the field-by-field loop compared the moved value to the
+   * moved value and returned ok. The pin has to cover the payload the loop
+   * actually reads, not a sibling string.
+   */
+  previousPayloadDigest: string;
   reason: string;
 }
 
@@ -265,6 +276,7 @@ export const CORRELATION_BENCH_V12_TO_V13_MIGRATION: CorrelationBenchMigrationV1
   toSchemaVersion: 13,
   previousCorpusDigest: '1a0377333099795fe0ccff8dc5a7a2cf',
   previousReportDigest: '354a7790613214a893698b1882eda0ae',
+  previousPayloadDigest: '129ab5924c521a1897a907059de7ffac',
   reason:
     'ACC-501 round 15 adds probe/emission observations to the report. No corpus edit, '
     + 'no engine change, no graded metric movement.',
@@ -278,6 +290,24 @@ export const CORRELATION_BENCH_V12_TO_V13_MIGRATION: CorrelationBenchMigrationV1
 const V13_MAY_MOVE: ReadonlySet<string> = new Set([
   'schemaVersion', 'seededAt', 'note', 'reportDigest', 'witnessed', 'tolerances',
 ]);
+
+/**
+ * Digest over exactly the fields the migration forbids to move.
+ *
+ * Pinned in the manifest, so the previous baseline handed to the validator has
+ * to BE the reviewed one rather than merely claim its report digest.
+ */
+export function benchBaselinePayloadDigest(baseline: CorrelationBenchBaseline): string {
+  const src = baseline as unknown as Record<string, unknown>;
+  const payload: Record<string, unknown> = {};
+  for (const key of Object.keys(src).sort(compareStrings)) {
+    if (V13_MAY_MOVE.has(key)) continue;
+    payload[key] = src[key];
+  }
+  const records: string[] = [];
+  canonicalRecords(payload, '', records);
+  return digestRecords(records);
+}
 
 export function validateCorrelationBenchV12ToV13Migration(
   report: CorrelationBenchReport,
@@ -298,6 +328,13 @@ export function validateCorrelationBenchV12ToV13Migration(
   if (previousV12.reportDigest !== manifest.previousReportDigest) {
     reasons.push('v12→v13 migration source is not the reviewed v12 report');
   }
+  if (benchBaselinePayloadDigest(previousV12) !== manifest.previousPayloadDigest) {
+    reasons.push(
+      'v12→v13 migration source does not carry the reviewed v12 payload — the baseline being ' +
+      'migrated FROM is not the one that was reviewed, so every field-by-field comparison below ' +
+      'is against an unvouched-for number',
+    );
+  }
   if (report.corpusDigest !== manifest.previousCorpusDigest) {
     reasons.push(
       'v13 corpus digest moved — this migration is additive-only and permits no corpus edit',
@@ -311,7 +348,11 @@ export function validateCorrelationBenchV12ToV13Migration(
     previousV12.seededAt,
   ) as unknown as Record<string, unknown>;
   const before = previousV12 as unknown as Record<string, unknown>;
-  for (const key of Object.keys(candidate).sort(compareStrings)) {
+  // Union, not the candidate's keys: iterating one side makes a field DROPPED
+  // by the bump invisible, and a dropped measurement is the same defect as a
+  // moved one.
+  const keys = [...new Set([...Object.keys(candidate), ...Object.keys(before)])].sort(compareStrings);
+  for (const key of keys) {
     if (V13_MAY_MOVE.has(key)) continue;
     if (JSON.stringify(candidate[key]) !== JSON.stringify(before[key])) {
       reasons.push(
@@ -1178,6 +1219,26 @@ function checkLearnedRuleResync(reasons: string[], report: CorrelationBenchRepor
     reasons.push(
       'syncing learned rules changed the BUILT-IN inventory — the learned:* prefix is the only ' +
       'thing keeping a mined coupling from evicting a shipped rule',
+    );
+  }
+  // Everything above reads the report. This runs the retirement again against a
+  // live engine and demands the two agree: a producer that derives
+  // `afterRetirement` arithmetically instead of calling `getRules()` moves no
+  // digest and satisfies every check above it.
+  const live = verifyResyncProbe();
+  const reportedSide: BenchResyncProbe = {
+    installed: p.installed,
+    retiredId: p.retiredId,
+    afterRetirement: p.afterRetirement,
+    reportedAdded: p.reportedAdded,
+    reportedRemoved: p.reportedRemoved,
+    builtInsIntact: p.builtInsIntact,
+  };
+  if (JSON.stringify(live) !== JSON.stringify(reportedSide)) {
+    reasons.push(
+      `the learned-rule resync probe does not reproduce: the report says ` +
+      `${JSON.stringify(p)} and re-running the retirement against a live engine ` +
+      `gives ${JSON.stringify(live)}`,
     );
   }
 }

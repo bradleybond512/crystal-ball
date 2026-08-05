@@ -23,7 +23,11 @@
 import type { ObservationEvent } from '@/types/intelligence';
 import { CorrelateEngine } from '../../intelligence/correlate-engine';
 import { builtInCorrelationRules } from '../../intelligence/built-in-correlation-rules';
+import { LEARNED_RULE_PREFIX, syncLearnedRules } from '../learned-rules';
+import type { CorrelationRule } from '../../intelligence/correlate-engine';
+import type { BenchResyncProbe } from '../bench-correlation';
 import {
+  RESYNC_FIXTURE_RULES,
   RULE_FIXTURES,
   positiveEvents,
   nearMissEvents,
@@ -95,4 +99,55 @@ export function verifyRuleProbes(now: Date = VERIFY_NOW): BenchRuleProbe[] {
     });
   }
   return out.sort((a, b) => a.ruleId.localeCompare(b.ruleId));
+}
+
+/**
+ * The gate's OWN execution of the learned-rule retirement.
+ *
+ * Same reason as `verifyRuleProbes` above, and the reviewer found the same
+ * defect shape here: `afterRetirement: installed.filter(id => id !== retiredId)`
+ * leaves the report, every digest and the whole gate byte-identical while the
+ * probe stops reading the engine entirely. Only a second executor that really
+ * calls `getRules()` can tell.
+ *
+ * Shares the frozen rule set (`RESYNC_FIXTURE_RULES` — that is the pinned
+ * question) and no execution path: its own engine, its own sync calls, its own
+ * inventory reads.
+ */
+export function verifyResyncProbe(
+  learned: readonly CorrelationRule[] = RESYNC_FIXTURE_RULES,
+): BenchResyncProbe {
+  const engine = new CorrelateEngine({ timer: () => 0 });
+  for (const rule of builtInCorrelationRules) engine.registerRule(rule);
+  const builtInsBefore = engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => !id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  const learnedNow = (): string[] => engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  syncLearnedRules(engine, learned);
+  const installed = learnedNow();
+  const retiredId = installed[installed.length - 1] ?? '';
+  const { added, removed } = syncLearnedRules(
+    engine,
+    learned.filter((r) => r.id !== retiredId),
+  );
+  const builtInsAfter = engine.getRules()
+    .map((r) => r.id)
+    .filter((id) => !id.startsWith(LEARNED_RULE_PREFIX))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    installed,
+    retiredId,
+    afterRetirement: learnedNow(),
+    reportedAdded: added,
+    reportedRemoved: removed,
+    builtInsIntact: builtInsAfter.length === builtInsBefore.length
+      && builtInsAfter.every((id, i) => id === builtInsBefore[i]),
+  };
 }

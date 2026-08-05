@@ -2,12 +2,18 @@
 
 Date: 2026-08-04
 
-Reviewed implementation commit: `c5e63061`
+Reviewed implementation commit: `870b08f6` (round 14) plus the round-15 working
+tree on `claude/acc-501-round-14` — round 15 addressed a Codex REQUEST_CHANGES
+review of PR #1625.
 
-The focused suite was green before mutation at `182 pass / 0 fail`.
-All mutations below began from an empty `git status --short`. Each edit was
-confirmed with `git diff` before the targeted test ran, then reverted with
-`apply_patch`.
+The focused suite was green before mutation at `182 pass / 0 fail` for the
+round-14 mutations below, and grew to `216 pass / 0 fail` (full
+`bench-correlation.test.mts`) plus `409 pass / 0 fail` (`npm run
+test:correlation`) by round 15. All mutations began from a `git status
+--short` containing only this session's legitimate round-15 diff (no
+unrelated changes); each file's SHA-256 was recorded before and after every
+mutation to confirm exact restoration, and each edit was confirmed with `git
+diff`/`git status --short` before its targeted command ran.
 
 ## Previous-baseline quality pin
 
@@ -105,7 +111,127 @@ confirmed with `git diff` before the targeted test ran, then reverted with
   checking for an initial baseline”.
 - Restored checksum: `852aa154f9cd1eb8027abdc2d70f0ce4b9af0cef95bbf21fa209145e138353c5`.
 
+## Round 15 — learned-rule resync self-attestation
+
+Codex's review of PR #1625 found `checkLearnedRuleResync` validated only the
+report's own internal consistency, never re-deriving `afterRetirement`
+against a live engine — so a producer that started computing it
+arithmetically (`installed.filter(id => id !== retiredId)`) instead of
+calling `engine.getRules()` would satisfy every check while the underlying
+removal path went unmeasured. The fix added `verifyResyncProbe()`
+(`__bench__/rule-probe-verify.ts`), which constructs its own fresh
+`CorrelateEngine`, runs the same install→retire→resync sequence independently
+of the producer, and the gate now demands the two agree.
+
+- Files: `src/services/correlation/bench-correlation.ts` (before
+  `62b008e868e5e7e0e73ee59b645670828149181727f510a1881e217c8a03020f`),
+  `src/services/correlation/learned-rules.ts` (before
+  `5f96ebbd460397ef75aef59ec50023d4b4e5d6a3420aed5975b6943a2bb38546`).
+- Mutation 1 alone: changed `probeLearnedRuleResync`'s `afterRetirement` from
+  `learnedIdsOf()` (a live `engine.getRules()` query) to
+  `installed.filter((id) => id !== retiredId)` (self-attested arithmetic).
+  Result: `npm run bench:correlation` still **PASSED** — the arithmetic
+  answer happens to equal the true engine state when the underlying removal
+  actually works, so this alone doesn't prove the removal path is exercised.
+  This matches the framing of the defect precisely: self-attestation isn't
+  wrong on the happy path, only silent on the path where the system it claims
+  to have queried actually breaks.
+- Mutation 2 (combined with mutation 1, recreating the historical bug the
+  file's own doc comment describes — "Deleting `engine.unregisterRule` from
+  `syncLearnedRules()` left a retired coupling permanently installed... while
+  the function REPORTED it removed"): removed the
+  `engine.unregisterRule(existing.id)` call from `syncLearnedRules` in
+  `learned-rules.ts`, so retirement stops actually removing the rule from the
+  engine while `removed += 1` still increments.
+- Targeted result: `npm run bench:correlation` → **FAIL**.
+- Failing assertion: `the learned-rule resync probe does not reproduce: the
+  report says {..."afterRetirement":["learned:cyber->finance", ...4 ids]...}
+  and re-running the retirement against a live engine gives
+  {..."afterRetirement":[...5 ids, including the one reported retired]...}` —
+  `verifyResyncProbe()`'s independently-constructed engine still has the rule
+  installed; the producer's self-attested field claims it is gone.
+- Restored checksums: both files matched their pre-mutation SHA-256 exactly;
+  `git status --short` returned only the pre-existing round-15 diff.
+
+## Round 15 — v12→v13 migration self-consistent forgery
+
+Codex also found `validateCorrelationBenchV12ToV13Migration` reconstructed
+its own "previous v12 baseline" comparison object from data available at
+validation time, with nothing pinning that reconstruction to the actual
+reviewed v12 payload — a forged previous baseline that moved a value in
+lockstep on both sides of the comparison would pass. The fix added
+`previousPayloadDigest`, computed once from the real `origin/main` v12
+baseline and pinned in `CORRELATION_BENCH_V12_TO_V13_MIGRATION`, checked via
+`benchBaselinePayloadDigest()` against whatever baseline is actually being
+migrated from.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Before checksum:
+  `dd078f9e8d6044b3eb1d7e454f8867a37032d6f27397d52b026d96a1675b7d6c`.
+- Mutation: short-circuited the payload-digest check with `if (false && ...)`,
+  disabling it while leaving `previousPayloadDigest` itself and every other
+  check in place.
+- Confirmed diff: the digest comparison branch became dead code.
+- Targeted result: `node --import tsx --test
+  src/services/correlation/__tests__/bench-correlation.test.mts` →
+  `214 pass / 1 fail`.
+- Failing assertion: exactly `refuses a previous baseline whose payload is
+  not the reviewed one` failed; no other test in the 215-test file was
+  affected, confirming the disabled check — not some other path — was what
+  that test exercises.
+- Restored checksum:
+  `dd078f9e8d6044b3eb1d7e454f8867a37032d6f27397d52b026d96a1675b7d6c`.
+
+## Round 15 — the "broken tolerance" re-seed test was not constructed
+
+Codex's third finding was a P2 on
+`refuses to re-seed over a broken tolerance without --force`: it ran
+`--seed` against the committed baseline (which passes today) and accepted
+either `Seeded from the current run` or `REFUSED` as a pass — a CLI that
+always printed one of those two strings regardless of what the comparator
+did would satisfy the assertion. It never constructed a baseline the live
+run actually violates, so it proved the CLI can print those words, not that
+`--seed` compares anything.
+
+The fix replaces it with two tests built on the CLI's own
+`--previous-baseline <path>` override:
+
+- **Refusal case**: writes a temp copy of the committed baseline with
+  `couplingPrecision: 1.5` (unreachable — precision is a fraction) and
+  `tolerances.couplingPrecisionDrop: 0`, runs `--seed --previous-baseline
+  <temp>`, and asserts exit code `1`, `REFUSED` plus the specific `miner
+  coupling precision` reason on stderr, and that stdout carries no seeded
+  JSON (`"schemaVersion"` absent).
+- **Positive control**: writes an unmodified, internally consistent copy of
+  the committed baseline as `--previous-baseline` and asserts exit code `0`,
+  `Seeded from the current run` on stderr, no `REFUSED`, and a parseable
+  seeded object on stdout — proving the comparator ran and passed on its own
+  merits rather than the refusal path being unreachable.
+
+Two earlier attempts at the positive control failed for reasons worth
+recording: raising `couplingPrecision` alone past its drop tolerance without
+loosening the tolerance tripped the refusal (expected); loosening the
+tolerance to `1` tripped a *different* guard — `bench-correlation-baseline.ts`
+refuses any tolerance width above a `0.1` ceiling ("a tolerance wide enough
+to absorb the whole measurement disarms its gate while still looking
+armed"); and setting `couplingPrecision: 0` with a `0.05` tolerance tripped a
+third guard against non-positive baseline metrics ("a non-positive baseline
+permanently disarms the gate it feeds"). All three are the gate's own
+defenses working correctly, not obstacles to route around — the final
+version validates against an object with no manufactured internal
+inconsistency at all.
+
+- File: `src/services/correlation/__tests__/bench-correlation.test.mts`.
+- No source mutation was needed here — the previous test was a coverage gap
+  in the *test*, not a defect in `bench-correlation.ts` or
+  `bench-correlation-baseline.ts`, so this section documents construction and
+  verification, not a mutation/restore round-trip. Verified by running both
+  new tests: refusal case exits `1` with the expected reason text; positive
+  control exits `0` with a parseable candidate. Full suite: `216 pass / 0
+  fail`.
+
 ## Restoration
 
-Final checksums matched all pre-mutation values and final
-`git status --short` was empty before this evidence file was added.
+Final checksums matched all pre-mutation values for every mutated file in
+both round 14 and round 15, and `git status --short` after each restoration
+showed only the legitimate round-15 source diff — no residual mutation.

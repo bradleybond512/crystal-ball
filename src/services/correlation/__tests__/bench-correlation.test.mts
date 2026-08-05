@@ -3169,8 +3169,25 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
     // A positive that satisfies BOTH branches of an OR and a near-miss that
     // defeats both cannot see one branch being lost. Each branch gets its own
     // isolated positive.
+    // Pinned per rule, OUTSIDE the fixture roster both the producer and the
+    // independent executor read. `>= 4` let three rules lose every disjunct
+    // they have and still pass, because both witnesses would simply stop
+    // asking about them together.
+    const EXPECTED_BRANCH_COUNTS: Readonly<Record<string, number>> = {
+      'airquality-wildfire': 2,
+      'conflict-displacement': 4,
+      'earthquake-infrastructure': 2,
+      'earthquake-tsunami': 1,
+      'space-weather-infrastructure': 4,
+      'weather-aviation': 1,
+      'weather-wildfire': 3,
+    };
     const withBranches = report.ruleProbes.filter((p) => p.disjuncts.length > 0);
-    assert.ok(withBranches.length >= 4, `only ${withBranches.length} rules carry branches`);
+    assert.deepEqual(
+      Object.fromEntries(withBranches.map((p) => [p.ruleId, p.disjuncts.length])),
+      EXPECTED_BRANCH_COUNTS,
+      'the disjunct roster moved — add or remove the pin in a reviewed diff',
+    );
     for (const p of withBranches) {
       for (const d of p.disjuncts) {
         assert.equal(d.matched, true, `${p.ruleId} lost branch ${d.branch}`);
@@ -3277,24 +3294,71 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
     assert.ok(reasons.some((r) => r.includes('still registered')), reasons.join(' | '));
   });
 
-  it('refuses to re-seed over a broken tolerance without --force', () => {
-    // The documented "tolerances gate the re-seed" workflow did not exist: the
-    // --seed path returned before the comparator ran, and the shell redirect it
-    // recommended truncated the baseline first.
-    const seed = spawnSync(
-      'npx',
-      ['tsx', path.join(here, '..', '..', '..', '..', 'scripts', 'correlation-benchmark.mts'), '--seed'],
-      { encoding: 'utf8', cwd: path.join(here, '..', '..', '..', '..') },
-    );
-    // With the baseline in step this seeds cleanly; the contract under test is
-    // that the comparison RAN and said so, either way. The round-14 reseed guard
-    // on main owns the wording, so this asserts on its two terminal verdicts
-    // rather than on any phrasing of mine.
-    const said = `${seed.stdout}${seed.stderr}`;
-    assert.ok(
-      /Seeded from the current run|REFUSED/.test(said),
-      said.slice(-400),
-    );
+  const scriptPath = path.join(here, '..', '..', '..', '..', 'scripts', 'correlation-benchmark.mts');
+  const repoRoot = path.join(here, '..', '..', '..', '..');
+
+  it('refuses to re-seed against a --previous-baseline whose tolerance the live run actually violates', () => {
+    // Round 15: the prior version of this test only ran --seed against the
+    // committed baseline, which passes today, so it could not distinguish a
+    // working refusal path from one that always prints "Seeded" — a CLI that
+    // never compared anything would satisfy the old assertion. This
+    // constructs a previous baseline whose couplingPrecisionDrop tolerance is
+    // zero and whose couplingPrecision is set one full point above what the
+    // live corpus can possibly score (precision is a fraction, so 1.5 is
+    // unreachable), which forces `checkDrop` to fire for real.
+    const committed = loadBaseline();
+    const dir = mkdtempSync(path.join(tmpdir(), 'acc501-broken-tolerance-'));
+    const brokenPath = path.join(dir, 'broken-previous-baseline.json');
+    try {
+      const broken: CorrelationBenchBaseline = {
+        ...committed,
+        couplingPrecision: 1.5,
+        tolerances: { ...committed.tolerances, couplingPrecisionDrop: 0 },
+      };
+      writeFileSync(brokenPath, JSON.stringify(broken, null, 2));
+
+      const seed = spawnSync(
+        'npx',
+        ['tsx', scriptPath, '--seed', '--previous-baseline', brokenPath],
+        { encoding: 'utf8', cwd: repoRoot },
+      );
+
+      assert.equal(seed.status, 1, `${seed.stdout}${seed.stderr}`.slice(-600));
+      assert.match(seed.stderr, /REFUSED/);
+      assert.match(seed.stderr, /miner coupling precision/);
+      // A refusal must not also hand back a usable candidate on stdout.
+      assert.doesNotMatch(seed.stdout, /"schemaVersion"/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('seeds cleanly against a --previous-baseline the live run genuinely satisfies', () => {
+    // The counterpart to the refusal case above: the same
+    // --previous-baseline mechanism, but pointed at an unmodified, internally
+    // consistent copy of the reviewed baseline (which today's live run
+    // legitimately meets), so the positive control proves the comparator ran
+    // and passed on its own merits rather than the CLI having skipped it.
+    const committed = loadBaseline();
+    const dir = mkdtempSync(path.join(tmpdir(), 'acc501-satisfied-tolerance-'));
+    const copyPath = path.join(dir, 'unmodified-previous-baseline.json');
+    try {
+      writeFileSync(copyPath, JSON.stringify(committed, null, 2));
+
+      const seed = spawnSync(
+        'npx',
+        ['tsx', scriptPath, '--seed', '--previous-baseline', copyPath],
+        { encoding: 'utf8', cwd: repoRoot },
+      );
+
+      assert.equal(seed.status, 0, `${seed.stdout}${seed.stderr}`.slice(-600));
+      assert.match(seed.stderr, /Seeded from the current run/);
+      assert.doesNotMatch(seed.stderr, /REFUSED/);
+      const seeded = JSON.parse(seed.stdout) as CorrelationBenchBaseline;
+      assert.equal(typeof seeded.schemaVersion, 'number');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -3305,14 +3369,48 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
   const manifest = correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION;
 
   // The reviewed v12 baseline differed from today's only in schemaVersion,
-  // seededAt, and reportDigest — that IS the claim the migration makes, so
-  // reconstructing it that way is the shape under test. The rejection cases
-  // below are what carry the weight.
+  // seededAt, and reportDigest — that IS the claim the migration makes. The
+  // reconstruction is only admissible because `previousPayloadDigest` pins it:
+  // if any forbidden field differed from the real reviewed v12 baseline, this
+  // object would digest to something else and the validator would refuse it.
+  // The test below asserts exactly that before using it.
   const previousV12 = (): correlationBaseline.CorrelationBenchBaseline => ({
     ...seedCorrelationBenchBaseline(report, carriedOver, committed.seededAt),
     schemaVersion: 12,
     reportDigest: manifest.previousReportDigest,
   } as unknown as correlationBaseline.CorrelationBenchBaseline);
+
+  it('reconstructs the reviewed v12 payload exactly — the pin says so', () => {
+    assert.equal(
+      correlationBaseline.benchBaselinePayloadDigest(previousV12()),
+      manifest.previousPayloadDigest,
+    );
+  });
+
+  it('refuses a previous baseline whose payload is not the reviewed one', () => {
+    // The reviewer moved minedEdgeCount in BOTH the report and the supplied
+    // previous baseline and the field-by-field loop compared the moved value to
+    // itself. The payload pin is what makes that self-consistent forgery fail.
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      { ...report, minedEdgeCount: report.minedEdgeCount + 1 },
+      { ...previousV12(), minedEdgeCount: report.minedEdgeCount + 1 },
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /does not carry the reviewed v12 payload/);
+  });
+
+  it('sees a forbidden field that was DROPPED, not just moved', () => {
+    const prev = previousV12() as unknown as Record<string, unknown>;
+    delete prev['minedEdgeCount'];
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      prev as unknown as correlationBaseline.CorrelationBenchBaseline,
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /minedEdgeCount moved|reviewed v12 payload/);
+  });
 
   it('accepts the real additive transition', () => {
     const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(

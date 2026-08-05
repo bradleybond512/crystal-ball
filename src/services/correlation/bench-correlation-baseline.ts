@@ -268,6 +268,18 @@ export interface CorrelationBenchMigrationV12ToV13 {
    * actually reads, not a sibling string.
    */
   previousPayloadDigest: string;
+  /**
+   * Digest over the previous baseline's `tolerances` block specifically.
+   *
+   * `tolerances` sits in `V13_MAY_MOVE` because an ordinary (non-migration)
+   * reseed legitimately edits it — but that same exemption let a caller-
+   * supplied `previousV12.tolerances` flow into `checkMigrationSharedGates`
+   * ungated: widening `couplingPrecisionDrop` from 0.02 to 0.1 still returned
+   * `{ok:true}` because nothing pinned tolerances to the reviewed values.
+   * This digest authenticates the tolerance block used for grading
+   * independently of whether tolerances are allowed to move at reseed time.
+   */
+  previousTolerancesDigest: string;
   reason: string;
 }
 
@@ -277,6 +289,21 @@ export const CORRELATION_BENCH_V12_TO_V13_MIGRATION: CorrelationBenchMigrationV1
   previousCorpusDigest: '1a0377333099795fe0ccff8dc5a7a2cf',
   previousReportDigest: '354a7790613214a893698b1882eda0ae',
   previousPayloadDigest: '129ab5924c521a1897a907059de7ffac',
+  previousTolerancesDigest: benchTolerancesDigest({
+    couplingPrecisionDrop: 0.02,
+    couplingRecallDrop: 0,
+    pairPrecisionDrop: 0,
+    pairRecallDrop: 0,
+    edgeEvidenceSeparationDrop: 1,
+    meanTruePairConfidenceDrop: 0.05,
+    falseEdgeGrowth: 0,
+    causalLearnedRuleShrink: 0,
+    learnedRuleFalsePositiveGrowth: 0,
+    learnedRulePairGrowth: 5,
+    causalLearnedRulePairShrinkRatio: 0.5,
+    enginePairShrink: 0,
+    minedEdgeCountShrink: 10,
+  }),
   reason:
     'ACC-501 round 15 adds probe/emission observations to the report. No corpus edit, '
     + 'no engine change, no graded metric movement.',
@@ -309,6 +336,16 @@ export function benchBaselinePayloadDigest(baseline: CorrelationBenchBaseline): 
   return digestRecords(records);
 }
 
+/**
+ * Digest over a `tolerances` block alone, so it can be authenticated
+ * independently of `V13_MAY_MOVE` exempting it from `benchBaselinePayloadDigest`.
+ */
+export function benchTolerancesDigest(tolerances: CorrelationBenchBaseline['tolerances']): string {
+  const records: string[] = [];
+  canonicalRecords(tolerances, '', records);
+  return digestRecords(records);
+}
+
 export function validateCorrelationBenchV12ToV13Migration(
   report: CorrelationBenchReport,
   previousV12: CorrelationBenchBaseline,
@@ -333,6 +370,21 @@ export function validateCorrelationBenchV12ToV13Migration(
       'v12→v13 migration source does not carry the reviewed v12 payload — the baseline being ' +
       'migrated FROM is not the one that was reviewed, so every field-by-field comparison below ' +
       'is against an unvouched-for number',
+    );
+  }
+  if (benchTolerancesDigest(previousV12.tolerances) !== manifest.previousTolerancesDigest) {
+    reasons.push(
+      'v12→v13 migration source does not carry the reviewed v12 tolerances — tolerances are ' +
+      'exempt from the payload digest so ordinary reseeds can edit them, but the shared gates ' +
+      'grade the live report against whatever tolerances the caller supplies, so an unpinned ' +
+      'tolerance here would grade leniently against a value nobody reviewed',
+    );
+  }
+  if (manifest.toSchemaVersion !== CORRELATION_BENCH_SCHEMA_VERSION) {
+    reasons.push(
+      `v12→v13 migration manifest targets schemaVersion ${String(manifest.toSchemaVersion)}, but the ` +
+      `compiled gate is schemaVersion ${String(CORRELATION_BENCH_SCHEMA_VERSION)} — this migration is ` +
+      'no longer the one-hop path to the live schema',
     );
   }
   if (report.corpusDigest !== manifest.previousCorpusDigest) {

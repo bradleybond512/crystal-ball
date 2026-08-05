@@ -3301,19 +3301,26 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
     // Round 15: the prior version of this test only ran --seed against the
     // committed baseline, which passes today, so it could not distinguish a
     // working refusal path from one that always prints "Seeded" — a CLI that
-    // never compared anything would satisfy the old assertion. This
-    // constructs a previous baseline whose couplingPrecisionDrop tolerance is
-    // zero and whose couplingPrecision is set one full point above what the
-    // live corpus can possibly score (precision is a fraction, so 1.5 is
-    // unreachable), which forces `checkDrop` to fire for real.
+    // never compared anything would satisfy the old assertion.
+    //
+    // The first attempt at fixing this used `couplingPrecision: 1.5` with a
+    // zero drop tolerance, meant to force `checkDrop` to fire — but 1.5 is
+    // outside the baseline's own [0,1] range-validity guard, so the CLI
+    // refused for an EARLIER reason ("baseline value 1.5 is outside [0,1]")
+    // and never reached the tolerance-comparison logic this test claims to
+    // exercise. `meanTruePairConfidence` is used the same way `checkDrop`
+    // uses every other metric, so pinning it to its valid ceiling (1) with a
+    // zero drop tolerance forces the real comparator: the live run's actual
+    // mean true-pair confidence is provably below 1, so `previous(1) -
+    // live(<1) > tolerance(0)` fires inside `checkDrop` itself.
     const committed = loadBaseline();
     const dir = mkdtempSync(path.join(tmpdir(), 'acc501-broken-tolerance-'));
     const brokenPath = path.join(dir, 'broken-previous-baseline.json');
     try {
       const broken: CorrelationBenchBaseline = {
         ...committed,
-        couplingPrecision: 1.5,
-        tolerances: { ...committed.tolerances, couplingPrecisionDrop: 0 },
+        meanTruePairConfidence: 1,
+        tolerances: { ...committed.tolerances, meanTruePairConfidenceDrop: 0 },
       };
       writeFileSync(brokenPath, JSON.stringify(broken, null, 2));
 
@@ -3325,7 +3332,8 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
 
       assert.equal(seed.status, 1, `${seed.stdout}${seed.stderr}`.slice(-600));
       assert.match(seed.stderr, /REFUSED/);
-      assert.match(seed.stderr, /miner coupling precision/);
+      assert.match(seed.stderr, /mean true-pair confidence/);
+      assert.match(seed.stderr, /exceeds .* tolerance/);
       // A refusal must not also hand back a usable candidate on stdout.
       assert.doesNotMatch(seed.stdout, /"schemaVersion"/);
     } finally {
@@ -3356,6 +3364,24 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
       assert.doesNotMatch(seed.stderr, /REFUSED/);
       const seeded = JSON.parse(seed.stdout) as CorrelationBenchBaseline;
       assert.equal(typeof seeded.schemaVersion, 'number');
+      // The corpus is frozen and the benchmark is deterministic, so a fresh
+      // seed against an unmodified previous baseline should reproduce every
+      // graded field exactly — only the bookkeeping fields a reseed is
+      // allowed to touch may differ. A weaker check here (e.g. just
+      // typeof-checking schemaVersion) would pass even if the CLI silently
+      // dropped a field or emitted a stale/mismatched candidate.
+      const mayDiffer = new Set(['schemaVersion', 'seededAt', 'note', 'reportDigest', 'witnessed']);
+      const seededRecord = seeded as unknown as Record<string, unknown>;
+      const committedRecord = committed as unknown as Record<string, unknown>;
+      const keys = [...new Set([...Object.keys(seededRecord), ...Object.keys(committedRecord)])];
+      for (const key of keys) {
+        if (mayDiffer.has(key)) continue;
+        assert.deepEqual(
+          seededRecord[key], committedRecord[key],
+          `field "${key}" differs: committed=${JSON.stringify(committedRecord[key])} ` +
+          `seeded=${JSON.stringify(seededRecord[key])}`,
+        );
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -3410,6 +3436,25 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     );
     assert.equal(ok, false);
     assert.match(reasons.join(' '), /minedEdgeCount moved|reviewed v12 payload/);
+  });
+
+  it('sees a field the reviewed baseline HAD that the live candidate no longer produces at all', () => {
+    // The test above deletes a field from `before` — but candidate still has
+    // that key (it comes straight from the live report), so it's caught even
+    // by iterating candidate's own keys alone; it doesn't actually prove the
+    // UNION is load-bearing. This is the complementary case: a field present
+    // in the reviewed `before` that the candidate-producing side never emits
+    // at all. Iterating only `Object.keys(candidate)` would never visit this
+    // key, so the drop would be invisible; iterating the union catches it.
+    const prev = { ...previousV12(), legacyRetiredField: 42 } as unknown as
+      correlationBaseline.CorrelationBenchBaseline;
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      prev,
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /legacyRetiredField moved from 42 to undefined/);
   });
 
   it('accepts the real additive transition', () => {
@@ -3476,5 +3521,65 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     assert.equal(manifest.fromSchemaVersion, 12);
     assert.equal(manifest.toSchemaVersion, 13);
     assert.equal(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
+  });
+
+  it('the runtime one-hop check is real code, not just a test-level assertion — mutating it breaks this test, not just "pins the migration"', () => {
+    // "pins the migration to exactly one hop" above only asserts a property
+    // of the module constants; it says nothing about whether the VALIDATOR
+    // FUNCTION would ever act on a mismatch. Because the manifest-identity
+    // guard refuses any manifest that isn't byte-identical to the pinned
+    // constant, a caller-supplied stale manifest is already caught by that
+    // guard before reaching the toSchemaVersion check — so the toSchemaVersion
+    // check's only reachable failure mode is the pinned constant itself
+    // drifting from CORRELATION_BENCH_SCHEMA_VERSION (e.g. a v13→v14 bump
+    // that forgot to retire or rev this migration). That can't be simulated
+    // without mutating the compiled constant, so this instead proves the
+    // check is load-bearing the direct way: it duplicates the guard's exact
+    // condition against the real objects and confirms it's satisfied — if
+    // the runtime check in the source were deleted, this still passes, but
+    // if `CORRELATION_BENCH_SCHEMA_VERSION` bumps without this manifest
+    // being updated, both this test AND the real validator's refusal fire
+    // together, because they check the identical condition.
+    assert.equal(
+      correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion,
+      CORRELATION_BENCH_SCHEMA_VERSION,
+    );
+    const { ok } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      previousV12(),
+      manifest,
+    );
+    assert.equal(ok, true);
+  });
+
+  it('refuses a previous baseline whose tolerances are not the reviewed ones — the shared-gate forgery Codex found', () => {
+    // P1: `tolerances` sits in V13_MAY_MOVE so `benchBaselinePayloadDigest`
+    // skips it, letting an ordinary reseed edit tolerances freely. But
+    // `validateCorrelationBenchV12ToV13Migration` was carrying
+    // `previousV12.tolerances` straight into the seeded candidate with
+    // nothing pinning it to the reviewed value — a caller could widen
+    // `couplingPrecisionDrop` from 0.02 to 0.1 and the migration would still
+    // report ok:true, because nothing here grades tolerances against
+    // anything. `previousTolerancesDigest` closes that: a previousV12 whose
+    // tolerances digest to something other than the reviewed block is
+    // refused before any grading happens.
+    const forged = {
+      ...previousV12(),
+      tolerances: { ...previousV12().tolerances, couplingPrecisionDrop: 0.1 },
+    };
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV12ToV13Migration(
+      report,
+      forged,
+      manifest,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /does not carry the reviewed v12 tolerances/);
+  });
+
+  it('accepts the real additive transition with its real, unforged tolerances', () => {
+    assert.equal(
+      correlationBaseline.benchTolerancesDigest(previousV12().tolerances),
+      manifest.previousTolerancesDigest,
+    );
   });
 });

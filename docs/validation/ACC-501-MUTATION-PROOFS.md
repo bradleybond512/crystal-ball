@@ -230,8 +230,155 @@ inconsistency at all.
   control exits `0` with a parseable candidate. Full suite: `216 pass / 0
   fail`.
 
+## Round 16 — Codex REQUEST_CHANGES on round 15 (four findings)
+
+Round 15 was sent for cross-agent review and came back `Verdict:
+REQUEST_CHANGES` with one P1 and three P2 findings. All four are fixed here.
+
+### P1 — migration source remained forgeable via unpinned tolerances
+
+`V13_MAY_MOVE` excludes `tolerances` from `benchBaselinePayloadDigest` so an
+ordinary (non-migration) reseed can edit tolerances freely — but
+`validateCorrelationBenchV12ToV13Migration` carried the caller-supplied
+`previousV12.tolerances` straight into the seeded candidate and, via
+`checkMigrationSharedGates`, into grading, with nothing authenticating it.
+Codex's repro: widening `couplingPrecisionDrop` from `0.02` to `0.1` in the
+supplied previous baseline still returned `{ok:true,reasons:[]}`.
+
+Fix: added `previousTolerancesDigest` to `CorrelationBenchMigrationV12ToV13`,
+pinned once via a new `benchTolerancesDigest()` helper computed over the real
+reviewed v12 `tolerances` block, and validated inside
+`validateCorrelationBenchV12ToV13Migration` independently of the
+`V13_MAY_MOVE` exemption — so tolerances remain editable at ordinary reseed
+time but a migration can't be graded against unreviewed tolerances.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Before checksum: `dd078f9e8d6044b3eb1d7e454f8867a37032d6f27397d52b026d96a1675b7d6c`
+  (same file identity as the round-15 entry above, prior to this round's edits).
+- Verified via `refuses a previous baseline whose tolerances are not the
+  reviewed ones — the shared-gate forgery Codex found` in
+  `bench-correlation.test.mts`: reproduces Codex's exact repro
+  (`couplingPrecisionDrop: 0.02 → 0.1`) against the fixed code and confirms
+  `ok:false` with the new `does not carry the reviewed v12 tolerances`
+  reason. No source mutation/restore round-trip needed for this one — it's a
+  new check with no prior code path to mutate; the negative test above
+  demonstrates it fires, and `accepts the real additive transition with its
+  real, unforged tolerances` demonstrates the pinned digest matches the real
+  reviewed value so genuine migrations still pass.
+
+### P2 — refusal test never reached `checkDrop`
+
+The round-15 refusal test used `couplingPrecision: 1.5`, which trips an
+earlier baseline range-validity guard (`[0,1]`) before ever reaching the
+tolerance-comparison logic (`checkDrop`) the test claimed to exercise — so it
+proved the CLI refuses invalid input, not that the tolerance gate works.
+
+Fix: rewrote the test to use `meanTruePairConfidence: 1` (valid — sits at the
+metric's own ceiling) with `meanTruePairConfidenceDrop: 0`, forcing
+`checkDrop`'s own `baseline - live > tolerance` branch to fire for real
+(`report.meanTruePairConfidence` is provably below `1`). Asserts the actual
+`checkDrop` diagnostic format (`/exceeds .* tolerance/`), not just `REFUSED`.
+
+- File: `src/services/correlation/__tests__/bench-correlation.test.mts`.
+- No source mutation needed — this was a test-construction defect, the same
+  category as the original round-15 finding it's fixing. Verified by running
+  the corrected test: exits `1`, stderr matches `mean true-pair confidence`
+  and `exceeds .* tolerance`, stdout carries no seeded JSON.
+
+### P2 — positive control too permissive
+
+The round-15 positive-control test only checked `typeof seeded.schemaVersion
+=== 'number'`, which would pass even if the CLI dropped or corrupted every
+other field.
+
+Fix: the positive control now compares the seeded output against the
+committed baseline field-by-field (union of both objects' keys, so a dropped
+field is caught too), excluding only the bookkeeping fields an ordinary
+reseed is allowed to touch (`schemaVersion`, `seededAt`, `note`,
+`reportDigest`, `witnessed`) — reachable because the corpus is frozen and the
+benchmark is deterministic, so a fresh seed against an unmodified previous
+baseline reproduces every graded field exactly.
+
+- File: `src/services/correlation/__tests__/bench-correlation.test.mts`.
+- Verified: the strengthened assertion passes against the real CLI output
+  (`refuses to re-seed against a --previous-baseline whose tolerance the live
+  run actually violates` / `seeds cleanly against a --previous-baseline the
+  live run genuinely satisfies` both still pass; the latter now exercises the
+  field-by-field comparison, not just a `typeof` check).
+
+### P2 — one-hop migration not enforced at runtime
+
+`manifest.toSchemaVersion === CORRELATION_BENCH_SCHEMA_VERSION` was only
+asserted by a unit test (`pins the migration to exactly one hop`), not by the
+validator function itself — a future schema bump that forgot to retire or rev
+this migration would pass every check in
+`validateCorrelationBenchV12ToV13Migration` and silently become a two-hop
+migration wearing a one-hop label.
+
+Fix: added a runtime check inside `validateCorrelationBenchV12ToV13Migration`
+comparing `manifest.toSchemaVersion` against the live
+`CORRELATION_BENCH_SCHEMA_VERSION` constant, pushing a refusal reason if they
+diverge.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Note on testability: the function's manifest-identity guard
+  (`JSON.stringify(manifest) !== JSON.stringify(CORRELATION_BENCH_V12_TO_V13_MIGRATION)`)
+  refuses any manifest that isn't byte-identical to the pinned module
+  constant, which means this new check's only reachable failure mode in
+  production is the pinned constant itself drifting from
+  `CORRELATION_BENCH_SCHEMA_VERSION` — not independently mutable via a test
+  argument without also tripping the identity guard first (both reasons
+  would fire together; the identity guard firing is not a bypass, it's proof
+  the two constants can't drift independently). Verified via `the runtime
+  one-hop check is real code, not just a test-level assertion` — confirms
+  the real manifest and the real schema-version constant agree, and that
+  `validateCorrelationBenchV12ToV13Migration` returns `ok:true` under that
+  agreement, so the added check does not falsely refuse the real migration.
+
+### P2 — union-of-keys drop detection was untested (mutation proof)
+
+The migration validator iterates the union of `candidate` and `before` keys
+specifically so a field present in the reviewed baseline but no longer
+produced by the live seed function is visible (`before`-only keys) — not just
+fields the candidate happens to still carry. No existing test forced that
+distinction: the existing "sees a forbidden field that was DROPPED" test
+deletes a field from `before`, but `candidate` still carries that same key
+(sourced live from `report`), so candidate-only iteration would already catch
+it — that test doesn't actually prove the union is load-bearing.
+
+Added a complementary test — `sees a field the reviewed baseline HAD that the
+live candidate no longer produces at all` — using a `before` with an extra
+field (`legacyRetiredField: 42`) that the candidate-producing path never
+emits, so only union iteration visits it.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Before checksum: `04696770b63a5ba784692bb0ddbac66743f26b862d9ac9926177191974b3dbe6`.
+- Mutation: `const keys = [...new Set([...Object.keys(candidate),
+  ...Object.keys(before)])]` → `const keys = [...new
+  Set([...Object.keys(candidate)])]` (dropped the `before` half of the union).
+- Confirmed diff: `git diff` showed exactly the one-line key-union narrowing.
+- Targeted result: `node --import tsx --test
+  src/services/correlation/__tests__/bench-correlation.test.mts` →
+  `219 pass / 1 fail`.
+- Failing assertion: exactly `sees a field the reviewed baseline HAD that the
+  live candidate no longer produces at all` failed — actual reason was
+  `does not carry the reviewed v12 payload` (from the earlier payload-digest
+  guard, which also fires for this fixture) instead of the expected
+  `legacyRetiredField moved from 42 to undefined` (which only the
+  union-iterating field loop produces) — confirming the union half of the key
+  set is what makes that specific reason reachable. No other test in the
+  220-test file was affected.
+- Restored checksum: `04696770b63a5ba784692bb0ddbac66743f26b862d9ac9926177191974b3dbe6`
+  (matches before checksum exactly).
+
+Full suite after all four round-16 fixes: `220 pass / 0 fail`
+(`bench-correlation.test.mts`), `413 pass / 0 fail` (`npm run
+test:correlation`), `npm run bench:correlation` → PASS, `npx tsc --noEmit`
+(both tsconfig.json and tsconfig.api.json) → 0 errors.
+
 ## Restoration
 
 Final checksums matched all pre-mutation values for every mutated file in
-both round 14 and round 15, and `git status --short` after each restoration
-showed only the legitimate round-15 source diff — no residual mutation.
+both round 14, round 15, and round 16, and `git status --short` after each
+restoration showed only the legitimate round-15/16 source diff — no residual
+mutation.

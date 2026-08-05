@@ -131,6 +131,10 @@ export class GlobeWebcamLayer {
     this.entities.clear();
     this.feedById.clear();
     for (const feed of feeds) {
+      // Some sources (e.g. GeoNet) can list the same camera under more than
+      // one entry with an identical derived id — Cesium's EntityCollection
+      // throws on a duplicate id, which halts the entire render loop.
+      if (this.feedById.has(feed.id)) continue;
       this.feedById.set(feed.id, feed);
       const entity = new Entity({
         id: feed.id,

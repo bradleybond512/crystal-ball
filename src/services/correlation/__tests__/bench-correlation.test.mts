@@ -3366,11 +3366,13 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
       assert.equal(typeof seeded.schemaVersion, 'number');
       // The corpus is frozen and the benchmark is deterministic, so a fresh
       // seed against an unmodified previous baseline should reproduce every
-      // graded field exactly — only the bookkeeping fields a reseed is
-      // allowed to touch may differ. A weaker check here (e.g. just
-      // typeof-checking schemaVersion) would pass even if the CLI silently
-      // dropped a field or emitted a stale/mismatched candidate.
-      const mayDiffer = new Set(['schemaVersion', 'seededAt', 'note', 'reportDigest', 'witnessed']);
+      // graded field exactly — including schemaVersion, note, reportDigest,
+      // and witnessed, none of which an ordinary reseed is entitled to
+      // change. Only seededAt (a wall-clock timestamp) genuinely differs
+      // between two runs. A wider exclusion set here would pass even if the
+      // CLI emitted a forged schemaVersion, a stale reportDigest, or a
+      // missing witness block — Codex caught this in round 16.
+      const mayDiffer = new Set(['seededAt']);
       const seededRecord = seeded as unknown as Record<string, unknown>;
       const committedRecord = committed as unknown as Record<string, unknown>;
       const keys = [...new Set([...Object.keys(seededRecord), ...Object.keys(committedRecord)])];
@@ -3523,7 +3525,7 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     assert.equal(manifest.toSchemaVersion, CORRELATION_BENCH_SCHEMA_VERSION);
   });
 
-  it('the runtime one-hop check is real code, not just a test-level assertion — mutating it breaks this test, not just "pins the migration"', () => {
+  it('the runtime one-hop check is real code, not just a test-level assertion', () => {
     // "pins the migration to exactly one hop" above only asserts a property
     // of the module constants; it says nothing about whether the VALIDATOR
     // FUNCTION would ever act on a mismatch. Because the manifest-identity
@@ -3532,14 +3534,16 @@ describe('round 15 — the v12→v13 schema bump is a pinned migration, not a sk
     // guard before reaching the toSchemaVersion check — so the toSchemaVersion
     // check's only reachable failure mode is the pinned constant itself
     // drifting from CORRELATION_BENCH_SCHEMA_VERSION (e.g. a v13→v14 bump
-    // that forgot to retire or rev this migration). That can't be simulated
-    // without mutating the compiled constant, so this instead proves the
-    // check is load-bearing the direct way: it duplicates the guard's exact
-    // condition against the real objects and confirms it's satisfied — if
-    // the runtime check in the source were deleted, this still passes, but
-    // if `CORRELATION_BENCH_SCHEMA_VERSION` bumps without this manifest
-    // being updated, both this test AND the real validator's refusal fire
-    // together, because they check the identical condition.
+    // that forgot to retire or rev this migration). A genuine mutation proof
+    // for that failure mode (mutating CORRELATION_BENCH_V12_TO_V13_MIGRATION.
+    // toSchemaVersion in the source, confirmed the real validator refuses
+    // with the expected reason text, then restored) is recorded in
+    // docs/validation/ACC-501-MUTATION-PROOFS.md — a prior version of this
+    // comment incorrectly claimed deleting the runtime check would leave
+    // this test green; that mutation was actually performed and disproved
+    // the claim, so the comment was corrected rather than left stale. This
+    // test itself asserts the module constant currently satisfies the
+    // invariant and that the real validator accepts the real inputs.
     assert.equal(
       correlationBaseline.CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion,
       CORRELATION_BENCH_SCHEMA_VERSION,

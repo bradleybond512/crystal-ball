@@ -376,9 +376,105 @@ Full suite after all four round-16 fixes: `220 pass / 0 fail`
 test:correlation`), `npm run bench:correlation` → PASS, `npx tsc --noEmit`
 (both tsconfig.json and tsconfig.api.json) → 0 errors.
 
+## Round 17 — Codex REQUEST_CHANGES on round 16 (three findings)
+
+Round 16 was sent for a second cross-agent review and came back a second
+genuine `Verdict: REQUEST_CHANGES` with three P2 findings, all fixed here.
+
+### P2 — positive control still permitted corrupted seed output
+
+Codex re-ran the positive-control test (`seeds cleanly against a
+--previous-baseline the live run genuinely satisfies`) and found the round-16
+`mayDiffer` exclusion set (`schemaVersion`, `seededAt`, `note`,
+`reportDigest`, `witnessed`) was wider than necessary — a fresh, unmodified
+reseed only ever legitimately changes `seededAt` (a wall-clock timestamp);
+`schemaVersion`, `note`, `reportDigest`, and `witnessed` are all reproduced
+exactly. With the wider set, the test would still pass against a CLI that
+emitted a forged `schemaVersion`, a stale `reportDigest`, or a missing
+`witnessed` block.
+
+Fix: narrowed `mayDiffer` to `{'seededAt'}` only.
+
+- File: `src/services/correlation/__tests__/bench-correlation.test.mts`.
+- No source mutation needed — this was a test-construction defect (the
+  exclusion set was over-broad), the same category as the round-15/16
+  findings it's fixing. Verified by re-running the narrowed test against the
+  real CLI: still passes, confirming `schemaVersion`, `note`, `reportDigest`,
+  and `witnessed` are in fact reproduced exactly on a genuine reseed, and
+  that the test would now fail if any of them weren't.
+
+### P2 — runtime one-hop guard had no load-bearing mutation proof
+
+The round-16 test for the `toSchemaVersion` runtime check asserted only that
+the module constant and the live schema version agree — its comment claimed
+"if the runtime check in the source were deleted, this still passes,"
+treating the check as untestable given the earlier manifest-identity guard.
+Codex asked for an actual mutation, not that assumption.
+
+Performing the mutation disproved the comment's own claim: mutating the
+*value* of `CORRELATION_BENCH_V12_TO_V13_MIGRATION.toSchemaVersion` (not
+deleting the runtime check) leaves the manifest self-identical (it's compared
+against itself via the same imported constant), so the identity guard still
+passes — and the runtime check then correctly refuses, proving it IS
+reachable through the real validator, just not via a caller-supplied
+mismatched manifest object.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Before checksum: `081b535902de7c75eeb090b8c18083af17ccbdf32af6d227202cc1a50577a511`.
+- Mutation: `toSchemaVersion: 13,` → `toSchemaVersion: 99 as unknown as 13,`
+  on `CORRELATION_BENCH_V12_TO_V13_MIGRATION` (bypasses the TS literal type
+  since `tsx` transpiles without type-checking; the mismatch is real at
+  runtime).
+- Confirmed diff: `git diff` showed exactly the one-line value change.
+- Targeted result: `bench-correlation.test.mts` → `217 pass / 3 fail`.
+- Failing tests: `accepts the real additive transition` — failed with reason
+  `v12→v13 migration manifest targets schemaVersion 99, but the compiled gate
+  is schemaVersion 13 — this migration is no longer the one-hop path to the
+  live schema` (the real validator's refusal, proving the check fires
+  through the public function); `pins the migration to exactly one hop` and
+  `the runtime one-hop check is real code, not just a test-level assertion`
+  — both failed on `99 !== 13`, as expected for assertions against the
+  mutated constant. No other test in the 220-test file was affected.
+- Restored checksum: `081b535902de7c75eeb090b8c18083af17ccbdf32af6d227202cc1a50577a511`
+  (matches before checksum exactly).
+- The test's comment was corrected to remove the disproven "if deleted, this
+  still passes" claim and point to this proof instead of asserting an
+  untested assumption.
+
+### P2 — tolerances-authentication check (P1 fix) lacked mutation proof
+
+Round 16's write-up said the new `previousTolerancesDigest` check had "no
+prior code path to mutate" since it was newly added. Codex correctly pointed
+out this reasoning doesn't hold — a newly added check still has code that can
+be short-circuited to prove the corresponding test depends on it, same as
+any other check in this function.
+
+- File: `src/services/correlation/bench-correlation-baseline.ts`.
+- Before checksum: `081b535902de7c75eeb090b8c18083af17ccbdf32af6d227202cc1a50577a511`
+  (same file identity as the toSchemaVersion proof above, run as a separate
+  mutation after restoring that one).
+- Mutation: `if (benchTolerancesDigest(previousV12.tolerances) !==
+  manifest.previousTolerancesDigest)` → `if (false &&
+  benchTolerancesDigest(...) !== manifest.previousTolerancesDigest)`
+  (short-circuits the check to never fire).
+- Confirmed diff: `git diff` showed exactly the one-line `false &&` insertion.
+- Targeted result: `bench-correlation.test.mts` → `219 pass / 1 fail`.
+- Failing test: exactly `refuses a previous baseline whose tolerances are not
+  the reviewed ones — the shared-gate forgery Codex found` failed on
+  `true !== false` (the test's `assert.equal(ok, false)` — with the check
+  short-circuited, the forged-tolerance fixture is accepted as `ok:true`). No
+  other test in the 220-test file was affected, confirming this is the sole
+  test depending on the check.
+- Restored checksum: `081b535902de7c75eeb090b8c18083af17ccbdf32af6d227202cc1a50577a511`
+  (matches before checksum exactly).
+
+Full suite after all three round-17 fixes: `220 pass / 0 fail`
+(`bench-correlation.test.mts`), `npx tsc --noEmit` (both tsconfig.json and
+tsconfig.api.json) → 0 errors.
+
 ## Restoration
 
-Final checksums matched all pre-mutation values for every mutated file in
-both round 14, round 15, and round 16, and `git status --short` after each
-restoration showed only the legitimate round-15/16 source diff — no residual
-mutation.
+Final checksums matched all pre-mutation values for every mutated file across
+round 14, round 15, round 16, and round 17, and `git status --short` after
+each restoration showed only the legitimate source diff for that round — no
+residual mutation.

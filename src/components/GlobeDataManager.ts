@@ -1099,10 +1099,19 @@ export class GlobeDataManager {
  // collide on a reload/retry (mirrors the maritime refresh pattern).
  layer.source.entities.removeAll();
 
+ // First-record-wins on a duplicate id, matching addEntitySafe()'s marker
+ // policy below — otherwise the forecast map and the plotted marker could
+ // disagree about which of two conflicting records is "the" quake.
+ const seenIds = new Set<string>();
+
  for (const eq of quakes) {
  const lat = eq.location?.latitude;
  const lon = eq.location?.longitude;
  if (lat == null || lon == null) continue;
+ if (eq.id) {
+ if (seenIds.has(eq.id)) continue;
+ seenIds.add(eq.id);
+ }
 
  if (eq.magnitude >= 4 && eq.id) {
  nextForecasts.set(

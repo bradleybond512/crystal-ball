@@ -7,7 +7,7 @@
  * geo-convergence detection).
  */
 
-import type { ModeChangedDetail, WarScoreDetail } from './mode-manager';
+import type { WarScoreDetail } from './mode-manager';
 import type { BreakingAlert } from './breaking-news-alerts';
 import type { Hotspot } from '@/types';
 
@@ -135,7 +135,7 @@ function drawWavefronts(now: number): void {
  const pt = projectFn(w.lat, w.lon);
  if (!pt) continue;
 
- const t = Math.min(1, (now - w.startMs) / w.durationMs);
+ const t = arrivalProgress(now, w.startMs, w.durationMs);
  // ease-out cubic
  const eased = 1 - (1 - t) ** 3;
  const radius  = eased * w.maxRadius;
@@ -222,6 +222,16 @@ function drawFlares(now: number, W: number, H: number): void {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
+export function arrivalProgress(now: number, startMs: number, durationMs: number): number {
+  return Math.max(0, Math.min(1, (now - startMs) / durationMs));
+}
+
+export function coronaPhase(lat: number, lon: number): number {
+  const seed = Math.sin(lat * 12.9898 + lon * 78.233) * 43_758.5453;
+  const normalized = seed - Math.floor(seed);
+  return normalized * Math.PI * 2;
+}
+
 /**
  * Update the current map center used as default wavefront origin.
  * Called by DeckGLMap on each state-change.
@@ -269,7 +279,7 @@ export function triggerCorona(lat: number, lon: number, type: ThreatType = 'gene
   );
   if (existing) { existing.color = THREAT_COLORS[type]; return; }
 
-  coronas.push({ lat, lon, color: THREAT_COLORS[type], phase: Math.random() * Math.PI * 2 });
+  coronas.push({ lat, lon, color: THREAT_COLORS[type], phase: coronaPhase(lat, lon) });
   startLoop();
 }
 
@@ -285,7 +295,7 @@ export function setCoronaTargets(hotspots: Pick<Hotspot, 'lat' | 'lon' | 'level'
  lat: h.lat,
  lon: h.lon,
  color: THREAT_COLORS.conflict,
- phase: Math.random() * Math.PI * 2,
+	 phase: coronaPhase(h.lat, h.lon),
  });
  }
   }
@@ -331,7 +341,7 @@ const _warScoreListener = ((e: CustomEvent<WarScoreDetail>) => {
   if (e.detail.score >= e.detail.threshold) triggerGlobalFlare('conflict');
 }) as EventListener;
 
-const _modeChangedListener = ((_e: CustomEvent<ModeChangedDetail>) => {
+const _modeChangedListener = (() => {
   // Global flares formerly tied to war/disaster/finance mode activation are
   // now driven by their underlying signals (wm:war-score, wm:breaking-news),
   // which still wire up in wireEvents() above.

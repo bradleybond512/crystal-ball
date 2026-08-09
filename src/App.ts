@@ -52,6 +52,7 @@ import { resolveUserRegion } from '@/utils/user-location';
 import type { GodsVisionView } from '@/components/GodsVisionView';
 import { getRuntimeConfigSnapshot } from '@/services/runtime-config';
 import { startNotificationRouter } from '@/services/notification-router';
+import { bindGodsVisionControls } from '@/app/gods-vision-events';
 
 export let cyberReactorUnsubscribe: (() => void) | null = null;
 
@@ -86,6 +87,7 @@ export class App {
   private desktopNotifications: DesktopNotifications;
 
   private godsVisionView: GodsVisionView | null = null;
+  private releaseGodsVisionControls: () => void = () => {};
   private modules: { destroy(): void }[] = [];
   private unsubAiFlow: (() => void) | null = null;
 
@@ -354,6 +356,9 @@ export class App {
  this.refreshScheduler,
  this.eventHandlers,
  ];
+ this.releaseGodsVisionControls = bindGodsVisionControls(document, () => {
+   void this.toggleGodsVision().catch(() => {/* error handled in GodsVisionView */});
+ });
   }
 
   public async init(): Promise<void> {
@@ -482,11 +487,6 @@ export class App {
  this.eventHandlers.setupMapLayerHandlers();
  this.countryIntel.init();
 
- // God's Eye toggle (keyboard shortcut + sidebar button dispatch this)
- document.addEventListener('cb:toggle-gods-vision', () => {
- this.toggleGodsVision().catch(() => {/* error handled in GodsVisionView */});
- });
-
  // A panel whose loading budget expired shows a "Source unreachable — Retry"
  // state; clicking Retry dispatches cb:panel-retry. Re-run the data wave so the
  // panel gets a fresh fetch. Debounced so mashing Retry across several stalled
@@ -550,8 +550,9 @@ export class App {
  this.eventHandlers.setupPanelViewTracking();
   }
 
-  public destroy(): void {
+ public destroy(): void {
  this.state.isDestroyed = true;
+ this.releaseGodsVisionControls();
 
  if (this.onPanelRetry) {
  document.removeEventListener('cb:panel-retry', this.onPanelRetry);

@@ -84,6 +84,7 @@ interface PanelEntry {
   registration: Required<Omit<PanelHealthRegistration, 'label' | 'dependencies'>> &
     Pick<PanelHealthRegistration, 'label' | 'dependencies'>;
   mounted: boolean;
+  explicitlyUnmounted: boolean;
   enabled: boolean;
   visible: boolean;
   lastRenderAt?: number;
@@ -117,6 +118,7 @@ export function createPanelHealthRegistry(
         dependencies: reg.dependencies,
       },
       mounted: false,
+      explicitlyUnmounted: false,
       enabled: true, // panels default to enabled until told otherwise
       visible: false,
     };
@@ -131,16 +133,23 @@ export function createPanelHealthRegistry(
   function recordMount(panelId: PanelId): void {
     const e = ensureEntry(panelId);
     e.mounted = true;
+    e.explicitlyUnmounted = false;
   }
 
   function recordUnmount(panelId: PanelId): void {
     const e = entries.get(panelId);
-    if (e) e.mounted = false;
+    if (e) {
+      e.mounted = false;
+      e.visible = false;
+      e.explicitlyUnmounted = true;
+    }
   }
 
   function recordRender(panelId: PanelId, opts: { hadData?: boolean } = {}): void {
     const e = ensureEntry(panelId);
+    if (e.explicitlyUnmounted) return;
     e.mounted = true;
+    e.explicitlyUnmounted = false;
     e.lastRenderAt = now();
     if (opts.hadData) e.lastDataUpdateAt = now();
     // A successful render clears recent errors so the panel can recover.
@@ -150,6 +159,8 @@ export function createPanelHealthRegistry(
 
   function recordError(panelId: PanelId, error: string): void {
     const e = ensureEntry(panelId);
+    if (e.explicitlyUnmounted) return;
+    e.mounted = true;
     e.lastErrorAt = now();
     e.lastError = error;
   }
@@ -171,6 +182,8 @@ export function createPanelHealthRegistry(
 
   function recordHeartbeat(panelId: PanelId): void {
     const e = ensureEntry(panelId);
+    if (e.explicitlyUnmounted) return;
+    e.mounted = true;
     e.lastHeartbeatAt = now();
   }
 
@@ -222,7 +235,6 @@ function computeHealth(entry: PanelEntry, t: number): PanelHealth {
   const lastSignal = mostRecent([
     entry.lastRenderAt,
     entry.lastDataUpdateAt,
-    entry.lastHeartbeatAt,
   ]);
   const staleAge = lastSignal === undefined ? undefined : t - lastSignal;
 
@@ -248,10 +260,16 @@ function decideStatus(entry: PanelEntry, staleAge: number | undefined): HealthSt
   // Disabled panels are explicitly out of scope — surface them as
   // 'unknown' so dashboards don't paint them red.
   if (!entry.enabled) return 'unknown';
+  if (!entry.mounted) {
+    return entry.lastRenderAt === undefined && entry.lastDataUpdateAt === undefined
+      ? 'blind'
+      : 'unknown';
+  }
+  if (!entry.visible) return 'unknown';
   // A recent error trumps stale age — show the user what actually failed.
   if (entry.lastError && entry.lastErrorAt !== undefined) return 'failing';
   // Never observed → blind so the UI flags it for first-render check.
-  if (staleAge === undefined) return entry.mounted ? 'unknown' : 'blind';
+  if (staleAge === undefined) return 'unknown';
   if (staleAge >= entry.registration.failingAfterMs) return 'failing';
   if (staleAge >= entry.registration.staleAfterMs) return 'stale';
   return 'healthy';

@@ -80,6 +80,22 @@ test('rule 2: panel → failing emits alert', () => {
   assert.ok(alerts.some(a => a.subjectId === 'news-panel' && a.toStatus === 'failing'), 'must alert on panel failing');
 });
 
+test('rule 2: hidden or unmounted panel failures do not emit alerts', () => {
+  const prev = baseReport({
+    panels: [
+      { panelId: 'hidden-panel', status: 'healthy', mounted: true, enabled: true, visible: false, dependencies: [] },
+      { panelId: 'unmounted-panel', status: 'healthy', mounted: false, enabled: true, visible: true, dependencies: [] },
+    ],
+  });
+  const curr = baseReport({
+    panels: [
+      { panelId: 'hidden-panel', status: 'failing', mounted: true, enabled: true, visible: false, dependencies: [] },
+      { panelId: 'unmounted-panel', status: 'failing', mounted: false, enabled: true, visible: true, dependencies: [] },
+    ],
+  });
+  assert.deepEqual(detectDegradations(prev, curr), []);
+});
+
 // ── Rule 3: unsafeSuppressions count increasing ─────────────────────────
 
 test('rule 3: unsafeSuppressions increasing emits notification_pipeline alert', () => {

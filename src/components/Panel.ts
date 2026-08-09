@@ -882,10 +882,11 @@ export class Panel {
   }
 
   public setContent(html: string, onRendered?: () => void): void {
+ if (this.baseDestroyed) return;
  // No-op detection uses only cached strings — avoid reading innerHTML, which
  // forces a full subtree serialization every call.
- if (this.pendingContentHtml === html) return;
- if (this.pendingContentHtml === null && this.lastAppliedContentHtml === html) return;
+ if (this.pendingContentHtml === html) { this.noteRenderRefresh(); return; }
+ if (this.pendingContentHtml === null && this.lastAppliedContentHtml === html) { this.noteRenderRefresh(); return; }
 
  this.pendingContentHtml = html;
  this.pendingOnRendered = onRendered ?? null;
@@ -965,8 +966,20 @@ export class Panel {
   }
 
   /** Mark the panel as freshly updated — flashes the content and resets the heartbeat. */
-  public markFresh(): void {
+  private noteDataUpdate(): void {
  this.lastTickAt = Date.now();
+ try { getPanelHealthRegistry().recordDataUpdate(this.panelId); } catch { /* diagnostics optional */ }
+ this.updateHeartbeat();
+  }
+
+  private noteRenderRefresh(): void {
+ this.lastTickAt = Date.now();
+ try { getPanelHealthRegistry().recordRender(this.panelId); } catch { /* diagnostics optional */ }
+ this.updateHeartbeat();
+  }
+
+  public markFresh(): void {
+ this.noteDataUpdate();
  this.content.classList.remove('panel-fresh-flash');
  // Re-add the class on the next animation frame instead of forcing a
  // synchronous layout flush with `void offsetWidth`. The 1-frame (~16 ms)
@@ -979,7 +992,6 @@ export class Panel {
  this.freshFlashRafId = null;
  this.content.classList.add('panel-fresh-flash');
  });
- this.updateHeartbeat();
   }
 
   /** Render the LLM-generated narrative line above content. */
@@ -1029,13 +1041,17 @@ export class Panel {
    * fully visible, avoiding a blank flash on scroll-in.
    */
   private setupVisibilityTracking(): void {
- if (typeof IntersectionObserver === 'undefined') return;
+ if (typeof IntersectionObserver === 'undefined') {
+   try { getPanelHealthRegistry().setVisible(this.panelId, true); } catch { /* diagnostics optional */ }
+   return;
+ }
  this.intersectionObserver = new IntersectionObserver(
  (entries) => {
  const entry = entries[entries.length - 1];
  if (!entry) return;
  const wasHidden = !this.panelIntersecting;
  this.panelIntersecting = entry.isIntersecting;
+ try { getPanelHealthRegistry().setVisible(this.panelId, this.panelIntersecting); } catch { /* diagnostics optional */ }
  // Pause CSS animations (loading spinners, pulse dots) on off-screen panels.
  // The render-gate already skips their JS re-renders, but WebKit keeps
  // advancing their CSS animations and recomputing the compositing overlap
@@ -1097,6 +1113,13 @@ export class Panel {
  if (typeof document !== 'undefined') {
  Panel._visibilityHandler = () => {
  Panel.appVisible = document.visibilityState !== 'hidden';
+ try {
+   const registry = getPanelHealthRegistry();
+   for (const p of Panel.instances) {
+     const visible = Panel.appVisible && p.panelIntersecting;
+     registry.setVisible(p.panelId, visible);
+   }
+ } catch { /* diagnostics optional */ }
  if (Panel.appVisible) {
  // Flush panels that are currently on-screen immediately.
  // Off-screen panels that were suppressed while hidden will be flushed by
@@ -1423,6 +1446,7 @@ export class Panel {
   public destroy(): void {
  if (this.baseDestroyed) return;
  this.baseDestroyed = true;
+ try { getPanelHealthRegistry().recordUnmount(this.panelId); } catch { /* diagnostics optional */ }
  Panel.instances.delete(this);
  if (Panel.instances.size === 0) Panel.stopHeartbeatTicker();
  this.intersectionObserver?.disconnect();

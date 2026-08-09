@@ -3001,14 +3001,6 @@ export class PanelLayoutManager implements AppModule {
  document.getElementById('ghostModeBtn')?.addEventListener('click', () => {
  toggleGhostMode();
  });
- // God's Eye button — use delegation to survive any DOM rebuilds
- document.addEventListener('click', (e) => {
- const target = (e.target as HTMLElement).closest('#godsVisionBtn');
- if (target) {
- document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision'));
- }
- });
-
  // Saved-places proximity filter toggle
  const syncFilterBtn = () => {
  const btn = document.getElementById('savedPlacesFilterBtn');

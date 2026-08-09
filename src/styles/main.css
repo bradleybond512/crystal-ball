@@ -67,15 +67,16 @@
   --font-body: var(--font-ui, -apple-system, system-ui, sans-serif);
 
   /* Header height tokens — single source of truth for the top-bar stack.
-     --eew-bar-h matches the min-height set on .eew-status-bar below. */
+     The header and fixed web overlays both consume --web-header-h. */
   --eew-bar-h: 32px;
+  --web-header-h: 40px;
   --staleness-banner-h: 32px;
   /* Live height of the NotificationStack column — updated by ResizeObserver. */
   --notification-stack-h: 0px;
   /* Derived: where things sit when both bars are visible */
   --below-eew: var(--eew-bar-h);
   /* --below-banners tracks the full header height dynamically via ResizeObserver. */
-  --below-banners: calc(var(--eew-bar-h) + var(--notification-stack-h));
+  --below-banners: calc(var(--below-eew) + var(--notification-stack-h));
 
   /* Overlay stacking scale — single source of truth for layering. */
   --z-strip: 1040;
@@ -298,6 +299,12 @@ canvas,
   bottom: 0;
 }
 
+body:not(.is-desktop-macos) #app {
+  top: var(--below-banners);
+  height: calc(100% - var(--below-banners));
+  min-height: 0;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -305,7 +312,7 @@ canvas,
   padding: 8px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  height: 40px;
+  height: var(--web-header-h);
   flex-shrink: 0;
 }
 
@@ -901,6 +908,10 @@ canvas,
   padding-top: var(--notification-stack-h);
 }
 
+body:not(.is-desktop-macos) .main-content {
+  padding-top: 0;
+}
+
 /* ── At-a-glance summary strip (Wave 5b) ─────────────────────────────────
    One slim row docked above the panels grid, inside the .main-content
    scroll container (so at rest it sits below the container's
@@ -921,6 +932,10 @@ canvas,
   background: var(--bg);
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+body:not(.is-desktop-macos) .cb-summary-strip {
+  top: 0;
 }
 
 .cb-summary-strip-segs {
@@ -18961,7 +18976,7 @@ body:has(.replay-scrubber:not([hidden])) .community-widget {
 /* ── Just-In rail ──────────────────────────────────────────────────── */
 .just-in-rail {
   position: fixed;
-  top: 8px;
+  top: calc(var(--below-banners) + var(--web-header-h) + 8px);
   right: 12px;
   z-index: 10002;
   display: flex;
@@ -18969,6 +18984,9 @@ body:has(.replay-scrubber:not([hidden])) .community-widget {
   gap: 4px;
   pointer-events: none;
   max-width: 360px;
+}
+body.is-desktop-macos .just-in-rail {
+  top: calc(var(--below-banners) + 8px);
 }
 .just-in-row {
   pointer-events: auto;

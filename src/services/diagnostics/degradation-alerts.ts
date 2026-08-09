@@ -74,7 +74,7 @@ export function detectDegradations(
     const prevStatus: HealthStatus = prevPanel?.status ?? 'unknown';
     const currStatus = panel.status;
 
-    if (currStatus === prevStatus) continue;
+    if (currStatus === prevStatus || !panel.enabled || !panel.mounted || !panel.visible) continue;
 
     if (currStatus === 'stale' || currStatus === 'failing') {
       const label = panel.label ?? panel.panelId;

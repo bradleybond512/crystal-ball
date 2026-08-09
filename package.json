@@ -243,7 +243,7 @@
     "@deck.gl/geo-layers": "^9.3.2",
     "@deck.gl/layers": "^9.3.3",
     "@deck.gl/mapbox": "^9.3.2",
-    "@deck.gl/mesh-layers": "^9.3.2",
+    "@deck.gl/mesh-layers": "^9.3.7",
     "@luma.gl/core": "^9.3.6",
     "@luma.gl/engine": "^9.3.6",
     "@luma.gl/gltf": "^9.3.6",

@@ -475,6 +475,13 @@ function setEntityTimestamp(entity: import('cesium').Entity, when: Date): void {
   entity.properties.addProperty('timestamp', new ConstantProperty(when));
 }
 
+function setEntityTimestampIfPresent(
+  entity: import('cesium').Entity | undefined,
+  when: string | number | null | undefined,
+): void {
+  if (entity && when) setEntityTimestamp(entity, new Date(when));
+}
+
 /** Read an entity's `timestamp` property and coerce to ms epoch.
  *  Returns null when no timestamp is set. Used by cursor-window
  *  opacity. Exported for tests. */
@@ -617,6 +624,19 @@ const DEFERRED_LAYER_ALTITUDE: Record<string, number> = {
 // Settle delay before the power overlay fetches a new anchor cell, so an active
 // camera pan doesn't fire an Overpass request for every cell crossed.
 const POWER_FETCH_DEBOUNCE_MS = 600;
+
+// Cesium's EntityCollection throws (and halts the ENTIRE render loop) if an
+// id already exists in the collection. External feeds occasionally emit two
+// records that map to the same id (e.g. a shared camera listed under two
+// GeoNet volcanoes, or an upstream fusion glitch); skipping the duplicate
+// here is cheap insurance against a whole-globe crash from one bad record.
+function addEntitySafe<T extends { entities: { add: (e: Entity.ConstructorOptions | Entity) => Entity; getById: (id: string) => Entity | undefined } }>(
+  source: T,
+  entity: Entity.ConstructorOptions | Entity,
+): Entity | undefined {
+  if (entity.id != null && source.entities.getById(entity.id)) return undefined;
+  return source.entities.add(entity);
+}
 
 export class GlobeDataManager {
   private viewer: Viewer;
@@ -1102,7 +1122,7 @@ export class GlobeDataManager {
  const color = isMajor ? C.earthquake : C.earthquakeMinor;
  const scale = Math.max(0.25, eq.magnitude * 0.08);
 
- const eqEntity = layer.source.entities.add({
+ const eqEntity = addEntitySafe(layer.source, {
  // Stable board id so the personal lens can style this marker (E4). Quakes
  // without an upstream id fall back to Cesium's auto-generated unique id.
  ...(eq.id ? { id: boardEntityId('earthquake', eq.id) } : {}),
@@ -1131,9 +1151,7 @@ export class GlobeDataManager {
  } : undefined,
  description: `${eq.place} — M${eq.magnitude} at ${eq.depthKm}km depth`,
  });
- if (eq.occurredAt) {
- setEntityTimestamp(eqEntity, new Date(eq.occurredAt));
- }
+ setEntityTimestampIfPresent(eqEntity, eq.occurredAt);
  }
 
  this.aftershockForecasts = nextForecasts;
@@ -1843,7 +1861,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  const alpha = 0.4 + 0.6 * Math.abs(Math.sin(t * Math.PI));
  return Color.RED.withAlpha(alpha);
  }, false);
- layer.source.entities.add(new Entity({
+ addEntitySafe(layer.source, new Entity({
  id: `aviation-flight-${flight.icao24}`,
  position: Cartesian3.fromDegrees(flight.lon, flight.lat, altMeters),
  point: {
@@ -1872,7 +1890,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  return;
  }
  const icon = flight.category === 'helicopter' ? ICON_HELICOPTER : ICON_TRANSPORT;
- layer.source.entities.add(new Entity({
+ addEntitySafe(layer.source, new Entity({
  id: `aviation-flight-${flight.icao24}`,
  position: Cartesian3.fromDegrees(flight.lon, flight.lat, altMeters),
  billboard: {
@@ -1920,7 +1938,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  const style = helpers.notamStyle(tfr);
  const outline = Color.fromCssColorString(style.outlineHex);
  const fill = Color.fromCssColorString(style.fillHex).withAlpha(style.fillAlpha);
- layer.source.entities.add(new Entity({
+ addEntitySafe(layer.source, new Entity({
  id: `aviation-tfr-${tfr.id}`,
  polygon: new PolygonGraphics({
  hierarchy: new PolygonHierarchy(positions),
@@ -1943,7 +1961,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  const positions = sigmet.polygon.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
  const style = helpers.sigmetStyle(sigmet);
  const color = Color.fromCssColorString(style.hex);
- layer.source.entities.add(new Entity({
+ addEntitySafe(layer.source, new Entity({
  id: `aviation-sigmet-${sigmet.id}`,
  polygon: new PolygonGraphics({
  hierarchy: new PolygonHierarchy(positions),
@@ -1965,7 +1983,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
   ): void {
  const positions = ash.polygon.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
  const color = Color.fromCssColorString(helpers.VOLCANIC_ASH_HEX);
- layer.source.entities.add(new Entity({
+ addEntitySafe(layer.source, new Entity({
  id: `aviation-ash-${ash.id}`,
  polygon: new PolygonGraphics({
  hierarchy: new PolygonHierarchy(positions),
@@ -1989,7 +2007,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  const altMeters = ac.altitudeFt === null ? 0 : ac.altitudeFt * 0.3048;
  const style = helpers.aircraftStyle(ac);
  const color = Color.fromCssColorString(style.hex);
- layer.source.entities.add(new Entity({
+ addEntitySafe(layer.source, new Entity({
  id: `aviation-mil-${ac.icao24}`,
  position: Cartesian3.fromDegrees(ac.lon, ac.lat, altMeters),
  point: {
@@ -2119,7 +2137,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
     for (const v of vessels) {
       const css = helpers.vesselColorCss(v.category);
       const color = Color.fromCssColorString(css);
-      layer.source.entities.add({
+      addEntitySafe(layer.source, {
         id: `maritime-vessel-${v.mmsi}`,
         position: Cartesian3.fromDegrees(v.lon, v.lat),
         point: {

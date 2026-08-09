@@ -13,6 +13,7 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   type Viewer,
+  type EntityCluster,
 } from 'cesium';
 import { escapeHtml } from '@/utils/sanitize';
 import type { WebcamFeed } from './webcam-types';
@@ -39,6 +40,20 @@ const CATEGORY_GLYPH: Record<string, string> = {
   stream: '💧',
   traffic: '🚗',
   nature: '🌲',
+};
+
+export const configureWebcamCluster: EntityCluster.newClusterCallback = (clustered, cluster) => {
+  cluster.billboard.show = false;
+  cluster.point.show = true;
+  cluster.point.id = clustered;
+  cluster.point.color = Color.fromCssColorString('#1f6feb');
+  cluster.point.outlineColor = Color.BLACK;
+  cluster.point.outlineWidth = 1;
+  cluster.point.pixelSize = Math.min(30, 14 + String(clustered.length).length * 5);
+  cluster.label.show = true;
+  cluster.label.text = String(clustered.length);
+  cluster.label.font = 'bold 12px sans-serif';
+  cluster.label.fillColor = Color.WHITE;
 };
 
 export interface WebcamGlobeLayerOptions {
@@ -77,18 +92,7 @@ export class GlobeWebcamLayer {
     clustering.enabled = true;
     clustering.pixelRange = 42;
     clustering.minimumClusterSize = 4;
-    clustering.clusterEvent.addEventListener((clustered, cluster) => {
-      cluster.billboard.show = false;
-      cluster.point.show = true;
-      cluster.point.color = Color.fromCssColorString('#1f6feb');
-      cluster.point.outlineColor = Color.BLACK;
-      cluster.point.outlineWidth = 1;
-      cluster.point.pixelSize = Math.min(30, 14 + String(clustered.length).length * 5);
-      cluster.label.show = true;
-      cluster.label.text = String(clustered.length);
-      cluster.label.font = 'bold 12px sans-serif';
-      cluster.label.fillColor = Color.WHITE;
-    });
+    clustering.clusterEvent.addEventListener(configureWebcamCluster);
 
     this.clickHandler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
     this.clickHandler.setInputAction((event: { position: Cartesian2 }) => {
@@ -131,6 +135,10 @@ export class GlobeWebcamLayer {
     this.entities.clear();
     this.feedById.clear();
     for (const feed of feeds) {
+      // Some sources (e.g. GeoNet) can list the same camera under more than
+      // one entry with an identical derived id — Cesium's EntityCollection
+      // throws on a duplicate id, which halts the entire render loop.
+      if (this.feedById.has(feed.id)) continue;
       this.feedById.set(feed.id, feed);
       const entity = new Entity({
         id: feed.id,

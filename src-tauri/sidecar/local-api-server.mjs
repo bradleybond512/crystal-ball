@@ -17779,7 +17779,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'HAZECAM', path: '/api/webcams/hazecam', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
- const port = process.env.SIDECAR_PORT ?? '46123';
+ const port = context.port;
  const baseUrl = `http://127.0.0.1:${port}`;
  const results = await Promise.allSettled(targets.map(async (sub) => {
  try {
@@ -18359,7 +18359,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(radiusKm) || radiusKm <= 0) {
  return json({ feeds: [], error: 'lat, lon, radiusKm required' }, 400);
  }
- const port = process.env.SIDECAR_PORT ?? '46123';
+ const port = context.port;
  try {
  // Same LOCAL_API_TOKEN gate as the master aggregator — forward the token.
  const r = await fetchWithTimeout(`http://127.0.0.1:${port}/api/webcams`, { headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20000);

@@ -272,6 +272,7 @@
     "posthog-js": "^1.373.2",
     "satellite.js": "7.0.0",
     "telegram": "2.26.22",
+    "texture-compressor": "file:vendor/texture-compressor-safe",
     "three": "^0.184.0",
     "topojson-client": "^3.1.0",
     "ws": "^8.21.0",
@@ -289,6 +290,7 @@
     "postcss": "^8.5.23",
     "esbuild": "^0.28.1",
     "@babel/core": "^7.29.7",
+    "texture-compressor": "$texture-compressor",
     "ws": "^8.21.0"
   },
   "engines": {

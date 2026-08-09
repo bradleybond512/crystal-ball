@@ -3,10 +3,14 @@ import test from 'node:test';
 
 import {
   alertSeverityClass,
+  buildWindStrip,
+  bzBadgeColor,
   formatArrivalCountdown,
   gpsRiskBlurb,
   stormLevelLabel,
   timeAgo,
+  windObservationAge,
+  windSpeedBadgeColor,
   xrayBadgeColor,
 } from '../space-weather-helpers.ts';
 
@@ -79,4 +83,232 @@ test('timeAgo formats elapsed time relative to "now"', () => {
   assert.equal(timeAgo(new Date(NOW), NOW), 'just now');
   assert.equal(timeAgo(new Date(NOW - 5 * 60 * 1000), NOW), '5m ago');
   assert.equal(timeAgo(new Date(NOW - 3 * HOUR_MS), NOW), '3h ago');
+});
+
+test('bzBadgeColor is asymmetric — only southward Bz is dangerous', () => {
+  // The whole point of the scale. A symmetric magnitude test would paint a
+  // strongly northward IMF, which is the quietest condition there is, the same
+  // red as the storm that actually knocks the grid about.
+  assert.equal(bzBadgeColor(-18), '#ff453a');
+  assert.equal(bzBadgeColor(18), '#4caf50');
+  assert.equal(bzBadgeColor(-12), '#ff5722');
+  assert.equal(bzBadgeColor(-7), '#ff9800');
+  assert.equal(bzBadgeColor(-1), '#4caf50');
+  assert.equal(bzBadgeColor(0), '#4caf50');
+});
+
+test('bzBadgeColor treats an absent or non-finite reading as unknown, not calm', () => {
+  // Green would assert "quiet" off a value we never got.
+  assert.equal(bzBadgeColor(null), '#9e9e9e');
+  assert.equal(bzBadgeColor(Number.NaN), '#9e9e9e');
+});
+
+test('windSpeedBadgeColor escalates with stream speed', () => {
+  assert.equal(windSpeedBadgeColor(380), '#4caf50');
+  assert.equal(windSpeedBadgeColor(520), '#ffeb3b');
+  assert.equal(windSpeedBadgeColor(650), '#ff9800');
+  assert.equal(windSpeedBadgeColor(850), '#ff453a');
+  assert.equal(windSpeedBadgeColor(null), '#9e9e9e');
+});
+
+test('windObservationAge reports a fresh sample as fresh', () => {
+  const r = windObservationAge(new Date(NOW - 4 * 60 * 1000).toISOString(), NOW);
+  assert.equal(r.label, '4m ago');
+  assert.equal(r.stale, false);
+});
+
+test('windObservationAge flags a sample past the L1 cadence as stale', () => {
+  // Nothing in parseSolarWindFeed bounds observation age — it returns the
+  // newest row it can find however old that is — so an hour-old reading
+  // otherwise renders identically to a live one.
+  const r = windObservationAge(new Date(NOW - 90 * 60 * 1000).toISOString(), NOW);
+  assert.equal(r.label, '1h ago');
+  assert.equal(r.stale, true);
+});
+
+test('windObservationAge treats an unknown age as stale rather than current', () => {
+  // Claiming freshness we cannot demonstrate is the failure worth avoiding:
+  // these all render as a number the user would read as "now".
+  for (const bad of [null, '', 'not-a-date']) {
+    const r = windObservationAge(bad, NOW);
+    assert.equal(r.label, 'age unknown', `${String(bad)} is not a time`);
+    assert.equal(r.stale, true, `${String(bad)} must not read as fresh`);
+  }
+});
+
+test('buildWindStrip formats a live reading with units', () => {
+  // The exact live values from services.swpc.noaa.gov at the time this was
+  // written, so the shape being formatted is the shape SWPC actually ships.
+  const view = buildWindStrip({
+    solarWindSpeed: 385.9,
+    solarWindDensity: 10.45,
+    bz: -12.7,
+    windObservedAt: new Date(NOW - 4 * 60 * 1000).toISOString(),
+  }, NOW);
+  assert.equal(view.meta, 'measured 4m ago');
+  assert.equal(view.metaWarn, false);
+  // 10.45 → '10.4': toFixed rounds the binary double, which sits a hair below
+  // the decimal literal. Pinned as observed rather than as arithmetic would
+  // suggest, since a tenth of a proton per cm³ changes nothing here.
+  assert.deepEqual(view.cells.map((c) => c.value), ['386 km/s', '10.4 p/cm³', '-12.7 nT']);
+  assert.equal(view.cells[2]?.sub, 'Southward — storm driver');
+  assert.equal(view.cells[2]?.color, '#ff5722');
+});
+
+test('buildWindStrip signs a northward Bz so the sign is never ambiguous', () => {
+  const view = buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13,
+    windObservedAt: new Date(NOW - 60 * 1000).toISOString(),
+  }, NOW);
+  assert.equal(view.cells[2]?.value, '+7.1 nT');
+  assert.equal(view.cells[2]?.sub, 'Northward is quiet');
+});
+
+test('buildWindStrip stops a stale Bz from claiming the sky is quiet', () => {
+  // The present-tense form of the stale-colour bug: greying the badge but
+  // leaving "Northward is quiet" just moves the all-clear from the colour into
+  // the words, where it reads as more authoritative rather than less.
+  const view = buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13,
+    windObservedAt: new Date(NOW - 2 * HOUR_MS).toISOString(),
+  }, NOW);
+  assert.equal(view.cells[2]?.value, '+7.1 nT', 'the reading itself is still shown');
+  assert.equal(view.cells[2]?.sub, 'Last known — not current');
+  assert.notEqual(view.cells[2]?.sub, 'Northward is quiet');
+  // Unknown age is at least as bad as known-old.
+  assert.equal(buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: 7.13, windObservedAt: null,
+  }, NOW).cells[2]?.sub, 'Last known — not current');
+  // But a missing reading still says so, rather than borrowing the stale copy.
+  assert.equal(buildWindStrip({
+    solarWindSpeed: 400, solarWindDensity: 5, bz: null, windObservedAt: null,
+  }, NOW).cells[2]?.sub, 'No magnetometer reading');
+});
+
+test('buildWindStrip renders absent values as dashes, never as zero', () => {
+  // A solar wind of 0 km/s would be the end of the world. Formatting a missing
+  // reading as a number is how "we have no data" becomes "we have alarming
+  // data" — or, worse here, reassuringly calm data.
+  const view = buildWindStrip({
+    solarWindSpeed: null, solarWindDensity: null, bz: null, windObservedAt: null,
+  }, NOW);
+  assert.deepEqual(view.cells.map((c) => c.value), ['—', '—', '—']);
+  assert.equal(view.meta, 'no solar-wind telemetry in this fetch');
+  assert.equal(view.metaWarn, true);
+  assert.equal(view.cells[0]?.color, '#9e9e9e', 'grey, not the green of a calm reading');
+});
+
+test('buildWindStrip warns when the reading is real but stale', () => {
+  // The dangerous middle case: numbers ARE present, so nothing looks wrong,
+  // but they are an hour old. Without metaWarn this renders as live telemetry.
+  const view = buildWindStrip({
+    solarWindSpeed: 700,
+    solarWindDensity: 3.2,
+    bz: -2,
+    windObservedAt: new Date(NOW - 2 * HOUR_MS).toISOString(),
+  }, NOW);
+  assert.equal(view.meta, 'measured 2h ago');
+  assert.equal(view.metaWarn, true);
+});
+
+test('buildWindStrip strips severity colour off a stale reading', () => {
+  // metaWarn only decorates the small age line. The badge colour is what gets
+  // read at a glance, so a green "calm" on an hour-old sample still asserts
+  // "quiet right now" from evidence that says nothing about right now.
+  const stale = buildWindStrip({
+    solarWindSpeed: 380, solarWindDensity: 4, bz: -18,
+    windObservedAt: new Date(NOW - 2 * HOUR_MS).toISOString(),
+  }, NOW);
+  assert.equal(stale.cells[0]?.color, '#9e9e9e', 'speed must not read as calm-green');
+  assert.equal(stale.cells[2]?.color, '#9e9e9e', 'nor may Bz read as severe-red');
+  // The numbers themselves survive — they are real, just old — and the subtitle
+  // says which.
+  assert.equal(stale.cells[0]?.value, '380 km/s');
+  assert.equal(stale.cells[0]?.sub, 'Last known — not current');
+
+  // Fresh, same numbers: colours come back.
+  const fresh = buildWindStrip({
+    solarWindSpeed: 380, solarWindDensity: 4, bz: -18,
+    windObservedAt: new Date(NOW - 60 * 1000).toISOString(),
+  }, NOW);
+  assert.equal(fresh.cells[0]?.color, '#4caf50');
+  assert.equal(fresh.cells[2]?.color, '#ff453a');
+  assert.equal(fresh.cells[0]?.sub, 'Ambient 300–500');
+});
+
+test('buildWindStrip greys an unknown-age reading too', () => {
+  // No stamp at all is strictly worse than a stamp we can see is old.
+  const view = buildWindStrip({
+    solarWindSpeed: 380, solarWindDensity: 4, bz: -18, windObservedAt: null,
+  }, NOW);
+  assert.equal(view.cells[0]?.color, '#9e9e9e');
+  assert.equal(view.cells[2]?.color, '#9e9e9e');
+});
+
+test('buildWindStrip treats non-finite readings as missing, not as numbers', () => {
+  // NaN and Infinity survive a `=== null` check and format as "NaN km/s" with
+  // confident units. The badge helpers already call them unknown, so without
+  // this the number and its colour tell the user two different stories.
+  const view = buildWindStrip({
+    solarWindSpeed: Number.NaN,
+    solarWindDensity: Number.POSITIVE_INFINITY,
+    bz: Number.NaN,
+    windObservedAt: new Date(NOW).toISOString(),
+  }, NOW);
+  assert.deepEqual(view.cells.map((c) => c.value), ['—', '—', '—']);
+  assert.equal(view.meta, 'no solar-wind telemetry in this fetch');
+  assert.equal(view.metaWarn, true);
+});
+
+test('buildWindStrip does not call a missing Bz quiet', () => {
+  // Bz is the best short-horizon storm predictor there is. "Northward is quiet"
+  // off a null reading is the magnetometer going dark reported as an all-clear.
+  const view = buildWindStrip({
+    solarWindSpeed: 420, solarWindDensity: 4, bz: null, windObservedAt: null,
+  }, NOW);
+  assert.equal(view.cells[2]?.value, '—');
+  assert.equal(view.cells[2]?.sub, 'No magnetometer reading');
+  assert.notEqual(view.cells[2]?.sub, 'Northward is quiet');
+});
+
+test('windObservationAge reads a naïve SWPC stamp as UTC, not host-local', () => {
+  // SWPC ships "2026-05-06 11:30:00" with no zone. Bare Date.parse reads that
+  // as host-LOCAL, so a UTC-5 host would age it by an extra five hours and call
+  // a live reading stale — the same bug already fixed twice in the parse path.
+  const naive = '2026-05-06 11:30:00';
+  const r = windObservationAge(naive, NOW);
+  assert.equal(r.label, '30m ago');
+  assert.equal(r.stale, false);
+  // And it must agree with the explicitly-stamped form of the same instant.
+  assert.deepEqual(windObservationAge('2026-05-06T11:30:00Z', NOW), r);
+});
+
+test('buildWindStrip rejects sentinel and impossible readings, not just non-finite ones', () => {
+  // SWPC pads gaps with -9999. It is finite, so a finiteness check passes it
+  // straight through to windSpeedBadgeColor, which calls anything under 500
+  // calm — rendering "-9999 km/s" in confident green. A wind of 0 km/s would
+  // be the end of the world; neither is a reading.
+  for (const speed of [-9999, 0, 12, 99999]) {
+    const view = buildWindStrip({
+      solarWindSpeed: speed, solarWindDensity: 4, bz: -3,
+      windObservedAt: new Date(NOW).toISOString(),
+    }, NOW);
+    assert.equal(view.cells[0]?.value, '—', `${speed} km/s is not a solar wind`);
+    assert.equal(view.cells[0]?.color, '#9e9e9e', `${speed} must not render calm`);
+  }
+  // A genuinely extreme but real event must still survive — the bounds are a
+  // plausibility filter, not a severity clamp.
+  const fast = buildWindStrip({
+    solarWindSpeed: 2400, solarWindDensity: 40, bz: -48,
+    windObservedAt: new Date(NOW).toISOString(),
+  }, NOW);
+  assert.deepEqual(fast.cells.map((c) => c.value), ['2400 km/s', '40.0 p/cm³', '-48.0 nT']);
+  assert.equal(fast.cells[0]?.color, '#ff453a');
+});
+
+test('windObservationAge tolerates the small forward skew of a propagated stamp', () => {
+  // Rows are propagated from L1 to the bow shock, so a stamp a few minutes
+  // ahead of the wall clock is routine. Beyond the tolerance it is corrupt.
+  assert.equal(windObservationAge(new Date(NOW + 5 * 60 * 1000).toISOString(), NOW).stale, false);
+  assert.equal(windObservationAge(new Date(NOW + 60 * 60 * 1000).toISOString(), NOW).label, 'age unknown');
 });

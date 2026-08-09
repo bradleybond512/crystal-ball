@@ -4,6 +4,7 @@ import { escapeHtml } from '@/utils/sanitize';
 import { t } from '../services/i18n';
 import { trackWebcamSelected, trackWebcamRegionFiltered } from '@/services/analytics';
 import { getStreamQuality, subscribeStreamQualityChange } from '@/services/ai-flow-settings';
+import { fetchLiveVideoInfo } from '@/services/live-news';
 import {
   YOUTUBE_LIVE_FEEDS,
   feedsForRegion,
@@ -13,10 +14,12 @@ import {
 type WebcamRegion = 'iran' | 'middle-east' | 'europe' | 'asia' | 'americas';
 
 type WebcamFeed = YoutubeLiveFeed;
-
-// Verified YouTube live stream IDs — validated Feb 2026 via title cross-check.
-// IDs may rotate; update when stale.
 const WEBCAM_FEEDS: WebcamFeed[] = YOUTUBE_LIVE_FEEDS;
+
+type LiveVideoResolver = (
+  channelHandle: string,
+  forceRefresh?: boolean,
+) => Promise<{ videoId: string | null }>;
 
 const MAX_GRID_CELLS = 4;
 
@@ -37,6 +40,8 @@ export class LiveWebcamsPanel extends Panel {
   private readonly IDLE_PAUSE_MS = 60 * 60 * 1000; // 60 minutes
   private isIdle = false;
   private _boundYtMsg!: (e: MessageEvent) => void;
+  private renderEpoch = 0;
+  private readonly resolveLiveVideo: LiveVideoResolver;
   // Per-iframe "did it ever start playing?" watchdog. Live-stream IDs go stale
   // (the broadcast ends), and an ended stream shows YouTube's own "recording not
   // available" screen WITHOUT firing the IFrame API onError — so the only
@@ -47,8 +52,9 @@ export class LiveWebcamsPanel extends Panel {
   // a later yt-state playing message clears the fallback anyway if it does show.
   private readonly NO_START_MS = 14_000;
 
-  constructor() {
+  constructor(resolveLiveVideo: LiveVideoResolver = fetchLiveVideoInfo) {
  super({ id: 'live-webcams', title: t('panels.liveWebcams'), className: 'panel-wide' });
+ this.resolveLiveVideo = resolveLiveVideo;
  this.createToolbar();
  this.setupIntersectionObserver();
  this.setupIdleDetection();
@@ -170,17 +176,14 @@ export class LiveWebcamsPanel extends Panel {
  return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&playsinline=1&rel=0${vq}`;
   }
 
-  private createIframe(feed: WebcamFeed): HTMLIFrameElement {
+  private createIframe(feed: WebcamFeed, videoId: string): HTMLIFrameElement {
  const iframe = document.createElement('iframe');
  iframe.className = 'webcam-iframe';
- iframe.src = this.buildEmbedUrl(feed.fallbackVideoId);
+ iframe.src = this.buildEmbedUrl(videoId);
  iframe.title = `${feed.city} live webcam`;
  iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
- // Carry the source info so the offline fallback can link to the channel's
- // live page (its current stream) when this frozen video id is dead.
- iframe.dataset.city = feed.city;
- iframe.dataset.channelHandle = feed.channelHandle;
+ iframe.dataset.feedId = feed.id;
  if (!isDesktopRuntime()) {
  iframe.allowFullscreen = true;
  iframe.setAttribute('loading', 'lazy');
@@ -203,6 +206,7 @@ export class LiveWebcamsPanel extends Panel {
   }
 
   private render(): void {
+ const epoch = ++this.renderEpoch;
  this.destroyIframes();
 
  if (!this.isVisible || this.isIdle) {
@@ -211,12 +215,53 @@ export class LiveWebcamsPanel extends Panel {
  }
 
  if (this.viewMode === 'grid') {
- this.renderGrid();
+ this.renderGrid(epoch);
  } else if (this.viewMode === 'map') {
  this.renderMap();
  } else {
- this.renderSingle();
+ this.renderSingle(epoch);
  }
+  }
+
+  private canMountResolvedFeed(cell: HTMLElement, epoch: number): boolean {
+ return epoch === this.renderEpoch && cell.isConnected && this.isVisible && !this.isIdle;
+  }
+
+  private createResolvingState(feed: WebcamFeed): HTMLElement {
+ const status = document.createElement('div');
+ status.className = 'webcam-resolving';
+ status.textContent = `Checking ${feed.city} live stream...`;
+ status.style.cssText =
+ 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+ 'background:var(--bg);color:var(--text-dim);font-size:12px;font-family:-apple-system,system-ui,sans-serif;';
+ return status;
+  }
+
+  private async mountResolvedFeed(
+ cell: HTMLElement,
+ feed: WebcamFeed,
+ status: HTMLElement,
+ epoch: number,
+ mountDelayMs = 0,
+ forceRefresh = false,
+  ): Promise<void> {
+ const info = await this.resolveLiveVideo(feed.channelHandle, forceRefresh);
+ if (!this.canMountResolvedFeed(cell, epoch)) return;
+
+ if (!info.videoId) {
+ status.remove();
+ this._showUnavailableState(cell, feed);
+ return;
+ }
+
+ if (mountDelayMs > 0) {
+ await new Promise<void>((resolve) => setTimeout(resolve, mountDelayMs));
+ if (!this.canMountResolvedFeed(cell, epoch)) return;
+ }
+
+ const iframe = this.createIframe(feed, info.videoId);
+ status.replaceWith(iframe);
+ this.iframes.push(iframe);
   }
 
   /** Map view: plot each live-video stream at its city on an equirectangular
@@ -302,7 +347,7 @@ export class LiveWebcamsPanel extends Panel {
  this.content.append(wrap);
   }
 
-  private renderGrid(): void {
+  private renderGrid(epoch: number): void {
  this.content.innerHTML = '';
  this.content.className = 'panel-content webcam-content';
 
@@ -344,38 +389,26 @@ export class LiveWebcamsPanel extends Panel {
  }
 
  cell.append(label);
+ const status = this.createResolvingState(feed);
+ cell.prepend(status);
  grid.append(cell);
-
- if (desktop && i > 0) {
- // Stagger iframe creation on desktop — WKWebView throttles concurrent autoplay.
- setTimeout(() => {
- // Bail if we left grid view before this fired — otherwise a staggered
- // iframe loads onto a detached/other view (e.g. after switching to map).
- if (!this.isVisible || this.isIdle || this.viewMode !== 'grid' || !cell.isConnected) return;
- const iframe = this.createIframe(feed);
- label.before(iframe);
- this.iframes.push(iframe);
- }, i * 800);
- } else {
- const iframe = this.createIframe(feed);
- label.before(iframe);
- this.iframes.push(iframe);
- }
+ // Stagger player creation on desktop — WKWebView throttles concurrent autoplay.
+ void this.mountResolvedFeed(cell, feed, status, epoch, desktop ? i * 800 : 0);
  });
 
  this.content.append(grid);
   }
 
-  private renderSingle(): void {
+  private renderSingle(epoch: number): void {
  this.content.innerHTML = '';
  this.content.className = 'panel-content webcam-content';
 
  const wrapper = document.createElement('div');
  wrapper.className = 'webcam-single';
 
- const iframe = this.createIframe(this.activeFeed);
- wrapper.append(iframe);
- this.iframes.push(iframe);
+ const status = this.createResolvingState(this.activeFeed);
+ wrapper.append(status);
+ void this.mountResolvedFeed(wrapper, this.activeFeed, status, epoch);
 
  const switcher = document.createElement('div');
  switcher.className = 'webcam-switcher';
@@ -443,16 +476,18 @@ export class LiveWebcamsPanel extends Panel {
  window.addEventListener('message', this._boundYtMsg);
   }
 
-  /** Replace a dead/offline player with a card that links to the channel's
-   *  current live stream on YouTube — so a stale video id never leaves a black
-   *  box, and the user is one click from the actual live feed. */
+ /** Replace a dead/offline player with a card that links to the channel's
+   *  current live page on YouTube. */
   private _showOfflineFallback(cell: HTMLElement, iframe: HTMLIFrameElement): void {
+ const feed = WEBCAM_FEEDS.find((candidate) => candidate.id === iframe.dataset.feedId)!;
+ this._showUnavailableState(cell, feed);
+  }
+
+  private _showUnavailableState(cell: HTMLElement, feed: WebcamFeed): void {
  if (cell.querySelector('.webcam-err-overlay')) return;
- const city = iframe.dataset.city ?? 'This camera';
- const handle = iframe.dataset.channelHandle ?? '';
  // Channel handles are '@name' from our static registry — /live shows the
  // channel's current live broadcast (or its live tab if none).
- const liveUrl = handle ? `https://www.youtube.com/${encodeURIComponent(handle)}/live` : 'https://www.youtube.com';
+ const liveUrl = `https://www.youtube.com/${encodeURIComponent(feed.channelHandle)}/live`;
 
  const overlay = document.createElement('div');
  overlay.className = 'webcam-err-overlay';
@@ -462,22 +497,38 @@ export class LiveWebcamsPanel extends Panel {
  'font-family:-apple-system,system-ui,sans-serif;z-index:6;padding:10px;text-align:center;';
 
  const title = document.createElement('div');
- title.textContent = `${city} — stream offline`;
+ title.textContent = `${feed.city} — stream unavailable`;
  title.style.cssText = 'font-weight:600;opacity:0.85;';
 
  const link = document.createElement('a');
  link.href = liveUrl;
  link.target = '_blank';
  link.rel = 'noopener noreferrer';
- link.textContent = '🔴 Watch live on YouTube →';
+ link.textContent = 'Watch on YouTube';
  link.style.cssText =
  'color:#fff;background:#c4302b;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:600;';
+ link.addEventListener('click', (event) => event.stopPropagation());
 
  const retry = document.createElement('button');
  retry.textContent = 'Retry';
  retry.style.cssText =
  'background:transparent;border:1px solid rgba(255,255,255,0.25);color:#cfd8e3;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;';
- retry.addEventListener('click', () => this.render());
+ retry.addEventListener('click', (event) => {
+ event.stopPropagation();
+ const iframe = cell.querySelector<HTMLIFrameElement>('.webcam-iframe');
+ if (iframe) {
+ const watchdog = this._startWatchdogs.get(iframe);
+ if (watchdog) clearTimeout(watchdog);
+ this._startWatchdogs.delete(iframe);
+ iframe.src = 'about:blank';
+ iframe.remove();
+ this.iframes = this.iframes.filter((candidate) => candidate !== iframe);
+ }
+ overlay.remove();
+ const status = this.createResolvingState(feed);
+ cell.prepend(status);
+ void this.mountResolvedFeed(cell, feed, status, this.renderEpoch, 0, true);
+ });
 
  overlay.append(title, link, retry);
  cell.style.position = 'relative';
@@ -492,6 +543,7 @@ export class LiveWebcamsPanel extends Panel {
  if (this.isVisible && !wasVisible && !this.isIdle) {
  this.render();
  } else if (!this.isVisible && wasVisible) {
+ this.renderEpoch += 1;
  this.destroyIframes();
  }
  },
@@ -522,6 +574,7 @@ export class LiveWebcamsPanel extends Panel {
  }
  this.idleTimeout = setTimeout(() => {
  this.isIdle = true;
+ this.renderEpoch += 1;
  this.destroyIframes();
  this.content.innerHTML = '<div class="webcam-placeholder">Webcams paused — move mouse to resume</div>';
  }, this.IDLE_PAUSE_MS);
@@ -541,6 +594,7 @@ export class LiveWebcamsPanel extends Panel {
   }
 
   public destroy(): void {
+ this.renderEpoch += 1;
  if (this.idleTimeout) {
  clearTimeout(this.idleTimeout);
  this.idleTimeout = null;

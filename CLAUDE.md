@@ -274,95 +274,24 @@ src/                        # TypeScript frontend (Vite)
     reasoning-memory.ts         # IDB KV store on shared crystalball_db
     reasoning-debug.ts          # 200-entry ring buffer log
     reasoning-metrics.ts        # latency histograms + counters
-    # ── Algorithm intelligence foundation (see docs/ALGORITHM_INTELLIGENCE_ENHANCEMENT_PLAN.md) ──
-    intelligence/types.ts                    # NormalizedFact, EvidenceNode/Edge, TruthScore, AlgorithmExplanation, ConfidenceBreakdown
-    intelligence/truth-score.ts              # multi-source truth scoring (formula + 5-point label)
-    intelligence/evidence-graph.ts           # typed graph + derivedFrom-aware independent-source counter
-    intelligence/confidence-explanation.ts   # 100-point breakdown + missingConfirmation hints
-    intelligence/situation-clustering.ts     # union-find clustering across space/time/source/type
-    intelligence/negative-evidence.ts        # expected follow-on signals + missing-signal penalty
-    intelligence/baseline-deviation.ts       # rolling-window store + z-score / percentile / 8-level labels
-    intelligence/compound-risk.ts            # cross-domain compound score with cascade-pair table
-    intelligence/forecast-calibration.ts     # Brier scoring + per-domain accuracy + per-source multipliers
-    intelligence/watchlist-relevance.ts      # "Should I care?" filter + feedback-adjusted thresholds
-    intelligence/momentum.ts                 # rate-of-change / slope / volatility — fast shock scores higher than slow climb
-    intelligence/learned-cascades.ts         # legacy naive miner (kept for its DomainEvent type); live mining is correlation/lead-lag.ts
-    # ── Correlation next-gen (see docs/CORRELATION_NEXTGEN_PLAN.md) ──
-    correlation/edge-confidence.ts           # multi-factor kernel: temporal × spatial × entity × reliability × regime, explained
-    correlation/correlation-outcomes.ts      # pairs-as-predictions + baseline-relative accretion outcomes (pure)
-    correlation/correlation-calibration.ts   # dedicated ledger + per-rule Brier reliability → engine via SituationStoreV2 seams
-    correlation/lead-lag.ts                  # multi-window Poisson base-rate miner, de-clustered trials, Bonferroni-corrected z
-    correlation/learned-rules.ts             # significant edges → capped learned:* CorrelationRules synced into the live engine
-    correlation/regime-coupling.ts           # BOCPD shifts → boost-only pair factors + 1.5× rule windows (bridge respects kill-switch)
-    correlation/compound-risk-cadence.ts     # situations → live trackedComputeCompoundRisk, warm TTL'd snapshot
-    correlation/pair-persistence.ts          # live pairs → correlation-store (crisis-signature reads the real pairs)
-    survival/correlation-contributor.ts      # compound clusters (≥2 members) → survival axis heat, inference-capped below direct obs
-    intelligence/proxy-outcomes.ts           # infer resolved_true/false from downstream proxy signals → resolve calibration where ground truth is scarce
-    intelligence/ood-decay.ts                # out-of-distribution confidence decay (distance-from-training + sparse-coverage penalty)
-    shortage/cross-domain-coupling.ts        # active intelligence cascades → shortage cross_domain drivers (war→port-closure boosts grain export risk)
-    # ── Weather warning remediation (see docs/WEATHER_WARNING_REMEDIATION_PLAN.md) ──
-    weather/weather-threat-types.ts          # 16-hazard taxonomy, AlertPolygon, NwsAlertMinimal, SavedPlace, PolygonMatchResult
-    weather/nws-polygon-match.ts             # ray-casting + UGC zone fallback + threat-level escalation
-    weather/weather-urgency.ts               # 6-rung delivery priority + acknowledgment escalation + watch windows
-    weather/personal-storm-mode.ts           # Storm Mode payload (4 activation tiers, arrival window)
-    weather/preparedness-actions.ts          # per-hazard action library (16 hazards)
-    weather/weather-warning-diagnostics.ts   # 7-stage pipeline trace for "why didn't I get warned?"
-    # ── Insights & notifications (see docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md) ──
-    insights/confidence-urgency-matrix.ts    # 4-corner Confidence × Urgency matrix + 5-tier SituationTier
-    insights/big-event-detector.ts           # 8-trigger detector with weight + rationale per trigger
-    insights/change-memory.ts                # snapshot store for what-changed deltas
-    insights/what-changed-digest.ts          # 9-ChangeKind delta engine, polarity- and weight-sorted output
-    insights/reaction-playbooks.ts           # 10-category static playbook library
-    insights/action-briefs.ts                # 4-tier action briefs (monitor/prepare/act_now/shelter)
-    insights/presentation-export.ts          # Markdown / clipboard / share / Claude debug packet formatters
-    # ── Shortage forecasts (see docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md) ──
-    shortage/shortage-types.ts               # ShortageDriver, ShortageInput, ShortageForecast, CommodityPlaybook
-    shortage/shortage-score.ts               # weighted scoring across 7 driver buckets + freshness + confidence + data-gap detection
-    shortage/commodity-playbooks.ts          # static fact sheets per commodity
-    shortage/wheat-shortage-risk.ts          # food, 60d horizon, Black Sea + Bosphorus + Suez chokepoints
-    shortage/corn-shortage-risk.ts           # food, 90d horizon, pollination heat anomaly amplifier
-    shortage/rice-shortage-risk.ts           # food, 90d horizon, monsoon + India ban + Thai 5% benchmark
-    shortage/soybeans-shortage-risk.ts       # food, 90d horizon, La Niña + China crush + USDA condition
-    shortage/diesel-shortage-risk.ts         # energy, 30d horizon, Gulf + Hormuz + Rotterdam + Singapore
-    shortage/gasoline-shortage-risk.ts       # energy, 30d horizon, Colonial Pipeline + driving season
-    shortage/natural-gas-shortage-risk.ts    # energy, 60d horizon, HDD/CDD + LNG export + cold-snap flag
-    shortage/jet-fuel-shortage-risk.ts       # energy, 30d horizon, SAF constraint + airport shortage alert
-    # ── Data-center readiness ──
-    datacenter/datacenter-types.ts           # DcLevel ladder, mapThreatLevelToDc, ReadinessAction, SiteConfig, PowerPosture, WeatherPosture, DataCenterPosture
-    datacenter/power-posture.ts              # computePowerPosture: utilization % + grid alerts + nearby outages → PowerPosture
-    datacenter/weather-posture.ts            # computeWeatherPosture: NWS polygon match + Storm Mode → WeatherPosture with arrival window
-    datacenter/readiness-actions.ts          # buildReadinessActions: people-first playbook (onsite_safety/commute_staffing/facility_ops/escalation)
-    datacenter/datacenter-posture.ts         # computeDatacenterPosture: fuses power+weather, compound amplifier, stale-input honesty, headline
-    datacenter/site-resolver.ts              # resolveSiteConfig (highest-priority data_center place) + eiaRegionForLatLon
-    datacenter/datacenter-state.ts           # singleton: setDatacenterSite / getDatacenterSite / recomputeDatacenterPosture / subscribe
-    datacenter/datacenter-view.ts            # pure label/color/summary helpers for renderers
-    # ── Provider registry + fusion core (see docs/superpowers/specs/2026-06-11-provider-registry-fusion-core-design.md) ──
-    providers/provider-types.ts              # ProviderDefinition, FetchOutcome, ProviderHealth, SourceObservation, FusionResult
-    providers/provider-registry.ts           # static catalog (live sources + P0 expansion batch), independence groups
-    providers/provider-health.ts             # pure record/derive: ring buffer → healthy/stale/degraded/down + quota detection
-    providers/source-fusion.ts               # freshness × reliability × independence-aware corroboration; disagreements surface, capped at 0.6
-    providers/provider-bridge.ts             # snapshotsFromRegistry (+ optional fingerprints) → provider-redundancy ProviderSnapshot contract
-    providers/providers-state.ts             # singleton: recordProviderFetchOutcome / getProviderHealthState
-    providers/provider-domain-map.ts         # fact-type → provider ids + tolerance + match window (FUSION_DOMAINS). matchBy: 'spatial'|'key'; toleranceMode: 'absolute'|'relative'
-    providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
-    providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
-    providers/provider-health-timeline-view.ts # pure: ProviderHealthState.outcomes[id] ring buffer → windowed timeline (dots + windowed success rate) for the SourceConfidencePanel provider-health strip
-    geo/geo-math.ts                          # shared pure haversine + bbox helpers (single source of truth for the spatial fusion domains)
-    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ + AirNow + PurpleAir readings → DomainObservation[] (AQI)
-    market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance)
-    market/coingecko-fetch.ts + coinbase-fetch.ts + coinpaprika-fetch.ts + kraken-fetch.ts # no-key fail-closed fetches — the 4 crypto sources (Coinbase, not Binance: 451 in US)
-    market/stock-fetch.ts                    # fail-closed Yahoo (no-key) + Finnhub (keyed) + FMP (keyed) — the 3 equities sources
-    market/fx-fusion-fetch.ts                # Frankfurter (ECB fixing) + open.er-api (continuous aggregate) → USD-base FX rates, matched by currency code
-    weather/open-meteo-temp-fetch.ts + met-norway-fetch.ts # the 2 surface_temp sources; api.met.no requires a descriptive User-Agent per its ToS — set sidecar-side at local-api-server.mjs:10642, not in the renderer fetch
-    weather/weather-fusion-observations.ts   # saved-place temps → DomainObservation[] (matched by PLACE ID, never spatially — home+work sit km apart)
-    spaceweather/gfz-kp-fetch.ts             # GFZ Potsdam Kp (SWPC rides the existing /api/spaceweather/status route)
-    spaceweather/kp-fusion-observations.ts   # Kp samples → DomainObservation[] keyed by 3-hour bin start; kpVote() derives `ok` from the ADAPTER output, not the fetch
-    netwatch/cloudflare-radar-fetch.ts       # IODA + Cloudflare Radar per-country outage-onset fetches (CF needs CLOUDFLARE_API_TOKEN, Account→Radar→Read)
-    netwatch/outage-fusion-observations.ts   # outage onsets → per-country counts over a trailing 6 h. DELIBERATE INVERSION vs every sibling adapter: zero qualifying rows behind a 200 is ok:true with an empty array — a quiet internet is a real observation, not a failed fetch.
-    diagnostics/source-confidence-view.ts    # pure: composes assessProviderRedundancy() + provider-health-timeline-view into per-domain cards (fusion-active vs SPOF, live disagreement flags, per-provider health) for SourceConfidencePanel
-    # 8 fused domains: earthquakes (USGS+EMSC+GEOFON) + air_quality (Open-Meteo+OpenAQ+AirNow+PurpleAir) — both spatial; crypto (4 sources) + stocks (3) + surface_temp (2) + fx_rates (2) + space_weather (2) + internet_outages (2) — all matchBy:'key'. Tolerances are EMPIRICAL, set from live side-by-side probes (see the per-domain comments in provider-domain-map.ts) — do not "tidy" them toward rounder numbers. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
-    # `src/components/SourceConfidencePanel.ts` (Phase 1 UI, panel id `source-confidence`) is the dedicated per-domain redundancy surface — SystemDiagnostic's Feeds tab still shows the compact "Source corroboration" summary, this panel is the full drill-down (per-provider health timeline + live disagreement flags + FUSED/SPOF tags). Widening fusion to more domains + closing the cataloged SPOFs (Workstream B) is still open — see the spec's "Phase 1 status" note.
-    # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
+    # Pure, fixture-tested service dirs (per-file detail lives in each dir + the plan docs at top):
+    #   intelligence/  correlation/  survival/  weather/  insights/  shortage/  datacenter/  providers/
+    #   See "Foundation Intelligence Layers" below + the plan bullets in "Project Overview".
+    # Non-obvious gotchas that are NOT discoverable by reading the tree:
+    #   - intelligence/learned-cascades.ts is a LEGACY miner kept only for its DomainEvent type; live mining = correlation/lead-lag.ts
+    #   - correlation/lead-lag.ts still uses fixed significance thresholds without multiple-comparison correction or de-clustering; ACC-502 owns that work
+    #   - correlation/bench-correlation.ts is the ACC-501 frozen precision/recall benchmark (`npm run bench:correlation`)
+    #   - correlation regime-coupling is BOOST-ONLY (never dampens); bridge respects a kill-switch
+    #   - survival/correlation-contributor.ts is inference-capped BELOW direct observation
+    #   - Fusion tolerances in providers/provider-domain-map.ts are EMPIRICAL (live side-by-side probes) — do NOT round them
+    #   - market: Coinbase not Binance (Binance = 451 in US); stocks = Yahoo(no-key)+Finnhub+FMP
+    #   - weather fusion matches by PLACE ID, never spatially (home+work sit km apart)
+    #   - api.met.no needs a descriptive User-Agent set SIDECAR-side (local-api-server.mjs), not in the renderer fetch
+    #   - netwatch/outage-fusion INVERTS the sibling pattern: zero rows behind a 200 = ok:true empty array (quiet internet is a real observation)
+    #   - fusion adapters derive `ok` from the ADAPTER output, not the raw fetch (avoid the phantom-healthy vote)
+    #   8 fused domains: earthquakes + air_quality (spatial); crypto(4) + stocks(3) + surface_temp(2) + fx_rates(2) + space_weather(2) + internet_outages(2) (matchBy:'key')
+    #   SourceConfidencePanel (id source-confidence) = per-domain redundancy drill-down; SystemDiagnostic Feeds tab has the compact summary
+    #   Specs: docs/superpowers/specs/2026-06-11-provider-registry-fusion-core-design.md + 2026-06-28-redundancy-prediction-enhancement-program-design.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
                                 # /api/analyst-state + /api/analyst-commands

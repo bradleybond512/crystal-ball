@@ -273,7 +273,7 @@
     "satellite.js": "7.0.0",
     "telegram": "2.26.22",
     "texture-compressor": "file:vendor/texture-compressor-safe",
-    "three": "^0.184.0",
+    "three": "^0.185.1",
     "topojson-client": "^3.1.0",
     "ws": "^8.21.0",
     "youtubei.js": "^16.0.1"

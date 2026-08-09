@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "f45a5187d2597ce1f7d35b0eb6466a0c0c482851",
+  "reviewer": "claude",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-09T09:09:07.569Z",
+  "evidence": "Cross-Agent Code Review — f45a5187 vs macos/main (b9c1f0f6)\n\nVerdict: APPROVED WITH ZERO BLOCKING FINDINGS\n\nNo high or medium findings. The commit faithfully restores real guardrail signal that had drifted from production, and each new assertion is backed by a verified production contract."
+}

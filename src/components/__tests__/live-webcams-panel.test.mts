@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Window } from 'happy-dom';
+import '../../../tests/panels/register-hook.mjs';
 
 const happyWindow = new Window({ url: 'http://127.0.0.1/' });
 const globals = globalThis as unknown as Record<string, unknown>;

@@ -22,16 +22,21 @@ import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolveManifestChunkFile } from '../scripts/bundle-budget-policy.mjs';
+
 const projectRoot = path.resolve(fileURLToPath(import.meta.url), '..', '..');
 const distAssets = path.join(projectRoot, 'dist', 'assets');
+const manifestPath = path.join(projectRoot, 'dist', '.vite', 'manifest.json');
 
 // Budgets in BYTES, gzipped. Comments record the size at the time the
 // budget was set (2026-05-12, PR for bundle optimisation).
 const BUDGETS = {
   // Main entry — current 431 KB after the feature wave. Budget 475 KB.
-  'main-': 475 * 1024,
-  // Catch-all panels chunk — was 629 KB; now 1049 KB (new panels wave). Budget 1155 KB.
+  main: 475 * 1024,
+  // Catch-all panels chunk — was 1178 KB before analysis split; now 1009 KB. Budget 1155 KB.
   panels: 1155 * 1024,
+  // Analysis / cognition panels split from the catch-all. Current 202 KB; budget 225 KB.
+  'panels-analysis': 225 * 1024,
   // News / intel-feed panels — was 132 KB; now 157 KB. Budget 175 KB.
   'panels-feeds': 175 * 1024,
   // OSINT / cyber / sanctions — was 41 KB; now 67 KB. Budget 75 KB.
@@ -60,33 +65,35 @@ const BUDGETS = {
   GodsVisionView: 1230 * 1024,
 };
 
-function findChunk(prefix) {
-  if (!existsSync(distAssets)) return null;
-  const files = readdirSync(distAssets);
-  // Use the longest matching prefix so `panels-` doesn't match `panels-feeds`.
-  for (const file of files) {
-    if (file.endsWith('.js') && file.startsWith(prefix)) {
-      return file;
-    }
-  }
-  return null;
-}
-
-function gzipBytes(filename) {
-  const raw = readFileSync(path.join(distAssets, filename));
+function gzipBytes(relativePath) {
+  const raw = readFileSync(path.join(projectRoot, 'dist', relativePath));
   return gzipSync(raw).length;
 }
 
-const haveBuild = existsSync(distAssets);
+const haveAssets = existsSync(distAssets);
+const manifest = existsSync(manifestPath)
+  ? JSON.parse(readFileSync(manifestPath, 'utf8'))
+  : null;
 
-for (const [prefix, budget] of Object.entries(BUDGETS)) {
-  test(`bundle-size: ${prefix} ≤ ${(budget / 1024).toFixed(0)} KB gz`, (t) => {
-    if (!haveBuild) {
+test('bundle-size: production build emits a Vite manifest', (t) => {
+  if (!haveAssets) {
+    t.skip('dist/assets missing — run `npm run build` first');
+    return;
+  }
+  assert.ok(manifest, 'dist/.vite/manifest.json is missing — build must emit exact chunk identities');
+});
+
+for (const [chunkName, budget] of Object.entries(BUDGETS)) {
+  test(`bundle-size: ${chunkName} ≤ ${(budget / 1024).toFixed(0)} KB gz`, (t) => {
+    if (!haveAssets) {
       t.skip('dist/assets missing — run `npm run build` first');
       return;
     }
-    const chunk = findChunk(prefix);
-    assert.ok(chunk, `no chunk in dist/assets/ starts with "${prefix}"`);
+    if (!manifest) {
+      t.skip('dist/.vite/manifest.json missing — manifest assertion reports the build defect');
+      return;
+    }
+    const chunk = resolveManifestChunkFile(manifest, chunkName);
     const gz = gzipBytes(chunk);
     assert.ok(
       gz <= budget,
@@ -98,13 +105,13 @@ for (const [prefix, budget] of Object.entries(BUDGETS)) {
 }
 
 test('bundle-size: total JS gz under 6 MB', (t) => {
-  if (!haveBuild) {
+  if (!haveAssets) {
     t.skip('dist/assets missing — run `npm run build` first');
     return;
   }
   const files = readdirSync(distAssets).filter((f) => f.endsWith('.js'));
   let total = 0;
-  for (const f of files) total += gzipBytes(f);
+  for (const f of files) total += gzipBytes(path.join('assets', f));
   const limit = 6 * 1024 * 1024;
   assert.ok(
     total <= limit,

@@ -3,88 +3,107 @@
     "Foundation": {
       "description": "Low-level query primitives for direct sidecar access, chaining, and diffing.",
       "tools": {
-        "query_raw": "Direct access to any sidecar endpoint with full parameter passthrough and pagination.",
-        "chain_query": "Sequential multi-step queries where each step can reference prior results via $prev[N] syntax.",
-        "compare_snapshots": "Structured diff between two queries to the same endpoint. Returns appeared/disappeared items."
+        "query_raw": "Query one approved sidecar endpoint with parameter passthrough and pagination.",
+        "chain_query": "Run sequential approved queries whose steps may reference prior results.",
+        "compare_snapshots": "Diff two queries to the same approved endpoint."
       }
     },
     "Intelligence": {
       "description": "Cross-domain analysis, trend detection, and anomaly scanning.",
       "tools": {
-        "correlate": "Cross-domain correlation: finds shared entities across 2+ intelligence domains.",
-        "trend": "Time-series trend analysis from sentinel history. Shows direction, rate of change, anomaly flags.",
-        "anomaly_scan": "Broad anomaly detection across all domains. Compares current values to historical baselines."
+        "correlate": "Find shared entities across two or more intelligence domains.",
+        "trend": "Analyze a time series from sentinel history.",
+        "anomaly_scan": "Compare current domain values with historical baselines."
       }
     },
     "Watchlists & Alerts": {
       "description": "Persistent tracking lists and threshold-based alert rules.",
       "tools": {
-        "watchlist_manage": "Create, list, get, add/remove items, or delete watchlists for tracking entities.",
-        "watchlist_check": "Run watchlists against live data. Returns items with new activity since last check.",
-        "alert_rules_manage": "Create, list, get, update, or delete threshold-based alert rules.",
-        "alert_check": "Evaluate all active alert rules against current data. Returns triggered rules."
+        "watchlist_manage": "Create, list, update, or delete persistent watchlists.",
+        "watchlist_check": "Evaluate watchlists and record newly observed activity.",
+        "alert_rules_manage": "Create, list, update, or delete threshold alert rules.",
+        "alert_check": "Evaluate active alert rules against current data."
       }
     },
     "Aggregate": {
       "description": "Broad situational awareness tools that pull from multiple sources at once.",
       "tools": {
-        "get_sitrep": "Full situational report: top conflicts, market moves, weather alerts, service health.",
-        "get_threat_landscape": "Active threats across conflict, cyber, and crisis domains.",
-        "get_market_overview": "Financial markets snapshot: indices, crypto, ETF flows, sentiment, macro signals.",
-        "get_cyber_intel": "Cyber threat intelligence: IOCs, KEVs, phishing URLs, malware URLs, threat pulses.",
-        "get_weather_environment": "Weather and environment: global cities, NWS alerts, space weather.",
-        "get_infrastructure_status": "Critical infrastructure: power grid, water quality, radiation, USGS water.",
-        "get_military_posture": "Military activity: tracked aircraft, naval vessels, theater posture, ISW analysis."
+        "get_sitrep": "Summarize conflicts, markets, weather, infrastructure, and service health.",
+        "get_threat_landscape": "Summarize active conflict, cyber, and crisis threats.",
+        "get_market_overview": "Summarize indices, crypto, flows, sentiment, and macro signals.",
+        "get_cyber_intel": "Summarize IOCs, KEVs, phishing, malware URLs, and threat pulses.",
+        "get_weather_environment": "Summarize weather alerts and environmental conditions.",
+        "get_infrastructure_status": "Summarize power, water, radiation, and critical infrastructure.",
+        "get_military_posture": "Summarize military aircraft, vessels, posture, and analysis.",
+        "check_feed_health": "Probe the sidecar and representative data feeds.",
+        "sitrep_bundle": "Return a pre-filtered multi-domain intelligence bundle."
       }
     },
     "Granular": {
       "description": "Targeted lookups and searches for specific entities or data points.",
       "tools": {
-        "search_conflicts": "Search ACLED armed conflict events by region, country, date range, or event type.",
-        "search_news": "Search news headlines from NewsAPI, NewsData, DoD, and NATO.",
-        "lookup_ip": "IP intelligence: GreyNoise, AbuseIPDB reputation, IPinfo geolocation.",
-        "lookup_cve": "Search for CVE vulnerabilities via Vulners.",
-        "lookup_vessel": "Look up a vessel by MMSI or name from AIS data.",
-        "lookup_flight": "Look up a military aircraft by hex code or callsign from ADS-B data.",
-        "get_sanctions": "Search OpenSanctions database for sanctioned entities.",
-        "get_economic_data": "Fetch FRED economic time series by series IDs.",
-        "get_sec_filings": "Search SEC EDGAR for 8-K filings or full-text search.",
-        "get_earthquakes": "Recent seismic activity from USGS.",
-        "get_disease_outbreaks": "Active disease outbreaks from WHO and ReliefWeb.",
-        "get_region_brief": "Everything Crystal Ball knows about a location: security, conflicts, weather, alerts."
+        "search_conflicts": "Search armed-conflict events by region, country, dates, or type.",
+        "search_news": "Search current headlines from configured news providers.",
+        "lookup_ip": "Combine IP reputation, classification, and geolocation.",
+        "lookup_cve": "Search vulnerability intelligence by CVE or text.",
+        "lookup_vessel": "Look up a vessel by MMSI or name.",
+        "lookup_flight": "Look up military aircraft by ICAO hex or callsign.",
+        "get_sanctions": "Search sanctioned entities.",
+        "get_economic_data": "Fetch economic time series.",
+        "get_sec_filings": "Search SEC filings.",
+        "get_earthquakes": "Fetch recent seismic activity.",
+        "get_disease_outbreaks": "Fetch active disease outbreaks.",
+        "get_region_brief": "Combine security, conflict, weather, and alert context for a place."
+      }
+    },
+    "Analyst": {
+      "description": "Renderer-side hypotheses, forecasts, feedback, and reasoning diagnostics.",
+      "tools": {
+        "get_analyst_hypotheses": "Read ranked renderer hypotheses.",
+        "get_mode_forecast": "Read the current cross-domain posture forecast.",
+        "get_analyst_accuracy": "Read hypothesis accuracy metrics.",
+        "get_hot_entities": "Read entities with elevated cross-domain activity.",
+        "submit_hypothesis_feedback": "Submit analyst hypothesis feedback.",
+        "dismiss_hypothesis": "Dismiss a hypothesis in renderer state.",
+        "run_skeptic_now": "Trigger an on-demand skeptic analysis.",
+        "get_reasoning_debug_log": "Read bounded reasoning debug events.",
+        "get_reasoning_metrics": "Read reasoning latency and counter metrics.",
+        "get_pipeline_trace": "Read fact-lifecycle pipeline traces."
       }
     },
     "Intel Expansion": {
-      "description": "16 newly-added intel sources: cyber feeds, chokepoints, internet outages, space weather, pharma supply, grid outages, disaster activations, entity LEI lookup, aviation hazards, FX rates, geocoded media events, and radiation monitoring.",
+      "description": "Specialized cyber, infrastructure, supply, aviation, finance, disaster, and radiation sources.",
       "tools": {
-        "get_cyber_threats": "Cyber threat feeds: C2 servers, IOC indicators, and malware URLs (filterable by kind).",
-        "get_chokepoint_status": "Maritime chokepoint transit data and trade-ton flows (Hormuz, Suez, Malacca, etc.).",
-        "get_internet_outages": "IODA internet outage alerts for large-scale BGP/telescope disruptions.",
-        "get_space_weather_extra": "Extended space weather: aurora max probability, high-latitude flag, flare-probability regions.",
-        "get_pharma_supply": "Drug shortages and FDA drug recalls.",
-        "get_grid_outages": "ORNL power grid outages by county, sorted by meters affected.",
-        "get_disaster_activations": "Copernicus EMS activations for major disasters worldwide.",
-        "lookup_entity": "GLEIF LEI lookup by company name: legal name, jurisdiction, LEI code, and status.",
-        "get_aviation_hazards": "SIGMETs and FAA NAS ground-stop programs.",
-        "get_fx_rates": "Live foreign exchange rates for a base currency.",
-        "get_geo_events": "GDELT geocoded media events by topic query and time window.",
-        "get_radiation": "BfS German gamma-dose radiation monitoring stations."
+        "get_cyber_threats": "Fetch C2, IOC, and malware URL feeds.",
+        "get_chokepoint_status": "Fetch maritime chokepoint transit conditions.",
+        "get_internet_outages": "Fetch large-scale internet outage alerts.",
+        "get_space_weather_extra": "Fetch extended aurora and solar-flare indicators.",
+        "get_pharma_supply": "Fetch drug shortages and recalls.",
+        "get_grid_outages": "Fetch county-level grid outages.",
+        "get_disaster_activations": "Fetch emergency-management disaster activations.",
+        "lookup_entity": "Look up a legal entity identifier.",
+        "get_aviation_hazards": "Fetch SIGMETs and ground-stop programs.",
+        "get_fx_rates": "Fetch foreign-exchange rates.",
+        "get_geo_events": "Fetch geocoded media events.",
+        "get_radiation": "Fetch gamma-dose monitoring readings."
       }
     },
     "Diagnostics": {
-      "description": "Live runtime triage, renderer reasoning evidence, pipeline traces, and algorithm tuning health.",
+      "description": "Live runtime triage, pipeline evidence, and algorithm health.",
       "tools": {
+        "get_capabilities": "Report domain readiness, credential coverage, and unavailable capability reasons.",
+        "get_monitor_status": "Read the latest persistent drift and quarantine monitor result.",
+        "run_monitor_cycle": "Run and persist a drift and quarantine monitor cycle.",
         "diagnose_runtime": "Ranked live runtime findings with optional deep route probes.",
-        "get_algorithm_diagnostics": "Algorithm health, latency, evaluation coverage, market/weather ground truth, bounded tunings, and recent tuning decisions.",
-        "get_pipeline_trace": "Fact-lifecycle traces with domain and stalled-pipeline filters.",
-        "get_reasoning_debug_log": "Filterable renderer reasoning errors and events.",
-        "get_reasoning_metrics": "Renderer latency histograms and named counters."
+        "get_algorithm_diagnostics": "Read bounded algorithm evaluation and tuning health.",
+        "get_weekly_evaluation_report": "Read the latest or a selected completed weekly algorithm evaluation report.",
+        "generate_weekly_evaluation_report": "Finalize accumulated completed weeks into immutable local evaluation reports."
       }
     },
     "Help": {
-      "description": "Built-in documentation and guides.",
+      "description": "Built-in documentation and capability discovery.",
       "tools": {
-        "help": "Tool man pages, conceptual guides, and example cookbooks."
+        "help": "Read the tool index, man pages, conceptual guides, and examples."
       }
     }
   },
@@ -93,7 +112,8 @@
     "watchlists",
     "alerts",
     "correlation",
-    "sentinel"
+    "sentinel",
+    "capabilities"
   ],
   "examples": [
     "cross-domain",

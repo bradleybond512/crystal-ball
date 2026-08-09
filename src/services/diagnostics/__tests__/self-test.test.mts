@@ -175,20 +175,21 @@ test('report is JSON-serializable', async () => {
 test('standardSelfTestDefinitions: empty adapters → all skipped', async () => {
   const defs = standardSelfTestDefinitions({});
   const report = await runSelfTests(defs, { now: () => NOW });
-  assert.equal(report.results.length, 9);
-  assert.equal(report.counts.skipped, 9);
+  assert.equal(report.results.length, 10);
+  assert.equal(report.counts.skipped, 10);
   assert.equal(report.status, 'skipped');
 });
 
 test('standardSelfTestDefinitions: ALL adapters wired → 0 skipped (the regression guard)', async () => {
   // Mirrors what SystemDiagnosticPanel now passes. If a future edit drops an
   // adapter, that probe silently reverts to `skipped` (green-when-broken) — this
-  // asserts every one of the 9 probes actually runs.
+  // asserts every one of the 10 probes actually runs.
   const defs = standardSelfTestDefinitions({
     fetchSidecarDiag: () => Promise.resolve({ ok: true }),
     checkNotificationPermission: () => Promise.resolve('granted'),
     countSavedPlaces: () => 1,
     runNwsPolygonFixture: () => Promise.resolve({ ok: true }),
+    runChampionRollbackFixture: () => Promise.resolve({ ok: true }),
     countProviderRegistry: () => 12,
     isStorageAvailable: () => ({ indexedDb: true, localStorage: true }),
     probeDataSources: () => Promise.resolve({ healthy: 3, degraded: 0, failing: 0 }),
@@ -196,7 +197,7 @@ test('standardSelfTestDefinitions: ALL adapters wired → 0 skipped (the regress
     countMountedPanels: () => ({ mounted: 5, total: 5 }),
   });
   const report = await runSelfTests(defs, { now: () => NOW });
-  assert.equal(report.results.length, 9);
+  assert.equal(report.results.length, 10);
   assert.equal(report.counts.skipped, 0);
 });
 

@@ -9,6 +9,17 @@
 
 import { Panel } from './Panel';
 import {
+  buildAgentIntelligenceView,
+  nextAgentMonitorPollDelayMs,
+  renderAgentIntelligenceHtml,
+  type AgentMonitorProjection,
+} from './agent-intelligence-view';
+import {
+  fetchAgentMonitorProjection,
+  markAgentMonitorProjectionUnavailable,
+} from '@/services/agent-monitor-projection';
+import { isDesktopRuntime } from '@/services/runtime';
+import {
   getAlgorithmEvaluationLedger,
   getAlgorithmDefinitions,
 } from '@/services/algorithms/algorithms-state';
@@ -33,6 +44,12 @@ import type { AlgorithmDefinition as HealthAlgorithmDefinition } from '@/service
 import type { PolicyDecision } from '@/services/governance/policy-engine';
 import { escapeHtml } from '@/utils/sanitize';
 import { getKindAccuracy } from '@/services/hypothesis-accuracy';
+import {
+  type ChallengerRow,
+  type ChallengerStatus,
+  type ChampionStatusView,
+} from '@/services/cognition/champion-status-view';
+import { composeChampionStatusRuntime } from '@/services/cognition/champion-status-runtime';
 
 const REFRESH_MS = 15_000;
 
@@ -80,22 +97,74 @@ const POLICY_DISPLAY: Record<PolicyDecision, PolicyVerdictDisplay> = {
 
 export class AlgorithmDiagnosticPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private monitorPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private monitorAbortController: AbortController | null = null;
+  private monitorProjection: AgentMonitorProjection | null = null;
+  private monitorPollFailures = 0;
+  private monitorPollInFlight = false;
+  private panelDestroyed = false;
+  private readonly onMonitorClick = (event: Event): void => {
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-agent-monitor-refresh]')
+      : null;
+    if (!target || !this.content.contains(target)) return;
+    if (this.monitorPollTimer !== null) {
+      clearTimeout(this.monitorPollTimer);
+      this.monitorPollTimer = null;
+    }
+    void this.refreshAgentMonitor();
+  };
 
   constructor() {
     super({
       id: 'algorithm-diagnostic',
-      title: 'Algorithm Diagnostic',
+      title: 'Agent Intelligence & Algorithms',
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Hit-rate / latency / drift report for each algorithm. Surfaces safe-adjustment proposals — never auto-applied; always a recommendation.',
+        'Explains local Claude/Codex access, derived-output safeguards, algorithm health, and evidence-gated adjustments.',
     });
     this.start();
   }
 
   private start(): void {
+    this.content.addEventListener('click', this.onMonitorClick);
     this.render();
+    if (isDesktopRuntime()) void this.refreshAgentMonitor();
     this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
+  }
+
+  private scheduleAgentMonitorPoll(): void {
+    if (this.panelDestroyed || !isDesktopRuntime()) return;
+    if (this.monitorPollTimer !== null) clearTimeout(this.monitorPollTimer);
+    this.monitorPollTimer = setTimeout(() => {
+      this.monitorPollTimer = null;
+      void this.refreshAgentMonitor();
+    }, nextAgentMonitorPollDelayMs(this.monitorPollFailures));
+  }
+
+  private async refreshAgentMonitor(): Promise<void> {
+    if (this.panelDestroyed || this.monitorPollInFlight || !isDesktopRuntime()) return;
+    this.monitorPollInFlight = true;
+    const controller = new AbortController();
+    this.monitorAbortController = controller;
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      this.monitorProjection = await fetchAgentMonitorProjection(controller.signal);
+      this.monitorPollFailures = 0;
+      this.renderWhenVisible(() => this.render());
+    } catch {
+      if (!controller.signal.aborted || !this.panelDestroyed) {
+        this.monitorPollFailures += 1;
+        this.monitorProjection = markAgentMonitorProjectionUnavailable(this.monitorProjection);
+        this.renderWhenVisible(() => this.render());
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (this.monitorAbortController === controller) this.monitorAbortController = null;
+      this.monitorPollInFlight = false;
+      this.scheduleAgentMonitorPoll();
+    }
   }
 
   public destroy(): void {
@@ -104,6 +173,14 @@ export class AlgorithmDiagnosticPanel extends Panel {
     // super.destroy() disconnects the IntersectionObserver and aborts the
     // AbortController, so a timer firing in that window would operate on a
     // partially-torn-down panel.  Every other subclass follows this order.
+    this.panelDestroyed = true;
+    this.content.removeEventListener('click', this.onMonitorClick);
+    if (this.monitorPollTimer !== null) {
+      clearTimeout(this.monitorPollTimer);
+      this.monitorPollTimer = null;
+    }
+    this.monitorAbortController?.abort();
+    this.monitorAbortController = null;
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
@@ -116,6 +193,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
     const definitions = getAlgorithmDefinitions();
     const calibrations = summarizeCalibration(ledger.all());
     const report = aggregateAlgorithmHealth({ definitions, calibrations });
+    const agentIntelligence = buildAgentIntelligenceView(report.algorithms, this.monitorProjection);
     const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: getTunings() });
     const definitionsById = new Map<string, HealthAlgorithmDefinition>();
     for (const d of definitions) definitionsById.set(d.algorithmId, d);
@@ -161,9 +239,14 @@ export class AlgorithmDiagnosticPanel extends Panel {
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Overall</div>
         <div style="font-size:14px;font-weight:700;color:${STATUS_COLOR[report.status]};">${escapeHtml(report.status.toUpperCase())} — ${escapeHtml(report.summary)}</div>
       </div>
+      ${renderAgentIntelligenceHtml(agentIntelligence)}
       <div>
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Prediction Accuracy</div>
         ${renderPredictionAccuracy()}
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Champion / Challenger</div>
+        ${renderChampionChallenger()}
       </div>
       <div>
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Recommendations</div>
@@ -200,6 +283,70 @@ export class AlgorithmDiagnosticPanel extends Panel {
       ${proposalHtml}
     </div>`;
   }
+}
+
+// ── ACC-403: champion/challenger status surface ──────────────────────
+
+const CHALLENGER_STATUS_DISPLAY: Record<ChallengerStatus, { label: string; color: string }> = {
+  promotable: { label: 'PROMOTABLE', color: 'var(--status-ok, #4caf50)' },
+  rejected: { label: 'REJECTED', color: 'var(--status-error, #ff453a)' },
+  'insufficient-evidence': { label: 'INSUFFICIENT EVIDENCE', color: 'var(--status-warn, #ff9800)' },
+};
+
+function renderChampionChallenger(): string {
+  let view: ChampionStatusView;
+  try {
+    view = composeChampionStatusRuntime().view;
+  } catch {
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">Champion status unavailable.</div>`;
+  }
+  let championHtml = `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No champion installed in '${escapeHtml(view.slot)}' — awaiting the first evidence-backed promotion decision (ACC-404).</div>`;
+  if (view.championId) {
+    const versionHtml = view.championVersion
+      ? ` <span style="color:var(--text-secondary,#aaa);">v${escapeHtml(view.championVersion)}</span>`
+      : '';
+    const reasonHtml = view.championActivationReason
+      ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:2px;">${escapeHtml(view.championActivationReason)}</div>`
+      : '';
+    championHtml = `<div style="font-size:12px;"><strong>${escapeHtml(view.championId)}</strong>${versionHtml} <span style="color:var(--text-secondary,#aaa);">— active champion of ${escapeHtml(view.slot)}</span></div>
+       ${reasonHtml}`;
+  }
+  const challengerHtml = view.challengers.map((c) => renderChallengerCard(c)).join('');
+  const activityHtml = view.recentActivity.length === 0
+    ? ''
+    : `<div style="margin-top:6px;">
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:3px;">Recent activity</div>
+        ${view.recentActivity.map((a) => `<div style="font-size:11px;color:var(--text-secondary,#aaa);">${escapeHtml(new Date(a.at).toLocaleString())} — ${escapeHtml(a.summary)}</div>`).join('')}
+      </div>`;
+  return `<div style="display:flex;flex-direction:column;gap:6px;">
+    ${championHtml}
+    ${challengerHtml}
+    ${activityHtml}
+  </div>`;
+}
+
+function renderChallengerCard(c: ChallengerRow): string {
+  const display = CHALLENGER_STATUS_DISPLAY[c.status];
+  const domains = Object.entries(c.perDomainCounts)
+    .map(([d, n]) => `${d}: ${n}`)
+    .join(' · ');
+  const evidenceStr = `${c.evidenceCount} joined pairs${domains ? ` (${domains})` : ''}`
+    + (c.proxyShare > 0 ? ` · ${(c.proxyShare * 100).toFixed(0)}% proxy-resolved` : '');
+  const deltasHtml = c.deltas.map((d) =>
+    `<div style="font-size:10px;color:${d.better ? 'var(--status-ok, #4caf50)' : 'var(--text-secondary,#aaa)'};font-family:ui-monospace,monospace;">${escapeHtml(d.explanation)}</div>`,
+  ).join('');
+  const reasonsHtml = c.reasons.slice(0, 4).map((r) =>
+    `<li>${escapeHtml(r)}</li>`,
+  ).join('');
+  return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:6px 8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+      <span style="font-size:12px;font-weight:600;">${escapeHtml(c.challengerId)}</span>
+      <span style="font-size:9px;color:${display.color};font-weight:700;letter-spacing:0.05em;">${display.label}</span>
+    </div>
+    <div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;font-family:ui-monospace,monospace;">${escapeHtml(evidenceStr)}</div>
+    ${deltasHtml}
+    ${c.reasons.length > 0 ? `<ul style="margin:3px 0 0;padding-left:16px;font-size:10px;color:var(--text-secondary,#aaa);">${reasonsHtml}</ul>` : ''}
+  </div>`;
 }
 
 function renderPredictionAccuracy(): string {

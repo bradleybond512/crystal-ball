@@ -9,15 +9,18 @@ interface LiveVideoInfo {
 const liveVideoCache = new Map<string, { videoId: string | null; hlsUrl: string | null; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function fetchLiveVideoInfo(channelHandle: string): Promise<LiveVideoInfo> {
+export async function fetchLiveVideoInfo(channelHandle: string, forceRefresh = false): Promise<LiveVideoInfo> {
   const cached = liveVideoCache.get(channelHandle);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL) {
  return { videoId: cached.videoId, hlsUrl: cached.hlsUrl };
   }
 
   try {
  const baseUrl = isDesktopRuntime() ? getRemoteApiBaseUrl() : '';
- const res = await fetch(`${baseUrl}/api/youtube/live?channel=${encodeURIComponent(channelHandle)}`);
+ const res = await fetch(
+ `${baseUrl}/api/youtube/live?channel=${encodeURIComponent(channelHandle)}`,
+ forceRefresh ? { cache: 'no-store' } : undefined,
+ );
  if (!res.ok) throw new Error('API error');
  const data = await res.json() as { videoId?: string | null; hlsUrl?: string | null };
  if (!data || typeof data !== 'object') {

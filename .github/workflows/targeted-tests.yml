@@ -1,0 +1,54 @@
+name: Targeted tests
+
+# Changed-path-scoped unit tests as a merge gate. Branch protection's other
+# required checks run zero unit tests; the full sweep is too slow per-PR.
+# scripts/targeted-tests.mjs derives the mapping from package.json itself
+# (each test:* script lists its files; src/<area>/__tests__/ covers
+# src/<area>/) and runs everything the diff touches — no cap. Docs-only and
+# dependency-only PRs select nothing and pass after npm ci.
+#
+# The selector is executed FROM origin/main, never from the PR head: a PR
+# must not control which tests judge it. (The test files themselves run from
+# the PR tree — that is inherent to CI and true of every check here.)
+#
+# Runs on fork PRs too: it needs no secrets, and a skipped job would satisfy
+# a required check vacuously.
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      # test:diagnostics reaches into tools/mcp-server/__tests__, whose imports
+      # resolve against that package's own node_modules. Without this the suite
+      # dies on ERR_MODULE_NOT_FOUND for zod on every PR touching
+      # src/services/diagnostics. smoke.yml already installs it the same way.
+      # (--prefix would read the root package name off the directory name and
+      # fail the lockfile-sync check, so run it from inside the package.)
+      - run: npm ci
+        working-directory: tools/mcp-server
+      - name: Select and run targeted suites
+        run: |
+          git fetch origin main --quiet
+          if git cat-file -e origin/main:scripts/targeted-tests.mjs 2>/dev/null; then
+            git show origin/main:scripts/targeted-tests.mjs > "$RUNNER_TEMP/targeted-tests.mjs"
+            node "$RUNNER_TEMP/targeted-tests.mjs" --ci
+          else
+            echo "targeted-tests.mjs not on origin/main yet (gate rollout); passing."
+          fi

@@ -1,0 +1,26 @@
+{
+  "title": "Capability and safety preflight",
+  "summary": "Check live availability and derived-output safety before broad analysis.",
+  "workflow": [
+    {
+      "step": 1,
+      "tool": "get_capabilities",
+      "purpose": "Identify ready, partial, and unavailable intelligence domains."
+    },
+    {
+      "step": 2,
+      "tool": "get_monitor_status",
+      "purpose": "Review active drift findings and quarantined derived algorithms."
+    },
+    {
+      "step": 3,
+      "tool": "check_feed_health",
+      "purpose": "Inspect individual feeds when a capability is partial or unavailable."
+    }
+  ],
+  "safety": [
+    "Treat unavailable feeds as collection gaps, not evidence that an event did not occur.",
+    "Do not use quarantined derived outputs for decisions.",
+    "A quarantined evaluator does not invalidate an independent authoritative source feed."
+  ]
+}

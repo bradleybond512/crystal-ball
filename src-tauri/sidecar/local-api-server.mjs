@@ -17,6 +17,7 @@ import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
 import { buildBiosurveillanceWastewater } from './biosurveillance-wastewater.mjs';
+import { fetchHrrrGrid } from './hrrr-smoke.mjs';
 import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
 import { crossReferenceWhoDonWithProMed } from './who-promed-cross-reference.mjs';
 import {
@@ -52,6 +53,231 @@ import { EventStore } from './event-store.mjs';
 // and append them to the event log. They never throw into the caller: an event
 // log write must not break live ingestion.
 const EVENT_SEVERITY_SCORES = { CRITICAL: 0.95, HIGH: 0.85, MEDIUM: 0.7, LOW: 0.55, INFO: 0.4 };
+
+const AGENT_MONITOR_PROJECTION_SCHEMA_VERSION = 1;
+const AGENT_MONITOR_STATE_SCHEMA_VERSION = 1;
+const AGENT_MONITOR_MAX_BYTES = 256 * 1024;
+const AGENT_MONITOR_MAX_FINDINGS = 16;
+const AGENT_MONITOR_MAX_EVENTS = 16;
+const AGENT_MONITOR_MAX_IDS = 24;
+const AGENT_MONITOR_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/;
+const AGENT_MONITOR_GENERATION_PATTERN = /^monitor-generation-v1-\d+$/;
+const AGENT_MONITOR_EVENT_TYPES = new Set(['opened', 'resolved', 'materially_escalated', 'stopped', 'resumed']);
+const AGENT_MONITOR_SEVERITIES = new Set(['green', 'yellow', 'red', 'unknown']);
+let _agentMonitorCache = null;
+
+function boundedMonitorId(value) {
+  return typeof value === 'string' && AGENT_MONITOR_ID_PATTERN.test(value) ? value : null;
+}
+
+function monitorTimestamp(value, { future = false, now = Date.now() } = {}) {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const upper = future ? now + 24 * 60 * 60 * 1000 : now + 5 * 60 * 1000;
+  return value <= upper ? Math.trunc(value) : null;
+}
+
+function emptyAgentMonitorProjection(state, generatedAt, stateSchemaVersion = null) {
+  return {
+    schemaVersion: AGENT_MONITOR_PROJECTION_SCHEMA_VERSION,
+    generatedAt,
+    state,
+    lastRunAt: null,
+    nextRunAt: null,
+    compatibility: {
+      status: state === 'incompatible' ? 'incompatible' : 'unknown',
+      stateSchemaVersion,
+      supportedSchemaVersion: AGENT_MONITOR_STATE_SCHEMA_VERSION,
+    },
+    findings: [],
+    events: [],
+    recovered: [],
+    quarantine: { activeCount: 0, algorithmIds: [] },
+    capabilities: {
+      liveCollection: null,
+      algorithmDiagnostics: null,
+      feeds: { ready: 0, degraded: 0, unavailable: 0, unknown: 0, total: 0 },
+    },
+  };
+}
+
+function normalizeMonitorFindings(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    const id = boundedMonitorId(row?.id);
+    if (!id) return [];
+    const severity = AGENT_MONITOR_SEVERITIES.has(row?.severity) ? row.severity : 'unknown';
+    return [{ id, severity }];
+  });
+}
+
+function normalizeMonitorEvents(rows, now) {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    const id = boundedMonitorId(row?.id);
+    const at = monitorTimestamp(row?.occurredAt ?? row?.at, { now });
+    if (!id || !at || !AGENT_MONITOR_EVENT_TYPES.has(row?.type)) return [];
+    const findingId = boundedMonitorId(row?.subject ?? row?.findingId);
+    const rawSeverity = row?.toSeverity ?? row?.fromSeverity ?? row?.severity;
+    const severity = AGENT_MONITOR_SEVERITIES.has(rawSeverity) ? rawSeverity : undefined;
+    return [{
+      id,
+      type: row.type === 'materially_escalated' ? 'escalated' : row.type,
+      at,
+      ...(findingId ? { findingId } : {}),
+      ...(severity ? { severity } : {}),
+    }];
+  });
+}
+
+function normalizeMonitorIds(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.slice(0, AGENT_MONITOR_MAX_IDS).map(boundedMonitorId).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function monitorCapabilitySummary(snapshot) {
+  const feeds = { ready: 0, degraded: 0, unavailable: 0, unknown: 0, total: 0 };
+  if (snapshot?.feeds && typeof snapshot.feeds === 'object' && !Array.isArray(snapshot.feeds)) {
+    for (const status of Object.values(snapshot.feeds).slice(0, 256)) {
+      feeds.total += 1;
+      if (status === 'ok' || status === 'ready' || status === 'healthy') feeds.ready += 1;
+      else if (status === 'degraded' || status === 'stale' || status === 'partial') feeds.degraded += 1;
+      else if (status === 'unavailable' || status === 'error' || status === 'failing') feeds.unavailable += 1;
+      else feeds.unknown += 1;
+    }
+  }
+  return {
+    liveCollection: typeof snapshot?.sidecarAvailable === 'boolean' ? snapshot.sidecarAvailable : null,
+    algorithmDiagnostics: typeof snapshot?.algorithmDiagnosticsAvailable === 'boolean'
+      ? snapshot.algorithmDiagnosticsAvailable
+      : null,
+    feeds,
+  };
+}
+
+function normalizeAgentMonitorState(raw, eventState, now) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'unknown' };
+  if (Number.isInteger(raw.schemaVersion) && raw.schemaVersion > AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+    return { error: 'incompatible', stateSchemaVersion: raw.schemaVersion };
+  }
+  if (raw.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+    return { error: 'unknown' };
+  }
+  if (!eventState || typeof eventState !== 'object' || Array.isArray(eventState)) return { error: 'unknown' };
+  if (Number.isInteger(eventState.schemaVersion) && eventState.schemaVersion > AGENT_MONITOR_STATE_SCHEMA_VERSION) {
+    return { error: 'incompatible', stateSchemaVersion: eventState.schemaVersion };
+  }
+  if (eventState.schemaVersion !== AGENT_MONITOR_STATE_SCHEMA_VERSION
+      || !AGENT_MONITOR_GENERATION_PATTERN.test(raw.generationId)
+      || raw.generationId !== eventState.generationId
+      || !eventState.schedule || typeof eventState.schedule !== 'object'
+      || Array.isArray(eventState.schedule)) return { error: 'unknown' };
+  if (raw.available === false) return { unavailable: true, stateSchemaVersion: eventState.schemaVersion };
+  const lastRunAt = monitorTimestamp(raw.lastRunAt, { now });
+  const rawNextRunAt = eventState.schedule.nextRunAt;
+  const nextRunAt = rawNextRunAt == null ? null : monitorTimestamp(rawNextRunAt, { future: true, now });
+  if (!lastRunAt || (rawNextRunAt != null && !nextRunAt)) return { error: 'unknown' };
+  const intervalCandidate = eventState.schedule.expectedIntervalMs;
+  const intervalMs = Number.isFinite(intervalCandidate)
+    ? Math.min(24 * 60 * 60 * 1000, Math.max(60_000, Math.trunc(intervalCandidate)))
+    : 15 * 60_000;
+  if (!Array.isArray(raw.findings) || raw.findings.length > 256
+      || !Array.isArray(eventState.events) || eventState.events.length > 1000) return { error: 'unknown' };
+  const findings = normalizeMonitorFindings(raw.findings);
+  const events = normalizeMonitorEvents(eventState.events, now);
+  if (findings.length !== raw.findings.length || events.length !== eventState.events.length) {
+    return { error: 'unknown' };
+  }
+  return Object.freeze({
+    stateSchemaVersion: eventState.schemaVersion,
+    available: true,
+    lastRunAt,
+    nextRunAt,
+    intervalMs,
+    explicitlyStopped: eventState.schedule.status === 'stopped' || raw.monitorState === 'stopped',
+    monitorStatus: AGENT_MONITOR_SEVERITIES.has(raw.status) ? raw.status : 'unknown',
+    findings: findings
+      .sort((left, right) => (right.severity === 'red' ? 1 : 0) - (left.severity === 'red' ? 1 : 0))
+      .slice(0, AGENT_MONITOR_MAX_FINDINGS),
+    events: events.slice(-AGENT_MONITOR_MAX_EVENTS),
+    recovered: normalizeMonitorIds(raw.recovered),
+    quarantineAlgorithmIds: normalizeMonitorIds(raw.snapshot?.quarantinedAlgorithms),
+    capabilities: monitorCapabilitySummary(raw.snapshot),
+  });
+}
+
+function classifyAgentMonitorState(normalized, now) {
+  if (normalized.explicitlyStopped) return 'stopped';
+  const dueAt = normalized.nextRunAt ?? (normalized.lastRunAt + normalized.intervalMs);
+  const overdueMs = Math.max(0, now - dueAt);
+  if (overdueMs > normalized.intervalMs * 3) return 'stopped';
+  if (overdueMs > normalized.intervalMs) return 'stale';
+  if (normalized.monitorStatus === 'red' || normalized.monitorStatus === 'yellow'
+      || normalized.findings.length > 0) return 'degraded';
+  if (normalized.monitorStatus !== 'green') return 'unknown';
+  return 'live';
+}
+
+function readAgentMonitorProjection(statePath, eventsPath, now = Date.now()) {
+  let stat;
+  try {
+    stat = statSync(statePath);
+  } catch (error) {
+    return emptyAgentMonitorProjection(error?.code === 'ENOENT' ? 'unavailable' : 'unknown', now);
+  }
+  if (!stat.isFile() || stat.size > AGENT_MONITOR_MAX_BYTES) {
+    return emptyAgentMonitorProjection('unknown', now);
+  }
+  let eventsStat;
+  try {
+    eventsStat = statSync(eventsPath);
+  } catch {
+    return emptyAgentMonitorProjection('unknown', now);
+  }
+  if (!eventsStat.isFile() || eventsStat.size > AGENT_MONITOR_MAX_BYTES) {
+    return emptyAgentMonitorProjection('unknown', now);
+  }
+  const cacheKey = `${statePath}:${stat.size}:${stat.mtimeMs}:${eventsPath}:${eventsStat.size}:${eventsStat.mtimeMs}`;
+  let normalized;
+  if (_agentMonitorCache?.key === cacheKey) {
+    normalized = _agentMonitorCache.normalized;
+  } else {
+    try {
+      normalized = normalizeAgentMonitorState(
+        JSON.parse(readFileSync(statePath, 'utf8')),
+        JSON.parse(readFileSync(eventsPath, 'utf8')),
+        now,
+      );
+    } catch {
+      normalized = { error: 'unknown' };
+    }
+    _agentMonitorCache = { key: cacheKey, normalized };
+  }
+  if (normalized.error) {
+    return emptyAgentMonitorProjection(normalized.error, now, normalized.stateSchemaVersion ?? null);
+  }
+  if (normalized.unavailable) {
+    return emptyAgentMonitorProjection('unavailable', now, normalized.stateSchemaVersion);
+  }
+  const algorithmIds = normalized.quarantineAlgorithmIds;
+  return {
+    schemaVersion: AGENT_MONITOR_PROJECTION_SCHEMA_VERSION,
+    generatedAt: now,
+    state: classifyAgentMonitorState(normalized, now),
+    lastRunAt: normalized.lastRunAt,
+    nextRunAt: normalized.nextRunAt,
+    compatibility: {
+      status: 'compatible',
+      stateSchemaVersion: normalized.stateSchemaVersion,
+      supportedSchemaVersion: AGENT_MONITOR_STATE_SCHEMA_VERSION,
+    },
+    findings: normalized.findings,
+    events: normalized.events,
+    recovered: normalized.recovered,
+    quarantine: { activeCount: algorithmIds.length, algorithmIds },
+    capabilities: normalized.capabilities,
+  };
+}
 
 function eventSeverityScore(label) {
   const k = String(label ?? '').toUpperCase();
@@ -1310,6 +1536,10 @@ const ALLOWED_ENV_KEYS = new Set([
 ]);
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+// Shared equities fusion ticker set (Finnhub / Yahoo / FMP routes). Module
+// scope: shared across three route blocks, so function-body placement would
+// create a TDZ ordering hazard if a route ever moved above the declaration.
+const STOCK_FUSION_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
 
 // Path aliases for callers that use the renderer's preferred names rather
 // than the canonical handler paths. Each alias is rewritten to its target
@@ -1613,7 +1843,7 @@ function sidecarParsePurpleAirNum(v) {
   return Number.NaN;
 }
 
-function sidecarParseV1Sensors(payload) {
+export function sidecarParseV1Sensors(payload) {
   if (!payload || typeof payload !== 'object') return [];
   const fields = payload.fields;
   const data = payload.data;
@@ -1647,7 +1877,8 @@ function sidecarParseV1Sensors(payload) {
  locationType: Number.isFinite(locationType) ? locationType : 0,
  confidence: Number.isFinite(confidence) ? confidence : 0,
  name: nameVal || `Sensor ${id}`,
- lastSeen: lastSeen !== null && Number.isFinite(lastSeen) ? lastSeen : null,
+ // v1 last_seen is unix seconds — emit epoch ms like the public-JSON parser below.
+ lastSeen: lastSeen !== null && Number.isFinite(lastSeen) ? lastSeen * 1000 : null,
  });
   }
   return out;
@@ -1808,6 +2039,31 @@ async function buildRouteTable(root) {
 const REQUEST_BODY_CACHE = Symbol('requestBodyCache');
 const REQUEST_BODY_OVERFLOW = Symbol('requestBodyOverflow');
 const MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024; // 16 MB
+const EVALUATION_REPORT_MAX_BYTES = 32 * 1024;
+const EVALUATION_REPORT_MAX_COUNT = 1_000_000_000;
+const EVALUATION_REPORT_FUTURE_SKEW_MS = 5 * 60_000;
+const EVALUATION_REPORT_MODELS = new Set([
+  'production',
+  'superforecast',
+  'hierarchical-base-rate',
+  'persistence-baseline',
+  'momentum-baseline',
+  'unknown',
+]);
+const EVALUATION_REPORT_DOMAINS = new Set([
+  'weather',
+  'cyber',
+  'aviation',
+  'maritime',
+  'markets',
+  'conflict',
+  'humanitarian',
+  'space',
+  'infra',
+  'macro',
+  'other',
+]);
+const EVALUATION_REPORT_VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
 class RequestBodyTooLargeError extends Error {
   constructor(limit) {
@@ -1839,6 +2095,221 @@ function sanitizeDeep(value, depth = 0) {
 function stripProtoKeys(obj) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
   return sanitizeDeep(obj);
+}
+
+export function validateEvaluationReportProjection(value, now = Date.now()) {
+  try {
+    const input = exactRecord(value, ['schemaVersion', 'generatedAt', 'forecast', 'champion']);
+    const generatedAt = evaluationTimestamp(input?.generatedAt, now);
+    const forecast = validateEvaluationForecast(input?.forecast);
+    const champion = validateEvaluationChampion(input?.champion, now);
+    if (input?.schemaVersion !== 1 || generatedAt === null || !forecast || !champion) return null;
+    const projection = { schemaVersion: 1, generatedAt, forecast, champion };
+    return Buffer.byteLength(JSON.stringify(projection), 'utf8') <= EVALUATION_REPORT_MAX_BYTES
+      ? projection
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function validateEvaluationForecast(value) {
+  const input = exactRecord(value, [
+    'total',
+    'resolved',
+    'pending',
+    'overduePending',
+    'expired',
+    'resolutionCoverage',
+    'expirationRate',
+    'metrics',
+    'largestVersionLossShare',
+    'quarantinedCount',
+  ]);
+  if (!input) return null;
+  const counts = ['total', 'resolved', 'pending', 'overduePending', 'expired', 'quarantinedCount']
+    .map((key) => evaluationCount(input[key]));
+  if (counts.includes(null)) return null;
+  const [total, resolved, pending, overduePending, expired, quarantinedCount] = counts;
+  if (resolved + pending + expired !== total || overduePending > pending) return null;
+  const resolutionCoverage = evaluationNullableRatio(input.resolutionCoverage);
+  const expirationRate = evaluationNullableRatio(input.expirationRate);
+  const largestVersionLossShare = evaluationNullableRatio(input.largestVersionLossShare);
+  if (resolutionCoverage === undefined || expirationRate === undefined
+      || largestVersionLossShare === undefined) return null;
+  const metrics = exactRecord(input.metrics, ['brier', 'logLoss', 'brierSkill', 'equalMassEce']);
+  if (!metrics) return null;
+  const brier = validateEvaluationMetric(metrics.brier, 0, 1);
+  const logLoss = validateEvaluationMetric(metrics.logLoss, 0, 100);
+  const brierSkill = validateEvaluationMetric(metrics.brierSkill, -10, 1);
+  const equalMassEce = validateEvaluationMetric(metrics.equalMassEce, 0, 1);
+  if (!brier || !logLoss || !brierSkill || !equalMassEce) return null;
+  return {
+    total,
+    resolved,
+    pending,
+    overduePending,
+    expired,
+    resolutionCoverage,
+    expirationRate,
+    metrics: { brier, logLoss, brierSkill, equalMassEce },
+    largestVersionLossShare,
+    quarantinedCount,
+  };
+}
+
+function validateEvaluationMetric(value, minimum, maximum) {
+  if (!plainRecord(value) || typeof value.status !== 'string') return null;
+  if (value.status === 'unavailable') {
+    return exactRecord(value, ['status']) ? { status: 'unavailable' } : null;
+  }
+  if (value.status === 'ok') {
+    const input = exactRecord(value, ['status', 'sampleSize', 'value']);
+    const sampleSize = evaluationCount(input?.sampleSize);
+    const metricValue = evaluationBoundedNumber(input?.value, minimum, maximum);
+    return input && sampleSize !== null && metricValue !== null
+      ? { status: 'ok', sampleSize, value: metricValue }
+      : null;
+  }
+  if (value.status === 'insufficient_evidence') {
+    const input = exactRecord(value, ['status', 'sampleSize', 'minSampleSize']);
+    const sampleSize = evaluationCount(input?.sampleSize);
+    const minSampleSize = evaluationCount(input?.minSampleSize);
+    return input && sampleSize !== null && minSampleSize !== null
+      ? { status: 'insufficient_evidence', sampleSize, minSampleSize }
+      : null;
+  }
+  return null;
+}
+
+function validateEvaluationChampion(value, now) {
+  const input = exactRecord(value, [
+    'availability',
+    'active',
+    'challengers',
+    'promotions',
+    'rejectionHistory',
+  ]);
+  if (!input || (input.availability !== 'available' && input.availability !== 'unavailable')) return null;
+  const active = input.active === null ? null : validateEvaluationActive(input.active, now);
+  if (input.active !== null && !active) return null;
+  if (!Array.isArray(input.challengers) || input.challengers.length > 4
+      || !Array.isArray(input.promotions) || input.promotions.length > 6) return null;
+  const challengers = input.challengers.map(validateEvaluationChallenger);
+  const promotions = input.promotions.map((row) => validateEvaluationPromotion(row, now));
+  if (challengers.some((row) => !row) || promotions.some((row) => !row)) return null;
+  const rejectionHistory = exactRecord(input.rejectionHistory, ['availability', 'reasonCode']);
+  if (rejectionHistory?.availability !== 'unavailable'
+      || rejectionHistory.reasonCode !== 'no_runtime_rejection_history') return null;
+  if (input.availability === 'unavailable'
+      && (active !== null || challengers.length !== 0 || promotions.length !== 0)) return null;
+  return {
+    availability: input.availability,
+    active,
+    challengers,
+    promotions,
+    rejectionHistory: {
+      availability: 'unavailable',
+      reasonCode: 'no_runtime_rejection_history',
+    },
+  };
+}
+
+function validateEvaluationActive(value, now) {
+  const input = exactRecord(value, ['model', 'version', 'activatedAt']);
+  const activatedAt = evaluationTimestamp(input?.activatedAt, now);
+  if (!input || !EVALUATION_REPORT_MODELS.has(input.model) || activatedAt === null) return null;
+  if (input.version !== null
+      && (typeof input.version !== 'string' || !EVALUATION_REPORT_VERSION.test(input.version))) return null;
+  return { model: input.model, version: input.version, activatedAt };
+}
+
+function validateEvaluationChallenger(value) {
+  const input = exactRecord(value, [
+    'model',
+    'status',
+    'evidenceCount',
+    'proxyShare',
+    'perDomain',
+    'deltas',
+  ]);
+  if (!input || !EVALUATION_REPORT_MODELS.has(input.model)
+      || !['promotable', 'rejected', 'insufficient_evidence'].includes(input.status)) return null;
+  const evidenceCount = evaluationCount(input.evidenceCount);
+  const proxyShare = evaluationBoundedNumber(input.proxyShare, 0, 1);
+  if (evidenceCount === null || proxyShare === null
+      || !Array.isArray(input.perDomain) || input.perDomain.length > 11
+      || !Array.isArray(input.deltas) || input.deltas.length > 2) return null;
+  const perDomain = input.perDomain.map((row) => {
+    const domain = exactRecord(row, ['domain', 'count']);
+    const count = evaluationCount(domain?.count);
+    return domain && EVALUATION_REPORT_DOMAINS.has(domain.domain) && count !== null
+      ? { domain: domain.domain, count }
+      : null;
+  });
+  const deltas = input.deltas.map((row) => {
+    const delta = exactRecord(row, ['metric', 'delta', 'ciLow', 'ciHigh']);
+    if (!delta || (delta.metric !== 'brier' && delta.metric !== 'logLoss')) return null;
+    const point = evaluationBoundedNumber(delta.delta, -100, 100);
+    const ciLow = evaluationBoundedNumber(delta.ciLow, -100, 100);
+    const ciHigh = evaluationBoundedNumber(delta.ciHigh, -100, 100);
+    return point !== null && ciLow !== null && ciHigh !== null && ciLow <= ciHigh
+      ? { metric: delta.metric, delta: point, ciLow, ciHigh }
+      : null;
+  });
+  if (perDomain.some((row) => !row) || deltas.some((row) => !row)
+      || new Set(perDomain.map((row) => row.domain)).size !== perDomain.length
+      || new Set(deltas.map((row) => row.metric)).size !== deltas.length) return null;
+  return { model: input.model, status: input.status, evidenceCount, proxyShare, perDomain, deltas };
+}
+
+function validateEvaluationPromotion(value, now) {
+  const input = exactRecord(value, ['at', 'kind', 'model']);
+  const at = evaluationTimestamp(input?.at, now);
+  if (!input || at === null || !['initial', 'promotion', 'rollback'].includes(input.kind)
+      || !EVALUATION_REPORT_MODELS.has(input.model)) return null;
+  return { at, kind: input.kind, model: input.model };
+}
+
+function exactRecord(value, keys) {
+  if (!plainRecord(value)) return null;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
+    ? value
+    : null;
+}
+
+function plainRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function evaluationCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= EVALUATION_REPORT_MAX_COUNT
+    ? value
+    : null;
+}
+
+function evaluationBoundedNumber(value, minimum, maximum) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum
+    ? value
+    : null;
+}
+
+function evaluationNullableRatio(value) {
+  if (value === null) return null;
+  const ratio = evaluationBoundedNumber(value, 0, 1);
+  return ratio === null ? undefined : ratio;
+}
+
+function evaluationTimestamp(value, now) {
+  return Number.isSafeInteger(value) && value >= 0
+    && Number.isSafeInteger(now) && now >= 0
+    && value <= now + EVALUATION_REPORT_FUTURE_SKEW_MS
+    ? value
+    : null;
 }
 
 async function readBody(req) {
@@ -2093,6 +2564,10 @@ function resolveConfig(options = {}) {
   const mode = String(options.mode ?? process.env.LOCAL_API_MODE ?? 'desktop-sidecar');
   const cloudFallback = String(options.cloudFallback ?? process.env.LOCAL_API_CLOUD_FALLBACK ?? '') === 'true';
   const logger = options.logger ?? (process.env.CB_SIDECAR_FILE_LOG !== '0' ? createSidecarLogger() : console);
+  const agentMonitorStatePath = String(options.agentMonitorStatePath
+    ?? path.resolve(os.homedir(), '.crystal-ball', 'monitor', 'state.json'));
+  const agentMonitorEventsPath = String(options.agentMonitorEventsPath
+    ?? path.resolve(path.dirname(agentMonitorStatePath), 'events.json'));
 
   return {
  port,
@@ -2103,6 +2578,8 @@ function resolveConfig(options = {}) {
  mode,
  cloudFallback,
  logger,
+ agentMonitorStatePath,
+ agentMonitorEventsPath,
   };
 }
 
@@ -2215,6 +2692,15 @@ function makeCorsHeaders(req) {
  'Access-Control-Allow-Origin': getSidecarCorsOrigin(req),
  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+ // The renderer runs at tauri://localhost and the sidecar at 127.0.0.1, so
+ // every call here is cross-origin — and `Date`/`Age` are NOT CORS-safelisted
+ // response headers, so without this they read back as null in the renderer.
+ // The fusion fetchers measure payload age against the SERVER's clock (see
+ // usgs-fusion-fetch.ts); denied those two headers they have only the browser
+ // clock, which a replay can hide behind. Both are non-sensitive by
+ // construction: they describe the response's own age, nothing about the
+ // requester.
+ 'Access-Control-Expose-Headers': 'Date, Age',
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };
@@ -2803,10 +3289,48 @@ export function classifyGpsDisruptionSidecar(cls) {
   return 'none';
 }
 
+// Every SWPC alert message opens with "Space Weather Message Code: XXXXX", so
+// the first non-empty line is a product code, not a headline — reading it
+// classified all 119 live alerts as `summary`. The severity keyword sits on a
+// later line.
+//
+// These eight are the complete set emitted across a live 30-day window of
+// products/alerts.json — enumerated, not guessed. Longer phrases lead so the
+// CANCEL/CONTINUED/EXTENDED qualifiers are matched before the bare keyword.
+// The two CANCEL forms are all-clears and must never read as active.
+// Kept in lockstep with SEVERITY_PREFIXES in src/services/space-weather-parse.ts.
+const SPACEWX_SEVERITY_PREFIXES = [
+  ['CANCEL WARNING:', 'summary'],
+  ['CANCEL ALERT:', 'summary'],
+  ['CONTINUED ALERT:', 'alert'],
+  ['EXTENDED WARNING:', 'warning'],
+  ['WARNING:', 'warning'],
+  ['ALERT:', 'alert'],
+  ['WATCH:', 'watch'],
+  ['SUMMARY:', 'summary'],
+];
+
+export function extractAlertHeadlineSidecar(message) {
+  let firstLine = '';
+  for (const rawLine of String(message ?? '').split('\n')) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    if (firstLine === '') firstLine = line;
+    const upper = line.toUpperCase();
+    for (const [prefix] of SPACEWX_SEVERITY_PREFIXES) {
+      if (upper.startsWith(prefix)) return line;
+    }
+  }
+  // No keyword line at all — fall back to the opening line so the alert is
+  // still shown rather than silently dropped.
+  return firstLine;
+}
+
 function classifyAlertSeveritySidecar(headline) {
-  if (/\bALERT\b/i.test(headline)) return 'alert';
-  if (/\bWARNING\b/i.test(headline)) return 'warning';
-  if (/\bWATCH\b/i.test(headline)) return 'watch';
+  const upper = String(headline ?? '').trim().toUpperCase();
+  for (const [prefix, severity] of SPACEWX_SEVERITY_PREFIXES) {
+    if (upper.startsWith(prefix)) return severity;
+  }
   return 'summary';
 }
 
@@ -2863,21 +3387,111 @@ export function summarizeKpSidecar(points, now, windowMs = SPACEWX_KP_WINDOW_MS)
   };
 }
 
+/**
+ * Every SWPC product /api/space-weather-feeds fans out to is a JSON array.
+ * Anything else — `{}`, `false`, an error envelope behind a 200 — is a
+ * wrong-shape body. Normalizing to null here means the shape is decided in one
+ * place rather than left for the renderer's parsers to reject silently.
+ */
+export function normalizeSwpcFeed(value) {
+  return Array.isArray(value) ? value : null;
+}
+
+/**
+ * Does this product carry a row the RENDERER'S PARSER would actually accept?
+ *
+ * Row-presence alone is not the question. `[{}]`, `['maintenance']`, a Kp row
+ * with no `time_tag` and a wind payload that is nothing but its header row are
+ * all non-empty arrays that every downstream parser discards — so counting them
+ * as healthy votes reports a fetch as good while the panel stays blank. That is
+ * the same fail-open shape as the empty array, one layer in.
+ *
+ * Each predicate mirrors the MINIMUM its parser needs, reusing the sidecar's
+ * existing normalizers where one already exists so the two can't drift.
+ */
+// GOES flare classes are a letter A/B/C/M/X plus an optional magnitude, and
+// nothing else. Mirrors XRAY_CLASS_RE in src/services/space-weather-parse.ts:
+// without the grammar, a status string like "maintenance" reads as a flare.
+const SWPC_XRAY_CLASS_RE = /^[ABCMX]\d*(?:\.\d+)?$/i;
+
+function isXrayClassString(value) {
+  return typeof value === 'string' && SWPC_XRAY_CLASS_RE.test(value.trim());
+}
+
+// Null-prototype: on a plain object literal, a key like `hasOwnProperty` resolves
+// up the chain to a real function, and invoking it as a bare predicate throws
+// (`this` is undefined under ESM strict mode) — so an unknown product named after
+// a prototype key would 500 the route instead of simply failing the allowlist.
+const SWPC_FEED_USABLE = Object.assign(Object.create(null), {
+  kp: (value) => normalizeKpPoints(value).length > 0,
+  alerts: (value) => normalizeAlertRaw(value).length > 0,
+  // xray-flares-latest carries the class on an object, unlike the flux-series
+  // product normalizeXrayPoints handles, so it needs its own check.
+  xray: (value) => Array.isArray(value)
+    && value.some((row) => row && typeof row === 'object' && !Array.isArray(row)
+      && ['max_class', 'current_class', 'class'].some((k) => isXrayClassString(row[k]))),
+  // Header row plus at least one data row — a lone header parses to nothing. The
+  // slice(1) test carries the row count on its own; a separate length check would
+  // be unfalsifiable, which is how dead guards get mistaken for live ones.
+  wind: (value) => Array.isArray(value)
+    && Array.isArray(value[0])
+    && value.slice(1).some((row) => Array.isArray(row) && row.length > 0),
+});
+
+export function swpcFeedIsUsable(key, value) {
+  const predicate = SWPC_FEED_USABLE[key];
+  // An unrecognized product is not assumed good: allowlist, never denylist.
+  // Coerced, so a predicate returning a truthy non-boolean can't leak out.
+  return typeof predicate === 'function' ? predicate(value) === true : false;
+}
+
+/**
+ * The route's fan-out reduction, extracted so it is reachable from a test.
+ *
+ * Keeping this inline meant the guarding tests could only assert on helper
+ * bodies and source ordering — swapping the call site for `value !== null` left
+ * all 539 sidecar tests green. Reducing here means a mutation to this logic is
+ * caught by behaviour rather than by grepping the file.
+ *
+ * @param {[string, unknown][]} entries decoded [productKey, body] pairs
+ */
+export function buildSwpcEnvelope(entries) {
+  const feeds = {};
+  let usable = 0;
+  for (const [key, value] of entries) {
+    feeds[key] = normalizeSwpcFeed(value);
+    if (swpcFeedIsUsable(key, value)) usable += 1;
+  }
+  return { feeds, usable, total: entries.length };
+}
+
+// Mirrors FUTURE_SKEW_TOLERANCE_MS in src/services/space-weather-parse.ts. The
+// renderer and this route both feed the space-weather panel, so an alert must
+// not be visible through one and missing through the other.
+const SPACEWX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+
 export function summarizeAlertsSidecar(raw, now, windowMs = SPACEWX_ALERTS_WINDOW_MS) {
   if (!Array.isArray(raw)) return [];
   const cutoff = now - windowMs;
+  const horizon = now + SPACEWX_FUTURE_SKEW_MS;
   const out = [];
   for (const r of raw) {
     if (!r?.message) continue;
-    const t = Date.parse(r.issue_datetime);
-    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
-    const headline = String(r.message).split('\n').map((s) => s.trim()).find((s) => s.length > 0) || '';
+    // issue_datetime is space-separated naïve UTC ("2026-07-30 19:03:19.350").
+    // Un-stamped, Date.parse reads it as host-LOCAL, which on a UTC-4 host puts
+    // every alert from the last 4 hours past `now` — and the guard below then
+    // drops exactly the alerts that matter most. Same bug class the Kp path
+    // already fixed; this path never got it.
+    const issuedAt = toUtcIsoTag(r.issue_datetime);
+    const t = Date.parse(issuedAt);
+    if (!Number.isFinite(t) || t < cutoff || t > horizon) continue;
+    const headline = extractAlertHeadlineSidecar(r.message);
     if (headline.length === 0) continue;
     out.push({
       id: `${r.product_id ?? 'swpc'}-${r.issue_datetime}`,
       severity: classifyAlertSeveritySidecar(headline),
       headline,
-      issuedAt: r.issue_datetime,
+      issuedAt,
     });
   }
   out.sort((a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt));
@@ -2925,9 +3539,21 @@ export function buildSpaceweatherStatusSidecar(input) {
   return {
     xray,
     geomag,
+    // Full normalized Kp series (UTC-stamped), exposed so the space_weather
+    // fusion domain can vote NOAA's bins against GFZ's without a SECOND fetch
+    // of the same upstream product.
+    kpPoints: Array.isArray(input.kpIndex) ? input.kpIndex : [],
     gpsDisruption: classifyGpsDisruptionSidecar(peakClass),
     hfRadioBlackout: !!xray && xray.peakFlux >= 1e-4,
     earthwardCmes,
+    // Repointing the dead URL fixed the 404 but not the failure MODE: any
+    // non-200 or throw still becomes null here, and an empty CME list renders
+    // as a confident "no Earthward CMEs" — an outage that looks like good news.
+    // The renderer needs to tell "the feed says none" apart from "the feed
+    // never answered", so say which one this is. Only an explicit true counts
+    // as healthy: defaulting an absent flag to true reinstates exactly the
+    // fail-open this field exists to close.
+    cmeFeedOk: input.cmeFeedOk === true,
     asOf: new Date(now).toISOString(),
   };
 }
@@ -2962,16 +3588,62 @@ function normalizeXrayPoints(raw) {
   return out;
 }
 
-function normalizeKpPoints(raw) {
-  // SWPC returns ["time_tag","kp_index","estimated_kp","kp"] header row + data.
-  if (!Array.isArray(raw) || raw.length < 2) return [];
+// SWPC stamps naïve UTC ("2026-07-30T12:00:00"), which Date.parse reads as
+// LOCAL time — so a UTC-5 host saw the newest bins as future-dated and
+// summarizeKpSidecar's `t > now` guard silently dropped them. Stamping the Z
+// here (rather than at each call site) means every consumer inherits the fix.
+function toUtcIsoTag(raw) {
+  const tag = String(raw ?? '').trim().replace(' ', 'T');
+  if (!tag) return '';
+  // Only a date-TIME can take a Z; appending one to a bare date yields NaN.
+  if (!/\d{2}:\d{2}/.test(tag)) return tag;
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(tag)) return tag;
+  return `${tag}Z`;
+}
+
+// Mirrors instantOrNull in src/services/space-weather-parse.ts. toUtcIsoTag
+// passes a tag it can't recognize through UNCHANGED, so `'not-a-date'` and
+// `12345` both survive a truthiness check while the renderer's Date.parse
+// discards them — a healthy vote on a payload the panel throws away. A stamp
+// that can't be placed in time also can't be windowed, so it is not a reading.
+function swpcInstantOrNull(raw) {
+  if (typeof raw !== 'string') return null;
+  const at = Date.parse(toUtcIsoTag(raw));
+  return Number.isFinite(at) ? at : null;
+}
+
+// Kp is a 0-9 planetary index. Anything outside that is corrupt, and a bogus
+// extreme would trip the Kp>=5 storm alerting downstream.
+const KP_MIN = 0;
+const KP_MAX = 9;
+
+function kpNumberOrNull(raw) {
+  let n;
+  if (typeof raw === 'number') n = raw;
+  else if (typeof raw === 'string' && raw.trim() !== '') n = Number(raw.trim());
+  else return null;
+  if (!Number.isFinite(n) || n < KP_MIN || n > KP_MAX) return null;
+  return n;
+}
+
+export function normalizeKpPoints(raw) {
+  // products/noaa-planetary-k-index.json is an array of OBJECTS with a
+  // capital-K `Kp` — NOT the header-row + array-of-arrays shape this used to
+  // parse. Every row failed the old Array.isArray(row) check, so this returned
+  // [] and the geomag block went dark for ~3 months without an error anywhere.
+  if (!Array.isArray(raw)) return [];
   const out = [];
-  for (let i = 1; i < raw.length; i += 1) {
-    const row = raw[i];
-    if (!Array.isArray(row) || row.length < 2) continue;
-    const time_tag = String(row[0] ?? '');
-    const kp = Number(row[1]);
-    if (!time_tag || !Number.isFinite(kp)) continue;
+  for (const row of raw) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    if (swpcInstantOrNull(row.time_tag) === null) continue;
+    const time_tag = toUtcIsoTag(row.time_tag);
+    // Number() maps null, '', '   ', false and [] all to 0 — a plausible-looking
+    // "quiet" Kp. Listing the absent values by identity misses the others, so
+    // reject on TYPE and bound the range, mirroring finiteOrNull/inRangeOrNull
+    // in src/services/space-weather-parse.ts: a looser vote here than the
+    // renderer's parse is a healthy verdict on a payload the panel discards.
+    const kp = kpNumberOrNull(row.Kp);
+    if (kp === null) continue;
     out.push({ time_tag, kp });
   }
   return out;
@@ -2981,9 +3653,16 @@ function normalizeAlertRaw(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const r of raw) {
-    if (!r || typeof r.message !== 'string') continue;
-    const issue = r.issue_datetime ? String(r.issue_datetime) : null;
-    if (!issue) continue;
+    // Empty and whitespace-only messages are dropped by parseAlerts in
+    // src/services/space-weather-parse.ts (`if (!message) continue`), so
+    // counting them here would vote healthy on a bulletin that renders as
+    // nothing. There is no such thing as a blank SWPC bulletin.
+    if (!r || typeof r.message !== 'string' || r.message.trim() === '') continue;
+    // Same reason as the Kp stamp: an unparseable issue time can't be windowed,
+    // so parseAlerts discards it. String(...) would happily turn 99999 into a
+    // tag that reads as present and parses to nothing.
+    if (swpcInstantOrNull(r.issue_datetime) === null) continue;
+    const issue = r.issue_datetime;
     // SWPC's issue_datetime is naïve UTC; append Z so Date.parse works.
     const issueIso = issue.endsWith('Z') ? issue : `${issue.replace(' ', 'T')}Z`;
     out.push({
@@ -2995,6 +3674,60 @@ function normalizeAlertRaw(raw) {
   return out;
 }
 
+// A CME takes one to four days to cross to Earth, and filterEarthwardCmesSidecar
+// still shows one for 12h after its predicted arrival — so the window has to
+// reach back far enough to cover the slowest event still in transit. Seven days
+// is comfortably past that; DONKI's endDate is inclusive by DATE, so the +1 day
+// keeps today's events from falling off the end for a host running behind UTC.
+export const SPACEWX_CME_LOOKBACK_DAYS = 7;
+
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * The CME list used to come from services.swpc.noaa.gov/json/donki/cme.json,
+ * which now 404s — and since fetchJsonSidecar swallows that into null, the
+ * Earthward CMEs section rendered as a confident "none" rather than as an
+ * error, for every user, indefinitely. CCMC runs the DONKI web service that
+ * feeds api.nasa.gov, in the same JSON shape, without needing a NASA key.
+ */
+export function buildDonkiCmeUrlSidecar(now) {
+  const start = isoDay(now - SPACEWX_CME_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const end = isoDay(now + 24 * 60 * 60 * 1000);
+  return `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/CME?startDate=${start}&endDate=${end}`;
+}
+
+/**
+ * A 200 carrying a well-formed array is not the same as a 200 carrying CMEs we
+ * can read. If DONKI renames its fields, every row falls out of
+ * filterEarthwardCmesSidecar and the section renders as "nothing Earthward" —
+ * the outage wearing the all-clear's clothes again, one level deeper.
+ *
+ * An EMPTY array stays healthy on purpose: a week with no CMEs is ordinary, and
+ * treating it as drift would cry wolf most of the time. It is a non-empty
+ * response in which no row carries the fields the filter reads that means the
+ * shape moved.
+ *
+ * The bar is "at least one row the filter could actually act on", checked all
+ * the way down to `longitude` — the field that decides Earthward. Partial drift
+ * is the likely kind and it hides at every level: `activityID` can survive a
+ * rename of `cmeAnalyses`, and `cmeAnalyses` can survive a rename of
+ * `longitude`. Stopping at either outer level leaves the same empty-and-healthy
+ * result one layer down.
+ *
+ * A window of exclusively UNANALYZED CMEs (`cmeAnalyses: []`) therefore reads
+ * as unhealthy, and that is the honest answer rather than a false alarm: we
+ * genuinely cannot determine Earthward status from it. It is rare over seven
+ * days, and "unknown" is the correct direction to fail.
+ */
+export function donkiCmeFeedHealthySidecar(raw) {
+  if (!Array.isArray(raw)) return false;
+  if (raw.length === 0) return true;
+  return raw.some((row) => row
+    && typeof row.activityID === 'string'
+    && Array.isArray(row.cmeAnalyses)
+    && row.cmeAnalyses.some((a) => a && typeof a.longitude === 'number'));
+}
+
 export async function fetchSpaceweatherStatusSidecar() {
   const now = Date.now();
   if (spacewxStatusCache && now - spacewxStatusCachedAt < SPACEWX_CACHE_TTL_MS) {
@@ -3003,16 +3736,25 @@ export async function fetchSpaceweatherStatusSidecar() {
   const [xrayRaw, kpRaw, cmeRaw] = await Promise.all([
     fetchJsonSidecar('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
     fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
-    fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
+    fetchJsonSidecar(buildDonkiCmeUrlSidecar(now)),
   ]);
+  const xrayFlux = normalizeXrayPoints(xrayRaw);
+  const kpIndex = normalizeKpPoints(kpRaw);
   const status = buildSpaceweatherStatusSidecar({
-    xrayFlux: normalizeXrayPoints(xrayRaw),
-    kpIndex: normalizeKpPoints(kpRaw),
+    xrayFlux,
+    kpIndex,
     cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
+    cmeFeedOk: donkiCmeFeedHealthySidecar(cmeRaw),
     now,
   });
-  spacewxStatusCache = status;
-  spacewxStatusCachedAt = now;
+  // Cache on what the ADAPTERS produced, not on the raw bodies being non-null.
+  // A 200 carrying `[]` is non-null, so the old raw check happily cached a
+  // status with no flux and no Kp — which renders as "Nominal", indistinguishable
+  // from a genuinely quiet sun, for the whole TTL.
+  if (xrayFlux.length > 0 || kpIndex.length > 0) {
+    spacewxStatusCache = status;
+    spacewxStatusCachedAt = now;
+  }
   return status;
 }
 
@@ -3023,8 +3765,15 @@ export async function fetchSpaceweatherAlertsSidecar() {
   }
   const raw = await fetchJsonSidecar('https://services.swpc.noaa.gov/products/alerts.json');
   const alerts = summarizeAlertsSidecar(normalizeAlertRaw(raw), now);
-  spacewxAlertsCache = alerts;
-  spacewxAlertsCachedAt = now;
+  // A failed fetch yields [] here, which the panel renders as "No active alerts"
+  // — the reassuring reading, produced by an outage. Caching it would hold that
+  // false all-clear for the full TTL, so only a real fetch is cached. The test
+  // is the SHAPE, not alerts.length: a genuinely quiet window is a legitimate
+  // empty array and should still be cached, while `{}` behind a 200 should not.
+  if (Array.isArray(raw)) {
+    spacewxAlertsCache = alerts;
+    spacewxAlertsCachedAt = now;
+  }
   return alerts;
 }
 
@@ -4130,6 +4879,71 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   }
 }
 
+// Cap a single HRRR fetch's buffered body. A MASSDEN message is a few hundred KB;
+// the whole cycle file is ~130 MB, so this trips only if the server ignores a
+// Range and streams the full file — which we then abort rather than OOM on.
+const HRRR_MAX_RESPONSE_BYTES = 24 * 1024 * 1024;
+
+function hrrrResponseWrapper(res, status, buf) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k) => res.headers[k.toLowerCase()] || null },
+    text: () => Promise.resolve(buf.toString('utf8')),
+    arrayBuffer: () =>
+      Promise.resolve(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)),
+  };
+}
+
+// Binary-capable fetch for the HRRR-Smoke decoder. fetchWithTimeout is unusable
+// here: it stringifies the body (corrupting GRIB2 bytes) and exposes no
+// arrayBuffer(). This preserves raw bytes, refuses to buffer a Range request the
+// server answered non-206 (a 200 means it ignored the Range and would stream the
+// whole ~130 MB file), and caps total bytes. IPv4-forced like the sidecar's
+// other outbound calls.
+function fetchHrrrResource(url, options = {}, timeoutMs = 20_000) {
+  const u = new URL(url);
+  const hdrs = options.headers || {};
+  const wantsRange = Boolean(hdrs.Range || hdrs.range);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        method: options.method || 'GET',
+        headers: hdrs,
+        family: 4,
+        agent: httpsAgent,
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (wantsRange && status !== 206) {
+          res.destroy();
+          resolve(hrrrResponseWrapper(res, status, Buffer.alloc(0)));
+          return;
+        }
+        const chunks = [];
+        let total = 0;
+        res.on('data', (c) => {
+          total += c.length;
+          if (total > HRRR_MAX_RESPONSE_BYTES) {
+            res.destroy();
+            reject(new Error('HRRR response exceeded byte cap'));
+            return;
+          }
+          chunks.push(c);
+        });
+        res.on('end', () => resolve(hrrrResponseWrapper(res, status, Buffer.concat(chunks))));
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => { req.destroy(new Error('Request timed out')); });
+    req.end();
+  });
+}
+
 /**
  * Sanitize a single GlobeSeismicOverlay payload from a renderer push.
  * Returns null if any required field is missing or wrong-typed so the
@@ -4300,6 +5114,12 @@ function getCachedStale(key) {
 function setCached(key, data, ttlMs) {
   _sidecarCache.set(key, { data, ts: Date.now(), ...(ttlMs != null && { ttlMs }) });
   _ensureSidecarCacheSweep();
+}
+
+// Test-only: clear every TTL-cache entry so route tests can cross cache
+// boundaries without sleeping (same convention as _resetSecurityCaches).
+export function _resetSidecarCacheForTests() {
+  _sidecarCache.clear();
 }
 
 // ── Webcam helpers (shared by /api/webcams aggregator and sub-handlers) ──
@@ -5644,6 +6464,18 @@ function extractAlertCentroid(feature) {
   return null;
 }
 
+// Local-time zone abbreviation → UTC offset, for AirNow's DateObserved +
+// HourObserved + LocalTimeZone triple (see /api/airnow/current). Module-level
+// so the table is built once instead of reallocated on every dispatch() call.
+// Includes AirNow's non-CONUS territories: Puerto Rico/USVI (AST), Guam
+// (ChST), American Samoa (SST).
+const AIRNOW_TZ_OFFSETS = {
+  EST: '-05:00', EDT: '-04:00', CST: '-06:00', CDT: '-05:00',
+  MST: '-07:00', MDT: '-06:00', PST: '-08:00', PDT: '-07:00',
+  AKST: '-09:00', AKDT: '-08:00', HST: '-10:00',
+  AST: '-04:00', ChST: '+10:00', SST: '-11:00',
+};
+
 async function dispatch(requestUrl, req, routes, context) {
   if (req.method === 'OPTIONS') {
  return new Response(null, { status: 204, headers: makeCorsHeaders(req) });
@@ -5874,6 +6706,51 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── HRRR-Smoke MASSDEN grid (authed) ───────────────────────────────────
+  // POST { points:[{lat,lon}], horizonHours? } → { grid:(GridPointAq|null)[],
+  // available, source }. The heavy lifting (NOMADS fetch + wgrib2 decode) is
+  // server-side; the renderer's fetchHrrrAqGrid is a thin client that falls
+  // back to Open-Meteo when available:false. Points feed wgrib2 as execFile
+  // args (no shell) and never touch the fetched URL, so there's no SSRF/
+  // injection surface — but validate + clamp them anyway.
+  if (requestUrl.pathname === '/api/smoke/hrrr-grid' && req.method === 'POST') {
+    try {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw.toString()) : null;
+      const rawPoints = Array.isArray(body?.points) ? body.points : null;
+      if (!rawPoints) return json({ error: 'points must be an array' }, 400);
+      if (rawPoints.length === 0) return json({ grid: [], available: false, source: 'hrrr-smoke' });
+      if (rawPoints.length > 200) return json({ error: 'too many points (max 200)' }, 400);
+      const points = [];
+      for (const p of rawPoints) {
+        const lat = Number(p?.lat);
+        const lon = Number(p?.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+          return json({ error: 'invalid point' }, 400);
+        }
+        points.push({ lat, lon });
+      }
+      const horizonHours = Number.isFinite(Number(body?.horizonHours))
+        ? Math.max(1, Math.min(48, Math.floor(Number(body.horizonHours))))
+        : 24;
+      const grid = await fetchHrrrGrid({
+        points,
+        now: Date.now(),
+        horizonHours,
+        // fetchHrrrGrid reads fetchImpl (and wgrib2Path) from `deps` — passing it
+        // at the top level silently falls back to global fetch, losing the
+        // IPv4-forcing, non-206 abort, and byte cap this helper provides.
+        deps: {
+          fetchImpl: (url, init) => fetchHrrrResource(url, { headers: init?.headers }, 20_000),
+        },
+      });
+      const available = grid.some((g) => g !== null);
+      return json({ grid, available, source: 'hrrr-smoke' });
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 400);
+    }
+  }
+
   // ── S2 Underground media + Patreon (authed) ────────────────────────────
   if (requestUrl.pathname === '/api/youtube/channel-feed') {
     const channelId = requestUrl.searchParams.get('channelId') || '';
@@ -6058,6 +6935,11 @@ async function dispatch(requestUrl, req, routes, context) {
               ? stripProtoKeys(body.algorithmDiagnostics)
               : null)
             : (previous.algorithmDiagnostics ?? null),
+          evaluationReportProjection: has('evaluationReportProjection')
+            ? (validateEvaluationReportProjection(body.evaluationReportProjection)
+              ?? previous.evaluationReportProjection
+              ?? null)
+            : (previous.evaluationReportProjection ?? null),
         };
         context._analystState = safe;
         return json({ ok: true });
@@ -10069,27 +10951,55 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Space Weather proxy (NOAA SWPC, no API key) ───────────────────────────
   if (requestUrl.pathname === '/api/space-weather-feeds') {
- const _swCached = getCached('space-weather-feeds', 5 * 60 * 1000);
+ // No TTL argument: getCached prefers a supplied ttlMs over the stored one, so
+ // passing 5 min here would override the shorter TTL a partial result is
+ // deliberately written with and pin the hole for the full five minutes.
+ const _swCached = getCached('space-weather-feeds');
  if (_swCached) return json(_swCached);
  const SW_URLS = {
  kp: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
- mag: 'https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json',
+ // Replaces the separate mag-5-minute + plasma-5-minute products, which SWPC
+ // retired — both 404 now, so Bz/speed/density arrived as null no matter what
+ // the renderer did with them. This single product carries speed, density AND
+ // bz, already propagated to Earth's bow shock.
+ wind: 'https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json',
  xray: 'https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json',
  alerts: 'https://services.swpc.noaa.gov/products/alerts.json',
- plasma: 'https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json',
  };
  try {
  const entries = Object.entries(SW_URLS);
  const settled = await Promise.allSettled(
  entries.map(([, url]) => fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000)),
  );
- const result = {};
+ const decoded = [];
  for (const [i, [key]] of entries.entries()) {
  const r = settled[i];
- result[key] = (r.status === 'fulfilled' && r.value.ok) ? await r.value.json() : null;
+ // Each feed fails on its own: a malformed body from one SWPC product
+ // shouldn't 502 the other three. The json() parse is the failure point
+ // most likely to throw, so it gets its own guard.
+ let value = null;
+ if (r.status === 'fulfilled' && r.value.ok) {
+ try { value = await r.value.json(); } catch { value = null; }
+ }
+ decoded.push([key, value]);
+ }
+ // Shape + health decided in buildSwpcEnvelope so a test can reach them.
+ const { feeds: result, usable, total } = buildSwpcEnvelope(decoded);
+ // Health is derived from what the ADAPTER produced, not from the handler
+ // reaching this line. Reporting a four-way upstream outage as a healthy
+ // fetch — then caching the all-null envelope for five minutes — is what let
+ // this panel sit blank for months without anything flagging it. An empty
+ // array counts as a failure here for the same reason: SWPC never returns
+ // four simultaneously empty products, so that pattern means upstream trouble
+ // rather than a genuinely quiet sun.
+ if (usable === 0) {
+ trackFailure('swpc', new Error('all SWPC feeds unavailable'));
+ return json({ error: 'space-weather-feeds: no SWPC feed returned usable data' }, 502);
  }
  trackSuccess('swpc', 'primary');
- setCached('space-weather-feeds', result, 5 * 60 * 1000);
+ // A partial result gets a short TTL so one flaky product doesn't pin a hole
+ // in the panel for the full five minutes.
+ setCached('space-weather-feeds', result, usable === total ? 5 * 60 * 1000 : 60 * 1000);
  return json(result);
  } catch (error) {
  trackFailure('swpc', error);
@@ -10435,15 +11345,79 @@ async function dispatch(requestUrl, req, routes, context) {
     const cached = getCached(cacheKey, 10 * 60 * 1000);
     if (cached) return json(cached);
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&forecast_days=3&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&current=temperature_2m&forecast_days=3&timezone=auto`;
       const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 10000);
       if (!r.ok) throw new Error(`Open-Meteo HTTP ${r.status}`);
       const data = await r.json();
+      // timezone=auto returns offset-less LOCAL wall-clock strings (e.g.
+      // "2026-07-29T23:00"), not UTC — Date.parse would silently misread
+      // them as UTC. Normalize once here to an unambiguous epoch ms.
+      // `current` is additive — if Open-Meteo ever omits it, that must
+      // degrade only the new temperature reading, not the pre-existing
+      // hourly forecast consumer, so currentObservedAtMs is left off
+      // rather than throwing and 502-ing the whole route.
+      const currentTime = data.current?.time;
+      const observedAt = currentTime !== undefined ? Date.parse(`${currentTime}Z`) - (data.utc_offset_seconds ?? 0) * 1000 : NaN;
       const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
+      if (Number.isFinite(observedAt)) result.currentObservedAtMs = observedAt;
       setCached(cacheKey, result);
       return json(result);
     } catch (error) {
       return json({ error: `open-meteo forecast error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
+    }
+  }
+
+  // ── MET Norway locationforecast (no key) ─────────────────────────────────
+  // GET /api/met-norway-temp?lat=&lon=
+  // 2nd independent source for the surface_temp fusion domain (see
+  // provider-domain-map.ts). MET Norway's TOS requires an identifying
+  // User-Agent (not the generic CHROME_UA used elsewhere in this file).
+  if (requestUrl.pathname === '/api/met-norway-temp') {
+    const lat = requestUrl.searchParams.get('lat');
+    const lon = requestUrl.searchParams.get('lon');
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    if (!lat || !lon || !Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+      return json({ error: 'lat and lon required' }, 400);
+    }
+    const cacheKey = `met-norway-temp-${latNum.toFixed(2)}-${lonNum.toFixed(2)}`;
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latNum}&lon=${lonNum}`;
+      const r = await fetchWithTimeout(
+        url,
+        { headers: { 'User-Agent': 'CrystalBall/1.0 github.com/bradleybond512/crystal-ball', Accept: 'application/json' } },
+        10000,
+      );
+      if (!r.ok) {
+        return json({ readings: [], degraded: true, reason: `met-norway upstream ${r.status}`, fetchedAt: Date.now() }, 502);
+      }
+      const data = await r.json();
+      const unit = data?.properties?.meta?.units?.air_temperature;
+      // MET Norway's TOS-mandated unit contract — refuse to emit a reading
+      // rather than silently fusing a mis-scaled value into surface_temp.
+      // Named separately from the generic empty-reading case below so a
+      // silent unit change (e.g. celsius -> fahrenheit) is distinguishable
+      // in the reason string, not just an ordinary empty/malformed response.
+      if (unit !== 'celsius') {
+        return json({ readings: [], degraded: true, reason: `met-norway: unexpected unit "${unit}" (expected celsius)`, fetchedAt: Date.now() }, 502);
+      }
+      const readings = [];
+      const first = data.properties.timeseries?.[0];
+      const tempC = first?.data?.instant?.details?.air_temperature;
+      const observedAt = first ? Date.parse(first.time) : NaN;
+      if (Number.isFinite(tempC) && Number.isFinite(observedAt)) {
+        readings.push({ lat: latNum, lon: lonNum, tempC, observedAt });
+      }
+      if (readings.length === 0) {
+        return json({ readings: [], degraded: true, reason: 'met-norway: no valid celsius reading', fetchedAt: Date.now() }, 502);
+      }
+      const result = { readings, fetchedAt: Date.now() };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ readings: [], degraded: true, reason: `met-norway upstream error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
     }
   }
 
@@ -10846,7 +11820,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/stocks-finnhub') {
  const _sfCached = getCached('stocks-finnhub', 60 * 1000);
  if (_sfCached) return json(_sfCached);
- const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ const SYMS = STOCK_FUSION_SYMBOLS;
  const finnhubKey = process.env.FINNHUB_API_KEY;
  if (!finnhubKey) return json({ quotes: [], degraded: true, error: 'no Finnhub key' });
  try {
@@ -10876,7 +11850,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/stocks-yahoo') {
  const _syCached = getCached('stocks-yahoo', 60 * 1000);
  if (_syCached) return json(_syCached);
- const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ const SYMS = STOCK_FUSION_SYMBOLS;
  try {
  const results = await Promise.allSettled(SYMS.map((s) =>
  fetchWithTimeout(
@@ -10895,6 +11869,60 @@ async function dispatch(requestUrl, req, routes, context) {
  const _syResult = { quotes };
  setCached('stocks-yahoo', _syResult, 60 * 1000);
  return json(_syResult);
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Stock fusion source C: Financial Modeling Prep (keyed). Real per-quote
+  // timestamps — corroborates when FMP_API_KEY is set, Yahoo+Finnhub only
+  // otherwise. ──────────────────────────────────────────────────────────────
+  if (requestUrl.pathname === '/api/stocks-fmp') {
+ const _sfmpCached = getCached('stocks-fmp', 60 * 1000);
+ if (_sfmpCached) return json(_sfmpCached);
+ const fmpKey = process.env.FMP_API_KEY;
+ if (!fmpKey) return json({ quotes: [], degraded: true, error: 'no FMP key' });
+ try {
+ // FMP's current API lives under /stable; /api/v3 is legacy and unavailable
+ // to newly created free keys (grandfathered keys still work there). Try
+ // stable first, fall back to v3 so both key generations get quotes.
+ const symbolCsv = STOCK_FUSION_SYMBOLS.join(',');
+ // Stable's batch endpoint is /stable/batch-quote?symbols= (the singular
+ // /stable/quote takes ONE symbol). Each attempt catches its own errors so
+ // a stable-side timeout or maintenance-HTML parse failure still falls
+ // through to legacy v3 for grandfathered keys.
+ const fmpUrls = [
+ `https://financialmodelingprep.com/stable/batch-quote?symbols=${encodeURIComponent(symbolCsv)}&apikey=${encodeURIComponent(fmpKey)}`,
+ `https://financialmodelingprep.com/api/v3/quote/${symbolCsv}?apikey=${encodeURIComponent(fmpKey)}`,
+ ];
+ let data = null;
+ let lastError = 'FMP: no attempt succeeded';
+ for (const url of fmpUrls) {
+ try {
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000);
+ if (!r.ok) { lastError = `FMP ${r.status}`; continue; }
+ const body = await r.json();
+ if (Array.isArray(body) && body.length > 0) { data = body; break; }
+ lastError = 'FMP: empty response';
+ } catch (attemptError) {
+ lastError = String(attemptError.message ?? attemptError);
+ }
+ }
+ if (!Array.isArray(data)) throw new Error(lastError);
+ const rows = Array.isArray(data) ? data : [];
+ const quotes = [];
+ for (const row of rows) {
+ const symbol = row?.symbol;
+ const price = row?.price;
+ if (typeof symbol !== 'string' || !Number.isFinite(price) || price <= 0) continue;
+ const rawTs = row?.timestamp;
+ const observedAt = Number.isFinite(rawTs) && rawTs > 0 ? rawTs * 1000 : Date.now(); // epoch seconds → ms; missing/0 falls back to fetch time
+ quotes.push({ symbol, price, observedAt });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no FMP prices' });
+ const _sfmpResult = { quotes };
+ setCached('stocks-fmp', _sfmpResult, 60 * 1000);
+ return json(_sfmpResult);
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
  }
@@ -10958,6 +11986,62 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(_cbResult);
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
+  // ── CoinPaprika — 3rd crypto fusion group (aggregator, no key).
+  if (requestUrl.pathname === '/api/crypto-quotes-coinpaprika') {
+ const _cpCached = getCached('crypto-quotes-coinpaprika', 60 * 1000);
+ if (_cpCached) return json(_cpCached);
+ const CP_IDS = { 'btc-bitcoin': 'BTC', 'eth-ethereum': 'ETH', 'sol-solana': 'SOL', 'xrp-xrp': 'XRP' };
+ try {
+ const settled = await Promise.allSettled(Object.keys(CP_IDS).map((id) =>
+ fetchWithTimeout(`https://api.coinpaprika.com/v1/tickers/${id}?quotes=USD`,
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000)
+ .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`coinpaprika ${r.status}`))))));
+ const quotes = [];
+ for (const [i, id] of Object.keys(CP_IDS).entries()) {
+ const s = settled[i];
+ if (s.status !== 'fulfilled') continue;
+ const price = s.value?.quotes?.USD?.price;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: CP_IDS[id], price });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all CoinPaprika requests failed' });
+ const _cpResult = { quotes };
+ setCached('crypto-quotes-coinpaprika', _cpResult, 60 * 1000);
+ return json(_cpResult);
+ } catch (error) {
+ return json({ quotes: [], error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Kraken public ticker — 4th crypto fusion group (US-reachable exchange).
+  if (requestUrl.pathname === '/api/crypto-quotes-kraken') {
+ const _krCached = getCached('crypto-quotes-kraken', 60 * 1000);
+ if (_krCached) return json(_krCached);
+ try {
+ const r = await fetchWithTimeout(
+ 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD,XRPUSD',
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 10_000);
+ if (!r.ok) throw new Error(`Kraken ${r.status}`);
+ const data = await r.json();
+ if (data.error?.length) throw new Error(String(data.error[0]));
+ // Kraken result keys are exchange-native (XXBTZUSD, XETHZUSD, SOLUSD, XXRPZUSD).
+ const SYM = [['XBT', 'BTC'], ['ETH', 'ETH'], ['SOL', 'SOL'], ['XRP', 'XRP']];
+ const seen = new Set();
+ const quotes = [];
+ for (const [pair, t] of Object.entries(data.result ?? {})) {
+ const hit = SYM.find(([native]) => pair.includes(native));
+ if (!hit || seen.has(hit[1])) continue;
+ const price = Number.parseFloat(t?.c?.[0]);
+ if (Number.isFinite(price) && price > 0) { quotes.push({ symbol: hit[1], price }); seen.add(hit[1]); }
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all Kraken requests failed' });
+ const _krResult = { quotes };
+ setCached('crypto-quotes-kraken', _krResult, 60 * 1000);
+ return json(_krResult);
+ } catch (error) {
+ return json({ quotes: [], error: String(error.message ?? error) });
  }
   }
 
@@ -12084,8 +13168,22 @@ async function dispatch(requestUrl, req, routes, context) {
           source: result.source,
         };
       }).filter(Boolean);
-      setCached('usgs-earthquakes', events, 60_000);
-      return json({ events, degraded: result.degraded, source: result.source });
+      // Cache the ENVELOPE, not the bare array: a hit and a miss have to answer
+      // with the same shape. It cached `events` alone, so for the 60 s after
+      // each miss the route replied with a top-level array and any consumer
+      // reading `.events` / `.source` off the body saw undefined.
+      //
+      // `generatedAt` is stamped HERE, on the upstream fetch, and then frozen
+      // into the cache — so a hit carries the ORIGINAL fetch instant, not the
+      // instant it was served. That is the only thing distinguishing a replay
+      // from a live fetch: `source` stays 'primary'/'fallback-N' on a hit too,
+      // so a consumer reading it alone cannot tell them apart. The fusion
+      // fetcher rejects on this age, and the field name matches the web edge
+      // function's (api/earthquakes.js) so one check covers both.
+      const payload = { events, degraded: result.degraded, source: result.source,
+                        generatedAt: new Date().toISOString() };
+      setCached('usgs-earthquakes', payload, 60_000);
+      return json(payload);
     } catch (error) {
       trackFailure('usgs', error);
       return json({ events: [], error: String(error.message ?? error), degraded: true }, 200);
@@ -12182,6 +13280,48 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  return json({ error: `emsc-seismic error: ${error.message ?? error}` }, 502);
  }
+  }
+
+  // ── GEOFON (GFZ Potsdam) FDSN event service — 3rd independent seismic
+  // network for earthquake fusion (groups: usgs / emsc / gfz). Text format
+  // is the stable FDSN contract; parsed here so the renderer gets JSON.
+  if (requestUrl.pathname === '/api/geofon-seismic') {
+    const _gfCached = getCached('geofon-seismic', 5 * 60 * 1000);
+    if (_gfCached) return json(_gfCached);
+    try {
+      const r = await fetchWithTimeout(
+        'https://geofon.gfz-potsdam.de/fdsnws/event/1/query?format=text&limit=50&minmagnitude=4.0',
+        { headers: { 'User-Agent': CHROME_UA } },
+        12_000,
+      );
+      if (!r.ok) throw new Error(`GEOFON ${r.status}`);
+      const text = await r.text();
+      const events = text.split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'))
+        .map((line) => {
+          const c = line.split('|');
+          return {
+            id: c[0],
+            time: c[1],
+            lat: Number.parseFloat(c[2]),
+            lon: Number.parseFloat(c[3]),
+            depthKm: Number.parseFloat(c[4]),
+            magnitude: Number.parseFloat(c[10]),
+            region: c[12] ?? '',
+          };
+        })
+        .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon) && Number.isFinite(e.magnitude));
+      // Zero parsed events from a 200 means a maintenance page or format
+      // change, not a quiet planet (M4+ is never absent from a 50-row,
+      // no-time-floor query) — degraded, uncached so the next poll retries.
+      if (events.length === 0) return json({ events: [], degraded: true, error: 'no GEOFON events parsed' });
+      const _gfResult = { events };
+      setCached('geofon-seismic', _gfResult, 5 * 60 * 1000);
+      return json(_gfResult);
+    } catch (error) {
+      return json({ events: [], error: String(error.message ?? error) });
+    }
   }
 
   // ── USGS PAGER + ShakeMap rapid impact assessment ────────────────────────
@@ -13354,6 +14494,56 @@ async function dispatch(requestUrl, req, routes, context) {
     return json(result);
   }
 
+  // ── AirNow current observations — nearest-station real-time AQI, keyed.
+  // 3rd air_quality fusion source (alongside Open-Meteo + OpenAQ). AirNow's
+  // current-observations API reports local time as DateObserved + an int
+  // HourObserved + a US timezone abbreviation (LocalTimeZone) rather than a
+  // UTC timestamp — GEOFON already burned us once on Date.parse() silently
+  // parsing a suffix-less string as local time, so this is normalized to
+  // epoch ms explicitly via an abbreviation→offset table below and never
+  // handed to Date.parse() without one.
+  if (requestUrl.pathname === '/api/airnow/current') {
+    const apiKey = process.env.AIRNOW_API_KEY;
+    if (!apiKey) return json({ readings: [], degraded: true, error: 'no AirNow key' });
+    const lat = Number.parseFloat(requestUrl.searchParams.get('lat') || '');
+    const lon = Number.parseFloat(requestUrl.searchParams.get('lon') || '');
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return json({ readings: [], error: 'lat/lon required' }, 400);
+    }
+    const cacheKey = `airnow-current:${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://www.airnowapi.org/aq/observation/latLong/current/`
+        + `?format=application/json&latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`
+        + `&distance=75&API_KEY=${encodeURIComponent(apiKey)}`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12_000);
+      if (!r.ok) throw new Error(`AirNow ${r.status}`);
+      const rows = await r.json();
+      const readings = (Array.isArray(rows) ? rows : [])
+        .map((o) => {
+          const offset = AIRNOW_TZ_OFFSETS[String(o?.LocalTimeZone ?? '').trim()];
+          const dateObserved = String(o?.DateObserved ?? '').trim();
+          const hourObserved = String(o?.HourObserved ?? '').padStart(2, '0');
+          const parsed = offset ? Date.parse(`${dateObserved}T${hourObserved}:00:00${offset}`) : Number.NaN;
+          return {
+            lat: o?.Latitude,
+            lon: o?.Longitude,
+            aqi: o?.AQI,
+            parameter: o?.ParameterName,
+            observedAt: Number.isFinite(parsed) ? parsed : Date.now(),
+          };
+        })
+        .filter((o) => Number.isFinite(o.aqi) && o.aqi >= 0 && Number.isFinite(o.lat) && Number.isFinite(o.lon));
+      if (readings.length === 0) return json({ readings: [], degraded: true, error: 'no AirNow observations' });
+      const result = { readings };
+      setCached(cacheKey, result, 30 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ readings: [], degraded: true, error: String(error.message ?? error) });
+    }
+  }
+
   // ── INPE Queimadas — Brazil wildfire hotspots (last 48h) ─────────────────
   // ── PurpleAir hyper-local AQI sensors ────────────────────────────────────
   // Prefers PURPLEAIR_API_KEY (v1/sensors), falls back to the deprecated
@@ -13368,9 +14558,25 @@ async function dispatch(requestUrl, req, routes, context) {
  error: 'PURPLEAIR_API_KEY required — public www.purpleair.com/json endpoint is no longer served',
  }, 503);
  }
+ // Optional PurpleAir-native bounding box (all four params or none). The
+ // fusion fetch sends one so upstream + transfer + renderer parse stay
+ // bounded; the wildfire panel's global snapshot omits it and keeps the
+ // unbounded form. Cache is keyed per-bbox so a bounded payload and the
+ // global one can never be served for each other.
+ const bboxRaw = ['nwlng', 'nwlat', 'selng', 'selat'].map((p) => requestUrl.searchParams.get(p));
+ const bboxPresent = bboxRaw.some((v) => v !== null);
+ // Number(), not parseFloat: '1junk' must 400, not silently truncate to 1.
+ const bbox = bboxRaw.map((v) => (v === null || v.trim() === '' ? Number.NaN : Number(v)));
+ if (bboxPresent && !bbox.every(Number.isFinite)) {
+ return json({ sensors: [], error: 'bbox requires all four finite params: nwlng, nwlat, selng, selat' }, 400);
+ }
+ const bboxQuery = bboxPresent ? `&nwlng=${bbox[0]}&nwlat=${bbox[1]}&selng=${bbox[2]}&selat=${bbox[3]}` : '';
+ const cacheKey = bboxPresent ? `purpleair-sensors:${bbox.join(',')}` : 'purpleair-sensors';
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
  const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
  try {
- const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0`;
+ const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0${bboxQuery}`;
  const resp = await fetchWithTimeout(url, {
  headers: {
  'X-API-Key': apiKey,
@@ -13381,7 +14587,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!resp.ok) return json({ sensors: [], error: `purpleair upstream ${resp.status}` }, 502);
  const payload = await resp.json();
  const sensors = sidecarParseV1Sensors(payload);
- return json({ sensors, source: 'v1', fetchedAt: Date.now() });
+ const result = { sensors, source: 'v1', fetchedAt: Date.now() };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
  } catch (error) {
  return json({ sensors: [], error: String(error.message ?? error) }, 500);
  }
@@ -17177,6 +18385,63 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // GET /api/fx-rates-erapi — open.er-api.com USD rates (~6h cache)
+  // 2nd independent source for the fx_rates fusion domain (see
+  // provider-domain-map.ts). Structurally independent of Frankfurter: a
+  // continuously-updated aggregator rather than the ECB daily reference
+  // fixing. Failure is signalled in the BODY (`result: "error"`) as well as
+  // by status, and neither shape is cached — a transient upstream blip must
+  // not pin the domain dark for the whole TTL.
+  if (requestUrl.pathname === '/api/fx-rates-erapi' && req.method === 'GET') {
+ const ERAPI_TTL = 6 * 60 * 60 * 1000;
+ const cached = getCached('er-api-fx', ERAPI_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: `er-api upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ const erApiReject = erApiRejectReason(raw);
+ if (erApiReject) {
+ return json({ rates: {}, time_last_update_unix: null, fetchedAt: Date.now(), degraded: true, reason: erApiReject }, 502);
+ }
+ const result = { rates: raw.rates, time_last_update_unix: raw.time_last_update_unix, fetchedAt: Date.now(), degraded: false };
+ setCached('er-api-fx', result, ERAPI_TTL);
+ return json(result);
+  }
+
+  // GET /api/spaceweather-kp-gfz — GFZ Potsdam planetary Kp (~30 min cache)
+  // 2nd source for the space_weather fusion domain: GFZ computes Kp from its
+  // own 13-observatory network with its own algorithm, against SWPC's
+  // 8-station estimate. Partially overlapping observatories — corroborating,
+  // NOT fully independent.
+  //
+  // The window is mandatory: omitting start/end returns HTTP 500 upstream.
+  // The URL therefore moves every request, so the cache key is deliberately
+  // STABLE ('gfz-kp') — keying on the URL would miss on every single call.
+  if (requestUrl.pathname === '/api/spaceweather-kp-gfz' && req.method === 'GET') {
+ const GFZ_KP_TTL = 30 * 60 * 1000;
+ const cached = getCached('gfz-kp', GFZ_KP_TTL);
+ if (cached) return json(cached);
+ const nowMs = Date.now();
+ // GFZ accepts ONLY second-precision ISO ("2026-07-28T15:00:00Z"). Date's
+ // own toISOString() emits milliseconds, and "...T15:00:00.000Z" returns
+ // HTTP 500 — verified live 2026-07-30. Do not "simplify" this back to a
+ // bare toISOString().
+ const gfzIso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+ const start = gfzIso(nowMs - 48 * 60 * 60 * 1000);
+ const end = gfzIso(nowMs);
+ const gfzUrl = `https://kp.gfz.de/app/json/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&index=Kp`;
+ const r = await fetchWithTimeout(gfzUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ samples: [], degraded: true, reason: `gfz-kp upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ const samples = parseGfzKp(raw);
+ // A well-formed envelope carrying no usable Kp is a failure, not an empty
+ // success — and it must stay uncached so the next poll retries.
+ if (samples.length === 0) return json({ samples: [], degraded: true, reason: 'gfz-kp no valid samples' }, 502);
+ const result = { samples, fetchedAt: nowMs, degraded: false };
+ setCached('gfz-kp', result, GFZ_KP_TTL);
+ return json(result);
+  }
+
   // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
   // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
   if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {
@@ -17212,10 +18477,49 @@ async function dispatch(requestUrl, req, routes, context) {
  const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
  const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
  if (!r.ok) return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ioda upstream ${r.status}` }, 502);
- const raw = await r.json();
+ const raw = await r.json().catch(() => null);
+ // A malformed body is a failure, not a quiet internet — and must stay
+ // uncached so the next poll retries instead of serving it for 15 minutes.
+ if (!iodaEnvelopeIsWellFormed(raw)) {
+ return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: 'ioda unparseable envelope' }, 502);
+ }
  const alerts = parseIodaAlerts(raw);
  const result = { alerts, count: alerts.length, fetchedAt: Date.now(), degraded: false };
  setCached(cacheKey, result, IODA_TTL);
+ return json(result);
+  }
+
+  // GET /api/internet-outages-cf — Cloudflare Radar outage annotations (~15 min cache)
+  // 2nd source for the internet_outages fusion domain: Cloudflare observes
+  // traffic drops across its own edge, against IODA's BGP/active-probing/
+  // darknet detection — different methodology, genuinely independent.
+  //
+  // An empty annotation list is a SUCCESS, not a failure: a quiet internet is
+  // a real observation, and failing it closed would make the domain go dark
+  // exactly when nothing is wrong.
+  if (requestUrl.pathname === '/api/internet-outages-cf' && req.method === 'GET') {
+ const CF_OUTAGES_TTL = 15 * 60 * 1000;
+ const cached = getCached('cf-radar-outages', CF_OUTAGES_TTL);
+ if (cached) return json(cached);
+ const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+ if (!cfToken) return json({ outages: [], degraded: true, reason: 'no Cloudflare API token' });
+ const cfUrl = 'https://api.cloudflare.com/client/v4/radar/annotations/outages?dateRange=1d&limit=100&format=json';
+ const r = await fetchWithTimeout(cfUrl, { headers: { Accept: 'application/json', Authorization: `Bearer ${cfToken}` } }, 12_000);
+ if (!r.ok) return json({ outages: [], degraded: true, reason: `cloudflare radar upstream ${r.status}` }, 502);
+ const raw = await r.json().catch(() => null);
+ if (!raw || !Array.isArray(raw?.result?.annotations)) {
+ return json({ outages: [], degraded: true, reason: 'cloudflare radar unparseable envelope' }, 502);
+ }
+ // A valid envelope whose annotations ALL fail to parse is a shape mismatch,
+ // not a quiet internet: upstream said "here are annotations" and we
+ // extracted none. Some rows parsing is enough — one bad row among many must
+ // not kill the tick — but zero out of many must not be cached as healthy.
+ if (raw.result.annotations.length > 0 && countUsableCfAnnotations(raw) === 0) {
+ return json({ outages: [], degraded: true, reason: 'cloudflare radar annotations unusable' }, 502);
+ }
+ const outages = parseCloudflareRadarOutages(raw);
+ const result = { outages, fetchedAt: Date.now(), degraded: false };
+ setCached('cf-radar-outages', result, CF_OUTAGES_TTL);
  return json(result);
   }
 
@@ -17883,6 +19187,61 @@ export function parseFrankfurterRates(raw) {
   };
 }
 
+// ── open.er-api payload gate ─────────────────────────────────────────────────
+// Input: parsed JSON from open.er-api.com/v6/latest/USD.
+// Output: a reason string when the payload must NOT be cached, else null.
+//
+// The route caches for SIX HOURS, so anything that gets past this gate pins the
+// fx_rates domain for that long. `result: "success"` alone is not enough:
+// { result: "success", rates: {}, time_last_update_unix: null } satisfies it,
+// carries no rate and no observation time, and the renderer then correctly
+// fails closed on every retry against the poisoned cache entry.
+export function erApiRejectReason(raw) {
+  if (raw?.result !== 'success' || !raw.rates || typeof raw.rates !== 'object') {
+    return `er-api result "${raw?.result ?? 'unparseable'}"`;
+  }
+  const updatedUnix = raw.time_last_update_unix;
+  if (typeof updatedUnix !== 'number' || !Number.isFinite(updatedUnix) || updatedUnix <= 0) {
+    return 'er-api missing time_last_update_unix';
+  }
+  if (Object.keys(raw.rates).length === 0) return 'er-api empty rates';
+  return null;
+}
+
+// ── GFZ Potsdam Kp parser ────────────────────────────────────────────────────
+// Input: parsed JSON from kp.gfz.de/app/json/?start=..&end=..&index=Kp, which
+// returns parallel COLUMN arrays ({ datetime: [...], Kp: [...], status: [...] })
+// rather than row objects. Output: transposed observation rows.
+//
+// `status` is 'def' (definitive) or 'pre' (preliminary) and is carried purely
+// as provenance — NEVER filter on it. Definitive Kp is only certified months
+// in arrears, so every row inside a live 48h window is 'pre'; a `=== 'def'`
+// filter would fail the provider closed forever while looking healthy.
+export function parseGfzKp(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const times = raw.datetime;
+  const values = raw.Kp;
+  const statuses = Array.isArray(raw.status) ? raw.status : [];
+  if (!Array.isArray(times) || !Array.isArray(values)) return [];
+  const rows = [];
+  const len = Math.min(times.length, values.length);
+  for (let i = 0; i < len; i += 1) {
+    // Same UTC discipline as the NOAA normalizer. GFZ is zone-explicit today,
+    // but a suffix-less tag would parse host-locally, stay finite, and bin
+    // hours off NOAA's — two disjoint sets of 1-vote facts, both green.
+    const observedAt = Date.parse(toUtcIsoTag(times[i]));
+    if (!Number.isFinite(observedAt) || observedAt <= 0) continue;
+    // Number(null) is 0, a valid-looking quiet Kp; -1 is GFZ's missing-value
+    // sentinel. Reject both before they become a fake reading.
+    const rawKp = values[i];
+    if (rawKp === null || rawKp === undefined || rawKp === '') continue;
+    const kp = Number(rawKp);
+    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
+    rows.push({ observedAt, kp, status: typeof statuses[i] === 'string' ? statuses[i] : null });
+  }
+  return rows;
+}
+
 // ── IMF PortWatch parser ──────────────────────────────────────────────────────
 // Input: ArcGIS FeatureServer JSON { features: [{ attributes: {...} }] }
 // Output: latest-per-portid normalized array (drops rows missing portid).
@@ -17928,8 +19287,18 @@ export function parsePortwatchChokepoints(arcgisJson) {
 // ── IODA internet outage alerts parser ───────────────────────────────────────
 // Input: parsed JSON from api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts
 // Output: normalized array of alert objects.
+// A well-formed IODA envelope always carries a `data` ARRAY — an empty one when
+// the internet is quiet. parseIodaAlerts collapses "bad envelope" and "quiet
+// internet" onto the same `[]`, so the ROUTE must separate them before caching:
+// a 200 carrying `{ error: "maintenance" }` would otherwise be cached for the
+// full 15-minute TTL as a healthy zero-outage reading, and every retry in that
+// window reads the poisoned entry.
+export function iodaEnvelopeIsWellFormed(raw) {
+  return Boolean(raw) && Array.isArray(raw.data);
+}
+
 export function parseIodaAlerts(raw) {
-  if (!raw || !Array.isArray(raw.data)) return [];
+  if (!iodaEnvelopeIsWellFormed(raw)) return [];
   return raw.data.map(alert => ({
     entityType: alert?.entity?.type ?? null,
     entityCode: alert?.entity?.code ?? null,
@@ -17943,6 +19312,45 @@ export function parseIodaAlerts(raw) {
     condition: alert?.condition ?? null,
     method: alert?.method ?? null,
   }));
+}
+
+// ── Cloudflare Radar outage annotation parser ────────────────────────────────
+// Input: parsed JSON from api.cloudflare.com/client/v4/radar/annotations/outages
+// Output: one row per (annotation, location) pair — { country: <ISO2>, startedAt: <ms> }.
+// `locations` is a required ISO2 string[] and `startDate` a required Z-suffixed
+// date-time, so Date.parse reads it as UTC. Do NOT add a defensive 'Z' append
+// here: it would corrupt an already-offset string.
+// How many annotations are STRUCTURALLY usable — an ISO2 array plus a parseable
+// startDate. The route needs this to tell a quiet internet (`annotations: []`)
+// from a shape mismatch (upstream said "here are annotations" and we extracted
+// none): only the first is a real observation, and only the first may be cached
+// as a healthy zero-outage reading.
+export function countUsableCfAnnotations(raw) {
+  const annotations = raw?.result?.annotations;
+  if (!Array.isArray(annotations)) return 0;
+  let usable = 0;
+  for (const a of annotations) {
+    if (!Array.isArray(a?.locations)) continue;
+    if (typeof a?.startDate !== 'string' || !Number.isFinite(Date.parse(a.startDate))) continue;
+    usable += 1;
+  }
+  return usable;
+}
+
+export function parseCloudflareRadarOutages(raw) {
+  const annotations = raw?.result?.annotations;
+  if (!Array.isArray(annotations)) return [];
+  const rows = [];
+  for (const a of annotations) {
+    const startedAt = typeof a?.startDate === 'string' ? Date.parse(a.startDate) : Number.NaN;
+    if (!Number.isFinite(startedAt)) continue;
+    if (!Array.isArray(a?.locations)) continue;
+    for (const code of a.locations) {
+      if (typeof code !== 'string' || code.trim() === '') continue;
+      rows.push({ country: code.trim().toUpperCase(), startedAt });
+    }
+  }
+  return rows;
 }
 
 // ── openFDA drug shortage parser ─────────────────────────────────────────────
@@ -18360,6 +19768,20 @@ export async function createLocalApiServer(options = {}) {
  res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;
+ }
+
+ // ── /api/local-agent-monitor — redacted read-only monitor projection ─
+ // The path is resolved at server construction, never from request input.
+ // Only the explicit projection builder sees the raw file; the renderer gets
+ // bounded IDs, severities, timestamps, counts, and compatibility metadata.
+ if (requestUrl.pathname === '/api/local-agent-monitor') {
+   if (req.method !== 'GET') {
+     return sendJson({ error: 'Method not allowed' }, 405);
+   }
+   return sendJson(readAgentMonitorProjection(
+     context.agentMonitorStatePath,
+     context.agentMonitorEventsPath,
+   ));
  }
 
  // ── /api/feeds/health — per-feed resilience status ────────────────────
@@ -18833,6 +20255,16 @@ export async function createLocalApiServer(options = {}) {
  const corsOrigin = getSidecarCorsOrigin(req);
  headers['access-control-allow-origin'] = corsOrigin;
  headers['vary'] = appendVary(headers['vary'], 'Origin');
+ // Applied HERE, not per-route: only a minority of routes spread
+ // makeCorsHeaders() into their response, and `Access-Control-Expose-Headers`
+ // on a preflight does nothing — the browser reads it off the ACTUAL response.
+ // /api/earthquakes answers with a bare json(payload), so without this the
+ // renderer sees null for `Date`/`Age` and every live USGS fetch records a
+ // failing vote. See the originNow() contract in usgs-fusion-fetch.ts.
+ // Covers every response that comes back through this writer — a handler that
+ // writes to the socket directly, or streams, bypasses it and would have to
+ // send the header itself.
+ headers['access-control-expose-headers'] = 'Date, Age';
 
  if (!skipRecord) {
  recordTraffic({

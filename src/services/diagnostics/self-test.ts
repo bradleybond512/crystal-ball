@@ -28,6 +28,7 @@ export type SelfTestId =
   | 'notification_permission'
   | 'saved_places'
   | 'nws_polygon_fixture'
+  | 'champion_rollback'
   | 'provider_registry_loaded'
   | 'storage_available'
   | 'data_source_probes'
@@ -36,7 +37,7 @@ export type SelfTestId =
   | 'diagnostics_liveness';
 
 export interface SelfTestResult {
-  /** SelfTestId for the standard nine; arbitrary strings welcome for
+  /** SelfTestId for the standard probes; arbitrary strings welcome for
    *  app-specific extras. The wider type is documented via the
    *  SelfTestId alias above. */
   id: string;
@@ -222,7 +223,8 @@ function describeSummary(
 
 // ── Standard probe builders ────────────────────────────────────────────
 
-/** The plan's "standard nine" — adapter functions wire host-specific
+/** The standard probe set (the plan's original nine + the ACC-404
+ *  champion-rollback probe) — adapter functions wire host-specific
  *  probes (sidecar fetch, notification permission, etc.) and the
  *  runner orchestrates. Each builder returns a `SelfTestDefinition`
  *  the host can splice into its `runSelfTests([...])` call. */
@@ -232,6 +234,9 @@ export interface StandardProbeAdapters {
   checkNotificationPermission?: () => Promise<'granted' | 'denied' | 'default' | 'unsupported'>;
   countSavedPlaces?: () => number;
   runNwsPolygonFixture?: () => Promise<{ ok: boolean; reason?: string }>;
+  /** ACC-404: proves the champion-registry rollback path in the shipped
+   *  bundle against an isolated in-memory registry. */
+  runChampionRollbackFixture?: () => Promise<{ ok: boolean; reason?: string }>;
   countProviderRegistry?: () => number;
   isStorageAvailable?: () => { indexedDb: boolean; localStorage: boolean };
   probeDataSources?: () => Promise<{
@@ -252,6 +257,7 @@ export function standardSelfTestDefinitions(
     notificationPermissionDefinition(adapters.checkNotificationPermission),
     savedPlacesDefinition(adapters.countSavedPlaces),
     nwsPolygonFixtureDefinition(adapters.runNwsPolygonFixture),
+    championRollbackDefinition(adapters.runChampionRollbackFixture),
     providerRegistryDefinition(adapters.countProviderRegistry),
     storageAvailableDefinition(adapters.isStorageAvailable),
     dataSourceProbesDefinition(adapters.probeDataSources),
@@ -368,6 +374,29 @@ function nwsPolygonFixtureDefinition(
       return r.ok
         ? { status: 'pass', reason: 'Polygon match fixture passed.' }
         : { status: 'fail', reason: r.reason ?? 'Polygon match fixture failed.' };
+    },
+  };
+}
+
+function championRollbackDefinition(
+  fixture?: StandardProbeAdapters['runChampionRollbackFixture'],
+): SelfTestDefinition {
+  if (!fixture) {
+    return {
+      id: 'champion_rollback',
+      label: 'Champion rollback',
+      probe: () => ({ status: 'skipped', reason: 'No rollback fixture adapter wired in.' }),
+      skipReason: 'No rollback fixture adapter wired in.',
+    };
+  }
+  return {
+    id: 'champion_rollback',
+    label: 'Champion rollback',
+    probe: async () => {
+      const r = await fixture();
+      return r.ok
+        ? { status: 'pass', reason: r.reason ?? 'Rollback fixture passed.' }
+        : { status: 'fail', reason: r.reason ?? 'Rollback fixture failed.' };
     },
   };
 }

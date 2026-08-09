@@ -24,6 +24,8 @@ export interface OpenMeteoHourlyForecast {
   };
   latitude?: number;
   longitude?: number;
+  current?: { temperature_2m?: number };
+  currentObservedAtMs?: number;
 }
 
 // WMO weather code → significant event label (only codes worth flagging)

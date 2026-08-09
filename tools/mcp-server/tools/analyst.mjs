@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { safetyEnvelope } from '../safety-policy.mjs';
 
 /**
  * Analyst tools — expose the renderer-side reasoning layer
@@ -125,10 +126,29 @@ export function makeAnalystTools(client) {
     return client.get('/api/analyst-state');
   }
 
+  function derivedSafety(state, algorithmId) {
+    return safetyEnvelope(state?.algorithmDiagnostics?.health, algorithmId);
+  }
+
+  function quarantineResponse(state, algorithmId, emptyField) {
+    const safety = derivedSafety(state, algorithmId);
+    if (!safety.outputAlgorithm.quarantined) return null;
+    return {
+      available: false,
+      quarantined: true,
+      summary: `${algorithmId} output is quarantined: ${safety.outputAlgorithm.reason}`,
+      safety,
+      [emptyField]: [],
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   return {
     async get_analyst_hypotheses(args = {}) {
       const state = await loadState();
       if (!state?.available) return unavailable(state, 'Hypotheses');
+      const blocked = quarantineResponse(state, 'analyst-loop', 'hypotheses');
+      if (blocked) return blocked;
       const limit = typeof args.limit === 'number' && args.limit > 0 ? args.limit : 8;
       const minRank = RISK_RANK[args.min_risk] ?? 0;
       const all = state.analyst?.hypotheses ?? [];
@@ -171,6 +191,7 @@ export function makeAnalystTools(client) {
         ghostMode: state.ghostMode === true,
         hypotheses: enriched,
         entityCount: state.entityCount ?? 0,
+        safety: derivedSafety(state, 'analyst-loop'),
         timestamp: new Date().toISOString(),
       };
     },
@@ -180,6 +201,8 @@ export function makeAnalystTools(client) {
       if (!state?.available) return unavailable(state, 'Mode forecast');
       const forecast = state.forecast;
       if (!forecast) return unavailable(state, 'Mode forecast');
+      const blocked = quarantineResponse(state, 'mode-forecast', 'advisories');
+      if (blocked) return { ...blocked, pressure: {} };
       return {
         available: true,
         summary:
@@ -192,6 +215,7 @@ export function makeAnalystTools(client) {
         ghostMode: state.ghostMode === true,
         pressure: forecast.pressure ?? {},
         advisories: forecast.advisories ?? [],
+        safety: derivedSafety(state, 'mode-forecast'),
         timestamp: new Date().toISOString(),
       };
     },
@@ -199,12 +223,15 @@ export function makeAnalystTools(client) {
     async get_analyst_accuracy() {
       const state = await loadState();
       if (!state?.available) return unavailable(state, 'Analyst accuracy');
+      const blocked = quarantineResponse(state, 'hypothesis-accuracy', 'rows');
+      if (blocked) return blocked;
       const rows = state.accuracy ?? [];
       if (rows.length === 0) {
         return {
           available: true,
           summary: 'No graded hypotheses yet — accuracy needs ~2 hours of cycles to populate.',
           rows: [],
+          safety: derivedSafety(state, 'hypothesis-accuracy'),
           timestamp: new Date().toISOString(),
         };
       }
@@ -215,6 +242,7 @@ export function makeAnalystTools(client) {
         available: true,
         summary,
         rows,
+        safety: derivedSafety(state, 'hypothesis-accuracy'),
         timestamp: new Date().toISOString(),
       };
     },
@@ -222,6 +250,8 @@ export function makeAnalystTools(client) {
     async get_hot_entities() {
       const state = await loadState();
       if (!state?.available) return unavailable(state, 'Hot entities');
+      const blocked = quarantineResponse(state, 'analyst-loop', 'entities');
+      if (blocked) return { ...blocked, totalEntities: 0 };
       const entities = state.hotEntities ?? [];
       return {
         available: true,
@@ -230,6 +260,7 @@ export function makeAnalystTools(client) {
           : `${entities.length} hot entities — ${entities.slice(0, 5).map(e => `${e.entity}(${e.hypothesisCount})`).join(', ')}.`,
         entities,
         totalEntities: state.entityCount ?? 0,
+        safety: derivedSafety(state, 'analyst-loop'),
         timestamp: new Date().toISOString(),
       };
     },

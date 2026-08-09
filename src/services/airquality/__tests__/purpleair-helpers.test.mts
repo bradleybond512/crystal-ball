@@ -19,9 +19,9 @@ test('truncatePm25: 0 returns 0', () => {
   assert.equal(truncatePm25(0), 0);
 });
 
-test('truncatePm25: truncates (does not round) to 2 decimal places', () => {
-  assert.equal(truncatePm25(9.999), 9.99);
-  assert.equal(truncatePm25(35.4567), 35.45);
+test('truncatePm25: truncates (does not round) to 1 decimal place', () => {
+  assert.equal(truncatePm25(9.999), 9.9);
+  assert.equal(truncatePm25(35.4567), 35.4);
 });
 
 test('truncatePm25: negative clamps to 0', () => {
@@ -79,11 +79,19 @@ test('pm25ToAqi: negative PM2.5 clamped to 0 → AQI 0', () => {
   assert.equal(pm25ToAqi(-2), 0);
 });
 
-test('pm25ToAqi: truncation matters — 12.299 → AQI for 12.29 (moderate band)', () => {
-  // 12.29 falls in [9.1, 35.4] → AQI 51..100
-  // AQI = ((100-51)/(35.4-9.1)) * (12.29 - 9.1) + 51
-  //     = (49/26.3) * 3.19 + 51 ≈ 56.94 → round → 57
+test('pm25ToAqi: truncation matters — 12.299 → AQI for 12.2 (1-decimal truncation, moderate band)', () => {
+  // 12.2 falls in [9.1, 35.4] → AQI 51..100
+  // AQI = ((100-51)/(35.4-9.1)) * (12.2 - 9.1) + 51
+  //     = (49/26.3) * 3.1 + 51 ≈ 56.78 → round → 57
   assert.equal(pm25ToAqi(12.299), 57);
+});
+
+test('pm25ToAqi: 1-decimal truncation closes the inter-band crack — 9.05 → AQI 50, not null', () => {
+  // Under 2-decimal truncation 9.05 stays 9.05, which is > the first band's
+  // 9.0 ceiling and < the second band's 9.1 floor — matches neither, so the
+  // old truncation silently dropped a valid reading. 1-decimal truncation
+  // lands it at 9.0, inside the first (good) band.
+  assert.equal(pm25ToAqi(9.05), 50);
 });
 
 // ── categoryForAqi ──────────────────────────────────────────────────────
@@ -181,7 +189,7 @@ test('scoreAndRank: drops sensors that produce no AQI (NaN pm25)', () => {
 
 // ── parseV1SensorsResponse ──────────────────────────────────────────────
 
-test('parseV1SensorsResponse: maps fields by name and produces sensors', () => {
+test('parseV1SensorsResponse: maps fields by name and converts last_seen seconds → ms', () => {
   const out = parseV1SensorsResponse({
     fields: ['sensor_index', 'pm2.5', 'latitude', 'longitude', 'location_type', 'confidence', 'name', 'last_seen'],
     data: [
@@ -193,7 +201,8 @@ test('parseV1SensorsResponse: maps fields by name and produces sensors', () => {
   assert.equal(out[0]!.id, 101);
   assert.equal(out[0]!.pm25, 12.5);
   assert.equal(out[0]!.locationType, 0);
-  assert.equal(out[0]!.lastSeen, 1_700_000_000);
+  assert.equal(out[0]!.lastSeen, 1_700_000_000_000, 'v1 last_seen is unix seconds — must land as epoch ms like the type documents');
+  assert.equal(out[1]!.lastSeen, 1_700_000_100_000);
 });
 
 test('parseV1SensorsResponse: returns [] on garbage input', () => {

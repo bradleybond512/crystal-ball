@@ -36,6 +36,7 @@
 import type { JoinedPairEvidence } from './shadow-rollout';
 import type { ReplayHarnessReport } from '@/services/ops/replay-harness';
 import type { ReplayFixture } from '@/services/ops/replay-fixtures';
+import type { ReplayBaseline } from '@/services/ops/replay-baseline';
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -169,22 +170,33 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/**
- * One-sided lower bound of the mean per-pair Brier improvement
- * (incumbent − challenger) via a paired bootstrap: resample pairs with
- * replacement, take the mean improvement of each resample, and return
- * the (1 − confidence) percentile of the resample means.
- */
-export function pairedBootstrapLowerBound(
-  pairs: readonly JoinedPairEvidence[],
-  resamples: number,
-  confidence: number,
-  seed: number,
-): number {
-  const diffs = pairs.map((e) => {
+/** Per-pair Brier improvement (incumbent − challenger; positive =
+ *  challenger better). */
+export function brierImprovementDiffs(pairs: readonly JoinedPairEvidence[]): number[] {
+  return pairs.map((e) => {
     const o = e.outcome ? 1 : 0;
     return (e.liveP - o) ** 2 - (e.shadowP - o) ** 2;
   });
+}
+
+/** Per-pair log-loss improvement (incumbent − challenger; positive =
+ *  challenger better). Probabilities clamped like logLossOf. */
+function clampProbability(p: number): number {
+  return Math.min(1 - LOG_LOSS_EPSILON, Math.max(LOG_LOSS_EPSILON, p));
+}
+
+export function logLossImprovementDiffs(pairs: readonly JoinedPairEvidence[]): number[] {
+  return pairs.map((e) => {
+    const live = clampProbability(e.liveP);
+    const shadow = clampProbability(e.shadowP);
+    return e.outcome
+      ? -Math.log(live) - -Math.log(shadow)
+      : -Math.log(1 - live) - -Math.log(1 - shadow);
+  });
+}
+
+/** Sorted resample means of `diffs` under the deterministic PRNG. */
+function bootstrapMeans(diffs: readonly number[], resamples: number, seed: number): number[] {
   const rand = mulberry32(seed);
   const means: number[] = [];
   for (let r = 0; r < resamples; r += 1) {
@@ -197,11 +209,47 @@ export function pairedBootstrapLowerBound(
     means.push(sum / diffs.length);
   }
   means.sort((a, b) => a - b);
+  return means;
+}
+
+/**
+ * One-sided lower bound of the mean per-pair Brier improvement
+ * (incumbent − challenger) via a paired bootstrap: resample pairs with
+ * replacement, take the mean improvement of each resample, and return
+ * the (1 − confidence) percentile of the resample means.
+ */
+export function pairedBootstrapLowerBound(
+  pairs: readonly JoinedPairEvidence[],
+  resamples: number,
+  confidence: number,
+  seed: number,
+): number {
+  const means = bootstrapMeans(brierImprovementDiffs(pairs), resamples, seed);
   const idx = Math.min(
     means.length - 1,
     Math.max(0, Math.floor((1 - confidence) * means.length)),
   );
   return means[idx]!;
+}
+
+/**
+ * Two-sided paired-bootstrap confidence interval of the mean of `diffs`
+ * (ACC-403: metric deltas with confidence intervals). Same deterministic
+ * PRNG as the gate's lower bound. Returns the ((1−c)/2, (1+c)/2)
+ * percentiles of the resample means.
+ */
+export function pairedBootstrapInterval(
+  diffs: readonly number[],
+  resamples: number,
+  confidence: number,
+  seed: number,
+): { low: number; high: number } {
+  const means = bootstrapMeans(diffs, resamples, seed);
+  const clampIdx = (i: number): number =>
+    Math.min(means.length - 1, Math.max(0, i));
+  const low = means[clampIdx(Math.floor(((1 - confidence) / 2) * means.length))]!;
+  const high = means[clampIdx(Math.floor(((1 + confidence) / 2) * means.length))]!;
+  return { low, high };
 }
 
 // ── Safety replay adapter ────────────────────────────────────────────
@@ -240,6 +288,72 @@ export function safetyEvidenceFromReplayReport(
     safetyCriticalPassed: acc.passed,
     ...(acc.minLeadMs === undefined ? {} : { minLeadTimeMinutes: acc.minLeadMs / 60_000 }),
   };
+}
+
+/**
+ * ACC-404: safety evidence as a NO-NEW-REGRESSIONS check against the
+ * committed replay baseline. The catalog fixtures are intentionally-
+ * failing historical-miss cases (their raw pass rate is 0 by design),
+ * so raw recall from safetyEvidenceFromReplayReport would fail every
+ * promotion forever. The meaningful safety question for a challenger is
+ * "did anything get WORSE than the accepted baseline?":
+ *
+ *   - a safety-relevant fixture counts as passed when its live outcome
+ *     matches the baseline, or improved over a baseline 'fail';
+ *   - a baseline 'pass' (or unknown fixture) that now fails counts as
+ *     a safety regression;
+ *   - lead-time evidence comes only from PASSING warning_before_impact
+ *     expectations — a historical miss's negative lead never poisons
+ *     the floor.
+ */
+export function safetyEvidenceFromBaselineRegression(
+  report: ReplayHarnessReport,
+  fixtures: readonly ReplayFixture[],
+  baseline: ReplayBaseline,
+): SafetyReplayEvidence {
+  const safetyFixtureIds = new Set<string>();
+  const kindByExpectation = new Map<string, string>();
+  for (const fixture of fixtures) {
+    for (const e of fixture.expectations) {
+      kindByExpectation.set(`${fixture.fixtureId}:${e.id}`, e.check.kind);
+      if (SAFETY_CHECK_KINDS.has(e.check.kind)) safetyFixtureIds.add(fixture.fixtureId);
+    }
+  }
+  const acc: SafetyAccumulator = { total: 0, passed: 0 };
+  for (const fixtureResult of report.results) {
+    if (!safetyFixtureIds.has(fixtureResult.fixtureId)) continue;
+    acc.total += 1;
+    if (matchesBaseline(fixtureResult.outcome, baseline.fixtures[fixtureResult.fixtureId])) {
+      acc.passed += 1;
+    }
+    accumulatePassingLeadTimes(acc, fixtureResult, kindByExpectation);
+  }
+  return {
+    safetyCriticalTotal: acc.total,
+    safetyCriticalPassed: acc.passed,
+    ...(acc.minLeadMs === undefined ? {} : { minLeadTimeMinutes: acc.minLeadMs / 60_000 }),
+  };
+}
+
+/** Matching the accepted baseline — or improving over a baseline
+ *  'fail' — is not a regression. */
+function matchesBaseline(outcome: string, expected: string | undefined): boolean {
+  return outcome === expected || (expected === 'fail' && outcome !== 'fail');
+}
+
+function accumulatePassingLeadTimes(
+  acc: SafetyAccumulator,
+  fixtureResult: ReplayHarnessReport['results'][number],
+  kindByExpectation: ReadonlyMap<string, string>,
+): void {
+  for (const er of fixtureResult.results) {
+    const kind = kindByExpectation.get(`${fixtureResult.fixtureId}:${er.expectationId}`);
+    if (kind !== 'warning_before_impact' || er.outcome !== 'pass') continue;
+    const leadMs = er.pivots?.leadMs;
+    if (typeof leadMs === 'number' && (acc.minLeadMs === undefined || leadMs < acc.minLeadMs)) {
+      acc.minLeadMs = leadMs;
+    }
+  }
 }
 
 interface SafetyAccumulator {

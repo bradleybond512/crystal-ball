@@ -142,6 +142,11 @@ import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
 import { fetchIodaOutages } from '@/services/internet-outages';
+import {
+  fetchCloudflareRadarOutages,
+  fetchIodaOutageEvents,
+} from '@/services/netwatch/cloudflare-radar-fetch';
+import { outageCountsToObservations } from '@/services/netwatch/outage-fusion-observations';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { fetchAirstrikes } from '@/services/airstrikes';
 import { updateFromFlights } from '@/services/strike-packages';
@@ -242,6 +247,7 @@ import { fetchReliefWebCrises } from '@/services/reliefweb';
 import { fetchBellingcatOsint } from '@/services/bellingcat';
 import { fetchFcdoWarnings, fetchDfatWarnings, fetchGacWarnings, fetchGovWarningConvergence, getConvergenceAlerts } from '@/services/travel-warnings';
 import { fetchEmscSeismic } from '@/services/emsc-seismic';
+import { fetchGeofonSeismic } from '@/services/geofon-seismic';
 import { fetchAcapsCrises } from '@/services/acaps';
 import { fetchLiveUaMap } from '@/services/liveuamap';
 import { fetchDebrisReentries } from '@/services/aerospace-reentry';
@@ -283,6 +289,7 @@ import type { BreakingAlert } from '@/services/breaking-news-alerts';
 import { fetchFloodGauges } from '@/services/flood-gauges';
 import { fetchExtendedForecast } from '@/services/extended-forecast';
 import { fetchRadarFrames } from '@/services/rainviewer-radar';
+import { fetchSmokeForecastFrames } from '@/services/firework-smoke';
 import { fetchTidePredictions, TIDE_STATIONS } from '@/services/tide-predictions';
 import { fetchPollenData } from '@/services/pollen';
 import { fetchRedFlagWarnings, fetchFireWeatherOutlook } from '@/services/red-flag-warnings';
@@ -335,16 +342,29 @@ import {
   getLatestFusion,
   recordDomainObservations,
 } from '@/services/providers/fusion-publish';
-import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
-import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { usgsEventsToObservations, emscEventsToObservations, geofonEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { fetchUsgsSeismicForFusion } from '@/services/earthquake/usgs-fusion-fetch';
+import { openMeteoAqToObservations, openaqToObservations, airnowToObservations, purpleairToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { fetchAirnowCurrent } from '@/services/airquality/airnow-fusion-fetch';
+import { fetchPurpleairNearby } from '@/services/airquality/purpleair-fusion-fetch';
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
 import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
+import { fetchFmpPrices } from '@/services/market/fmp-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
+import { fetchCoinpaprikaPrices } from '@/services/market/coinpaprika-fetch';
+import { fetchKrakenPrices } from '@/services/market/kraken-fetch';
+import { fetchErApiRates, fetchFrankfurterRates, fxRatesToObservations } from '@/services/market/fx-fusion-fetch';
 import { recordFusedSpotPrices } from '@/services/market/spot-price-store';
+import { fetchGfzKp, fetchSwpcKp } from '@/services/spaceweather/gfz-kp-fetch';
+import { kpVote } from '@/services/spaceweather/kp-fusion-observations';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
+import { tempVote, type TempReading } from '@/services/weather/weather-fusion-observations';
+import { isUsableLatLon } from '@/services/geo/geo-math';
+import { fetchOpenMeteoTemp } from '@/services/weather/open-meteo-temp-fetch';
+import { fetchMetNorwayTemp } from '@/services/weather/met-norway-fetch';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
 import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/services/intelligence/adapters/river-discharge-adapter';
 import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/services/intelligence/adapters/marine-forecast-adapter';
@@ -481,6 +501,21 @@ export class DataLoaderManager implements AppModule {
  this.applyTimeRangeFilterToNewsPanels();
   }, 120);
 
+  // The three hazard loaders (air quality / wildfire / hazmat) each trigger a
+  // compound-threat pass and typically finish within the same refresh window —
+  // trailing-debounce them into one evaluation so its fetch fan-out (including
+  // the air-quality fusion block) doesn't rerun 2-4x per tick. Manual timer
+  // rather than utils.debounce so destroy() can cancel a pending evaluation.
+  private compoundThreatTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleCompoundThreatEvaluation(): void {
+ if (this.compoundThreatTimer !== null) clearTimeout(this.compoundThreatTimer);
+ this.compoundThreatTimer = setTimeout(() => {
+ this.compoundThreatTimer = null;
+ void this.evaluateCompoundThreats();
+ }, 10_000);
+  }
+
   public updateSearchIndex: () => void = () => {};
 
   private digestBreaker = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, cooldownUntil: 0 };
@@ -543,6 +578,10 @@ export class DataLoaderManager implements AppModule {
   }
 
   destroy(): void {
+ if (this.compoundThreatTimer !== null) {
+ clearTimeout(this.compoundThreatTimer);
+ this.compoundThreatTimer = null;
+ }
  stopOrefPolling();
   }
 
@@ -739,7 +778,13 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'reliefWeb', task: () => runGuarded('reliefWeb', () => this.loadReliefWebCrises()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: () => runGuarded('bellingcat', () => this.loadBellingcat()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: () => runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
+ // Not 'full'-only like its two siblings: tech and finance ship the natural
+ // map layer too, so `loadNatural` used to record this provider for them.
+ // Gating the replacement on 'full' would have silently retired the
+ // earthquakes domain's only vote in those variants.
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'usgsSeismic', task: () => runGuarded('usgsSeismic', () => this.loadUsgsSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: () => runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'geofonSeismic', task: () => runGuarded('geofonSeismic', () => this.loadGeofonSeismic()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: () => runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'liveUaMap', task: () => runGuarded('liveUaMap', () => this.loadLiveUaMap()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'debrisReentries', task: () => runGuarded('debrisReentries', () => this.loadDebrisReentries()) });
@@ -758,6 +803,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'spcMesoscale', task: () => runGuarded('spcMesoscale', () => this.loadSpcMesoscale()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'extendedForecast', task: () => runGuarded('extendedForecast', () => this.loadExtendedForecast()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: () => runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'smokeForecast', task: () => runGuarded('smokeForecast', () => this.loadSmokeForecast()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: () => runGuarded('tidePredictions', () => this.loadTidePredictions()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'goesSatellite', task: () => runGuarded('goesSatellite', () => this.loadGoesSatellite()) });
@@ -817,6 +863,13 @@ export class DataLoaderManager implements AppModule {
  }
  case 'weather': {
  await this.loadWeatherAlerts();
+ break;
+ }
+ case 'smokeForecast': {
+ // Re-delivers the (cached) frames to the map. The boot-time task can
+ // land before MapContainer's dynamic DeckGLMap import resolves, in
+ // which case the setter short-circuits and the state is dropped.
+ await this.loadSmokeForecast();
  break;
  }
  case 'outages': {
@@ -1401,24 +1454,48 @@ export class DataLoaderManager implements AppModule {
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
  }
- // Crypto price fusion: CoinGecko + Coinbase, matched by symbol. Dedicated
- // fail-closed fetches (NOT the panel's cached fetchCrypto) so a down source
- // records a failing outcome instead of corroborating against stale prices.
+ // Crypto price fusion: CoinGecko + Coinbase + CoinPaprika + Kraken, matched
+ // by symbol. Dedicated fail-closed fetches (NOT the panel's cached
+ // fetchCrypto) so a down source records a failing outcome instead of
+ // corroborating against stale prices.
  const cg = await fetchCoingeckoPrices();
  const cgObservedAt = Date.now();
  recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices, cgObservedAt), cg.ok, cgObservedAt);
  const coinbase = await fetchCoinbasePrices();
  const coinbaseObservedAt = Date.now();
  recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices, coinbaseObservedAt), coinbase.ok, coinbaseObservedAt);
- recordFusedSpotPrices(getLatestFusion('crypto', coinbaseObservedAt).facts);
- // Stock price fusion: Yahoo (no-key) + Finnhub (keyed), matched by ticker. Fail-closed.
+ const cp = await fetchCoinpaprikaPrices();
+ const cpObservedAt = Date.now();
+ recordDomainObservations('coinpaprika', exchangePricesToObservations('coinpaprika', cp.prices, cpObservedAt), cp.ok, cpObservedAt);
+ const kr = await fetchKrakenPrices();
+ const krObservedAt = Date.now();
+ recordDomainObservations('kraken', exchangePricesToObservations('kraken', kr.prices, krObservedAt), kr.ok, krObservedAt);
+ recordFusedSpotPrices(getLatestFusion('crypto', krObservedAt).facts);
+ // Stock price fusion: Yahoo (no-key) + Finnhub (keyed) + FMP (keyed),
+ // matched by ticker. Fail-closed. FMP quotes carry their own per-row
+ // occurredAt (the API's real quote timestamp, not "now") — that's why
+ // this source doesn't route through exchangePricesToObservations' shared
+ // timestamp like the others.
  const yahoo = await fetchYahooPrices();
  const yahooObservedAt = Date.now();
  recordDomainObservations('yahoo-finance', exchangePricesToObservations('yahoo-finance', yahoo.prices, yahooObservedAt), yahoo.ok, yahooObservedAt);
  const finnhub = await fetchFinnhubPrices();
  const finnhubObservedAt = Date.now();
  recordDomainObservations('finnhub', exchangePricesToObservations('finnhub', finnhub.prices, finnhubObservedAt), finnhub.ok, finnhubObservedAt);
+ const fmp = await fetchFmpPrices();
+ recordDomainObservations('fmp',
+   fmp.quotes.map((q) => ({ providerId: 'fmp', key: q.symbol.toUpperCase(), value: q.price, lat: 0, lon: 0, occurredAt: q.observedAt })),
+   fmp.ok);
  recordFusedSpotPrices(getLatestFusion('stocks', finnhubObservedAt).facts);
+ // USD FX rate fusion: Frankfurter (ECB daily fixing) + open.er-api
+ // (continuous aggregator), matched by currency code. Both stamp their rows
+ // with the instant the quote refers to — the ECB fixing date, or er-api's
+ // own update time — NOT the fetch time, so a source serving a week-old rate
+ // reads as a week old. The fetch-outcome clock stays at "now" (default),
+ // since the request itself did just happen.
+ const [frankfurter, erApi] = await Promise.all([fetchFrankfurterRates(), fetchErApiRates()]);
+ recordDomainObservations('frankfurter-fx', fxRatesToObservations('frankfurter-fx', frankfurter.rates, frankfurter.observedAt), frankfurter.ok);
+ recordDomainObservations('er-api-fx', fxRatesToObservations('er-api-fx', erApi.rates, erApi.observedAt), erApi.ok);
   }
 
   async loadPredictions(): Promise<void> {
@@ -1468,14 +1545,15 @@ export class DataLoaderManager implements AppModule {
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
- recordDomainObservations('usgs-earthquakes', usgsEarthquakesToObservations(earthquakeResult.value), true);
+ // No recordDomainObservations here: this path reads through a 1-hour
+ // offline cache and is gated on a map layer, so it cannot honour the
+ // provider's 10 min TTL. loadUsgsSeismic owns the fusion vote.
  } else {
  this.ctx.intelligenceCache.earthquakes = [];
  this.ctx.map?.setEarthquakes([]);
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update([]);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'error' });
  dataFreshness.recordError('usgs', String(earthquakeResult.reason));
- recordDomainObservations('usgs-earthquakes', [], false);
  }
 
  if (eonetResult.status === 'fulfilled') {
@@ -2142,6 +2220,48 @@ export class DataLoaderManager implements AppModule {
  }
  })();
 
+ // surface_temp fusion: Open-Meteo + MET Norway per saved place.
+ // recordDomainObservations REPLACES per provider rather than accumulating
+ // (see fusion-publish.ts), so every place's readings are collected into
+ // one array per provider before the single, fail-closed record call below.
+ // Deliberately bypasses fetchJsonCached (unlike the hourly-forecast block
+ // above): routing through its 30-min renderer cache would pin
+ // currentObservedAtMs for up to 30 min against open-meteo-forecast's
+ // 1-hour freshnessTtlMs, manufacturing staleness that isn't real. The
+ // sidecar's own 10-min cache on /api/weather/local-forecast already
+ // absorbs upstream load, so a fresh renderer-side call per tick is cheap.
+ // AWAITED, not fire-and-forget: recordDomainObservations REPLACES per
+ // provider, so an unawaited block lets the tick's in-flight guard release
+ // while these requests are still running — a retry then starts a second
+ // tick and the older, slower one can land LAST and overwrite the newer
+ // observations. Awaiting is free for alert latency: this block is the last
+ // thing in the tick, long after the safety-critical chip publication.
+ const openMeteoReadings: TempReading[] = [];
+ const metNorwayReadings: TempReading[] = [];
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const places = getSavedPlaces().slice(0, 3);
+ await Promise.allSettled(places.map(async (place) => {
+ if (!isUsableLatLon(place.lat, place.lon)) return;
+ const [om, mn] = await Promise.allSettled([
+ fetchOpenMeteoTemp(place.lat, place.lon),
+ fetchMetNorwayTemp(place.lat, place.lon),
+ ]);
+ if (om.status === 'fulfilled' && om.value.ok) openMeteoReadings.push(...om.value.readings.map((r) => ({ ...r, placeId: place.id })));
+ if (mn.status === 'fulfilled' && mn.value.ok) metNorwayReadings.push(...mn.value.readings.map((r) => ({ ...r, placeId: place.id })));
+ }));
+ } catch {
+ /* readings arrays may be partially populated or empty — recorded below either way */
+ } finally {
+ // `ok` comes from the ADAPTER output, never the raw readings: the adapter
+ // applies the stricter validation, so a 200 carrying `tempC: 999` has
+ // readings.length 1 but yields zero observations — a phantom healthy vote.
+ const omVote = tempVote('open-meteo-forecast', openMeteoReadings);
+ const mnVote = tempVote('met-norway', metNorwayReadings);
+ recordDomainObservations('open-meteo-forecast', omVote.observations, omVote.ok);
+ recordDomainObservations('met-norway', mnVote.observations, mnVote.ok);
+ }
+
  } catch (error) {
  this.ctx.map?.setLayerReady('weather', false);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
@@ -2643,7 +2763,27 @@ export class DataLoaderManager implements AppModule {
   async loadLittleSnitch(): Promise<void> { return cyberLoaders.loadLittleSnitch(this.ctx); }
 
   // Space domain → src/app/loaders/space.ts
-  async loadSpaceWeather(): Promise<void> { return spaceLoaders.loadSpaceWeather(this.ctx); }
+  async loadSpaceWeather(): Promise<void> {
+    await spaceLoaders.loadSpaceWeather(this.ctx);
+    // Planetary Kp fusion: SWPC's 8-station estimate + GFZ Potsdam's
+    // 13-observatory index, matched on the 3-hour bin they both stamp.
+    // Exactly one record per provider per tick — recordDomainObservations
+    // REPLACES a provider's set rather than accumulating. The fetch-outcome
+    // clock stays at the default wall clock (the request really did just
+    // happen); each sample carries its own bin timestamp as occurredAt, so a
+    // source serving stale bins still reads as stale.
+    // ONE `now` for both fetches: they share a rolling 48h trim, and two
+    // independent clocks would drift by however long the slower leg takes,
+    // orphaning any bin that fell in the gap.
+    const now = Date.now();
+    const [swpc, gfz] = await Promise.all([fetchSwpcKp(now), fetchGfzKp(now)]);
+    // kpVote derives `ok` from the same array it hands back, so a provider
+    // whose rows all get dropped records ok:false instead of green-but-silent.
+    const swpcVote = kpVote('swpc-kp', swpc.ok, swpc.samples);
+    const gfzVote = kpVote('gfz-kp', gfz.ok, gfz.samples);
+    recordDomainObservations('swpc-kp', swpcVote.observations, swpcVote.ok);
+    recordDomainObservations('gfz-kp', gfzVote.observations, gfzVote.ok);
+  }
   async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
   async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }
 
@@ -2655,16 +2795,30 @@ export class DataLoaderManager implements AppModule {
   // Hazard pipeline → src/app/loaders/hazards.ts
   // The compound-threat evaluator still owns cross-domain data, so we pass it
   // in as a callback rather than importing it from the loader module.
-  async loadAirQuality(): Promise<void> { return hazardLoaders.loadAirQuality(this.ctx, () => void this.evaluateCompoundThreats()); }
-  async loadWildfireIncidents(): Promise<void> { return hazardLoaders.loadWildfireIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadAirQuality(): Promise<void> { return hazardLoaders.loadAirQuality(this.ctx, () => this.scheduleCompoundThreatEvaluation()); }
+  async loadWildfireIncidents(): Promise<void> { return hazardLoaders.loadWildfireIncidents(this.ctx, () => this.scheduleCompoundThreatEvaluation()); }
   async loadWildfireIntel(): Promise<void> { return hazardLoaders.loadWildfireIntel(this.ctx); }
   async loadPurpleAir(): Promise<void> { return hazardLoaders.loadPurpleAir(this.ctx); }
-  async loadHazmatIncidents(): Promise<void> { return hazardLoaders.loadHazmatIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadHazmatIncidents(): Promise<void> { return hazardLoaders.loadHazmatIncidents(this.ctx, () => this.scheduleCompoundThreatEvaluation()); }
   async loadOilSpills(): Promise<void> { return hazardLoaders.loadOilSpills(this.ctx); }
 
   async evaluateCompoundThreats(): Promise<void> {
  try {
- const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts, openaqReadings] = await Promise.allSettled([
+ // AirNow's current-observations API is a single nearest-station lookup
+ // (not a global fetch like open-meteo-aqi/openaq-v3), so it needs a point
+ // to query around. Reuses the same getSavedPlaces()[0] + NYC-fallback
+ // convention as loadExtendedForecast() — the app's established pattern
+ // for "pick one representative coordinate" when a fetch is single-point.
+ // PurpleAir reuses the same coordinate to cap its otherwise-global sensor
+ // fetch to a radius around it (see purpleair-fusion-fetch.ts).
+ let airnowLat = 40.71, airnowLon = -74.01;
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const home = getSavedPlaces()[0];
+ if (home) { airnowLat = home.lat; airnowLon = home.lon; }
+ } catch { /* fall back to NYC */ }
+
+ const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts, openaqReadings, airnowReadings, purpleairReadings] = await Promise.allSettled([
  fetchInciwebIncidents(),
  fetchGlobalAirQuality(),
  fetchHazmatIncidents(),
@@ -2672,15 +2826,45 @@ export class DataLoaderManager implements AppModule {
  fetchDamSafetyAlerts(),
  fetchPowerGridAlerts(),
  fetchOpenaqWorstReadings(),
+ fetchAirnowCurrent(airnowLat, airnowLon),
+ fetchPurpleairNearby(airnowLat, airnowLon),
  ]);
 
  // Second air-quality source for fusion (OpenAQ ground stations). Fail-closed:
  // a degraded/failed fetch records ok=false so the provider health drops.
+ //
+ // All four providers below gate ok on BOTH stages, because there are two
+ // adapters between the wire and a vote. `r.ok` is derived inside the fetch
+ // module from ITS parse, so it already catches an unusable body — but a
+ // response whose readings survive that and are then all dropped by
+ // *ToObservations still reached recordDomainObservations as ok:true, with
+ // zero observations behind it. Which is the phantom healthy vote again, one
+ // stage further down: lastSuccessAt re-stamped, the provider green, and the
+ // domain counting a source that contributed nothing to the fused fact.
  if (openaqReadings.status === 'fulfilled') {
  const r = openaqReadings.value;
- recordDomainObservations('openaq-v3', openaqToObservations(r.readings), r.ok);
+ const openaqObs = openaqToObservations(r.readings);
+ recordDomainObservations('openaq-v3', openaqObs, r.ok && openaqObs.length > 0);
  } else {
  recordDomainObservations('openaq-v3', [], false);
+ }
+
+ // Third air-quality source for fusion (AirNow EPA ground stations, keyed).
+ if (airnowReadings.status === 'fulfilled') {
+ const r = airnowReadings.value;
+ const airnowObs = airnowToObservations(r.readings);
+ recordDomainObservations('airnow', airnowObs, r.ok && airnowObs.length > 0);
+ } else {
+ recordDomainObservations('airnow', [], false);
+ }
+
+ // Fourth air-quality source for fusion (PurpleAir crowdsourced sensors, keyed).
+ if (purpleairReadings.status === 'fulfilled') {
+ const r = purpleairReadings.value;
+ const purpleairObs = purpleairToObservations(r.readings);
+ recordDomainObservations('purpleair', purpleairObs, r.ok && purpleairObs.length > 0);
+ } else {
+ recordDomainObservations('purpleair', [], false);
  }
 
  const signals = [];
@@ -2696,7 +2880,12 @@ export class DataLoaderManager implements AppModule {
 
  // Air quality signals — unhealthy or worse
  if (aqReadings.status === 'fulfilled') {
- recordDomainObservations('open-meteo-aqi', openMeteoAqToObservations(aqReadings.value), true);
+ // ok from the ADAPTER output, not from the promise fulfilling: the readings
+ // cover a FIXED city list, so zero observations means the adapter dropped
+ // every one of them — a format change recorded as a healthy vote, which is
+ // the phantom vote the three sibling providers below already guard against.
+ const openMeteoAqObservations = openMeteoAqToObservations(aqReadings.value);
+ recordDomainObservations('open-meteo-aqi', openMeteoAqObservations, openMeteoAqObservations.length > 0);
  for (const r of aqReadings.value) {
  if (r.aqiLevel === 'good' || r.aqiLevel === 'moderate' || r.aqiLevel === 'sensitive') continue;
  const sev = r.aqiLevel === 'hazardous' ? 'critical' : r.aqiLevel === 'very_unhealthy' ? 'high' : 'medium';
@@ -4033,6 +4222,38 @@ export class DataLoaderManager implements AppModule {
   // rather than coupling this loader back into refreshStormPosture (re-entrancy).
   async loadInternetOutages(): Promise<void> {
  await fetchIodaOutages();
+    // internet_outages fusion: per-country outage-onset counts from IODA and
+    // Cloudflare Radar. A SECOND IODA request, not a reuse of the one above —
+    // that one asks for limit=50 to warm the comms-axis cache, and the fusion
+    // path needs limit=5000 or the newest rows are silently truncated away.
+    // The cache key carries from/until/limit, so the two never clobber each other.
+    // This query's bounds are snapped to a 15-minute boundary (see
+    // IODA_WINDOW_QUANTUM_MS) precisely so its key is NOT unique per call:
+    // every tick inside one quantum reuses the cached entry, which is what
+    // keeps the scheduled cadence off the upstream API.
+    //
+    // ONE `now` for both fetches and for the adapter: it is the observations'
+    // occurredAt and the instant the counting window is derived from, and two
+    // clocks would put the providers on different windows. Note it is no longer
+    // the IODA window's end itself — fetchIodaOutageEvents snaps that end up to
+    // the next quantum boundary, so the two coincide only when `now` lands
+    // exactly on one. The comms-axis counting window still runs back from `now`.
+    // Exactly one record per provider per tick — recordDomainObservations
+    // REPLACES a provider's set rather than accumulating.
+    const now = Date.now();
+    const [ioda, cloudflare] = await Promise.all([
+      fetchIodaOutageEvents(now),
+      fetchCloudflareRadarOutages(),
+    ]);
+    // `ok` comes straight from the fetch, NOT from the observation count: an
+    // internet with no outages anywhere is a real, healthy observation, and
+    // failing it closed would blind the domain exactly when nothing is wrong.
+    recordDomainObservations('ioda', outageCountsToObservations('ioda', ioda.events, now), ioda.ok);
+    recordDomainObservations(
+      'cloudflare-radar',
+      outageCountsToObservations('cloudflare-radar', cloudflare.events, now),
+      cloudflare.ok,
+    );
   }
 
   async loadIswReports(): Promise<void> {
@@ -4104,14 +4325,90 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadEmscSeismic(): Promise<void> {
+ // Toggled-off feed: clear the panel and record nothing — a disabled source
+ // is neither a healthy fetch nor a failure for earthquake fusion.
+ if (!isFeatureAvailable('emscSeismic')) {
+ (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
+ return;
+ }
  try {
  const events = await fetchEmscSeismic();
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents(events);
- recordDomainObservations('emsc-seismic', emscEventsToObservations(events), true);
+ // ok from the ADAPTER output, not from the fetch resolving. A literal
+ // `true` here recorded a healthy vote whenever the request returned 200,
+ // including when a field rename made the adapter drop every row — which
+ // re-stamps lastSuccessAt and leaves the domain counting a source that
+ // contributes nothing. Empty is failure because the route reads M3.5+ over
+ // SEVEN DAYS: a week with no qualifying quake anywhere on earth does not
+ // occur, so zero rows means a shape change, not a quiet planet.
+ const emscObservations = emscEventsToObservations(events);
+ recordDomainObservations('emsc-seismic', emscObservations, emscObservations.length > 0);
  } catch (error) {
  console.warn('[emsc-seismic] fetch failed', error);
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
  recordDomainObservations('emsc-seismic', [], false);
+ }
+  }
+
+  async loadGeofonSeismic(): Promise<void> {
+ try {
+ const events = await fetchGeofonSeismic();
+ // ok from the ADAPTER output — same reasoning as loadEmscSeismic. The
+ // route asks for the 50 most recent M4.0+ events with NO time bound, so
+ // the feed is empty only if the FDSN text format changed under the parser.
+ const geofonObservations = geofonEventsToObservations(events);
+ recordDomainObservations('geofon-seismic', geofonObservations, geofonObservations.length > 0);
+ } catch (error) {
+ console.warn('[geofon-seismic] fetch failed', error);
+ recordDomainObservations('geofon-seismic', [], false);
+ }
+  }
+
+  /**
+   * The earthquakes fusion domain's FIRST vote, on its own cadence.
+   *
+   * USGS observations used to be recorded as a side effect of `loadNatural`,
+   * which is wrong twice over. `loadNatural` runs hourly against a 10 min
+   * freshnessTtlMs, so the provider read `stale` for ~50 of every 60 min with
+   * no upstream fault; and it is gated on `mapLayers.natural`, so turning a MAP
+   * LAYER off silently stopped refreshing a fusion vote. Not removed it —
+   * observations already recorded stay in the store and keep counting their
+   * independence group. What toggling the layer did was freeze them: the rows
+   * stopped advancing, the provider aged past its TTL into `stale`, and the
+   * freshness term in source-fusion decayed toward zero while the domain went
+   * on reporting USGS as one of its sources. A frozen vote with no upstream
+   * fault and no UI signal, which is the harder failure to notice.
+   *
+   * It also could not have been fixed by giving `loadNatural` a faster
+   * interval. That path calls `fetchEarthquakes()`, which is cached twice over
+   * — `withOfflineCache('earthquake-data', ..., 1 h)` here, and a 30 min
+   * circuit-breaker cache inside the service — and since
+   * `recordDomainObservations` stamps `lastSuccessAt` at RECORD time rather
+   * than from the payload, a faster tick would just have re-stamped old cached
+   * rows as a fresh success. A phantom healthy vote is worse than an honest
+   * stale one, so this uses `fetchUsgsSeismicForFusion` instead: the sidecar's
+   * own `/api/earthquakes` route, cached 60 s, which the 8 min cadence cannot
+   * outrun.
+   */
+  async loadUsgsSeismic(): Promise<void> {
+ try {
+ const events = await fetchUsgsSeismicForFusion();
+ // ok comes from the ADAPTER's output, not the raw rows: a 200 whose rows
+ // the adapter all drops is a format change, and recording it healthy would
+ // put a phantom vote behind "verified by N independent sources". Empty is
+ // therefore failure here — the narrowest window either implementation reads
+ // is the sidecar's `all_hour` with NO magnitude floor, and neither an empty
+ // seismic hour nor an empty M2.5+ day (the web route's window) occurs. Every
+ // non-live outcome (error envelope, cache replay, unrecognized source,
+ // malformed body) already throws in the fetch; a live all_day FALLBACK does
+ // not, and is parsed normally. This is the OPPOSITE reading from
+ // outage-fusion-observations, where zero rows is a real observation; the
+ // difference is that a quiet internet is common and a silent planet is not.
+ const observations = usgsEventsToObservations(events);
+ recordDomainObservations('usgs-earthquakes', observations, observations.length > 0);
+ } catch (error) {
+ console.warn('[usgs-seismic] fetch failed', error);
+ recordDomainObservations('usgs-earthquakes', [], false);
  }
   }
 
@@ -4336,6 +4633,17 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setRadarState(state);
  } catch (error) {
  console.warn('[weather-radar] fetch failed', error);
+ }
+  }
+
+  async loadSmokeForecast(): Promise<void> {
+ try {
+ const state = await fetchSmokeForecastFrames();
+ this.ctx.map?.setFireworkForecast(state);
+ } catch (error) {
+ // Fail-open: the map layer still renders GeoMet's default TIME without
+ // frames; the service already recorded the freshness error.
+ console.warn('[smoke-forecast] frames fetch failed', error);
  }
   }
 

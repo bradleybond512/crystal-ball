@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "9b70f0a8b7433f43e8b14e380b30c9c094411f07",
+  "reviewer": "codex",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-01T04:36:25.227Z",
+  "evidence": "Codex review round 5 (codex-cli 0.145.0, `codex exec --sandbox read-only`, diff on stdin).\nRisk tier: High. Findings: none. Release stance: approved. VERDICT: approve.\nChecks passed: workflow YAML 23 files parsed; MCP diagnostics 8/0; diagnostics source tests 384/0; typecheck:all; secret scan 4,409 files; git diff --check; worktree clean.\nAssessment: working-directory correctly installs from the MCP package lockfile, placing zod where Node resolves it; npm ci preserves lockfile integrity; no permissions or secrets added, contents: read remains; lifecycle-script exposure creates no new privilege boundary because the job already installs and executes PR-controlled code; the unconditional install is appropriately scoped to repairing the required check; brief source re-check found no regressions.\nNot run: exact clean-runner npm ci (reviewer sandbox read-only); two loopback-listening diagnostics tests blocked by sandbox EPERM, unrelated."
+}

@@ -24,9 +24,13 @@ test('both providers agree → snapshots carry equal fingerprints → redundant_
   recordDomainObservations('emsc-seismic', [ob('emsc-seismic', 6.0)], true, NOW);
 
   const snaps = getFusionProviderSnapshots(NOW);
-  assert.equal(snaps.length, 2);
-  const fps = new Set(snaps.map((s) => s.recentFactFingerprint));
-  assert.equal(fps.size, 1, 'both providers share one fingerprint');
+  // earthquakes is now a 3-provider domain (USGS + EMSC + GEOFON); GEOFON
+  // still surfaces as a silent (no-data) snapshot once the domain is active.
+  assert.equal(snaps.length, 3);
+  const reporting = snaps.filter((s) => s.recentFactFingerprint);
+  assert.equal(reporting.length, 2, 'only the two providers that actually reported carry a fingerprint');
+  const fps = new Set(reporting.map((s) => s.recentFactFingerprint));
+  assert.equal(fps.size, 1, 'both reporting providers share one fingerprint');
 
   const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
   assert.equal(report.domains[0]!.verdict, 'redundant_agreement');
@@ -61,7 +65,9 @@ test('multiple domains fuse independently (earthquakes + air_quality)', () => {
   recordDomainObservations('openaq-v3', [ob('openaq-v3', 130)], true, NOW); // within ±25 AQI
 
   const snaps = getFusionProviderSnapshots(NOW);
-  assert.equal(snaps.length, 4, 'both active fused domains surface their providers');
+  // earthquakes now has 3 registered providers (USGS + EMSC + GEOFON) +
+  // air_quality's 4 (Open-Meteo + OpenAQ + AirNow + PurpleAir).
+  assert.equal(snaps.length, 7, 'both active fused domains surface their providers');
 
   const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
   const disasters = report.domains.find((d) => d.domain === 'disasters')!;

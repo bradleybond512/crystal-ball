@@ -1,14 +1,25 @@
 import { z } from 'zod';
+import { validateAgentQueryRoutes } from '../route-policy.mjs';
 
-function makeResponse(summary, data, sources, warnings = []) {
+function makeResponse(summary, data, sources, warnings = [], healthy = true) {
   return {
     summary,
     data,
     sources,
     warnings,
     timestamp: new Date().toISOString(),
-    healthy: true,
+    healthy,
   };
+}
+
+function deniedResponse(endpoint) {
+  return makeResponse(
+    `Query denied for ${endpoint}.`,
+    { error: 'route_not_approved', endpoint },
+    [],
+    [`${endpoint} is not approved for agent queries. Add it to the reviewed route catalog before use.`],
+    false,
+  );
 }
 
 function resolvePrevRefs(value, prevResults) {
@@ -43,6 +54,9 @@ function findArray(obj) {
 
 export function makeFoundationTools(client) {
   async function query_raw({ endpoint, params, offset, limit } = {}) {
+    const policy = validateAgentQueryRoutes([endpoint]);
+    if (!policy.allowed) return deniedResponse(policy.denied);
+
     const merged = { ...params };
     if (offset != null) merged.offset = offset;
     if (limit != null) merged.limit = limit;
@@ -60,6 +74,9 @@ export function makeFoundationTools(client) {
   }
 
   async function chain_query({ steps }) {
+    const policy = validateAgentQueryRoutes(steps.map((step) => step.endpoint));
+    if (!policy.allowed) return deniedResponse(policy.denied);
+
     const results = [];
     const resolved_params = [];
     const warnings = [];
@@ -89,6 +106,9 @@ export function makeFoundationTools(client) {
   }
 
   async function compare_snapshots({ endpoint, before_params, after_params }) {
+    const policy = validateAgentQueryRoutes([endpoint]);
+    if (!policy.allowed) return deniedResponse(policy.denied);
+
     const beforeData = await client.get(endpoint, before_params);
     const afterData = await client.get(endpoint, after_params);
 
@@ -118,16 +138,16 @@ export function makeFoundationTools(client) {
 
 export const schemas = {
   query_raw: {
-    description: 'Direct access to any sidecar endpoint with full parameter passthrough and pagination.',
+    description: 'Direct access to an approved read-only sidecar endpoint with parameter passthrough and pagination.',
     inputSchema: z.object({
-      endpoint: z.string().describe('Sidecar API path (e.g., "/api/acled-events")'),
+      endpoint: z.string().describe('Approved read-only sidecar API path (e.g., "/api/acled-events")'),
       params: z.record(z.string(), z.any()).optional().describe('Query parameters to pass through'),
       offset: z.number().optional().describe('Pagination offset'),
       limit: z.number().optional().describe('Max results to return'),
     }),
   },
   chain_query: {
-    description: 'Sequential multi-step queries where each step can reference prior results via $prev[N].field.path syntax.',
+    description: 'Sequential approved read-only queries where each step can reference prior results via $prev[N].field.path syntax.',
     inputSchema: z.object({
       steps: z.array(z.object({
         endpoint: z.string().describe('Sidecar API path'),

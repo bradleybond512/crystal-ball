@@ -142,6 +142,26 @@ if (!skipNodeRuntime) {
   }
 }
 
+// Vendor a self-contained wgrib2 for the HRRR-Smoke decoder. NON-fatal by
+// design: it only builds on a macOS host whose arch matches the target and
+// self-skips (exit 0) otherwise. Even a hard failure must not block the desktop
+// build — the decoder is an optional upgrade that fails closed to Open-Meteo, so
+// we warn and continue rather than exit. The binary is never vendored unless it
+// passed the script's own otool -L self-containment gate.
+if (!skipNodeRuntime && targetOs === 'macos') {
+  console.log('[desktop-package] Vendoring wgrib2 (HRRR-Smoke decoder, optional)');
+  const wgrib2Result = spawnSync('bash', ['scripts/vendor-wgrib2.sh'], { // eslint-disable-line sonarjs/no-os-command-from-path
+    env,
+    stdio: 'inherit',
+    shell: process.platform === 'win32'
+  });
+  if (wgrib2Result.error) {
+    console.warn(`[desktop-package] wgrib2 vendor step could not run: ${wgrib2Result.error.message} — continuing without HRRR (Open-Meteo fallback).`);
+  } else if ((wgrib2Result.status ?? 1) !== 0) {
+    console.warn(`[desktop-package] wgrib2 vendor step exited ${wgrib2Result.status} — continuing without HRRR (Open-Meteo fallback).`);
+  }
+}
+
 console.log(`[desktop-package] OS=${targetOs} VARIANT=${variant} BUNDLES=${bundles} SIGN=${sign ? 'on' : 'off'}`);
 
 const result = spawnSync(tauriBin, cliArgs, {

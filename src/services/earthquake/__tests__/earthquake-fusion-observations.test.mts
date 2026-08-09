@@ -1,18 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  usgsEarthquakesToObservations,
+  usgsEventsToObservations,
   emscEventsToObservations,
+  geofonEventsToObservations,
 } from '../earthquake-fusion-observations.ts';
-import type { Earthquake } from '@/generated/client/crystalball/seismology/v1/service_client';
+import type { UsgsEvent } from '@/services/earthquake/earthquake-intelligence';
 import type { EmscEvent } from '@/services/emsc-seismic';
+import type { GeofonEvent } from '@/services/geofon-seismic';
 
 const NOW = 1_745_000_000_000;
 
-function usgs(o: Partial<Earthquake> = {}): Earthquake {
+function usgs(o: Partial<UsgsEvent> = {}): UsgsEvent {
   return {
-    id: 'us1', place: 'near Tokyo', magnitude: 6.0, depthKm: 10,
-    location: { latitude: 35.6, longitude: 139.7 }, occurredAt: NOW, sourceUrl: 'https://usgs',
+    id: 'us1', place: 'near Tokyo', magnitude: 6.0, magnitudeType: 'mww', depthKm: 10,
+    lat: 35.6, lon: 139.7, time: NOW,
     ...o,
   };
 }
@@ -27,7 +29,7 @@ function emsc(o: Partial<EmscEvent> = {}): EmscEvent {
 }
 
 test('USGS adapter maps magnitude + location to a DomainObservation', () => {
-  const obs = usgsEarthquakesToObservations([usgs({ magnitude: 6.3 })]);
+  const obs = usgsEventsToObservations([usgs({ magnitude: 6.3 })]);
   assert.equal(obs.length, 1);
   assert.deepEqual(obs[0], {
     providerId: 'usgs-earthquakes', value: 6.3, lat: 35.6, lon: 139.7, occurredAt: NOW, externalId: 'us1',
@@ -35,7 +37,7 @@ test('USGS adapter maps magnitude + location to a DomainObservation', () => {
 });
 
 test('USGS adapter skips events with no location', () => {
-  const obs = usgsEarthquakesToObservations([usgs({ location: undefined })]);
+  const obs = usgsEventsToObservations([usgs({ lat: Number.NaN, lon: Number.NaN })]);
   assert.equal(obs.length, 0);
 });
 
@@ -55,4 +57,35 @@ test('EMSC adapter skips null magnitude and unparseable time', () => {
 
 test('EMSC adapter skips NaN magnitude (defense-in-depth, mirrors USGS guard)', () => {
   assert.equal(emscEventsToObservations([emsc({ magnitude: Number.NaN })]).length, 0);
+});
+
+function geofon(o: Partial<GeofonEvent> = {}): GeofonEvent {
+  return {
+    id: 'gfz2026osef', time: '2026-07-29T04:07:23.28Z', lat: -17.595, lon: -178.762,
+    depthKm: 531.4, magnitude: 5.19, region: 'Fiji Islands Region',
+    ...o,
+  };
+}
+
+test('geofonEventsToObservations maps valid events and drops NaN rows', () => {
+  const obs = geofonEventsToObservations([
+    geofon(),
+    geofon({ time: 'not-a-date', id: 'bad' }),
+    geofon({ lat: Number.NaN, id: 'bad2' }),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0]!.providerId, 'geofon-seismic');
+  assert.equal(obs[0]!.value, 5.19);
+  assert.equal(obs[0]!.externalId, 'gfz2026osef');
+});
+
+test('geofonEventsToObservations appends Z to suffix-less FDSN timestamps so they parse as UTC', () => {
+  const obs = geofonEventsToObservations([geofon({ time: '2026-07-29T04:07:23.28' })]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0]!.occurredAt, Date.parse('2026-07-29T04:07:23.28Z'));
+});
+
+test('geofonEventsToObservations leaves timestamps that already carry a timezone suffix untouched', () => {
+  const plusOffset = geofonEventsToObservations([geofon({ time: '2026-07-29T04:07:23.28+02:00' })]);
+  assert.equal(plusOffset[0]!.occurredAt, Date.parse('2026-07-29T04:07:23.28+02:00'));
 });

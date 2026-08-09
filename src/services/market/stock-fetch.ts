@@ -1,40 +1,16 @@
 /**
- * Loader-callable fail-closed fetches for the two stock-price sources used in
- * fusion: Yahoo Finance (no-key chart) + Finnhub (keyed, proven in the market
- * panel). Returns { ok: false } on non-2xx, sidecar `degraded` (incl. missing
- * Finnhub key), or a thrown error so a dead/unconfigured source records a
- * failing fetch (provider health drops) instead of looking healthy-but-empty.
+ * Fail-closed fetches for the live stock-price fusion sources: Yahoo Finance
+ * (no-key chart) + Finnhub (keyed). The third equities source, FMP, lives in
+ * fmp-fetch.ts because its rows carry real per-quote timestamps rather than
+ * fetch-time stamps.
  */
 
-import { getApiBaseUrl } from '@/services/runtime';
-import type { ExchangePrice } from './crypto-fusion-observations';
+import { fetchQuotesRoute, type QuotesFetchResult } from './quotes-route-fetch';
 
-export interface StockFetchResult {
-  ok: boolean;
-  prices: ExchangePrice[];
+export function fetchFinnhubPrices(): Promise<QuotesFetchResult> {
+  return fetchQuotesRoute('/api/stocks-finnhub');
 }
 
-async function fetchStockRoute(path: string): Promise<StockFetchResult> {
-  try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return { ok: false, prices: [] };
-    const data = (await res.json()) as { quotes?: ExchangePrice[]; degraded?: boolean } | null;
-    if (!data || data.degraded || !Array.isArray(data.quotes)) return { ok: false, prices: [] };
-    const prices = data.quotes.filter(
-      (q): q is ExchangePrice => !!q && typeof q.symbol === 'string' && Number.isFinite(q.price),
-    );
-    // A live 200 with all-null quotes is a soft failure — treat as provider down.
-    if (prices.length === 0) return { ok: false, prices: [] };
-    return { ok: true, prices };
-  } catch {
-    return { ok: false, prices: [] };
-  }
-}
-
-export function fetchFinnhubPrices(): Promise<StockFetchResult> {
-  return fetchStockRoute('/api/stocks-finnhub');
-}
-
-export function fetchYahooPrices(): Promise<StockFetchResult> {
-  return fetchStockRoute('/api/stocks-yahoo');
+export function fetchYahooPrices(): Promise<QuotesFetchResult> {
+  return fetchQuotesRoute('/api/stocks-yahoo');
 }

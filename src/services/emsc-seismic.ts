@@ -1,5 +1,4 @@
 import { getApiBaseUrl } from '@/services/runtime';
-import { isFeatureAvailable } from '@/services/runtime-config';
 
 export interface EmscEvent {
   id: string | null;
@@ -16,20 +15,16 @@ export interface EmscEvent {
 }
 
 export async function fetchEmscSeismic(): Promise<EmscEvent[]> {
-  if (!isFeatureAvailable('emscSeismic')) return [];
-  try {
- const res = await fetch(`${getApiBaseUrl()}/api/emsc-seismic`, { signal: AbortSignal.timeout(10_000) });
- if (!res.ok) {
- // eslint-disable-next-line no-console -- surface nuclear-test feed degradation, never swallow
- console.warn(`[emsc-seismic] feed returned HTTP ${res.status}`);
- return [];
- }
- return (await res.json()) as EmscEvent[];
-  } catch (error) {
- // eslint-disable-next-line no-console -- surface nuclear-test feed degradation, never swallow
- console.warn('[emsc-seismic] feed fetch failed (timeout or network):', error);
- return [];
-  }
+  // Fail-closed (mirrors geofon-seismic): any failure throws so the loader
+  // records ok=false for earthquake fusion — a dead source must never look
+  // healthy-but-empty. 20s: comfortably above the sidecar's 15s upstream
+  // deadline so a slow upstream fails in the sidecar (recorded properly)
+  // rather than racing here.
+  const res = await fetch(`${getApiBaseUrl()}/api/emsc-seismic`, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`emsc-seismic ${res.status}`);
+  const data = (await res.json()) as EmscEvent[] | null;
+  if (!Array.isArray(data)) throw new Error('emsc-seismic malformed');
+  return data;
 }
 
 export function getSuspectedNuclearTests(events: EmscEvent[]): EmscEvent[] {

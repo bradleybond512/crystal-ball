@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { publicAlgorithmDiagnostics } from '../forecast-evaluation-public.mjs';
+import {
+  publicAlgorithmDiagnostics,
+  publicEvaluationReportProjection,
+} from '../forecast-evaluation-public.mjs';
+import { quarantinedAlgorithmIds } from '../safety-policy.mjs';
 
 const HEALTHY = new Set(['healthy', 'ok', 'fresh', 'up', 'operational']);
 
@@ -9,6 +13,15 @@ export const schemas = {
       'Fast live troubleshooting pass across the Crystal Ball sidecar, feed health, renderer state, and optional 10-route self-test. Returns ranked findings and next actions.',
     inputSchema: z.object({
       deep: z.boolean().optional().describe('Run the slower 10-route sidecar self-test (default false).'),
+      detail: z.enum(['compact', 'full']).optional().describe('Response detail level (default compact).'),
+      sections: z.array(z.enum([
+        'sidecar',
+        'feeds',
+        'renderer',
+        'algorithms',
+        'selfTest',
+        'findings',
+      ])).optional().describe('Return only selected sections plus status fields.'),
     }),
   },
   get_algorithm_diagnostics: {
@@ -122,22 +135,40 @@ export function makeDiagnosticsTools(client) {
         : findings.length > 0
           ? 'yellow'
           : 'green';
-      return {
+      const base = {
         available: health?.ok === true,
         status,
         summary: findings.length === 0
           ? 'No actionable live runtime problems detected.'
           : `${findings.length} ranked finding(s).`,
-        sidecar: health,
-        feedSummary: summarizeFeeds(feeds?.feeds),
-        renderer: analyst?.available === true
-          ? { available: true, stale: analyst.stale === true, ageMs: analyst.ageMs ?? null }
-          : { available: false },
-        algorithms: algorithmDiagnostics,
-        selfTest,
-        findings,
         timestamp: new Date().toISOString(),
       };
+      const renderer = analyst?.available === true
+        ? { available: true, stale: analyst.stale === true, ageMs: analyst.ageMs ?? null }
+        : { available: false };
+      const quarantinedAlgorithms = quarantinedAlgorithmIds(algorithmDiagnostics?.health);
+      const compact = {
+        ...base,
+        sidecar: summarizeSidecar(health),
+        feedSummary: summarizeFeeds(feeds?.feeds),
+        renderer,
+        algorithmSummary: summarizeAlgorithmSnapshot(algorithmDiagnostics),
+        quarantinedAlgorithms,
+        selfTest: summarizeSelfTest(selfTest),
+        findings,
+      };
+      const full = {
+        ...base,
+        sidecar: health,
+        feedSummary: summarizeFeeds(feeds?.feeds),
+        renderer,
+        algorithms: algorithmDiagnostics,
+        quarantinedAlgorithms,
+        selfTest,
+        findings,
+      };
+      const selected = args.detail === 'full' ? full : compact;
+      return projectSections(selected, args.sections);
     },
 
     async get_algorithm_diagnostics() {
@@ -171,10 +202,83 @@ export function makeDiagnosticsTools(client) {
         summary: summarizeAlgorithms(diagnostics),
         stale: state.stale === true,
         diagnostics,
+        evaluationReportProjection: publicEvaluationReportProjection(
+          state.evaluationReportProjection,
+        ),
         timestamp: new Date().toISOString(),
       };
     },
   };
+}
+
+function projectSections(result, sections) {
+  if (!Array.isArray(sections) || sections.length === 0) return result;
+  const projected = {
+    available: result.available,
+    status: result.status,
+    summary: result.summary,
+    timestamp: result.timestamp,
+  };
+  for (const section of sections) {
+    if (section === 'feeds' && result.feedSummary) projected.feedSummary = result.feedSummary;
+    else if (section === 'algorithms') {
+      if (result.algorithms) projected.algorithms = result.algorithms;
+      if (result.algorithmSummary) projected.algorithmSummary = result.algorithmSummary;
+      projected.quarantinedAlgorithms = result.quarantinedAlgorithms;
+    } else if (section in result) {
+      projected[section] = result[section];
+    }
+  }
+  return projected;
+}
+
+function summarizeSidecar(health) {
+  if (!health || typeof health !== 'object') return { ok: false };
+  const fields = [
+    'ok',
+    'pid',
+    'uptime_ms',
+    'port',
+    'rss_mb',
+    'heap_mb',
+    'ais_connected',
+    'ais_vessels',
+    'keys_configured',
+    'keys_total',
+    'keys_missing_count',
+  ];
+  return Object.fromEntries(fields
+    .filter((field) => health[field] !== undefined)
+    .map((field) => [field, health[field]]));
+}
+
+function summarizeAlgorithmSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return { status: 'unavailable', ledger: { total: 0, graded: 0, pending: 0 } };
+  }
+  const ledger = snapshot.ledger ?? {};
+  const health = snapshot.health ?? {};
+  return {
+    status: health.status ?? 'unknown',
+    counts: Object.fromEntries(
+      ['healthy', 'degraded', 'failing', 'unsafe', 'unknown']
+        .map((status) => [
+          status,
+          (health.algorithms ?? []).filter((algorithm) => algorithm.status === status).length,
+        ]),
+    ),
+    ledger: {
+      total: ledger.total ?? 0,
+      graded: ledger.graded ?? 0,
+      pending: ledger.pending ?? 0,
+    },
+    forecasts: snapshot.forecastCalibration?.summary ?? null,
+  };
+}
+
+function summarizeSelfTest(selfTest) {
+  if (!selfTest || typeof selfTest !== 'object') return null;
+  return { summary: selfTest.summary ?? null };
 }
 
 function finding(id, severity, summary, nextAction) {

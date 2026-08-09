@@ -80,6 +80,7 @@ export class MapContainer {
   private container: HTMLElement;
   private isMobile: boolean;
   private deckGLMap: DeckGLMapType | null = null;
+  private pendingFireworkForecast: import('@/services/firework-smoke').SmokeForecastState | null = null;
   private svgMap: MapComponent | null = null;
   private initialState: MapContainerState;
   private useDeckGL: boolean;
@@ -144,6 +145,10 @@ export class MapContainer {
  ...this.initialState,
  view: this.initialState.view as DeckMapView,
  });
+ if (this.pendingFireworkForecast) {
+ this.deckGLMap.setFireworkForecast(this.pendingFireworkForecast);
+ this.pendingFireworkForecast = null;
+ }
  } catch (error) {
  console.warn('[MapContainer] DeckGL initialization failed, falling back to SVG map', error); // eslint-disable-line no-console
  this.initSvgMap('[MapContainer] Initializing SVG map (DeckGL fallback mode)');
@@ -492,6 +497,18 @@ export class MapContainer {
  if (this.useDeckGL) {
  this.deckGLMap?.setRadarState(state);
  }
+  }
+
+  public setFireworkForecast(state: import('@/services/firework-smoke').SmokeForecastState): void {
+ if (!this.useDeckGL) return;
+ if (!this.deckGLMap) {
+ // Boot-time delivery can land before init()'s dynamic DeckGLMap import
+ // resolves. Frames refresh every 30 min, so a dropped one-shot would
+ // leave the scrubber empty for half an hour — buffer and replay instead.
+ this.pendingFireworkForecast = state;
+ return;
+ }
+ this.deckGLMap.setFireworkForecast(state);
   }
 
   public setLightningStrikes(strikes: import('@/services/lightning').LightningStrike[]): void {

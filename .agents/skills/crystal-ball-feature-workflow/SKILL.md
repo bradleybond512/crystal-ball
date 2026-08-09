@@ -1,0 +1,134 @@
+---
+name: crystal-ball-feature-workflow
+description: Use for every substantial Crystal Ball feature, multi-file bug fix, provider integration, prediction/calibration/correlation change, Tauri or sidecar change, security-sensitive task, performance project, or architecture change. Do not use for trivial copy, formatting, or isolated documentation edits.
+---
+
+# Crystal Ball Agentic Feature Workflow
+
+Follow these phases in order. AGENTS.md remains authoritative.
+
+## 1. Branch and classify
+
+Confirm work is on a fresh `codex/*` branch based on the canonical remote's
+`main`, never local `main`. Resolve the remote name rather than assuming it — it
+is `macos` on Bradley's Mac and `origin` in most other clones, and the wrong
+guess fails before any work starts. See "Branch Discipline" in `AGENTS.md` for
+the exact commands. Classify the task as Fast, Standard, or High Assurance.
+
+Prediction, calibration, correlation, scoring, self-tuning, promotion, Tauri
+IPC, permissions, secrets, networking boundaries, migrations, destructive
+operations, release/install behavior, and architecture changes are High
+Assurance.
+
+## 2. Intake
+
+Create a concise feature brief containing objective, user/analyst value,
+acceptance criteria, constraints, non-goals, unknowns, risk level, affected
+variants, and expected evidence.
+
+For prediction-adjacent work, read `docs/PREDICTION_ACCURACY_ROADMAP.md`, identify
+one applicable `ACC-NNN` task, and follow its claim/evidence rules.
+
+## 3. Discovery
+
+For Standard and High Assurance tasks, delegate read-only exploration to
+`repository_analyst`. Ask it to trace the actual execution path, tests,
+boundaries, and relevant validation commands. Do not edit production files.
+
+For security-sensitive work, explicitly map trust boundaries, privileged
+operations, attacker-controlled inputs, secrets, and fail-closed behavior.
+
+## 4. Design
+
+Delegate design to `architect`. Require goals/non-goals, architecture, data and
+control flow, schemas/interfaces, errors and degraded modes, security,
+performance, tests, migration, rollback, and alternatives.
+
+Stop for explicit human approval after design for High Assurance work.
+
+## 5. Task plan
+
+Create atomic tasks. Each task must define objective, agent owner, dependencies,
+allowed modules/files, acceptance criteria, validation command, non-goals, and
+expected evidence. Parallelize only cleanly separable work.
+
+Route implementation to the narrowest agent:
+
+- external sources and ingestion: `provider_engineer`
+- fusion, correlation, evidence, analyst reasoning: `intelligence_engineer`
+- forecasting, calibration, scoring, replay, promotion: `prediction_engineer`
+- Tauri, sidecar, filesystem, networking, security: `tauri_security_engineer`
+- UI, state, globe/map, accessibility: `ui_map_engineer`
+- tests and abuse/failure coverage: `test_engineer`
+
+Use isolated Git worktrees when parallel streams might collide.
+
+## 6. Implement
+
+Require agents to inspect before editing, stay within scope, preserve existing
+patterns, avoid unrelated refactors, add behavior tests, report design
+deviations, and run targeted checks. Dependencies require explicit approval and
+an explanation of necessity, maintenance, license, build/bundle, and security
+impact.
+
+Write each test first and watch it fail for the right reason before implementing.
+Where that ordering was not possible, produce the equivalent mutation proof
+afterward — see "Mutation proof" in `AGENTS.md`. A test that has never been seen
+red is an unverified claim, not coverage.
+
+## 7. Integrate and validate
+
+Resolve mechanical integration issues without changing the approved design.
+Architectural deviations return to the design phase.
+
+Run targeted domain tests, then name them to the gate so it runs them too:
+
+```bash
+bash scripts/agentic-validate.sh --tests "test:providers test:weather"
+```
+
+The gate is lint, typecheck, secrets, docs, and build. It executes no tests of
+its own and proves nothing about behavior, so "the gate passed" is never on its
+own evidence that the change works.
+
+Do not edit validation rules during a feature unless that is explicitly within
+approved scope. Record exact commands, exit results, failures, and warnings.
+
+Prediction changes must also produce the roadmap-required replay, calibration,
+benchmark, or shadow evidence. Security-sensitive changes must run relevant
+adversarial tests and `npm run secrets:scan`.
+
+## 8. Independent review
+
+Delegate the complete diff to `independent_reviewer`, never the implementer.
+Triage findings as confirmed blocking, confirmed nonblocking, unconfirmed, or
+false positive.
+
+Repair confirmed findings with the relevant specialist, rerun affected checks,
+and obtain fresh independent review. Allow at most two automatic repair cycles.
+Stop if a blocker remains, tests must be weakened, architecture changes, or
+scope materially expands.
+
+When the second cycle ends with the finding still open, hand it to the human with
+both attempted repairs and why each failed. A third cycle, a quiet severity
+downgrade, and "pre-existing, out of scope" are all the same failure: closing a
+confirmed finding without fixing it.
+
+The reviewer runs read-only and cannot reach the network, so it can never confirm
+that a filter, parameter, or field name matches live production data. For any
+change to an external source, supply the live-probe evidence from `AGENTS.md`
+alongside the diff.
+
+## 9. Completion and publication boundary
+
+Report summary, user-visible behavior, architecture and files changed,
+validation commands and actual results, review outcome, evidence, unresolved
+risks, manual verification, rollback, proposed commit, and draft PR text.
+
+When the review concludes clean, record the SHA-pinned verdict per the "Review
+Verdict Protocol" in `AGENTS.md` (`verify-review-verdict.mjs --record`), then
+finish with `bash scripts/pr-closeout.sh` — it verifies pushed-tip parity and
+the verdict before arming auto-merge. Never arm auto-merge by hand.
+
+Do not push, merge, release, install, deploy, change secrets, or alter
+production data without explicit human approval.

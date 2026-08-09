@@ -27,6 +27,8 @@ import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provi
 import { getProviderDefinition } from '../providers/provider-registry';
 import { recordProviderFetchOutcome, getProviderHealthState } from '../providers/providers-state';
 import { getFusionProviderSnapshots } from '../providers/fusion-publish';
+import { demoteUnconfiguredProviders } from '../providers/provider-bridge';
+import { getSecretState, type RuntimeSecretKey } from '../runtime-config';
 // ── Public API ──────────────────────────────────────────────────────────
 
 /** A subset of the `WeatherAlert` shape from `services/weather.ts` —
@@ -348,9 +350,26 @@ export function bridgeSourcesToProviderRedundancy(
   // instead of 'redundant_unverified'. Fusion wins by providerId.
   const fusion = getFusionProviderSnapshots(now);
   const fusionIds = new Set(fusion.map((f) => f.providerId));
-  const snapshots = [...base.filter((s) => !fusionIds.has(s.providerId)), ...fusion];
+  const merged = [...base.filter((s) => !fusionIds.has(s.providerId)), ...fusion];
+  // Single chokepoint into the live report: a provider whose requiredSecret is
+  // unset can never answer, so it must not be counted as an "up" corroborating
+  // vote. Applied here rather than in either producer because both the registry
+  // path and the fusion path feed this list.
+  const snapshots = demoteUnconfiguredProviders(merged, isProviderSecretConfigured);
   setProviderSnapshots(snapshots);
   return snapshots;
+}
+
+/** Whether a provider's API key is actually available to fetch with.
+ *
+ *  Deliberately uniform across desktop and web. `isFeatureAvailable()` is
+ *  optimistic on web before vault unlock so the settings UI isn't a wall of
+ *  red — but that is a presentation choice. Reusing it here would let an
+ *  unreachable provider cast a corroborating vote, which is the exact
+ *  overstatement this gate exists to prevent. Erring toward understating
+ *  corroboration is the safe direction. */
+function isProviderSecretConfigured(key: RuntimeSecretKey): boolean {
+  return getSecretState(key).valid;
 }
 
 /** Build a snapshot for a registry-known source, recording the outcome for

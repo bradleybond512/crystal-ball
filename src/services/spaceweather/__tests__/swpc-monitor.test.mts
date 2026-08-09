@@ -16,6 +16,7 @@ import type {
   KpIndexPoint,
   MonitorInput,
   SwpcAlertRaw,
+  SwpcAlertSeverity,
   XrayFluxPoint,
 } from '../swpc-monitor.ts';
 
@@ -162,6 +163,69 @@ test('summarizeAlerts classifies ALERT/WARNING/WATCH/summary by headline', () =>
   assert.equal(summarized.length, 3);
   const sevs = summarized.map((a) => a.severity);
   assert.deepEqual(sevs, ['alert', 'watch', 'warning']);
+});
+
+// Mirrors the sidecar assertions in
+// src-tauri/sidecar/__tests__/spaceweather-parity.test.mjs — these two must
+// agree, since the sidecar serves /api/spaceweather/alerts and this module is
+// the canonical definition of what that route is supposed to produce.
+const swpcMessage = (body: string): string =>
+  `Space Weather Message Code: ALTK07\r\nSerial Number: 366\r\nIssue Time: 2026 May 06 1000 UTC\r\n\r\n${body}\r\n`;
+
+test('summarizeAlerts reads past the SWPC message-code preamble', () => {
+  const raw: SwpcAlertRaw[] = [
+    { product_id: 'K07', message: swpcMessage('ALERT: Geomagnetic K-index of 7\r\nThreshold Reached: 2026 May 06 0958 UTC'), issue_datetime: isoMinus(2) },
+  ];
+  const [a] = summarizeAlerts(raw, NOW);
+  assert.equal(a.severity, 'alert');
+  assert.equal(a.headline, 'ALERT: Geomagnetic K-index of 7');
+});
+
+// The eight keyword forms enumerated from a live 30-day products/alerts.json.
+// CANCEL_* are stand-downs; CONTINUED ALERT is still active.
+test('summarizeAlerts maps every keyword SWPC actually emits', () => {
+  const cases: [string, SwpcAlertSeverity][] = [
+    ['CANCEL WARNING: Geomagnetic K-index of 4',                    'summary'],
+    ['CANCEL ALERT: Proton Event 100MeV Integral Flux exceeded 1pfu', 'summary'],
+    ['CONTINUED ALERT: Electron 2MeV Integral Flux exceeded 1,000pfu', 'alert'],
+    ['EXTENDED WARNING: Geomagnetic K-index of 5',                  'warning'],
+    ['WARNING: Geomagnetic K-index of 5 expected',                  'warning'],
+    ['ALERT: Geomagnetic K-index of 7',                             'alert'],
+    ['WATCH: Geomagnetic Storm Category G3 Predicted',              'watch'],
+    ['SUMMARY: X-ray Event exceeded M5',                            'summary'],
+  ];
+  for (const [body, expected] of cases) {
+    const [a] = summarizeAlerts(
+      [{ product_id: 'P', message: swpcMessage(body), issue_datetime: isoMinus(1) }], NOW);
+    assert.equal(a.severity, expected, body);
+    assert.equal(a.headline, body);
+  }
+});
+
+test('summarizeAlerts keeps recent alerts stamped with naïve-UTC issue times', () => {
+  const raw: SwpcAlertRaw[] = [
+    { product_id: 'K07', message: swpcMessage('ALERT: Geomagnetic K-index of 7'), issue_datetime: '2026-05-06 10:00:00.000' },
+  ];
+  const a = summarizeAlerts(raw, NOW);
+  assert.equal(a.length, 1);
+  // Asserted on the STAMPED string, not on Date.parse of it: comparing parsed
+  // instants would agree with the buggy output on a UTC runner and only fail
+  // off-UTC, so the regression could land green in CI.
+  assert.equal(a[0].issuedAt, '2026-05-06T10:00:00.000Z');
+});
+
+// parseAlerts tolerates 5 minutes of clock skew. This path and that one feed
+// the same panel, so an alert must not exist in one and not the other.
+test('summarizeAlerts tolerates the same clock skew as parseAlerts', () => {
+  const at = (offsetMin: number) =>
+    new Date(NOW + offsetMin * 60_000).toISOString().replace('T', ' ').replace('Z', '');
+  const build = (offsetMin: number): SwpcAlertRaw[] => [
+    { product_id: 'K07', message: swpcMessage('ALERT: Geomagnetic K-index of 7'), issue_datetime: at(offsetMin) },
+  ];
+
+  assert.equal(summarizeAlerts(build(2), NOW).length, 1, '+2 min is skew');
+  assert.equal(summarizeAlerts(build(-1), NOW).length, 1, 'the past is always fine');
+  assert.equal(summarizeAlerts(build(180), NOW).length, 0, '+3 h is corrupt');
 });
 
 // ── Full status ────────────────────────────────────────────────────────────

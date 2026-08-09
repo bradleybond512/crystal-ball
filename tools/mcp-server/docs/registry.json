@@ -1,0 +1,1058 @@
+{
+  "summary": "61 tools across 9 categories",
+  "compatibility": {
+    "protocol": "2025-03-26",
+    "server": {
+      "current": "0.3.0",
+      "testedMinor": "0.3",
+      "maxExclusive": "1.0.0"
+    },
+    "skillContract": {
+      "current": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "evidencePacket": {
+      "current": 1
+    }
+  },
+  "categories": {
+    "Foundation": {
+      "description": "Low-level query primitives for direct sidecar access, chaining, and diffing.",
+      "tools": {
+        "query_raw": "Query one approved sidecar endpoint with parameter passthrough and pagination.",
+        "chain_query": "Run sequential approved queries whose steps may reference prior results.",
+        "compare_snapshots": "Diff two queries to the same approved endpoint."
+      }
+    },
+    "Intelligence": {
+      "description": "Cross-domain analysis, trend detection, and anomaly scanning.",
+      "tools": {
+        "correlate": "Find shared entities across two or more intelligence domains.",
+        "trend": "Analyze a time series from sentinel history.",
+        "anomaly_scan": "Compare current domain values with historical baselines."
+      }
+    },
+    "Watchlists & Alerts": {
+      "description": "Persistent tracking lists and threshold-based alert rules.",
+      "tools": {
+        "watchlist_manage": "Create, list, update, or delete persistent watchlists.",
+        "watchlist_check": "Evaluate watchlists and record newly observed activity.",
+        "alert_rules_manage": "Create, list, update, or delete threshold alert rules.",
+        "alert_check": "Evaluate active alert rules against current data."
+      }
+    },
+    "Aggregate": {
+      "description": "Broad situational awareness tools that pull from multiple sources at once.",
+      "tools": {
+        "get_sitrep": "Summarize conflicts, markets, weather, infrastructure, and service health.",
+        "get_threat_landscape": "Summarize active conflict, cyber, and crisis threats.",
+        "get_market_overview": "Summarize indices, crypto, flows, sentiment, and macro signals.",
+        "get_cyber_intel": "Summarize IOCs, KEVs, phishing, malware URLs, and threat pulses.",
+        "get_weather_environment": "Summarize weather alerts and environmental conditions.",
+        "get_infrastructure_status": "Summarize power, water, radiation, and critical infrastructure.",
+        "get_military_posture": "Summarize military aircraft, vessels, posture, and analysis.",
+        "check_feed_health": "Probe the sidecar and representative data feeds.",
+        "sitrep_bundle": "Return a pre-filtered multi-domain intelligence bundle."
+      }
+    },
+    "Granular": {
+      "description": "Targeted lookups and searches for specific entities or data points.",
+      "tools": {
+        "search_conflicts": "Search armed-conflict events by region, country, dates, or type.",
+        "search_news": "Search current headlines from configured news providers.",
+        "lookup_ip": "Combine IP reputation, classification, and geolocation.",
+        "lookup_cve": "Search vulnerability intelligence by CVE or text.",
+        "lookup_vessel": "Look up a vessel by MMSI or name.",
+        "lookup_flight": "Look up military aircraft by ICAO hex or callsign.",
+        "get_sanctions": "Search sanctioned entities.",
+        "get_economic_data": "Fetch economic time series.",
+        "get_sec_filings": "Search SEC filings.",
+        "get_earthquakes": "Fetch recent seismic activity.",
+        "get_disease_outbreaks": "Fetch active disease outbreaks.",
+        "get_region_brief": "Combine security, conflict, weather, and alert context for a place."
+      }
+    },
+    "Analyst": {
+      "description": "Renderer-side hypotheses, forecasts, feedback, and reasoning diagnostics.",
+      "tools": {
+        "get_analyst_hypotheses": "Read ranked renderer hypotheses.",
+        "get_mode_forecast": "Read the current cross-domain posture forecast.",
+        "get_analyst_accuracy": "Read hypothesis accuracy metrics.",
+        "get_hot_entities": "Read entities with elevated cross-domain activity.",
+        "submit_hypothesis_feedback": "Submit analyst hypothesis feedback.",
+        "dismiss_hypothesis": "Dismiss a hypothesis in renderer state.",
+        "run_skeptic_now": "Trigger an on-demand skeptic analysis.",
+        "get_reasoning_debug_log": "Read bounded reasoning debug events.",
+        "get_reasoning_metrics": "Read reasoning latency and counter metrics.",
+        "get_pipeline_trace": "Read fact-lifecycle pipeline traces."
+      }
+    },
+    "Intel Expansion": {
+      "description": "Specialized cyber, infrastructure, supply, aviation, finance, disaster, and radiation sources.",
+      "tools": {
+        "get_cyber_threats": "Fetch C2, IOC, and malware URL feeds.",
+        "get_chokepoint_status": "Fetch maritime chokepoint transit conditions.",
+        "get_internet_outages": "Fetch large-scale internet outage alerts.",
+        "get_space_weather_extra": "Fetch extended aurora and solar-flare indicators.",
+        "get_pharma_supply": "Fetch drug shortages and recalls.",
+        "get_grid_outages": "Fetch county-level grid outages.",
+        "get_disaster_activations": "Fetch emergency-management disaster activations.",
+        "lookup_entity": "Look up a legal entity identifier.",
+        "get_aviation_hazards": "Fetch SIGMETs and ground-stop programs.",
+        "get_fx_rates": "Fetch foreign-exchange rates.",
+        "get_geo_events": "Fetch geocoded media events.",
+        "get_radiation": "Fetch gamma-dose monitoring readings."
+      }
+    },
+    "Diagnostics": {
+      "description": "Live runtime triage, pipeline evidence, and algorithm health.",
+      "tools": {
+        "get_capabilities": "Report domain readiness, credential coverage, and unavailable capability reasons.",
+        "get_monitor_status": "Read the latest persistent drift and quarantine monitor result.",
+        "run_monitor_cycle": "Run and persist a drift and quarantine monitor cycle.",
+        "diagnose_runtime": "Ranked live runtime findings with optional deep route probes.",
+        "get_algorithm_diagnostics": "Read bounded algorithm evaluation and tuning health.",
+        "get_weekly_evaluation_report": "Read the latest or a selected completed weekly algorithm evaluation report.",
+        "generate_weekly_evaluation_report": "Finalize accumulated completed weeks into immutable local evaluation reports."
+      }
+    },
+    "Help": {
+      "description": "Built-in documentation and capability discovery.",
+      "tools": {
+        "help": "Read the tool index, man pages, conceptual guides, and examples."
+      }
+    }
+  },
+  "topics": [
+    "getting-started",
+    "watchlists",
+    "alerts",
+    "correlation",
+    "sentinel",
+    "capabilities"
+  ],
+  "examples": [
+    "cross-domain",
+    "time-series",
+    "watchlists",
+    "alert-rules"
+  ],
+  "tools": {
+    "query_raw": {
+      "category": "Foundation",
+      "description": "Query one approved sidecar endpoint with parameter passthrough and pagination.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "chain_query": {
+      "category": "Foundation",
+      "description": "Run sequential approved queries whose steps may reference prior results.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "compare_snapshots": {
+      "category": "Foundation",
+      "description": "Diff two queries to the same approved endpoint.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "correlate": {
+      "category": "Intelligence",
+      "description": "Find shared entities across two or more intelligence domains.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "trend": {
+      "category": "Intelligence",
+      "description": "Analyze a time series from sentinel history.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "anomaly_scan": {
+      "category": "Intelligence",
+      "description": "Compare current domain values with historical baselines.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "watchlist_manage": {
+      "category": "Watchlists & Alerts",
+      "description": "Create, list, update, or delete persistent watchlists.",
+      "permission": {
+        "code": "manage_local",
+        "label": "Manages local records",
+        "detail": "Creates, updates, or deletes local Crystal Ball records. Confirm the requested change with the user."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    "watchlist_check": {
+      "category": "Watchlists & Alerts",
+      "description": "Evaluate watchlists and record newly observed activity.",
+      "permission": {
+        "code": "act_external",
+        "label": "Runs live checks and changes state",
+        "detail": "Contacts live providers and records local results. Run only when the user requests the action."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    "alert_rules_manage": {
+      "category": "Watchlists & Alerts",
+      "description": "Create, list, update, or delete threshold alert rules.",
+      "permission": {
+        "code": "manage_local",
+        "label": "Manages local records",
+        "detail": "Creates, updates, or deletes local Crystal Ball records. Confirm the requested change with the user."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    "alert_check": {
+      "category": "Watchlists & Alerts",
+      "description": "Evaluate active alert rules against current data.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_sitrep": {
+      "category": "Aggregate",
+      "description": "Summarize conflicts, markets, weather, infrastructure, and service health.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_threat_landscape": {
+      "category": "Aggregate",
+      "description": "Summarize active conflict, cyber, and crisis threats.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_market_overview": {
+      "category": "Aggregate",
+      "description": "Summarize indices, crypto, flows, sentiment, and macro signals.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_cyber_intel": {
+      "category": "Aggregate",
+      "description": "Summarize IOCs, KEVs, phishing, malware URLs, and threat pulses.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_weather_environment": {
+      "category": "Aggregate",
+      "description": "Summarize weather alerts and environmental conditions.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_infrastructure_status": {
+      "category": "Aggregate",
+      "description": "Summarize power, water, radiation, and critical infrastructure.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_military_posture": {
+      "category": "Aggregate",
+      "description": "Summarize military aircraft, vessels, posture, and analysis.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "check_feed_health": {
+      "category": "Aggregate",
+      "description": "Probe the sidecar and representative data feeds.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "sitrep_bundle": {
+      "category": "Aggregate",
+      "description": "Return a pre-filtered multi-domain intelligence bundle.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "search_conflicts": {
+      "category": "Granular",
+      "description": "Search armed-conflict events by region, country, dates, or type.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "search_news": {
+      "category": "Granular",
+      "description": "Search current headlines from configured news providers.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "lookup_ip": {
+      "category": "Granular",
+      "description": "Combine IP reputation, classification, and geolocation.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "lookup_cve": {
+      "category": "Granular",
+      "description": "Search vulnerability intelligence by CVE or text.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "lookup_vessel": {
+      "category": "Granular",
+      "description": "Look up a vessel by MMSI or name.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "lookup_flight": {
+      "category": "Granular",
+      "description": "Look up military aircraft by ICAO hex or callsign.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_sanctions": {
+      "category": "Granular",
+      "description": "Search sanctioned entities.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_economic_data": {
+      "category": "Granular",
+      "description": "Fetch economic time series.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_sec_filings": {
+      "category": "Granular",
+      "description": "Search SEC filings.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_earthquakes": {
+      "category": "Granular",
+      "description": "Fetch recent seismic activity.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_disease_outbreaks": {
+      "category": "Granular",
+      "description": "Fetch active disease outbreaks.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_region_brief": {
+      "category": "Granular",
+      "description": "Combine security, conflict, weather, and alert context for a place.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_analyst_hypotheses": {
+      "category": "Analyst",
+      "description": "Read ranked renderer hypotheses.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_mode_forecast": {
+      "category": "Analyst",
+      "description": "Read the current cross-domain posture forecast.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_analyst_accuracy": {
+      "category": "Analyst",
+      "description": "Read hypothesis accuracy metrics.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_hot_entities": {
+      "category": "Analyst",
+      "description": "Read entities with elevated cross-domain activity.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "submit_hypothesis_feedback": {
+      "category": "Analyst",
+      "description": "Submit analyst hypothesis feedback.",
+      "permission": {
+        "code": "change_local",
+        "label": "Changes local state",
+        "detail": "Changes local Crystal Ball state without deleting records or contacting external providers."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    "dismiss_hypothesis": {
+      "category": "Analyst",
+      "description": "Dismiss a hypothesis in renderer state.",
+      "permission": {
+        "code": "manage_local",
+        "label": "Manages local records",
+        "detail": "Creates, updates, or deletes local Crystal Ball records. Confirm the requested change with the user."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "run_skeptic_now": {
+      "category": "Analyst",
+      "description": "Trigger an on-demand skeptic analysis.",
+      "permission": {
+        "code": "act_external",
+        "label": "Runs live checks and changes state",
+        "detail": "Contacts live providers and records local results. Run only when the user requests the action."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    "get_reasoning_debug_log": {
+      "category": "Analyst",
+      "description": "Read bounded reasoning debug events.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "get_reasoning_metrics": {
+      "category": "Analyst",
+      "description": "Read reasoning latency and counter metrics.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "get_pipeline_trace": {
+      "category": "Analyst",
+      "description": "Read fact-lifecycle pipeline traces.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "get_cyber_threats": {
+      "category": "Intel Expansion",
+      "description": "Fetch C2, IOC, and malware URL feeds.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_chokepoint_status": {
+      "category": "Intel Expansion",
+      "description": "Fetch maritime chokepoint transit conditions.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_internet_outages": {
+      "category": "Intel Expansion",
+      "description": "Fetch large-scale internet outage alerts.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_space_weather_extra": {
+      "category": "Intel Expansion",
+      "description": "Fetch extended aurora and solar-flare indicators.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_pharma_supply": {
+      "category": "Intel Expansion",
+      "description": "Fetch drug shortages and recalls.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_grid_outages": {
+      "category": "Intel Expansion",
+      "description": "Fetch county-level grid outages.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_disaster_activations": {
+      "category": "Intel Expansion",
+      "description": "Fetch emergency-management disaster activations.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "lookup_entity": {
+      "category": "Intel Expansion",
+      "description": "Look up a legal entity identifier.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_aviation_hazards": {
+      "category": "Intel Expansion",
+      "description": "Fetch SIGMETs and ground-stop programs.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_fx_rates": {
+      "category": "Intel Expansion",
+      "description": "Fetch foreign-exchange rates.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_geo_events": {
+      "category": "Intel Expansion",
+      "description": "Fetch geocoded media events.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_radiation": {
+      "category": "Intel Expansion",
+      "description": "Fetch gamma-dose monitoring readings.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_capabilities": {
+      "category": "Diagnostics",
+      "description": "Report domain readiness, credential coverage, and unavailable capability reasons.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_monitor_status": {
+      "category": "Diagnostics",
+      "description": "Read the latest persistent drift and quarantine monitor result.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "run_monitor_cycle": {
+      "category": "Diagnostics",
+      "description": "Run and persist a drift and quarantine monitor cycle.",
+      "permission": {
+        "code": "act_external",
+        "label": "Runs live checks and changes state",
+        "detail": "Contacts live providers and records local results. Run only when the user requests the action."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    "diagnose_runtime": {
+      "category": "Diagnostics",
+      "description": "Ranked live runtime findings with optional deep route probes.",
+      "permission": {
+        "code": "read_external",
+        "label": "Reads live intelligence",
+        "detail": "Reads local Crystal Ball data that may come from external providers; it does not change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    "get_algorithm_diagnostics": {
+      "category": "Diagnostics",
+      "description": "Read bounded algorithm evaluation and tuning health.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "get_weekly_evaluation_report": {
+      "category": "Diagnostics",
+      "description": "Read the latest or a selected completed weekly algorithm evaluation report.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "generate_weekly_evaluation_report": {
+      "category": "Diagnostics",
+      "description": "Finalize accumulated completed weeks into immutable local evaluation reports.",
+      "permission": {
+        "code": "change_local",
+        "label": "Changes local state",
+        "detail": "Changes local Crystal Ball state without deleting records or contacting external providers."
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "help": {
+      "category": "Help",
+      "description": "Read the tool index, man pages, conceptual guides, and examples.",
+      "permission": {
+        "code": "read_local",
+        "label": "Reads local status",
+        "detail": "Reads local Crystal Ball status or history; it does not contact providers or change state."
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  }
+}

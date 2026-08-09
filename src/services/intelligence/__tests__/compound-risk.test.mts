@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { computeCompoundRisk } from '../compound-risk.ts';
 import type { CompoundRiskInput } from '../compound-risk.ts';
+import { replaceInhibitorySnapshot, clearInhibitorySnapshot } from '../../correlation/inhibition.ts';
 
 function inp(overrides: Partial<CompoundRiskInput>): CompoundRiskInput {
   return {
@@ -90,6 +91,31 @@ test('score: low-confidence members produce a low score', () => {
   const a = inp({ severityScore: 90, confidence: 0.2 });
   const result = computeCompoundRisk([a]);
   assert.ok(result[0]!.score < 30);
+});
+
+test('score: published inhibitory evidence cannot change any compound result field', () => {
+  clearInhibitorySnapshot();
+  const a = inp({
+    id: 'a', domain: 'weather', domains: ['weather'],
+    severityScore: 80, confidence: 1, entities: ['shared'],
+  });
+  const b = inp({
+    id: 'b', domain: 'infra', domains: ['infra'],
+    severityScore: 80, confidence: 1, entities: ['shared'],
+  });
+  const originalInputs = structuredClone([a, b]);
+  const baseline = computeCompoundRisk([a, b])[0]!;
+  replaceInhibitorySnapshot([{
+    effect: 'inhibitory', from: 'wildfire', to: 'infrastructure', windowMs: 1,
+    support: 0, antecedents: 12, followRate: 0, expectedRate: 0.5, lift: 0,
+    zScore: -100, strength: 0, explanation: 'learned suppression',
+  }], 4, 1);
+
+  const shadowActive = computeCompoundRisk([a, b])[0]!;
+
+  assert.deepEqual(shadowActive, baseline);
+  assert.deepEqual([a, b], originalInputs);
+  assert.equal('inhibition' in shadowActive, false);
 });
 
 // ── Level labels ──────────────────────────────────────────────────────

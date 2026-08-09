@@ -1,7 +1,7 @@
 # Prediction Accuracy Roadmap
 
 > Status: ACTIVE
-> Updated: 2026-07-27
+> Updated: 2026-08-04
 > Owners: Codex and Claude
 > Scope: Forecast accuracy, outcome resolution, calibration, model comparison,
 > correlation quality, safe promotion, and production monitoring.
@@ -790,9 +790,12 @@ typecheck:all, scoped ESLint.
 
 ### ACC-403 — Champion/challenger status surface
 
-Status: `WAITING`
+Status: `DONE`
 
-Dependencies: ACC-402
+Owner: Claude
+Branch: `claude/acc-403-status-surface`
+
+Dependencies: ACC-402 (DONE — #1566)
 
 Show:
 
@@ -801,11 +804,37 @@ Show:
 - metric deltas with confidence intervals;
 - promotion, rejection, rollback, and insufficient-evidence reasons.
 
+Evidence: `src/services/cognition/champion-status-view.ts` —
+`buildChampionStatusView()` is the pure view-model: active champion +
+version + activation reason (or an honest "no champion installed —
+awaiting ACC-404" state), per-challenger evidence counts (overall +
+per-domain + proxy share), Brier and log-loss deltas each with a
+two-sided 90% paired-bootstrap confidence interval (deterministic
+seeded PRNG shared with the gate; `pairedBootstrapInterval` +
+`brierImprovementDiffs`/`logLossImprovementDiffs` added to
+promotion-gate.ts, with the gate's one-sided lower bound refactored
+onto the same resample core — bench-verified unchanged), and
+promotion / rejection / insufficient-evidence reasons taken verbatim
+from the ACC-402 gate results (min-pairs failures map to
+insufficient-evidence; rollbacks and promotions surface through the
+registry history as recent-activity rows). Rendered as the
+"Champion / Challenger" section of `AlgorithmDiagnosticPanel`
+(existing panel — no new panel wiring), composed live from
+`getChampionRegistry()` + `collectJoinedEvidence()` per shadow run +
+`evaluatePromotionGate()` with real safety evidence from
+`runReplay(buildCatalogReplayFixtures())`. Verified: 12-test
+champion-status-view suite + bootstrap-addition tests (66 across the
+four cognition suites touched), typecheck:all, scoped ESLint, frozen
+bench:forecast + bench:baselines unchanged.
+
 ### ACC-404 — First production promotion decision
 
-Status: `WAITING`
+Status: `DONE`
 
-Dependencies: ACC-402 and the data threshold
+Owner: Claude
+Branch: `claude/acc-404-first-decision`
+
+Dependencies: ACC-402 (DONE — #1566) and the data threshold
 
 Outcome:
 
@@ -818,6 +847,36 @@ Phase exit:
 - the first evidence-backed promote-or-reject decision is recorded;
 - rollback is tested against the installed app.
 
+Evidence: the first evidence-backed decision is **MONITOR** (no
+promotion), recorded durably in
+`docs/decisions/2026-07-29-acc404-first-promotion-decision.md` with the
+full machine record. The ACC-402 gate ran against the installed app's
+REAL evidence (read-only extraction from the production WKWebView
+localStorage): superforecast 0 joined pairs (its comparisons carry no
+join keys yet), hierarchical-base-rate 14/200 (87 raw comparisons, only
+the 14 post-ACC-401 rows join), persistence/momentum 0 (emission path
+not yet exercised in the installed build) — each verdict carries the
+exact missing evidence verbatim from the gate.
+`src/services/cognition/first-promotion-decision.ts` is the pure
+recorder (per-challenger PROMOTE/REJECTED/MONITOR semantics, overall
+precedence, persistence under `crystalball-acc404-first-decision-v1`);
+`scripts/acc404-first-decision.mts` re-runs the decision from any
+localStorage export using the live modules. Running against real data
+exposed and fixed an ACC-403 safety-evidence flaw: the replay catalog's
+fixtures are intentionally-failing historical-miss cases (raw recall 0/4,
+lead −1440 min), so the gate now consumes
+`safetyEvidenceFromBaselineRegression` — no-NEW-regressions vs the
+committed replay baseline (5/5, lead-time only from passing warnings) —
+in both the panel composition and the decision script. Rollback is
+tested against the installed app via the new `champion_rollback`
+self-test probe (SystemDiagnostic → Self-Test):
+`runChampionRollbackSelfTestFixture()` proves setInitial → promote →
+rollback restores the previous champion on an isolated in-memory
+registry inside the shipped bundle. Verified: 34 tests across the
+first-promotion-decision + self-test suites (self-test regression guard
+updated to the 10-probe set), typecheck:all, scoped ESLint, frozen
+benches unchanged.
+
 ## Phase 5 — Correlation quality and statistical controls
 
 Purpose: improve event relationship discovery without converting correlation
@@ -828,21 +887,745 @@ These tasks retain their detailed designs in
 
 | ID | Status | Work | Dependencies |
 |---|---|---|---|
-| ACC-501 | TODO | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
-| ACC-502 | WAITING | Multiple-comparison correction and inhibitory edges | ACC-501 |
-| ACC-503 | WAITING | Multi-hop mediation/confounder filtering | ACC-501 |
-| ACC-504 | WAITING | Dispersion correction for bursty streams | ACC-501 |
-| ACC-505 | WAITING | Per-regime correlation reliability | ACC-501 |
+| ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
+| ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
+| ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
+| ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
+| ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
+| ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 
-Safety invariant: learned inhibitory or dampening evidence may soften
-confidence but must never suppress a safety-critical delivery rung.
+Safety invariant: learned inhibitory evidence remains shadow-only and cannot
+change operational scores, confidence, posture, alerts, or delivery rungs.
 
 Phase exit:
 
 - correlation changes improve or preserve frozen precision/recall;
 - false learned edges fall on confounded and bursty streams;
+- live ingestion supplies bounded cross-event batches and diagnostics witness
+  learned-rule pair production;
 - tuning cannot bypass the benchmark or safety fixtures.
+
+### ACC-501 — Frozen correlation benchmark and `bench:correlation` CI gate
+
+Status: `DONE`
+
+Owner: Claude
+Branch: `claude/acc-501-correlation-benchmark`
+PR: #1596
+
+Dependencies: ACC-201 (DONE)
+
+Outcome — delivered:
+
+- `src/services/correlation/__bench__/golden-streams.ts` — 10 frozen
+  streams, 378 observations over a fixed 30-day span, with **two levels**
+  of planted truth: domain-level `PLANTED_COUPLINGS` (5 causal, plus
+  independent / confounded / mediated / inhibitory traps) grading the
+  lead-lag miner, and event-level `plantedTruePairKeys()` /
+  `decoyEventIds()` grading the engine's built-in rules. Fixed-seed
+  jitter, no clock reads, no fetch.
+- `src/services/correlation/bench-correlation.ts` — pure replay through
+  the **real** miner and two **real** `CorrelateEngine` instances
+  (`timer: () => 0`, fixed `now`): pass A built-ins only, pass B with the
+  learned rules mined from the same corpus.
+- `src/services/correlation/bench-correlation-baseline.ts` +
+  `__bench__/bench-correlation-baseline.json` — committed baseline with
+  **one-sided** tolerances and exact-equality identity checks (corpus digest,
+  rule inventory, whole-report digest) that short-circuit before any metric
+  comparison. Identity is the strict half: any change that moves ANY reported
+  number — regression *or* improvement — fails and must be re-seeded via
+  `npm run bench:correlation -- --seed` into
+  `/tmp/bench-correlation-baseline.candidate.json`. Before emitting JSON, the
+  seed path compares the candidate against the PREVIOUS reviewed baseline;
+  the one-sided tolerances decide whether the new numbers may replace the old.
+- `npm run bench:correlation` (`scripts/correlation-benchmark.mts`),
+  wired as a step in `.github/workflows/smoke.yml`. Exit codes mirror
+  `bench:cognition`: 0 pass / 1 regression / 2 baseline unreadable.
+- 174 unit tests in
+  `src/services/correlation/__tests__/bench-correlation.test.mts`,
+  covering both the corpus (the traps still trap) and the gate (one-sided
+  tolerances, zero-tolerance decoy leakage, corpus-drift short-circuit, a
+  regression per demonstrated PASS-on-nothing across thirteen review rounds, and
+  an exhaustive leaf sweep proving the report digest covers every field).
+
+Gate hardening from the Codex cross-agent review (baseline `schemaVersion: 2`).
+Every item below is a way the first cut would have reported PASS on a benchmark
+that had stopped measuring anything:
+
+- **Corpus identity is a content digest, not three counts.**
+  `goldenCorpusDigest()` (FNV-1a over every observation field, every planted
+  coupling, every true-pair key, every decoy id) — timestamps, domains and
+  truth labels can all be edited while stream / observation / coupling counts
+  hold steady, which is how an easier corpus passes as an improvement.
+- **Fails closed on non-finite numbers.** `NaN > tolerance` is false, so a
+  missing baseline field or a corrupt report used to satisfy every directional
+  check. Both sides of every gated metric are now validated finite first.
+  `cappedZ` likewise throws on `NaN` / `−Infinity` instead of mapping them to
+  the cap.
+- **Usefulness is gated, not only blast radius.** A pipeline that emits zero
+  learned rules has zero false positives and zero pair volume — perfect on
+  every "lower is better" gate, and dead. `causalLearnedRuleCount` and
+  `meanTruePairConfidence` are gated against shrink, so neither the rule
+  pipeline nor the confidence kernel can quietly disappear.
+- **Discrete false-edge growth is gated at zero.** 22 → 24 significant edges
+  moves precision 0.2273 → 0.2083, inside the 0.02 ratio tolerance; on a
+  deterministic corpus that is still two new false edges.
+- **A perfect miner scores as an improvement.** Zero false edges makes
+  evidence separation `null`; coercing it to 0 reported an 8.49 regression for
+  achieving exactly what ACC-502..504 exist to achieve.
+- **Pair precision divides by DISTINCT pairs.** Two legitimate rules matching
+  one planted pair inflated the denominator without the numerator.
+- **`--json` emits only JSON on stdout** — the verdict goes to stderr; exit
+  codes are unchanged.
+
+Second-round hardening from the same reviewer (baseline `schemaVersion: 3`).
+Each of these was demonstrated live: the reviewer edited the corpus or the
+report, and the gate still returned PASS.
+
+- **The digest is JSON-encoded, not delimiter-joined.** `['a','b']` and
+  `['a,b']` flatten to the same delimited string, so content could move across
+  an array boundary — an entity id into a tag, a tag into the next field —
+  without moving the hash. `JSON.stringify` quotes and escapes every element,
+  so array shape is part of the hashed bytes. Digest `206cda25` → `13cd95ef`.
+- **A missing gated metric fails closed, not just a null one.** The separation
+  operand excused `null` (legitimate: a perfect miner) via a coercion that also
+  excused `undefined`. Deleting `edgeEvidenceSeparation` outright returned
+  `{ok: true, reasons: []}`. The null case is now matched exactly and everything
+  else falls through to the finite check.
+- **Learned rules are gated on FIRING, not on being synthesised.** Counting
+  synthesised rules cannot see the install → match path go dark. The new
+  `causalLearnedRulePairCount` is gated as *liveness* — no shrink tolerance,
+  because shrinking total pair volume is a goal — and trips only when the
+  baseline emitted pairs and the live run emits zero while still synthesising
+  causal rules.
+- **The report must agree with itself.** The perfect-miner exemption trusted
+  `falseEdgeCount === 0` without reconciling the five breakdown fields that sum
+  to it; setting that one field bought the exemption while 17 false edges sat
+  in the detail. Four cross-checks now run before any gate: the false-edge
+  breakdown must sum to the total, causal + FP learned rules must equal the
+  learned-rule count, and both causal-subset counts must not exceed their
+  supersets.
+- **The tolerance block is validated too.** It is untyped JSON on disk;
+  `couplingRecallDrop: "garbage"` made its comparison `NaN`, and `NaN > tol`
+  is false, so the gate reported PASS on a real recall collapse. Unknown keys
+  and non-finite / negative values are now rejected before any comparison runs.
+- **The distinct-pair denominator has an exercising test.** The live corpus
+  emits exactly one pair per key (22 === 22), so the existing
+  `distinct <= raw` assertion would stay green if the fix were reverted;
+  `gradeEnginePairs` is now driven directly with one pair matched by two rules.
+
+Third-round hardening from the same reviewer (baseline `schemaVersion: 4`).
+The round-2 fixes held, but the reviewer demonstrated seven further live PASS
+results — each one an edit that removed real measurement while the gate stayed
+green.
+
+- **The digest is 128-bit.** A 32-bit FNV digest is brute-forceable in seconds,
+  and the reviewer found a preimage: replacing the decoy id `s10-wildfire-wa`
+  with a 7-character string reproduced `13cd95ef` exactly, dropping that decoy
+  from grading with corpus identity intact. FNV-1a now runs at 128 bits over
+  BigInt (still no `node:crypto`, so the module stays renderer-importable).
+  Digest `13cd95ef` → `9bf277acf1747bf73f19e30e511b934f`.
+- **Causal-rule liveness is proportional, not exactly-zero.** 19 → 1 causal
+  learned-rule pairs is the same dead install/match path as 19 → 0, with one
+  survivor, and the exact-zero check passed it. Gated at a 0.5 shrink ratio.
+- **The baseline must ARM every gate it feeds.** Every gate here is
+  baseline-relative, so re-seeding `causalLearnedRulePairCount: 0` disabled its
+  gate permanently — and a re-seed is reviewed by a human reading numbers.
+  Fifteen baseline fields must now be positive or the run fails.
+- **Summaries reconcile against the row-level ledger.** Zeroing
+  `falseEdgeCount` *and* all five breakdown fields made the report agree with
+  itself and bought the perfect-miner exemption while `edges` still listed 17
+  false verdicts. The ledger is now cross-checked, as is `couplingPrecision`
+  against the edge counts it is derived from.
+- **Positive pair rates require pairs behind them.** Both engine pair counts at
+  0 with precision and recall at 1.0 passed — `0 > 0` satisfied the only
+  consistency check. Distinct emissions are now a gated metric with a
+  zero shrink tolerance, and positive rates over zero pairs are rejected.
+- **Impossible values are rejected, not scored as improvements.**
+  `pairPrecision: 2` is finite and reads as better than 1.0 against every
+  directional check. Rates are range-checked to [0,1] and counts to
+  non-negative integers, on both sides.
+- **Tolerance validation runs in both directions.** It validated only the keys
+  that were present, so `tolerances: null`, a scalar, or a block missing half
+  its keys fell back to the compiled defaults and could still pass. The block
+  must now be a complete object.
+- **The distinct-pair denominator test drives production code.** The round-2
+  test computed its own ratio, so reverting the production line to
+  `graded.pairCount` left it green. Precision is now computed by an exported
+  `enginePairPrecision()` that the report assembly calls, pinned on a graded set
+  where the two counts differ.
+
+Fourth-round hardening from the same reviewer (baseline `schemaVersion: 5`).
+Eight more live PASS results. The theme has not changed — a gate that reports
+PASS on a benchmark that measured nothing — but each round reaches one level
+deeper into the reconciliation.
+
+- **The digest is LENGTH-PREFIXED, not separator-framed.** Width was never the
+  issue: a separator byte is just another code unit, so hashing `decoy:first`
+  then `decoy:second` reaches exactly the state of hashing the single record
+  `decoy:first_decoy:second` — two real decoy ids replaced by one synthetic id,
+  both traps removed from grading, digest unmoved. Prefixing each record with
+  its length makes the encoding injective, so no regrouping of the corpus can
+  collide. Digest `9bf277acf1747bf73f19e30e511b934f` → `a0e284431f365d35e1706fe6ca79adc4`.
+- **Every tolerance has a ceiling.** Validating tolerances as finite and
+  non-negative only stops the NaN class. A block of individually plausible wide
+  values (`causalLearnedRulePairShrinkRatio: 1`, `enginePairShrink: 22`, rate
+  drops of `1`) disarms every liveness gate at once while the baseline still
+  looks armed. Each key now has a per-key ceiling above which it is rejected.
+- **An empty edge ledger cannot carry positive miner rates.** Clearing `edges`
+  takes every row-level reconciliation with it, and zeroed summaries agree with
+  each other — but a miner that reported no edges cannot have scored 22.7%
+  precision on them.
+- **Coupling recall and the learned-rule summaries reconcile against detail.**
+  Recall now cross-checks against the couplings the report itself names as
+  missing, and `learnedRuleCount` / `causalLearnedRuleCount` against the
+  `edges[].becameLearnedRule` rows that claim them.
+- **Pair precision and recall must agree on the count they both imply.**
+  `precision × distinct` and `recall × truePairUniverse` are two independent
+  routes to the same quantity (true pairs emitted). Requiring agreement, and
+  capping the implied count at the universe size, makes `distinct: 23` at
+  precision and recall 1.0 — arithmetically impossible, previously a clean pass
+  — fail.
+- **The causal-pair liveness floor applies PER RULE.** Volumes are 7/6/6 = 19;
+  a 0.5 aggregate shrink ratio floors at 9.5, so one rule dying entirely
+  (19 → 13) passed. Sums hide their own zeros. The same proportional floor now
+  applies to the weakest rule, and the per-rule tally is seeded from the rule
+  IDs rather than from emitted pairs — a rule that fired nothing has no pairs
+  to group by, and grouping by emission would drop it from the tally entirely.
+- **Separation is bounded and each component is range-checked.** z-scores are
+  clamped to [2,50], so a separation of means lives in [−48,48]:
+  `edgeEvidenceSeparation: 1e300` is not a large separation but a fabricated
+  one, and higher-is-better made it read as an improvement. Separately,
+  `confoundedFalsePositives: -1` against `unplantedFalsePositives: +3` preserved
+  `falseEdgeCount` exactly, satisfying the sum reconciliation with a negative
+  count.
+- **`edgeEvidenceSeparation` joined the must-arm set.** Re-seeding both sides at
+  0 while 17 false edges remain retires the 8.49 → 0 collapse permanently.
+
+One residual is documented rather than claimed fixed: the live corpus emits 22
+raw / 22 distinct pairs, so **no** end-to-end assertion driven through
+`runCorrelationBenchmark()` can distinguish the raw pair denominator from the
+distinct one. It is mitigated structurally — precision is computed in exactly
+one place, `enginePairPrecision()` takes a `Pick<>` that does not have the raw
+count in scope, and the pair-arithmetic reconciliation fires on any corpus where
+the two counts differ — but a corpus that exercises the difference end-to-end
+would be a stronger proof.
+
+Fifth-round hardening from the same reviewer (baseline `schemaVersion: 5`, now
+pinned by exact equality rather than a floor). Six more findings, four of them
+live PASS results on a benchmark that had stopped measuring.
+
+- **Schema version is pinned, and the digest must be a digest.** A baseline
+  written before a field existed reads that field as `undefined`, which is not
+  a number, which no directional comparison rejects; `schemaVersion` is now
+  compared against a pinned `CORRELATION_BENCH_SCHEMA_VERSION` constant. Worse,
+  corpus identity was checked with `===` on two values that could both be
+  absent — `undefined === undefined` is the identity gate passing on the absence
+  of identity. Both operands must now match a 32-hex-character pattern before
+  any number below them is treated as comparable.
+- **Every must-arm field is paired with its tolerance floor.** A field seeded
+  positive still disarms its gate if the tolerance that reads it is itself set
+  to the width of the metric. The must-arm set and the per-key ceilings are now
+  one table, so a gate cannot be armed on one side and disarmed on the other.
+- **Internal consistency is checked on the BASELINE too, not only the report.**
+  Every reconciliation ran against the live run; the committed baseline — the
+  side a human edits — was trusted. `learnedRuleFalsePositives: 99` in the
+  baseline sailed through.
+- **A rate implies a whole number of things.** A rate is a ratio of two
+  integers, so `rate × denominator` must land on an integer within the 4dp
+  rounding slack. `pairPrecision: 0.5123` over 22 distinct pairs implies 11.27
+  true pairs — a value no grading pass can produce, and previously a clean
+  improvement over 0.2273.
+- **The gate re-derives the summaries from a row-level ledger.** Round 4 caught
+  summaries that disagreed with each other; the reply was summaries that agreed
+  because they were all written by the same hand. `CorrelationBenchReport` now
+  carries `edges[]` and `pairs[]` — per-edge support/lift/z/verdict and per-pair
+  rule ids/confidences — and the gate re-derives `edgeEvidenceSeparation`,
+  `pairPrecision`, `pairRecall`, `meanTruePairConfidence`, `enginePairCount` and
+  `decoyPairsEmitted` from them, checks every row against the miner's own
+  thresholds (`minLift 2` / `minZ 2` / `minSupport 3`), and rejects
+  `minedEdgeCount` below the number of edges that survived them. Forging a
+  summary now means forging a self-consistent corpus of rows behind it.
+- **The digest claims unique decodability, not collision resistance.** The
+  round-4 length-prefix framing makes the encoding injective — a regrouping of
+  the corpus can no longer collide for free. That is a property of the framing.
+  The recurrence itself is a custom FNV-like function over UTF-16 code units,
+  not a cryptographic hash, and the comments no longer imply otherwise.
+
+Sixth-round hardening from the same reviewer (baseline `schemaVersion: 6`,
+corpus digest `a0e2844…` → `8411c23a6f009f2245ec779a7593685e`). Round 5 answered
+"the summaries agree with each other" with a row-level ledger; round 5's ledger
+then answered for itself. Five P1 + two P2 findings, all one defect: **the rows
+carried their own conclusions.** Each row stated its own `verdict`, its own
+`isTruePair`, its own `decoyEmissions`, and the gate believed them — so
+rewriting every endpoint to a fabricated id still returned PASS, because the
+rows and the summaries were written by the same pass and only ever checked
+against each other.
+
+- **The gate imports planted truth and derives every conclusion.**
+  `bench-correlation-baseline.ts` now imports `plantedCouplingIndex`,
+  `plantedTruePairKeys`, `decoyEventIds` and `pairKeyFor` from
+  `__bench__/golden-streams.ts` directly. Each edge row's verdict is re-graded
+  from its `from`/`to` endpoints; each pair row now carries `eventIdA`/`eventIdB`
+  so the gate can rebuild its key, re-look-up planted truth, and re-derive
+  whether the pair touches a near-miss decoy. Truth comes from the corpus or it
+  is not truth.
+- **The five false-positive categories reconcile individually.** They summed to
+  `falseEdgeCount`, so any reassignment between them was free — and the sum is
+  what hides which trap the miner actually fell into. Each category is now
+  reconciled against the rows that carry that verdict, and the causal row count
+  against the recovered count implied by `couplingRecall` and `missingCouplings`.
+- **Edge dedupe keys on the directed pair alone.** It included the lag window,
+  so one causal coupling reported at two windows counted twice — padding that
+  raises precision. The miner emits one edge per pair; a repeat is now rejected.
+- **The built-in rule inventory is pinned by exact set equality.** Deleting a
+  rule deletes the pairs it would have emitted, which reads as a smaller — and
+  therefore better — denominator. The report carries `builtInRuleIds`, and a
+  baseline that omits the list, or ships an empty one, fails closed.
+- **`minedEdgeCount` is a gated metric, not just a floor.** A miner that stops
+  mining improves precision *and* separation: fewer candidates, fewer false
+  positives. The candidate count is the only number that falls, so it now has
+  its own shrink tolerance and its own must-arm entry.
+- **Decoy leakage is absolute zero on both sides.** The check was
+  baseline-relative, so a baseline that admitted one leak licensed one leak
+  forever. Neither operand may emit a decoy pair.
+- **`pairKeyFor` is injective.** `${a}::${b}` made `('a','b::c')` and
+  `('a::b','c')` one key, silently merging two distinct pairs into one ledger
+  row. Each id is now length-prefixed, the same framing the corpus digest uses.
+  This is what moved the digest, and the baseline was re-seeded for it.
+
+Seventh-round hardening from the same reviewer (baseline `schemaVersion: 7`,
+corpus digest unchanged at `8411c23a6f009f2245ec779a7593685e` — nothing here
+perturbs the corpus). Round 6 made every EDGE and PAIR conclusion derivable from
+planted truth. The reviewer then showed that the conclusions round 6 did not
+reach were still authored by the pass that reported them: three P1 + two P2 + one
+P3, each demonstrated as a mutation that PASSED the round-6 gate.
+
+- **Pass B has a row ledger too.** The four learned-rule counters (`101 / 19 /
+  [7,6,6] / 6`) had no row-level witness at all: forcing the second engine pass
+  to emit nothing and restoring the four numbers returned PASS. The report now
+  persists `learnedPairs` — one row per (learned rule, event pair) with both
+  endpoints — and the gate derives all four counters from it. The row key is
+  length-prefixed (`${ruleId.length}:${ruleId}${key}`) for the same reason
+  `pairKeyFor` is: a bare separator is not a boundary.
+- **The causal roster is re-derived from the graded edge rows.** It decides
+  which learned emissions count as causal volume, so authoring it next to the
+  grading launders a false rule's pairs. `checkCausalLearnedRoster` rebuilds it
+  with `learnedRuleId()` from the edges graded causal against planted truth.
+- **Rules are probed, not just inventoried.** An id in `builtInRuleIds` proves a
+  rule is REGISTERED, not that its matcher still decides anything: five of the
+  nine built-ins fire nowhere in the corpus, and forcing all five to return
+  false left every number — and the verdict — unchanged. `__bench__/rule-probes.ts`
+  gives each of the nine a positive fixture and a near-miss violating exactly one
+  clause; the fixtures sit OUTSIDE the corpus, so they perturb no metric and no
+  digest. A missing probe fails as loudly as a failing one. `ruleCoverage` (which
+  four rules actually emit) is pinned by set equality and re-derived from the
+  pair ledger, and a pair emission attributed to a rule the graded pass never
+  registered is rejected.
+- **Confidence cannot be a placeholder.** An exact 0 or 1, or one constant
+  across the whole ledger, means the kernel ranked nothing — and every mean-based
+  gate reads that as a clean score.
+- **The baseline's false-positive breakdown is gated per category.** Rewriting
+  `2/1/0/0/14` to `0/0/0/0/17` preserved the total the gate read and retired the
+  confounded and mediated traps in silence. Each category now has its own
+  zero-growth gate.
+- **Edge rows validate their own window and their null coupling.** `windowHours`
+  must be one of the miner's configured windows (`DEFAULT_WINDOWS_MS`), and
+  `lift` and `zScore` are the same zero-chance-rate division — nulling every
+  lift while keeping 22 finite z-scores bought the infinity exemption.
+
+Eighth-round hardening from the same reviewer (corpus digest still unchanged).
+Round 7 gave every conclusion a row-level witness. The reviewer then showed the
+remaining soft spots are the numbers the gate never RE-DERIVES — five mutations,
+each demonstrated as a PASS against the round-7 gate:
+
+- **The mined-candidate count has a ceiling, not just a floor.** It was gated
+  for shrink only, so `minedEdgeCount: Number.MAX_SAFE_INTEGER` passed. The
+  miner tests each ordered pair of OBSERVED domains at each configured window,
+  and that product (1088 here) is a hard upper bound on any run.
+- **Pinned rosters are sets on the live side too.** Set equality is
+  symmetric-difference, so a repeated id is invisible to it — and the inventory
+  is what the per-rule counters are denominated in. Repeats are now rejected.
+- **Coverage probes must name a registered rule.** Probes are counted, so an
+  invented passing probe was free coverage; a probe outside the inventory the
+  graded pass registered is rejected.
+- **Edge evidence has to look like a measurement.** Every threshold on a row is
+  a per-row FLOOR, so one admissible constant repeated across all 22 rows
+  cleared all of them, and separation — derived from those same z-scores —
+  agreed. A constant `support`, `lift` or `zScore` column is rejected: a miner
+  that ranked nothing is not mining.
+- **Edge endpoints must be domains the corpus observed.** "Not in the planted
+  index" and "not in the corpus" were the same answer, so renaming the 14
+  false-positive rows to invented domains kept them graded `unplanted` and
+  reconciled against every summary.
+
+Ninth-round hardening, and the one that ends the sequence. Eight rounds all
+found the same shape of defect, because eight rounds all answered the same
+question: *could* a run have produced these numbers? A careful enough forgery
+answers yes every time — the reviewer deranged all 22 pair attributions onto
+other registered rules, replaced every edge-evidence field with varied
+admissible values and recomputed the separation off them, rebuilt the 101-row
+pass-B ledger out of four rows citing a nonexistent rule, and deleted seven
+advertised measurements outright. Each returned PASS.
+
+The corpus is frozen and `runCorrelationBenchmark()` is deterministic and takes
+no inputs, so the gate does not have to keep inferring. It now RE-RUNS the
+benchmark and requires the submitted report to reproduce it field for field
+(`checkReportIsReproducible`, memoized, reported as field paths). Every
+self-authored number becomes uncheckable-in-principle → impossible. This runs
+LAST: the named checks above still fire first, because a specific reason is what
+a human re-seeding a baseline needs to read.
+
+Two consequences worth stating plainly:
+
+- **It does not block a real improvement.** The comparator re-runs the same
+  miner the report came from, so when ACC-502 corrects the miner, both sides
+  move together and only the baseline-relative gates have an opinion. What it
+  blocks is a report that no run produced.
+- **The constant-column heuristic was deleted, not kept as defence in depth.**
+  It rejected a legitimate report whose ten edge rows naturally shared a support
+  of 6. A heuristic that guesses at "did this measure anything" is strictly
+  worse than re-deriving the answer, and worse than nothing when it is wrong.
+
+Three gaps re-derivation does not close, because they are on the BASELINE side —
+a committed file, with no run to reproduce it from — and each is now checked
+directly: `minedEdgeCount` below its own `significantEdgeCount` (which licensed
+the live candidate population collapsing from 256 to 22), `minedEdgeCount` above
+what the corpus can produce (the ceiling was ordered-pairs × windows; the miner
+returns one best window per ordered pair, so it is 272, not 1088), and a padded
+pinned roster (the set check ran on the live side only).
+
+Tenth-round hardening — the last circular seam. Re-derivation proves the report
+matches THIS commit's producer, and nothing more: a change *inside*
+`runCorrelationBenchmark()` moves the report and the comparator's re-run
+identically, and the gate agrees with itself. The reviewer injected the
+round-nine forgeries into the producer instead of the report — deranged pair
+attribution, 101 learned-pair rows collapsed to four (one citing
+`learned:not-real->not-real`), forged probe text, an advertised metric deleted —
+and every one returned `ok: true, reasons: []`. None of them move an aggregate
+the committed file pins.
+
+`reportDigest` (`schemaVersion: 9`) is the anchor that lives outside the
+process: a 128-bit digest over the WHOLE report, written into
+`bench-correlation-baseline.json` by the human who re-seeded it, so no source
+change can move it along with itself. Both producer-side forgeries above now
+fail the gate.
+
+Round 11 found the first cut of this anchor pinned the wrong half. At
+`schemaVersion: 8` it covered only the row-level ledgers (edges / pairs /
+learned pairs / probes), which left the SUMMARY layer — where the advertised
+measurements live — pinned by nothing but in-process re-derivation: deleting
+`meanCausalEdgeStrength` or `meanCausalEdgeZ` inside the producer, or forging
+`causalCouplingsLostToCap`, still returned `ok: true, reasons: []`. It now
+covers every field, containers included: an array emits its length and an
+object its sorted key list before their contents, so a deleted field reads as a
+changed shape rather than merely as a shorter run. An exhaustive leaf sweep in
+the test file perturbs every leaf of the live report in turn and requires the
+digest to move, so the coverage claim is asserted field by field rather than by
+argument.
+
+Numbers enter the digest rounded to 9 dp. At the original 4 dp a uniform
+`strength - 0.00001` across the producer reproduced the committed digest
+exactly; values live in `[0, 50]` where a ULP is ~1e-14, so 9 dp keeps about
+five orders of margin over the last-bit noise of `Math.log`/`Math.exp` — which
+are implementation-defined, and a digest that flaked between a macOS seed and
+Linux CI would be deleted within a week — while shrinking the blind band to
+1e-9.
+
+The walk that compares a report to its re-run is descriptor-based
+(`Reflect.ownKeys` + `getOwnPropertyDescriptor`, data descriptors only, value
+read once from `descriptor.value`), so an accessor cannot answer the shape check
+and the value check differently, and a non-enumerable own property cannot ride
+along invisibly. A Proxy that lies CONSISTENTLY through both traps is out of
+scope and documented as such — it would have to reproduce the live run field for
+field, which is what the digest is computed over.
+
+Re-seeding is one command rather than a hand-transcription of thirty numbers:
+`npm run bench:correlation -- --seed` emits the complete baseline block from the
+live run, carrying `note` and `tolerances` over verbatim because those encode
+human judgement. A test round-trips the emitter against the committed file field
+for field, so a hand-edit that quietly widens a tolerance shows up as a test
+failure rather than as a gate measuring something nobody reviewed.
+
+The cost is explicit and intended, and it revises the header contract: a real
+change to the miner now fails on IDENTITY and must be re-seeded in a reviewed
+diff. Tolerances stay one-sided and still govern everything after a re-seed;
+what is gone is the ability for a change that moves the ledgers to pass in
+silence. The failure message says which reading applies.
+
+Two narrower defects closed in the same round:
+
+- **A perfect miner could pass the gate and then not become the baseline.**
+  Zero false edges means `edgeEvidenceSeparation` is `null`, and the committed
+  side demanded a finite, positive number — so the ACC-502..504 goal state was
+  un-seedable. It is nullable now, legal *only* when the same baseline pins
+  `falseEdgeCount: 0`, with the separation gate ceding to `falseEdgeGrowth`.
+- **The reproduction walk accepted a report that owned none of its fields.**
+  `Object.create(realReport)` has zero own keys, serializes as `{}`, and answers
+  every read from the prototype — it reproduced exactly. The walk now compares
+  own enumerable key SETS, rejects non-plain prototypes, symbol keys and extra
+  own properties (including array-object properties), and uses `Object.is`, so
+  `-0` no longer equals `0`.
+
+Round 12 (`schemaVersion: 10`) closed the last two places where the digest
+covered a *field* but not the *claim* that field stood for. No graded number
+moved in the re-seed — every metric in the table below is identical to
+`schemaVersion: 9`'s.
+
+- **Rule coverage probes recorded verdicts, not what was tested.** Each probe
+  carried two booleans and free text, so a near-miss fixture could be re-aimed
+  at a clause the rule still has — move `n1b.sourceId` off GDACS *and* delete
+  the earthquake→tsunami distance clause, and both booleans stay true about a
+  clause that no longer exists, with the report byte-identical. Probes now carry
+  `fixtureDigest`: a digest over every field of the positive and negative
+  fixtures plus the expected outcomes, canonicalised key-order-insensitively.
+  Re-aiming a fixture lands in a reviewed diff.
+- **The pair ledger erased direction and edge semantics before hashing.** Rows
+  stored a sorted key with parallel `ruleIds` / `confidences` arrays, so
+  rewriting a rule from `causal-candidate cause→effect` to
+  `contradicts effect→cause` — two different claims, mapped differently into the
+  evidence graph at `situation-store-v2.ts:335` — produced an identical report.
+  Emissions are first-class rows now (`ruleId`, `edgeType`, and the endpoints in
+  EMISSION order), and the gate rejects an emission whose endpoints do not build
+  the row's own key. The pair KEY stays unordered on purpose: planted truth is
+  about two events being related, not about which came first.
+
+Two narrower items from the same round:
+
+- **The digest said "something moved" without saying what.** A `witnessed` block
+  now pins by value the five advertised-but-otherwise-ungated measurements
+  (`meanCausalEdgeStrength`, `meanCausalEdgeZ`, `meanFalsePairConfidence`,
+  `confidenceSeparation`, `causalCouplingsLostToCap`) plus one digest per
+  ledger, and is checked immediately *before* the whole-report digest — so a
+  re-seed diff names which measurement moved instead of only asserting that one
+  did.
+- **A tolerance test asserted its own input.** It fed the committed tolerances
+  back through the seeder and checked they came out unchanged, which passes for
+  any value. It now feeds a hand-edited block and proves the seeder transcribes
+  rather than generates, and a second test proves the real defense —
+  `TOLERANCE_CEILINGS` rejects a widened tolerance that tries to launder itself
+  through a re-seed.
+
+Round 13 (`schemaVersion: 11`) found that each round-12 fix had been applied to
+half of the surface it named. Every case below was reproduced as a live
+`{ok: true, reasons: []}` against the shipped `schemaVersion: 10` gate. No
+graded number moved in the re-seed.
+
+- **The learned-pair ledger still counted.** Round 12 made emissions
+  first-class rows in `BenchPairRow` and missed `BenchLearnedPairRow`, which
+  kept `emissions: number`. Rewriting every learned rule from
+  `causal-candidate` to `contradicts` — the opposite assertion, and a different
+  evidence edge downstream — left all 101 rows and the report digest
+  byte-identical. Learned rows now carry the same `BenchPairEmission[]`, and
+  every emission must name its own row's rule and hash to its own row's key.
+- **Probes pinned what was asked, not what was answered.** Five of the nine
+  shipped rules never fire over the golden corpus, so the probe row is their
+  only observation anywhere in the benchmark. Inverting `airquality-wildfire`
+  to `contradicts` preserved both probe booleans, the fixture digest and the
+  report digest. Probes now record `positiveEdgeType` and `positiveDirection`
+  (the emitted endpoints in EMISSION order), and the gate range-checks both.
+- **One clause per rule is not coverage.** The earthquake→tsunami near-miss
+  held the GDACS source gate valid and varied only distance, so deleting the
+  source clause left the rule accepting any nearby humanitarian event while the
+  probe still reported a clean rejection. Near-misses are now *patches* on the
+  positive fixture, one per independently-defeatable clause — **59 clauses
+  across 9 rules**, up from 9 — so a near-miss cannot drift from its positive
+  except in the field it names. Two clauses per rule is an enforced floor and
+  duplicate clause labels are refused.
+- **A measured engine finding fell out of writing those fixtures.**
+  `domainMatches()` (`correlate-engine.ts:208`) is a DISJUNCTION over the pair:
+  `domainSet.has(a.domain) || domainSet.has(b.domain)`. Moving one event out of
+  a rule's declared domains does not reject the pair — `CorrelationRule.domains`
+  constrains considerably less than its name suggests. The domain-gate
+  near-misses move both events.
+- **The witnessed list comparison was not injective.** `causalCouplingsLostToCap`
+  was compared through `.join(',')`, so the single element
+  `"macro->maritime,space->infra"` compared equal to the real two-element array
+  and passed. Lists now compare through JSON, which keeps element boundaries.
+
+Round 14 closed the reseed bypass found in the final independent review. The
+normal exact-identity comparator was sound, but `--seed` generated a candidate
+from the live report and never compared its metrics to the baseline it was
+replacing. Redirecting stdout directly onto the tracked JSON was worse: the
+shell truncated the previous evidence before the process could read it.
+
+- `compareCorrelationBenchReseedToPrevious()` validates the previous reviewed
+  anchors, substitutes only the candidate's `reportDigest`, `witnessed`, and
+  `ruleCoverage` into a private comparison view, and then runs the unchanged
+  normal comparator. Schema, corpus identity, built-in rule inventory, all old
+  metric values, all old tolerances, liveness floors, and blast-radius ceilings
+  remain the reference. Same-corpus improvement may seed; regression,
+  malformed prior evidence, and corpus drift fail closed.
+- `--seed` refuses a disallowed candidate with exit 1 and no JSON on stdout.
+  Every instruction writes to
+  `/tmp/bench-correlation-baseline.candidate.json`, never to the tracked
+  baseline.
+- Pull-request and merge-queue CI extract the baseline from the base commit
+  whenever the tracked baseline changes and run this reseed guard before the
+  normal exact-identity benchmark. Editing the candidate and then comparing it
+  only to itself cannot bypass the previous baseline in CI.
+- Focused red/green and strict mutation evidence is recorded in
+  `docs/validation/ACC-501-MUTATION-PROOFS.md`.
+
+Round 15 (`schemaVersion: 13`) attacked the round-13 gate itself — a separate
+audit from the round-14 reseed work above, landed after it. Every case below was
+reproduced as a live `{ok: true, reasons: []}` against the shipped gate. No
+graded number moved in the re-seed: round 15 adds observations, it does not
+change engine behaviour.
+
+- **The probes reported without being asked.** Deleting all 73 near-miss engine
+  executions and hardcoding `rejected: true` left every digest in the report
+  byte-identical, because the honest answer to those questions was also `true`.
+  Truthful output is not evidence that a question was asked. The gate now runs
+  the fixtures itself (`__bench__/rule-probe-verify.ts`, a deliberate second
+  implementation) and refuses any verdict its own execution does not reproduce.
+- **Near-misses were not boundary-adjacent, and disjunctions had no per-branch
+  positive.** A near-miss at 400 km against a 150 km radius cannot see the
+  radius widen to 200 km; a positive satisfying BOTH branches of an OR cannot
+  see one branch die. Clauses went 59 → 73 with boundary-adjacent cases
+  (155 km, 24 h 1 min), and every disjunctive branch now has its own isolated
+  positive.
+- **Every fixture was antecedent-first.** `correlate-engine.ts:177` retries
+  `(b, a)` when `(a, b)` misses; deleting that branch changed nothing in the
+  benchmark. Each positive is now also fed back-to-front and `reversedMatched`
+  is pinned.
+- **The evidence projection was unobserved.** Inverting `EDGE_TYPE_MAP` in
+  `situation-store-v2.ts` made every situation edge assert the opposite
+  relationship while every benchmark number held. Emissions now carry the real
+  `pairToEdge()` output, checked against a restated table the gate owns — the
+  second opinion, not an import of the map under test.
+- **Learned-rule RETIREMENT was never exercised.** `runEngine()` builds a fresh
+  engine per pass, so every learned-rule number described an install. Removing
+  `engine.unregisterRule()` from `syncLearnedRules()` moved nothing here while a
+  retired coupling stayed registered and kept matching live events — and the
+  function still reported it removed. A live resync probe now reads the engine's
+  inventory after a retirement instead of trusting the returned counters.
+- **`detectedAt` and the confidence BREAKDOWN left no trace.** `new Date(0)` on
+  every pair moved no count and no digest, though live pairs would have been
+  discarded as ancient; and the scalar confidence hid which factor produced it.
+  Both are in the emission ledger now.
+- **`--seed` could not gate itself.** Found independently in this audit; already
+  closed by the round-14 reseed guard above, so round 15 changed nothing here.
+
+Seed measurements (uncorrected miner, 2026-07-30):
+
+| Metric | Value |
+|---|---|
+| Coupling precision | 22.7% (5 causal of 22 significant, 256 mined) |
+| Coupling recall | 100% (no planted causal coupling missed) |
+| False positives | confounded 2 · mediated 1 · independent 0 · inhibitory 0 · unplanted 14 |
+| Edge evidence separation (mean z) | 8.49 (causal 15.11 vs false 6.62) |
+| Learned rules | 12 synthesised, 9 from non-causal edges |
+| Engine pair precision / recall | 100% / 100%, 0 decoy pairs |
+| Learned-rule pair blast radius | 101 pairs |
+
+Findings the benchmark surfaced, each now a concrete target:
+
+- `significantEdges()` applies **no** multiple-comparisons correction and
+  **no** de-clustering — only three fixed thresholds (`minLift 2`,
+  `minZ 2`, `minSupport 3`). CLAUDE.md and `docs/CORRELATION_NEXTGEN_PLAN.md`
+  describe Bonferroni correction and de-clustered trials that do not exist
+  in the code; **ACC-502 is what makes those claims true.**
+- Of the 14 unplanted edges, 6 are a *systematic* near-coincidence that
+  will survive a Bonferroni correction (z=4.63 vs z_crit≈3.66 at 256
+  tests) and 8 are weak incidental noise a correction should kill — so
+  ACC-502 alone is not sufficient.
+- `LeadLagEdge.strength` **saturates**: every causal edge scores exactly
+  1.0 and false edges average 0.9498, a separation of 0.05. That nearly
+  flat ranking is what decides which 12 edges survive
+  `MAX_LEARNED_RULES`, and it is why two genuinely causal couplings
+  (`macro->maritime`, `space->infra`) were evicted in favour of burst
+  artefacts. The gated separation metric therefore runs on the raw
+  z-score, which has real dynamic range; `edgeStrengthSeparation` is kept
+  as reported-only evidence of the defect.
+- The engine's built-in rules are already perfect on event-level truth,
+  so **all** the available headroom in Phase 5 is in the miner.
+
+### ACC-502 — Multiple-comparison correction and inhibitory edges
+
+Status: `DONE`
+
+Owner: Codex
+Branch: `codex/acc-502-multiple-testing-inhibition`
+PR: #1624
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+The shadow-only operational boundary was explicitly approved on 2026-08-04
+after independent review showed that dampening an observed A+B compound would
+reverse the semantics of “A suppresses future B.”
+
+- the lead-lag miner now reports the complete pre-filter hypothesis family and
+  applies a two-tailed Gaussian union-bound threshold across every eligible
+  ordered domain pair and configured lag window;
+- zero-support candidates remain in the family denominator, while promoting
+  and inhibitory results use separate discriminated types and fail closed on
+  invalid configuration;
+- inhibitory evidence requires at least five antecedents, a 20% expected event
+  rate, lift at or below 0.5, and a negative z-score beyond both the fixed and
+  family-adjusted thresholds;
+- inhibitory absence is right-censored against an explicit observation end:
+  incomplete follow windows remain pending, post-boundary events are excluded,
+  and silent covered time contributes to the inhibitory base rate without
+  changing promoting-edge statistics. Calls without a coverage boundary fail
+  closed for inhibition;
+- only promoting edges can become learned correlation rules; inhibitory
+  evidence is bounded, expiring, fail-safe-on, and evaluated in shadow with
+  direction- and window-aware confirmed/refuted/pending counts. It has no path
+  into operational scores, confidence, posture, alerts, or delivery;
+- successful refreshes that admit no inhibition now clear both the active
+  snapshot and its diagnostics atomically; disabled and error paths retain
+  distinct statuses, and invalid publication times fail closed;
+- identifier-free liveness diagnostics distinguish offline replay from live
+  ingestion and flag three consecutive singleton live batches when learned
+  rules are installed but cannot produce event pairs;
+- the frozen benchmark migrated once from schema 11 to 12, pinning the prior
+  corpus/report/stream digests and permitting only the reviewed inhibitory
+  fixture change.
+
+Verification evidence:
+
+- `npm run test:correlation`: 384 pass / 0 fail;
+- `npm run test:intelligence`: 587 pass / 0 fail;
+- `npm run test:algorithms`: 307 pass / 0 fail;
+- `npm run test:diagnostics`: 384 renderer pass / 0 fail plus 27 MCP/sidecar
+  diagnostics pass / 0 fail;
+- restored ACC-502 mutation selection: 33 pass / 0 fail after 29 independently
+  applied and checksum-restored mutations;
+- `npm run typecheck:all`: pass;
+- `npm run bench:correlation`: PASS over 10 streams / 469 observations, with
+  5/5 causal promoting couplings recovered, 1/1 inhibitory coupling recovered,
+  0 inhibitory false positives, 12 promoting false positives, and no decoy
+  event-pair emissions. The family contained 272 ordered pairs x 4 windows =
+  1,088 hypotheses and used `zcrit = 4.6218991511`; the right-censored S9
+  inhibitor retained 28 mature trials with expected rate 0.503415 and
+  `z = -5.327765`.
+
+Known limitation and rollback:
+
+- production currently calls `SituationStoreV2.ingest()` with singleton event
+  batches. ACC-502 diagnoses this fail-closed instead of adding unbounded
+  history or work to the hot path; ACC-507 owns the bounded ingestion repair;
+- rollback is removal of inhibition snapshot publication/shadow diagnostics and
+  restoration of the schema-11 benchmark, without changing operational scores
+  or built-in safety-notification rules.
+
+### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
+
+Status: `TODO`
+
+Dependencies: ACC-502 (DONE)
+
+Production `SituationStoreV2.ingest()` is invoked with one event at a time, so
+the correlation engine cannot form learned-rule pairs even when rules are
+installed. Introduce a bounded, time-windowed event handoff that preserves
+startup and ingest latency, deduplicates events, expires history, and never
+allows learned correlation to delay safety-critical ingestion. Prove the live
+path with a deterministic multi-call fixture and require liveness diagnostics
+to recover from degraded to healthy after a learned pair is emitted.
 
 ## Phase 6 — Evaluate better statistical models
 
@@ -929,7 +1712,29 @@ Phase exit:
 
 ### ACC-701 — Drift and cohort-health monitor
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-701-mcp-hardening`
+
+Evidence: PR #1597
+
+Merged: `93d94aa1`
+
+Verification: the MCP monitor persists bounded snapshots and deduplicated
+findings for holdout Brier regression, feed readiness changes, evaluation
+missingness, prediction-volume shifts, resolution-coverage drops, algorithm
+version loss concentration, and explicit derived-output quarantine. It records
+recoveries and fails closed when live collection or algorithm diagnostics are
+unavailable. The same safety envelope blocks quarantined analyst hypotheses
+and forecasts while preserving independent authoritative observations. A
+15-minute macOS LaunchAgent runs the portable monitor command outside agent
+sessions. The MCP surface is generated from one 59-tool registry with safety
+annotations, structured output, capability discovery, compact diagnostics,
+and an approved read-only route policy. Verified with the full MCP suite,
+portable installed-binary handshake, dependency audit, strict lint, explicit
+ESLint, secret scan, typecheck, and production build.
 
 Dependencies: ACC-201 and ACC-402
 
@@ -943,7 +1748,26 @@ Detect:
 
 ### ACC-702 — Scheduled evaluation report
 
-Status: `WAITING`
+Status: `DONE`
+
+Owner: Codex
+
+Branch: `codex/acc-702-scheduled-evaluation-report`
+
+Evidence: PR #1618
+
+Implementation: `59a822eb`, `b8ce8d05`, `4676530f`
+
+Mutation evidence: `docs/validation/ACC-702-MUTATION-PROOFS.md`
+
+Verification: weekly UTC aggregation, bounded catch-up and retention,
+privacy allowlists, stale and unavailable diagnostics, committed-generation
+gating, immutable mode-0600 persistence, CLI/MCP registration, portable
+package installation, cadence-completeness enforcement, and fifteen mutation
+proofs passed. Repaired weekly and monitor validation finished at 46 pass / 0
+fail; the full MCP suite finished at 199 pass / 0 fail. Cognition regression
+finished at 654 pass / 0 fail and the frozen benchmark remained Brier 0.1681,
+conformal coverage 100.0%, analog precision@5 75.0%, and schema TPR 75.0%.
 
 Dependencies: ACC-701
 
@@ -988,7 +1812,7 @@ Every task runs focused tests first, then the smallest relevant rows:
 | Forecast/calibration core | `npm run test:intelligence`, `npm run typecheck:all` |
 | Cognition or model comparison | `npm run test:cognition`, `npm run bench:cognition` |
 | Algorithm health/tuning | `npm run test:algorithms`, `npm run test:diagnostics` |
-| Correlation engine | focused correlation tests, then `npm run bench:correlation` once ACC-501 lands |
+| Correlation engine | focused correlation tests, then `npm run bench:correlation` (ACC-501, gated in CI) |
 | Runtime/sidecar/MCP | `npm run test:diagnostics`, `npm run smoke` |
 | UI surface | focused view-model tests, `npm run test:renderer`, relevant smoke/axe checks |
 | Every PR | `npm run lint:ci`, `npm run typecheck:all`, `npm run secrets:scan:staged`, `git diff --check` |

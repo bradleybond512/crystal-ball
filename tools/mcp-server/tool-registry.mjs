@@ -1,0 +1,229 @@
+import { z } from 'zod';
+
+const READ_ONLY_REMOTE = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+const READ_ONLY_LOCAL = {
+  ...READ_ONLY_REMOTE,
+  openWorldHint: false,
+};
+
+const MUTATING_LOCAL = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+};
+
+const DESTRUCTIVE_LOCAL = {
+  ...MUTATING_LOCAL,
+  destructiveHint: true,
+};
+
+const MUTATING_REMOTE = {
+  ...MUTATING_LOCAL,
+  openWorldHint: true,
+};
+
+const PERMISSIONS = Object.freeze({
+  read_external: Object.freeze({
+    code: 'read_external',
+    label: 'Reads live intelligence',
+    detail: 'Reads local Crystal Ball data that may come from external providers; it does not change state.',
+  }),
+  read_local: Object.freeze({
+    code: 'read_local',
+    label: 'Reads local status',
+    detail: 'Reads local Crystal Ball status or history; it does not contact providers or change state.',
+  }),
+  change_local: Object.freeze({
+    code: 'change_local',
+    label: 'Changes local state',
+    detail: 'Changes local Crystal Ball state without deleting records or contacting external providers.',
+  }),
+  manage_local: Object.freeze({
+    code: 'manage_local',
+    label: 'Manages local records',
+    detail: 'Creates, updates, or deletes local Crystal Ball records. Confirm the requested change with the user.',
+  }),
+  act_external: Object.freeze({
+    code: 'act_external',
+    label: 'Runs live checks and changes state',
+    detail: 'Contacts live providers and records local results. Run only when the user requests the action.',
+  }),
+});
+
+export function permissionFromAnnotations(annotations) {
+  if (annotations?.readOnlyHint) {
+    return annotations.openWorldHint ? PERMISSIONS.read_external : PERMISSIONS.read_local;
+  }
+  if (annotations?.openWorldHint) return PERMISSIONS.act_external;
+  return annotations?.destructiveHint ? PERMISSIONS.manage_local : PERMISSIONS.change_local;
+}
+
+const CATEGORY_DESCRIPTIONS = {
+  Foundation: 'Low-level query primitives for direct sidecar access, chaining, and diffing.',
+  Intelligence: 'Cross-domain analysis, trend detection, and anomaly scanning.',
+  'Watchlists & Alerts': 'Persistent tracking lists and threshold-based alert rules.',
+  Aggregate: 'Broad situational awareness tools that pull from multiple sources at once.',
+  Granular: 'Targeted lookups and searches for specific entities or data points.',
+  Analyst: 'Renderer-side hypotheses, forecasts, feedback, and reasoning diagnostics.',
+  'Intel Expansion': 'Specialized cyber, infrastructure, supply, aviation, finance, disaster, and radiation sources.',
+  Diagnostics: 'Live runtime triage, pipeline evidence, and algorithm health.',
+  Help: 'Built-in documentation and capability discovery.',
+};
+
+const CATEGORY_TOOLS = {
+  Foundation: {
+    query_raw: 'Query one approved sidecar endpoint with parameter passthrough and pagination.',
+    chain_query: 'Run sequential approved queries whose steps may reference prior results.',
+    compare_snapshots: 'Diff two queries to the same approved endpoint.',
+  },
+  Intelligence: {
+    correlate: 'Find shared entities across two or more intelligence domains.',
+    trend: 'Analyze a time series from sentinel history.',
+    anomaly_scan: 'Compare current domain values with historical baselines.',
+  },
+  'Watchlists & Alerts': {
+    watchlist_manage: 'Create, list, update, or delete persistent watchlists.',
+    watchlist_check: 'Evaluate watchlists and record newly observed activity.',
+    alert_rules_manage: 'Create, list, update, or delete threshold alert rules.',
+    alert_check: 'Evaluate active alert rules against current data.',
+  },
+  Aggregate: {
+    get_sitrep: 'Summarize conflicts, markets, weather, infrastructure, and service health.',
+    get_threat_landscape: 'Summarize active conflict, cyber, and crisis threats.',
+    get_market_overview: 'Summarize indices, crypto, flows, sentiment, and macro signals.',
+    get_cyber_intel: 'Summarize IOCs, KEVs, phishing, malware URLs, and threat pulses.',
+    get_weather_environment: 'Summarize weather alerts and environmental conditions.',
+    get_infrastructure_status: 'Summarize power, water, radiation, and critical infrastructure.',
+    get_military_posture: 'Summarize military aircraft, vessels, posture, and analysis.',
+    check_feed_health: 'Probe the sidecar and representative data feeds.',
+    sitrep_bundle: 'Return a pre-filtered multi-domain intelligence bundle.',
+  },
+  Granular: {
+    search_conflicts: 'Search armed-conflict events by region, country, dates, or type.',
+    search_news: 'Search current headlines from configured news providers.',
+    lookup_ip: 'Combine IP reputation, classification, and geolocation.',
+    lookup_cve: 'Search vulnerability intelligence by CVE or text.',
+    lookup_vessel: 'Look up a vessel by MMSI or name.',
+    lookup_flight: 'Look up military aircraft by ICAO hex or callsign.',
+    get_sanctions: 'Search sanctioned entities.',
+    get_economic_data: 'Fetch economic time series.',
+    get_sec_filings: 'Search SEC filings.',
+    get_earthquakes: 'Fetch recent seismic activity.',
+    get_disease_outbreaks: 'Fetch active disease outbreaks.',
+    get_region_brief: 'Combine security, conflict, weather, and alert context for a place.',
+  },
+  Analyst: {
+    get_analyst_hypotheses: 'Read ranked renderer hypotheses.',
+    get_mode_forecast: 'Read the current cross-domain posture forecast.',
+    get_analyst_accuracy: 'Read hypothesis accuracy metrics.',
+    get_hot_entities: 'Read entities with elevated cross-domain activity.',
+    submit_hypothesis_feedback: 'Submit analyst hypothesis feedback.',
+    dismiss_hypothesis: 'Dismiss a hypothesis in renderer state.',
+    run_skeptic_now: 'Trigger an on-demand skeptic analysis.',
+    get_reasoning_debug_log: 'Read bounded reasoning debug events.',
+    get_reasoning_metrics: 'Read reasoning latency and counter metrics.',
+    get_pipeline_trace: 'Read fact-lifecycle pipeline traces.',
+  },
+  'Intel Expansion': {
+    get_cyber_threats: 'Fetch C2, IOC, and malware URL feeds.',
+    get_chokepoint_status: 'Fetch maritime chokepoint transit conditions.',
+    get_internet_outages: 'Fetch large-scale internet outage alerts.',
+    get_space_weather_extra: 'Fetch extended aurora and solar-flare indicators.',
+    get_pharma_supply: 'Fetch drug shortages and recalls.',
+    get_grid_outages: 'Fetch county-level grid outages.',
+    get_disaster_activations: 'Fetch emergency-management disaster activations.',
+    lookup_entity: 'Look up a legal entity identifier.',
+    get_aviation_hazards: 'Fetch SIGMETs and ground-stop programs.',
+    get_fx_rates: 'Fetch foreign-exchange rates.',
+    get_geo_events: 'Fetch geocoded media events.',
+    get_radiation: 'Fetch gamma-dose monitoring readings.',
+  },
+  Diagnostics: {
+    get_capabilities: 'Report domain readiness, credential coverage, and unavailable capability reasons.',
+    get_monitor_status: 'Read the latest persistent drift and quarantine monitor result.',
+    run_monitor_cycle: 'Run and persist a drift and quarantine monitor cycle.',
+    diagnose_runtime: 'Ranked live runtime findings with optional deep route probes.',
+    get_algorithm_diagnostics: 'Read bounded algorithm evaluation and tuning health.',
+    get_weekly_evaluation_report: 'Read the latest or a selected completed weekly algorithm evaluation report.',
+    generate_weekly_evaluation_report: 'Finalize accumulated completed weeks into immutable local evaluation reports.',
+  },
+  Help: {
+    help: 'Read the tool index, man pages, conceptual guides, and examples.',
+  },
+};
+
+const ANNOTATION_OVERRIDES = {
+  help: READ_ONLY_LOCAL,
+  get_reasoning_debug_log: READ_ONLY_LOCAL,
+  get_reasoning_metrics: READ_ONLY_LOCAL,
+  get_pipeline_trace: READ_ONLY_LOCAL,
+  get_algorithm_diagnostics: READ_ONLY_LOCAL,
+  get_monitor_status: READ_ONLY_LOCAL,
+  get_weekly_evaluation_report: READ_ONLY_LOCAL,
+  generate_weekly_evaluation_report: { ...MUTATING_LOCAL, idempotentHint: true },
+  run_monitor_cycle: MUTATING_REMOTE,
+  watchlist_manage: DESTRUCTIVE_LOCAL,
+  watchlist_check: MUTATING_REMOTE,
+  alert_rules_manage: DESTRUCTIVE_LOCAL,
+  submit_hypothesis_feedback: MUTATING_LOCAL,
+  dismiss_hypothesis: { ...DESTRUCTIVE_LOCAL, idempotentHint: true },
+  run_skeptic_now: MUTATING_REMOTE,
+};
+
+export const TOOL_CATALOG = Object.freeze(Object.fromEntries(
+  Object.entries(CATEGORY_TOOLS).flatMap(([category, tools]) => (
+    Object.entries(tools).map(([name, description]) => [
+      name,
+      Object.freeze({
+        category,
+        description,
+        annotations: Object.freeze(ANNOTATION_OVERRIDES[name] ?? READ_ONLY_REMOTE),
+        permission: permissionFromAnnotations(ANNOTATION_OVERRIDES[name] ?? READ_ONLY_REMOTE),
+      }),
+    ])
+  )),
+));
+
+export const TOOL_INDEX = Object.freeze({
+  categories: Object.freeze(Object.fromEntries(
+    Object.entries(CATEGORY_TOOLS).map(([category, tools]) => [
+      category,
+      Object.freeze({
+        description: CATEGORY_DESCRIPTIONS[category],
+        tools: Object.freeze({ ...tools }),
+      }),
+    ]),
+  )),
+  topics: Object.freeze(['getting-started', 'watchlists', 'alerts', 'correlation', 'sentinel', 'capabilities']),
+  examples: Object.freeze(['cross-domain', 'time-series', 'watchlists', 'alert-rules']),
+});
+
+export const TOOL_REFERENCE = Object.freeze(Object.fromEntries(
+  Object.entries(TOOL_CATALOG).map(([name, metadata]) => [name, Object.freeze({
+    category: metadata.category,
+    description: metadata.description,
+    permission: metadata.permission,
+    annotations: metadata.annotations,
+  })]),
+));
+
+export function createToolConfig(name, config) {
+  const metadata = TOOL_CATALOG[name];
+  if (!metadata) throw new Error(`Tool "${name}" is not declared in the canonical registry.`);
+  return {
+    ...config,
+    annotations: metadata.annotations,
+    outputSchema: { result: z.unknown() },
+  };
+}
+
+export function catalogSummary() {
+  return `${Object.keys(TOOL_CATALOG).length} tools across ${Object.keys(TOOL_INDEX.categories).length} categories`;
+}

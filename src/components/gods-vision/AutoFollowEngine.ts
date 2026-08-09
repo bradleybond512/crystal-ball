@@ -87,6 +87,7 @@ const LAYER_WEIGHTS: Record<string, number> = {
   minerals: 0.8,
   weatherRadar: 0.6,
   weatherSatellite: 0.6,
+  smokeForecast: 0.6,
 };
 
 /** Future power-reduction levels. See {@link AutoFollowEngine.setPowerMode}. */

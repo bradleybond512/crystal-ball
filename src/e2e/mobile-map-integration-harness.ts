@@ -146,6 +146,7 @@ const layers = {
   sigintConvergence: false,
   weatherRadar: false,
   weatherSatellite: false,
+  smokeForecast: false,
   lightning: false,
   owmTemperature: false,
   owmPrecipitation: false,

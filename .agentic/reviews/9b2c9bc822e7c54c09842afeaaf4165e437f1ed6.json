@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "9b2c9bc822e7c54c09842afeaaf4165e437f1ed6",
+  "reviewer": "claude",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-09T08:34:43.946Z",
+  "evidence": "### Security review\n- **Positive**: the `Authorization: Bearer ${LOCAL_API_TOKEN}` self-call header (`17789`, `18365`) is now sent only to the sidecar's own bound port, never leaked to whatever process occupies `46123`/the requested port. Test 2 explicitly asserts `leakedAuthorization === undefined` against a 401-returning foreign server. Bearer routing is otherwise unchanged.\n\nNeither rises to blocking. The fix is correct, minimal, security-positive, consistent with existing `context.port` usage, and both regression paths (configured port + collision fallback) are covered by spawned-sidecar integration tests.\n\nCONCLUSION: APPROVE - zero blocking findings."
+}

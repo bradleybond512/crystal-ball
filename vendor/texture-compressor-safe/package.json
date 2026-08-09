@@ -1,0 +1,8 @@
+{
+  "name": "texture-compressor",
+  "version": "1.0.2-crystalball.1",
+  "private": true,
+  "bin": {
+    "texture-compressor": "cli.cjs"
+  }
+}

@@ -3290,7 +3290,7 @@ test('/api/spaceweather/status — a stale-but-parseable xray payload is a failu
     if (options.path.includes('noaa-planetary-k-index')) {
       return { statusCode: 200, body: JSON.stringify([{ time_tag: freshTag, Kp: 4.33 }]) };
     }
-    if (options.path.includes('donki/cme')) return { statusCode: 200, body: '[]' };
+    if (options.path.includes('/DONKI/WS/get/CME')) return { statusCode: 200, body: '[]' };
     return { statusCode: 500, body: 'unexpected request' };
   });
   try {
@@ -3329,7 +3329,7 @@ test('/api/spaceweather/status — a subfeed that ages out of the window inside 
     if (options.path.includes('noaa-planetary-k-index')) {
       return { statusCode: 200, body: JSON.stringify([{ time_tag: swpcTag(60_000), Kp: 4.33 }]) };
     }
-    if (options.path.includes('donki/cme')) return { statusCode: 200, body: '[]' };
+    if (options.path.includes('/DONKI/WS/get/CME')) return { statusCode: 200, body: '[]' };
     return { statusCode: 500, body: 'unexpected request' };
   });
   const xrayCalls = () => app.calls.filter((c) => c.path.includes('xrays-6-hour')).length;

@@ -35,6 +35,13 @@ test.describe('desktop runtime routing guardrails', () => {
  locationHost: 'example.com',
  locationOrigin: 'https://example.com',
  }),
+ secureLoopback: runtime.detectDesktopRuntime({
+ hasTauriGlobals: false,
+ userAgent: 'Mozilla/5.0',
+ locationProtocol: 'https:',
+ locationHost: '127.0.0.1',
+ locationOrigin: 'https://127.0.0.1',
+ }),
  secureLocalhost: runtime.detectDesktopRuntime({
  hasTauriGlobals: false,
  userAgent: 'Mozilla/5.0',
@@ -63,7 +70,8 @@ test.describe('desktop runtime routing guardrails', () => {
  expect(result.tauriScheme).toBe(true);
  expect(result.tauriUa).toBe(true);
  expect(result.tauriGlobal).toBe(true);
- expect(result.secureLocalhost).toBe(true);
+ expect(result.secureLoopback).toBe(true);
+ expect(result.secureLocalhost).toBe(false);
  expect(result.insecureLocalhost).toBe(false);
  expect(result.webHost).toBe(false);
   });
@@ -74,6 +82,7 @@ test.describe('desktop runtime routing guardrails', () => {
  const result = await page.evaluate(async () => {
  const runtime = await import('/src/services/runtime.ts');
  const runtimeConfig = await import('/src/services/runtime-config.ts');
+ const webSecretStore = await import('/src/services/web-secret-store.ts');
  const globalWindow = window as unknown as Record<string, unknown>;
  const originalFetch = window.fetch.bind(window);
 
@@ -116,6 +125,7 @@ test.describe('desktop runtime routing guardrails', () => {
  delete globalWindow.__wmFetchPatched;
 
  // Set a valid WM API key so cloud fallback is allowed
+ await webSecretStore.createVault('runtime-e2e-vault-passphrase');
  await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, 'wm_test_key_1234567890abcdef');
 
  try {
@@ -143,6 +153,7 @@ test.describe('desktop runtime routing guardrails', () => {
  globalWindow.__TAURI__ = previousTauri;
  }
  await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
+ await webSecretStore.destroyVault();
  }
  });
 
@@ -320,65 +331,31 @@ test.describe('desktop runtime routing guardrails', () => {
  expect(result.storedValue).toBe('1');
   });
 
-  test('update badge picks architecture-correct desktop download url', async ({ page }) => {
+  test('update badge picks the architecture-correct desktop asset', async ({ page }) => {
  await page.goto('/tests/runtime-harness.html');
 
  const result = await page.evaluate(async () => {
  const { DesktopUpdater } = await import('/src/app/desktop-updater.ts');
- const globalWindow = window as unknown as {
- __TAURI__?: { core?: { invoke?: (command: string) => Promise<unknown> } };
- };
- const previousTauri = globalWindow.__TAURI__;
- const releaseUrl = 'https://github.com/bradleybond512/crystal-ball/releases/latest';
-
  const updaterProto = DesktopUpdater.prototype as unknown as {
- resolveUpdateDownloadUrl: (releaseUrl: string) => Promise<string>;
- mapDesktopDownloadPlatform: (os: string, arch: string) => string | null;
- getDesktopBuildVariant: () => 'full' | 'tech' | 'finance';
+ resolveDownloadInfo: (data: { assets?: Array<{ name: string; browser_download_url: string }> }) => { url: string; name: string | null };
  };
- const fakeApp = {
- mapDesktopDownloadPlatform: updaterProto.mapDesktopDownloadPlatform,
- getDesktopBuildVariant: () => 'full' as const,
- };
-
- try {
- globalWindow.__TAURI__ = {
- core: {
- invoke: async (command: string) => {
- if (command !== 'get_desktop_runtime_info') throw new Error(`Unexpected command: ${command}`);
- return { os: 'macos', arch: 'aarch64' };
- },
- },
- };
- const macArm = await updaterProto.resolveUpdateDownloadUrl.call(fakeApp, releaseUrl);
-
- globalWindow.__TAURI__ = {
- core: {
- invoke: async () => ({ os: 'windows', arch: 'amd64' }),
- },
- };
- const windowsX64 = await updaterProto.resolveUpdateDownloadUrl.call(fakeApp, releaseUrl);
-
- globalWindow.__TAURI__ = {
- core: {
- invoke: async () => ({ os: 'linux', arch: 'x86_64' }),
- },
- };
- const linuxFallback = await updaterProto.resolveUpdateDownloadUrl.call(fakeApp, releaseUrl);
-
- return { macArm, windowsX64, linuxFallback };
- } finally {
- if (previousTauri === undefined) {
- delete globalWindow.__TAURI__;
- } else {
- globalWindow.__TAURI__ = previousTauri;
- }
- }
+ const assets = [
+ { name: 'Crystal-Ball_2.25.147_x64.dmg', browser_download_url: 'https://downloads.example/x64.dmg' },
+ { name: 'Crystal-Ball_2.25.147_aarch64.dmg', browser_download_url: 'https://downloads.example/aarch64.dmg' },
+ { name: 'release-manifest.json', browser_download_url: 'https://downloads.example/release-manifest.json' },
+ ];
+ const selected = updaterProto.resolveDownloadInfo.call({}, { assets });
+ const fallback = updaterProto.resolveDownloadInfo.call({}, { assets: [] });
+ return { selected, fallback };
  });
 
- expect(result.macArm).toBe('https://crystalball.app/api/download?platform=macos-arm64&variant=full');
- expect(result.windowsX64).toBe('https://crystalball.app/api/download?platform=windows-exe&variant=full');
- expect(result.linuxFallback).toBe('https://github.com/bradleybond512/crystal-ball/releases/latest');
+ const expectedArch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+ expect(result.selected.name).toContain(expectedArch);
+ expect(result.selected.url).toBe(`https://downloads.example/${expectedArch}.dmg`);
+ expect(result.fallback).toEqual({
+ url: 'https://github.com/bradleybond512/crystal-ball/releases/latest',
+ name: null,
+ });
   });
 
   test('MapContainer falls back to SVG when WebGL2 is unavailable', async ({ page }) => {
@@ -416,6 +393,11 @@ test.describe('desktop runtime routing guardrails', () => {
  layers: { ...DEFAULT_MAP_LAYERS },
  timeRange: '7d',
  });
+
+ const deadline = Date.now() + 5_000;
+ while (map.isDeckGLMode() && Date.now() < deadline) {
+ await new Promise((resolve) => setTimeout(resolve, 20));
+ }
 
  return {
  isDeckGLMode: map.isDeckGLMode(),
@@ -487,6 +469,11 @@ test.describe('desktop runtime routing guardrails', () => {
  timeRange: '7d',
  });
 
+ const deadline = Date.now() + 5_000;
+ while (map.isDeckGLMode() && Date.now() < deadline) {
+ await new Promise((resolve) => setTimeout(resolve, 20));
+ }
+
  return {
  isDeckGLMode: map.isDeckGLMode(),
  hasSvgModeClass: mapHost.classList.contains('svg-mode'),
@@ -528,27 +515,10 @@ test.describe('desktop runtime routing guardrails', () => {
  headers: { 'content-type': 'application/json' },
  });
 
- const yahooChart = (symbol: string) => {
- const base = symbol.length * 100;
- return {
- chart: {
- result: [{
- meta: {
- regularMarketPrice: base + 1,
- previousClose: base,
- },
- indicators: {
- quote: [{ close: [base - 2, base - 1, base, base + 1] }],
- },
- }],
- },
- };
- };
-
  const marketRenders: number[] = [];
  const marketConfigErrors: string[] = [];
  const heatmapRenders: number[] = [];
- const heatmapConfigErrors: string[] = [];
+ const heatmapContent = document.createElement('div');
  const commoditiesRenders: number[] = [];
  const commoditiesConfigErrors: string[] = [];
  const cryptoRenders: number[] = [];
@@ -557,15 +527,14 @@ test.describe('desktop runtime routing guardrails', () => {
  // Yahoo-only symbols (same set as server handler)
  const yahooOnly = new Set(['^GSPC', '^DJI', '^IXIC', '^VIX', 'GC=F', 'CL=F', 'NG=F', 'SI=F', 'HG=F']);
 
- window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+ window.fetch = (async (input: RequestInfo | URL) => {
  const url = toUrl(input);
  calls.push(url);
  const parsed = new URL(url);
 
- // Sebuf proto: POST /api/market/v1/list-market-quotes
+ // Generated RPC client: GET /api/market/v1/list-market-quotes?symbols=...
  if (parsed.pathname === '/api/market/v1/list-market-quotes') {
- const body = init?.body ? JSON.parse(String(init.body)) : {};
- const symbols: string[] = body.symbols || [];
+ const symbols = parsed.searchParams.getAll('symbols');
  const quotes = symbols
  .filter((s: string) => yahooOnly.has(s))
  .map((s: string) => {
@@ -579,7 +548,7 @@ test.describe('desktop runtime routing guardrails', () => {
  });
  }
 
- // Sebuf proto: POST /api/market/v1/list-crypto-quotes
+ // Generated RPC client: GET /api/market/v1/list-crypto-quotes
  if (parsed.pathname === '/api/market/v1/list-crypto-quotes') {
  return responseJson({
  quotes: [
@@ -603,7 +572,7 @@ test.describe('desktop runtime routing guardrails', () => {
  },
  heatmap: {
  renderHeatmap: (data: Array<unknown>) => heatmapRenders.push(data.length),
- showConfigError: (message: string) => heatmapConfigErrors.push(message),
+ getContentElement: () => heatmapContent,
  },
  commodities: {
  renderCommodities: (data: Array<unknown>) => commoditiesRenders.push(data.length),
@@ -636,7 +605,7 @@ test.describe('desktop runtime routing guardrails', () => {
  marketRenders,
  marketConfigErrors,
  heatmapRenders,
- heatmapConfigErrors,
+ heatmapGateText: heatmapContent.textContent ?? '',
  commoditiesRenders,
  commoditiesConfigErrors,
  cryptoRenders,
@@ -654,7 +623,7 @@ test.describe('desktop runtime routing guardrails', () => {
  expect(result.marketConfigErrors.length).toBe(0);
 
  expect(result.heatmapRenders.length).toBe(0);
- expect(result.heatmapConfigErrors).toEqual(['FINNHUB_API_KEY not configured — add in Settings']);
+ expect(result.heatmapGateText).toContain('Finnhub API Key required');
 
  expect(result.commoditiesRenders.some((count) => count > 0)).toBe(true);
  expect(result.commoditiesConfigErrors.length).toBe(0);
@@ -684,11 +653,10 @@ test.describe('desktop runtime routing guardrails', () => {
 
  const seenCountryCodes = new Set<string>();
 
- window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+ window.fetch = (async (input: RequestInfo | URL) => {
  const parsed = new URL(toUrl(input));
  if (parsed.pathname === '/api/conflict/v1/get-humanitarian-summary') {
- const body = init?.body ? JSON.parse(String(init.body)) : {};
- const countryCode = String(body.countryCode || '').toUpperCase();
+ const countryCode = String(parsed.searchParams.get('country_code') || '').toUpperCase();
  seenCountryCodes.add(countryCode);
  return responseJson({
  summary: {
@@ -766,17 +734,14 @@ test.describe('desktop runtime routing guardrails', () => {
  try {
  runtime.installRuntimeFetchPatch();
 
- let fetchError: string | null = null;
- try {
- await window.fetch('/api/fred-data?series_id=CPIAUCSL');
- } catch (err) {
- fetchError = err instanceof Error ? err.message : String(err);
- }
+ const response = await window.fetch('/api/fred-data?series_id=CPIAUCSL');
+ const body = await response.json() as { error?: string };
 
  const cloudCalls = calls.filter(u => u.includes('crystalball.app'));
 
  return {
- fetchError,
+ status: response.status,
+ error: body.error ?? null,
  cloudCalls: cloudCalls.length,
  localCalls: calls.filter(u => u.includes('127.0.0.1')).length,
  };
@@ -791,7 +756,8 @@ test.describe('desktop runtime routing guardrails', () => {
  }
  });
 
- expect(result.fetchError).not.toBeNull();
+ expect(result.status).toBe(503);
+ expect(result.error).toBe('CRYSTALBALL_API_KEY not configured');
  expect(result.cloudCalls).toBe(0);
  expect(result.localCalls).toBeGreaterThan(0);
   });
@@ -802,6 +768,7 @@ test.describe('desktop runtime routing guardrails', () => {
  const result = await page.evaluate(async () => {
  const runtime = await import('/src/services/runtime.ts');
  const runtimeConfig = await import('/src/services/runtime-config.ts');
+ const webSecretStore = await import('/src/services/web-secret-store.ts');
  const globalWindow = window as unknown as Record<string, unknown>;
  const originalFetch = window.fetch.bind(window);
 
@@ -843,6 +810,7 @@ test.describe('desktop runtime routing guardrails', () => {
  delete globalWindow.__wmFetchPatched;
 
  const testKey = 'wm_test_key_1234567890abcdef';
+ await webSecretStore.createVault('runtime-e2e-vault-passphrase');
  await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, testKey);
 
  try {
@@ -866,6 +834,7 @@ test.describe('desktop runtime routing guardrails', () => {
  globalWindow.__TAURI__ = previousTauri;
  }
  await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
+ await webSecretStore.destroyVault();
  }
  });
 

@@ -80,35 +80,14 @@ async function showAlertShelf(page: Page): Promise<void> {
     && element.style.zIndex === '9999'
     && element.querySelector('canvas') !== null
   )));
+  await page.waitForSelector('#cb-storm-mode-mount', { state: 'attached', timeout: 30_000 });
+  await page.waitForSelector('.triage-bar', { state: 'attached', timeout: 30_000 });
 
   await page.evaluate(async () => {
     const alertStorePath = '/src/services/unified-alerts.ts';
-    const notificationStackPath = '/src/components/NotificationStack.ts';
-    const stormModePath = '/src/components/PersonalStormMode.ts';
-    const triageBarPath = '/src/components/TriageBar.ts';
-    const [
-      { unifiedAlertStore, _setNotifyThrottleForTest },
-      { notificationStack },
-      { PersonalStormMode },
-      { TriageBar },
-    ] = await Promise.all([
-      import(/* @vite-ignore */ alertStorePath),
-      import(/* @vite-ignore */ notificationStackPath),
-      import(/* @vite-ignore */ stormModePath),
-      import(/* @vite-ignore */ triageBarPath),
-    ]);
-
-    if (!notificationStack.element.isConnected) notificationStack.mount(document.body);
-    let stormMount = document.getElementById('cb-storm-mode-mount');
-    if (!stormMount) {
-      stormMount = document.createElement('div');
-      stormMount.id = 'cb-storm-mode-mount';
-      notificationStack.element.append(stormMount);
-    }
-    const stormMode = new PersonalStormMode({ mount: stormMount });
-    const triageBar = new TriageBar();
-    triageBar.mount(notificationStack.element);
-    Object.assign(window, { __e2eStormMode: stormMode, __e2eTriageBar: triageBar });
+    const { unifiedAlertStore, _setNotifyThrottleForTest } = await import(
+      /* @vite-ignore */ alertStorePath
+    );
 
     _setNotifyThrottleForTest(0);
     unifiedAlertStore.ingest([{
@@ -124,7 +103,7 @@ async function showAlertShelf(page: Page): Promise<void> {
     }]);
 
     const now = Date.now();
-    stormMode.update({
+    const decision = {
         alertId: 'e2e-storm-warning',
         matchedPlaceId: 'new-carlisle-aws',
         matchedPlaceLabel: 'New Carlisle AWS',
@@ -180,7 +159,9 @@ async function showAlertShelf(page: Page): Promise<void> {
         dispatchActions: ['persistent_strip'],
         shouldSuppress: false,
         reason: 'Inside warning polygon for New Carlisle AWS',
-      });
+      };
+    Object.assign(window, { __e2eStormDecision: decision });
+    document.dispatchEvent(new CustomEvent('cb:storm-decision', { detail: decision }));
   });
 
   await expect(page.locator('.cb-storm-mode')).toBeVisible();
@@ -292,4 +273,42 @@ test('mobile alert shelf keeps readable text and reachable controls', async ({ p
     body: await page.screenshot(),
     contentType: 'image/png',
   });
+});
+
+test('short alert shelf preserves open details across a production refresh', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 520 });
+  await showAlertShelf(page);
+
+  const details = page.getByRole('button', { name: 'Details' });
+  await details.click();
+  await details.focus();
+  await page.evaluate(() => {
+    const decision = (window as typeof window & { __e2eStormDecision?: unknown }).__e2eStormDecision;
+    document.dispatchEvent(new CustomEvent('cb:storm-decision', { detail: decision }));
+  });
+
+  const refreshedDetails = page.getByRole('button', { name: 'Details' });
+  await expect(refreshedDetails).toHaveAttribute('aria-expanded', 'true');
+  await expect(refreshedDetails).toBeFocused();
+  await expect(page.getByRole('group', { name: 'Storm Mode details' })).toBeVisible();
+
+  const shelf = page.locator('.alert-shelf');
+  const shelfBounds = await shelf.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      bottom: rect.bottom,
+      clientHeight: element.clientHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(shelfBounds.bottom).toBeLessThanOrEqual(shelfBounds.viewportHeight);
+  expect(shelfBounds.overflowY).toBe('auto');
+  expect(shelfBounds.scrollHeight).toBeGreaterThan(shelfBounds.clientHeight);
+
+  await page.locator('.triage-bar').scrollIntoViewIfNeeded();
+  const triageBounds = await page.locator('.triage-bar').boundingBox();
+  expect(triageBounds).not.toBeNull();
+  expect(triageBounds!.y + triageBounds!.height).toBeLessThanOrEqual(shelfBounds.viewportHeight);
 });

@@ -1122,6 +1122,29 @@ export class PanelLayoutManager implements AppModule {
  });
   }
 
+  private mountAlertShelf(): void {
+ // Mount the notification stack directly below the EEW bar. All secondary
+ // banners mount into this container so they flow vertically without overlap.
+ notificationStack.mount(document.body);
+
+ // The data-loader dispatches this event on every NWS refresh. One shared
+ // mounting path also lets isolated E2E shells exercise the real listener.
+ const stormMount = document.createElement('div');
+ stormMount.id = 'cb-storm-mode-mount';
+ notificationStack.element.append(stormMount);
+ this.stormMount = stormMount;
+ this.stormMode = new PersonalStormMode({ mount: stormMount });
+ this._onStormDecision = (e: Event) => {
+ const decision = (e as CustomEvent<WeatherDispatchDecision | undefined>).detail;
+ this.stormMode?.update(decision);
+ };
+ document.addEventListener('cb:storm-decision', this._onStormDecision);
+
+ // Triage is the final shelf row, below staleness and personal alerts.
+ this.triageBar = new TriageBar();
+ this.triageBar.mount(notificationStack.element);
+  }
+
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
 
@@ -1137,6 +1160,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels[key] = panel;
  panelsGrid.append(panel.getElement());
  }
+ this.mountAlertShelf();
  this.bindSidebarNavigation();
  return;
  }
@@ -1163,33 +1187,12 @@ export class PanelLayoutManager implements AppModule {
  } catch { /* diagnostics optional */ }
  startSpaceWeatherStatusBarPoller(eewStatusBar);
 
- // Mount the notification stack directly below the EEW bar. All secondary
- // banners mount into this container so they flow vertically without overlap.
- // A ResizeObserver publishes --notification-stack-h so content shifts correctly.
- notificationStack.mount(document.body);
-
- // Mount Personal Storm Mode banner — shows when a severe NWS alert
- // matches a saved place. The data-loader dispatches 'cb:storm-decision'
- // on each NWS alert refresh cycle; this component renders the result.
- const stormMount = document.createElement('div');
- stormMount.id = 'cb-storm-mode-mount';
- notificationStack.element.append(stormMount);
- this.stormMount = stormMount;
- this.stormMode = new PersonalStormMode({ mount: stormMount });
- this._onStormDecision = (e: Event) => {
- const decision = (e as CustomEvent<WeatherDispatchDecision | undefined>).detail;
- this.stormMode?.update(decision);
- };
- document.addEventListener('cb:storm-decision', this._onStormDecision);
+ this.mountAlertShelf();
 
  // Mount the cross-domain correlation banner. Self-fetches from
  // /api/synthesis/correlations every 15s; hidden when no events.
  const correlationBanner = new CorrelationAlertBanner();
  correlationBanner.mount(document.body);
-
- // Mount the triage bar into the notification stack (last row — below staleness).
- this.triageBar = new TriageBar();
- this.triageBar.mount(notificationStack.element);
 
  // "At a glance" summary strip — one sticky line above the panels grid
  // (inside the scroll container, so it inherits the same

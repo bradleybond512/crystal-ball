@@ -9,6 +9,8 @@
  */
 
 import { createCircuitBreaker } from '@/utils';
+import { rehydrateDate } from '@/services/cache-hydration';
+import { fetchWithContext } from '@/services/fetch-with-context';
 
 export interface ForecastDay {
   date: string; // ISO date YYYY-MM-DD
@@ -62,7 +64,7 @@ export async function fetchExtendedForecast(lat: number, lon: number, location =
  'forecast_days=7',
  ].join('&');
 
- const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {
+ const res = await fetchWithContext('extended forecast', `https://api.open-meteo.com/v1/forecast?${params}`, {
  signal: AbortSignal.timeout(10_000),
  });
  if (!res.ok) throw new Error(`Open-Meteo HTTP ${String(res.status)}`);
@@ -99,9 +101,7 @@ export async function fetchExtendedForecast(lat: number, lon: number, location =
   if (!forecast) return null;
   return {
     ...forecast,
-    fetchedAt: forecast.fetchedAt instanceof Date
-      ? forecast.fetchedAt
-      : new Date(forecast.fetchedAt as unknown as string),
+    fetchedAt: rehydrateDate(forecast.fetchedAt),
   };
 }
 

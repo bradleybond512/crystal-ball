@@ -3,6 +3,8 @@ import {
   type AirportDelayAlert as ProtoAlert,
 } from '@/generated/client/crystalball/aviation/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
+import { rehydrateDate } from '@/services/cache-hydration';
+import { fetchWithContext } from '@/services/fetch-with-context';
 
 // --- Consumer-friendly types (matching legacy shape exactly) ---
 
@@ -90,7 +92,9 @@ function toDisplayAlert(proto: ProtoAlert): AirportDelayAlert {
 
 // --- Client + circuit breaker ---
 
-const client = new AviationServiceClient('', { fetch: (...args) => globalThis.fetch(...args) });
+const client = new AviationServiceClient('', {
+  fetch: (input, init) => fetchWithContext('flight delays', input, init),
+});
 const breaker = createCircuitBreaker<AirportDelayAlert[]>({ name: 'Flight Delays v2', cacheTtlMs: 2 * 60 * 60 * 1000, persistCache: true });
 
 // --- Main fetch (public API) ---
@@ -107,8 +111,6 @@ export async function fetchFlightDelays(): Promise<AirportDelayAlert[]> {
   }, []);
   return delays.map(delay => ({
     ...delay,
-    updatedAt: delay.updatedAt instanceof Date
-      ? delay.updatedAt
-      : new Date(delay.updatedAt as unknown as string),
+    updatedAt: rehydrateDate(delay.updatedAt),
   }));
 }

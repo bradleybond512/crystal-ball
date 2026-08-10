@@ -6,6 +6,8 @@
  */
 
 import { createCircuitBreaker } from '@/utils';
+import { rehydrateDate } from '@/services/cache-hydration';
+import { fetchWithContext } from '@/services/fetch-with-context';
 
 export interface TidePrediction {
   time: Date;
@@ -63,7 +65,7 @@ export async function fetchTidePredictions(stationId: string): Promise<TideData 
 
  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin}&end_date=${end}&station=${station.id}&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&format=json`;
 
- const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+ const res = await fetchWithContext('tide predictions', url, { signal: AbortSignal.timeout(10_000) });
  if (!res.ok) throw new Error(`CO-OPS HTTP ${String(res.status)}`);
 
  const data = await res.json() as CoopsHiLo;
@@ -80,14 +82,10 @@ export async function fetchTidePredictions(stationId: string): Promise<TideData 
   if (!data) return null;
   return {
     ...data,
-    fetchedAt: data.fetchedAt instanceof Date
-      ? data.fetchedAt
-      : new Date(data.fetchedAt as unknown as string),
+    fetchedAt: rehydrateDate(data.fetchedAt),
     predictions: data.predictions.map(prediction => ({
       ...prediction,
-      time: prediction.time instanceof Date
-        ? prediction.time
-        : new Date(prediction.time as unknown as string),
+      time: rehydrateDate(prediction.time),
     })),
   };
 }

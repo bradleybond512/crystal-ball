@@ -7,6 +7,8 @@
  */
 
 import { createCircuitBreaker } from '@/utils';
+import { rehydrateDate } from '@/services/cache-hydration';
+import { fetchWithContext } from '@/services/fetch-with-context';
 
 export interface PollenReading {
   city: string;
@@ -65,16 +67,14 @@ export async function fetchPollenData(): Promise<PollenReading[]> {
   }, []);
   return readings.map(reading => ({
     ...reading,
-    updatedAt: reading.updatedAt instanceof Date
-      ? reading.updatedAt
-      : new Date(reading.updatedAt as unknown as string),
+    updatedAt: rehydrateDate(reading.updatedAt),
   }));
 }
 
 async function fetchCityPollen(city: typeof CITIES[0]): Promise<PollenReading | null> {
   try {
  const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${String(city.lat)}&longitude=${String(city.lon)}&current=grass_pollen,birch_pollen,ragweed_pollen,alder_pollen,olive_pollen`;
- const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+ const res = await fetchWithContext('pollen data', url, { signal: AbortSignal.timeout(8000) });
  if (!res.ok) return null;
 
  const data = await res.json() as PollenResponse;

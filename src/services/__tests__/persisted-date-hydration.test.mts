@@ -4,8 +4,6 @@ import { after, test } from 'node:test';
 import { formatLogArgument, isExpectedFeedFailure } from '../log-bridge.ts';
 
 const originalLocalStorage = globalThis.localStorage;
-const originalFetch = globalThis.fetch;
-const originalConsoleError = console.error;
 const storage = new Map<string, string>();
 
 Object.defineProperty(globalThis, 'localStorage', {
@@ -34,8 +32,6 @@ after(() => {
     configurable: true,
     value: originalLocalStorage,
   });
-  globalThis.fetch = originalFetch;
-  console.error = originalConsoleError;
 });
 
 test('GDACS cache hydration restores event dates before normalization', async () => {
@@ -181,13 +177,42 @@ test('pollen cache hydration restores updatedAt', async () => {
 });
 
 test('SPC WebKit load failures carry fetch context into the log classifier', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalConsoleError = console.error;
   const capturedErrors: unknown[][] = [];
   globalThis.fetch = (async () => { throw new TypeError('Load failed'); }) as typeof globalThis.fetch;
   console.error = (...args: unknown[]) => { capturedErrors.push(args); };
   const { fetchFireWeatherOutlook } = await import('../red-flag-warnings.ts');
 
-  assert.deepEqual(await fetchFireWeatherOutlook(), []);
-  assert.equal(capturedErrors.length, 1);
-  const message = capturedErrors[0]!.map(formatLogArgument).join(' ');
-  assert.equal(isExpectedFeedFailure(message), true, message);
+  try {
+    assert.deepEqual(await fetchFireWeatherOutlook(), []);
+    assert.equal(capturedErrors.length, 1);
+    const message = capturedErrors[0]!.map(formatLogArgument).join(' ');
+    assert.equal(isExpectedFeedFailure(message), true, message);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalConsoleError;
+  }
+});
+
+test('SPC unexpected fetch exceptions remain genuine errors', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  const capturedErrors: unknown[][] = [];
+  globalThis.fetch = (async () => { throw new TypeError('Unexpected response coercion'); }) as typeof globalThis.fetch;
+  console.error = (...args: unknown[]) => { capturedErrors.push(args); };
+  console.warn = () => {};
+  const { fetchFireWeatherOutlook } = await import('../red-flag-warnings.ts');
+
+  try {
+    assert.deepEqual(await fetchFireWeatherOutlook(), []);
+    assert.equal(capturedErrors.length, 1);
+    const message = capturedErrors[0]!.map(formatLogArgument).join(' ');
+    assert.equal(isExpectedFeedFailure(message), false, message);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+  }
 });

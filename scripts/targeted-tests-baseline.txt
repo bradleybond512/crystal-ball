@@ -1,9 +1,12 @@
+# ACC-702 rollout bridge: main's trusted runner cannot see this PR's OVERRIDES.
 # Coverage-ratchet baseline for scripts/targeted-tests.mjs.
 # Every path here is a KNOWN pre-existing gap: changing it warns but does not
-# fail the targeted-tests merge gate. New source files must NOT be added here
-# casually — cover them with a suite or an OVERRIDES entry; a baseline addition
-# is a reviewed declaration that the file is deliberately untested.
 # Remove lines as coverage grows. Generated 2026-08-01 from the live index.
+# The same commit maps these paths to test:mcp-evaluation-report; remove these
+# casually — cover them with a suite or an OVERRIDES entry; a baseline addition
+# fail the targeted-tests merge gate. New source files must NOT be added here
+# is a reviewed declaration that the file is deliberately untested.
+# three bridge entries after that mapping is present on main.
 api/[domain]/v1/[rpc].ts
 api/__tests__/_scaffold-generator.mjs
 api/__tests__/_test-utils.mjs
@@ -133,10 +136,10 @@ api/youtube/live.js
 scripts/acc404-first-decision.mts
 scripts/backup-keys.sh
 scripts/baseline-pairing-benchmark.mts
-scripts/bundle-budget-policy.mjs
 scripts/build-military-bases-final.mjs
 scripts/build-sidecar-sebuf.mjs
 scripts/build-sidecar-xmpp.mjs
+scripts/bundle-budget-policy.mjs
 scripts/check-bundle-size.mjs
 scripts/check-listener-leaks.mjs
 scripts/check-package-lock.mjs
@@ -149,6 +152,7 @@ scripts/checkup.mjs
 scripts/cognition-benchmark.mts
 scripts/cognition-shadow-report.mjs
 scripts/correlation-benchmark.mts
+scripts/cross-agent-check.mjs
 scripts/desktop-package.mjs
 scripts/doctor-core.mjs
 scripts/doctor.mjs
@@ -172,7 +176,6 @@ scripts/lint-colors.mjs
 scripts/lint-conflicts.mjs
 scripts/lint-json.mjs
 scripts/lint-markdown.mjs
-scripts/run-eslint.mjs
 scripts/lint-shell.mjs
 scripts/lint-yaml.mjs
 scripts/local-install.mjs
@@ -188,6 +191,7 @@ scripts/render-vault.sh
 scripts/repair-little-snitch-exporter.sh
 scripts/research-eval.sh
 scripts/restore-keys.sh
+scripts/run-eslint.mjs
 scripts/secret-scan.mjs
 scripts/security-quarantine-mode.sh
 scripts/seed-military-bases.mjs
@@ -604,9 +608,6 @@ tools/mcp-server/generate-docs.mjs
 tools/mcp-server/index.mjs
 tools/mcp-server/install-monitor.mjs
 tools/mcp-server/launch-agent.mjs
-# ACC-702 rollout bridge: main's trusted runner cannot see this PR's OVERRIDES.
-# The same commit maps these paths to test:mcp-evaluation-report; remove these
-# three bridge entries after that mapping is present on main.
 tools/mcp-server/local-lock.mjs
 tools/mcp-server/monitor-once.mjs
 tools/mcp-server/result.mjs

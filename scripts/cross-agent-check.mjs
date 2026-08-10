@@ -195,5 +195,8 @@ function main() {
   if (ci) console.log('[cross-check] Cross-agent gate files present.');
 }
 
-const isDirectRun = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+// Resolved-path equality, not basename: a different entrypoint that happens to be
+// named cross-agent-check.mjs must not trigger the CLI on import.
+const isDirectRun = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isDirectRun) main();

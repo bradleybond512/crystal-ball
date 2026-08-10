@@ -429,6 +429,20 @@ test('a same-basename entrypoint does not trigger the CLI', () => {
   assert.equal(r.stdout.trim(), '', `same-basename import emitted CLI output:\n${r.stdout}`);
 });
 
+test('importing cross-agent-check cannot trigger the verifier CLI transitively', () => {
+  // cross-agent-check imports requiredReviewers from verify-review-verdict. Under
+  // the verifier's own basename guard, an entrypoint named verify-review-verdict.mjs
+  // made that transitive import RUN THE GATE and exit 1 — import-safety in the
+  // importer is worthless if the imported module is not import-safe too.
+  const dir = mkdtempSync(join(tmpdir(), 'transitive-collision-'));
+  const decoy = join(dir, 'verify-review-verdict.mjs');
+  writeFileSync(decoy, `import ${JSON.stringify(join(root, 'scripts/cross-agent-check.mjs'))};\n`);
+  const r = spawnSync(process.execPath, [decoy], { encoding: 'utf8', cwd: root });
+  assert.equal(r.status, 0, `verifier CLI ran transitively:\n${r.stderr}`);
+  assert.equal(r.stdout.trim(), '', `transitive import emitted stdout:\n${r.stdout}`);
+  assert.equal(r.stderr.trim(), '', `transitive import emitted stderr:\n${r.stderr}`);
+});
+
 test('changing cross-agent-check selects a suite that actually covers it', () => {
   // Guards the OVERRIDES entry: without it the five tests above still pass
   // while CI certifies nothing about the file.

@@ -4,6 +4,7 @@
  * Eliminates 15-minute learning mode for users.
  */
 
+import { isCallerCancellation } from './caller-abort';
 import type { CountryScore, ComponentScores } from './country-instability';
 import { setHasCachedScores } from './country-instability';
 import { getPersistentCache, setPersistentCache } from './persistent-cache';
@@ -199,7 +200,7 @@ export async function fetchCachedRiskScores(signal?: AbortSignal): Promise<Cache
  void setPersistentCache(RISK_CACHE_KEY, data);
  return cachedScores;
  } catch (error) {
- if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ if (isCallerCancellation(error, signal)) throw error;
  // eslint-disable-next-line no-console -- intentional: debug logging for cached risk score fetch failures
  console.error('[CachedRiskScores] Fetch error:', error);
  lastFetchTime = now; // prevent unlimited retries on sustained failure

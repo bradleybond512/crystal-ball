@@ -1,4 +1,6 @@
 import { createCircuitBreaker, getCSSColor } from '@/utils';
+import { rehydrateDate } from '@/services/cache-hydration';
+import { fetchWithContext } from '@/services/fetch-with-context';
 import { isUsableMatchRing } from './weather/ring-geometry';
 
 export interface WeatherAlert {
@@ -187,7 +189,7 @@ export function normalizeWeatherAlertsResponse(data: NWSResponse | null | undefi
 }
 
 async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
-  const response = await fetch(NWS_API, {
+  const response = await fetchWithContext('NWS weather alerts', NWS_API, {
  headers: { 'User-Agent': 'CrystalBall/1.0' }
   });
 
@@ -199,12 +201,8 @@ async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
 function hydrateWeatherAlertDates(alerts: WeatherAlert[]): WeatherAlert[] {
   return alerts.map(alert => ({
     ...alert,
-    onset: alert.onset instanceof Date
-      ? alert.onset
-      : new Date(alert.onset as unknown as string),
-    expires: alert.expires instanceof Date
-      ? alert.expires
-      : new Date(alert.expires as unknown as string),
+    onset: rehydrateDate(alert.onset),
+    expires: rehydrateDate(alert.expires),
   }));
 }
 

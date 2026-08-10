@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/prefer-nullish-coalescing */
 import { createCircuitBreaker } from '@/utils';
+import { rehydrateDate } from '@/services/cache-hydration';
+import { fetchWithContext } from '@/services/fetch-with-context';
 
 export interface GDACSEvent {
   id: string;
@@ -56,7 +58,7 @@ const EVENT_TYPE_NAMES: Record<string, string> = {
 
 export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
   const events = await breaker.execute(async () => {
- const response = await fetch(GDACS_API, {
+ const response = await fetchWithContext('GDACS events', GDACS_API, {
  headers: { 'Accept': 'application/json' },
  signal: AbortSignal.timeout(10_000),
  });
@@ -95,9 +97,7 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
   }, []);
   return events.map(event => ({
     ...event,
-    fromDate: event.fromDate instanceof Date
-      ? event.fromDate
-      : new Date(event.fromDate as unknown as string),
+    fromDate: rehydrateDate(event.fromDate),
   }));
 }
 

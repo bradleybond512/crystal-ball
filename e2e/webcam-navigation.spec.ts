@@ -277,6 +277,11 @@ test('FAA map popup requests and reveals a resolved frame', async ({ page }) => 
   await close.focus();
   await page.keyboard.press('Tab');
   await expect(body).toBeFocused();
+  const focusStyle = await body.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { offset: style.outlineOffset, width: style.outlineWidth };
+  });
+  expect(focusStyle).toEqual({ offset: '-2px', width: '2px' });
   await page.keyboard.press('PageDown');
   await expect.poll(async () => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await expect(close).toBeVisible();
@@ -340,23 +345,41 @@ test('FAA map popup stays usable as a mobile camera sheet', async ({ page }) => 
   const layout = await popup.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const frame = element.querySelector<HTMLElement>('.faa-camera-frame')?.getBoundingClientRect();
+    const image = element.querySelector<HTMLElement>('.faa-camera-frame-image')?.getBoundingClientRect();
     const title = element.querySelector<HTMLElement>('.popup-title');
     return {
       left: rect.left,
+      top: rect.top,
       right: rect.right,
       bottom: rect.bottom,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
+      frameLeft: frame?.left ?? 0,
+      frameTop: frame?.top ?? 0,
+      frameRight: frame?.right ?? 0,
+      frameBottom: frame?.bottom ?? 0,
       frameWidth: frame?.width ?? 0,
+      frameHeight: frame?.height ?? 0,
+      imageLeft: image?.left ?? 0,
+      imageTop: image?.top ?? 0,
+      imageRight: image?.right ?? 0,
+      imageBottom: image?.bottom ?? 0,
       titleScrollWidth: title?.scrollWidth ?? 0,
       titleClientWidth: title?.clientWidth ?? 0,
     };
   });
   expect(layout.left).toBeGreaterThanOrEqual(0);
+  expect(layout.top).toBeGreaterThanOrEqual(0);
   expect(layout.right).toBeLessThanOrEqual(layout.viewportWidth);
   expect(layout.bottom).toBeLessThanOrEqual(layout.viewportHeight);
   expect(layout.frameWidth).toBeGreaterThan(0);
+  expect(layout.frameHeight).toBeGreaterThan(0);
   expect(layout.frameWidth).toBeLessThanOrEqual(layout.viewportWidth - 32);
+  expect(layout.frameWidth / layout.frameHeight).toBeCloseTo(4 / 3, 2);
+  expect(layout.imageLeft).toBeGreaterThanOrEqual(layout.frameLeft - 1);
+  expect(layout.imageTop).toBeGreaterThanOrEqual(layout.frameTop - 1);
+  expect(layout.imageRight).toBeLessThanOrEqual(layout.frameRight + 1);
+  expect(layout.imageBottom).toBeLessThanOrEqual(layout.frameBottom + 1);
   expect(layout.titleScrollWidth).toBeLessThanOrEqual(layout.titleClientWidth + 1);
 
   await popup.locator('.popup-close').click();

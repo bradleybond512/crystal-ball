@@ -51,10 +51,10 @@ export async function fetchUnifiedWebcams(opts: FetchOpts = {}): Promise<WebcamC
   const qs = params.toString();
   const suffix = qs ? `?${qs}` : '';
   const url = `${getApiBaseUrl()}/api/webcams${suffix}`;
-  const res = await fetch(url, { signal: opts.signal });
+  const res = await fetch(url, { signal: opts.signal ?? AbortSignal.timeout(30_000) });
   if (!res.ok) {
     if (cache) return cache.catalog;
-    return emptyCatalog();
+    throw new Error(`Webcam catalog request failed: HTTP ${res.status}`);
   }
   const data = (await res.json()) as { feeds?: WebcamFeed[]; sourceHealth?: WebcamSourceHealth[]; updatedAt?: number };
   const catalog = catalogFromResponse(data);
@@ -62,14 +62,6 @@ export async function fetchUnifiedWebcams(opts: FetchOpts = {}): Promise<WebcamC
     cache = { catalog, ts: Date.now() };
   }
   return catalog;
-}
-
-function emptyCatalog(): WebcamCatalog {
-  return {
-    feeds: [],
-    bySource: {} as Record<WebcamSource, WebcamFeed[]>,
-    lastUpdated: Date.now(),
-  };
 }
 
 export function getFavoriteIds(): string[] {

@@ -2732,7 +2732,7 @@ export class MapPopup {
  <span class="popup-title">${escapeHtml(cam.name)}</span>
  <button class="popup-close" type="button" aria-label="${escapeHtml(t('common.close'))}">×</button>
  </div>
- <div class="popup-body faa-camera-popup-body">
+ <div class="popup-body faa-camera-popup-body" role="region" tabindex="0" aria-label="${escapeHtml(cam.name)}">
  <div class="popup-subtitle">${escapeHtml(cam.state)} · ${escapeHtml(cam.category)}</div>
  <time class="faa-camera-updated" datetime="${escapeHtml(cam.lastUpdated)}">${escapeHtml(t('components.status.updatedAt', { time: lastUpdated }))}</time>
  <div class="popup-stats">

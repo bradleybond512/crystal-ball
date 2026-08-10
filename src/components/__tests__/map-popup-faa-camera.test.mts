@@ -104,6 +104,10 @@ test('FAA map popup exposes dedicated viewer structure for constrained layout', 
   assert.ok(document.querySelector('.popup-body.faa-camera-popup-body'));
   assert.ok(document.querySelector('.faa-camera-frame'));
   assert.ok(document.querySelector('.faa-camera-frame-image'));
+  const body = document.querySelector<HTMLElement>('.faa-camera-popup-body');
+  assert.equal(body?.getAttribute('tabindex'), '0');
+  assert.equal(body?.getAttribute('role'), 'region');
+  assert.equal(body?.getAttribute('aria-label'), CAMERA.name);
   const close = document.querySelector<HTMLButtonElement>('.faa-camera-popup-header .popup-close');
   assert.equal(close?.type, 'button');
   assert.equal(close?.getAttribute('aria-label'), 'common.close');

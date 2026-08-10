@@ -79,6 +79,9 @@ test.beforeEach(async ({ page, baseURL }) => {
       configurable: true,
     });
     localStorage.setItem('crystalball-classic-view', '1');
+    localStorage.setItem('mobile-warning-dismissed', 'true');
+    localStorage.setItem('wm-analytics-consent', 'false');
+    localStorage.setItem('wm-analytics-consent-prompt-seen', 'true');
   });
 });
 
@@ -271,14 +274,91 @@ test('FAA map popup requests and reveals a resolved frame', async ({ page }) => 
   expect(layout.imageHeight).toBeLessThanOrEqual(layout.frameHeight);
   expect(layout.imageObjectFit).toBe('contain');
 
-  await body.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
+  await close.focus();
+  await page.keyboard.press('Tab');
+  await expect(body).toBeFocused();
+  await page.keyboard.press('PageDown');
+  await expect.poll(async () => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await expect(close).toBeVisible();
   await expect.poll(async () => popup.locator('.faa-camera-popup-header').evaluate((element) => (
     element.getBoundingClientRect().top
   ))).toBe(layout.headerTop);
 
   await page.keyboard.press('Escape');
+  await expect(popup).toHaveCount(0);
+});
+
+test('FAA map popup stays usable as a mobile camera sheet', async ({ page }) => {
+  const resolvedImageUrl = 'https://api.weather.gov/e2e-faa-camera-mobile.png';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('http://127.0.0.1:46123/api/faa-camera-image?cameraId=11914', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ imageUrl: resolvedImageUrl, frames: [] }),
+    });
+  });
+  await page.route(resolvedImageUrl, async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: CAMERA_IMAGE });
+  });
+  await page.goto('/?e2e=ui-only');
+
+  await page.evaluate(async () => {
+    const modulePath = '/src/components/MapPopup.ts';
+    const { MapPopup } = await import(/* @vite-ignore */ modulePath);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const popup = new MapPopup(container);
+    popup.show({
+      type: 'faaCamera',
+      data: {
+        id: '11914',
+        name: 'Monument Hill/Kelly Air Park - Camera 2 With A Long Mobile Title',
+        lat: 37.5969,
+        lon: -105.2035,
+        state: 'CO',
+        category: 'remote',
+        imageUrl: '/api/faa-camera-image?cameraId=11914',
+        isOnline: true,
+        lastUpdated: '2026-08-10T05:53:28.994Z',
+        alertProximityMi: null,
+        alertLabel: null,
+        relevanceScore: 30,
+        aiConditions: null,
+      },
+      x: 100,
+      y: 100,
+    });
+  });
+
+  const popup = page.locator('.map-popup.map-popup-faa-camera.map-popup-sheet');
+  const image = popup.locator('[data-faa-camera-image]');
+  await expect(popup).toBeVisible();
+  await expect.poll(async () => image.evaluate((element) => element.naturalWidth)).toBeGreaterThan(0);
+  await expect(image).toBeVisible();
+
+  const layout = await popup.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const frame = element.querySelector<HTMLElement>('.faa-camera-frame')?.getBoundingClientRect();
+    const title = element.querySelector<HTMLElement>('.popup-title');
+    return {
+      left: rect.left,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      frameWidth: frame?.width ?? 0,
+      titleScrollWidth: title?.scrollWidth ?? 0,
+      titleClientWidth: title?.clientWidth ?? 0,
+    };
+  });
+  expect(layout.left).toBeGreaterThanOrEqual(0);
+  expect(layout.right).toBeLessThanOrEqual(layout.viewportWidth);
+  expect(layout.bottom).toBeLessThanOrEqual(layout.viewportHeight);
+  expect(layout.frameWidth).toBeGreaterThan(0);
+  expect(layout.frameWidth).toBeLessThanOrEqual(layout.viewportWidth - 32);
+  expect(layout.titleScrollWidth).toBeLessThanOrEqual(layout.titleClientWidth + 1);
+
+  await popup.locator('.popup-close').click();
   await expect(popup).toHaveCount(0);
 });

@@ -5,6 +5,7 @@
  * Persists to localStorage so data shows instantly on reload.
  */
 
+import { isCallerCancellation } from './caller-abort';
 import type { TheaterPostureSummary } from './military-surge';
 import {
   MilitaryServiceClient,
@@ -218,7 +219,7 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  console.info(`[CachedTheaterPosture] OK — ${data.postures.length} theaters, ${data.totalFlights} active flights`);
  return cachedPosture;
  } catch (error) {
- if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ if (isCallerCancellation(error, signal)) throw error;
  const msg = error instanceof Error ? error.message : String(error);
  // eslint-disable-next-line no-console
  console.error(`[CachedTheaterPosture] Fetch error: ${msg}`);
@@ -229,8 +230,12 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  }
   })();
 
-  // If we have stale data, return it now — the fetch updates in background
+  // If we have stale data, return it now — the fetch updates in background.
+  // Nothing awaits fetchPromise on this path, so it needs its own rejection handler:
+  // an unhandled rejection here is reported as a renderer ERROR even though the
+  // caller was served fine from cache.
   if (hasStaleData) {
+ void fetchPromise.catch(() => { /* background refresh; the catch above already logged */ });
  return cachedPosture;
   }
 

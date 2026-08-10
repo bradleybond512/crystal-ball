@@ -4,7 +4,7 @@
 // instead of dying in WebInspector. Also maintains an in-memory breadcrumb
 // ring buffer that is dumped alongside crash reports and Cmd+Shift+D diagnostics.
 import { invokeTauri } from '@/services/tauri-bridge';
-import { isDesktopRuntime } from '@/services/runtime';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 
 let installed = false;
 
@@ -456,6 +456,17 @@ function bumpFetchStat(host: string, ok: boolean): void {
   }
 }
 
+// This wrapper is installed from App.ts, i.e. OUTSIDE installRuntimeFetchPatch, so it
+// still sees relative `/api/*` paths before that patch rewrites them to the sidecar.
+// Resolving those against location.href attributed them to the app origin's host —
+// under Tauri that is the phantom `localhost` of `tauri://localhost`, a host the app
+// never contacts (CSP allows 127.0.0.1 only), and it split every sidecar failure
+// across two buckets. Attribute them to the host the request actually reaches.
+// getApiBaseUrl() is '' off-desktop, where the same-origin host is already correct.
+export function apiAwareBaseFor(url: string, apiBaseUrl = getApiBaseUrl(), pageHref = location.href): string {
+  return url.startsWith('/api/') && apiBaseUrl ? apiBaseUrl : pageHref;
+}
+
 function installFetchInstrumentation(): void {
   // Idempotent — installLogBridge is idempotent so this is fine.
   const origFetch = window.fetch.bind(window);
@@ -466,7 +477,7 @@ function installFetchInstrumentation(): void {
  if (typeof input === 'string') url = input;
  else if (input instanceof Request) url = input.url;
  else url = String(input);
- host = new URL(url, location.href).host;
+ host = new URL(url, apiAwareBaseFor(url)).host;
  } catch { /* unparseable; keep 'unknown' */ }
  try {
  const resp = await origFetch(input, init);

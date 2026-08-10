@@ -76,72 +76,88 @@ function makeManager() {
 
 async function startCorrelation(manager: AnalysisWorkerManager, worker: FakeWorker) {
   const result = manager.analyzeCorrelations([], [], []);
-  worker.emit({ type: 'ready' });
-  await Promise.resolve();
-  await Promise.resolve();
   const request = worker.messages.find((message) => (
     typeof message === 'object' && message !== null && 'type' in message
     && message.type === 'correlation'
   )) as { id: string } | undefined;
-  assert.ok(request, 'correlation request should be posted after worker readiness');
+  assert.ok(request, 'correlation request should be queued immediately');
   return { request, result };
 }
 
-test('worker readiness accepts a queued ready event during the deadline grace period', async () => {
-  const { manager, timers, worker } = makeManager();
+test('correlation request queues immediately without waiting for a ready signal', async () => {
+  const { manager, worker } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
-  const outcome = result.then(
-    value => ({ value, error: null }),
-    error => ({ value: null, error }),
-  );
+  const outcome = result.catch(() => {});
 
-  timers.advanceTo(10_000);
-  assert.equal(timers.size, 1, 'readiness deadline should install one grace timer');
-  const queuedGraceTimeout = timers.captureNext();
+  try {
+    const request = worker.messages.find((message) => (
+      typeof message === 'object' && message !== null && 'type' in message
+      && message.type === 'correlation'
+    ));
+    assert.ok(request, 'worker should queue the request while its script is starting');
+  } finally {
+    manager.terminate();
+    await outcome;
+  }
+});
 
-  worker.emit({ type: 'ready' });
-  queuedGraceTimeout();
-  await Promise.resolve();
-  await Promise.resolve();
+test('cluster request queues immediately without waiting for a ready signal', async () => {
+  const { manager, worker } = makeManager();
+  const result = manager.clusterNews([]);
+  const outcome = result.catch(() => {});
+
+  try {
+    const request = worker.messages.find((message) => (
+      typeof message === 'object' && message !== null && 'type' in message
+      && message.type === 'cluster'
+    ));
+    assert.ok(request, 'worker should queue clustering while its script is starting');
+  } finally {
+    manager.terminate();
+    await outcome;
+  }
+});
+
+test('ready is telemetry and does not gate a queued correlation request', async () => {
+  const { manager, worker } = makeManager();
+  const result = manager.analyzeCorrelations([], [], []);
   const request = worker.messages.find((message) => (
     typeof message === 'object' && message !== null && 'type' in message
     && message.type === 'correlation'
   )) as { id: string } | undefined;
-  assert.ok(request, 'correlation request should be posted after delayed worker readiness');
+  assert.ok(request);
+  assert.equal(manager.ready, false);
 
+  worker.emit({ type: 'ready' });
+  assert.equal(manager.ready, true);
   worker.emit({ type: 'correlation-result', id: request.id, signals: [] });
 
-  assert.deepEqual(await outcome, { value: [], error: null });
-  assert.equal(timers.size, 0);
+  assert.deepEqual(await result, []);
 });
 
-test('worker readiness waits through its deadline grace period', async () => {
-  const { manager, timers } = makeManager();
+test('worker load failure rejects an already-queued request', async () => {
+  const { manager, timers, worker } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
 
-  timers.advanceTo(10_000);
-  assert.equal(timers.size, 1, 'readiness deadline should install one grace timer');
+  worker.emitError('load failed');
 
-  timers.advanceTo(11_000);
-
-  await assert.rejects(result, /Worker failed to become ready within timeout/);
+  await assert.rejects(result, /Worker error: load failed/);
   assert.equal(timers.size, 0);
+  assert.equal(manager.ready, false);
 });
 
-test('worker readiness rejects after a late deadline callback and one grace period', async () => {
-  const { manager, timers } = makeManager();
-  const result = manager.analyzeCorrelations([], [], []);
+test('worker creation failures are normalized to Error objects', async () => {
+  const manager = new AnalysisWorkerManager({
+    createWorker: () => { throw 'worker unavailable'; },
+  });
 
-  timers.advanceTo(11_000);
-  assert.equal(timers.size, 1, 'late readiness deadline should install one grace timer');
-
-  timers.advanceTo(12_000);
-
-  await assert.rejects(result, /Worker failed to become ready within timeout/);
-  assert.equal(timers.size, 0);
+  await assert.rejects(
+    manager.analyzeCorrelations([], [], []),
+    (error: unknown) => error instanceof Error && error.message === 'worker unavailable',
+  );
 });
 
-test('terminate rejects a request still waiting for worker readiness', async () => {
+test('terminate rejects a request queued while the worker starts', async () => {
   const { manager } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
   const outcome = result.then(
@@ -158,7 +174,7 @@ test('terminate rejects a request still waiting for worker readiness', async () 
   assert.deepEqual(settled, { value: null, error: 'Worker terminated' });
 });
 
-test('terminate makes an already-queued readiness timeout callback harmless', () => {
+test('terminate makes an already-queued request timeout callback harmless', () => {
   const { manager, timers } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
   const queuedTimeout = timers.captureNext();
@@ -181,7 +197,7 @@ test('terminate makes an already-queued ready message harmless', () => {
   assert.equal(manager.ready, false);
 });
 
-test('a stale worker error cannot reject replacement worker readiness', async () => {
+test('a stale worker error cannot reject a replacement worker request', async () => {
   const timers = new FakeTimers();
   const firstWorker = new FakeWorker();
   const replacementWorker = new FakeWorker();
@@ -198,9 +214,6 @@ test('a stale worker error cannot reject replacement worker readiness', async ()
   manager.terminate();
   const replacementResult = manager.analyzeCorrelations([], [], []);
   firstWorker.emitError('stale worker failure');
-  replacementWorker.emit({ type: 'ready' });
-  await Promise.resolve();
-  await Promise.resolve();
   const request = replacementWorker.messages.find((message) => (
     typeof message === 'object' && message !== null && 'type' in message
     && message.type === 'correlation'
@@ -213,7 +226,7 @@ test('a stale worker error cannot reject replacement worker readiness', async ()
   assert.equal(timers.size, 0);
 });
 
-test('analyzeCorrelations rejects an on-time worker hang at ten seconds', async () => {
+test('analyzeCorrelations rejects an on-time worker hang without a ready signal', async () => {
   const { manager, timers, worker } = makeManager();
   const { result } = await startCorrelation(manager, worker);
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-os-command-from-path, sonarjs/slow-regex, unicorn/prefer-number-properties, unicorn/import-style -- dev-tooling script: git/gh on PATH is intentional, complexity is fine for a one-shot CLI. */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -88,27 +87,17 @@ function expectedReviewer(branch) {
   return 'another agent';
 }
 
-function readEventBody() {
-  const eventPath = process.env.GITHUB_EVENT_PATH;
-  if (!eventPath || !existsSync(eventPath)) return '';
-  try {
-    const event = JSON.parse(readFileSync(eventPath, 'utf8'));
-    return event.pull_request?.body || '';
-  } catch {
-    return '';
-  }
-}
-
-function hasCrossReviewMarker(body) {
-  return /cross-agent review:\s*(codex|claude|qodo|coderabbit|human)/i.test(body)
-    || /second-agent review:\s*(codex|claude|qodo|coderabbit|human)/i.test(body)
-    || /\[x\].*(cross-agent|second-agent|qodo|coderabbit)/i.test(body);
+// expectedReviewer() is prose for humans; --reviewer wants a single slug.
+function reviewerSlug(reviewer) {
+  const match = reviewer.match(/codex|claude/i);
+  return match ? match[0].toLowerCase() : '<codex|claude>';
 }
 
 function requiredFilesPresent() {
   return [
     '.github/workflows/cross-agent-review.yml',
     'scripts/cross-agent-check.mjs',
+    'scripts/verify-review-verdict.mjs',
   ].filter((file) => !existsSync(path.resolve(root, file)));
 }
 
@@ -140,26 +129,28 @@ function printLocalReport({ branch, files, areas, reviewer }) {
   console.log('```');
   console.log('');
 
-  console.log('After the second review, add this to the PR body before merge:');
-  console.log(`Cross-agent review: ${reviewer} reviewed on YYYY-MM-DD; outcome: pass / issues fixed / accepted risk.`);
+  console.log('After the second review, record the verdict as a SHA-pinned commit (a PR-body');
+  console.log('marker no longer satisfies the gate — see .github/workflows/cross-agent-review.yml):');
+  console.log('```');
+  console.log(`node scripts/verify-review-verdict.mjs --record --reviewer ${reviewerSlug(reviewer)} --evidence-file <review-output>`);
+  console.log('git commit -m "agentic: record review verdict" -- .agentic/reviews');
+  console.log('```');
+  console.log('The verdict pins the reviewed SHA, so record it LAST — any later code commit');
+  console.log('invalidates it and the gate turns red until a fresh review is recorded.');
 }
 
-function collectFailures({ branch, ci, eventBody }) {
+function collectFailures() {
   const failures = [];
   const missing = requiredFilesPresent();
   if (missing.length > 0) {
     failures.push(`Missing cross-agent workflow file(s): ${missing.join(', ')}`);
   }
-  if (/^(claude|codex|copilot)\//.test(branch) && ci && !hasCrossReviewMarker(eventBody)) {
-    failures.push('PR body is missing a completed cross-agent review marker.');
-  }
   return failures;
 }
 
-function reportFailures(failures, { ci, reviewer }) {
+function reportFailures(failures, { ci }) {
   if (ci && !args.has('--verbose')) {
     for (const failure of failures) console.error(`[cross-check] ${failure}`);
-    console.error(`[cross-check] Add: Cross-agent review: ${reviewer} reviewed on YYYY-MM-DD; outcome: pass / issues fixed / accepted risk.`);
     return;
   }
   console.log('');
@@ -173,20 +164,21 @@ function main() {
   const areas = changedAreas(files);
   const reviewer = expectedReviewer(branch);
   const ci = args.has('--ci') || Boolean(process.env.CI);
-  const eventBody = readEventBody();
-  const failures = collectFailures({ branch, ci, eventBody });
+  const failures = collectFailures();
 
   if (!ci || args.has('--verbose')) {
     printLocalReport({ branch, files, areas, reviewer });
-    if (failures.length > 0) reportFailures(failures, { ci, reviewer });
+    if (failures.length > 0) reportFailures(failures, { ci });
   }
 
   if (failures.length > 0) {
-    if (ci && !args.has('--verbose')) reportFailures(failures, { ci, reviewer });
+    if (ci && !args.has('--verbose')) reportFailures(failures, { ci });
     process.exit(1);
   }
 
-  if (ci) console.log('[cross-check] Cross-agent review marker present.');
+  // The review verdict itself is enforced by verify-review-verdict.mjs / ci-codex-review.mjs
+  // from origin/main; this script only advises and asserts the gate files exist.
+  if (ci) console.log('[cross-check] Cross-agent gate files present.');
 }
 
 main();

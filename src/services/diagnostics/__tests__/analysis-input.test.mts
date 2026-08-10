@@ -2,10 +2,10 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
 import {
-  CORRELATION_TIMEOUT_STALL_GRACE_MS,
+  ANALYSIS_TIMEOUT_STALL_GRACE_MS,
   MAX_CORRELATION_CLUSTERS,
   boundCorrelationClusters,
-  shouldExtendCorrelationTimeout,
+  shouldExtendAnalysisTimeout,
 } from '../../analysis-input.ts';
 
 test('correlation analysis keeps only the newest bounded cluster set', () => {
@@ -26,19 +26,19 @@ test('correlation analysis reuses inputs already within the limit', () => {
   assert.equal(boundCorrelationClusters(clusters), clusters);
 });
 
-test('correlation timeout extends once when the main thread delayed its timer', () => {
+test('analysis timeout extends once when the main thread delayed its timer', () => {
   const deadline = 10_000;
 
   assert.equal(
-    shouldExtendCorrelationTimeout(deadline + CORRELATION_TIMEOUT_STALL_GRACE_MS - 1, deadline, false),
+    shouldExtendAnalysisTimeout(deadline + ANALYSIS_TIMEOUT_STALL_GRACE_MS - 1, deadline, false),
     false,
   );
   assert.equal(
-    shouldExtendCorrelationTimeout(deadline + CORRELATION_TIMEOUT_STALL_GRACE_MS, deadline, false),
+    shouldExtendAnalysisTimeout(deadline + ANALYSIS_TIMEOUT_STALL_GRACE_MS, deadline, false),
     true,
   );
   assert.equal(
-    shouldExtendCorrelationTimeout(deadline + CORRELATION_TIMEOUT_STALL_GRACE_MS, deadline, true),
+    shouldExtendAnalysisTimeout(deadline + ANALYSIS_TIMEOUT_STALL_GRACE_MS, deadline, true),
     false,
   );
 });

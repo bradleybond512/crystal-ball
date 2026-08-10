@@ -7,7 +7,7 @@ import type { NewsItem, ClusteredEvent, MarketData } from '@/types';
 import type { PredictionMarket } from '@/services/prediction';
 import type { CorrelationSignal } from './correlation';
 import { SOURCE_TIERS, SOURCE_TYPES, type SourceType } from '@/config/feeds';
-import { boundCorrelationClusters, shouldExtendCorrelationTimeout } from './analysis-input';
+import { boundCorrelationClusters, shouldExtendAnalysisTimeout } from './analysis-input';
 import { slog } from './structured-log';
 
 // Import worker using Vite's worker syntax
@@ -75,15 +75,23 @@ export class AnalysisWorkerManager {
  this.readyReject = reject;
  });
 
- // Set ready timeout - reject if worker doesn't become ready in time
- this.readyTimeout = this.setTimer(() => {
+ let deadlineMs = this.now() + AnalysisWorkerManager.READY_TIMEOUT_MS;
+ let timeoutExtended = false;
+ const onReadyTimeout = () => {
  if (!this.isReady) {
+ if (shouldExtendAnalysisTimeout(this.now(), deadlineMs, timeoutExtended)) {
+ timeoutExtended = true;
+ deadlineMs = this.now() + AnalysisWorkerManager.READY_TIMEOUT_MS;
+ this.readyTimeout = this.setTimer(onReadyTimeout, AnalysisWorkerManager.READY_TIMEOUT_MS);
+ return;
+ }
  const error = new Error('Worker failed to become ready within timeout');
  slog('error', 'analysis-worker', error.message);
  this.readyReject?.(error);
  this.cleanup();
  }
- }, AnalysisWorkerManager.READY_TIMEOUT_MS);
+ };
+ this.readyTimeout = this.setTimer(onReadyTimeout, AnalysisWorkerManager.READY_TIMEOUT_MS);
 
  try {
  this.worker = this.createWorker();
@@ -255,7 +263,7 @@ export class AnalysisWorkerManager {
  const onTimeout = () => {
  const pending = this.pendingRequests.get(id);
  if (!pending) return;
- if (shouldExtendCorrelationTimeout(this.now(), deadlineMs, timeoutExtended)) {
+ if (shouldExtendAnalysisTimeout(this.now(), deadlineMs, timeoutExtended)) {
  timeoutExtended = true;
  deadlineMs = this.now() + timeoutMs;
  pending.timeout = this.setTimer(onTimeout, timeoutMs);

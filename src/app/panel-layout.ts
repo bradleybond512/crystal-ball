@@ -734,6 +734,7 @@ export class PanelLayoutManager implements AppModule {
   private lazyFactories = new Map<string, () => Promise<Panel>>();
   /** In-flight mounts, so concurrent enables of the same panel build it once. */
   private mountingPanels = new Map<string, Promise<Panel | null>>();
+  private isolatedPanelKeys: readonly string[] | null = null;
   private panelDragCleanupHandlers: (() => void)[] = [];
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
@@ -812,6 +813,10 @@ export class PanelLayoutManager implements AppModule {
     if (this._savedPlaceOpenCreate && this._savedPlaceOpenEdit) {
       this.ctx.unifiedSettings?.setPlaceCallbacks(this._savedPlaceOpenCreate, this._savedPlaceOpenEdit);
     }
+  }
+
+  public setIsolatedPanelKeys(keys: readonly string[]): void {
+    this.isolatedPanelKeys = keys;
   }
 
   init(): void {
@@ -1113,6 +1118,22 @@ export class PanelLayoutManager implements AppModule {
 
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
+
+ if (this.isolatedPanelKeys) {
+ const isolatedPanels: Record<string, Panel> = {
+ 'live-webcams': new LiveWebcamsPanel(),
+ 'unified-webcams': new UnifiedWebcamPanel(),
+ 'pinned-webcams': new PinnedWebcamsPanel(),
+ };
+ for (const key of this.isolatedPanelKeys) {
+ const panel = isolatedPanels[key];
+ if (!panel) continue;
+ this.ctx.panels[key] = panel;
+ panelsGrid.append(panel.getElement());
+ }
+ this.bindSidebarNavigation();
+ return;
+ }
 
  // Mount the EEW status bar at top of body — the anchor (z:9000).
  // The chip is a composite worst-of across EEW alerts, the Safety Case
@@ -2780,12 +2801,7 @@ export class PanelLayoutManager implements AppModule {
  // moment the sidebar was rebuilt (Defect B2). closest() also resolves
  // clicks on an item's inner dot / ⌘-hint children. navigateToPanel mounts
  // on demand and always gives visible feedback (scroll + flash, or a toast).
- const sidebarNav = document.querySelector('.mac-sidebar-nav');
- sidebarNav?.addEventListener('click', (e) => {
- const item = (e.target as HTMLElement).closest<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]');
- const key = item?.dataset.panelKey;
- if (key) void this.navigateToPanel(key);
- });
+ this.bindSidebarNavigation();
 
  // Wire mode selector buttons
  this._initModeSelector();
@@ -2808,6 +2824,7 @@ export class PanelLayoutManager implements AppModule {
  lpBtn.classList.toggle('low-power-active', e.detail as boolean);
  }) as EventListener);
  }
+
  }
 
  this.ctx.map.onTimeRangeChanged((range) => {
@@ -2820,6 +2837,17 @@ export class PanelLayoutManager implements AppModule {
  this.restoreLastViewedPanel();
  this.startLastViewedTracker();
  this.maybeShowOnboarding();
+  }
+
+  private bindSidebarNavigation(): void {
+ const sidebarNav = document.querySelector('.mac-sidebar-nav');
+ sidebarNav?.addEventListener('click', (event) => {
+ const item = (event.target as HTMLElement).closest<HTMLElement>(
+ '.mac-sidebar-panel-item[data-panel-key]',
+ );
+ const key = item?.dataset.panelKey;
+ if (key) void this.navigateToPanel(key);
+ });
   }
 
   /** Mount the WelcomeFlow on first run and seed operator-model from the user's choices. */

@@ -363,6 +363,8 @@ export class App {
 
   public async init(): Promise<void> {
  const initStart = performance.now();
+ const uiOnlyE2E = import.meta.env.VITE_E2E === '1'
+ && new URLSearchParams(window.location.search).get('e2e') === 'ui-only';
  // Log-bridge records breadcrumbs, long-task perf events, and memory snapshots
  // in every runtime. In desktop builds it also forwards to ~/Library/Logs via
  // Tauri; in web builds the invokeTauri calls no-op but the client-side
@@ -375,7 +377,7 @@ export class App {
  await initI18n();
  cyberReactorUnsubscribe = startNotificationRouter();
  const aiFlow = getAiFlowSettings();
- if (aiFlow.browserModel || isDesktopRuntime()) {
+ if (!uiOnlyE2E && (aiFlow.browserModel || isDesktopRuntime())) {
  await mlWorker.init();
  if (BETA_MODE) mlWorker.loadModel('summarization-beta').catch(() => {});
  }
@@ -430,6 +432,9 @@ export class App {
  // Phase 1: Layout (creates map + panels — they'll find hydrated data)
  const bootLayoutT = typeof performance === 'undefined' ? 0 : performance.now();
  bootTrace('panelLayout.init:start');
+ if (uiOnlyE2E) {
+ this.panelLayout.setIsolatedPanelKeys(['live-webcams', 'unified-webcams', 'pinned-webcams']);
+ }
  this.panelLayout.init();
  bootTrace('panelLayout.init:done');
  if (bootLayoutT > 0) {
@@ -515,10 +520,12 @@ export class App {
  bootTrace('phase6:data-load:start');
  this.dataLoader.syncDataFreshnessWithLayers();
  bootTrace('phase6:data-load:awaiting');
+ if (!uiOnlyE2E) {
  await Promise.all([preloadCountryGeometry(), this.dataLoader.loadAllData()]);
+ }
  bootTrace('phase6:data-load:done');
 
- startLearning();
+ if (!uiOnlyE2E) startLearning();
  bootTrace('startLearning:done');
 
  // Hide unconfigured layers after first data load
@@ -533,9 +540,11 @@ export class App {
  }
 
  // Phase 7: Refresh scheduling
+ if (!uiOnlyE2E) {
  this.setupRefreshIntervals();
  this.eventHandlers.setupSnapshotSaving();
  cleanOldSnapshots().catch((error) => console.warn('[Storage] Snapshot cleanup failed:', error));
+ }
 
  // Phase 8: Deep links + update checks
  this.handleDeepLinks();

@@ -7,7 +7,7 @@ import type { NewsItem, ClusteredEvent, MarketData } from '@/types';
 import type { PredictionMarket } from '@/services/prediction';
 import type { CorrelationSignal } from './correlation';
 import { SOURCE_TIERS, SOURCE_TYPES, type SourceType } from '@/config/feeds';
-import { boundCorrelationClusters } from './analysis-input';
+import { boundCorrelationClusters, shouldExtendCorrelationTimeout } from './analysis-input';
 import { slog } from './structured-log';
 
 // Import worker using Vite's worker syntax
@@ -17,6 +17,13 @@ interface PendingRequest<T> {
   resolve: (value: T) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+}
+
+interface AnalysisWorkerManagerOptions {
+  createWorker?: () => Worker;
+  now?: () => number;
+  setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
 }
 
 interface ClusterResult {
@@ -33,7 +40,7 @@ interface CorrelationResult {
 
 type WorkerResult = ClusterResult | CorrelationResult | { type: 'ready' };
 
-class AnalysisWorkerManager {
+export class AnalysisWorkerManager {
   private worker: Worker | null = null;
   private pendingRequests = new Map<string, PendingRequest<unknown>>();
   private requestIdCounter = 0;
@@ -43,7 +50,19 @@ class AnalysisWorkerManager {
   private readyReject: ((error: Error) => void) | null = null;
   private readyTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  private readonly createWorker: () => Worker;
+  private readonly now: () => number;
+  private readonly setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  private readonly clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
+
   private static readonly READY_TIMEOUT_MS = 10_000; // 10 seconds to become ready
+
+  constructor(options: AnalysisWorkerManagerOptions = {}) {
+ this.createWorker = options.createWorker ?? (() => new AnalysisWorker());
+ this.now = options.now ?? (() => performance.now());
+ this.setTimer = options.setTimer ?? setTimeout;
+ this.clearTimer = options.clearTimer ?? clearTimeout;
+  }
 
   /**
  * Initialize the worker. Called lazily on first use.
@@ -57,7 +76,7 @@ class AnalysisWorkerManager {
  });
 
  // Set ready timeout - reject if worker doesn't become ready in time
- this.readyTimeout = setTimeout(() => {
+ this.readyTimeout = this.setTimer(() => {
  if (!this.isReady) {
  const error = new Error('Worker failed to become ready within timeout');
  slog('error', 'analysis-worker', error.message);
@@ -67,7 +86,7 @@ class AnalysisWorkerManager {
  }, AnalysisWorkerManager.READY_TIMEOUT_MS);
 
  try {
- this.worker = new AnalysisWorker();
+ this.worker = this.createWorker();
  } catch (error) {
  slog('error', 'analysis-worker', 'Failed to create worker', {
  fields: { error: error instanceof Error ? error.message : String(error) },
@@ -83,7 +102,7 @@ class AnalysisWorkerManager {
  if (data.type === 'ready') {
  this.isReady = true;
  if (this.readyTimeout) {
- clearTimeout(this.readyTimeout);
+ this.clearTimer(this.readyTimeout);
  this.readyTimeout = null;
  }
  this.readyResolve?.();
@@ -93,7 +112,7 @@ class AnalysisWorkerManager {
  if ('id' in data) {
  const pending = this.pendingRequests.get(data.id);
  if (pending) {
- clearTimeout(pending.timeout);
+ this.clearTimer(pending.timeout);
  this.pendingRequests.delete(data.id);
 
  if (data.type === 'cluster-result') {
@@ -142,7 +161,7 @@ class AnalysisWorkerManager {
 
  // Reject all pending requests
  for (const [id, pending] of this.pendingRequests) {
- clearTimeout(pending.timeout);
+ this.clearTimer(pending.timeout);
  pending.reject(new Error(`Worker error: ${error.message}`));
  this.pendingRequests.delete(id);
  }
@@ -154,7 +173,7 @@ class AnalysisWorkerManager {
  */
   private cleanup(): void {
  if (this.readyTimeout) {
- clearTimeout(this.readyTimeout);
+ this.clearTimer(this.readyTimeout);
  this.readyTimeout = null;
  }
  if (this.worker) {
@@ -194,7 +213,7 @@ class AnalysisWorkerManager {
  const id = this.generateId();
 
  // Set timeout (30 seconds - clustering can take a while for large datasets)
- const timeout = setTimeout(() => {
+ const timeout = this.setTimer(() => {
  this.pendingRequests.delete(id);
  reject(new Error('Clustering request timed out'));
  }, 30_000);
@@ -228,12 +247,24 @@ class AnalysisWorkerManager {
 
  return new Promise((resolve, reject) => {
  const id = this.generateId();
+ const timeoutMs = 10_000;
+ let deadlineMs = this.now() + timeoutMs;
+ let timeoutExtended = false;
 
  // Set timeout (10 seconds should be plenty for correlation)
- const timeout = setTimeout(() => {
+ const onTimeout = () => {
+ const pending = this.pendingRequests.get(id);
+ if (!pending) return;
+ if (shouldExtendCorrelationTimeout(this.now(), deadlineMs, timeoutExtended)) {
+ timeoutExtended = true;
+ deadlineMs = this.now() + timeoutMs;
+ pending.timeout = this.setTimer(onTimeout, timeoutMs);
+ return;
+ }
  this.pendingRequests.delete(id);
  reject(new Error('Correlation analysis request timed out'));
- }, 10_000);
+ };
+ const timeout = this.setTimer(onTimeout, timeoutMs);
 
  this.pendingRequests.set(id, {
  resolve: resolve as (value: unknown) => void,
@@ -258,7 +289,7 @@ class AnalysisWorkerManager {
   reset(): void {
  // Reject all pending requests - reset worker won't answer old queries
  for (const pending of this.pendingRequests.values()) {
- clearTimeout(pending.timeout);
+ this.clearTimer(pending.timeout);
  pending.reject(new Error('Worker reset'));
  }
  this.pendingRequests.clear();
@@ -274,7 +305,7 @@ class AnalysisWorkerManager {
   terminate(): void {
  // Reject all pending requests
  for (const [id, pending] of this.pendingRequests) {
- clearTimeout(pending.timeout);
+ this.clearTimer(pending.timeout);
  pending.reject(new Error('Worker terminated'));
  this.pendingRequests.delete(id);
  }

@@ -56,13 +56,19 @@ interface PollenResponse {
 }
 
 export async function fetchPollenData(): Promise<PollenReading[]> {
-  return breaker.execute(async () => {
+  const readings = await breaker.execute(async () => {
  const results = await Promise.allSettled(CITIES.map(c => fetchCityPollen(c)));
  return results
  .filter((r): r is PromiseFulfilledResult<PollenReading | null> => r.status === 'fulfilled')
  .map(r => r.value)
  .filter((r): r is PollenReading => r !== null);
   }, []);
+  return readings.map(reading => ({
+    ...reading,
+    updatedAt: reading.updatedAt instanceof Date
+      ? reading.updatedAt
+      : new Date(reading.updatedAt as unknown as string),
+  }));
 }
 
 async function fetchCityPollen(city: typeof CITIES[0]): Promise<PollenReading | null> {

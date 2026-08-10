@@ -55,7 +55,7 @@ const EVENT_TYPE_NAMES: Record<string, string> = {
 };
 
 export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
-  return breaker.execute(async () => {
+  const events = await breaker.execute(async () => {
  const response = await fetch(GDACS_API, {
  headers: { 'Accept': 'application/json' },
  signal: AbortSignal.timeout(10_000),
@@ -93,6 +93,12 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
  url: f.properties.url?.report || '',
  }));
   }, []);
+  return events.map(event => ({
+    ...event,
+    fromDate: event.fromDate instanceof Date
+      ? event.fromDate
+      : new Date(event.fromDate as unknown as string),
+  }));
 }
 
 export function getGDACSStatus(): string {

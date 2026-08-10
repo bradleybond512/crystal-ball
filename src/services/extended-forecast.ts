@@ -53,7 +53,7 @@ interface OpenMeteoDaily {
 }
 
 export async function fetchExtendedForecast(lat: number, lon: number, location = ''): Promise<ExtendedForecast | null> {
-  return breaker.execute(async () => {
+  const forecast = await breaker.execute(async () => {
  const params = [
  `latitude=${String(lat)}`,
  `longitude=${String(lon)}`,
@@ -96,6 +96,13 @@ export async function fetchExtendedForecast(lat: number, lon: number, location =
 
  return { location: location ?? '', lat, lon, days, fetchedAt: new Date() };
   }, null);
+  if (!forecast) return null;
+  return {
+    ...forecast,
+    fetchedAt: forecast.fetchedAt instanceof Date
+      ? forecast.fetchedAt
+      : new Date(forecast.fetchedAt as unknown as string),
+  };
 }
 
 function degreesToCardinal(deg: number): string {

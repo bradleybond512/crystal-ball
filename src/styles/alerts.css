@@ -5,6 +5,7 @@
   width: auto;
   max-width: 100vw;
   overflow-x: clip;
+  scrollbar-gutter: stable;
   isolation: isolate;
 }
 
@@ -893,11 +894,7 @@
 }
 
 .cb-storm-mode__details-shell {
-  max-height: 55dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  scrollbar-gutter: stable;
 }
 .cb-storm-mode__details-shell[hidden] { display: none; }
 

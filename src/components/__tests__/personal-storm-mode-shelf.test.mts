@@ -194,6 +194,38 @@ test('critical headline and details use an accessible disclosure contract', () =
   }
 });
 
+test('refreshing the same alert preserves expanded details and keyboard focus', () => {
+  const { component, mount } = renderStorm('emergency');
+
+  try {
+    const disclosure = requiredElement<HTMLButtonElement>(mount, '.cb-storm-mode__btn--details');
+    disclosure.click();
+    disclosure.focus();
+
+    const refreshedDecision = {
+      ...persistentDecision('emergency'),
+      reason: 'Updated warning still includes Home',
+    };
+    component.update(refreshedDecision, NOW + 1_000);
+
+    const refreshedDisclosure = requiredElement<HTMLButtonElement>(mount, '.cb-storm-mode__btn--details');
+    const detailsId = refreshedDisclosure.getAttribute('aria-controls');
+    assert.ok(detailsId);
+    assert.equal(refreshedDisclosure.getAttribute('aria-expanded'), 'true');
+    assert.equal(happyWindow.document.getElementById(detailsId)?.hidden, false);
+    assert.equal(happyWindow.document.activeElement, refreshedDisclosure);
+
+    const refreshedRoot = requiredElement<HTMLElement>(mount, '.cb-storm-mode');
+    component.update({ ...refreshedDecision }, NOW + 2_000);
+    assert.ok(
+      requiredElement<HTMLElement>(mount, '.cb-storm-mode') === refreshedRoot,
+      'an unchanged refresh should not replace the live alert DOM',
+    );
+  } finally {
+    component.clear();
+  }
+});
+
 test('collapsed shelf keeps acknowledge primary and snooze independently accessible', () => {
   const { component, mount } = renderStorm('warning');
 
@@ -259,6 +291,8 @@ test('NotificationStack exposes and measures the alert shelf below EEW chrome', 
       'notification shelf should anchor at var(--below-eew)',
     );
     assert.ok(stack.element.classList.contains('alert-shelf'));
+    assert.equal(stack.element.style.maxHeight, 'calc(100dvh - var(--below-eew))');
+    assert.equal(stack.element.style.overflowY, 'auto');
 
     const stormMount = happyWindow.document.createElement('div');
     const triageMount = happyWindow.document.createElement('div');

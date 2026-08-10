@@ -54,6 +54,12 @@ class FakeWorker extends EventTarget {
   emit(data: unknown): void {
     this.dispatchEvent(new MessageEvent('message', { data }));
   }
+
+  emitError(message: string): void {
+    const event = new Event('error');
+    Object.defineProperty(event, 'message', { value: message });
+    this.dispatchEvent(event);
+  }
 }
 
 function makeManager() {
@@ -173,6 +179,38 @@ test('terminate makes an already-queued ready message harmless', () => {
   worker.emit({ type: 'ready' });
 
   assert.equal(manager.ready, false);
+});
+
+test('a stale worker error cannot reject replacement worker readiness', async () => {
+  const timers = new FakeTimers();
+  const firstWorker = new FakeWorker();
+  const replacementWorker = new FakeWorker();
+  const workers = [firstWorker, replacementWorker];
+  const manager = new AnalysisWorkerManager({
+    createWorker: () => workers.shift() as unknown as Worker,
+    now: () => timers.now,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+  });
+  const firstResult = manager.analyzeCorrelations([], [], []);
+  void firstResult.catch(() => {});
+
+  manager.terminate();
+  const replacementResult = manager.analyzeCorrelations([], [], []);
+  firstWorker.emitError('stale worker failure');
+  replacementWorker.emit({ type: 'ready' });
+  await Promise.resolve();
+  await Promise.resolve();
+  const request = replacementWorker.messages.find((message) => (
+    typeof message === 'object' && message !== null && 'type' in message
+    && message.type === 'correlation'
+  )) as { id: string } | undefined;
+  assert.ok(request, 'replacement worker should receive the correlation request');
+
+  replacementWorker.emit({ type: 'correlation-result', id: request.id, signals: [] });
+
+  assert.deepEqual(await replacementResult, []);
+  assert.equal(timers.size, 0);
 });
 
 test('analyzeCorrelations rejects an on-time worker hang at ten seconds', async () => {

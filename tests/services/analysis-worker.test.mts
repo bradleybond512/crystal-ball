@@ -123,24 +123,24 @@ test('default browser timers keep the global receiver', async () => {
   const originalClearTimeout = globalThis.clearTimeout;
   const timerHandle = {} as ReturnType<typeof setTimeout>;
   let clearCalls = 0;
-
-  globalThis.setTimeout = (function (this: unknown): ReturnType<typeof setTimeout> {
-    assert.equal(this, globalThis, 'setTimeout must use the browser global as its receiver');
-    return timerHandle;
-  }) as typeof globalThis.setTimeout;
-  globalThis.clearTimeout = (function (this: unknown, handle?: ReturnType<typeof setTimeout>): void {
-    assert.equal(this, globalThis, 'clearTimeout must use the browser global as its receiver');
-    assert.equal(handle, timerHandle);
-    clearCalls += 1;
-  }) as typeof globalThis.clearTimeout;
-
-  const worker = new FakeWorker();
-  const manager = new AnalysisWorkerManager({
-    createWorker: () => worker as unknown as Worker,
-  });
+  let manager: AnalysisWorkerManager | undefined;
   let outcome: Promise<void> | undefined;
 
   try {
+    globalThis.setTimeout = (function (this: unknown): ReturnType<typeof setTimeout> {
+      assert.equal(this, globalThis, 'setTimeout must use the browser global as its receiver');
+      return timerHandle;
+    }) as typeof globalThis.setTimeout;
+    globalThis.clearTimeout = (function (this: unknown, handle?: ReturnType<typeof setTimeout>): void {
+      assert.equal(this, globalThis, 'clearTimeout must use the browser global as its receiver');
+      assert.equal(handle, timerHandle);
+      clearCalls += 1;
+    }) as typeof globalThis.clearTimeout;
+
+    const worker = new FakeWorker();
+    manager = new AnalysisWorkerManager({
+      createWorker: () => worker as unknown as Worker,
+    });
     const result = manager.analyzeCorrelations([], [], []);
     outcome = result.then(() => {}, () => {});
     const request = worker.messages.find((message) => (
@@ -154,10 +154,13 @@ test('default browser timers keep the global receiver', async () => {
     assert.deepEqual(await result, []);
     assert.equal(clearCalls, 1);
   } finally {
-    manager.terminate();
-    await outcome;
-    globalThis.setTimeout = originalSetTimeout;
-    globalThis.clearTimeout = originalClearTimeout;
+    try {
+      manager?.terminate();
+      await outcome;
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
   }
 });
 

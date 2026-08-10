@@ -19,6 +19,11 @@ test('Error formatting preserves the message when WebKit omits it from the stack
 
 test('expected feed failures include WebKit aborts and upstream outages', () => {
   assert.equal(isExpectedFeedFailure('Fetch is aborted'), true);
-  assert.equal(isExpectedFeedFailure('[CachedRiskScores] Fetch error: request cancelled'), true);
+  assert.equal(isExpectedFeedFailure('[CachedRiskScores] Fetch error: request failed with status 503'), true);
   assert.equal(isExpectedFeedFailure('All regions failed - upstream may be down'), true);
+});
+
+test('feed failure classification does not mask unrelated application errors', () => {
+  assert.equal(isExpectedFeedFailure('Fetch error: unexpected null in response body'), false);
+  assert.equal(isExpectedFeedFailure('AbortError: analysis worker cancelled unexpectedly'), false);
 });

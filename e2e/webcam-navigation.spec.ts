@@ -162,6 +162,8 @@ test('FAA map popup requests and reveals a resolved frame', async ({ page }) => 
   const resolvedImageUrl = 'https://api.weather.gov/e2e-faa-camera.png';
   let imageRequests = 0;
 
+  await page.setViewportSize({ width: 900, height: 420 });
+
   await page.route('http://127.0.0.1:46123/api/faa-camera-image?cameraId=11914', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -185,7 +187,7 @@ test('FAA map popup requests and reveals a resolved frame', async ({ page }) => 
       type: 'faaCamera',
       data: {
         id: '11914',
-        name: 'La Veta Pass - Camera 3',
+        name: 'Monument Hill/Kelly Air Park - Camera 2',
         lat: 37.5969,
         lon: -105.2035,
         state: 'CO',
@@ -209,4 +211,74 @@ test('FAA map popup requests and reveals a resolved frame', async ({ page }) => 
   await expect.poll(async () => image.evaluate((element) => element.naturalWidth)).toBeGreaterThan(0);
   await expect(image).toBeVisible();
   await expect(page.locator('[data-faa-camera-status]')).toHaveCount(0);
+
+  const popup = page.locator('.map-popup.map-popup-faa-camera');
+  const body = popup.locator('.faa-camera-popup-body');
+  const close = popup.locator('.popup-close');
+  await expect(popup).toBeVisible();
+  await expect(close).toBeVisible();
+
+  const layout = await popup.evaluate((element) => {
+    const popupElement = element as HTMLElement;
+    const popupBody = popupElement.querySelector<HTMLElement>('.faa-camera-popup-body');
+    const header = popupElement.querySelector<HTMLElement>('.faa-camera-popup-header');
+    const frame = popupElement.querySelector<HTMLElement>('.faa-camera-frame');
+    const imageElement = popupElement.querySelector<HTMLElement>('.faa-camera-frame-image');
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--red)';
+    document.body.append(probe);
+    const criticalRed = getComputedStyle(probe).color;
+    probe.remove();
+    const popupStyle = getComputedStyle(popupElement);
+    const bodyStyle = popupBody ? getComputedStyle(popupBody) : null;
+    const popupRect = popupElement.getBoundingClientRect();
+    const frameRect = frame?.getBoundingClientRect();
+    const imageRect = imageElement?.getBoundingClientRect();
+
+    return {
+      viewportHeight: window.innerHeight,
+      popupTop: popupRect.top,
+      popupBottom: popupRect.bottom,
+      popupOverflowY: popupStyle.overflowY,
+      popupScrollHeight: popupElement.scrollHeight,
+      popupClientHeight: popupElement.clientHeight,
+      borderColor: popupStyle.borderTopColor,
+      criticalRed,
+      borderRadius: Number.parseFloat(popupStyle.borderTopLeftRadius),
+      bodyOverflowY: bodyStyle?.overflowY,
+      bodyScrollHeight: popupBody?.scrollHeight ?? 0,
+      bodyClientHeight: popupBody?.clientHeight ?? 0,
+      headerTop: header?.getBoundingClientRect().top ?? 0,
+      frameWidth: frameRect?.width ?? 0,
+      frameHeight: frameRect?.height ?? 0,
+      imageWidth: imageRect?.width ?? 0,
+      imageHeight: imageRect?.height ?? 0,
+      imageObjectFit: imageElement ? getComputedStyle(imageElement).objectFit : '',
+    };
+  });
+
+  expect(layout.popupTop).toBeGreaterThanOrEqual(16);
+  expect(layout.popupBottom).toBeLessThanOrEqual(layout.viewportHeight - 16);
+  expect(layout.popupOverflowY).toBe('hidden');
+  expect(layout.popupScrollHeight).toBe(layout.popupClientHeight);
+  expect(layout.borderColor).not.toBe(layout.criticalRed);
+  expect(layout.borderRadius).toBeGreaterThanOrEqual(8);
+  expect(layout.bodyOverflowY).toBe('auto');
+  expect(layout.bodyScrollHeight).toBeGreaterThan(layout.bodyClientHeight);
+  expect(layout.frameWidth).toBeGreaterThan(0);
+  expect(layout.frameHeight).toBeGreaterThan(0);
+  expect(layout.imageWidth).toBeLessThanOrEqual(layout.frameWidth);
+  expect(layout.imageHeight).toBeLessThanOrEqual(layout.frameHeight);
+  expect(layout.imageObjectFit).toBe('contain');
+
+  await body.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(close).toBeVisible();
+  await expect.poll(async () => popup.locator('.faa-camera-popup-header').evaluate((element) => (
+    element.getBoundingClientRect().top
+  ))).toBe(layout.headerTop);
+
+  await page.keyboard.press('Escape');
+  await expect(popup).toHaveCount(0);
 });

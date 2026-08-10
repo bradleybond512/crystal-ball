@@ -90,6 +90,27 @@ test('FAA map popup resolves the API pointer before loading the camera image', a
   }
 });
 
+test('FAA map popup exposes dedicated viewer structure for constrained layout', () => {
+  const popup = mountPopup();
+  popup.show({
+    type: 'faaCamera',
+    data: { ...CAMERA, imageUrl: 'https://images.wcams-static.faa.gov/11526/current.jpg' },
+    x: 100,
+    y: 100,
+  });
+
+  assert.ok(document.querySelector('.map-popup.map-popup-faa-camera'));
+  assert.ok(document.querySelector('.popup-header.faa-camera-popup-header'));
+  assert.ok(document.querySelector('.popup-body.faa-camera-popup-body'));
+  assert.ok(document.querySelector('.faa-camera-frame'));
+  assert.ok(document.querySelector('.faa-camera-frame-image'));
+  const close = document.querySelector<HTMLButtonElement>('.faa-camera-popup-header .popup-close');
+  assert.equal(close?.type, 'button');
+  assert.equal(close?.getAttribute('aria-label'), 'common.close');
+  assert.equal(document.querySelector('time.faa-camera-updated')?.getAttribute('datetime'), CAMERA.lastUpdated);
+  popup.hide();
+});
+
 test('FAA map popup replaces a failed image load with an unavailable state', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({

@@ -37,6 +37,7 @@ export const OVERRIDES = {
   'scripts/agentic-validate.sh': ['test:agentic-gate'],
   'scripts/check-docs-freshness.mjs': ['test:agentic-gate'],
   'scripts/verify-review-verdict.mjs': ['test:agentic-pipeline'],
+  'scripts/cross-agent-check.mjs': ['test:agentic-pipeline'],
   'scripts/targeted-tests.mjs': ['test:agentic-pipeline'],
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
   'scripts/lint-changed.mjs': ['test:eslint-runner'],

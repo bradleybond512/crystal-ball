@@ -16,6 +16,7 @@ import {
   commandToStages,
 } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
+import { expectedReviewer, verdictAdvice } from '../scripts/cross-agent-check.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -363,4 +364,49 @@ test('schema violations parse to null so the check refuses to pass', () => {
   assert.equal(parseVerdictLine('{"blockingFindings": 0.5, "findings": []}'), null);
   assert.equal(parseVerdictLine('{"blockingFindings": 0, "findings": [{"file": "a.ts", "summary": "x"}]}'), null);
   assert.equal(parseVerdictLine('{"looksLike": "json but wrong shape"}'), null);
+});
+
+// ── cross-agent-check: advice must match the gate it describes ──
+
+test('the advised reviewer tracks requiredReviewers, never a private copy', () => {
+  assert.equal(expectedReviewer('claude/x'), 'Codex');
+  assert.equal(expectedReviewer('codex/x'), 'Claude');
+  assert.equal(expectedReviewer('copilot/x'), 'Codex or Claude');
+  assert.equal(expectedReviewer('feature/x'), 'another agent');
+  // Drift guard: the prose must be derived from the enforcing mapping.
+  for (const branch of ['claude/x', 'codex/x', 'copilot/x', 'feature/x']) {
+    const reviewers = requiredReviewers(branch);
+    const expected = reviewers === null
+      ? 'another agent'
+      : reviewers.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(' or ');
+    assert.equal(expectedReviewer(branch), expected);
+  }
+});
+
+test('a non-agent branch is advised no verdict, because record() would reject it', () => {
+  assert.equal(verdictAdvice('feature/x'), null);
+  assert.equal(verdictAdvice('main'), null);
+  assert.equal(requiredReviewers('feature/x'), null);
+});
+
+test('the advised --reviewer slug is one the verifier would accept', () => {
+  for (const branch of ['claude/x', 'codex/x']) {
+    const line = verdictAdvice(branch).find((l) => l.includes('--reviewer'));
+    const slug = line.split('--reviewer ')[1].split(' ')[0];
+    assert.ok(requiredReviewers(branch).includes(slug), `${slug} rejected for ${branch}`);
+  }
+  // Either agent may review a copilot branch, so the advice must not pick one.
+  const copilot = verdictAdvice('copilot/x').find((l) => l.includes('--reviewer'));
+  assert.match(copilot, /--reviewer <codex\|claude>/);
+});
+
+test('the advice never tells the operator to commit the verdict a second time', () => {
+  const advice = verdictAdvice('claude/x').join('\n');
+  assert.ok(advice.includes('--record'), 'advice should show the record command');
+  assert.doesNotMatch(advice, /^git commit/m, '--record already commits; a second commit fails');
+});
+
+test('cross-agent-check is importable without running its CLI', () => {
+  // The advice helpers are unit-testable only if importing does not shell out.
+  assert.equal(typeof verdictAdvice, 'function');
 });

@@ -740,6 +740,9 @@ export class PanelLayoutManager implements AppModule {
   private dcStrip: DataCenterPinnedStrip | null = null;
   private summaryStrip: SummaryStrip | null = null;
   private triageBar: TriageBar | null = null;
+  private stormMode: PersonalStormMode | null = null;
+  private stormMount: HTMLElement | null = null;
+  private _onStormDecision: ((e: Event) => void) | null = null;
   private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private unsubWeatherClearOnPlaces: (() => void) | null = null;
@@ -865,6 +868,9 @@ export class PanelLayoutManager implements AppModule {
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
  if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
+ if (this._onStormDecision) { document.removeEventListener('cb:storm-decision', this._onStormDecision); this._onStormDecision = null; }
+ if (this.stormMode) { this.stormMode.destroy(); this.stormMode = null; }
+ if (this.stormMount) { this.stormMount.remove(); this.stormMount = null; }
  // Clean up happy variant controllers and every mounted panel exactly once.
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
@@ -1167,12 +1173,14 @@ export class PanelLayoutManager implements AppModule {
  // on each NWS alert refresh cycle; this component renders the result.
  const stormMount = document.createElement('div');
  stormMount.id = 'cb-storm-mode-mount';
- document.body.appendChild(stormMount);
- const stormModeComponent = new PersonalStormMode({ mount: stormMount });
- document.addEventListener('cb:storm-decision', (e: Event) => {
+ notificationStack.element.append(stormMount);
+ this.stormMount = stormMount;
+ this.stormMode = new PersonalStormMode({ mount: stormMount });
+ this._onStormDecision = (e: Event) => {
  const decision = (e as CustomEvent<WeatherDispatchDecision | undefined>).detail;
- stormModeComponent.update(decision);
- });
+ this.stormMode?.update(decision);
+ };
+ document.addEventListener('cb:storm-decision', this._onStormDecision);
 
  // Mount the cross-domain correlation banner. Self-fetches from
  // /api/synthesis/correlations every 15s; hidden when no events.

@@ -22,9 +22,10 @@ export class NotificationStack {
   constructor() {
     const el = document.createElement('div');
     el.id = STACK_ID;
+    el.className = 'alert-shelf';
     Object.assign(el.style, {
       position: 'fixed',
-      top: 'var(--eew-bar-h, 32px)',
+      top: 'var(--below-eew)',
       left: '0',
       right: '0',
       zIndex: '9001',
@@ -37,6 +38,7 @@ export class NotificationStack {
 
   mount(parent: HTMLElement = document.body): void {
     parent.append(this.element);
+    this.ro?.disconnect();
     this.ro = new ResizeObserver(() => {
       document.documentElement.style.setProperty(
         CSS_VAR,
@@ -50,6 +52,7 @@ export class NotificationStack {
 
   destroy(): void {
     this.ro?.disconnect();
+    this.ro = null;
     this.element.remove();
     document.documentElement.style.removeProperty(CSS_VAR);
   }

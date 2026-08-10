@@ -341,6 +341,9 @@ test('FAA map popup stays usable as a mobile camera sheet', async ({ page }) => 
   await expect(popup).toBeVisible();
   await expect.poll(async () => image.evaluate((element) => element.naturalWidth)).toBeGreaterThan(0);
   await expect(image).toBeVisible();
+  await expect.poll(async () => popup.evaluate((element) => (
+    element.getBoundingClientRect().bottom <= window.innerHeight
+  ))).toBe(true);
 
   const layout = await popup.evaluate((element) => {
     const rect = element.getBoundingClientRect();

@@ -196,8 +196,20 @@ async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
   return normalizeWeatherAlertsResponse(await response.json() as NWSResponse);
 }
 
+function hydrateWeatherAlertDates(alerts: WeatherAlert[]): WeatherAlert[] {
+  return alerts.map(alert => ({
+    ...alert,
+    onset: alert.onset instanceof Date
+      ? alert.onset
+      : new Date(alert.onset as unknown as string),
+    expires: alert.expires instanceof Date
+      ? alert.expires
+      : new Date(alert.expires as unknown as string),
+  }));
+}
+
 export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
-  return breaker.execute(fetchNwsAlerts, []);
+  return hydrateWeatherAlertDates(await breaker.execute(fetchNwsAlerts, []));
 }
 
 export function getWeatherStatus(): string {
@@ -250,7 +262,10 @@ export async function fetchWeatherAlertsWithFeedState(): Promise<{
   feedState: WeatherFeedState;
 }> {
   const { data, dataState } = await breaker.executeTracked(fetchNwsAlerts, []);
-  return { alerts: data, feedState: { mode: dataState.mode, timestamp: dataState.timestamp } };
+  return {
+    alerts: hydrateWeatherAlertDates(data),
+    feedState: { mode: dataState.mode, timestamp: dataState.timestamp },
+  };
 }
 
 /**

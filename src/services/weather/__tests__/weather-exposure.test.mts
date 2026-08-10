@@ -129,17 +129,15 @@ test('an alert far from every saved place yields zero exposure', () => {
   assert.equal(exposure, 0);
 });
 
-// ── Regression: cache-hydrated alerts (string dates) ─────────────────────
-// The NWS circuit breaker uses persistCache:true, which round-trips the
-// payload through JSON (persistent-cache does JSON.stringify → JSON.parse).
+// ── Regression: raw persisted alerts (string dates) ──────────────────────
+// The public weather service rehydrates its own breaker cache, but callers can
+// still supply JSON-round-tripped alerts from other persistence boundaries.
 // That turns `onset`/`expires` from Date objects into ISO strings. If the
 // adapter calls `.toISOString()` on them it throws a TypeError, and because
-// this runs inside the per-batch try/catch in data-loader, ONE bad alert
-// aborts the entire severe-alert batch — no warning is dispatched that
-// cycle. That is strictly worse than the original bug, and it happens
-// exactly when offline/cached (a storm knocking out connectivity).
+// this runs inside the per-batch try/catch in data-loader, ONE bad alert aborts
+// the entire severe-alert batch — no warning is dispatched that cycle.
 
-test('cache-hydrated alerts (string dates) do not throw and still match', () => {
+test('raw persisted alerts (string dates) do not throw and still match', () => {
   const live = tornadoWarning(COVERS_HOME);
   // Faithful reproduction of persistent-cache hydration.
   const hydrated = JSON.parse(JSON.stringify(live)) as unknown as WeatherAlert;

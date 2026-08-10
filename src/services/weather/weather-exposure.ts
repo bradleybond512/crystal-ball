@@ -41,13 +41,12 @@ const SEVERITY_LOWER: Record<WeatherAlert['severity'], WeatherSeverity> = {
 
 /**
  * Coerce an alert timestamp to an ISO string. The type says `Date`, but
- * the NWS circuit breaker persists its cache with `persistCache: true`,
- * which round-trips the payload through JSON — so cache-hydrated alerts
- * arrive with `onset`/`expires` as ISO strings, not Date objects.
- * Calling `.toISOString()` on those throws a TypeError that (inside the
- * data-loader's per-batch try/catch) would drop EVERY severe alert that
- * cycle. The matcher only needs a `Date.parse`-able string, so pass a
- * string straight through and stringify a real Date.
+ * persisted or externally supplied data can still carry ISO strings despite
+ * the public weather service rehydrating its own cache. Calling
+ * `.toISOString()` on those strings throws a TypeError that (inside the
+ * data-loader's per-batch try/catch) would drop EVERY severe alert that cycle.
+ * The matcher only needs a `Date.parse`-able string, so pass a string straight
+ * through and stringify a real Date.
  *
  * A malformed NWS timestamp also yields an *invalid* Date object
  * (`new Date('garbage')`), whose `.toISOString()` throws RangeError('Invalid

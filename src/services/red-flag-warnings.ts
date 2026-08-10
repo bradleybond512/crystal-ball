@@ -60,7 +60,7 @@ interface NWSAlertProps {
 }
 
 export async function fetchRedFlagWarnings(): Promise<RedFlagWarning[]> {
-  return warningBreaker.execute(async () => {
+  const warnings = await warningBreaker.execute(async () => {
  const res = await fetch(NWS_FIRE_URL, {
  headers: { 'User-Agent': 'CrystalBall/1.0' },
  signal: AbortSignal.timeout(10_000),
@@ -81,13 +81,27 @@ export async function fetchRedFlagWarnings(): Promise<RedFlagWarning[]> {
  centroid: extractCentroid(f.geometry),
  }));
   }, []);
+  return warnings.map(warning => ({
+    ...warning,
+    onset: warning.onset instanceof Date
+      ? warning.onset
+      : new Date(warning.onset as unknown as string),
+    expires: warning.expires instanceof Date
+      ? warning.expires
+      : new Date(warning.expires as unknown as string),
+  }));
 }
 
 export async function fetchFireWeatherOutlook(): Promise<FireWeatherOutlook[]> {
   return outlookBreaker.execute(async () => {
  // SPC publishes fire weather outlooks as GeoJSON Day 1
  const url = 'https://www.spc.noaa.gov/products/fire_wx/day1otlk_fire.lyr.geojson';
- const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+ let res: Response;
+ try {
+ res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+ } catch (error) {
+ throw new Error(`Failed to fetch SPC fire weather outlook: ${String(error)}`);
+ }
  if (!res.ok) return [];
 
  const data = await res.json() as {

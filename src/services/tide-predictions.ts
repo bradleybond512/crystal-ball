@@ -54,7 +54,7 @@ interface CoopsHiLo {
 }
 
 export async function fetchTidePredictions(stationId: string): Promise<TideData | null> {
-  return breaker.execute(async () => {
+  const data = await breaker.execute(async () => {
  const station = TIDE_STATIONS.find(s => s.id === stationId);
  if (!station) return null;
  const now = new Date();
@@ -77,6 +77,19 @@ export async function fetchTidePredictions(stationId: string): Promise<TideData 
 
  return { station, predictions, fetchedAt: new Date() };
   }, null);
+  if (!data) return null;
+  return {
+    ...data,
+    fetchedAt: data.fetchedAt instanceof Date
+      ? data.fetchedAt
+      : new Date(data.fetchedAt as unknown as string),
+    predictions: data.predictions.map(prediction => ({
+      ...prediction,
+      time: prediction.time instanceof Date
+        ? prediction.time
+        : new Date(prediction.time as unknown as string),
+    })),
+  };
 }
 
 function formatDate(d: Date): string {

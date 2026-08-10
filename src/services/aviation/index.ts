@@ -96,13 +96,19 @@ const breaker = createCircuitBreaker<AirportDelayAlert[]>({ name: 'Flight Delays
 // --- Main fetch (public API) ---
 
 export async function fetchFlightDelays(): Promise<AirportDelayAlert[]> {
-  return breaker.execute(async () => {
+  const delays = await breaker.execute(async () => {
  const response = await client.listAirportDelays({
  region: 'AIRPORT_REGION_UNSPECIFIED',
  minSeverity: 'FLIGHT_DELAY_SEVERITY_UNSPECIFIED',
  pageSize: 0,
  cursor: '',
  });
- return response.alerts.map(toDisplayAlert);
+ return response.alerts.map(alert => toDisplayAlert(alert));
   }, []);
+  return delays.map(delay => ({
+    ...delay,
+    updatedAt: delay.updatedAt instanceof Date
+      ? delay.updatedAt
+      : new Date(delay.updatedAt as unknown as string),
+  }));
 }

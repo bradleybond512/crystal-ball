@@ -226,6 +226,73 @@ test('a stale worker error cannot reject a replacement worker request', async ()
   assert.equal(timers.size, 0);
 });
 
+test('a post-ready worker error cleans up before the next request', async () => {
+  const timers = new FakeTimers();
+  const firstWorker = new FakeWorker();
+  const replacementWorker = new FakeWorker();
+  const workers = [firstWorker, replacementWorker];
+  const manager = new AnalysisWorkerManager({
+    createWorker: () => workers.shift() as unknown as Worker,
+    now: () => timers.now,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+  });
+  const firstResult = manager.analyzeCorrelations([], [], []);
+  firstWorker.emit({ type: 'ready' });
+  assert.equal(manager.ready, true);
+
+  firstWorker.emitError('worker crashed');
+
+  await assert.rejects(firstResult, /Worker error: worker crashed/);
+  assert.equal(manager.ready, false);
+
+  const replacementResult = manager.clusterNews([]);
+  const request = replacementWorker.messages.find((message) => (
+    typeof message === 'object' && message !== null && 'type' in message
+    && message.type === 'cluster'
+  )) as { id: string } | undefined;
+  assert.ok(request, 'the next request should create and use a fresh worker');
+
+  replacementWorker.emit({ type: 'cluster-result', id: request.id, clusters: [] });
+
+  assert.deepEqual(await replacementResult, []);
+  assert.equal(timers.size, 0);
+});
+
+test('a stale worker result cannot settle a replacement worker request', async () => {
+  const timers = new FakeTimers();
+  const firstWorker = new FakeWorker();
+  const replacementWorker = new FakeWorker();
+  const workers = [firstWorker, replacementWorker];
+  const manager = new AnalysisWorkerManager({
+    createWorker: () => workers.shift() as unknown as Worker,
+    now: () => timers.now,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+  });
+  const firstResult = manager.analyzeCorrelations([], [], []);
+  void firstResult.catch(() => {});
+
+  manager.terminate();
+  const replacementResult = manager.analyzeCorrelations([], [], []);
+  const request = replacementWorker.messages.find((message) => (
+    typeof message === 'object' && message !== null && 'type' in message
+    && message.type === 'correlation'
+  )) as { id: string } | undefined;
+  assert.ok(request);
+  let settled = false;
+  void replacementResult.finally(() => { settled = true; });
+
+  firstWorker.emit({ type: 'correlation-result', id: request.id, signals: [{ stale: true }] });
+  await Promise.resolve();
+  assert.equal(settled, false);
+
+  replacementWorker.emit({ type: 'correlation-result', id: request.id, signals: [] });
+
+  assert.deepEqual(await replacementResult, []);
+  assert.equal(timers.size, 0);
+});
+
 test('analyzeCorrelations rejects an on-time worker hang without a ready signal', async () => {
   const { manager, timers, worker } = makeManager();
   const { result } = await startCorrelation(manager, worker);

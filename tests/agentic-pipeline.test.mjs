@@ -406,7 +406,23 @@ test('the advice never tells the operator to commit the verdict a second time', 
   assert.doesNotMatch(advice, /^git commit/m, '--record already commits; a second commit fails');
 });
 
-test('cross-agent-check is importable without running its CLI', () => {
-  // The advice helpers are unit-testable only if importing does not shell out.
-  assert.equal(typeof verdictAdvice, 'function');
+test('importing cross-agent-check does not run its CLI', () => {
+  // A bare `main()` call at module scope would print the whole report on import
+  // and shell out to git; asserting on exported types would not catch that.
+  const r = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', `import ${JSON.stringify(join(root, 'scripts/cross-agent-check.mjs'))};`],
+    { encoding: 'utf8', cwd: root },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '', `import emitted CLI output:\n${r.stdout}`);
+});
+
+test('changing cross-agent-check selects a suite that actually covers it', () => {
+  // Guards the OVERRIDES entry: without it the five tests above still pass
+  // while CI certifies nothing about the file.
+  const index = deriveScriptIndex({ 'test:agentic-pipeline': 'tsx --test tests/agentic-pipeline.test.mjs' }, root);
+  const { scripts, unmapped } = selectScripts(['scripts/cross-agent-check.mjs'], index);
+  assert.deepEqual(scripts, ['test:agentic-pipeline']);
+  assert.deepEqual(unmapped, []);
 });

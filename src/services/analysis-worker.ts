@@ -76,8 +76,10 @@ export class AnalysisWorkerManager {
  this.readyReject = reject;
  });
 
+ const readyPromise = this.readyPromise;
  let graceScheduled = false;
  const onReadyTimeout = () => {
+ if (this.readyPromise !== readyPromise) return;
  if (!this.isReady) {
  if (!graceScheduled) {
  graceScheduled = true;
@@ -104,6 +106,7 @@ export class AnalysisWorkerManager {
  }
 
  this.worker.addEventListener('message', (event: MessageEvent<WorkerResult>) => {
+ if (this.readyPromise !== readyPromise) return;
  const data = event.data;
 
  if (data.type === 'ready') {
@@ -157,6 +160,7 @@ export class AnalysisWorkerManager {
  });
 
  this.worker.addEventListener('error', (error) => {
+ if (this.readyPromise !== readyPromise) return;
  slog('error', 'analysis-worker', 'Worker error', { fields: { error: error.message } });
 
  // If not ready yet, reject the ready promise
@@ -316,6 +320,7 @@ export class AnalysisWorkerManager {
  pending.reject(new Error('Worker terminated'));
  this.pendingRequests.delete(id);
  }
+ this.readyReject?.(new Error('Worker terminated'));
  this.cleanup();
   }
 

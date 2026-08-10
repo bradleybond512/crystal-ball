@@ -135,6 +135,46 @@ test('worker readiness rejects after a late deadline callback and one grace peri
   assert.equal(timers.size, 0);
 });
 
+test('terminate rejects a request still waiting for worker readiness', async () => {
+  const { manager } = makeManager();
+  const result = manager.analyzeCorrelations([], [], []);
+  const outcome = result.then(
+    value => ({ value, error: null }),
+    error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+  );
+
+  manager.terminate();
+
+  const settled = await Promise.race([
+    outcome,
+    new Promise(resolve => setTimeout(() => resolve({ value: null, error: 'pending' }), 25)),
+  ]);
+  assert.deepEqual(settled, { value: null, error: 'Worker terminated' });
+});
+
+test('terminate makes an already-queued readiness timeout callback harmless', () => {
+  const { manager, timers } = makeManager();
+  const result = manager.analyzeCorrelations([], [], []);
+  const queuedTimeout = timers.captureNext();
+  void result.catch(() => {});
+
+  manager.terminate();
+  queuedTimeout();
+
+  assert.equal(timers.size, 0);
+});
+
+test('terminate makes an already-queued ready message harmless', () => {
+  const { manager, worker } = makeManager();
+  const result = manager.analyzeCorrelations([], [], []);
+  void result.catch(() => {});
+
+  manager.terminate();
+  worker.emit({ type: 'ready' });
+
+  assert.equal(manager.ready, false);
+});
+
 test('analyzeCorrelations rejects an on-time worker hang at ten seconds', async () => {
   const { manager, timers, worker } = makeManager();
   const { result } = await startCorrelation(manager, worker);

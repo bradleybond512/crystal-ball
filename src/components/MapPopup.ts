@@ -15,6 +15,7 @@ import { fetchHotspotContext, formatArticleDate, extractDomain, type GdeltArticl
 import { getNaturalEventIcon } from '@/services/eonet';
 import { getHotspotEscalation, getEscalationChange24h } from '@/services/hotspot-escalation';
 import { getCableHealthRecord } from '@/services/cable-health';
+import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 
 export type PopupType = 'conflict' | 'hotspot' | 'earthquake' | 'weather' | 'base' | 'waterway' | 'apt' | 'cyberThreat' | 'nuclear' | 'economic' | 'irradiator' | 'pipeline' | 'cable' | 'cable-advisory' | 'repair-ship' | 'outage' | 'datacenter' | 'datacenterCluster' | 'ais' | 'protest' | 'protestCluster' | 'flight' | 'militaryFlight' | 'militaryVessel' | 'militaryFlightCluster' | 'militaryVesselCluster' | 'natEvent' | 'port' | 'spaceport' | 'mineral' | 'startupHub' | 'cloudRegion' | 'techHQ' | 'accelerator' | 'techEvent' | 'techHQCluster' | 'techEventCluster' | 'techActivity' | 'geoActivity' | 'stockExchange' | 'financialCenter' | 'centralBank' | 'commodityHub' | 'iranEvent' | 'gpsJamming' | 'faaCamera';
 
@@ -163,6 +164,7 @@ export class MapPopup {
   private sheetCurrentOffset = 0;
   private readonly mobileDismissThreshold = 96;
   private outsideListenerTimeoutId: number | null = null;
+  private frameResolveController: AbortController | null = null;
 
   constructor(container: HTMLElement) {
  this.container = container;
@@ -193,6 +195,10 @@ export class MapPopup {
 
  // Append to body to avoid container overflow clipping
  document.body.append(this.popup);
+
+ if (data.type === 'faaCamera') {
+ void this.loadFAACameraFrame(data.data as ScoredFAACamera);
+ }
 
  // Close button handler
  this.popup.querySelector('.popup-close')?.addEventListener('click', () => this.hide());
@@ -339,6 +345,9 @@ export class MapPopup {
   };
 
   public hide(): void {
+ this.frameResolveController?.abort();
+ this.frameResolveController = null;
+
  if (this.outsideListenerTimeoutId !== null) {
  window.clearTimeout(this.outsideListenerTimeoutId);
  this.outsideListenerTimeoutId = null;
@@ -2708,7 +2717,10 @@ export class MapPopup {
  ? `<div class="popup-stat"><span class="stat-label">${t('popups.faaCamera.nearbyAlert')}</span><span class="stat-value alert">${escapeHtml(cam.alertLabel)}</span></div>`
  : '';
  const imageSection = cam.imageUrl
- ? `<div style="margin-top:8px"><img src="${sanitizeUrl(cam.imageUrl)}" alt="${escapeHtml(cam.name)}" loading="lazy" style="width:100%;max-width:220px;border-radius:4px;" /></div>`
+ ? `<div style="margin-top:8px;min-height:124px;display:flex;align-items:center;justify-content:center;">
+ <img data-faa-camera-image alt="${escapeHtml(cam.name)}" loading="lazy" hidden style="width:100%;max-width:220px;aspect-ratio:4/3;object-fit:cover;border-radius:4px;" />
+ <span data-faa-camera-status>${t('common.loading')}</span>
+ </div>`
  : '';
  const statusLabel = cam.isOnline ? t('popups.faaCamera.online') : t('popups.faaCamera.offline');
  return `
@@ -2726,6 +2738,38 @@ export class MapPopup {
  ${imageSection}
  </div>
  `;
+  }
+
+  private async loadFAACameraFrame(cam: ScoredFAACamera): Promise<void> {
+ const popup = this.popup;
+ const image = popup?.querySelector<HTMLImageElement>('[data-faa-camera-image]');
+ const status = popup?.querySelector<HTMLElement>('[data-faa-camera-status]');
+ if (!popup || !image || !status) return;
+
+ const controller = new AbortController();
+ this.frameResolveController = controller;
+ const resolvedUrl = await resolveFrameUrl(cam.imageUrl, controller.signal);
+
+ if (controller.signal.aborted || this.popup !== popup || this.frameResolveController !== controller) return;
+ this.frameResolveController = null;
+
+ if (!resolvedUrl || !sanitizeUrl(resolvedUrl)) {
+ image.remove();
+ status.textContent = t('common.noDataAvailable');
+ return;
+ }
+
+ image.addEventListener('load', () => {
+ if (this.popup !== popup) return;
+ image.hidden = false;
+ status.remove();
+ }, { once: true });
+ image.addEventListener('error', () => {
+ if (this.popup !== popup) return;
+ image.remove();
+ status.textContent = t('common.noDataAvailable');
+ }, { once: true });
+ image.src = resolvedUrl;
   }
 
   private renderGpsJammingPopup(data: GpsJammingPopupData): string {

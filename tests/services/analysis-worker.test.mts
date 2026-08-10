@@ -81,7 +81,7 @@ async function startCorrelation(manager: AnalysisWorkerManager, worker: FakeWork
   return { request, result };
 }
 
-test('worker readiness survives one delayed timeout while its ready event is queued', async () => {
+test('worker readiness accepts a queued ready event during the deadline grace period', async () => {
   const { manager, timers, worker } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
   const outcome = result.then(
@@ -89,10 +89,12 @@ test('worker readiness survives one delayed timeout while its ready event is que
     error => ({ value: null, error }),
   );
 
-  timers.advanceTo(11_000);
-  assert.equal(timers.size, 1, 'late readiness timeout should install one replacement timer');
+  timers.advanceTo(10_000);
+  assert.equal(timers.size, 1, 'readiness deadline should install one grace timer');
+  const queuedGraceTimeout = timers.captureNext();
 
   worker.emit({ type: 'ready' });
+  queuedGraceTimeout();
   await Promise.resolve();
   await Promise.resolve();
   const request = worker.messages.find((message) => (
@@ -107,22 +109,27 @@ test('worker readiness survives one delayed timeout while its ready event is que
   assert.equal(timers.size, 0);
 });
 
-test('worker readiness rejects an on-time worker hang at ten seconds', async () => {
+test('worker readiness waits through its deadline grace period', async () => {
   const { manager, timers } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
 
   timers.advanceTo(10_000);
+  assert.equal(timers.size, 1, 'readiness deadline should install one grace timer');
+
+  timers.advanceTo(11_000);
 
   await assert.rejects(result, /Worker failed to become ready within timeout/);
   assert.equal(timers.size, 0);
 });
 
-test('worker readiness rejects after its one delayed timeout extension', async () => {
+test('worker readiness rejects after a late deadline callback and one grace period', async () => {
   const { manager, timers } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);
 
   timers.advanceTo(11_000);
-  timers.advanceTo(22_000);
+  assert.equal(timers.size, 1, 'late readiness deadline should install one grace timer');
+
+  timers.advanceTo(12_000);
 
   await assert.rejects(result, /Worker failed to become ready within timeout/);
   assert.equal(timers.size, 0);

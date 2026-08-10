@@ -56,6 +56,7 @@ export class AnalysisWorkerManager {
   private readonly clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
 
   private static readonly READY_TIMEOUT_MS = 10_000; // 10 seconds to become ready
+  private static readonly READY_EVENT_GRACE_MS = 1000;
 
   constructor(options: AnalysisWorkerManagerOptions = {}) {
  this.createWorker = options.createWorker ?? (() => new AnalysisWorker());
@@ -75,14 +76,12 @@ export class AnalysisWorkerManager {
  this.readyReject = reject;
  });
 
- let deadlineMs = this.now() + AnalysisWorkerManager.READY_TIMEOUT_MS;
- let timeoutExtended = false;
+ let graceScheduled = false;
  const onReadyTimeout = () => {
  if (!this.isReady) {
- if (shouldExtendAnalysisTimeout(this.now(), deadlineMs, timeoutExtended)) {
- timeoutExtended = true;
- deadlineMs = this.now() + AnalysisWorkerManager.READY_TIMEOUT_MS;
- this.readyTimeout = this.setTimer(onReadyTimeout, AnalysisWorkerManager.READY_TIMEOUT_MS);
+ if (!graceScheduled) {
+ graceScheduled = true;
+ this.readyTimeout = this.setTimer(onReadyTimeout, AnalysisWorkerManager.READY_EVENT_GRACE_MS);
  return;
  }
  const error = new Error('Worker failed to become ready within timeout');

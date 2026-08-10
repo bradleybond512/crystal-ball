@@ -2718,7 +2718,7 @@ export class MapPopup {
  : '';
  const imageSection = cam.imageUrl
  ? `<div style="margin-top:8px;min-height:124px;display:flex;align-items:center;justify-content:center;">
- <img data-faa-camera-image alt="${escapeHtml(cam.name)}" loading="lazy" hidden style="width:100%;max-width:220px;aspect-ratio:4/3;object-fit:cover;border-radius:4px;" />
+ <img data-faa-camera-image alt="${escapeHtml(cam.name)}" loading="eager" hidden style="width:100%;max-width:220px;aspect-ratio:4/3;object-fit:cover;border-radius:4px;" />
  <span data-faa-camera-status>${t('common.loading')}</span>
  </div>`
  : '';

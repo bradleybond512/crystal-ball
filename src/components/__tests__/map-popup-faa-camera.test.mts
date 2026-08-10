@@ -71,6 +71,7 @@ test('FAA map popup resolves the API pointer before loading the camera image', a
     const image = document.querySelector<HTMLImageElement>('[data-faa-camera-image]');
     assert.ok(image, 'camera popup should mount an image element');
     assert.equal(image.getAttribute('src'), null, 'the JSON resolver pointer must never become img.src');
+    assert.equal(image.loading, 'eager', 'a hidden popup image must not be deferred by lazy loading');
 
     await settle();
 

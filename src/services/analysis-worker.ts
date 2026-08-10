@@ -45,18 +45,11 @@ export class AnalysisWorkerManager {
   private pendingRequests = new Map<string, PendingRequest<unknown>>();
   private requestIdCounter = 0;
   private isReady = false;
-  private readyPromise: Promise<void> | null = null;
-  private readyResolve: (() => void) | null = null;
-  private readyReject: ((error: Error) => void) | null = null;
-  private readyTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private readonly createWorker: () => Worker;
   private readonly now: () => number;
   private readonly setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   private readonly clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
-
-  private static readonly READY_TIMEOUT_MS = 10_000; // 10 seconds to become ready
-  private static readonly READY_EVENT_GRACE_MS = 1000;
 
   constructor(options: AnalysisWorkerManagerOptions = {}) {
  this.createWorker = options.createWorker ?? (() => new AnalysisWorker());
@@ -71,51 +64,24 @@ export class AnalysisWorkerManager {
   private initWorker(): void {
  if (this.worker) return;
 
- this.readyPromise = new Promise((resolve, reject) => {
- this.readyResolve = resolve;
- this.readyReject = reject;
- });
-
- const readyPromise = this.readyPromise;
- let graceScheduled = false;
- const onReadyTimeout = () => {
- if (this.readyPromise !== readyPromise) return;
- if (!this.isReady) {
- if (!graceScheduled) {
- graceScheduled = true;
- this.readyTimeout = this.setTimer(onReadyTimeout, AnalysisWorkerManager.READY_EVENT_GRACE_MS);
- return;
- }
- const error = new Error('Worker failed to become ready within timeout');
- slog('error', 'analysis-worker', error.message);
- this.readyReject?.(error);
- this.cleanup();
- }
- };
- this.readyTimeout = this.setTimer(onReadyTimeout, AnalysisWorkerManager.READY_TIMEOUT_MS);
-
+ let worker: Worker;
  try {
- this.worker = this.createWorker();
+ worker = this.createWorker();
  } catch (error) {
+ const workerError = error instanceof Error ? error : new Error(String(error));
  slog('error', 'analysis-worker', 'Failed to create worker', {
- fields: { error: error instanceof Error ? error.message : String(error) },
+ fields: { error: workerError.message },
  });
- this.readyReject?.(error instanceof Error ? error : new Error(String(error)));
- this.cleanup();
- return;
+ throw workerError;
  }
+ this.worker = worker;
 
- this.worker.addEventListener('message', (event: MessageEvent<WorkerResult>) => {
- if (this.readyPromise !== readyPromise) return;
+ worker.addEventListener('message', (event: MessageEvent<WorkerResult>) => {
+ if (this.worker !== worker) return;
  const data = event.data;
 
  if (data.type === 'ready') {
  this.isReady = true;
- if (this.readyTimeout) {
- this.clearTimer(this.readyTimeout);
- this.readyTimeout = null;
- }
- this.readyResolve?.();
  return;
  }
 
@@ -159,16 +125,9 @@ export class AnalysisWorkerManager {
  }
  });
 
- this.worker.addEventListener('error', (error) => {
- if (this.readyPromise !== readyPromise) return;
+ worker.addEventListener('error', (error) => {
+ if (this.worker !== worker) return;
  slog('error', 'analysis-worker', 'Worker error', { fields: { error: error.message } });
-
- // If not ready yet, reject the ready promise
- if (!this.isReady) {
- this.readyReject?.(new Error(`Worker failed to initialize: ${error.message}`));
- this.cleanup();
- return;
- }
 
  // Reject all pending requests
  for (const [id, pending] of this.pendingRequests) {
@@ -176,6 +135,7 @@ export class AnalysisWorkerManager {
  pending.reject(new Error(`Worker error: ${error.message}`));
  this.pendingRequests.delete(id);
  }
+ this.cleanup();
  });
   }
 
@@ -183,28 +143,12 @@ export class AnalysisWorkerManager {
  * Cleanup worker state (for re-initialization)
  */
   private cleanup(): void {
- if (this.readyTimeout) {
- this.clearTimer(this.readyTimeout);
- this.readyTimeout = null;
- }
  if (this.worker) {
  this.worker.terminate();
  this.worker = null;
  }
  this.isReady = false;
- this.readyPromise = null;
- this.readyResolve = null;
- this.readyReject = null;
-  }
-
-  /**
- * Wait for worker to be ready
- */
-  private async waitForReady(): Promise<void> {
- this.initWorker();
- if (this.isReady) return;
- await this.readyPromise;
-  }
+ }
 
   /**
  * Generate unique request ID
@@ -218,7 +162,7 @@ export class AnalysisWorkerManager {
  * Runs O(n²) Jaccard similarity off the main thread.
  */
   async clusterNews(items: NewsItem[]): Promise<ClusteredEvent[]> {
- await this.waitForReady();
+ this.initWorker();
 
  return new Promise((resolve, reject) => {
  const id = this.generateId();
@@ -253,7 +197,7 @@ export class AnalysisWorkerManager {
  predictions: PredictionMarket[],
  markets: MarketData[]
   ): Promise<CorrelationSignal[]> {
- await this.waitForReady();
+ this.initWorker();
  const boundedClusters = boundCorrelationClusters(clusters);
 
  return new Promise((resolve, reject) => {
@@ -320,7 +264,6 @@ export class AnalysisWorkerManager {
  pending.reject(new Error('Worker terminated'));
  this.pendingRequests.delete(id);
  }
- this.readyReject?.(new Error('Worker terminated'));
  this.cleanup();
   }
 

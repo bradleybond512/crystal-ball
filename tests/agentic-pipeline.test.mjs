@@ -418,6 +418,17 @@ test('importing cross-agent-check does not run its CLI', () => {
   assert.equal(r.stdout.trim(), '', `import emitted CLI output:\n${r.stdout}`);
 });
 
+test('a same-basename entrypoint does not trigger the CLI', () => {
+  // The previous guard compared basenames, so ANY entrypoint named
+  // cross-agent-check.mjs ran the report on import. argv[1] is the decoy here.
+  const dir = mkdtempSync(join(tmpdir(), 'basename-collision-'));
+  const decoy = join(dir, 'cross-agent-check.mjs');
+  writeFileSync(decoy, `import ${JSON.stringify(join(root, 'scripts/cross-agent-check.mjs'))};\n`);
+  const r = spawnSync(process.execPath, [decoy], { encoding: 'utf8', cwd: root });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '', `same-basename import emitted CLI output:\n${r.stdout}`);
+});
+
 test('changing cross-agent-check selects a suite that actually covers it', () => {
   // Guards the OVERRIDES entry: without it the five tests above still pass
   // while CI certifies nothing about the file.

@@ -69,8 +69,14 @@ export function resetBootTrace(): void {
   try { (globalThis as { localStorage?: Storage }).localStorage?.setItem(BOOT_TRACE_KEY, ''); } catch { /* ignore */ }
 }
 
-function fmtArg(a: unknown): string {
-  if (a instanceof Error) return a.stack ?? a.message;
+export function formatLogArgument(a: unknown): string {
+  if (a instanceof Error) {
+ const message = a.message.trim();
+ const stack = a.stack?.trim() ?? '';
+ if (!stack) return message || a.name || 'Error';
+ if (!message || stack.includes(message)) return stack;
+ return `${message}\n${stack}`;
+  }
   if (a !== null && typeof a === 'object') {
  try { return JSON.stringify(a).slice(0, 500); } catch { return '[object]'; }
   }
@@ -85,12 +91,14 @@ function fmtArg(a: unknown): string {
 // avoid masking real logic errors.
 const FEED_FAILURE_PATTERNS: RegExp[] = [
   /failed to fetch/i,
-  /fetch failed/i,
+  /\bfetch (?:failed|failure|error|is aborted)\b/i,
   /\bHTTP\s+[45]\d\d\b/i,
   /\breturned\s+[45]\d\d\b/i,
   /\bstatus\s+[45]\d\d\b/i,
   /\b(?:ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN)\b/i,
+  /\bAbortError\b/i,
   /networkerror|failed to load resource/i,
+  /upstream (?:may be )?(?:down|unavailable)/i,
 ];
 
 export function isExpectedFeedFailure(message: string): boolean {
@@ -517,7 +525,7 @@ export function installLogBridge(): void {
   console.error = (...args: unknown[]) => {
  origError(...args);
  try {
- const feedMsg = args.map(a => fmtArg(a)).join(' ').slice(0, 1000);
+ const feedMsg = args.map(a => formatLogArgument(a)).join(' ').slice(0, 1000);
    if (isExpectedFeedFailure(feedMsg)) logToDesktop('WARN', `[FEED] ${feedMsg}`);
    else logToDesktop('ERROR', `console.error: ${feedMsg}`);
  } catch { /* safe */ }
@@ -526,7 +534,7 @@ export function installLogBridge(): void {
   console.warn = (...args: unknown[]) => {
  origWarn(...args);
  try {
- logToDesktop('WARN', `console.warn: ${args.map(a => fmtArg(a)).join(' ').slice(0, 1000)}`);
+ logToDesktop('WARN', `console.warn: ${args.map(a => formatLogArgument(a)).join(' ').slice(0, 1000)}`);
  } catch { /* safe */ }
   };
 

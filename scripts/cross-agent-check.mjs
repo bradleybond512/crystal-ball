@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requiredReviewers } from './verify-review-verdict.mjs';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 
@@ -80,17 +82,31 @@ function changedAreas(files) {
   return [...areas].sort();
 }
 
-function expectedReviewer(branch) {
-  if (branch.startsWith('claude/')) return 'Codex';
-  if (branch.startsWith('codex/')) return 'Claude';
-  if (branch.startsWith('copilot/')) return 'Codex or Claude';
-  return 'another agent';
+// Branch → reviewer is owned by verify-review-verdict.mjs (it is the script that
+// ENFORCES the mapping); duplicating it here would let the advice drift from the gate.
+const titleCase = (slug) => slug.charAt(0).toUpperCase() + slug.slice(1);
+
+export function expectedReviewer(branch) {
+  const reviewers = requiredReviewers(branch);
+  return reviewers === null ? 'another agent' : reviewers.map((r) => titleCase(r)).join(' or ');
 }
 
-// expectedReviewer() is prose for humans; --reviewer wants a single slug.
-function reviewerSlug(reviewer) {
-  const match = reviewer.match(/codex|claude/i);
-  return match ? match[0].toLowerCase() : '<codex|claude>';
+// The --reviewer flag takes one slug. A copilot/* branch accepts either agent, so
+// the operator must choose; a non-agent branch records no verdict at all.
+export function verdictAdvice(branch) {
+  const reviewers = requiredReviewers(branch);
+  if (reviewers === null) return null;
+  const slug = reviewers.length === 1 ? reviewers[0] : `<${reviewers.join('|')}>`;
+  return [
+    'After the second review, record the verdict as a SHA-pinned commit (a PR-body',
+    'marker no longer satisfies the gate — see .github/workflows/cross-agent-review.yml):',
+    '```',
+    `node scripts/verify-review-verdict.mjs --record --reviewer ${slug} --evidence-file <review-output>`,
+    '```',
+    'That flag both writes .agentic/reviews/<sha>.json and commits it — do not commit again.',
+    'It pins the reviewed SHA, so record it LAST: any later code commit invalidates the',
+    'verdict and the gate stays red until a fresh review is recorded.',
+  ];
 }
 
 function requiredFilesPresent() {
@@ -129,14 +145,12 @@ function printLocalReport({ branch, files, areas, reviewer }) {
   console.log('```');
   console.log('');
 
-  console.log('After the second review, record the verdict as a SHA-pinned commit (a PR-body');
-  console.log('marker no longer satisfies the gate — see .github/workflows/cross-agent-review.yml):');
-  console.log('```');
-  console.log(`node scripts/verify-review-verdict.mjs --record --reviewer ${reviewerSlug(reviewer)} --evidence-file <review-output>`);
-  console.log('git commit -m "agentic: record review verdict" -- .agentic/reviews');
-  console.log('```');
-  console.log('The verdict pins the reviewed SHA, so record it LAST — any later code commit');
-  console.log('invalidates it and the gate turns red until a fresh review is recorded.');
+  const advice = verdictAdvice(branch);
+  if (advice) {
+    for (const line of advice) console.log(line);
+  } else {
+    console.log('Not an agent branch: no cross-agent verdict is required or recordable.');
+  }
 }
 
 function collectFailures() {
@@ -181,4 +195,5 @@ function main() {
   if (ci) console.log('[cross-check] Cross-agent gate files present.');
 }
 
-main();
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+if (isDirectRun) main();

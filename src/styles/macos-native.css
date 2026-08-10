@@ -2175,34 +2175,38 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1);
 }
 
-/* ── Personal Storm Mode strip (src/components/PersonalStormMode.ts) ──
- * Weather Remediation PR 5: retreat the persistent severe-weather strip
- * to the native toolbar language when the desktop chrome is active —
- * window-tinted backdrop-blur surface, aid tokens for text/borders, and
- * accent chips per threat tier. Base (web) styling lives in alerts.css.
- */
+/* ── Alert shelf ─────────────────────────────────────────────────────── */
 
 body.is-desktop-macos .cb-storm-mode {
   font-family: var(--aid-font);
-  color: var(--aid-text);
-  background: color-mix(in srgb, var(--aid-window) 82%, transparent);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(28, 28, 30, 0.94);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border-bottom: 1px solid var(--aid-border-strong);
-  box-shadow: var(--aid-shadow-elevated);
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
+}
+body.is-desktop-macos .triage-bar {
+  font-family: var(--aid-font);
+  background: rgba(30, 30, 32, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.12);
 }
 body.is-desktop-macos .cb-storm-mode__strip {
-  padding: var(--aid-space-2) var(--aid-space-4);
+  min-height: 52px;
+  padding: 5px var(--aid-space-3);
   font-size: var(--aid-text-size-md);
 }
 body.is-desktop-macos .cb-storm-mode__tier {
   border-radius: var(--aid-radius-sm);
   font-size: var(--aid-text-size-xs);
 }
-body.is-desktop-macos .cb-storm-mode--warning   { border-bottom-color: rgba(255, 159, 10, 0.55); }
-body.is-desktop-macos .cb-storm-mode--emergency { border-bottom-color: rgba(255, 69, 58, 0.7); }
-body.is-desktop-macos .cb-storm-mode--warning   .cb-storm-mode__tier { background: rgba(255, 159, 10, 0.16); color: var(--aid-amber); }
-body.is-desktop-macos .cb-storm-mode--emergency .cb-storm-mode__tier { background: rgba(255, 69, 58, 0.18); color: var(--aid-red); }
+body.is-desktop-macos .cb-storm-mode__title.critical-title {
+  color: #fff;
+  opacity: 1;
+}
+body.is-desktop-macos .cb-storm-mode--warning .cb-storm-mode__tier { color: var(--aid-amber); }
+body.is-desktop-macos .cb-storm-mode--emergency .cb-storm-mode__tier { color: var(--aid-red); }
 body.is-desktop-macos .cb-storm-mode__btn {
   border: 1px solid var(--aid-border);
   border-radius: var(--aid-radius-md);
@@ -2219,8 +2223,11 @@ body.is-desktop-macos .cb-storm-mode__btn--ack {
 body.is-desktop-macos .cb-storm-mode__btn--ack:hover {
   background: color-mix(in srgb, var(--aid-blue) 85%, #fff);
 }
+body.is-desktop-macos .cb-storm-mode__details-shell {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
 body.is-desktop-macos .cb-storm-mode__card {
-  padding: var(--aid-space-1) var(--aid-space-4) var(--aid-space-4);
+  padding: var(--aid-space-3);
   font-size: var(--aid-text-size-md);
 }
 body.is-desktop-macos .cb-storm-mode__reason {
@@ -2249,7 +2256,8 @@ body.is-desktop-macos .cb-storm-mode__action-time,
 body.is-desktop-macos .cb-storm-mode__action-rationale { color: var(--aid-text-tertiary); }
 body.is-desktop-macos .cb-storm-mode__watch-list { color: var(--aid-text-secondary); }
 body.is-desktop-macos .cb-storm-mode__footer { border-top-color: var(--aid-border); }
-body.is-desktop-macos .cb-storm-mode__why { color: var(--aid-blue); }
+body.is-desktop-macos .cb-storm-mode__why,
+body.is-desktop-macos .cb-storm-mode__guide { color: var(--aid-blue); }
 
 /* ── Reduced motion ──────────────────────────────────────────────────── */
 

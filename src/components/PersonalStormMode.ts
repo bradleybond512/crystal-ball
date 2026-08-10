@@ -68,10 +68,12 @@ export interface PersonalStormModeOptions {
 }
 
 const SNOOZE_MINUTES = 15;
+let nextDetailsId = 0;
 
 export class PersonalStormMode {
   private readonly mount: HTMLElement;
   private readonly callbacks: PersonalStormModeCallbacks;
+  private readonly detailsId = `cb-storm-mode-details-${++nextDetailsId}`;
   private current?: WeatherDispatchDecision;
   private uiState: StormModeUiState;
   private transitionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -95,6 +97,15 @@ export class PersonalStormMode {
   clear(): void {
     this.current = undefined;
     this.render();
+  }
+
+  destroy(): void {
+    if (this.transitionTimer !== undefined) {
+      clearTimeout(this.transitionTimer);
+      this.transitionTimer = undefined;
+    }
+    this.current = undefined;
+    replaceChildren(this.mount);
   }
 
   /** Programmatic acknowledge — useful for keyboard shortcuts. */
@@ -157,10 +168,16 @@ export class PersonalStormMode {
       'aria-live': 'assertive',
     });
 
-    root.append(this.renderStrip(decision));
-    if (persistent) {
-      root.append(this.renderCard(decision));
-    }
+    const detailsShell = persistent
+      ? h('div', {
+          className: 'cb-storm-mode__details-shell',
+          id: this.detailsId,
+          hidden: true,
+        })
+      : undefined;
+
+    root.append(this.renderStrip(decision, detailsShell));
+    if (detailsShell) root.append(detailsShell);
 
     replaceChildren(this.mount, root);
   }
@@ -181,16 +198,22 @@ export class PersonalStormMode {
     this.transitionTimer = setTimeout(() => { this.render(); }, delay);
   }
 
-  private renderStrip(decision: WeatherDispatchDecision): HTMLElement {
+  private renderStrip(
+    decision: WeatherDispatchDecision,
+    detailsShell?: HTMLElement,
+  ): HTMLElement {
     const strip = h('div', { className: 'cb-storm-mode__strip' },
       h('span', { className: 'cb-storm-mode__tier' }, stormTierLabel(decision)),
-      h('span', { className: 'cb-storm-mode__title' }, stormStripTitle(decision)),
-      this.renderQuickActions(decision),
+      h('h2', { className: 'cb-storm-mode__title critical-title' }, stormStripTitle(decision)),
+      this.renderQuickActions(decision, detailsShell),
     );
     return strip;
   }
 
-  private renderQuickActions(decision: WeatherDispatchDecision): HTMLElement {
+  private renderQuickActions(
+    decision: WeatherDispatchDecision,
+    detailsShell?: HTMLElement,
+  ): HTMLElement {
     const ack = h('button', {
       className: 'cb-storm-mode__btn cb-storm-mode__btn--ack',
       type: 'button',
@@ -213,7 +236,32 @@ export class PersonalStormMode {
       this.render();
     });
 
-    return h('div', { className: 'cb-storm-mode__quick' }, ack, snooze);
+    const disclosure = detailsShell
+      ? this.renderDetailsDisclosure(decision, detailsShell)
+      : null;
+
+    return h('div', { className: 'cb-storm-mode__quick' }, ack, snooze, disclosure);
+  }
+
+  private renderDetailsDisclosure(
+    decision: WeatherDispatchDecision,
+    detailsShell: HTMLElement,
+  ): HTMLElement {
+    const disclosure = h('button', {
+      className: 'cb-storm-mode__btn cb-storm-mode__btn--details',
+      type: 'button',
+      'aria-expanded': 'false',
+      'aria-controls': this.detailsId,
+    }, 'Details');
+    disclosure.addEventListener('click', () => {
+      const expanded = disclosure.getAttribute('aria-expanded') === 'true';
+      if (!expanded && !detailsShell.hasChildNodes()) {
+        detailsShell.append(this.renderCard(decision));
+      }
+      disclosure.setAttribute('aria-expanded', String(!expanded));
+      detailsShell.hidden = expanded;
+    });
+    return disclosure;
   }
 
   private renderCard(decision: WeatherDispatchDecision): HTMLElement {

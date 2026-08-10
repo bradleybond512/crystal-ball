@@ -66,6 +66,9 @@ export class TriageBar {
   private visibleStories: AlertStory[] = [];
   /** Opens the current render's preset popover (delegated preset-toggle). */
   private openPresetMenu: (() => void) | null = null;
+  private readonly onRootClick = (e: Event): void => this.onClick(e as MouseEvent);
+  private readonly onRootContextMenu = (e: Event): void => this.onContextMenu(e as MouseEvent);
+  private readonly onRootChange = (e: Event): void => this.onChange(e);
 
   constructor() {
     this.element = document.createElement('div');
@@ -76,15 +79,16 @@ export class TriageBar {
     // alert-store churn, orphaning any per-node listener a click gesture
     // straddles (Defect B1). One listener on this.element — which is never
     // replaced — survives every re-render (same pattern as AnalystHUD.ts).
-    this.element.addEventListener('click', (e) => this.onClick(e as MouseEvent));
-    this.element.addEventListener('contextmenu', (e) => this.onContextMenu(e as MouseEvent));
+    this.element.addEventListener('click', this.onRootClick);
+    this.element.addEventListener('contextmenu', this.onRootContextMenu);
+    this.element.addEventListener('change', this.onRootChange);
   }
 
   /** Re-render on new BOCPD detections so the regime chip appears promptly. */
   private readonly onRegimeShift = (): void => this.render();
 
   mount(parent: HTMLElement): void {
-    parent.prepend(this.element);
+    parent.append(this.element);
     this.unsubscribe = unifiedAlertStore.subscribe(() => this.render());
     this.refreshTimer = window.setInterval(() => this.render(), 30_000);
     document.addEventListener(REGIME_SHIFT_EVENT, this.onRegimeShift);
@@ -96,6 +100,9 @@ export class TriageBar {
     if (this.refreshTimer != null) window.clearInterval(this.refreshTimer);
     document.removeEventListener(REGIME_SHIFT_EVENT, this.onRegimeShift);
     this.presetMenuCleanup?.();
+    this.element.removeEventListener('click', this.onRootClick);
+    this.element.removeEventListener('contextmenu', this.onRootContextMenu);
+    this.element.removeEventListener('change', this.onRootChange);
     this.element.remove();
   }
 
@@ -129,18 +136,29 @@ export class TriageBar {
     document.body.classList.add('has-triage-bar');
     const label = document.createElement('div');
     label.className = 'triage-bar-label';
-    label.textContent = '⚡ TRIAGE';
-    // Domain facet pills
-    const facets = document.createElement('div');
-    facets.className = 'triage-bar-facets';
+    // safe-html: icon() output and label are static strings.
+    label.innerHTML = `${icon('alert-triangle', { size: 14 })}<span>Triage</span>`;
+    const controls = document.createElement('div');
+    controls.className = 'triage-bar-controls';
+    const facetControl = document.createElement('label');
+    facetControl.className = 'triage-bar-facet-control';
+    const facetLabel = document.createElement('span');
+    facetLabel.className = 'triage-bar-facet-label';
+    facetLabel.textContent = 'Triage category';
+    const facetSelect = document.createElement('select');
+    facetSelect.className = 'triage-bar-facet-select';
+    facetSelect.dataset.action = 'facet-select';
+    facetSelect.setAttribute('aria-label', 'Triage category');
     for (const d of Object.keys(DOMAIN_LABELS) as Domain[]) {
-      const pill = document.createElement('button');
-      pill.className = `triage-facet${this.facet === d ? ' active' : ''}`;
-      pill.dataset.facet = d;
-      pill.textContent = DOMAIN_LABELS[d];
-      facets.append(pill);
+      const option = document.createElement('option');
+      option.value = d;
+      option.textContent = DOMAIN_LABELS[d];
+      option.selected = this.facet === d;
+      facetSelect.append(option);
     }
-    // Amber regime-shift chips after the facet pills; absent when quiet.
+    facetControl.append(facetLabel, facetSelect);
+    controls.append(facetControl);
+    // Amber regime-shift chips after the category menu; absent when quiet.
     for (const domain of regimeDomains) {
       const shift = regimeShifts[domain];
       if (!shift) continue;
@@ -151,7 +169,7 @@ export class TriageBar {
       chip.textContent = `Regime shift: ${domain} (${pct}%)`;
       chip.title = `${shift.explanation}\n\nClick to open the Analyst HUD posture advisories.`;
       chip.setAttribute('aria-label', `Regime shift detected in ${domain}, confidence ${pct} percent. Open Analyst HUD.`);
-      facets.append(chip);
+      controls.append(chip);
     }
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
@@ -166,7 +184,7 @@ export class TriageBar {
     this.visibleStories = stories;
     // No "Ack all" when only a regime chip is showing — nothing to ack.
     const tail = stories.length > 0 ? [ack] : [];
-    this.element.replaceChildren(label, facets, items, ...tail, this.buildPresetControl());
+    this.element.replaceChildren(label, controls, items, ...tail, this.buildPresetControl());
   }
 
   /**
@@ -180,6 +198,7 @@ export class TriageBar {
 
     const btn = document.createElement('button');
     btn.className = 'triage-bar-preset';
+    btn.type = 'button';
     btn.dataset.action = 'preset-toggle';
     btn.title = 'Alerting preset';
     btn.setAttribute('aria-haspopup', 'menu');
@@ -349,8 +368,6 @@ export class TriageBar {
     // Dismiss handled before the item branch so it doesn't also navigate;
     // stopPropagation preserves the prior per-node behavior.
     if (t.closest('.triage-dismiss-btn')) { e.stopPropagation(); this.dismissStory(t.closest<HTMLElement>('.triage-bar-item')); return; }
-    const facet = t.closest<HTMLElement>('.triage-facet[data-facet]');
-    if (facet) { this.selectFacet(facet.dataset.facet as Domain); return; }
     if (t.closest('.triage-bar-ack')) { this.ackAllVisible(); return; }
     if (t.closest('.triage-regime-chip')) {
       // The regime detail lives in the Analyst HUD posture advisories.
@@ -360,6 +377,15 @@ export class TriageBar {
     if (t.closest('.triage-bar-preset')) { this.togglePresetMenu(); return; }
     const story = this.storyFor(t.closest<HTMLElement>('.triage-bar-item'));
     if (story) this.activateStory(story);
+  }
+
+  private onChange(e: Event): void {
+    const select = (e.target as HTMLElement | null)?.closest<HTMLSelectElement>(
+      '.triage-bar-facet-select[data-action="facet-select"]',
+    );
+    if (select && Object.prototype.hasOwnProperty.call(DOMAIN_LABELS, select.value)) {
+      this.selectFacet(select.value as Domain);
+    }
   }
 
   private dismissStory(item: HTMLElement | null): void {

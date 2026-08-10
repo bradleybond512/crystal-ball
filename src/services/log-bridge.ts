@@ -91,12 +91,11 @@ export function formatLogArgument(a: unknown): string {
 // avoid masking real logic errors.
 const FEED_FAILURE_PATTERNS: RegExp[] = [
   /failed to fetch/i,
-  /\bfetch (?:failed|failure|error|is aborted)\b/i,
+  /\bfetch (?:failed|failure|is aborted)\b/i,
   /\bHTTP\s+[45]\d\d\b/i,
   /\breturned\s+[45]\d\d\b/i,
   /\bstatus\s+[45]\d\d\b/i,
   /\b(?:ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN)\b/i,
-  /\bAbortError\b/i,
   /networkerror|failed to load resource/i,
   /upstream (?:may be )?(?:down|unavailable)/i,
 ];

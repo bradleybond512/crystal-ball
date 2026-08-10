@@ -79,11 +79,10 @@ jobs:
 
             if (prs.length > 0) {
               // Don't clobber the body on existing PRs. The cross-agent
-              // review gate requires a marker in the PR body (per
-              // scripts/cross-agent-check.mjs), and rewriting the body
-              // on every push would erase that marker and re-fail the
-              // gate. Keep the auto-PR for creation only; let humans /
-              // agents own the body text after that.
+              // gate no longer reads the body (it verifies the SHA-pinned
+              // verdict commit), but the body still carries hand-written
+              // context, task claims, and review notes. Keep the auto-PR
+              // for creation only; let humans / agents own the text after.
               console.log(`PR #${prs[0].number} already exists; leaving body untouched.`);
               core.setOutput('pr_number', String(prs[0].number));
               return;

@@ -1,36 +1,143 @@
-/* Triage bar + alert reaction styles */
+/* Alert shelf + alert reaction styles */
+
+.alert-shelf {
+  box-sizing: border-box;
+  width: auto;
+  max-width: 100vw;
+  overflow-x: clip;
+  scrollbar-gutter: stable;
+  isolation: isolate;
+}
+
+.alert-shelf > * {
+  min-width: 0;
+}
+
+.alert-shelf .cb-offline-staleness-banner[data-status],
+.alert-shelf .staleness-banner-warn,
+.alert-shelf .staleness-banner-critical,
+.alert-shelf .staleness-banner-offline {
+  color: #fff !important;
+  background: rgba(28, 28, 30, 0.94) !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 3px 0 0 rgba(255, 159, 10, 0.9);
+}
+
+.alert-shelf .cb-offline-staleness-banner[data-status="offline"],
+.alert-shelf .staleness-banner-critical,
+.alert-shelf .staleness-banner-offline {
+  box-shadow: inset 3px 0 0 rgba(255, 69, 58, 0.88);
+}
+
+.alert-shelf .cb-osb-icon {
+  color: #ff9f0a;
+}
+
+.alert-shelf .cb-offline-staleness-banner[data-status="offline"] .cb-osb-icon {
+  color: #ff453a;
+}
+
+.alert-shelf .cb-osb-btn,
+.alert-shelf .staleness-reset,
+.alert-shelf .staleness-dismiss {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+#cb-notification-stack:has(.cb-offline-staleness-banner[data-status]) > .staleness-banner,
+#cb-notification-stack:has(.cb-offline-staleness-banner[data-status]) > .staleness-details {
+  display: none !important;
+}
 
 .triage-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px 12px;
   margin: 0;
-  background: linear-gradient(90deg, rgba(40, 0, 0, 0.85), rgba(20, 20, 30, 0.85));
-  border-bottom: 1px solid rgba(255, 80, 80, 0.4);
+  background: rgba(30, 30, 32, 0.9);
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   font: 12px/1.2 -apple-system, system-ui, sans-serif;
   color: #f5f5f7;
-  /* Flow child of NotificationStack — no sticky/fixed needed. */
   position: relative;
   width: 100%;
   box-sizing: border-box;
   pointer-events: auto;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
 }
 .triage-bar[hidden] { display: none; }
 
 .triage-bar-label {
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #ffb84d;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 600;
   flex-shrink: 0;
+}
+
+.triage-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.triage-bar-facet-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.triage-bar-facet-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.triage-bar-facet-select {
+  min-width: 104px;
+  min-height: 32px;
+  box-sizing: border-box;
+  appearance: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #f5f5f7;
+  padding: 4px 24px 4px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.triage-bar-facet-select:focus-visible,
+.triage-bar-ack:focus-visible,
+.triage-bar-preset:focus-visible,
+.triage-regime-chip:focus-visible,
+.triage-dismiss-btn:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
 }
 
 .triage-bar-items {
   display: flex;
   flex: 1;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .triage-bar-items::-webkit-scrollbar { display: none; }
@@ -39,28 +146,29 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background 120ms ease, transform 120ms ease;
+  transition: background 120ms ease;
 }
 .triage-bar-item:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .triage-sev-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #888;
   flex-shrink: 0;
 }
-.triage-sev-critical .triage-sev-dot { background: #ff3b30; box-shadow: 0 0 6px #ff3b30; }
+.triage-sev-critical .triage-sev-dot { background: #ff453a; }
 .triage-sev-high .triage-sev-dot { background: #ff9500; }
 .triage-sev-medium .triage-sev-dot { background: #ffcc00; }
 .triage-sev-low .triage-sev-dot { background: #34c759; }
@@ -70,28 +178,37 @@
   font-size: 11px;
   text-transform: uppercase;
   opacity: 0.7;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 .triage-title { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .triage-age { font-size: 11px; opacity: 0.6; font-variant-numeric: tabular-nums; }
 .triage-dismiss-btn {
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
   color: inherit;
   opacity: 0;
   font-size: 14px;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity 0.15s;
 }
 .triage-bar-item:hover .triage-dismiss-btn { opacity: 0.5; }
 .triage-dismiss-btn:hover { opacity: 1 !important; }
+.triage-dismiss-btn:focus-visible { opacity: 1; }
 
 .triage-bar-ack {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  min-height: 32px;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #f5f5f7;
   padding: 4px 10px;
   border-radius: 6px;
@@ -100,6 +217,13 @@
   flex-shrink: 0;
 }
 .triage-bar-ack:hover { background: rgba(255, 255, 255, 0.16); }
+
+.triage-bar .triage-regime-chip {
+  min-height: 32px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  letter-spacing: 0;
+}
 
 /* Panel flash — outline pulse on the affected panel */
 @keyframes panel-alert-pulse {
@@ -283,8 +407,10 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  min-height: 32px;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #f5f5f7;
   padding: 4px 10px;
   border-radius: 6px;
@@ -668,83 +794,82 @@
 }
 
 /* ── Personal Storm Mode (src/components/PersonalStormMode.ts) ───────────
- * Persistent strip + expandable card for severe-weather warnings near
- * saved places. Rendered as an overlay above the rest of the app.
+ * Persistent compact row + on-demand details for severe-weather warnings.
  * Tier classes: --watch / --advisory / --warning / --emergency.
  */
 
 .cb-storm-mode-host {
-  position: fixed;
-  top: env(safe-area-inset-top, 0);
-  left: 0;
-  right: 0;
-  z-index: calc(var(--z-status-bar) + 1);
-  pointer-events: none;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  pointer-events: auto;
 }
 .cb-storm-mode-host:empty { display: none; }
 
 .cb-storm-mode {
+  --storm-accent: rgba(255, 214, 10, 0.92);
   pointer-events: auto;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(20, 22, 26, 0.92);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(28, 28, 30, 0.94);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
 }
-.cb-storm-mode--watch     { border-bottom-color: rgba(255, 196, 0, 0.55); }
-.cb-storm-mode--advisory  { border-bottom-color: rgba(255, 196, 0, 0.55); }
-.cb-storm-mode--warning   { border-bottom-color: rgba(255, 100, 60, 0.7); }
-.cb-storm-mode--emergency { border-bottom-color: rgba(255, 60, 60, 0.85); animation: cb-storm-pulse 2s ease-in-out infinite; }
-.cb-storm-mode--persistent .cb-storm-mode__strip { padding-bottom: 8px; }
-
-@keyframes cb-storm-pulse {
-  0%, 100% { box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35); }
-  50%      { box-shadow: 0 4px 18px rgba(255, 60, 60, 0.45); }
-}
+.cb-storm-mode--warning { --storm-accent: #ff9f0a; }
+.cb-storm-mode--emergency { --storm-accent: #ff453a; }
 
 .cb-storm-mode__strip {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
+  gap: 10px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 5px 12px;
   font-size: 13px;
-  line-height: 1.35;
+  line-height: 1.25;
 }
 .cb-storm-mode__tier {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
-  padding: 3px 8px;
+  padding: 4px 7px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.075);
+  color: var(--storm-accent);
   flex-shrink: 0;
 }
-.cb-storm-mode--warning   .cb-storm-mode__tier { background: rgba(255, 100, 60, 0.18); color: #ffa080; }
-.cb-storm-mode--emergency .cb-storm-mode__tier { background: rgba(255, 60, 60, 0.25);  color: #ff8c8c; }
-.cb-storm-mode--watch     .cb-storm-mode__tier,
-.cb-storm-mode--advisory  .cb-storm-mode__tier { background: rgba(255, 196, 0, 0.18);  color: #ffd060; }
 
 .cb-storm-mode__title {
   flex: 1;
-  font-weight: 500;
+  min-width: 0;
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.cb-storm-mode__title.critical-title { color: #fff; opacity: 1; }
 
 .cb-storm-mode__quick {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
 .cb-storm-mode__btn {
+  min-height: 32px;
+  box-sizing: border-box;
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -754,11 +879,27 @@
   transition: background 120ms ease;
 }
 .cb-storm-mode__btn:hover { background: rgba(255, 255, 255, 0.12); }
-.cb-storm-mode__btn--ack { border-color: rgba(120, 200, 120, 0.4); }
-.cb-storm-mode__btn--ack:hover { background: rgba(120, 200, 120, 0.18); }
+.cb-storm-mode__btn--ack {
+  background: #0a84ff;
+  border-color: #0a84ff;
+  color: #fff;
+}
+.cb-storm-mode__btn--ack:hover { background: #409cff; }
+.cb-storm-mode__btn:focus-visible {
+  outline: 2px solid #64d2ff;
+  outline-offset: 2px;
+}
+.cb-storm-mode__btn--details[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.cb-storm-mode__details-shell {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.cb-storm-mode__details-shell[hidden] { display: none; }
 
 .cb-storm-mode__card {
-  padding: 4px 18px 16px;
+  padding: 12px;
   font-size: 13px;
   line-height: 1.5;
   display: grid;
@@ -786,7 +927,7 @@
   color: rgba(255, 255, 255, 0.5);
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   font-size: 11px;
   align-self: center;
 }
@@ -801,7 +942,7 @@
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -852,11 +993,14 @@
 
 .cb-storm-mode__footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 8px;
 }
-.cb-storm-mode__why {
+.cb-storm-mode__why,
+.cb-storm-mode__guide {
   appearance: none;
   background: transparent;
   border: 0;
@@ -866,22 +1010,99 @@
   cursor: pointer;
   padding: 4px 0;
 }
-.cb-storm-mode__why:hover { color: rgba(160, 200, 255, 1); text-decoration: underline; }
+.cb-storm-mode__why:hover,
+.cb-storm-mode__guide:hover { color: rgba(160, 200, 255, 1); text-decoration: underline; }
 
 @media (prefers-color-scheme: light) {
-  .cb-storm-mode {
-    background: rgba(255, 255, 255, 0.96);
-    color: rgba(0, 0, 0, 0.88);
-    border-bottom-color: rgba(0, 0, 0, 0.08);
+  .cb-storm-mode,
+  .triage-bar {
+    background: rgba(28, 28, 30, 0.94);
   }
-  .cb-storm-mode__btn { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.12); }
-  .cb-storm-mode__btn:hover { background: rgba(0, 0, 0, 0.08); }
-  .cb-storm-mode__reason { background: rgba(0, 0, 0, 0.04); }
-  .cb-storm-mode__meta dt { color: rgba(0, 0, 0, 0.5); }
-  .cb-storm-mode__action { background: rgba(0, 0, 0, 0.03); }
-  .cb-storm-mode__why { color: rgba(0, 100, 220, 0.85); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cb-storm-mode--emergency { animation: none; }
+  .cb-storm-mode,
+  .cb-storm-mode__btn,
+  .triage-bar-item,
+  .triage-bar button,
+  .triage-bar select {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .alert-shelf {
+    left: 0 !important;
+    right: 0 !important;
+    width: auto;
+  }
+
+  .cb-storm-mode__strip,
+  .triage-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .cb-storm-mode__title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .cb-storm-mode__quick {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .cb-storm-mode__btn,
+  .cb-osb-btn,
+  .cb-osb-dismiss,
+  .staleness-reset,
+  .staleness-dismiss,
+  .triage-bar-facet-select,
+  .triage-bar-ack,
+  .triage-bar-preset,
+  .triage-bar .triage-regime-chip {
+    min-height: 44px;
+  }
+
+  .cb-storm-mode__btn {
+    flex: 1 1 96px;
+  }
+
+  .cb-storm-mode__card {
+    padding: 10px 8px 12px;
+  }
+
+  .triage-bar-label {
+    min-height: 44px;
+  }
+
+  .triage-bar-controls {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+  }
+
+  .triage-bar-items {
+    order: 5;
+    flex: 1 0 100%;
+    max-width: 100%;
+  }
+
+  .triage-bar-item {
+    min-height: 44px;
+    max-width: calc(100vw - 16px);
+  }
+
+  .triage-title {
+    max-width: min(42vw, 220px);
+  }
+
+  .triage-dismiss-btn {
+    width: 44px;
+    height: 44px;
+    opacity: 0.65;
+  }
 }

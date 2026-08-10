@@ -16,6 +16,7 @@ import {
   commandToStages,
 } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
+import { expectedReviewer, verdictAdvice } from '../scripts/cross-agent-check.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -363,4 +364,90 @@ test('schema violations parse to null so the check refuses to pass', () => {
   assert.equal(parseVerdictLine('{"blockingFindings": 0.5, "findings": []}'), null);
   assert.equal(parseVerdictLine('{"blockingFindings": 0, "findings": [{"file": "a.ts", "summary": "x"}]}'), null);
   assert.equal(parseVerdictLine('{"looksLike": "json but wrong shape"}'), null);
+});
+
+// ── cross-agent-check: advice must match the gate it describes ──
+
+test('the advised reviewer tracks requiredReviewers, never a private copy', () => {
+  assert.equal(expectedReviewer('claude/x'), 'Codex');
+  assert.equal(expectedReviewer('codex/x'), 'Claude');
+  assert.equal(expectedReviewer('copilot/x'), 'Codex or Claude');
+  assert.equal(expectedReviewer('feature/x'), 'another agent');
+  // Drift guard: the prose must be derived from the enforcing mapping.
+  for (const branch of ['claude/x', 'codex/x', 'copilot/x', 'feature/x']) {
+    const reviewers = requiredReviewers(branch);
+    const expected = reviewers === null
+      ? 'another agent'
+      : reviewers.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(' or ');
+    assert.equal(expectedReviewer(branch), expected);
+  }
+});
+
+test('a non-agent branch is advised no verdict, because record() would reject it', () => {
+  assert.equal(verdictAdvice('feature/x'), null);
+  assert.equal(verdictAdvice('main'), null);
+  assert.equal(requiredReviewers('feature/x'), null);
+});
+
+test('the advised --reviewer slug is one the verifier would accept', () => {
+  for (const branch of ['claude/x', 'codex/x']) {
+    const line = verdictAdvice(branch).find((l) => l.includes('--reviewer'));
+    const slug = line.split('--reviewer ')[1].split(' ')[0];
+    assert.ok(requiredReviewers(branch).includes(slug), `${slug} rejected for ${branch}`);
+  }
+  // Either agent may review a copilot branch, so the advice must not pick one.
+  const copilot = verdictAdvice('copilot/x').find((l) => l.includes('--reviewer'));
+  assert.match(copilot, /--reviewer <codex\|claude>/);
+});
+
+test('the advice never tells the operator to commit the verdict a second time', () => {
+  const advice = verdictAdvice('claude/x').join('\n');
+  assert.ok(advice.includes('--record'), 'advice should show the record command');
+  assert.doesNotMatch(advice, /^git commit/m, '--record already commits; a second commit fails');
+});
+
+test('importing cross-agent-check does not run its CLI', () => {
+  // A bare `main()` call at module scope would print the whole report on import
+  // and shell out to git; asserting on exported types would not catch that.
+  const r = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', `import ${JSON.stringify(join(root, 'scripts/cross-agent-check.mjs'))};`],
+    { encoding: 'utf8', cwd: root },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '', `import emitted CLI output:\n${r.stdout}`);
+});
+
+test('a same-basename entrypoint does not trigger the CLI', () => {
+  // The previous guard compared basenames, so ANY entrypoint named
+  // cross-agent-check.mjs ran the report on import. argv[1] is the decoy here.
+  const dir = mkdtempSync(join(tmpdir(), 'basename-collision-'));
+  const decoy = join(dir, 'cross-agent-check.mjs');
+  writeFileSync(decoy, `import ${JSON.stringify(join(root, 'scripts/cross-agent-check.mjs'))};\n`);
+  const r = spawnSync(process.execPath, [decoy], { encoding: 'utf8', cwd: root });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '', `same-basename import emitted CLI output:\n${r.stdout}`);
+});
+
+test('importing cross-agent-check cannot trigger the verifier CLI transitively', () => {
+  // cross-agent-check imports requiredReviewers from verify-review-verdict. Under
+  // the verifier's own basename guard, an entrypoint named verify-review-verdict.mjs
+  // made that transitive import RUN THE GATE and exit 1 — import-safety in the
+  // importer is worthless if the imported module is not import-safe too.
+  const dir = mkdtempSync(join(tmpdir(), 'transitive-collision-'));
+  const decoy = join(dir, 'verify-review-verdict.mjs');
+  writeFileSync(decoy, `import ${JSON.stringify(join(root, 'scripts/cross-agent-check.mjs'))};\n`);
+  const r = spawnSync(process.execPath, [decoy], { encoding: 'utf8', cwd: root });
+  assert.equal(r.status, 0, `verifier CLI ran transitively:\n${r.stderr}`);
+  assert.equal(r.stdout.trim(), '', `transitive import emitted stdout:\n${r.stdout}`);
+  assert.equal(r.stderr.trim(), '', `transitive import emitted stderr:\n${r.stderr}`);
+});
+
+test('changing cross-agent-check selects a suite that actually covers it', () => {
+  // Guards the OVERRIDES entry: without it the five tests above still pass
+  // while CI certifies nothing about the file.
+  const index = deriveScriptIndex({ 'test:agentic-pipeline': 'tsx --test tests/agentic-pipeline.test.mjs' }, root);
+  const { scripts, unmapped } = selectScripts(['scripts/cross-agent-check.mjs'], index);
+  assert.deepEqual(scripts, ['test:agentic-pipeline']);
+  assert.deepEqual(unmapped, []);
 });

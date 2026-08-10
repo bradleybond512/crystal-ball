@@ -32,6 +32,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const REVIEWS_DIR = '.agentic/reviews';
 const MIN_EVIDENCE_LENGTH = 40;
@@ -213,5 +214,10 @@ function main() {
   process.exit(1);
 }
 
-const isDirectRun = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+// Resolved-path equality, not basename. This module is imported by
+// cross-agent-check.mjs for requiredReviewers(); under the basename guard an
+// entrypoint merely NAMED verify-review-verdict.mjs made that import run the
+// gate CLI and exit 1.
+const isDirectRun = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isDirectRun) main();

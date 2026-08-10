@@ -68,13 +68,17 @@ export interface PersonalStormModeOptions {
 }
 
 const SNOOZE_MINUTES = 15;
+let nextDetailsId = 0;
 
 export class PersonalStormMode {
   private readonly mount: HTMLElement;
   private readonly callbacks: PersonalStormModeCallbacks;
+  private readonly detailsId = `cb-storm-mode-details-${++nextDetailsId}`;
   private current?: WeatherDispatchDecision;
   private uiState: StormModeUiState;
   private transitionTimer: ReturnType<typeof setTimeout> | undefined;
+  private expandedAlertId: string | undefined;
+  private renderedViewKey: string | undefined;
 
   constructor(options: PersonalStormModeOptions) {
     this.mount = options.mount;
@@ -86,6 +90,7 @@ export class PersonalStormMode {
 
   /** Update the displayed decision. Pass `undefined` to clear. */
   update(decision: WeatherDispatchDecision | undefined, now: number = Date.now()): void {
+    if (decision?.alertId !== this.current?.alertId) this.expandedAlertId = undefined;
     this.current = decision;
     this.uiState = pruneStormModeUiState(this.uiState, now);
     this.render(now);
@@ -93,13 +98,27 @@ export class PersonalStormMode {
 
   /** Manually clear the strip and card. */
   clear(): void {
+    this.expandedAlertId = undefined;
+    this.renderedViewKey = undefined;
     this.current = undefined;
     this.render();
+  }
+
+  destroy(): void {
+    if (this.transitionTimer !== undefined) {
+      clearTimeout(this.transitionTimer);
+      this.transitionTimer = undefined;
+    }
+    this.expandedAlertId = undefined;
+    this.renderedViewKey = undefined;
+    this.current = undefined;
+    replaceChildren(this.mount);
   }
 
   /** Programmatic acknowledge — useful for keyboard shortcuts. */
   acknowledge(alertId: string): void {
     if (this.current?.alertId === alertId) {
+      this.expandedAlertId = undefined;
       this.recordAcknowledge(this.current);
       this.callbacks.onAcknowledge?.(alertId);
       this.render();
@@ -144,12 +163,18 @@ export class PersonalStormMode {
     const decision = this.current;
     const visibility = computeStormModeVisibility(decision, this.uiState, now);
     if (!visibility.visible || !decision) {
-      replaceChildren(this.mount);
+      if (this.mount.hasChildNodes()) replaceChildren(this.mount);
+      this.renderedViewKey = undefined;
       return;
     }
 
     const tier = decision.urgency!.threatLevel;
     const persistent = decision.urgency!.persistentInApp;
+    if (!persistent) this.expandedAlertId = undefined;
+    const expanded = persistent && this.expandedAlertId === decision.alertId;
+    const viewKey = this.viewKey(decision, expanded);
+    if (this.renderedViewKey === viewKey && this.mount.hasChildNodes()) return;
+    const focusedControl = this.focusedControlKey();
 
     const root = h('div', {
       className: `cb-storm-mode cb-storm-mode--${tier}${persistent ? ' cb-storm-mode--persistent' : ''}`,
@@ -157,12 +182,47 @@ export class PersonalStormMode {
       'aria-live': 'assertive',
     });
 
-    root.append(this.renderStrip(decision));
-    if (persistent) {
-      root.append(this.renderCard(decision));
+    const detailsShell = persistent
+      ? h('div', {
+          className: 'cb-storm-mode__details-shell',
+          id: this.detailsId,
+          hidden: !expanded,
+        })
+      : undefined;
+
+    root.append(this.renderStrip(decision, detailsShell));
+    if (detailsShell) {
+      if (expanded) detailsShell.append(this.renderCard(decision));
+      root.append(detailsShell);
     }
 
     replaceChildren(this.mount, root);
+    this.renderedViewKey = viewKey;
+    if (focusedControl) {
+      this.mount.querySelector<HTMLElement>(`[data-storm-focus="${focusedControl}"]`)?.focus();
+    }
+  }
+
+  private focusedControlKey(): string | undefined {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.mount.contains(active)) return undefined;
+    return active.dataset.stormFocus;
+  }
+
+  private viewKey(decision: WeatherDispatchDecision, expanded: boolean): string {
+    return JSON.stringify([
+      decision.alertId,
+      decision.urgency?.threatLevel,
+      decision.urgency?.persistentInApp,
+      expanded,
+      stormTierLabel(decision),
+      stormStripTitle(decision),
+      decision.reason,
+      stormMetaPairs(decision),
+      decision.payload?.actions ?? [],
+      decision.urgency?.watchWindow ?? null,
+      decision.payload?.primaryHazard ?? null,
+    ]);
   }
 
   /** Re-render on the next timed boundary (alert expiry or snooze end)
@@ -181,22 +241,30 @@ export class PersonalStormMode {
     this.transitionTimer = setTimeout(() => { this.render(); }, delay);
   }
 
-  private renderStrip(decision: WeatherDispatchDecision): HTMLElement {
+  private renderStrip(
+    decision: WeatherDispatchDecision,
+    detailsShell?: HTMLElement,
+  ): HTMLElement {
     const strip = h('div', { className: 'cb-storm-mode__strip' },
       h('span', { className: 'cb-storm-mode__tier' }, stormTierLabel(decision)),
-      h('span', { className: 'cb-storm-mode__title' }, stormStripTitle(decision)),
-      this.renderQuickActions(decision),
+      h('h2', { className: 'cb-storm-mode__title critical-title' }, stormStripTitle(decision)),
+      this.renderQuickActions(decision, detailsShell),
     );
     return strip;
   }
 
-  private renderQuickActions(decision: WeatherDispatchDecision): HTMLElement {
+  private renderQuickActions(
+    decision: WeatherDispatchDecision,
+    detailsShell?: HTMLElement,
+  ): HTMLElement {
     const ack = h('button', {
       className: 'cb-storm-mode__btn cb-storm-mode__btn--ack',
       type: 'button',
       'aria-label': 'Acknowledge alert',
+      dataset: { stormFocus: 'acknowledge' },
     }, 'Acknowledge');
     ack.addEventListener('click', () => {
+      this.expandedAlertId = undefined;
       this.recordAcknowledge(decision);
       this.callbacks.onAcknowledge?.(decision.alertId);
       this.render();
@@ -206,14 +274,45 @@ export class PersonalStormMode {
       className: 'cb-storm-mode__btn cb-storm-mode__btn--snooze',
       type: 'button',
       'aria-label': `Snooze for ${SNOOZE_MINUTES} minutes`,
+      dataset: { stormFocus: 'snooze' },
     }, `Snooze ${SNOOZE_MINUTES}m`);
     snooze.addEventListener('click', () => {
+      this.expandedAlertId = undefined;
       this.recordSnooze(decision);
       this.callbacks.onSnooze?.(decision.alertId, SNOOZE_MINUTES);
       this.render();
     });
 
-    return h('div', { className: 'cb-storm-mode__quick' }, ack, snooze);
+    const disclosure = detailsShell
+      ? this.renderDetailsDisclosure(decision, detailsShell)
+      : null;
+
+    return h('div', { className: 'cb-storm-mode__quick' }, ack, snooze, disclosure);
+  }
+
+  private renderDetailsDisclosure(
+    decision: WeatherDispatchDecision,
+    detailsShell: HTMLElement,
+  ): HTMLElement {
+    const expanded = this.expandedAlertId === decision.alertId;
+    const disclosure = h('button', {
+      className: 'cb-storm-mode__btn cb-storm-mode__btn--details',
+      type: 'button',
+      'aria-expanded': String(expanded),
+      'aria-controls': this.detailsId,
+      dataset: { stormFocus: 'details' },
+    }, 'Details');
+    disclosure.addEventListener('click', () => {
+      const expanded = disclosure.getAttribute('aria-expanded') === 'true';
+      if (!expanded && !detailsShell.hasChildNodes()) {
+        detailsShell.append(this.renderCard(decision));
+      }
+      this.expandedAlertId = expanded ? undefined : decision.alertId;
+      disclosure.setAttribute('aria-expanded', String(!expanded));
+      detailsShell.hidden = expanded;
+      this.renderedViewKey = this.viewKey(decision, !expanded);
+    });
+    return disclosure;
   }
 
   private renderCard(decision: WeatherDispatchDecision): HTMLElement {
@@ -284,6 +383,7 @@ export class PersonalStormMode {
       className: 'cb-storm-mode__why',
       type: 'button',
       'aria-label': 'Why did I get this alert?',
+      dataset: { stormFocus: 'why' },
     }, 'Why did I get this?');
     btn.addEventListener('click', () => {
       this.callbacks.onShowDiagnostic?.(decision.alertId);
@@ -299,6 +399,7 @@ export class PersonalStormMode {
       className: 'cb-storm-mode__guide',
       type: 'button',
       'aria-label': 'Open the full survival guide for this hazard',
+      dataset: { stormFocus: 'guide' },
     }, 'Full guide →');
     btn.addEventListener('click', () => {
       document.dispatchEvent(new CustomEvent('cb:open-survival-guide', { detail: { guideId } }));

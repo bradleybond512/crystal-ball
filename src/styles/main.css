@@ -7064,6 +7064,11 @@ a.prediction-link:hover {
   overflow-x: hidden;
 }
 
+.faa-camera-popup-body:focus-visible {
+  outline: 2px solid var(--mac-blue, var(--semantic-info));
+  outline-offset: -2px;
+}
+
 .faa-camera-popup-body .popup-subtitle {
   margin-bottom: 4px;
   color: var(--mac-secondary-label, var(--text-secondary));

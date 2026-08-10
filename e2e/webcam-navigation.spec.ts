@@ -157,3 +157,56 @@ test('clicking a webcam card opens a rendered viewer', async ({ page }) => {
   await expect(viewer).toContainText('Release Test Camera');
   await expect.poll(async () => viewer.locator('img').evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
 });
+
+test('FAA map popup requests and reveals a resolved frame', async ({ page }) => {
+  const resolvedImageUrl = 'https://api.weather.gov/e2e-faa-camera.png';
+  let imageRequests = 0;
+
+  await page.route('http://127.0.0.1:46123/api/faa-camera-image?cameraId=11914', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ imageUrl: resolvedImageUrl, frames: [] }),
+    });
+  });
+  await page.route(resolvedImageUrl, async (route) => {
+    imageRequests += 1;
+    await route.fulfill({ contentType: 'image/png', body: CAMERA_IMAGE });
+  });
+  await page.goto('/?e2e=ui-only');
+
+  await page.evaluate(async () => {
+    const modulePath = '/src/components/MapPopup.ts';
+    const { MapPopup } = await import(/* @vite-ignore */ modulePath);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const popup = new MapPopup(container);
+    popup.show({
+      type: 'faaCamera',
+      data: {
+        id: '11914',
+        name: 'La Veta Pass - Camera 3',
+        lat: 37.5969,
+        lon: -105.2035,
+        state: 'CO',
+        category: 'remote',
+        imageUrl: '/api/faa-camera-image?cameraId=11914',
+        isOnline: true,
+        lastUpdated: '2026-08-10T05:53:28.994Z',
+        alertProximityMi: null,
+        alertLabel: null,
+        relevanceScore: 30,
+        aiConditions: null,
+      },
+      x: 100,
+      y: 100,
+    });
+  });
+
+  const image = page.locator('[data-faa-camera-image]');
+  await expect(image).toHaveAttribute('loading', 'eager');
+  await expect.poll(() => imageRequests).toBe(1);
+  await expect.poll(async () => image.evaluate((element) => element.naturalWidth)).toBeGreaterThan(0);
+  await expect(image).toBeVisible();
+  await expect(page.locator('[data-faa-camera-status]')).toHaveCount(0);
+});

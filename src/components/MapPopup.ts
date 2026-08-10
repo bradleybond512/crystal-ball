@@ -175,7 +175,10 @@ export class MapPopup {
 
  this.isMobileSheet = isMobileDevice();
  this.popup = document.createElement('div');
- this.popup.className = this.isMobileSheet ? 'map-popup map-popup-sheet' : 'map-popup';
+ const popupClasses = ['map-popup'];
+ if (this.isMobileSheet) popupClasses.push('map-popup-sheet');
+ if (data.type === 'faaCamera') popupClasses.push('map-popup-faa-camera');
+ this.popup.className = popupClasses.join(' ');
 
  const content = this.renderContent(data);
  this.popup.innerHTML = this.isMobileSheet
@@ -2712,25 +2715,26 @@ export class MapPopup {
 
   private renderFAACameraPopup(cam: ScoredFAACamera): string {
  const hasAlert = cam.alertProximityMi !== null;
- const headerBg = hasAlert ? '#e8650a' : '#2563eb';
  const alertSection = cam.alertLabel
  ? `<div class="popup-stat"><span class="stat-label">${t('popups.faaCamera.nearbyAlert')}</span><span class="stat-value alert">${escapeHtml(cam.alertLabel)}</span></div>`
  : '';
  const imageSection = cam.imageUrl
- ? `<div style="margin-top:8px;min-height:124px;display:flex;align-items:center;justify-content:center;">
- <img data-faa-camera-image alt="${escapeHtml(cam.name)}" loading="eager" hidden style="width:100%;max-width:220px;aspect-ratio:4/3;object-fit:cover;border-radius:4px;" />
+ ? `<div class="faa-camera-frame">
+ <img class="faa-camera-frame-image" data-faa-camera-image alt="${escapeHtml(cam.name)}" loading="eager" hidden />
  <span data-faa-camera-status>${t('common.loading')}</span>
  </div>`
  : '';
  const statusLabel = cam.isOnline ? t('popups.faaCamera.online') : t('popups.faaCamera.offline');
+ const lastUpdated = this.getTimeAgo(new Date(cam.lastUpdated));
  return `
- <div class="popup-header" style="background:${headerBg}">
+ <div class="popup-header faa-camera-popup-header${hasAlert ? ' has-alert' : ''}">
  <span class="popup-icon">&#128247;</span>
  <span class="popup-title">${escapeHtml(cam.name)}</span>
- <button class="popup-close">×</button>
+ <button class="popup-close" type="button" aria-label="${escapeHtml(t('common.close'))}">×</button>
  </div>
- <div class="popup-body">
+ <div class="popup-body faa-camera-popup-body">
  <div class="popup-subtitle">${escapeHtml(cam.state)} · ${escapeHtml(cam.category)}</div>
+ <time class="faa-camera-updated" datetime="${escapeHtml(cam.lastUpdated)}">${escapeHtml(t('components.status.updatedAt', { time: lastUpdated }))}</time>
  <div class="popup-stats">
  <div class="popup-stat"><span class="stat-label">${t('popups.faaCamera.status')}</span><span class="stat-value">${statusLabel}</span></div>
  ${alertSection}

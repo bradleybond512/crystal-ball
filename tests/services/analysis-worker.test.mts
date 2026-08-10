@@ -118,6 +118,49 @@ test('cluster request queues immediately without waiting for a ready signal', as
   }
 });
 
+test('default browser timers keep the global receiver', async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timerHandle = {} as ReturnType<typeof setTimeout>;
+  let clearCalls = 0;
+
+  globalThis.setTimeout = (function (this: unknown): ReturnType<typeof setTimeout> {
+    assert.equal(this, globalThis, 'setTimeout must use the browser global as its receiver');
+    return timerHandle;
+  }) as typeof globalThis.setTimeout;
+  globalThis.clearTimeout = (function (this: unknown, handle?: ReturnType<typeof setTimeout>): void {
+    assert.equal(this, globalThis, 'clearTimeout must use the browser global as its receiver');
+    assert.equal(handle, timerHandle);
+    clearCalls += 1;
+  }) as typeof globalThis.clearTimeout;
+
+  const worker = new FakeWorker();
+  const manager = new AnalysisWorkerManager({
+    createWorker: () => worker as unknown as Worker,
+  });
+  let outcome: Promise<void> | undefined;
+
+  try {
+    const result = manager.analyzeCorrelations([], [], []);
+    outcome = result.then(() => {}, () => {});
+    const request = worker.messages.find((message) => (
+      typeof message === 'object' && message !== null && 'type' in message
+      && message.type === 'correlation'
+    )) as { id: string } | undefined;
+    assert.ok(request, 'receiver-safe timers should allow the request to reach the worker');
+
+    worker.emit({ type: 'correlation-result', id: request.id, signals: [] });
+
+    assert.deepEqual(await result, []);
+    assert.equal(clearCalls, 1);
+  } finally {
+    manager.terminate();
+    await outcome;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
 test('ready is telemetry and does not gate a queued correlation request', async () => {
   const { manager, worker } = makeManager();
   const result = manager.analyzeCorrelations([], [], []);

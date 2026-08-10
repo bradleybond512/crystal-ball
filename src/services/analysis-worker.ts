@@ -54,8 +54,14 @@ export class AnalysisWorkerManager {
   constructor(options: AnalysisWorkerManagerOptions = {}) {
  this.createWorker = options.createWorker ?? (() => new AnalysisWorker());
  this.now = options.now ?? (() => performance.now());
- this.setTimer = options.setTimer ?? setTimeout;
- this.clearTimer = options.clearTimer ?? clearTimeout;
+ const setTimer = options.setTimer;
+ const clearTimer = options.clearTimer;
+ this.setTimer = setTimer
+ ? (callback, delayMs) => setTimer(callback, delayMs)
+ : (callback, delayMs) => globalThis.setTimeout(callback, delayMs);
+ this.clearTimer = clearTimer
+ ? timer => clearTimer(timer)
+ : timer => globalThis.clearTimeout(timer);
   }
 
   /**

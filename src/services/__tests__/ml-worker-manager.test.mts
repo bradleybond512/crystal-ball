@@ -208,3 +208,54 @@ test('a worker error settles the callers still waiting', async () => {
   await assert.rejects(embeddings, /worker crashed/);
   assert.deepEqual(armed(), []);
 });
+
+// ─── Async worker creation vs. termination ────────────────────────────────
+
+test('a worker factory that resolves after terminate() is discarded, not attached', async () => {
+  // createWorker() is awaited before there is a worker to hold onto. If
+  // terminate() (or the ready timeout) runs while that await is still
+  // pending, a factory that resolves afterward must not resurrect the
+  // manager it was already given up on.
+  timers = [];
+  let resolveFactory!: (worker: Worker) => void;
+  const factory = () => new Promise<Worker>(resolve => { resolveFactory = resolve; });
+  const manager = new MLWorkerManager(factory);
+
+  const started = manager.init();
+  await flush(); // let init() reach the pending createWorker() await
+
+  manager.terminate();
+  assert.equal(await started, false, 'terminate before the factory resolves must fail init');
+
+  const late = new FakeWorker();
+  resolveFactory(late as unknown as Worker);
+  await flush();
+  await flush();
+
+  assert.equal(late.terminated, 1, 'the late worker must be discarded, not attached');
+  assert.equal(manager.isAvailable, false, 'a discarded worker must not revive availability');
+});
+
+// ─── Eviction vs. in-flight replies ────────────────────────────────────────
+
+test('a late id-bearing model-loaded reply does not undo an eviction', async () => {
+  // A genuinely new load always posts the unsolicited model-loaded notice
+  // before its own id-bearing reply, but concurrent loads can still interleave
+  // an eviction of that same model between the two. The id-bearing reply must
+  // only settle its caller — residency is tracked from the unsolicited
+  // channel alone.
+  const { fake, manager } = await readyManager();
+
+  const loaded = manager.loadModel('embeddings');
+  const id = fake.lastRequestId();
+
+  fake.emit({ type: 'model-loaded', modelId: 'embeddings' }); // unsolicited
+  assert.equal(manager.isModelLoaded('embeddings'), true);
+
+  fake.emit({ type: 'model-evicted', modelId: 'embeddings' }); // raced in from another load
+  assert.equal(manager.isModelLoaded('embeddings'), false);
+
+  fake.emit({ type: 'model-loaded', id, modelId: 'embeddings' }); // this request's own late reply
+  assert.equal(await loaded, true, 'the caller still sees its own request succeed');
+  assert.equal(manager.isModelLoaded('embeddings'), false, 'the eviction must not be undone');
+});

@@ -46,6 +46,9 @@ body.is-desktop-macos {
   --mac-blue: #0a84ff;
   --mac-purple: #bf5af2;
   --mac-pink: #ff375f;
+  --mac-alert-info: var(--sev-info);
+  --mac-alert-warning: var(--hs-warn);
+  --mac-alert-danger: var(--mac-red);
 
   /* Card / panel appearance */
   --mac-card-bg: var(--mat-solid-2);
@@ -66,6 +69,9 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *) {
   --mac-tertiary-label: rgba(0, 0, 0, 0.25);
   --mac-separator: rgba(0, 0, 0, 0.12);
   --mac-fill: rgba(0, 0, 0, 0.05);
+  --mac-alert-info: color-mix(in srgb, var(--sev-info) 58%, black);
+  --mac-alert-warning: color-mix(in srgb, var(--hs-warn) 45%, black);
+  --mac-alert-danger: color-mix(in srgb, var(--hs-bad) 72%, black);
   --mac-card-bg: #ffffff;
   --mac-card-border: rgba(0, 0, 0, 0.08);
   --mac-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.06);

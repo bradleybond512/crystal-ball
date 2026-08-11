@@ -122,6 +122,10 @@ export class EEWStatusBar {
     main.append(this.labelEl, this.subtitleEl, this.imessageBadgeEl, this.spaceWxEl, chevronEl);
     main.addEventListener('click', () => this.toggleExpanded());
 
+    const dragRegion = document.createElement('div');
+    dragRegion.className = 'eew-bar-drag-region';
+    dragRegion.setAttribute('aria-hidden', 'true');
+
     this.expandedEl = document.createElement('div');
     this.expandedEl.className = 'eew-bar-expanded';
     this.expandedEl.id = detailsId;
@@ -135,7 +139,7 @@ export class EEWStatusBar {
     this.liveEl.setAttribute('aria-live', 'polite');
     this.liveEl.setAttribute('aria-atomic', 'true');
 
-    this.root.append(main, this.expandedEl, this.liveEl);
+    this.root.append(main, dragRegion, this.expandedEl, this.liveEl);
     parent.prepend(this.root);
     document.addEventListener('keydown', this.onDocumentKeydown);
     document.addEventListener('pointerdown', this.onDocumentPointerDown);
@@ -169,6 +173,7 @@ export class EEWStatusBar {
     this.liveEl = null;
     this.expanded = false;
     this.lastAnnouncementKey = '';
+    this.stateListeners.clear();
   }
 
   /**
@@ -179,6 +184,8 @@ export class EEWStatusBar {
   setSpaceWeatherStatus(status: SpaceWxStatus | null): void {
     this.currentSpaceWx = deriveSpaceWxBanner(status);
     this.renderSpaceWxBanner();
+    this.updateMainA11yLabel();
+    this.announceStatusTransition();
   }
 
   /** @internal */
@@ -358,19 +365,38 @@ export class EEWStatusBar {
   private announceStatusTransition(): void {
     if (!this.liveEl) return;
     const alertId = this.currentState.lastAlert?.eventId ?? '';
-    const key = `${this.currentState.source}:${this.currentState.label}:${alertId}`;
+    const imessage = this.currentState.imessage;
+    const spaceWeather = this.currentSpaceWx;
+    const key = [
+      this.currentState.source,
+      this.currentState.label,
+      alertId,
+      imessage.visible ? imessage.status : '',
+      imessage.error ?? '',
+      spaceWeather.severity,
+      spaceWeather.label,
+      spaceWeather.subtitle,
+    ].join(':');
     if (key === this.lastAnnouncementKey) return;
     this.lastAnnouncementKey = key;
-    const subtitle = this.subtitleEl?.textContent?.trim() ?? '';
-    this.liveEl.textContent = subtitle
-      ? `${this.displayLabel(this.currentState.label)}. ${subtitle}`
-      : this.displayLabel(this.currentState.label);
+    this.liveEl.textContent = this.accessibleStatusParts().join('. ');
   }
 
   private updateMainA11yLabel(): void {
     if (!this.mainEl) return;
     const action = this.expanded ? 'Hide alert details' : 'Show alert details';
-    this.mainEl.setAttribute('aria-label', `${this.displayLabel(this.currentState.label)}. ${action}`);
+    this.mainEl.setAttribute('aria-label', `${this.accessibleStatusParts().join('. ')}. ${action}`);
+  }
+
+  private accessibleStatusParts(): string[] {
+    const parts = [this.displayLabel(this.currentState.label)];
+    const subtitle = this.subtitleEl?.textContent?.trim();
+    const imessage = this.imessageBadgeEl?.textContent?.trim();
+    const spaceWeather = this.spaceWxEl?.textContent?.trim();
+    if (subtitle) parts.push(subtitle);
+    if (imessage && this.currentState.imessage.visible) parts.push(imessage);
+    if (spaceWeather && this.currentSpaceWx.severity !== 'none') parts.push(spaceWeather);
+    return parts;
   }
 
   private renderImessageBadge(): void {

@@ -4,6 +4,7 @@ import test from 'node:test';
 import { Window } from 'happy-dom';
 
 import type { EewAlert } from '../../services/seismic/eew-alert-engine.ts';
+import type { SpaceWxStatus } from '../../services/spaceweather/swpc-monitor.ts';
 
 const happyWindow = new Window({ url: 'http://127.0.0.1/' });
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -59,6 +60,9 @@ test('weather status uses source-aware details and an accessible disclosure', ()
     const chevron = button.querySelector<HTMLElement>('.eew-bar-chevron');
     assert.ok(chevron, 'status disclosure should show a familiar chevron');
     assert.equal(chevron.getAttribute('aria-hidden'), 'true');
+    const dragRegion = happyWindow.document.querySelector<HTMLElement>('.eew-bar-drag-region');
+    assert.ok(dragRegion, 'macOS titlebar should retain a noninteractive drag surface');
+    assert.equal(dragRegion.getAttribute('aria-hidden'), 'true');
 
     button.click();
     assert.equal(button.getAttribute('aria-expanded'), 'true');
@@ -66,6 +70,55 @@ test('weather status uses source-aware details and an accessible disclosure', ()
     assert.match(details.textContent, /Severe weather affects a saved place/i);
     assert.match(details.textContent, /No recent earthquake alerts/i);
     assert.doesNotMatch(details.textContent, /^No active alerts$/i);
+  } finally {
+    bar.destroy();
+  }
+});
+
+test('space weather and iMessage failures remain in the accessible status', () => {
+  const bar = mountBar();
+
+  try {
+    const live = happyWindow.document.querySelector<HTMLElement>('.eew-bar-live');
+    const button = happyWindow.document.querySelector<HTMLButtonElement>('.eew-bar-main');
+    assert.ok(live);
+    assert.ok(button);
+
+    const spaceWeather: SpaceWxStatus = {
+      xray: null,
+      geomag: {
+        kp: 8,
+        level: 'G4',
+        auroraVisibilityLatN: 50,
+        observedAt: new Date(NOW).toISOString(),
+        kpMax24h: 8,
+      },
+      gpsDisruption: 'high',
+      hfRadioBlackout: true,
+      earthwardCmes: [],
+      asOf: new Date(NOW).toISOString(),
+    };
+    bar.setSpaceWeatherStatus(spaceWeather);
+
+    assert.match(button.getAttribute('aria-label') ?? '', /GEOMAGNETIC G4/i);
+    assert.match(live.textContent, /GEOMAGNETIC G4/i);
+
+    const active = alert({
+      tier: 'TIER_5_EXTREME',
+      imessageStatus: 'failed',
+      imessageError: 'Messages.app unavailable',
+    });
+    bar.applyPayload({
+      activeAlerts: [active],
+      highestTier: active.tier,
+      lastEventId: active.eventId,
+      asOf: NOW,
+    });
+
+    assert.match(button.getAttribute('aria-label') ?? '', /iMessage failed/i);
+    assert.match(live.textContent, /iMessage failed/i);
+    assert.match(live.textContent, /Messages\.app unavailable/i);
+    assert.match(live.textContent, /GEOMAGNETIC G4/i);
   } finally {
     bar.destroy();
   }

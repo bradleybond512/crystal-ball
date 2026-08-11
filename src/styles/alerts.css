@@ -31,7 +31,7 @@
   box-sizing: border-box;
   border: 0;
   border-radius: var(--r-sm);
-  background: var(--mat-solid-2);
+  background: var(--mac-surface, var(--mat-solid-2));
   box-shadow: var(--e-2), var(--edge-hairline);
   color: var(--hs-warn);
   font-family: var(--font-ui);
@@ -44,7 +44,12 @@
 .alert-shelf .cb-offline-staleness-banner[data-status="offline"],
 .alert-shelf .staleness-banner-critical,
 .alert-shelf .staleness-banner-offline {
-  color: var(--hs-bad);
+  color: var(--mac-red, #ff6961);
+}
+
+.alert-shelf .cb-offline-staleness-banner[data-status="offline"] .cb-osb-subtext,
+.alert-shelf :is(.staleness-banner-critical, .staleness-banner-offline) .cb-osb-subtext {
+  opacity: 1;
 }
 
 .cb-offline-staleness-banner {

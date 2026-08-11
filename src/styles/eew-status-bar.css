@@ -253,27 +253,27 @@ body.is-desktop-macos .eew-bar-label {
 }
 
 body.is-desktop-macos .eew-bar-blue .eew-bar-label {
-  color: var(--sev-info);
+  color: var(--mac-alert-info);
 }
 
 body.is-desktop-macos .eew-bar-blue .eew-bar-main::before {
-  background: var(--sev-info);
+  background: var(--mac-alert-info);
 }
 
 body.is-desktop-macos :is(.eew-bar-yellow, .eew-bar-orange) .eew-bar-label {
-  color: var(--hs-warn);
+  color: var(--mac-alert-warning);
 }
 
 body.is-desktop-macos :is(.eew-bar-yellow, .eew-bar-orange) .eew-bar-main::before {
-  background: var(--hs-warn);
+  background: var(--mac-alert-warning);
 }
 
 body.is-desktop-macos :is(.eew-bar-red, .eew-bar-crimson) .eew-bar-label {
-  color: var(--hs-bad);
+  color: var(--mac-alert-danger);
 }
 
 body.is-desktop-macos :is(.eew-bar-red, .eew-bar-crimson) .eew-bar-main::before {
-  background: var(--hs-bad);
+  background: var(--mac-alert-danger);
 }
 
 body.is-desktop-macos .eew-bar-subtitle {
@@ -305,7 +305,7 @@ body.is-desktop-macos .eew-bar-expanded {
 }
 
 body.is-desktop-macos .eew-bar-context {
-  color: var(--hs-warn);
+  color: var(--mac-alert-warning);
   font-size: var(--text-sm);
 }
 

@@ -106,7 +106,7 @@ test('macOS alert chrome uses neutral material and amber stale-data hierarchy', 
           <span class="eew-bar-subtitle">A saved place is affected</span>
         </button>
         <div class="eew-bar-drag-region" aria-hidden="true"></div>
-        <div class="eew-bar-expanded">Alert details</div>
+        <div class="eew-bar-expanded"><span class="eew-bar-context">Severe weather affects a saved place</span></div>
       </div>
       <div class="alert-shelf" id="cb-notification-stack">
         <div class="cb-offline-staleness-banner" data-status="stale">
@@ -129,6 +129,7 @@ test('macOS alert chrome uses neutral material and amber stale-data hierarchy', 
     const statusLabel = document.querySelector<HTMLElement>('.eew-bar-label')!;
     const dragRegion = document.querySelector<HTMLElement>('.eew-bar-drag-region')!;
     const expanded = document.querySelector<HTMLElement>('.eew-bar-expanded')!;
+    const context = document.querySelector<HTMLElement>('.eew-bar-context')!;
     const banner = document.querySelector<HTMLElement>('.cb-offline-staleness-banner')!;
     const label = document.querySelector<HTMLElement>('.cb-osb-label')!;
     const subtext = document.querySelector<HTMLElement>('.cb-osb-subtext')!;
@@ -163,6 +164,7 @@ test('macOS alert chrome uses neutral material and amber stale-data hierarchy', 
     expanded.style.transition = 'none';
     label.style.transition = 'none';
     subtext.style.transition = 'none';
+    statusLabel.style.transition = 'none';
     banner.dataset.status = 'offline';
     const offlineStyle = getComputedStyle(banner);
     const offlineBackground = parseRgb(offlineStyle.backgroundColor);
@@ -199,10 +201,54 @@ test('macOS alert chrome uses neutral material and amber stale-data hierarchy', 
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const lightStatusStyle = getComputedStyle(status);
     const lightExpandedStyle = getComputedStyle(expanded);
+    const lightStatusBackground = parseRgb(lightStatusStyle.backgroundColor);
+    const lightExpandedBackground = parseRgb(lightExpandedStyle.backgroundColor);
+    const statusContrastFor = (className: string): number => {
+      status.className = `eew-status-bar ${className}`;
+      return contrast(parseRgb(getComputedStyle(statusLabel).color), lightStatusBackground);
+    };
+    const lightContrasts = {
+      blueTitlebar: statusContrastFor('eew-bar-blue'),
+      amberTitlebar: statusContrastFor('eew-bar-yellow'),
+      redTitlebar: statusContrastFor('eew-bar-red'),
+      expandedContext: contrast(parseRgb(getComputedStyle(context).color), lightExpandedBackground),
+      staleBanner: 0,
+      staleSubtext: 0,
+      offlineBanner: 0,
+      offlineSubtext: 0,
+    };
+    banner.dataset.status = 'stale';
+    const lightStaleStyle = getComputedStyle(banner);
+    const lightStaleSubtextStyle = getComputedStyle(subtext);
+    const lightBannerBackground = parseRgb(lightStaleStyle.backgroundColor);
+    lightContrasts.staleBanner = contrast(parseRgb(lightStaleStyle.color), lightBannerBackground);
+    lightContrasts.staleSubtext = contrast(
+      blend(
+        parseRgb(lightStaleSubtextStyle.color),
+        lightBannerBackground,
+        Number.parseFloat(lightStaleSubtextStyle.opacity),
+      ),
+      lightBannerBackground,
+    );
+    banner.dataset.status = 'offline';
+    const lightOfflineStyle = getComputedStyle(banner);
+    const lightOfflineSubtextStyle = getComputedStyle(subtext);
+    lightContrasts.offlineBanner = contrast(parseRgb(lightOfflineStyle.color), lightBannerBackground);
+    lightContrasts.offlineSubtext = contrast(
+      blend(
+        parseRgb(lightOfflineSubtextStyle.color),
+        lightBannerBackground,
+        Number.parseFloat(lightOfflineSubtextStyle.opacity),
+      ),
+      lightBannerBackground,
+    );
+    status.className = 'eew-status-bar eew-bar-red';
+    banner.dataset.status = 'stale';
     return {
       ...darkAppearance,
       lightStatusBackground: lightStatusStyle.backgroundColor,
       lightExpandedBackground: lightExpandedStyle.backgroundColor,
+      lightContrasts,
     };
   });
 
@@ -223,6 +269,9 @@ test('macOS alert chrome uses neutral material and amber stale-data hierarchy', 
   expect(appearance.offlineSubtextContrast).toBeGreaterThanOrEqual(4.5);
   expect(appearance.lightStatusBackground).toContain('242');
   expect(appearance.lightExpandedBackground).toBe('rgb(255, 255, 255)');
+  for (const [surface, ratio] of Object.entries(appearance.lightContrasts)) {
+    expect(ratio, `${surface} contrast`).toBeGreaterThanOrEqual(4.5);
+  }
   expect(appearance.documentWidth).toBeLessThanOrEqual(appearance.viewportWidth);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });

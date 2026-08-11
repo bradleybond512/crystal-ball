@@ -73,6 +73,38 @@ test('web RPC calls are attributed to the edge the redirect sends them to', () =
   assert.equal(fetchTargetHost(new URL('https://crystalball.app/api/military/v1/posture'), web), 'api.crystalball.app');
 });
 
+// The web redirect matches per input shape rather than on a normalized path, and
+// attribution has to reproduce that or it credits the edge for calls the wrapper
+// waved through. Desktop is unaffected: its router normalizes first.
+test('an app-origin absolute string is NOT redirected on web', () => {
+  // installWebApiRedirect tests the raw string against an anchored pattern, so
+  // only a relative path matches — the absolute form reaches the page host.
+  assert.equal(fetchTargetHost('https://crystalball.app/api/military/v1/posture', web), 'crystalball.app');
+});
+
+test('a sibling app host is not same-origin, so the redirect leaves it alone', () => {
+  assert.equal(
+    fetchTargetHost(new URL('https://tech.crystalball.app/api/military/v1/posture'), web),
+    'tech.crystalball.app',
+  );
+});
+
+test('a same-origin Request for an RPC path is redirected', () => {
+  assert.equal(fetchTargetHost(new Request('https://crystalball.app/api/military/v1/posture'), web), 'api.crystalball.app');
+});
+
+test('the same absolute URL is attributed differently by shape, exactly as it is routed', () => {
+  const raw = 'https://crystalball.app/api/military/v1/posture';
+  assert.equal(fetchTargetHost(raw, web), 'crystalball.app', 'string: not redirected');
+  assert.equal(fetchTargetHost(new URL(raw), web), 'api.crystalball.app', 'URL: redirected');
+});
+
+test('desktop still normalizes every shape onto the sidecar', () => {
+  // Only the web wrapper is shape-sensitive; the desktop router asks
+  // getApiTargetFromRequestInput, which accepts all four forms.
+  assert.equal(fetchTargetHost('tauri://localhost/api/military/v1/posture', desktop), '127.0.0.1:46123');
+});
+
 test('web paths outside the RPC pattern stay on the page origin', () => {
   // The redirect only matches /api/<service>/v1/ — /api/health is served same-origin.
   assert.equal(fetchTargetHost('/api/health', web), 'crystalball.app');

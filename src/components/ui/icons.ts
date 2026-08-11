@@ -26,7 +26,9 @@ export type IconName =
   | 'magnifier'
   | 'doc'
   | 'brain'
-  | 'chevron-down';
+  | 'chevron-down'
+  | 'refresh-cw'
+  | 'x';
 
 const PATHS: Record<IconName, string> = {
   bell:
@@ -81,6 +83,11 @@ const PATHS: Record<IconName, string> = {
     '<path d="M10.6 9.4a1.8 1.8 0 0 1-1.4.7"/>',
   'chevron-down':
     '<path d="M4 6l4 4 4-4"/>',
+  'refresh-cw':
+    '<path d="M13.2 5.8A5.6 5.6 0 1 0 13 10.7"/>' +
+    '<path d="M13.2 2.5v3.3H9.9"/>',
+  x:
+    '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>',
 };
 
 export interface IconOptions {

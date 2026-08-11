@@ -1,14 +1,43 @@
 /**
- * Distinguishes a caller's own cancellation from an abort the runtime raised on
- * its own behalf.
+ * Caller-scoped cancellation for a shared in-flight request.
  *
- * `installRuntimeFetchPatch` arms a fresh `AbortSignal.timeout(15_000)` on every
- * request that does not carry a caller signal, so a slow sidecar body read surfaces
- * in a catch block as an `AbortError` with no caller involved. Rethrowing that on
- * sight escapes as an `unhandledrejection` — reported as a renderer ERROR — instead
- * of taking the cache fallback every other failure gets. Only rethrow when the
- * caller's signal is the one that fired.
+ * `fetchCachedRiskScores` / `fetchCachedTheaterPosture` deduplicate concurrent
+ * callers onto a single RPC, so cancellation has to be scoped to the caller that
+ * asked for it: one caller walking away must not decide what the others receive.
+ * These helpers reject only the caller whose signal fired and leave the shared
+ * promise running, so every caller still waiting gets its result.
  */
-export function isCallerCancellation(error: unknown, signal?: AbortSignal): boolean {
-  return signal?.aborted === true && error instanceof DOMException && error.name === 'AbortError';
+
+export function createAbortError(): DOMException {
+  return new DOMException('The operation was aborted.', 'AbortError');
+}
+
+/**
+ * Settle with `promise` unless `signal` fires first, in which case this caller —
+ * and only this caller — is rejected. `promise` is never cancelled or otherwise
+ * altered, so other waiters are unaffected.
+ */
+export function withCallerAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(createAbortError());
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(createAbortError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejecting the original error
+        reject(error);
+      },
+    );
+  });
 }

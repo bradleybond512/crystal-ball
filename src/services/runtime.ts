@@ -412,6 +412,61 @@ function isAllowedRedirectTarget(url: string): boolean {
   }
 }
 
+/** Where the wrappers installed over `window.fetch` will actually send a request. */
+export interface FetchRoutingEnv {
+  /** `getApiBaseUrl()` — non-empty only on desktop, where the sidecar patch is installed. */
+  apiBaseUrl: string;
+  /** The base `installWebApiRedirect` redirects to, or '' when it declines to patch. */
+  webRedirectBaseUrl: string;
+  pageHref: string;
+}
+
+function ambientFetchRouting(): FetchRoutingEnv {
+  return {
+    apiBaseUrl: getApiBaseUrl(),
+    webRedirectBaseUrl:
+      !isDesktopRuntime() && WS_API_URL && isAllowedRedirectTarget(WS_API_URL) ? WS_API_URL : '',
+    pageHref: typeof location === 'undefined' ? '' : location.href,
+  };
+}
+
+/** The base a request is rerouted to, or null when it reaches its literal URL. */
+function routedBaseFor(target: string | null, env: FetchRoutingEnv): string | null {
+  if (target === null) return null;
+  // Desktop: installRuntimeFetchPatch sends every app-origin /api/* call to the sidecar.
+  if (env.apiBaseUrl) return target.startsWith('/api/') ? env.apiBaseUrl : null;
+  // Web: installWebApiRedirect sends app-origin /api/<service>/v1/* calls to the edge.
+  if (env.webRedirectBaseUrl && WEB_RPC_PATTERN.test(target)) return env.webRedirectBaseUrl;
+  return null;
+}
+
+/**
+ * The host a fetch for `input` actually reaches.
+ *
+ * Instrumentation wrapping `window.fetch` sits OUTSIDE the two routing wrappers
+ * above, so it observes app-origin URLs before they are rewritten. Resolving
+ * those against `location.href` attributes them to the app origin — under Tauri
+ * the phantom `localhost` of `tauri://localhost`, a host the app never contacts
+ * since CSP allows 127.0.0.1 only — which splits one backend across two buckets.
+ *
+ * Routing is decided by `getApiTargetFromRequestInput`, so this reuses it rather
+ * than re-deriving a subset: every input shape the wrappers rewrite (relative
+ * path, app-origin absolute string, `URL`, `Request`) is attributed the same way
+ * it is routed. Desktop retries a failed local call against the cloud host; this
+ * reports the local target that every attempt starts with.
+ */
+export function fetchTargetHost(input: RequestInfo | URL, env: FetchRoutingEnv = ambientFetchRouting()): string {
+  try {
+    const base = routedBaseFor(getApiTargetFromRequestInput(input), env);
+    if (base) return new URL(base).host;
+
+    const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    return new URL(raw, env.pageHref || undefined).host;
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function installWebApiRedirect(): void {
   if (isDesktopRuntime() || typeof window === 'undefined') return;
   if (!WS_API_URL) return;

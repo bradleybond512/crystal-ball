@@ -1,21 +1,6 @@
 /**
- * OfflineStalenessBanner action delegation tests (happy-dom).
- *
- * Regression guard for the swallowed-click ("dead click") race. render() rebuilds
- * the banner's inner row via el.replaceChildren() on every offline-state emit
- * (30s cadence + per-source updates). The Reset/Dismiss buttons used to bind
- * `click` directly on those per-render nodes, so a background emit landing
- * between pointerdown and pointerup replaced the node and the browser never
- * synthesized the click → the button looked completely dead.
- *
- * The fix routes both buttons through ONE delegated listener bound on the stable
- * `el` root in mount() (created once, never replaced): each button carries
- * `data-action`, and the action is resolved by `target.closest('[data-action]')`
- * at click time.
- *
- * NOTE: happy-dom cannot reproduce WKWebView's cross-render click synthesis, so
- * these tests lock the delegation CONTRACT (data attributes + root handler that
- * survives a render() teardown) rather than the raw race.
+ * Regression guards for the swallowed-click race: the banner retains its action
+ * nodes across renders and resolves actions through one stable root listener.
  */
 
 import assert from 'node:assert/strict';
@@ -90,21 +75,15 @@ test('reset + dismiss buttons carry the delegated data-action contract', () => {
 test('dismiss click is serviced by the root delegate, not a per-render listener', () => {
   const { banner, internals } = mountStale();
 
-  // First reproduce the teardown that swallowed direct-bound clicks: a second
-  // render() detaches the original button via replaceChildren().
+  // Exercise the background refresh path that used to replace the action nodes.
   internals.render(staleState());
 
   const dismiss = internals.el.querySelector<HTMLElement>('.cb-osb-dismiss');
-  assert.ok(dismiss, 'dismiss button re-rendered after teardown');
+  assert.ok(dismiss, 'dismiss button remains after refresh');
   assert.equal(internals.dismissed, false, 'not dismissed before click');
 
-  // Then swap the live button for a cloneNode(true) copy: clones carry data-*
-  // attributes but DROP directly-bound listeners, so the click can ONLY be
-  // serviced by the delegated listener on the stable `el` root. This is the
-  // definitive delegation-vs-per-render distinguisher — the OLD implementation
-  // also carried [data-action], so a plain re-render-then-click could not tell
-  // the two apart; the listener-stripped clone can. A per-node regression would
-  // make this click inert.
+  // A clone keeps data attributes but drops direct listeners, so only the stable
+  // root delegate can service this click.
   const clone = (dismiss as HTMLElement).cloneNode(true) as HTMLElement;
   (dismiss as HTMLElement).replaceWith(clone);
   dispatchBubblingClick(clone);
@@ -132,43 +111,101 @@ test('a click on empty banner chrome (no data-action) is ignored by the delegate
   banner.destroy();
 });
 
-test('reset click reloads via the root delegate, not a per-render listener', () => {
+test('repeated renders retain the warning hierarchy and action nodes', () => {
+  const { banner, internals } = mountStale();
+
+  try {
+    const label = internals.el.querySelector<HTMLElement>('.cb-osb-label');
+    const subtext = internals.el.querySelector<HTMLElement>('.cb-osb-subtext');
+    const reset = internals.el.querySelector<HTMLButtonElement>('[data-action="reset"]');
+    const live = internals.el.querySelector<HTMLElement>('.cb-osb-live');
+    assert.ok(label);
+    assert.ok(subtext);
+    assert.ok(reset);
+    assert.ok(live);
+    assert.equal(internals.el.getAttribute('role'), 'region');
+    assert.equal(internals.el.hasAttribute('aria-live'), false);
+    const firstAnnouncement = live.textContent;
+
+    internals.render({ ...staleState(), bannerSubtext: 'Last updated 7h ago' });
+
+    assert.ok(internals.el.querySelector('.cb-osb-label') === label, 'label node should be retained');
+    assert.ok(internals.el.querySelector('.cb-osb-subtext') === subtext, 'timestamp node should be retained');
+    assert.ok(internals.el.querySelector('[data-action="reset"]') === reset, 'reset node should be retained');
+    assert.equal(subtext.textContent, 'Last updated 7h ago');
+    assert.equal(live.textContent, firstAnnouncement, 'age-only refresh should not repeat the live announcement');
+    assert.equal(reset.getAttribute('aria-label'), 'Clear cache and reload');
+    assert.equal(reset.getAttribute('title'), 'Clear cache and reload');
+
+    internals.render({
+      ...staleState(),
+      status: 'very-stale',
+      bannerLabel: 'Data is very old',
+      bannerSubtext: 'Last updated 8h ago',
+    });
+    assert.notEqual(live.textContent, firstAnnouncement, 'status escalation should be announced');
+  } finally {
+    banner.destroy();
+  }
+});
+
+test('reset click clears browser caches before one reload via the root delegate', async () => {
   const { banner, internals } = mountStale();
 
   // Stub location.reload so the reset action is observable and harmless. It is a
   // prototype method, so we install an own-property spy on the instance and
   // remove it afterward to reveal the original.
   let reloads = 0;
+  const calls: string[] = [];
   Object.defineProperty(happyWindow.location, 'reload', {
-    value: () => { reloads++; },
+    value: () => { calls.push('reload'); reloads++; },
     configurable: true,
     writable: true,
   });
+  Object.defineProperty(happyWindow.navigator, 'serviceWorker', {
+    value: {
+      getRegistrations: async () => [{
+        unregister: async () => { calls.push('unregister'); return true; },
+      }],
+    },
+    configurable: true,
+  });
+  Object.defineProperty(happyWindow, 'caches', {
+    value: {
+      keys: async () => ['runtime-v1'],
+      delete: async (key: string) => { calls.push(`delete:${key}`); return true; },
+    },
+    configurable: true,
+  });
 
   try {
-    // Reproduce the teardown that swallowed direct-bound clicks: a second
-    // render() detaches the original button via replaceChildren().
+    // Exercise the background refresh path before the action.
     internals.render(staleState());
 
-    const reset = internals.el.querySelector<HTMLElement>('.cb-osb-btn');
-    assert.ok(reset, 'reset button re-rendered after teardown');
+    const reset = internals.el.querySelector<HTMLButtonElement>('[data-action="reset"]');
+    assert.ok(reset, 'reset button remains after refresh');
 
-    // Swap the live button for a cloneNode(true) copy: clones carry data-action
-    // but DROP directly-bound listeners, so the click can ONLY be serviced by the
-    // delegated listener on the stable `el` root. A per-node regression would
-    // leave this click inert and no reload would fire.
-    const clone = (reset as HTMLElement).cloneNode(true) as HTMLElement;
-    (reset as HTMLElement).replaceWith(clone);
+    // A clone keeps data-action but drops direct listeners, proving the action is
+    // handled by the stable root delegate.
+    const clone = reset.cloneNode(true) as HTMLButtonElement;
+    reset.replaceWith(clone);
     dispatchBubblingClick(clone);
+
+    assert.equal(clone.disabled, true, 'reset is disabled while cleanup runs');
+    assert.equal(internals.el.getAttribute('aria-busy'), 'true');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(
       reloads,
       1,
       'clicking the listener-stripped reset clone must reload the page via the root delegate',
     );
+    assert.deepEqual(calls, ['unregister', 'delete:runtime-v1', 'reload']);
   } finally {
     delete (happyWindow.location as unknown as Record<string, unknown>).reload;
+    delete (happyWindow.navigator as unknown as Record<string, unknown>).serviceWorker;
+    delete (happyWindow as unknown as Record<string, unknown>).caches;
+    banner.destroy();
   }
-
-  banner.destroy();
 });

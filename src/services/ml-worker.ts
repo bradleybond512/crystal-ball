@@ -1,9 +1,11 @@
+/* eslint-disable no-console, unicorn/prefer-add-event-listener -- pre-existing in this file; lint:ci lints changed files, so they surface on any edit here */
 /**
  * ML Worker Manager
  * Provides typed async interface to the ML Web Worker for ONNX inference
  */
 
 import { detectMLCapabilities, type MLCapabilities } from './ml-capabilities';
+import { AbandonedRequestIds, inferenceTimeoutFor } from './ml-request-budget';
 import { ML_THRESHOLDS, MODEL_CONFIGS } from '@/config/ml-config';
 
 // Import worker using Vite's worker syntax
@@ -52,6 +54,7 @@ class MLWorkerManager {
   private loadedModels = new Set<string>();
   private readyResolve: (() => void) | null = null;
   private modelProgressCallbacks = new Map<string, (progress: number) => void>();
+  private abandonedRequestIds = new AbandonedRequestIds();
 
   private static readonly READY_TIMEOUT_MS = 10_000;
 
@@ -116,43 +119,12 @@ class MLWorkerManager {
  }
 
  if (data.type === 'error') {
- const pending = data.id ? this.pendingRequests.get(data.id) : null;
- if (pending) {
- clearTimeout(pending.timeout);
- this.pendingRequests.delete(data.id!);
- pending.reject(new Error(data.error));
- } else {
- console.error('[MLWorker] Error:', data.error);
- }
+ this.handleWorkerError(data.id, data.error);
  return;
  }
 
  if ('id' in data && data.id) {
- const pending = this.pendingRequests.get(data.id);
- if (pending) {
- clearTimeout(pending.timeout);
- this.pendingRequests.delete(data.id);
-
- if (data.type === 'model-loaded') {
- this.loadedModels.add(data.modelId);
- pending.resolve(true);
- } else if (data.type === 'model-unloaded') {
- this.loadedModels.delete(data.modelId);
- pending.resolve(true);
- } else if (data.type === 'embed-result') {
- pending.resolve(data.embeddings);
- } else if (data.type === 'summarize-result') {
- pending.resolve(data.summaries);
- } else if (data.type === 'sentiment-result') {
- pending.resolve(data.results);
- } else if (data.type === 'entities-result') {
- pending.resolve(data.entities);
- } else if (data.type === 'cluster-semantic-result') {
- pending.resolve(data.clusters);
- } else if (data.type === 'status-result') {
- pending.resolve(data.loadedModels);
- }
- }
+ this.settlePendingRequest(data.id, data);
  }
  };
 
@@ -189,6 +161,78 @@ class MLWorkerManager {
  return `ml-${++this.requestIdCounter}-${Date.now()}`;
   }
 
+  private timeoutForInference(modelId: string): number {
+ return inferenceTimeoutFor(this.loadedModels.has(modelId));
+  }
+
+  /** Resolve the pending request this reply belongs to, if it is still waiting. */
+  private settlePendingRequest(id: string, data: WorkerResult): void {
+ const pending = this.pendingRequests.get(id);
+ if (!pending) return;
+
+ clearTimeout(pending.timeout);
+ this.pendingRequests.delete(id);
+
+ switch (data.type) {
+ case 'model-loaded': {
+ this.loadedModels.add(data.modelId);
+ pending.resolve(true);
+ break;
+ }
+ case 'model-unloaded': {
+ this.loadedModels.delete(data.modelId);
+ pending.resolve(true);
+ break;
+ }
+ case 'embed-result': {
+ pending.resolve(data.embeddings);
+ break;
+ }
+ case 'summarize-result': {
+ pending.resolve(data.summaries);
+ break;
+ }
+ case 'sentiment-result': {
+ pending.resolve(data.results);
+ break;
+ }
+ case 'entities-result': {
+ pending.resolve(data.entities);
+ break;
+ }
+ case 'cluster-semantic-result': {
+ pending.resolve(data.clusters);
+ break;
+ }
+ case 'status-result': {
+ pending.resolve(data.loadedModels);
+ break;
+ }
+ }
+  }
+
+  /**
+ * Route an error the worker reported. A reply whose request already timed out
+ * has no pending entry left: its caller was rejected at the timeout, so logging
+ * it at error level would report the same failure twice.
+ */
+  private handleWorkerError(id: string | undefined, error: string): void {
+ const pending = id ? this.pendingRequests.get(id) : null;
+ if (pending) {
+ clearTimeout(pending.timeout);
+ this.pendingRequests.delete(id!);
+ pending.reject(new Error(error));
+ return;
+ }
+
+ if (id && this.abandonedRequestIds.claim(id)) {
+ console.debug('[MLWorker] Late error for abandoned request:', error);
+ return;
+ }
+
+ console.error('[MLWorker] Error:', error);
+  }
+
   private request<T>(
  type: string,
  data: Record<string, unknown>,
@@ -203,6 +247,7 @@ class MLWorkerManager {
  const id = this.generateRequestId();
  const timeout = setTimeout(() => {
  this.pendingRequests.delete(id);
+ this.abandonedRequestIds.add(id);
  reject(new Error(`ML request ${type} timed out after ${timeoutMs}ms`));
  }, timeoutMs);
 
@@ -271,7 +316,7 @@ class MLWorkerManager {
  */
   async embedTexts(texts: string[]): Promise<number[][]> {
  if (!this.isReady) throw new Error('ML Worker not ready');
- return this.request<number[][]>('embed', { texts });
+ return this.request<number[][]>('embed', { texts }, this.timeoutForInference('embeddings'));
   }
 
   /**
@@ -279,7 +324,11 @@ class MLWorkerManager {
  */
   async summarize(texts: string[], modelId?: string): Promise<string[]> {
  if (!this.isReady) throw new Error('ML Worker not ready');
- return this.request<string[]>('summarize', { texts, ...(modelId && { modelId }) });
+ return this.request<string[]>(
+ 'summarize',
+ { texts, ...(modelId && { modelId }) },
+ this.timeoutForInference(modelId ?? 'summarization')
+ );
   }
 
   /**
@@ -287,7 +336,11 @@ class MLWorkerManager {
  */
   async classifySentiment(texts: string[]): Promise<SentimentResult[]> {
  if (!this.isReady) throw new Error('ML Worker not ready');
- return this.request<SentimentResult[]>('classify-sentiment', { texts });
+ return this.request<SentimentResult[]>(
+ 'classify-sentiment',
+ { texts },
+ this.timeoutForInference('sentiment')
+ );
   }
 
   /**
@@ -295,7 +348,7 @@ class MLWorkerManager {
  */
   async extractEntities(texts: string[]): Promise<NEREntity[][]> {
  if (!this.isReady) throw new Error('ML Worker not ready');
- return this.request<NEREntity[][]>('extract-entities', { texts });
+ return this.request<NEREntity[][]>('extract-entities', { texts }, this.timeoutForInference('ner'));
   }
 
   /**

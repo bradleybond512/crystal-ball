@@ -174,8 +174,8 @@ async function expectCalmStalenessRows(page: Page): Promise<void> {
     '.staleness-banner:not(.staleness-banner-hidden)',
   ].join(',')).filter({ visible: true });
   await expect(visibleRows).toHaveCount(1);
-  await expect(visibleRows).toHaveCSS('color', 'rgb(255, 255, 255)');
-  await expect(visibleRows).toHaveCSS('background-color', 'rgba(28, 28, 30, 0.94)');
+  await expect(visibleRows).not.toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(visibleRows).toHaveCSS('background-color', 'rgb(23, 26, 33)');
 }
 
 async function shelfGeometry(page: Page): Promise<{
@@ -186,6 +186,7 @@ async function shelfGeometry(page: Page): Promise<{
   rightBorderWidth: string;
   stormBottom: number;
   triageTop: number;
+  shelfLeft: number;
   shelfRight: number;
   actionRightEdges: number[];
 }> {
@@ -205,6 +206,7 @@ async function shelfGeometry(page: Page): Promise<{
       rightBorderWidth: stormStyle.borderRightWidth,
       stormBottom: stormRect.bottom,
       triageTop: triageRect.top,
+      shelfLeft: shelf.getBoundingClientRect().left,
       shelfRight: shelf.getBoundingClientRect().right,
       actionRightEdges: [...storm.querySelectorAll<HTMLElement>('.cb-storm-mode__btn')]
         .map((button) => button.getBoundingClientRect().right),
@@ -253,6 +255,7 @@ test('mobile alert shelf keeps readable text and reachable controls', async ({ p
   const geometry = await shelfGeometry(page);
   expect(geometry.titleColor).toBe('rgb(255, 255, 255)');
   expect(geometry.triageTop).toBeGreaterThanOrEqual(geometry.stormBottom - 0.5);
+  expect(geometry.shelfLeft).toBe(0);
   expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
   expect(geometry.shelfRight).toBeLessThanOrEqual(geometry.viewportWidth);
   for (const right of geometry.actionRightEdges) expect(right).toBeLessThanOrEqual(geometry.viewportWidth);
@@ -260,6 +263,8 @@ test('mobile alert shelf keeps readable text and reachable controls', async ({ p
 
   const controlHeights = await page.locator([
     '.cb-storm-mode__btn',
+    '.cb-osb-btn',
+    '.cb-osb-dismiss',
     '.triage-bar-facet-select',
     '.triage-bar-ack',
     '.triage-bar-preset',

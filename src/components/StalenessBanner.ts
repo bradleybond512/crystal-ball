@@ -18,6 +18,8 @@ import {
   type FreshnessStatus,
 } from '@/services/data-freshness';
 import type { DataSourceState } from '@/services/data-freshness';
+import { clearClientCachesAndReload } from '@/services/client-cache-reset';
+import { icon } from '@/components/ui/icons';
 import { escapeHtml } from '@/utils/sanitize';
 
 type BannerLevel = 'hidden' | 'warn' | 'critical' | 'offline';
@@ -36,6 +38,7 @@ export class StalenessBanner {
   private dismissedAt: number | null = null;
   private dismissedLevel: BannerLevel = 'hidden';
   private currentLevel: BannerLevel = 'hidden';
+  private resetInFlight = false;
   // Named bound references so they can be removed in destroy().
   private readonly _onOnline = (): void => { this.evaluate(); };
   private readonly _onOffline = (): void => { this.evaluate(); };
@@ -56,6 +59,7 @@ export class StalenessBanner {
  this.dismiss();
  return;
  }
+ if (target.closest('.staleness-reset')) return;
  if (target.closest('.staleness-details')) return; // don't toggle when clicking table
  this.toggleDetails();
  });
@@ -195,25 +199,16 @@ export class StalenessBanner {
  // safe-html: timeText comes from date formatting, message is built from constants
  this.el.innerHTML = `
  <div class="staleness-message">${message}</div>
- <button class="staleness-reset" aria-label="Reset cache and reload" title="Clear local cache + service worker, then reload">Reset cache</button>
+ <button class="staleness-reset" aria-label="Clear cache and reload" title="Clear cache and reload">${icon('refresh-cw')}</button>
  <button class="staleness-dismiss" aria-label="Dismiss staleness banner">\u00D7</button>
  `;
  // Recovery button: stuck-banner reports usually trace back to a stale
  // service-worker bundle from before a deploy that fixed the underlying
  // fetch failures. Unregister every SW + purge every cache + reload.
  const resetBtn = this.el.querySelector<HTMLButtonElement>('.staleness-reset');
+ if (resetBtn) resetBtn.disabled = this.resetInFlight;
  resetBtn?.addEventListener('click', () => {
- void (async () => {
- resetBtn.disabled = true;
- resetBtn.textContent = 'Clearing\u2026';
- try {
- const regs = await navigator.serviceWorker?.getRegistrations();
- await Promise.all((regs ?? []).map((r) => r.unregister()));
- const keys = await caches.keys();
- await Promise.all(keys.map((k) => caches.delete(k)));
- } catch { /* best-effort */ }
- location.reload();
- })();
+ void this.resetCache(resetBtn);
  });
 
  // Update details if expanded
@@ -227,6 +222,21 @@ export class StalenessBanner {
  this.detailsEl.style.display = 'none';
  this.expanded = false;
  document.body.classList.remove('has-staleness-banner');
+  }
+
+  private async resetCache(button: HTMLButtonElement): Promise<void> {
+ if (this.resetInFlight) return;
+ this.resetInFlight = true;
+ button.disabled = true;
+ this.el.setAttribute('aria-busy', 'true');
+ try {
+ await clearClientCachesAndReload();
+ } finally {
+ this.resetInFlight = false;
+ button.disabled = false;
+ this.el.querySelector<HTMLButtonElement>('.staleness-reset')?.removeAttribute('disabled');
+ this.el.removeAttribute('aria-busy');
+ }
   }
 
   private toggleDetails(): void {

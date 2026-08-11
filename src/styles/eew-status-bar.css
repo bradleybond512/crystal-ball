@@ -1,15 +1,12 @@
-/* EEW Status Bar — Layer 9 of the seismic intelligence stack.
- *
- * Persistent header pinned to the top of body. Color-coded by tier;
- * click anywhere on the main row to expand the last-5 alerts list.
- */
+/* EEW Status Bar — Layer 9 of the seismic intelligence stack. */
 
 .eew-status-bar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: var(--z-status-bar); /* above panels (1000-2000), below modals (10000+) */
+  z-index: var(--z-status-bar);
+  min-height: var(--eew-bar-h, 32px);
   font-family: 'SF Mono', ui-monospace, 'Monaco', monospace;
   font-size: 12px;
   font-weight: 600;
@@ -20,38 +17,67 @@
   pointer-events: auto;
   user-select: none;
   transition: background-color 0.2s ease, color 0.2s ease;
-  min-height: var(--eew-bar-h, 32px);
 }
 
 .eew-bar-main {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 14px;
-  cursor: pointer;
-  /* Keep the row plus the outer 1px border equal to --eew-bar-h. */
+  width: 100%;
   height: calc(var(--eew-bar-h, 32px) - 1px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 14px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-/* macOS desktop: the bar is pinned to top:0, so its label would render under
-   the window traffic-light buttons (x≈8–72). Inset the content past them. */
 body.is-desktop-macos .eew-bar-main {
   padding-left: 80px;
 }
 
+.eew-bar-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.eew-bar-drag-region {
+  display: none;
+}
+
 .eew-bar-label {
+  flex-shrink: 0;
   font-weight: 700;
   text-transform: uppercase;
-  flex-shrink: 0;
 }
 
 .eew-bar-subtitle {
   flex: 1;
-  opacity: 0.85;
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  color: inherit;
   font-weight: 400;
+  opacity: 0.85;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eew-bar-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.eew-bar-main[aria-expanded="true"] .eew-bar-chevron {
+  transform: rotate(180deg);
 }
 
 .eew-bar-imessage-badge {
@@ -69,19 +95,20 @@ body.is-desktop-macos .eew-bar-main {
 
 .eew-bar-spacewx {
   flex-shrink: 0;
+  max-width: 60ch;
+  overflow: hidden;
   padding: 2px 10px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
-  max-width: 60ch;
-  overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: uppercase;
   white-space: nowrap;
 }
-.eew-bar-spacewx-g3    { background: rgba(234, 88, 12, 0.85);  color: #fff7ed; }
-.eew-bar-spacewx-g4    { background: rgba(220, 38, 38, 0.92);  color: #fef2f2; }
+
+.eew-bar-spacewx-g3    { background: rgba(234, 88, 12, 0.85); color: #fff7ed; }
+.eew-bar-spacewx-g4    { background: rgba(220, 38, 38, 0.92); color: #fef2f2; }
 .eew-bar-spacewx-g5    {
   background: rgba(159, 18, 57, 0.95);
   color: #ffffff;
@@ -89,8 +116,7 @@ body.is-desktop-macos .eew-bar-main {
 }
 .eew-bar-spacewx-flare { background: rgba(124, 58, 237, 0.85); color: #f5f3ff; }
 
-/* Tier color schemes — outer container background + text */
-.eew-bar-gray    { background: rgba(40, 44, 52, 0.92);  color: #cbd5e1; }
+.eew-bar-gray    { background: rgba(40, 44, 52, 0.92); color: #cbd5e1; }
 .eew-bar-blue    { background: rgba(30, 64, 175, 0.92); color: #ffffff; }
 .eew-bar-yellow  { background: rgba(202, 138, 4, 0.92); color: #fffbeb; }
 .eew-bar-orange  { background: rgba(234, 88, 12, 0.92); color: #fff7ed; }
@@ -98,7 +124,6 @@ body.is-desktop-macos .eew-bar-main {
 .eew-bar-crimson {
   background: rgba(159, 18, 57, 0.95);
   color: #ffffff;
-  /* Crimson tier pulses softly to draw eye for emergency */
   animation: eew-bar-crimson-pulse 2.4s ease-in-out infinite;
 }
 
@@ -107,24 +132,28 @@ body.is-desktop-macos .eew-bar-main {
   50%      { box-shadow: inset 0 -3px 0 0 rgba(255, 200, 200, 0.55); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .eew-bar-crimson { animation: none; }
-}
-
-/* Expanded last-5 alerts list */
 .eew-bar-expanded {
-  background: rgba(20, 22, 28, 0.96);
-  color: #cbd5e1;
-  padding: 6px 14px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
   max-height: 280px;
   overflow-y: auto;
+  padding: 6px 14px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 22, 28, 0.96);
+  color: #cbd5e1;
+}
+
+.eew-bar-expanded[hidden] {
+  display: none;
+}
+
+.eew-bar-context {
+  padding: 6px 0;
+  font-weight: 600;
 }
 
 .eew-bar-empty {
   padding: 6px 0;
-  opacity: 0.6;
   font-style: italic;
+  opacity: 0.6;
 }
 
 .eew-bar-alert-row {
@@ -144,19 +173,159 @@ body.is-desktop-macos .eew-bar-main {
 }
 
 .eew-bar-alert-reason {
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .eew-bar-alert-ago {
-  opacity: 0.6;
   font-weight: 400;
+  opacity: 0.6;
 }
 
-/* Tier-row accent stripes (left border) */
 .eew-bar-tier-TIER_1_INFO    { border-left: 3px solid #3b82f6; padding-left: 8px; }
 .eew-bar-tier-TIER_2_WATCH   { border-left: 3px solid #facc15; padding-left: 8px; }
 .eew-bar-tier-TIER_3_WARNING { border-left: 3px solid #f97316; padding-left: 8px; }
 .eew-bar-tier-TIER_4_SEVERE  { border-left: 3px solid #dc2626; padding-left: 8px; }
 .eew-bar-tier-TIER_5_EXTREME { border-left: 3px solid #9f1239; padding-left: 8px; }
+
+.eew-bar-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* macOS alert chrome uses one neutral window material. Severity moves into
+   the restrained status label and dot instead of repainting the titlebar. */
+body.is-desktop-macos .eew-status-bar {
+  display: flex;
+  align-items: stretch;
+  z-index: calc(var(--z-status-bar) + 2);
+  min-height: var(--eew-bar-h, 32px);
+  overflow: visible;
+  border: 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: linear-gradient(180deg, var(--mac-fill), transparent), var(--mac-sidebar-bg);
+  box-shadow: var(--e-1), var(--edge-hairline);
+  color: var(--mac-label);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  animation: none;
+  -webkit-backdrop-filter: var(--mat-blur-chrome);
+  backdrop-filter: var(--mat-blur-chrome);
+}
+
+body.is-desktop-macos .eew-bar-main {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: calc(100% - 64px);
+  min-width: 0;
+  height: var(--eew-bar-h, 32px);
+  gap: 8px;
+}
+
+body.is-desktop-macos .eew-bar-drag-region {
+  display: block;
+  flex: 1 0 64px;
+  min-width: 64px;
+}
+
+body.is-desktop-macos .eew-bar-main::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  content: '';
+  opacity: 0.9;
+}
+
+body.is-desktop-macos .eew-bar-label {
+  color: var(--mac-secondary-label);
+  text-transform: none;
+}
+
+body.is-desktop-macos .eew-bar-blue .eew-bar-label {
+  color: var(--mac-alert-info);
+}
+
+body.is-desktop-macos .eew-bar-blue .eew-bar-main::before {
+  background: var(--mac-alert-info);
+}
+
+body.is-desktop-macos :is(.eew-bar-yellow, .eew-bar-orange) .eew-bar-label {
+  color: var(--mac-alert-warning);
+}
+
+body.is-desktop-macos :is(.eew-bar-yellow, .eew-bar-orange) .eew-bar-main::before {
+  background: var(--mac-alert-warning);
+}
+
+body.is-desktop-macos :is(.eew-bar-red, .eew-bar-crimson) .eew-bar-label {
+  color: var(--mac-alert-danger);
+}
+
+body.is-desktop-macos :is(.eew-bar-red, .eew-bar-crimson) .eew-bar-main::before {
+  background: var(--mac-alert-danger);
+}
+
+body.is-desktop-macos .eew-bar-subtitle {
+  color: var(--mac-secondary-label);
+  opacity: 1;
+}
+
+body.is-desktop-macos :is(.eew-bar-crimson, .eew-bar-spacewx-g5) {
+  animation: none;
+}
+
+body.is-desktop-macos .eew-bar-expanded {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 80px;
+  width: min(560px, calc(100vw - 104px));
+  max-width: calc(100vw - 24px);
+  max-height: min(280px, calc(100dvh - var(--eew-bar-h, 32px) - 24px));
+  box-sizing: border-box;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--mac-surface);
+  box-shadow: var(--e-3), var(--edge-hairline);
+  color: var(--mac-label);
+  font-family: var(--font-ui);
+  letter-spacing: 0;
+}
+
+body.is-desktop-macos .eew-bar-context {
+  color: var(--mac-alert-warning);
+  font-size: var(--text-sm);
+}
+
+body.is-desktop-macos .eew-bar-empty {
+  color: var(--mac-secondary-label);
+  font-style: normal;
+}
+
+@media (max-width: 720px) {
+  body.is-desktop-macos .eew-bar-expanded {
+    left: 12px;
+    width: calc(100vw - 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eew-bar-crimson,
+  .eew-bar-spacewx-g5,
+  .eew-bar-chevron {
+    animation: none;
+    transition: none;
+  }
+}

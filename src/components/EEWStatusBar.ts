@@ -27,9 +27,11 @@ import {
   type SpaceWxBannerSeverity,
 } from '../services/spaceweather/globe-overlay';
 import type { SpaceWxStatus } from '../services/spaceweather/swpc-monitor';
+import { icon } from './ui/icons';
 
 const ENDPOINT = '/api/eew-status';
 const POLL_INTERVAL_MS = 30_000;
+let detailsIdSequence = 0;
 
 const COLOR_CLASSES: Record<StatusBarState['color'], string> = {
   gray: 'eew-bar-gray',
@@ -50,11 +52,13 @@ const SPACEWX_CLASSES: Record<SpaceWxBannerSeverity, string> = {
 
 export class EEWStatusBar {
   private root: HTMLElement | null = null;
+  private mainEl: HTMLButtonElement | null = null;
   private labelEl: HTMLElement | null = null;
   private subtitleEl: HTMLElement | null = null;
   private imessageBadgeEl: HTMLElement | null = null;
   private spaceWxEl: HTMLElement | null = null;
   private expandedEl: HTMLElement | null = null;
+  private liveEl: HTMLElement | null = null;
   private mounted = false;
   private expanded = false;
   private currentPayload: EewStatusPayload | null = null;
@@ -67,6 +71,17 @@ export class EEWStatusBar {
   private currentSpaceWx: SpaceWxBanner = { severity: 'none', label: '', subtitle: '' };
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private subtitleTimer: ReturnType<typeof setInterval> | null = null;
+  private lastAnnouncementKey = '';
+  private readonly onDocumentKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || !this.expanded) return;
+    this.closeExpanded(true);
+  };
+  private readonly onDocumentPointerDown = (event: Event): void => {
+    if (!this.expanded || !this.root) return;
+    const target = event.target;
+    if (target instanceof Node && this.root.contains(target)) return;
+    this.closeExpanded(true);
+  };
 
   mount(parent: HTMLElement): void {
     if (this.mounted) return;
@@ -74,11 +89,15 @@ export class EEWStatusBar {
 
     this.root = document.createElement('div');
     this.root.className = `eew-status-bar ${COLOR_CLASSES.gray}`;
-    this.root.setAttribute('role', 'status');
-    this.root.setAttribute('aria-live', 'polite');
 
-    const main = document.createElement('div');
+    const main = document.createElement('button');
     main.className = 'eew-bar-main';
+    main.type = 'button';
+    const detailsId = `eew-status-details-${++detailsIdSequence}`;
+    main.setAttribute('aria-expanded', 'false');
+    main.setAttribute('aria-controls', detailsId);
+    main.setAttribute('aria-label', 'Show alert details');
+    this.mainEl = main;
     this.labelEl = document.createElement('span');
     this.labelEl.className = 'eew-bar-label';
     // Honest pre-render placeholder: weather has not been evaluated yet at mount,
@@ -95,15 +114,35 @@ export class EEWStatusBar {
     this.spaceWxEl.className = 'eew-bar-spacewx';
     this.spaceWxEl.style.display = 'none';
 
-    main.append(this.labelEl, this.subtitleEl, this.imessageBadgeEl, this.spaceWxEl);
+    const chevronEl = document.createElement('span');
+    chevronEl.className = 'eew-bar-chevron';
+    chevronEl.setAttribute('aria-hidden', 'true');
+    chevronEl.innerHTML = icon('chevron-down');
+
+    main.append(this.labelEl, this.subtitleEl, this.imessageBadgeEl, this.spaceWxEl, chevronEl);
     main.addEventListener('click', () => this.toggleExpanded());
+
+    const dragRegion = document.createElement('div');
+    dragRegion.className = 'eew-bar-drag-region';
+    dragRegion.setAttribute('aria-hidden', 'true');
 
     this.expandedEl = document.createElement('div');
     this.expandedEl.className = 'eew-bar-expanded';
-    this.expandedEl.style.display = 'none';
+    this.expandedEl.id = detailsId;
+    this.expandedEl.hidden = true;
+    this.expandedEl.setAttribute('role', 'region');
+    this.expandedEl.setAttribute('aria-label', 'Alert details');
 
-    this.root.append(main, this.expandedEl);
+    this.liveEl = document.createElement('span');
+    this.liveEl.className = 'eew-bar-live';
+    this.liveEl.setAttribute('role', 'status');
+    this.liveEl.setAttribute('aria-live', 'polite');
+    this.liveEl.setAttribute('aria-atomic', 'true');
+
+    this.root.append(main, dragRegion, this.expandedEl, this.liveEl);
     parent.prepend(this.root);
+    document.addEventListener('keydown', this.onDocumentKeydown);
+    document.addEventListener('pointerdown', this.onDocumentPointerDown);
 
     // Apply composite (safety/readiness) state immediately — don't wait
     // for the first EEW poll round-trip.
@@ -121,13 +160,20 @@ export class EEWStatusBar {
       clearInterval(this.subtitleTimer);
       this.subtitleTimer = null;
     }
+    document.removeEventListener('keydown', this.onDocumentKeydown);
+    document.removeEventListener('pointerdown', this.onDocumentPointerDown);
     this.root?.remove();
     this.root = null;
+    this.mainEl = null;
     this.labelEl = null;
     this.subtitleEl = null;
     this.imessageBadgeEl = null;
     this.spaceWxEl = null;
     this.expandedEl = null;
+    this.liveEl = null;
+    this.expanded = false;
+    this.lastAnnouncementKey = '';
+    this.stateListeners.clear();
   }
 
   /**
@@ -138,6 +184,8 @@ export class EEWStatusBar {
   setSpaceWeatherStatus(status: SpaceWxStatus | null): void {
     this.currentSpaceWx = deriveSpaceWxBanner(status);
     this.renderSpaceWxBanner();
+    this.updateMainA11yLabel();
+    this.announceStatusTransition();
   }
 
   /** @internal */
@@ -257,11 +305,13 @@ export class EEWStatusBar {
     this.notifyStateListeners();
     if (!this.root || !this.labelEl) return;
     this.root.className = `eew-status-bar ${COLOR_CLASSES[this.currentState.color]}`;
-    this.labelEl.textContent = this.currentState.label;
+    this.labelEl.textContent = this.displayLabel(this.currentState.label);
     this.refreshSubtitle();
     this.renderImessageBadge();
     this.renderSpaceWxBanner();
     this.renderExpanded();
+    this.updateMainA11yLabel();
+    this.announceStatusTransition();
   }
 
   private renderSpaceWxBanner(): void {
@@ -306,6 +356,49 @@ export class EEWStatusBar {
     return '';
   }
 
+  private displayLabel(label: string): string {
+    if (!document.body.classList.contains('is-desktop-macos')) return label;
+    const lower = label.toLocaleLowerCase();
+    return `${lower.charAt(0).toLocaleUpperCase()}${lower.slice(1)}`;
+  }
+
+  private announceStatusTransition(): void {
+    if (!this.liveEl) return;
+    const alertId = this.currentState.lastAlert?.eventId ?? '';
+    const imessage = this.currentState.imessage;
+    const spaceWeather = this.currentSpaceWx;
+    const key = [
+      this.currentState.source,
+      this.currentState.label,
+      alertId,
+      imessage.visible ? imessage.status : '',
+      imessage.error ?? '',
+      spaceWeather.severity,
+      spaceWeather.label,
+      spaceWeather.subtitle,
+    ].join(':');
+    if (key === this.lastAnnouncementKey) return;
+    this.lastAnnouncementKey = key;
+    this.liveEl.textContent = this.accessibleStatusParts().join('. ');
+  }
+
+  private updateMainA11yLabel(): void {
+    if (!this.mainEl) return;
+    const action = this.expanded ? 'Hide alert details' : 'Show alert details';
+    this.mainEl.setAttribute('aria-label', `${this.accessibleStatusParts().join('. ')}. ${action}`);
+  }
+
+  private accessibleStatusParts(): string[] {
+    const parts = [this.displayLabel(this.currentState.label)];
+    const subtitle = this.subtitleEl?.textContent?.trim();
+    const imessage = this.imessageBadgeEl?.textContent?.trim();
+    const spaceWeather = this.spaceWxEl?.textContent?.trim();
+    if (subtitle) parts.push(subtitle);
+    if (imessage && this.currentState.imessage.visible) parts.push(imessage);
+    if (spaceWeather && this.currentSpaceWx.severity !== 'none') parts.push(spaceWeather);
+    return parts;
+  }
+
   private renderImessageBadge(): void {
     if (!this.imessageBadgeEl) return;
     const im = this.currentState.imessage;
@@ -330,17 +423,34 @@ export class EEWStatusBar {
   }
 
   private toggleExpanded(): void {
-    this.expanded = !this.expanded;
-    if (this.expandedEl) {
-      this.expandedEl.style.display = this.expanded ? '' : 'none';
+    if (this.expanded) {
+      this.closeExpanded(false);
+      return;
     }
+    this.expanded = true;
+    if (this.mainEl) {
+      this.mainEl.setAttribute('aria-expanded', 'true');
+    }
+    this.updateMainA11yLabel();
+    if (this.expandedEl) this.expandedEl.hidden = false;
     this.renderExpanded();
+  }
+
+  private closeExpanded(returnFocus: boolean): void {
+    if (!this.expanded) return;
+    this.expanded = false;
+    if (this.mainEl) {
+      this.mainEl.setAttribute('aria-expanded', 'false');
+    }
+    this.updateMainA11yLabel();
+    if (this.expandedEl) this.expandedEl.hidden = true;
+    if (returnFocus) this.mainEl?.focus();
   }
 
   private renderExpanded(): void {
     if (!this.expandedEl) return;
-    if (!this.expanded) return;
     while (this.expandedEl.firstChild) this.expandedEl.firstChild.remove();
+    this.appendSourceContext();
     // Slice copies, then iterate from the end → newest first.
     const tail = (this.currentPayload?.activeAlerts ?? []).slice(-5);
     const recent: EewAlert[] = [];
@@ -348,13 +458,28 @@ export class EEWStatusBar {
     if (recent.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'eew-bar-empty';
-      empty.textContent = 'No active alerts';
+      empty.textContent = 'No recent earthquake alerts';
       this.expandedEl.append(empty);
       return;
     }
     for (const alert of recent) {
       this.expandedEl.append(this.buildAlertRow(alert));
     }
+  }
+
+  private appendSourceContext(): void {
+    if (!this.expandedEl) return;
+    const messages: Partial<Record<StatusBarState['source'], string>> = {
+      weather: 'Severe weather affects a saved place',
+      safety: 'A safety property requires review',
+      readiness: 'System readiness requires attention',
+    };
+    const message = messages[this.currentState.source];
+    if (!message) return;
+    const context = document.createElement('div');
+    context.className = 'eew-bar-context';
+    context.textContent = message;
+    this.expandedEl.append(context);
   }
 
   private buildAlertRow(alert: EewAlert): HTMLElement {

@@ -807,6 +807,8 @@ export class PanelLayoutManager implements AppModule {
   }
 
   private stalenessBanner: StalenessBanner | null = null;
+  private eewStatusBar: EEWStatusBar | null = null;
+  private spaceWeatherStatusBarPoller: ReturnType<typeof startSpaceWeatherStatusBarPoller> | null = null;
   private _savedPlaceOpenCreate: (() => void) | null = null;
   private _savedPlaceOpenEdit: ((id: string) => void) | null = null;
 
@@ -867,6 +869,10 @@ export class PanelLayoutManager implements AppModule {
  if (this.unsubWeatherClearOnPlaces) { this.unsubWeatherClearOnPlaces(); this.unsubWeatherClearOnPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
+ this.spaceWeatherStatusBarPoller?.stop();
+ this.spaceWeatherStatusBarPoller = null;
+ this.eewStatusBar?.destroy();
+ this.eewStatusBar = null;
  if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
  if (this._onStormDecision) { document.removeEventListener('cb:storm-decision', this._onStormDecision); this._onStormDecision = null; }
  if (this.stormMode) { this.stormMode.destroy(); this.stormMode = null; }
@@ -1171,7 +1177,8 @@ export class PanelLayoutManager implements AppModule {
  // the Safety Case panel says "SAFETY REVIEW REQUIRED" or the Command
  // Center risk is CRITICAL. Inputs are gathered here so the derive
  // helper stays pure (see eew-status-bar-helpers.ts).
- const eewStatusBar = new EEWStatusBar();
+ this.eewStatusBar = new EEWStatusBar();
+ const eewStatusBar = this.eewStatusBar;
  eewStatusBar.setCompositeStatusProvider(collectCompositeStatusInputs);
  eewStatusBar.mount(document.body);
  // Safety-case re-evaluations should update the chip immediately rather
@@ -1185,7 +1192,7 @@ export class PanelLayoutManager implements AppModule {
  try {
  this.personalWeatherUnsub = subscribePersonalWeatherThreat(() => eewStatusBar.refreshCompositeStatus());
  } catch { /* diagnostics optional */ }
- startSpaceWeatherStatusBarPoller(eewStatusBar);
+ this.spaceWeatherStatusBarPoller = startSpaceWeatherStatusBarPoller(eewStatusBar);
 
  this.mountAlertShelf();
 

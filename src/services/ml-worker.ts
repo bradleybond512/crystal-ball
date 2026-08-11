@@ -8,8 +8,20 @@ import { detectMLCapabilities, type MLCapabilities } from './ml-capabilities';
 import { AbandonedRequestIds, inferenceTimeoutFor } from './ml-request-budget';
 import { ML_THRESHOLDS, MODEL_CONFIGS } from '@/config/ml-config';
 
-// Import worker using Vite's worker syntax
-import MLWorkerClass from '@/workers/ml.worker?worker';
+/**
+ * How the manager obtains its worker.
+ *
+ * The default uses Vite's `?worker` syntax, which only the Vite build can
+ * resolve. Importing it dynamically keeps that specifier out of the module's
+ * static graph, so the manager's request bookkeeping — timeout budgets, late
+ * replies, termination — can be exercised against a fake worker outside Vite.
+ */
+export type MLWorkerFactory = () => Worker | Promise<Worker>;
+
+const defaultWorkerFactory: MLWorkerFactory = async () => {
+  const { default: MLWorkerClass } = await import('@/workers/ml.worker?worker');
+  return new MLWorkerClass();
+};
 
 interface PendingRequest<T> {
   resolve: (value: T) => void;
@@ -42,10 +54,11 @@ type WorkerResult =
   | { type: 'entities-result'; id: string; entities: NEREntity[][] }
   | { type: 'cluster-semantic-result'; id: string; clusters: number[][] }
   | { type: 'status-result'; id: string; loadedModels: string[] }
+  | { type: 'model-evicted'; modelId: string }
   | { type: 'reset-complete' }
   | { type: 'error'; id?: string; error: string };
 
-class MLWorkerManager {
+export class MLWorkerManager {
   private worker: Worker | null = null;
   private pendingRequests = new Map<string, PendingRequest<unknown>>();
   private requestIdCounter = 0;
@@ -57,6 +70,8 @@ class MLWorkerManager {
   private abandonedRequestIds = new AbandonedRequestIds();
 
   private static readonly READY_TIMEOUT_MS = 10_000;
+
+  constructor(private readonly createWorker: MLWorkerFactory = defaultWorkerFactory) {}
 
   /**
  * Initialize the ML worker. Returns false if ML is not supported.
@@ -86,16 +101,20 @@ class MLWorkerManager {
  }
  }, MLWorkerManager.READY_TIMEOUT_MS);
 
+ void (async () => {
+ let worker: Worker;
  try {
- this.worker = new MLWorkerClass();
+ worker = await this.createWorker();
  } catch (error) {
  console.error('[MLWorker] Failed to create worker:', error);
+ clearTimeout(readyTimeout);
  this.cleanup();
  resolve(false);
  return;
  }
+ this.worker = worker;
 
- this.worker.onmessage = (event: MessageEvent<WorkerResult>) => {
+ worker.onmessage = (event: MessageEvent<WorkerResult>) => {
  const data = event.data;
 
  if (data.type === 'worker-ready') {
@@ -118,6 +137,15 @@ class MLWorkerManager {
  return;
  }
 
+ // The worker caps how many pipelines it keeps in memory, so a model can
+ // leave without anyone asking. Believing it is still resident charges the
+ // next request for it the warm budget, and its implicit reload then times
+ // out mid-download — the failure `inferenceTimeoutFor` exists to prevent.
+ if (data.type === 'model-evicted') {
+ this.loadedModels.delete(data.modelId);
+ return;
+ }
+
  if (data.type === 'error') {
  this.handleWorkerError(data.id, data.error);
  return;
@@ -128,7 +156,7 @@ class MLWorkerManager {
  }
  };
 
- this.worker.onerror = (error) => {
+ worker.onerror = (error) => {
  console.error('[MLWorker] Error:', error);
 
  if (!this.isReady) {
@@ -138,12 +166,9 @@ class MLWorkerManager {
  return;
  }
 
- for (const [id, pending] of this.pendingRequests) {
- clearTimeout(pending.timeout);
- pending.reject(new Error(`Worker error: ${error.message}`));
- this.pendingRequests.delete(id);
- }
+ this.rejectAllPending(`Worker error: ${error.message}`);
  };
+ })();
  });
   }
 
@@ -153,8 +178,22 @@ class MLWorkerManager {
  this.worker = null;
  }
  this.isReady = false;
- this.pendingRequests.clear();
+ this.rejectAllPending('ML worker terminated');
  this.loadedModels.clear();
+  }
+
+  /**
+ * Settle every in-flight caller. Dropping the entries without settling them
+ * strands each caller until its own timeout fires — up to the cold-load
+ * budget — and that timeout then records the id as abandoned, so the reply
+ * that never comes is accounted for as one the manager stopped waiting on.
+ */
+  private rejectAllPending(reason: string): void {
+ for (const [id, pending] of this.pendingRequests) {
+ clearTimeout(pending.timeout);
+ this.pendingRequests.delete(id);
+ pending.reject(new Error(reason));
+ }
   }
 
   private generateRequestId(): string {

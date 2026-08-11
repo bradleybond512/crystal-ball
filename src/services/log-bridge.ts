@@ -465,13 +465,17 @@ export function installFetchInstrumentation(): void {
  // This wrapper is installed from App.ts, i.e. OUTSIDE the routing wrappers in
  // runtime.ts, so it observes app-origin URLs before they are rewritten.
  // fetchTargetHost reuses the routers' own predicate to name the real host.
- const host = fetchTargetHost(input);
+ //
+ // Named after the call settles, not before: the sidecar router resolves its
+ // port lazily, on the first /api/ request it handles. Asking beforehand would
+ // name the default port for that first request even when the sidecar came up
+ // on a fallback one — reintroducing the two-buckets-per-backend split.
  try {
  const resp = await origFetch(input, init);
- bumpFetchStat(host, resp.ok);
+ bumpFetchStat(fetchTargetHost(input), resp.ok);
  return resp;
  } catch (error) {
- bumpFetchStat(host, false);
+ bumpFetchStat(fetchTargetHost(input), false);
  throw error;
  }
   };

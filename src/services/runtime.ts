@@ -430,14 +430,32 @@ function ambientFetchRouting(): FetchRoutingEnv {
   };
 }
 
+/**
+ * Whether `installWebApiRedirect` would rewrite this request.
+ *
+ * It matches per input shape rather than on a normalized path, and the shapes
+ * are not equivalent: for a string it tests the RAW value against an anchored
+ * pattern, so `https://crystalball.app/api/military/v1/x` written as a string
+ * is NOT redirected, while the same URL as a `URL` is. `URL`/`Request` inputs
+ * additionally have to be exactly same-origin — a sibling app host is not.
+ */
+function isWebRedirected(input: RequestInfo | URL, env: FetchRoutingEnv): boolean {
+  if (typeof input === 'string') return WEB_RPC_PATTERN.test(input);
+  const url = input instanceof URL ? input : new URL(input.url);
+  return url.origin === new URL(env.pageHref).origin && WEB_RPC_PATTERN.test(url.pathname);
+}
+
 /** The base a request is rerouted to, or null when it reaches its literal URL. */
-function routedBaseFor(target: string | null, env: FetchRoutingEnv): string | null {
-  if (target === null) return null;
-  // Desktop: installRuntimeFetchPatch sends every app-origin /api/* call to the sidecar.
-  if (env.apiBaseUrl) return target.startsWith('/api/') ? env.apiBaseUrl : null;
-  // Web: installWebApiRedirect sends app-origin /api/<service>/v1/* calls to the edge.
-  if (env.webRedirectBaseUrl && WEB_RPC_PATTERN.test(target)) return env.webRedirectBaseUrl;
-  return null;
+function routedBaseFor(input: RequestInfo | URL, env: FetchRoutingEnv): string | null {
+  // Desktop: installRuntimeFetchPatch decides with getApiTargetFromRequestInput,
+  // so reuse it rather than re-deriving a subset.
+  if (env.apiBaseUrl) {
+ const target = getApiTargetFromRequestInput(input);
+ return target?.startsWith('/api/') ? env.apiBaseUrl : null;
+  }
+  // Web: installWebApiRedirect sends same-origin /api/<service>/v1/* calls to the edge.
+  if (!env.webRedirectBaseUrl) return null;
+  return isWebRedirected(input, env) ? env.webRedirectBaseUrl : null;
 }
 
 /**
@@ -449,15 +467,14 @@ function routedBaseFor(target: string | null, env: FetchRoutingEnv): string | nu
  * the phantom `localhost` of `tauri://localhost`, a host the app never contacts
  * since CSP allows 127.0.0.1 only — which splits one backend across two buckets.
  *
- * Routing is decided by `getApiTargetFromRequestInput`, so this reuses it rather
- * than re-deriving a subset: every input shape the wrappers rewrite (relative
- * path, app-origin absolute string, `URL`, `Request`) is attributed the same way
- * it is routed. Desktop retries a failed local call against the cloud host; this
- * reports the local target that every attempt starts with.
+ * Each wrapper's own routing predicate is reused rather than re-derived, so an
+ * input is attributed exactly the way it is routed — including the shapes the
+ * web redirect declines to rewrite. Desktop retries a failed local call against
+ * the cloud host; this reports the local target every attempt starts with.
  */
 export function fetchTargetHost(input: RequestInfo | URL, env: FetchRoutingEnv = ambientFetchRouting()): string {
   try {
-    const base = routedBaseFor(getApiTargetFromRequestInput(input), env);
+    const base = routedBaseFor(input, env);
     if (base) return new URL(base).host;
 
     const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;

@@ -68,6 +68,10 @@ export class MLWorkerManager {
   private readyResolve: (() => void) | null = null;
   private modelProgressCallbacks = new Map<string, (progress: number) => void>();
   private abandonedRequestIds = new AbandonedRequestIds();
+  private initPromise: Promise<boolean> | null = null;
+  private initGeneration = 0;
+  private pendingInitResolve: ((ready: boolean) => void) | null = null;
+  private pendingInitTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private static readonly READY_TIMEOUT_MS = 10_000;
 
@@ -78,26 +82,39 @@ export class MLWorkerManager {
  */
   async init(): Promise<boolean> {
  if (this.isReady) return true;
+ if (this.initPromise) return this.initPromise;
 
- // Detect capabilities
+ const promise = (async () => {
  this.capabilities = await detectMLCapabilities();
-
- if (!this.capabilities.isSupported) {
- return false;
- }
-
+ if (!this.capabilities.isSupported) return false;
  return this.initWorker();
+ })();
+
+ this.initPromise = promise;
+ try {
+ return await promise;
+ } finally {
+ if (this.initPromise === promise) this.initPromise = null;
+ }
   }
 
   private initWorker(): Promise<boolean> {
  if (this.worker) return Promise.resolve(this.isReady);
 
+ // The factory is awaited before there is a worker to hold onto, so a
+ // terminate() or the ready timeout can invalidate this attempt while it's
+ // still in flight. The generation lets a worker that resolves late — after
+ // its attempt was already given up on — get discarded instead of
+ // resurrecting a manager the caller believes is gone.
+ const generation = this.initGeneration;
+
  return new Promise((resolve) => {
- const readyTimeout = setTimeout(() => {
+ this.pendingInitResolve = resolve;
+
+ this.pendingInitTimeout = setTimeout(() => {
  if (!this.isReady) {
  console.error('[MLWorker] Worker failed to become ready');
  this.cleanup();
- resolve(false);
  }
  }, MLWorkerManager.READY_TIMEOUT_MS);
 
@@ -107,21 +124,31 @@ export class MLWorkerManager {
  worker = await this.createWorker();
  } catch (error) {
  console.error('[MLWorker] Failed to create worker:', error);
- clearTimeout(readyTimeout);
- this.cleanup();
- resolve(false);
+ if (generation === this.initGeneration) this.cleanup();
  return;
  }
+
+ if (generation !== this.initGeneration) {
+ worker.terminate();
+ return;
+ }
+
  this.worker = worker;
 
  worker.onmessage = (event: MessageEvent<WorkerResult>) => {
+ if (this.worker !== worker) return;
  const data = event.data;
 
  if (data.type === 'worker-ready') {
  this.isReady = true;
- clearTimeout(readyTimeout);
+ if (this.pendingInitTimeout) {
+ clearTimeout(this.pendingInitTimeout);
+ this.pendingInitTimeout = null;
+ }
  this.readyResolve?.();
- resolve(true);
+ const resolveInit = this.pendingInitResolve;
+ this.pendingInitResolve = null;
+ resolveInit?.(true);
  return;
  }
 
@@ -157,12 +184,11 @@ export class MLWorkerManager {
  };
 
  worker.onerror = (error) => {
+ if (this.worker !== worker) return;
  console.error('[MLWorker] Error:', error);
 
  if (!this.isReady) {
- clearTimeout(readyTimeout);
  this.cleanup();
- resolve(false);
  return;
  }
 
@@ -173,6 +199,13 @@ export class MLWorkerManager {
   }
 
   private cleanup(): void {
+ this.initGeneration++;
+ if (this.pendingInitTimeout) {
+ clearTimeout(this.pendingInitTimeout);
+ this.pendingInitTimeout = null;
+ }
+ const resolveInit = this.pendingInitResolve;
+ this.pendingInitResolve = null;
  if (this.worker) {
  this.worker.terminate();
  this.worker = null;
@@ -180,6 +213,7 @@ export class MLWorkerManager {
  this.isReady = false;
  this.rejectAllPending('ML worker terminated');
  this.loadedModels.clear();
+ resolveInit?.(false);
   }
 
   /**
@@ -214,7 +248,12 @@ export class MLWorkerManager {
 
  switch (data.type) {
  case 'model-loaded': {
- this.loadedModels.add(data.modelId);
+ // Residency is tracked from the unsolicited notification the worker posts
+ // whenever it actually performs a load (or from the model already being
+ // resident when this request was made). Adding it again here on the
+ // id-bearing reply would re-insert a model an interleaved model-evicted
+ // notification already removed, since a load and its own eviction of some
+ // other model can race across concurrent requests.
  pending.resolve(true);
  break;
  }

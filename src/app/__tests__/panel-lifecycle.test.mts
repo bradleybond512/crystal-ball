@@ -25,6 +25,9 @@ test('layout and shared ticker release their panel ownership on teardown', () =>
   assert.match(layoutSource, /destroyUniquePanels/);
   assert.match(layoutSource, /Object\.values\(this\.ctx\.panels\)/);
   assert.match(layoutSource, /Object\.values\(this\.ctx\.newsPanels\)/);
+  assert.match(layoutSource, /private eewStatusBar: EEWStatusBar \| null/);
+  assert.match(layoutSource, /this\.eewStatusBar\?\.destroy\(\)/);
+  assert.match(layoutSource, /this\.spaceWeatherStatusBarPoller\?\.stop\(\)/);
   assert.match(panelSource, /Panel\.instances\.size === 0/);
   assert.match(panelSource, /Panel\.stopHeartbeatTicker\(\)/);
 });

@@ -47,6 +47,10 @@ body.is-desktop-macos .eew-bar-main {
   outline-offset: -3px;
 }
 
+.eew-bar-drag-region {
+  display: none;
+}
+
 .eew-bar-label {
   flex-shrink: 0;
   font-weight: 700;
@@ -200,12 +204,14 @@ body.is-desktop-macos .eew-bar-main {
 /* macOS alert chrome uses one neutral window material. Severity moves into
    the restrained status label and dot instead of repainting the titlebar. */
 body.is-desktop-macos .eew-status-bar {
+  display: flex;
+  align-items: stretch;
   z-index: calc(var(--z-status-bar) + 2);
   min-height: var(--eew-bar-h, 32px);
   overflow: visible;
   border: 0;
   border-radius: var(--r-sm) var(--r-sm) 0 0;
-  background: linear-gradient(180deg, var(--mat-thin), transparent), var(--mat-chrome-bg);
+  background: linear-gradient(180deg, var(--mac-fill), transparent), var(--mac-sidebar-bg);
   box-shadow: var(--e-1), var(--edge-hairline);
   color: var(--mac-label);
   font-family: var(--font-ui);
@@ -217,8 +223,18 @@ body.is-desktop-macos .eew-status-bar {
 }
 
 body.is-desktop-macos .eew-bar-main {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: calc(100% - 64px);
+  min-width: 0;
   height: var(--eew-bar-h, 32px);
   gap: 8px;
+}
+
+body.is-desktop-macos .eew-bar-drag-region {
+  display: block;
+  flex: 1 0 64px;
+  min-width: 64px;
 }
 
 body.is-desktop-macos .eew-bar-main::before {
@@ -281,7 +297,7 @@ body.is-desktop-macos .eew-bar-expanded {
   overflow-y: auto;
   border: 0;
   border-radius: var(--r-sm);
-  background: var(--mat-solid-2);
+  background: var(--mac-surface);
   box-shadow: var(--e-3), var(--edge-hairline);
   color: var(--mac-label);
   font-family: var(--font-ui);

@@ -1,71 +1,88 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { apiAwareBaseFor } from '../log-bridge';
-import { isCallerCancellation } from '../caller-abort';
+import { fetchTargetHost, type FetchRoutingEnv } from '../runtime';
 
 const TAURI_HREF = 'tauri://localhost/index.html';
 const SIDECAR = 'http://127.0.0.1:46123';
+const EDGE = 'https://api.crystalball.app';
 
-test('relative /api paths are attributed to the sidecar, not the tauri origin', () => {
+/** Desktop: installRuntimeFetchPatch reroutes app-origin /api/* to the sidecar. */
+const desktop: FetchRoutingEnv = {
+  apiBaseUrl: SIDECAR,
+  webRedirectBaseUrl: '',
+  pageHref: TAURI_HREF,
+};
+
+/** Web with the edge redirect installed. */
+const web: FetchRoutingEnv = {
+  apiBaseUrl: '',
+  webRedirectBaseUrl: EDGE,
+  pageHref: 'https://crystalball.app/app',
+};
+
+/** Web with no VITE_WS_API_URL, or one the allowlist rejected. */
+const webNoRedirect: FetchRoutingEnv = { ...web, webRedirectBaseUrl: '' };
+
+test('a relative /api path is attributed to the sidecar, not the tauri origin', () => {
   // The bug: log-bridge wraps fetch OUTSIDE installRuntimeFetchPatch, so it sees
   // '/api/x' before the rewrite. Resolved against tauri://localhost that produced
   // the phantom host 'localhost' — a host the app never contacts, since CSP allows
-  // 127.0.0.1 only — and split each sidecar failure across two burst buckets.
-  const host = new URL('/api/health', apiAwareBaseFor('/api/health', SIDECAR, TAURI_HREF)).host;
-  assert.equal(host, '127.0.0.1:46123');
-  assert.notEqual(host, 'localhost');
+  // 127.0.0.1 only — and split each sidecar failure across two buckets.
+  assert.equal(fetchTargetHost('/api/health', desktop), '127.0.0.1:46123');
 });
 
-test('a sidecar-bound relative path and its already-absolute twin share one bucket', () => {
-  const relative = new URL('/api/health', apiAwareBaseFor('/api/health', SIDECAR, TAURI_HREF)).host;
-  const absolute = new URL(`${SIDECAR}/api/health`, apiAwareBaseFor(`${SIDECAR}/api/health`, SIDECAR, TAURI_HREF)).host;
-  assert.equal(relative, absolute, 'the same backend must not be counted under two host names');
+// Every input shape getApiTargetFromRequestInput accepts is rerouted by the patch,
+// so every one of them must be attributed to the sidecar rather than to the origin.
+test('the app-origin absolute form of a sidecar call shares the sidecar bucket', () => {
+  assert.equal(fetchTargetHost('tauri://localhost/api/health', desktop), '127.0.0.1:46123');
 });
 
-test('off-desktop (empty api base) keeps resolving against the page', () => {
-  const href = 'https://crystalball.app/app';
-  assert.equal(apiAwareBaseFor('/api/health', '', href), href);
-  assert.equal(new URL('/api/health', apiAwareBaseFor('/api/health', '', href)).host, 'crystalball.app');
+test('a URL instance for a sidecar call shares the sidecar bucket', () => {
+  assert.equal(fetchTargetHost(new URL('tauri://localhost/api/health'), desktop), '127.0.0.1:46123');
 });
 
-test('non-/api requests are unaffected', () => {
-  assert.equal(apiAwareBaseFor('/map-styles/dark.json', SIDECAR, TAURI_HREF), TAURI_HREF);
-  assert.equal(apiAwareBaseFor('https://api.weather.gov/alerts', SIDECAR, TAURI_HREF), TAURI_HREF);
-  assert.equal(
-    new URL('https://api.weather.gov/alerts', apiAwareBaseFor('https://api.weather.gov/alerts', SIDECAR, TAURI_HREF)).host,
-    'api.weather.gov',
-  );
+test('a Request instance for a sidecar call shares the sidecar bucket', () => {
+  assert.equal(fetchTargetHost(new Request('http://localhost/api/health'), desktop), '127.0.0.1:46123');
 });
 
-test('a path merely containing /api/ is not rewritten', () => {
-  // Only the leading-slash form is what installRuntimeFetchPatch rewrites.
-  assert.equal(apiAwareBaseFor('https://example.com/api/v1', SIDECAR, TAURI_HREF), TAURI_HREF);
+test('all four input shapes for one endpoint land in a single bucket', () => {
+  const hosts = new Set([
+    fetchTargetHost('/api/health', desktop),
+    fetchTargetHost('tauri://localhost/api/health', desktop),
+    fetchTargetHost(new URL('tauri://localhost/api/health'), desktop),
+    fetchTargetHost(new Request('http://localhost/api/health'), desktop),
+  ]);
+  assert.deepEqual([...hosts], ['127.0.0.1:46123'], 'one backend must not be counted under several host names');
 });
 
-const abortError = () => new DOMException('Fetch is aborted', 'AbortError');
-
-test('the runtime 15s fetch timeout is not treated as caller cancellation', () => {
-  // No caller signal at all — the abort came from AbortSignal.timeout inside the
-  // runtime fetch patch. Rethrowing it is what produced the observed
-  // "unhandledrejection: Fetch is aborted" errors from getTheaterPosture/getRiskScores.
-  assert.equal(isCallerCancellation(abortError(), undefined), false);
+test('non-/api desktop requests keep their own host', () => {
+  assert.equal(fetchTargetHost('https://api.weather.gov/alerts', desktop), 'api.weather.gov');
+  assert.equal(fetchTargetHost('/map-styles/dark.json', desktop), 'localhost');
 });
 
-test('an un-fired caller signal does not claim an abort', () => {
-  const controller = new AbortController();
-  assert.equal(isCallerCancellation(abortError(), controller.signal), false);
+test('a path merely containing /api/ is not treated as a sidecar call', () => {
+  // Only app-origin targets whose path starts with /api/ are rewritten.
+  assert.equal(fetchTargetHost('https://example.com/api/v1', desktop), 'example.com');
 });
 
-test('a fired caller signal does propagate its cancellation', () => {
-  const controller = new AbortController();
-  controller.abort();
-  assert.equal(isCallerCancellation(abortError(), controller.signal), true);
+test('web RPC calls are attributed to the edge the redirect sends them to', () => {
+  // installWebApiRedirect rewrites /api/<service>/v1/* off desktop; resolving
+  // against the page origin would credit those to crystalball.app instead.
+  assert.equal(fetchTargetHost('/api/military/v1/posture', web), 'api.crystalball.app');
+  assert.equal(fetchTargetHost(new URL('https://crystalball.app/api/military/v1/posture'), web), 'api.crystalball.app');
 });
 
-test('a non-abort failure is never mistaken for cancellation', () => {
-  const controller = new AbortController();
-  controller.abort();
-  assert.equal(isCallerCancellation(new TypeError('Load failed'), controller.signal), false);
-  assert.equal(isCallerCancellation(new DOMException('timed out', 'TimeoutError'), controller.signal), false);
+test('web paths outside the RPC pattern stay on the page origin', () => {
+  // The redirect only matches /api/<service>/v1/ — /api/health is served same-origin.
+  assert.equal(fetchTargetHost('/api/health', web), 'crystalball.app');
+  assert.equal(fetchTargetHost('/map-styles/dark.json', web), 'crystalball.app');
+});
+
+test('with no redirect installed, web RPC calls stay on the page origin', () => {
+  assert.equal(fetchTargetHost('/api/military/v1/posture', webNoRedirect), 'crystalball.app');
+});
+
+test('unparseable input is bucketed as unknown rather than throwing', () => {
+  assert.equal(fetchTargetHost('::::', { apiBaseUrl: '', webRedirectBaseUrl: '', pageHref: '' }), 'unknown');
 });

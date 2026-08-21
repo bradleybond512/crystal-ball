@@ -123,7 +123,7 @@ export const FEED_CATALOG: FeedDefinition[] = [
     pollIntervalMs: 15 * MIN },
   { id: 'usgs-surface-water', name: 'USGS Surface Water', category: 'natural',
     endpoint: 'https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items',
-    pollIntervalMs: 30 * MIN },
+    pollIntervalMs: 30 * MIN, sidecarKey: 'usgs-surface-water' },
 ];
 
 /** Spec-mandated minimum count — the panel wires up at least this many feeds. */

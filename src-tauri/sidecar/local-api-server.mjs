@@ -5282,11 +5282,8 @@ const USGS_WATER_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 let _sidecarCacheSweepTimer = null;
 
 function _sweepSidecarCache() {
-  const now = Date.now();
-  for (const [k, v] of _sidecarCache) {
-    if (v.ttlMs != null && now - v.ts >= v.ttlMs) _sidecarCache.delete(k);
-  }
-  // Hard cap: if still over limit, drop oldest entries
+  // Expired entries remain available to getCachedStale() as last-known-good
+  // fallbacks. Bound memory by evicting only the oldest entries over the cap.
   if (_sidecarCache.size > SIDECAR_CACHE_MAX) {
     const entries = [..._sidecarCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
     for (const [k] of entries.slice(0, _sidecarCache.size - SIDECAR_CACHE_MAX)) _sidecarCache.delete(k);
@@ -5304,7 +5301,6 @@ function getCached(key, ttlMs) {
   const entry = _sidecarCache.get(key);
   const effective = ttlMs ?? entry?.ttlMs;
   if (entry && effective != null && Date.now() - entry.ts < effective) return entry.data;
-  if (entry && effective != null) _sidecarCache.delete(key);
   return null;
 }
 function getCachedStale(key) {
@@ -5316,6 +5312,13 @@ function setCached(key, data, ttlMs) {
   if (_sidecarCache.size > SIDECAR_CACHE_MAX) _sweepSidecarCache();
   _ensureSidecarCacheSweep();
 }
+
+export {
+  getCached as _getSidecarCachedForTests,
+  getCachedStale as _getSidecarCachedStaleForTests,
+  setCached as _setSidecarCachedForTests,
+  _sweepSidecarCache as _sweepSidecarCacheForTests,
+};
 
 function setOdinCached(key, data, ttlMs) {
   setCached(key, data, ttlMs);
@@ -17370,9 +17373,13 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!locationResponse.ok) throw new Error(`USGS HTTP ${locationResponse.status}`);
  const locationRaw = await locationResponse.json().catch(() => null);
  const locations = normalizeUsgsMonitoringLocationsSidecar(locationRaw, bbox);
- if (!locations) return json({ error: 'USGS monitoring locations response was incomplete or malformed' }, 502);
+ if (!locations) {
+ recordFeedFailure('usgs-surface-water', 'monitoring locations response incomplete');
+ return json({ error: 'USGS monitoring locations response was incomplete or malformed' }, 502);
+ }
  if (locations.size === 0) {
  const empty = { type: 'FeatureCollection', features: [], numberReturned: 0 };
+ recordFeedFailure('usgs-surface-water', 'no_contributed_rows');
  return json(empty);
  }
  const latestParams = new URLSearchParams({
@@ -17387,10 +17394,19 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!latestResponse.ok) throw new Error(`USGS HTTP ${latestResponse.status}`);
  const raw = await latestResponse.json().catch(() => null);
  const result = normalizeUsgsLatestContinuousSidecar(raw, bbox, locations, Date.now());
- if (!result) return json({ error: 'USGS water source returned an incomplete or malformed response' }, 502);
- if (result.features.length > 0) setCached(cacheKey, result);
+ if (!result) {
+ recordFeedFailure('usgs-surface-water', 'latest continuous response incomplete');
+ return json({ error: 'USGS water source returned an incomplete or malformed response' }, 502);
+ }
+ if (result.features.length > 0) {
+ setCached(cacheKey, result);
+ recordFeedSuccess('usgs-surface-water');
+ } else {
+ recordFeedFailure('usgs-surface-water', 'no_contributed_rows');
+ }
  return json(result);
  } catch (error) {
+ recordFeedFailure('usgs-surface-water', error);
  return json({ error: `usgs-water error: ${error.message ?? error}` }, 502);
  }
   }

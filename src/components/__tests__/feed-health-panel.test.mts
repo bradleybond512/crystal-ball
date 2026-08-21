@@ -14,7 +14,7 @@ import {
   parseLifelineProviderHealthEvent,
   shortenEndpoint,
 } from '../feed-health-helpers.ts';
-import type { FeedDefinition } from '@/services/diagnostics/feed-catalog';
+import { FEED_CATALOG, type FeedDefinition } from '@/services/diagnostics/feed-catalog';
 
 const NOW = Date.parse('2026-05-08T12:00:00Z');
 
@@ -63,6 +63,14 @@ test('mergeSidecarFeeds tolerates missing optional fields', () => {
   assert.deepEqual(out['fred'], {
     id: 'fred', lastSuccessAt: null, lastError: null, lastAttemptAt: null,
   });
+});
+
+test('USGS surface-water route telemetry maps to its Feed Health row', () => {
+  const out = mergeSidecarFeeds([{
+    key: 'usgs-surface-water', lastSuccessAt: NOW, lastError: null, lastAttemptAt: NOW,
+  }], FEED_CATALOG);
+  assert.equal(out['usgs-surface-water']?.lastSuccessAt, NOW);
+  assert.equal(out['usgs-surface-water']?.lastError, null);
 });
 
 // ── collectDataFreshnessSnapshots ─────────────────────────────────────────

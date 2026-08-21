@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { routeWeatherAlert } from '../weather-warning-router.ts';
-import type { AlertPolygon, NwsAlertMinimal, SavedPlace } from '../weather-threat-types.ts';
+import {
+  matchesWeatherSavedPlaceActionTarget,
+  type AlertPolygon,
+  type NwsAlertMinimal,
+  type SavedPlace,
+} from '../weather-threat-types.ts';
 import { getAlgorithmEvaluationLedger, resetAlgorithmsState } from '@/services/algorithms/algorithms-state';
 
 const NOW = 1_745_000_000_000;
@@ -53,6 +58,10 @@ test('strongest match: picks the place where alert is inside polygon over a plac
   const office: SavedPlace = { id: 'office', label: 'Office', lat: 0, lon: 0 };
   const decision = routeWeatherAlert(alert(), [office, HOME], { now: NOW });
   assert.equal(decision.matchedPlaceId, 'home');
+  assert.ok(matchesWeatherSavedPlaceActionTarget(HOME, decision.matchedPlaceAction));
+  assert.equal(matchesWeatherSavedPlaceActionTarget({ ...HOME, lat: HOME.lat + 1 }, decision.matchedPlaceAction), false);
+  assert.equal(matchesWeatherSavedPlaceActionTarget({ ...HOME, label: 'Renamed Home' }, decision.matchedPlaceAction), false);
+  assert.equal(matchesWeatherSavedPlaceActionTarget(undefined, decision.matchedPlaceAction), false);
   assert.equal(decision.match!.matchKind, 'inside_polygon');
 });
 

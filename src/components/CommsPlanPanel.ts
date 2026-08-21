@@ -13,6 +13,11 @@ import {
 import { getCommsDirectoryLinks } from '@/services/comms-directory';
 import { buildCommsFieldCard } from '@/services/comms-export';
 import { exportCommsPlanCSV, exportCommsPlanJSON } from '@/utils/export';
+import { getCachedLocalLogistics } from '@/services/local-logistics';
+import {
+  buildCountyPowerDisclosure,
+  buildDeviceConnectivityDisclosure,
+} from './comms-lifeline-context';
 
 function formatUpdatedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -31,6 +36,7 @@ export class CommsPlanPanel extends Panel {
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeSavedPlaces: (() => void) | null = null;
   private unsubscribeCommsPlans: (() => void) | null = null;
+  private readonly refreshConnectivity = () => this.refresh();
 
   constructor() {
  super({
@@ -59,11 +65,17 @@ export class CommsPlanPanel extends Panel {
 
  this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.refresh());
  this.unsubscribeCommsPlans = subscribeCommsPlans(() => this.refresh());
+ window.addEventListener('online', this.refreshConnectivity);
+ window.addEventListener('offline', this.refreshConnectivity);
+ document.addEventListener('wm:local-logistics-updated', this.refreshConnectivity);
  this.refresh();
   }
 
   override destroy(): void {
  if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
+ window.removeEventListener('online', this.refreshConnectivity);
+ window.removeEventListener('offline', this.refreshConnectivity);
+ document.removeEventListener('wm:local-logistics-updated', this.refreshConnectivity);
  this.unsubscribeSavedPlaces?.();
  this.unsubscribeCommsPlans?.();
  this.unsubscribeSavedPlaces = null;
@@ -86,6 +98,8 @@ export class CommsPlanPanel extends Panel {
 
  const plan = getResolvedCommsPlan(place, getCommsPlan(place.id));
  const references = getCommsDirectoryLinks(place, plan);
+ const deviceContext = buildDeviceConnectivityDisclosure(navigator.onLine);
+ const countyContext = buildCountyPowerDisclosure(getCachedLocalLogistics(place));
  this.setCount(plan.fallbackSteps.length);
 
  const templatesHtml = COMMS_STATUS_ORDER.map((status) => `
@@ -138,6 +152,10 @@ export class CommsPlanPanel extends Panel {
  <div class="watchlist-country">${escapeHtml(place.name)}</div>
  <div class="watchlist-scenario">Updated ${escapeHtml(formatUpdatedAt(plan.updatedAt))}</div>
  </div>
+ </div>
+ <div class="panel-empty" style="margin-bottom:10px;">
+ ${escapeHtml(deviceContext.label)}: ${escapeHtml(deviceContext.detail)}<br>
+ ${escapeHtml(countyContext.label)}: ${escapeHtml(countyContext.detail)}
  </div>
  ${this.feedback ? `<div class="panel-empty" style="margin-bottom:10px;">${escapeHtml(this.feedback)}</div>` : ''}
  <div class="sa-filters">${templatesHtml}</div>

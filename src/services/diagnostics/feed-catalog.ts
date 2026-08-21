@@ -20,9 +20,9 @@ export interface FeedDefinition {
   endpoint: string;
   /** Nominal poll interval in ms; status thresholds key off this value. */
   pollIntervalMs: number;
-  /** Optional DataSourceId backing this feed in data-freshness. The panel
-   *  prefers data-freshness state for sources that have it; rows without
-   *  a sourceId fall back to the sidecar /api/health feeds[] payload. */
+  /** Optional one-to-one DataSourceId backing this exact provider/feed.
+   * Aggregate or merely related DataSourceIds must not be used: rows without
+   * an exact identity fall back to per-provider sidecar telemetry or `never`. */
   sourceId?: DataSourceId;
   /** Sidecar route name used to look up the feed in /api/health.feeds[]
    *  if the sidecar exposes per-feed status. */
@@ -51,48 +51,48 @@ export const FEED_CATALOG: FeedDefinition[] = [
   // ── Space weather ──────────────────────────────────────────────────────
   { id: 'swpc-xray', name: 'SWPC X-ray Flux', category: 'space',
     endpoint: 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json',
-    pollIntervalMs: 5 * MIN, sourceId: 'space-weather', sidecarKey: 'swpc-xray' },
+    pollIntervalMs: 5 * MIN, sidecarKey: 'swpc-xray' },
   { id: 'swpc-kp', name: 'SWPC Planetary Kp', category: 'space',
     endpoint: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
-    pollIntervalMs: 5 * MIN, sourceId: 'space-weather', sidecarKey: 'swpc-kp' },
+    pollIntervalMs: 5 * MIN, sidecarKey: 'swpc-kp' },
   // ── Fire ───────────────────────────────────────────────────────────────
   { id: 'firms-modis', name: 'NASA FIRMS MODIS', category: 'fire',
     endpoint: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/MODIS_NRT/world',
-    pollIntervalMs: 30 * MIN, sourceId: 'firms', sidecarKey: 'firms-modis' },
+    pollIntervalMs: 30 * MIN, sidecarKey: 'firms-modis' },
   { id: 'firms-viirs', name: 'NASA FIRMS VIIRS', category: 'fire',
     endpoint: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/VIIRS_SNPP_NRT/world',
-    pollIntervalMs: 30 * MIN, sourceId: 'firms', sidecarKey: 'firms-viirs' },
+    pollIntervalMs: 30 * MIN, sidecarKey: 'firms-viirs' },
   { id: 'nifc-perimeters', name: 'NIFC Fire Perimeters', category: 'fire',
     endpoint: 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query',
-    pollIntervalMs: 15 * MIN, sourceId: 'inciweb', sidecarKey: 'nifc' },
+    pollIntervalMs: 15 * MIN, sidecarKey: 'nifc' },
   // ── Air quality ────────────────────────────────────────────────────────
   { id: 'airnow-aqi', name: 'AirNow AQI', category: 'air',
     endpoint: 'https://www.airnowapi.org/aq/observation/zipCode/current/',
-    pollIntervalMs: 15 * MIN, sourceId: 'air-quality', sidecarKey: 'airnow' },
+    pollIntervalMs: 15 * MIN, sidecarKey: 'airnow' },
   { id: 'purpleair', name: 'PurpleAir Sensors', category: 'air',
     endpoint: 'https://api.purpleair.com/v1/sensors',
-    pollIntervalMs: 10 * MIN, sourceId: 'air-quality', sidecarKey: 'purpleair' },
+    pollIntervalMs: 10 * MIN, sidecarKey: 'purpleair' },
   // ── Energy / grid ──────────────────────────────────────────────────────
   { id: 'eia-930', name: 'EIA-930 Grid', category: 'energy',
     endpoint: 'https://api.eia.gov/v2/electricity/rto/region-data/data',
-    pollIntervalMs: HOUR, sourceId: 'power-grid', sidecarKey: 'eia-930' },
-  { id: 'poweroutage-us', name: 'PowerOutage.us', category: 'energy',
-    endpoint: 'https://poweroutage.us/api/web/states',
-    pollIntervalMs: 5 * MIN, sourceId: 'power-grid-alerts', sidecarKey: 'poweroutage' },
+    pollIntervalMs: HOUR, sidecarKey: 'eia-930' },
+  { id: 'ornl-odin', name: 'ORNL ODIN County Outages', category: 'energy',
+    endpoint: 'https://openenergyhub.ornl.gov/api/explore/v2.1/catalog/datasets/odin-real-time-outages-county/records',
+    pollIntervalMs: 15 * MIN, sidecarKey: 'ornl-odin' },
   { id: 'radnet', name: 'EPA RadNet', category: 'energy',
     endpoint: 'https://www.epa.gov/radnet',
-    pollIntervalMs: HOUR, sourceId: 'radiation-monitoring', sidecarKey: 'radnet' },
+    pollIntervalMs: HOUR, sidecarKey: 'radnet' },
   // ── Cyber / network ────────────────────────────────────────────────────
   { id: 'cloudflare-bgp', name: 'Cloudflare Radar BGP', category: 'cyber',
-    endpoint: 'https://api.cloudflare.com/client/v4/radar/bgp/timeseries',
-    pollIntervalMs: 10 * MIN, sourceId: 'internet-outages', sidecarKey: 'cloudflare-bgp' },
+    endpoint: 'https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events',
+    pollIntervalMs: 10 * MIN, sidecarKey: 'cloudflare-bgp' },
   { id: 'otx', name: 'AlienVault OTX', category: 'cyber',
     endpoint: 'https://otx.alienvault.com/api/v1/pulses/subscribed',
-    pollIntervalMs: 30 * MIN, sourceId: 'cyber_threats', sidecarKey: 'otx' },
+    pollIntervalMs: 30 * MIN, sidecarKey: 'otx' },
   // ── Open-source intel ──────────────────────────────────────────────────
   { id: 'gdelt', name: 'GDELT Doc API', category: 'data',
     endpoint: 'https://api.gdeltproject.org/api/v2/doc/doc',
-    pollIntervalMs: 15 * MIN, sourceId: 'gdelt', sidecarKey: 'gdelt' },
+    pollIntervalMs: 15 * MIN, sidecarKey: 'gdelt' },
   { id: 'acled', name: 'ACLED Conflict', category: 'data',
     endpoint: 'https://api.acleddata.com/acled/read',
     pollIntervalMs: HOUR, sourceId: 'acled_conflict', sidecarKey: 'acled' },
@@ -112,6 +112,18 @@ export const FEED_CATALOG: FeedDefinition[] = [
   { id: 'smoke-forecast', name: 'Smoke Forecast (Open-Meteo AQ)', category: 'air',
     endpoint: 'https://air-quality-api.open-meteo.com/v1/air-quality',
     pollIntervalMs: 30 * MIN, sourceId: 'smoke_forecast' },
+  { id: 'fema-open-shelters', name: 'FEMA Open Shelters', category: 'data',
+    endpoint: 'https://gis.fema.gov/arcgis/rest/services/NSS/OpenShelters/FeatureServer/0/query',
+    pollIntervalMs: 20 * MIN },
+  { id: 'fema-recovery-centers', name: 'FEMA Disaster Recovery Centers', category: 'data',
+    endpoint: 'https://gis.fema.gov/arcgis/rest/services/FEMA/DRC_Services_Relate/FeatureServer/0/query',
+    pollIntervalMs: HOUR },
+  { id: 'openstreetmap-lifelines', name: 'OpenStreetMap Lifeline Directory', category: 'data',
+    endpoint: 'https://overpass-api.de/api/interpreter',
+    pollIntervalMs: 15 * MIN },
+  { id: 'usgs-surface-water', name: 'USGS Surface Water', category: 'natural',
+    endpoint: 'https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items',
+    pollIntervalMs: 30 * MIN },
 ];
 
 /** Spec-mandated minimum count — the panel wires up at least this many feeds. */
@@ -158,7 +170,7 @@ export function classifyFeedHealth(
     return 'never';
   }
   if (snapshot.lastError && (snapshot.lastSuccessAt === null
-    || (snapshot.lastAttemptAt !== null && snapshot.lastAttemptAt > snapshot.lastSuccessAt))) {
+    || (snapshot.lastAttemptAt !== null && snapshot.lastAttemptAt >= snapshot.lastSuccessAt))) {
     return 'error';
   }
   if (snapshot.lastSuccessAt === null) return 'never';
@@ -213,7 +225,11 @@ export function summarizeFeedHealth(rows: FeedRow[]): FeedHealthSummary {
 
 /** Format the "last poll" column. Empty string for never-polled feeds. */
 export function formatLastPoll(snapshot: FeedSnapshot, nowMs: number): string {
-  const at = snapshot.lastSuccessAt ?? snapshot.lastAttemptAt;
+  const at = snapshot.lastSuccessAt === null
+    ? snapshot.lastAttemptAt
+    : (snapshot.lastAttemptAt === null
+        ? snapshot.lastSuccessAt
+        : Math.max(snapshot.lastSuccessAt, snapshot.lastAttemptAt));
   if (at === null) return '—';
   const ageMs = nowMs - at;
   if (ageMs < 60_000) return 'just now';

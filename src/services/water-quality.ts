@@ -1,21 +1,19 @@
 /**
- * Water Quality Monitoring Service
+ * Water evidence service.
  *
- * Fetches drinking water safety data from:
- *  - EPA SDWIS (Safe Drinking Water Information System) via sidecar proxy
- *  - USGS Water Quality data (waterservices.usgs.gov)
- *
- * Tracks boil water advisories, contamination alerts, and treatment plant outages.
- * Uses proximity-filter for location-based filtering.
+ * EPA SDWIS rows are compliance history, not live local drinking-water
+ * advisories. USGS Water Services readings are surface-water measurements,
+ * not evidence that treated tap water is safe or unsafe. This boundary keeps
+ * those evidence classes separate and leaves live potable status unknown
+ * until an explicit potable-water authority feed is integrated.
  */
 import { getApiBaseUrl } from '@/services/runtime';
-import { loadProximityConfig, haversineKm } from '@/services/proximity-filter';
 import { dataFreshness } from '@/services/data-freshness';
 
-// ── Types ──────────────────────────────────────────────────────────────
-
-export type WaterAlertSeverity = 'safe' | 'advisory' | 'do-not-use';
+export type WaterAlertSeverity = 'safe' | 'advisory' | 'do-not-use' | 'unknown';
 export type WaterAlertType = 'boil-water' | 'do-not-use' | 'contamination' | 'treatment-outage' | 'general';
+export type WaterEvidenceKind = 'official-potable-advisory' | 'epa-compliance-history';
+export type PotableWaterStatus = WaterAlertSeverity;
 
 export interface WaterAlert {
   id: string;
@@ -27,6 +25,9 @@ export interface WaterAlert {
   state: string;
   issuedAt: Date;
   expiresAt: Date | null;
+  evidenceKind?: WaterEvidenceKind;
+  sourceObservedAt?: Date | null;
+  sourceUrl?: string;
 }
 
 export interface WaterSystem {
@@ -40,328 +41,404 @@ export interface WaterSystem {
   distanceKm: number | null;
   violations: number;
   lastInspection: Date | null;
+  evidenceKind?: 'epa-compliance-history';
+}
+
+export interface SurfaceWaterMeasurement {
+  id: string;
+  source: 'usgs-surface-water';
+  siteCode?: string;
+  siteName: string;
+  parameterCode: string;
+  parameterName: string;
+  value: number;
+  unit?: string;
+  lat?: number;
+  lon?: number;
+  retrievedAt: Date;
+  sourceObservedAt?: Date;
 }
 
 export interface WaterQualityData {
+  /** Legacy field. Contains only explicit potable advisories, never EPA or USGS inference. */
   alerts: WaterAlert[];
   systems: WaterSystem[];
   summary: {
- totalSystems: number;
- safeSystems: number;
- advisorySystems: number;
- doNotUseSystems: number;
+    totalSystems: number;
+    safeSystems: number;
+    advisorySystems: number;
+    doNotUseSystems: number;
+    unknownSystems: number;
   };
   fetchedAt: Date;
+  retrievedAt: Date;
+  potableStatus: PotableWaterStatus;
+  potableAdvisories: WaterAlert[];
+  complianceRecords: WaterAlert[];
+  surfaceMeasurements: SurfaceWaterMeasurement[];
+  sourceCoverage: {
+    epaCompliance: 'available' | 'unavailable';
+    usgsSurfaceWater: 'available' | 'unavailable';
+    potableAdvisories: 'not-configured';
+  };
+  limitations: string[];
 }
 
-// ── Cache ──────────────────────────────────────────────────────────────
+export interface NormalizedEpaCompliance {
+  records: WaterAlert[];
+  systems: WaterSystem[];
+}
 
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-let cache: { data: WaterQualityData; fetchedAt: number } | null = null;
+export interface WaterQualityBuildInput {
+  retrievedAt: Date;
+  epa: NormalizedEpaCompliance & { ok: boolean };
+  usgs: { ok: boolean; measurements: SurfaceWaterMeasurement[] };
+  potableAdvisories?: WaterAlert[];
+}
 
-// ── Known water system locations (US major metros) ─────────────────────
-
-interface KnownSystem {
-  name: string;
-  state: string;
+export interface WaterQualityLocation {
   lat: number;
   lon: number;
-  pop: number;
+  radiusKm?: number;
 }
 
-const MAJOR_WATER_SYSTEMS: KnownSystem[] = [
-  { name: 'New York City DEP', state: 'NY', lat: 40.71, lon: -74.01, pop: 8_300_000 },
-  { name: 'Los Angeles DWP', state: 'CA', lat: 34.05, lon: -118.24, pop: 4_000_000 },
-  { name: 'Chicago Water Mgmt', state: 'IL', lat: 41.88, lon: -87.63, pop: 2_700_000 },
-  { name: 'Houston Public Works', state: 'TX', lat: 29.76, lon: -95.37, pop: 2_300_000 },
-  { name: 'Phoenix Water Services', state: 'AZ', lat: 33.45, lon: -112.07, pop: 1_600_000 },
-  { name: 'Philadelphia Water Dept', state: 'PA', lat: 39.95, lon: -75.17, pop: 1_600_000 },
-  { name: 'San Antonio Water System', state: 'TX', lat: 29.42, lon: -98.49, pop: 1_500_000 },
-  { name: 'San Diego Public Utilities', state: 'CA', lat: 32.72, lon: -117.16, pop: 1_400_000 },
-  { name: 'Dallas Water Utilities', state: 'TX', lat: 32.78, lon: -96.8, pop: 1_300_000 },
-  { name: 'Denver Water', state: 'CO', lat: 39.74, lon: -104.99, pop: 1_500_000 },
-  { name: 'Seattle Public Utilities', state: 'WA', lat: 47.61, lon: -122.33, pop: 1_400_000 },
-  { name: 'Miami-Dade WASD', state: 'FL', lat: 25.76, lon: -80.19, pop: 2_700_000 },
-  { name: 'Atlanta Watershed Mgmt', state: 'GA', lat: 33.75, lon: -84.39, pop: 500_000 },
-  { name: 'Boston Water & Sewer', state: 'MA', lat: 42.36, lon: -71.06, pop: 700_000 },
-  { name: 'Detroit Water & Sewerage', state: 'MI', lat: 42.33, lon: -83.05, pop: 670_000 },
-];
-
-// ── USGS Parameter codes for water quality ─────────────────────────────
-
-const USGS_PARAMS = [
-  '00010', // Temperature
-  '00300', // Dissolved oxygen
-  '00400', // pH
-  '00095', // Specific conductance
-  '00665', // Phosphorus
-  '00631', // Nitrate+Nitrite
-];
-
-// ── Fetch helpers ──────────────────────────────────────────────────────
-
-async function fetchUSGSWaterQuality(): Promise<WaterAlert[]> {
-  const base = getApiBaseUrl();
-  const paramCodes = USGS_PARAMS.join(',');
-  const url = `${base}/api/usgs-water-proxy?parameterCd=${paramCodes}&siteStatus=active&period=P1D&siteType=ST`;
-
-  try {
- const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return [];
- const json = await res.json() as {
- value?: {
- timeSeries?: {
- sourceInfo?: { siteName?: string; geoLocation?: { geogLocation?: { latitude?: number; longitude?: number } } };
- variable?: { variableName?: string; variableCode?: { value?: string }[] };
- values?: { value?: { value?: string; dateTime?: string }[] }[];
- }[];
- };
- };
- if (!json || typeof json !== 'object') return [];
-
- const alerts: WaterAlert[] = [];
- const series = json.value?.timeSeries ?? [];
-
- for (const ts of series) {
- const siteName = ts.sourceInfo?.siteName ?? 'Unknown';
- const varName = ts.variable?.variableName ?? '';
- const varCode = ts.variable?.variableCode?.[0]?.value ?? '';
- const latestValues = ts.values?.[0]?.value ?? [];
- const latest = latestValues[latestValues.length - 1];
- if (!latest?.value) continue;
-
- const val = Number.parseFloat(latest.value);
- if (isNaN(val)) continue;
-
- // Flag anomalous readings
- let alert: WaterAlert | null = null;
-
- // pH outside safe range (6.5-8.5)
- if (varCode === '00400' && (val < 5.5 || val > 9.5)) {
- alert = {
- id: `usgs-ph-${siteName.slice(0, 20)}-${Date.now()}`,
- type: 'contamination',
- severity: val < 4 || val > 10 ? 'do-not-use' : 'advisory',
- title: `Abnormal pH (${val.toFixed(1)}) at ${siteName}`,
- description: `pH reading of ${val.toFixed(1)} detected. Safe range is 6.5–8.5.`,
- systemName: siteName,
- state: '',
- issuedAt: new Date(latest.dateTime ?? Date.now()),
- expiresAt: null,
- };
- }
-
- // Dissolved oxygen critically low (<4 mg/L)
- if (varCode === '00300' && val < 4) {
- alert = {
- id: `usgs-do-${siteName.slice(0, 20)}-${Date.now()}`,
- type: 'contamination',
- severity: val < 2 ? 'do-not-use' : 'advisory',
- title: `Low dissolved oxygen (${val.toFixed(1)} mg/L) at ${siteName}`,
- description: `Dissolved oxygen at ${val.toFixed(1)} mg/L. Levels below 4 mg/L indicate water quality issues.`,
- systemName: siteName,
- state: '',
- issuedAt: new Date(latest.dateTime ?? Date.now()),
- expiresAt: null,
- };
- }
-
- // High nitrate (> 10 mg/L — EPA MCL)
- if (varCode === '00631' && val > 10) {
- alert = {
- id: `usgs-nitrate-${siteName.slice(0, 20)}-${Date.now()}`,
- type: 'contamination',
- severity: val > 20 ? 'do-not-use' : 'advisory',
- title: `High nitrate (${val.toFixed(1)} mg/L) at ${siteName}`,
- description: `Nitrate at ${val.toFixed(1)} mg/L exceeds EPA MCL of 10 mg/L. ${varName}.`,
- systemName: siteName,
- state: '',
- issuedAt: new Date(latest.dateTime ?? Date.now()),
- expiresAt: null,
- };
- }
-
- if (alert) {
- alerts.push(alert);
- }
- }
-
- return alerts;
-  } catch {
- return [];
-  }
+export interface WaterQualitySavedPlaceLike extends WaterQualityLocation {
+  primary?: boolean;
 }
 
-async function fetchEPAViolations(): Promise<{ alerts: WaterAlert[]; systems: WaterSystem[] }> {
-  const base = getApiBaseUrl();
-  const url = `${base}/api/epa-sdwis-proxy?type=violations&is_health_based=Y&compliance_period=current`;
-
-  try {
- const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return { alerts: [], systems: [] };
- const json = await res.json() as {
- violations?: {
- pwsid?: string;
- pws_name?: string;
- state_code?: string;
- violation_name?: string;
- contaminant_name?: string;
- population_served_count?: number;
- is_health_based_ind?: string;
- compliance_begin_date?: string;
- }[];
- };
- if (!json || typeof json !== 'object') return { alerts: [], systems: [] };
-
- const violations = json.violations ?? [];
- const alerts: WaterAlert[] = [];
- const systemMap = new Map<string, WaterSystem>();
-
- for (const v of violations) {
- const pwsid = v.pwsid ?? 'unknown';
- const pwsName = v.pws_name ?? 'Unknown System';
- const state = v.state_code ?? '';
- const violationName = v.violation_name ?? 'Unknown Violation';
- const contaminant = v.contaminant_name ?? '';
-
- const isHealthBased = v.is_health_based_ind === 'Y';
- const severity: WaterAlertSeverity = isHealthBased ? 'advisory' : 'safe';
- const type: WaterAlertType = contaminant.toLowerCase().includes('coliform') ? 'boil-water' : 'contamination';
-
- alerts.push({
- id: `epa-${pwsid}-${violationName.slice(0, 20)}`,
- type,
- severity,
- title: `${violationName} — ${pwsName}`,
- description: contaminant ? `Contaminant: ${contaminant}` : violationName,
- systemName: pwsName,
- state,
- issuedAt: v.compliance_begin_date ? new Date(v.compliance_begin_date) : new Date(),
- expiresAt: null,
- });
-
- if (systemMap.has(pwsid)) {
- const sys = systemMap.get(pwsid)!;
- sys.violations += 1;
- if (severity === 'advisory' && sys.status === 'safe') {
- sys.status = severity;
- }
- } else {
- systemMap.set(pwsid, {
- id: pwsid,
- name: pwsName,
- state,
- populationServed: v.population_served_count ?? 0,
- status: severity,
- lat: null,
- lon: null,
- distanceKm: null,
- violations: 1,
- lastInspection: null,
- });
- }
- }
-
- return { alerts, systems: [...systemMap.values()] };
-  } catch {
- return { alerts: [], systems: [] };
-  }
+/** Select one bounded location for the panel without merging unrelated places. */
+export function selectWaterQualityLocation(
+  places: readonly WaterQualitySavedPlaceLike[],
+): WaterQualityLocation | undefined {
+  const place = places.find((candidate) => candidate.primary) ?? places[0];
+  if (!place || !Number.isFinite(place.lat) || !Number.isFinite(place.lon)
+    || place.lat < -90 || place.lat > 90 || place.lon < -180 || place.lon > 180) return undefined;
+  const radiusKm = Number.isFinite(place.radiusKm)
+    ? Math.max(1, Math.min(50, place.radiusKm ?? 25))
+    : 25;
+  return { lat: place.lat, lon: place.lon, radiusKm };
 }
 
-function buildLocalSystems(): WaterSystem[] {
-  const proxConfig = loadProximityConfig();
-  const userLat = proxConfig.location?.lat ?? null;
-  const userLon = proxConfig.location?.lon ?? null;
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const EPA_SOURCE_URL = 'https://echo.epa.gov/trends/comparative-maps-dashboards/drinking-water-dashboard';
+const USGS_PARAMS = new Set(['00010', '00300', '00400', '00095', '00665', '00631']);
+const cache = new Map<string, { data: WaterQualityData; fetchedAt: number }>();
 
-  return MAJOR_WATER_SYSTEMS.map((sys) => {
- let distanceKm: number | null = null;
- if (userLat !== null && userLon !== null) {
- distanceKm = haversineKm(userLat, userLon, sys.lat, sys.lon);
- }
- return {
- id: `local-${sys.state}-${sys.name.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`,
- name: sys.name,
- state: sys.state,
- populationServed: sys.pop,
- status: 'safe' as WaterAlertSeverity,
- lat: sys.lat,
- lon: sys.lon,
- distanceKm,
- violations: 0,
- lastInspection: null,
- };
-  });
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-// ── Main export ────────────────────────────────────────────────────────
+function safeString(value: unknown, max = 240): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  return normalized ? normalized.slice(0, max) : undefined;
+}
 
-export async function fetchWaterQuality(): Promise<WaterQualityData> {
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
- return cache.data;
+function finiteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== 'string' || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value.trim())) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function validCoordinate(value: unknown, min: number, max: number): number | undefined {
+  const parsed = finiteNumber(value);
+  return parsed !== undefined && parsed >= min && parsed <= max ? parsed : undefined;
+}
+
+function parseDate(value: unknown): Date | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function isValidRfc3339CivilTime(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = Number(match[7] ?? 0);
+  const offsetMinute = Number(match[8] ?? 0);
+  if (!year || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
+    || offsetHour > 23 || offsetMinute > 59) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day >= 1 && day <= (monthDays[month - 1] ?? 0);
+}
+
+function stablePart(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'unknown';
+}
+
+function boundedSourceDate(value: unknown, retrievedAt: Date): Date | null {
+  if (typeof value !== 'string' || !isValidRfc3339CivilTime(value)) return null;
+  const parsed = parseDate(value);
+  if (!parsed) return null;
+  return parsed.getTime() >= Math.max(Date.UTC(2000, 0, 1), retrievedAt.getTime() - 24 * 60 * 60 * 1000)
+    && parsed.getTime() <= retrievedAt.getTime() + 5 * 60 * 1000
+    ? parsed
+    : null;
+}
+
+function parameterName(code: string, fallback?: string): string {
+  return fallback ?? ({
+    '00010': 'Water temperature',
+    '00300': 'Dissolved oxygen',
+    '00400': 'pH',
+    '00095': 'Specific conductance',
+    '00665': 'Total phosphorus',
+    '00631': 'Nitrate plus nitrite',
+  }[code] ?? `USGS parameter ${code}`);
+}
+
+function normalizeModernUsgs(raw: Record<string, unknown>, retrievedAt: Date): SurfaceWaterMeasurement[] {
+  if (raw.type !== 'FeatureCollection' || !Array.isArray(raw.features)) return [];
+  const bySiteParameter = new Map<string, SurfaceWaterMeasurement>();
+  for (const feature of raw.features) {
+    if (!isRecord(feature) || !isRecord(feature.properties)) continue;
+    const properties = feature.properties;
+    const parameterCode = safeString(properties.parameter_code, 16);
+    const siteCode = safeString(properties.monitoring_location_id, 48);
+    const value = finiteNumber(properties.value);
+    if (!parameterCode || !USGS_PARAMS.has(parameterCode) || !siteCode || value === undefined) continue;
+    const sourceObservedAt = boundedSourceDate(properties.time, retrievedAt);
+    if (!sourceObservedAt) continue;
+    const geometry = isRecord(feature.geometry) && feature.geometry.type === 'Point'
+      && Array.isArray(feature.geometry.coordinates) ? feature.geometry.coordinates : [];
+    const lon = validCoordinate(geometry[0], -180, 180);
+    const lat = validCoordinate(geometry[1], -90, 90);
+    if (lat === undefined || lon === undefined) continue;
+    const measurement: SurfaceWaterMeasurement = {
+      id: `usgs-surface:${stablePart(siteCode)}:${parameterCode}:${sourceObservedAt?.getTime() ?? retrievedAt.getTime()}`,
+      source: 'usgs-surface-water', siteCode,
+      siteName: safeString(properties.monitoring_location_name, 160) ?? siteCode,
+      parameterCode, parameterName: parameterName(parameterCode), value,
+      ...(safeString(properties.unit_of_measure, 40) ? { unit: safeString(properties.unit_of_measure, 40) } : {}),
+      lat, lon, retrievedAt,
+      ...(sourceObservedAt ? { sourceObservedAt } : {}),
+    };
+    const key = `${siteCode}:${parameterCode}`;
+    const prior = bySiteParameter.get(key);
+    if (!prior || (measurement.sourceObservedAt?.getTime() ?? 0) > (prior.sourceObservedAt?.getTime() ?? 0)) {
+      bySiteParameter.set(key, measurement);
+    }
   }
+  return [...bySiteParameter.values()];
+}
 
-  const [usgsAlerts, epaData] = await Promise.allSettled([
- fetchUSGSWaterQuality(),
- fetchEPAViolations(),
-  ]);
-
-  const alerts: WaterAlert[] = [
- ...(usgsAlerts.status === 'fulfilled' ? usgsAlerts.value : []),
- ...(epaData.status === 'fulfilled' ? epaData.value.alerts : []),
-  ];
-
-  // Merge EPA-reported systems with known major systems
-  const epaSystems = epaData.status === 'fulfilled' ? epaData.value.systems : [];
-  const localSystems = buildLocalSystems();
-
-  // Overlay EPA violation data onto known systems
-  const epaById = new Map(epaSystems.map(s => [s.name.toLowerCase(), s]));
-  for (const ls of localSystems) {
- const match = epaById.get(ls.name.toLowerCase());
- if (match) {
- ls.violations = match.violations;
- ls.status = match.status;
- }
+/** Normalize USGS surface-water telemetry without assigning potable-water meaning. */
+export function normalizeUsgsSurfaceWaterResponse(raw: unknown, retrievedAt: Date): SurfaceWaterMeasurement[] {
+  if (!isRecord(raw)) return [];
+  if (raw.type === 'FeatureCollection') return normalizeModernUsgs(raw, retrievedAt);
+  if (!isRecord(raw.value) || !Array.isArray(raw.value.timeSeries)) return [];
+  const measurements: SurfaceWaterMeasurement[] = [];
+  for (const item of raw.value.timeSeries) {
+    if (!isRecord(item)) continue;
+    const sourceInfo = isRecord(item.sourceInfo) ? item.sourceInfo : {};
+    const variable = isRecord(item.variable) ? item.variable : {};
+    const variableCodes = Array.isArray(variable.variableCode) ? variable.variableCode : [];
+    const codeRecord = variableCodes.find(isRecord);
+    const parameterCode = safeString(codeRecord?.value, 16);
+    if (!parameterCode || !USGS_PARAMS.has(parameterCode)) continue;
+    const valueGroups = Array.isArray(item.values) ? item.values : [];
+    const firstGroup = valueGroups.find(isRecord);
+    const readings = firstGroup && Array.isArray(firstGroup.value) ? firstGroup.value : [];
+    const latest = readings
+      .filter(isRecord)
+      .map((reading) => ({
+        reading,
+        at: boundedSourceDate(reading.dateTime, retrievedAt),
+      }))
+      .filter((candidate) => candidate.at !== null)
+      .sort((left, right) => (right.at?.getTime() ?? 0) - (left.at?.getTime() ?? 0))[0]?.reading;
+    const value = latest ? finiteNumber(latest.value) : undefined;
+    if (value === undefined) continue;
+    const siteName = safeString(sourceInfo.siteName) ?? 'Unnamed USGS surface-water site';
+    const siteCodes = Array.isArray(sourceInfo.siteCode) ? sourceInfo.siteCode : [];
+    const siteCodeRecord = siteCodes.find(isRecord);
+    const siteCode = safeString(siteCodeRecord?.value, 40);
+    const displayParameterName = parameterName(parameterCode, safeString(variable.variableName));
+    const unitRecord = isRecord(variable.unit) ? variable.unit : {};
+    const unit = safeString(unitRecord.unitCode, 40);
+    const geoLocation = isRecord(sourceInfo.geoLocation) ? sourceInfo.geoLocation : {};
+    const geogLocation = isRecord(geoLocation.geogLocation) ? geoLocation.geogLocation : {};
+    const lat = validCoordinate(geogLocation.latitude, -90, 90);
+    const lon = validCoordinate(geogLocation.longitude, -180, 180);
+    const sourceObservedAt = latest ? boundedSourceDate(latest.dateTime, retrievedAt) : null;
+    measurements.push({
+      id: `usgs-surface:${stablePart(siteCode ?? siteName)}:${parameterCode}:${sourceObservedAt?.getTime() ?? retrievedAt.getTime()}`,
+      source: 'usgs-surface-water',
+      ...(siteCode ? { siteCode } : {}),
+      siteName,
+      parameterCode,
+      parameterName: displayParameterName,
+      value,
+      ...(unit ? { unit } : {}),
+      ...(lat !== undefined ? { lat } : {}),
+      ...(lon !== undefined ? { lon } : {}),
+      retrievedAt,
+      ...(sourceObservedAt ? { sourceObservedAt } : {}),
+    });
   }
+  return measurements;
+}
 
-  // Add EPA systems not already in the local list
-  const localNames = new Set(localSystems.map(s => s.name.toLowerCase()));
-  for (const es of epaSystems) {
- if (!localNames.has(es.name.toLowerCase())) {
- localSystems.push(es);
- }
+/** Normalize EPA compliance rows without translating them into live advisories. */
+export function normalizeEpaComplianceResponse(raw: unknown): NormalizedEpaCompliance {
+  if (!isRecord(raw) || !Array.isArray(raw.violations)) return { records: [], systems: [] };
+  const records: WaterAlert[] = [];
+  const systemMap = new Map<string, WaterSystem>();
+  for (const item of raw.violations) {
+    if (!isRecord(item) || item.is_health_based_ind !== 'Y') continue;
+    const pwsid = safeString(item.pwsid, 32);
+    const systemName = safeString(item.pws_name) ?? (pwsid ? `Public water system ${pwsid}` : undefined);
+    const violationCode = safeString(item.violation_code, 32);
+    const violationName = safeString(item.violation_name)
+      ?? (violationCode ? `Violation code ${violationCode}` : undefined);
+    if (!pwsid || !/^[a-z0-9-]{4,32}$/i.test(pwsid) || !systemName || !violationName) continue;
+    const contaminantCode = safeString(item.contaminant_code, 32);
+    const contaminant = safeString(item.contaminant_name)
+      ?? (contaminantCode ? `code ${contaminantCode}` : undefined);
+    const stateValue = safeString(item.state_code, 2) ?? '';
+    const state = /^[A-Z]{2}$/.test(stateValue) ? stateValue : '';
+    const sourceObservedAt = parseDate(item.compl_per_begin_date ?? item.compliance_begin_date);
+    const population = typeof item.population_served_count === 'number'
+      && Number.isSafeInteger(item.population_served_count) && item.population_served_count >= 0
+      ? item.population_served_count : 0;
+    records.push({
+      id: `epa-compliance:${stablePart(pwsid)}:${stablePart(violationName)}:${sourceObservedAt?.getTime() ?? 'date-unknown'}`,
+      type: 'general',
+      severity: 'unknown',
+      title: `EPA compliance record — ${violationName}`,
+      description: `${contaminant ? `Contaminant or rule: ${contaminant}. ` : ''}This is compliance history, not a live boil-water or do-not-use notice. Check the water utility or local health department for current instructions.`,
+      systemName,
+      state,
+      issuedAt: sourceObservedAt ?? new Date(0),
+      expiresAt: null,
+      evidenceKind: 'epa-compliance-history',
+      sourceObservedAt,
+      sourceUrl: EPA_SOURCE_URL,
+    });
+    const existing = systemMap.get(pwsid);
+    if (existing) {
+      existing.violations += 1;
+    } else {
+      systemMap.set(pwsid, {
+        id: pwsid,
+        name: systemName,
+        state,
+        populationServed: population,
+        status: 'unknown',
+        lat: null,
+        lon: null,
+        distanceKm: null,
+        violations: 1,
+        lastInspection: null,
+        evidenceKind: 'epa-compliance-history',
+      });
+    }
   }
+  return { records, systems: [...systemMap.values()] };
+}
 
-  // Sort by proximity if location is available, otherwise by status
-  const proxConfig = loadProximityConfig();
-  if (proxConfig.location) {
- localSystems.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-  } else {
- const statusOrder: Record<WaterAlertSeverity, number> = { 'do-not-use': 0, advisory: 1, safe: 2 };
- localSystems.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-  }
+function potableStatusFromExplicitAdvisories(advisories: WaterAlert[]): PotableWaterStatus {
+  if (advisories.some((item) => item.evidenceKind === 'official-potable-advisory' && item.severity === 'do-not-use')) return 'do-not-use';
+  if (advisories.some((item) => item.evidenceKind === 'official-potable-advisory' && item.severity === 'advisory')) return 'advisory';
+  if (advisories.some((item) => item.evidenceKind === 'official-potable-advisory' && item.severity === 'safe')) return 'safe';
+  return 'unknown';
+}
 
-  // Sort alerts by severity
-  const sevOrder: Record<WaterAlertSeverity, number> = { 'do-not-use': 0, advisory: 1, safe: 2 };
-  alerts.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
-
-  const safeSystems = localSystems.filter(s => s.status === 'safe').length;
-  const advisorySystems = localSystems.filter(s => s.status === 'advisory').length;
-  const doNotUseSystems = localSystems.filter(s => s.status === 'do-not-use').length;
-
-  const data: WaterQualityData = {
- alerts,
- systems: localSystems,
- summary: {
- totalSystems: localSystems.length,
- safeSystems,
- advisorySystems,
- doNotUseSystems,
- },
- fetchedAt: new Date(),
+export function buildWaterQualitySnapshot(input: WaterQualityBuildInput): WaterQualityData {
+  const potableAdvisories = (input.potableAdvisories ?? [])
+    .filter((item) => item.evidenceKind === 'official-potable-advisory');
+  const systems = input.epa.systems.map((system) => ({ ...system, status: 'unknown' as const }));
+  return {
+    alerts: potableAdvisories,
+    systems,
+    summary: {
+      totalSystems: systems.length,
+      safeSystems: 0,
+      advisorySystems: 0,
+      doNotUseSystems: 0,
+      unknownSystems: systems.length,
+    },
+    fetchedAt: input.retrievedAt,
+    retrievedAt: input.retrievedAt,
+    potableStatus: potableStatusFromExplicitAdvisories(potableAdvisories),
+    potableAdvisories,
+    complianceRecords: input.epa.records,
+    surfaceMeasurements: input.usgs.measurements,
+    sourceCoverage: {
+      epaCompliance: input.epa.ok ? 'available' : 'unavailable',
+      usgsSurfaceWater: input.usgs.ok ? 'available' : 'unavailable',
+      potableAdvisories: 'not-configured',
+    },
+    limitations: [
+      'EPA SDWIS compliance history and USGS surface-water sensors do not establish that tap water is safe.',
+      'Live potable-water status is unknown until an explicit utility or public-health advisory is available.',
+    ],
   };
+}
 
-  cache = { data, fetchedAt: Date.now() };
-  dataFreshness.recordUpdate('water-quality', alerts.length);
+function waterBbox(location: WaterQualityLocation): string | null {
+  if (!Number.isFinite(location.lat) || !Number.isFinite(location.lon)
+    || location.lat < -90 || location.lat > 90 || location.lon < -180 || location.lon > 180) return null;
+  const radiusKm = Math.max(5, Math.min(50, location.radiusKm ?? 25));
+  const latDelta = Math.min(0.5, radiusKm / 111.32);
+  const lonDelta = Math.min(0.5, radiusKm / (111.32 * Math.max(0.2, Math.cos(location.lat * Math.PI / 180))));
+  const west = Math.max(-180, location.lon - lonDelta);
+  const east = Math.min(180, location.lon + lonDelta);
+  const south = Math.max(-90, location.lat - latDelta);
+  const north = Math.min(90, location.lat + latDelta);
+  return [west, south, east, north].map((value) => value.toFixed(6)).join(',');
+}
+
+async function fetchUsgs(location: WaterQualityLocation | undefined, retrievedAt: Date): Promise<{ ok: boolean; measurements: SurfaceWaterMeasurement[] }> {
+  const bbox = location ? waterBbox(location) : null;
+  if (!bbox) return { ok: false, measurements: [] };
+  const url = `${getApiBaseUrl()}/api/usgs-water-proxy?bbox=${encodeURIComponent(bbox)}`;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(25_000) });
+    if (!response.ok) return { ok: false, measurements: [] };
+    const raw: unknown = await response.json().catch(() => null);
+    if (!isRecord(raw) || raw.type !== 'FeatureCollection' || !Array.isArray(raw.features)) {
+      return { ok: false, measurements: [] };
+    }
+    const measurements = normalizeUsgsSurfaceWaterResponse(raw, retrievedAt);
+    return { ok: raw.features.length === 0 || measurements.length > 0, measurements };
+  } catch {
+    return { ok: false, measurements: [] };
+  }
+}
+
+async function fetchEpa(): Promise<NormalizedEpaCompliance & { ok: boolean }> {
+  // EPA's global VIOLATION table is not a bounded local feed and its dates are
+  // compliance history, not live advisories. Keep the adapter unavailable
+  // until a jurisdiction/utility identifier can scope an official query.
+  return { ok: false, records: [], systems: [] };
+}
+
+export async function fetchWaterQuality(location?: WaterQualityLocation): Promise<WaterQualityData> {
+  const bbox = location ? waterBbox(location) : null;
+  const cacheKey = bbox ?? 'no-location';
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return cached.data;
+  const retrievedAt = new Date();
+  const [usgs, epa] = await Promise.all([fetchUsgs(location, retrievedAt), fetchEpa()]);
+  const data = buildWaterQualitySnapshot({ retrievedAt, epa, usgs });
+  const itemCount = data.complianceRecords.length + data.surfaceMeasurements.length;
+  if (itemCount > 0) {
+    dataFreshness.recordUpdate('water-quality', itemCount);
+    if (!cache.has(cacheKey) && cache.size >= 50) cache.delete(cache.keys().next().value as string);
+    cache.set(cacheKey, { data, fetchedAt: retrievedAt.getTime() });
+  } else {
+    dataFreshness.recordError('water-quality', epa.ok || usgs.ok
+      ? 'Water sources returned no contributed rows'
+      : 'EPA compliance and USGS surface-water sources unavailable');
+  }
   return data;
 }

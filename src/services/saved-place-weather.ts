@@ -28,6 +28,7 @@ export interface SavedPlaceWeatherHazard {
 export interface SavedPlaceWeatherSnapshot {
   placeId: string;
   placeName: string;
+  placeFingerprint: string;
   forecastUrl?: string;
   hazards: SavedPlaceWeatherHazard[];
   fetchedAt: Date;
@@ -58,8 +59,10 @@ interface NWSForecastResponse {
 }
 
 interface CachedSavedPlaceWeatherSnapshot {
+  schemaVersion: 2;
   placeId: string;
   placeName: string;
+  placeFingerprint: string;
   forecastUrl?: string;
   hazards: SavedPlaceWeatherHazard[];
   fetchedAt: string;
@@ -68,11 +71,20 @@ interface CachedSavedPlaceWeatherSnapshot {
 const SAVED_PLACE_WEATHER_EVENT = 'wm:saved-place-weather-updated';
 const SAVED_PLACE_WEATHER_CACHE_PREFIX = 'saved-place-weather';
 const MAX_FORECAST_HOURS = 18;
+const MAX_CACHED_FORECAST_AGE_MS = 24 * 60 * 60 * 1000;
+const CACHE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const ALLOWED_NWS_HOSTS = new Set(['api.weather.gov', 'forecast.weather.gov']);
 const memoryCache = new Map<string, CachedSavedPlaceWeatherSnapshot>();
 
-function buildCacheKey(placeId: string): string {
-  return `${SAVED_PLACE_WEATHER_CACHE_PREFIX}:${placeId}`;
+/** Exact point identity for forecast caches; stable IDs do not imply stable geography. */
+export function buildSavedPlaceWeatherFingerprint(
+  place: Pick<SavedPlace, 'id' | 'name' | 'lat' | 'lon'>,
+): string {
+  return JSON.stringify([2, place.id, place.name, place.lat, place.lon]);
+}
+
+function buildCacheKey(place: SavedPlace): string {
+  return `${SAVED_PLACE_WEATHER_CACHE_PREFIX}:${place.id}:${buildSavedPlaceWeatherFingerprint(place)}`;
 }
 
 function emitSavedPlaceWeatherUpdated(snapshot: SavedPlaceWeatherSnapshot): void {
@@ -277,24 +289,60 @@ export function analyzeHourlyForecastPeriods(periods: HourlyForecastPeriod[]): S
 
 function serializeSnapshot(snapshot: SavedPlaceWeatherSnapshot): CachedSavedPlaceWeatherSnapshot {
   return {
+ schemaVersion: 2,
  placeId: snapshot.placeId,
  placeName: snapshot.placeName,
+ placeFingerprint: snapshot.placeFingerprint,
  forecastUrl: snapshot.forecastUrl,
  hazards: snapshot.hazards,
  fetchedAt: snapshot.fetchedAt.toISOString(),
   };
 }
 
-function deserializeSnapshot(cached: CachedSavedPlaceWeatherSnapshot): SavedPlaceWeatherSnapshot {
-  const fetchedAt = new Date(cached.fetchedAt);
+function validCachedHazard(value: unknown): value is SavedPlaceWeatherHazard {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const hazard = value as Record<string, unknown>;
+  return ['tropical', 'thunderstorm', 'winter', 'flood', 'wind'].includes(String(hazard.type))
+    && ['critical', 'high', 'medium', 'low'].includes(String(hazard.severity))
+    && typeof hazard.headline === 'string' && hazard.headline.length > 0 && hazard.headline.length <= 240
+    && typeof hazard.detail === 'string' && hazard.detail.length <= 1_000
+    && typeof hazard.startTime === 'string' && hazard.startTime.length > 0 && hazard.startTime.length <= 80
+    && (hazard.endTime === undefined || (typeof hazard.endTime === 'string' && hazard.endTime.length <= 80))
+    && Number.isSafeInteger(hazard.leadHours) && Number(hazard.leadHours) >= 0 && Number(hazard.leadHours) <= MAX_FORECAST_HOURS
+    && hazard.source === 'NWS hourly forecast';
+}
+
+/** @internal Strict exact-place boundary for offline forecast reuse. */
+export function deserializeCachedSavedPlaceWeather(
+  cached: unknown,
+  place: SavedPlace,
+  now = Date.now(),
+): SavedPlaceWeatherSnapshot | null {
+  if (!cached || typeof cached !== 'object' || Array.isArray(cached)) return null;
+  const value = cached as Record<string, unknown>;
+  if (value.schemaVersion !== 2
+    || value.placeId !== place.id
+    || value.placeName !== place.name
+    || value.placeFingerprint !== buildSavedPlaceWeatherFingerprint(place)
+    || (value.forecastUrl !== undefined
+      && (typeof value.forecastUrl !== 'string' || !isAllowedNwsForecastUrl(value.forecastUrl)))
+    || !Array.isArray(value.hazards) || value.hazards.length > MAX_FORECAST_HOURS
+    || !value.hazards.every(validCachedHazard)
+    || typeof value.fetchedAt !== 'string') return null;
+  const fetchedAt = new Date(value.fetchedAt);
+  if (!Number.isFinite(fetchedAt.getTime())
+    || fetchedAt.getTime() > now + CACHE_CLOCK_SKEW_MS
+    || now - fetchedAt.getTime() < 0
+    || now - fetchedAt.getTime() > MAX_CACHED_FORECAST_AGE_MS) return null;
   return {
- placeId: cached.placeId,
- placeName: cached.placeName,
- forecastUrl: cached.forecastUrl,
- hazards: cached.hazards,
+ placeId: place.id,
+ placeName: place.name,
+ placeFingerprint: buildSavedPlaceWeatherFingerprint(place),
+ forecastUrl: value.forecastUrl as string | undefined,
+ hazards: value.hazards as SavedPlaceWeatherHazard[],
  fetchedAt,
  isStale: true,
- staleAgeMs: Math.max(0, Date.now() - fetchedAt.getTime()),
+ staleAgeMs: Math.max(0, now - fetchedAt.getTime()),
  source: 'offline-cache',
   };
 }
@@ -308,6 +356,7 @@ function buildSnapshot(
   return {
  placeId: place.id,
  placeName: place.name,
+ placeFingerprint: buildSavedPlaceWeatherFingerprint(place),
  forecastUrl,
  hazards,
  fetchedAt,
@@ -317,14 +366,16 @@ function buildSnapshot(
   };
 }
 
-export function getCachedSavedPlaceWeather(placeId: string): SavedPlaceWeatherSnapshot | null {
-  const cacheKey = buildCacheKey(placeId);
+export function getCachedSavedPlaceWeather(place: SavedPlace): SavedPlaceWeatherSnapshot | null {
+  const cacheKey = buildCacheKey(place);
   const cached = memoryCache.get(cacheKey);
-  if (cached) return deserializeSnapshot(cached);
+  if (cached) return deserializeCachedSavedPlaceWeather(cached, place);
   const offline = readOfflineCacheEntry<CachedSavedPlaceWeatherSnapshot>(cacheKey);
   if (!offline) return null;
+  const parsed = deserializeCachedSavedPlaceWeather(offline.data, place);
+  if (!parsed) return null;
   memoryCache.set(cacheKey, offline.data);
-  return deserializeSnapshot(offline.data);
+  return parsed;
 }
 
 export function buildSavedPlaceWeatherBriefItems(
@@ -342,14 +393,14 @@ export function buildSavedPlaceWeatherBriefItems(
 }
 
 export async function fetchSavedPlaceWeather(place: SavedPlace): Promise<SavedPlaceWeatherSnapshot | null> {
-  const cacheKey = buildCacheKey(place.id);
+  const cacheKey = buildCacheKey(place);
   try {
  const pointResponse = await fetch(`https://api.weather.gov/points/${place.lat},${place.lon}`, {
  headers: { Accept: 'application/geo+json' },
  signal: AbortSignal.timeout(12_000),
  });
  if (pointResponse.status === 404) {
- const cached = getCachedSavedPlaceWeather(place.id);
+ const cached = getCachedSavedPlaceWeather(place);
  if (cached) emitSavedPlaceWeatherUpdated(cached);
  return cached;
  }
@@ -378,7 +429,7 @@ export async function fetchSavedPlaceWeather(place: SavedPlace): Promise<SavedPl
  emitSavedPlaceWeatherUpdated(snapshot);
  return snapshot;
   } catch (error) {
- const cached = getCachedSavedPlaceWeather(place.id);
+ const cached = getCachedSavedPlaceWeather(place);
  if (cached) {
  emitSavedPlaceWeatherUpdated(cached);
  return cached;

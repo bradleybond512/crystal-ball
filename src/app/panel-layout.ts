@@ -60,6 +60,11 @@ import {
   DailyWisdomPanel,
 } from '@/components';
 import type { Panel } from '@/components/Panel';
+import {
+  parseClearLifelinesOverlayEventDetail,
+  parseLifelinesOverlayEventDetail,
+} from '@/components/disaster-lifelines-map-helpers';
+import { parseEvacRouteEventDetail } from '@/services/evacuation-router';
 import { findInsertBeforeKey } from '@/app/lazy-panel-order';
 import { destroyUniquePanels } from '@/app/panel-lifecycle';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
@@ -222,10 +227,17 @@ import { OilSpillPanel } from '@/components/OilSpillPanel';
 import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
-import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-intelligence-loader';
+import {
+  startGridIntelligenceLoader,
+  type GridIntelligenceLoaderHandle,
+} from '@/services/infrastructure/grid-intelligence-loader';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { PersonalStormMode } from '@/components/PersonalStormMode';
 import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
+import {
+  matchesWeatherSavedPlaceActionTarget,
+  type WeatherSavedPlaceActionTarget,
+} from '@/services/weather/weather-threat-types';
 import { getPersonalWeatherThreat, isPersonalWeatherClearConfirmed, revokePersonalWeatherClearConfirmation, subscribePersonalWeatherThreat } from '@/services/weather/personal-weather-status';
 import { createPlacesClearRevoker } from '@/services/weather/saved-place-adapter';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
@@ -556,6 +568,8 @@ import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
 import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlaces } from '@/services/saved-places';
+import { prewarmLocalLogistics } from '@/services/local-logistics';
+import { startLifelineRuntime } from '@/services/lifelines/lifeline-runtime';
 import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
 import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
@@ -757,6 +771,13 @@ export class PanelLayoutManager implements AppModule {
   private _uninstallPlaceCommands: (() => void) | null = null;
   private _onFocusPlace: ((e: Event) => void) | null = null;
   private _onMapFocus: ((e: Event) => void) | null = null;
+  private _onShowLifelinesOverlay: ((e: Event) => void) | null = null;
+  private _onClearLifelinesOverlay: ((e: Event) => void) | null = null;
+  private _onShowEvacRoute: ((e: Event) => void) | null = null;
+  private stopLifelineRuntime: (() => void) | null = null;
+  private cancelPinnedLifelinePrewarm: (() => void) | null = null;
+  private gridIntelligenceLoader: GridIntelligenceLoaderHandle | null = null;
+  private _openDisasterLifelines: ((target: WeatherSavedPlaceActionTarget) => void) | null = null;
   private cmdkPanel: CommandPalettePanel | null = null;
   private _onCmdkToggle: (() => void) | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
@@ -791,7 +812,7 @@ export class PanelLayoutManager implements AppModule {
   /** Panels floated to top in Disaster Mode. */
   private static readonly DISASTER_PRIORITY = [
  'hazard-alerts',
- 'alert-center', 'saved-places', 'tropical-cyclones', 'nws-alerts',
+ 'alert-center', 'saved-places', 'local-logistics', 'evacuation', 'tropical-cyclones', 'nws-alerts',
  'global-weather', 'weather-radar', 'earthquakes', 'gdacs-alerts', 'satellite-fires',
  'volcano-alerts', 'displacement', 'oref-sirens', 'air-quality',
  'wildfire-incidents', 'hazmat-incidents', 'oil-spill',
@@ -825,6 +846,25 @@ export class PanelLayoutManager implements AppModule {
   }
 
   init(): void {
+ if (SITE_VARIANT === 'full') {
+ // Install the derivation listener before panel construction: the Lifelines
+ // panel can publish its first snapshot while renderLayout() is still running.
+ this.stopLifelineRuntime = startLifelineRuntime();
+ const prewarmPinnedLifelines = () => {
+ this.cancelPinnedLifelinePrewarm = null;
+ if (this.destroyed) return;
+ void prewarmLocalLogistics(
+ getSavedPlaces().filter((place) => place.offlinePinned).slice(0, 3),
+ ).catch(() => { /* Offline Lifelines prewarm is best-effort. */ });
+ };
+ if (typeof requestIdleCallback === 'function' && typeof cancelIdleCallback === 'function') {
+ const idleId = requestIdleCallback(prewarmPinnedLifelines, { timeout: 5_000 });
+ this.cancelPinnedLifelinePrewarm = () => cancelIdleCallback(idleId);
+ } else {
+ const timeoutId = setTimeout(prewarmPinnedLifelines, 0);
+ this.cancelPinnedLifelinePrewarm = () => clearTimeout(timeoutId);
+ }
+ }
  this.renderLayout();
  document.addEventListener('wm:update-state', this._onUpdateState);
  // Mount staleness banner into the notification stack (first row).
@@ -834,6 +874,13 @@ export class PanelLayoutManager implements AppModule {
   destroy(): void {
  if (this.destroyed) return;
  this.destroyed = true;
+ this.cancelPinnedLifelinePrewarm?.();
+ this.cancelPinnedLifelinePrewarm = null;
+ this.stopLifelineRuntime?.();
+ this.stopLifelineRuntime = null;
+ this.gridIntelligenceLoader?.stop();
+ this.gridIntelligenceLoader = null;
+ this._openDisasterLifelines = null;
  document.removeEventListener('wm:update-state', this._onUpdateState);
  this.panelDragCleanupHandlers.forEach((cleanup) => cleanup());
  this.panelDragCleanupHandlers = [];
@@ -859,6 +906,9 @@ export class PanelLayoutManager implements AppModule {
  if (this._uninstallPlaceCommands) { this._uninstallPlaceCommands(); this._uninstallPlaceCommands = null; }
  if (this._onFocusPlace) { document.removeEventListener('cb:focus-place', this._onFocusPlace); this._onFocusPlace = null; }
  if (this._onMapFocus) { document.removeEventListener('cb:map-focus', this._onMapFocus); this._onMapFocus = null; }
+ if (this._onShowLifelinesOverlay) { document.removeEventListener('wm:show-lifelines-overlay', this._onShowLifelinesOverlay); this._onShowLifelinesOverlay = null; }
+ if (this._onClearLifelinesOverlay) { document.removeEventListener('wm:clear-lifelines-overlay', this._onClearLifelinesOverlay); this._onClearLifelinesOverlay = null; }
+ if (this._onShowEvacRoute) { document.removeEventListener('wm:show-evac-route', this._onShowEvacRoute); this._onShowEvacRoute = null; }
  if (this._onCmdkToggle) { document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle); this._onCmdkToggle = null; }
  this.cmdkPanel = null;
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
@@ -1139,7 +1189,12 @@ export class PanelLayoutManager implements AppModule {
  stormMount.id = 'cb-storm-mode-mount';
  notificationStack.element.append(stormMount);
  this.stormMount = stormMount;
- this.stormMode = new PersonalStormMode({ mount: stormMount });
+ this.stormMode = new PersonalStormMode({
+ mount: stormMount,
+ callbacks: {
+ onOpenLifelines: (target) => this._openDisasterLifelines?.(target),
+ },
+ });
  this._onStormDecision = (e: Event) => {
  const decision = (e as CustomEvent<WeatherDispatchDecision | undefined>).detail;
  this.stormMode?.update(decision);
@@ -1530,6 +1585,27 @@ export class PanelLayoutManager implements AppModule {
  timeRange: '7d',
  });
 
+ this._onShowLifelinesOverlay = (event: Event) => {
+ const snapshot = parseLifelinesOverlayEventDetail((event as CustomEvent<unknown>).detail);
+ if (!snapshot) return;
+ this.ctx.map?.showLifelinesOverlay(snapshot);
+ };
+ document.addEventListener('wm:show-lifelines-overlay', this._onShowLifelinesOverlay);
+
+ this._onClearLifelinesOverlay = (event: Event) => {
+ const identity = parseClearLifelinesOverlayEventDetail((event as CustomEvent<unknown>).detail);
+ if (!identity) return;
+ this.ctx.map?.clearLifelinesOverlayIfMatches(identity);
+ };
+ document.addEventListener('wm:clear-lifelines-overlay', this._onClearLifelinesOverlay);
+
+ this._onShowEvacRoute = (event: Event) => {
+ const route = parseEvacRouteEventDetail((event as CustomEvent<unknown>).detail);
+ if (!route) return;
+ this.ctx.map?.showEvacRoute(route);
+ };
+ document.addEventListener('wm:show-evac-route', this._onShowEvacRoute);
+
  this.ctx.map.initEscalationGetters();
  this.ctx.currentTimeRange = this.ctx.map.getTimeRange();
 
@@ -1738,6 +1814,18 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map?.setCenter(place.lat, place.lon, 6);
  this.ctx.map?.flashLocation(place.lat, place.lon, 3000);
  };
+ this._openDisasterLifelines = (target: WeatherSavedPlaceActionTarget) => {
+ const place = getSavedPlace(target.placeId);
+ if (!place || !matchesWeatherSavedPlaceActionTarget({
+ id: place.id,
+ label: place.name,
+ lat: place.lat,
+ lon: place.lon,
+ radiusKm: place.radiusKm,
+ }, target)) return;
+ focusSavedPlace(place.id);
+ void this.navigateToPanel('local-logistics');
+ };
 
  const watchlistPanel = new WatchlistPanel({
  getCountrySnapshot: (code, country) => this.callbacks.getCountryWatchSnapshot(code, country),
@@ -1907,7 +1995,9 @@ export class PanelLayoutManager implements AppModule {
 
  const gridIntelPanel = new GridIntelligencePanel();
  this.ctx.panels['grid-intelligence'] = gridIntelPanel;
- startGridIntelligenceLoader(gridIntelPanel);
+ this.gridIntelligenceLoader = startGridIntelligenceLoader(gridIntelPanel, {
+ getActivePlaceId: () => localLogisticsPanel?.getActivePlaceId() ?? null,
+ });
 
  const strategicRiskPanel = new StrategicRiskPanel();
  strategicRiskPanel.setLocationClickHandler((lat, lon) => {

@@ -1362,6 +1362,37 @@ function deleteHeaderCI(headers, name) {
   }
 }
 
+function normalizedResponseByteLimit(value) {
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function declaredResponseLength(headers) {
+  const value = headers instanceof Headers
+    ? headers.get('content-length')
+    : headers?.['content-length'];
+  if (value == null) return null;
+  return Array.isArray(value) ? value.join(',') : String(value);
+}
+
+function boundedResponseCollector(headers, maxResponseBytes) {
+  const maximum = normalizedResponseByteLimit(maxResponseBytes);
+  const declared = declaredResponseLength(headers);
+  if (maximum !== null && declared !== null
+    && (!/^\d+$/.test(declared) || Number(declared) > maximum)) {
+    throw new Error('Upstream response exceeded byte limit');
+  }
+  const chunks = [];
+  let total = 0;
+  return {
+    push(chunk) {
+      total += chunk.length;
+      if (maximum !== null && total > maximum) throw new Error('Upstream response exceeded byte limit');
+      chunks.push(chunk);
+    },
+    finish() { return Buffer.concat(chunks, total); },
+  };
+}
+
 // IPv4-pinned fetch that ALSO follows 3xx redirects, re-resolving each hop to
 // IPv4. The previous implementation issued a single request and returned the
 // raw 3xx, so any upstream that began redirecting (e.g. OFAC's sdn.xml, which
@@ -1384,6 +1415,7 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
   }
   const redirectMode = init?.redirect || (isRequest ? input.redirect : null) || 'follow';
   const signal = init?.signal || (isRequest && input.signal) || null;
+  const maxResponseBytes = normalizedResponseByteLimit(init?.maxResponseBytes);
 
   const sendOnce = (target, pinnedIp = null) => new Promise((resolve, reject) => {
     const isHttps = target.protocol === 'https:';
@@ -1403,12 +1435,40 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
     };
     if (pinnedIp && isHttps) options.servername = target.hostname;
     const req = mod.request(options, (res) => {
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, headers: res.headers, buf: Buffer.concat(chunks) }));
+      let collector;
+      try {
+        collector = boundedResponseCollector(res.headers, maxResponseBytes);
+      } catch (error) {
+        res.destroy();
+        reject(error);
+        return;
+      }
+      let settled = false;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        res.destroy();
+        reject(error);
+      };
+      res.on('data', (chunk) => {
+        if (settled) return;
+        try { collector.push(chunk); } catch (error) { fail(error); }
+      });
+      res.on('end', () => {
+        if (settled) return;
+        settled = true;
+        resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, headers: res.headers, buf: collector.finish() });
+      });
+      res.on('error', fail);
+      res.on('aborted', () => fail(new Error('Upstream response aborted')));
     });
     req.on('error', reject);
-    if (signal) { signal.addEventListener('abort', () => req.destroy(), { once: true }); }
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        const reason = signal.reason instanceof Error ? signal.reason : new Error('Request aborted');
+        req.destroy(reason);
+      }, { once: true });
+    }
     if (body != undefined) req.write(body);
     req.end();
   });
@@ -4928,6 +4988,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   warnIfSecretInQuery(u);
   if (u.protocol === 'https:') {
  return new Promise((resolve, reject) => {
+ const maxResponseBytes = normalizedResponseByteLimit(options.maxResponseBytes);
  const reqOpts = {
  hostname: u.hostname,
  port: u.port || 443,
@@ -4943,10 +5004,29 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
  reqOpts.lookup = (_hostname, _opts, cb) => cb(null, options.resolvedAddress, 4);
  }
  const req = https.request(reqOpts, (res) => {
- const chunks = [];
- res.on('data', (c) => chunks.push(c));
+ let collector;
+ try {
+ collector = boundedResponseCollector(res.headers, maxResponseBytes);
+ } catch (error) {
+ res.destroy();
+ reject(error);
+ return;
+ }
+ let settled = false;
+ const fail = (error) => {
+ if (settled) return;
+ settled = true;
+ res.destroy();
+ reject(error);
+ };
+ res.on('data', (chunk) => {
+ if (settled) return;
+ try { collector.push(chunk); } catch (error) { fail(error); }
+ });
  res.on('end', () => {
- const body = Buffer.concat(chunks).toString();
+ if (settled) return;
+ settled = true;
+ const body = collector.finish().toString();
  resolve({
  ok: res.statusCode >= 200 && res.statusCode < 300,
  status: res.statusCode,
@@ -4955,9 +5035,16 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
  json: () => Promise.resolve(JSON.parse(body)),
  });
  });
+ res.on('error', fail);
+ res.on('aborted', () => fail(new Error('Upstream response aborted')));
  });
  req.on('error', reject);
  req.setTimeout(timeoutMs, () => { req.destroy(new Error('Request timed out')); });
+ const deadline = maxResponseBytes === null ? null : setTimeout(() => {
+ req.destroy(new Error('Request timed out'));
+ }, timeoutMs);
+ if (deadline?.unref) deadline.unref();
+ if (deadline) req.once('close', () => clearTimeout(deadline));
  if (options.body) {
  const body = normalizeRequestBody(options.body);
  if (body != undefined) req.write(body);
@@ -5185,7 +5272,12 @@ export function sanitizeCorrelationEvent(raw) {
 
 // CACHE PATTERN: copy this for future cached routes
 const _sidecarCache = new Map(); // key -> { data, ts }
+const _odinInFlight = new Map();
 const SIDECAR_CACHE_MAX = 500;
+const ODIN_CACHE_MAX = 128;
+const ODIN_IN_FLIGHT_MAX = 64;
+const ODIN_MAX_RESPONSE_BYTES = 512 * 1024;
+const USGS_WATER_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 let _sidecarCacheSweepTimer = null;
 
 function _sweepSidecarCache() {
@@ -5211,6 +5303,7 @@ function getCached(key, ttlMs) {
   const entry = _sidecarCache.get(key);
   const effective = ttlMs ?? entry?.ttlMs;
   if (entry && effective != null && Date.now() - entry.ts < effective) return entry.data;
+  if (entry && effective != null) _sidecarCache.delete(key);
   return null;
 }
 function getCachedStale(key) {
@@ -5219,13 +5312,32 @@ function getCachedStale(key) {
 }
 function setCached(key, data, ttlMs) {
   _sidecarCache.set(key, { data, ts: Date.now(), ...(ttlMs != null && { ttlMs }) });
+  if (_sidecarCache.size > SIDECAR_CACHE_MAX) _sweepSidecarCache();
   _ensureSidecarCacheSweep();
+}
+
+function setOdinCached(key, data, ttlMs) {
+  setCached(key, data, ttlMs);
+  pruneOdinCache(_sidecarCache);
+}
+
+export function pruneOdinCache(cache, maximum = ODIN_CACHE_MAX) {
+  if (!(cache instanceof Map) || !Number.isSafeInteger(maximum) || maximum < 1) return false;
+  const odinKeys = [...cache.keys()].filter((candidate) => typeof candidate === 'string' && candidate.startsWith('ornl-odin:'));
+  while (odinKeys.length > maximum) cache.delete(odinKeys.shift());
+  return true;
+}
+
+export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT_MAX) {
+  return inFlight instanceof Map && typeof cacheKey === 'string'
+    && (inFlight.has(cacheKey) || (Number.isSafeInteger(maximum) && maximum > 0 && inFlight.size < maximum));
 }
 
 // Test-only: clear every TTL-cache entry so route tests can cross cache
 // boundaries without sleeping (same convention as _resetSecurityCaches).
 export function _resetSidecarCacheForTests() {
   _sidecarCache.clear();
+  _odinInFlight.clear();
 }
 
 // ── Webcam helpers (shared by /api/webcams aggregator and sub-handlers) ──
@@ -8991,80 +9103,62 @@ async function dispatch(requestUrl, req, routes, context) {
   // and scores. Graceful-degraded payloads ({ degraded: true }) when
   // upstream is unreachable so the panel can render an empty-state.
 
-  if (requestUrl.pathname === '/api/infrarisks/power') {
-    const cached = getCached('infrarisks-power', 15 * 60 * 1000);
-    if (cached) return json(cached);
-    try {
-      const r = await fetchWithTimeout('https://poweroutage.us/api/stat/county', {
-        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
-      }, 15_000);
-      if (!r.ok) throw new Error(`poweroutage.us HTTP ${r.status}`);
-      const raw = await r.json();
-      // cachedAt lets consumers show true source-data age while the
-      // 15-min cache amortizes the panel's 60s poll.
-      const data = { ...raw, cachedAt: Date.now() };
-      setCached('infrarisks-power', data, 15 * 60 * 1000);
-      return json(data);
-    } catch (error) {
-      return json({ CountyOutages: [], degraded: true, reason: `poweroutage.us error: ${error.message ?? error}` });
-    }
-  }
-
   if (requestUrl.pathname === '/api/infrarisks/kev') {
     const cached = getCached('infrarisks-kev', 30 * 60 * 1000);
     if (cached) return json(cached);
     try {
       const r = await fetchWithTimeout('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', {
         headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+        maxResponseBytes: INFRA_RISK_CISA_KEV_MAX_RESPONSE_BYTES,
       }, 20_000);
       if (!r.ok) throw new Error(`CISA KEV HTTP ${r.status}`);
       const data = await r.json();
+      if (!infraRiskCisaKevEnvelopeIsUsable(data, Date.now())) {
+        return json({ vulnerabilities: [], degraded: true, reason: 'CISA KEV response failed validation' }, 502);
+      }
       setCached('infrarisks-kev', data, 30 * 60 * 1000);
       return json(data);
     } catch (error) {
-      return json({ vulnerabilities: [], degraded: true, reason: `cisa-kev error: ${error.message ?? error}` });
+      return json({ vulnerabilities: [], degraded: true, reason: `cisa-kev error: ${error.message ?? error}` }, 502);
     }
   }
 
   if (requestUrl.pathname === '/api/infrarisks/bgp') {
     const resource = requestUrl.searchParams.get('resource') || 'AS3356';
+    if (!/^(?:AS\d{1,10}|[0-9A-Fa-f:.]{2,64}\/\d{1,3})$/.test(resource)) {
+      return json({ data: null, degraded: true, reason: 'invalid RIPE resource' }, 400);
+    }
     const cacheKey = `infrarisks-bgp:${resource}`;
     const cached = getCached(cacheKey, 10 * 60 * 1000);
     if (cached) return json(cached);
     try {
       const url = `https://stat.ripe.net/data/routing-consistency/data.json?resource=${encodeURIComponent(resource)}`;
-      const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+      const r = await fetchWithTimeout(url, {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+        maxResponseBytes: 512 * 1024,
+      }, 15_000);
       if (!r.ok) throw new Error(`RIPE NCC HTTP ${r.status}`);
       const data = await r.json();
+      if (!infraRiskRipeEnvelopeIsUsable(data, resource, Date.now())) {
+        return json({ data: null, degraded: true, reason: 'RIPE response failed validation' }, 502);
+      }
       setCached(cacheKey, data, 10 * 60 * 1000);
       return json(data);
     } catch (error) {
-      return json({ data: { resource, inconsistencies: [] }, degraded: true, reason: `ripe-bgp error: ${error.message ?? error}` });
+      return json({ data: null, degraded: true, reason: `ripe-bgp error: ${error.message ?? error}` }, 502);
     }
   }
 
   if (requestUrl.pathname === '/api/infrarisks/acled') {
-    const cacheKey = 'infrarisks-acled';
-    const cached = getCached(cacheKey, 30 * 60 * 1000);
-    if (cached) return json(cached);
-    try {
-      const url = 'https://api.acleddata.com/acled/read/?event_type=Violence%20against%20civilians&limit=50&format=json';
-      const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
-      if (!r.ok) {
-        // ACLED gates anonymous reads behind a key on most endpoints —
-        // return an empty payload rather than a 502.
-        return json({ data: [], degraded: true, reason: `acled HTTP ${r.status} (auth may be required)` });
-      }
-      const data = await r.json();
-      setCached(cacheKey, data, 30 * 60 * 1000);
-      return json(data);
-    } catch (error) {
-      return json({ data: [], degraded: true, reason: `acled error: ${error.message ?? error}` });
-    }
+    return json({
+      data: [],
+      degraded: true,
+      reason: 'Current-window ACLED coverage is disabled until an authenticated complete adapter is available',
+    }, 503);
   }
 
   // POST /api/infrarisks/state — convenience endpoint that orchestrates
-  // the four feeds server-side and returns the composed snapshot. The
+  // the two supported live feeds server-side and returns explicit gaps. The
   // renderer can either call this once or call each feed individually
   // and compose on the client. We expose both so tests + diagnostics
   // can sample the composed state from a single request.
@@ -9074,13 +9168,14 @@ async function dispatch(requestUrl, req, routes, context) {
     if (cached) return json(cached);
     try {
       const base = `http://127.0.0.1:${context.port}/api/infrarisks`;
-      const [power, kev, bgp, acled] = await Promise.all([
-        fetchWithTimeout(`${base}/power`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20_000).then((r) => r.ok ? r.json() : null).catch(() => null),
+      const [kev, bgp] = await Promise.all([
         fetchWithTimeout(`${base}/kev`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 25_000).then((r) => r.ok ? r.json() : null).catch(() => null),
         fetchWithTimeout(`${base}/bgp`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20_000).then((r) => r.ok ? r.json() : null).catch(() => null),
-        fetchWithTimeout(`${base}/acled`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20_000).then((r) => r.ok ? r.json() : null).catch(() => null),
       ]);
-      const payload = { power, kev, bgp, acled, fetchedAt: Date.now() };
+      const payload = {
+        power: { coverage: 'unknown', reason: 'no_supported_national_feed' },
+        kev, bgp, acled: null, fetchedAt: Date.now(),
+      };
       setCached(cacheKey, payload, 60_000);
       return json(payload);
     } catch (error) {
@@ -17241,41 +17336,68 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── Water Quality: USGS Instantaneous Values proxy ──
+  // ── Water Quality: bounded USGS latest-continuous surface measurements ──
   if (requestUrl.pathname === '/api/usgs-water-proxy') {
- const qs = requestUrl.search || '?parameterCd=00300,00010&siteStatus=active&period=P1D&siteType=ST';
- const cacheKey = `usgs-water${qs}`;
+ if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+ if ([...requestUrl.searchParams.keys()].some((key) => key !== 'bbox')
+   || requestUrl.searchParams.getAll('bbox').length !== 1) {
+ return json({ error: 'Invalid USGS water query' }, 400);
+ }
+ const rawBbox = requestUrl.searchParams.get('bbox');
+ const bboxParts = typeof rawBbox === 'string' ? rawBbox.split(',') : [];
+ const bboxValues = bboxParts.length === 4 && bboxParts.every((part) => /^-?(?:\d+\.?\d*|\.\d+)$/.test(part))
+ ? bboxParts.map(Number) : [];
+ const [west, south, east, north] = bboxValues;
+ if (bboxValues.length !== 4 || !bboxValues.every(Number.isFinite)
+   || west < -180 || east > 180 || south < -90 || north > 90
+   || west >= east || south >= north || east - west > 1 || north - south > 1) {
+ return json({ error: 'Invalid USGS water query' }, 400);
+ }
+ const bbox = bboxValues.map((value) => value.toFixed(6)).join(',');
+ const cacheKey = `usgs-water:${bbox}`;
  const cached = getCached(cacheKey, 30 * 60 * 1000);
  if (cached) return json(cached);
  try {
- const usgsUrl = `https://waterservices.usgs.gov/nwis/iv/${qs}&format=json`;
- const r = await fetchWithTimeout(usgsUrl, { headers: { 'User-Agent': CHROME_UA } }, 15000);
- if (!r.ok) throw new Error(`USGS HTTP ${r.status}`);
- const data = await r.json();
- setCached(cacheKey, data);
- return json(data);
+ const locationParams = new URLSearchParams({
+ f: 'json', bbox, agency_code: 'USGS', site_type_code: 'ST', limit: '200',
+ });
+ const locationUrl = `https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items?${locationParams}`;
+ const locationResponse = await fetchWithTimeout(locationUrl, {
+ headers: { Accept: 'application/geo+json, application/json', 'User-Agent': CHROME_UA },
+ maxResponseBytes: USGS_WATER_MAX_RESPONSE_BYTES,
+ }, 12000);
+ if (!locationResponse.ok) throw new Error(`USGS HTTP ${locationResponse.status}`);
+ const locationRaw = await locationResponse.json().catch(() => null);
+ const locations = normalizeUsgsMonitoringLocationsSidecar(locationRaw, bbox);
+ if (!locations) return json({ error: 'USGS monitoring locations response was incomplete or malformed' }, 502);
+ if (locations.size === 0) {
+ const empty = { type: 'FeatureCollection', features: [], numberReturned: 0 };
+ return json(empty);
+ }
+ const latestParams = new URLSearchParams({
+ f: 'json', monitoring_location_id: [...locations.keys()].join(','),
+ parameter_code: '00010,00300,00400,00095,00665,00631', limit: '200',
+ });
+ const latestUrl = `https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items?${latestParams}`;
+ const latestResponse = await fetchWithTimeout(latestUrl, {
+ headers: { Accept: 'application/geo+json, application/json', 'User-Agent': CHROME_UA },
+ maxResponseBytes: USGS_WATER_MAX_RESPONSE_BYTES,
+ }, 12000);
+ if (!latestResponse.ok) throw new Error(`USGS HTTP ${latestResponse.status}`);
+ const raw = await latestResponse.json().catch(() => null);
+ const result = normalizeUsgsLatestContinuousSidecar(raw, bbox, locations, Date.now());
+ if (!result) return json({ error: 'USGS water source returned an incomplete or malformed response' }, 502);
+ if (result.features.length > 0) setCached(cacheKey, result);
+ return json(result);
  } catch (error) {
  return json({ error: `usgs-water error: ${error.message ?? error}` }, 502);
  }
   }
 
-  // ── Water Quality: EPA SDWIS proxy ──
+  // EPA's global VIOLATION table is intentionally disabled: it is not a
+  // bounded local feed and does not publish live potable-water advisories.
   if (requestUrl.pathname === '/api/epa-sdwis-proxy') {
- const qs = requestUrl.search || '?type=violations&is_health_based=Y&compliance_period=current';
- const cacheKey = `epa-sdwis${qs}`;
- const cached = getCached(cacheKey, 60 * 60 * 1000);
- if (cached) return json(cached);
- try {
- const sdwisUrl = `https://data.epa.gov/efservice/VIOLATION/JSON${qs}`;
- const r = await fetchWithTimeout(sdwisUrl, { headers: { 'User-Agent': CHROME_UA } }, 15000);
- if (!r.ok) throw new Error(`EPA SDWIS HTTP ${r.status}`);
- const raw = await r.json();
- const result = { violations: Array.isArray(raw) ? raw.slice(0, 200) : [], source: 'epa.gov/sdwis', updatedAt: new Date().toISOString() };
- setCached(cacheKey, result);
- return json(result);
- } catch (error) {
- return json({ violations: [], error: `epa-sdwis error: ${error.message ?? error}` }, 502);
- }
+ return json({ violations: [], error: 'EPA local compliance feed not configured' }, 503);
   }
 
   // ── Nuclear Monitor: EPA RadNet proxy ──
@@ -17339,37 +17461,6 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── Infrastructure intelligence: power outages (PowerOutage.us) ──────────
-  // GET /api/infrastructure/outages — county-level US rollup. 5-min cache.
-  if (requestUrl.pathname === '/api/infrastructure/outages') {
- const cacheKey = 'infrastructure-outages';
- const cached = getCached(cacheKey, 5 * 60 * 1000);
- if (cached) return json(cached);
- try {
- const url = 'https://api.poweroutage.us/api/v1/outages?country=US';
- const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15000);
- if (!r.ok) throw new Error(`PowerOutage.us HTTP ${r.status}`);
- const data = await r.json();
- const entitiesRaw = Array.isArray(data?.OutageEntities) ? data.OutageEntities : Array.isArray(data?.outages) ? data.outages : [];
- const result = {
- nationalCustomersTracked: typeof data?.ContinentalUSCustomersTrackedTotal === 'number' ? data.ContinentalUSCustomersTrackedTotal : null,
- entities: entitiesRaw.map((row) => ({
- StateName: row?.StateName ?? row?.state ?? null,
- CountyName: row?.CountyName ?? row?.county ?? null,
- CustomersTracked: row?.CustomersTracked ?? row?.customersTracked ?? null,
- CustomersAffected: row?.CustomersAffected ?? row?.customersAffected ?? null,
- RecordDateTime: row?.RecordDateTime ?? row?.recordDateTime ?? null,
- UtilityCompany: row?.UtilityCompany ?? row?.utility ?? null,
- })),
- fetchedAt: Date.now(),
- };
- setCached(cacheKey, result, 5 * 60 * 1000);
- return json(result);
- } catch (error) {
- return json({ entities: [], error: `infrastructure-outages error: ${error.message ?? error}` }, 502);
- }
-  }
-
   // ── Infrastructure intelligence: BGP hijacks (Cloudflare Radar) ──────────
   // GET /api/infrastructure/bgp — recent BGP hijack events. 10-min cache.
   if (requestUrl.pathname === '/api/infrastructure/bgp') {
@@ -17377,41 +17468,24 @@ async function dispatch(requestUrl, req, routes, context) {
  const cacheKey = 'infrastructure-bgp';
  const cached = getCached(cacheKey, 10 * 60 * 1000);
  if (cached) return json(cached);
- if (!cfToken) return json({ events: [], keyMissing: true, fetchedAt: Date.now() });
+ if (!cfToken) return json(infrastructureBgpUnknown('missing_key', Date.now(), true), 503);
  try {
- const url = 'https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&per_page=20';
+ const url = 'https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&page=1&per_page=20';
  const r = await fetchWithTimeout(url, {
  headers: {
  Accept: 'application/json',
  Authorization: `Bearer ${cfToken}`,
  },
+ maxResponseBytes: 2 * 1024 * 1024,
  }, 15000);
  if (!r.ok) throw new Error(`Cloudflare Radar HTTP ${r.status}`);
  const data = await r.json();
- const eventsRaw = Array.isArray(data?.result?.events)
- ? data.result.events
- : Array.isArray(data?.result?.data)
- ? data.result.data
- : Array.isArray(data?.events)
- ? data.events
- : [];
- const result = {
- events: eventsRaw.map((e) => ({
- id: e?.id ?? null,
- started_at: e?.started_at ?? e?.startedAt ?? null,
- ended_at: e?.ended_at ?? e?.endedAt ?? null,
- detected_origins: e?.detected_origins ?? e?.detectedOrigins ?? [],
- expected_origin: e?.expected_origin ?? e?.expectedOrigin ?? null,
- involved_asns: e?.involved_asns ?? e?.involvedAsns ?? [],
- prefixes: e?.prefixes ?? [],
- type: e?.type ?? '',
- })),
- fetchedAt: Date.now(),
- };
+ const result = normalizeInfrastructureBgpPayload(data, Date.now());
+ if (result.coverage !== 'reported') return json(result, 502);
  setCached(cacheKey, result, 10 * 60 * 1000);
  return json(result);
  } catch (error) {
- return json({ events: [], error: `infrastructure-bgp error: ${error.message ?? error}` }, 502);
+ return json(infrastructureBgpUnknown('provider_unavailable', Date.now()), 502);
  }
   }
 
@@ -17424,15 +17498,18 @@ async function dispatch(requestUrl, req, routes, context) {
  if (cached) return json(cached);
  try {
  const upstream = 'https://www.epa.gov/enviro/api/radnet/data?media=Air&analyte_group=Gross';
- const r = await fetchWithTimeout(upstream, { headers: { 'User-Agent': CHROME_UA } }, 15000);
+ const r = await fetchWithTimeout(upstream, {
+ headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+ maxResponseBytes: 4 * 1024 * 1024,
+ }, 15000);
  if (!r.ok) throw new Error(`RadNet HTTP ${r.status}`);
  const data = await r.json();
- const stations = Array.isArray(data) ? data : Array.isArray(data?.stations) ? data.stations : [];
- const result = { stations, fetchedAt: Date.now() };
+ const result = normalizeInfrastructureRadiationPayload(data, Date.now());
+ if (result.coverage !== 'reported') return json(result, 502);
  setCached(cacheKey, result, 30 * 60 * 1000);
  return json(result);
  } catch (error) {
- return json({ stations: [], error: `infrastructure-radiation error: ${error.message ?? error}` }, 502);
+ return json(infrastructureRadiationUnknown('provider_unavailable', Date.now()), 502);
  }
   }
 
@@ -18674,19 +18751,74 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // GET /api/grid-outages — ORNL ODIN real-time power outages by county (~15 min cache)
   if (requestUrl.pathname === '/api/grid-outages' && req.method === 'GET') {
+ const query = validateOdinQuery(requestUrl.searchParams);
+ if (!query) return json({ error: 'Invalid grid outage query' }, 400);
  const ODIN_TTL = 15 * 60 * 1000;
- const limit = requestUrl.searchParams.get('limit') || '50';
- const cacheKey = `ornl-odin:${limit}`;
+ const cacheKey = `ornl-odin:${query.limit}:${query.fips}`;
  const cached = getCached(cacheKey, ODIN_TTL);
  if (cached) return json(cached);
- const upstreamUrl = `https://ornl.opendatasoft.com/api/explore/v2.1/catalog/datasets/odin-real-time-outages-county/records?limit=${encodeURIComponent(limit)}`;
- const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
- if (!r.ok) return json({ outages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ornl-odin upstream ${r.status}` }, 502);
- const raw = await r.json();
- const outages = parseOdinOutages(raw);
- const result = { outages, count: outages.length, fetchedAt: Date.now(), degraded: false };
- setCached(cacheKey, result, ODIN_TTL);
- return json(result);
+ let pending = _odinInFlight.get(cacheKey);
+ if (!odinRequestCanStart(_odinInFlight, cacheKey)) {
+ const capacityFailure = odinFailure('capacity_exceeded', 0, 503);
+ return json(capacityFailure.body, capacityFailure.status);
+ }
+ if (!pending) {
+ pending = (async () => {
+ const params = new URLSearchParams({ limit: String(query.limit) });
+ params.set('where', `communitydescriptor="${query.fips}"`);
+ const upstreamUrl = `https://openenergyhub.ornl.gov/api/explore/v2.1/catalog/datasets/odin-real-time-outages-county/records?${params}`;
+ const r = await fetchWithTimeout(upstreamUrl, {
+ headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+ maxResponseBytes: ODIN_MAX_RESPONSE_BYTES,
+ }, 15_000);
+ if (!r.ok) {
+ recordFeedFailure('ornl-odin', `upstream HTTP ${r.status}`);
+ return odinFailure('upstream_http_error');
+ }
+ const raw = await r.json().catch(() => null);
+ if (!raw || !Array.isArray(raw.results)) {
+ recordFeedFailure('ornl-odin', 'malformed envelope');
+ return odinFailure('malformed_envelope');
+ }
+ if (!odinPageIsCompleteSidecar(raw, query.limit)) {
+ recordFeedFailure('ornl-odin', 'incomplete page');
+ return odinFailure('truncated_page');
+ }
+ const parsed = parseOdinOutagesDetailed(raw, { fips: query.fips });
+ if (raw.results.length > 0 && parsed.acceptedRows === 0) {
+ recordFeedFailure('ornl-odin', 'all rows unusable');
+ return odinFailure('unusable_rows', parsed.droppedRows);
+ }
+ const fetchedAt = new Date().toISOString();
+ const result = {
+ schemaVersion: 1,
+ coverage: parsed.acceptedRows > 0 ? 'reported' : 'unknown',
+ outages: parsed.outages,
+ provider: {
+ id: 'ornl-odin',
+ state: parsed.droppedRows > 0 ? 'partial' : (parsed.acceptedRows === 0 ? 'empty' : 'ok'),
+ acceptedRows: parsed.acceptedRows,
+ droppedRows: parsed.droppedRows,
+ observedAt: fetchedAt,
+ retrievedAt: fetchedAt,
+ ...(parsed.droppedRows > 0 ? { reasonCode: 'rows_dropped' } : {}),
+ },
+ fetchedAt,
+ retrievedAt: fetchedAt,
+ degraded: parsed.droppedRows > 0,
+ };
+ setOdinCached(cacheKey, result, ODIN_TTL);
+ if (parsed.acceptedRows > 0) recordFeedSuccess('ornl-odin');
+ else recordFeedFailure('ornl-odin', 'no_contributed_rows');
+ return { status: 200, body: result };
+ })().catch((error) => {
+ recordFeedFailure('ornl-odin', error);
+ return odinFailure('upstream_unavailable');
+ }).finally(() => _odinInFlight.delete(cacheKey));
+ _odinInFlight.set(cacheKey, pending);
+ }
+ const resolved = await pending;
+ return json(resolved.body ?? resolved, resolved.status ?? 200);
   }
 
   // GET /api/ems-activations — Copernicus Emergency Management Service activations (~30 min cache)
@@ -19498,21 +19630,192 @@ export function parseFdaRecalls(raw) {
   }));
 }
 
+// ── USGS bounded surface-water parsers ──────────────────────────────────────
+const USGS_WATER_PARAMETERS = new Set(['00010', '00300', '00400', '00095', '00665', '00631']);
+
+export function parseUsgsWaterNumber(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== 'string' || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function isValidUsgsWaterCivilTime(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = Number(match[7] ?? 0);
+  const offsetMinute = Number(match[8] ?? 0);
+  if (!year || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
+    || offsetHour > 23 || offsetMinute > 59) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day >= 1 && day <= (monthDays[month - 1] ?? 0);
+}
+
+function usgsWaterBounds(bbox) {
+  if (typeof bbox !== 'string') return null;
+  const values = bbox.split(',').map(parseUsgsWaterNumber);
+  if (values.length !== 4 || values.some((value) => value === undefined)) return null;
+  const [west, south, east, north] = values;
+  return west < east && south < north ? { west, south, east, north } : null;
+}
+
+function usgsWaterPageIsIncomplete(raw) {
+  return !raw || raw.type !== 'FeatureCollection' || !Array.isArray(raw.features)
+    || raw.features.length >= 200
+    || (Array.isArray(raw.links) && raw.links.some((link) => link?.rel === 'next'));
+}
+
+export function normalizeUsgsMonitoringLocationsSidecar(raw, bbox) {
+  const bounds = usgsWaterBounds(bbox);
+  if (!bounds || usgsWaterPageIsIncomplete(raw)) return null;
+  const locations = new Map();
+  for (const feature of raw.features) {
+    const properties = feature?.properties;
+    const coordinates = feature?.geometry?.type === 'Point' && Array.isArray(feature.geometry.coordinates)
+      && feature.geometry.coordinates.length === 2 ? feature.geometry.coordinates : null;
+    const id = odinBoundedString(properties?.id ?? feature?.id, 48);
+    const lon = parseUsgsWaterNumber(coordinates?.[0]);
+    const lat = parseUsgsWaterNumber(coordinates?.[1]);
+    if (!id || !id.startsWith('USGS-') || properties?.agency_code !== 'USGS' || properties?.site_type_code !== 'ST'
+      || lon === undefined || lat === undefined
+      || lon < bounds.west || lon > bounds.east || lat < bounds.south || lat > bounds.north) continue;
+    locations.set(id, odinBoundedString(properties.monitoring_location_name, 160) ?? id);
+  }
+  return raw.features.length > 0 && locations.size === 0 ? null : locations;
+}
+
+export function normalizeUsgsLatestContinuousSidecar(raw, bbox, locations, retrievedAtMs = Date.now()) {
+  const bounds = usgsWaterBounds(bbox);
+  if (!bounds || !(locations instanceof Map) || usgsWaterPageIsIncomplete(raw)) return null;
+  const features = raw.features.flatMap((feature) => {
+    const properties = feature?.properties;
+    const coordinates = feature?.geometry?.type === 'Point' && Array.isArray(feature.geometry.coordinates)
+      && feature.geometry.coordinates.length === 2 ? feature.geometry.coordinates : null;
+    const parameterCode = odinBoundedString(properties?.parameter_code, 16);
+    const siteCode = odinBoundedString(properties?.monitoring_location_id, 48);
+    const value = parseUsgsWaterNumber(properties?.value);
+    const lon = parseUsgsWaterNumber(coordinates?.[0]);
+    const lat = parseUsgsWaterNumber(coordinates?.[1]);
+    const sourceTimeMs = typeof properties?.time === 'string'
+      && isValidUsgsWaterCivilTime(properties.time)
+      ? Date.parse(properties.time) : NaN;
+    const sourceTime = Number.isFinite(sourceTimeMs) && sourceTimeMs >= retrievedAtMs - 24 * 60 * 60 * 1000
+      && sourceTimeMs <= retrievedAtMs + 5 * 60 * 1000 ? new Date(sourceTimeMs).toISOString() : null;
+    if (!parameterCode || !USGS_WATER_PARAMETERS.has(parameterCode) || !siteCode || !locations.has(siteCode)
+      || value === undefined || lon === undefined || lat === undefined || !sourceTime
+      || lon < bounds.west || lon > bounds.east || lat < bounds.south || lat > bounds.north) return [];
+    const unit = odinBoundedString(properties.unit_of_measure, 40);
+    return [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lon, lat] },
+      properties: {
+        monitoring_location_id: siteCode,
+        monitoring_location_name: locations.get(siteCode),
+        parameter_code: parameterCode,
+        value,
+        time: sourceTime,
+        ...(unit ? { unit_of_measure: unit } : {}),
+      },
+    }];
+  });
+  if (raw.features.length > 0 && features.length === 0) return null;
+  return { type: 'FeatureCollection', features, numberReturned: features.length };
+}
+
 // ── ORNL ODIN power outage parser ────────────────────────────────────────────
-// Input: parsed JSON from ornl.opendatasoft.com API (Socrata-compatible)
+// Input: parsed JSON from openenergyhub.ornl.gov Explore API.
 // Real fields: name, county, state, metersaffected, communitydescriptor
-export function parseOdinOutages(raw) {
-  if (!raw || !Array.isArray(raw.results)) return [];
-  return raw.results.map(r => ({
-    fips: r.communitydescriptor ?? null,
-    county: r.county ?? null,
-    state: r.state ?? null,
-    customersOut: typeof r.metersaffected === 'number' ? r.metersaffected : null,
-    customersRestored: typeof r.customersrestored === 'number' ? r.customersrestored : null,
-    utilityName: r.name ?? null,
-    utilityId: r.utility_id ?? null,
-    updated: r.reportedstarttime ?? null,
-  }));
+function odinBoundedString(value, max = 160) {
+  if (typeof value !== 'string') return undefined;
+  const clean = value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean ? clean.slice(0, max) : undefined;
+}
+
+function odinNonNegativeInteger(value) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+export function validateOdinQuery(searchParams) {
+  const keys = [...searchParams.keys()];
+  if (keys.some((key) => !['fips', 'limit'].includes(key))) return null;
+  if (searchParams.getAll('fips').length > 1 || searchParams.getAll('limit').length > 1) return null;
+  const fips = searchParams.get('fips');
+  if (fips === null || !/^\d{5}$/.test(fips)) return null;
+  const rawLimit = searchParams.get('limit');
+  if (rawLimit !== null && !/^[1-9]\d*$/.test(rawLimit)) return null;
+  const limit = rawLimit === null ? 50 : Number(rawLimit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) return null;
+  return { fips, limit };
+}
+
+export function odinPageIsCompleteSidecar(raw, requestedLimit) {
+  if (!raw || !Array.isArray(raw.results) || !Number.isSafeInteger(requestedLimit) || requestedLimit < 1) return false;
+  const totalCount = raw.total_count;
+  if (totalCount !== undefined && (!Number.isSafeInteger(totalCount) || totalCount < 0)) return false;
+  if (Number.isSafeInteger(totalCount) && totalCount > raw.results.length) return false;
+  return raw.results.length < requestedLimit || Number.isSafeInteger(totalCount);
+}
+
+export function parseOdinOutagesDetailed(raw, { fips, nowMs = Date.now() } = {}) {
+  if (!raw || !Array.isArray(raw.results)) return { outages: [], acceptedRows: 0, droppedRows: 0 };
+  const retrievedAt = new Date(nowMs).toISOString();
+  const expiresAt = new Date(nowMs + 30 * 60 * 1000).toISOString();
+  const outages = [];
+  let droppedRows = 0;
+  for (const row of raw.results) {
+    const rowFips = typeof row?.communitydescriptor === 'string' && /^\d{5}$/.test(row.communitydescriptor)
+      ? row.communitydescriptor : null;
+    const customersOut = odinNonNegativeInteger(row?.metersaffected);
+    const county = odinBoundedString(row?.county);
+    const state = odinBoundedString(row?.state);
+    if (!rowFips || customersOut === undefined || !county || !state || (fips && rowFips !== fips)) {
+      droppedRows += 1;
+      continue;
+    }
+    const customersRestored = odinNonNegativeInteger(row.customersrestored);
+    const utilityName = odinBoundedString(row.name);
+    const utilityId = odinBoundedString(row.utility_id, 80);
+    outages.push({
+      fips: rowFips,
+      county,
+      state,
+      customersOut,
+      ...(customersRestored !== undefined ? { customersRestored } : {}),
+      ...(utilityName ? { utilityName } : {}),
+      ...(utilityId ? { utilityId } : {}),
+      observedAt: retrievedAt,
+      retrievedAt,
+      expiresAt,
+    });
+  }
+  return { outages, acceptedRows: outages.length, droppedRows };
+}
+
+export function parseOdinOutages(raw, options = {}) {
+  return parseOdinOutagesDetailed(raw, options).outages;
+}
+
+function odinFailure(reasonCode, droppedRows = 0, status = 502) {
+  const fetchedAt = new Date().toISOString();
+  return {
+    status,
+    body: {
+      schemaVersion: 1,
+      coverage: 'unknown',
+      outages: [],
+      provider: { id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows, observedAt: fetchedAt, retrievedAt: fetchedAt, reasonCode },
+      fetchedAt,
+      retrievedAt: fetchedAt,
+      degraded: true,
+    },
+  };
 }
 
 // ── Copernicus EMS activation parser ─────────────────────────────────────────
@@ -19698,6 +20001,358 @@ export function parseFaaNasEvents(raw) {
     }
   }
   return events;
+}
+
+// ── Infrastructure BGP / radiation truth envelopes ──────────────────────────
+
+const INFRA_RISK_CISA_KEV_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const INFRA_RISK_CISA_KEV_MAX_CATALOG_ENTRIES = 20_000;
+const INFRA_RISK_CISA_KEV_FUTURE_SKEW_MS = 5 * 60_000;
+
+function infrastructureRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function infrastructureString(value, maximum = 160) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const clean = String(value).replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean ? clean.slice(0, maximum) : null;
+}
+
+function infrastructureStringArray(value, maximumItems = 50, maximumLength = 160) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value.slice(0, maximumItems)) {
+    const clean = infrastructureString(item, maximumLength);
+    if (clean !== null) out.push(clean);
+  }
+  return out;
+}
+
+function infrastructureTimestamp(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function infrastructureNumber(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function infrastructureReading(value) {
+  const parsed = infrastructureNumber(value);
+  return parsed !== null && parsed >= 0 ? parsed : null;
+}
+
+function infrastructureCoordinate(value, minimum, maximum) {
+  const parsed = infrastructureNumber(value);
+  return parsed !== null && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
+function readInfrastructureBgpRows(payload) {
+  if (!infrastructureRecord(payload) || payload.success !== true) return null;
+  if (infrastructureRecord(payload.result) && Array.isArray(payload.result.events)) return payload.result.events;
+  return null;
+}
+
+/** Prove that the Cloudflare response contains the complete requested page.
+ *  A page filled to the limit needs total/page metadata; otherwise silently
+ *  treating the first page as the full 24-hour result would under-report. */
+export function infrastructureBgpPageIsComplete(payload, returnedRows, requestedLimit = 20) {
+  if (!infrastructureRecord(payload) || !Number.isSafeInteger(returnedRows) || returnedRows < 0
+    || !Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || returnedRows > requestedLimit) return false;
+
+  const nestedResult = infrastructureRecord(payload.result) ? payload.result : null;
+  const hasOwn = (record, key) => Object.prototype.hasOwnProperty.call(record, key);
+  const hasTopLevelInfo = hasOwn(payload, 'result_info');
+  const hasNestedInfo = nestedResult !== null && hasOwn(nestedResult, 'result_info');
+  const rawInfo = hasTopLevelInfo ? payload.result_info : (hasNestedInfo ? nestedResult.result_info : undefined);
+  if (rawInfo === undefined) return returnedRows < requestedLimit;
+  if (!infrastructureRecord(rawInfo)) return false;
+
+  const integerField = (name) => {
+    if (!hasOwn(rawInfo, name)) return undefined;
+    const value = rawInfo[name];
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  };
+  const page = integerField('page');
+  const perPage = integerField('per_page');
+  const count = integerField('count');
+  const totalCount = integerField('total_count');
+  const totalPages = integerField('total_pages');
+  if ([page, perPage, count, totalCount, totalPages].includes(null)) return false;
+  if (page !== undefined && page !== 1) return false;
+  if (perPage !== undefined && perPage !== requestedLimit) return false;
+  if (count !== undefined && count !== returnedRows) return false;
+  if (totalCount !== undefined && totalCount !== returnedRows) return false;
+  if (totalPages !== undefined && totalPages > 1) return false;
+
+  if (returnedRows < requestedLimit) return true;
+  return totalCount !== undefined || totalPages === 1;
+}
+
+function infrastructureStrictCivilTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-](\d{2}):(\d{2}))?$/.exec(clean);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = Number(match[8] ?? 0);
+  const offsetMinute = Number(match[9] ?? 0);
+  if (!year || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
+    || offsetHour > 23 || offsetMinute > 59) return null;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day < 1 || day > (monthDays[month - 1] ?? 0)) return null;
+  const parsed = Date.parse(match[7] ? clean : `${clean}Z`);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function infraRiskCisaKevText(value, maximum, allowEmpty = false) {
+  if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value)) {
+    return null;
+  }
+  const clean = value.trim();
+  return clean || allowEmpty ? clean : null;
+}
+
+function infraRiskCisaKevDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const normalized = infrastructureStrictCivilTimestamp(`${value}T00:00:00Z`);
+  return normalized?.slice(0, 10) === value ? Date.parse(normalized) : null;
+}
+
+function infraRiskCisaKevReleasedAt(value) {
+  if (typeof value !== 'string' || value.length > 80 || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+  const normalized = infrastructureStrictCivilTimestamp(value);
+  return normalized ? Date.parse(normalized) : null;
+}
+
+function infraRiskCisaKevRowIsUsable(row, now, releasedAt, seenCves) {
+  if (!infrastructureRecord(row)) return false;
+  const cveID = infraRiskCisaKevText(row.cveID, 32);
+  if (!cveID || !/^CVE-\d{4}-\d{4,}$/.test(cveID) || seenCves.has(cveID)) return false;
+  const requiredTextFields = [
+    ['vendorProject', 300],
+    ['product', 500],
+    ['vulnerabilityName', 1_000],
+    ['shortDescription', 8_000],
+    ['requiredAction', 8_000],
+  ];
+  if (!requiredTextFields.every(([key, maximum]) => infraRiskCisaKevText(row[key], maximum) !== null)) return false;
+  if (infraRiskCisaKevText(row.notes, 16_000, true) === null) return false;
+  if (row.knownRansomwareCampaignUse !== 'Known' && row.knownRansomwareCampaignUse !== 'Unknown') return false;
+
+  const dateAdded = infraRiskCisaKevDate(row.dateAdded);
+  const dueDate = infraRiskCisaKevDate(row.dueDate);
+  if (dateAdded === null || dueDate === null || dueDate < dateAdded
+    || dateAdded > now + INFRA_RISK_CISA_KEV_FUTURE_SKEW_MS
+    || dateAdded > releasedAt) return false;
+  if (!Array.isArray(row.cwes) || row.cwes.length === 0 || row.cwes.length > 50
+    || !row.cwes.every((cwe) => infraRiskCisaKevText(cwe, 80) !== null)) return false;
+  seenCves.add(cveID);
+  return true;
+}
+
+/** Validate the canonical full CISA KEV catalog before it can enter cache.
+ * HTTP 200 and an empty vulnerabilities array are not evidence of no recent
+ * additions. The provider's catalog identity/count and every required row
+ * must be complete and temporally possible. */
+export function infraRiskCisaKevEnvelopeIsUsable(payload, now = Date.now()) {
+  if (!infrastructureRecord(payload) || payload.degraded === true
+    || !Number.isSafeInteger(now) || now <= 0
+    || infraRiskCisaKevText(payload.catalogVersion, 80) === null) return false;
+  const releasedAt = infraRiskCisaKevReleasedAt(payload.dateReleased);
+  if (releasedAt === null || releasedAt > now + INFRA_RISK_CISA_KEV_FUTURE_SKEW_MS) return false;
+  const rows = payload.vulnerabilities;
+  if (!Number.isSafeInteger(payload.count) || payload.count < 1
+    || payload.count > INFRA_RISK_CISA_KEV_MAX_CATALOG_ENTRIES
+    || !Array.isArray(rows) || rows.length !== payload.count) return false;
+  const seenCves = new Set();
+  return rows.every((row) => infraRiskCisaKevRowIsUsable(row, now, releasedAt, seenCves));
+}
+
+/** Validate RIPE routing-consistency identity and freshness before caching.
+ * Provider HTTP 200 is not sufficient: native error envelopes, a different
+ * resource, stale query time, or an oversized/ambiguous row fail closed. */
+export function infraRiskRipeEnvelopeIsUsable(payload, expectedResource = 'AS3356', now = Date.now()) {
+  if (!infrastructureRecord(payload) || payload.status !== 'ok' || payload.status_code !== 200
+    || typeof expectedResource !== 'string' || expectedResource.length < 2 || expectedResource.length > 80) return false;
+  const data = payload.data;
+  if (!infrastructureRecord(data) || data.resource !== expectedResource
+    || !Array.isArray(data.inconsistencies) || data.inconsistencies.length > 500
+    || !data.inconsistencies.every((item) => (
+      (typeof item === 'string' && item.length > 0 && item.length <= 2_000)
+      || infrastructureRecord(item)
+    ))) return false;
+  const queryTime = infrastructureStrictCivilTimestamp(data.query_time ?? payload.time);
+  if (!queryTime || !Number.isSafeInteger(now) || now <= 0) return false;
+  const queryTimeMs = Date.parse(queryTime);
+  return queryTimeMs >= now - 30 * 60_000 && queryTimeMs <= now + 5 * 60_000;
+}
+
+function infrastructureCloudflareAsn(value) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 4_294_967_295
+    ? String(value) : null;
+}
+
+function infrastructureCloudflareAsnArray(value, maximumItems = 50) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximumItems) return null;
+  const asns = value.map(infrastructureCloudflareAsn);
+  return asns.every((asn) => asn !== null) ? asns : null;
+}
+
+function infrastructureCloudflarePrefixes(value) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 50) return null;
+  const prefixes = value.map((prefix) => {
+    if (typeof prefix !== 'string') return null;
+    const clean = prefix.trim();
+    return clean && clean.length <= 80 && !/[\u0000-\u001F\u007F]/.test(clean) ? clean : null;
+  });
+  return prefixes.every((prefix) => prefix !== null) ? prefixes : null;
+}
+
+function normalizeInfrastructureCloudflareBgpEvent(row, fetchedAt) {
+  if (!infrastructureRecord(row)) return null;
+  const id = typeof row.id === 'number' && Number.isSafeInteger(row.id) && row.id >= 0
+    ? String(row.id) : null;
+  const prefixes = infrastructureCloudflarePrefixes(row.prefixes);
+  const hijackerAsn = infrastructureCloudflareAsn(row.hijacker_asn);
+  const victimAsns = infrastructureCloudflareAsnArray(row.victim_asns);
+  const ongoingCount = typeof row.on_going_count === 'number' && Number.isSafeInteger(row.on_going_count)
+    && row.on_going_count >= 0 && row.on_going_count <= 1_000_000 ? row.on_going_count : null;
+  const isStale = typeof row.is_stale === 'boolean' ? row.is_stale : null;
+  const startedAt = infrastructureStrictCivilTimestamp(row.min_hijack_ts);
+  const lastHijackAt = infrastructureStrictCivilTimestamp(row.max_hijack_ts);
+  if (!id || !prefixes || !hijackerAsn || !victimAsns || ongoingCount === null || isStale === null
+    || !startedAt || !lastHijackAt) return null;
+
+  const startedMs = Date.parse(startedAt);
+  const lastHijackMs = Date.parse(lastHijackAt);
+  const referenceTime = Number.isSafeInteger(fetchedAt) && fetchedAt > 0 ? fetchedAt : Date.now();
+  if (lastHijackMs < startedMs || startedMs > referenceTime + 5 * 60_000
+    || lastHijackMs > referenceTime + 5 * 60_000) return null;
+  // Cloudflare's stale flag and a positive ongoing count conflict. Do not
+  // convert ambiguous lifecycle evidence into either an active or all-clear row.
+  if (isStale && ongoingCount > 0) return null;
+
+  return {
+    id,
+    started_at: startedAt,
+    ended_at: ongoingCount > 0 ? null : lastHijackAt,
+    detected_origins: [hijackerAsn],
+    expected_origin: victimAsns[0],
+    involved_asns: [...new Set([...victimAsns, hijackerAsn])],
+    prefixes,
+    type: isStale ? 'BGP_HIJACK_STALE' : 'BGP_HIJACK',
+  };
+}
+
+export function infrastructureBgpUnknown(error, fetchedAt, keyMissing = false, droppedRows = 0) {
+  return {
+    schemaVersion: 1,
+    provider: 'cloudflare-radar',
+    coverage: 'unknown',
+    events: [],
+    acceptedRows: 0,
+    droppedRows: Number.isSafeInteger(droppedRows) && droppedRows > 0 ? droppedRows : 0,
+    error: infrastructureString(error, 80) ?? 'provider_unavailable',
+    ...(keyMissing ? { keyMissing: true } : {}),
+    fetchedAt: Number.isSafeInteger(fetchedAt) && fetchedAt > 0 ? fetchedAt : Date.now(),
+  };
+}
+
+export function normalizeInfrastructureBgpPayload(payload, fetchedAt = Date.now()) {
+  const rows = readInfrastructureBgpRows(payload);
+  if (rows === null) return infrastructureBgpUnknown('malformed_response', fetchedAt);
+  if (!infrastructureBgpPageIsComplete(payload, rows.length, 20)) {
+    return infrastructureBgpUnknown('incomplete_page', fetchedAt);
+  }
+  const events = [];
+  for (const row of rows.slice(0, 100)) {
+    const normalized = normalizeInfrastructureCloudflareBgpEvent(row, fetchedAt);
+    if (normalized) events.push(normalized);
+  }
+  const droppedRows = rows.length - events.length;
+  if (rows.length > 0 && events.length === 0) {
+    return infrastructureBgpUnknown('no_valid_events', fetchedAt, false, droppedRows);
+  }
+  return {
+    schemaVersion: 1,
+    provider: 'cloudflare-radar',
+    coverage: 'reported',
+    events,
+    acceptedRows: events.length,
+    droppedRows,
+    error: null,
+    fetchedAt,
+  };
+}
+
+function readInfrastructureRadiationRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (infrastructureRecord(payload) && Array.isArray(payload.stations) && !payload.error) return payload.stations;
+  return null;
+}
+
+export function infrastructureRadiationUnknown(error, fetchedAt, droppedRows = 0) {
+  return {
+    schemaVersion: 1,
+    provider: 'epa-radnet',
+    coverage: 'unknown',
+    stations: [],
+    acceptedRows: 0,
+    droppedRows: Number.isSafeInteger(droppedRows) && droppedRows > 0 ? droppedRows : 0,
+    error: infrastructureString(error, 80) ?? 'provider_unavailable',
+    fetchedAt: Number.isSafeInteger(fetchedAt) && fetchedAt > 0 ? fetchedAt : Date.now(),
+  };
+}
+
+export function normalizeInfrastructureRadiationPayload(payload, fetchedAt = Date.now()) {
+  const rows = readInfrastructureRadiationRows(payload);
+  if (rows === null) return infrastructureRadiationUnknown('malformed_response', fetchedAt);
+  const stations = [];
+  const referenceTime = Number.isSafeInteger(fetchedAt) && fetchedAt > 0 ? fetchedAt : Date.now();
+  for (const row of rows.slice(0, 2_000)) {
+    if (!infrastructureRecord(row)) continue;
+    const cpm = infrastructureReading(row.GammaCpm ?? row.GammaCPM ?? row.Gamma ?? row.CountRate);
+    if (cpm === null) continue;
+    const sampleDateTime = infrastructureStrictCivilTimestamp(row.SampleDateTime ?? row.CollectionDate);
+    const sampleTime = sampleDateTime === null ? Number.NaN : Date.parse(sampleDateTime);
+    if (sampleDateTime === null || sampleTime > referenceTime + 5 * 60_000) continue;
+    const stationName = infrastructureString(
+      row.StationLocationName ?? row.StationName ?? row.Location,
+    ) ?? 'Unknown station';
+    stations.push({
+      StationName: stationName,
+      Latitude: infrastructureCoordinate(row.Latitude, -90, 90),
+      Longitude: infrastructureCoordinate(row.Longitude, -180, 180),
+      GammaCpm: cpm,
+      SampleDateTime: sampleDateTime,
+    });
+  }
+  const droppedRows = rows.length - stations.length;
+  if (rows.length > 0 && stations.length === 0) {
+    return infrastructureRadiationUnknown('no_valid_stations', fetchedAt, droppedRows);
+  }
+  return {
+    schemaVersion: 1,
+    provider: 'epa-radnet',
+    coverage: 'reported',
+    stations,
+    acceptedRows: stations.length,
+    droppedRows,
+    error: null,
+    fetchedAt,
+  };
 }
 
 // ── BfS ODL radiation station parser ─────────────────────────────────────────

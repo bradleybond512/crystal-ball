@@ -113,6 +113,47 @@ export interface SavedPlace {
   ugcZones?: string[];
 }
 
+/** Exact, inert reference carried by a Storm Mode action. Stable place ids are
+ * not enough because a saved place can be moved or renamed while an older
+ * warning card remains visible. */
+export interface WeatherSavedPlaceActionTarget {
+  placeId: string;
+  fingerprint: string;
+}
+
+type WeatherSavedPlaceActionIdentity = Pick<SavedPlace, 'id' | 'label' | 'lat' | 'lon' | 'radiusKm'>;
+
+export function buildWeatherSavedPlaceActionTarget(
+  place: WeatherSavedPlaceActionIdentity,
+): WeatherSavedPlaceActionTarget | undefined {
+  if (typeof place.id !== 'string' || place.id.length === 0 || place.id.length > 240
+    || typeof place.label !== 'string' || place.label.length === 0 || place.label.length > 240
+    || !Number.isFinite(place.lat) || place.lat < -90 || place.lat > 90
+    || !Number.isFinite(place.lon) || place.lon < -180 || place.lon > 180
+    || (place.radiusKm !== undefined && (!Number.isFinite(place.radiusKm) || place.radiusKm <= 0))) {
+    return undefined;
+  }
+  return {
+    placeId: place.id,
+    fingerprint: JSON.stringify([
+      place.id,
+      place.label,
+      place.lat,
+      place.lon,
+      place.radiusKm ?? null,
+    ]),
+  };
+}
+
+export function matchesWeatherSavedPlaceActionTarget(
+  place: WeatherSavedPlaceActionIdentity | null | undefined,
+  target: WeatherSavedPlaceActionTarget | null | undefined,
+): boolean {
+  if (!place || !target || target.placeId !== place.id) return false;
+  const current = buildWeatherSavedPlaceActionTarget(place);
+  return current !== undefined && current.fingerprint === target.fingerprint;
+}
+
 // ── Match result ─────────────────────────────────────────────────────────
 
 /** Per-place match outcome. The plan's section 2 example (lines 60-63):

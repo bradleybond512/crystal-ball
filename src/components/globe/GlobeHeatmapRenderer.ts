@@ -134,21 +134,12 @@ const DEFAULT_FETCHERS: Record<HeatmapDomain, SidecarFetcher> = {
     }
     return out;
   },
-  infrastructure: async (baseUrl, signal) => {
-    const res = await fetch(`${baseUrl}/api/infrastructure/outages`, { signal });
-    if (!res.ok) return [];
-    const body = await res.json() as { outages?: { lat?: unknown; lon?: unknown; latitude?: unknown; longitude?: unknown; customers?: unknown }[] };
-    if (!body || typeof body !== 'object') return [];
-    const out: HeatmapPoint[] = [];
-    for (const o of body.outages ?? []) {
-      const lat = Number(o?.lat ?? o?.latitude);
-      const lon = Number(o?.lon ?? o?.longitude);
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        out.push({ lat, lon, intensity: 1 });
-      }
-    }
-    return out;
-  },
+  // ODIN is exact-county report context and does not publish point geometry.
+  // Plotting a saved-place coordinate or state centroid would imply facility
+  // or statewide coverage, so this layer stays empty until county geometry is
+  // carried through a dedicated, coverage-labelled overlay contract. An empty
+  // layer means outage geometry is unknown; it never means power is on.
+  infrastructure: async () => [],
 };
 
 export interface GlobeHeatmapRendererOptions {

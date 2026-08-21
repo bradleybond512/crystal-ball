@@ -74,6 +74,10 @@ function persistentDecision(threatLevel: 'warning' | 'emergency'): WeatherDispat
     alertId,
     matchedPlaceId: 'home',
     matchedPlaceLabel: 'Home',
+    matchedPlaceAction: {
+      placeId: 'home',
+      fingerprint: '["home","Home",41.6,-86.7,25]',
+    },
     match: {
       alertId,
       placeId: 'home',
@@ -242,6 +246,33 @@ test('collapsed shelf keeps acknowledge primary and snooze independently accessi
     assert.ok(!mount.querySelector('.cb-storm-mode__card'));
   } finally {
     component.clear();
+  }
+});
+
+test('expanded Storm Mode opens Disaster Lifelines only after an explicit click', () => {
+  const opened: Array<{ placeId: string; fingerprint: string }> = [];
+  const mount = happyWindow.document.createElement('div');
+  happyWindow.document.body.append(mount);
+  const component = new PersonalStormMode({
+    mount,
+    callbacks: { onOpenLifelines: (target) => opened.push(target) },
+  });
+  component.update(persistentDecision('warning'), NOW);
+
+  try {
+    assert.deepEqual(opened, [], 'rendering an alert must not open or transmit a destination');
+    requiredElement<HTMLButtonElement>(mount, '.cb-storm-mode__btn--details').click();
+    const lifelines = requiredElement<HTMLButtonElement>(
+      mount,
+      'button[aria-label="Open Disaster Lifelines for the matched saved place"]',
+    );
+    lifelines.click();
+    assert.deepEqual(opened, [{
+      placeId: 'home',
+      fingerprint: '["home","Home",41.6,-86.7,25]',
+    }]);
+  } finally {
+    component.destroy();
   }
 });
 

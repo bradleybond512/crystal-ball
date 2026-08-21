@@ -265,7 +265,7 @@ export const PANEL_METADATA: Record<string, PanelMeta> = {
   'live-webcams': { domain: 'news-osint', tags: ['cctv', 'live', 'live cameras', 'webcams'], tier: 'library', featured: true, icon: '\u{1F4F7}' },
   'liveuamap': { domain: 'conflict-military', tags: ['frontline', 'liveua', 'liveuamap', 'ukraine'], tier: 'library', featured: true, evidenceFor: ['conflict_escalation'] },
   'local-ids': { domain: 'cyber-infrastructure', tags: ['ids', 'local'], tier: 'library' },
-  'local-logistics': { domain: 'personal-safety', tags: ['local', 'logistics'], tier: 'library' },
+  'local-logistics': { domain: 'personal-safety', tags: ['disaster', 'lifelines', 'shelter', 'hotel', 'fuel'], tier: 'library' },
   'macro-signals': { domain: 'markets-economy', tags: ['liquidity', 'macro', 'macro signals', 'market', 'radar', 'signals'], tier: 'library', icon: '\u{1F4C9}', evidenceFor: ['banking_outage'] },
   'map': { domain: 'global-intel', tags: ['global', 'global map', 'globe', 'map'], tier: 'library', featured: true, icon: '\u{1F5FA}\uFE0F' },
   'maritime-boundary': { domain: 'global-intel', tags: ['boundary', 'maritime'], tier: 'library' },

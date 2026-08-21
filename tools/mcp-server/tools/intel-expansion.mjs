@@ -1,11 +1,11 @@
-function makeResponse(summary, data, sources, warnings = []) {
+function makeResponse(summary, data, sources, warnings = [], healthy = true) {
   return {
     summary,
     data,
     sources,
     warnings,
     timestamp: new Date().toISOString(),
-    healthy: true,
+    healthy,
   };
 }
 
@@ -122,19 +122,67 @@ export function makeIntelExpansionTools(client) {
     );
   }
 
-  async function get_grid_outages() {
-    const data = await client.get('/api/grid-outages');
-    const counties = data?.counties || data?.outages || (Array.isArray(data) ? data : []);
-    const warnings = data?.error ? [data.error] : [];
+  async function get_grid_outages({ fips } = {}) {
+    if (typeof fips !== 'string' || !/^\d{5}$/.test(fips)) {
+      throw new TypeError('get_grid_outages requires an exact 5-digit county FIPS');
+    }
+    const data = await client.get('/api/grid-outages', { fips });
+    const source = `/api/grid-outages?fips=${fips}`;
+    const provider = data?.provider;
+    const outages = Array.isArray(data?.outages) ? data.outages : null;
+    const providerState = provider?.state;
+    const acceptedRows = provider?.acceptedRows;
+    const droppedRows = provider?.droppedRows;
+    const reportedEnvelope = data?.schemaVersion === 1
+      && data?.coverage === 'reported'
+      && provider?.id === 'ornl-odin'
+      && (providerState === 'ok' || providerState === 'partial')
+      && Number.isSafeInteger(acceptedRows) && acceptedRows > 0 && acceptedRows <= 100
+      && Number.isSafeInteger(droppedRows) && droppedRows >= 0 && droppedRows <= 100
+      && outages && outages.length === acceptedRows;
+    if (!reportedEnvelope) {
+      const reason = typeof provider?.reasonCode === 'string'
+        ? provider.reasonCode
+        : (typeof data?.error === 'string' ? data.error : 'no_accepted_reports');
+      return makeResponse(
+        `Grid outage coverage unknown for FIPS ${fips}; no accepted ODIN report is available. This is not a reported zero or an all-clear.`,
+        { coverage: 'unknown', counties: [], provider: provider ?? null },
+        [source],
+        [`ornl-odin: ${reason}`],
+        false,
+      );
+    }
 
-    const sorted = [...counties].sort((a, b) => (b.metersAffected ?? b.customers ?? 0) - (a.metersAffected ?? a.customers ?? 0));
-    const totalMeters = counties.reduce((s, c) => s + (c.metersAffected ?? c.customers ?? 0), 0);
+    const now = Date.now();
+    const counties = outages.filter((row) => row && typeof row === 'object'
+      && row.fips === fips
+      && typeof row.county === 'string' && row.county.length > 0 && row.county.length <= 160
+      && typeof row.state === 'string' && row.state.length > 0 && row.state.length <= 160
+      && Number.isSafeInteger(row.customersOut) && row.customersOut >= 0 && row.customersOut <= 1_000_000_000
+      && typeof row.expiresAt === 'string' && Number.isFinite(Date.parse(row.expiresAt))
+      && Date.parse(row.expiresAt) > now);
+    if (counties.length !== outages.length) {
+      return makeResponse(
+        `Grid outage coverage unknown for FIPS ${fips}; the ODIN response failed validation. This is not a reported zero or an all-clear.`,
+        { coverage: 'unknown', counties: [], provider },
+        [source],
+        ['ornl-odin: malformed_or_expired_rows'],
+        false,
+      );
+    }
+
+    const sorted = [...counties].sort((a, b) => b.customersOut - a.customersOut);
+    const totalCustomersOut = counties.reduce((sum, county) => sum + county.customersOut, 0);
+    const warnings = providerState === 'partial' || droppedRows > 0
+      ? [`ornl-odin: partial coverage (${droppedRows} row(s) dropped)`]
+      : [];
 
     return makeResponse(
-      `Grid outages: ${counties.length} county/region(s) reporting, ~${totalMeters.toLocaleString()} meters affected.`,
-      { counties: sorted.slice(0, 20) },
-      ['/api/grid-outages'],
+      `Grid outages: ${counties.length} report(s) for FIPS ${fips}, ${totalCustomersOut.toLocaleString()} customers out.`,
+      { coverage: 'reported', counties: sorted.slice(0, 20), provider },
+      [source],
       warnings,
+      warnings.length === 0,
     );
   }
 

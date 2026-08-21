@@ -5,8 +5,6 @@ import {
   outagesToStateOverlay,
   radiationToHotspots,
   bgpToBanner,
-  US_STATE_CENTROIDS,
-  SEVERITY_COLORS,
 } from '../infrastructure-overlay.ts';
 import type {
   OutageSummary,
@@ -24,112 +22,34 @@ function badge(): { observedAt: number; evaluatedAt: number; ageSeconds: number;
 
 // ── outagesToStateOverlay ─────────────────────────────────────────────
 
-test('overlay: only non-normal states are emitted', () => {
+test('outage overlay: exact-county ODIN context is not promoted to a state centroid', () => {
   const summary: OutageSummary = {
-    nationalCustomersAffected: 1_200_000,
-    countyCount: 3,
-    topCounties: [],
-    byState: [
-      { state: 'TX', customersAffected: 1_000_000, countyCount: 2, topCounty: 'Harris', severity: 'major' },
-      { state: 'CA', customersAffected: 200_000, countyCount: 1, topCounty: 'LA', severity: 'elevated' },
-      { state: 'WA', customersAffected: 5, countyCount: 1, topCounty: 'King', severity: 'normal' },
-    ],
-    severity: 'major',
-    badge: badge(),
-  };
-  const rows = outagesToStateOverlay(summary);
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows.map((r) => r.state), ['TX', 'CA']);
-});
-
-test('overlay: rows sorted by descending customersAffected', () => {
-  const summary: OutageSummary = {
-    nationalCustomersAffected: 0,
-    countyCount: 0,
-    topCounties: [],
-    byState: [
-      { state: 'CA', customersAffected: 100_000, countyCount: 1, topCounty: null, severity: 'elevated' },
-      { state: 'TX', customersAffected: 500_000, countyCount: 1, topCounty: null, severity: 'high' },
-      { state: 'NY', customersAffected: 200_000, countyCount: 1, topCounty: null, severity: 'elevated' },
-    ],
-    severity: 'high',
-    badge: badge(),
-  };
-  const rows = outagesToStateOverlay(summary);
-  assert.deepEqual(rows.map((r) => r.state), ['TX', 'NY', 'CA']);
-});
-
-test('overlay: each row carries fillColor + opacity + radiusPx from severity', () => {
-  const summary: OutageSummary = {
-    nationalCustomersAffected: 0,
-    countyCount: 0,
-    topCounties: [],
-    byState: [
-      { state: 'TX', customersAffected: 1, countyCount: 1, topCounty: null, severity: 'extreme' },
-    ],
-    severity: 'extreme',
-    badge: badge(),
-  };
-  const [tx] = outagesToStateOverlay(summary);
-  assert.ok(tx);
-  assert.equal(tx!.fillColorHex, SEVERITY_COLORS.extreme);
-  assert.ok(tx!.fillOpacity > 0.5);
-  assert.equal(tx!.radiusPx, 22);
-});
-
-test('overlay: state row attaches the centroid lat/lon', () => {
-  const summary: OutageSummary = {
-    nationalCustomersAffected: 0,
-    countyCount: 0,
-    topCounties: [],
-    byState: [
-      { state: 'CA', customersAffected: 1, countyCount: 1, topCounty: null, severity: 'high' },
-    ],
-    severity: 'high',
-    badge: badge(),
-  };
-  const [ca] = outagesToStateOverlay(summary);
-  const expected = US_STATE_CENTROIDS.CA!;
-  assert.equal(ca!.lat, expected.lat);
-  assert.equal(ca!.lon, expected.lon);
-});
-
-test('overlay: state with full English name resolves via normalizeStateName', () => {
-  const summary: OutageSummary = {
-    nationalCustomersAffected: 0,
-    countyCount: 0,
-    topCounties: [],
-    byState: [
-      { state: 'New York', customersAffected: 1, countyCount: 1, topCounty: null, severity: 'high' },
-    ],
-    severity: 'high',
-    badge: badge(),
-  };
-  const rows = outagesToStateOverlay(summary);
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0]!.lat, US_STATE_CENTROIDS.NY!.lat);
-});
-
-test('overlay: unknown state code is silently dropped', () => {
-  const summary: OutageSummary = {
-    nationalCustomersAffected: 0,
-    countyCount: 0,
-    topCounties: [],
-    byState: [
-      { state: 'ZZ', customersAffected: 1, countyCount: 1, topCounty: null, severity: 'high' },
-    ],
+    source: 'ornl-odin',
+    coverage: 'reported',
+    completeness: 'reported',
+    placeId: 'home',
+    placeName: 'Home',
+    countyFips: '18091',
+    county: 'LaPorte',
+    state: 'Indiana',
+    reportedCustomersOut: 500_000,
+    reportedCustomersRestored: null,
+    reportCount: 1,
+    reports: [{
+      countyFips: '18091', county: 'LaPorte', state: 'Indiana', customersOut: 500_000,
+      customersRestored: null, utility: 'Utility', utilityId: 'u1', retrievedAt: NOW,
+      expiresAt: NOW + 30 * 60_000,
+    }],
+    providerState: 'ok',
+    unknownReason: null,
     severity: 'high',
     badge: badge(),
   };
   assert.deepEqual(outagesToStateOverlay(summary), []);
 });
 
-test('overlay: null summary returns an empty array', () => {
+test('outage overlay: null context returns an empty array', () => {
   assert.deepEqual(outagesToStateOverlay(null), []);
-});
-
-test('overlay: 50 states + DC + PR are covered', () => {
-  assert.equal(Object.keys(US_STATE_CENTROIDS).length, 52);
 });
 
 // ── radiationToHotspots ───────────────────────────────────────────────
@@ -147,8 +67,18 @@ function station(over: Partial<RadStation>): RadStation {
   };
 }
 
+function reportedRad(over: Omit<RadSummary, 'coverage' | 'error' | 'acceptedRows' | 'droppedRows'>): RadSummary {
+  return {
+    coverage: 'reported',
+    error: null,
+    acceptedRows: over.stationCount,
+    droppedRows: 0,
+    ...over,
+  };
+}
+
 test('rad-overlay: only severity ≥ elevated stations are emitted', () => {
-  const summary: RadSummary = {
+  const summary = reportedRad({
     stationCount: 3,
     elevatedStations: [
       station({ name: 'A', cpm: 150, severity: 'elevated', lat: 35, lon: -100 }),
@@ -159,26 +89,26 @@ test('rad-overlay: only severity ≥ elevated stations are emitted', () => {
     maxCpmStation: 'C',
     severity: 'major',
     badge: badge(),
-  };
-  const rows = radiationToHotspots(summary);
+  });
+  const rows = radiationToHotspots(summary, NOW);
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((r) => r.name), ['C', 'A']);
 });
 
 test('rad-overlay: stations missing coordinates are dropped', () => {
-  const summary: RadSummary = {
+  const summary = reportedRad({
     stationCount: 1,
     elevatedStations: [station({ name: 'no-coords', cpm: 200, severity: 'high', lat: null, lon: null })],
     maxCpm: 200,
     maxCpmStation: 'no-coords',
     severity: 'high',
     badge: badge(),
-  };
-  assert.deepEqual(radiationToHotspots(summary), []);
+  });
+  assert.deepEqual(radiationToHotspots(summary, NOW), []);
 });
 
 test('rad-overlay: pulse period speeds up with severity', () => {
-  const summary: RadSummary = {
+  const summary = reportedRad({
     stationCount: 2,
     elevatedStations: [
       station({ name: 'low', cpm: 150, severity: 'elevated', lat: 0, lon: 0 }),
@@ -188,10 +118,59 @@ test('rad-overlay: pulse period speeds up with severity', () => {
     maxCpmStation: 'high',
     severity: 'extreme',
     badge: badge(),
-  };
-  const [first, second] = radiationToHotspots(summary);
+  });
+  const [first, second] = radiationToHotspots(summary, NOW);
   assert.equal(first!.name, 'high');
   assert.ok(first!.pulsePeriodMs < second!.pulsePeriodMs);
+});
+
+test('rad-overlay: rejects out-of-range/nonfinite coordinates and negative/nonfinite CPM', () => {
+  const summary = reportedRad({
+    stationCount: 7,
+    elevatedStations: [
+      station({ name: 'valid-zero-axis', lat: 0, lon: 0, cpm: 150, severity: 'elevated' }),
+      station({ name: 'latitude-high', lat: 91, lon: 0, cpm: 150, severity: 'elevated' }),
+      station({ name: 'longitude-low', lat: 0, lon: -181, cpm: 150, severity: 'elevated' }),
+      station({ name: 'nan-lat', lat: Number.NaN, lon: 0, cpm: 150, severity: 'elevated' }),
+      station({ name: 'infinite-lon', lat: 0, lon: Number.POSITIVE_INFINITY, cpm: 150, severity: 'elevated' }),
+      station({ name: 'negative-cpm', lat: 0, lon: 0, cpm: -1, severity: 'elevated' }),
+      station({ name: 'infinite-cpm', lat: 0, lon: 0, cpm: Number.POSITIVE_INFINITY, severity: 'elevated' }),
+    ],
+    maxCpm: 150,
+    maxCpmStation: 'valid-zero-axis',
+    severity: 'elevated',
+    badge: badge(),
+  });
+  assert.deepEqual(radiationToHotspots(summary, NOW).map((row) => row.name), ['valid-zero-axis']);
+});
+
+test('rad-overlay: unknown coverage never emits hotspots even if rows are present', () => {
+  const summary: RadSummary = {
+    ...reportedRad({
+      stationCount: 1,
+      elevatedStations: [station({ cpm: 500, severity: 'major' })],
+      maxCpm: 500,
+      maxCpmStation: 'X',
+      severity: 'major',
+      badge: badge(),
+    }),
+    coverage: 'unknown',
+    error: 'malformed response',
+  };
+  assert.deepEqual(radiationToHotspots(summary, NOW), []);
+});
+
+test('rad-overlay: a once-fresh elevated reading stops emitting after evidence expiry', () => {
+  const summary = reportedRad({
+    stationCount: 1,
+    elevatedStations: [station({ name: 'aged', cpm: 250, severity: 'high', lat: 41, lon: -87 })],
+    maxCpm: 250,
+    maxCpmStation: 'aged',
+    severity: 'high',
+    badge: badge(),
+  });
+  assert.equal(radiationToHotspots(summary, NOW).length, 1);
+  assert.deepEqual(radiationToHotspots(summary, NOW + 6 * 60 * 60_000 + 1), []);
 });
 
 // ── bgpToBanner ───────────────────────────────────────────────────────
@@ -212,14 +191,24 @@ function event(over: Partial<BgpEvent>): BgpEvent {
   };
 }
 
+function reportedBgp(over: Omit<BgpSummary, 'coverage' | 'error' | 'acceptedRows' | 'droppedRows'>): BgpSummary {
+  return {
+    coverage: 'reported',
+    error: null,
+    acceptedRows: over.events.length,
+    droppedRows: 0,
+    ...over,
+  };
+}
+
 test('banner: hidden when no events', () => {
-  const r = bgpToBanner({ events: [], criticalCount: 0, elevatedCount: 0, affectedAsnSet: [], badge: badge() });
+  const r = bgpToBanner(reportedBgp({ events: [], criticalCount: 0, elevatedCount: 0, affectedAsnSet: [], badge: badge() }), NOW);
   assert.equal(r.visible, false);
 });
 
 test('banner: visible + critical when ≥1 critical event', () => {
   const ev = event({ severity: 'critical', tags: ['cloudflare-dns'], prefixes: ['1.1.1.0/24'] });
-  const r = bgpToBanner({ events: [ev], criticalCount: 1, elevatedCount: 0, affectedAsnSet: ['67890'], badge: badge() });
+  const r = bgpToBanner(reportedBgp({ events: [ev], criticalCount: 1, elevatedCount: 0, affectedAsnSet: ['67890'], badge: badge() }), NOW);
   assert.equal(r.visible, true);
   assert.equal(r.severity, 'critical');
   assert.ok(r.message.includes('Cloudflare DNS'));
@@ -228,13 +217,13 @@ test('banner: visible + critical when ≥1 critical event', () => {
 
 test('banner: hidden when only 1-2 elevated events with tags', () => {
   const ev = event({ severity: 'elevated', tags: ['fastly'] });
-  const r = bgpToBanner({ events: [ev, ev], criticalCount: 0, elevatedCount: 2, affectedAsnSet: [], badge: badge() });
+  const r = bgpToBanner(reportedBgp({ events: [ev, ev], criticalCount: 0, elevatedCount: 2, affectedAsnSet: [], badge: badge() }), NOW);
   assert.equal(r.visible, false);
 });
 
 test('banner: visible + elevated when ≥3 elevated events all tagged', () => {
   const ev = event({ severity: 'elevated', tags: ['fastly'] });
-  const r = bgpToBanner({ events: [ev, ev, ev], criticalCount: 0, elevatedCount: 3, affectedAsnSet: [], badge: badge() });
+  const r = bgpToBanner(reportedBgp({ events: [ev, ev, ev], criticalCount: 0, elevatedCount: 3, affectedAsnSet: [], badge: badge() }), NOW);
   assert.equal(r.visible, true);
   assert.equal(r.severity, 'elevated');
   assert.ok(r.message.includes('Fastly'));
@@ -242,19 +231,53 @@ test('banner: visible + elevated when ≥3 elevated events all tagged', () => {
 
 test('banner: criticalEvents tooltip is capped at 3 entries', () => {
   const ev = event({ severity: 'critical', tags: ['google-dns'] });
-  const summary: BgpSummary = {
+  const summary = reportedBgp({
     events: [ev, ev, ev, ev, ev],
     criticalCount: 5,
     elevatedCount: 0,
     affectedAsnSet: ['67890'],
     badge: badge(),
-  };
-  const r = bgpToBanner(summary);
+  });
+  const r = bgpToBanner(summary, NOW);
   assert.equal(r.criticalEvents.length, 3);
 });
 
 test('banner: untagged elevated events don\'t count toward the ≥3 threshold', () => {
   const ev = event({ severity: 'elevated', tags: [] });
-  const r = bgpToBanner({ events: [ev, ev, ev, ev], criticalCount: 0, elevatedCount: 4, affectedAsnSet: [], badge: badge() });
+  const r = bgpToBanner(reportedBgp({ events: [ev, ev, ev, ev], criticalCount: 0, elevatedCount: 4, affectedAsnSet: [], badge: badge() }), NOW);
   assert.equal(r.visible, false);
+});
+
+test('banner: unknown BGP coverage never emits an alert banner', () => {
+  const ev = event({ severity: 'critical', tags: ['google-dns'] });
+  const summary: BgpSummary = {
+    ...reportedBgp({ events: [ev], criticalCount: 1, elevatedCount: 0, affectedAsnSet: ['67890'], badge: badge() }),
+    coverage: 'unknown',
+    error: 'missing key',
+  };
+  assert.equal(bgpToBanner(summary, NOW).visible, false);
+});
+
+test('banner: an ended critical event is historical evidence, not an active alert', () => {
+  const ended = event({
+    severity: 'critical', tags: ['google-dns'], prefixes: ['8.8.8.0/24'],
+    endedAt: NOW,
+  });
+  const summary = reportedBgp({
+    events: [ended], criticalCount: 1, elevatedCount: 0,
+    affectedAsnSet: ['67890'], badge: badge(),
+  });
+  assert.equal(bgpToBanner(summary, NOW).visible, false);
+});
+
+test('banner: a summary that aged past freshness cannot emit an active alert', () => {
+  const active = event({
+    severity: 'critical', tags: ['cloudflare-dns'], prefixes: ['1.1.1.0/24'],
+  });
+  const summary = reportedBgp({
+    events: [active], criticalCount: 1, elevatedCount: 0,
+    affectedAsnSet: ['67890'], badge: badge(),
+  });
+  assert.equal(bgpToBanner(summary, NOW).visible, true);
+  assert.equal(bgpToBanner(summary, NOW + 60 * 60_000 + 1).visible, false);
 });

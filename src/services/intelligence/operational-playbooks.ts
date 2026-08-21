@@ -183,7 +183,7 @@ const BUILT_IN_PLAYBOOKS: readonly OperationalPlaybook[] = [
   {
     id: 'infrastructure-failure',
     domain: 'infrastructure',
-    triggerCondition: 'PowerOutage.us > 50k customers OR BGP hijack on critical prefix OR ISP outage > 30 min',
+    triggerCondition: 'Accepted, unexpired ORNL ODIN reports > 50k customers out for the active saved-place county OR BGP hijack on critical prefix OR ISP outage > 30 min',
     title: 'Infrastructure failure response',
     severity: 'high',
     estimatedMinutes: 60,

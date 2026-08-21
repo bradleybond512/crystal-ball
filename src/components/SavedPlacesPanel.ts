@@ -2,6 +2,7 @@ import { Panel } from './Panel';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
 import { getSavedPlaceBrief, computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
 import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
+import { getLifelinePackReadinessForPlace } from '@/services/lifelines/lifeline-runtime';
 
 interface SavedPlacesPanelOptions {
   focusPlace: (placeId: string) => void;
@@ -111,6 +112,7 @@ export class SavedPlacesPanel extends Panel {
     document.addEventListener('wm:breaking-news', this.boundRefresh);
     document.addEventListener('wm:intelligence-updated', this.boundRefresh);
     document.addEventListener('wm:local-logistics-updated', this.boundRefresh);
+    document.addEventListener('wm:lifeline-situation-updated', this.boundRefresh);
     document.addEventListener('wm:saved-place-weather-updated', this.boundRefresh);
     document.addEventListener('wm:storm-data-updated', this.boundRefresh);
     this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.boundRefresh());
@@ -122,6 +124,7 @@ export class SavedPlacesPanel extends Panel {
     document.removeEventListener('wm:breaking-news', this.boundRefresh);
     document.removeEventListener('wm:intelligence-updated', this.boundRefresh);
     document.removeEventListener('wm:local-logistics-updated', this.boundRefresh);
+    document.removeEventListener('wm:lifeline-situation-updated', this.boundRefresh);
     document.removeEventListener('wm:saved-place-weather-updated', this.boundRefresh);
     document.removeEventListener('wm:storm-data-updated', this.boundRefresh);
     this.unsubscribeSavedPlaces?.();
@@ -261,9 +264,21 @@ export class SavedPlacesPanel extends Panel {
     const threatBadge = this.buildThreatBadge(threats);
     if (threatBadge) panelsRow.append(threatBadge);
 
+    const packStatus = place.offlinePinned
+      ? getLifelinePackReadinessForPlace(place).status
+      : null;
+    const packLabel = packStatus === 'ready'
+      ? 'Lifelines Ready'
+      : packStatus === 'partial'
+        ? 'Lifelines Partial'
+        : packStatus === 'expired'
+          ? 'Lifelines Expired'
+          : packStatus === 'not-saved'
+            ? 'Lifelines Not Saved'
+            : '';
     const chips: string[] = [
       place.primary ? 'Primary' : '',
-      place.offlinePinned ? 'Offline' : '',
+      packLabel,
       brief?.isStale ? 'Cached' : '',
       hasStormPosture ? 'Storm' : '',
       hasForecastRisk ? 'Forecast' : '',

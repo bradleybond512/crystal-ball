@@ -133,7 +133,28 @@ test('regression: pharma-shortages cache key still includes limit', () => {
   assert.match(body, /openfda-shortages:\$\{limit\}/);
 });
 
-test('regression: grid-outages cache key still includes limit', () => {
+test('regression: grid-outages cache key includes validated limit and exact FIPS', () => {
   const body = routeBody('/api/grid-outages');
-  assert.match(body, /ornl-odin:\$\{limit\}/);
+  assert.match(body, /ornl-odin:\$\{query\.limit\}:\$\{query\.fips\}/);
+  assert.doesNotMatch(body, /\?\? 'all'/);
+});
+
+test('USGS surface-water sidecar uses the bounded two-step API and caches only contributed rows', () => {
+  const body = routeBody('/api/usgs-water-proxy');
+  assert.match(body, /collections\/monitoring-locations\/items/);
+  assert.match(body, /collections\/latest-continuous\/items/);
+  assert.match(body, /monitoring_location_id: \[\.\.\.locations\.keys\(\)\]\.join\(','\)/);
+  assert.doesNotMatch(body, /waterservices\.usgs\.gov/);
+  assert.match(body, /if \(result\.features\.length > 0\) setCached\(cacheKey, result\)/);
+  assert.equal(count(body, /maxResponseBytes: USGS_WATER_MAX_RESPONSE_BYTES/g), 2);
+});
+
+test('grid-outages records feed success only after ODIN contributes a usable row', () => {
+  const route = routeBody('/api/grid-outages');
+  assert.match(route, /odinRequestCanStart\(_odinInFlight, cacheKey\)/);
+  assert.match(route, /maxResponseBytes: ODIN_MAX_RESPONSE_BYTES/);
+  assert.match(route, /odinPageIsCompleteSidecar\(raw, query\.limit\)/);
+  assert.match(route, /setOdinCached\(cacheKey, result, ODIN_TTL\)/);
+  assert.match(route, /if \(parsed\.acceptedRows > 0\) recordFeedSuccess\('ornl-odin'\)/);
+  assert.match(route, /else recordFeedFailure\('ornl-odin', 'no_contributed_rows'\)/);
 });

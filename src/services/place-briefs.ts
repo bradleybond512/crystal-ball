@@ -3,8 +3,15 @@ import { getRecentBreakingAlerts } from './breaking-news-alerts';
 import type { CorrelationSignal } from './correlation';
 import { getRecentSignals } from './correlation';
 import { buildLocalLogisticsBriefItems, getCachedLocalLogistics, type LocalLogisticsSnapshot } from './local-logistics';
+import {
+  getLifelinePackReadinessForPlace,
+  getRecentLifelineChangesForPlace,
+} from './lifelines/lifeline-runtime';
+import type { LifelineChange } from './lifelines/lifeline-changes';
+import type { LifelineOfflinePackStatus } from './lifelines/offline-pack';
 import { haversineKm } from './proximity-filter';
 import {
+  buildSavedPlaceWeatherFingerprint,
   buildSavedPlaceWeatherBriefItems,
   getCachedSavedPlaceWeather,
   type SavedPlaceWeatherSnapshot,
@@ -23,12 +30,21 @@ import {
 // and must not run on every panel re-render — only when storm data actually changes.
 const stormPrepCache = new Map<string, { result: PlaceStormPreparedness | null; version: number }>();
 
+export function buildStormPreparednessCacheKey(place: SavedPlace, version: number): string {
+  return `${buildPlaceBriefFingerprint(place)}:${version}`;
+}
+
 function getCachedStormPreparedness(place: SavedPlace): PlaceStormPreparedness | null {
   const version = getStormPreparednessContext().updatedAt;
-  const cached = stormPrepCache.get(place.id);
+  const cacheKey = buildStormPreparednessCacheKey(place, version);
+  const cached = stormPrepCache.get(cacheKey);
   if (cached?.version === version) return cached.result;
   const result = getStormPreparednessForPlace(place);
-  stormPrepCache.set(place.id, { result, version });
+  if (stormPrepCache.size >= 128) {
+    const oldestKey = stormPrepCache.keys().next().value as string | undefined;
+    if (oldestKey) stormPrepCache.delete(oldestKey);
+  }
+  stormPrepCache.set(cacheKey, { result, version });
   return result;
 }
 
@@ -51,7 +67,9 @@ export interface PlaceBrief {
 }
 
 interface CachedPlaceBrief {
+  schemaVersion: 2;
   placeId: string;
+  placeFingerprint: string;
   headline: string;
   severity: PlaceBrief['severity'];
   items: PlaceBriefItem[];
@@ -68,10 +86,30 @@ interface PlaceBriefOptions {
   now?: number;
 }
 
+interface LifelineBriefContext {
+  packStatus?: LifelineOfflinePackStatus;
+  changes?: LifelineChange[];
+}
+
 const PLACE_BRIEF_CACHE_PREFIX = 'saved-place-brief';
+const PLACE_BRIEF_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 
 function placeBriefCacheKey(placeId: string): string {
   return `${PLACE_BRIEF_CACHE_PREFIX}:${placeId}`;
+}
+
+/** Exact saved-place identity for cached briefs; same-ID edits must not reuse old geography. */
+export function buildPlaceBriefFingerprint(place: SavedPlace): string {
+  return JSON.stringify([
+    2,
+    place.id,
+    place.name,
+    place.lat,
+    place.lon,
+    place.radiusKm,
+    place.offlinePinned,
+    place.updatedAt,
+  ]);
 }
 
 function briefSeverityFromSignal(signal: CorrelationSignal): PlaceBrief['severity'] {
@@ -81,9 +119,13 @@ function briefSeverityFromSignal(signal: CorrelationSignal): PlaceBrief['severit
 }
 
 function computeSeverity(items: PlaceBriefItem[]): PlaceBrief['severity'] {
-  if (items.some((item) => item.severity === 'critical')) return 'critical';
-  if (items.some((item) => item.severity === 'high')) return 'high';
-  if (items.some((item) => item.severity === 'medium')) return 'medium';
+  // Lifelines are an evidence/action surface, not a calibrated threat score.
+  // A reported closure or outage context must not silently promote the saved
+  // place headline or severity without a separately reviewed scoring model.
+  const scored = items.filter((item) => item.kind !== 'logistics');
+  if (scored.some((item) => item.severity === 'critical')) return 'critical';
+  if (scored.some((item) => item.severity === 'high')) return 'high';
+  if (scored.some((item) => item.severity === 'medium')) return 'medium';
   return 'low';
 }
 
@@ -97,9 +139,11 @@ function isSignalNearPlace(place: SavedPlace, signal: CorrelationSignal): boolea
   return Array.isArray(signal.data.placeIds) && signal.data.placeIds.includes(place.id);
 }
 
-function serializeBrief(brief: PlaceBrief): CachedPlaceBrief {
+function serializeBrief(brief: PlaceBrief, place: SavedPlace): CachedPlaceBrief {
   return {
+ schemaVersion: 2,
  placeId: brief.placeId,
+ placeFingerprint: buildPlaceBriefFingerprint(place),
  headline: brief.headline,
  severity: brief.severity,
  items: brief.items,
@@ -107,15 +151,53 @@ function serializeBrief(brief: PlaceBrief): CachedPlaceBrief {
   };
 }
 
-function deserializeBrief(cached: CachedPlaceBrief, now: number): PlaceBrief {
+function isCachedBriefItem(value: unknown): value is PlaceBriefItem {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  return ['breaking', 'signal', 'preparedness', 'forecast', 'logistics'].includes(String(item.kind))
+    && ['critical', 'high', 'medium', 'low'].includes(String(item.severity))
+    && typeof item.label === 'string' && item.label.length > 0 && item.label.length <= 500
+    && typeof item.value === 'string' && item.value.length > 0 && item.value.length <= 2_000
+    && (item.link === undefined || (typeof item.link === 'string' && item.link.length <= 2_048));
+}
+
+/** @internal Strict cache boundary used by the offline same-place fallback. */
+export function deserializeCachedPlaceBrief(cached: unknown, place: SavedPlace, now: number): PlaceBrief | null {
+  if (!cached || typeof cached !== 'object' || Array.isArray(cached)) return null;
+  const value = cached as Record<string, unknown>;
+  if (value.schemaVersion !== 2 || value.placeId !== place.id
+    || value.placeFingerprint !== buildPlaceBriefFingerprint(place)
+    || typeof value.headline !== 'string' || value.headline.length === 0 || value.headline.length > 500
+    || !['critical', 'high', 'medium', 'low'].includes(String(value.severity))
+    || !Array.isArray(value.items) || value.items.length > 20 || !value.items.every(isCachedBriefItem)
+    || typeof value.generatedAtMs !== 'number' || !Number.isFinite(value.generatedAtMs)
+    || value.generatedAtMs > now + 5 * 60_000
+    || now - value.generatedAtMs < 0 || now - value.generatedAtMs >= PLACE_BRIEF_CACHE_MAX_AGE_MS) return null;
   return {
- placeId: cached.placeId,
- headline: cached.headline,
- severity: cached.severity,
- items: cached.items,
- generatedAt: new Date(cached.generatedAtMs),
+ placeId: place.id,
+ headline: value.headline,
+ severity: value.severity as PlaceBrief['severity'],
+ items: value.items as PlaceBriefItem[],
+ generatedAt: new Date(value.generatedAtMs),
  isStale: true,
- staleAgeMs: Math.max(0, now - cached.generatedAtMs),
+ staleAgeMs: now - value.generatedAtMs,
+  };
+}
+
+function buildOfflineUnknownBrief(place: SavedPlace, now: number): PlaceBrief {
+  return {
+    placeId: place.id,
+    headline: 'Offline coverage unavailable for this exact place',
+    severity: 'low',
+    items: [{
+      kind: 'signal',
+      label: 'Local status unknown',
+      value: 'No current exact-place brief is cached. Reconnect and refresh before relying on local conditions.',
+      severity: 'low',
+    }],
+    generatedAt: new Date(now),
+    isStale: true,
+    staleAgeMs: 0,
   };
 }
 
@@ -170,6 +252,72 @@ function buildPreparednessItems(stormPreparedness: PlaceStormPreparedness | null
   ];
 }
 
+function buildLifelineSituationBriefItems(
+  place: SavedPlace,
+  snapshot: LocalLogisticsSnapshot | null,
+  context: LifelineBriefContext,
+  now: number,
+): PlaceBriefItem[] {
+  const items: PlaceBriefItem[] = [];
+  if (place.offlinePinned && context.packStatus) {
+    const statusLabel: Record<LifelineOfflinePackStatus, string> = {
+      ready: 'Lifelines ready offline',
+      partial: 'Lifelines pack partial',
+      expired: 'Lifelines pack expired',
+      'not-saved': 'Lifelines pack not saved',
+    };
+    items.push({
+      kind: 'logistics',
+      label: 'Offline readiness',
+      value: statusLabel[context.packStatus],
+      severity: 'low',
+    });
+  }
+  if (!snapshot) return items;
+
+  const currentConditions = snapshot.areaConditions.filter((condition) => (
+    condition.coverage === 'reported' && condition.expiresAt.getTime() > now
+  ));
+  if (currentConditions.length > 0) {
+    const customersOut = currentConditions.reduce((sum, condition) => sum + condition.customersOut, 0);
+    const county = currentConditions[0]?.county ?? 'County';
+    items.push({
+      kind: 'logistics',
+      label: `${county} power context`,
+      value: `${customersOut.toLocaleString()} customers reported out; individual facility power remains unknown. Retrieved ${snapshot.fetchedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`,
+      severity: 'low',
+    });
+  } else {
+    items.push({
+      kind: 'logistics',
+      label: 'County power coverage',
+      value: 'Unknown; no current accepted county observation. This does not mean power is on.',
+      severity: 'low',
+    });
+  }
+
+  const newestChange = context.changes?.[0];
+  if (newestChange) {
+    const transition = newestChange.kind.includes('coverage-lost') || newestChange.kind.includes('became-unknown')
+      ? 'Evidence became unknown'
+      : `${String(newestChange.from)} → ${String(newestChange.to)}`;
+    items.push({
+      kind: 'logistics',
+      label: 'What changed (review-only)',
+      value: `${newestChange.attribute.replace(/-/g, ' ')}: ${transition}.`,
+      severity: 'low',
+    });
+  }
+
+  items.push({
+    kind: 'logistics',
+    label: 'Known collection gaps',
+    value: 'Hotel occupancy, fuel stock, facility power, and unreported road access are not verified; call first.',
+    severity: 'low',
+  });
+  return items;
+}
+
 export function buildPlaceBrief(
   place: SavedPlace,
   breakingAlerts: BreakingAlert[] = [],
@@ -178,13 +326,21 @@ export function buildPlaceBrief(
   forecastSnapshot: SavedPlaceWeatherSnapshot | null = null,
   logisticsSnapshot: LocalLogisticsSnapshot | null = null,
   now = Date.now(),
+  lifelineContext: LifelineBriefContext = {},
 ): PlaceBrief {
+  const exactForecastSnapshot = forecastSnapshot
+    && forecastSnapshot.placeId === place.id
+    && forecastSnapshot.placeName === place.name
+    && forecastSnapshot.placeFingerprint === buildSavedPlaceWeatherFingerprint(place)
+    ? forecastSnapshot
+    : null;
   const items = [
  ...buildPreparednessItems(stormPreparedness),
- ...buildSavedPlaceWeatherBriefItems(forecastSnapshot, 2),
+ ...buildSavedPlaceWeatherBriefItems(exactForecastSnapshot, 2),
  ...buildAlertItems(place, breakingAlerts),
  ...buildSignalItems(place, signals),
  ...buildLocalLogisticsBriefItems(logisticsSnapshot, 2),
+ ...buildLifelineSituationBriefItems(place, logisticsSnapshot, lifelineContext, now),
   ];
 
   if (items.length === 0) {
@@ -226,22 +382,36 @@ export function getPlaceBriefSnapshot(
   const breakingAlerts = options.breakingAlerts ?? getRecentBreakingAlerts();
   const signals = options.signals ?? getRecentSignals();
   const stormPreparedness = options.stormPreparedness ?? getCachedStormPreparedness(place);
-  const forecastSnapshot = options.forecastSnapshot ?? getCachedSavedPlaceWeather(place.id);
-  const logisticsSnapshot = options.logisticsSnapshot ?? getCachedLocalLogistics(place.id);
+  const forecastSnapshot = options.forecastSnapshot ?? getCachedSavedPlaceWeather(place);
+  const logisticsSnapshot = options.logisticsSnapshot ?? getCachedLocalLogistics(place);
   const offline = options.offline ?? isOffline();
 
   if (offline && breakingAlerts.length === 0 && signals.length === 0 && !stormPreparedness && !forecastSnapshot && !logisticsSnapshot) {
- const cached = readOfflineCacheEntry<CachedPlaceBrief>(placeBriefCacheKey(place.id));
+ const cached = readOfflineCacheEntry<unknown>(placeBriefCacheKey(place.id));
  if (cached) {
- return deserializeBrief(cached.data, now);
+ const exact = deserializeCachedPlaceBrief(cached.data, place, now);
+ if (exact) return exact;
  }
+ return buildOfflineUnknownBrief(place, now);
   }
 
-  const brief = buildPlaceBrief(place, breakingAlerts, signals, stormPreparedness, forecastSnapshot, logisticsSnapshot, now);
+  const brief = buildPlaceBrief(
+    place,
+    breakingAlerts,
+    signals,
+    stormPreparedness,
+    forecastSnapshot,
+    logisticsSnapshot,
+    now,
+    {
+      packStatus: getLifelinePackReadinessForPlace(place).status,
+      changes: getRecentLifelineChangesForPlace(place),
+    },
+  );
   // Defer the localStorage write so it never blocks a UI render or click handler.
   // The offline cache is background bookkeeping — a 5-second window is fine.
   const cacheKey = placeBriefCacheKey(place.id);
-  const serialized = serializeBrief(brief);
+  const serialized = serializeBrief(brief, place);
   if (typeof requestIdleCallback === 'undefined') {
     setTimeout(() => { writeOfflineCacheEntry(cacheKey, serialized); }, 0);
   } else {

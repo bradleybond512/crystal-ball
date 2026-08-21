@@ -3,13 +3,22 @@ import assert from 'node:assert/strict';
 
 import {
   buildLocalLogisticsBriefItems,
+  buildLocalLogisticsFingerprint,
   buildLocalLogisticsSnapshot,
+  deserializeLocalLogisticsSnapshot,
+  fetchLocalLogistics,
+  getCachedLocalLogistics,
+  LOCAL_LOGISTICS_CATEGORIES,
+  parseLocalLogisticsApiResponse,
   rankLocalLogisticsNodes,
+  validateLocalLogisticsSnapshotEvent,
 } from '../src/services/local-logistics.ts';
+import type { LogisticsNode } from '../src/services/local-logistics-types.ts';
+import type { SavedPlace } from '../src/services/saved-places.ts';
 
 const NOW = new Date('2026-03-29T19:00:00.000Z');
 
-function makePlace(overrides = {}) {
+function makePlace(overrides: Partial<SavedPlace> = {}): SavedPlace {
   return {
  id: 'place-home',
  name: 'Home',
@@ -29,17 +38,30 @@ function makePlace(overrides = {}) {
   };
 }
 
-function makeNode(overrides = {}) {
+function makeNode(overrides: Partial<LogisticsNode> = {}): LogisticsNode {
+  const category = overrides.category ?? 'fuel';
   return {
  id: 'fuel-1',
- category: 'fuel',
+ kind: category,
+ category,
  name: 'Fuel Stop',
  lat: 35.99,
  lon: -78.9,
  distanceKm: 5,
  source: 'OpenStreetMap',
+ sourceRefs: [{ provider: 'osm', recordId: 'node/1' }],
+ capabilities: {},
+ sourceUrl: 'https://www.openstreetmap.org/node/1',
  freshness: 'fresh',
- status: 'unknown',
+ operational: 'unknown',
+ inventory: 'unknown',
+ power: 'unknown',
+ access: 'unknown',
+ verification: 'directory',
+ observedAt: NOW,
+ expiresAt: new Date(NOW.getTime() + 60_000),
+ confidence: 'low',
+ directoryOnly: true,
  hazardCompatibility: 'general',
  fetchedAt: NOW,
  ...overrides,
@@ -48,10 +70,10 @@ function makeNode(overrides = {}) {
 
 test('rankLocalLogisticsNodes prioritizes viable nodes before nearer unknown nodes', () => {
   const ranked = rankLocalLogisticsNodes([
- makeNode({ id: 'fuel-unknown', category: 'fuel', distanceKm: 2, status: 'unknown' }),
- makeNode({ id: 'hospital-open', category: 'hospital', distanceKm: 6, status: 'open' }),
- makeNode({ id: 'water-limited', category: 'water', distanceKm: 4, status: 'limited' }),
-  ]);
+ makeNode({ id: 'fuel-unknown', category: 'fuel', distanceKm: 2 }),
+ makeNode({ id: 'hospital-open', category: 'hospital', distanceKm: 6, operational: 'open', directoryOnly: false, verification: 'official' }),
+ makeNode({ id: 'water-limited', category: 'water', distanceKm: 4, inventory: 'limited', directoryOnly: false, verification: 'official' }),
+  ], NOW.getTime());
 
   assert.deepEqual(
  ranked.map((node) => node.id),
@@ -81,9 +103,9 @@ test('buildLocalLogisticsBriefItems yields concise place-brief entries', () => {
   const snapshot = buildLocalLogisticsSnapshot(
  makePlace(),
  [
- makeNode({ id: 'hospital-1', category: 'hospital', name: 'Duke Hospital', distanceKm: 3.2, status: 'open' }),
- makeNode({ id: 'pharmacy-1', category: 'pharmacy', name: '24h Pharmacy', distanceKm: 1.4, status: 'limited' }),
- makeNode({ id: 'fuel-1', category: 'fuel', name: 'Fuel Depot', distanceKm: 5.8, status: 'unknown' }),
+ makeNode({ id: 'hospital-1', category: 'hospital', name: 'Duke Hospital', distanceKm: 3.2, operational: 'open', verification: 'official', directoryOnly: false }),
+ makeNode({ id: 'pharmacy-1', category: 'pharmacy', name: '24h Pharmacy', distanceKm: 1.4, inventory: 'limited', verification: 'official', directoryOnly: false }),
+ makeNode({ id: 'fuel-1', category: 'fuel', name: 'Fuel Depot', distanceKm: 5.8 }),
  ],
  { fetchedAt: NOW, source: 'network' },
   );
@@ -93,4 +115,303 @@ test('buildLocalLogisticsBriefItems yields concise place-brief entries', () => {
   assert.equal(items.length, 2);
   assert.match(items[0]?.label ?? '', /Hospital|Pharmacy|Fuel/);
   assert.match(items[0]?.value ?? '', /km/);
+});
+
+test('strict v2 parsing keeps only valid sites and observations and adds hotels', () => {
+  const parsed = parseLocalLogisticsApiResponse(makePlace(), {
+ schemaVersion: 2,
+ query: { lat: 35.994, lon: -78.8986, radiusKm: 25, categories: ['hotel'], countyFips: '37183' },
+ sites: [{
+ id: 'hotel:1', kind: 'hotel', name: 'Safe Hotel', lat: 35.99, lon: -78.9,
+ sourceRefs: [{ provider: 'osm', recordId: '1' }], capabilities: { lodgingType: 'hotel' },
+ }],
+ observations: [{
+ id: 'obs:1', siteId: 'hotel:1', provider: 'osm', verification: 'directory',
+ operational: 'unknown', inventory: 'unknown', power: 'unknown', access: 'unknown',
+ observedAt: NOW.toISOString(), expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
+ confidence: 'low', sourceUrl: 'https://www.openstreetmap.org/node/1',
+ }, {
+ id: 'obs:bad', siteId: 'hotel:1', provider: 'osm', verification: 'directory',
+ operational: 'probably-open', inventory: 'unknown', power: 'unknown', access: 'unknown',
+ observedAt: NOW.toISOString(), expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
+ confidence: 'certain', sourceUrl: 'https://example.com',
+ }],
+ providers: [{ id: 'osm', state: 'ok', acceptedRows: 1, droppedRows: 0, observedAt: NOW.toISOString() }],
+ fetchedAt: NOW.toISOString(), partial: false,
+  }, NOW.getTime());
+
+  assert.equal(parsed.nodes.length, 1);
+  assert.equal(parsed.nodes[0]?.category, 'hotel');
+  assert.equal(parsed.nodes[0]?.operational, 'unknown');
+  assert.equal(parsed.providers[0]?.id, 'osm');
+  assert.equal(parsed.countyFips, '37183');
+  assert.equal(parsed.effectiveRadiusKm, 25);
+});
+
+test('strict v2 parsing separates retrieval time from an upstream report timestamp', () => {
+  const retrievedAt = '2026-03-29T19:00:00.000Z';
+  const sourceObservedAt = '2026-03-29T18:30:00.000Z';
+  const parsed = parseLocalLogisticsApiResponse(makePlace(), {
+    schemaVersion: 2,
+    query: { lat: 35.994, lon: -78.8986, radiusKm: 25, categories: ['recovery'] },
+    sites: [{
+      id: 'fema:recovery:1', kind: 'recovery', name: 'FEMA Recovery Center',
+      lat: 35.99, lon: -78.9,
+      sourceRefs: [{ provider: 'fema', recordId: '1' }], capabilities: {},
+    }],
+    observations: [{
+      id: 'fema:recovery:1:retrieval', siteId: 'fema:recovery:1', provider: 'fema',
+      verification: 'official', operational: 'open', inventory: 'unknown', power: 'unknown', access: 'unknown',
+      observedAt: retrievedAt, retrievedAt, sourceObservedAt,
+      expiresAt: '2026-03-29T19:30:00.000Z', confidence: 'high',
+      sourceUrl: 'https://gis.fema.gov/arcgis/rest/services/FEMA/DRC_Services_Relate/FeatureServer/0',
+    }],
+    providers: [{
+      id: 'fema-recovery-centers', state: 'ok', acceptedRows: 1, droppedRows: 0,
+      observedAt: retrievedAt, retrievedAt,
+    }],
+    fetchedAt: retrievedAt,
+    retrievedAt,
+  }, NOW.getTime());
+
+  assert.equal(parsed.nodes[0]?.category, 'recovery');
+  assert.equal(parsed.nodes[0]?.source, 'FEMA Disaster Recovery Centers');
+  assert.equal(parsed.observations[0]?.retrievedAt?.toISOString(), retrievedAt);
+  assert.equal(parsed.observations[0]?.sourceObservedAt?.toISOString(), sourceObservedAt);
+  assert.equal(parsed.providers[0]?.retrievedAt?.toISOString(), retrievedAt);
+  assert.equal(parsed.retrievedAt.toISOString(), retrievedAt);
+});
+
+test('strict v2 parsing rejects fabricated or malformed upstream timestamps', () => {
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    schemaVersion: 2,
+    query: { lat: 35.994, lon: -78.8986, radiusKm: 25, categories: ['recovery'] },
+    sites: [{
+      id: 'fema:recovery:1', kind: 'recovery', name: 'FEMA Recovery Center', lat: 35.99, lon: -78.9,
+      sourceRefs: [{ provider: 'fema', recordId: '1' }], capabilities: {},
+    }],
+    observations: [{
+      id: 'bad-time', siteId: 'fema:recovery:1', provider: 'fema', verification: 'official',
+      operational: 'open', inventory: 'unknown', power: 'unknown', access: 'unknown',
+      observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(), sourceObservedAt: 'not-a-date',
+      expiresAt: new Date(NOW.getTime() + 60_000).toISOString(), confidence: 'high',
+      sourceUrl: 'https://gis.fema.gov/arcgis/rest/services/FEMA/DRC_Services_Relate/FeatureServer/0',
+    }],
+    providers: [{
+      id: 'fema-recovery-centers', state: 'ok', acceptedRows: 1, droppedRows: 0,
+      observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(),
+    }],
+    fetchedAt: NOW.toISOString(),
+  }, NOW.getTime()), /observations failed validation/);
+  for (const timestamp of ['2026-03-29T19:00:00', '03/29/2026', '2026-02-30T19:00:00Z']) {
+    assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+      schemaVersion: 2,
+      query: { lat: 35.994, lon: -78.8986, radiusKm: 25, categories: ['recovery'] },
+      sites: [], observations: [],
+      providers: [{ id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: timestamp }],
+      fetchedAt: timestamp,
+    }, NOW.getTime()), /timestamp|providers failed validation/);
+  }
+});
+
+test('strict v2 parsing rejects directory availability claims and mismatched site provenance', () => {
+  const site = {
+    id: 'osm:fuel:1', kind: 'fuel', name: 'Directory Fuel', lat: 35.99, lon: -78.9,
+    sourceRefs: [{ provider: 'osm', recordId: '1' }], capabilities: {},
+  };
+  const baseObservation = {
+    id: 'obs:1', siteId: site.id, provider: 'osm', verification: 'directory',
+    operational: 'unknown', inventory: 'unknown', power: 'unknown', access: 'unknown',
+    observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(),
+    expiresAt: new Date(NOW.getTime() + 60_000).toISOString(), confidence: 'low',
+    sourceUrl: 'https://www.openstreetmap.org/node/1',
+  };
+  const payload = (observation: Record<string, unknown>) => ({
+    schemaVersion: 2,
+    query: { lat: 35.994, lon: -78.8986, radiusKm: 25, categories: ['fuel'] },
+    sites: [site], observations: [observation],
+    providers: [{ id: 'osm', state: 'ok', acceptedRows: 1, droppedRows: 0, observedAt: NOW.toISOString() }],
+    fetchedAt: NOW.toISOString(),
+  });
+
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), payload({
+    ...baseObservation, operational: 'open', inventory: 'available', confidence: 'high',
+  }), NOW.getTime()), /observations failed validation/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), payload({
+    ...baseObservation, provider: 'fema', verification: 'official', operational: 'open', confidence: 'high',
+    sourceUrl: 'https://gis.fema.gov/arcgis/rest/services/NSS/OpenShelters/FeatureServer',
+  }), NOW.getTime()), /observations failed validation/);
+});
+
+test('strict v2 parsing rejects mismatched queries, phantom provider health, future retrievals, and overlong TTLs', () => {
+  const base = {
+    schemaVersion: 2,
+    query: { lat: 35.994, lon: -78.8986, radiusKm: 25, categories: ['hotel'] },
+    sites: [{
+      id: 'osm:hotel:1', kind: 'hotel', name: 'Directory Hotel', lat: 35.99, lon: -78.9,
+      distanceKm: 0, sourceRefs: [{ provider: 'osm', recordId: '1' }], capabilities: {},
+    }],
+    observations: [{
+      id: 'obs:1', siteId: 'osm:hotel:1', provider: 'osm', verification: 'directory',
+      operational: 'unknown', inventory: 'unknown', power: 'unknown', access: 'unknown',
+      observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(),
+      expiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000).toISOString(), confidence: 'low',
+      sourceUrl: 'https://www.openstreetmap.org/node/1',
+    }],
+    providers: [{ id: 'osm', state: 'ok', acceptedRows: 1, droppedRows: 0, observedAt: NOW.toISOString() }],
+    fetchedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(),
+  };
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base, query: { ...base.query, lat: 36 },
+  }, NOW.getTime()), /location mismatch/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base, query: { ...base.query, categories: ['hotel', 'evil'] },
+  }, NOW.getTime()), /categories/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base, providers: [{ ...base.providers[0], id: 'fema-open-shelters' }],
+  }, NOW.getTime()), /provider coverage mismatch/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base,
+    fetchedAt: new Date(NOW.getTime() + 10 * 60 * 1000).toISOString(),
+    retrievedAt: new Date(NOW.getTime() + 10 * 60 * 1000).toISOString(),
+  }, NOW.getTime()), /retrieval timestamp/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base,
+    observations: [{ ...base.observations[0], expiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000 + 1).toISOString() }],
+  }, NOW.getTime()), /observations failed validation/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base, sites: Array.from({ length: 36 }, () => base.sites[0]),
+  }, NOW.getTime()), /oversized/);
+  assert.throws(() => parseLocalLogisticsApiResponse(makePlace(), {
+    ...base, providers: [{ ...base.providers[0], acceptedRows: 1e20 }],
+  }, NOW.getTime()), /providers failed validation/);
+
+  const parsed = parseLocalLogisticsApiResponse(makePlace(), base, NOW.getTime());
+  assert.notEqual(parsed.sites[0]?.distanceKm, 0, 'client recomputes distance instead of trusting the server');
+});
+
+test('offline snapshot validation binds identity, distance, county, provenance, and timestamps', () => {
+  const fingerprint = buildLocalLogisticsFingerprint(makePlace(), 25, ['recovery'], 3);
+  const sourceObservedAt = '2026-03-29T18:30:00.000Z';
+  const cached = {
+    schemaVersion: 2,
+    queryFingerprint: fingerprint,
+    placeId: 'place-home', placeName: 'Home', effectiveRadiusKm: 25, countyFips: '37183',
+    categories: ['recovery'],
+    sites: [{
+      id: 'fema:recovery:1', kind: 'recovery', name: 'Recovery Center', lat: 35.99, lon: -78.9,
+      distanceKm: 0, sourceRefs: [{ provider: 'fema', recordId: '1' }], capabilities: {},
+    }],
+    observations: [{
+      id: 'obs:1', siteId: 'fema:recovery:1', provider: 'fema', verification: 'official',
+      operational: 'open', inventory: 'unknown', power: 'unknown', access: 'unknown',
+      observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(), sourceObservedAt,
+      expiresAt: new Date(NOW.getTime() + 30 * 60 * 1000).toISOString(), confidence: 'high',
+      sourceUrl: 'https://gis.fema.gov/arcgis/rest/services/FEMA/DRC_Services_Relate/FeatureServer/0',
+    }],
+    nodes: [],
+    areaConditions: [{
+      id: 'ornl-odin:37183:utility', type: 'power_outage', coverage: 'reported', countyFips: '37183',
+      county: 'Wake', state: 'North Carolina', customersOut: 12,
+      observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(),
+      expiresAt: new Date(NOW.getTime() + 30 * 60 * 1000).toISOString(), source: 'ornl-odin',
+    }],
+    providers: [
+      { id: 'fema-recovery-centers', state: 'ok', acceptedRows: 1, droppedRows: 0, observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString() },
+      { id: 'ornl-odin', state: 'ok', acceptedRows: 1, droppedRows: 0, observedAt: NOW.toISOString(), retrievedAt: NOW.toISOString() },
+    ],
+    fetchedAt: NOW.toISOString(),
+  };
+  const expected = { placeId: 'place-home', queryFingerprint: fingerprint, lat: 35.994, lon: -78.8986 };
+  const parsed = deserializeLocalLogisticsSnapshot(cached, NOW.getTime(), expected);
+  assert.ok(parsed);
+  assert.ok((parsed.nodes[0]?.distanceKm ?? 0) > 0, 'forged cached distance is recomputed');
+  assert.equal(parsed.observations[0]?.sourceObservedAt?.toISOString(), sourceObservedAt);
+  assert.equal(parsed.areaConditions[0]?.retrievedAt?.toISOString(), NOW.toISOString());
+  assert.equal(deserializeLocalLogisticsSnapshot({ ...cached, placeId: 'other' }, NOW.getTime(), expected), null);
+  assert.equal(deserializeLocalLogisticsSnapshot({ ...cached, queryFingerprint: fingerprint.replace('35.99400', '36.00000') }, NOW.getTime(), expected), null);
+  assert.equal(deserializeLocalLogisticsSnapshot({
+    ...cached,
+    areaConditions: [{ ...cached.areaConditions[0], countyFips: '37181' }],
+  }, NOW.getTime(), expected), null);
+  assert.equal(deserializeLocalLogisticsSnapshot({
+    ...cached,
+    observations: [{ ...cached.observations[0], inventory: 'available' }],
+  }, NOW.getTime(), expected), null);
+  assert.equal(deserializeLocalLogisticsSnapshot({
+    ...cached, nodes: Array.from({ length: 36 }, () => ({})),
+  }, NOW.getTime(), expected), null);
+  assert.equal(deserializeLocalLogisticsSnapshot({
+    ...cached,
+    areaConditions: [{ ...cached.areaConditions[0], customersOut: 1e20 }],
+  }, NOW.getTime(), expected), null);
+
+  const eventSnapshot = {
+    ...parsed,
+    source: 'network' as const,
+    isStale: false,
+    isExpired: false,
+    staleAgeMs: 0,
+  };
+  const validatedEvent = validateLocalLogisticsSnapshotEvent(eventSnapshot, NOW.getTime());
+  assert.ok(validatedEvent, 'a genuine Date-backed renderer snapshot passes the event boundary');
+  assert.equal(validatedEvent.source, 'network');
+  assert.equal(validatedEvent.nodes[0]?.id, 'fema:recovery:1');
+  assert.equal(validateLocalLogisticsSnapshotEvent({ ...eventSnapshot, fetchedAt: {} }, NOW.getTime()), null);
+  assert.equal(validateLocalLogisticsSnapshotEvent({
+    ...eventSnapshot,
+    providers: [null, ...eventSnapshot.providers.slice(1)],
+  }, NOW.getTime()), null);
+  assert.equal(validateLocalLogisticsSnapshotEvent({
+    ...eventSnapshot,
+    fetchedAt: new Date(NOW.getTime() + 10 * 60_000),
+  }, NOW.getTime()), null);
+  assert.equal(validateLocalLogisticsSnapshotEvent({ ...eventSnapshot, source: 'script' }, NOW.getTime()), null);
+});
+
+test('expired observations rank as unknown and never ahead of current official availability', () => {
+  const ranked = rankLocalLogisticsNodes([
+ makeNode({ id: 'expired', operational: 'open', verification: 'official', directoryOnly: false, expiresAt: new Date(NOW.getTime() - 1) }),
+ makeNode({ id: 'current', operational: 'open', verification: 'official', directoryOnly: false, expiresAt: new Date(NOW.getTime() + 60_000), distanceKm: 9 }),
+  ], NOW.getTime());
+  assert.deepEqual(ranked.map((node) => node.id), ['current', 'expired']);
+});
+
+test('fingerprint isolates coordinate, radius, category, and schema changes', () => {
+  const base = buildLocalLogisticsFingerprint(makePlace(), 25, ['fuel']);
+  assert.notEqual(base, buildLocalLogisticsFingerprint(makePlace({ lat: 36 }), 25, ['fuel']));
+  assert.notEqual(base, buildLocalLogisticsFingerprint(makePlace(), 30, ['fuel']));
+  assert.notEqual(base, buildLocalLogisticsFingerprint(makePlace(), 25, ['hotel']));
+  assert.notEqual(base, buildLocalLogisticsFingerprint(makePlace(), 25, ['fuel'], 5));
+  assert.match(base, /^v2\|/);
+});
+
+test('edited saved-place coordinates cannot share the old default cache fingerprint', () => {
+  const oldLocation = makePlace({ lat: 41.61, lon: -86.72, radiusKm: 50 });
+  const editedLocation = makePlace({ lat: 41.72, lon: -86.90, radiusKm: 50 });
+  const oldFingerprint = buildLocalLogisticsFingerprint(oldLocation, 25, [...LOCAL_LOGISTICS_CATEGORIES]);
+  const currentFingerprint = buildLocalLogisticsFingerprint(editedLocation, 25, [...LOCAL_LOGISTICS_CATEGORIES]);
+  assert.notEqual(oldFingerprint, currentFingerprint);
+});
+
+test('current-place cache lookup rejects a prior-location snapshot with the same place id', async () => {
+  const oldLocation = makePlace({ id: 'moved-place', lat: 41.61, lon: -86.72, radiusKm: 50 });
+  const editedLocation = makePlace({ id: 'moved-place', lat: 41.72, lon: -86.90, radiusKm: 50 });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+ schemaVersion: 2,
+ query: { lat: oldLocation.lat, lon: oldLocation.lon, radiusKm: 25, categories: [...LOCAL_LOGISTICS_CATEGORIES] },
+ sites: [], observations: [], providers: [
+   { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date().toISOString() },
+   { id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date().toISOString() },
+   { id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date().toISOString() },
+ ], fetchedAt: new Date().toISOString(), partial: false,
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  try {
+ await fetchLocalLogistics(oldLocation);
+ assert.ok(getCachedLocalLogistics(oldLocation));
+ assert.equal(getCachedLocalLogistics(editedLocation), null);
+  } finally {
+ globalThis.fetch = originalFetch;
+  }
 });

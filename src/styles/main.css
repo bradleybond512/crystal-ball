@@ -18793,6 +18793,28 @@ body:has(.replay-scrubber:not([hidden])) .community-widget {
   color: rgb(255, 190, 0);
 }
 
+.spm-offline-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  background: var(--overlay-subtle);
+  border: 1px solid var(--overlay-medium);
+  border-radius: 6px;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.spm-offline-btn:hover { background: var(--overlay-light); color: var(--text); }
+.spm-offline-btn span { font-size: 11px; font-weight: 600; }
+.spm-offline-btn small { color: var(--text-dim); font-size: 10px; line-height: 1.35; }
+.spm-offline-btn--active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--text);
+}
+
 .spm-error {
   font-size: 11px;
   color: var(--semantic-elevated, var(--mac-orange, #ff9f0a));
@@ -20919,6 +20941,199 @@ body.is-desktop-macos .mac-sidebar-panel-item {
    A11y floor (shared) — keyboard focus ring, reduced motion,
    and the inline control-icon helper (src/components/ui/icons.ts)
    ============================================================ */
+
+/* ─── Disaster Lifelines + graph-route map overlays ─────────────── */
+.mission-map-overlay-status {
+  position: absolute;
+  right: 52px;
+  bottom: 12px;
+  z-index: 510;
+  display: grid;
+  width: min(440px, calc(100% - 76px));
+  gap: 4px;
+  pointer-events: none;
+}
+
+.mission-map-overlay-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid var(--surface-border, var(--border));
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--surface-1, var(--bg)) 94%, transparent);
+  box-shadow: var(--e-2);
+  color: var(--text-secondary, var(--text));
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: auto;
+}
+
+.mission-map-overlay-row span {
+  flex: 1;
+}
+
+.mission-map-overlay-row button {
+  flex: 0 0 28px;
+  min-width: 28px;
+  min-height: 28px;
+  margin: -4px -4px -4px 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-secondary, var(--text));
+  cursor: pointer;
+  font-size: 17px;
+}
+
+.mission-map-overlay-row button:hover {
+  background: var(--surface-2, var(--border));
+  color: var(--text-primary, var(--text));
+}
+
+.lifeline-map-marker,
+.evac-route-endpoint {
+  position: absolute;
+  z-index: 88;
+  display: grid;
+  width: 27px;
+  height: 27px;
+  transform: translate(-50%, -50%) scale(var(--marker-scale, 1));
+  place-items: center;
+  border: 2px solid var(--text-primary, var(--text));
+  border-radius: 50%;
+  background: var(--semantic-info);
+  box-shadow: var(--e-2);
+  color: var(--text-primary, var(--text));
+  cursor: pointer;
+  font: 700 10px/1 var(--font-family, inherit);
+}
+
+.lifeline-map-marker:hover,
+.lifeline-map-marker:focus-visible {
+  z-index: 90;
+  transform: translate(-50%, -50%) scale(calc(var(--marker-scale, 1) * 1.16));
+}
+
+.lifeline-map-marker.lifeline-directory {
+  background: var(--semantic-elevated);
+  border-style: dashed;
+}
+
+.lifeline-map-marker.lifeline-official-open { background: var(--semantic-normal); }
+.lifeline-map-marker.lifeline-official-closed { background: var(--semantic-critical); }
+.lifeline-map-marker.lifeline-unknown { background: var(--semantic-info); }
+
+.lifeline-map-marker.lifeline-expired {
+  background: var(--text-muted);
+  opacity: 0.72;
+  filter: grayscale(0.45);
+}
+
+.lifeline-map-marker.lifeline-category-recovery {
+  border-radius: var(--r-xs);
+}
+
+.evac-route-map-line {
+  stroke: var(--semantic-info);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.evac-route-endpoint {
+  z-index: 86;
+  width: 23px;
+  height: 23px;
+  border-color: var(--text-primary, var(--text));
+  background: var(--semantic-info);
+  cursor: default;
+}
+
+.map-popup.map-popup-lifeline {
+  border-color: var(--surface-border-strong, var(--border));
+  box-shadow: var(--e-3);
+}
+
+.popup-header.lifeline {
+  border-left: 4px solid var(--semantic-info);
+  background: var(--surface-2, var(--bg));
+}
+
+.popup-header.lifeline.official-open { border-left-color: var(--semantic-normal); }
+.popup-header.lifeline.official-closed { border-left-color: var(--semantic-critical); }
+.popup-header.lifeline.directory { border-left-color: var(--semantic-elevated); }
+.popup-header.lifeline.expired { border-left-color: var(--text-muted); }
+
+.popup-header.lifeline .popup-title {
+  color: var(--text-primary, var(--text));
+  letter-spacing: 0;
+}
+
+.popup-header.lifeline .popup-icon {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--r-xs);
+  background: var(--surface-3, var(--border));
+  color: var(--text-primary, var(--text));
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.popup-header.lifeline .popup-badge {
+  background: var(--surface-3, var(--border));
+  color: var(--text-secondary, var(--text));
+  letter-spacing: 0;
+}
+
+.lifeline-evidence {
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.lifeline-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.lifeline-popup-action {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--surface-border-strong, var(--border));
+  border-radius: var(--r-xs);
+  background: var(--surface-2, var(--bg));
+  color: var(--text-primary, var(--text));
+  cursor: pointer;
+  font: inherit;
+  text-decoration: none;
+}
+
+.lifeline-popup-action:hover {
+  border-color: var(--semantic-info);
+}
+
+.lifeline-popup-action-status {
+  min-height: 1.3em;
+  margin-top: 6px;
+  color: var(--text-secondary, var(--text-dim));
+  font-size: 11px;
+}
+
+@media (max-width: 600px) {
+  .mission-map-overlay-status {
+    right: 10px;
+    bottom: 10px;
+    width: calc(100% - 20px);
+  }
+}
 
 /* Inline SVG control icons — baseline-align inside text buttons, center
    naturally inside flex buttons. */

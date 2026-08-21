@@ -26,7 +26,7 @@ function expiryTimes(snapshot: LocalLogisticsSnapshot): number[] {
     ...snapshot.nodes,
     ...snapshot.observations,
     ...snapshot.areaConditions,
-  ].map((item) => item.expiresAt.getTime()).filter(Number.isFinite);
+  ].map((item) => item.expiresAt.getTime()).filter((expiresAt) => Number.isFinite(expiresAt));
 }
 
 function nextFutureExpiry(snapshot: LocalLogisticsSnapshot, now: number): number | null {

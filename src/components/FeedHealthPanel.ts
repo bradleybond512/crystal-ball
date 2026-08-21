@@ -10,7 +10,7 @@
  *
  * Refreshes every 10s. No DOM mutation outside Panel.setContent.
  */
-/* eslint-disable sonarjs/no-nested-template-literals -- short status row markup */
+
 
 import { Panel } from './Panel';
 import {

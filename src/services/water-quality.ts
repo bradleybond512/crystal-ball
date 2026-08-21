@@ -13,7 +13,6 @@ import { dataFreshness } from '@/services/data-freshness';
 export type WaterAlertSeverity = 'safe' | 'advisory' | 'do-not-use' | 'unknown';
 export type WaterAlertType = 'boil-water' | 'do-not-use' | 'contamination' | 'treatment-outage' | 'general';
 export type WaterEvidenceKind = 'official-potable-advisory' | 'epa-compliance-history';
-export type PotableWaterStatus = WaterAlertSeverity;
 
 export interface WaterAlert {
   id: string;
@@ -72,7 +71,7 @@ export interface WaterQualityData {
   };
   fetchedAt: Date;
   retrievedAt: Date;
-  potableStatus: PotableWaterStatus;
+  potableStatus: WaterAlertSeverity;
   potableAdvisories: WaterAlert[];
   complianceRecords: WaterAlert[];
   surfaceMeasurements: SurfaceWaterMeasurement[];
@@ -345,7 +344,7 @@ export function normalizeEpaComplianceResponse(raw: unknown): NormalizedEpaCompl
   return { records, systems: [...systemMap.values()] };
 }
 
-function potableStatusFromExplicitAdvisories(advisories: WaterAlert[]): PotableWaterStatus {
+function potableStatusFromExplicitAdvisories(advisories: WaterAlert[]): WaterAlertSeverity {
   if (advisories.some((item) => item.evidenceKind === 'official-potable-advisory' && item.severity === 'do-not-use')) return 'do-not-use';
   if (advisories.some((item) => item.evidenceKind === 'official-potable-advisory' && item.severity === 'advisory')) return 'advisory';
   if (advisories.some((item) => item.evidenceKind === 'official-potable-advisory' && item.severity === 'safe')) return 'safe';

@@ -162,7 +162,7 @@ export function deriveLifelineChanges(
     const subjectDiff = left.subjectId.localeCompare(right.subjectId);
     if (subjectDiff !== 0) return subjectDiff;
     const attributeDiff = left.attribute.localeCompare(right.attribute);
-    return attributeDiff !== 0 ? attributeDiff : left.kind.localeCompare(right.kind);
+    return attributeDiff === 0 ? left.kind.localeCompare(right.kind) : attributeDiff;
   });
   const requestedMax = Number.isFinite(options.maxCandidates)
     ? Math.trunc(options.maxCandidates as number)

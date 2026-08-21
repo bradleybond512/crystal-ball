@@ -70,30 +70,30 @@ interface CachedLocalLogisticsSnapshot {
   countyFips?: string;
   categories: LogisticsCategory[];
   sites: ResourceSite[];
-  observations: Array<Omit<ResourceObservation, 'observedAt' | 'retrievedAt' | 'sourceObservedAt' | 'expiresAt'> & {
+  observations: (Omit<ResourceObservation, 'observedAt' | 'retrievedAt' | 'sourceObservedAt' | 'expiresAt'> & {
  observedAt: string;
  retrievedAt?: string;
  sourceObservedAt?: string;
  expiresAt: string;
-  }>;
-  nodes: Array<Omit<LogisticsNode, 'fetchedAt' | 'observedAt' | 'retrievedAt' | 'sourceObservedAt' | 'expiresAt'> & {
+  })[];
+  nodes: (Omit<LogisticsNode, 'fetchedAt' | 'observedAt' | 'retrievedAt' | 'sourceObservedAt' | 'expiresAt'> & {
  fetchedAt: string;
  observedAt: string;
  retrievedAt?: string;
  sourceObservedAt?: string;
  expiresAt: string;
-  }>;
-  areaConditions: Array<Omit<AreaCondition, 'observedAt' | 'retrievedAt' | 'sourceObservedAt' | 'expiresAt'> & {
+  })[];
+  areaConditions: (Omit<AreaCondition, 'observedAt' | 'retrievedAt' | 'sourceObservedAt' | 'expiresAt'> & {
  observedAt: string;
  retrievedAt?: string;
  sourceObservedAt?: string;
  expiresAt: string;
-  }>;
-  providers: Array<Omit<ProviderStatus, 'observedAt' | 'retrievedAt' | 'sourceObservedAt'> & {
+  })[];
+  providers: (Omit<ProviderStatus, 'observedAt' | 'retrievedAt' | 'sourceObservedAt'> & {
  observedAt: string | null;
  retrievedAt?: string | null;
  sourceObservedAt?: string | null;
-  }>;
+  })[];
   fetchedAt: string;
 }
 
@@ -117,6 +117,15 @@ interface LocalLogisticsBriefItem {
   link?: string;
 }
 
+type LocatedResourceSite = ResourceSite & { distanceKm: number };
+
+interface ParsedObservationDates {
+  observedAt: Date;
+  retrievedAt: Date;
+  sourceObservedAt: Date | null;
+  expiresAt: Date;
+}
+
 const CACHE_PREFIX = 'local-logistics:v2';
 const CACHE_EXPIRE_MS = 24 * 60 * 60 * 1000;
 const DIRECTORY_OBSERVATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -128,7 +137,7 @@ const DEFAULT_RADIUS_KM = 25;
 const DEFAULT_LIMIT_PER_CATEGORY = 3;
 const MAX_RESOURCE_ROWS = LOCAL_LOGISTICS_CATEGORIES.length * 5;
 const MAX_PROVIDER_ROWS = 4;
-const MAX_PROVIDER_ROW_COUNT = 5_000;
+const MAX_PROVIDER_ROW_COUNT = 5000;
 const MAX_AREA_CONDITION_ROWS = 100;
 const MAX_CUSTOMERS_OUT = 100_000_000;
 const memoryCache = new Map<string, CachedLocalLogisticsSnapshot>();
@@ -169,6 +178,10 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function compareStrings(left: string, right: string): number {
+  return left.localeCompare(right);
+}
+
 function isValidRfc3339CivilTime(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
@@ -193,6 +206,12 @@ function parseDate(value: unknown): Date | null {
   return Number.isFinite(date.getTime()) ? date : null;
 }
 
+function parseNullableDate(value: unknown, fallback: Date | null): Date | null {
+  if (value === undefined) return fallback;
+  if (value === null) return null;
+  return parseDate(value);
+}
+
 function isBoundedSourceTime(sourceObservedAt: Date, retrievedAt: Date): boolean {
   return sourceObservedAt.getTime() >= EARLIEST_SOURCE_TIME_MS
     && sourceObservedAt.getTime() <= retrievedAt.getTime() + 5 * 60 * 1000;
@@ -206,7 +225,7 @@ function safeString(value: unknown, maxLength = 240): string | undefined {
 
 function publicPhone(value: unknown): string | undefined {
   const phone = safeString(value, 80);
-  return phone && /^[+()\d\s.\-xext]+$/i.test(phone) ? phone : undefined;
+  return phone && /^[+()\d\s.\-ext]+$/i.test(phone) ? phone : undefined;
 }
 
 function trustedSourceUrl(value: unknown, provider: 'osm' | 'fema'): string | null {
@@ -234,7 +253,7 @@ export function buildLocalLogisticsFingerprint(
  place.lat.toFixed(5),
  place.lon.toFixed(5),
  radiusKm.toFixed(2),
- [...categories].sort().join(','),
+ [...categories].sort(compareStrings).join(','),
  String(limitPerCategory),
   ].join('|');
 }
@@ -282,9 +301,30 @@ function hazardCompatibility(category: LogisticsCategory): LogisticsHazardCompat
   return 'general';
 }
 
+function logisticsSourceLabel(site: ResourceSite): string {
+  if (site.sourceRefs[0]?.provider !== 'fema') return 'OpenStreetMap directory';
+  return site.kind === 'recovery' ? 'FEMA Disaster Recovery Centers' : 'FEMA Open Shelters';
+}
+
 function freshness(observedAt: Date, expiresAt: Date, now: number): LogisticsNode['freshness'] {
   if (expiresAt.getTime() <= now) return 'stale';
   return now - observedAt.getTime() <= 6 * 60 * 60 * 1000 ? 'fresh' : 'recent';
+}
+
+function parseProviderDates(
+  value: Record<string, unknown>,
+  now: number,
+): Pick<ProviderStatus, 'observedAt' | 'retrievedAt' | 'sourceObservedAt'> | null {
+  const observedAt = value.observedAt === null ? null : parseDate(value.observedAt);
+  if (value.observedAt !== null && !observedAt) return null;
+  const retrievedAt = parseNullableDate(value.retrievedAt, observedAt);
+  if (value.retrievedAt !== undefined && value.retrievedAt !== null && !retrievedAt) return null;
+  if (retrievedAt && (retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS)) return null;
+  if (observedAt && retrievedAt && observedAt.getTime() !== retrievedAt.getTime()) return null;
+  const sourceObservedAt = parseNullableDate(value.sourceObservedAt, null);
+  if (value.sourceObservedAt !== undefined && value.sourceObservedAt !== null && !sourceObservedAt) return null;
+  if (sourceObservedAt && (!retrievedAt || !isBoundedSourceTime(sourceObservedAt, retrievedAt))) return null;
+  return { observedAt, retrievedAt, ...(sourceObservedAt ? { sourceObservedAt } : {}) };
 }
 
 function parseProvider(value: unknown, now = Date.now()): ProviderStatus | null {
@@ -294,29 +334,43 @@ function parseProvider(value: unknown, now = Date.now()): ProviderStatus | null 
   if (typeof value.state !== 'string' || !PROVIDER_STATES.has(value.state as ProviderState)) return null;
   if (!isNonNegativeInteger(value.acceptedRows) || value.acceptedRows > MAX_PROVIDER_ROW_COUNT
     || !isNonNegativeInteger(value.droppedRows) || value.droppedRows > MAX_PROVIDER_ROW_COUNT) return null;
-  const observedAt = value.observedAt === null ? null : parseDate(value.observedAt);
-  if (value.observedAt !== null && !observedAt) return null;
-  const retrievedAt = value.retrievedAt === undefined
- ? observedAt
- : (value.retrievedAt === null ? null : parseDate(value.retrievedAt));
-  if (value.retrievedAt !== undefined && value.retrievedAt !== null && !retrievedAt) return null;
-  if (retrievedAt && (retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS)) return null;
-  if (observedAt && retrievedAt && observedAt.getTime() !== retrievedAt.getTime()) return null;
-  const sourceObservedAt = value.sourceObservedAt === undefined || value.sourceObservedAt === null
- ? null
- : parseDate(value.sourceObservedAt);
-  if (value.sourceObservedAt !== undefined && value.sourceObservedAt !== null && !sourceObservedAt) return null;
-  if (sourceObservedAt && (!retrievedAt || !isBoundedSourceTime(sourceObservedAt, retrievedAt))) return null;
+  const dates = parseProviderDates(value, now);
+  if (!dates) return null;
   return {
  id: value.id as ProviderStatus['id'],
  state: value.state as ProviderState,
  acceptedRows: value.acceptedRows as number,
  droppedRows: value.droppedRows as number,
- observedAt,
- retrievedAt,
- ...(sourceObservedAt ? { sourceObservedAt } : {}),
+ ...dates,
  ...(safeString(value.reasonCode) ? { reasonCode: safeString(value.reasonCode) } : {}),
   };
+}
+
+function observationStatusesAreValid(value: Record<string, unknown>): boolean {
+  return VERIFICATION.has(value.verification as VerificationMethod)
+    && OPERATIONAL.has(value.operational as OperationalStatus)
+    && INVENTORY.has(value.inventory as InventoryStatus)
+    && POWER.has(value.power as PowerStatus)
+    && ACCESS.has(value.access as AccessStatus)
+    && CONFIDENCE.has(value.confidence as ObservationConfidence);
+}
+
+function parseObservationDates(
+  value: Record<string, unknown>,
+  maximumTtlMs: number,
+  now: number,
+): ParsedObservationDates | null {
+  const observedAt = parseDate(value.observedAt);
+  const retrievedAt = value.retrievedAt === undefined ? observedAt : parseDate(value.retrievedAt);
+  const sourceObservedAt = value.sourceObservedAt === undefined ? null : parseDate(value.sourceObservedAt);
+  const expiresAt = parseDate(value.expiresAt);
+  if (!observedAt || !retrievedAt || !expiresAt || observedAt.getTime() !== retrievedAt.getTime()) return null;
+  if (retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS) return null;
+  if (expiresAt.getTime() < retrievedAt.getTime()
+    || expiresAt.getTime() > retrievedAt.getTime() + maximumTtlMs) return null;
+  if (value.sourceObservedAt !== undefined && !sourceObservedAt) return null;
+  if (sourceObservedAt && !isBoundedSourceTime(sourceObservedAt, retrievedAt)) return null;
+  return { observedAt, retrievedAt, sourceObservedAt, expiresAt };
 }
 
 function parseSourceRefs(value: unknown): ResourceSite['sourceRefs'] | null {
@@ -329,96 +383,167 @@ function parseSourceRefs(value: unknown): ResourceSite['sourceRefs'] | null {
   return refs;
 }
 
+function parseCapabilities(value: Record<string, unknown>): ResourceSite['capabilities'] {
+  const capabilities: ResourceSite['capabilities'] = {};
+  const lodgingType = safeString(value.lodgingType);
+  if (lodgingType === 'hotel' || lodgingType === 'motel' || lodgingType === 'hostel' || lodgingType === 'other') {
+    capabilities.lodgingType = lodgingType;
+  }
+  const directoryHours = safeString(value.directoryHours);
+  if (directoryHours) capabilities.directoryHours = directoryHours;
+  for (const key of ['evacuationCapacity', 'postImpactCapacity', 'reportedPopulation'] as const) {
+    const parsed = value[key];
+    if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed >= 0) capabilities[key] = parsed;
+  }
+  for (const key of ['ada', 'wheelchairAccessible', 'pets', 'generatorOnsite'] as const) {
+    const parsed = value[key];
+    if (typeof parsed === 'boolean') capabilities[key] = parsed;
+  }
+  return capabilities;
+}
+
 function parseSite(value: unknown): ResourceSite | null {
-  if (!isRecord(value) || !safeString(value.id, 160) || !safeString(value.name, 240)) return null;
+  if (!isRecord(value)) return null;
+  const id = safeString(value.id, 160);
+  const name = safeString(value.name, 240);
+  if (!id || !name) return null;
   if (!LOCAL_LOGISTICS_CATEGORIES.includes(value.kind as LogisticsCategory)) return null;
   if (!isCoordinate(value.lat, -90, 90) || !isCoordinate(value.lon, -180, 180)) return null;
   const sourceRefs = parseSourceRefs(value.sourceRefs);
   if (!sourceRefs || !isRecord(value.capabilities)) return null;
-  const capabilities: ResourceSite['capabilities'] = {};
-  for (const key of ['lodgingType', 'directoryHours'] as const) {
- const parsed = safeString(value.capabilities[key]);
- if (key === 'lodgingType') {
- if (parsed === 'hotel' || parsed === 'motel' || parsed === 'hostel' || parsed === 'other') capabilities.lodgingType = parsed;
- } else if (parsed) capabilities.directoryHours = parsed;
-  }
-  for (const key of ['evacuationCapacity', 'postImpactCapacity', 'reportedPopulation'] as const) {
- const parsed = value.capabilities[key];
- if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed >= 0) capabilities[key] = parsed;
-  }
-  for (const key of ['ada', 'wheelchairAccessible', 'pets', 'generatorOnsite'] as const) {
- const parsed = value.capabilities[key];
- if (typeof parsed === 'boolean') capabilities[key] = parsed;
-  }
+  const capabilities = parseCapabilities(value.capabilities);
+  const address = safeString(value.address, 400);
+  const phone = publicPhone(value.publicPhone);
+  const directoryUrl = trustedSourceUrl(value.directoryUrl, sourceRefs[0]?.provider ?? 'osm');
   return {
- id: safeString(value.id, 160) as string,
+ id,
  kind: value.kind as LogisticsCategory,
- name: safeString(value.name, 240) as string,
+ name,
  lat: value.lat,
  lon: value.lon,
  ...(isNonNegativeFinite(value.distanceKm) ? { distanceKm: value.distanceKm } : {}),
- ...(safeString(value.address, 400) ? { address: safeString(value.address, 400) } : {}),
- ...(publicPhone(value.publicPhone) ? { publicPhone: publicPhone(value.publicPhone) } : {}),
- ...(trustedSourceUrl(value.directoryUrl, sourceRefs[0]?.provider ?? 'osm') ? { directoryUrl: trustedSourceUrl(value.directoryUrl, sourceRefs[0]?.provider ?? 'osm') as string } : {}),
+ ...(address ? { address } : {}),
+ ...(phone ? { publicPhone: phone } : {}),
+ ...(directoryUrl ? { directoryUrl } : {}),
  sourceRefs,
  capabilities,
   };
 }
 
+function observationMatchesProviderContract(value: Record<string, unknown>): boolean {
+  if (value.provider === 'osm') {
+    return value.verification === 'directory'
+      && value.operational === 'unknown'
+      && value.inventory === 'unknown'
+      && value.power === 'unknown'
+      && value.access === 'unknown'
+      && value.confidence === 'low';
+  }
+  return value.verification === 'official'
+    && value.operational === 'open'
+    && value.inventory === 'unknown'
+    && value.power === 'unknown'
+    && value.access === 'unknown'
+    && value.confidence === 'high';
+}
+
 function parseObservation(value: unknown, now = Date.now()): ResourceObservation | null {
-  if (!isRecord(value) || !safeString(value.id) || !safeString(value.siteId)) return null;
+  if (!isRecord(value)) return null;
+  const id = safeString(value.id);
+  const siteId = safeString(value.siteId);
+  if (!id || !siteId) return null;
   if (value.provider !== 'osm' && value.provider !== 'fema') return null;
-  if (!VERIFICATION.has(value.verification as VerificationMethod)) return null;
-  if (!OPERATIONAL.has(value.operational as OperationalStatus)) return null;
-  if (!INVENTORY.has(value.inventory as InventoryStatus)) return null;
-  if (!POWER.has(value.power as PowerStatus)) return null;
-  if (!ACCESS.has(value.access as AccessStatus)) return null;
-  const observedAt = parseDate(value.observedAt);
-  const retrievedAt = value.retrievedAt === undefined ? observedAt : parseDate(value.retrievedAt);
-  const sourceObservedAt = value.sourceObservedAt === undefined ? null : parseDate(value.sourceObservedAt);
-  const expiresAt = parseDate(value.expiresAt);
-  if (!observedAt || !retrievedAt || !expiresAt || observedAt.getTime() !== retrievedAt.getTime()) return null;
-  if (retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS) return null;
+  if (!observationStatusesAreValid(value)) return null;
   const maximumTtlMs = value.provider === 'osm' ? DIRECTORY_OBSERVATION_TTL_MS : FEMA_OBSERVATION_TTL_MS;
-  if (expiresAt.getTime() < retrievedAt.getTime()
-    || expiresAt.getTime() > retrievedAt.getTime() + maximumTtlMs) return null;
-  if (value.sourceObservedAt !== undefined && !sourceObservedAt) return null;
-  if (sourceObservedAt && !isBoundedSourceTime(sourceObservedAt, retrievedAt)) return null;
-  if (!CONFIDENCE.has(value.confidence as ObservationConfidence)) return null;
-  if (value.provider === 'osm' && (
-    value.verification !== 'directory'
-    || value.operational !== 'unknown'
-    || value.inventory !== 'unknown'
-    || value.power !== 'unknown'
-    || value.access !== 'unknown'
-    || value.confidence !== 'low'
-  )) return null;
-  if (value.provider === 'fema' && (
-    value.verification !== 'official'
-    || value.operational !== 'open'
-    || value.inventory !== 'unknown'
-    || value.power !== 'unknown'
-    || value.access !== 'unknown'
-    || value.confidence !== 'high'
-  )) return null;
+  const dates = parseObservationDates(value, maximumTtlMs, now);
+  if (!dates) return null;
+  if (!observationMatchesProviderContract(value)) return null;
   const sourceUrl = trustedSourceUrl(value.sourceUrl, value.provider);
   if (!sourceUrl) return null;
   return {
- id: safeString(value.id) as string,
- siteId: safeString(value.siteId) as string,
+ id,
+ siteId,
  provider: value.provider,
  verification: value.verification as VerificationMethod,
  operational: value.operational as OperationalStatus,
  inventory: value.inventory as InventoryStatus,
  power: value.power as PowerStatus,
  access: value.access as AccessStatus,
- observedAt,
- retrievedAt,
- ...(sourceObservedAt ? { sourceObservedAt } : {}),
- expiresAt,
+ observedAt: dates.observedAt,
+ retrievedAt: dates.retrievedAt,
+ ...(dates.sourceObservedAt ? { sourceObservedAt: dates.sourceObservedAt } : {}),
+ expiresAt: dates.expiresAt,
  confidence: value.confidence as ObservationConfidence,
  sourceUrl,
   };
+}
+
+function compareObservations(left: ResourceObservation, right: ResourceObservation, now: number): number {
+  const currentDiff = Number(right.expiresAt.getTime() > now) - Number(left.expiresAt.getTime() > now);
+  if (currentDiff !== 0) return currentDiff;
+  const verificationDiff = Number(right.verification === 'official') - Number(left.verification === 'official');
+  if (verificationDiff !== 0) return verificationDiff;
+  return (right.retrievedAt ?? right.observedAt).getTime() - (left.retrievedAt ?? left.observedAt).getTime();
+}
+
+function groupObservationsBySite(observations: ResourceObservation[]): Map<string, ResourceObservation[]> {
+  const observationsBySite = new Map<string, ResourceObservation[]>();
+  for (const observation of observations) {
+    const bucket = observationsBySite.get(observation.siteId) ?? [];
+    bucket.push(observation);
+    observationsBySite.set(observation.siteId, bucket);
+  }
+  return observationsBySite;
+}
+
+function buildLogisticsNodes(
+  sites: LocatedResourceSite[],
+  observations: ResourceObservation[],
+  fetchedAt: Date,
+  now: number,
+): LogisticsNode[] {
+  const observationsBySite = groupObservationsBySite(observations);
+  const nodes: LogisticsNode[] = [];
+  for (const site of sites) {
+    const observation = [...(observationsBySite.get(site.id) ?? [])]
+      .sort((left, right) => compareObservations(left, right, now))[0];
+    if (!observation) continue;
+    nodes.push({
+      ...site,
+      category: site.kind,
+      source: logisticsSourceLabel(site),
+      freshness: freshness(observation.retrievedAt ?? observation.observedAt, observation.expiresAt, now),
+      hazardCompatibility: hazardCompatibility(site.kind),
+      fetchedAt,
+      operational: observation.operational,
+      inventory: observation.inventory,
+      power: observation.power,
+      access: observation.access,
+      verification: observation.verification,
+      observedAt: observation.observedAt,
+      retrievedAt: observation.retrievedAt,
+      ...(observation.sourceObservedAt ? { sourceObservedAt: observation.sourceObservedAt } : {}),
+      expiresAt: observation.expiresAt,
+      confidence: observation.confidence,
+      sourceUrl: observation.sourceUrl,
+      directoryOnly: observation.verification === 'directory',
+      ...(site.directoryUrl ? { url: site.directoryUrl } : {}),
+    });
+  }
+  return nodes;
+}
+
+function countProviderContributions(
+  observations: ResourceObservation[],
+  siteById: Map<string, LocatedResourceSite>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const observation of observations) {
+    const site = siteById.get(observation.siteId);
+    const providerId = site ? providerIdForObservation(site, observation) : null;
+    if (providerId) counts.set(providerId, (counts.get(providerId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function expectedLocalProviderIds(categories: LogisticsCategory[]): string[] {
@@ -457,61 +582,93 @@ function reconcileProvider(provider: ProviderStatus, contributedRows: number): P
   return provider;
 }
 
-export function parseLocalLogisticsApiResponse(
-  place: SavedPlace,
-  payload: unknown,
-  now = Date.now(),
-  expectedCategories?: LogisticsCategory[],
-): ParsedLogisticsPayload {
+interface ApiLogisticsEnvelope {
+  query: Record<string, unknown> & { categories: unknown[]; radiusKm: number };
+  sites: unknown[];
+  observations: unknown[];
+  providers: unknown[];
+  fetchedAt: unknown;
+  retrievedAt: unknown;
+}
+
+function parseApiEnvelope(place: SavedPlace, payload: unknown): ApiLogisticsEnvelope {
   if (!isRecord(payload) || payload.schemaVersion !== LOCAL_LOGISTICS_SCHEMA_VERSION) throw new Error('unsupported lifelines schema');
   if (!isRecord(payload.query) || !Array.isArray(payload.query.categories)) throw new Error('malformed lifelines query');
   if (payload.query.lat !== place.lat || payload.query.lon !== place.lon) throw new Error('lifelines location mismatch');
   if (!isNonNegativeFinite(payload.query.radiusKm) || payload.query.radiusKm < 1 || payload.query.radiusKm > 50) {
- throw new Error('malformed lifelines radius');
+    throw new Error('malformed lifelines radius');
   }
   if (!Array.isArray(payload.sites) || !Array.isArray(payload.observations) || !Array.isArray(payload.providers)) {
- throw new Error('malformed lifelines response');
+    throw new TypeError('malformed lifelines response');
   }
   if (payload.sites.length > MAX_RESOURCE_ROWS || payload.observations.length > MAX_RESOURCE_ROWS
     || payload.providers.length > MAX_PROVIDER_ROWS
     || (payload.nodes !== undefined && (!Array.isArray(payload.nodes) || payload.nodes.length > MAX_RESOURCE_ROWS))) {
     throw new Error('oversized lifelines response');
   }
-  const fetchedAt = parseDate(payload.fetchedAt);
+  return {
+    query: payload.query as ApiLogisticsEnvelope['query'],
+    sites: payload.sites,
+    observations: payload.observations,
+    providers: payload.providers,
+    fetchedAt: payload.fetchedAt,
+    retrievedAt: payload.retrievedAt,
+  };
+}
+
+function parseApiRetrievalTime(envelope: ApiLogisticsEnvelope, now: number): { fetchedAt: Date; retrievedAt: Date } {
+  const fetchedAt = parseDate(envelope.fetchedAt);
   if (!fetchedAt) throw new Error('malformed lifelines timestamp');
-  const retrievedAt = payload.retrievedAt === undefined ? fetchedAt : parseDate(payload.retrievedAt);
-  if (!retrievedAt) throw new Error('malformed lifelines retrieval timestamp');
-  if (fetchedAt.getTime() !== retrievedAt.getTime()
-    || retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS) {
+  const retrievedAt = envelope.retrievedAt === undefined ? fetchedAt : parseDate(envelope.retrievedAt);
+  if (retrievedAt?.getTime() !== fetchedAt.getTime()) throw new Error('malformed lifelines retrieval timestamp');
+  if (retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS) {
     throw new Error('malformed lifelines retrieval timestamp');
   }
-  const categories = payload.query.categories.filter((item): item is LogisticsCategory =>
- typeof item === 'string' && LOCAL_LOGISTICS_CATEGORIES.includes(item as LogisticsCategory));
-  if (categories.length !== payload.query.categories.length || new Set(categories).size !== categories.length) {
-    throw new Error('malformed lifelines categories');
-  }
-  if (expectedCategories) {
-    const actual = [...categories].sort().join(',');
-    const expected = [...new Set(expectedCategories)].sort().join(',');
-    if (actual !== expected) throw new Error('lifelines categories mismatch');
-  }
-  const sites = payload.sites
-    .map(parseSite)
-    .filter((site): site is ResourceSite => Boolean(site))
-    .map((site) => ({ ...site, distanceKm: haversineKm(place.lat, place.lon, site.lat, site.lon) }));
-  if (sites.some((site) => !categories.includes(site.kind))) throw new Error('lifelines site category mismatch');
-  const parsedProviders = payload.providers.map((provider) => parseProvider(provider, now))
+  return { fetchedAt, retrievedAt };
+}
+
+function parseCategories(value: unknown[]): LogisticsCategory[] | null {
+  const categories = value.filter((item): item is LogisticsCategory =>
+    typeof item === 'string' && LOCAL_LOGISTICS_CATEGORIES.includes(item as LogisticsCategory));
+  return categories.length === value.length && new Set(categories).size === categories.length ? categories : null;
+}
+
+function categoriesMatchExpected(categories: LogisticsCategory[], expectedCategories?: LogisticsCategory[]): boolean {
+  if (!expectedCategories) return true;
+  const actual = [...categories].sort(compareStrings).join(',');
+  const expected = [...new Set(expectedCategories)].sort(compareStrings).join(',');
+  return actual === expected;
+}
+
+function parseProviderCollection(
+  rawProviders: unknown[],
+  categories: LogisticsCategory[],
+  now: number,
+  includeGrid: boolean,
+): { providers: ProviderStatus[]; byId: Map<ProviderStatus['id'], ProviderStatus> } | null {
+  const providers = rawProviders.map((provider) => parseProvider(provider, now))
     .filter((provider): provider is ProviderStatus => Boolean(provider));
-  if (payload.providers.length !== parsedProviders.length) throw new Error('lifelines providers failed validation');
-  const providerById = new Map(parsedProviders.map((provider) => [provider.id, provider]));
-  if (providerById.size !== parsedProviders.length) throw new Error('duplicate lifelines provider');
-  const expectedProviderIds = expectedLocalProviderIds(categories).sort();
-  if ([...providerById.keys()].sort().join(',') !== expectedProviderIds.join(',')) {
-    throw new Error('lifelines provider coverage mismatch');
-  }
-  const siteById = new Map(sites.map((site) => [site.id, site]));
-  const observations = payload.observations
-    .map((observation) => parseObservation(observation, now))
+  if (providers.length !== rawProviders.length) return null;
+  const byId = new Map(providers.map((provider) => [provider.id, provider]));
+  if (byId.size !== providers.length) return null;
+  const gridIds = includeGrid ? ['ornl-odin'] : [];
+  const expectedIds = [...expectedLocalProviderIds(categories), ...gridIds].sort(compareStrings);
+  return [...byId.keys()].sort(compareStrings).join(',') === expectedIds.join(',') ? { providers, byId } : null;
+}
+
+function parseLocatedSites(rawSites: unknown[], lat: number, lon: number): LocatedResourceSite[] {
+  return rawSites.map((site) => parseSite(site))
+    .filter((site): site is ResourceSite => Boolean(site))
+    .map((site) => ({ ...site, distanceKm: haversineKm(lat, lon, site.lat, site.lon) }));
+}
+
+function parseActiveObservations(
+  rawObservations: unknown[],
+  siteById: Map<string, LocatedResourceSite>,
+  providerById: Map<ProviderStatus['id'], ProviderStatus>,
+  now: number,
+): ResourceObservation[] {
+  return rawObservations.map((observation) => parseObservation(observation, now))
     .filter((item): item is ResourceObservation => Boolean(item))
     .filter((observation) => {
       const site = siteById.get(observation.siteId);
@@ -520,67 +677,46 @@ export function parseLocalLogisticsApiResponse(
       const provider = providerId ? providerById.get(providerId) : undefined;
       return provider?.state === 'ok' || provider?.state === 'partial';
     });
-  if (payload.sites.length > 0 && sites.length === 0) throw new Error('lifelines sites failed validation');
-  if (payload.observations.length > 0 && observations.length === 0) throw new Error('lifelines observations failed validation');
-  const observationsBySite = new Map<string, ResourceObservation[]>();
-  for (const observation of observations) {
- const bucket = observationsBySite.get(observation.siteId) ?? [];
- bucket.push(observation);
- observationsBySite.set(observation.siteId, bucket);
+}
+
+export function parseLocalLogisticsApiResponse(
+  place: SavedPlace,
+  payload: unknown,
+  now = Date.now(),
+  expectedCategories?: LogisticsCategory[],
+): ParsedLogisticsPayload {
+  const envelope = parseApiEnvelope(place, payload);
+  const { fetchedAt, retrievedAt } = parseApiRetrievalTime(envelope, now);
+  const categories = parseCategories(envelope.query.categories);
+  if (!categories) throw new Error('malformed lifelines categories');
+  if (!categoriesMatchExpected(categories, expectedCategories)) throw new Error('lifelines categories mismatch');
+  const sites = parseLocatedSites(envelope.sites, place.lat, place.lon);
+  if (sites.some((site) => !categories.includes(site.kind))) throw new Error('lifelines site category mismatch');
+  const parsedProviders = envelope.providers.map((provider) => parseProvider(provider, now))
+    .filter((provider): provider is ProviderStatus => Boolean(provider));
+  if (envelope.providers.length !== parsedProviders.length) throw new Error('lifelines providers failed validation');
+  const providerById = new Map(parsedProviders.map((provider) => [provider.id, provider]));
+  if (providerById.size !== parsedProviders.length) throw new Error('duplicate lifelines provider');
+  const expectedProviderIds = expectedLocalProviderIds(categories).sort(compareStrings);
+  if ([...providerById.keys()].sort(compareStrings).join(',') !== expectedProviderIds.join(',')) {
+    throw new Error('lifelines provider coverage mismatch');
   }
-  const nodes = sites.flatMap((site): LogisticsNode[] => {
- const candidates = observationsBySite.get(site.id) ?? [];
- const observation = candidates.sort((left, right) => {
- const currentDiff = Number(right.expiresAt.getTime() > now) - Number(left.expiresAt.getTime() > now);
- if (currentDiff !== 0) return currentDiff;
- const verificationDiff = Number(right.verification === 'official') - Number(left.verification === 'official');
- if (verificationDiff !== 0) return verificationDiff;
- return right.observedAt.getTime() - left.observedAt.getTime();
- })[0];
- if (!observation) return [];
- const sourceRef = site.sourceRefs[0];
- const source = sourceRef?.provider === 'fema'
- ? (site.kind === 'recovery' ? 'FEMA Disaster Recovery Centers' : 'FEMA Open Shelters')
- : 'OpenStreetMap directory';
- return [{
- ...site,
- category: site.kind,
- distanceKm: site.distanceKm,
- source,
- freshness: freshness(observation.retrievedAt ?? observation.observedAt, observation.expiresAt, now),
- hazardCompatibility: hazardCompatibility(site.kind),
- fetchedAt,
- operational: observation.operational,
- inventory: observation.inventory,
- power: observation.power,
- access: observation.access,
- verification: observation.verification,
- observedAt: observation.observedAt,
- retrievedAt: observation.retrievedAt,
- ...(observation.sourceObservedAt ? { sourceObservedAt: observation.sourceObservedAt } : {}),
- expiresAt: observation.expiresAt,
- confidence: observation.confidence,
- sourceUrl: observation.sourceUrl,
- directoryOnly: observation.verification === 'directory',
- ...(site.directoryUrl ? { url: site.directoryUrl } : {}),
- }];
-  });
-  const contributionCounts = new Map<string, number>();
-  for (const observation of observations) {
-    const site = siteById.get(observation.siteId);
-    const providerId = site ? providerIdForObservation(site, observation) : null;
-    if (providerId) contributionCounts.set(providerId, (contributionCounts.get(providerId) ?? 0) + 1);
-  }
+  const siteById = new Map(sites.map((site) => [site.id, site]));
+  const observations = parseActiveObservations(envelope.observations, siteById, providerById, now);
+  if (envelope.sites.length > 0 && sites.length === 0) throw new Error('lifelines sites failed validation');
+  if (envelope.observations.length > 0 && observations.length === 0) throw new Error('lifelines observations failed validation');
+  const nodes = buildLogisticsNodes(sites, observations, fetchedAt, now);
+  const contributionCounts = countProviderContributions(observations, siteById);
   const providers = parsedProviders.map((provider) =>
     reconcileProvider(provider, contributionCounts.get(provider.id) ?? 0));
   if (nodes.length !== sites.length) throw new Error('lifelines sites have no valid observations');
-  const countyFips = safeString(payload.query.countyFips);
-  if (payload.query.countyFips !== undefined && (!countyFips || !/^\d{5}$/.test(countyFips))) {
+  const countyFips = safeString(envelope.query.countyFips);
+  if (envelope.query.countyFips !== undefined && (!countyFips || !/^\d{5}$/.test(countyFips))) {
     throw new Error('malformed lifelines county FIPS');
   }
   return {
  sites, observations, nodes, providers, fetchedAt, retrievedAt, categories,
- effectiveRadiusKm: payload.query.radiusKm,
+ effectiveRadiusKm: envelope.query.radiusKm,
  ...(countyFips ? { countyFips } : {}),
   };
 }
@@ -593,22 +729,14 @@ function parseAreaCondition(row: unknown, expectedCountyFips?: string, now = Dat
   const county = safeString(row.county);
   const state = safeString(row.state);
   if (!county || !state || !isNonNegativeInteger(row.customersOut) || row.customersOut > MAX_CUSTOMERS_OUT) return null;
-  const observedAt = parseDate(row.observedAt);
-  const retrievedAt = row.retrievedAt === undefined ? observedAt : parseDate(row.retrievedAt);
-  const sourceObservedAt = row.sourceObservedAt === undefined ? null : parseDate(row.sourceObservedAt);
-  const expiresAt = parseDate(row.expiresAt);
-  if (!observedAt || !retrievedAt || !expiresAt || observedAt.getTime() !== retrievedAt.getTime()) return null;
-  if (retrievedAt.getTime() < EARLIEST_SOURCE_TIME_MS || retrievedAt.getTime() > now + CLOCK_SKEW_MS) return null;
-  if (expiresAt.getTime() < retrievedAt.getTime()
-    || expiresAt.getTime() > retrievedAt.getTime() + ODIN_OBSERVATION_TTL_MS) return null;
-  if (row.sourceObservedAt !== undefined && !sourceObservedAt) return null;
-  if (sourceObservedAt && !isBoundedSourceTime(sourceObservedAt, retrievedAt)) return null;
+  const dates = parseObservationDates(row, ODIN_OBSERVATION_TTL_MS, now);
+  if (!dates) return null;
   return {
     id: safeString(row.id) ?? `ornl-odin:${countyFips}:${safeString(row.utilityId) ?? 'county'}`,
     type: 'power_outage', coverage: row.coverage, countyFips, county, state,
-    customersOut: row.customersOut, observedAt, retrievedAt,
-    ...(sourceObservedAt ? { sourceObservedAt } : {}),
-    expiresAt, source: 'ornl-odin',
+    customersOut: row.customersOut, observedAt: dates.observedAt, retrievedAt: dates.retrievedAt,
+    ...(dates.sourceObservedAt ? { sourceObservedAt: dates.sourceObservedAt } : {}),
+    expiresAt: dates.expiresAt, source: 'ornl-odin',
     ...(isNonNegativeInteger(row.customersRestored) && row.customersRestored <= MAX_CUSTOMERS_OUT
       ? { customersRestored: row.customersRestored } : {}),
     ...(safeString(row.utilityName) ? { utilityName: safeString(row.utilityName) } : {}),
@@ -625,7 +753,7 @@ function parseGridOutages(payload: unknown, countyFips: string, now = Date.now()
  return { areaConditions: [], provider: fallback };
   }
   const parsedProvider = parseProvider(payload.provider, now);
-  if (!parsedProvider || parsedProvider.id !== 'ornl-odin') return { areaConditions: [], provider: fallback };
+  if (parsedProvider?.id !== 'ornl-odin') return { areaConditions: [], provider: fallback };
   const coverage = payload.coverage === 'reported' ? 'reported' : 'unknown';
   const areaConditions: AreaCondition[] = [];
   for (const row of payload.outages) {
@@ -682,11 +810,83 @@ function serializeSnapshot(snapshot: LocalLogisticsSnapshot): CachedLocalLogisti
  }) => ({
  ...provider,
  observedAt: observedAt?.toISOString() ?? null,
- ...(retrievedAt !== undefined ? { retrievedAt: retrievedAt?.toISOString() ?? null } : {}),
- ...(sourceObservedAt !== undefined ? { sourceObservedAt: sourceObservedAt?.toISOString() ?? null } : {}),
+ ...(retrievedAt === undefined ? {} : { retrievedAt: retrievedAt?.toISOString() ?? null }),
+ ...(sourceObservedAt === undefined ? {} : { sourceObservedAt: sourceObservedAt?.toISOString() ?? null }),
  })),
  fetchedAt: snapshot.fetchedAt.toISOString(),
   };
+}
+
+interface CachedLogisticsEnvelope {
+  categories: unknown[];
+  sites: unknown[];
+  observations: unknown[];
+  areaConditions: unknown[];
+  providers: unknown[];
+  queryFingerprint: unknown;
+  placeId: unknown;
+  placeName: unknown;
+  fetchedAt: unknown;
+  effectiveRadiusKm: number;
+  countyFips: unknown;
+}
+
+function parseCachedEnvelope(cached: unknown): CachedLogisticsEnvelope | null {
+  if (!isRecord(cached) || cached.schemaVersion !== LOCAL_LOGISTICS_SCHEMA_VERSION) return null;
+  if (!Array.isArray(cached.categories) || !Array.isArray(cached.sites)
+    || !Array.isArray(cached.observations) || !Array.isArray(cached.nodes)
+    || !Array.isArray(cached.areaConditions) || !Array.isArray(cached.providers)) return null;
+  if (cached.sites.length > MAX_RESOURCE_ROWS || cached.observations.length > MAX_RESOURCE_ROWS
+    || cached.nodes.length > MAX_RESOURCE_ROWS || cached.areaConditions.length > MAX_AREA_CONDITION_ROWS
+    || cached.providers.length > MAX_PROVIDER_ROWS) return null;
+  if (!isNonNegativeFinite(cached.effectiveRadiusKm)
+    || cached.effectiveRadiusKm < 1 || cached.effectiveRadiusKm > 50) return null;
+  return {
+    categories: cached.categories,
+    sites: cached.sites,
+    observations: cached.observations,
+    areaConditions: cached.areaConditions,
+    providers: cached.providers,
+    queryFingerprint: cached.queryFingerprint,
+    placeId: cached.placeId,
+    placeName: cached.placeName,
+    fetchedAt: cached.fetchedAt,
+    effectiveRadiusKm: cached.effectiveRadiusKm,
+    countyFips: cached.countyFips,
+  };
+}
+
+function parseCachedIdentity(
+  cached: CachedLogisticsEnvelope,
+  now: number,
+  expected?: { placeId: string; queryFingerprint: string; lat: number; lon: number },
+): { queryFingerprint: string; placeId: string; placeName: string; fetchedAt: Date } | null {
+  const queryFingerprint = safeString(cached.queryFingerprint, 600);
+  const placeId = safeString(cached.placeId, 240);
+  const placeName = safeString(cached.placeName, 240);
+  const fetchedAt = parseDate(cached.fetchedAt);
+  if (!queryFingerprint || !placeId || !placeName || !fetchedAt) return null;
+  if (expected && (placeId !== expected.placeId || queryFingerprint !== expected.queryFingerprint)) return null;
+  if (fetchedAt.getTime() < EARLIEST_SOURCE_TIME_MS || fetchedAt.getTime() > now + CLOCK_SKEW_MS) return null;
+  return { queryFingerprint, placeId, placeName, fetchedAt };
+}
+
+function parseCachedQuery(
+  cached: CachedLogisticsEnvelope,
+  queryFingerprint: string,
+  expected?: { lat: number; lon: number },
+): { categories: LogisticsCategory[]; queryLat: number; queryLon: number; countyFips?: string } | null {
+  const categories = parseCategories(cached.categories);
+  if (!categories) return null;
+  const fingerprint = parseLogisticsFingerprint(queryFingerprint);
+  if (fingerprint?.radiusKm.toFixed(2) !== cached.effectiveRadiusKm.toFixed(2)) return null;
+  if (fingerprint.categories.join(',') !== [...categories].sort(compareStrings).join(',')) return null;
+  const queryLat = expected?.lat ?? fingerprint.lat;
+  const queryLon = expected?.lon ?? fingerprint.lon;
+  if (!isCoordinate(queryLat, -90, 90) || !isCoordinate(queryLon, -180, 180)) return null;
+  const countyFips = cached.countyFips === undefined ? undefined : safeString(cached.countyFips);
+  if (cached.countyFips !== undefined && (!countyFips || !/^\d{5}$/.test(countyFips))) return null;
+  return { categories, queryLat, queryLon, ...(countyFips ? { countyFips } : {}) };
 }
 
 /** @internal Strictly validates the persisted snapshot before offline use. */
@@ -695,111 +895,38 @@ export function deserializeLocalLogisticsSnapshot(
   now = Date.now(),
   expected?: { placeId: string; queryFingerprint: string; lat: number; lon: number },
 ): LocalLogisticsSnapshot | null {
-  if (!isRecord(cached) || cached.schemaVersion !== LOCAL_LOGISTICS_SCHEMA_VERSION) return null;
-  if (!Array.isArray(cached.categories) || !Array.isArray(cached.sites)
-    || !Array.isArray(cached.observations) || !Array.isArray(cached.nodes)
-    || !Array.isArray(cached.areaConditions) || !Array.isArray(cached.providers)) return null;
-  if (cached.sites.length > MAX_RESOURCE_ROWS || cached.observations.length > MAX_RESOURCE_ROWS
-    || cached.nodes.length > MAX_RESOURCE_ROWS || cached.areaConditions.length > MAX_AREA_CONDITION_ROWS
-    || cached.providers.length > MAX_PROVIDER_ROWS) return null;
-  const queryFingerprint = safeString(cached.queryFingerprint, 600);
-  const placeId = safeString(cached.placeId, 240);
-  const placeName = safeString(cached.placeName, 240);
-  const fetchedAt = parseDate(cached.fetchedAt);
-  if (!queryFingerprint || !placeId || !placeName || !fetchedAt) return null;
-  if (expected && (placeId !== expected.placeId || queryFingerprint !== expected.queryFingerprint)) return null;
-  if (fetchedAt.getTime() < EARLIEST_SOURCE_TIME_MS || fetchedAt.getTime() > now + CLOCK_SKEW_MS) return null;
-  if (!isNonNegativeFinite(cached.effectiveRadiusKm)
-    || cached.effectiveRadiusKm < 1 || cached.effectiveRadiusKm > 50) return null;
-  const categories = cached.categories.filter((item): item is LogisticsCategory =>
-    typeof item === 'string' && LOCAL_LOGISTICS_CATEGORIES.includes(item as LogisticsCategory));
-  if (categories.length !== cached.categories.length || new Set(categories).size !== categories.length) return null;
-  const fingerprint = parseLogisticsFingerprint(queryFingerprint);
-  if (!fingerprint || fingerprint.radiusKm.toFixed(2) !== cached.effectiveRadiusKm.toFixed(2)
-    || fingerprint.categories.join(',') !== [...categories].sort().join(',')) return null;
-  const queryLat = expected?.lat ?? fingerprint.lat;
-  const queryLon = expected?.lon ?? fingerprint.lon;
-  if (!isCoordinate(queryLat, -90, 90) || !isCoordinate(queryLon, -180, 180)) return null;
-  const countyFips = cached.countyFips === undefined ? undefined : safeString(cached.countyFips);
-  if (cached.countyFips !== undefined && (!countyFips || !/^\d{5}$/.test(countyFips))) return null;
+  const envelope = parseCachedEnvelope(cached);
+  if (!envelope) return null;
+  const identity = parseCachedIdentity(envelope, now, expected);
+  if (!identity) return null;
+  const query = parseCachedQuery(envelope, identity.queryFingerprint, expected);
+  if (!query) return null;
+  const { queryFingerprint, placeId, placeName, fetchedAt } = identity;
+  const { categories, queryLat, queryLon, countyFips } = query;
 
-  const parsedProviders = cached.providers
-    .map((provider) => parseProvider(provider, now))
-    .filter((provider): provider is ProviderStatus => Boolean(provider));
-  if (parsedProviders.length !== cached.providers.length) return null;
-  const providerById = new Map(parsedProviders.map((provider) => [provider.id, provider]));
-  if (providerById.size !== parsedProviders.length) return null;
-  const expectedProviderIds = [...expectedLocalProviderIds(categories), 'ornl-odin'].sort();
-  if ([...providerById.keys()].sort().join(',') !== expectedProviderIds.join(',')) return null;
+  const providerCollection = parseProviderCollection(envelope.providers, categories, now, true);
+  if (!providerCollection) return null;
+  const { providers: parsedProviders, byId: providerById } = providerCollection;
 
-  const sites = cached.sites
-    .map(parseSite)
-    .filter((site): site is ResourceSite => Boolean(site))
-    .map((site) => ({ ...site, distanceKm: haversineKm(queryLat, queryLon, site.lat, site.lon) }));
-  if (sites.length !== cached.sites.length) return null;
+  const sites = parseLocatedSites(envelope.sites, queryLat, queryLon);
+  if (sites.length !== envelope.sites.length) return null;
   if (sites.some((site) => !categories.includes(site.kind))) return null;
   const siteById = new Map(sites.map((site) => [site.id, site]));
-  const observations = cached.observations
-    .map((observation) => parseObservation(observation, now))
-    .filter((item): item is ResourceObservation => Boolean(item))
-    .filter((observation) => {
-      const site = siteById.get(observation.siteId);
-      if (!site) return false;
-      const providerId = providerIdForObservation(site, observation);
-      const provider = providerId ? providerById.get(providerId) : undefined;
-      return provider?.state === 'ok' || provider?.state === 'partial';
-    });
-  if (observations.length !== cached.observations.length) return null;
+  const observations = parseActiveObservations(envelope.observations, siteById, providerById, now);
+  if (observations.length !== envelope.observations.length) return null;
 
-  const observationsBySite = new Map<string, ResourceObservation[]>();
-  for (const observation of observations) {
-    const bucket = observationsBySite.get(observation.siteId) ?? [];
-    bucket.push(observation);
-    observationsBySite.set(observation.siteId, bucket);
-  }
-  const nodes = sites.flatMap((site): LogisticsNode[] => {
-    const observation = (observationsBySite.get(site.id) ?? []).sort((left, right) => {
-      const currentDiff = Number(right.expiresAt.getTime() > now) - Number(left.expiresAt.getTime() > now);
-      if (currentDiff !== 0) return currentDiff;
-      const verificationDiff = Number(right.verification === 'official') - Number(left.verification === 'official');
-      if (verificationDiff !== 0) return verificationDiff;
-      return right.retrievedAt!.getTime() - left.retrievedAt!.getTime();
-    })[0];
-    if (!observation || site.distanceKm === undefined) return [];
-    const sourceRef = site.sourceRefs[0];
-    const source = sourceRef?.provider === 'fema'
-      ? (site.kind === 'recovery' ? 'FEMA Disaster Recovery Centers' : 'FEMA Open Shelters')
-      : 'OpenStreetMap directory';
-    return [{
-      ...site, category: site.kind, distanceKm: site.distanceKm, source,
-      freshness: freshness(observation.retrievedAt ?? observation.observedAt, observation.expiresAt, now),
-      hazardCompatibility: hazardCompatibility(site.kind), fetchedAt,
-      operational: observation.operational, inventory: observation.inventory,
-      power: observation.power, access: observation.access,
-      verification: observation.verification, observedAt: observation.observedAt,
-      retrievedAt: observation.retrievedAt,
-      ...(observation.sourceObservedAt ? { sourceObservedAt: observation.sourceObservedAt } : {}),
-      expiresAt: observation.expiresAt, confidence: observation.confidence,
-      sourceUrl: observation.sourceUrl, directoryOnly: observation.verification === 'directory',
-      ...(site.directoryUrl ? { url: site.directoryUrl } : {}),
-    }];
-  });
+  const nodes = buildLogisticsNodes(sites, observations, fetchedAt, now);
   if (nodes.length !== sites.length) return null;
 
-  const areaConditions = cached.areaConditions
+  const areaConditions = envelope.areaConditions
     .map((condition) => countyFips ? parseAreaCondition(condition, countyFips, now) : null)
     .filter((condition): condition is AreaCondition => Boolean(condition))
     .filter(() => {
       const provider = providerById.get('ornl-odin');
       return provider?.state === 'ok' || provider?.state === 'partial';
     });
-  if (areaConditions.length !== cached.areaConditions.length) return null;
-  const contributionCounts = new Map<string, number>();
-  for (const observation of observations) {
-    const site = siteById.get(observation.siteId);
-    const providerId = site ? providerIdForObservation(site, observation) : null;
-    if (providerId) contributionCounts.set(providerId, (contributionCounts.get(providerId) ?? 0) + 1);
-  }
+  if (areaConditions.length !== envelope.areaConditions.length) return null;
+  const contributionCounts = countProviderContributions(observations, siteById);
   contributionCounts.set('ornl-odin', areaConditions.length);
   const providers = parsedProviders.map((provider) =>
     reconcileProvider(provider, contributionCounts.get(provider.id) ?? 0));
@@ -807,7 +934,7 @@ export function deserializeLocalLogisticsSnapshot(
   const staleAgeMs = Math.max(0, now - fetchedAt.getTime());
   return {
     schemaVersion: 2, queryFingerprint, placeId, placeName,
-    effectiveRadiusKm: cached.effectiveRadiusKm,
+    effectiveRadiusKm: envelope.effectiveRadiusKm,
     ...(countyFips ? { countyFips } : {}),
     categories: [...new Set(categories)], sites, observations,
     nodes: rankLocalLogisticsNodes(nodes, now), areaConditions, providers, fetchedAt,
@@ -902,8 +1029,24 @@ export function rankLocalLogisticsNodes(nodes: LogisticsNode[], now = Date.now()
  const currentDiff = Number(right.expiresAt.getTime() > now) - Number(left.expiresAt.getTime() > now);
  if (currentDiff !== 0) return currentDiff;
  const distanceDiff = left.distanceKm - right.distanceKm;
- return distanceDiff !== 0 ? distanceDiff : left.name.localeCompare(right.name);
+ return distanceDiff === 0 ? left.name.localeCompare(right.name) : distanceDiff;
   });
+}
+
+function resourceSiteFromNode(node: LogisticsNode): ResourceSite {
+  return {
+    id: node.id,
+    kind: node.kind,
+    name: node.name,
+    lat: node.lat,
+    lon: node.lon,
+    distanceKm: node.distanceKm,
+    ...(node.address ? { address: node.address } : {}),
+    ...(node.publicPhone ? { publicPhone: node.publicPhone } : {}),
+    ...(node.directoryUrl ? { directoryUrl: node.directoryUrl } : {}),
+    sourceRefs: node.sourceRefs,
+    capabilities: node.capabilities,
+  };
 }
 
 export function buildLocalLogisticsSnapshot(place: SavedPlace, nodes: LogisticsNode[], options: BuildSnapshotOptions = {}): LocalLogisticsSnapshot {
@@ -917,11 +1060,7 @@ export function buildLocalLogisticsSnapshot(place: SavedPlace, nodes: LogisticsN
  placeId: place.id, placeName: place.name,
  effectiveRadiusKm: options.effectiveRadiusKm ?? Math.min(place.radiusKm, DEFAULT_RADIUS_KM),
  categories,
- sites: options.sites ?? nodes.map(({ category: _category, source: _source, freshness: _freshness, hazardCompatibility: _hazardCompatibility,
- fetchedAt: _fetchedAt, operational: _operational, inventory: _inventory, power: _power, access: _access,
- verification: _verification, observedAt: _observedAt, retrievedAt: _retrievedAt,
- sourceObservedAt: _sourceObservedAt, expiresAt: _expiresAt, confidence: _confidence,
- sourceUrl: _sourceUrl, directoryOnly: _directoryOnly, url: _url, ...site }) => site),
+ sites: options.sites ?? nodes.map((node) => resourceSiteFromNode(node)),
  observations: options.observations ?? nodes.map((node) => ({
  id: `${node.id}:presentation`, siteId: node.id, provider: node.sourceRefs[0]?.provider ?? 'osm',
  verification: node.verification, operational: node.operational, inventory: node.inventory,
@@ -1063,7 +1202,7 @@ async function runFetch(place: SavedPlace, categories: LogisticsCategory[], radi
 
 export function fetchLocalLogistics(place: SavedPlace, options: FetchLocalLogisticsOptions = {}): Promise<LocalLogisticsSnapshot> {
   const requested = options.categories?.length ? options.categories : [...LOCAL_LOGISTICS_CATEGORIES];
-  const categories = [...new Set(requested.filter((item) => LOCAL_LOGISTICS_CATEGORIES.includes(item)))].sort();
+  const categories = [...new Set(requested.filter((item) => LOCAL_LOGISTICS_CATEGORIES.includes(item)))].sort(compareStrings);
   const radiusKm = Math.max(1, Math.min(place.radiusKm, options.radiusKm ?? DEFAULT_RADIUS_KM));
   const limitPerCategory = Math.max(1, Math.min(5, Math.trunc(options.limitPerCategory ?? DEFAULT_LIMIT_PER_CATEGORY)));
   const fingerprint = buildLocalLogisticsFingerprint(place, radiusKm, categories, limitPerCategory);

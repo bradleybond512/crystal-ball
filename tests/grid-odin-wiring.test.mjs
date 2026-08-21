@@ -105,7 +105,7 @@ test('active grid diagnostics use one ODIN entry and no PowerOutage.us entry', a
 
 test('globe heatmap does not turn county-only ODIN context into an unlabelled point', async () => {
   const heatmap = await source('src/components/globe/GlobeHeatmapRenderer.ts');
-  assert.match(heatmap, /infrastructure:\s*async \(\) => \[\]/);
+  assert.match(heatmap, /infrastructure:\s*\(\) => Promise\.resolve\(\[\]\)/);
   assert.match(heatmap, /would imply facility\s*\n\s*\/\/ or statewide coverage/);
   assert.match(heatmap, /never means power is on/);
   assert.doesNotMatch(heatmap, /api\/infrastructure\/outages/);

@@ -49,17 +49,19 @@ interface CurrentSituation {
   situation: LifelineSituation;
 }
 
+type LifelineSavedPlace = Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>;
+
 interface StoredPackV1 {
   schemaVersion: 1;
   placeId: string;
   queryFingerprint: string;
   requiredKinds: string[];
-  artifacts: Array<{
+  artifacts: {
     kind: string;
     queryFingerprint: string;
     cachedAt: string;
     expiresAt: string | null;
-  }>;
+  }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -67,13 +69,13 @@ interface StoredPackV1 {
 interface StoredOdinHistoryV1 {
   schemaVersion: 1;
   countyFips: string;
-  samples: Array<{
+  samples: {
     countyFips: string;
     customersOut: number;
     customersRestored?: number;
     observedAt: string;
     expiresAt: string;
-  }>;
+  }[];
   watermarkAt: string | null;
   latestOutcome: OdinOutageHistory['latestOutcome'];
   trendBaselineAt: string | null;
@@ -83,7 +85,7 @@ interface StoredOdinHistoryV1 {
 
 function defaultStorage(): StorageLike | null {
   try {
-    return typeof localStorage !== 'undefined' ? localStorage : null;
+    return typeof localStorage === 'undefined' ? null : localStorage;
   } catch {
     return null;
   }
@@ -124,6 +126,12 @@ function parseDate(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function validChangeValue(candidate: unknown): boolean {
+  return candidate === null
+    || (typeof candidate === 'number' && Number.isFinite(candidate))
+    || (typeof candidate === 'string' && candidate.length <= 120);
 }
 
 function readPack(storage: StorageLike | null, placeId: string): LifelineOfflinePackManifest | null {
@@ -188,7 +196,7 @@ function readExactLifelinesArtifact(
     }
     : undefined;
   const parsed = deserializeLocalLogisticsSnapshot(entry.data, now, identity);
-  if (!parsed || parsed.placeId !== expected.placeId
+  if (parsed?.placeId !== expected.placeId
     || parsed.queryFingerprint !== expected.queryFingerprint
     || (expected.fetchedAt !== undefined && parsed.fetchedAt.getTime() !== expected.fetchedAt)) return null;
   return parsed;
@@ -206,7 +214,7 @@ function verifiedPackManifest(
   ));
   if (!lifelines) return manifest;
   const persisted = readExactLifelinesArtifact(storage, expected, now);
-  if (persisted && persisted.fetchedAt.getTime() === lifelines.cachedAt.getTime()) return manifest;
+  if (persisted?.fetchedAt.getTime() === lifelines.cachedAt.getTime()) return manifest;
   return {
     ...manifest,
     artifacts: manifest.artifacts.filter((artifact) => artifact !== lifelines),
@@ -251,15 +259,12 @@ function parseChangeLog(
       if (!value || typeof value !== 'object') return [];
       const item = value as Record<string, unknown>;
       const observedAt = parseDate(item.observedAt);
-      const validValue = (candidate: unknown) => candidate === null
-        || (typeof candidate === 'number' && Number.isFinite(candidate))
-        || (typeof candidate === 'string' && candidate.length <= 120);
       if (!observedAt || item.shadowOnly !== true || typeof item.id !== 'string' || item.id.length > 500
         || typeof item.kind !== 'string' || !kinds.has(item.kind)
         || (item.scope !== 'site' && item.scope !== 'area')
         || typeof item.subjectId !== 'string' || item.subjectId.length > 240
         || typeof item.attribute !== 'string' || !attributes.has(item.attribute)
-        || !validValue(item.from) || !validValue(item.to)
+        || !validChangeValue(item.from) || !validChangeValue(item.to)
         || !Array.isArray(item.evidenceIds) || item.evidenceIds.length > 20
         || !item.evidenceIds.every((id) => typeof id === 'string' && id.length <= 500)) return [];
       return [{ ...item, observedAt } as unknown as LifelineChange];
@@ -291,14 +296,14 @@ function readOdinHistory(storage: StorageLike | null, placeId: string, countyFip
   if (!storage) return empty;
   try {
     const parsed = JSON.parse(storage.getItem(outageKey(placeId, countyFips)) ?? 'null') as StoredOdinHistoryV1 | null;
-    if (!parsed || parsed.schemaVersion !== 1 || parsed.countyFips !== countyFips
+    if (parsed?.schemaVersion !== 1 || parsed.countyFips !== countyFips
       || !Array.isArray(parsed.samples) || parsed.samples.length > 288) return empty;
     const outcomes = new Set<OdinOutageHistory['latestOutcome']>(['none', 'reported', 'empty-unknown', 'unavailable-unknown']);
     if (!outcomes.has(parsed.latestOutcome)) return empty;
     const samples = parsed.samples.map((sample) => ({
       countyFips: sample.countyFips,
       customersOut: sample.customersOut,
-      ...(sample.customersRestored !== undefined ? { customersRestored: sample.customersRestored } : {}),
+      ...(sample.customersRestored === undefined ? {} : { customersRestored: sample.customersRestored }),
       observedAt: parseDate(sample.observedAt),
       expiresAt: parseDate(sample.expiresAt),
     }));
@@ -326,6 +331,44 @@ function readOdinHistory(storage: StorageLike | null, placeId: string, countyFip
   }
 }
 
+function updateOdinHistory(
+  storage: StorageLike | null,
+  snapshot: LocalLogisticsSnapshot,
+  now: number,
+): OdinOutageState | null {
+  if (!snapshot.countyFips) return null;
+  let history = readOdinHistory(storage, snapshot.placeId, snapshot.countyFips);
+  const provider = snapshot.providers.find((item) => item.id === 'ornl-odin');
+  const reported = snapshot.areaConditions.filter((condition) => (
+    condition.countyFips === snapshot.countyFips && condition.coverage === 'reported'
+  ));
+  if (reported.length > 0) {
+    const expiry = Math.min(...reported.map((condition) => condition.expiresAt.getTime()));
+    const restored = reported.every((condition) => typeof condition.customersRestored === 'number')
+      ? reported.reduce((sum, condition) => sum + (condition.customersRestored ?? 0), 0)
+      : undefined;
+    history = applyOdinOutageUpdate(history, {
+      kind: 'reported',
+      sample: {
+        countyFips: snapshot.countyFips,
+        customersOut: reported.reduce((sum, condition) => sum + condition.customersOut, 0),
+        ...(restored === undefined ? {} : { customersRestored: restored }),
+        observedAt: snapshot.fetchedAt,
+        expiresAt: new Date(expiry),
+      },
+    }).history;
+  } else {
+    const kind = provider?.state === 'empty' || (provider?.acceptedRows === 0 && provider.state !== 'error')
+      ? 'empty'
+      : 'unavailable';
+    history = applyOdinOutageUpdate(history, {
+      kind, countyFips: snapshot.countyFips, observedAt: snapshot.fetchedAt,
+    }).history;
+  }
+  safeWrite(storage, outageKey(snapshot.placeId, snapshot.countyFips), serializeOdinHistory(history));
+  return deriveOdinOutageState(history, now);
+}
+
 export function createLifelineRuntime(
   storage: StorageLike | null = defaultStorage(),
   clock: () => number = Date.now,
@@ -333,7 +376,7 @@ export function createLifelineRuntime(
   const current = new Map<string, CurrentSituation>();
   const updates = new Map<string, LifelineRuntimeUpdate>();
 
-  function getPackReadiness(place: Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>): LifelineOfflinePackReadiness {
+  function getPackReadiness(place: LifelineSavedPlace): LifelineOfflinePackReadiness {
     const fingerprint = exactFingerprint(place);
     const now = clock();
     const manifest = verifiedPackManifest(storage, readPack(storage, place.id), {
@@ -397,40 +440,7 @@ export function createLifelineRuntime(
       safeWrite(storage, packKey(snapshot.placeId), serializePack(manifest));
     }
 
-    let outage: OdinOutageState | null = null;
-    if (snapshot.countyFips) {
-      let history = readOdinHistory(storage, snapshot.placeId, snapshot.countyFips);
-      const provider = snapshot.providers.find((item) => item.id === 'ornl-odin');
-      const reported = snapshot.areaConditions.filter((condition) => (
-        condition.countyFips === snapshot.countyFips && condition.coverage === 'reported'
-      ));
-      if (reported.length > 0) {
-        const expiry = Math.min(...reported.map((condition) => condition.expiresAt.getTime()));
-        const restored = reported.every((condition) => typeof condition.customersRestored === 'number')
-          ? reported.reduce((sum, condition) => sum + (condition.customersRestored ?? 0), 0)
-          : undefined;
-        history = applyOdinOutageUpdate(history, {
-          kind: 'reported',
-          sample: {
-            countyFips: snapshot.countyFips,
-            customersOut: reported.reduce((sum, condition) => sum + condition.customersOut, 0),
-            ...(restored !== undefined ? { customersRestored: restored } : {}),
-            observedAt: snapshot.fetchedAt,
-            expiresAt: new Date(expiry),
-          },
-        }).history;
-      } else if (provider?.state === 'empty' || (provider && provider.acceptedRows === 0 && provider.state !== 'error')) {
-        history = applyOdinOutageUpdate(history, {
-          kind: 'empty', countyFips: snapshot.countyFips, observedAt: snapshot.fetchedAt,
-        }).history;
-      } else {
-        history = applyOdinOutageUpdate(history, {
-          kind: 'unavailable', countyFips: snapshot.countyFips, observedAt: snapshot.fetchedAt,
-        }).history;
-      }
-      safeWrite(storage, outageKey(snapshot.placeId, snapshot.countyFips), serializeOdinHistory(history));
-      outage = deriveOdinOutageState(history, clock());
-    }
+    const outage = updateOdinHistory(storage, snapshot, clock());
 
     const packNow = clock();
     const pack = deriveLifelineOfflinePackReadiness(snapshot.queryFingerprint, verifiedPackManifest(
@@ -469,13 +479,13 @@ export function createLifelineRuntime(
 export const lifelineRuntime = createLifelineRuntime();
 
 export function getLifelinePackReadinessForPlace(
-  place: Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>,
+  place: LifelineSavedPlace,
 ): LifelineOfflinePackReadiness {
   return lifelineRuntime.getPackReadiness(place);
 }
 
 export function getRecentLifelineChangesForPlace(
-  place: Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>,
+  place: LifelineSavedPlace,
 ): LifelineChange[] {
   return lifelineRuntime.getRecentChanges(place.id, exactFingerprint(place));
 }
@@ -484,7 +494,7 @@ let runtimeListener: ((event: Event) => void) | null = null;
 
 /** Install the renderer-only derivation bridge once. It never dispatches notifications. */
 export function startLifelineRuntime(): () => void {
-  if (runtimeListener || typeof document === 'undefined') return () => {};
+  if (runtimeListener || typeof document === 'undefined') return () => undefined;
   runtimeListener = (event: Event) => {
     const snapshot = validateLocalLogisticsSnapshotEvent(
       (event as CustomEvent<unknown>).detail,

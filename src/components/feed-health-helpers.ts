@@ -12,14 +12,16 @@ export interface SidecarFeedStatus {
   lastAttemptAt?: number | string | null;
 }
 
+type FeedTimestamp = Date | number | string | null;
+
 export interface LifelineProviderHealth {
   id?: string;
   state?: string;
   acceptedRows?: number;
   droppedRows?: number;
-  observedAt?: Date | number | string | null;
-  retrievedAt?: Date | number | string | null;
-  sourceObservedAt?: Date | number | string | null;
+  observedAt?: FeedTimestamp;
+  retrievedAt?: FeedTimestamp;
+  sourceObservedAt?: FeedTimestamp;
   reasonCode?: string;
 }
 
@@ -29,6 +31,18 @@ const LIFELINE_FEED_IDS: Readonly<Record<string, string>> = {
   'fema-recovery-centers': 'fema-recovery-centers',
   'ornl-odin': 'ornl-odin',
 };
+
+function latestAttempt(lastSuccessAt: number | null, lastErrorAt: number | null): number | null {
+  if (lastSuccessAt === null) return lastErrorAt;
+  if (lastErrorAt === null) return lastSuccessAt;
+  return Math.max(lastSuccessAt, lastErrorAt);
+}
+
+function providerFailureReason(provider: LifelineProviderHealth, acceptedRows: number): string {
+  if (provider.reasonCode) return provider.reasonCode;
+  if (acceptedRows === 0) return 'no_contributed_rows';
+  return `provider_${provider.state ?? 'error'}`;
+}
 
 export function collectDataFreshnessSnapshots(
   catalog: FeedDefinition[],
@@ -57,8 +71,7 @@ export function collectDataFreshnessSnapshots(
       id: def.id,
       lastSuccessAt,
       lastError: state.lastError,
-      lastAttemptAt: lastSuccessAt === null ? lastErrorAt
-        : (lastErrorAt === null ? lastSuccessAt : Math.max(lastSuccessAt, lastErrorAt)),
+      lastAttemptAt: latestAttempt(lastSuccessAt, lastErrorAt),
     };
   }
   return out;
@@ -110,19 +123,54 @@ export function mergeLifelineProviderHealth(
       id,
       lastSuccessAt: contributed ? at : null,
       lastAttemptAt: at,
-      lastError: contributed ? null : (provider.reasonCode || (acceptedRows === 0
-        ? 'no_contributed_rows'
-        : `provider_${provider.state || 'error'}`)),
+      lastError: contributed ? null : providerFailureReason(provider, acceptedRows),
     };
   }
   return out;
 }
 
 const LIFELINE_PROVIDER_STATES = new Set(['ok', 'empty', 'partial', 'stale', 'error']);
-const MAX_LIFELINE_PROVIDER_ROWS = 5_000;
+const MAX_LIFELINE_PROVIDER_ROWS = 5000;
 const MAX_LIFELINE_PROVIDERS = 8;
 const MAX_EVENT_FUTURE_SKEW_MS = 5 * 60_000;
 const EARLIEST_EVENT_TIME_MS = Date.UTC(2000, 0, 1);
+
+type ParsedLifelineProviderHealth = LifelineProviderHealth & { id: string };
+
+function validProviderRowCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+    && (value as number) <= MAX_LIFELINE_PROVIDER_ROWS;
+}
+
+function parseProviderHealth(
+  raw: unknown,
+  eventAt: number,
+  now: number,
+): ParsedLifelineProviderHealth | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const provider = raw as Record<string, unknown>;
+  if (typeof provider.id !== 'string'
+    || !Object.prototype.hasOwnProperty.call(LIFELINE_FEED_IDS, provider.id)) return null;
+  if (typeof provider.state !== 'string' || !LIFELINE_PROVIDER_STATES.has(provider.state)) return null;
+  if (!validProviderRowCount(provider.acceptedRows) || !validProviderRowCount(provider.droppedRows)) return null;
+  const timestamp = provider.retrievedAt ?? provider.observedAt;
+  const explicitRetrievedAt = toMs(timestamp as FeedTimestamp | undefined);
+  if (timestamp !== undefined && timestamp !== null && explicitRetrievedAt === null) return null;
+  if (explicitRetrievedAt === null && (provider.state === 'ok' || provider.state === 'partial')) return null;
+  const retrievedAt = explicitRetrievedAt ?? eventAt;
+  if (retrievedAt < EARLIEST_EVENT_TIME_MS || retrievedAt > now + MAX_EVENT_FUTURE_SKEW_MS) return null;
+  if (provider.reasonCode !== undefined
+    && (typeof provider.reasonCode !== 'string' || provider.reasonCode.length > 160)) return null;
+  return {
+    id: provider.id,
+    state: provider.state,
+    acceptedRows: provider.acceptedRows,
+    droppedRows: provider.droppedRows,
+    retrievedAt,
+    observedAt: retrievedAt,
+    ...(typeof provider.reasonCode === 'string' ? { reasonCode: provider.reasonCode } : {}),
+  };
+}
 
 /** Strictly validate the shared document event before it can update provider
  * health. Invalid rows, duplicates, and future timestamps are rejected as a
@@ -135,40 +183,16 @@ export function parseLifelineProviderHealthEvent(
   const value = detail as Record<string, unknown>;
   if (value.schemaVersion !== 2 || !Array.isArray(value.providers)
     || value.providers.length === 0 || value.providers.length > MAX_LIFELINE_PROVIDERS) return [];
-  const eventAt = toMs(value.fetchedAt as Date | number | string | null | undefined);
+  const eventAt = toMs(value.fetchedAt as FeedTimestamp | undefined);
   if (eventAt === null || eventAt < EARLIEST_EVENT_TIME_MS
     || eventAt > now + MAX_EVENT_FUTURE_SKEW_MS) return [];
   const providers: LifelineProviderHealth[] = [];
   const seenIds = new Set<string>();
   for (const raw of value.providers) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
-    const provider = raw as Record<string, unknown>;
-    if (typeof provider.id !== 'string'
-      || !Object.prototype.hasOwnProperty.call(LIFELINE_FEED_IDS, provider.id)
-      || seenIds.has(provider.id)
-      || typeof provider.state !== 'string' || !LIFELINE_PROVIDER_STATES.has(provider.state)
-      || !Number.isSafeInteger(provider.acceptedRows) || (provider.acceptedRows as number) < 0
-      || (provider.acceptedRows as number) > MAX_LIFELINE_PROVIDER_ROWS
-      || !Number.isSafeInteger(provider.droppedRows) || (provider.droppedRows as number) < 0
-      || (provider.droppedRows as number) > MAX_LIFELINE_PROVIDER_ROWS) return [];
-    const timestamp = provider.retrievedAt ?? provider.observedAt;
-    const explicitRetrievedAt = toMs(timestamp as Date | number | string | null | undefined);
-    if (timestamp !== undefined && timestamp !== null && explicitRetrievedAt === null) return [];
-    if (explicitRetrievedAt === null && (provider.state === 'ok' || provider.state === 'partial')) return [];
-    const retrievedAt = explicitRetrievedAt ?? eventAt;
-    if (retrievedAt < EARLIEST_EVENT_TIME_MS || retrievedAt > now + MAX_EVENT_FUTURE_SKEW_MS) return [];
-    if (provider.reasonCode !== undefined
-      && (typeof provider.reasonCode !== 'string' || provider.reasonCode.length > 160)) return [];
+    const provider = parseProviderHealth(raw, eventAt, now);
+    if (!provider || seenIds.has(provider.id)) return [];
     seenIds.add(provider.id);
-    providers.push({
-      id: provider.id,
-      state: provider.state,
-      acceptedRows: provider.acceptedRows as number,
-      droppedRows: provider.droppedRows as number,
-      retrievedAt,
-      observedAt: retrievedAt,
-      ...(typeof provider.reasonCode === 'string' ? { reasonCode: provider.reasonCode } : {}),
-    });
+    providers.push(provider);
   }
   return providers;
 }
@@ -192,7 +216,7 @@ export function mergeFeedSnapshotsByAttempt(
   return out;
 }
 
-function toMs(value: Date | number | string | null | undefined): number | null {
+function toMs(value: FeedTimestamp | undefined): number | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;

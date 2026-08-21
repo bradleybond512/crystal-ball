@@ -131,13 +131,15 @@ export function deriveLifelineOfflinePackReadiness(
   const incompatibleKinds = manifest.artifacts
     .filter((artifact) => artifact.queryFingerprint !== queryFingerprint)
     .map((artifact) => artifact.kind)
-    .sort();
+    .sort((left, right) => left.localeCompare(right));
   const byKind = new Map(compatible.map((artifact) => [artifact.kind, artifact]));
-  const missingKinds = manifest.requiredKinds.filter((kind) => !byKind.has(kind)).sort();
+  const missingKinds = manifest.requiredKinds
+    .filter((kind) => !byKind.has(kind))
+    .sort((left, right) => left.localeCompare(right));
   const expiredKinds = manifest.requiredKinds.filter((kind) => {
     const artifact = byKind.get(kind);
     return artifact?.expiresAt ? artifact.expiresAt.getTime() <= now : false;
-  }).sort();
+  }).sort((left, right) => left.localeCompare(right));
   const reasons = [
     ...missingKinds.map((kind) => `missing:${kind}`),
     ...expiredKinds.map((kind) => `expired:${kind}`),

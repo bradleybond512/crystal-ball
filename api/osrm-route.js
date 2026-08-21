@@ -5,7 +5,7 @@ export const config = { runtime: 'edge' };
 const OSRM_ROUTE_ENDPOINT = 'https://router.project-osrm.org/route/v1/driving';
 const MAX_WAYPOINTS = 12;
 const MAX_GEOMETRY_POINTS = 100_000;
-const MAX_STEPS = 5_000;
+const MAX_STEPS = 5000;
 const MAX_DISTANCE_METERS = 50_000_000;
 const MAX_DURATION_SECONDS = 31_536_000;
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
@@ -50,7 +50,7 @@ async function readBoundedJson(response, signal) {
   const reader = response.body.getReader();
   const chunks = [];
   let received = 0;
-  const abortRead = () => { void reader.cancel(signal.reason); };
+  const abortRead = () => reader.cancel(signal.reason);
   signal.addEventListener('abort', abortRead, { once: true });
   try {
     while (true) {
@@ -119,8 +119,8 @@ function normalizeLeg(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   if (!boundedDistance(value.distance) || !boundedDuration(value.duration) || !Array.isArray(value.steps)) return null;
   if (value.steps.length > MAX_STEPS) return null;
-  const steps = value.steps.map(normalizeStep);
-  if (steps.some((step) => step === null)) return null;
+  const steps = value.steps.map((step) => normalizeStep(step));
+  if (steps.includes(null)) return null;
   return { distance: value.distance, duration: value.duration, steps };
 }
 
@@ -129,11 +129,11 @@ function normalizeRoute(value) {
   if (!boundedDistance(value.distance) || !boundedDuration(value.duration)) return null;
   if (!value.geometry || value.geometry.type !== 'LineString' || !Array.isArray(value.geometry.coordinates)) return null;
   if (value.geometry.coordinates.length < 2 || value.geometry.coordinates.length > MAX_GEOMETRY_POINTS) return null;
-  const coordinates = value.geometry.coordinates.map(normalizeCoordinate);
-  if (coordinates.some((coordinate) => coordinate === null)) return null;
+  const coordinates = value.geometry.coordinates.map((coordinate) => normalizeCoordinate(coordinate));
+  if (coordinates.includes(null)) return null;
   if (!Array.isArray(value.legs) || value.legs.length === 0 || value.legs.length > MAX_WAYPOINTS - 1) return null;
-  const legs = value.legs.map(normalizeLeg);
-  if (legs.some((leg) => leg === null)) return null;
+  const legs = value.legs.map((leg) => normalizeLeg(leg));
+  if (legs.includes(null)) return null;
   if (legs.reduce((total, leg) => total + leg.steps.length, 0) > MAX_STEPS) return null;
   return {
     distance: value.distance,
@@ -151,8 +151,8 @@ function normalizeResponse(value) {
   }
   if (!Array.isArray(value.routes)) return null;
   if (value.code !== 'Ok' || value.routes.length === 0 || value.routes.length > 3) return null;
-  const routes = value.routes.map(normalizeRoute);
-  return routes.some((route) => route === null) ? null : { code: 'Ok', routes };
+  const routes = value.routes.map((route) => normalizeRoute(route));
+  return routes.includes(null) ? null : { code: 'Ok', routes };
 }
 
 export default async function handler(req) {

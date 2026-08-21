@@ -126,6 +126,12 @@ const EIA_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
  */
 interface LatestCell { value: number; period: string; periodEpoch: number }
 
+function oldestCell(left: LatestCell | undefined, right: LatestCell | undefined): LatestCell | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return left.periodEpoch <= right.periodEpoch ? left : right;
+}
+
 function foldLatestEia(rows: readonly EiaRowRaw[], now: number): Map<string, LatestCell> {
   const latest = new Map<string, LatestCell>();
   for (const r of rows) {
@@ -155,11 +161,8 @@ export function buildGridSnapshot(
     const ngCell = latest.get(`${region}:NG`);
     const demand = dCell?.value ?? null;
     const generation = ngCell?.value ?? null;
-    const periodsAligned = dCell !== undefined && ngCell !== undefined
-      && dCell.period === ngCell.period;
-    const oldestCell = dCell && ngCell
-      ? (dCell.periodEpoch <= ngCell.periodEpoch ? dCell : ngCell)
-      : (dCell ?? ngCell);
+    const periodsAligned = dCell !== undefined && dCell.period === ngCell?.period;
+    const oldest = oldestCell(dCell, ngCell);
     return {
       region,
       displayName: REGION_DISPLAY_NAMES[region],
@@ -170,7 +173,7 @@ export function buildGridSnapshot(
       // A single date cannot truthfully label a balance derived from two
       // different daily periods. Null makes the mismatch fail closed in every
       // dynamic freshness consumer as well as in the initial status.
-      observedDate: dCell && ngCell && !periodsAligned ? null : (oldestCell?.period ?? null),
+      observedDate: dCell && ngCell && !periodsAligned ? null : (oldest?.period ?? null),
     };
   });
 
@@ -292,92 +295,131 @@ export function severityFor(value: number, ladder: Readonly<Record<Severity, num
   return 'normal';
 }
 
-export function buildOutageSummary(snapshot: unknown, now: number): OutageSummary {
-  const unknown = (
-    reason: OutageUnknownReason,
-    context: Partial<Pick<OutageSummary, 'placeId' | 'placeName' | 'countyFips' | 'providerState' | 'badge'>> = {},
-  ): OutageSummary => ({
+type OutageContext = Partial<Pick<
+  OutageSummary,
+  'placeId' | 'placeName' | 'countyFips' | 'providerState' | 'badge'
+>>;
+
+interface ParsedOutageProvider {
+  state: Exclude<OutageSummary['providerState'], 'unavailable'>;
+  acceptedRows: number;
+  droppedRows: number;
+  retrievedAt: number | null;
+}
+
+interface ParsedOutageProviderResult {
+  value: ParsedOutageProvider | null;
+  error: 'missing' | 'malformed' | null;
+}
+
+interface ParsedCountyOutageResult {
+  value: CountyOutage | null;
+  error: 'malformed' | 'expired' | null;
+}
+
+interface ParsedCountyOutagesResult {
+  value: CountyOutage[] | null;
+  error: 'malformed' | 'expired' | null;
+}
+
+interface ParsedOutageSnapshot {
+  value: {
+    record: Record<string, unknown>;
+    placeId: string;
+    placeName: string;
+    countyFips: string;
+    providers: unknown[];
+    areaConditions: unknown[];
+  } | null;
+  reason: OutageUnknownReason;
+  context?: OutageContext;
+}
+
+function unknownOutageSummary(reason: OutageUnknownReason, now: number, context?: OutageContext): OutageSummary {
+  return {
     source: 'ornl-odin',
     coverage: 'unknown',
     completeness: 'unknown',
-    placeId: context.placeId ?? null,
-    placeName: context.placeName ?? null,
-    countyFips: context.countyFips ?? null,
+    placeId: context?.placeId ?? null,
+    placeName: context?.placeName ?? null,
+    countyFips: context?.countyFips ?? null,
     county: null,
     state: null,
     reportedCustomersOut: null,
     reportedCustomersRestored: null,
     reportCount: 0,
     reports: [],
-    providerState: context.providerState ?? 'unavailable',
+    providerState: context?.providerState ?? 'unavailable',
     unknownReason: reason,
     severity: 'normal',
-    badge: context.badge ?? buildBadge(null, now, OUTAGE_STALE_AFTER_SEC),
-  });
+    badge: context?.badge ?? buildBadge(null, now, OUTAGE_STALE_AFTER_SEC),
+  };
+}
 
-  if (snapshot === null || snapshot === undefined) return unknown('awaiting_lifeline_context');
-  if (!isRecord(snapshot) || snapshot.schemaVersion !== 2) return unknown('malformed_snapshot');
+function parseOutageSnapshot(snapshot: unknown): ParsedOutageSnapshot {
+  if (snapshot === null || snapshot === undefined) return { value: null, reason: 'awaiting_lifeline_context' };
+  if (!isRecord(snapshot) || snapshot.schemaVersion !== 2) return { value: null, reason: 'malformed_snapshot' };
   const placeId = boundedStringOrNull(snapshot.placeId, 160);
   const placeName = boundedStringOrNull(snapshot.placeName, 160);
-  if (!placeId || !placeName) return unknown('malformed_snapshot');
-  const placeContext = { placeId, placeName };
+  if (!placeId || !placeName) return { value: null, reason: 'malformed_snapshot' };
+  const context = { placeId, placeName };
   if (!Array.isArray(snapshot.providers) || snapshot.providers.length > 16
     || !Array.isArray(snapshot.areaConditions) || snapshot.areaConditions.length > MAX_ODIN_REPORTS) {
-    return unknown('malformed_snapshot', placeContext);
+    return { value: null, reason: 'malformed_snapshot', context };
   }
   const countyFips = typeof snapshot.countyFips === 'string' && /^\d{5}$/.test(snapshot.countyFips)
     ? snapshot.countyFips : null;
-  const baseContext = { placeId, placeName, countyFips };
-  if (!countyFips) return unknown('county_fips_unknown', baseContext);
+  if (!countyFips) return { value: null, reason: 'county_fips_unknown', context: { ...context, countyFips } };
+  return {
+    value: {
+      record: snapshot,
+      placeId,
+      placeName,
+      countyFips,
+      providers: snapshot.providers,
+      areaConditions: snapshot.areaConditions,
+    },
+    reason: 'malformed_snapshot',
+  };
+}
 
-  const providerRaw = snapshot.providers.find((item: unknown) => isRecord(item) && item.id === 'ornl-odin');
-  if (!isRecord(providerRaw)) return unknown('provider_unavailable', baseContext);
-  const providerStates = new Set(['ok', 'partial', 'empty', 'stale', 'error']);
-  const providerState = typeof providerRaw.state === 'string' && providerStates.has(providerRaw.state)
-    ? providerRaw.state as OutageSummary['providerState'] : null;
-  const acceptedRows = safeBoundedInteger(providerRaw.acceptedRows, 0, MAX_ODIN_REPORTS);
-  const droppedRows = safeBoundedInteger(providerRaw.droppedRows, 0, MAX_ODIN_REPORTS);
-  const providerRetrievedAt = parseTimestamp(providerRaw.retrievedAt ?? providerRaw.observedAt);
-  if (!providerState || acceptedRows === null || droppedRows === null) {
-    return unknown('malformed_snapshot', baseContext);
-  }
-  const providerBadge = buildBadge(providerRetrievedAt, now, OUTAGE_STALE_AFTER_SEC);
-  const providerContext = { ...baseContext, providerState, badge: providerBadge };
-  if (providerState === 'error' || providerState === 'stale') {
-    return unknown('provider_unavailable', providerContext);
-  }
-  if (providerState === 'empty' || acceptedRows === 0) {
-    return unknown('no_accepted_reports', providerContext);
-  }
-  if (providerRetrievedAt === null) return unknown('malformed_snapshot', providerContext);
+function parseOutageProvider(providers: unknown[]): ParsedOutageProviderResult {
+  const raw: unknown = providers.find((item: unknown) => isRecord(item) && item.id === 'ornl-odin');
+  if (!isRecord(raw)) return { value: null, error: 'missing' };
+  const states = new Set(['ok', 'partial', 'empty', 'stale', 'error']);
+  if (typeof raw.state !== 'string' || !states.has(raw.state)) return { value: null, error: 'malformed' };
+  const acceptedRows = safeBoundedInteger(raw.acceptedRows, 0, MAX_ODIN_REPORTS);
+  const droppedRows = safeBoundedInteger(raw.droppedRows, 0, MAX_ODIN_REPORTS);
+  if (acceptedRows === null || droppedRows === null) return { value: null, error: 'malformed' };
+  return {
+    value: {
+      state: raw.state as ParsedOutageProvider['state'],
+      acceptedRows,
+      droppedRows,
+      retrievedAt: parseTimestamp(raw.retrievedAt ?? raw.observedAt),
+    },
+    error: null,
+  };
+}
 
-  const reports: CountyOutage[] = [];
-  for (const item of snapshot.areaConditions) {
-    if (!isRecord(item) || item.type !== 'power_outage' || item.source !== 'ornl-odin'
-      || item.coverage !== 'reported' || item.countyFips !== countyFips) {
-      return unknown('malformed_snapshot', providerContext);
-    }
-    const county = boundedStringOrNull(item.county, 160);
-    const state = boundedStringOrNull(item.state, 80);
-    const customersOut = safeBoundedInteger(item.customersOut, 0, MAX_OUTAGE_CUSTOMERS);
-    const retrievedAt = parseTimestamp(item.retrievedAt ?? item.observedAt);
-    const expiresAt = parseTimestamp(item.expiresAt);
-    if (!county || !state || customersOut === null || retrievedAt === null || expiresAt === null
-      || expiresAt < retrievedAt) {
-      return unknown('malformed_snapshot', providerContext);
-    }
-    if (expiresAt <= now) {
-      return unknown('expired_reports', {
-        ...providerContext,
-        badge: { ...providerBadge, isStale: true },
-      });
-    }
-    const restored = item.customersRestored === undefined
-      ? null : safeBoundedInteger(item.customersRestored, 0, MAX_OUTAGE_CUSTOMERS);
-    if (item.customersRestored !== undefined && restored === null) {
-      return unknown('malformed_snapshot', providerContext);
-    }
-    reports.push({
+function parseCountyOutage(item: unknown, countyFips: string, now: number): ParsedCountyOutageResult {
+  if (!isRecord(item) || item.type !== 'power_outage' || item.source !== 'ornl-odin'
+    || item.coverage !== 'reported' || item.countyFips !== countyFips) {
+    return { value: null, error: 'malformed' };
+  }
+  const county = boundedStringOrNull(item.county, 160);
+  const state = boundedStringOrNull(item.state, 80);
+  const customersOut = safeBoundedInteger(item.customersOut, 0, MAX_OUTAGE_CUSTOMERS);
+  const retrievedAt = parseTimestamp(item.retrievedAt ?? item.observedAt);
+  const expiresAt = parseTimestamp(item.expiresAt);
+  if (!county || !state || customersOut === null || retrievedAt === null || expiresAt === null
+    || expiresAt < retrievedAt) return { value: null, error: 'malformed' };
+  if (expiresAt <= now) return { value: null, error: 'expired' };
+  const restored = item.customersRestored === undefined
+    ? null : safeBoundedInteger(item.customersRestored, 0, MAX_OUTAGE_CUSTOMERS);
+  if (item.customersRestored !== undefined && restored === null) return { value: null, error: 'malformed' };
+  return {
+    value: {
       countyFips,
       county,
       state,
@@ -387,20 +429,68 @@ export function buildOutageSummary(snapshot: unknown, now: number): OutageSummar
       utilityId: boundedStringOrNull(item.utilityId, 80),
       retrievedAt,
       expiresAt,
+    },
+    error: null,
+  };
+}
+
+function parseCountyOutages(
+  values: unknown[],
+  countyFips: string,
+  now: number,
+): ParsedCountyOutagesResult {
+  const reports: CountyOutage[] = [];
+  for (const value of values) {
+    const result = parseCountyOutage(value, countyFips, now);
+    if (result.error || !result.value) return { value: null, error: result.error ?? 'malformed' };
+    reports.push(result.value);
+  }
+  return { value: reports, error: null };
+}
+
+export function buildOutageSummary(snapshot: unknown, now: number): OutageSummary {
+  const parsedSnapshot = parseOutageSnapshot(snapshot);
+  if (!parsedSnapshot.value) return unknownOutageSummary(parsedSnapshot.reason, now, parsedSnapshot.context);
+  const { placeId, placeName, countyFips, providers, areaConditions } = parsedSnapshot.value;
+  const baseContext = { placeId, placeName, countyFips };
+
+  const providerResult = parseOutageProvider(providers);
+  if (!providerResult.value) {
+    const reason = providerResult.error === 'missing' ? 'provider_unavailable' : 'malformed_snapshot';
+    return unknownOutageSummary(reason, now, baseContext);
+  }
+  const provider = providerResult.value;
+  const providerBadge = buildBadge(provider.retrievedAt, now, OUTAGE_STALE_AFTER_SEC);
+  const providerContext = { ...baseContext, providerState: provider.state, badge: providerBadge };
+  if (provider.state === 'error' || provider.state === 'stale') {
+    return unknownOutageSummary('provider_unavailable', now, providerContext);
+  }
+  if (provider.state === 'empty' || provider.acceptedRows === 0) {
+    return unknownOutageSummary('no_accepted_reports', now, providerContext);
+  }
+  if (provider.retrievedAt === null) return unknownOutageSummary('malformed_snapshot', now, providerContext);
+
+  const reportResult = parseCountyOutages(areaConditions, countyFips, now);
+  if (reportResult.error === 'expired') {
+    return unknownOutageSummary('expired_reports', now, {
+      ...providerContext,
+      badge: { ...providerBadge, isStale: true },
     });
   }
-  if (reports.length !== acceptedRows || reports.length === 0) {
-    return unknown('malformed_snapshot', providerContext);
+  const reports = reportResult.value;
+  if (!reports || reportResult.error === 'malformed'
+    || reports.length !== provider.acceptedRows || reports.length === 0) {
+    return unknownOutageSummary('malformed_snapshot', now, providerContext);
   }
   const county = reports[0]!.county;
   const state = reports[0]!.state;
   if (reports.some((report) => report.county !== county || report.state !== state)) {
-    return unknown('malformed_snapshot', providerContext);
+    return unknownOutageSummary('malformed_snapshot', now, providerContext);
   }
   reports.sort((left, right) => right.customersOut - left.customersOut
     || (left.utility ?? '').localeCompare(right.utility ?? ''));
   const reportedCustomersOut = reports.reduce((sum, report) => sum + report.customersOut, 0);
-  if (!Number.isSafeInteger(reportedCustomersOut)) return unknown('malformed_snapshot', providerContext);
+  if (!Number.isSafeInteger(reportedCustomersOut)) return unknownOutageSummary('malformed_snapshot', now, providerContext);
   const reportedCustomersRestored = reports.every((report) => report.customersRestored !== null)
     ? reports.reduce((sum, report) => sum + (report.customersRestored ?? 0), 0)
     : null;
@@ -408,7 +498,7 @@ export function buildOutageSummary(snapshot: unknown, now: number): OutageSummar
   return {
     source: 'ornl-odin',
     coverage: 'reported',
-    completeness: providerState === 'partial' || droppedRows > 0 ? 'partial' : 'reported',
+    completeness: provider.state === 'partial' || provider.droppedRows > 0 ? 'partial' : 'reported',
     placeId,
     placeName,
     countyFips,
@@ -418,7 +508,7 @@ export function buildOutageSummary(snapshot: unknown, now: number): OutageSummar
     reportedCustomersRestored,
     reportCount: reports.length,
     reports,
-    providerState,
+    providerState: provider.state,
     unknownReason: null,
     severity: severityFor(reportedCustomersOut, OUTAGE_REPORTED_THRESHOLDS),
     badge: providerBadge,
@@ -538,27 +628,53 @@ export const KNOWN_PREFIX_TAGS: readonly { prefix: string; tag: string }[] = [
 export const BGP_STALE_AFTER_MS = 60 * 60 * 1000; // 1h
 const BGP_STALE_AFTER_SEC = BGP_STALE_AFTER_MS / 1000;
 
+function parseBgpEvent(value: BgpEventRaw): BgpEvent | null {
+  if (!isRecord(value)) return null;
+  const prefixes = stringArray(value.prefixes);
+  const expected = stringOrNull(value.expected_origin);
+  const detected = stringArray(value.detected_origins);
+  const involved = stringArray(value.involved_asns);
+  const startedAt = parseTimestamp(value.started_at);
+  const endedAt = value.ended_at === null ? null : parseTimestamp(value.ended_at);
+  if ((!prefixes.length && !involved.length) || startedAt === null) return null;
+  if ((value.ended_at !== null && endedAt === null) || (endedAt !== null && endedAt < startedAt)) return null;
+  const tags = collectPrefixTags(prefixes);
+  return {
+    id: stringOrEmpty(value.id) || `${expected ?? ''}-${prefixes[0] ?? ''}-${startedAt}`,
+    startedAt,
+    endedAt,
+    prefixes,
+    expectedOriginAsn: expected,
+    detectedOriginAsns: detected,
+    involvedAsns: involved,
+    type: stringOrEmpty(value.type),
+    tags,
+    severity: decideBgpSeverity(prefixes, detected, expected, tags),
+  };
+}
+
 export function buildBgpSummary(
   events: readonly BgpEventRaw[],
   now: number,
-  evidence: ProviderEvidence = {
-    coverage: 'reported', error: null, retrievedAt: now, droppedRows: 0,
-  },
+  evidence?: ProviderEvidence,
 ): BgpSummary {
-  const boundaryDroppedEverything = events.length === 0 && evidence.droppedRows > 0;
-  if (evidence.coverage !== 'reported' || boundaryDroppedEverything) {
+  const providerEvidence = evidence ?? {
+    coverage: 'reported' as const, error: null, retrievedAt: now, droppedRows: 0,
+  };
+  const boundaryDroppedEverything = events.length === 0 && providerEvidence.droppedRows > 0;
+  if (providerEvidence.coverage !== 'reported' || boundaryDroppedEverything) {
     return {
       coverage: 'unknown',
-      error: evidence.error ?? (boundaryDroppedEverything
+      error: providerEvidence.error ?? (boundaryDroppedEverything
         ? 'The BGP provider response contained no valid event rows.'
         : 'BGP coverage is unavailable.'),
       events: [],
       acceptedRows: 0,
-      droppedRows: Math.max(0, evidence.droppedRows),
+      droppedRows: Math.max(0, providerEvidence.droppedRows),
       criticalCount: 0,
       elevatedCount: 0,
       affectedAsnSet: [],
-      badge: buildBadge(evidence.retrievedAt, now, BGP_STALE_AFTER_SEC),
+      badge: buildBadge(providerEvidence.retrievedAt, now, BGP_STALE_AFTER_SEC),
     };
   }
   const out: BgpEvent[] = [];
@@ -566,40 +682,19 @@ export function buildBgpSummary(
   let criticalCount = 0;
   let elevatedCount = 0;
 
-  for (const e of events) {
-    if (!isRecord(e)) continue;
-    const prefixes = stringArray(e.prefixes);
-    const expected = stringOrNull(e.expected_origin);
-    const detected = stringArray(e.detected_origins);
-    const involved = stringArray(e.involved_asns);
-    const startedAt = parseTimestamp(e.started_at);
-    const endedAt = e.ended_at === null ? null : parseTimestamp(e.ended_at);
-    if (!prefixes.length && !involved.length) continue;
-    if (startedAt === null || (e.ended_at !== null && endedAt === null)
-      || (endedAt !== null && endedAt < startedAt)) continue;
-    const tags = collectPrefixTags(prefixes);
-    const severity = decideBgpSeverity(prefixes, detected, expected, tags);
-    if (severity === 'critical') criticalCount += 1;
-    else if (severity === 'elevated') elevatedCount += 1;
-    for (const a of [...detected, ...involved]) asnSet.add(a);
-    out.push({
-      id: stringOrEmpty(e.id) || `${expected ?? ''}-${prefixes[0] ?? ''}-${startedAt ?? 0}`,
-      startedAt,
-      endedAt,
-      prefixes,
-      expectedOriginAsn: expected,
-      detectedOriginAsns: detected,
-      involvedAsns: involved,
-      type: stringOrEmpty(e.type),
-      tags,
-      severity,
-    });
+  for (const value of events) {
+    const event = parseBgpEvent(value);
+    if (!event) continue;
+    if (event.severity === 'critical') criticalCount += 1;
+    else if (event.severity === 'elevated') elevatedCount += 1;
+    for (const asn of [...event.detectedOriginAsns, ...event.involvedAsns]) asnSet.add(asn);
+    out.push(event);
   }
 
   out.sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || (b.startedAt ?? 0) - (a.startedAt ?? 0));
 
   const locallyDroppedRows = Math.max(0, events.length - out.length);
-  const droppedRows = Math.max(0, evidence.droppedRows) + locallyDroppedRows;
+  const droppedRows = Math.max(0, providerEvidence.droppedRows) + locallyDroppedRows;
   if (events.length > 0 && out.length === 0) {
     return {
       coverage: 'unknown',
@@ -610,7 +705,7 @@ export function buildBgpSummary(
       criticalCount: 0,
       elevatedCount: 0,
       affectedAsnSet: [],
-      badge: buildBadge(evidence.retrievedAt, now, BGP_STALE_AFTER_SEC),
+      badge: buildBadge(providerEvidence.retrievedAt, now, BGP_STALE_AFTER_SEC),
     };
   }
 
@@ -625,7 +720,7 @@ export function buildBgpSummary(
     affectedAsnSet: [...asnSet],
     // An old-but-ongoing event can still be current. Freshness belongs to
     // the provider retrieval that attests its state, not the event start.
-    badge: buildBadge(evidence.retrievedAt, now, BGP_STALE_AFTER_SEC),
+    badge: buildBadge(providerEvidence.retrievedAt, now, BGP_STALE_AFTER_SEC),
   };
 }
 
@@ -633,7 +728,7 @@ export function buildBgpSummary(
  *  Re-evaluating the evidence timestamp prevents a once-fresh summary from
  *  remaining actionable merely because its stored badge has not been rebuilt. */
 export function isBgpSummaryFresh(summary: BgpSummary | null, now = Date.now()): boolean {
-  if (!summary || summary.coverage !== 'reported' || summary.badge.isStale
+  if (summary?.coverage !== 'reported' || summary.badge.isStale
     || !Number.isFinite(now)) return false;
   const { observedAt } = summary.badge;
   return typeof observedAt === 'number' && Number.isFinite(observedAt)
@@ -719,6 +814,11 @@ export interface RadStation {
   severity: Severity;
 }
 
+type ValidatedRadStation = Omit<RadStation, 'cpm' | 'observedAt'> & {
+  cpm: number;
+  observedAt: number;
+};
+
 export interface RadSummary {
   coverage: EvidenceCoverage;
   error: string | null;
@@ -746,78 +846,106 @@ export const RADIATION_STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6h: hourly readin
 const RADIATION_STALE_AFTER_SEC = RADIATION_STALE_AFTER_MS / 1000;
 const RADIATION_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 
-export function buildRadSummary(
-  stations: readonly RadStationRaw[],
+function parseRadStation(value: RadStationRaw, now: number): ValidatedRadStation | null {
+  if (!isRecord(value)) return null;
+  const cpm = readCpm(value);
+  if (cpm === null) return null;
+  const observedAt = parseTimestamp(value.SampleDateTime ?? value.CollectionDate);
+  if (observedAt === null || observedAt > now + RADIATION_MAX_FUTURE_SKEW_MS) return null;
+  const name = stringOrEmpty(value.StationLocationName ?? value.StationName ?? value.Location) || 'Unknown';
+  const stateMatch = /,\s*([A-Z]{2})\b/.exec(name);
+  return {
+    name,
+    state: stateMatch?.[1] ?? null,
+    lat: parseCoordinateOrNull(value.Latitude, -90, 90),
+    lon: parseCoordinateOrNull(value.Longitude, -180, 180),
+    cpm,
+    observedAt,
+    severity: severityFor(cpm, RADIATION_THRESHOLDS),
+  };
+}
+
+function unknownRadSummary(
+  error: string,
+  droppedRows: number,
+  retrievedAt: number | null,
   now: number,
-  evidence: ProviderEvidence = {
-    coverage: 'reported', error: null, retrievedAt: now, droppedRows: 0,
-  },
 ): RadSummary {
-  const boundaryDroppedEverything = stations.length === 0 && evidence.droppedRows > 0;
-  if (evidence.coverage !== 'reported' || boundaryDroppedEverything) {
-    return {
-      coverage: 'unknown',
-      error: evidence.error ?? (boundaryDroppedEverything
-        ? 'The radiation provider response contained no valid station readings.'
-        : 'Radiation coverage is unavailable.'),
-      stationCount: 0,
-      acceptedRows: 0,
-      droppedRows: Math.max(0, evidence.droppedRows),
-      elevatedStations: [],
-      maxCpm: null,
-      maxCpmStation: null,
-      severity: null,
-      badge: buildBadge(evidence.retrievedAt, now, RADIATION_STALE_AFTER_SEC),
-    };
-  }
-  const out: RadStation[] = [];
+  return {
+    coverage: 'unknown',
+    error,
+    stationCount: 0,
+    acceptedRows: 0,
+    droppedRows,
+    elevatedStations: [],
+    maxCpm: null,
+    maxCpmStation: null,
+    severity: null,
+    badge: buildBadge(retrievedAt, now, RADIATION_STALE_AFTER_SEC),
+  };
+}
+
+function collectRadStations(stations: readonly RadStationRaw[], now: number): {
+  stations: ValidatedRadStation[];
+  mostRecent: number;
+  maxCpm: number;
+  maxCpmStation: string | null;
+} {
+  const accepted: ValidatedRadStation[] = [];
   let mostRecent = 0;
   let maxCpm = -Infinity;
   let maxCpmStation: string | null = null;
-
-  for (const s of stations) {
-    if (!isRecord(s)) continue;
-    const cpm = readCpm(s);
-    if (cpm === null) continue;
-    const observedAt = parseTimestamp(s.SampleDateTime ?? s.CollectionDate);
-    // A CPM value without a trustworthy observation clock cannot establish a
-    // current background or alert condition. Allow only a small provider-clock
-    // skew; farther-future observations would otherwise remain fresh forever.
-    if (observedAt === null || observedAt > now + RADIATION_MAX_FUTURE_SKEW_MS) continue;
-    if (observedAt > mostRecent) mostRecent = observedAt;
-    const name = stringOrEmpty(s.StationLocationName ?? s.StationName ?? s.Location) || 'Unknown';
-    const stateMatch = /,\s*([A-Z]{2})\b/.exec(name);
-    const state = stateMatch?.[1] ?? null;
-    const lat = parseCoordinateOrNull(s.Latitude, -90, 90);
-    const lon = parseCoordinateOrNull(s.Longitude, -180, 180);
-    const severity = severityFor(cpm, RADIATION_THRESHOLDS);
-    if (cpm > maxCpm) {
-      maxCpm = cpm;
-      maxCpmStation = name;
+  for (const value of stations) {
+    const station = parseRadStation(value, now);
+    if (!station) continue;
+    if (station.observedAt > mostRecent) mostRecent = station.observedAt;
+    if (station.cpm > maxCpm) {
+      maxCpm = station.cpm;
+      maxCpmStation = station.name;
     }
-    out.push({ name, state, lat, lon, cpm, observedAt, severity });
+    accepted.push(station);
   }
+  return { stations: accepted, mostRecent, maxCpm, maxCpmStation };
+}
+
+export function buildRadSummary(
+  stations: readonly RadStationRaw[],
+  now: number,
+  evidence?: ProviderEvidence,
+): RadSummary {
+  const providerEvidence = evidence ?? {
+    coverage: 'reported' as const, error: null, retrievedAt: now, droppedRows: 0,
+  };
+  const boundaryDroppedEverything = stations.length === 0 && providerEvidence.droppedRows > 0;
+  if (providerEvidence.coverage !== 'reported' || boundaryDroppedEverything) {
+    const unavailableError = boundaryDroppedEverything
+      ? 'The radiation provider response contained no valid station readings.'
+      : 'Radiation coverage is unavailable.';
+    return unknownRadSummary(
+      providerEvidence.error ?? unavailableError,
+      Math.max(0, providerEvidence.droppedRows),
+      providerEvidence.retrievedAt,
+      now,
+    );
+  }
+  const {
+    stations: out, mostRecent, maxCpm, maxCpmStation,
+  } = collectRadStations(stations, now);
 
   const locallyDroppedRows = Math.max(0, stations.length - out.length);
-  const droppedRows = Math.max(0, evidence.droppedRows) + locallyDroppedRows;
+  const droppedRows = Math.max(0, providerEvidence.droppedRows) + locallyDroppedRows;
   if (stations.length > 0 && out.length === 0) {
-    return {
-      coverage: 'unknown',
-      error: 'The radiation provider response contained no valid station readings.',
-      stationCount: 0,
-      acceptedRows: 0,
+    return unknownRadSummary(
+      'The radiation provider response contained no valid station readings.',
       droppedRows,
-      elevatedStations: [],
-      maxCpm: null,
-      maxCpmStation: null,
-      severity: null,
-      badge: buildBadge(evidence.retrievedAt, now, RADIATION_STALE_AFTER_SEC),
-    };
+      providerEvidence.retrievedAt,
+      now,
+    );
   }
 
   const elevated = out
-    .filter((s) => s.cpm !== null && s.cpm >= RADIATION_BACKGROUND_CPM)
-    .sort((a, b) => (b.cpm ?? 0) - (a.cpm ?? 0));
+    .filter((station) => station.cpm >= RADIATION_BACKGROUND_CPM)
+    .sort((left, right) => right.cpm - left.cpm);
 
   return {
     coverage: 'reported',
@@ -829,7 +957,7 @@ export function buildRadSummary(
     maxCpm: maxCpm === -Infinity ? null : maxCpm,
     maxCpmStation,
     severity: maxCpm === -Infinity ? 'normal' : severityFor(maxCpm, RADIATION_THRESHOLDS),
-    badge: buildBadge(mostRecent > 0 ? mostRecent : evidence.retrievedAt, now, RADIATION_STALE_AFTER_SEC),
+    badge: buildBadge(mostRecent > 0 ? mostRecent : providerEvidence.retrievedAt, now, RADIATION_STALE_AFTER_SEC),
   };
 }
 
@@ -837,7 +965,7 @@ export function buildRadSummary(
  *  This is deliberately re-evaluated instead of trusting the stored badge so a
  *  once-fresh summary cannot keep driving alerts, hotspots, or an all-clear. */
 export function isRadSummaryFresh(summary: RadSummary | null, now = Date.now()): boolean {
-  if (!summary || summary.coverage !== 'reported' || summary.severity === null
+  if (summary?.coverage !== 'reported' || summary.severity === null
     || summary.badge.isStale || !Number.isFinite(now)) return false;
   const { observedAt } = summary.badge;
   return typeof observedAt === 'number' && Number.isFinite(observedAt)
@@ -852,19 +980,17 @@ export function countActiveRadiationAlerts(summary: RadSummary | null, now = Dat
 
 function readCpm(s: RadStationRaw): number | null {
   for (const key of ['GammaCpm', 'GammaCPM', 'Gamma', 'CountRate'] as const) {
-    const v = s[key];
-    if (typeof v === 'number') {
-      if (Number.isFinite(v) && v >= 0) return v;
-      continue;
-    }
-    if (typeof v === 'string') {
-      const clean = v.trim();
-      if (!clean) continue;
-      const n = Number(clean);
-      if (Number.isFinite(n) && n >= 0) return n;
-    }
+    const cpm = numericCpm(s[key]);
+    if (cpm !== null) return cpm;
   }
   return null;
+}
+
+function numericCpm(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : null;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const cpm = Number(value.trim());
+  return Number.isFinite(cpm) && cpm >= 0 ? cpm : null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────

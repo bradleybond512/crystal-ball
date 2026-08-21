@@ -29,6 +29,18 @@ const PENCIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="1
 
 const MAX_PLACES = 20;
 
+type LifelinePackStatus = ReturnType<typeof getLifelinePackReadinessForPlace>['status'];
+
+function lifelinePackLabel(status: LifelinePackStatus | null): string {
+  switch (status) {
+    case 'ready': { return 'Lifelines Ready'; }
+    case 'partial': { return 'Lifelines Partial'; }
+    case 'expired': { return 'Lifelines Expired'; }
+    case 'not-saved': { return 'Lifelines Not Saved'; }
+    default: { return ''; }
+  }
+}
+
 interface PlaceThreatSummary {
   total: number;
   critical: number;
@@ -267,15 +279,7 @@ export class SavedPlacesPanel extends Panel {
     const packStatus = place.offlinePinned
       ? getLifelinePackReadinessForPlace(place).status
       : null;
-    const packLabel = packStatus === 'ready'
-      ? 'Lifelines Ready'
-      : packStatus === 'partial'
-        ? 'Lifelines Partial'
-        : packStatus === 'expired'
-          ? 'Lifelines Expired'
-          : packStatus === 'not-saved'
-            ? 'Lifelines Not Saved'
-            : '';
+    const packLabel = lifelinePackLabel(packStatus);
     const chips: string[] = [
       place.primary ? 'Primary' : '',
       packLabel,

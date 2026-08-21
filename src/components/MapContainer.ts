@@ -155,7 +155,15 @@ export class MapContainer {
 
   private async init(): Promise<void> {
  const generation = this.asyncInitGuard.begin();
- if (this.useDeckGL) {
+ if (!this.useDeckGL) {
+ if (!this.asyncInitGuard.isCurrent(generation)) return;
+ this.initSvgMap('[MapContainer] Initializing SVG map (mobile/fallback mode)');
+ return;
+ }
+ await this.initDeckGL(generation);
+  }
+
+  private async initDeckGL(generation: number): Promise<void> {
  if (import.meta.env.DEV) console.log('[MapContainer] Initializing deck.gl map (desktop mode)'); // eslint-disable-line no-console
  try {
  // Dynamic import so deck.gl + maplibre land in their own chunk. The
@@ -178,10 +186,6 @@ export class MapContainer {
  if (!this.asyncInitGuard.isCurrent(generation)) return;
  console.warn('[MapContainer] DeckGL initialization failed, falling back to SVG map', error); // eslint-disable-line no-console
  this.initSvgMap('[MapContainer] Initializing SVG map (DeckGL fallback mode)');
- }
- } else {
- if (!this.asyncInitGuard.isCurrent(generation)) return;
- this.initSvgMap('[MapContainer] Initializing SVG map (mobile/fallback mode)');
  }
   }
 
@@ -244,7 +248,7 @@ export class MapContainer {
 
   public clearLifelinesOverlayIfMatches(identity: LifelinesOverlayIdentity): void {
  const active = this.activeLifelinesOverlay;
- if (!active || active.placeId !== identity.placeId
+ if (active?.placeId !== identity.placeId
    || active.queryFingerprint !== identity.queryFingerprint) return;
  this.clearLifelinesOverlay();
   }

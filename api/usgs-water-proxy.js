@@ -8,13 +8,14 @@ const PARAMETER_CODES = new Set(['00010', '00300', '00400', '00095', '00665', '0
 const MAX_FEATURES = 200;
 const MAX_USGS_LOCATIONS_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_USGS_LATEST_RESPONSE_BYTES = 2 * 1024 * 1024;
+const DECIMAL_PATTERN = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
 function parseBbox(raw) {
   if (typeof raw !== 'string') return null;
   const parts = raw.split(',');
-  if (parts.length !== 4 || parts.some((part) => !/^-?(?:\d+\.?\d*|\.\d+)$/.test(part))) return null;
+  if (parts.length !== 4 || parts.some((part) => !DECIMAL_PATTERN.test(part))) return null;
   const [west, south, east, north] = parts.map(Number);
-  if (![west, south, east, north].every(Number.isFinite)
+  if (![west, south, east, north].every((value) => Number.isFinite(value))
     || west < -180 || east > 180 || south < -90 || north > 90
     || west >= east || south >= north || east - west > 1 || north - south > 1) return null;
   return [west, south, east, north].map((value) => value.toFixed(6)).join(',');
@@ -28,7 +29,7 @@ function boundedString(value, max = 80) {
 
 function finiteNumber(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
-  if (typeof value !== 'string' || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value)) return undefined;
+  if (typeof value !== 'string' || !DECIMAL_PATTERN.test(value)) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }

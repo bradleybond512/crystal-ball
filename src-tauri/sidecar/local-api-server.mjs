@@ -5014,10 +5014,11 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
  }
  let settled = false;
  const fail = (error) => {
- if (settled) return;
+ if (!settled) {
  settled = true;
  res.destroy();
  reject(error);
+ }
  };
  res.on('data', (chunk) => {
  if (settled) return;
@@ -17484,7 +17485,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (result.coverage !== 'reported') return json(result, 502);
  setCached(cacheKey, result, 10 * 60 * 1000);
  return json(result);
- } catch (error) {
+ } catch {
  return json(infrastructureBgpUnknown('provider_unavailable', Date.now()), 502);
  }
   }
@@ -17508,7 +17509,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (result.coverage !== 'reported') return json(result, 502);
  setCached(cacheKey, result, 30 * 60 * 1000);
  return json(result);
- } catch (error) {
+ } catch {
  return json(infrastructureRadiationUnknown('provider_unavailable', Date.now()), 502);
  }
   }
@@ -19661,7 +19662,7 @@ function isValidUsgsWaterCivilTime(value) {
 function usgsWaterBounds(bbox) {
   if (typeof bbox !== 'string') return null;
   const values = bbox.split(',').map(parseUsgsWaterNumber);
-  if (values.length !== 4 || values.some((value) => value === undefined)) return null;
+  if (values.length !== 4 || values.includes(undefined)) return null;
   const [west, south, east, north] = values;
   return west < east && south < north ? { west, south, east, north } : null;
 }

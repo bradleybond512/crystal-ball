@@ -149,9 +149,9 @@ export function matchesWeatherSavedPlaceActionTarget(
   place: WeatherSavedPlaceActionIdentity | null | undefined,
   target: WeatherSavedPlaceActionTarget | null | undefined,
 ): boolean {
-  if (!place || !target || target.placeId !== place.id) return false;
+  if (!place || target?.placeId !== place.id) return false;
   const current = buildWeatherSavedPlaceActionTarget(place);
-  return current !== undefined && current.fingerprint === target.fingerprint;
+  return current?.fingerprint === target.fingerprint;
 }
 
 // ── Match result ─────────────────────────────────────────────────────────

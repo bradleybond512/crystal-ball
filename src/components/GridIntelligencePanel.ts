@@ -131,8 +131,9 @@ export class GridIntelligencePanel extends Panel {
       reportedCustomersOut, reportCount, reports, severity, badge, unknownReason,
     } = this.outages;
     if (coverage !== 'reported' || reportedCustomersOut === null) {
+      const countyScope = countyFips ? ` · county FIPS ${escapeHtml(countyFips)}` : '';
       const scope = placeName
-        ? ` Saved place: ${escapeHtml(placeName)}${countyFips ? ` · county FIPS ${escapeHtml(countyFips)}` : ''}.`
+        ? ` Saved place: ${escapeHtml(placeName)}${countyScope}.`
         : '';
       return `<div class="gi-outages-tab">
         <div class="gi-headline" style="padding:8px 12px;border-radius:6px;background:var(--overlay-light);font-size:14px">

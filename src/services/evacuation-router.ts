@@ -334,7 +334,7 @@ function normalizeOsrmLeg(value: unknown): OsrmLeg | null {
   if (!isRecord(value) || !boundedDistanceMeters(value.distance) || !boundedDurationSeconds(value.duration)) return null;
   if (!Array.isArray(value.steps) || value.steps.length > MAX_ROUTE_STEPS) return null;
   const steps = value.steps.map(normalizeOsrmStep);
-  return steps.some((step) => step === null)
+  return steps.includes(null)
     ? null
     : { distance: value.distance, duration: value.duration, steps: steps as NonNullable<OsrmLeg['steps']> };
 }
@@ -343,7 +343,7 @@ function normalizeOsrmRoute(value: unknown): OsrmRoute | null {
   if (!isRecord(value) || !boundedDistanceMeters(value.distance) || !boundedDurationSeconds(value.duration)) return null;
   if (!validGeometry(value.geometry) || !Array.isArray(value.legs) || value.legs.length === 0 || value.legs.length >= MAX_ROUTE_WAYPOINTS) return null;
   const legs = value.legs.map(normalizeOsrmLeg);
-  if (legs.some((leg) => leg === null)) return null;
+  if (legs.includes(null)) return null;
   if (legs.reduce((total, leg) => total + (leg?.steps.length ?? 0), 0) > MAX_ROUTE_STEPS) return null;
   return {
     distance: value.distance,
@@ -362,7 +362,7 @@ export function parseOsrmResponse(value: unknown): OsrmResponse | null {
   if (!Array.isArray(value.routes)) return null;
   if (value.code !== 'Ok' || value.routes.length === 0 || value.routes.length > 3) return null;
   const routes = value.routes.map(normalizeOsrmRoute);
-  return routes.some((route) => route === null) ? null : { code: 'Ok', routes: routes as OsrmRoute[] };
+  return routes.includes(null) ? null : { code: 'Ok', routes: routes as OsrmRoute[] };
 }
 
 async function readBoundedOsrmJson(response: Response, signal: AbortSignal): Promise<unknown> {

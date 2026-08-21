@@ -81,7 +81,7 @@ function cloneSample(sample: OdinOutageSample): OdinOutageSample {
 function cloneHistory(history: OdinOutageHistory): OdinOutageHistory {
   return {
     ...history,
-    samples: history.samples.map(cloneSample),
+    samples: history.samples.map((sample) => cloneSample(sample)),
     watermarkAt: history.watermarkAt ? new Date(history.watermarkAt) : null,
     trendBaselineAt: history.trendBaselineAt ? new Date(history.trendBaselineAt) : null,
   };
@@ -165,11 +165,9 @@ export function applyOdinOutageUpdate(
     .filter((sample) => sample.observedAt.getTime() >= cutoff)
     .sort((left, right) => left.observedAt.getTime() - right.observedAt.getTime())
     .slice(-maxSamples);
-  const disposition: OdinUpdateDisposition = update.kind === 'reported'
-    ? 'accepted-reported'
-    : update.kind === 'empty'
-      ? 'accepted-empty-unknown'
-      : 'accepted-unavailable-unknown';
+  let disposition: OdinUpdateDisposition = 'accepted-unavailable-unknown';
+  if (update.kind === 'reported') disposition = 'accepted-reported';
+  else if (update.kind === 'empty') disposition = 'accepted-empty-unknown';
   return { history, disposition };
 }
 
@@ -205,13 +203,10 @@ export function deriveOdinOutageState(history: OdinOutageHistory, now = Date.now
     ? previousCandidate
     : undefined;
   const delta = previous ? latest.customersOut - previous.customersOut : null;
-  const trend = delta === null
-    ? 'unknown'
-    : delta > 0
-      ? 'worsening'
-      : delta < 0
-        ? 'improving'
-        : 'steady';
+  let trend: OdinOutageState['trend'] = 'unknown';
+  if (delta !== null && delta > 0) trend = 'worsening';
+  else if (delta !== null && delta < 0) trend = 'improving';
+  else if (delta === 0) trend = 'steady';
   return {
     countyFips: history.countyFips,
     coverage: 'reported',

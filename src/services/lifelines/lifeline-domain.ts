@@ -25,6 +25,12 @@ function currentAt(expiresAt: Date, now: number): boolean {
   return validTime(expiresAt) && expiresAt.getTime() > now;
 }
 
+function retrievalTime(value: ResourceObservation | AreaCondition): Date {
+  if (value.retrievedAt) return value.retrievedAt;
+  const { observedAt: legacyValue } = value as unknown as { observedAt?: unknown };
+  return legacyValue instanceof Date ? legacyValue : new Date(Number.NaN);
+}
+
 function providerForSite(site: ResourceSite): 'fema' | 'osm' {
   return site.sourceRefs.some((reference) => reference.provider === 'fema') ? 'fema' : 'osm';
 }
@@ -44,7 +50,7 @@ function unknownStatusFact<T extends OperationalStatus | InventoryStatus | Power
     value: 'unknown' as T,
     knowledge: 'unknown',
     provider,
-    observedAt: observation?.observedAt ?? null,
+    observedAt: observation ? retrievalTime(observation) : null,
     expiresAt: observation?.expiresAt ?? null,
     ...(observation ? { sourceObservationId: observation.id } : {}),
     reason,
@@ -68,7 +74,7 @@ function statusFact<T extends OperationalStatus | InventoryStatus | PowerStatus 
     value,
     knowledge: 'reported',
     provider: 'fema',
-    observedAt: observation.observedAt,
+    observedAt: retrievalTime(observation),
     expiresAt: observation.expiresAt,
     sourceObservationId: observation.id,
   };
@@ -76,10 +82,10 @@ function statusFact<T extends OperationalStatus | InventoryStatus | PowerStatus 
 
 function latestObservation(observations: readonly ResourceObservation[]): ResourceObservation | undefined {
   return [...observations]
-    .filter((observation) => validTime(observation.observedAt) && validTime(observation.expiresAt))
+    .filter((observation) => validTime(retrievalTime(observation)) && validTime(observation.expiresAt))
     .sort((left, right) => {
-      const timeDiff = right.observedAt.getTime() - left.observedAt.getTime();
-      return timeDiff !== 0 ? timeDiff : left.id.localeCompare(right.id);
+      const timeDiff = retrievalTime(right).getTime() - retrievalTime(left).getTime();
+      return timeDiff === 0 ? left.id.localeCompare(right.id) : timeDiff;
     })[0];
 }
 
@@ -87,9 +93,9 @@ function capacityFacts(
   site: ResourceSite,
   official: ResourceObservation | undefined,
   now: number,
-): Array<LifelineFact<number | null>> {
+): LifelineFact<number | null>[] {
   if (!site.sourceRefs.some((reference) => reference.provider === 'fema')) return [];
-  const definitions: Array<[LifelineFactAttribute, number | undefined]> = [
+  const definitions: [LifelineFactAttribute, number | undefined][] = [
     ['evacuation-capacity', site.capabilities.evacuationCapacity],
     ['post-impact-capacity', site.capabilities.postImpactCapacity],
     ['reported-population', site.capabilities.reportedPopulation],
@@ -105,7 +111,7 @@ function capacityFacts(
       value: expired ? null : value,
       knowledge: expired ? 'unknown' as const : 'reported' as const,
       provider: 'fema' as const,
-      observedAt: official.observedAt,
+      observedAt: retrievalTime(official),
       expiresAt: official.expiresAt,
       ...(expired ? { reason: 'expired' as const } : {}),
     }];
@@ -146,7 +152,7 @@ function deriveSite(
     value: site.name,
     knowledge: provider === 'fema' ? 'reported' : 'directory',
     provider,
-    observedAt: evidence?.observedAt ?? null,
+    observedAt: evidence ? retrievalTime(evidence) : null,
     expiresAt: null,
     ...(evidence ? { sourceObservationId: evidence.id } : {}),
   };
@@ -206,7 +212,7 @@ function areaFact(
     value: expired || unknownCoverage ? null : value,
     knowledge: expired || unknownCoverage ? 'unknown' : 'reported',
     provider: 'ornl-odin',
-    observedAt: condition.observedAt,
+    observedAt: retrievalTime(condition),
     expiresAt: condition.expiresAt,
     ...(expired ? { reason: 'expired' as const } : {}),
     ...(!expired && unknownCoverage ? { reason: 'coverage-unknown' as const } : {}),

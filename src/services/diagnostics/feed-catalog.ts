@@ -225,11 +225,9 @@ export function summarizeFeedHealth(rows: FeedRow[]): FeedHealthSummary {
 
 /** Format the "last poll" column. Empty string for never-polled feeds. */
 export function formatLastPoll(snapshot: FeedSnapshot, nowMs: number): string {
-  const at = snapshot.lastSuccessAt === null
-    ? snapshot.lastAttemptAt
-    : (snapshot.lastAttemptAt === null
-        ? snapshot.lastSuccessAt
-        : Math.max(snapshot.lastSuccessAt, snapshot.lastAttemptAt));
+  let at = snapshot.lastSuccessAt;
+  if (at === null) at = snapshot.lastAttemptAt;
+  else if (snapshot.lastAttemptAt !== null) at = Math.max(at, snapshot.lastAttemptAt);
   if (at === null) return '—';
   const ageMs = nowMs - at;
   if (ageMs < 60_000) return 'just now';

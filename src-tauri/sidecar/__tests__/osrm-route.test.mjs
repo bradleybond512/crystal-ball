@@ -38,12 +38,12 @@ test('desktop dynamic route table serves the strict OSRM graph proxy', async () 
       code: 'Ok',
       routes: [{
         distance: 15_200,
-        duration: 1_260,
+        duration: 1260,
         geometry: { type: 'LineString', coordinates: [[-86.7, 41.6], [-86.8, 41.7]] },
         legs: [{
           distance: 15_200,
-          duration: 1_260,
-          steps: [{ maneuver: { type: 'depart' }, name: 'Main St', distance: 1_000, duration: 120 }],
+          duration: 1260,
+          steps: [{ maneuver: { type: 'depart' }, name: 'Main St', distance: 1000, duration: 120 }],
         }],
       }],
     });

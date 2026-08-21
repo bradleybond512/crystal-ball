@@ -61,6 +61,14 @@ function formatPackStatus(status: ReturnType<typeof getLifelinePackReadinessForP
   return 'not saved for this exact place';
 }
 
+function renderStaleSnapshot(snapshot: LocalLogisticsSnapshot): string {
+  if (!snapshot.isStale) return '';
+  const message = snapshot.isExpired
+    ? 'Cached Lifeline Pack expired; all current availability must be reconfirmed.'
+    : `Showing stale cached Lifeline Pack from ${escapeHtml(formatUpdatedAt(snapshot.fetchedAt))}.`;
+  return `<div class="panel-empty" style="margin-bottom:10px;">${message}</div>`;
+}
+
 export class LocalLogisticsPanel extends Panel {
   private readonly options: LocalLogisticsPanelOptions;
   private activePlaceId: string | null = null;
@@ -98,8 +106,15 @@ export class LocalLogisticsPanel extends Panel {
  this.options = options;
  this.showLoading('Loading disaster lifelines…');
 
- this.content.addEventListener('click', (event) => {
+ this.content.addEventListener('click', (event) => this.handleContentClick(event));
+
+ this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.handleSavedPlacesChanged());
+ document.addEventListener('wm:lifeline-situation-updated', this.onLifelineSituationUpdated);
+  }
+
+  private handleContentClick(event: MouseEvent): void {
  const target = event.target as HTMLElement | null;
+ if (!target) return;
  const filterButton = target?.closest<HTMLElement>('[data-logistics-filter]');
  if (filterButton) {
  this.activeFilter = (filterButton.dataset.logisticsFilter ?? 'all') as LocalLogisticsFilter;
@@ -114,19 +129,14 @@ export class LocalLogisticsPanel extends Panel {
 
  const mapButton = target?.closest<HTMLElement>('[data-logistics-map]');
  if (mapButton) {
- const snapshot = this.snapshot;
- const place = this.resolvePlace();
- if (!snapshot || !place || snapshot.placeId !== this.activePlaceId
-   || this.snapshotPlaceSignature !== buildLifelinesPlaceMatchSignature(place)
-   || !this.snapshotMatchesPlace(snapshot, place)) return;
- document.dispatchEvent(new CustomEvent('wm:show-lifelines-overlay', { detail: { snapshot } }));
+ this.showCurrentOverlay();
  return;
  }
 
  const sourceButton = target?.closest<HTMLElement>('[data-logistics-source]');
  if (sourceButton) {
  const sourceNode = this.nodeLookup.get(sourceButton.dataset.logisticsSource ?? '');
- const safeUrl = sourceNode ? sanitizeUrl(sourceNode.sourceUrl || sourceNode.url || '') : '';
+ const safeUrl = sourceNode ? sanitizeUrl(sourceNode.sourceUrl ?? sourceNode.url ?? '') : '';
  if (safeUrl && safeUrl !== '#') window.open(safeUrl, '_blank', 'noopener,noreferrer');
  return;
  }
@@ -144,10 +154,15 @@ export class LocalLogisticsPanel extends Panel {
  const node = this.nodeLookup.get(nodeId);
  if (!node) return;
  this.options.focusNode(node.lat, node.lon);
- });
+  }
 
- this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.handleSavedPlacesChanged());
- document.addEventListener('wm:lifeline-situation-updated', this.onLifelineSituationUpdated);
+  private showCurrentOverlay(): void {
+ const snapshot = this.snapshot;
+ const place = this.resolvePlace();
+ if (!snapshot || !place || snapshot.placeId !== this.activePlaceId
+   || this.snapshotPlaceSignature !== buildLifelinesPlaceMatchSignature(place)
+   || !this.snapshotMatchesPlace(snapshot, place)) return;
+ document.dispatchEvent(new CustomEvent('wm:show-lifelines-overlay', { detail: { snapshot } }));
   }
 
   public setPlaceId(placeId: string | null): void {
@@ -355,9 +370,7 @@ export class LocalLogisticsPanel extends Panel {
  </div>
  `;
 
- const staleHtml = this.snapshot.isStale
- ? `<div class="panel-empty" style="margin-bottom:10px;">${this.snapshot.isExpired ? 'Cached Lifeline Pack expired; all current availability must be reconfirmed.' : `Showing stale cached Lifeline Pack from ${escapeHtml(formatUpdatedAt(this.snapshot.fetchedAt))}.`}</div>`
- : '';
+ const staleHtml = renderStaleSnapshot(this.snapshot);
 
  const readiness = getLifelinePackReadinessForPlace(place);
  const latestChange = getRecentLifelineChangesForPlace(place)[0] ?? null;

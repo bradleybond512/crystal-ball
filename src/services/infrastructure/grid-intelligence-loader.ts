@@ -80,6 +80,11 @@ export interface GridIntelligenceLoaderOptions {
   getActivePlaceId(): string | null;
 }
 
+function reportRefreshFailure(error: unknown): void {
+  // eslint-disable-next-line no-console -- diagnostic for an unexpected background refresh failure
+  console.warn('[grid-intelligence-loader] background refresh failed', error);
+}
+
 const EMPTY_OVERLAY: InfrastructureOverlayState = {
   outageStates: [],
   radiationHotspots: [],
@@ -295,26 +300,25 @@ export function startGridIntelligenceLoader(
     refreshOutages();
     await Promise.allSettled([refreshGrid(), refreshBgp(), refreshRadiation()]);
   };
-
   if (typeof document !== 'undefined') {
     document.addEventListener(ACTIVE_LOCAL_LOGISTICS_SNAPSHOT_EVENT, onLifelineSnapshot);
     document.addEventListener(LOCAL_LOGISTICS_ACTIVE_PLACE_EVENT, onActivePlaceChanged);
   }
 
-  void refreshAll();
+  refreshAll().catch(reportRefreshFailure);
 
   const intervals: ReturnType<typeof setInterval>[] = [
-    setInterval(() => { void refreshGrid(); }, POLL_GRID_MS),
-    setInterval(() => { void refreshOutages(); }, POLL_OUTAGES_MS),
-    setInterval(() => { void refreshBgp(); }, POLL_BGP_MS),
-    setInterval(() => { void refreshRadiation(); }, POLL_RADIATION_MS),
+    setInterval(() => { refreshGrid().catch(reportRefreshFailure); }, POLL_GRID_MS),
+    setInterval(refreshOutages, POLL_OUTAGES_MS),
+    setInterval(() => { refreshBgp().catch(reportRefreshFailure); }, POLL_BGP_MS),
+    setInterval(() => { refreshRadiation().catch(reportRefreshFailure); }, POLL_RADIATION_MS),
   ];
 
   return {
     stop(): void {
       if (stopped) return;
       stopped = true;
-      for (const source of Object.keys(generations) as Array<keyof typeof generations>) {
+      for (const source of Object.keys(generations) as (keyof typeof generations)[]) {
         generations[source] += 1;
         controllers[source]?.abort();
         delete controllers[source];
@@ -366,9 +370,9 @@ async function fetchGrid(signal?: AbortSignal): Promise<GridSnapshot | null> {
   return buildGridSnapshot(rows, Date.now());
 }
 
-export async function fetchOutages(): Promise<OutageSummary> {
+export function fetchOutages(): Promise<OutageSummary> {
   latestOutageSummary = ageOutageSummary(latestOutageSummary, Date.now());
-  return latestOutageSummary;
+  return Promise.resolve(latestOutageSummary);
 }
 
 export function parseBgpResponse(data: unknown, now: number): BgpSummary {

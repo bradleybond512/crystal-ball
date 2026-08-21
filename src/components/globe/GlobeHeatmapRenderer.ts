@@ -139,7 +139,7 @@ const DEFAULT_FETCHERS: Record<HeatmapDomain, SidecarFetcher> = {
   // or statewide coverage, so this layer stays empty until county geometry is
   // carried through a dedicated, coverage-labelled overlay contract. An empty
   // layer means outage geometry is unknown; it never means power is on.
-  infrastructure: async () => [],
+  infrastructure: () => Promise.resolve([]),
 };
 
 export interface GlobeHeatmapRendererOptions {

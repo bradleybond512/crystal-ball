@@ -305,7 +305,7 @@ function validCachedHazard(value: unknown): value is SavedPlaceWeatherHazard {
   return ['tropical', 'thunderstorm', 'winter', 'flood', 'wind'].includes(String(hazard.type))
     && ['critical', 'high', 'medium', 'low'].includes(String(hazard.severity))
     && typeof hazard.headline === 'string' && hazard.headline.length > 0 && hazard.headline.length <= 240
-    && typeof hazard.detail === 'string' && hazard.detail.length <= 1_000
+    && typeof hazard.detail === 'string' && hazard.detail.length <= 1000
     && typeof hazard.startTime === 'string' && hazard.startTime.length > 0 && hazard.startTime.length <= 80
     && (hazard.endTime === undefined || (typeof hazard.endTime === 'string' && hazard.endTime.length <= 80))
     && Number.isSafeInteger(hazard.leadHours) && Number(hazard.leadHours) >= 0 && Number(hazard.leadHours) <= MAX_FORECAST_HOURS
@@ -327,7 +327,7 @@ export function deserializeCachedSavedPlaceWeather(
     || (value.forecastUrl !== undefined
       && (typeof value.forecastUrl !== 'string' || !isAllowedNwsForecastUrl(value.forecastUrl)))
     || !Array.isArray(value.hazards) || value.hazards.length > MAX_FORECAST_HOURS
-    || !value.hazards.every(validCachedHazard)
+    || !value.hazards.every((hazard) => validCachedHazard(hazard))
     || typeof value.fetchedAt !== 'string') return null;
   const fetchedAt = new Date(value.fetchedAt);
   if (!Number.isFinite(fetchedAt.getTime())
@@ -392,6 +392,12 @@ export function buildSavedPlaceWeatherBriefItems(
   }));
 }
 
+function emitCachedSavedPlaceWeather(place: SavedPlace): SavedPlaceWeatherSnapshot | null {
+  const cached = getCachedSavedPlaceWeather(place);
+  if (cached) emitSavedPlaceWeatherUpdated(cached);
+  return cached;
+}
+
 export async function fetchSavedPlaceWeather(place: SavedPlace): Promise<SavedPlaceWeatherSnapshot | null> {
   const cacheKey = buildCacheKey(place);
   try {
@@ -400,9 +406,7 @@ export async function fetchSavedPlaceWeather(place: SavedPlace): Promise<SavedPl
  signal: AbortSignal.timeout(12_000),
  });
  if (pointResponse.status === 404) {
- const cached = getCachedSavedPlaceWeather(place);
- if (cached) emitSavedPlaceWeatherUpdated(cached);
- return cached;
+ return emitCachedSavedPlaceWeather(place);
  }
  if (!pointResponse.ok) throw new Error(`HTTP ${pointResponse.status}`);
 
@@ -429,11 +433,8 @@ export async function fetchSavedPlaceWeather(place: SavedPlace): Promise<SavedPl
  emitSavedPlaceWeatherUpdated(snapshot);
  return snapshot;
   } catch (error) {
- const cached = getCachedSavedPlaceWeather(place);
- if (cached) {
- emitSavedPlaceWeatherUpdated(cached);
- return cached;
- }
+ const cached = emitCachedSavedPlaceWeather(place);
+ if (cached) return cached;
  if (error instanceof Error && error.message.includes('HTTP 404')) {
  return null;
  }

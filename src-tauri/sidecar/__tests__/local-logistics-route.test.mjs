@@ -32,9 +32,9 @@ test('desktop dynamic handler serves the same strict local-logistics v2 route', 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (String(url).includes('overpass-api.de')) {
-      return new Response(JSON.stringify({ elements: [
+      return Response.json({ elements: [
         { type: 'node', id: 1, lat: 0, lon: 0, tags: { amenity: 'fuel', name: 'Directory Fuel', opening_hours: '24/7' } },
-      ] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      ] }, { status: 200, headers: { 'content-type': 'application/json' } });
     }
     throw new Error(`unexpected upstream ${url}`);
   };

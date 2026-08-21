@@ -60,7 +60,7 @@ const SNAPSHOT_KEYS = new Set([
 
 function plainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
+  const prototype: unknown = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return false;
   return Object.values(Object.getOwnPropertyDescriptors(value)).every((descriptor) => 'value' in descriptor);
 }
@@ -93,7 +93,7 @@ function validDate(value: unknown): value is Date {
 }
 
 function validHttpsUrl(value: unknown): boolean {
-  if (!boundedString(value, 2_048)) return false;
+  if (!boundedString(value, 2048)) return false;
   try {
     return new URL(value).protocol === 'https:';
   } catch {
@@ -168,37 +168,63 @@ function haversineKm(fromLat: number, fromLon: number, toLat: number, toLon: num
   const a = Math.sin(deltaLat / 2) ** 2
     + Math.cos(fromLat * radians) * Math.cos(toLat * radians) * Math.sin(deltaLon / 2) ** 2;
   const boundedA = Math.max(0, Math.min(1, a));
-  return 6_371 * 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
+  return 6371 * 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
 }
 
 function validNode(value: unknown, snapshotFetchedAt: Date, now: number): value is LogisticsNode {
   if (!plainRecord(value)) return false;
+  if (!validNodeIdentity(value)) return false;
+  const provider = validNodeSourceRefs(value.sourceRefs);
+  if (provider === null) return false;
+  if (!validNodeStates(value) || !validNodeDates(value, snapshotFetchedAt, now, provider)) return false;
+  if (typeof value.directoryOnly !== 'boolean' || !validProviderSemantics(value, provider)) return false;
+  return true;
+}
+
+function validNodeIdentity(value: Record<string, unknown>): boolean {
   if (!boundedString(value.id, 180) || !boundedString(value.name, 240)) return false;
-  if (!CATEGORIES.has(String(value.category)) || value.kind !== value.category) return false;
+  if (typeof value.category !== 'string' || !CATEGORIES.has(value.category) || value.kind !== value.category) return false;
   if (!finiteInRange(value.lat, -90, 90) || !finiteInRange(value.lon, -180, 180)) return false;
   if (!finiteInRange(value.distanceKm, 0, 50_000)) return false;
   if (!optionalBoundedString(value.address) || !optionalBoundedString(value.publicPhone, 80)) return false;
-  if (value.publicPhone !== undefined && !/^[+()\d\s.\-xext]+$/i.test(String(value.publicPhone))) return false;
-  if (!plainRecord(value.capabilities) || !denseDataArray(value.sourceRefs) || value.sourceRefs.length === 0 || value.sourceRefs.length > 8) return false;
-  const sourceRefs = Array.from(value.sourceRefs);
+  if (value.publicPhone !== undefined
+    && (typeof value.publicPhone !== 'string' || !/^[+()\d\s.ext-]+$/i.test(value.publicPhone))) return false;
+  return plainRecord(value.capabilities);
+}
+
+function validNodeSourceRefs(value: unknown): 'osm' | 'fema' | null {
+  if (!denseDataArray(value) || value.length === 0 || value.length > 8) return null;
+  const sourceRefs = [...value];
   if (!sourceRefs.every((ref) => plainRecord(ref)
     && (ref.provider === 'osm' || ref.provider === 'fema')
-    && boundedString(ref.recordId, 180))) return false;
+    && boundedString(ref.recordId, 180))) return null;
   const provider = (sourceRefs[0] as { provider: 'osm' | 'fema' }).provider;
   const refKeys = sourceRefs.map((ref) => `${(ref as { provider: string }).provider}:${(ref as { recordId: string }).recordId}`);
-  if (new Set(refKeys).size !== refKeys.length) return false;
-  if (provider === 'osm' && sourceRefs.some((ref) => (ref as { provider: string }).provider !== 'osm')) return false;
+  if (new Set(refKeys).size !== refKeys.length) return null;
+  if (provider === 'osm' && sourceRefs.some((ref) => (ref as { provider: string }).provider !== 'osm')) return null;
   if (provider === 'fema') {
     let reachedOsmSecondary = false;
     for (const ref of sourceRefs) {
       if ((ref as { provider: string }).provider === 'osm') reachedOsmSecondary = true;
-      else if (reachedOsmSecondary) return false;
+      else if (reachedOsmSecondary) return null;
     }
   }
+  return provider;
+}
+
+function validNodeStates(value: Record<string, unknown>): boolean {
   if (!boundedString(value.source, 120) || !FRESHNESS.has(String(value.freshness)) || !HAZARD.has(String(value.hazardCompatibility))) return false;
   if (!OPERATIONAL.has(String(value.operational)) || !INVENTORY.has(String(value.inventory))) return false;
   if (!POWER.has(String(value.power)) || !ACCESS.has(String(value.access))) return false;
-  if (!VERIFICATION.has(String(value.verification)) || !CONFIDENCE.has(String(value.confidence))) return false;
+  return VERIFICATION.has(String(value.verification)) && CONFIDENCE.has(String(value.confidence));
+}
+
+function validNodeDates(
+  value: Record<string, unknown>,
+  snapshotFetchedAt: Date,
+  now: number,
+  provider: 'osm' | 'fema',
+): boolean {
   if (!validDate(value.fetchedAt) || value.fetchedAt.getTime() !== snapshotFetchedAt.getTime()) return false;
   if (!validDate(value.observedAt) || !validDate(value.expiresAt)) return false;
   const retrievedAt = value.retrievedAt === undefined ? value.observedAt : value.retrievedAt;
@@ -210,7 +236,6 @@ function validNode(value: unknown, snapshotFetchedAt: Date, now: number): value 
   const maximumTtlMs = provider === 'osm' ? DIRECTORY_OBSERVATION_TTL_MS : FEMA_OBSERVATION_TTL_MS;
   if (value.expiresAt.getTime() < retrievedAt.getTime()
     || value.expiresAt.getTime() > retrievedAt.getTime() + maximumTtlMs) return false;
-  if (typeof value.directoryOnly !== 'boolean' || !validProviderSemantics(value, provider)) return false;
   return true;
 }
 
@@ -244,21 +269,58 @@ function sanitizeNode(node: LogisticsNode, distanceKm: number): LogisticsNode {
     source: node.source,
     freshness: node.freshness,
     hazardCompatibility: node.hazardCompatibility,
-    fetchedAt: new Date(node.fetchedAt.getTime()),
+    fetchedAt: new Date(node.fetchedAt),
     operational: node.operational,
     inventory: node.inventory,
     power: node.power,
     access: node.access,
     verification: node.verification,
-    observedAt: new Date(node.observedAt.getTime()),
-    ...(node.retrievedAt ? { retrievedAt: new Date(node.retrievedAt.getTime()) } : {}),
-    ...(node.sourceObservedAt ? { sourceObservedAt: new Date(node.sourceObservedAt.getTime()) } : {}),
-    expiresAt: new Date(node.expiresAt.getTime()),
+    observedAt: new Date(node.observedAt),
+    ...(node.retrievedAt ? { retrievedAt: new Date(node.retrievedAt) } : {}),
+    ...(node.sourceObservedAt ? { sourceObservedAt: new Date(node.sourceObservedAt) } : {}),
+    expiresAt: new Date(node.expiresAt),
     confidence: node.confidence,
     sourceUrl: node.sourceUrl,
     directoryOnly: node.directoryOnly,
     ...(node.url ? { url: node.url } : {}),
   };
+}
+
+interface ValidOverlayHeader {
+  snapshot: Record<string, unknown>;
+  categories: string[];
+  fingerprint: ParsedSnapshotFingerprint;
+}
+
+function parseValidOverlayHeader(value: unknown, now: number): ValidOverlayHeader | null {
+  if (!plainRecord(value) || Object.keys(value).length !== 1 || !('snapshot' in value)) return null;
+  const snapshot = value.snapshot;
+  if (!plainRecord(snapshot) || Object.keys(snapshot).some((key) => !SNAPSHOT_KEYS.has(key))) return null;
+  if (snapshot.schemaVersion !== 2 || !boundedString(snapshot.queryFingerprint, 800)) return null;
+  if (!boundedString(snapshot.placeId, 180) || !boundedString(snapshot.placeName, 240)) return null;
+  if (!finiteInRange(snapshot.effectiveRadiusKm, 1, 50) || !optionalBoundedString(snapshot.countyFips, 5)) return null;
+  if (snapshot.countyFips !== undefined
+    && (typeof snapshot.countyFips !== 'string' || !/^\d{5}$/.test(snapshot.countyFips))) return null;
+  if (!denseDataArray(snapshot.categories) || snapshot.categories.length > CATEGORIES.size
+    || !snapshot.categories.every((item) => typeof item === 'string' && CATEGORIES.has(item))) return null;
+  const categories = [...snapshot.categories] as string[];
+  const fingerprint = parseSnapshotFingerprint(snapshot.queryFingerprint);
+  if (!fingerprint || new Set(categories).size !== categories.length) return null;
+  const fingerprintCategories = [...fingerprint.categories].sort((left, right) => left.localeCompare(right));
+  const snapshotCategories = [...categories].sort((left, right) => left.localeCompare(right));
+  if (fingerprint.radiusKm.toFixed(2) !== snapshot.effectiveRadiusKm.toFixed(2)
+    || fingerprintCategories.join(',') !== snapshotCategories.join(',')) return null;
+  if (!validDate(snapshot.fetchedAt)
+    || snapshot.fetchedAt.getTime() < EARLIEST_SOURCE_TIME_MS
+    || snapshot.fetchedAt.getTime() > now + CLOCK_SKEW_MS) return null;
+  return { snapshot, categories, fingerprint };
+}
+
+function validOverlayCollections(snapshot: Record<string, unknown>): boolean {
+  for (const key of ['sites', 'observations', 'areaConditions', 'providers'] as const) {
+    if (!denseDataArray(snapshot[key]) || snapshot[key].length > 1000) return false;
+  }
+  return true;
 }
 
 /**
@@ -267,33 +329,17 @@ function sanitizeNode(node: LogisticsNode, distanceKm: number): LogisticsNode {
  * or status strings into a safety-adjacent map overlay.
  */
 function parseLifelinesOverlayEventDetailUnchecked(value: unknown, now: number): LocalLogisticsSnapshot | null {
-  if (!plainRecord(value) || Object.keys(value).length !== 1 || !('snapshot' in value)) return null;
-  const snapshot = value.snapshot;
-  if (!plainRecord(snapshot) || Object.keys(snapshot).some((key) => !SNAPSHOT_KEYS.has(key))) return null;
-  if (snapshot.schemaVersion !== 2 || !boundedString(snapshot.queryFingerprint, 800)) return null;
-  if (!boundedString(snapshot.placeId, 180) || !boundedString(snapshot.placeName, 240)) return null;
-  if (!finiteInRange(snapshot.effectiveRadiusKm, 1, 50) || !optionalBoundedString(snapshot.countyFips, 5)) return null;
-  if (snapshot.countyFips !== undefined && !/^\d{5}$/.test(String(snapshot.countyFips))) return null;
-  if (!denseDataArray(snapshot.categories) || snapshot.categories.length > CATEGORIES.size
-    || !Array.from(snapshot.categories).every((item) => typeof item === 'string' && CATEGORIES.has(item))) return null;
-  const snapshotCategories = Array.from(snapshot.categories) as string[];
-  const fingerprint = parseSnapshotFingerprint(snapshot.queryFingerprint);
-  if (new Set(snapshotCategories).size !== snapshotCategories.length || !fingerprint
-    || fingerprint.radiusKm.toFixed(2) !== snapshot.effectiveRadiusKm.toFixed(2)
-    || [...fingerprint.categories].sort().join(',') !== [...snapshotCategories].sort().join(',')) return null;
-  if (!validDate(snapshot.fetchedAt)
-    || snapshot.fetchedAt.getTime() < EARLIEST_SOURCE_TIME_MS
-    || snapshot.fetchedAt.getTime() > now + CLOCK_SKEW_MS) return null;
+  const header = parseValidOverlayHeader(value, now);
+  if (!header) return null;
+  const { snapshot, categories: snapshotCategories, fingerprint } = header;
   if (!denseDataArray(snapshot.nodes) || snapshot.nodes.length > 300
-    || !Array.from(snapshot.nodes).every((node) => validNode(node, snapshot.fetchedAt as Date, now))) return null;
-  const validatedNodes = Array.from(snapshot.nodes) as LogisticsNode[];
+    || ![...snapshot.nodes].every((node) => validNode(node, snapshot.fetchedAt as Date, now))) return null;
+  const validatedNodes = [...snapshot.nodes] as LogisticsNode[];
   const nodeDistances = validatedNodes.map((node) => haversineKm(fingerprint.lat, fingerprint.lon, node.lat, node.lon));
   if (validatedNodes.some((node, index) => !snapshotCategories.includes(node.category)
     || !Number.isFinite(nodeDistances[index])
     || (nodeDistances[index] ?? Number.POSITIVE_INFINITY) > fingerprint.radiusKm + 0.25)) return null;
-  for (const key of ['sites', 'observations', 'areaConditions', 'providers'] as const) {
-    if (!denseDataArray(snapshot[key]) || snapshot[key].length > 1_000) return null;
-  }
+  if (!validOverlayCollections(snapshot)) return null;
   if (typeof snapshot.isStale !== 'boolean' || typeof snapshot.isExpired !== 'boolean') return null;
   if (!finiteInRange(snapshot.staleAgeMs, 0, Number.MAX_SAFE_INTEGER)) return null;
   if (snapshot.source !== 'network' && snapshot.source !== 'offline-cache') return null;
@@ -314,7 +360,7 @@ function parseLifelinesOverlayEventDetailUnchecked(value: unknown, now: number):
     nodes: validated.nodes.map((node, index) => sanitizeNode(node, nodeDistances[index]!)),
     areaConditions: [],
     providers: [],
-    fetchedAt: new Date(validated.fetchedAt.getTime()),
+    fetchedAt: new Date(validated.fetchedAt),
     isStale: validated.isStale,
     isExpired: validated.isExpired,
     staleAgeMs: validated.staleAgeMs,
@@ -339,10 +385,9 @@ export function parseLifelinesOverlayEventDetailWithContext(
     const candidate = parseLifelinesOverlayEventDetailUnchecked(value, now);
     if (!candidate) return null;
     const place = context.getPlace(candidate.placeId);
-    if (!place || candidate.placeName !== place.name) return null;
+    if (candidate.placeName !== place?.name) return null;
     const cached = context.getCachedSnapshot(place);
-    if (!cached
-      || candidate.queryFingerprint !== cached.queryFingerprint
+    if (candidate.queryFingerprint !== cached?.queryFingerprint
       || candidate.effectiveRadiusKm !== cached.effectiveRadiusKm
       || candidate.countyFips !== cached.countyFips
       || candidate.fetchedAt.getTime() !== cached.fetchedAt.getTime()) return null;
@@ -394,7 +439,7 @@ export interface TemporaryMapBounds {
  * full-world longitude extent because the SVG fallback has no wrapped-world
  * copy; this is less tight but guarantees every point remains visible.
  */
-export function getTemporaryMapBounds(coordinates: ReadonlyArray<readonly [number, number]>): TemporaryMapBounds | null {
+export function getTemporaryMapBounds(coordinates: readonly (readonly [number, number])[]): TemporaryMapBounds | null {
   if (coordinates.length === 0) return null;
   let minLon = 180;
   let minLat = 90;

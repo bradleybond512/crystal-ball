@@ -58,7 +58,7 @@ export interface LifelineSiteSituation {
   inventory: LifelineFact<InventoryStatus>;
   power: LifelineFact<PowerStatus>;
   access: LifelineFact<AccessStatus>;
-  capacities: Array<LifelineFact<number | null>>;
+  capacities: LifelineFact<number | null>[];
 }
 
 export interface LifelineAreaSituation {

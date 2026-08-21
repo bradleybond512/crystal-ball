@@ -68,7 +68,7 @@ export function parseOdinOutagesV1(raw, { fips, nowMs = Date.now() } = {}) {
       county,
       state,
       customersOut,
-      ...(customersRestored !== undefined ? { customersRestored } : {}),
+      ...(customersRestored === undefined ? {} : { customersRestored }),
       ...(utilityName ? { utilityName } : {}),
       ...(utilityId ? { utilityId } : {}),
       observedAt: retrievedAt,
@@ -142,6 +142,9 @@ function buildResult(fetchResult, nowMs) {
     };
   }
   const { outages, acceptedRows, droppedRows } = fetchResult.parsed;
+  let providerState = 'ok';
+  if (droppedRows > 0) providerState = 'partial';
+  else if (acceptedRows === 0) providerState = 'empty';
   return {
     status: 200,
     body: {
@@ -150,7 +153,7 @@ function buildResult(fetchResult, nowMs) {
       outages,
       provider: {
         id: 'ornl-odin',
-        state: droppedRows > 0 ? 'partial' : (acceptedRows === 0 ? 'empty' : 'ok'),
+        state: providerState,
         acceptedRows,
         droppedRows,
         observedAt: fetchedAt,

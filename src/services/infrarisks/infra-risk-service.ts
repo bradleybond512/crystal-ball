@@ -403,9 +403,9 @@ export function composeInfraRiskState(input: {
     ? Math.round(observed.reduce((sum, { score, weight }) => sum + score.score * weight, 0) / observedWeight)
     : null;
   const observedDomainCount = observed.length;
-  const compositeCoverage = observedDomainCount === candidates.length
-    ? 'reported'
-    : observedDomainCount > 0 ? 'partial' : 'unknown';
+  let compositeCoverage: InfraRiskState['compositeCoverage'] = 'unknown';
+  if (observedDomainCount === candidates.length) compositeCoverage = 'reported';
+  else if (observedDomainCount > 0) compositeCoverage = 'partial';
   return {
     power: input.power,
     kev: input.kev,
@@ -643,12 +643,12 @@ function kevCatalogRowIsUsable(
   if (!isRecord(row)) return false;
   const cveID = kevCatalogText(row.cveID, 32);
   if (!cveID || !/^CVE-\d{4}-\d{4,}$/.test(cveID) || seenCves.has(cveID)) return false;
-  const requiredTextFields: ReadonlyArray<readonly [string, number]> = [
+  const requiredTextFields: readonly (readonly [string, number])[] = [
     ['vendorProject', 300],
     ['product', 500],
-    ['vulnerabilityName', 1_000],
-    ['shortDescription', 8_000],
-    ['requiredAction', 8_000],
+    ['vulnerabilityName', 1000],
+    ['shortDescription', 8000],
+    ['requiredAction', 8000],
   ];
   if (!requiredTextFields.every(([key, maximum]) => kevCatalogText(row[key], maximum) !== null)) return false;
   if (kevCatalogText(row.notes, 16_000, true) === null) return false;

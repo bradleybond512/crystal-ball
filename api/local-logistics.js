@@ -11,12 +11,13 @@ const FEMA_ENDPOINT = 'https://gis.fema.gov/arcgis/rest/services/NSS/OpenShelter
 const FEMA_RECOVERY_ENDPOINT = 'https://gis.fema.gov/arcgis/rest/services/FEMA/DRC_Services_Relate/FeatureServer/0/query';
 const CENSUS_GEOCODER_ENDPOINT = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates';
 const MAX_STRING = 240;
-const MAX_OVERPASS_ELEMENTS = 5_000;
+const MAX_OVERPASS_ELEMENTS = 5000;
 const MAX_OVERPASS_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_FEMA_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_CENSUS_RESPONSE_BYTES = 256 * 1024;
 const DIRECTORY_TTL_MS = 24 * 60 * 60 * 1000;
 const FEMA_TTL_MS = 30 * 60 * 1000;
+const DECIMAL_PATTERN = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
 const CATEGORY_FILTERS = {
   shelter: ['["amenity"="shelter"]', '["social_facility"="shelter"]', '["emergency"="shelter"]'],
@@ -52,7 +53,7 @@ function boundedString(value, max = MAX_STRING) {
 
 function finiteNumber(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value)) return null;
+  if (typeof value !== 'string' || !DECIMAL_PATTERN.test(value)) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -193,12 +194,12 @@ function normalizeFemaFeature(feature, queryLat, queryLon, retrievedAt) {
   const address = boundedString([a.address, a.city, a.state, a.zip].map((v) => boundedString(v, 100)).filter(Boolean).join(', '));
   const directoryHours = boundedString([a.hours_open, a.hours_close].map((v) => boundedString(v, 30)).filter(Boolean).join('–'), 80);
   const capabilities = {
-    ...(evacuationCapacity !== undefined ? { evacuationCapacity } : {}),
-    ...(postImpactCapacity !== undefined ? { postImpactCapacity } : {}),
-    ...(reportedPopulation !== undefined ? { reportedPopulation } : {}),
-    ...(yesNo(a.ada_compliant) !== undefined ? { ada: yesNo(a.ada_compliant) } : {}),
-    ...(yesNo(a.wheelchair_accessible) !== undefined ? { wheelchairAccessible: yesNo(a.wheelchair_accessible) } : {}),
-    ...(yesNo(a.pet_accommodations_code) !== undefined ? { pets: yesNo(a.pet_accommodations_code) } : {}),
+    ...(evacuationCapacity === undefined ? {} : { evacuationCapacity }),
+    ...(postImpactCapacity === undefined ? {} : { postImpactCapacity }),
+    ...(reportedPopulation === undefined ? {} : { reportedPopulation }),
+    ...(yesNo(a.ada_compliant) === undefined ? {} : { ada: yesNo(a.ada_compliant) }),
+    ...(yesNo(a.wheelchair_accessible) === undefined ? {} : { wheelchairAccessible: yesNo(a.wheelchair_accessible) }),
+    ...(yesNo(a.pet_accommodations_code) === undefined ? {} : { pets: yesNo(a.pet_accommodations_code) }),
     ...(directoryHours ? { directoryHours } : {}),
   };
   return {
@@ -298,7 +299,7 @@ async function fetchOverpass(categories, lat, lon, radiusMeters) {
   let lastError;
   for (const endpoint of OVERPASS_ENDPOINTS) {
     try {
-      const response = await fetchWithTimeout(endpoint, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'text/plain;charset=UTF-8' }, body: query }, 6_000, MAX_OVERPASS_RESPONSE_BYTES);
+      const response = await fetchWithTimeout(endpoint, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'text/plain;charset=UTF-8' }, body: query }, 6000, MAX_OVERPASS_RESPONSE_BYTES);
       if (!response.ok) throw new Error('http');
       const raw = await readBoundedJson(response, MAX_OVERPASS_RESPONSE_BYTES).catch(() => null);
       if (!raw || !Array.isArray(raw.elements) || raw.elements.length > MAX_OVERPASS_ELEMENTS) throw new Error('malformed');
@@ -372,7 +373,7 @@ async function resolveCountyFips(lat, lon) {
     format: 'json',
   });
   try {
-    const response = await fetchWithTimeout(`${CENSUS_GEOCODER_ENDPOINT}?${params}`, { headers: { Accept: 'application/json' } }, 8_000, MAX_CENSUS_RESPONSE_BYTES);
+    const response = await fetchWithTimeout(`${CENSUS_GEOCODER_ENDPOINT}?${params}`, { headers: { Accept: 'application/json' } }, 8000, MAX_CENSUS_RESPONSE_BYTES);
     if (!response.ok) return undefined;
     const raw = await readBoundedJson(response, MAX_CENSUS_RESPONSE_BYTES).catch(() => null);
     const geoid = raw?.result?.geographies?.Counties?.[0]?.GEOID;
@@ -412,62 +413,60 @@ function json(body, status, cors, extra = {}) {
   return Response.json(body, { status, headers: { 'Content-Type': 'application/json', ...extra, ...cors } });
 }
 
-export default async function handler(req) {
-  const cors = getCorsHeaders(req, 'GET, OPTIONS');
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-  if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405, cors, { Allow: 'GET, OPTIONS' });
-  if (isDisallowedOrigin(req)) return json({ error: 'Origin not allowed' }, 403, cors);
-
-  const url = new URL(req.url);
+function parseLocalLogisticsQuery(url) {
   const allowedParams = new Set(['lat', 'lon', 'radiusKm', 'limitPerCategory', 'categories']);
   const paramKeys = [...url.searchParams.keys()];
   if (paramKeys.some((key) => !allowedParams.has(key))
-    || [...allowedParams].some((key) => url.searchParams.getAll(key).length > 1)) {
-    return json({ error: 'Invalid local logistics query' }, 400, cors);
-  }
+    || [...allowedParams].some((key) => url.searchParams.getAll(key).length > 1)) return null;
+
   const lat = finiteNumber(url.searchParams.get('lat'));
   const lon = finiteNumber(url.searchParams.get('lon'));
   const radiusKm = finiteNumber(url.searchParams.get('radiusKm') ?? '25');
   const limitPerCategory = integerParam(url.searchParams.get('limitPerCategory'), 5, 1, 10);
   const categories = parseCategories(url.searchParams.get('categories'));
-  if (lat === null || lon === null || lat < -90 || lat > 90 || lon < -180 || lon > 180
-    || radiusKm === null || radiusKm < 1 || radiusKm > 50 || limitPerCategory === null
-    || !categories || categories.length === 0) {
-    return json({ error: 'Invalid local logistics query' }, 400, cors);
-  }
+  if (lat === null || lon === null || lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  if (radiusKm === null || radiusKm < 1 || radiusKm > 50 || limitPerCategory === null) return null;
+  if (!categories || categories.length === 0) return null;
+  return { lat, lon, radiusKm, limitPerCategory, categories };
+}
 
-  const fetchedAt = new Date().toISOString();
-  const countyFipsPromise = resolveCountyFips(lat, lon);
+function buildProviderJobs(categories, lat, lon, radiusKm, fetchedAt) {
   const osmCategories = categories.filter((category) => CATEGORY_FILTERS[category].length > 0);
-  const jobs = [
+  return [
     ...(osmCategories.length > 0 ? [{ id: 'osm', fetch: () => fetchOverpass(osmCategories, lat, lon, Math.round(radiusKm * 1000)), normalize: (row) => normalizeOsmElement(row, osmCategories, lat, lon, fetchedAt) }] : []),
     ...(categories.includes('shelter') ? [{ id: 'fema-open-shelters', fetch: () => fetchFema(lat, lon, radiusKm), normalize: (row) => normalizeFemaFeature(row, lat, lon, fetchedAt) }] : []),
     ...(categories.includes('recovery') ? [{ id: 'fema-recovery-centers', fetch: () => fetchFemaRecoveryCenters(lat, lon, radiusKm), normalize: (row) => normalizeFemaRecoveryFeature(row, lat, lon, fetchedAt) }] : []),
   ];
-  const settled = await Promise.allSettled(jobs.map((job) => job.fetch()));
-  const countyFips = await countyFipsPromise;
-  const query = { lat, lon, radiusKm, categories, ...(countyFips ? { countyFips } : {}) };
+}
+
+function providerStateForRows(acceptedRows, droppedRows) {
+  if (droppedRows > 0) return 'partial';
+  return acceptedRows === 0 ? 'empty' : 'ok';
+}
+
+function normalizeProviderResults(jobs, settled, fetchedAt) {
   const providers = [];
   const accepted = [];
-  settled.forEach((result, index) => {
+  for (const [index, result] of settled.entries()) {
     const job = jobs[index];
     if (result.status === 'rejected') {
       providers.push(providerStatus(job.id, 'error', 0, 0, fetchedAt, 'upstream_unavailable'));
-      return;
+      continue;
     }
-    const normalized = result.value.map(job.normalize).filter(Boolean);
+    const normalized = result.value.map((row) => job.normalize(row)).filter(Boolean);
     const dropped = result.value.length - normalized.length;
     if (result.value.length > 0 && normalized.length === 0) {
       providers.push(providerStatus(job.id, 'error', 0, dropped, fetchedAt, 'unusable_rows'));
-      return;
+      continue;
     }
-    providers.push(providerStatus(job.id, dropped > 0 ? 'partial' : (normalized.length === 0 ? 'empty' : 'ok'), normalized.length, dropped, fetchedAt, dropped > 0 ? 'rows_dropped' : undefined));
+    const reasonCode = dropped > 0 ? 'rows_dropped' : undefined;
+    providers.push(providerStatus(job.id, providerStateForRows(normalized.length, dropped), normalized.length, dropped, fetchedAt, reasonCode));
     accepted.push(...normalized.map((row) => ({ ...row, providerId: job.id })));
-  });
+  }
+  return { providers, accepted };
+}
 
-  const limited = dedupeResources(accepted)
-    .sort((a, b) => a.site.distanceKm - b.site.distanceKm)
-    .filter((row, index, rows) => rows.slice(0, index).filter((prior) => prior.site.kind === row.site.kind).length < limitPerCategory);
+function reconcileProviderContributions(providers, limited) {
   for (const provider of providers) {
     if (provider.state === 'error') continue;
     const contributedRows = limited.filter((row) => row.providerId === provider.id).length;
@@ -484,6 +483,30 @@ export default async function handler(req) {
       provider.reasonCode = 'rows_dropped';
     }
   }
+}
+
+export default async function handler(req) {
+  const cors = getCorsHeaders(req, 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405, cors, { Allow: 'GET, OPTIONS' });
+  if (isDisallowedOrigin(req)) return json({ error: 'Origin not allowed' }, 403, cors);
+
+  const parsedQuery = parseLocalLogisticsQuery(new URL(req.url));
+  if (!parsedQuery) return json({ error: 'Invalid local logistics query' }, 400, cors);
+  const { lat, lon, radiusKm, limitPerCategory, categories } = parsedQuery;
+
+  const fetchedAt = new Date().toISOString();
+  const countyFipsPromise = resolveCountyFips(lat, lon);
+  const jobs = buildProviderJobs(categories, lat, lon, radiusKm, fetchedAt);
+  const settled = await Promise.allSettled(jobs.map((job) => job.fetch()));
+  const countyFips = await countyFipsPromise;
+  const query = { lat, lon, radiusKm, categories, ...(countyFips ? { countyFips } : {}) };
+  const { providers, accepted } = normalizeProviderResults(jobs, settled, fetchedAt);
+
+  const limited = dedupeResources(accepted)
+    .sort((a, b) => a.site.distanceKm - b.site.distanceKm)
+    .filter((row, index, rows) => rows.slice(0, index).filter((prior) => prior.site.kind === row.site.kind).length < limitPerCategory);
+  reconcileProviderContributions(providers, limited);
   const allFailed = providers.every((provider) => provider.state === 'error');
   const partial = !allFailed && providers.some((provider) => ['partial', 'stale', 'error'].includes(provider.state));
   const sites = limited.map((row) => row.site);
@@ -495,7 +518,7 @@ export default async function handler(req) {
     name: site.name,
     lat: site.lat,
     lon: site.lon,
-    ...(site.distanceKm !== undefined ? { distanceKm: site.distanceKm } : {}),
+    ...(site.distanceKm === undefined ? {} : { distanceKm: site.distanceKm }),
     ...(site.address ? { address: site.address } : {}),
     status: 'unknown',
     fetchedAt,

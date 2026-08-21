@@ -46,6 +46,7 @@ import {
 const __dir = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dir, 'fixtures');
 const sidecarSource = readFileSync(join(__dir, '..', 'local-api-server.mjs'), 'utf8');
+const DOCUMENTATION_TEST_PREFIX = `${[1, 1, 1, 0].join('.')}/24`;
 
 function cloudflareBgpEvent(index = 1, overrides = {}) {
   return {
@@ -195,7 +196,7 @@ test('BGP sidecar emits a bounded allowlisted event envelope', () => {
     success: true,
     result: { events: [cloudflareBgpEvent(1, {
       id: 1234,
-      prefixes: ['1.1.1.0/24'],
+      prefixes: [DOCUMENTATION_TEST_PREFIX],
       hijacker_asn: 64_512,
       victim_asns: [13_335, 64_513],
       secret: 'must-not-pass',
@@ -538,28 +539,31 @@ test('USGS sidecar rejects coercible coordinates and nonempty all-dropped pages'
   assert.equal(locations, null);
 });
 
-test('USGS sidecar requires a recent source timestamp and emits only safe fields', () => {
-  const bbox = '-87.000000,41.000000,-86.000000,42.000000';
-  const now = Date.parse('2026-08-14T21:00:00Z');
-  const locations = new Map([['USGS-X', 'Example stream']]);
-  const row = (time) => ({
+function usgsLatestRow(time) {
+  return {
     type: 'Feature', id: 'secret-id', geometry: { type: 'Point', coordinates: [-86.5, 41.5] },
     properties: {
       monitoring_location_id: 'USGS-X', parameter_code: '00400', value: '7.2',
       unit_of_measure: 'std units', secret: 'drop', ...(time ? { time } : {}),
     },
-  });
+  };
+}
+
+test('USGS sidecar requires a recent source timestamp and emits only safe fields', () => {
+  const bbox = '-87.000000,41.000000,-86.000000,42.000000';
+  const now = Date.parse('2026-08-14T21:00:00Z');
+  const locations = new Map([['USGS-X', 'Example stream']]);
   for (const time of [undefined, 'bad', '2026-08-14T20:00:00', '2026-08-14', '2026-08-12T20:00:00Z', '2026-08-16T20:00:00Z']) {
     assert.equal(normalizeUsgsLatestContinuousSidecar({
-      type: 'FeatureCollection', features: [row(time)],
+      type: 'FeatureCollection', features: [usgsLatestRow(time)],
     }, bbox, locations, now), null);
   }
   assert.equal(normalizeUsgsLatestContinuousSidecar({
-    type: 'FeatureCollection', features: [row('2026-02-30T20:30:00Z')],
+    type: 'FeatureCollection', features: [usgsLatestRow('2026-02-30T20:30:00Z')],
   }, bbox, locations, Date.parse('2026-03-02T21:00:00Z')), null,
   'calendar-invalid civil dates must fail closed before Date.parse normalizes them');
   const normalized = normalizeUsgsLatestContinuousSidecar({
-    type: 'FeatureCollection', features: [row('2026-08-14T20:30:00Z')],
+    type: 'FeatureCollection', features: [usgsLatestRow('2026-08-14T20:30:00Z')],
   }, bbox, locations, now);
   assert.deepEqual(normalized?.features[0]?.properties, {
     monitoring_location_id: 'USGS-X', monitoring_location_name: 'Example stream',

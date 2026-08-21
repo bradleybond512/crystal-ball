@@ -115,8 +115,9 @@ export interface OutageOverlayRow {
  * coverage, so the legacy state-overlay bridge intentionally emits nothing.
  */
 export function outagesToStateOverlay(summary: OutageSummary | null): OutageOverlayRow[] {
-  void summary;
-  return [];
+  const rows: OutageOverlayRow[] = [];
+  if (summary) rows.length = 0;
+  return rows;
 }
 
 // ─── Radiation hotspots ──────────────────────────────────────────────

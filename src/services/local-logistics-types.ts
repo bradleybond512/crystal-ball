@@ -2,7 +2,6 @@ export const LOCAL_LOGISTICS_SCHEMA_VERSION = 2 as const;
 export const LOCAL_LOGISTICS_CATEGORIES = ['shelter', 'hotel', 'hospital', 'pharmacy', 'fuel', 'water', 'recovery'] as const;
 
 export type LogisticsCategory = typeof LOCAL_LOGISTICS_CATEGORIES[number];
-export type ResourceKind = LogisticsCategory;
 export type LogisticsFreshness = 'fresh' | 'recent' | 'stale';
 export type LogisticsHazardCompatibility = 'general' | 'evacuation' | 'medical' | 'supply';
 export type OperationalStatus = 'open' | 'closed' | 'unknown';
@@ -16,7 +15,7 @@ export type ProviderState = 'ok' | 'empty' | 'partial' | 'stale' | 'error';
 
 export interface ResourceSite {
   id: string;
-  kind: ResourceKind;
+  kind: LogisticsCategory;
   name: string;
   lat: number;
   lon: number;
@@ -24,7 +23,7 @@ export interface ResourceSite {
   address?: string;
   publicPhone?: string;
   directoryUrl?: string;
-  sourceRefs: Array<{ provider: 'osm' | 'fema'; recordId: string }>;
+  sourceRefs: { provider: 'osm' | 'fema'; recordId: string }[];
   capabilities: {
  lodgingType?: 'hotel' | 'motel' | 'hostel' | 'other';
  evacuationCapacity?: number;
@@ -47,7 +46,7 @@ export interface ResourceObservation {
   inventory: InventoryStatus;
   power: PowerStatus;
   access: AccessStatus;
-  /** @deprecated Compatibility alias. When no upstream timestamp exists this is retrieval time. */
+  /** Compatibility alias. When no upstream timestamp exists this is retrieval time. */
   observedAt: Date;
   /** Time Crystal Ball retrieved and validated the provider response. */
   retrievedAt?: Date;
@@ -63,7 +62,7 @@ export interface ProviderStatus {
   state: ProviderState;
   acceptedRows: number;
   droppedRows: number;
-  /** @deprecated Compatibility alias for retrieval time. */
+  /** Compatibility alias for retrieval time. */
   observedAt: Date | null;
   retrievedAt?: Date | null;
   sourceObservedAt?: Date | null;
@@ -81,7 +80,7 @@ export interface AreaCondition {
   customersRestored?: number;
   utilityName?: string;
   utilityId?: string;
-  /** @deprecated Compatibility alias for retrieval time. */
+  /** Compatibility alias for retrieval time. */
   observedAt: Date;
   retrievedAt?: Date;
   sourceObservedAt?: Date;

@@ -952,7 +952,7 @@ export class DeckGLMap {
  this.recoverSatelliteTiles();
  return;
  }
- console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId }); // eslint-disable-line no-console
+ console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
  mapErrorCount += 1;
  if (mapErrorCount === mapErrorThreshold) {
  this.showMapErrorOverlay(msg, sourceId);

@@ -157,8 +157,8 @@ function isCachedBriefItem(value: unknown): value is PlaceBriefItem {
   return ['breaking', 'signal', 'preparedness', 'forecast', 'logistics'].includes(String(item.kind))
     && ['critical', 'high', 'medium', 'low'].includes(String(item.severity))
     && typeof item.label === 'string' && item.label.length > 0 && item.label.length <= 500
-    && typeof item.value === 'string' && item.value.length > 0 && item.value.length <= 2_000
-    && (item.link === undefined || (typeof item.link === 'string' && item.link.length <= 2_048));
+    && typeof item.value === 'string' && item.value.length > 0 && item.value.length <= 2000
+    && (item.link === undefined || (typeof item.link === 'string' && item.link.length <= 2048));
 }
 
 /** @internal Strict cache boundary used by the offline same-place fallback. */
@@ -169,7 +169,7 @@ export function deserializeCachedPlaceBrief(cached: unknown, place: SavedPlace, 
     || value.placeFingerprint !== buildPlaceBriefFingerprint(place)
     || typeof value.headline !== 'string' || value.headline.length === 0 || value.headline.length > 500
     || !['critical', 'high', 'medium', 'low'].includes(String(value.severity))
-    || !Array.isArray(value.items) || value.items.length > 20 || !value.items.every(isCachedBriefItem)
+    || !Array.isArray(value.items) || value.items.length > 20 || !value.items.every((item) => isCachedBriefItem(item))
     || typeof value.generatedAtMs !== 'number' || !Number.isFinite(value.generatedAtMs)
     || value.generatedAtMs > now + 5 * 60_000
     || now - value.generatedAtMs < 0 || now - value.generatedAtMs >= PLACE_BRIEF_CACHE_MAX_AGE_MS) return null;
@@ -328,8 +328,7 @@ export function buildPlaceBrief(
   now = Date.now(),
   lifelineContext: LifelineBriefContext = {},
 ): PlaceBrief {
-  const exactForecastSnapshot = forecastSnapshot
-    && forecastSnapshot.placeId === place.id
+  const exactForecastSnapshot = forecastSnapshot?.placeId === place.id
     && forecastSnapshot.placeName === place.name
     && forecastSnapshot.placeFingerprint === buildSavedPlaceWeatherFingerprint(place)
     ? forecastSnapshot

@@ -33,6 +33,10 @@ const INDEX_FLOOR = 40;
 // TEXT of another file, and scripts exercised by a suite that does not live
 // beside them.
 export const OVERRIDES = {
+  'api/_bounded-json.js': ['test:lifelines'],
+  'api/grid-outages.js': ['test:lifelines-grid'],
+  'api/osrm-route.js': ['test:lifelines-map'],
+  'api/usgs-water-proxy.js': ['test:lifelines'],
   'src/app/data-loader.ts': ['test:providers'],
   'scripts/agentic-validate.sh': ['test:agentic-gate'],
   'scripts/check-docs-freshness.mjs': ['test:agentic-gate'],

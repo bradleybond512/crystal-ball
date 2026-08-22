@@ -12,6 +12,7 @@ const eslintWorkflow = readFileSync(
   path.join(repoRoot, '.github', 'workflows', 'eslint.yml'),
   'utf8',
 );
+const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
 test('markdown lint workflow only lints markdown files changed in the pull request', () => {
   assert.match(
@@ -44,5 +45,15 @@ test('ESLint workflow has a bounded completion time', () => {
  eslintWorkflow,
  /eslint:[\s\S]*timeout-minutes: 12/,
  'ESLint workflow should stop a stuck lint process before consuming an entire runner allocation',
+  );
+});
+
+test('ESLint CI tests and runs the repository-wide debt ratchet', () => {
+  assert.match(packageJson.scripts.lint, /lint-baseline\.mjs/);
+  assert.match(packageJson.scripts['lint:ci'], /npm run lint/);
+  assert.match(
+ eslintWorkflow,
+ /npm run test:eslint-runner[\s\S]*npm run lint:ci/,
+ 'ESLint workflow should test the lint infrastructure before enforcing the full-repository ratchet',
   );
 });

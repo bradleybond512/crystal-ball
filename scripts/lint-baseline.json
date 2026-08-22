@@ -1,0 +1,1131 @@
+{
+  "note": "Per-file ESLint finding counts. Managed by scripts/lint-baseline.mjs --update. Counts may only decrease.",
+  "files": {
+    "api/fwdstart.js": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "api/og-story.js": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:sonarjs/no-dead-store": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/no-unused-vars": 1
+    },
+    "api/s2-underground.js": {
+      "error:unicorn/prefer-number-properties": 2
+    },
+    "api/telegram-feed.js": {
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "api/youtube/live.js": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/prefer-string-slice": 1
+    },
+    "e2e/mobile-map-native.spec.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1,
+      "error:@typescript-eslint/no-unused-vars": 1
+    },
+    "e2e/mobile-map-popup.spec.ts": {
+      "error:@typescript-eslint/no-unused-vars": 2
+    },
+    "scripts/build-military-bases-final.mjs": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/pseudo-random": 1,
+      "error:sonarjs/slow-regex": 1,
+      "error:unicorn/no-process-exit": 1,
+      "error:unicorn/text-encoding-identifier-case": 1
+    },
+    "scripts/build-sidecar-sebuf.mjs": {
+      "error:unicorn/no-process-exit": 1
+    },
+    "scripts/check-package-lock.mjs": {
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/download-vault-textures.mjs": {
+      "error:unicorn/import-style": 1
+    },
+    "scripts/fetch-gpsjam.mjs": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/unused-import": 1,
+      "error:unicorn/no-process-exit": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/fetch-pizzint-bases.mjs": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/no-process-exit": 2,
+      "error:unicorn/prefer-spread": 1,
+      "error:unicorn/prefer-top-level-await": 1,
+      "error:unicorn/text-encoding-identifier-case": 2
+    },
+    "scripts/install-git-hooks.mjs": {
+      "error:sonarjs/no-os-command-from-path": 3,
+      "error:unicorn/no-process-exit": 2
+    },
+    "scripts/lint-json.mjs": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-os-command-from-path": 2,
+      "error:sonarjs/no-redundant-assignments": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/lint-shell.mjs": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-os-command-from-path": 2
+    },
+    "scripts/lint-yaml.mjs": {
+      "error:sonarjs/no-os-command-from-path": 3
+    },
+    "scripts/prune-tauri-dist.mjs": {
+      "error:unicorn/no-process-exit": 2
+    },
+    "scripts/release-push-guard.mjs": {
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/secret-scan.mjs": {
+      "error:sonarjs/concise-regex": 1,
+      "error:sonarjs/empty-string-repetition": 1,
+      "error:sonarjs/no-empty-alternatives": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/no-os-command-from-path": 3,
+      "error:unicorn/no-process-exit": 1
+    },
+    "scripts/seed-military-bases.mjs": {
+      "error:unicorn/import-style": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/setup-main-sync-agent.mjs": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-os-command-from-path": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/sync-desktop-version.mjs": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/telegram/session-auth.mjs": {
+      "error:unicorn/no-await-expression-member": 3,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/validate-rss-feeds.mjs": {
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/no-nested-conditional": 3,
+      "error:unicorn/import-style": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "scripts/verify-review-verdict.mjs": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src-tauri/sidecar/__tests__/watchboard-engine.test.mjs": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:sonarjs/unused-import": 1,
+      "error:unicorn/import-style": 1
+    },
+    "src-tauri/sidecar/feed-latency-config.test.mjs": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src-tauri/sidecar/gdacs-rss.mjs": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src-tauri/sidecar/gdacs-rss.test.mjs": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src-tauri/sidecar/s2u-tak-client.mjs": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src-tauri/sidecar/sms-command-parser.mjs": {
+      "error:unicorn/no-useless-switch-case": 1,
+      "error:unicorn/switch-case-braces": 4
+    },
+    "src-tauri/sidecar/sms-security.mjs": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-array-callback-reference": 3,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src-tauri/sidecar/watchboard-engine.mjs": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/pseudo-random": 1,
+      "error:sonarjs/unused-import": 1,
+      "error:unicorn/numeric-separators-style": 2
+    },
+    "src/app/country-intel.ts": {
+      "error:@typescript-eslint/no-floating-promises": 5,
+      "error:@typescript-eslint/no-misused-promises": 2,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 10,
+      "error:@typescript-eslint/require-await": 1,
+      "error:no-console": 2,
+      "error:sonarjs/cognitive-complexity": 3,
+      "error:sonarjs/no-nested-conditional": 3,
+      "error:sonarjs/public-static-readonly": 2,
+      "error:unicorn/no-nested-ternary": 1,
+      "error:unicorn/prefer-code-point": 1,
+      "error:unicorn/prefer-single-call": 1,
+      "error:unicorn/prefer-spread": 1
+    },
+    "src/app/desktop-updater.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/app/pending-panel-data.ts": {
+      "error:@typescript-eslint/no-unsafe-assignment": 1
+    },
+    "src/components/AirTrafficPanel.ts": {
+      "error:sonarjs/no-async-constructor": 1,
+      "error:unicorn/catch-error-name": 1,
+      "error:unicorn/no-negated-condition": 2
+    },
+    "src/components/AnalystNotebookPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/ArcticCompetitionPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 14,
+      "error:unicorn/no-nested-ternary": 8,
+      "error:unicorn/no-zero-fractions": 2,
+      "error:unicorn/prefer-spread": 1
+    },
+    "src/components/AssumptionTrackerPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/CascadePanel.ts": {
+      "error:@typescript-eslint/no-floating-promises": 2,
+      "error:@typescript-eslint/require-await": 1,
+      "error:no-console": 1,
+      "error:sonarjs/no-async-constructor": 1
+    },
+    "src/components/CentralBankCalendarPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/CommsHealthPanel.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 4,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/CorruptionIndexPanel.ts": {
+      "error:sonarjs/void-use": 2,
+      "error:unicorn/switch-case-braces": 3
+    },
+    "src/components/CounterfactualReasoningPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/CounterfactualReplayPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/CountryBriefPage.ts": {
+      "error:@typescript-eslint/no-unsafe-argument": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/deprecation": 1,
+      "error:sonarjs/no-nested-conditional": 11,
+      "error:sonarjs/no-nested-template-literals": 1,
+      "error:unicorn/no-nested-ternary": 3,
+      "error:unicorn/prefer-code-point": 1,
+      "error:unicorn/prefer-dom-node-remove": 1,
+      "error:unicorn/prefer-spread": 1
+    },
+    "src/components/CrisisSignaturePanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-negated-condition": 1
+    },
+    "src/components/CrisisTrajectoryPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/CveTrackerPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/CyberEspionagePanel.ts": {
+      "error:unicorn/catch-error-name": 1
+    },
+    "src/components/CyberIncidentResponsePanel.ts": {
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:unicorn/no-array-callback-reference": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/DailyWisdomPanel.ts": {
+      "error:@typescript-eslint/no-inferrable-types": 1,
+      "error:unicorn/prefer-code-point": 1,
+      "error:unicorn/prefer-math-trunc": 1
+    },
+    "src/components/DisplacementPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
+      "error:prefer-const": 1,
+      "error:sonarjs/no-nested-conditional": 4,
+      "error:unicorn/no-nested-ternary": 2
+    },
+    "src/components/DomainDependencyPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/DomainScorecardsPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/DownloadBanner.ts": {
+      "error:@typescript-eslint/no-unsafe-argument": 2,
+      "error:@typescript-eslint/no-unsafe-assignment": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/components/DroneWarfarePanel.ts": {
+      "warning:eslint-unused-disable": 2
+    },
+    "src/components/EarthquakesPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/no-nested-template-literals": 1
+    },
+    "src/components/ExperimentManagerPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/FearGreedPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/FederalRegisterPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/FloodMonitorPanel.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/no-nested-template-literals": 1
+    },
+    "src/components/ForeignAidWeaponizationPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/GenericIntelFeedPanel.ts": {
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "src/components/GeoHubsPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 3,
+      "error:sonarjs/no-nested-conditional": 2
+    },
+    "src/components/GeospatialClusteringPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/GivingPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/GlobalMilitarySpendingPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/GlobalRhythmPanel.ts": {
+      "warning:eslint-unused-disable": 2
+    },
+    "src/components/HeroSpotlightPanel.ts": {
+      "error:unicorn/prefer-number-properties": 2
+    },
+    "src/components/IntelligenceBriefingExportPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/IntelligenceDigestPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/IntelligenceGapBadge.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
+      "error:sonarjs/no-duplicated-branches": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/components/IntelligenceHealthMonitorPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/IntelligenceLoopOrchestratorPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/InvestmentsPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/no-alphabetical-sort": 2,
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/components/ModelGovernancePanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/MonitorPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
+      "error:sonarjs/no-nested-conditional": 1
+    },
+    "src/components/MultiAgentReviewPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/NavigationPanel.ts": {
+      "error:@typescript-eslint/dot-notation": 2,
+      "error:sonarjs/function-return-type": 1,
+      "error:unicorn/no-negated-condition": 1,
+      "error:unicorn/prefer-dom-node-append": 14,
+      "error:unicorn/prefer-dom-node-remove": 2
+    },
+    "src/components/NotificationAuditPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/NotificationHistoryPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/NotificationProvenancePanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/NuclearNearMissPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/ObservationRulesPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/OrefSirensPanel.ts": {
+      "error:@typescript-eslint/no-empty-function": 1
+    },
+    "src/components/OutcomeLedgerPanel.ts": {
+      "warning:eslint-unused-disable": 2
+    },
+    "src/components/PersistentQueryEnginePanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/PositiveNewsFeedPanel.ts": {
+      "error:@typescript-eslint/no-empty-function": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/components/PredictionPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/no-nested-template-literals": 1
+    },
+    "src/components/PredictiveCrisisIndexPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/ProgressChartsPanel.ts": {
+      "error:@typescript-eslint/unbound-method": 1
+    },
+    "src/components/RecoveryModelingPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/RegionalResiliencePanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/RegulationPanel.ts": {
+      "error:sonarjs/no-misleading-array-reverse": 1,
+      "error:sonarjs/no-nested-conditional": 1
+    },
+    "src/components/RenewableEnergyPanel.ts": {
+      "error:@typescript-eslint/no-explicit-any": 3,
+      "error:@typescript-eslint/no-unsafe-argument": 2,
+      "error:@typescript-eslint/no-unsafe-call": 1,
+      "error:@typescript-eslint/no-unsafe-return": 1,
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/components/S2UIntelPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/SafetyCaseDashboard.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/SafetyCaseDashboardPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/SearchModal.ts": {
+      "error:@typescript-eslint/no-unsafe-assignment": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 8,
+      "error:sonarjs/cognitive-complexity": 3,
+      "error:sonarjs/no-misleading-array-reverse": 2,
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:sonarjs/no-nested-template-literals": 1,
+      "error:sonarjs/pseudo-random": 1
+    },
+    "src/components/SecurityAdvisoriesPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:prefer-const": 1
+    },
+    "src/components/SevereWeatherPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/no-nested-template-literals": 1
+    },
+    "src/components/ShortageDetailPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/SignalEnrichmentPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/SignalModal.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 7,
+      "error:unicorn/prefer-number-properties": 2
+    },
+    "src/components/SituationPriorityQueuePanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/SpaceLaunchesPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-negated-condition": 1,
+      "error:unicorn/no-nested-ternary": 1,
+      "error:unicorn/numeric-separators-style": 1
+    },
+    "src/components/SpeciesComebackPanel.ts": {
+      "error:unicorn/prefer-add-event-listener": 2
+    },
+    "src/components/StoryModal.ts": {
+      "error:@typescript-eslint/no-misused-promises": 5,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:@typescript-eslint/require-await": 2,
+      "error:no-console": 1,
+      "error:sonarjs/no-gratuitous-expressions": 1,
+      "error:unicorn/prefer-code-point": 1
+    },
+    "src/components/StrategicPosturePanel.ts": {
+      "error:@typescript-eslint/no-misused-promises": 4
+    },
+    "src/components/StrategicRiskPanel.ts": {
+      "error:@typescript-eslint/no-misused-promises": 1
+    },
+    "src/components/StrikePackagePanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 5,
+      "error:unicorn/escape-case": 3,
+      "error:unicorn/prefer-number-properties": 2
+    },
+    "src/components/SupplyChainDisruptionPanel.ts": {
+      "error:sonarjs/no-async-constructor": 1,
+      "error:sonarjs/no-nested-conditional": 1
+    },
+    "src/components/SystemDiagnosticPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/TechEventsPanel.ts": {
+      "error:no-console": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-async-constructor": 1
+    },
+    "src/components/TechHubsPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/no-nested-conditional": 2
+    },
+    "src/components/TechReadinessPanel.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:no-console": 1
+    },
+    "src/components/TerritorialDisputesPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1,
+      "error:unicorn/prefer-dom-node-append": 1
+    },
+    "src/components/ThreatCorrelationMatrixPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/ThreatHorizonPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/TransnationalRepressionPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/TrustBudgetPanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/UcdpEventsPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1
+    },
+    "src/components/VirtualList.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/prefer-ternary": 1
+    },
+    "src/components/VolcanoAlertsPanel.ts": {
+      "error:unicorn/prefer-number-properties": 2
+    },
+    "src/components/VulnersCvePanel.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/WatchboardPanel.ts": {
+      "error:@typescript-eslint/array-type": 1,
+      "error:sonarjs/no-async-constructor": 1,
+      "error:unicorn/no-negated-condition": 3
+    },
+    "src/components/WatchlistEditor.ts": {
+      "error:@typescript-eslint/no-unused-expressions": 1,
+      "error:unicorn/prefer-dom-node-append": 3,
+      "error:unicorn/prefer-number-properties": 3
+    },
+    "src/components/WildfireIncidentsPanel.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-negated-condition": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/WorldClockPanel.ts": {
+      "error:sonarjs/cognitive-complexity": 2
+    },
+    "src/components/__tests__/notification-panels.test.mts": {
+      "error:@typescript-eslint/no-unused-vars": 1
+    },
+    "src/components/arctic-competition-helpers.ts": {
+      "error:unicorn/no-zero-fractions": 9,
+      "error:unicorn/switch-case-braces": 5
+    },
+    "src/components/arms-sales-helpers.ts": {
+      "error:sonarjs/no-nested-conditional": 4,
+      "error:unicorn/no-nested-ternary": 2,
+      "error:unicorn/switch-case-braces": 39
+    },
+    "src/components/climate-security-nexus-helpers.ts": {
+      "error:unicorn/no-zero-fractions": 5,
+      "error:unicorn/numeric-separators-style": 1
+    },
+    "src/components/coalition-dynamics-helpers.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/components/corruption-index-helpers.ts": {
+      "error:unicorn/no-zero-fractions": 3,
+      "error:unicorn/switch-case-braces": 7
+    },
+    "src/components/cyber-espionage-helpers.ts": {
+      "error:sonarjs/no-nested-template-literals": 2,
+      "error:unicorn/no-array-callback-reference": 5
+    },
+    "src/components/cyber-incident-helpers.ts": {
+      "error:@typescript-eslint/prefer-regexp-exec": 1,
+      "error:sonarjs/prefer-regexp-exec": 1,
+      "error:unicorn/no-zero-fractions": 1
+    },
+    "src/components/extremism-tracking-helpers.ts": {
+      "error:unicorn/numeric-separators-style": 5
+    },
+    "src/components/gods-vision/GlobeDegradation.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/gods-vision/GlobeSwimlane.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/components/great-power-competition-helpers.ts": {
+      "error:@typescript-eslint/array-type": 2,
+      "error:unicorn/no-zero-fractions": 3
+    },
+    "src/components/nuclear-near-miss-helpers.ts": {
+      "error:unicorn/switch-case-braces": 7
+    },
+    "src/components/political-economy-helpers.ts": {
+      "error:unicorn/no-array-callback-reference": 1,
+      "error:unicorn/no-zero-fractions": 2
+    },
+    "src/components/political-violence-helpers.ts": {
+      "error:unicorn/no-zero-fractions": 3
+    },
+    "src/components/semiconductor-geopolitics-helpers.ts": {
+      "error:unicorn/switch-case-braces": 10
+    },
+    "src/components/territorial-disputes-helpers.ts": {
+      "error:unicorn/no-zero-fractions": 3
+    },
+    "src/components/watchboard-store-helpers.ts": {
+      "error:@typescript-eslint/no-base-to-string": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/different-types-comparison": 2,
+      "error:sonarjs/pseudo-random": 1,
+      "error:unicorn/numeric-separators-style": 2,
+      "error:unicorn/switch-case-braces": 4
+    },
+    "src/config/ai-regulations.ts": {
+      "error:sonarjs/no-clear-text-protocols": 2
+    },
+    "src/config/commands.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
+      "error:unicorn/prefer-code-point": 1,
+      "error:unicorn/prefer-spread": 1
+    },
+    "src/config/inspiration-quotes.ts": {
+      "error:unicorn/prefer-code-point": 1
+    },
+    "src/config/trade-routes.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:no-console": 2,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/live-channels-main.ts": {
+      "error:no-console": 1,
+      "error:unicorn/prefer-top-level-await": 1
+    },
+    "src/live-channels-window.ts": {
+      "error:@typescript-eslint/no-misused-promises": 1,
+      "error:@typescript-eslint/no-unsafe-assignment": 4,
+      "error:@typescript-eslint/no-unsafe-member-access": 5,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 5,
+      "error:no-console": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 1
+    },
+    "src/locales/ar.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/es.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/it.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/pl.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/ru.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/th.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/tr.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/vi.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/locales/zh.d.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1
+    },
+    "src/services/action-guidance/earthquake-action-guidance.ts": {
+      "error:unicorn/no-zero-fractions": 4
+    },
+    "src/services/aerospace-reentry.ts": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/function-return-type": 2,
+      "error:sonarjs/no-dead-store": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/regex-complexity": 1,
+      "error:sonarjs/slow-regex": 1,
+      "error:sonarjs/use-type-alias": 2,
+      "error:unicorn/consistent-function-scoping": 1,
+      "error:unicorn/prefer-number-properties": 6
+    },
+    "src/services/ai-classify-queue.ts": {
+      "error:sonarjs/no-nested-conditional": 2
+    },
+    "src/services/alert-debug.ts": {
+      "error:@typescript-eslint/no-unsafe-member-access": 1,
+      "error:no-console": 1
+    },
+    "src/services/alert-store.ts": {
+      "error:unicorn/no-negated-condition": 1
+    },
+    "src/services/aviation-hazards.ts": {
+      "error:@typescript-eslint/no-unsafe-assignment": 2,
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/no-nested-template-literals": 1
+    },
+    "src/services/bootstrap.ts": {
+      "error:@typescript-eslint/no-redundant-type-constituents": 1
+    },
+    "src/services/breaking-news-alerts.ts": {
+      "error:@typescript-eslint/no-unsafe-assignment": 2,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/prefer-code-point": 1,
+      "error:unicorn/prefer-math-trunc": 1
+    },
+    "src/services/cable-activity.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 4,
+      "error:no-console": 1,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:sonarjs/prefer-regexp-exec": 1,
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/cable-health.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1
+    },
+    "src/services/celebration.ts": {
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/cisa-advisories.ts": {
+      "error:sonarjs/duplicates-in-character-class": 2,
+      "error:sonarjs/no-misleading-array-reverse": 1,
+      "error:sonarjs/slow-regex": 3
+    },
+    "src/services/climate/index.ts": {
+      "error:unicorn/no-array-callback-reference": 2
+    },
+    "src/services/clipboard-watcher.ts": {
+      "error:@typescript-eslint/no-misused-promises": 1
+    },
+    "src/services/cognition/conformal.ts": {
+      "error:unicorn/no-negated-condition": 1
+    },
+    "src/services/cognition/evoi-planner.ts": {
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/cognition/llm-json.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/slow-regex": 1
+    },
+    "src/services/cognition/regime-detection.ts": {
+      "error:unicorn/numeric-separators-style": 1
+    },
+    "src/services/conflict/index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
+      "error:unicorn/no-array-callback-reference": 2
+    },
+    "src/services/congress-defense.ts": {
+      "error:sonarjs/slow-regex": 1,
+      "error:sonarjs/use-type-alias": 1,
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "src/services/copernicus-cems.ts": {
+      "error:@typescript-eslint/no-redundant-type-constituents": 1,
+      "error:@typescript-eslint/no-unsafe-assignment": 1,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/no-nested-conditional": 6,
+      "error:sonarjs/slow-regex": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/services/correlation.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/services/country-geometry.ts": {
+      "error:@typescript-eslint/no-unsafe-assignment": 3,
+      "error:no-console": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/cross-module-integration.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/displacement/index.ts": {
+      "error:unicorn/no-array-callback-reference": 2
+    },
+    "src/services/dsca-arms-transfers.ts": {
+      "error:sonarjs/function-return-type": 2,
+      "error:sonarjs/regex-complexity": 1,
+      "error:sonarjs/slow-regex": 3
+    },
+    "src/services/ecdc-surveillance.ts": {
+      "error:unicorn/prefer-code-point": 1,
+      "error:unicorn/prefer-math-trunc": 1
+    },
+    "src/services/economic/index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
+      "error:@typescript-eslint/require-await": 1,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/different-types-comparison": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/consistent-function-scoping": 1,
+      "error:unicorn/no-array-callback-reference": 1,
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "src/services/emergency-brief.ts": {
+      "error:@typescript-eslint/prefer-find": 1,
+      "error:@typescript-eslint/require-await": 1,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/emergency-contacts.ts": {
+      "error:sonarjs/no-clear-text-protocols": 2
+    },
+    "src/services/entity-extraction.ts": {
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/entity-index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/focal-point-detector.ts": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 4,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/use-type-alias": 1
+    },
+    "src/services/geo-activity.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/geo-convergence.ts": {
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/geo-hub-index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/giving/index.ts": {
+      "error:unicorn/no-array-callback-reference": 2
+    },
+    "src/services/happy-share-renderer.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1
+    },
+    "src/services/infrastructure-cascade.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 17,
+      "error:sonarjs/no-nested-conditional": 2
+    },
+    "src/services/intelligence/__tests__/rules-bootstrap.test.mts": {
+      "error:@typescript-eslint/no-explicit-any": 2
+    },
+    "src/services/intelligence/assumption-producers.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/services/intelligence/bias-scan-cadence.ts": {
+      "error:sonarjs/no-alphabetical-sort": 1,
+      "error:sonarjs/no-nested-functions": 1
+    },
+    "src/services/intelligence/briefing-scheduler.ts": {
+      "error:unicorn/prefer-spread": 1,
+      "error:unicorn/prefer-ternary": 1
+    },
+    "src/services/intelligence/epistemic-bridge.ts": {
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/services/intelligence/mission-bridges/weather-bridges.ts": {
+      "error:@typescript-eslint/dot-notation": 18,
+      "error:@typescript-eslint/no-base-to-string": 3,
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "src/services/market/index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 5,
+      "error:sonarjs/no-alphabetical-sort": 1,
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/military-bases.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
+      "error:no-console": 2,
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/military-vessels.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 8,
+      "error:no-console": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/different-types-comparison": 1,
+      "error:sonarjs/no-dead-store": 1,
+      "error:sonarjs/no-nested-conditional": 2
+    },
+    "src/services/ml-capabilities.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/different-types-comparison": 1
+    },
+    "src/services/ml-worker.ts": {
+      "error:no-console": 4,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:unicorn/prefer-add-event-listener": 2
+    },
+    "src/services/newsapi.ts": {
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/newsdata.ts": {
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/notifications/eew-tiers.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/services/notifications/notification-history-service.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/services/notifications/notification-provenance.ts": {
+      "warning:eslint-unused-disable": 3
+    },
+    "src/services/notifications/push-notifier.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/services/positive-events-geo.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1
+    },
+    "src/services/progress-data.ts": {
+      "error:unicorn/no-array-callback-reference": 1,
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "src/services/proximity-alerts.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1,
+      "error:unicorn/numeric-separators-style": 4
+    },
+    "src/services/related-assets.ts": {
+      "error:sonarjs/no-misleading-array-reverse": 1
+    },
+    "src/services/renewable-energy-data.ts": {
+      "error:unicorn/prefer-number-properties": 2
+    },
+    "src/services/rest-countries.ts": {
+      "error:@typescript-eslint/no-explicit-any": 1,
+      "error:@typescript-eslint/no-unsafe-argument": 2,
+      "error:@typescript-eslint/no-unsafe-assignment": 14,
+      "error:@typescript-eslint/no-unsafe-member-access": 25
+    },
+    "src/services/rss.ts": {
+      "error:@typescript-eslint/no-empty-function": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 16,
+      "error:no-console": 3,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/no-clear-text-protocols": 1,
+      "error:unicorn/no-array-callback-reference": 2
+    },
+    "src/services/security-advisories.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 7,
+      "error:no-console": 1,
+      "error:sonarjs/slow-regex": 1
+    },
+    "src/services/sentiment-gate.ts": {
+      "error:no-console": 1,
+      "error:unicorn/prefer-number-properties": 1
+    },
+    "src/services/settings-manager.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 8
+    },
+    "src/services/signal-aggregator.ts": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 7,
+      "error:sonarjs/no-unused-vars": 1
+    },
+    "src/services/situation-correlator.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-misleading-array-reverse": 1,
+      "error:sonarjs/no-nested-template-literals": 1,
+      "error:unicorn/consistent-existence-index-check": 1,
+      "error:unicorn/prefer-ternary": 1
+    },
+    "src/services/situation-forecaster.ts": {
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1,
+      "error:unicorn/no-zero-fractions": 1,
+      "error:unicorn/numeric-separators-style": 2
+    },
+    "src/services/situation-personalizer.ts": {
+      "error:@typescript-eslint/array-type": 1,
+      "error:@typescript-eslint/no-unsafe-assignment": 6,
+      "error:@typescript-eslint/no-unsafe-member-access": 4,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-immediate-mutation": 1
+    },
+    "src/services/storm-preparedness.ts": {
+      "error:@typescript-eslint/no-duplicate-type-constituents": 1,
+      "error:sonarjs/cognitive-complexity": 3,
+      "error:sonarjs/no-dead-store": 1,
+      "error:sonarjs/no-nested-conditional": 6,
+      "error:sonarjs/no-redundant-assignments": 1,
+      "error:unicorn/no-lonely-if": 1,
+      "error:unicorn/no-nested-ternary": 6,
+      "error:unicorn/numeric-separators-style": 1,
+      "error:unicorn/switch-case-braces": 41
+    },
+    "src/services/story-data.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 10
+    },
+    "src/services/story-renderer.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 5,
+      "error:unicorn/no-array-callback-reference": 1,
+      "error:unicorn/prefer-add-event-listener": 1
+    },
+    "src/services/story-share.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 11,
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:sonarjs/no-nested-template-literals": 8,
+      "error:unicorn/prefer-code-point": 2
+    },
+    "src/services/street-tiles.ts": {
+      "error:@typescript-eslint/require-await": 1
+    },
+    "src/services/strike-package-prediction.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:unicorn/no-nested-ternary": 1,
+      "error:unicorn/no-zero-fractions": 19,
+      "error:unicorn/numeric-separators-style": 1
+    },
+    "src/services/strike-packages.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 2,
+      "error:unicorn/no-nested-ternary": 1
+    },
+    "src/services/supplychain/bdi-feed.ts": {
+      "error:unicorn/prefer-number-properties": 1,
+      "error:unicorn/prefer-type-error": 1
+    },
+    "src/services/synthesis/precedent-matcher.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/services/tech-activity.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/cognitive-complexity": 1
+    },
+    "src/services/tech-hub-index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/cognitive-complexity": 2,
+      "error:sonarjs/use-type-alias": 1
+    },
+    "src/services/temporal-baseline.ts": {
+      "error:@typescript-eslint/no-empty-function": 1,
+      "error:no-console": 3
+    },
+    "src/services/trade/index.ts": {
+      "error:@typescript-eslint/array-type": 1,
+      "error:@typescript-eslint/no-unused-vars": 6,
+      "error:@typescript-eslint/require-await": 3
+    },
+    "src/services/trending-keywords.ts": {
+      "error:@typescript-eslint/no-empty-function": 2,
+      "error:no-console": 4,
+      "error:sonarjs/different-types-comparison": 1,
+      "error:sonarjs/no-nested-conditional": 1,
+      "error:sonarjs/prefer-regexp-exec": 1,
+      "error:sonarjs/slow-regex": 1
+    },
+    "src/services/tv-mode.ts": {
+      "error:@typescript-eslint/no-empty-function": 2,
+      "error:sonarjs/no-try-promise": 2
+    },
+    "src/services/unified-ingestors.ts": {
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-nested-conditional": 4,
+      "error:sonarjs/no-nested-template-literals": 3,
+      "error:unicorn/no-nested-ternary": 2
+    },
+    "src/services/unrest/index.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:unicorn/no-array-callback-reference": 1
+    },
+    "src/services/usa-spending.ts": {
+      "error:@typescript-eslint/no-base-to-string": 6,
+      "error:@typescript-eslint/no-unsafe-assignment": 3,
+      "error:@typescript-eslint/no-unsafe-call": 1,
+      "error:@typescript-eslint/no-unsafe-member-access": 2,
+      "error:@typescript-eslint/prefer-nullish-coalescing": 8,
+      "error:no-console": 1
+    },
+    "src/services/velocity.ts": {
+      "error:sonarjs/no-nested-conditional": 3
+    },
+    "src/services/wildfires/index.ts": {
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:sonarjs/no-nested-assignment": 2
+    },
+    "src/services/wingbits.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 5,
+      "error:no-console": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/no-alphabetical-sort": 1
+    },
+    "src/settings-main.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/shims/child-process-proxy.ts": {
+      "error:@typescript-eslint/no-empty-function": 2,
+      "error:@typescript-eslint/no-empty-object-type": 1,
+      "error:@typescript-eslint/no-unused-vars": 1,
+      "error:@typescript-eslint/require-await": 1
+    },
+    "src/utils/keyword-match.ts": {
+      "error:sonarjs/slow-regex": 1
+    },
+    "src/utils/prompt-sanitize.ts": {
+      "warning:eslint-unused-disable": 1
+    },
+    "src/utils/sanitize.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1,
+      "error:sonarjs/cognitive-complexity": 1,
+      "error:sonarjs/slow-regex": 1,
+      "error:unicorn/consistent-function-scoping": 1
+    },
+    "src/utils/theme-colors.ts": {
+      "error:@typescript-eslint/prefer-nullish-coalescing": 1
+    },
+    "src/utils/urlState.ts": {
+      "error:unicorn/prefer-set-has": 2
+    },
+    "tests/ui/progressive-disclosure.test.mts": {
+      "warning:eslint-unused-disable": 1
+    }
+  }
+}

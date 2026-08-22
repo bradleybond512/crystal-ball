@@ -1,5 +1,6 @@
 export const MAX_CORRELATION_CLUSTERS = 1000;
-export const MAX_SEMANTIC_CLUSTER_INPUTS = 5;
+// Preserve useful cross-topic deduplication while bounding ONNX's quadratic grouping work.
+export const MAX_SEMANTIC_CLUSTER_INPUTS = 50;
 export const ANALYSIS_TIMEOUT_STALL_GRACE_MS = 1000;
 
 export function boundCorrelationClusters<T>(clusters: T[]): T[] {

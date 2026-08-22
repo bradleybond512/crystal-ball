@@ -79,7 +79,7 @@
         "get_internet_outages": "Fetch large-scale internet outage alerts.",
         "get_space_weather_extra": "Fetch extended aurora and solar-flare indicators.",
         "get_pharma_supply": "Fetch drug shortages and recalls.",
-        "get_grid_outages": "Fetch county-level grid outages.",
+        "get_grid_outages": "Fetch grid outages for an exact county FIPS.",
         "get_disaster_activations": "Fetch emergency-management disaster activations.",
         "lookup_entity": "Look up a legal entity identifier.",
         "get_aviation_hazards": "Fetch SIGMETs and ground-stop programs.",

@@ -35,7 +35,6 @@
     "/api/infrarisks/acled",
     "/api/infrarisks/bgp",
     "/api/infrarisks/kev",
-    "/api/infrarisks/power",
     "/api/infrarisks/state",
     "/api/intelligence/brief/generate",
     "/api/intelligence/correlations/event",

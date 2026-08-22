@@ -24,6 +24,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import {
+  _getSidecarCachedForTests,
+  _getSidecarCachedStaleForTests,
+  _resetSidecarCacheForTests,
+  _setSidecarCachedForTests,
+  _sweepSidecarCacheForTests,
+} from '../local-api-server.mjs';
+
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const serverSrc = readFileSync(path.join(__dir, '..', 'local-api-server.mjs'), 'utf8');
 
@@ -133,7 +141,69 @@ test('regression: pharma-shortages cache key still includes limit', () => {
   assert.match(body, /openfda-shortages:\$\{limit\}/);
 });
 
-test('regression: grid-outages cache key still includes limit', () => {
+test('regression: grid-outages cache key includes validated limit and exact FIPS', () => {
   const body = routeBody('/api/grid-outages');
-  assert.match(body, /ornl-odin:\$\{limit\}/);
+  assert.match(body, /ornl-odin:\$\{query\.limit\}:\$\{query\.fips\}/);
+  assert.doesNotMatch(body, /\?\? 'all'/);
+});
+
+test('USGS surface-water sidecar uses the bounded two-step API and caches only contributed rows', () => {
+  const body = routeBody('/api/usgs-water-proxy');
+  assert.match(body, /collections\/monitoring-locations\/items/);
+  assert.match(body, /collections\/latest-continuous\/items/);
+  assert.match(body, /monitoring_location_id: \[\.\.\.locations\.keys\(\)\]\.join\(','\)/);
+  assert.doesNotMatch(body, /waterservices\.usgs\.gov/);
+  assert.match(body,
+    /if \(result\.features\.length > 0\) \{[\s\S]{0,100}setCached\(cacheKey, result\)[\s\S]{0,100}recordFeedSuccess\('usgs-surface-water'\)/);
+  assert.equal(count(body, /maxResponseBytes: USGS_WATER_MAX_RESPONSE_BYTES/g), 2);
+  assert.match(body, /recordFeedSuccess\('usgs-surface-water'\)/);
+  assert.match(body, /recordFeedFailure\('usgs-surface-water'/);
+});
+
+test('cache sweep preserves expired last-known-good data for upstream failure fallback', () => {
+  const realNow = Date.now;
+  let now = Date.parse('2026-08-21T20:00:00Z');
+  const lastKnownGood = { events: ['REAL LAST-KNOWN-GOOD'] };
+  try {
+    Date.now = () => now;
+    _resetSidecarCacheForTests();
+    _setSidecarCachedForTests('fallback-regression', lastKnownGood, 1);
+    now += 2;
+    _sweepSidecarCacheForTests();
+
+    assert.equal(_getSidecarCachedForTests('fallback-regression', 1), null);
+    assert.deepEqual(_getSidecarCachedStaleForTests('fallback-regression'), lastKnownGood);
+  } finally {
+    Date.now = realNow;
+    _resetSidecarCacheForTests();
+  }
+});
+
+test('cache sweep still evicts the oldest entry above the hard cap', () => {
+  const realNow = Date.now;
+  let now = Date.parse('2026-08-21T20:00:00Z');
+  try {
+    Date.now = () => now;
+    _resetSidecarCacheForTests();
+    for (let index = 0; index <= 500; index += 1) {
+      _setSidecarCachedForTests(`cap-${index}`, { index }, 1);
+      now += 1;
+    }
+
+    assert.equal(_getSidecarCachedStaleForTests('cap-0'), null);
+    assert.deepEqual(_getSidecarCachedStaleForTests('cap-500'), { index: 500 });
+  } finally {
+    Date.now = realNow;
+    _resetSidecarCacheForTests();
+  }
+});
+
+test('grid-outages records feed success only after ODIN contributes a usable row', () => {
+  const route = routeBody('/api/grid-outages');
+  assert.match(route, /odinRequestCanStart\(_odinInFlight, cacheKey\)/);
+  assert.match(route, /maxResponseBytes: ODIN_MAX_RESPONSE_BYTES/);
+  assert.match(route, /odinPageIsCompleteSidecar\(raw, query\.limit\)/);
+  assert.match(route, /setOdinCached\(cacheKey, result, ODIN_TTL\)/);
+  assert.match(route, /if \(parsed\.acceptedRows > 0\) recordFeedSuccess\('ornl-odin'\)/);
+  assert.match(route, /else recordFeedFailure\('ornl-odin', 'no_contributed_rows'\)/);
 });

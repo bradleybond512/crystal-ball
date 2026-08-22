@@ -139,6 +139,9 @@ import type { RedFlagWarning } from '@/services/red-flag-warnings';
 import type { SatellitePosition, OrbitPath } from '@/services/satellite-propagator';
 import type { SatelliteTLE } from '@/services/satellite-catalog';
 import { filterNotable } from '@/services/satellite-catalog';
+import type { LocalLogisticsSnapshot, LogisticsNode } from '@/services/local-logistics-types';
+import type { EvacRoute } from '@/services/evacuation-router';
+import { getLifelineMarkerPresentation, getTemporaryMapBounds } from './disaster-lifelines-map-helpers';
 
 export type TimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
 export type DeckMapView = 'global' | 'america' | 'mena' | 'eu' | 'asia' | 'latam' | 'africa' | 'oceania';
@@ -570,6 +573,9 @@ export class DeckGLMap {
   private tradeRouteSegments: TradeRouteSegment[] = resolveTradeRouteSegments();
   private positiveEvents: PositiveGeoEvent[] = [];
   private kindnessPoints: KindnessPoint[] = [];
+  /** User-selected, in-memory disaster action overlays. Never persisted. */
+  private lifelinesOverlay: LocalLogisticsSnapshot | null = null;
+  private activeEvacRoute: EvacRoute | null = null;
 
   // Phase 8 overlay data
   private happinessScores = new Map<string, number>();
@@ -946,7 +952,7 @@ export class DeckGLMap {
  this.recoverSatelliteTiles();
  return;
  }
- console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId }); // eslint-disable-line no-console
+ console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
  mapErrorCount += 1;
  if (mapErrorCount === mapErrorThreshold) {
  this.showMapErrorOverlay(msg, sourceId);
@@ -1874,6 +1880,15 @@ export class DeckGLMap {
  layers.push(...this.createNewsLocationsLayer());
  }
 
+ // User-selected disaster overlays stay at the top of the visual stack. Their
+ // colors communicate source evidence only; they do not imply road access.
+ if (this.activeEvacRoute) {
+ layers.push(...this.createEvacRouteOverlayLayers(this.activeEvacRoute));
+ }
+ if (this.lifelinesOverlay?.nodes.length) {
+ layers.push(...this.createLifelinesOverlayLayers(this.lifelinesOverlay.nodes));
+ }
+
  const result = layers.filter(Boolean) as LayersList;
  const elapsed = performance.now() - startTime;
  if (import.meta.env.DEV && elapsed > 16) {
@@ -1883,6 +1898,91 @@ export class DeckGLMap {
   }
 
   // Layer creation methods
+  private createLifelinesOverlayLayers(nodes: LogisticsNode[]): Layer[] {
+ const markerLayer = new ScatterplotLayer<LogisticsNode>({
+ id: 'lifelines-overlay-markers',
+ data: nodes,
+ getPosition: (node: LogisticsNode) => [node.lon, node.lat],
+ getRadius: 12,
+ radiusUnits: 'pixels' as const,
+ radiusMinPixels: 10,
+ radiusMaxPixels: 16,
+ filled: true,
+ stroked: true,
+ getFillColor: (node: LogisticsNode) => getLifelineMarkerPresentation(node).fillColor,
+ getLineColor: (node: LogisticsNode) => getLifelineMarkerPresentation(node).strokeColor,
+ getLineWidth: 2,
+ lineWidthUnits: 'pixels' as const,
+ pickable: true,
+ autoHighlight: true,
+ highlightColor: [255, 255, 255, 90],
+ });
+ const glyphLayer = new TextLayer<LogisticsNode>({
+ id: 'lifelines-overlay-glyphs',
+ data: nodes,
+ getPosition: (node: LogisticsNode) => [node.lon, node.lat],
+ getText: (node: LogisticsNode) => getLifelineMarkerPresentation(node).glyph,
+ getColor: [255, 255, 255, 255],
+ getSize: 11,
+ sizeUnits: 'pixels' as const,
+ getTextAnchor: 'middle',
+ getAlignmentBaseline: 'center',
+ fontWeight: 700,
+ billboard: true,
+ pickable: false,
+ });
+ return [markerLayer, glyphLayer];
+  }
+
+  private createEvacRouteOverlayLayers(route: EvacRoute): Layer[] {
+ const endpointData: Array<{ lat: number; lon: number; label: string; endpoint: 'A' | 'B' }> = [
+ { ...route.from, endpoint: 'A' },
+ { ...route.to, endpoint: 'B' },
+ ];
+ return [
+ new PathLayer<EvacRoute>({
+ id: 'evac-route-overlay-path',
+ data: [route],
+ getPath: (item: EvacRoute) => item.geometry.coordinates as [number, number][],
+ getColor: [45, 144, 230, 235],
+ getWidth: 5,
+ widthUnits: 'pixels' as const,
+ widthMinPixels: 3,
+ capRounded: true,
+ jointRounded: true,
+ pickable: false,
+ }),
+ new ScatterplotLayer<(typeof endpointData)[number]>({
+ id: 'evac-route-overlay-endpoints',
+ data: endpointData,
+ getPosition: (item: { lat: number; lon: number }) => [item.lon, item.lat],
+ getRadius: 10,
+ radiusUnits: 'pixels' as const,
+ filled: true,
+ stroked: true,
+ getFillColor: [21, 88, 139, 255],
+ getLineColor: [232, 247, 255, 255],
+ getLineWidth: 2,
+ lineWidthUnits: 'pixels' as const,
+ pickable: false,
+ }),
+ new TextLayer<(typeof endpointData)[number]>({
+ id: 'evac-route-overlay-endpoint-labels',
+ data: endpointData,
+ getPosition: (item: { lat: number; lon: number }) => [item.lon, item.lat],
+ getText: (item: { endpoint: string }) => item.endpoint,
+ getColor: [255, 255, 255, 255],
+ getSize: 11,
+ sizeUnits: 'pixels' as const,
+ getTextAnchor: 'middle',
+ getAlignmentBaseline: 'center',
+ fontWeight: 700,
+ billboard: true,
+ pickable: false,
+ }),
+ ];
+  }
+
   private createCablesLayer(): PathLayer {
  const highlightedCables = this.highlightedAssets.cable;
  const cacheKey = 'cables-layer';
@@ -3898,6 +3998,10 @@ export class DeckGLMap {
  const text = (value: unknown): string => escapeHtml(String(value ?? ''));
 
  switch (layerId) {
+ case 'lifelines-overlay-markers': {
+ const presentation = getLifelineMarkerPresentation(obj as LogisticsNode);
+ return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(presentation.categoryLabel)} · ${text(presentation.evidenceLabel)}</div>` };
+ }
  case 'hotspots-layer': {
  return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.subtext)}</div>` };
  }
@@ -4242,6 +4346,16 @@ export class DeckGLMap {
 
  const rawClickLayerId = info.layer?.id || '';
  const layerId = rawClickLayerId.endsWith('-ghost') ? rawClickLayerId.slice(0, -6) : rawClickLayerId;
+
+ if (layerId === 'lifelines-overlay-markers') {
+ this.popup.show({
+ type: 'lifeline',
+ data: info.object as LogisticsNode,
+ x: info.x,
+ y: info.y,
+ });
+ return;
+ }
 
  // Hotspots show popup with related news
  if (layerId === 'hotspots-layer') {
@@ -5088,6 +5202,40 @@ export class DeckGLMap {
  duration: 500,
  });
  }
+  }
+
+  /** Replace the transient, explicitly selected Lifelines layer. */
+  public setLifelinesOverlay(snapshot: LocalLogisticsSnapshot | null): void {
+ this.lifelinesOverlay = snapshot;
+ if (snapshot?.nodes.length) {
+ this.fitTemporaryCoordinates(snapshot.nodes.map((node) => [node.lon, node.lat]));
+ }
+ this.render();
+  }
+
+  /** Replace the transient cached OSRM graph route. */
+  public setEvacRoute(route: EvacRoute | null): void {
+ this.activeEvacRoute = route;
+ if (route) {
+ this.fitTemporaryCoordinates(route.geometry.coordinates as [number, number][]);
+ }
+ this.render();
+  }
+
+  private fitTemporaryCoordinates(coordinates: [number, number][]): void {
+ if (!this.maplibreMap || coordinates.length === 0) return;
+ if (coordinates.length === 1) {
+ const coordinate = coordinates[0]!;
+ this.maplibreMap.flyTo({ center: coordinate, zoom: Math.max(this.maplibreMap.getZoom(), 10), duration: 600 });
+ return;
+ }
+ const bounds = getTemporaryMapBounds(coordinates);
+ if (!bounds) return;
+ this.maplibreMap.fitBounds([[bounds.minLon, bounds.minLat], [bounds.maxLon, bounds.maxLat]], {
+ padding: 64,
+ duration: 700,
+ maxZoom: 13,
+ });
   }
 
   public fitCountry(code: string): void {

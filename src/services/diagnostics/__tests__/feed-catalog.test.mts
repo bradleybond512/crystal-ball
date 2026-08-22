@@ -33,6 +33,11 @@ test('FEED_CATALOG entries have unique ids', () => {
   }
 });
 
+test('data-freshness identities are one-to-one and never shared across provider rows', () => {
+  const bindings = FEED_CATALOG.filter((feed) => feed.sourceId);
+  assert.equal(new Set(bindings.map((feed) => feed.sourceId)).size, bindings.length);
+});
+
 test('FEED_CATALOG entries use HTTPS or WSS endpoints', () => {
   for (const def of FEED_CATALOG) {
     assert.match(def.endpoint, /^(https|wss):\/\//, `${def.id}: ${def.endpoint}`);
@@ -45,14 +50,21 @@ test('FEED_CATALOG includes the spec-listed core feeds', () => {
     'usgs earthquakes', 'swpc x-ray flux', 'swpc planetary kp',
     'nws alerts', 'nhc tropical cyclones', 'nasa firms modis',
     'nasa firms viirs', 'nifc fire perimeters', 'airnow aqi',
-    'eia-930 grid', 'poweroutage.us', 'cloudflare radar bgp',
+    'eia-930 grid', 'ornl odin county outages', 'cloudflare radar bgp',
     'epa radnet', 'gdelt doc api', 'acled conflict',
     'alienvault otx', 'fred economic', 'opensky network',
     'aisstream vessels', 'purpleair sensors',
+    'usgs surface water',
   ]) {
     assert.ok(names.some((n) => n.includes(expected)),
       `missing spec feed "${expected}" in catalog`);
   }
+});
+
+test('FEED_CATALOG active grid path contains ODIN and no PowerOutage.us entry', () => {
+  assert.ok(FEED_CATALOG.some((feed) => feed.id === 'ornl-odin'));
+  assert.equal(FEED_CATALOG.some((feed) => feed.id === 'poweroutage-us'), false);
+  assert.equal(FEED_CATALOG.some((feed) => /poweroutage\.us/i.test(feed.name)), false);
 });
 
 test('FEED_CATALOG poll intervals are positive and ≤ 24h', () => {
@@ -95,11 +107,20 @@ test('classifyFeedHealth returns "error" when last fetch errored', () => {
 test('classifyFeedHealth ignores stale errors when a more-recent success exists', () => {
   const snap = snapshot({
     lastSuccessAt: NOW - 1_000,
-    lastAttemptAt: NOW - 1_000,
+    lastAttemptAt: NOW - 5 * 60_000,
     lastError: 'old failure 5 min ago',
   });
   // success time > attempt time means the error pre-dated the success — still fresh.
   assert.equal(classifyFeedHealth(snap, 60_000, NOW), 'fresh');
+});
+
+test('classifyFeedHealth treats an equal-time latest failure as error', () => {
+  const snap = snapshot({
+    lastSuccessAt: NOW - 1_000,
+    lastAttemptAt: NOW - 1_000,
+    lastError: 'no_contributed_rows',
+  });
+  assert.equal(classifyFeedHealth(snap, 60_000, NOW), 'error');
 });
 
 // ── buildFeedRows ─────────────────────────────────────────────────────────
@@ -159,4 +180,13 @@ test('formatLastPoll renders human-readable ages', () => {
 test('formatLastPoll falls back to lastAttemptAt when no success has been recorded', () => {
   const snap = snapshot({ lastAttemptAt: NOW - 4 * MIN, lastError: 'boom' });
   assert.equal(formatLastPoll(snap, NOW), '4m ago');
+});
+
+test('formatLastPoll shows a later failed attempt instead of an older success', () => {
+  const snap = snapshot({
+    lastSuccessAt: NOW - 10 * MIN,
+    lastAttemptAt: NOW - 2 * MIN,
+    lastError: 'upstream unavailable',
+  });
+  assert.equal(formatLastPoll(snap, NOW), '2m ago');
 });

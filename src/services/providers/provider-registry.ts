@@ -153,7 +153,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   { id: 'openfda', domain: 'health', displayName: 'openFDA (Shortages + Recalls)', authType: 'none', baseUrl: 'https://api.fda.gov', rateLimitNote: 'no key, 240 req/min per IP', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'openfda' },
   // ORNL ODIN real-time power outages by county. New 'grid' domain. 15 min cache.
   // Sidecar route: /api/grid-outages
-  { id: 'ornl-odin', domain: 'grid', displayName: 'ORNL ODIN Power Outages', authType: 'none', baseUrl: 'https://ornl.opendatasoft.com', rateLimitNote: 'no key, Socrata ODS API', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ornl-odin' },
+  { id: 'ornl-odin', domain: 'grid', displayName: 'ORNL ODIN Power Outages', authType: 'none', baseUrl: 'https://openenergyhub.ornl.gov', rateLimitNote: 'no key, public county outage dataset', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ornl-odin' },
   // Copernicus EMS emergency activations. 'disasters' domain. 30 min cache.
   // Sidecar route: /api/ems-activations
   { id: 'copernicus-ems', domain: 'disasters', displayName: 'Copernicus Emergency Management', authType: 'none', baseUrl: 'https://mapping.emergency.copernicus.eu', rateLimitNote: 'no key, DRF public API', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.9, fallbackPriority: 5, independenceGroup: 'copernicus-ems' },

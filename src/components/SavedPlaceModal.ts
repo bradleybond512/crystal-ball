@@ -43,6 +43,7 @@ interface FormState {
   radiusKm: number;
   notes: string;
   primary: boolean;
+  offlinePinned: boolean;
 }
 
 export class SavedPlaceModal {
@@ -91,6 +92,7 @@ export class SavedPlaceModal {
  radiusKm: 50,
  notes: '',
  primary: false,
+ offlinePinned: false,
  };
   }
 
@@ -115,6 +117,7 @@ export class SavedPlaceModal {
  radiusKm: place.radiusKm,
  notes: place.notes,
  primary: place.primary,
+ offlinePinned: place.offlinePinned,
  };
  this.geocodeResults = [];
  this.confirmingDelete = false;
@@ -208,6 +211,20 @@ export class SavedPlaceModal {
  Pin
  </button>
  </div>
+ </div>
+
+ <div class="spm-field-group">
+ <label class="spm-label">Emergency Pack: Lifelines</label>
+ <button
+ class="spm-offline-btn${this.formState.offlinePinned ? ' spm-offline-btn--active' : ''}"
+ data-action="toggle-offline"
+ type="button"
+ aria-pressed="${this.formState.offlinePinned ? 'true' : 'false'}"
+ title="Keep the latest Disaster Lifelines data ready for degraded or offline conditions"
+ >
+ <span>${this.formState.offlinePinned ? '&#x2713; Keep Disaster Lifelines offline' : 'Keep Disaster Lifelines offline'}</span>
+ <small>${this.formState.offlinePinned ? 'Refreshes this place’s exact-location pack before severe weather.' : 'Save an exact-location pack for weak or unavailable service.'}</small>
+ </button>
  </div>
 
  <div class="spm-field-group">
@@ -317,8 +334,8 @@ export class SavedPlaceModal {
 
   private getValidationError(): string | null {
  if (!this.formState.name.trim() && !this.formState.lat && !this.formState.lon) return null;
- const lat = Number.parseFloat(this.formState.lat);
- const lon = Number.parseFloat(this.formState.lon);
+ const lat = Number(this.formState.lat);
+ const lon = Number(this.formState.lon);
  if (this.formState.lat && !Number.isFinite(lat)) return 'Latitude must be a number between -90 and 90';
  if (this.formState.lon && !Number.isFinite(lon)) return 'Longitude must be a number between -180 and 180';
  if (this.formState.lat && (lat < -90 || lat > 90)) return 'Latitude must be between -90 and 90';
@@ -328,10 +345,12 @@ export class SavedPlaceModal {
 
   private canSave(): boolean {
  const name = this.formState.name.trim();
- const lat = Number.parseFloat(this.formState.lat);
- const lon = Number.parseFloat(this.formState.lon);
+ const lat = Number(this.formState.lat);
+ const lon = Number(this.formState.lon);
  return (
  name.length > 0
+ && this.formState.lat.trim().length > 0
+ && this.formState.lon.trim().length > 0
  && Number.isFinite(lat) && lat >= -90 && lat <= 90
  && Number.isFinite(lon) && lon >= -180 && lon <= 180
  && !this.getValidationError()
@@ -404,6 +423,11 @@ export class SavedPlaceModal {
  this.rerenderPrimaryButton();
  break;
  }
+ case 'toggle-offline': {
+ this.formState.offlinePinned = !this.formState.offlinePinned;
+ this.rerenderOfflineButton();
+ break;
+ }
  case 'pick-map': {
  this.enterPickMode();
  break;
@@ -459,6 +483,21 @@ export class SavedPlaceModal {
  if (!btn) return;
  btn.textContent = this.formState.primary ? '\u2605 Primary' : '\u2606 Set Primary';
  btn.classList.toggle('spm-primary-btn--active', this.formState.primary);
+  }
+
+  private rerenderOfflineButton(): void {
+ const btn = this.overlay.querySelector<HTMLButtonElement>('[data-action="toggle-offline"]');
+ if (!btn) return;
+ btn.classList.toggle('spm-offline-btn--active', this.formState.offlinePinned);
+ btn.setAttribute('aria-pressed', this.formState.offlinePinned ? 'true' : 'false');
+ const label = btn.querySelector('span');
+ const detail = btn.querySelector('small');
+ if (label) label.textContent = `${this.formState.offlinePinned ? '\u2713 ' : ''}Keep Disaster Lifelines offline`;
+ if (detail) {
+ detail.textContent = this.formState.offlinePinned
+ ? 'Refreshes this place’s exact-location pack before severe weather.'
+ : 'Save an exact-location pack for weak or unavailable service.';
+ }
   }
 
   private refreshDeleteArea(): void {
@@ -564,8 +603,8 @@ export class SavedPlaceModal {
  return;
  }
 
- const lat = Number.parseFloat(this.formState.lat);
- const lon = Number.parseFloat(this.formState.lon);
+ const lat = Number(this.formState.lat);
+ const lon = Number(this.formState.lon);
  const input = {
  name: this.formState.name.trim(),
  lat,
@@ -573,6 +612,7 @@ export class SavedPlaceModal {
  radiusKm: this.formState.radiusKm,
  tags: [...this.formState.tags],
  notes: this.formState.notes,
+ offlinePinned: this.formState.offlinePinned,
  source: 'manual' as const,
  };
 

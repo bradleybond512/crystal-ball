@@ -8,6 +8,7 @@
  * via the loader and hands them to the canvas / banner.
  */
 
+import { activeBgpEvents, isRadSummaryFresh } from './grid-monitor';
 import type {
   OutageSummary,
   RadSummary,
@@ -33,7 +34,7 @@ export const SEVERITY_OPACITIES: Readonly<Record<Severity, number>> = {
   extreme: 0.7,
 };
 
-// ─── Outage choropleth ───────────────────────────────────────────────
+// ─── Outage overlay compatibility ───────────────────────────────────
 
 /** Two-letter US state/territory code → centroid (lat, lon). Built so
  *  the choropleth/dot overlay can render even when no GeoJSON polygon
@@ -109,66 +110,14 @@ export interface OutageOverlayRow {
 }
 
 /**
- * Build per-state overlay rows from an OutageSummary. States with no
- * known centroid are silently dropped — we never plot a dot at (0,0).
- * Sorted descending by customersAffected for stable z-order.
+ * ODIN context is scoped to one exact county and currently carries no
+ * geometry. Promoting it to a state centroid would visually imply statewide
+ * coverage, so the legacy state-overlay bridge intentionally emits nothing.
  */
 export function outagesToStateOverlay(summary: OutageSummary | null): OutageOverlayRow[] {
-  if (!summary) return [];
   const rows: OutageOverlayRow[] = [];
-  for (const s of summary.byState) {
-    if (s.severity === 'normal') continue;
-    const centroid = US_STATE_CENTROIDS[s.state] ?? US_STATE_CENTROIDS[normalizeStateName(s.state)];
-    if (!centroid) continue;
-    rows.push({
-      state: s.state,
-      lat: centroid.lat,
-      lon: centroid.lon,
-      customersAffected: s.customersAffected,
-      countyCount: s.countyCount,
-      severity: s.severity,
-      fillColorHex: SEVERITY_COLORS[s.severity],
-      fillOpacity: SEVERITY_OPACITIES[s.severity],
-      radiusPx: severityRadiusPx(s.severity),
-      topCounty: s.topCounty,
-    });
-  }
-  rows.sort((a, b) => b.customersAffected - a.customersAffected);
+  if (summary) rows.length = 0;
   return rows;
-}
-
-function severityRadiusPx(s: Severity): number {
-  switch (s) {
-    case 'extreme': { return 22;
-    }
-    case 'major': { return 18;
-    }
-    case 'high': { return 14;
-    }
-    case 'elevated': { return 10;
-    }
-    case 'normal': { return 6;
-    }
-  }
-}
-
-const STATE_NAME_TO_CODE: Readonly<Record<string, string>> = {
-  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
-  colorado: 'CO', connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC',
-  florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL',
-  indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA',
-  maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
-  mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
-  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
-  'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK',
-  oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
-  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI',
-  wyoming: 'WY', 'puerto rico': 'PR',
-};
-
-function normalizeStateName(name: string): string {
-  return STATE_NAME_TO_CODE[name.trim().toLowerCase()] ?? name;
 }
 
 // ─── Radiation hotspots ──────────────────────────────────────────────
@@ -193,11 +142,14 @@ const PULSE_PERIODS: Readonly<Record<Severity, number>> = {
   extreme: 500,
 };
 
-export function radiationToHotspots(summary: RadSummary | null): RadHotspotRow[] {
-  if (!summary) return [];
+export function radiationToHotspots(summary: RadSummary | null, now = Date.now()): RadHotspotRow[] {
+  if (!summary || !isRadSummaryFresh(summary, now)) return [];
   const out: RadHotspotRow[] = [];
   for (const s of summary.elevatedStations) {
     if (s.lat === null || s.lon === null || s.cpm === null) continue;
+    if (!Number.isFinite(s.lat) || s.lat < -90 || s.lat > 90) continue;
+    if (!Number.isFinite(s.lon) || s.lon < -180 || s.lon > 180) continue;
+    if (!Number.isFinite(s.cpm) || s.cpm < 0) continue;
     if (s.severity === 'normal') continue;
     out.push({
       name: s.name,
@@ -235,12 +187,13 @@ export interface BgpBannerState {
  * carrying a known-prefix tag). The message names the most-affected
  * tag (e.g. "Cloudflare DNS hijack — 2 events").
  */
-export function bgpToBanner(summary: BgpSummary | null): BgpBannerState {
-  if (!summary || summary.events.length === 0) {
+export function bgpToBanner(summary: BgpSummary | null, now = Date.now()): BgpBannerState {
+  const currentEvents = activeBgpEvents(summary, now);
+  if (currentEvents.length === 0) {
     return { visible: false, severity: 'none', message: '', criticalEvents: [] };
   }
-  const critical = summary.events.filter((e) => e.severity === 'critical');
-  const elevatedTagged = summary.events.filter((e) => e.severity === 'elevated' && e.tags.length > 0);
+  const critical = currentEvents.filter((e) => e.severity === 'critical');
+  const elevatedTagged = currentEvents.filter((e) => e.severity === 'elevated' && e.tags.length > 0);
   if (critical.length === 0 && elevatedTagged.length < 3) {
     return { visible: false, severity: 'none', message: '', criticalEvents: [] };
   }

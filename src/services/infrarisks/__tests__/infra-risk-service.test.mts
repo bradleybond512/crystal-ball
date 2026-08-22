@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
-  parsePowerOutages,
-  scorePowerOutages,
-  powerAlertsFor,
+  unknownPowerRisk,
   parseCisaKev,
   scoreCisaKev,
   kevAlertsFor,
@@ -16,105 +15,26 @@ import {
   acledAlertsFor,
   composeInfraRiskState,
   fetchInfraRisks,
+  ageInfraRiskState,
   getInfraState,
   _resetInfraStateForTests,
   maxSeverity,
   severityToScore,
+  INFRA_RISK_STATE_MAX_AGE_MS,
+  RIPE_BGP_SCOPE_LABEL,
 } from '../infra-risk-service.ts';
 
 const NOW = Date.UTC(2026, 4, 12, 12, 0, 0);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// ── parsePowerOutages ─────────────────────────────────────────────────
+// ── Unsupported national power coverage ──────────────────────────────
 
-test('power: parses CountyOutages array shape', () => {
-  const raw = {
-    CountyOutages: [
-      { CountyName: 'Harris', StateName: 'TX', CustomersOut: 600_000, CustomersTracked: 1_500_000, RecordDateTime: '2026-05-12T10:00:00Z' },
-      { CountyName: 'Dallas', StateName: 'TX', CustomersOut: 250_000, CustomersTracked: 1_000_000 },
-      { CountyName: 'Travis', StateName: 'TX', CustomersOut: 12_000, CustomersTracked: 700_000 },
-      { CountyName: 'Bexar', StateName: 'TX', CustomersOut: 1_000, CustomersTracked: 800_000 },
-    ],
-  };
-  const out = parsePowerOutages(raw);
-  assert.equal(out.length, 4);
-  assert.equal(out[0]!.severity, 'CRITICAL');
-  assert.equal(out[1]!.severity, 'HIGH');
-  assert.equal(out[2]!.severity, 'MEDIUM');
-  assert.equal(out[3]!.severity, 'LOW');
-});
-
-test('power: accepts bare array payload', () => {
-  const raw = [{ CountyName: 'X', StateName: 'CA', CustomersOut: 11_000 }];
-  const out = parsePowerOutages(raw);
-  assert.equal(out.length, 1);
-  assert.equal(out[0]!.severity, 'MEDIUM');
-});
-
-test('power: sorts by customers-out descending', () => {
-  const raw = {
-    CountyOutages: [
-      { CountyName: 'A', StateName: 'TX', CustomersOut: 5_000 },
-      { CountyName: 'B', StateName: 'TX', CustomersOut: 50_000 },
-      { CountyName: 'C', StateName: 'TX', CustomersOut: 600_000 },
-    ],
-  };
-  const out = parsePowerOutages(raw);
-  assert.deepEqual(out.map((r) => r.county), ['C', 'B', 'A']);
-});
-
-test('power: drops zero-out + missing-county rows', () => {
-  const raw = {
-    CountyOutages: [
-      { CountyName: 'A', StateName: 'TX', CustomersOut: 0 },
-      { CountyName: '', StateName: 'TX', CustomersOut: 1_000 },
-      { CountyName: 'B', StateName: 'TX', CustomersOut: 1_000 },
-    ],
-  };
-  assert.equal(parsePowerOutages(raw).length, 1);
-});
-
-test('power: outageRatio computed from tracked count', () => {
-  const out = parsePowerOutages({ CountyOutages: [
-    { CountyName: 'A', StateName: 'TX', CustomersOut: 250, CustomersTracked: 1_000 },
-    { CountyName: 'B', StateName: 'TX', CustomersOut: 100 }, // no tracked → ratio 0
-  ]});
-  assert.equal(out[0]!.outageRatio, 0.25);
-  assert.equal(out[1]!.outageRatio, 0);
-});
-
-test('power: thresholds match spec (>500k CRITICAL, >100k HIGH, >10k MEDIUM)', () => {
-  const at = (n: number) => parsePowerOutages({ CountyOutages: [{ CountyName: 'X', StateName: 'Y', CustomersOut: n }] })[0]!.severity;
-  assert.equal(at(500_001), 'CRITICAL');
-  assert.equal(at(500_000), 'HIGH'); // strictly >500k → CRITICAL
-  assert.equal(at(100_001), 'HIGH');
-  assert.equal(at(100_000), 'MEDIUM');
-  assert.equal(at(10_001), 'MEDIUM');
-  assert.equal(at(10_000), 'LOW');
-  assert.equal(at(1), 'LOW');
-});
-
-test('power score: empty input → INFO', () => {
-  assert.equal(scorePowerOutages([]).severity, 'INFO');
-});
-
-test('power score: takes max severity across records', () => {
-  const records = parsePowerOutages({ CountyOutages: [
-    { CountyName: 'A', StateName: 'TX', CustomersOut: 600_000 },
-    { CountyName: 'B', StateName: 'TX', CustomersOut: 1_000 },
-  ]});
-  assert.equal(scorePowerOutages(records).severity, 'CRITICAL');
-});
-
-test('power alerts: only HIGH+ records emit alerts', () => {
-  const records = parsePowerOutages({ CountyOutages: [
-    { CountyName: 'A', StateName: 'TX', CustomersOut: 250_000 },
-    { CountyName: 'B', StateName: 'TX', CustomersOut: 5_000 },
-  ]});
-  const alerts = powerAlertsFor(records, NOW);
-  assert.equal(alerts.length, 1);
-  assert.equal(alerts[0]!.severity, 'high');
-  assert.equal(alerts[0]!.source, 'power-grid');
+test('power: unsupported national coverage is explicit unknown with no alerts', () => {
+  const power = unknownPowerRisk();
+  assert.equal(power.coverage, 'unknown');
+  assert.equal(power.score, null);
+  assert.match(power.coverageReason ?? '', /unknown.+not included/i);
+  assert.deepEqual(power.alerts, []);
 });
 
 // ── parseCisaKev ──────────────────────────────────────────────────────
@@ -209,13 +129,23 @@ test('bgp: no inconsistencies → INFO score', () => {
 });
 
 test('bgp alerts: only HIGH (>=5 inconsistencies) emit alerts', () => {
-  const records = parseBgpAnomalies({ data: [
-    { resource: 'AS1', inconsistencies: ['a','b','c','d','e','f'] },
-    { resource: 'AS2', inconsistencies: ['x'] },
-  ]});
+  const records = parseBgpAnomalies({ data: {
+    resource: 'AS3356', inconsistencies: ['a','b','c','d','e','f'],
+  }});
   const alerts = bgpAlertsFor(records, NOW);
   assert.equal(alerts.length, 1);
-  assert.equal(alerts[0]!.title, 'BGP anomaly: AS1');
+  assert.equal(alerts[0]!.title, 'AS3356 / Lumen routing anomaly');
+});
+
+test('bgp evidence: every score and alert claim names the exact AS3356 / Lumen scope', () => {
+  const records = parseBgpAnomalies({ data: {
+    resource: 'AS3356',
+    inconsistencies: ['a', 'b', 'c', 'd', 'e'],
+    query_time: new Date(NOW).toISOString(),
+  } });
+  assert.match(scoreBgpAnomalies(records).headline, /AS3356 \/ Lumen/);
+  assert.match(bgpAlertsFor(records, NOW)[0]!.title, /AS3356 \/ Lumen/);
+  assert.match(bgpAlertsFor(records, NOW)[0]!.body, /AS3356 \/ Lumen/);
 });
 
 // ── parseAcledEvents ──────────────────────────────────────────────────
@@ -278,26 +208,30 @@ test('severityToScore: 0 / 25 / 50 / 75 / 100 ladder', () => {
 
 // ── composeInfraRiskState ─────────────────────────────────────────────
 
-test('compose: weighted composite score reflects all four domains', () => {
+test('compose: unknown power and scoped AS3356 evidence are excluded from broad-domain scoring', () => {
   const state = composeInfraRiskState({
-    power: { records: [], score: { score: 100, severity: 'CRITICAL', headline: '' }, alerts: [] },
-    kev: { entries: [], score: { score: 75, severity: 'HIGH', headline: '' }, alerts: [] },
-    bgp: { records: [], score: { score: 50, severity: 'MEDIUM', headline: '' }, alerts: [] },
-    acled: { events: [], score: { score: 0, severity: 'INFO', headline: '' }, alerts: [] },
+    power: unknownPowerRisk(),
+    kev: { coverage: 'reported', coverageReason: null, entries: [], score: { score: 75, severity: 'HIGH', headline: '' }, alerts: [] },
+    bgp: { coverage: 'reported', coverageReason: null, records: [], scopeLabel: RIPE_BGP_SCOPE_LABEL, compositeEligible: false, score: { score: 50, severity: 'MEDIUM', headline: '' }, alerts: [] },
+    acled: { coverage: 'reported', coverageReason: null, events: [], score: { score: 0, severity: 'INFO', headline: '' }, alerts: [] },
     fetchedAt: NOW,
   });
-  // 100*0.3 + 75*0.25 + 50*0.2 + 0*0.25 = 30 + 18.75 + 10 = 58.75 → 59
-  assert.equal(state.compositeScore, 59);
-  assert.equal(state.compositeSeverity, 'HIGH');
+  // AS3356 is scoped evidence. Only broad KEV + ACLED vote: (75 + 0) / 2 = 38.
+  assert.equal(state.compositeScore, 38);
+  assert.equal(state.compositeSeverity, 'MEDIUM');
+  assert.equal(state.compositeCoverage, 'reported');
+  assert.equal(state.observedDomainCount, 2);
+  assert.equal(state.expectedDomainCount, 2);
+  assert.equal(state.power.coverage, 'unknown');
 });
 
 test('compose: all-zero domains → INFO composite', () => {
   const zero = { score: 0, severity: 'INFO' as const, headline: '' };
   const state = composeInfraRiskState({
-    power: { records: [], score: zero, alerts: [] },
-    kev: { entries: [], score: zero, alerts: [] },
-    bgp: { records: [], score: zero, alerts: [] },
-    acled: { events: [], score: zero, alerts: [] },
+    power: unknownPowerRisk(),
+    kev: { coverage: 'reported', coverageReason: null, entries: [], score: zero, alerts: [] },
+    bgp: { coverage: 'reported', coverageReason: null, records: [], scopeLabel: RIPE_BGP_SCOPE_LABEL, compositeEligible: false, score: zero, alerts: [] },
+    acled: { coverage: 'reported', coverageReason: null, events: [], score: zero, alerts: [] },
     fetchedAt: NOW,
   });
   assert.equal(state.compositeScore, 0);
@@ -307,13 +241,28 @@ test('compose: all-zero domains → INFO composite', () => {
 test('compose: result is JSON-serializable', () => {
   const zero = { score: 0, severity: 'INFO' as const, headline: '' };
   const state = composeInfraRiskState({
-    power: { records: [], score: zero, alerts: [] },
-    kev: { entries: [], score: zero, alerts: [] },
-    bgp: { records: [], score: zero, alerts: [] },
-    acled: { events: [], score: zero, alerts: [] },
+    power: unknownPowerRisk(),
+    kev: { coverage: 'reported', coverageReason: null, entries: [], score: zero, alerts: [] },
+    bgp: { coverage: 'reported', coverageReason: null, records: [], scopeLabel: RIPE_BGP_SCOPE_LABEL, compositeEligible: false, score: zero, alerts: [] },
+    acled: { coverage: 'reported', coverageReason: null, events: [], score: zero, alerts: [] },
     fetchedAt: NOW,
   });
   assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
+});
+
+test('compose: scoped AS3356 / Lumen evidence is explicitly excluded from the broad composite', () => {
+  const state = composeInfraRiskState({
+    power: unknownPowerRisk(),
+    kev: { coverage: 'reported', coverageReason: null, entries: [], score: { score: 25, severity: 'LOW', headline: '' }, alerts: [] },
+    bgp: { coverage: 'reported', coverageReason: null, records: [], scopeLabel: RIPE_BGP_SCOPE_LABEL, compositeEligible: false, score: { score: 100, severity: 'CRITICAL', headline: '' }, alerts: [] },
+    acled: { coverage: 'unknown', coverageReason: 'Unavailable.', events: [], score: null, alerts: [] },
+    fetchedAt: NOW,
+  });
+  assert.equal(state.bgp.scopeLabel, RIPE_BGP_SCOPE_LABEL);
+  assert.equal(state.bgp.compositeEligible, false);
+  assert.equal(state.compositeScore, 25);
+  assert.equal(state.observedDomainCount, 1);
+  assert.equal(state.expectedDomainCount, 2);
 });
 
 // ── fetchInfraRisks orchestrator ──────────────────────────────────────
@@ -330,46 +279,304 @@ function mockFetch(routeMap: Record<string, unknown>): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
-test('orchestrator: pulls all four feeds and composes a state', async () => {
+function canonicalKevRow(index = 1, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    cveID: `CVE-2026-${String(1000 + index)}`,
+    vendorProject: 'Example Vendor',
+    product: 'Example Product',
+    vulnerabilityName: 'Example vulnerability',
+    dateAdded: '2026-05-01',
+    shortDescription: 'A bounded description of the exploited vulnerability.',
+    requiredAction: 'Apply mitigations according to vendor instructions.',
+    dueDate: '2026-06-01',
+    knownRansomwareCampaignUse: 'Unknown',
+    notes: '',
+    cwes: ['CWE-78'],
+    ...overrides,
+  };
+}
+
+function canonicalKevCatalog(
+  rows: Record<string, unknown>[] = [canonicalKevRow()],
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    catalogVersion: '2026.05.12',
+    dateReleased: new Date(NOW).toISOString(),
+    count: rows.length,
+    vulnerabilities: rows,
+    ...overrides,
+  };
+}
+
+test('orchestrator: pulls two supported live feeds and leaves unsupported domains unknown', async () => {
   _resetInfraStateForTests();
+  const requested: string[] = [];
+  const delegate = mockFetch({
+    '/kev': canonicalKevCatalog([canonicalKevRow(1, { dateAdded: '2026-05-12' })]),
+    '/bgp': { status: 'ok', status_code: 200,
+      data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(),
+        inconsistencies: ['x','y','z','a','b','c'] } },
+  });
   const state = await fetchInfraRisks({
-    fetchImpl: mockFetch({
-      '/power': { CountyOutages: [{ CountyName: 'A', StateName: 'TX', CustomersOut: 600_000 }] },
-      '/kev': { vulnerabilities: [{ cveID: 'C', dateAdded: '2026-05-12' }] },
-      '/bgp': { data: { resource: 'AS1', inconsistencies: ['x','y','z','a','b','c'] } },
-      '/acled': { data: [{ event_id_cnty: 'E1', fatalities: 50, event_date: '2026-05-12', country: 'X' }] },
-    }),
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requested.push(String(input));
+      return delegate(input, init);
+    }) as typeof fetch,
     now: NOW,
   });
-  assert.equal(state.power.records.length, 1);
+  assert.equal(state.power.coverage, 'unknown');
+  assert.equal(requested.some((url) => url.endsWith('/power')), false);
+  assert.equal(requested.some((url) => url.endsWith('/acled')), false);
   assert.equal(state.kev.entries.length, 1);
   assert.equal(state.bgp.records.length, 1);
-  assert.equal(state.acled.events.length, 1);
+  assert.equal(state.acled.events.length, 0);
+  assert.equal(state.kev.coverage, 'reported');
+  assert.equal(state.bgp.coverage, 'reported');
+  assert.equal(state.acled.coverage, 'unknown');
+  assert.equal(state.compositeCoverage, 'partial');
+  assert.equal(state.observedDomainCount, 1);
+  assert.equal(state.expectedDomainCount, 2);
+  assert.equal(state.bgp.scopeLabel, RIPE_BGP_SCOPE_LABEL);
+  assert.equal(state.bgp.compositeEligible, false);
   assert.ok(state.compositeScore > 0);
   assert.equal(getInfraState(), state);
 });
 
-test('orchestrator: failed fetches return null payloads and emit empty domains', async () => {
+test('orchestrator: total HTTP failure is unknown, not a 0/100 INFO all-clear', async () => {
   _resetInfraStateForTests();
   const state = await fetchInfraRisks({
     fetchImpl: mockFetch({}),
     now: NOW,
   });
-  assert.equal(state.power.records.length, 0);
+  assert.equal(state.power.coverage, 'unknown');
   assert.equal(state.kev.entries.length, 0);
   assert.equal(state.bgp.records.length, 0);
   assert.equal(state.acled.events.length, 0);
-  assert.equal(state.compositeScore, 0);
+  assert.equal(state.kev.coverage, 'unknown');
+  assert.equal(state.bgp.coverage, 'unknown');
+  assert.equal(state.acled.coverage, 'unknown');
+  assert.equal(state.kev.score, null);
+  assert.equal(state.bgp.score, null);
+  assert.equal(state.acled.score, null);
+  assert.equal(state.compositeScore, null);
+  assert.equal(state.compositeSeverity, null);
+  assert.equal(state.compositeCoverage, 'unknown');
+  assert.equal(state.observedDomainCount, 0);
 });
 
-test('orchestrator: exception in fetch is swallowed (graceful)', async () => {
+test('orchestrator: network exception is swallowed into explicit unknown coverage', async () => {
   _resetInfraStateForTests();
   const state = await fetchInfraRisks({
     fetchImpl: (() => { throw new Error('network down'); }) as unknown as typeof fetch,
     now: NOW,
   });
+  assert.equal(state.compositeScore, null);
+  assert.equal(state.compositeSeverity, null);
+  assert.equal(state.compositeCoverage, 'unknown');
+});
+
+test('orchestrator: a fetch implementation that never settles is bounded, aborted, and becomes unknown', async () => {
+  _resetInfraStateForTests();
+  const upstreamSignals: AbortSignal[] = [];
+  const neverSettles = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.signal) upstreamSignals.push(init.signal);
+    return new Promise<Response>(() => {});
+  }) as typeof fetch;
+  let guard: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const state = await Promise.race([
+      fetchInfraRisks({ fetchImpl: neverSettles, now: NOW, timeoutMs: 10 }),
+      new Promise<never>((_resolve, reject) => {
+        guard = setTimeout(() => reject(new Error('refresh exceeded its bounded deadline')), 250);
+      }),
+    ]);
+    assert.equal(state.kev.coverage, 'unknown');
+    assert.equal(state.bgp.coverage, 'unknown');
+    assert.match(state.kev.coverageReason ?? '', /timed out/i);
+    assert.match(state.bgp.coverageReason ?? '', /timed out/i);
+    assert.equal(state.compositeScore, null);
+    assert.equal(upstreamSignals.length, 2);
+    assert.equal(upstreamSignals.every((signal) => signal.aborted), true);
+  } finally {
+    if (guard) clearTimeout(guard);
+  }
+});
+
+test('orchestrator: partial failure excludes the unknown domain and renormalizes observed weights', async () => {
+  _resetInfraStateForTests();
+  const state = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': canonicalKevCatalog([canonicalKevRow(1, { dateAdded: '2026-05-12' })]),
+    }),
+    now: NOW,
+  });
+  assert.equal(state.kev.coverage, 'reported');
+  assert.equal(state.bgp.coverage, 'unknown');
+  assert.equal(state.acled.coverage, 'unknown');
+  assert.equal(state.compositeCoverage, 'partial');
+  assert.equal(state.observedDomainCount, 1);
+  assert.equal(state.compositeScore, 50);
+  assert.equal(state.compositeSeverity, 'HIGH');
+});
+
+test('orchestrator: degraded HTTP-200 envelopes remain unknown', async () => {
+  _resetInfraStateForTests();
+  const state = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': { vulnerabilities: [], degraded: true },
+      '/bgp': { data: { resource: 'AS1', inconsistencies: [] }, degraded: true },
+      '/acled': { data: [], degraded: true },
+    }),
+    now: NOW,
+  });
+  assert.equal(state.kev.coverage, 'unknown');
+  assert.equal(state.bgp.coverage, 'unknown');
+  assert.equal(state.acled.coverage, 'unknown');
+  assert.equal(state.compositeScore, null);
+});
+
+test('orchestrator: malformed HTTP-200 envelopes and all-dropped rows remain unknown', async () => {
+  _resetInfraStateForTests();
+  const state = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': { vulnerabilities: [{}] },
+      '/bgp': { data: { resource: 'AS1', inconsistencies: 'not-an-array' } },
+      '/acled': { data: [{ fatalities: 0 }] },
+    }),
+    now: NOW,
+  });
+  assert.equal(state.kev.coverage, 'unknown');
+  assert.equal(state.bgp.coverage, 'unknown');
+  assert.equal(state.acled.coverage, 'unknown');
+  assert.equal(state.compositeScore, null);
+});
+
+test('orchestrator: RIPE provider errors and wrong-resource envelopes remain unknown', async () => {
+  _resetInfraStateForTests();
+  const providerError = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': canonicalKevCatalog(),
+      '/bgp': { status: 'error', status_code: 500,
+        data: { resource: 'AS3356', inconsistencies: [] } },
+    }),
+    now: NOW,
+  });
+  assert.equal(providerError.bgp.coverage, 'unknown');
+  assert.equal(providerError.bgp.score, null);
+
+  const wrongResource = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': canonicalKevCatalog(),
+      '/bgp': { status: 'ok', status_code: 200,
+        data: { resource: 'AS9999', query_time: new Date(NOW).toISOString(), inconsistencies: [] } },
+    }),
+    now: NOW,
+  });
+  assert.equal(wrongResource.bgp.coverage, 'unknown');
+  assert.equal(wrongResource.bgp.score, null);
+});
+
+test('orchestrator: unscoped ACLED history is never fetched or scored as current risk', async () => {
+  _resetInfraStateForTests();
+  const requested: string[] = [];
+  const delegate = mockFetch({
+    '/kev': canonicalKevCatalog(),
+    '/bgp': { status: 'ok', status_code: 200,
+      data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(), inconsistencies: [] } },
+    '/acled': { success: true, data: [{ event_id_cnty: 'OLD', fatalities: 100,
+      event_date: '2020-01-01', country: 'X' }] },
+  });
+  const state = await fetchInfraRisks({
+    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requested.push(String(input));
+      return delegate(input, init);
+    }) as typeof fetch,
+    now: NOW,
+  });
+  assert.equal(requested.some((url) => url.endsWith('/acled')), false);
+  assert.equal(state.acled.coverage, 'unknown');
+  assert.equal(state.acled.score, null);
+  assert.deepEqual(state.acled.events, []);
+  assert.equal(state.acled.alerts.length, 0);
+});
+
+test('orchestrator: empty, inconsistent, invalid, and future-dated KEV catalogs remain unknown', async () => {
+  const invalidCatalogs = [
+    canonicalKevCatalog([]),
+    canonicalKevCatalog([canonicalKevRow()], { count: 2 }),
+    canonicalKevCatalog([canonicalKevRow()], { catalogVersion: '' }),
+    canonicalKevCatalog([canonicalKevRow(1, { product: '' })]),
+    canonicalKevCatalog([canonicalKevRow(1, { dateAdded: '2026-05-13' })]),
+    canonicalKevCatalog([canonicalKevRow(1, { cwes: [] })]),
+    canonicalKevCatalog([canonicalKevRow()], { dateReleased: 'not-a-date' }),
+    canonicalKevCatalog([canonicalKevRow()], { dateReleased: '2026-05-12T12:06:00Z' }),
+  ];
+  for (const payload of invalidCatalogs) {
+    _resetInfraStateForTests();
+    const state = await fetchInfraRisks({
+      fetchImpl: mockFetch({
+        '/kev': payload,
+        '/bgp': { status: 'ok', status_code: 200,
+          data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(), inconsistencies: [] } },
+      }),
+      now: NOW,
+    });
+    assert.equal(state.kev.coverage, 'unknown');
+    assert.equal(state.kev.score, null);
+    assert.equal(state.compositeScore, null);
+  }
+});
+
+test('orchestrator: a validated nonempty full KEV catalog with no 7-day additions reports zero', async () => {
+  _resetInfraStateForTests();
+  const state = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': canonicalKevCatalog(),
+      '/bgp': { status: 'ok', status_code: 200,
+        data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(), inconsistencies: [] } },
+    }),
+    now: NOW,
+  });
+  assert.equal(state.kev.coverage, 'reported');
+  assert.equal(state.bgp.coverage, 'reported');
+  assert.equal(state.acled.coverage, 'unknown');
   assert.equal(state.compositeScore, 0);
   assert.equal(state.compositeSeverity, 'INFO');
+  assert.equal(state.compositeCoverage, 'partial');
+});
+
+test('orchestrator: aborted late refresh cannot overwrite the last module state', async () => {
+  _resetInfraStateForTests();
+  const initial = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': canonicalKevCatalog(),
+      '/bgp': { status: 'ok', status_code: 200,
+        data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(), inconsistencies: [] } },
+    }),
+    now: NOW,
+  });
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const lateFetch = (async (input: RequestInfo | URL) => {
+    await gate;
+    const url = String(input);
+    const payload = url.endsWith('/kev')
+      ? canonicalKevCatalog([canonicalKevRow(2, { dateAdded: '2026-05-12' })])
+      : url.endsWith('/bgp')
+        ? { status: 'ok', status_code: 200,
+          data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(), inconsistencies: ['late'] } }
+        : { data: [{ event_id_cnty: 'LATE', event_date: '2026-05-12', fatalities: 50 }] };
+    return { ok: true, json: async () => payload } as Response;
+  }) as typeof fetch;
+  const controller = new AbortController();
+  const pending = fetchInfraRisks({ fetchImpl: lateFetch, signal: controller.signal, now: NOW + 1 });
+  controller.abort();
+  release();
+
+  await assert.rejects(pending, (error: unknown) => error instanceof Error && error.name === 'AbortError');
+  assert.equal(getInfraState(), initial);
 });
 
 test('getInfraState: starts null + reflects last fetch', async () => {
@@ -377,4 +584,47 @@ test('getInfraState: starts null + reflects last fetch', async () => {
   assert.equal(getInfraState(), null);
   await fetchInfraRisks({ fetchImpl: mockFetch({}), now: NOW });
   assert.ok(getInfraState() !== null);
+});
+
+test('display freshness: a formerly reported snapshot ages to unknown without a new fetch event', async () => {
+  const state = await fetchInfraRisks({
+    fetchImpl: mockFetch({
+      '/kev': canonicalKevCatalog(),
+      '/bgp': { status: 'ok', status_code: 200,
+        data: { resource: 'AS3356', query_time: new Date(NOW).toISOString(), inconsistencies: [] } },
+    }),
+    now: NOW,
+  });
+  assert.equal(ageInfraRiskState(state, NOW + INFRA_RISK_STATE_MAX_AGE_MS), state);
+
+  const aged = ageInfraRiskState(state, NOW + INFRA_RISK_STATE_MAX_AGE_MS + 1);
+  assert.notEqual(aged, state);
+  assert.equal(aged.kev.coverage, 'unknown');
+  assert.equal(aged.bgp.coverage, 'unknown');
+  assert.equal(aged.bgp.scopeLabel, RIPE_BGP_SCOPE_LABEL);
+  assert.equal(aged.bgp.compositeEligible, false);
+  assert.equal(aged.compositeScore, null);
+  assert.equal(aged.compositeSeverity, null);
+  assert.equal(aged.compositeCoverage, 'unknown');
+  assert.equal(aged.observedDomainCount, 0);
+  assert.match(aged.kev.coverageReason ?? '', /stale/i);
+  assert.match(aged.bgp.coverageReason ?? '', /stale/i);
+});
+
+test('panel: renders explicit total/partial unknown coverage instead of a fixed observed count', () => {
+  const panelSource = readFileSync(new URL('../../../components/InfraRiskMatrixPanel.ts', import.meta.url), 'utf8');
+  assert.match(panelSource, /this\.loadAbort\?\.abort\(\);[\s\S]+super\.destroy\(\);/);
+  assert.match(panelSource, /signal: controller\.signal/);
+  assert.match(panelSource, /this\.stopped \|\| controller\.signal\.aborted \|\| generation !== this\.loadGeneration/);
+  assert.match(panelSource, /if \(this\.state\.compositeScore === null \|\| this\.state\.compositeSeverity === null\)/);
+  assert.match(panelSource, /Composite Risk[\s\S]+Unavailable/);
+  assert.match(panelSource, /0 of \$\{this\.state\.expectedDomainCount\} scored source domains reporting/);
+  assert.match(panelSource, /compositeCoverage === 'partial'/);
+  assert.match(panelSource, /Missing coverage is not an all-clear/);
+  assert.match(panelSource, /AS3356 \/ Lumen/);
+  assert.match(panelSource, /this\.state = ageInfraRiskState\(this\.state, Date\.now\(\)\)/);
+  assert.match(panelSource, /this\.scheduleFreshnessTransition\(\);/);
+  assert.match(panelSource, /this\.freshnessTimer = setTimeout\([\s\S]+this\.render\(\);/);
+  assert.match(panelSource, /clearTimeout\(this\.freshnessTimer\)/);
+  assert.doesNotMatch(panelSource, />3 observed domains/);
 });

@@ -187,21 +187,91 @@ test('get_pharma_supply combines shortages and recalls', async () => {
 
 // ---- get_grid_outages ----
 
-test('get_grid_outages sorts by metersAffected descending', async () => {
+test('get_grid_outages requires county FIPS and sorts normalized customersOut', async () => {
+  let capturedParams;
+  const client = {
+    ...mockClient(),
+    get: async (route, params) => {
+      assert.equal(route, '/api/grid-outages');
+      capturedParams = params;
+      return {
+        schemaVersion: 1,
+        coverage: 'reported',
+        provider: { id: 'ornl-odin', state: 'ok', acceptedRows: 3, droppedRows: 0 },
+        outages: [
+          { fips: '18089', county: 'Lake', state: 'Indiana', customersOut: 12_000, expiresAt: '2030-01-01T00:00:00.000Z' },
+          { fips: '18089', county: 'Lake', state: 'Indiana', customersOut: 500, expiresAt: '2030-01-01T00:00:00.000Z' },
+          { fips: '18089', county: 'Lake', state: 'Indiana', customersOut: 3_000, expiresAt: '2030-01-01T00:00:00.000Z' },
+        ],
+      };
+    },
+  };
+  const tools = makeIntelExpansionTools(client);
+  await assert.rejects(() => tools.get_grid_outages(), /5-digit county FIPS/);
+  const result = await tools.get_grid_outages({ fips: '18089' });
+  assert.deepEqual(capturedParams, { fips: '18089' });
+  assert.equal(result.data.counties[0].county, 'Lake');
+  assert.equal(result.data.counties[0].customersOut, 12_000);
+  assert.ok(result.summary.includes('15,500'));
+  assert.ok(result.summary.includes('18089'));
+  assert.deepEqual(result.sources, ['/api/grid-outages?fips=18089']);
+  assert.equal(result.healthy, true);
+  assert.equal(result.data.coverage, 'reported');
+});
+
+test('get_grid_outages keeps empty ODIN coverage unknown instead of reporting zero', async () => {
   const client = mockClient({
     '/api/grid-outages': {
-      counties: [
-        { county: 'Wayne', metersAffected: 500 },
-        { county: 'Lake', metersAffected: 12000 },
-        { county: 'Cook', metersAffected: 3000 },
-      ],
+      schemaVersion: 1,
+      coverage: 'unknown',
+      outages: [],
+      provider: { id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0, reasonCode: 'no_contributed_rows' },
     },
   });
-  const tools = makeIntelExpansionTools(client);
-  const result = await tools.get_grid_outages();
-  assert.equal(result.data.counties[0].county, 'Lake');
-  assert.ok(result.summary.includes('3 county'));
-  assert.ok(result.summary.includes('15,500'));
+  const result = await makeIntelExpansionTools(client).get_grid_outages({ fips: '18089' });
+  assert.equal(result.healthy, false);
+  assert.equal(result.data.coverage, 'unknown');
+  assert.deepEqual(result.data.counties, []);
+  assert.match(result.summary, /coverage unknown/);
+  assert.match(result.summary, /not a reported zero or an all-clear/);
+  assert.doesNotMatch(result.summary, /0 customers out/);
+});
+
+test('get_grid_outages preserves an accepted ODIN zero as reported evidence', async () => {
+  const client = mockClient({
+    '/api/grid-outages': {
+      schemaVersion: 1,
+      coverage: 'reported',
+      outages: [{
+        fips: '18089', county: 'Lake', state: 'Indiana', customersOut: 0,
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      }],
+      provider: { id: 'ornl-odin', state: 'ok', acceptedRows: 1, droppedRows: 0 },
+    },
+  });
+  const result = await makeIntelExpansionTools(client).get_grid_outages({ fips: '18089' });
+  assert.equal(result.healthy, true);
+  assert.equal(result.data.coverage, 'reported');
+  assert.match(result.summary, /1 report\(s\)/);
+  assert.match(result.summary, /0 customers out/);
+});
+
+test('get_grid_outages rejects expired or wrong-county rows as unknown', async () => {
+  const client = mockClient({
+    '/api/grid-outages': {
+      schemaVersion: 1,
+      coverage: 'reported',
+      outages: [{
+        fips: '06037', county: 'Los Angeles', state: 'California', customersOut: 0,
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      }],
+      provider: { id: 'ornl-odin', state: 'ok', acceptedRows: 1, droppedRows: 0 },
+    },
+  });
+  const result = await makeIntelExpansionTools(client).get_grid_outages({ fips: '18089' });
+  assert.equal(result.healthy, false);
+  assert.equal(result.data.coverage, 'unknown');
+  assert.match(result.warnings[0], /malformed_or_expired_rows/);
 });
 
 // ---- get_disaster_activations ----

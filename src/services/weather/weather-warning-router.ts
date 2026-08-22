@@ -19,7 +19,13 @@
  * `dispatchActions` list ready for the notification dispatcher.
  */
 
-import type { NwsAlertMinimal, PolygonMatchResult, SavedPlace } from './weather-threat-types';
+import {
+  buildWeatherSavedPlaceActionTarget,
+  type NwsAlertMinimal,
+  type PolygonMatchResult,
+  type SavedPlace,
+  type WeatherSavedPlaceActionTarget,
+} from './weather-threat-types';
 import { matchAlertToPlace } from './nws-polygon-match';
 import {
   urgencyFor,
@@ -87,6 +93,9 @@ export interface WeatherDispatchDecision {
   /** Which saved place produced the strongest match (when any). */
   matchedPlaceId?: string;
   matchedPlaceLabel?: string;
+  /** Exact place identity captured with the warning decision. A click must
+   * revalidate this before opening location-specific disaster resources. */
+  matchedPlaceAction?: WeatherSavedPlaceActionTarget;
   /** The polygon match for the strongest place (or `undefined` when
    *  there were no places to evaluate). */
   match?: PolygonMatchResult;
@@ -192,6 +201,9 @@ export function routeWeatherAlert(
     alertId: alert.id,
     matchedPlaceId: strongest?.place.id,
     matchedPlaceLabel: strongest?.place.label,
+    matchedPlaceAction: strongest
+      ? buildWeatherSavedPlaceActionTarget(strongest.place)
+      : undefined,
     match: strongest?.match,
     urgency,
     payload,

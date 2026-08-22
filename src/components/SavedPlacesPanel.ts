@@ -2,6 +2,7 @@ import { Panel } from './Panel';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
 import { getSavedPlaceBrief, computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
 import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
+import { getLifelinePackReadinessForPlace } from '@/services/lifelines/lifeline-runtime';
 
 interface SavedPlacesPanelOptions {
   focusPlace: (placeId: string) => void;
@@ -27,6 +28,18 @@ const TAG_LABELS: Record<SavedPlaceTag, string> = {
 const PENCIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 
 const MAX_PLACES = 20;
+
+type LifelinePackStatus = ReturnType<typeof getLifelinePackReadinessForPlace>['status'];
+
+function lifelinePackLabel(status: LifelinePackStatus | null): string {
+  switch (status) {
+    case 'ready': { return 'Lifelines Ready'; }
+    case 'partial': { return 'Lifelines Partial'; }
+    case 'expired': { return 'Lifelines Expired'; }
+    case 'not-saved': { return 'Lifelines Not Saved'; }
+    default: { return ''; }
+  }
+}
 
 interface PlaceThreatSummary {
   total: number;
@@ -111,6 +124,7 @@ export class SavedPlacesPanel extends Panel {
     document.addEventListener('wm:breaking-news', this.boundRefresh);
     document.addEventListener('wm:intelligence-updated', this.boundRefresh);
     document.addEventListener('wm:local-logistics-updated', this.boundRefresh);
+    document.addEventListener('wm:lifeline-situation-updated', this.boundRefresh);
     document.addEventListener('wm:saved-place-weather-updated', this.boundRefresh);
     document.addEventListener('wm:storm-data-updated', this.boundRefresh);
     this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.boundRefresh());
@@ -122,6 +136,7 @@ export class SavedPlacesPanel extends Panel {
     document.removeEventListener('wm:breaking-news', this.boundRefresh);
     document.removeEventListener('wm:intelligence-updated', this.boundRefresh);
     document.removeEventListener('wm:local-logistics-updated', this.boundRefresh);
+    document.removeEventListener('wm:lifeline-situation-updated', this.boundRefresh);
     document.removeEventListener('wm:saved-place-weather-updated', this.boundRefresh);
     document.removeEventListener('wm:storm-data-updated', this.boundRefresh);
     this.unsubscribeSavedPlaces?.();
@@ -261,9 +276,13 @@ export class SavedPlacesPanel extends Panel {
     const threatBadge = this.buildThreatBadge(threats);
     if (threatBadge) panelsRow.append(threatBadge);
 
+    const packStatus = place.offlinePinned
+      ? getLifelinePackReadinessForPlace(place).status
+      : null;
+    const packLabel = lifelinePackLabel(packStatus);
     const chips: string[] = [
       place.primary ? 'Primary' : '',
-      place.offlinePinned ? 'Offline' : '',
+      packLabel,
       brief?.isStale ? 'Cached' : '',
       hasStormPosture ? 'Storm' : '',
       hasForecastRisk ? 'Forecast' : '',

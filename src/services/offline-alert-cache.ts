@@ -58,6 +58,11 @@ export interface OfflineCacheEntry<T> {
   version: number;
 }
 
+export interface OfflineCacheStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
 const CACHE_VERSION = 1;
 const PREFIX = 'wm_offline_';
 
@@ -65,37 +70,69 @@ function storageKey(serviceId: string): string {
   return `${PREFIX}${serviceId}`;
 }
 
-function readEntry<T>(serviceId: string): OfflineCacheEntry<T> | null {
+function resolveStorage(storage?: OfflineCacheStorage): OfflineCacheStorage | null {
+  if (storage) return storage;
   try {
- const raw = localStorage.getItem(storageKey(serviceId));
- if (!raw) return null;
- const entry = JSON.parse(raw) as OfflineCacheEntry<T>;
- if (entry.version !== CACHE_VERSION) return null;
- return entry;
+ return typeof localStorage !== 'undefined' ? localStorage : null;
   } catch {
  return null;
   }
 }
 
-function writeEntry<T>(serviceId: string, data: T): void {
+function readEntry<T>(serviceId: string, storage?: OfflineCacheStorage): OfflineCacheEntry<T> | null {
   try {
+ const raw = resolveStorage(storage)?.getItem(storageKey(serviceId));
+ if (!raw) return null;
+ const entry = JSON.parse(raw) as Partial<OfflineCacheEntry<T>> | null;
+ if (!entry || typeof entry !== 'object' || entry.version !== CACHE_VERSION
+   || typeof entry.cachedAt !== 'number' || !Number.isFinite(entry.cachedAt)
+   || !Object.prototype.hasOwnProperty.call(entry, 'data')) return null;
+ return entry as OfflineCacheEntry<T>;
+  } catch {
+ return null;
+  }
+}
+
+function writeEntry<T>(serviceId: string, data: T, storage?: OfflineCacheStorage): boolean {
+  try {
+ const target = resolveStorage(storage);
+ if (!target) return false;
  const entry: OfflineCacheEntry<T> = {
  data,
  cachedAt: Date.now(),
  version: CACHE_VERSION,
  };
- safeSetItem(storageKey(serviceId), JSON.stringify(entry));
+ const serialized = JSON.stringify(entry);
+ let wrote: boolean;
+ if (storage) {
+   target.setItem(storageKey(serviceId), serialized);
+   wrote = true;
+ } else {
+   wrote = safeSetItem(storageKey(serviceId), serialized);
+ }
+ if (!wrote) return false;
+ // The renderer-wide quota patch may swallow a failed setItem. Exact readback
+ // is the only proof that an emergency artifact actually reached storage.
+ return target.getItem(storageKey(serviceId)) === serialized;
   } catch {
- // localStorage might be full — fail silently
+ // localStorage might be full or unavailable — report failure without throwing.
+ return false;
   }
 }
 
-export function readOfflineCacheEntry<T>(serviceId: string): OfflineCacheEntry<T> | null {
-  return readEntry<T>(serviceId);
+export function readOfflineCacheEntry<T>(
+  serviceId: string,
+  storage?: OfflineCacheStorage,
+): OfflineCacheEntry<T> | null {
+  return readEntry<T>(serviceId, storage);
 }
 
-export function writeOfflineCacheEntry<T>(serviceId: string, data: T): void {
-  writeEntry(serviceId, data);
+export function writeOfflineCacheEntry<T>(
+  serviceId: string,
+  data: T,
+  storage?: OfflineCacheStorage,
+): boolean {
+  return writeEntry(serviceId, data, storage);
 }
 
 function clearEntry(serviceId: string): void {

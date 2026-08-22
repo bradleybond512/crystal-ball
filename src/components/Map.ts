@@ -56,6 +56,9 @@ import { getAlertsNearLocation } from '@/services/geo-convergence';
 import { getCountryAtCoordinates, getCountryBbox } from '@/services/country-geometry';
 import type { CountryClickPayload } from './DeckGLMap';
 import { t } from '@/services/i18n';
+import type { LocalLogisticsSnapshot } from '@/services/local-logistics-types';
+import type { EvacRoute } from '@/services/evacuation-router';
+import { getLifelineMarkerPresentation, getTemporaryMapBounds } from './disaster-lifelines-map-helpers';
 
 export type TimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
 export type MapView = 'global' | 'america' | 'mena' | 'eu' | 'asia' | 'latam' | 'africa' | 'oceania';
@@ -141,6 +144,8 @@ export class MapComponent {
   private aptGroups: import('@/types').APTGroup[] = [];
   private aptGroupsLoaded = false;
   private news: NewsItem[] = [];
+  private lifelinesOverlay: LocalLogisticsSnapshot | null = null;
+  private activeEvacRoute: EvacRoute | null = null;
   private onTechHubClick?: (hub: TechHubActivity) => void;
   private onGeoHubClick?: (hub: GeoHubActivity) => void;
   private popup: MapPopup;
@@ -1053,6 +1058,8 @@ export class MapComponent {
 
  // Overlays
  this.renderOverlays(projection);
+ this.renderEvacRoute(projection);
+ this.renderLifelinesOverlay(projection);
 
  // POST-RENDER VERIFICATION: Ensure base layer actually rendered
  // This catches silent failures where d3 operations didn't stick
@@ -2728,6 +2735,68 @@ export class MapComponent {
  }
   }
 
+  private renderLifelinesOverlay(projection: d3.GeoProjection): void {
+ const snapshot = this.lifelinesOverlay;
+ if (!snapshot) return;
+ for (const node of snapshot.nodes) {
+ const pos = projection([node.lon, node.lat]);
+ if (!pos || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) continue;
+ const presentation = getLifelineMarkerPresentation(node);
+ const marker = document.createElement('button');
+ marker.type = 'button';
+ marker.className = `lifeline-map-marker lifeline-${presentation.state} lifeline-category-${node.category}`;
+ marker.style.left = `${pos[0]}px`;
+ marker.style.top = `${pos[1]}px`;
+ marker.textContent = presentation.glyph;
+ marker.title = `${node.name} — ${presentation.evidenceLabel}`;
+ marker.setAttribute('aria-label', `${presentation.categoryLabel}: ${node.name}. ${presentation.evidenceLabel}`);
+ marker.addEventListener('click', (event) => {
+ event.stopPropagation();
+ const rect = this.container.getBoundingClientRect();
+ this.popup.show({
+ type: 'lifeline',
+ data: node,
+ x: event.clientX - rect.left,
+ y: event.clientY - rect.top,
+ });
+ });
+ this.overlays.append(marker);
+ }
+  }
+
+  private renderEvacRoute(projection: d3.GeoProjection): void {
+ const route = this.activeEvacRoute;
+ if (!route || !this.dynamicLayerGroup) return;
+ const points = route.geometry.coordinates
+ .map((coordinate) => {
+ const [lon, lat] = coordinate;
+ return lon === undefined || lat === undefined ? null : projection([lon, lat]);
+ })
+ .filter((point): point is [number, number] => Boolean(point && Number.isFinite(point[0]) && Number.isFinite(point[1])))
+ .map((point) => `${point[0]},${point[1]}`)
+ .join(' ');
+ if (!points) return;
+ const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+ line.setAttribute('points', points);
+ line.setAttribute('class', 'evac-route-map-line');
+ line.setAttribute('fill', 'none');
+ line.setAttribute('aria-label', 'OSRM route graph; current road conditions unverified');
+ this.dynamicLayerGroup.select('.overlays-svg').append(() => line);
+
+ for (const [endpoint, className] of [[route.from, 'from'], [route.to, 'to']] as const) {
+ const pos = projection([endpoint.lon, endpoint.lat]);
+ if (!pos) continue;
+ const marker = document.createElement('div');
+ marker.className = `evac-route-endpoint evac-route-endpoint-${className}`;
+ marker.style.left = `${pos[0]}px`;
+ marker.style.top = `${pos[1]}px`;
+ marker.title = endpoint.label;
+ marker.setAttribute('aria-label', `${className === 'from' ? 'Route start' : 'Route destination'}: ${endpoint.label}`);
+ marker.textContent = className === 'from' ? 'A' : 'B';
+ this.overlays.append(marker);
+ }
+  }
+
   private renderWaterways(projection: d3.GeoProjection): void {
  STRATEGIC_WATERWAYS.forEach((waterway) => {
  const pos = projection([waterway.lon, waterway.lat]);
@@ -3551,6 +3620,49 @@ export class MapComponent {
  this.applyTransform();
  // Ensure base layer is intact after pan
  this.ensureBaseLayerIntact();
+  }
+
+  public setLifelinesOverlay(snapshot: LocalLogisticsSnapshot | null): void {
+ this.lifelinesOverlay = snapshot;
+ if (snapshot?.nodes.length) {
+ this.fitTemporaryCoordinates(snapshot.nodes.map((node) => [node.lon, node.lat]));
+ return;
+ }
+ this.render();
+  }
+
+  public setEvacRoute(route: EvacRoute | null): void {
+ this.activeEvacRoute = route;
+ if (route) {
+ this.fitTemporaryCoordinates(route.geometry.coordinates as [number, number][]);
+ return;
+ }
+ this.render();
+  }
+
+  private fitTemporaryCoordinates(coordinates: [number, number][]): void {
+ const bounds = getTemporaryMapBounds(coordinates);
+ if (!bounds) return;
+ const width = this.container.clientWidth;
+ const height = this.container.clientHeight;
+ const projection = this.getProjection(width, height);
+ const topLeft = projection([bounds.minLon, bounds.maxLat]);
+ const bottomRight = projection([bounds.maxLon, bounds.minLat]);
+ if (!topLeft || !bottomRight) return;
+ const pixelWidth = Math.abs(bottomRight[0] - topLeft[0]);
+ const pixelHeight = Math.abs(bottomRight[1] - topLeft[1]);
+ const zoomX = pixelWidth > 0 ? (width * 0.78) / pixelWidth : 10;
+ const zoomY = pixelHeight > 0 ? (height * 0.78) / pixelHeight : 10;
+ // Temporary mission overlays may span beyond the map's usual cropped
+ // latitude range; allow a sub-1 fit so no validated point is clipped.
+ this.state.zoom = Math.max(0.25, Math.min(10, zoomX, zoomY));
+ const projectedCenter: [number, number] = [
+   (topLeft[0] + bottomRight[0]) / 2,
+   (topLeft[1] + bottomRight[1]) / 2,
+ ];
+ const center = projection.invert?.(projectedCenter);
+ this.render();
+ if (center) this.setCenter(center[1], center[0]);
   }
 
   public setLayers(layers: MapLayers): void {

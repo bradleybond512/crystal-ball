@@ -24,8 +24,18 @@ test('place briefs use offline cache and offline fallback', () => {
   assert.match(placeBriefsSrc, /readOfflineCacheEntry/, 'place briefs should read cached snapshots');
   assert.match(placeBriefsSrc, /writeOfflineCacheEntry\(/, 'place briefs should persist cached snapshots');
   assert.match(placeBriefsSrc, /isOffline\(\)/, 'place briefs should respect offline mode when deciding fallback');
+  assert.match(placeBriefsSrc, /buildPlaceBriefFingerprint/, 'offline briefs should bind to the exact saved-place identity');
+  assert.match(placeBriefsSrc, /Offline coverage unavailable for this exact place/, 'missing exact offline context should fail unknown');
   assert.match(placeBriefsSrc, /buildPlaceBrief\(/, 'place briefs should have a dedicated builder');
   assert.match(placeBriefsSrc, /buildSavedPlaceWeatherBriefItems|getCachedSavedPlaceWeather/, 'place briefs should fold cached point forecasts into saved-place guidance');
+});
+
+test('weather and storm-preparedness inputs are exact-place isolated', () => {
+  assert.match(placeBriefsSrc, /getCachedSavedPlaceWeather\(place\)/);
+  assert.doesNotMatch(placeBriefsSrc, /getCachedSavedPlaceWeather\(place\.id\)/);
+  assert.match(placeBriefsSrc, /const cacheKey = buildStormPreparednessCacheKey\(place, version\)/);
+  assert.doesNotMatch(placeBriefsSrc, /stormPrepCache\.get\(place\.id\)/);
+  assert.match(placeBriefsSrc, /forecastSnapshot\.placeFingerprint === buildSavedPlaceWeatherFingerprint\(place\)/);
 });
 
 test('saved places panel surfaces place brief headlines and refreshes on alert events', () => {

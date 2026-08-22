@@ -2,8 +2,8 @@
  * Quick Settings — Web-only user preferences for AI pipeline and map behavior.
  * Desktop (Tauri) manages AI config via its own settings window.
  *
- * TODO: Migrate panel visibility, sources, and language selector into this
- * settings hub once the UI is extended with additional sections.
+ * Panel visibility, sources, and language remain in their existing settings
+ * surfaces until this hub grows dedicated sections for them.
  */
 
 const STORAGE_KEY_BROWSER_MODEL = 'wm-ai-flow-browser-model';
@@ -58,6 +58,13 @@ export function getAiFlowSettings(): AiFlowSettings {
  cloudLlm: readBool(STORAGE_KEY_CLOUD_LLM, DEFAULTS.cloudLlm),
  mapNewsFlash: readBool(STORAGE_KEY_MAP_NEWS_FLASH, DEFAULTS.mapNewsFlash),
   };
+}
+
+export function shouldInitializeBrowserMl(
+  uiOnlyE2E: boolean,
+  settings: Pick<AiFlowSettings, 'browserModel'>,
+): boolean {
+  return !uiOnlyE2E && settings.browserModel;
 }
 
 export function setAiFlowSetting(key: keyof AiFlowSettings, value: boolean): void {

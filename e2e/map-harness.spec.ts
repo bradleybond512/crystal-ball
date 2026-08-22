@@ -28,10 +28,11 @@ type HarnessWindow = Window & {
  | 'recent-protest'
  ) => void;
  setNewsPulseScenario: (scenario: 'none' | 'recent' | 'stale') => void;
+ setAlertPulseScenario: (active: boolean) => void;
  setHotspotActivityScenario: (scenario: 'none' | 'breaking') => void;
- forcePulseStartupElapsed: () => void;
- resetPulseStartupTime: () => void;
- isPulseAnimationRunning: () => boolean;
+ resetAppRepaintCount: () => void;
+ getAppRepaintCount: () => number;
+ setRenderPaused: (paused: boolean) => void;
  setZoom: (zoom: number) => void;
  setLayersForSnapshot: (enabledLayers: string[]) => void;
  setCamera: (camera: { lon: number; lat: number; zoom: number }) => void;
@@ -245,9 +246,9 @@ test.describe('DeckGL map harness', () => {
  const nonEmptyIds = new Set(
  snapshot.filter((layer) => layer.dataCount > 0).map((layer) => layer.id)
  );
- return expectedDeckLayers.filter((id) => !nonEmptyIds.has(id)).length;
+ return expectedDeckLayers.filter((id) => !nonEmptyIds.has(id));
  }, { timeout: 40000 })
- .toBe(0);
+ .toEqual([]);
 
  await expect
  .poll(async () => {
@@ -340,83 +341,58 @@ test.describe('DeckGL map harness', () => {
  expect(html).not.toContain('<script>');
   });
 
-  test('suppresses pulse animation during startup cooldown even with recent signals', async ({
- page,
-  }) => {
- await waitForHarnessReady(page);
+  test('renders ambient emphasis layers without a standing repaint loop', async ({ page }) => {
+    await waitForHarnessReady(page);
 
- await page.evaluate(() => {
- const w = window as HarnessWindow;
- w.__mapHarness?.setHotspotActivityScenario('none');
- w.__mapHarness?.setPulseProtestsScenario('none');
- w.__mapHarness?.setNewsPulseScenario('none');
- w.__mapHarness?.resetPulseStartupTime();
- w.__mapHarness?.setNewsPulseScenario('recent');
- });
+    await page.evaluate(() => {
+      const w = window as HarnessWindow;
+      w.__mapHarness?.setLayersForSnapshot(['cables']);
+      w.__mapHarness?.setHotspotActivityScenario('none');
+      w.__mapHarness?.setPulseProtestsScenario('none');
+      w.__mapHarness?.setNewsPulseScenario('recent');
+      w.__mapHarness?.setAlertPulseScenario(true);
+    });
+    await page.waitForTimeout(500);
 
- await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      const w = window as HarnessWindow;
+      w.__mapHarness?.resetAppRepaintCount();
+    });
+    await page.waitForTimeout(1_600);
 
- const isRunning = await page.evaluate(() => {
- const w = window as HarnessWindow;
- return w.__mapHarness?.isPulseAnimationRunning() ?? false;
- });
+    const result = await page.evaluate(() => {
+      const w = window as HarnessWindow;
+      return {
+        repaints: w.__mapHarness?.getAppRepaintCount() ?? 0,
+        alerts: w.__mapHarness?.getLayerDataCount('alert-pulses') ?? 0,
+        cables: w.__mapHarness?.getLayerDataCount('cables-layer') ?? 0,
+        news: w.__mapHarness?.getLayerDataCount('news-pulse-layer') ?? 0,
+      };
+    });
 
- expect(isRunning).toBe(false);
-  });
+    expect(result.alerts).toBe(1);
+    expect(result.cables).toBeGreaterThan(0);
+    expect(result.news).toBe(1);
+    expect(result.repaints).toBe(0);
 
-  test('starts and stops pulse on dynamic signals and ignores gdelt-only riot recency', async ({
- page,
-  }) => {
- await waitForHarnessReady(page);
+    await page.evaluate(() => {
+      const w = window as HarnessWindow;
+      w.__mapHarness?.resetAppRepaintCount();
+      w.__mapHarness?.setRenderPaused(true);
+    });
+    await page.waitForTimeout(1_200);
 
- await page.evaluate(() => {
- const w = window as HarnessWindow;
- w.__mapHarness?.seedAllDynamicData();
- w.__mapHarness?.setHotspotActivityScenario('none');
- w.__mapHarness?.setPulseProtestsScenario('none');
- w.__mapHarness?.setNewsPulseScenario('none');
- w.__mapHarness?.forcePulseStartupElapsed();
- w.__mapHarness?.setPulseProtestsScenario('recent-gdelt-riot');
- });
+    const pausedRepaints = await page.evaluate(() => {
+      const w = window as HarnessWindow;
+      return w.__mapHarness?.getAppRepaintCount() ?? -1;
+    });
+    expect(pausedRepaints).toBe(0);
 
- await page.waitForTimeout(600);
-
- const gdeltPulseRunning = await page.evaluate(() => {
- const w = window as HarnessWindow;
- return w.__mapHarness?.isPulseAnimationRunning() ?? false;
- });
- expect(gdeltPulseRunning).toBe(false);
-
- await page.evaluate(() => {
- const w = window as HarnessWindow;
- w.__mapHarness?.setPulseProtestsScenario('recent-acled-riot');
- });
-
- await expect
- .poll(async () => {
- return await page.evaluate(() => {
- const w = window as HarnessWindow;
- return w.__mapHarness?.isPulseAnimationRunning() ?? false;
- });
- }, { timeout: 30000 })
- .toBe(true);
-
- await page.evaluate(() => {
- const w = window as HarnessWindow;
- w.__mapHarness?.resetPulseStartupTime();
- w.__mapHarness?.setNewsPulseScenario('none');
- w.__mapHarness?.setHotspotActivityScenario('none');
- w.__mapHarness?.setPulseProtestsScenario('none');
- });
-
- await expect
- .poll(async () => {
- return await page.evaluate(() => {
- const w = window as HarnessWindow;
- return w.__mapHarness?.isPulseAnimationRunning() ?? false;
- });
- }, { timeout: 12000 })
- .toBe(false);
+    await page.evaluate(() => {
+      const w = window as HarnessWindow;
+      w.__mapHarness?.setAlertPulseScenario(false);
+      w.__mapHarness?.setRenderPaused(false);
+    });
   });
 
   test('matches golden screenshots per layer and zoom', async ({ page }) => {

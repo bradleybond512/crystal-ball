@@ -1,15 +1,19 @@
 /**
  * Infrastructure Risk Matrix — pure-deterministic service.
  *
- * Aggregates four cross-domain risk signals:
+ * Maintains one broad scored signal, one scoped evidence stream, and
+ * two explicit coverage gaps:
  *
- *   - Power grid: poweroutage.us per-county customer counts.
+ *   - Power grid: unknown here. Exact-county ORNL ODIN context belongs to
+ *     Disaster Lifelines and cannot truthfully become a national score.
  *   - CISA KEV: known-exploited-vulnerabilities feed, filtered to the
  *     last 7 days and grouped by vendor.
- *   - BGP anomalies: RIPE NCC routing-consistency snapshots flagged
- *     when their `inconsistencies[]` array is non-empty.
- *   - ACLED: violence-against-civilians events scored by fatality
- *     count (anonymous read, returns [] gracefully on auth failure).
+ *   - AS3356 / Lumen: scoped RIPE NCC routing-consistency evidence.
+ *     It is displayed as exact-resource evidence and is intentionally
+ *     excluded from the broad cross-domain composite.
+ *   - ACLED: explicit unknown. The prior anonymous, unscoped query could
+ *     restamp historical events as current risk and is disabled until a
+ *     complete authenticated recent-window adapter is available.
  *
  * Every parser is pure and takes upstream-shaped JSON. The
  * orchestrator `fetchInfraRisks()` accepts a `fetchImpl` so tests can
@@ -20,20 +24,15 @@
 
 import type { UnifiedAlert } from '@/services/unified-alerts';
 
+export const RIPE_BGP_RESOURCE = 'AS3356';
+export const RIPE_BGP_SCOPE_LABEL = 'AS3356 / Lumen';
+export const INFRA_RISK_FETCH_TIMEOUT_MS = 10_000;
+export const INFRA_RISK_STATE_MAX_AGE_MS = 90_000;
+
 // ─── Public types ─────────────────────────────────────────────────────
 
 export type InfraSeverity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-
-export interface PowerOutageRecord {
-  county: string;
-  state: string;
-  customersOut: number;
-  customersTracked: number;
-  /** customersOut / customersTracked, 0-1. */
-  outageRatio: number;
-  severity: InfraSeverity;
-  observedAt: number | null;
-}
+export type InfraCoverage = 'reported' | 'unknown';
 
 export interface CisaKevEntry {
   cveId: string;
@@ -74,14 +73,33 @@ export interface DomainScore {
   headline: string;
 }
 
+interface InfraDomainStatus {
+  /** `reported` means the latest refresh returned a usable source envelope. */
+  coverage: InfraCoverage;
+  /** Safe, displayable explanation when coverage is unknown. */
+  coverageReason: string | null;
+  /** Unknown coverage has no score; it must never be represented as INFO/0. */
+  score: DomainScore | null;
+  alerts: UnifiedAlert[];
+}
+
 export interface InfraRiskState {
-  power: { records: PowerOutageRecord[]; score: DomainScore; alerts: UnifiedAlert[]; dataAsOf?: number };
-  kev: { entries: CisaKevEntry[]; score: DomainScore; alerts: UnifiedAlert[] };
-  bgp: { records: BgpAnomalyRecord[]; score: DomainScore; alerts: UnifiedAlert[] };
-  acled: { events: AcledEvent[]; score: DomainScore; alerts: UnifiedAlert[] };
-  /** 0-100 composite across all four domains. */
-  compositeScore: number;
-  compositeSeverity: InfraSeverity;
+  power: InfraDomainStatus & { coverage: 'unknown' };
+  kev: InfraDomainStatus & { entries: CisaKevEntry[] };
+  bgp: InfraDomainStatus & {
+    records: BgpAnomalyRecord[];
+    /** This is exact-resource evidence, not whole-domain BGP coverage. */
+    scopeLabel: typeof RIPE_BGP_SCOPE_LABEL;
+    /** AS3356 alone cannot truthfully vote as the broad BGP domain. */
+    compositeEligible: false;
+  };
+  acled: InfraDomainStatus & { events: AcledEvent[] };
+  /** 0-100 composite across only the domains with reported coverage. */
+  compositeScore: number | null;
+  compositeSeverity: InfraSeverity | null;
+  compositeCoverage: 'reported' | 'partial' | 'unknown';
+  observedDomainCount: number;
+  expectedDomainCount: 2;
   fetchedAt: number;
 }
 
@@ -111,72 +129,15 @@ function severityFromScore(score: number): InfraSeverity {
   return 'INFO';
 }
 
-// ─── Power grid: poweroutage.us ───────────────────────────────────────
+// ─── Power grid collection gap ────────────────────────────────────────
 
-interface PowerOutageRow {
-  CountyName?: unknown;
-  StateName?: unknown;
-  CustomersOut?: unknown;
-  CustomersTracked?: unknown;
-  RecordDateTime?: unknown;
-}
-
-function parsePowerSeverity(customersOut: number): InfraSeverity {
-  if (customersOut > 500_000) return 'CRITICAL';
-  if (customersOut > 100_000) return 'HIGH';
-  if (customersOut > 10_000) return 'MEDIUM';
-  if (customersOut > 0) return 'LOW';
-  return 'INFO';
-}
-
-export function parsePowerOutages(raw: unknown): PowerOutageRecord[] {
-  const rows = extractRows(raw, ['CountyOutages', 'counties', 'data']);
-  const out: PowerOutageRecord[] = [];
-  for (const r of rows) {
-    const row = r as PowerOutageRow;
-    const county = stringOrEmpty(row.CountyName);
-    const state = stringOrEmpty(row.StateName);
-    const customersOut = numOrZero(row.CustomersOut);
-    const customersTracked = numOrZero(row.CustomersTracked);
-    if (!county || !state || customersOut <= 0) continue;
-    out.push({
-      county,
-      state,
-      customersOut,
-      customersTracked,
-      outageRatio: customersTracked > 0 ? customersOut / customersTracked : 0,
-      severity: parsePowerSeverity(customersOut),
-      observedAt: parseTimestamp(row.RecordDateTime),
-    });
-  }
-  return out.sort((a, b) => b.customersOut - a.customersOut);
-}
-
-export function scorePowerOutages(records: readonly PowerOutageRecord[]): DomainScore {
-  if (records.length === 0) return { score: 0, severity: 'INFO', headline: 'No reported outages' };
-  const totalOut = records.reduce((acc, r) => acc + r.customersOut, 0);
-  const sev = maxSeverity(records.map((r) => r.severity));
+export function unknownPowerRisk(): InfraRiskState['power'] {
   return {
-    score: severityToScore(sev),
-    severity: sev,
-    headline: `${totalOut.toLocaleString()} customers out across ${records.length} counties`,
+    coverage: 'unknown',
+    coverageReason: 'Power outage coverage unknown — not included in composite',
+    score: null,
+    alerts: [],
   };
-}
-
-export function powerAlertsFor(records: readonly PowerOutageRecord[], now: number): UnifiedAlert[] {
-  return records
-    .filter((r) => r.severity === 'HIGH' || r.severity === 'CRITICAL')
-    .map((r) => ({
-      id: `infra-power-${r.state}-${r.county}-${now}`,
-      source: 'power-grid' as const,
-      severity: SEVERITY_TO_ALERT[r.severity],
-      title: `Power outage: ${r.county}, ${r.state}`,
-      body: `${r.customersOut.toLocaleString()} customers out (${Math.round(r.outageRatio * 100)}% of tracked).`,
-      timestamp: now,
-      relevanceScore: Math.min(1, r.customersOut / 1_000_000),
-      acknowledged: false,
-      pinned: false,
-    }));
 }
 
 // ─── CISA KEV: known-exploited vulnerabilities ───────────────────────
@@ -190,6 +151,9 @@ interface KevEntryRaw {
   shortDescription?: unknown;
   knownRansomwareCampaignUse?: unknown;
 }
+
+const CISA_KEV_MAX_CATALOG_ENTRIES = 20_000;
+const CISA_KEV_FUTURE_SKEW_MS = 5 * 60_000;
 
 export function parseCisaKev(raw: unknown, now: number, windowMs = 7 * 24 * 60 * 60 * 1000): CisaKevEntry[] {
   const rows = extractRows(raw, ['vulnerabilities']);
@@ -301,13 +265,19 @@ function bgpSeverityFor(count: number): InfraSeverity {
 
 export function scoreBgpAnomalies(records: readonly BgpAnomalyRecord[]): DomainScore {
   const flagged = records.filter((r) => r.inconsistencyCount > 0);
-  if (flagged.length === 0) return { score: 0, severity: 'INFO', headline: 'No BGP inconsistencies detected' };
+  if (flagged.length === 0) {
+    return {
+      score: 0,
+      severity: 'INFO',
+      headline: `${RIPE_BGP_SCOPE_LABEL}: no routing inconsistencies in the latest exact-resource response`,
+    };
+  }
   const sev = maxSeverity(flagged.map((r) => r.severity));
   const total = flagged.reduce((acc, r) => acc + r.inconsistencyCount, 0);
   return {
     score: severityToScore(sev),
     severity: sev,
-    headline: `${total} BGP inconsistencies across ${flagged.length} prefixes`,
+    headline: `${RIPE_BGP_SCOPE_LABEL}: ${total} routing inconsistencies in the latest exact-resource response`,
   };
 }
 
@@ -318,8 +288,8 @@ export function bgpAlertsFor(records: readonly BgpAnomalyRecord[], now: number):
       id: `infra-bgp-${r.resource}-${now}`,
       source: 'cyber' as const,
       severity: 'high' as const,
-      title: `BGP anomaly: ${r.resource}`,
-      body: `${r.inconsistencyCount} routing inconsistencies detected on ${r.resource}.`,
+      title: `${RIPE_BGP_SCOPE_LABEL} routing anomaly`,
+      body: `${r.inconsistencyCount} routing inconsistencies reported for ${RIPE_BGP_SCOPE_LABEL}.`,
       timestamp: now,
       relevanceScore: Math.min(1, r.inconsistencyCount / 20),
       acknowledged: false,
@@ -401,30 +371,75 @@ export function acledAlertsFor(events: readonly AcledEvent[], now: number): Unif
 
 // ─── Composite ────────────────────────────────────────────────────────
 
-const DOMAIN_WEIGHTS = { power: 0.3, kev: 0.25, bgp: 0.2, acled: 0.25 };
+const DOMAIN_WEIGHTS = { kev: 0.25, acled: 0.25 };
+const RIPE_BGP_MAX_AGE_MS = 30 * 60_000;
+const PROVIDER_FUTURE_SKEW_MS = 5 * 60_000;
+const MAX_BGP_INCONSISTENCIES = 500;
+const MAX_INFRA_RISK_FETCH_TIMEOUT_MS = 30_000;
+const ACLED_UNAVAILABLE_REASON = 'Current-window ACLED coverage is unavailable; historical rows are not scored as current risk.';
+const STALE_REFRESH_REASON = 'The last successful infrastructure refresh is stale.';
 
 export function composeInfraRiskState(input: {
-  power: { records: PowerOutageRecord[]; score: DomainScore; alerts: UnifiedAlert[]; dataAsOf?: number };
-  kev: { entries: CisaKevEntry[]; score: DomainScore; alerts: UnifiedAlert[] };
-  bgp: { records: BgpAnomalyRecord[]; score: DomainScore; alerts: UnifiedAlert[] };
-  acled: { events: AcledEvent[]; score: DomainScore; alerts: UnifiedAlert[] };
+  power: InfraRiskState['power'];
+  kev: InfraRiskState['kev'];
+  bgp: InfraRiskState['bgp'];
+  acled: InfraRiskState['acled'];
   fetchedAt: number;
 }): InfraRiskState {
-  const compositeScore = Math.round(
-    input.power.score.score * DOMAIN_WEIGHTS.power
-    + input.kev.score.score * DOMAIN_WEIGHTS.kev
-    + input.bgp.score.score * DOMAIN_WEIGHTS.bgp
-    + input.acled.score.score * DOMAIN_WEIGHTS.acled,
-  );
+  // Power has no supported national source in this panel. AS3356 / Lumen is
+  // exact-resource evidence, not broad BGP-domain coverage, so it is also
+  // excluded. The remaining broad domains participate only when their latest
+  // response was usable. Unknown coverage must never become a zero-risk vote.
+  const candidates = [
+    { domain: input.kev, weight: DOMAIN_WEIGHTS.kev },
+    { domain: input.acled, weight: DOMAIN_WEIGHTS.acled },
+  ];
+  const observed = candidates.flatMap(({ domain, weight }) => {
+    const score = domain.score;
+    return domain.coverage === 'reported' && score !== null ? [{ score, weight }] : [];
+  });
+  const observedWeight = observed.reduce((sum, { weight }) => sum + weight, 0);
+  const compositeScore = observedWeight > 0
+    ? Math.round(observed.reduce((sum, { score, weight }) => sum + score.score * weight, 0) / observedWeight)
+    : null;
+  const observedDomainCount = observed.length;
+  let compositeCoverage: InfraRiskState['compositeCoverage'] = 'unknown';
+  if (observedDomainCount === candidates.length) compositeCoverage = 'reported';
+  else if (observedDomainCount > 0) compositeCoverage = 'partial';
   return {
     power: input.power,
     kev: input.kev,
-    bgp: input.bgp,
+    bgp: {
+      ...input.bgp,
+      scopeLabel: RIPE_BGP_SCOPE_LABEL,
+      compositeEligible: false,
+    },
     acled: input.acled,
     compositeScore,
-    compositeSeverity: severityFromScore(compositeScore),
+    compositeSeverity: compositeScore === null ? null : severityFromScore(compositeScore),
+    compositeCoverage,
+    observedDomainCount,
+    expectedDomainCount: 2,
     fetchedAt: input.fetchedAt,
   };
+}
+
+/**
+ * Derive the fail-closed display state for a previously fetched snapshot.
+ * The original snapshot is returned while fresh. Once its local refresh age
+ * crosses the bound, every formerly scored source is demoted to unknown and
+ * the old composite/alerts cannot continue to render as current evidence.
+ */
+export function ageInfraRiskState(state: InfraRiskState, now = Date.now()): InfraRiskState {
+  const ageMs = now - state.fetchedAt;
+  if (Number.isFinite(ageMs) && ageMs <= INFRA_RISK_STATE_MAX_AGE_MS) return state;
+  return composeInfraRiskState({
+    power: state.power,
+    kev: unknownKevDomain(STALE_REFRESH_REASON),
+    bgp: unknownBgpDomain('The last successful infrastructure refresh is stale.'),
+    acled: unknownAcledDomain(STALE_REFRESH_REASON),
+    fetchedAt: state.fetchedAt,
+  });
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────
@@ -434,14 +449,18 @@ export interface FetchInfraRisksOptions {
   baseUrl?: string;
   /** Injection point for tests. Default: globalThis.fetch. */
   fetchImpl?: typeof fetch;
+  /** Cancels the refresh and prevents a late module-state write. */
+  signal?: AbortSignal;
+  /** Per-source deadline. Bounded to 1-30 seconds; default 10 seconds. */
+  timeoutMs?: number;
   now?: number;
 }
 
 let _lastState: InfraRiskState | null = null;
 
 /**
- * Pull the four upstream feeds via the sidecar, parse + score each
- * domain, generate per-domain UnifiedAlerts, and compose into an
+ * Pull the two supported live upstream feeds via the sidecar, parse + score
+ * each domain, generate per-domain UnifiedAlerts, and compose into an
  * InfraRiskState snapshot. Persists the result in module state so the
  * panel can read `getInfraState()` between refreshes.
  */
@@ -449,29 +468,27 @@ export async function fetchInfraRisks(opts: FetchInfraRisksOptions = {}): Promis
   const baseUrl = opts.baseUrl ?? '/api/infrarisks';
   const f = opts.fetchImpl ?? globalThis.fetch;
   const now = opts.now ?? Date.now();
+  const timeoutMs = normalizeFetchTimeout(opts.timeoutMs);
+  throwIfAborted(opts.signal);
 
-  const [powerRaw, kevRaw, bgpRaw, acledRaw] = await Promise.all([
-    fetchSilent(f, `${baseUrl}/power`),
-    fetchSilent(f, `${baseUrl}/kev`),
-    fetchSilent(f, `${baseUrl}/bgp`),
-    fetchSilent(f, `${baseUrl}/acled`),
+  const [kevResult, bgpResult] = await Promise.all([
+    fetchDomain(f, `${baseUrl}/kev`, opts.signal, timeoutMs),
+    fetchDomain(f, `${baseUrl}/bgp`, opts.signal, timeoutMs),
   ]);
+  throwIfAborted(opts.signal);
 
-  const powerRecords = parsePowerOutages(powerRaw);
-  const kevEntries = parseCisaKev(kevRaw, now);
-  const bgpRecords = parseBgpAnomalies(bgpRaw);
-  const acledEvents = parseAcledEvents(acledRaw);
-  const powerDataAsOf = typeof (powerRaw as { cachedAt?: unknown } | null)?.cachedAt === 'number'
-    ? (powerRaw as { cachedAt: number }).cachedAt
-    : undefined;
+  const kev = buildKevDomain(kevResult, now);
+  const bgp = buildBgpDomain(bgpResult, now);
+  const acled = unknownAcledDomain(ACLED_UNAVAILABLE_REASON);
 
   const state = composeInfraRiskState({
-    power: { records: powerRecords, score: scorePowerOutages(powerRecords), alerts: powerAlertsFor(powerRecords, now), dataAsOf: powerDataAsOf },
-    kev: { entries: kevEntries, score: scoreCisaKev(kevEntries, now), alerts: kevAlertsFor(kevEntries, now) },
-    bgp: { records: bgpRecords, score: scoreBgpAnomalies(bgpRecords), alerts: bgpAlertsFor(bgpRecords, now) },
-    acled: { events: acledEvents, score: scoreAcled(acledEvents), alerts: acledAlertsFor(acledEvents, now) },
+    power: unknownPowerRisk(),
+    kev,
+    bgp,
+    acled,
     fetchedAt: now,
   });
+  throwIfAborted(opts.signal);
   _lastState = state;
   return state;
 }
@@ -485,14 +502,206 @@ export function _resetInfraStateForTests(): void {
   _lastState = null;
 }
 
-async function fetchSilent(f: typeof fetch, url: string): Promise<unknown> {
-  try {
-    const r = await f(url, { headers: { Accept: 'application/json' } });
-    if (!r.ok) return null;
-    return await r.json() as unknown;
-  } catch {
-    return null;
+type DomainFetchResult =
+  | { available: true; raw: unknown }
+  | { available: false; reason: string };
+
+async function fetchDomain(
+  f: typeof fetch,
+  url: string,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<DomainFetchResult> {
+  throwIfAborted(callerSignal);
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let removeCallerAbort: (() => void) | undefined;
+
+  const fetchTask = (async (): Promise<DomainFetchResult> => {
+    try {
+      const r = await f(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+      if (!r.ok) return { available: false, reason: 'The source request failed.' };
+      return { available: true, raw: await r.json() as unknown };
+    } catch {
+      throwIfAborted(callerSignal);
+      return controller.signal.aborted
+        ? { available: false, reason: 'The source request timed out.' }
+        : { available: false, reason: 'The source response was unavailable.' };
+    }
+  })();
+
+  const deadline = new Promise<DomainFetchResult>((resolve) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      resolve({ available: false, reason: 'The source request timed out.' });
+    }, timeoutMs);
+  });
+  const racers: Promise<DomainFetchResult>[] = [fetchTask, deadline];
+
+  if (callerSignal) {
+    racers.push(new Promise<DomainFetchResult>((_resolve, reject) => {
+      const onCallerAbort = (): void => {
+        controller.abort();
+        reject(createAbortError());
+      };
+      callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+      removeCallerAbort = () => callerSignal.removeEventListener('abort', onCallerAbort);
+    }));
   }
+
+  try {
+    return await Promise.race(racers);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    removeCallerAbort?.();
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw createAbortError();
+}
+
+function createAbortError(): Error {
+  const error = new Error('Infrastructure risk refresh was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function normalizeFetchTimeout(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return INFRA_RISK_FETCH_TIMEOUT_MS;
+  return Math.min(MAX_INFRA_RISK_FETCH_TIMEOUT_MS, Math.max(1, Math.trunc(value)));
+}
+
+function buildKevDomain(result: DomainFetchResult, now: number): InfraRiskState['kev'] {
+  if (!result.available) return unknownKevDomain(result.reason);
+  if (!hasKevEnvelope(result.raw, now)) return unknownKevDomain(unusableResponseReason(result.raw));
+  const entries = parseCisaKev(result.raw, now);
+  return {
+    coverage: 'reported',
+    coverageReason: null,
+    entries,
+    score: scoreCisaKev(entries, now),
+    alerts: kevAlertsFor(entries, now),
+  };
+}
+
+function buildBgpDomain(result: DomainFetchResult, now: number): InfraRiskState['bgp'] {
+  if (!result.available) return unknownBgpDomain(result.reason);
+  if (!hasBgpEnvelope(result.raw, now)) return unknownBgpDomain(unusableResponseReason(result.raw));
+  const records = parseBgpAnomalies(result.raw);
+  return {
+    coverage: 'reported',
+    coverageReason: null,
+    records,
+    scopeLabel: RIPE_BGP_SCOPE_LABEL,
+    compositeEligible: false,
+    score: scoreBgpAnomalies(records),
+    alerts: bgpAlertsFor(records, now),
+  };
+}
+
+function unknownKevDomain(reason: string): InfraRiskState['kev'] {
+  return { coverage: 'unknown', coverageReason: reason, entries: [], score: null, alerts: [] };
+}
+
+function unknownBgpDomain(reason: string): InfraRiskState['bgp'] {
+  return {
+    coverage: 'unknown',
+    coverageReason: `${RIPE_BGP_SCOPE_LABEL}: ${reason}`,
+    records: [],
+    scopeLabel: RIPE_BGP_SCOPE_LABEL,
+    compositeEligible: false,
+    score: null,
+    alerts: [],
+  };
+}
+
+function unknownAcledDomain(reason: string): InfraRiskState['acled'] {
+  return { coverage: 'unknown', coverageReason: reason, events: [], score: null, alerts: [] };
+}
+
+function hasKevEnvelope(raw: unknown, now = Date.now()): boolean {
+  if (!isRecord(raw) || raw.degraded === true || !Number.isSafeInteger(now) || now <= 0
+    || kevCatalogText(raw.catalogVersion, 80) === null) return false;
+  const releasedAt = kevCatalogReleasedAt(raw.dateReleased);
+  if (releasedAt === null || releasedAt > now + CISA_KEV_FUTURE_SKEW_MS) return false;
+  const rows = raw.vulnerabilities;
+  const count = raw.count;
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1
+    || count > CISA_KEV_MAX_CATALOG_ENTRIES || !Array.isArray(rows) || rows.length !== count) return false;
+  const seenCves = new Set<string>();
+  return rows.every((row) => kevCatalogRowIsUsable(row, now, releasedAt, seenCves));
+}
+
+function kevCatalogRowIsUsable(
+  row: unknown,
+  now: number,
+  releasedAt: number,
+  seenCves: Set<string>,
+): boolean {
+  if (!isRecord(row)) return false;
+  const cveID = kevCatalogText(row.cveID, 32);
+  if (!cveID || !/^CVE-\d{4}-\d{4,}$/.test(cveID) || seenCves.has(cveID)) return false;
+  const requiredTextFields: readonly (readonly [string, number])[] = [
+    ['vendorProject', 300],
+    ['product', 500],
+    ['vulnerabilityName', 1000],
+    ['shortDescription', 8000],
+    ['requiredAction', 8000],
+  ];
+  if (!requiredTextFields.every(([key, maximum]) => kevCatalogText(row[key], maximum) !== null)) return false;
+  if (kevCatalogText(row.notes, 16_000, true) === null) return false;
+  if (row.knownRansomwareCampaignUse !== 'Known' && row.knownRansomwareCampaignUse !== 'Unknown') return false;
+  const dateAdded = kevCatalogDate(row.dateAdded);
+  const dueDate = kevCatalogDate(row.dueDate);
+  if (dateAdded === null || dueDate === null || dueDate < dateAdded
+    || dateAdded > now + CISA_KEV_FUTURE_SKEW_MS || dateAdded > releasedAt) return false;
+  if (!Array.isArray(row.cwes) || row.cwes.length === 0 || row.cwes.length > 50
+    || !row.cwes.every((cwe) => kevCatalogText(cwe, 80) !== null)) return false;
+  seenCves.add(cveID);
+  return true;
+}
+
+function kevCatalogText(value: unknown, maximum: number, allowEmpty = false): string | null {
+  if (typeof value !== 'string' || value.length > maximum
+    || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value)) return null;
+  const clean = value.trim();
+  return clean || allowEmpty ? clean : null;
+}
+
+function kevCatalogDate(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = strictCivilTimestamp(`${value}T00:00:00Z`);
+  return parsed !== null && new Date(parsed).toISOString().slice(0, 10) === value ? parsed : null;
+}
+
+function kevCatalogReleasedAt(value: unknown): number | null {
+  if (typeof value !== 'string' || value.length > 80 || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+  return strictCivilTimestamp(value);
+}
+
+function hasBgpEnvelope(raw: unknown, now = Date.now()): boolean {
+  if (!isRecord(raw) || raw.degraded === true || raw.status !== 'ok' || raw.status_code !== 200) return false;
+  const data = raw.data;
+  if (!isRecord(data) || stringOrEmpty(data.resource) !== RIPE_BGP_RESOURCE
+    || !Array.isArray(data.inconsistencies)
+    || data.inconsistencies.length > MAX_BGP_INCONSISTENCIES
+    || !data.inconsistencies.every((item) => typeof item === 'string' || isRecord(item))) return false;
+  const observedAt = parseTimestamp(data.query_time ?? raw.time);
+  return observedAt !== null
+    && observedAt >= now - RIPE_BGP_MAX_AGE_MS
+    && observedAt <= now + PROVIDER_FUTURE_SKEW_MS;
+}
+
+function unusableResponseReason(raw: unknown): string {
+  return isRecord(raw) && raw.degraded === true
+    ? 'The source reported degraded coverage.'
+    : 'The source response was not usable.';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -528,6 +737,25 @@ function parseTimestamp(v: unknown): number | null {
   if (!s) return null;
   const t = Date.parse(s);
   return Number.isFinite(t) ? t : null;
+}
+
+function strictCivilTimestamp(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-](\d{2}):(\d{2}))$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = Number(match[8] ?? 0);
+  const offsetMinute = Number(match[9] ?? 0);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (!year || month < 1 || month > 12 || day < 1 || day > (monthDays[month - 1] ?? 0)
+    || hour > 23 || minute > 59 || second > 59 || offsetHour > 23 || offsetMinute > 59) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function safeStringify(v: unknown): string {

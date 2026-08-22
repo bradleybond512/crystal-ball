@@ -47,6 +47,17 @@ import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
 import type { ScoredFAACamera } from '@/services/faa-cameras';
 import type { DiseaseIntelData } from '@/services/disease-intel';
+import type { LocalLogisticsSnapshot } from '@/services/local-logistics-types';
+import {
+  getEvacRouteDisclosure,
+  parseEvacRouteEventDetail,
+  type EvacRoute,
+} from '@/services/evacuation-router';
+import { subscribeSavedPlaces } from '@/services/saved-places';
+import {
+  createMapAsyncInitGuard,
+  type LifelinesOverlayIdentity,
+} from './disaster-lifelines-map-helpers';
 
 export type TimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
 export type MapView = 'global' | 'america' | 'mena' | 'eu' | 'asia' | 'latam' | 'africa' | 'oceania';
@@ -81,9 +92,14 @@ export class MapContainer {
   private isMobile: boolean;
   private deckGLMap: DeckGLMapType | null = null;
   private pendingFireworkForecast: import('@/services/firework-smoke').SmokeForecastState | null = null;
+  private activeLifelinesOverlay: LocalLogisticsSnapshot | null = null;
+  private activeEvacRoute: EvacRoute | null = null;
+  private missionOverlayStatus: HTMLElement | null = null;
   private svgMap: MapComponent | null = null;
   private initialState: MapContainerState;
   private useDeckGL: boolean;
+  private readonly asyncInitGuard = createMapAsyncInitGuard();
+  private unsubscribeSavedPlaces: (() => void) | null = null;
 
   constructor(container: HTMLElement, initialState: MapContainerState) {
  this.container = container;
@@ -92,6 +108,7 @@ export class MapContainer {
 
  // Use deck.gl on desktop with WebGL support, SVG on mobile
  this.useDeckGL = this.shouldUseDeckGL();
+ this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.revalidateActiveEvacRoute());
 
  // Fire-and-forget so the constructor stays sync. The init() call
  // dynamic-imports DeckGLMap on the desktop path; until it resolves,
@@ -131,15 +148,28 @@ export class MapContainer {
  // clear partial deck.gl nodes before creating the SVG fallback.
  this.container.innerHTML = '';
  this.svgMap = new MapComponent(this.container, this.initialState);
+ if (this.activeLifelinesOverlay) this.svgMap.setLifelinesOverlay(this.activeLifelinesOverlay);
+ if (this.activeEvacRoute) this.svgMap.setEvacRoute(this.activeEvacRoute);
+ this.renderMissionOverlayStatus();
   }
 
   private async init(): Promise<void> {
- if (this.useDeckGL) {
+ const generation = this.asyncInitGuard.begin();
+ if (!this.useDeckGL) {
+ if (!this.asyncInitGuard.isCurrent(generation)) return;
+ this.initSvgMap('[MapContainer] Initializing SVG map (mobile/fallback mode)');
+ return;
+ }
+ await this.initDeckGL(generation);
+  }
+
+  private async initDeckGL(generation: number): Promise<void> {
  if (import.meta.env.DEV) console.log('[MapContainer] Initializing deck.gl map (desktop mode)'); // eslint-disable-line no-console
  try {
  // Dynamic import so deck.gl + maplibre land in their own chunk. The
  // SVG fallback paths above never trigger this load.
  const { DeckGLMap } = await import('./DeckGLMap');
+ if (!this.asyncInitGuard.isCurrent(generation)) return;
  this.container.classList.add('deckgl-mode');
  this.deckGLMap = new DeckGLMap(this.container, {
  ...this.initialState,
@@ -149,12 +179,13 @@ export class MapContainer {
  this.deckGLMap.setFireworkForecast(this.pendingFireworkForecast);
  this.pendingFireworkForecast = null;
  }
+ if (this.activeLifelinesOverlay) this.deckGLMap.setLifelinesOverlay(this.activeLifelinesOverlay);
+ if (this.activeEvacRoute) this.deckGLMap.setEvacRoute(this.activeEvacRoute);
+ this.renderMissionOverlayStatus();
  } catch (error) {
+ if (!this.asyncInitGuard.isCurrent(generation)) return;
  console.warn('[MapContainer] DeckGL initialization failed, falling back to SVG map', error); // eslint-disable-line no-console
  this.initSvgMap('[MapContainer] Initializing SVG map (DeckGL fallback mode)');
- }
- } else {
- this.initSvgMap('[MapContainer] Initializing SVG map (mobile/fallback mode)');
  }
   }
 
@@ -198,6 +229,91 @@ export class MapContainer {
  this.svgMap?.setCenter(lat, lon);
  if (zoom != undefined) this.svgMap?.setZoom(zoom);
  }
+  }
+
+  /** Replace the transient Lifelines map layer with one explicitly selected place. */
+  public showLifelinesOverlay(snapshot: LocalLogisticsSnapshot): void {
+ this.activeLifelinesOverlay = snapshot;
+ if (this.useDeckGL) this.deckGLMap?.setLifelinesOverlay(snapshot);
+ else this.svgMap?.setLifelinesOverlay(snapshot);
+ this.renderMissionOverlayStatus();
+  }
+
+  public clearLifelinesOverlay(): void {
+ this.activeLifelinesOverlay = null;
+ if (this.useDeckGL) this.deckGLMap?.setLifelinesOverlay(null);
+ else this.svgMap?.setLifelinesOverlay(null);
+ this.renderMissionOverlayStatus();
+  }
+
+  public clearLifelinesOverlayIfMatches(identity: LifelinesOverlayIdentity): void {
+ const active = this.activeLifelinesOverlay;
+ if (active?.placeId !== identity.placeId
+   || active.queryFingerprint !== identity.queryFingerprint) return;
+ this.clearLifelinesOverlay();
+  }
+
+  /** Render a cached OSRM graph route. No current road-condition claim is attached. */
+  public showEvacRoute(route: EvacRoute): void {
+ this.activeEvacRoute = route;
+ if (this.useDeckGL) this.deckGLMap?.setEvacRoute(route);
+ else this.svgMap?.setEvacRoute(route);
+ this.renderMissionOverlayStatus();
+  }
+
+  public clearEvacRoute(): void {
+ this.activeEvacRoute = null;
+ if (this.useDeckGL) this.deckGLMap?.setEvacRoute(null);
+ else this.svgMap?.setEvacRoute(null);
+ this.renderMissionOverlayStatus();
+  }
+
+  private revalidateActiveEvacRoute(): void {
+ const active = this.activeEvacRoute;
+ if (!active || parseEvacRouteEventDetail({ route: active })) return;
+ this.clearEvacRoute();
+  }
+
+  private renderMissionOverlayStatus(): void {
+ this.missionOverlayStatus?.remove();
+ this.missionOverlayStatus = null;
+ if (!this.activeLifelinesOverlay && !this.activeEvacRoute) return;
+
+ const status = document.createElement('section');
+ status.className = 'mission-map-overlay-status';
+ status.setAttribute('aria-label', 'Active disaster map overlays');
+ status.setAttribute('role', 'status');
+
+ if (this.activeLifelinesOverlay) {
+ const row = document.createElement('div');
+ row.className = 'mission-map-overlay-row';
+ const copy = document.createElement('span');
+ copy.textContent = `${this.activeLifelinesOverlay.placeName}: ${this.activeLifelinesOverlay.nodes.length} Lifeline locations. Marker key: green official open; red official closed/access blocked; amber directory-only; blue unknown; gray expired. Availability is not inferred.`;
+ const clear = document.createElement('button');
+ clear.type = 'button';
+ clear.textContent = '×';
+ clear.setAttribute('aria-label', `Clear Lifelines overlay for ${this.activeLifelinesOverlay.placeName}`);
+ clear.addEventListener('click', () => this.clearLifelinesOverlay());
+ row.append(copy, clear);
+ status.append(row);
+ }
+
+ if (this.activeEvacRoute) {
+ const row = document.createElement('div');
+ row.className = 'mission-map-overlay-row';
+ const copy = document.createElement('span');
+ copy.textContent = `${this.activeEvacRoute.from.label} → ${this.activeEvacRoute.to.label}: ${getEvacRouteDisclosure()}. Cached ${new Date(this.activeEvacRoute.cachedAt).toLocaleString()}.`;
+ const clear = document.createElement('button');
+ clear.type = 'button';
+ clear.textContent = '×';
+ clear.setAttribute('aria-label', `Clear graph route from ${this.activeEvacRoute.from.label} to ${this.activeEvacRoute.to.label}`);
+ clear.addEventListener('click', () => this.clearEvacRoute());
+ row.append(copy, clear);
+ status.append(row);
+ }
+
+ this.container.append(status);
+ this.missionOverlayStatus = status;
   }
 
   public getCenter(): { lat: number; lon: number } | null {
@@ -791,10 +907,14 @@ export class MapContainer {
   }
 
   public destroy(): void {
- if (this.useDeckGL) {
+ this.asyncInitGuard.dispose();
+ this.unsubscribeSavedPlaces?.();
+ this.unsubscribeSavedPlaces = null;
+ this.missionOverlayStatus?.remove();
+ this.missionOverlayStatus = null;
  this.deckGLMap?.destroy();
- } else {
  this.svgMap?.destroy();
- }
+ this.deckGLMap = null;
+ this.svgMap = null;
   }
 }

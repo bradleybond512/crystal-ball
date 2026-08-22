@@ -8,6 +8,7 @@ import {
   getHomePlace,
   getBugoutPlace,
   subscribeEvacRoutes,
+  getEvacRouteDisclosure,
   type EvacRoute,
   type LatLon,
 } from '@/services/evacuation-router';
@@ -24,6 +25,7 @@ export class EvacuationPanel extends Panel {
   private unsubPlaces: (() => void) | null = null;
   private unsubRoutes: (() => void) | null = null;
   private planning = false;
+  private planningError: string | null = null;
   private expandedRouteId: string | null = null;
 
   constructor() {
@@ -32,7 +34,7 @@ export class EvacuationPanel extends Panel {
  title: 'Evacuation Routes',
  showCount: true,
  trackActivity: true,
- infoTooltip: 'Plan driving routes between saved places with offline-cached step-by-step directions.',
+ infoTooltip: 'Plan OSRM driving-graph estimates between saved places with offline-cached directions. Current road conditions are not verified.',
  });
 
  this.content.addEventListener('click', (e) => this.handleClick(e));
@@ -62,6 +64,10 @@ export class EvacuationPanel extends Panel {
 
   private renderContent(): void {
  const parts: string[] = [];
+
+ if (this.planningError) {
+ parts.push(`<div class="evac-error" role="alert">${escapeHtml(this.planningError)}</div>`);
+ }
 
  // Quick Route section
  parts.push(this.renderQuickRoute());
@@ -146,11 +152,12 @@ export class EvacuationPanel extends Panel {
  <div class="evac-route-header">
  <div class="evac-route-label" data-evac-action="toggle-steps">${escapeHtml(r.from.label)} &rarr; ${escapeHtml(r.to.label)}</div>
  <div class="evac-route-actions">
- <button class="evac-btn-icon" data-evac-action="show-map" title="Show on map">${MAP_SVG}</button>
- <button class="evac-btn-icon evac-btn-danger" data-evac-action="delete" title="Delete route">${DELETE_SVG}</button>
+ <button class="evac-btn-icon" data-evac-action="show-map" title="Show graph route on map" aria-label="Show ${escapeHtml(r.from.label)} to ${escapeHtml(r.to.label)} graph route on map">${MAP_SVG}</button>
+ <button class="evac-btn-icon evac-btn-danger" data-evac-action="delete" title="Delete route" aria-label="Delete ${escapeHtml(r.from.label)} to ${escapeHtml(r.to.label)} route">${DELETE_SVG}</button>
  </div>
  </div>
- <div class="evac-route-meta">${dist} &middot; ${dur} &middot; cached ${age}</div>
+ <div class="evac-route-meta">${dist} &middot; graph estimate ${dur} &middot; cached ${age}</div>
+ <div class="evac-hint evac-hint-warn">${escapeHtml(getEvacRouteDisclosure())}</div>
  <div class="evac-cache-status">Route cached &#10003; &mdash; available offline</div>
  ${stepsHtml}
  </div>`;
@@ -229,6 +236,7 @@ export class EvacuationPanel extends Panel {
   private async doPlan(from: LatLon, to: LatLon): Promise<void> {
  if (this.planning) return;
  this.planning = true;
+ this.planningError = null;
  this.renderContent();
 
  try {
@@ -236,10 +244,7 @@ export class EvacuationPanel extends Panel {
  // refresh happens via subscription
  } catch (error) {
  console.error('[evacuation] route planning failed:', error);
- const errDiv = document.createElement('div');
- errDiv.className = 'evac-error';
- errDiv.textContent = `Route planning failed: ${error instanceof Error ? error.message : 'unknown error'}. Check internet connection.`;
- this.content.prepend(errDiv);
+ this.planningError = `Route planning failed: ${error instanceof Error ? error.message : 'unknown error'}. No current road-condition conclusion can be drawn; verify an alternate route source.`;
  } finally {
  this.planning = false;
  this.renderContent();

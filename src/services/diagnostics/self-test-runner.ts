@@ -169,7 +169,7 @@ export const DOMAIN_TO_FEED_IDS: Record<string, readonly string[]> = {
   biosurveillance:   [],
   wildfire:          ['firms-modis', 'firms-viirs', 'nifc-perimeters'],
   sanctions:         [],
-  infrastructure:    ['eia-930', 'poweroutage-us', 'cloudflare-bgp'],
+  infrastructure:    ['eia-930', 'ornl-odin', 'cloudflare-bgp'],
   gdacs:             [],
   nuclear:           ['radnet'],
 };

@@ -10,7 +10,7 @@
  *
  * Refreshes every 10s. No DOM mutation outside Panel.setContent.
  */
-/* eslint-disable sonarjs/no-nested-template-literals -- short status row markup */
+
 
 import { Panel } from './Panel';
 import {
@@ -25,7 +25,10 @@ import {
 import {
   collectDataFreshnessSnapshots,
   groupBy,
+  mergeFeedSnapshotsByAttempt,
+  mergeLifelineProviderHealth,
   mergeSidecarFeeds,
+  parseLifelineProviderHealthEvent,
   shortenEndpoint,
   type SidecarFeedStatus,
 } from './feed-health-helpers';
@@ -50,6 +53,15 @@ export class FeedHealthPanel extends Panel {
   private snapshots: Record<string, FeedSnapshot> = {};
   private lastFetchAt: number | null = null;
   private lastFetchError: string | null = null;
+  private readonly lifelinesUpdated = (event: Event): void => {
+    const providers = parseLifelineProviderHealthEvent((event as CustomEvent<unknown>).detail);
+    if (providers.length === 0) return;
+    this.snapshots = mergeFeedSnapshotsByAttempt(
+      this.snapshots,
+      mergeLifelineProviderHealth(providers),
+    );
+    this.render();
+  };
 
   constructor() {
     super({
@@ -60,11 +72,13 @@ export class FeedHealthPanel extends Panel {
       infoTooltip:
         'Status of every external data feed Crystal Ball polls. 🟢 fresh = last success within 2× poll interval; 🟡 stale = within 10×; 🔴 error = last fetch failed or feed beyond 10× interval.',
     });
+    document.addEventListener('wm:local-logistics-updated', this.lifelinesUpdated);
     this.refreshNow();
     this.refreshTimer = setInterval(() => this.refreshNow(), REFRESH_MS);
   }
 
   override destroy(): void {
+    document.removeEventListener('wm:local-logistics-updated', this.lifelinesUpdated);
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
@@ -97,7 +111,10 @@ export class FeedHealthPanel extends Panel {
       }
       const body = (await resp.json()) as SidecarHealthResponse;
       if (Array.isArray(body.feeds)) {
-        this.snapshots = { ...this.snapshots, ...mergeSidecarFeeds(body.feeds, FEED_CATALOG) };
+        this.snapshots = mergeFeedSnapshotsByAttempt(
+          this.snapshots,
+          mergeSidecarFeeds(body.feeds, FEED_CATALOG),
+        );
       }
       this.lastFetchAt = Date.now();
       this.lastFetchError = null;
@@ -178,4 +195,3 @@ export class FeedHealthPanel extends Panel {
     return `<div class="feed-health-footer">Sidecar reachable · last ${escapeHtml(ago)}</div>`;
   }
 }
-

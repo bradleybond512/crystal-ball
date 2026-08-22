@@ -27,6 +27,7 @@
 
 import { h, replaceChildren } from '../utils/dom-utils';
 import type { WeatherDispatchDecision } from '../services/weather/weather-warning-router';
+import type { WeatherSavedPlaceActionTarget } from '../services/weather/weather-threat-types';
 import { guideForWeatherHazard } from '../services/survival-guide/guide-links';
 import {
   STORM_MODE_UI_STORAGE_KEY,
@@ -57,6 +58,8 @@ export interface PersonalStormModeCallbacks {
    *  diagnostic surface. The component already renders a basic
    *  inline summary; this gives callers a hook for richer display. */
   onShowDiagnostic?: (alertId: string) => void;
+  /** Open the exact saved-place revision captured by the warning. */
+  onOpenLifelines?: (target: WeatherSavedPlaceActionTarget) => void;
 }
 
 export interface PersonalStormModeOptions {
@@ -222,6 +225,8 @@ export class PersonalStormMode {
       decision.payload?.actions ?? [],
       decision.urgency?.watchWindow ?? null,
       decision.payload?.primaryHazard ?? null,
+      decision.matchedPlaceId ?? null,
+      decision.matchedPlaceAction?.fingerprint ?? null,
     ]);
   }
 
@@ -333,7 +338,11 @@ export class PersonalStormMode {
       decision.urgency?.watchWindow && decision.urgency.watchWindow.confirming.length > 0
         ? this.renderWatchWindow(decision.urgency.watchWindow)
         : null,
-      h('div', { className: 'cb-storm-mode__footer' }, whyLink, this.renderFullGuideLink(decision)),
+      h('div', { className: 'cb-storm-mode__footer' },
+        whyLink,
+        this.renderLifelinesLink(decision),
+        this.renderFullGuideLink(decision),
+      ),
     );
   }
 
@@ -404,6 +413,19 @@ export class PersonalStormMode {
     btn.addEventListener('click', () => {
       document.dispatchEvent(new CustomEvent('cb:open-survival-guide', { detail: { guideId } }));
     });
+    return btn;
+  }
+
+  private renderLifelinesLink(decision: WeatherDispatchDecision): HTMLElement | null {
+    const target = decision.matchedPlaceAction;
+    if (!target || target.placeId !== decision.matchedPlaceId) return null;
+    const btn = h('button', {
+      className: 'cb-storm-mode__guide',
+      type: 'button',
+      'aria-label': 'Open Disaster Lifelines for the matched saved place',
+      dataset: { stormFocus: 'lifelines' },
+    }, 'Disaster Lifelines →');
+    btn.addEventListener('click', () => this.callbacks.onOpenLifelines?.({ ...target }));
     return btn;
   }
 }

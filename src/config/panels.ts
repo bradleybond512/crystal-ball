@@ -12,7 +12,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   watchlist: { name: 'Watchlist & Playbooks', enabled: true, priority: 1 },
   'saved-places': { name: 'Saved Places', enabled: true, priority: 1 },
   'watchlist-locations': { name: 'Watched Locations', enabled: true, priority: 1 },
-  'local-logistics': { name: 'Local Logistics', enabled: true, priority: 1 },
+  'local-logistics': { name: 'Disaster Lifelines', enabled: true, priority: 1 },
   'comms-plan': { name: 'Tactical Comms', enabled: true, priority: 1 },
   'unified-alert-inbox': { name: 'Alert Inbox', enabled: true, priority: 1 },
   'alert-rules': { name: 'Alert Rules', enabled: true, priority: 1 },

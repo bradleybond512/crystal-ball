@@ -16,8 +16,10 @@ import { getNaturalEventIcon } from '@/services/eonet';
 import { getHotspotEscalation, getEscalationChange24h } from '@/services/hotspot-escalation';
 import { getCableHealthRecord } from '@/services/cable-health';
 import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
+import type { LogisticsNode } from '@/services/local-logistics-types';
+import { bindLifelinePopupActions, getLifelineMarkerPresentation } from './disaster-lifelines-map-helpers';
 
-export type PopupType = 'conflict' | 'hotspot' | 'earthquake' | 'weather' | 'base' | 'waterway' | 'apt' | 'cyberThreat' | 'nuclear' | 'economic' | 'irradiator' | 'pipeline' | 'cable' | 'cable-advisory' | 'repair-ship' | 'outage' | 'datacenter' | 'datacenterCluster' | 'ais' | 'protest' | 'protestCluster' | 'flight' | 'militaryFlight' | 'militaryVessel' | 'militaryFlightCluster' | 'militaryVesselCluster' | 'natEvent' | 'port' | 'spaceport' | 'mineral' | 'startupHub' | 'cloudRegion' | 'techHQ' | 'accelerator' | 'techEvent' | 'techHQCluster' | 'techEventCluster' | 'techActivity' | 'geoActivity' | 'stockExchange' | 'financialCenter' | 'centralBank' | 'commodityHub' | 'iranEvent' | 'gpsJamming' | 'faaCamera';
+export type PopupType = 'conflict' | 'hotspot' | 'earthquake' | 'weather' | 'base' | 'waterway' | 'apt' | 'cyberThreat' | 'nuclear' | 'economic' | 'irradiator' | 'pipeline' | 'cable' | 'cable-advisory' | 'repair-ship' | 'outage' | 'datacenter' | 'datacenterCluster' | 'ais' | 'protest' | 'protestCluster' | 'flight' | 'militaryFlight' | 'militaryVessel' | 'militaryFlightCluster' | 'militaryVesselCluster' | 'natEvent' | 'port' | 'spaceport' | 'mineral' | 'startupHub' | 'cloudRegion' | 'techHQ' | 'accelerator' | 'techEvent' | 'techHQCluster' | 'techEventCluster' | 'techActivity' | 'geoActivity' | 'stockExchange' | 'financialCenter' | 'centralBank' | 'commodityHub' | 'iranEvent' | 'gpsJamming' | 'faaCamera' | 'lifeline';
 
 interface TechEventPopupData {
   id: string;
@@ -145,9 +147,9 @@ interface DatacenterClusterData {
   sampled?: boolean;
 }
 
-interface PopupData {
+export interface PopupData {
   type: PopupType;
-  data: ConflictZone | Hotspot | Earthquake | WeatherAlert | MilitaryBase | StrategicWaterway | APTGroup | CyberThreat | NuclearFacility | EconomicCenter | GammaIrradiator | Pipeline | UnderseaCable | CableAdvisory | RepairShip | InternetOutage | AIDataCenter | AisDisruptionEvent | SocialUnrestEvent | AirportDelayAlert | MilitaryFlight | MilitaryVessel | MilitaryFlightCluster | MilitaryVesselCluster | NaturalEvent | Port | Spaceport | CriticalMineralProject | StartupHub | CloudRegion | TechHQ | Accelerator | TechEventPopupData | TechHQClusterData | TechEventClusterData | ProtestClusterData | DatacenterClusterData | TechHubActivity | GeoHubActivity | StockExchangePopupData | FinancialCenterPopupData | CentralBankPopupData | CommodityHubPopupData | IranEventPopupData | GpsJammingPopupData | ScoredFAACamera;
+  data: ConflictZone | Hotspot | Earthquake | WeatherAlert | MilitaryBase | StrategicWaterway | APTGroup | CyberThreat | NuclearFacility | EconomicCenter | GammaIrradiator | Pipeline | UnderseaCable | CableAdvisory | RepairShip | InternetOutage | AIDataCenter | AisDisruptionEvent | SocialUnrestEvent | AirportDelayAlert | MilitaryFlight | MilitaryVessel | MilitaryFlightCluster | MilitaryVesselCluster | NaturalEvent | Port | Spaceport | CriticalMineralProject | StartupHub | CloudRegion | TechHQ | Accelerator | TechEventPopupData | TechHQClusterData | TechEventClusterData | ProtestClusterData | DatacenterClusterData | TechHubActivity | GeoHubActivity | StockExchangePopupData | FinancialCenterPopupData | CentralBankPopupData | CommodityHubPopupData | IranEventPopupData | GpsJammingPopupData | ScoredFAACamera | LogisticsNode;
   relatedNews?: NewsItem[];
   x: number;
   y: number;
@@ -178,6 +180,7 @@ export class MapPopup {
  const popupClasses = ['map-popup'];
  if (this.isMobileSheet) popupClasses.push('map-popup-sheet');
  if (data.type === 'faaCamera') popupClasses.push('map-popup-faa-camera');
+ if (data.type === 'lifeline') popupClasses.push('map-popup-lifeline');
  this.popup.className = popupClasses.join(' ');
 
  const content = this.renderContent(data);
@@ -201,6 +204,9 @@ export class MapPopup {
 
  if (data.type === 'faaCamera') {
  void this.loadFAACameraFrame(data.data as ScoredFAACamera);
+ }
+ if (data.type === 'lifeline') {
+ bindLifelinePopupActions(this.popup, data.data as LogisticsNode);
  }
 
  // Close button handler
@@ -516,10 +522,59 @@ export class MapPopup {
  case 'faaCamera': {
  return this.renderFAACameraPopup(data.data as ScoredFAACamera);
  }
+ case 'lifeline': {
+ return this.renderLifelinePopup(data.data as LogisticsNode);
+ }
  default: {
  return '';
  }
  }
+  }
+
+  private renderLifelinePopup(node: LogisticsNode): string {
+ const presentation = getLifelineMarkerPresentation(node);
+ const expired = presentation.state === 'expired';
+ const stateValue = (value: string) => escapeHtml(expired ? 'unknown' : value.replace(/_/g, ' '));
+ const retrieved = (node.retrievedAt ?? node.observedAt).toLocaleString();
+ const sourceReported = node.sourceObservedAt?.toLocaleString();
+ const expires = node.expiresAt.toLocaleString();
+ const safePhone = node.publicPhone?.replace(/[^+\d]/g, '').replace(/(?!^)\+/g, '') ?? '';
+ const callAction = safePhone
+ ? `<a class="lifeline-popup-action" data-lifeline-call href="tel:${escapeHtml(safePhone)}" aria-label="Call ${escapeHtml(node.name)}">Call</a>`
+ : '';
+ const addressAction = node.address
+ ? `<button class="lifeline-popup-action" data-lifeline-copy="address" type="button">Copy address</button>`
+ : '';
+ return `
+ <div class="popup-header lifeline ${presentation.state}">
+ <span class="popup-icon" aria-hidden="true">${escapeHtml(presentation.glyph)}</span>
+ <span class="popup-title">${escapeHtml(node.name)}</span>
+ <span class="popup-badge ${presentation.state}">${escapeHtml(presentation.categoryLabel)}</span>
+ <button class="popup-close" type="button" aria-label="Close">×</button>
+ </div>
+ <div class="popup-body lifeline-popup-body">
+ <p class="popup-description lifeline-evidence">${escapeHtml(presentation.evidenceLabel)}</p>
+ <div class="popup-stats">
+ <div class="popup-stat"><span class="stat-label">Operational</span><span class="stat-value">${stateValue(node.operational)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Inventory</span><span class="stat-value">${stateValue(node.inventory)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Power</span><span class="stat-value">${stateValue(node.power)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Access</span><span class="stat-value">${stateValue(node.access)}</span></div>
+ </div>
+ <div class="popup-subtitle">${escapeHtml(node.address ?? 'No street address published')}</div>
+ ${node.publicPhone ? `<div class="popup-location">Public phone: ${escapeHtml(node.publicPhone)}</div>` : ''}
+ <div class="popup-location">${escapeHtml(node.distanceKm.toFixed(1))} km · ${escapeHtml(node.source)}</div>
+ <div class="popup-location">Retrieved ${escapeHtml(retrieved)} · ${expired ? 'Expired' : 'Expires'} ${escapeHtml(expires)}</div>
+ ${sourceReported ? `<div class="popup-location">Source reported ${escapeHtml(sourceReported)}</div>` : ''}
+ <p class="popup-description">No route or current road status is inferred from this marker.</p>
+ <div class="lifeline-popup-actions" aria-label="Lifeline actions">
+ ${callAction}
+ ${addressAction}
+ <button class="lifeline-popup-action" data-lifeline-copy="coordinates" type="button">Copy coordinates</button>
+ <button class="lifeline-popup-action" data-lifeline-open-maps type="button">Open in Maps</button>
+ </div>
+ <div class="lifeline-popup-action-status" data-lifeline-action-status role="status" aria-live="polite"></div>
+ </div>
+ `;
   }
 
   private renderConflictPopup(conflict: ConflictZone): string {

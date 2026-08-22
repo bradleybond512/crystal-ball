@@ -312,9 +312,11 @@ registerTool('get_pharma_supply', {
 }, async () => textResult(await intelExpansion.get_pharma_supply()));
 
 registerTool('get_grid_outages', {
-  description: 'ORNL power grid outages by county. Returns counties sorted by meters affected.',
-  inputSchema: z.object({}),
-}, async () => textResult(await intelExpansion.get_grid_outages()));
+  description: 'ORNL power grid outages for one exact U.S. county FIPS. Returns reports sorted by customers out.',
+  inputSchema: z.object({
+    fips: z.string().regex(/^\d{5}$/).describe('Exact 5-digit county FIPS code'),
+  }),
+}, async (args) => textResult(await intelExpansion.get_grid_outages(args)));
 
 registerTool('get_disaster_activations', {
   description: 'Copernicus Emergency Management Service activations for major disasters worldwide.',

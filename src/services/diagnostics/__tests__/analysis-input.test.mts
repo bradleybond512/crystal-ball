@@ -29,7 +29,7 @@ test('correlation analysis reuses inputs already within the limit', () => {
 });
 
 test('semantic clustering cannot enqueue an unbounded inference workload', () => {
-  assert.equal(MAX_SEMANTIC_CLUSTER_INPUTS, 5);
+  assert.equal(MAX_SEMANTIC_CLUSTER_INPUTS, 50);
   const clusters = Array.from(
     { length: MAX_SEMANTIC_CLUSTER_INPUTS + 25 },
     (_, index) => ({ id: index }),

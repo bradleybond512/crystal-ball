@@ -64,6 +64,7 @@ export function shouldInitializeBrowserMl(
   uiOnlyE2E: boolean,
   settings: Pick<AiFlowSettings, 'browserModel'>,
 ): boolean {
+  // Keep local ONNX opt-in on every platform; WKWebView must not warm it implicitly at startup.
   return !uiOnlyE2E && settings.browserModel;
 }
 

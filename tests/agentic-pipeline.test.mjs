@@ -236,9 +236,13 @@ test('the data-loader override guards the text-pinned wiring test', () => {
 test('the ESLint runner override selects its focused behavioral suite', () => {
   const index = deriveScriptIndex({
     ...SCRIPTS,
-    'test:eslint-runner': 'node --test tests/eslint-runner.test.mjs tests/lint-workflow.test.mjs',
+    'test:eslint-runner': 'node --test tests/eslint-runner.test.mjs tests/eslint-baseline.test.mjs tests/lint-workflow.test.mjs',
   });
-  const result = selectScripts(['scripts/run-eslint.mjs', 'scripts/lint-changed.mjs'], index, OVERRIDES);
+  const result = selectScripts([
+    'scripts/run-eslint.mjs',
+    'scripts/lint-baseline.mjs',
+    'scripts/lint-changed.mjs',
+  ], index, OVERRIDES);
   assert.deepEqual(result, { scripts: ['test:eslint-runner'], unmapped: [] });
 });
 

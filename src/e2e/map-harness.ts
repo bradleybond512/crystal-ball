@@ -326,6 +326,11 @@ const internals = map as unknown as {
   maplibreMap?: MapLibreMap;
   getTooltip?: (info: { object?: unknown; layer?: { id?: string } }) => { html?: string } | null;
   newsLocationFirstSeen?: Map<string, number>;
+  aptGroups?: typeof APT_GROUPS;
+  aptGroupsLoaded?: boolean;
+  debouncedFetchBases?: () => void;
+  serverBases?: typeof MILITARY_BASES;
+  serverBasesLoaded?: boolean;
   _mapFpsAppRepaintCount?: number;
 };
 
@@ -458,10 +463,15 @@ const firstPathPoint = <T extends { points: [number, number][] }>(
   return [firstPoint[0], firstPoint[1]];
 };
 
-const firstConflictPoint = (fallback: [number, number]): [number, number] => {
-  const coords = CONFLICT_ZONES[0]?.coords?.[0];
-  if (!coords || coords.length < 2) return fallback;
-  return [coords[0], coords[1]];
+const firstConflictCenter = (fallback: [number, number]): [number, number] => {
+  const coords = CONFLICT_ZONES[0]?.coords;
+  if (!coords || coords.length === 0) return fallback;
+  const lons = coords.map(([lon]) => lon);
+  const lats = coords.map(([, lat]) => lat);
+  return [
+ (Math.min(...lons) + Math.max(...lons)) / 2,
+ (Math.min(...lats) + Math.max(...lats)) / 2,
+  ];
 };
 
 const seededCameras = {
@@ -478,7 +488,7 @@ const seededCameras = {
   news: toCamera(2.35, 48.85, 5),
 };
 
-const [conflictLon, conflictLat] = firstConflictPoint([36, 35]);
+const [conflictLon, conflictLat] = firstConflictCenter([36, 35]);
 const [baseLon, baseLat] = firstLatLon(MILITARY_BASES, [44, 33]);
 const [cableLon, cableLat] = firstPathPoint(UNDERSEA_CABLES, [38, 20]);
 const [pipelineLon, pipelineLat] = firstPathPoint(PIPELINES, [45, 30]);
@@ -703,9 +713,9 @@ const VISUAL_SCENARIOS: VisualScenario[] = [
   {
  id: 'apt-groups-z5',
  variant: 'full',
- enabledLayers: [],
+ enabledLayers: ['cyberThreats'],
  camera: toCamera(aptLon, aptLat, 5.1),
- expectedDeckLayers: ['apt-groups-layer'],
+ expectedDeckLayers: ['cyber-threats-layer', 'apt-groups-layer'],
  expectedSelectors: [],
   },
   {
@@ -1095,6 +1105,11 @@ const seedAllDynamicData = (): void => {
   ];
 
   map.setRenderPaused(true);
+  internals.debouncedFetchBases = () => {};
+  internals.aptGroups = [...APT_GROUPS];
+  internals.aptGroupsLoaded = true;
+  internals.serverBases = [...MILITARY_BASES];
+  internals.serverBasesLoaded = true;
   map.setLayers(allLayersEnabled);
   map.setZoom(5);
   map.setEarthquakes(earthquakes);
@@ -1102,6 +1117,21 @@ const seedAllDynamicData = (): void => {
   map.setOutages(outages);
   map.setCyberThreats(cyberThreats);
   map.setAisData(aisDisruptions, aisDensity);
+  map.setAdsbFlights([
+ {
+  icao24: 'e2e123',
+  callsign: 'HARNESS1',
+  originCountry: 'United States',
+  lon: -73.9,
+  lat: 40.4,
+  altitude: 9500,
+  onGround: false,
+  velocity: 240,
+  heading: 90,
+  verticalRate: 0,
+  squawk: '1200',
+ },
+  ]);
   map.setCableActivity(cableAdvisories, repairShips);
   map.setProtests(buildProtests('alpha'));
   map.setFlightDelays(flightDelays);
@@ -1204,6 +1234,7 @@ const ensureDeterministicStyles = (): void => {
  body.${DETERMINISTIC_BODY_CLASS} .deckgl-layer-toggles,
  body.${DETERMINISTIC_BODY_CLASS} .deckgl-legend,
  body.${DETERMINISTIC_BODY_CLASS} .deckgl-timestamp,
+ body.${DETERMINISTIC_BODY_CLASS} .map-attribution,
  body.${DETERMINISTIC_BODY_CLASS} .maplibregl-ctrl-bottom-right,
  body.${DETERMINISTIC_BODY_CLASS} .maplibregl-ctrl-bottom-left {
  display: none !important;
@@ -1212,13 +1243,14 @@ const ensureDeterministicStyles = (): void => {
   document.head.append(style);
 };
 
-const hideRasterBasemap = (): void => {
+const hideBasemapLayers = (): void => {
   const maplibreMap = internals.maplibreMap;
   if (!maplibreMap) return;
 
   try {
- if (maplibreMap.getLayer('carto-dark-layer')) {
- maplibreMap.setPaintProperty('carto-dark-layer', 'raster-opacity', 0);
+ for (const layer of maplibreMap.getStyle().layers ?? []) {
+ if (layer.type === 'background') continue;
+ maplibreMap.setLayoutProperty(layer.id, 'visibility', 'none');
  }
   } catch {
  // No-op for harness stability.
@@ -1228,7 +1260,7 @@ const hideRasterBasemap = (): void => {
 const enableDeterministicVisualMode = (): void => {
   document.body.classList.add(DETERMINISTIC_BODY_CLASS);
   ensureDeterministicStyles();
-  hideRasterBasemap();
+  hideBasemapLayers();
   makeNewsLocationsNonRecent();
   map.render();
   deterministicVisualModeEnabled = true;

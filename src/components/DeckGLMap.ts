@@ -633,13 +633,8 @@ export class DeckGLMap {
   private lastSCBoundsKey = '';
   private lastSCMask = '';
   private protestSuperclusterSource: SocialUnrestEvent[] = [];
-  private newsPulseIntervalId: ReturnType<typeof setInterval> | null = null;
   private dayNightIntervalId: ReturnType<typeof setInterval> | null = null;
-  private cablePulseIntervalId: ReturnType<typeof setInterval> | null = null;
-  /** Current cable pulse phase in radians (0 → 2π, cycles every CABLE_PULSE_PERIOD_MS). */
-  private cablePulsePhase = 0;
   private cachedNightPolygon: [number, number][] | null = null;
-  private readonly startupTime = Date.now();
   private theaterPolygons: TheaterPolygon[] = [];
   private theaterUnsubscribe: (() => void) | null = null;
   private convergenceSeenAlerts = new Set<string>();
@@ -672,7 +667,6 @@ export class DeckGLMap {
   private debouncedRebuildLayers: () => void;
   private debouncedFetchBases: () => void;
   private rafUpdateLayers: () => void;
-  private rafUpdateLayersPending = false;
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private _themeChangedHandler: ((e: Event) => void) | null = null;
   private _visibilityHandler: (() => void) | null = null;
@@ -690,12 +684,10 @@ export class DeckGLMap {
  }, 150);
  this.debouncedFetchBases = debounce(() => this.fetchServerBases(), 300);
  const rafFn = rafSchedule(() => {
- this.rafUpdateLayersPending = false;
  if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
  try { this.deckOverlay?.setProps({ layers: this.buildLayers() }); } catch { /* map mid-teardown */ }
  });
  this.rafUpdateLayers = () => {
- this.rafUpdateLayersPending = true;
  this._mapFpsAppRepaintCount++;
  rafFn();
  };
@@ -781,7 +773,7 @@ export class DeckGLMap {
  const app = (this._mapFpsAppRepaintCount / 2).toFixed(1);
  this._mapFpsRenderCount = 0;
  this._mapFpsAppRepaintCount = 0;
- console.warn(`[MAP-FPS] gl=${glfps}/s appRepaint=${app}/s alertPulses=${this.alertPulses.length} newsPulse=${this.newsPulseIntervalId !== null} cablePulse=${this.cablePulseIntervalId !== null} dayNight=${this.dayNightIntervalId !== null} paused=${this.renderPaused}`);
+ console.warn(`[MAP-FPS] gl=${glfps}/s appRepaint=${app}/s alertPulses=${this.alertPulses.length} dayNight=${this.dayNightIntervalId !== null} paused=${this.renderPaused}`);
  }, 2000) as unknown as number;
   }
 
@@ -993,13 +985,6 @@ export class DeckGLMap {
 
   private getSetSignature(set: Set<string>): string {
  return [...set].sort().join('|');
-  }
-
-  private hasRecentNews(now = Date.now()): boolean {
- for (const ts of this.newsLocationFirstSeen.values()) {
- if (now - ts < 30_000) return true;
- }
- return false;
   }
 
   private getTimeRangeMs(range: TimeRange = this.state.timeRange): number {
@@ -1579,15 +1564,12 @@ export class DeckGLMap {
  layers.push(this.createCyberThreatsLayer());
  }
 
- // Alert pulse beacons — top of stack so they're never occluded
+  // Alert beacons — top of stack so they're never occluded
  if (this.alertPulses.length > 0) {
- const t = (Date.now() % 2000) / 2000; // 0..1 over 2 seconds
  const sevColor = (s: string): [number, number, number, number] =>
  s === 'critical' ? [255, 59, 48, 255]
  : s === 'high' ? [255, 149, 0, 255]
  : [255, 204, 0, 255];
- const radius = 8 + t * 28;
- const fadeAlpha = Math.round(255 * (1 - t));
  layers.push(new ScatterplotLayer({
  id: 'alert-pulses',
  data: this.alertPulses,
@@ -1597,19 +1579,12 @@ export class DeckGLMap {
  lineWidthMinPixels: 2,
  radiusUnits: 'pixels',
  getPosition: (d: { lat: number; lon: number }) => [d.lon, d.lat],
- getRadius: radius,
+ getRadius: 24,
  getLineColor: (d: { severity: string }) => {
  const c = sevColor(d.severity);
- return [c[0], c[1], c[2], fadeAlpha];
+ return [c[0], c[1], c[2], 180];
  },
- updateTriggers: { getRadius: t, getLineColor: t },
  }));
- // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF
- // loop. Suppressed while paused/hidden so it can't keep rebuilding layers for
- // a view nobody can see (the loop that spiked idle CPU when alerts were live).
- if (!this.rafUpdateLayersPending && !this.renderPaused) {
- setTimeout(() => this.rafUpdateLayers(), 250);
- }
  }
 
  // AIS density layer
@@ -1989,12 +1964,9 @@ export class DeckGLMap {
  const cached = this.layerCache.get(cacheKey) as PathLayer | undefined;
  const highlightSignature = this.getSetSignature(highlightedCables);
  const healthSignature = Object.keys(this.healthByCableId).sort().join(',');
- // Cache is invalidated by pulse (cablePulsePhase changes every ~120ms via startCablePulse)
  if (cached && highlightSignature === this.lastCableHighlightSignature && healthSignature === this.lastCableHealthSignature) return cached;
 
  const health = this.healthByCableId;
- // Pulse: gentle sine-wave opacity modulation 100–200 alpha over 10s cycle
- const pulseAlpha = Math.round(150 + 50 * Math.sin(this.cablePulsePhase));
 
  const layer = new PathLayer({
  id: cacheKey,
@@ -2005,7 +1977,7 @@ export class DeckGLMap {
  const h = health[d.id];
  if (h?.status === 'fault') return COLORS.cableFault;
  if (h?.status === 'degraded') return COLORS.cableDegraded;
- return [0, 200, 255, pulseAlpha] as [number, number, number, number];
+ return [0, 200, 255, 150] as [number, number, number, number];
  },
  getWidth: (d) => {
  if (highlightedCables.has(d.id)) return 3;
@@ -2017,7 +1989,7 @@ export class DeckGLMap {
  widthMinPixels: 1,
  widthMaxPixels: 5,
  pickable: true,
- updateTriggers: { highlighted: highlightSignature, health: healthSignature, pulse: this.cablePulsePhase },
+ updateTriggers: { highlighted: highlightSignature, health: healthSignature },
  });
 
  this.lastCableHighlightSignature = highlightSignature;
@@ -3385,13 +3357,12 @@ export class DeckGLMap {
 
  const pulseClusters = this.protestClusters.filter(c => c.maxSeverity === 'high' || c.hasRiot);
  if (pulseClusters.length > 0) {
- const pulse = 1 + 0.8 * (0.5 + 0.5 * Math.sin((this.pulseTime || Date.now()) / 400));
  layers.push(new ScatterplotLayer<MapProtestCluster>({
  id: 'protest-clusters-pulse',
  data: pulseClusters,
  getPosition: d => [d.lon, d.lat],
  getRadius: d => 15_000 + d.count * 2000,
- radiusScale: pulse,
+ radiusScale: 1.4,
  radiusMinPixels: 8,
  radiusMaxPixels: 30,
  stroked: true,
@@ -3399,7 +3370,6 @@ export class DeckGLMap {
  getLineColor: d => d.hasRiot ? [220, 40, 40, 120] as [number, number, number, number] : [255, 80, 60, 100] as [number, number, number, number],
  lineWidthMinPixels: 1.5,
  pickable: false,
- updateTriggers: { radiusScale: this.pulseTime },
  }));
  }
 
@@ -3581,7 +3551,6 @@ export class DeckGLMap {
 
  const highHotspots = this.hotspots.filter(h => h.level === 'high' || h.hasBreaking);
  if (highHotspots.length > 0) {
- const pulse = 1 + 0.8 * (0.5 + 0.5 * Math.sin((this.pulseTime || Date.now()) / 400));
  layers.push(new ScatterplotLayer({
  id: 'hotspots-pulse',
  data: highHotspots,
@@ -3590,7 +3559,7 @@ export class DeckGLMap {
  const score = d.escalationScore || 1;
  return 10_000 + score * 5000;
  },
- radiusScale: pulse,
+ radiusScale: 1.4,
  radiusMinPixels: 6,
  radiusMaxPixels: 30,
  stroked: true,
@@ -3601,13 +3570,11 @@ export class DeckGLMap {
  },
  lineWidthMinPixels: 1.5,
  pickable: false,
- updateTriggers: { radiusScale: this.pulseTime },
  }));
 
  // Night bloom: soft outer glow around high-severity hotspots.
  // Omitted when the user prefers reduced motion or low power mode is active.
  if (zoom >= 2.5 && !isLowPowerMode() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
- const bloomBreath = 0.5 + 0.5 * Math.sin((this.pulseTime || Date.now()) / 1200);
  layers.push(new ScatterplotLayer({
  id: 'hotspots-bloom',
  data: highHotspots,
@@ -3618,7 +3585,7 @@ export class DeckGLMap {
  },
  getFillColor: (d) => {
  const score = d.escalationScore || 1;
- const baseAlpha = Math.round((18 + score * 6) * bloomBreath * baseOpacity);
+ const baseAlpha = Math.round((18 + score * 6) * 0.5 * baseOpacity);
  return d.hasBreaking
  ? [255, 50, 50, baseAlpha] as [number, number, number, number]
  : [255, 140, 0, baseAlpha] as [number, number, number, number];
@@ -3628,7 +3595,6 @@ export class DeckGLMap {
  stroked: false,
  filled: true,
  pickable: false,
- updateTriggers: { getFillColor: this.pulseTime },
  }));
  }
  }
@@ -3658,100 +3624,6 @@ export class DeckGLMap {
  });
   }
 
-  private pulseTime = 0;
-
-  private canPulse(now = Date.now()): boolean {
- return now - this.startupTime > 60_000;
-  }
-
-  private hasRecentRiot(now = Date.now(), windowMs = 2 * 60 * 60 * 1000): boolean {
- const hasRecentClusterRiot = this.protestClusters.some(c =>
- c.hasRiot && c.latestRiotEventTimeMs != undefined && (now - c.latestRiotEventTimeMs) < windowMs
- );
- if (hasRecentClusterRiot) return true;
-
- // Fallback to raw protests because syncPulseAnimation can run before cluster data refreshes.
- return this.protests.some((p) => {
- if (p.eventType !== 'riot' || p.sourceType === 'gdelt') return false;
- const ts = p.time.getTime();
- return Number.isFinite(ts) && (now - ts) < windowMs;
- });
-  }
-
-  private needsPulseAnimation(now = Date.now()): boolean {
- return this.hasRecentNews(now)
- || this.hasRecentRiot(now)
- || this.hotspots.some(h => h.hasBreaking)
- || this.positiveEvents.some(e => e.count > 10)
- || this.kindnessPoints.some(p => p.type === 'real');
-  }
-
-  private syncPulseAnimation(now = Date.now()): void {
- if (this.renderPaused) {
- if (this.newsPulseIntervalId !== null) this.stopPulseAnimation();
- return;
- }
- const shouldPulse = this.canPulse(now) && this.needsPulseAnimation(now);
- if (shouldPulse && this.newsPulseIntervalId === null) {
- this.startPulseAnimation();
- } else if (!shouldPulse && this.newsPulseIntervalId !== null) {
- this.stopPulseAnimation();
- }
-  }
-
-  private startPulseAnimation(): void {
- if (this.newsPulseIntervalId !== null) return;
- // 1s is sufficient — pulse is a smooth sine wave, 500ms was imperceptibly faster
- const PULSE_UPDATE_INTERVAL_MS = 1000;
-
- this.newsPulseIntervalId = setInterval(() => {
- const now = Date.now();
- if (!this.needsPulseAnimation(now)) {
- this.pulseTime = now;
- this.stopPulseAnimation();
- this.rafUpdateLayers();
- return;
- }
- this.pulseTime = now;
- this.rafUpdateLayers();
- }, PULSE_UPDATE_INTERVAL_MS);
-  }
-
-  private stopPulseAnimation(): void {
- if (this.newsPulseIntervalId !== null) {
- clearInterval(this.newsPulseIntervalId);
- this.newsPulseIntervalId = null;
- }
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Cable pulse — gentle sine-wave opacity animation on undersea cable layer
-  // Period: 10s cycle; interval: 120ms (~8fps, imperceptible on slow motion)
-  // ──────────────────────────────────────────────────────────────────────────
-
-  private static readonly CABLE_PULSE_PERIOD_MS = 10_000;
-
-  private startCablePulse(): void {
- if (this.cablePulseIntervalId !== null) return;
- // Use a slower interval (1s) — the pulse is a gentle 10s sine wave,
- // so 120ms updates were ~80x faster than perceptually needed.
- this.cablePulseIntervalId = setInterval(() => {
- if (this.renderPaused || this.webglLost) return;
- const TWO_PI = 2 * Math.PI;
- const period = DeckGLMap.CABLE_PULSE_PERIOD_MS;
- this.cablePulsePhase = ((Date.now() % period) / period) * TWO_PI;
- this.layerCache.delete('cables-layer');
- this.rafUpdateLayers();
- }, 1000);
-  }
-
-  private stopCablePulse(): void {
- if (this.cablePulseIntervalId !== null) {
- clearInterval(this.cablePulseIntervalId);
- this.cablePulseIntervalId = null;
- }
-  }
-
   private createNewsLocationsLayer(): ScatterplotLayer[] {
  const zoom = this.maplibreMap?.getZoom() || 2;
  const alphaScale = zoom < 2.5 ? 0.4 : (zoom < 4 ? 0.7 : 1);
@@ -3771,7 +3643,7 @@ export class DeckGLMap {
  info: 80,
  };
 
- const now = this.pulseTime || Date.now();
+ const now = Date.now();
  const PULSE_DURATION = 30_000;
 
  const layers: ScatterplotLayer[] = [
@@ -3797,14 +3669,12 @@ export class DeckGLMap {
  });
 
  if (recentNews.length > 0) {
- const pulse = 1 + 1.5 * (0.5 + 0.5 * Math.sin(now / 318));
-
  layers.push(new ScatterplotLayer({
  id: 'news-pulse-layer',
  data: recentNews,
  getPosition: (d) => [d.lon, d.lat],
  getRadius: 18_000,
- radiusScale: pulse,
+ radiusScale: 1.75,
  radiusMinPixels: 6,
  radiusMaxPixels: 30,
  pickable: false,
@@ -3819,7 +3689,6 @@ export class DeckGLMap {
  return [...rgb, a] as [number, number, number, number];
  },
  lineWidthMinPixels: 1.5,
- updateTriggers: { pulseTime: now },
  }));
  }
 
@@ -3861,16 +3730,15 @@ export class DeckGLMap {
  pickable: true,
  }));
 
- // Gentle pulse ring for significant events (count > 8)
+ // Emphasis ring for significant events (count > 8)
  const significantEvents = this.positiveEvents.filter(e => e.count > 8);
  if (significantEvents.length > 0) {
- const pulse = 1 + 0.4 * (0.5 + 0.5 * Math.sin((this.pulseTime || Date.now()) / 800));
  layers.push(new ScatterplotLayer({
  id: 'positive-events-pulse',
  data: significantEvents,
  getPosition: (d: PositiveGeoEvent) => [d.lon, d.lat],
  getRadius: 15_000,
- radiusScale: pulse,
+ radiusScale: 1.2,
  radiusMinPixels: 8,
  radiusMaxPixels: 24,
  stroked: true,
@@ -3878,7 +3746,6 @@ export class DeckGLMap {
  getLineColor: (d: PositiveGeoEvent) => getCategoryColor(d.category),
  lineWidthMinPixels: 1.5,
  pickable: false,
- updateTriggers: { radiusScale: this.pulseTime },
  }));
  }
 
@@ -3901,14 +3768,13 @@ export class DeckGLMap {
  pickable: true,
  }));
 
- // Pulse for real events
- const pulse = 1 + 0.4 * (0.5 + 0.5 * Math.sin((this.pulseTime || Date.now()) / 800));
+ // Emphasis ring for real events
  layers.push(new ScatterplotLayer<KindnessPoint>({
  id: 'kindness-pulse',
  data: this.kindnessPoints,
  getPosition: (d: KindnessPoint) => [d.lon, d.lat],
  getRadius: 14_000,
- radiusScale: pulse,
+ radiusScale: 1.2,
  radiusMinPixels: 6,
  radiusMaxPixels: 18,
  stroked: true,
@@ -3916,7 +3782,6 @@ export class DeckGLMap {
  getLineColor: [74, 222, 128, 80] as [number, number, number, number],
  lineWidthMinPixels: 1,
  pickable: false,
- updateTriggers: { radiusScale: this.pulseTime },
  }));
 
  return layers;
@@ -5134,21 +4999,12 @@ export class DeckGLMap {
  if (this.renderPaused === paused) return;
  this.renderPaused = paused;
  if (paused) {
- this.stopPulseAnimation();
  this.stopDayNightTimer();
- this.stopCablePulse();
  return;
  }
 
- this.syncPulseAnimation();
  if (this.state.layers.dayNight) this.startDayNightTimer();
- if (this.state.layers.cables) this.startCablePulse();
  if (this.state.layers.theaterPolygons) this.startTheaterPolygons();
- // Always refresh once on resume. Besides flushing any render deferred while
- // paused, this re-arms the alert-pulse loop: that loop is a self-scheduling
- // setTimeout chain (not a named timer), so if the window hid mid-cycle its
- // chain broke — a fresh render()→buildLayers() re-schedules it when alert
- // pulses are still active.
  this.render();
   }
 
@@ -5281,13 +5137,6 @@ export class DeckGLMap {
  this.state.layers = { ...layers };
  if (this.state.layers.cyberThreats && !prevCyber && !this.aptGroupsLoaded) this.loadAptGroups();
  this.render(); // Debounced
-
- // Start/stop cable pulse animation when cables layer is toggled
- if (layers.cables) {
- this.startCablePulse();
- } else {
- this.stopCablePulse();
- }
 
  // Update toggle checkboxes
  Object.entries(layers).forEach(([key, value]) => {
@@ -5659,7 +5508,6 @@ export class DeckGLMap {
  this.protests = events;
  this.rebuildProtestSupercluster();
  this.render();
- this.syncPulseAnimation();
   }
 
   public setFlightDelays(delays: AirportDelayAlert[]): void {
@@ -5788,8 +5636,6 @@ export class DeckGLMap {
  }
  this.newsLocations = data;
  this.render();
-
- this.syncPulseAnimation(now);
   }
 
   public setTechActivity(_activities: TechHubActivity[]): void {}
@@ -5802,13 +5648,11 @@ export class DeckGLMap {
 
   public setPositiveEvents(events: PositiveGeoEvent[]): void {
  this.positiveEvents = events;
- this.syncPulseAnimation();
  this.render();
   }
 
   public setKindnessData(points: KindnessPoint[]): void {
  this.kindnessPoints = points;
- this.syncPulseAnimation();
  this.render();
   }
 
@@ -5863,7 +5707,6 @@ export class DeckGLMap {
  });
 
  this.render();
- this.syncPulseAnimation();
   }
 
   /** Get news items related to a hotspot by keyword matching */
@@ -6479,8 +6322,6 @@ export class DeckGLMap {
  this.satelliteRetryTimer = null;
  }
 
- this.stopPulseAnimation();
- this.stopCablePulse();
  this.stopDayNightTimer();
  this.stopTheaterPolygons();
 

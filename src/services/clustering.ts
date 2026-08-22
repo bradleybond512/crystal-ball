@@ -11,6 +11,7 @@ import { clusterNewsCore } from './analysis-core';
 import { mlWorker } from './ml-worker';
 import { ML_THRESHOLDS } from '@/config/ml-config';
 import { buildClusterEvidencePack } from './evidence-pack';
+import { boundSemanticClusters } from './analysis-input';
 
 // Warn once per session — WKWebView can't run ONNX SIMD models so this fires constantly.
 let clusterWarnedThisSession = false;
@@ -31,9 +32,9 @@ export async function clusterNewsHybrid(items: NewsItem[]): Promise<ClusteredEve
  return jaccardClusters;
   }
 
-  try {
- // Get cluster primary titles for embedding
- const clusterTexts = jaccardClusters.map(c => ({
+ try {
+ // Bound local inference so a large feed refresh cannot pin the ML worker for minutes.
+ const clusterTexts = boundSemanticClusters(jaccardClusters).map(c => ({
  id: c.id,
  text: c.primaryTitle,
  }));

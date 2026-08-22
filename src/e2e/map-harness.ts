@@ -98,10 +98,11 @@ interface MapHarness {
   setProtestsScenario: (scenario: Scenario) => void;
   setPulseProtestsScenario: (scenario: PulseProtestScenario) => void;
   setNewsPulseScenario: (scenario: NewsPulseScenario) => void;
+  setAlertPulseScenario: (active: boolean) => void;
   setHotspotActivityScenario: (scenario: 'none' | 'breaking') => void;
-  forcePulseStartupElapsed: () => void;
-  resetPulseStartupTime: () => void;
-  isPulseAnimationRunning: () => boolean;
+  resetAppRepaintCount: () => void;
+  getAppRepaintCount: () => number;
+  setRenderPaused: (paused: boolean) => void;
   setZoom: (zoom: number) => void;
   setLayersForSnapshot: (enabledLayers: HarnessLayerKey[]) => void;
   setCamera: (camera: CameraState) => void;
@@ -325,9 +326,7 @@ const internals = map as unknown as {
   maplibreMap?: MapLibreMap;
   getTooltip?: (info: { object?: unknown; layer?: { id?: string } }) => { html?: string } | null;
   newsLocationFirstSeen?: Map<string, number>;
-  newsPulseIntervalId?: ReturnType<typeof setInterval> | null;
-  startupTime?: number;
-  stopPulseAnimation?: () => void;
+  _mapFpsAppRepaintCount?: number;
 };
 
 const buildLayerState = (enabledLayers: HarnessLayerKey[]): MapLayers => {
@@ -1159,7 +1158,6 @@ const makeNewsLocationsNonRecent = (): void => {
  internals.newsLocationFirstSeen.set(key, now - 120_000);
  }
   }
-  internals.stopPulseAnimation?.();
 };
 
 const setNewsPulseScenario = (scenario: NewsPulseScenario): void => {
@@ -1329,17 +1327,20 @@ window.__mapHarness = {
  map.setProtests(buildPulseProtests(scenario));
   },
   setNewsPulseScenario,
+  setAlertPulseScenario: (active: boolean): void => {
+    map.setAlertPulses(active
+      ? [{ id: 'harness-alert', lat: 38.9, lon: -77.0, severity: 'critical' }]
+      : []);
+  },
   setHotspotActivityScenario: (scenario: 'none' | 'breaking'): void => {
  map.updateHotspotActivity(buildHotspotActivityNews(scenario));
   },
-  forcePulseStartupElapsed: (): void => {
- internals.startupTime = Date.now() - 61_000;
+  resetAppRepaintCount: (): void => {
+    internals._mapFpsAppRepaintCount = 0;
   },
-  resetPulseStartupTime: (): void => {
- internals.startupTime = Date.now();
-  },
-  isPulseAnimationRunning: (): boolean => {
- return internals.newsPulseIntervalId != undefined;
+  getAppRepaintCount: (): number => internals._mapFpsAppRepaintCount ?? 0,
+  setRenderPaused: (paused: boolean): void => {
+    map.setRenderPaused(paused);
   },
   setZoom: (zoom: number): void => {
  map.setZoom(zoom);

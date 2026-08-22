@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "711160facd4a9310d2dedae63d527e7666620f74",
+  "reviewer": "claude",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-22T05:52:01.317Z",
+  "evidence": "PASS — no blocking bugs, regressions, security risks, or CI hazards.\n\nReview: codex/clear-lint-map-baselines-20260821 @ 711160fa\n\nCommits reviewed\n\n- 65200c28 — ESLint debt ratchet, map harness fixes, CI gate ordering\n- 77e54a03 — prior agentic verdict record\n- 711160fa — targeted-tests routing fix for scripts/lint-baseline.mjs\n\nAdvisory findings\n\n- F1: scripts/lint-baseline.mjs:128 — --force intentionally bypasses the baseline-raise guard; low risk because it requires an explicit command and committed diff.\n- F2: package.json:32 — lint:ci runs the full ratchet and changed-file strict scan; the 12-minute CI timeout should be watched as the repository grows.\n- F3: src/e2e/map-harness.ts:467 — the conflict camera uses a bounding-box midpoint rather than the authored ConflictZone center; both are inside the zone and this affects only visual-test framing.\n- F4: scripts/targeted-tests-baseline.txt:641 — remove the rollout bridge after the new OVERRIDES mapping is present on main.\n\nVerified clean\n\n- Basemap hiding, APT scenario wiring, ADS-B seed, base-fetch harness stub, parser config, ratchet comparisons, workflow ordering, baseline JSON shape, update behavior, and snapshots were reviewed as correct.\n\nTest gaps\n\n- CLI update/force and improvement-message paths are not directly unit tested. Acceptable for this tooling scope; CI exercises the real scanner."
+}

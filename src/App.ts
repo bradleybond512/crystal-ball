@@ -10,7 +10,7 @@ import {
 } from '@/config';
 import { initDB, cleanOldSnapshots, isAisConfigured, initAisStream, isOutagesConfigured, disconnectAisStream } from '@/services';
 import { mlWorker } from '@/services/ml-worker';
-import { getAiFlowSettings, subscribeAiFlowChange } from '@/services/ai-flow-settings';
+import { getAiFlowSettings, shouldInitializeBrowserMl, subscribeAiFlowChange } from '@/services/ai-flow-settings';
 import { startLearning } from '@/services/country-instability';
 import { dataFreshness } from '@/services/data-freshness';
 import { loadFromStorage, parseMapUrlState, saveToStorage, isMobileDevice } from '@/utils';
@@ -377,7 +377,7 @@ export class App {
  await initI18n();
  cyberReactorUnsubscribe = startNotificationRouter();
  const aiFlow = getAiFlowSettings();
- if (!uiOnlyE2E && (aiFlow.browserModel || isDesktopRuntime())) {
+ if (shouldInitializeBrowserMl(uiOnlyE2E, aiFlow)) {
  await mlWorker.init();
  if (BETA_MODE) mlWorker.loadModel('summarization-beta').catch(() => {});
  }

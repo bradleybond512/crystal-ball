@@ -44,6 +44,7 @@ export const OVERRIDES = {
   'scripts/cross-agent-check.mjs': ['test:agentic-pipeline'],
   'scripts/targeted-tests.mjs': ['test:agentic-pipeline'],
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
+  'scripts/lint-baseline.mjs': ['test:eslint-runner'],
   'scripts/lint-changed.mjs': ['test:eslint-runner'],
   'scripts/run-eslint.mjs': ['test:eslint-runner'],
   'scripts/bundle-budget-policy.mjs': ['test:bundle-budget-policy'],

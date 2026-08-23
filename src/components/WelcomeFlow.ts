@@ -3,6 +3,7 @@ import { locationService } from '@/services/location';
 import { OPTIONAL_ONBOARDING_SOURCES } from '@/services/home-shell/onboarding-sources';
 
 const ONBOARDING_KEY = 'cb:onboarding-complete';
+const WELCOME_BACKDROP_Z_INDEX = 100_000;
 
 const INTERESTS = [
   'Geopolitical',
@@ -58,6 +59,10 @@ export class WelcomeFlow {
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'cb-backdrop';
     Object.assign(this.backdrop.style, {
+      position: 'fixed',
+      inset: '0',
+      zIndex: String(WELCOME_BACKDROP_Z_INDEX),
+      pointerEvents: 'auto',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',

@@ -54,6 +54,36 @@ test('source-connect step separates auth wiring and derives optional unlocks fro
   happyWindow.document.body.replaceChildren();
 });
 
+test('first-run backdrop blocks the full app stack while its native controls remain reachable', async () => {
+  const happyWindow = installDom();
+  const { WelcomeFlow } = await import('../WelcomeFlow.ts');
+  let underlyingClicks = 0;
+  const underlying = happyWindow.document.createElement('button');
+  underlying.textContent = 'Underlying Home Shell control';
+  underlying.addEventListener('click', () => { underlyingClicks += 1; });
+
+  const flow = new WelcomeFlow();
+  const testFlow = flow as unknown as { backdrop: HTMLElement; renderStep(): void };
+  happyWindow.document.body.append(underlying, testFlow.backdrop);
+  testFlow.renderStep();
+
+  assert.equal(testFlow.backdrop.style.position, 'fixed');
+  assert.equal(testFlow.backdrop.style.inset, '0');
+  assert.ok(Number(testFlow.backdrop.style.zIndex) > 10_005, 'onboarding must stack above the Home Shell and command palette');
+  assert.equal(testFlow.backdrop.style.pointerEvents, 'auto');
+
+  const skip = [...testFlow.backdrop.querySelectorAll('button')]
+    .find((candidate) => candidate.textContent === 'Skip for now');
+  assert.ok(skip instanceof happyWindow.HTMLButtonElement);
+  assert.equal(skip.disabled, false);
+  happyWindow.document.body.classList.add('animations-paused');
+  skip.click();
+  assert.match(testFlow.backdrop.textContent, /What interests you\?/);
+  assert.equal(underlyingClicks, 0);
+
+  happyWindow.document.body.replaceChildren();
+});
+
 test('Open Settings completes once and opens API-key settings', async () => {
   const happyWindow = installDom();
   const { WelcomeFlow } = await import('../WelcomeFlow.ts');

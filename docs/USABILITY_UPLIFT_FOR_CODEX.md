@@ -461,7 +461,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | IN PROGRESS | pending PR |
+| UX-000 | Zero-key first-run contract | IN PROGRESS | #1660 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | NOT STARTED | — |

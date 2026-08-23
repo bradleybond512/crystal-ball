@@ -7,6 +7,10 @@
 - Claim one `ACC-NNN` task through a draft PR before implementation and update
   its status and evidence in the same PR that completes the work.
 - `docs/PREDICTION_UPLIFT_PLAN.md` is a reference design, not the live tracker.
+- UI, surfacing, or usability work must start with
+  `docs/USABILITY_UPLIFT_FOR_CODEX.md`. It carries verified findings (with
+  re-runnable commands) and the `UX-NNN` task list. Claim one task per PR and
+  update its Progress Tracker row in that same PR.
 
 ## Delivery Path
 

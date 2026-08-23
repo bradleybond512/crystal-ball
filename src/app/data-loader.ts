@@ -71,7 +71,11 @@ import {
 import { refreshStormPosture } from '@/services/survival/storm-posture-state';
 import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
 import { reportElevatedPanel } from '@/services/panel-correlation';
-import { fetchGDACSEvents } from '@/services/gdacs';
+import {
+  fetchGDACSEvents,
+  fetchGDACSEventsTracked,
+  getGDACSSuccessfulUpdate,
+} from '@/services/gdacs';
 import { normalizeNaturalEventToAlert } from '@/services/eonet';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
@@ -567,7 +571,7 @@ export class DataLoaderManager implements AppModule {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
  withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
- withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
+ withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
  const proximate = getDisasterProximateCameras(raw, nwsResult.data, gdacsResult.data);
  // Panel-side disaster badge only — map keeps the full set.
@@ -1590,7 +1594,7 @@ export class DataLoaderManager implements AppModule {
  reportElevatedPanel('earthquakes', 'Earthquakes');
  }
 
- withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
+ withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
  if (gdacs.some(e => e.alertLevel === 'Red')) {
  reportElevatedPanel('gdacs-alerts', 'GDACS Disaster Alerts');
  }
@@ -2237,11 +2241,12 @@ export class DataLoaderManager implements AppModule {
  // thing in the tick, long after the safety-critical chip publication.
  const openMeteoReadings: TempReading[] = [];
  const metNorwayReadings: TempReading[] = [];
+ let openMeteoSavedPlaceCount: number | null = null;
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
- const places = getSavedPlaces().slice(0, 3);
+ const places = getSavedPlaces().slice(0, 3).filter((place) => isUsableLatLon(place.lat, place.lon));
+ openMeteoSavedPlaceCount = places.length;
  await Promise.allSettled(places.map(async (place) => {
- if (!isUsableLatLon(place.lat, place.lon)) return;
  const [om, mn] = await Promise.allSettled([
  fetchOpenMeteoTemp(place.lat, place.lon),
  fetchMetNorwayTemp(place.lat, place.lon),
@@ -2259,6 +2264,16 @@ export class DataLoaderManager implements AppModule {
  const mnVote = tempVote('met-norway', metNorwayReadings);
  recordDomainObservations('open-meteo-forecast', omVote.observations, omVote.ok);
  recordDomainObservations('met-norway', mnVote.observations, mnVote.ok);
+ if (openMeteoSavedPlaceCount === 0) {
+ dataFreshness.recordUnknown('open-meteo', 'Add a saved place to start local forecasts.');
+ } else if (omVote.ok) {
+ // Success follows the validated adapter output, never the raw HTTP/readings.
+ dataFreshness.recordUpdate('open-meteo', omVote.observations.length);
+ } else {
+ dataFreshness.recordError('open-meteo', openMeteoSavedPlaceCount === null
+   ? 'Saved-place forecast setup could not be evaluated'
+   : 'Open-Meteo returned no validated saved-place forecast observations');
+ }
  }
 
  } catch (error) {
@@ -2979,7 +2994,12 @@ export class DataLoaderManager implements AppModule {
 
   async loadGDACSAlerts(): Promise<void> {
  try {
- const { data: events } = await withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000);
+ const snapshot = await withOfflineCache(
+   'gdacs-events',
+   () => this.fetchVerifiedGDACSEvents(),
+   1 * 60 * 60 * 1000,
+ );
+ const events = snapshot.data;
  this.ctx.intelligenceCache.gdacsAlerts = events;
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update(events);
  unifiedAlertStore.ingest(events.map(normalizeGDACSEvent));
@@ -2999,10 +3019,26 @@ export class DataLoaderManager implements AppModule {
  const domain = (event.eventType === 'TC' || event.eventType === 'FL' || event.eventType === 'DR') ? 'weather' : 'infrastructure';
  ingestCorrelationMatrix(lat, lon, domain, severity);
  }
+ const freshness = feedFreshnessFromSnapshot(snapshot);
+ if (!freshness.fresh) {
+ dataFreshness.recordError('gdacs', freshness.staleReason ?? 'GDACS update provenance unavailable');
+ }
  } catch (error) {
  console.warn('[gdacs-alerts] fetch failed', error);
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update([]);
+ dataFreshness.recordError('gdacs', String(error));
  }
+  }
+
+  private async fetchVerifiedGDACSEvents(): Promise<Awaited<ReturnType<typeof fetchGDACSEvents>>> {
+ const result = await fetchGDACSEventsTracked();
+ const update = getGDACSSuccessfulUpdate(result);
+ if (!update) {
+ dataFreshness.recordError('gdacs', 'GDACS adapter returned circuit-breaker fallback without successful provenance');
+ throw new Error('GDACS adapter returned circuit-breaker fallback without successful provenance');
+ }
+ dataFreshness.recordUpdate('gdacs', update.itemCount, update.updatedAt);
+ return result.events;
   }
 
   /** NOAA CO-OPS flood gauge observations — redundant source alongside USGS water data.
@@ -4176,7 +4212,7 @@ export class DataLoaderManager implements AppModule {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
  withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
- withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
+ withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
  const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data, gdacsResult.data);
  this.ctx.map?.setFAACameras(scored);

@@ -2,6 +2,8 @@
 import { Panel } from './Panel';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
+import { getGdeltNewsAdapterEvidence } from '@/services/home-shell/keyless-adapter-evidence';
 
 interface GdeltEvent {
   title: string;
@@ -64,11 +66,19 @@ export class GdeltIntelPanel extends Panel {
  const res = await fetch(`${getApiBaseUrl()}/api/gdelt-intel`);
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const json = await res.json() as GdeltIntelResponse;
- if (!json || typeof json !== 'object' || !Array.isArray(json.events)) {
- this.error = 'GDELT returned a malformed response. Will retry every 15 min.';
- } else {
+ const evidence = getGdeltNewsAdapterEvidence(json);
+ if (evidence) {
  this.data = json;
  this.error = null;
+ dataFreshness.recordUpdate('gdelt-news', evidence.itemCount);
+ } else {
+ const adapterError = typeof json?.error === 'string' && json.error.trim().length > 0
+   ? json.error
+   : null;
+ this.error = adapterError
+   ? `GDELT unavailable: ${adapterError}. Will retry every 15 min.`
+   : 'GDELT returned a malformed response. Will retry every 15 min.';
+ dataFreshness.recordError('gdelt-news', adapterError ?? 'GDELT adapter output was unavailable or malformed');
  }
  } catch (error) {
  if (this.isAbortError(error)) return;
@@ -77,6 +87,7 @@ export class GdeltIntelPanel extends Panel {
  this.error = error instanceof Error
  ? `GDELT unreachable: ${error.message}. Will retry every 15 min.`
  : 'GDELT unavailable. Source: gdeltproject.org (free, no key needed). Will retry every 15 min.';
+ dataFreshness.recordError('gdelt-news', this.error);
  }
 
  this.loading = false;

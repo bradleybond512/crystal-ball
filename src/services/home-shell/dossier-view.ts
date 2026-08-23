@@ -10,7 +10,7 @@
 import type { PanelMeta } from '../../config/panel-metadata.ts';
 import type { SituationDescriptor } from '../insights/action-briefs.ts';
 import { classifyUrgency } from '../insights/confidence-urgency-matrix.ts';
-import { buildDeckCards } from './deck-view.ts';
+import { DECK_STARTUP_BUDGET_MS, buildDeckCards } from './deck-view.ts';
 import type { DeckCardView, PanelHealthLike } from './deck-view.ts';
 
 export interface TraceEventLike {
@@ -105,6 +105,7 @@ function composeEvidence(
     ranked.map((c) => c.panelId),
     { names: inputs.names, health: inputs.health, narratives: inputs.narratives },
     now,
+    now - DECK_STARTUP_BUDGET_MS,
   );
   const withReason: EvidenceCardView[] = cards.map((card, i) => {
     const meta = ranked[i]!.meta;

@@ -1,5 +1,6 @@
 import { animateIn, prefersReducedMotion } from '@/services/motion';
 import { locationService } from '@/services/location';
+import { OPTIONAL_ONBOARDING_SOURCES } from '@/services/home-shell/onboarding-sources';
 
 const ONBOARDING_KEY = 'cb:onboarding-complete';
 
@@ -14,14 +15,27 @@ const INTERESTS = [
   'Space',
 ] as const;
 
-const FREE_APIS = [
-  { name: 'USGS Earthquakes', label: 'free' },
-  { name: 'GDACS Disasters', label: 'free' },
-  { name: 'Open-Meteo Weather', label: 'free' },
-  { name: 'GDELT News', label: 'free' },
-  { name: 'NewsAPI', label: 'free tier' },
-  { name: 'OpenWeatherMap', label: 'free tier' },
-];
+export const WELCOME_SOURCE_GROUPS = [
+  {
+    access: 'no-auth',
+    heading: 'No configured credentials required',
+    description: 'These public-source adapters use no authentication in repository wiring.',
+    badge: 'no credential',
+    sources: [
+      { name: 'USGS Earthquakes', unlocks: 'Earthquake coverage' },
+      { name: 'GDACS Disasters', unlocks: 'Global disaster alerts' },
+      { name: 'Open-Meteo Weather', unlocks: 'Forecast coverage' },
+      { name: 'GDELT News', unlocks: 'Global event coverage' },
+    ],
+  },
+  {
+    access: 'optional-credential',
+    heading: 'Optional service credentials',
+    description: 'These adapters require configured provider credentials; free tiers may be available.',
+    badge: 'credential',
+    sources: OPTIONAL_ONBOARDING_SOURCES,
+  },
+] as const;
 
 export interface WelcomeFlowOptions {
   onLocationSet?: (lat: number, lng: number) => void;
@@ -263,7 +277,7 @@ export class WelcomeFlow {
     });
 
     const desc = document.createElement('p');
-    desc.textContent = 'These free sources work right away — no key needed.';
+    desc.textContent = 'Authentication requirements shown here come from adapter wiring. Network access and upstream availability still apply.';
     Object.assign(desc.style, {
       margin: '0',
       fontSize: 'var(--text-sm)',
@@ -271,48 +285,84 @@ export class WelcomeFlow {
       fontFamily: 'var(--font-ui)',
     });
 
-    const list = document.createElement('div');
-    Object.assign(list.style, {
+    const groups = document.createElement('div');
+    Object.assign(groups.style, {
       display: 'flex',
       flexDirection: 'column',
-      gap: '2px',
-      borderRadius: 'var(--radius-md)',
-      overflow: 'hidden',
-      border: '1px solid rgba(255,255,255,0.06)',
+      gap: 'var(--space-3)',
     });
 
-    for (const api of FREE_APIS) {
-      const row = document.createElement('div');
-      Object.assign(row.style, {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 'var(--space-2) var(--space-3)',
-        background: 'rgba(255,255,255,0.02)',
+    for (const group of WELCOME_SOURCE_GROUPS) {
+      const section = document.createElement('section');
+      section.dataset.sourceAccess = group.access;
+      const headingId = `welcome-sources-${group.access}`;
+      section.setAttribute('aria-labelledby', headingId);
+
+      const groupHeading = document.createElement('h3');
+      groupHeading.id = headingId;
+      groupHeading.textContent = group.heading;
+      Object.assign(groupHeading.style, {
+        margin: '0 0 2px',
+        color: 'var(--text-primary)',
+        fontSize: 'var(--text-sm)',
         fontFamily: 'var(--font-ui)',
       });
 
-      const name = document.createElement('span');
-      name.textContent = api.name;
-      Object.assign(name.style, {
-        fontSize: 'var(--text-sm)',
-        color: '#ccc',
+      const groupDescription = document.createElement('p');
+      groupDescription.textContent = group.description;
+      Object.assign(groupDescription.style, {
+        margin: '0 0 var(--space-2)',
+        color: 'var(--text-tertiary)',
+        fontSize: 'var(--text-xs)',
+        fontFamily: 'var(--font-ui)',
       });
 
-      const badge = document.createElement('span');
-      badge.textContent = api.label;
-      Object.assign(badge.style, {
-        fontSize: 'var(--text-2xs)',
-        fontWeight: 'var(--fw-medium)',
-        color: '#4ade80',
-        background: 'rgba(74, 222, 128, 0.1)',
-        border: '1px solid rgba(74, 222, 128, 0.2)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '1px var(--space-2)',
+      const list = document.createElement('div');
+      list.setAttribute('role', 'list');
+      Object.assign(list.style, {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+        border: '1px solid rgba(255,255,255,0.06)',
       });
 
-      row.append(name, badge);
-      list.append(row);
+      for (const source of group.sources) {
+        const row = document.createElement('div');
+        row.dataset.sourceName = source.name;
+        row.setAttribute('role', 'listitem');
+        Object.assign(row.style, {
+          padding: 'var(--space-2) var(--space-3)',
+          background: 'rgba(255,255,255,0.02)',
+          fontFamily: 'var(--font-ui)',
+        });
+
+        const name = document.createElement('span');
+        name.textContent = source.name;
+        Object.assign(name.style, { fontSize: 'var(--text-sm)', color: 'var(--text-primary)', marginRight: 'var(--space-2)' });
+
+        const badge = document.createElement('span');
+        badge.textContent = group.badge;
+        Object.assign(badge.style, {
+          fontSize: 'var(--text-2xs)',
+          fontWeight: 'var(--fw-medium)',
+          color: group.access === 'no-auth' ? 'var(--status-ok)' : 'var(--status-warn)',
+          background: 'var(--mat-thin)',
+          border: '1px solid var(--accent-selection)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '1px var(--space-2)',
+        });
+
+        const unlocks = document.createElement('span');
+        unlocks.textContent = ` · ${source.unlocks}`;
+        Object.assign(unlocks.style, { fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' });
+        row.append(name, badge, unlocks);
+        list.append(row);
+      }
+
+      section.append(groupHeading, groupDescription, list);
+      groups.append(section);
     }
 
     const btnRow = document.createElement('div');
@@ -335,11 +385,11 @@ export class WelcomeFlow {
     settingsBtn.style.padding = 'var(--space-3) var(--space-4)';
     settingsBtn.addEventListener('click', () => {
       this.complete();
-      this.options.onComplete?.();
+      document.dispatchEvent(new CustomEvent('wm:open-settings'));
     });
 
     btnRow.append(skipBtn, settingsBtn);
-    this.stepEl.append(title, desc, list, btnRow);
+    this.stepEl.append(title, desc, groups, btnRow);
   }
 
   private advance(): void {

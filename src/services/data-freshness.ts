@@ -12,8 +12,11 @@ export type DataSourceId =
   | 'wingbits' // Aircraft enrichment
   | 'ais' // Vessel tracking
   | 'usgs' // Earthquakes
+  | 'gdacs' // GDACS disasters
+  | 'open-meteo' // Open-Meteo local forecast for saved places
   | 'gdelt' // News velocity
   | 'gdelt_doc'  // GDELT Doc protest intelligence
+  | 'gdelt-news' // Dedicated first-run evidence from the GDELT news adapter
   | 'rss' // RSS feeds
   | 'polymarket' // Prediction markets
   | 'predictions' // Predictions feed
@@ -143,6 +146,8 @@ export interface DataSourceState {
   lastUpdate: Date | null;
   lastError: string | null;
   lastErrorAt: number | null;
+  /** Explicit non-error reason that a source has no current update. */
+  unknownReason?: string | null;
   itemCount: number;
   /** Items delivered by the MOST RECENT refresh (set, not accumulated, unlike
    *  itemCount). Lets diagnostics distinguish "fresh and delivering" from
@@ -191,8 +196,11 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   wingbits: { name: 'Aircraft Enrichment', requiredForRisk: false, panelId: 'military' },
   ais: { name: 'Vessel Tracking', requiredForRisk: false, panelId: 'shipping' },
   usgs: { name: 'Earthquakes', requiredForRisk: false, panelId: 'natural' },
+  gdacs: { name: 'GDACS Disasters', requiredForRisk: false, panelId: 'gdacs-alerts' },
+  'open-meteo': { name: 'Open-Meteo Local Forecast', requiredForRisk: false, panelId: 'global-weather' },
   gdelt: { name: 'News Intelligence', requiredForRisk: true, panelId: 'intel' },
   gdelt_doc: { name: 'GDELT Doc Intelligence', requiredForRisk: false, panelId: 'protests' },
+  'gdelt-news': { name: 'GDELT News', requiredForRisk: false, panelId: 'gdelt-intel' },
   rss: { name: 'Live News Feeds', requiredForRisk: true, panelId: 'live-news' },
   polymarket: { name: 'Prediction Markets', requiredForRisk: false, panelId: 'polymarket' },
   predictions: { name: 'Predictions Feed', requiredForRisk: false, panelId: 'polymarket' },
@@ -328,6 +336,7 @@ class DataFreshnessTracker {
  lastUpdate: null,
  lastError: null,
  lastErrorAt: null,
+ unknownReason: null,
  itemCount: 0,
  lastBatchItemCount: 0,
  enabled: true, // Assume enabled by default
@@ -340,14 +349,15 @@ class DataFreshnessTracker {
   /**
  * Record that a data source received new data
  */
-  recordUpdate(sourceId: DataSourceId, itemCount = 1): void {
+  recordUpdate(sourceId: DataSourceId, itemCount = 1, updatedAt = Date.now()): void {
  const source = this.sources.get(sourceId);
  if (source) {
- source.lastUpdate = new Date();
+ source.lastUpdate = new Date(updatedAt);
  source.itemCount += itemCount;
  source.lastBatchItemCount = itemCount;
  source.lastError = null;
  source.lastErrorAt = null;
+ source.unknownReason = null;
  source.status = this.calculateStatus(source);
  this.notifyListeners();
  }
@@ -361,7 +371,22 @@ class DataFreshnessTracker {
  if (source) {
  source.lastError = error;
  source.lastErrorAt = Date.now();
+ source.unknownReason = null;
  source.status = 'error';
+ this.notifyListeners();
+ }
+  }
+
+  /** Record an intentional no-data state, such as no saved place configured. */
+  recordUnknown(sourceId: DataSourceId, reason: string): void {
+ const source = this.sources.get(sourceId);
+ if (source) {
+ source.lastUpdate = null;
+ source.lastBatchItemCount = 0;
+ source.lastError = null;
+ source.lastErrorAt = null;
+ source.unknownReason = reason;
+ source.status = 'no_data';
  this.notifyListeners();
  }
   }
@@ -592,8 +617,11 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   wingbits: 'Aircraft identification limited—enrichment service unavailable',
   ais: 'Vessel positions outdated—possible dark shipping or AIS transponder-off activity undetected',
   usgs: 'Recent earthquakes may not be shown—seismic data unavailable',
+  gdacs: 'Global disaster alerts unknown—GDACS data unavailable',
+  'open-meteo': 'Local forecast unknown—Open-Meteo has no current saved-place update',
   gdelt: 'News event velocity unknown—GDELT intelligence feed offline',
   gdelt_doc: 'Protest intelligence degraded—GDELT Doc feed offline',
+  'gdelt-news': 'GDELT news coverage unknown—news adapter unavailable',
   rss: 'Breaking news may be missed—RSS feeds not updating',
   polymarket: 'Prediction market signals unavailable—early warning capability degraded',
   predictions: 'Prediction feed unavailable—scenario signals may be stale',

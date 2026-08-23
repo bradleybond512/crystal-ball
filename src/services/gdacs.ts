@@ -2,6 +2,7 @@
 import { createCircuitBreaker } from '@/utils';
 import { rehydrateDate } from '@/services/cache-hydration';
 import { fetchWithContext } from '@/services/fetch-with-context';
+import type { BreakerDataState } from '@/utils/circuit-breaker';
 
 export interface GDACSEvent {
   id: string;
@@ -56,8 +57,29 @@ const EVENT_TYPE_NAMES: Record<string, string> = {
   DR: 'Drought',
 };
 
-export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
-  const events = await breaker.execute(async () => {
+export interface GDACSFetchResult {
+  events: GDACSEvent[];
+  dataState: BreakerDataState;
+}
+
+export interface GDACSSuccessfulUpdate {
+  itemCount: number;
+  updatedAt: number;
+}
+
+/**
+ * Convert only breaker-backed live/cached output into freshness evidence.
+ * `executeTracked(..., [])` returns the same empty array for a valid zero-row
+ * response and an unavailable fallback; the paired state is the provenance
+ * that keeps those outcomes distinct.
+ */
+export function getGDACSSuccessfulUpdate(result: GDACSFetchResult): GDACSSuccessfulUpdate | null {
+  if (result.dataState.mode === 'unavailable' || result.dataState.timestamp === null) return null;
+  return { itemCount: result.events.length, updatedAt: result.dataState.timestamp };
+}
+
+export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {
+  const { data: events, dataState } = await breaker.executeTracked(async () => {
  const response = await fetchWithContext('GDACS events', GDACS_API, {
  headers: { 'Accept': 'application/json' },
  signal: AbortSignal.timeout(10_000),
@@ -95,10 +117,18 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
  url: f.properties.url?.report || '',
  }));
   }, []);
-  return events.map(event => ({
-    ...event,
-    fromDate: rehydrateDate(event.fromDate),
-  }));
+  return {
+    events: events.map(event => ({
+      ...event,
+      fromDate: rehydrateDate(event.fromDate),
+    })),
+    dataState,
+  };
+}
+
+export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
+  const result = await fetchGDACSEventsTracked();
+  return result.events;
 }
 
 export function getGDACSStatus(): string {

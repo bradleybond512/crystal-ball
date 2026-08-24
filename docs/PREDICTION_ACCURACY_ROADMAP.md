@@ -1780,11 +1780,23 @@ registered in `algorithm-registry` at all — the closest entry is
 does not report `no_tunable` for the edge kernel; it has nothing to report on,
 because the algorithm does not exist as a tuning target.
 
-Declare the kernel factor weights as bounded tunables in
-`tunable-params-store`, defaults equal to the current constants so an empty
-store is byte-identical to today's behaviour (the established convention).
-Register the correlation edge algorithm in `algorithm-registry`, graded from the
-correlation outcome ledger.
+There are no per-factor weights to declare: the kernel is a plain product of the
+six factors. The tunable surface is the set of named **shape constants** that
+determine how each factor is computed, plus the clamps —
+`SPATIAL_DECAY_KM` (400), `SPATIAL_FLOOR` (0.5), `ENTITY_BOOST_PER_SHARED`
+(0.15), `ENTITY_BOOST_MAX_SHARED` (2), `VALUE_FLOOR` (0.2), the temporal
+half-life kernel's shape, and the `reliability` `[0.5, 1.5]` and `regime`
+`[1, 1.15]` bounds.
+
+Declare those as bounded tunables in `tunable-params-store` with defaults equal
+to the current constants, so an empty store is byte-identical to today's
+behaviour (the established convention). Introducing new per-factor weights is an
+alternative, but only with neutral defaults and the same byte-identical
+guarantee — and it should be justified rather than assumed, since it adds
+degrees of freedom the outcome ledger may not be able to identify.
+
+Register a correlation edge algorithm in `algorithm-registry` (none exists
+today), graded from the correlation outcome ledger.
 
 Each knob needs a safety-fixture suite following the `episodic-analog:minSim`
 discriminating pattern — the suite must block clearly-bad values and allow
@@ -1793,8 +1805,8 @@ without a passing suite fails closed to `held_for_approval` and is never
 auto-applied.
 
 Waits on ACC-505 because tuning a kernel whose `reliability` factor is still
-regime-blind would fit the weights to an averaged signal, and the fitted values
-would have to be re-derived once the reliability input changes shape.
+regime-blind would fit the constants to an averaged signal, and the fitted
+values would have to be re-derived once the reliability input changes shape.
 
 ### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
 

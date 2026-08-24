@@ -889,11 +889,12 @@ These tasks retain their detailed designs in
 |---|---|---|---|
 | ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
 | ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
-| ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
-| ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
+| ACC-503 | DONE | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
+| ACC-504 | DONE | Dispersion correction for bursty streams | ACC-501 (DONE) |
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
-| ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
+| ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
+| ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
 change operational scores, confidence, posture, alerts, or delivery rungs.
@@ -1613,6 +1614,107 @@ Known limitation and rollback:
   restoration of the schema-11 benchmark, without changing operational scores
   or built-in safety-notification rules.
 
+### ACC-503 — Multi-hop mediation/confounder filtering
+
+Status: `DONE`
+
+Landed: main `a7947ac4` ("fix: prevent spurious correlation rules"), jointly
+with ACC-504. Recorded retroactively — the implementation shipped without the
+tracker row being flipped, and this section documents it after the fact.
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+- `lead-lag.ts` gained a `RedundancyKind` discriminator (`chain`, `fork`,
+  `reciprocal`, `inhibitory-reverse`) and an `EdgeRedundancy` annotation
+  carrying the mediator and the explained fraction;
+- `explainedByChain()` demotes a direct A→B when compatible A→M and M→B edges
+  account for it, and `explainedByFork()` demotes it when a common antecedent
+  drives both endpoints — the observed-fork case that a family-wise correction
+  cannot reach, because a real common cause produces a genuinely significant
+  shortcut;
+- reciprocal within-burst pairs are demoted as directionally ambiguous, and a
+  promoting edge cannot survive alongside its own significant inhibitory
+  reverse;
+- redundancy is applied in stages (inhibitory-reverse and reciprocal first,
+  then chain, then fork over the chain-filtered set) so a demoted edge cannot
+  serve as another edge's explanation;
+- demoted edges are **retained as evidence** and excluded only from
+  `promoting`, so `learnedRulesFromEdges()` cannot synthesise a rule from a
+  mediated or confounded shortcut while the observation itself survives for
+  inspection.
+
+This closes the six systematic near-coincidence edges (z = 4.63) that the
+ACC-501 baseline predicted would survive any multiple-comparisons correction,
+because they were never noise — they were the S2 grid-storm anchors sitting a
+fixed interval ahead of the S8 chain triplets.
+
+### ACC-504 — Dispersion correction for bursty streams
+
+Status: `DONE`
+
+Landed: main `a7947ac4`, jointly with ACC-503.
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+- automatic per-domain declustering (`inferDeclusterGaps()` +
+  `declusterDomainEvents()`, enabled by default via `decluster ?? true`)
+  collapses burst pseudo-replication before any rate is estimated, so a single
+  storm system or market shock contributes one independent antecedent rather
+  than dozens;
+- the significance test moved from the normal approximation to **exact
+  binomial tails**, which is what the low-single-digit support counts in this
+  corpus actually warrant;
+- each ordered domain pair is treated as **one hypothesis across lag windows**
+  rather than four, and **Holm** family-wise correction is applied over the
+  eligible pair family, with Benjamini-Hochberg q-values retained as
+  diagnostics. This supersedes the two-tailed Gaussian union bound recorded
+  under ACC-502;
+- zero-support candidates are padded into the family denominator so the
+  correction cannot be weakened by candidates that never generated a test;
+- `strength` became a beta-binomial posterior probability (bounded), and
+  ranking moved to `rankingScore = posteriorLogOdds` — unsaturated, which
+  repairs the near-flat cap ordering that `edgeStrengthSeparation = 0.05`
+  measured. Expected utility enforces a 4:1 false-positive cost at the
+  promotion decision.
+
+Combined ACC-503 + ACC-504 benchmark movement, at unchanged recall 1.0:
+
+| Metric | ACC-502 (schema 12) | ACC-503 + ACC-504 (schema 13) |
+|---|---|---|
+| Coupling precision | 0.2941 | 1.0 |
+| Significant edges | 17 | 5 |
+| False edges | 12 | 0 |
+| Learned rules | 12 | 5 |
+| False learned rules | 7 | 0 |
+| Learned-pair blast radius | 102 | 32 |
+| Couplings evicted at cap | 2 | 0 |
+
+All five planted causal couplings and the planted inhibitory edge remain
+recovered; inhibitory precision and recall stay at 1.0/1.0. The two couplings
+previously evicted at `MAX_LEARNED_RULES` by burst artefacts — `macro→maritime`
+and `space→infra` — are both promoted again.
+
+Verification evidence (re-run independently on a clean worktree at main
+`8da854fe`, 2026-08-24):
+
+- `npm run test:correlation`: 430 pass / 0 fail;
+- `npm run bench:correlation`: PASS within tolerance of the committed
+  schema-13 baseline — 5 significant of 257 mined, 5/5 planted couplings
+  recovered, 0 false positives in every category (confounded, mediated,
+  independent, inhibitory, unplanted), 5 rules synthesised with 0 from
+  non-causal edges, pair blast radius 32.
+
+Known limitation:
+
+- benchmark recall is measured only against couplings that clear the critical
+  threshold by a wide margin (surviving edges sit at z 10.77–26.72 against
+  `criticalAbsZ` 4.6219). Recall near the decision boundary is unmeasured —
+  ACC-508 owns closing that gate.
+
 ### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
 
 Status: `TODO`
@@ -1626,6 +1728,32 @@ startup and ingest latency, deduplicates events, expires history, and never
 allows learned correlation to delay safety-critical ingestion. Prove the live
 path with a deterministic multi-call fixture and require liveness diagnostics
 to recover from degraded to healthy after a learned pair is emitted.
+
+### ACC-508 — Near-threshold coupling recall gate
+
+Status: `TODO`
+
+Dependencies: ACC-503 (DONE), ACC-504 (DONE)
+
+ACC-502 through ACC-504 moved the miner's failure mode from false positives to
+possible false negatives, and the frozen benchmark cannot currently see the new
+mode. Every planted causal coupling clears `criticalAbsZ` by 2.3x to 5.8x, and
+every test in `lead-lag.test.mts` containing "weak" asserts *rejection*, so
+`couplingRecall: 1.0` and `couplingRecallDrop: 0` today certify only that the
+miner still finds couplings it could not plausibly miss.
+
+The operational risk this leaves open is specific: a real but statistically
+marginal coupling — which is what a novel cross-domain signal looks like on
+first appearance, and the case the product exists to catch — can be discarded
+silently while the gate reports a clean 1.0/1.0.
+
+Plant at least one additional causal coupling in `__bench__/golden-streams.ts`
+calibrated to roughly 1.3-1.6x critical z, gate on its recovery, and record the
+realised margin in the baseline so a future tightening of the correction that
+would drop it fails the gate rather than passing it. The near-threshold
+coupling must be distinguishable from the existing decoy and confounder
+streams, so its planted truth has to be asserted in `golden-streams.ts`
+alongside the others rather than inferred.
 
 ## Phase 6 — Evaluate better statistical models
 

@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { buildLaunchAgentPlist } from '../scripts/setup-main-sync-agent.mjs';
+import {
+  DEFAULT_INTERVAL_SECONDS,
+  buildLaunchAgentPlist,
+} from '../scripts/setup-main-sync-agent.mjs';
 import {
   buildSyncPaths,
   collectCheckStates,
   collectStatusCheckRollupStates,
+  determineSyncAction,
   evaluateRequiredChecks,
   findMergedPullRequestForCommit,
 } from '../scripts/sync-main-to-mac.mjs';
@@ -110,6 +114,39 @@ test('main sync launch agent plist runs Node on a fixed interval', () => {
   assert.match(plist, /sync-main-to-mac\.mjs/);
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(plist, /<key>StartInterval<\/key>\s*<integer>60<\/integer>/);
+});
+
+test('main sync launch agent defaults to a five-minute poll interval', () => {
+  assert.equal(DEFAULT_INTERVAL_SECONDS, 300);
+});
+
+test('unchanged healthy installs take the idle path before checks and workspace cleanup', () => {
+  assert.equal(determineSyncAction({
+    installedSha: 'abc123',
+    targetSha: 'abc123',
+    installedHealthy: true,
+  }), 'idle');
+  assert.equal(determineSyncAction({
+    installedSha: 'abc123',
+    targetSha: 'abc123',
+    installedHealthy: false,
+  }), 'build');
+  assert.equal(determineSyncAction({
+    installedSha: 'old123',
+    targetSha: 'new456',
+    installedHealthy: true,
+  }), 'build');
+
+  const syncScript = readFileSync(syncScriptPath, 'utf8');
+  const fetchIndex = syncScript.indexOf('await fetchTargetSha(options)');
+  const idleIndex = syncScript.indexOf('determineSyncAction({', fetchIndex);
+  const prepareIndex = syncScript.indexOf('await prepareClone(options, targetSha)');
+  const checksIndex = syncScript.indexOf('await verifyRemoteChecks(options, targetSha)');
+
+  assert.ok(fetchIndex >= 0, 'the sync should fetch the remote target SHA first');
+  assert.ok(idleIndex > fetchIndex, 'the sync should decide whether the target changed after fetching');
+  assert.ok(prepareIndex > idleIndex, 'workspace reset and clean must occur after the unchanged fast path');
+  assert.ok(checksIndex > idleIndex, 'GitHub required-check queries must occur after the unchanged fast path');
 });
 
 test('main-to-mac sync uses a local clean clone instead of a GitHub self-hosted runner workflow', () => {

@@ -35,6 +35,18 @@ export interface NotificationSettings {
   domains: Record<NotificationDomain, DomainSettings>;
 }
 
+export type NotificationPreferenceReason =
+  | 'allowed'
+  | 'master-mute'
+  | 'domain-disabled'
+  | 'below-threshold'
+  | 'domain-quiet-hours';
+
+export interface NotificationPreferenceDecision {
+  allowed: boolean;
+  reason: NotificationPreferenceReason;
+}
+
 const STORAGE_KEY = 'wm-notification-settings-v1';
 
 const SEVERITY_ORDER: NotificationSeverity[] = ['info', 'low', 'medium', 'high', 'critical'];
@@ -171,21 +183,30 @@ function isInQuietHours(start: string, end: string): boolean {
   return currentMinutes >= startMinutes && currentMinutes < endMinutes;
 }
 
-export function shouldNotify(domain: NotificationDomain, severity: NotificationSeverity): boolean {
+export function evaluateNotificationPreference(
+  domain: NotificationDomain,
+  severity: NotificationSeverity,
+): NotificationPreferenceDecision {
   const { global, domains } = currentSettings;
-  if (global.masterMute) return false;
+  if (global.masterMute) return { allowed: false, reason: 'master-mute' };
 
   const domainSettings = domains[domain];
-  if (!domainSettings.enabled) return false;
+  if (!domainSettings.enabled) return { allowed: false, reason: 'domain-disabled' };
 
   const severityIndex = Math.max(0, SEVERITY_ORDER.indexOf(severity));
   const thresholdIndex = Math.max(0, SEVERITY_ORDER.indexOf(domainSettings.threshold));
-  if (severityIndex < thresholdIndex) return false;
+  if (severityIndex < thresholdIndex) return { allowed: false, reason: 'below-threshold' };
 
   // Critical always bypasses quiet hours
-  if (domainSettings.quietHoursEnabled && severity !== 'critical' && isInQuietHours(global.quietHoursStart, global.quietHoursEnd)) return false;
+  if (domainSettings.quietHoursEnabled && severity !== 'critical' && isInQuietHours(global.quietHoursStart, global.quietHoursEnd)) {
+    return { allowed: false, reason: 'domain-quiet-hours' };
+  }
 
-  return true;
+  return { allowed: true, reason: 'allowed' };
+}
+
+export function shouldNotify(domain: NotificationDomain, severity: NotificationSeverity): boolean {
+  return evaluateNotificationPreference(domain, severity).allowed;
 }
 
 export function resetSettings(): void {

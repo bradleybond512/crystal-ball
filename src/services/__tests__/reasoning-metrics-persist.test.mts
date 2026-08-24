@@ -4,6 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 // We test the store injection via the exported initCountersForTest helper.
@@ -40,4 +41,10 @@ test('resetMetrics: clears persisted counters', async () => {
   resetMetrics();
   const c = getCounters();
   assert.equal(c['x'], undefined, 'reset must clear hydrated counters');
+});
+
+test('counter persistence and hydration bypass their own IDB instrumentation', () => {
+  const metricsSource = readFileSync(new URL('../reasoning-metrics.ts', import.meta.url), 'utf8');
+  assert.match(metricsSource, /putMemory\(COUNTERS_KEY, snap, \{ instrument: false \}\)/);
+  assert.match(metricsSource, /getMemory<Record<string, number>>\(COUNTERS_KEY, \{ instrument: false \}\)/);
 });

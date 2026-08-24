@@ -64,7 +64,7 @@ export class HypothesisPanel extends Panel {
         'Bayesian competition between 2–3 explanations for the most critical active Situation. Designed to fight anchoring on the first plausible story.',
     });
     this.render();
-    this.unsubscribeSituations = getSituationStoreV2().subscribe(() => this.render());
+    this.unsubscribeSituations = getSituationStoreV2().subscribeView(() => this.render());
     this.unsubscribeHypotheses = getHypothesisEngine().subscribe(() => this.render());
   }
 

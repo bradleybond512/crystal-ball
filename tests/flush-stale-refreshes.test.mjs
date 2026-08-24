@@ -175,6 +175,22 @@ describe('RefreshScheduler.flushStaleRefreshes', () => {
       'Non-stale service timeout should be untouched');
   });
 
+  it('uses each service last successful run when deciding resume staleness', () => {
+    const flushed = [];
+    seed('recent-success', 60_000, async () => { flushed.push('recent-success'); });
+    seed('stale-success', 60_000, async () => { flushed.push('stale-success'); });
+    scheduler['lastSuccessfulAt'] = new Map([
+      ['recent-success', timers.now - 30_000],
+      ['stale-success', timers.now - 120_000],
+    ]);
+
+    scheduler.setHiddenSince(timers.now - 600_000);
+    scheduler.flushStaleRefreshes();
+    timers.runAll();
+
+    assert.deepEqual(flushed, ['stale-success']);
+  });
+
   it('tolerates runners that return non-Promise values', () => {
     let called = false;
     scheduler['refreshRunners'].set('sync-service', {
@@ -189,5 +205,73 @@ describe('RefreshScheduler.flushStaleRefreshes', () => {
     timers.runAll();
 
     assert.equal(called, true, 'Synchronous runner should still be invoked');
+  });
+
+  it('preserves the active queue and concurrency bound across repeated resumes', async () => {
+    const started = [];
+    const releases = [];
+    let active = 0;
+    let maxActive = 0;
+
+    for (let index = 0; index < 8; index += 1) {
+      const name = `svc-${index}`;
+      seed(name, 60_000, () => new Promise((resolve) => {
+        started.push(name);
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        releases.push(() => {
+          active -= 1;
+          resolve();
+        });
+      }));
+    }
+
+    scheduler.setHiddenSince(timers.now - 600_000);
+    scheduler.flushStaleRefreshes();
+    timers.advanceBy(RefreshScheduler.FLUSH_STAGGER_MS * 5);
+    assert.equal(active, RefreshScheduler.MAX_CONCURRENT_FLUSHES);
+
+    scheduler.setHiddenSince(timers.now - 60_000);
+    scheduler.flushStaleRefreshes();
+    timers.advanceBy(RefreshScheduler.FLUSH_STAGGER_MS * 5);
+
+    assert.equal(maxActive, RefreshScheduler.MAX_CONCURRENT_FLUSHES,
+      'a second resume must not reset the active concurrency count');
+    assert.equal(new Set(started).size, started.length,
+      'services already active or queued must not be scheduled twice');
+
+    while (releases.length > 0) {
+      releases.shift()();
+    }
+    await Promise.resolve();
+    timers.runAll();
+    await Promise.resolve();
+
+    assert.equal(new Set(started).size, 8, 'the original queue must survive the second resume');
+    assert.equal(started.length, 8, 'each due service should run once per catch-up cycle');
+  });
+
+  it('evaluates due services from each resume period without replacing queued work', async () => {
+    let releaseFast;
+    const started = [];
+    seed('fast', 60_000, () => new Promise((resolve) => {
+      started.push('fast');
+      releaseFast = resolve;
+    }));
+    seed('slow', 300_000, async () => { started.push('slow'); });
+
+    scheduler.setHiddenSince(timers.now - 60_000);
+    scheduler.flushStaleRefreshes();
+    timers.advanceBy(0);
+    assert.deepEqual(started, ['fast']);
+
+    scheduler.setHiddenSince(timers.now - 300_000);
+    scheduler.flushStaleRefreshes();
+    timers.runAll();
+    assert.deepEqual(started, ['fast', 'slow'],
+      'the second resume should add newly-due work without duplicating active work');
+
+    releaseFast();
+    await Promise.resolve();
   });
 });

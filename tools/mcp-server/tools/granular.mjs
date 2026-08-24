@@ -1,11 +1,11 @@
-function makeResponse(summary, data, sources, warnings = []) {
+function makeResponse(summary, data, sources, warnings = [], healthy = sources.length > 0) {
   return {
     summary,
     data,
     sources,
     warnings,
     timestamp: new Date().toISOString(),
-    healthy: true,
+    healthy,
   };
 }
 
@@ -153,7 +153,7 @@ export function makeGranularTools(client) {
     if (min_magnitude) params.minmagnitude = min_magnitude;
     if (region) params.region = region;
     const data = await client.get('/api/usgs-earthquakes', params);
-    const quakes = data?.features || (Array.isArray(data) ? data : []);
+    const quakes = data?.events || data?.features || (Array.isArray(data) ? data : []);
     return makeResponse(
       `Found ${quakes.length} earthquakes${min_magnitude ? ` above M${min_magnitude}` : ''}.`,
       { earthquakes: quakes },
@@ -236,12 +236,16 @@ export function makeGranularTools(client) {
     let degraded = 0;
     for (const route of probeRoutes) {
       const data = results.get(route);
-      const ok = data && !data.error;
-      feeds.push({ route, status: ok ? 'ok' : 'error', error: data?.error || null });
+      const ok = validFeedPayload(data);
+      feeds.push({
+        route,
+        status: ok ? 'ok' : 'error',
+        error: ok ? null : data?.error || 'invalid response',
+      });
       if (ok) healthy++; else degraded++;
     }
 
-    const sidecarOk = health && !health.error;
+    const sidecarOk = health?.ok === true;
     const keyInfo = sidecarOk ? `${health.keys_configured}/${health.keys_total} API keys configured` : 'unknown';
     const missingKeyCount = sidecarOk && health.keys_missing_count ? health.keys_missing_count : 0;
 
@@ -257,10 +261,14 @@ export function makeGranularTools(client) {
         keys_configured: health.keys_configured,
         keys_total: health.keys_total,
         keys_missing_count: missingKeyCount,
-      } : { error: health?.error || 'unreachable' },
-      serviceStatus: status || {},
+      } : { error: health?.error || 'invalid health response' },
+      serviceStatus: validFeedPayload(status) ? status : { error: status?.error || 'invalid response' },
       feeds,
-    }, ['/api/health', '/api/service-status', ...probeRoutes]);
+    }, [
+      ...(sidecarOk ? ['/api/health'] : []),
+      ...(validFeedPayload(status) ? ['/api/service-status'] : []),
+      ...feeds.filter((feed) => feed.status === 'ok').map((feed) => feed.route),
+    ], [], sidecarOk && degraded === 0);
   }
 
   return {
@@ -278,4 +286,15 @@ export function makeGranularTools(client) {
     get_region_brief,
     check_feed_health,
   };
+}
+
+function validFeedPayload(value) {
+  if (Array.isArray(value)) return true;
+  return value !== null
+    && typeof value === 'object'
+    && !value.error
+    && value.ok !== false
+    && value.healthy !== false
+    && value.available !== false
+    && Object.keys(value).length > 0;
 }

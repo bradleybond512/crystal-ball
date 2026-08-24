@@ -36,6 +36,10 @@ interface StoredRecord<T> {
   updatedAt: number;
 }
 
+export interface MemoryOperationOptions {
+  instrument?: boolean;
+}
+
 // ── DB open with version bump if needed ──────────────────────────────────────
 
 function createOtherStoresIfMissing(db: IDBDatabase): void {
@@ -71,7 +75,7 @@ function attachCloseHandlers(db: IDBDatabase): void {
   });
 }
 
-function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
+function openWithUpgrade(currentVersion: number, instrument: boolean): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const upgrade = indexedDB.open(DB_NAME, currentVersion + 1);
     upgrade.addEventListener('error', () => {
@@ -79,7 +83,7 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
     });
     upgrade.addEventListener('blocked', () => {
       console.error('[reasoning-memory] upgrade blocked by another connection', { currentVersion });
-      incrementCounter('idb.upgrade.blocked');
+      if (instrument) incrementCounter('idb.upgrade.blocked');
       reject(new Error('[reasoning-memory] upgrade blocked by another connection'));
     });
     upgrade.addEventListener('upgradeneeded', (event) => {
@@ -97,7 +101,7 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   });
 }
 
-function openDB(): Promise<IDBDatabase> {
+function openDB(instrument = true): Promise<IDBDatabase> {
   if (dbInstance) return Promise.resolve(dbInstance);
   if (openPromise) return openPromise;
 
@@ -108,7 +112,7 @@ function openDB(): Promise<IDBDatabase> {
     });
     probe.addEventListener('blocked', () => {
       console.error('[reasoning-memory] probe blocked');
-      incrementCounter('idb.probe.blocked');
+      if (instrument) incrementCounter('idb.probe.blocked');
       reject(new Error('[reasoning-memory] probe blocked'));
     });
     probe.addEventListener('success', () => {
@@ -121,7 +125,7 @@ function openDB(): Promise<IDBDatabase> {
       }
       const version = currentDB.version;
       currentDB.close();
-      openWithUpgrade(version).then(resolve, reject);
+      openWithUpgrade(version, instrument).then(resolve, reject);
     });
     probe.addEventListener('upgradeneeded', (event) => {
       // Fresh DB — create all expected stores up-front.
@@ -139,10 +143,15 @@ function openDB(): Promise<IDBDatabase> {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** Write a value under `key`. Errors are logged and swallowed. */
-export async function putMemory<T>(key: string, value: T): Promise<void> {
+export async function putMemory<T>(
+  key: string,
+  value: T,
+  options: MemoryOperationOptions = {},
+): Promise<void> {
   const t0 = performance.now();
+  const instrument = options.instrument !== false;
   try {
-    const db = await openDB();
+    const db = await openDB(instrument);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
@@ -151,11 +160,15 @@ export async function putMemory<T>(key: string, value: T): Promise<void> {
       tx.addEventListener('complete', () => resolve());
       tx.addEventListener('error', () => reject(tx.error ?? new Error('put failed')));
     });
-    recordLatency('idb.put', performance.now() - t0);
-    incrementCounter('idb.put.success');
+    if (instrument) {
+      recordLatency('idb.put', performance.now() - t0);
+      incrementCounter('idb.put.success');
+    }
   } catch (error) {
-    recordLatency('idb.put', performance.now() - t0);
-    incrementCounter('idb.put.error');
+    if (instrument) {
+      recordLatency('idb.put', performance.now() - t0);
+      incrementCounter('idb.put.error');
+    }
     console.error('[reasoning-memory] put failed', {
       key, latencyMs: performance.now() - t0,
       error: error instanceof Error ? error.message : String(error),
@@ -164,10 +177,14 @@ export async function putMemory<T>(key: string, value: T): Promise<void> {
 }
 
 /** Read a value by key. Returns null if missing or on error. */
-export async function getMemory<T>(key: string): Promise<T | null> {
+export async function getMemory<T>(
+  key: string,
+  options: MemoryOperationOptions = {},
+): Promise<T | null> {
   const t0 = performance.now();
+  const instrument = options.instrument !== false;
   try {
-    const db = await openDB();
+    const db = await openDB(instrument);
     const value = await new Promise<T | null>((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const req = tx.objectStore(STORE_NAME).get(key);
@@ -177,12 +194,16 @@ export async function getMemory<T>(key: string): Promise<T | null> {
       });
       req.addEventListener('error', () => resolve(null));
     });
-    recordLatency('idb.get', performance.now() - t0);
-    incrementCounter(value === null ? 'idb.get.miss' : 'idb.get.hit');
+    if (instrument) {
+      recordLatency('idb.get', performance.now() - t0);
+      incrementCounter(value === null ? 'idb.get.miss' : 'idb.get.hit');
+    }
     return value;
   } catch (error) {
-    recordLatency('idb.get', performance.now() - t0);
-    incrementCounter('idb.get.error');
+    if (instrument) {
+      recordLatency('idb.get', performance.now() - t0);
+      incrementCounter('idb.get.error');
+    }
     console.error('[reasoning-memory] get failed', {
       key, latencyMs: performance.now() - t0,
       error: error instanceof Error ? error.message : String(error),

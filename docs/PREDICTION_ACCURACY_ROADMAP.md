@@ -889,11 +889,12 @@ These tasks retain their detailed designs in
 |---|---|---|---|
 | ACC-501 | DONE | Frozen correlation benchmark and `bench:correlation` CI gate | ACC-201 |
 | ACC-502 | DONE | Multiple-comparison correction and inhibitory edges | ACC-501 (DONE) |
-| ACC-503 | TODO | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
-| ACC-504 | TODO | Dispersion correction for bursty streams | ACC-501 (DONE) |
+| ACC-503 | DONE | Multi-hop mediation/confounder filtering | ACC-501 (DONE) |
+| ACC-504 | DONE | Dispersion correction for bursty streams | ACC-501 (DONE) |
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
-| ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-502 through ACC-505 |
+| ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
+| ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
 change operational scores, confidence, posture, alerts, or delivery rungs.
@@ -1613,6 +1614,200 @@ Known limitation and rollback:
   restoration of the schema-11 benchmark, without changing operational scores
   or built-in safety-notification rules.
 
+### ACC-503 — Multi-hop mediation/confounder filtering
+
+Status: `DONE`
+
+Landed: main `a7947ac4` ("fix: prevent spurious correlation rules"), jointly
+with ACC-504. Recorded retroactively — the implementation shipped without the
+tracker row being flipped, and this section documents it after the fact.
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+- `lead-lag.ts` gained a `RedundancyKind` discriminator (`chain`, `fork`,
+  `reciprocal`, `inhibitory-reverse`) and an `EdgeRedundancy` annotation
+  carrying the mediator and the explained fraction;
+- `explainedByChain()` demotes a direct A→B when compatible A→M and M→B edges
+  account for it, and `explainedByFork()` demotes it when a common antecedent
+  drives both endpoints — the observed-fork case that a family-wise correction
+  cannot reach, because a real common cause produces a genuinely significant
+  shortcut;
+- reciprocal within-burst pairs are demoted as directionally ambiguous, and a
+  promoting edge cannot survive alongside its own significant inhibitory
+  reverse;
+- redundancy is applied in stages (inhibitory-reverse and reciprocal first,
+  then chain, then fork over the chain-filtered set) so a demoted edge cannot
+  serve as another edge's explanation;
+- demoted edges are **retained as evidence** and excluded only from
+  `promoting`, so `learnedRulesFromEdges()` cannot synthesise a rule from a
+  mediated or confounded shortcut while the observation itself survives for
+  inspection.
+
+The six systematic near-coincidence edges (z = 4.63) that the ACC-501 baseline
+flagged — the S2 grid-storm anchors sitting a fixed interval ahead of the S8
+chain triplets — are indeed rejected in the schema-13 result, but **not by this
+filter**: they carry no redundancy annotation, and it is ACC-504's admission
+gates that reject them (Holm-adjusted p ≈ 0.216, posterior ≈ 0.785, negative
+expected utility). Cross-agent review corrected an earlier draft that credited
+the rejection to ACC-503 and asserted the edges would survive "any"
+multiple-comparisons correction; the exact-binomial-Holm result disproves that
+assertion.
+
+### ACC-504 — Dispersion correction for bursty streams
+
+Status: `DONE`
+
+Landed: main `a7947ac4`, jointly with ACC-503.
+
+Dependencies: ACC-501 (DONE)
+
+Outcome — delivered:
+
+- automatic per-domain declustering (`inferDeclusterGaps()` +
+  `declusterDomainEvents()`, enabled by default via `decluster ?? true`)
+  collapses burst pseudo-replication before any rate is estimated, so a single
+  storm system or market shock contributes one independent antecedent rather
+  than dozens;
+- the significance test moved from the normal approximation to **exact
+  binomial tails**, which is what the low-single-digit support counts in this
+  corpus actually warrant;
+- each ordered domain pair is treated as **one hypothesis across lag windows**
+  rather than four, and **Holm** family-wise correction is applied over the
+  eligible pair family, with Benjamini-Hochberg q-values retained as
+  diagnostics. This supersedes the two-tailed Gaussian union bound recorded
+  under ACC-502;
+- zero-support candidates are padded into the family denominator so the
+  correction cannot be weakened by candidates that never generated a test;
+- `strength` became a beta-binomial posterior probability (bounded), and
+  ranking moved to `rankingScore = posteriorLogOdds` — unsaturated, which
+  repairs the near-flat cap ordering that `edgeStrengthSeparation = 0.05`
+  measured. Expected utility enforces a 4:1 false-positive cost at the
+  promotion decision.
+
+Combined ACC-503 + ACC-504 benchmark movement, at unchanged recall 1.0:
+
+| Metric | ACC-502 (schema 12) | ACC-503 + ACC-504 (schema 13) |
+|---|---|---|
+| Coupling precision | 0.2941 | 1.0 |
+| Significant edges | 17 | 5 |
+| False edges | 12 | 0 |
+| Learned rules | 12 | 5 |
+| False learned rules | 7 | 0 |
+| Learned-pair blast radius | 102 | 32 |
+
+All five planted causal couplings and the planted inhibitory edge remain
+recovered; inhibitory precision and recall stay at 1.0/1.0.
+
+Correction (cross-agent review, 2026-08-24): an earlier draft of this table
+claimed cap evictions fell from 2 to 0. That was wrong — the schema-12 baseline
+already recorded `causalCouplingsLostToCap: []`, so no causal coupling was ever
+evicted at `MAX_LEARNED_RULES` and the movement was 0 to 0. The precision gain
+came from rejecting false edges, not from freeing cap slots.
+
+Verification evidence (re-run independently on a clean worktree at main
+`8da854fe`, 2026-08-24):
+
+- `npm run test:correlation`: 430 pass / 0 fail;
+- `npm run bench:correlation`: PASS within tolerance of the committed
+  schema-13 baseline — 5 significant of 257 mined, 5/5 planted couplings
+  recovered, 0 false positives in every category (confounded, mediated,
+  independent, inhibitory, unplanted), 5 rules synthesised with 0 from
+  non-causal edges, pair blast radius 32.
+
+Known limitation:
+
+- benchmark recall is measured only against couplings that clear the admission
+  gate by a wide margin. Recall near the decision boundary is unmeasured —
+  ACC-508 owns closing that gate.
+
+Note on the decision boundary (corrected in cross-agent review, 2026-08-24):
+promotion is a conjunction, not a z threshold —
+
+```text
+lift >= 2 && support >= 3 && zScore >= minZ (default 2)
+  && adjustedPValue <= alpha (0.05, Holm over the eligible pair family)
+  && posteriorProbability >= 0.8
+  && expectedUtility > 0
+```
+
+`criticalAbsZ` (4.6219) gates **inhibitory** edges only — see
+`isInhibitorySignificant()`. Any reasoning that treats `criticalAbsZ` as the
+promoting-edge threshold, including margin ratios computed against it, is
+measuring the wrong boundary.
+
+### ACC-505 — Per-regime correlation reliability
+
+Status: `TODO`
+
+Dependencies: ACC-501 (DONE)
+
+`reliabilityForRule()` returns a single unconditional multiplier in `[0.5, 1.5]`
+per rule, neutral at 1.0 until the rule has ≥5 resolved outcomes. A rule that is
+reliable during a calm epoch and unreliable during a regime shift — the case the
+product most needs to distinguish — is averaged into one number, so the engine
+applies calm-epoch reliability to shift-epoch predictions and vice versa.
+
+Tag each `correlation-calibration.ts` ledger entry with the active BOCPD shift
+state at outcome-record time (`RegimeShift` already carries `metric`,
+`detectedAt`, `direction`, and `changeProbability`). Compute per-rule Brier both
+overall and per-regime; the engine's reliability provider prefers the
+regime-conditional bucket when that bucket's n is large enough to be worth
+trusting, and falls back to the overall multiplier otherwise, keeping the
+existing shrinkage so a thin bucket cannot swing the multiplier. The fallback
+threshold must be stated in the code and asserted in a test, not left implicit.
+
+Constraint: the regime tag is recorded at outcome time, never back-filled from
+the current regime at read time — back-filling would let a later shift rewrite
+the reliability of predictions that resolved under different conditions.
+
+### ACC-506 — Bounded correlation-kernel tunables and safety fixtures
+
+Status: `WAITING`
+
+Dependencies: ACC-505
+
+The `edge-confidence.ts` kernel multiplies six factors —
+`base × temporal × spatial × entity × reliability × regime`, clamped to
+`[0.2, 1]`. Several of those factors are dynamic inputs; what is hard-coded is
+the kernel's own parameters (the per-factor clamp bounds and the value floor).
+
+Two things are missing, and both are required: the kernel parameters are not
+declared as bounded tunables, **and** no correlation edge algorithm is
+registered in `algorithm-registry` at all — the closest entry is
+`correlation-feedback`, which is a different algorithm. So the self-tuning loop
+does not report `no_tunable` for the edge kernel; it has nothing to report on,
+because the algorithm does not exist as a tuning target.
+
+There are no per-factor weights to declare: the kernel is a plain product of the
+six factors. The tunable surface is the set of named **shape constants** that
+determine how each factor is computed, plus the clamps —
+`SPATIAL_NEUTRAL_KM` (25), `SPATIAL_DECAY_KM` (400), `SPATIAL_FLOOR` (0.5),
+`ENTITY_BOOST_PER_SHARED` (0.15), `ENTITY_BOOST_MAX_SHARED` (2), `VALUE_FLOOR`
+(0.2), the temporal half-life kernel's shape, and the `reliability` `[0.5, 1.5]`
+and `regime` `[1, 1.15]` bounds.
+
+Declare those as bounded tunables in `tunable-params-store` with defaults equal
+to the current constants, so an empty store is byte-identical to today's
+behaviour (the established convention). Introducing new per-factor weights is an
+alternative, but only with neutral defaults and the same byte-identical
+guarantee — and it should be justified rather than assumed, since it adds
+degrees of freedom the outcome ledger may not be able to identify.
+
+Register a correlation edge algorithm in `algorithm-registry` (none exists
+today), graded from the correlation outcome ledger.
+
+Each knob needs a safety-fixture suite following the `episodic-analog:minSim`
+discriminating pattern — the suite must block clearly-bad values and allow
+adjacent ones, so it proves discrimination rather than merely passing. A knob
+without a passing suite fails closed to `held_for_approval` and is never
+auto-applied.
+
+Waits on ACC-505 because tuning a kernel whose `reliability` factor is still
+regime-blind would fit the constants to an averaged signal, and the fitted
+values would have to be re-derived once the reliability input changes shape.
+
 ### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
 
 Status: `TODO`
@@ -1621,11 +1816,62 @@ Dependencies: ACC-502 (DONE)
 
 Production `SituationStoreV2.ingest()` is invoked with one event at a time, so
 the correlation engine cannot form learned-rule pairs even when rules are
-installed. Introduce a bounded, time-windowed event handoff that preserves
+installed. The live producer is `situation-hypothesis-bridge.ts`, whose queue
+calls `store.ingest([event])` once per `schedule()` tick.
+
+The singleton shape is deliberate, not an oversight: a single `ingest()` runs
+the correlate engine plus a full `SituationStoreV2` notify fan-out
+(meta-confidence, counterfactuals, bias, panels), and a boot burst of events
+run synchronously through it previously wedged the main thread for 30s+ and
+tripped the renderer-watchdog reload loop. Any fix that simply widens the batch
+at this call site reintroduces that hang, so the handoff must decouple pair
+formation from the synchronous fan-out rather than enlarging it. Introduce a bounded, time-windowed event handoff that preserves
 startup and ingest latency, deduplicates events, expires history, and never
 allows learned correlation to delay safety-critical ingestion. Prove the live
 path with a deterministic multi-call fixture and require liveness diagnostics
 to recover from degraded to healthy after a learned pair is emitted.
+
+### ACC-508 — Near-threshold coupling recall gate
+
+Status: `TODO`
+
+Dependencies: ACC-503 (DONE), ACC-504 (DONE)
+
+ACC-502 through ACC-504 moved the miner's failure mode from false positives to
+possible false negatives, and the frozen benchmark cannot currently see the new
+mode. No planted promoting coupling exercises the admission boundary: every one
+clears it comfortably, so `couplingRecall: 1.0` and `couplingRecallDrop: 0`
+certify only that the miner still finds couplings it could not plausibly miss.
+
+The operational risk this leaves open is specific: a real but statistically
+marginal coupling — which is what a novel cross-domain signal looks like on
+first appearance, and the case the product exists to catch — can be discarded
+silently while the gate reports a clean 1.0/1.0.
+
+**Target the real gate.** Promotion requires all six of `lift >= 2`,
+`support >= 3`, `zScore >= minZ`, `adjustedPValue <= alpha`,
+`posteriorProbability >= 0.8`, and `expectedUtility > 0`. A near-threshold
+fixture must be calibrated against whichever of these actually binds for a
+marginal coupling — in this corpus the Holm-adjusted exact p-value and the
+posterior floor bind long before `minZ` does — and the recorded margin must be
+the distance to that binding gate, not a ratio against `criticalAbsZ`, which
+governs inhibition and is not a promotion threshold at all.
+
+Deliverables:
+
+- plant at least one additional causal coupling in `__bench__/golden-streams.ts`
+  sitting just inside the admission boundary, with its planted truth asserted
+  explicitly alongside the existing decoys and confounders so it is
+  distinguishable from them rather than inferred;
+- gate on its recovery, and record in the baseline **which gate binds** and the
+  realised margin to it, so a future tightening that would drop the coupling
+  fails the gate rather than passing it;
+- the calibration must be stable under family-size drift. Adding a stream
+  changes `eligibleOrderedPairs`, which moves the Holm threshold, so a fixture
+  pinned to an absolute p-value would silently drift across the boundary.
+  Calibrate and assert against the realised margin recomputed from the run, and
+  fail the gate if the margin moves outside a recorded tolerance in either
+  direction — too far inside means the fixture has stopped testing the boundary.
 
 ## Phase 6 — Evaluate better statistical models
 

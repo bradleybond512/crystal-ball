@@ -406,12 +406,13 @@ export function makeAnalystTools(client) {
           return !hasTerminal && (now - e.createdAt) > TEN_MIN_MS;
         });
       }
+      const total = entries.length;
       const tail = entries.slice(-limit).reverse();
       return {
         available: true,
-        summary: tail.length + ' of ' + trace.total + ' trace entries (domain=' + (domain ?? 'all') + ', stalledOnly=' + stalledOnly + ').',
+        summary: tail.length + ' of ' + total + ' trace entries (domain=' + (domain ?? 'all') + ', stalledOnly=' + stalledOnly + ').',
         stale: state.stale === true,
-        total: trace.total,
+        total,
         entries: tail,
         timestamp: new Date().toISOString(),
       };

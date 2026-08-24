@@ -10,7 +10,9 @@ import { buildSyncPaths } from './sync-main-to-mac.mjs';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const DEFAULT_LABEL = 'com.bradleybond.crystalball.main-sync';
-const DEFAULT_INTERVAL_SECONDS = 60;
+const LAUNCHCTL_PATH = '/bin/launchctl';
+const LAUNCH_AGENT_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+export const DEFAULT_INTERVAL_SECONDS = 300;
 
 export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoot, logDir, intervalSeconds, envPath }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -46,6 +48,30 @@ export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoo
 `;
 }
 
+function applyArgument(options, argv, index) {
+  const arg = argv[index];
+  if (arg === '--sync-root' || arg.startsWith('--sync-root=')) {
+    const inline = arg.startsWith('--sync-root=');
+    const value = inline ? arg.slice('--sync-root='.length) : argv[index + 1] ?? '';
+    const nextPaths = buildSyncPaths(value);
+    options.syncRoot = nextPaths.syncRoot;
+    options.logDir = nextPaths.logDir;
+    return index + (inline ? 0 : 1);
+  }
+  if (arg === '--launch-agent-path' || arg.startsWith('--launch-agent-path=')) {
+    const inline = arg.startsWith('--launch-agent-path=');
+    options.launchAgentPath = inline ? arg.slice('--launch-agent-path='.length) : argv[index + 1] ?? '';
+    return index + (inline ? 0 : 1);
+  }
+  if (arg === '--interval-seconds' || arg.startsWith('--interval-seconds=')) {
+    const inline = arg.startsWith('--interval-seconds=');
+    const value = inline ? arg.slice('--interval-seconds='.length) : argv[index + 1] ?? '';
+    options.intervalSeconds = Number.parseInt(value, 10);
+    return index + (inline ? 0 : 1);
+  }
+  throw new Error(`Unknown argument: ${arg}`);
+}
+
 function parseArgs(argv) {
   const syncPaths = buildSyncPaths();
   const options = {
@@ -57,45 +83,14 @@ function parseArgs(argv) {
  start: true,
   };
 
-  for (let index = 0; index < argv.length; index += 1) {
- const arg = argv[index];
- if (arg === '--sync-root') {
- const nextRoot = argv[index + 1] ?? '';
- index += 1;
- const nextPaths = buildSyncPaths(nextRoot);
- options.syncRoot = nextPaths.syncRoot;
- options.logDir = nextPaths.logDir;
- continue;
- }
- if (arg.startsWith('--sync-root=')) {
- const nextPaths = buildSyncPaths(arg.slice('--sync-root='.length));
- options.syncRoot = nextPaths.syncRoot;
- options.logDir = nextPaths.logDir;
- continue;
- }
- if (arg === '--launch-agent-path') {
- options.launchAgentPath = argv[index + 1] ?? '';
- index += 1;
- continue;
- }
- if (arg.startsWith('--launch-agent-path=')) {
- options.launchAgentPath = arg.slice('--launch-agent-path='.length);
- continue;
- }
- if (arg === '--interval-seconds') {
- options.intervalSeconds = Number.parseInt(argv[index + 1] ?? '', 10);
- index += 1;
- continue;
- }
- if (arg.startsWith('--interval-seconds=')) {
- options.intervalSeconds = Number.parseInt(arg.slice('--interval-seconds='.length), 10);
- continue;
- }
- if (arg === '--no-start') {
- options.start = false;
- continue;
- }
- throw new Error(`Unknown argument: ${arg}`);
+  let index = 0;
+  while (index < argv.length) {
+    if (argv[index] === '--no-start') {
+      options.start = false;
+      index += 1;
+      continue;
+    }
+    index = applyArgument(options, argv, index) + 1;
   }
 
   if (!Number.isInteger(options.intervalSeconds) || options.intervalSeconds < 30) {
@@ -126,7 +121,7 @@ async function installLaunchAgent(options) {
  syncRoot: options.syncRoot,
  logDir: options.logDir,
  intervalSeconds: options.intervalSeconds,
- envPath: process.env.PATH ?? '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+	envPath: LAUNCH_AGENT_PATH,
   });
   await writeFile(options.launchAgentPath, plist);
   await chmod(options.launchAgentPath, 0o644);
@@ -137,10 +132,10 @@ function reloadLaunchAgent(launchAgentPath, label) {
   if (!uid) {
  throw new Error('Could not determine user id for launchctl bootstrap');
   }
-  spawnSync('launchctl', ['bootout', `gui/${uid}`, launchAgentPath], { stdio: 'ignore' });
-  runCommand('launchctl', ['bootstrap', `gui/${uid}`, launchAgentPath]);
-  runCommand('launchctl', ['enable', `gui/${uid}/${label}`]);
-  runCommand('launchctl', ['kickstart', '-k', `gui/${uid}/${label}`]);
+  spawnSync(LAUNCHCTL_PATH, ['bootout', `gui/${uid}`, launchAgentPath], { stdio: 'ignore' });
+  runCommand(LAUNCHCTL_PATH, ['bootstrap', `gui/${uid}`, launchAgentPath]);
+  runCommand(LAUNCHCTL_PATH, ['enable', `gui/${uid}/${label}`]);
+  runCommand(LAUNCHCTL_PATH, ['kickstart', '-k', `gui/${uid}/${label}`]);
 }
 
 async function main() {
@@ -161,8 +156,10 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
-  main().catch((error) => {
- console.error(`[setup-main-sync-agent] Failed: ${error instanceof Error ? error.message : String(error)}`);
- process.exit(1);
-  });
+  try {
+    await main();
+  } catch (error) {
+    console.error(`[setup-main-sync-agent] Failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
 }

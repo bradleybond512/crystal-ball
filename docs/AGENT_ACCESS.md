@@ -35,7 +35,7 @@ crystalball capabilities
 crystalball safeguard-demo
 ```
 
-`doctor` checks installation, Node.js, the local sidecar, discovered agent clients, the safety monitor, compatibility, and the canonical tool registry. Checks are independent, so one failure does not hide the remaining results. Use `--json` for automation.
+`doctor` checks installation, Node.js, an MCP initialize handshake, the local sidecar, discovered agent clients, the safety monitor, compatibility, and the canonical tool registry. A client is ready only when its configured command is executable; an absolute command path is required for the portable check because GUI clients may not inherit your shell `PATH`. Checks are independent, so one failure does not hide the remaining results. Use `--json` for automation.
 
 Stable doctor exit codes:
 
@@ -56,11 +56,13 @@ Configure a local stdio MCP server with:
 {
   "mcpServers": {
     "crystalball": {
-      "command": "crystalball-mcp"
+      "command": "/absolute/prefix/bin/crystalball-mcp"
     }
   }
 }
 ```
+
+For the default install, replace `/absolute/prefix` with the absolute path to `~/.local` (for example, `/Users/you/.local`). Do not use `~` in the JSON command because MCP clients launch the executable directly without shell expansion.
 
 Restart the client after changing its MCP configuration. Ask it to call `check_feed_health` and `get_capabilities` before a broad intelligence request. A useful first query is: "Check Crystal Ball's available capabilities, then give me a sourced situation report and identify missing feeds."
 

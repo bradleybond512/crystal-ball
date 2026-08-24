@@ -58,6 +58,7 @@ export interface SyncStorageLike {
 
 const CACHE_PREFIX = 'store-cache/';
 const FLUSH_DEBOUNCE_MS = 800;
+const MAX_WRITE_ATTEMPTS = 3;
 
 /**
  * The localStorage keys whose stores are relocated to IndexedDB. Every entry is
@@ -91,25 +92,71 @@ export const IDB_BACKED_STORE_KEYS: readonly string[] = [
 ];
 
 const mirror = new Map<string, string>();
-/** Pending IDB writes: value string, or `null` to delete. */
-const pending = new Map<string, string | null>();
+interface PendingWrite {
+  value: string | null;
+  generation: number;
+  attempts: number;
+}
+const pending = new Map<string, PendingWrite>();
+const durable = new Map<string, string | null>();
+const exhausted = new Map<string, string | null>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushPromise: Promise<void> | null = null;
+let generation = 0;
 let preloaded = false;
 let preloadPromise: Promise<void> | null = null;
 
 function scheduleFlush(): void {
   if (flushTimer !== null) return;
-  flushTimer = setTimeout(() => { flushTimer = null; void flushPending(); }, FLUSH_DEBOUNCE_MS);
+  flushTimer = setTimeout(() => { flushTimer = null; void requestFlush(); }, FLUSH_DEBOUNCE_MS);
 }
 
-async function flushPending(): Promise<void> {
-  const batch = [...pending.entries()];
-  pending.clear();
-  for (const [key, value] of batch) {
-    // Best effort — the mirror stays authoritative this session on any failure.
-    try {
-      await (value === null ? backend.deleteMemory(CACHE_PREFIX + key) : backend.putMemory(CACHE_PREFIX + key, value));
-    } catch { /* ignore */ }
+function queueWrite(key: string, value: string | null): void {
+  exhausted.delete(key);
+  pending.set(key, { value, generation: ++generation, attempts: 0 });
+  scheduleFlush();
+}
+
+function requestFlush(): Promise<void> {
+  if (flushPromise) return flushPromise;
+  flushPromise = drainPending().finally(() => {
+    flushPromise = null;
+    if (pending.size > 0) scheduleFlush();
+  });
+  return flushPromise;
+}
+
+async function drainPending(): Promise<void> {
+  while (pending.size > 0) {
+    const batch = [...pending.entries()];
+    for (const [key, write] of batch) {
+      if (pending.get(key)?.generation === write.generation) pending.delete(key);
+    }
+    let failed = false;
+    for (const [key, write] of batch) {
+      if (!await persistPendingWrite(key, write)) failed = true;
+    }
+    if (failed) return;
+  }
+}
+
+async function persistPendingWrite(key: string, write: PendingWrite): Promise<boolean> {
+  if (durable.has(key) && durable.get(key) === write.value) return true;
+  try {
+    await (write.value === null
+      ? backend.deleteMemory(CACHE_PREFIX + key)
+      : backend.putMemory(CACHE_PREFIX + key, write.value));
+    durable.set(key, write.value);
+    exhausted.delete(key);
+    return true;
+  } catch {
+    const attempts = write.attempts + 1;
+    if (!pending.has(key) && attempts < MAX_WRITE_ATTEMPTS) {
+      pending.set(key, { ...write, attempts });
+    } else if (!pending.has(key)) {
+      exhausted.set(key, write.value);
+    }
+    return false;
   }
 }
 
@@ -252,14 +299,14 @@ export function getIdbBackedStorage(): SyncStorageLike {
       return mirror.has(key) ? mirror.get(key)! : null;
     },
     setItem(key: string, value: string): void {
+      if (mirror.get(key) === value && exhausted.get(key) !== value) return;
       mirror.set(key, value);
-      pending.set(key, value);
-      scheduleFlush();
+      queueWrite(key, value);
     },
     removeItem(key: string): void {
+      if (!mirror.has(key) && !(exhausted.has(key) && exhausted.get(key) === null)) return;
       mirror.delete(key);
-      pending.set(key, null);
-      scheduleFlush();
+      queueWrite(key, null);
     },
   };
 }
@@ -315,9 +362,9 @@ export function installIdbStorageRouting(): void {
 
   host.setItem = function (this: Storage, key: string, value: string): void {
     if (this === target && routedKeys.has(key)) {
+      if (mirror.get(key) === value && exhausted.get(key) !== value) return;
       mirror.set(key, value);
-      pending.set(key, value);
-      scheduleFlush();
+      queueWrite(key, value);
       return;
     }
     nativeSet.call(this, key, value);
@@ -325,9 +372,9 @@ export function installIdbStorageRouting(): void {
 
   host.removeItem = function (this: Storage, key: string): void {
     if (this === target && routedKeys.has(key)) {
+      if (!mirror.has(key) && !(exhausted.has(key) && exhausted.get(key) === null)) return;
       mirror.delete(key);
-      pending.set(key, null);
-      scheduleFlush();
+      queueWrite(key, null);
       return;
     }
     nativeRemove.call(this, key);
@@ -340,11 +387,19 @@ export function installIdbStorageRouting(): void {
 export function _resetIdbStoreCacheForTest(): void {
   mirror.clear();
   pending.clear();
+  durable.clear();
+  exhausted.clear();
+  generation = 0;
   if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
   preloaded = false;
   preloadPromise = null;
   backend = defaultBackend;
   delete (globalThis as Record<string, unknown>).__idbStoreRoutingInstalled;
+}
+
+export function _flushPendingForTest(): Promise<void> {
+  if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
+  return requestFlush();
 }
 
 /** Test seam — inject an in-memory IDB backend (pass null to restore the real one). */

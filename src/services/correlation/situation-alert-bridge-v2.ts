@@ -26,7 +26,11 @@
  */
 
 import type { UnifiedAlert } from '../unified-alerts';
-import type { Situation, SituationSeverity } from '../intelligence/situation-store-v2';
+import type {
+  Situation,
+  SituationMutationSnapshot,
+  SituationSeverity,
+} from '../intelligence/situation-store-v2';
 import { getSituationStoreV2 } from '../intelligence/situation-store-v2';
 import type {
   NotificationDomain,
@@ -57,10 +61,20 @@ export function traceDomainFor(domain: string): NotificationDomain {
  *  timestamp guard can never drop a legitimate update (re-emit control
  *  lives entirely in shouldReemit) — situation/alert persistence clocks
  *  can skew across reloads. */
-export function situationToAlert(s: Situation, nowMs: number): UnifiedAlert | null {
+type AlertableSituation = Situation | SituationMutationSnapshot;
+
+function observationCount(s: AlertableSituation): number {
+  return 'observationCount' in s ? s.observationCount : s.observations.length;
+}
+
+function edgeCount(s: AlertableSituation): number {
+  return 'edgeCount' in s ? s.edgeCount : s.edges.length;
+}
+
+export function situationToAlert(s: AlertableSituation, nowMs: number): UnifiedAlert | null {
   if (s.status !== 'active') return null;
-  if (s.observations.length < MIN_OBSERVATIONS) return null;
-  if (s.edges.length < 1) return null;
+  if (observationCount(s) < MIN_OBSERVATIONS) return null;
+  if (edgeCount(s) < 1) return null;
   if (SEVERITY_RANK[s.severity] < SEVERITY_RANK.medium) return null;
   if (!Number.isFinite(s.confidence) || s.confidence < MIN_CONFIDENCE) return null;
 
@@ -70,7 +84,7 @@ export function situationToAlert(s: Situation, nowMs: number): UnifiedAlert | nu
     source: 'correlation',
     severity: s.severity,
     title: s.name,
-    body: `${s.observations.length} correlated signals across ${domains.join(', ')} — confidence ${Math.round(s.confidence * 100)}%`,
+    body: `${observationCount(s)} correlated signals across ${domains.join(', ')} — confidence ${Math.round(s.confidence * 100)}%`,
     timestamp: nowMs,
     location: s.location ? { lat: s.location.lat, lon: s.location.lon } : undefined,
     relevanceScore: Math.round(s.confidence * 100),
@@ -86,22 +100,22 @@ export interface EmitRecord {
   observationCount: number;
 }
 
-export function toEmitRecord(s: Situation): EmitRecord {
+export function toEmitRecord(s: AlertableSituation): EmitRecord {
   return {
     severity: s.severity,
     status: s.status,
     confidence: s.confidence,
-    observationCount: s.observations.length,
+    observationCount: observationCount(s),
   };
 }
 
 /** Re-emit only on meaningful change — never on persistence churn. */
-export function shouldReemit(prev: EmitRecord | undefined, s: Situation): boolean {
+export function shouldReemit(prev: EmitRecord | undefined, s: AlertableSituation): boolean {
   if (!prev) return true;
   if (prev.severity !== s.severity) return true;
   if (prev.status !== s.status) return true;
   if (Math.abs(prev.confidence - s.confidence) >= MEANINGFUL_CONFIDENCE_DELTA) return true;
-  if (s.observations.length > prev.observationCount) return true;
+  if (observationCount(s) > prev.observationCount) return true;
   return false;
 }
 
@@ -123,7 +137,7 @@ let started = false;
  * startSituationV2AlertBridge's defaults (panel-layout bootstrap).
  */
 export function createSituationV2AlertBridge(
-  store: Pick<ReturnType<typeof getSituationStoreV2>, 'subscribe' | 'list'>,
+  store: Pick<ReturnType<typeof getSituationStoreV2>, 'subscribeMutations' | 'list'>,
   deps: SituationAlertBridgeDeps,
 ): () => void {
   const lastEmitted = new Map<string, EmitRecord>();
@@ -144,7 +158,7 @@ export function createSituationV2AlertBridge(
     return stamp;
   };
 
-  const sync = (situations: readonly Situation[]): void => {
+  const sync = (situations: readonly AlertableSituation[], pruneMissing = false): void => {
     const live = new Set<string>();
     const out: UnifiedAlert[] = [];
     const at = now();
@@ -164,19 +178,30 @@ export function createSituationV2AlertBridge(
       recordTrace(deps.registry, s, at);
     }
     // Evicted situations shed their emit records too.
-    for (const id of lastEmitted.keys()) {
-      if (!live.has(id)) {
-        lastEmitted.delete(id);
-        lastStamp.delete(id);
+    if (pruneMissing) {
+      for (const id of lastEmitted.keys()) {
+        if (!live.has(id)) {
+          lastEmitted.delete(id);
+          lastStamp.delete(id);
+        }
       }
     }
     if (out.length > 0) deps.ingest(out);
   };
 
-  const unsubscribe = store.subscribe((situations) => {
-    try { sync(situations); } catch { /* bridge crash isolation */ }
+  const unsubscribe = store.subscribeMutations((result) => {
+    try {
+      for (const mutation of result.mutations) {
+        if (mutation.kind === 'removed') {
+          lastEmitted.delete(mutation.situationId);
+          lastStamp.delete(mutation.situationId);
+        } else {
+          sync([mutation.situation]);
+        }
+      }
+    } catch { /* bridge crash isolation */ }
   });
-  try { sync(store.list()); } catch { /* initial sync isolation */ }
+  try { sync(store.list(), true); } catch { /* initial sync isolation */ }
   return () => {
     unsubscribe();
     lastEmitted.clear();
@@ -185,7 +210,7 @@ export function createSituationV2AlertBridge(
 
 function recordTrace(
   registry: SituationAlertBridgeDeps['registry'],
-  s: Situation,
+  s: AlertableSituation,
   at: number,
 ): void {
   if (!registry) return;

@@ -200,6 +200,38 @@ test('monitor detects calibration, coverage, volume, and feed drift then records
   rmSync(dir, { recursive: true });
 });
 
+test('monitor reports impaired feeds on the first cycle', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false, feed: 'error' }) };
+  const tools = createTools(dir, current);
+
+  const result = await tools.run_monitor_cycle();
+
+  assert.ok(result.findings.some((finding) => (
+    finding.id === 'drift.feed./api/nws-alerts'
+    && finding.severity === 'yellow'
+  )));
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor fails closed on malformed feed-health output', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = {
+    value: {
+      feedHealth: { data: { sidecar: {}, feeds: {} } },
+      algorithmDiagnostics: { available: true, diagnostics: { health: { algorithms: [] } } },
+    },
+  };
+  const tools = createTools(dir, current);
+
+  const result = await tools.run_monitor_cycle();
+
+  assert.equal(result.status, 'red');
+  assert.ok(result.findings.some((finding) => finding.id === 'collection.sidecar-unavailable'));
+  assert.ok(result.findings.some((finding) => finding.id === 'collection.feed-health-invalid'));
+  rmSync(dir, { recursive: true });
+});
+
 test('monitor scheduler is opt-in and unrefs its timer', () => {
   let unrefCalled = false;
   let scheduledMs = null;

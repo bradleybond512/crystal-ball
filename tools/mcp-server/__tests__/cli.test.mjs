@@ -185,14 +185,34 @@ test('CLI doctor does not treat an unrelated Codex config as Crystal Ball regist
   const codexDir = join(home, '.codex');
   mkdirSync(codexDir, { recursive: true });
   writeFileSync(join(codexDir, 'config.toml'), '[mcp_servers.other]\ncommand = "other-mcp"\n');
-  let result = run(['doctor', '--json'], { HOME: home });
+  const isolatedEnv = { HOME: home, PATH: '/usr/bin:/bin' };
+  let result = run(['doctor', '--json'], isolatedEnv);
   let report = JSON.parse(result.stdout);
   assert.equal(report.checks.clients.configured, 0);
 
   writeFileSync(join(codexDir, 'config.toml'), '[mcp_servers.crystalball]\ncommand = "crystalball-mcp"\n');
-  result = run(['doctor', '--json'], { HOME: home });
+  result = run(['doctor', '--json'], isolatedEnv);
   report = JSON.parse(result.stdout);
   assert.equal(report.checks.clients.configured, 1);
+  assert.equal(report.checks.clients.resolvable, 0);
+  assert.equal(report.checks.clients.portable, 0);
+  assert.equal(report.checks.clients.status, 'warn');
+
+  const executable = join(home, 'bin', 'crystalball-mcp');
+  mkdirSync(join(home, 'bin'), { recursive: true });
+  writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  result = run(['doctor', '--json'], { ...isolatedEnv, PATH: join(home, 'bin') });
+  report = JSON.parse(result.stdout);
+  assert.equal(report.checks.clients.configured, 1);
+  assert.equal(report.checks.clients.resolvable, 1);
+  assert.equal(report.checks.clients.portable, 0);
+
+  writeFileSync(join(codexDir, 'config.toml'), `[mcp_servers.crystalball]\ncommand = "${executable}"\n`);
+  result = run(['doctor', '--json'], isolatedEnv);
+  report = JSON.parse(result.stdout);
+  assert.equal(report.checks.clients.configured, 1);
+  assert.equal(report.checks.clients.resolvable, 1);
+  assert.equal(report.checks.clients.portable, 1);
 
   writeFileSync(join(codexDir, 'config.toml'), [
     '[mcp_servers.crystalball]',
@@ -200,7 +220,7 @@ test('CLI doctor does not treat an unrelated Codex config as Crystal Ball regist
     '[mcp_servers.other]',
     'command = "crystalball-mcp"',
   ].join('\n'));
-  result = run(['doctor', '--json'], { HOME: home });
+  result = run(['doctor', '--json'], isolatedEnv);
   report = JSON.parse(result.stdout);
   assert.equal(report.checks.clients.configured, 0);
 });

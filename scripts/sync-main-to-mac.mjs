@@ -158,7 +158,7 @@ async function acquireLock(lockFile) {
   return open(lockFile, 'wx');
 }
 
-async function ensureClone(options) {
+async function fetchTargetSha(options) {
   await mkdir(path.dirname(options.repoDir), { recursive: true });
 
   if (await pathExists(path.join(options.repoDir, '.git'))) {
@@ -172,8 +172,10 @@ async function ensureClone(options) {
   // and gives us the target SHA even when the local clone has stale
   // tags that would otherwise block a combined fetch.
   runCommand('git', ['fetch', 'origin', options.branch, '--prune', '--no-tags'], { cwd: options.repoDir });
-  const targetSha = runCommand('git', ['rev-parse', `origin/${options.branch}`], { cwd: options.repoDir });
+  return runCommand('git', ['rev-parse', `origin/${options.branch}`], { cwd: options.repoDir });
+}
 
+async function prepareClone(options, targetSha) {
   // Then fetch tags with --force --prune-tags so a force-moved
   // historical tag (e.g., a release re-tag) doesn't fail the entire
   // sync. Active-release-tag integrity is still verified server-side
@@ -194,7 +196,10 @@ async function ensureClone(options) {
   });
   runLoggedCommand('git', ['reset', '--hard', targetSha], { cwd: options.repoDir });
   runLoggedCommand('git', ['clean', '-fdx'], { cwd: options.repoDir });
-  return targetSha;
+}
+
+export function determineSyncAction({ installedSha, targetSha, installedHealthy }) {
+  return installedSha === targetSha && installedHealthy ? 'idle' : 'build';
 }
 
 function normalizeCheckState(value) {
@@ -397,7 +402,7 @@ async function main() {
   try {
  await mkdir(options.logDir, { recursive: true });
  const state = await readJson(options.stateFile);
- const targetSha = await ensureClone(options);
+ const targetSha = await fetchTargetSha(options);
 
  await writeJson(options.statusFile, {
  phase: 'checking',
@@ -407,21 +412,28 @@ async function main() {
  repoDir: options.repoDir,
  });
 
- const { requiredChecks, verificationSource, verifiedPrNumber } = await verifyRemoteChecks(options, targetSha);
-
- if (state?.installedSha === targetSha && (await isInstalledCommitHealthy(state, options.installPath))) {
+ const installedHealthy = state?.installedSha === targetSha
+ ? await isInstalledCommitHealthy(state, options.installPath)
+ : false;
+ if (determineSyncAction({
+ installedSha: state?.installedSha,
+ targetSha,
+ installedHealthy,
+ }) === 'idle') {
  await writeJson(options.statusFile, {
  phase: 'idle',
  checkedAt: new Date().toISOString(),
  targetSha,
  installedSha: state.installedSha,
- requiredChecks,
- verificationSource,
- verifiedPrNumber,
+ requiredChecks: state.requiredChecks,
+ verificationSource: state.verificationSource,
+ verifiedPrNumber: state.verifiedPrNumber,
  });
- console.log(`[sync-main-to-mac] ${targetSha} already installed and healthy`);
  return;
  }
+
+ await prepareClone(options, targetSha);
+ const { requiredChecks, verificationSource, verifiedPrNumber } = await verifyRemoteChecks(options, targetSha);
 
  // If a local build is installed that is NOT an ancestor of macos/main HEAD,
  // the installed version is ahead of (or diverged from) main — skip to avoid

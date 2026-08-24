@@ -194,4 +194,30 @@ test('analyst tools', async (t) => {
     assert.equal(result.available, true);
     assert.deepEqual(result.safety.quarantinedAlgorithms, ['warning-verification']);
   });
+
+  await t.test('pipeline trace total reflects active filters before applying the limit', async () => {
+    const routed = (id, domain) => ({
+      id,
+      domain,
+      createdAt: Date.now() - 1_000,
+      events: [{ stage: 'routed' }],
+    });
+    const tools = makeAnalystTools(fakeClient({
+      available: true,
+      pipelineTrace: {
+        total: 50,
+        entries: [
+          routed('weather-1', 'weather'),
+          routed('weather-2', 'weather'),
+          routed('cyber-1', 'cyber'),
+        ],
+      },
+    }));
+
+    const result = await tools.get_pipeline_trace({ domain: 'weather', limit: 1 });
+
+    assert.equal(result.total, 2);
+    assert.equal(result.entries.length, 1);
+    assert.match(result.summary, /^1 of 2 trace entries/);
+  });
 });

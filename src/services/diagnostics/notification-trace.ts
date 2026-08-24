@@ -177,6 +177,12 @@ export interface NotificationTraceRegistryOptions {
   now?: () => number;
 }
 
+const USER_AUTHORIZED_SUPPRESSIONS = new Set([
+  'master-mute',
+  'domain-disabled',
+  'ghost-mode',
+]);
+
 export function createNotificationTraceRegistry(
   options: NotificationTraceRegistryOptions = {},
 ): NotificationTraceRegistry {
@@ -360,7 +366,7 @@ export function createNotificationTraceRegistry(
       if (entry.decision === 'suppressed' || entry.decision === 'expired') {
         const reason = entry.decisionReason ?? `Decision: ${entry.decision}`;
         suppressedByReason[reason] = (suppressedByReason[reason] ?? 0) + 1;
-        if (entry.candidate.safetyCritical) {
+        if (entry.candidate.safetyCritical && !USER_AUTHORIZED_SUPPRESSIONS.has(reason)) {
           // Find the suppression event timestamp (or fall back to "now").
           const ev = entry.events.find((e) => e.kind === 'suppressed' || e.kind === 'expired');
           unsafeSuppressions.push({

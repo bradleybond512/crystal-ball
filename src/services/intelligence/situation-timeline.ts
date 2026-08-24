@@ -185,7 +185,7 @@ export class SituationTimelineService {
     // two singletons. Only wired when using the production source.
     if (!options.source) {
       try {
-        this.unsubStore = getSituationStoreV2().subscribe(() => {
+        this.unsubStore = getSituationStoreV2().subscribeView(() => {
           // Coalesce a burst of store notifies (e.g. the boot data-load ingests
           // every feed's observations) into ONE rebuild on the next macrotask,
           // instead of a full O(situations) rebuild + fan-out per notify.

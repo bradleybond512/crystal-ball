@@ -291,14 +291,15 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const processEvent = (event: ObservationEvent): void => {
     stats.events += 1;
     const t0 = perfNow();
-    const beforeIds = new Set(store.list().map((s) => s.id));
-    store.ingest([event]);
+    const result = store.ingest([event]);
     const t1 = perfNow();
     stats.ingestMs += t1 - t0;
     const now = clock();
 
-    for (const sit of store.list()) {
-      const isNew = !beforeIds.has(sit.id);
+    for (const mutation of result.mutations) {
+      const sit = mutation.situation;
+      if (!mutation.observationIds.includes(event.id)) continue;
+      const isNew = mutation.kind === 'created';
       const state = tracked.get(sit.id);
 
       if (isNew && !state) {
@@ -308,7 +309,6 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
       }
 
       if (!isNew && state) {
-        if (!sit.observations.some((o) => o.id === event.id)) continue;
         const processingStartedAtMs = runtimeClock();
         stats.evidence += 1;
 

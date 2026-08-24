@@ -13,8 +13,9 @@ const store = new Map<string, string>();
 } as Storage;
 
 const {
-  preloadIdbBackedStores, installIdbStorageRouting, IDB_BACKED_STORE_KEYS,
+  preloadIdbBackedStores, installIdbStorageRouting, getIdbBackedStorage, IDB_BACKED_STORE_KEYS,
   _resetIdbStoreCacheForTest, _mirrorGetForTest, _setMemoryBackendForTest,
+  _flushPendingForTest,
 } = await import('../idb-store-cache.ts');
 
 // A representative IDB-backed key and a non-backed one.
@@ -250,5 +251,59 @@ describe('idb-store-cache — extension keys (quota headroom)', () => {
     for (const k of ['wm-situations-v1', 'wm-unified-alerts-v1']) {
       assert.ok(!IDB_BACKED_STORE_KEYS.includes(k), `${k} must stay in localStorage`);
     }
+  });
+});
+
+describe('idb-store-cache — coordinated flushes', () => {
+  it('keeps IDB writes single-flight and applies a newer generation last', async () => {
+    let active = 0;
+    let maxActive = 0;
+    let releaseFirst!: () => void;
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => { firstStarted = resolve; });
+    const blocked = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const writes: string[] = [];
+    _setMemoryBackendForTest({
+      getMemory: async () => null,
+      putMemory: async (_key: string, value: unknown) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        writes.push(String(value));
+        if (value === 'generation-1') {
+          firstStarted();
+          await blocked;
+        }
+        active -= 1;
+      },
+      deleteMemory: async () => {},
+    });
+    const routed = getIdbBackedStorage();
+    routed.setItem(BACKED, 'generation-1');
+    const firstFlush = _flushPendingForTest();
+    await started;
+    routed.setItem(BACKED, 'generation-2');
+    const secondFlush = _flushPendingForTest();
+    await Promise.resolve();
+    assert.equal(maxActive, 1);
+
+    releaseFirst();
+    await Promise.all([firstFlush, secondFlush]);
+    assert.equal(maxActive, 1);
+    assert.deepEqual(writes, ['generation-1', 'generation-2']);
+  });
+
+  it('skips a same-value write once that value is durable', async () => {
+    const writes: string[] = [];
+    _setMemoryBackendForTest({
+      getMemory: async () => null,
+      putMemory: async (_key: string, value: unknown) => { writes.push(String(value)); },
+      deleteMemory: async () => {},
+    });
+    const routed = getIdbBackedStorage();
+    routed.setItem(BACKED, 'same');
+    await _flushPendingForTest();
+    routed.setItem(BACKED, 'same');
+    await _flushPendingForTest();
+    assert.deepEqual(writes, ['same']);
   });
 });

@@ -42,6 +42,7 @@ export class RefreshScheduler implements AppModule {
  this.refreshRunners.clear();
  this.flushQueue = [];
  this.flushInFlight = 0;
+ this.flushScheduled.clear();
   }
 
   setHiddenSince(ts: number): void {
@@ -131,8 +132,9 @@ export class RefreshScheduler implements AppModule {
 
   static readonly MAX_CONCURRENT_FLUSHES = 6;
   static readonly FLUSH_STAGGER_MS = 150;
-  private flushQueue: { name: string; run: () => Promise<void> }[] = [];
+  private flushQueue: { name: string; run: () => Promise<void>; intervalMs: number }[] = [];
   private flushInFlight = 0;
+  private flushScheduled = new Set<string>();
 
   flushStaleRefreshes(): void {
  if (!this.hiddenSince) return;
@@ -143,16 +145,18 @@ export class RefreshScheduler implements AppModule {
  const stale: { name: string; run: () => Promise<void>; intervalMs: number }[] = [];
  for (const [name, { run, intervalMs }] of this.refreshRunners) {
  if (hiddenMs < intervalMs) continue;
+ if (this.flushScheduled.has(name)) continue;
  const pending = this.refreshTimeoutIds.get(name);
  if (pending) clearTimeout(pending);
  stale.push({ name, run, intervalMs });
+ this.flushScheduled.add(name);
  }
 
  // Sort by interval (shortest first = most time-sensitive)
  stale.sort((a, b) => a.intervalMs - b.intervalMs);
 
- this.flushQueue = stale;
- this.flushInFlight = 0;
+ this.flushQueue.push(...stale);
+ this.flushQueue.sort((a, b) => a.intervalMs - b.intervalMs);
  this.drainFlushQueue();
   }
 
@@ -166,6 +170,7 @@ export class RefreshScheduler implements AppModule {
  // Wrap in Promise.resolve so runners that forget to return a Promise don't crash the chain.
  Promise.resolve(item.run()).finally(() => {
   this.flushInFlight--;
+  this.flushScheduled.delete(item.name);
   this.drainFlushQueue();
  }).catch(() => { /* errors are already logged by the caller */ });
  }, delay));

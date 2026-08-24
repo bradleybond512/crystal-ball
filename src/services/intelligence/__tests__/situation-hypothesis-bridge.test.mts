@@ -127,6 +127,31 @@ test('second observation in same situation produces evidence rows', () => {
   assert.ok(evidenceAfter > evidenceBefore, 'evidence should grow after second observation');
 });
 
+test('routes hypotheses from ingest receipts without full-store list scans', () => {
+  __internals.reset();
+  const { store, engine, opts, fireEvent } = makeDeps();
+  const originalList = store.list.bind(store);
+  let listCalls = 0;
+  store.list = () => {
+    listCalls += 1;
+    return originalList();
+  };
+  startSituationHypothesisBridge(opts);
+
+  fireEvent(makeEvent({ id: 'receipt-1', severity: 'HIGH', sourceId: 'src-A' }));
+  fireEvent(makeEvent({
+    id: 'receipt-2',
+    severity: 'HIGH',
+    sourceId: 'src-B',
+    timestamp: BASE_TIME + 60_000,
+  }));
+
+  assert.equal(listCalls, 0);
+  const sets = engine.getAllSets();
+  assert.equal(sets.length, 1);
+  assert.ok(sets[0]!.hypotheses.some((hypothesis) => hypothesis.evidence.length > 0));
+});
+
 // ── Corroboration + consensus ─────────────────────────────────────────────
 
 test('corroborating second source raises primary confidence', () => {

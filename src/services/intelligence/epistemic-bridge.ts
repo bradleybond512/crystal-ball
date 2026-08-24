@@ -74,6 +74,12 @@ interface SituationTrack {
 
 let active: { stop: () => void } | null = null;
 
+function updatedAtMs(situation: Situation): number {
+  return situation.updatedAt instanceof Date
+    ? situation.updatedAt.getTime()
+    : Number(situation.updatedAt);
+}
+
 // ── Bridge ────────────────────────────────────────────────────────────────────
 
 export function startEpistemicBridge(options: EpistemicBridgeOptions = {}): () => void {
@@ -88,10 +94,6 @@ export function startEpistemicBridge(options: EpistemicBridgeOptions = {}): () =
   const recorder = options.recorder ?? recordAlgorithmEvaluation;
 
   const tracks = new Map<string, SituationTrack>();
-
-  function updatedAtMs(s: Situation): number {
-    return s.updatedAt instanceof Date ? s.updatedAt.getTime() : Number(s.updatedAt);
-  }
 
   function processSituation(s: Situation, track: SituationTrack | undefined, now: number): void {
     const firstSeen = track === undefined;
@@ -175,7 +177,7 @@ export function startEpistemicBridge(options: EpistemicBridgeOptions = {}): () =
     tracks.set(s.id, next);
   }
 
-  const unsubscribeStore = store.subscribe((situations) => {
+  const unsubscribeStore = store.subscribeView((situations) => {
     const now = clock();
     for (const s of situations) {
       processSituation(s, tracks.get(s.id), now);

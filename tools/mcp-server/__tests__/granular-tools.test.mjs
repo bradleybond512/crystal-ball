@@ -70,3 +70,39 @@ test('get_economic_data passes series IDs', async () => {
   assert.ok(capturedParams);
   assert.equal(capturedParams.ids, 'FEDFUNDS,WALCL');
 });
+
+test('get_earthquakes accepts the live sidecar events response shape', async () => {
+  const earthquakes = [{ id: 'us7000-test', magnitude: 6.2, place: 'Test region' }];
+  const tools = makeGranularTools(mockClient({
+    '/api/usgs-earthquakes': { events: earthquakes },
+  }));
+
+  const result = await tools.get_earthquakes({});
+
+  assert.match(result.summary, /Found 1 earthquake/);
+  assert.deepEqual(result.data.earthquakes, earthquakes);
+});
+
+test('check_feed_health fails closed on malformed health and feed payloads', async () => {
+  const tools = makeGranularTools(mockClient({
+    '/api/health': {},
+    '/api/service-status': {},
+    '/api/acled-events': {},
+    '/api/market-quotes': { ok: false },
+  }));
+
+  const result = await tools.check_feed_health();
+
+  assert.equal(result.healthy, false);
+  assert.deepEqual(result.data.sidecar, { error: 'invalid health response' });
+  assert.deepEqual(result.data.feeds[0], {
+    route: '/api/acled-events',
+    status: 'error',
+    error: 'invalid response',
+  });
+  assert.deepEqual(result.data.feeds[1], {
+    route: '/api/market-quotes',
+    status: 'error',
+    error: 'invalid response',
+  });
+});

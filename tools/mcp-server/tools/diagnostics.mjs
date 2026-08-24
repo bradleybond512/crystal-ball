@@ -39,6 +39,7 @@ export function makeDiagnosticsTools(client) {
       const responses = await Promise.all(routes.map((route) => client.get(route)));
       const [health, feeds, analyst, selfTest = null] = responses;
       const findings = [];
+      const feedRows = Array.isArray(feeds?.feeds) ? feeds.feeds : [];
       const algorithmDiagnostics = publicAlgorithmDiagnostics(
         analyst?.algorithmDiagnostics,
       );
@@ -52,7 +53,16 @@ export function makeDiagnosticsTools(client) {
         ));
       }
 
-      for (const feed of Array.isArray(feeds?.feeds) ? feeds.feeds : []) {
+      if (!Array.isArray(feeds?.feeds)) {
+        findings.push(finding(
+          'runtime.feed_health_invalid',
+          'yellow',
+          'The feed-health endpoint returned an invalid response.',
+          'Inspect the sidecar feed-health route before trusting provider readiness.',
+        ));
+      }
+
+      for (const feed of feedRows) {
         const status = String(feed.status ?? feed.state ?? feed.health ?? '').toLowerCase();
         if (!status || HEALTHY.has(status)) continue;
         const id = String(feed.id ?? feed.name ?? feed.feedId ?? 'unknown');
@@ -150,7 +160,7 @@ export function makeDiagnosticsTools(client) {
       const compact = {
         ...base,
         sidecar: summarizeSidecar(health),
-        feedSummary: summarizeFeeds(feeds?.feeds),
+        feedSummary: summarizeFeeds(feedRows, Array.isArray(feeds?.feeds)),
         renderer,
         algorithmSummary: summarizeAlgorithmSnapshot(algorithmDiagnostics),
         quarantinedAlgorithms,
@@ -160,7 +170,7 @@ export function makeDiagnosticsTools(client) {
       const full = {
         ...base,
         sidecar: health,
-        feedSummary: summarizeFeeds(feeds?.feeds),
+        feedSummary: summarizeFeeds(feedRows, Array.isArray(feeds?.feeds)),
         renderer,
         algorithms: algorithmDiagnostics,
         quarantinedAlgorithms,
@@ -285,12 +295,12 @@ function finding(id, severity, summary, nextAction) {
   return { id, severity, summary, nextAction };
 }
 
-function summarizeFeeds(feeds) {
+function summarizeFeeds(feeds, available = Array.isArray(feeds)) {
   const rows = Array.isArray(feeds) ? feeds : [];
   const healthy = rows.filter((feed) =>
     HEALTHY.has(String(feed.status ?? feed.state ?? feed.health ?? '').toLowerCase()),
   ).length;
-  return { total: rows.length, healthy, impaired: rows.length - healthy };
+  return { total: rows.length, healthy, impaired: rows.length - healthy, available };
 }
 
 function summarizeAlgorithms(snapshot) {

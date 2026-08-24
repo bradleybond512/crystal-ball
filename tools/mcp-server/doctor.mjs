@@ -1,10 +1,14 @@
-import { readFileSync, statSync } from 'node:fs';
+import { accessSync, constants, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
+
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 import { createSidecarClient } from './sidecar-client.mjs';
 import { createStorage } from './storage.mjs';
 import {
+  SERVER_NAME,
   SERVER_VERSION,
   SKILL_CONTRACT_VERSION,
   compatibilityVerdict,
@@ -23,20 +27,46 @@ export async function buildAgentDoctorReport(options = {}) {
   const executablePath = options.executablePath ?? process.argv[1];
   const now = options.now?.() ?? new Date().toISOString();
   const checkSidecar = options.checkSidecar ?? defaultSidecarCheck;
+  const checkMcp = options.checkMcp ?? defaultMcpHandshake;
   const inspectInstall = options.inspectInstall ?? defaultInstallInspection;
   const inspectClients = options.inspectClients ?? defaultClientInspection;
   const readMonitor = options.readMonitor ?? defaultMonitorRead;
   const checks = {};
+  let installation = null;
 
   checks.install = await independentCheck('install', options, async () => {
-    const install = await inspectInstall({ executablePath, nodeVersion, packageVersion });
+    installation = await inspectInstall({ executablePath, nodeVersion, packageVersion });
     return {
-      status: install?.installed && install?.nodeSupported ? 'pass' : 'fail',
-      installed: install?.installed === true,
-      nodeSupported: install?.nodeSupported === true,
-      command: install?.installed ? 'crystalball' : null,
+      status: installation?.installed && installation?.nodeSupported ? 'pass' : 'fail',
+      installed: installation?.installed === true,
+      nodeSupported: installation?.nodeSupported === true,
+      command: installation?.installed ? 'crystalball' : null,
       nodeVersion,
       packageVersion,
+    };
+  });
+  checks.mcp = await independentCheck('mcp', options, async () => {
+    if (!installation?.installed || typeof installation.mcpExecutable !== 'string') {
+      return {
+        status: 'fail',
+        available: false,
+        nameMatches: false,
+        version: null,
+        versionMatches: false,
+      };
+    }
+    const mcp = await checkMcp({
+      executablePath: installation.mcpExecutable,
+      timeoutMs: options.mcpTimeoutMs ?? 3_000,
+    });
+    const nameMatches = mcp?.name === SERVER_NAME;
+    const versionMatches = mcp?.version === packageVersion;
+    return {
+      status: mcp?.ok && nameMatches && versionMatches ? 'pass' : 'fail',
+      available: mcp?.ok === true,
+      nameMatches,
+      version: typeof mcp?.version === 'string' ? mcp.version : null,
+      versionMatches,
     };
   });
   checks.runtime = await independentCheck('runtime', options, async () => {
@@ -53,10 +83,19 @@ export async function buildAgentDoctorReport(options = {}) {
     const safeClients = Array.isArray(clients) ? clients.map((client) => ({
       name: String(client.name ?? 'Unknown'),
       configured: client.configured === true,
+      commandResolvable: client.commandResolvable === true,
+      portable: client.portable === true,
     })) : [];
+    const configured = safeClients.filter((client) => client.configured).length;
+    const resolvable = safeClients.filter((client) => client.configured && client.commandResolvable).length;
+    const portable = safeClients.filter((client) => (
+      client.configured && client.commandResolvable && client.portable
+    )).length;
     return {
-      status: safeClients.some((client) => client.configured) ? 'pass' : 'warn',
-      configured: safeClients.filter((client) => client.configured).length,
+      status: portable > 0 ? 'pass' : 'warn',
+      configured,
+      resolvable,
+      portable,
       clients: safeClients,
     };
   });
@@ -98,7 +137,9 @@ export async function buildAgentDoctorReport(options = {}) {
   }));
 
   const statuses = Object.values(checks).map((check) => check.status);
-  const status = checks.runtime.status === 'fail' || checks.compatibility.status === 'fail'
+  const status = checks.runtime.status === 'fail'
+      || checks.mcp.status === 'fail'
+      || checks.compatibility.status === 'fail'
     ? 'unavailable'
     : statuses.includes('warn') || statuses.includes('fail') ? 'degraded' : 'ready';
   const exitCode = status === 'ready'
@@ -139,6 +180,28 @@ async function defaultSidecarCheck() {
   };
 }
 
+async function defaultMcpHandshake({ executablePath, timeoutMs }) {
+  const client = new Client({ name: 'crystalball-doctor', version: SERVER_VERSION });
+  const transport = new StdioClientTransport({
+    command: executablePath,
+    args: [],
+    stderr: 'pipe',
+  });
+  try {
+    await client.connect(transport, { timeout: timeoutMs, maxTotalTimeout: timeoutMs });
+    const server = client.getServerVersion();
+    return {
+      ok: true,
+      name: typeof server?.name === 'string' ? server.name : null,
+      version: typeof server?.version === 'string' ? server.version : null,
+    };
+  } catch {
+    return { ok: false, name: null, version: null };
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
 export async function readLocalMonitorStatus(now = Date.now(), storage = createStorage()) {
   const state = storage.readJSON('monitor/state.json');
   const eventState = storage.readJSON('monitor/events.json');
@@ -170,62 +233,102 @@ async function defaultClientInspection() {
   ];
   return candidates.map(([name, path]) => ({
     name,
-    configured: hasCrystalBallClientRegistration(path),
+    ...inspectCrystalBallClientRegistration(path),
   }));
 }
 
 function defaultInstallInspection({ executablePath, nodeVersion }) {
-  let installed = false;
-  try {
-    installed = Boolean(executablePath) && statSync(executablePath).isFile();
-  } catch {
-    installed = false;
-  }
+  const cliInstalled = executableFile(executablePath);
+  const mcpExecutable = cliInstalled
+    ? join(dirname(executablePath), 'crystalball-mcp')
+    : null;
+  const installed = cliInstalled && executableFile(mcpExecutable);
   const nodeMajor = Number.parseInt(String(nodeVersion).split('.')[0], 10);
-  return { installed, nodeSupported: Number.isInteger(nodeMajor) && nodeMajor >= 20 };
+  return {
+    installed,
+    nodeSupported: Number.isInteger(nodeMajor) && nodeMajor >= 20,
+    mcpExecutable: installed ? mcpExecutable : null,
+  };
 }
 
-function hasCrystalBallClientRegistration(path) {
+function inspectCrystalBallClientRegistration(path) {
   let source;
   try {
     source = readFileSync(path, 'utf8');
   } catch {
-    return false;
+    return clientRegistrationResult(null, false);
   }
   if (path.endsWith('.toml')) {
     const sections = source.split(/^\s*(?=\[)/m);
     const section = sections.find((candidate) => (
       /^\s*\[mcp_servers\.(?:"crystalball"|crystalball)\]\s*$/im.test(candidate)
     ));
-    if (!section) return false;
+    if (!section) return clientRegistrationResult(null, false);
     const disabled = /^\s*disabled\s*=\s*true\s*$/im.test(section)
       || /^\s*enabled\s*=\s*false\s*$/im.test(section);
     const command = section.match(/^\s*command\s*=\s*["']([^"']+)["']\s*$/im)?.[1];
-    return !disabled && isCrystalBallCommand(command);
+    return clientRegistrationResult(command, !disabled && isCrystalBallCommand(command));
   }
   try {
-    return containsCrystalBallClient(JSON.parse(source));
+    return findCrystalBallClient(JSON.parse(source));
   } catch {
-    return false;
+    return clientRegistrationResult(null, false);
   }
 }
 
-function containsCrystalBallClient(value) {
-  if (!value || typeof value !== 'object') return false;
+function findCrystalBallClient(value) {
+  if (!value || typeof value !== 'object') return clientRegistrationResult(null, false);
   for (const [key, child] of Object.entries(value)) {
     if (key === 'mcpServers' && child && typeof child === 'object') {
       const registration = child.crystalball;
-      if (registration && typeof registration === 'object'
-          && registration.disabled !== true
-          && isCrystalBallCommand(registration.command)) return true;
+      if (registration && typeof registration === 'object') {
+        return clientRegistrationResult(
+          registration.command,
+          registration.disabled !== true && isCrystalBallCommand(registration.command),
+        );
+      }
     }
-    if (containsCrystalBallClient(child)) return true;
+    const nested = findCrystalBallClient(child);
+    if (nested.configured) return nested;
   }
-  return false;
+  return clientRegistrationResult(null, false);
 }
 
 function isCrystalBallCommand(value) {
   return typeof value === 'string' && /(?:^|[\\/])crystalball-mcp$/.test(value.trim());
+}
+
+function clientRegistrationResult(command, configured) {
+  const resolved = configured ? resolveExecutable(command) : null;
+  return {
+    configured,
+    commandResolvable: resolved !== null,
+    portable: resolved !== null && isAbsolute(String(command).trim()),
+  };
+}
+
+function resolveExecutable(command) {
+  if (typeof command !== 'string') return null;
+  const candidate = command.trim();
+  if (!candidate) return null;
+  if (isAbsolute(candidate)) return executableFile(candidate) ? candidate : null;
+  if (candidate.includes('/') || candidate.includes('\\')) return null;
+  for (const directory of String(process.env.PATH ?? '').split(delimiter)) {
+    if (!directory) continue;
+    const path = join(directory, candidate);
+    if (executableFile(path)) return path;
+  }
+  return null;
+}
+
+function executableFile(path) {
+  if (typeof path !== 'string' || !path) return false;
+  try {
+    accessSync(path, constants.X_OK);
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export function formatDoctorReport(report) {

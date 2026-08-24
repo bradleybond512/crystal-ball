@@ -30,6 +30,16 @@ test('temporary-prefix install exposes both new and existing command names', { t
   });
   assert.equal(probe.status, 0, probe.stderr);
   assert.equal(JSON.parse(probe.stdout).tools.length, 61);
+  const doctor = spawnSync(join(prefix, 'bin', 'crystalball'), ['doctor', '--json'], {
+    encoding: 'utf8',
+    env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), 'crystalball-doctor-home-')) },
+    timeout: 10_000,
+  });
+  assert.notEqual(doctor.status, null, doctor.error?.message);
+  const doctorReport = JSON.parse(doctor.stdout);
+  assert.equal(doctorReport.checks.install.status, 'pass');
+  assert.equal(doctorReport.checks.mcp.status, 'pass');
+  assert.equal(doctorReport.checks.mcp.version, '0.3.0');
   const installedRoot = join(prefix, 'lib', 'node_modules', 'crystalball-mcp');
   for (const file of [
     'local-lock.mjs',

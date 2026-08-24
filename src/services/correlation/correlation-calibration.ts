@@ -200,11 +200,11 @@ export function startCorrelationCalibration(
     for (const p of pairs) recordPairPrediction(p);
   });
   let lastResolveAt = 0;
-  const unsubscribe = store.subscribe((situations) => {
+  const unsubscribe = store.subscribeMutations(() => {
     const now = Date.now();
     if (now - lastResolveAt < RESOLVE_THROTTLE_MS) return;
     lastResolveAt = now;
-    resolvePairPredictions(situations, now);
+    resolvePairPredictions(store.list(), now);
   });
   return () => {
     started = false;

@@ -12,7 +12,7 @@ function makeResponse(summary, data, sources, warnings = []) {
     sources,
     warnings,
     timestamp: new Date().toISOString(),
-    healthy: true,
+    healthy: sources.length > 0,
   };
 }
 
@@ -112,14 +112,14 @@ export function makeAggregateTools(client) {
     const fg = results.get('/api/fear-greed');
     const wsb = results.get('/api/wsb-sentiment');
 
-    const fgLabel = fg?.label || fg?.value_classification || 'unknown';
-    const fgValue = fg?.value ?? fg?.fgi?.now?.value ?? '?';
+    const fgLabel = fg?.classification || fg?.label || fg?.value_classification || 'unknown';
+    const fgValue = fg?.score ?? fg?.value ?? fg?.fgi?.now?.value ?? '?';
 
     const summary = `Markets overview: Fear & Greed at ${fgValue} (${fgLabel}).${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
     const data = {
       indices: cap(quotes?.quotes || []),
-      crypto: cap(toArray(crypto?.prices, crypto)),
+      crypto: cap(toArray(crypto?.quotes, crypto?.prices, crypto)),
       etfFlows: etf?.flows || etf || {},
       sentiment: { fearGreed: fg, wsb: wsb },
       macroRegime: macro?.signals || macro || {},

@@ -60,6 +60,22 @@ test('get_market_overview returns market data', async () => {
   assert.equal(result.healthy, true);
 });
 
+test('get_market_overview accepts the live crypto and fear-greed response shapes', async () => {
+  const tools = makeAggregateTools(mockClient({
+    '/api/market-quotes': { quotes: [{ symbol: 'SPY', price: 425 }] },
+    '/api/crypto-quotes': { quotes: [{ symbol: 'BTC', price: 65000 }] },
+    '/api/btc-etf-flows': { flows: [] },
+    '/api/macro-signals': { signals: {} },
+    '/api/fear-greed': { score: 73, classification: 'Greed' },
+    '/api/wsb-sentiment': { trending: [] },
+  }));
+
+  const result = await tools.get_market_overview();
+
+  assert.match(result.summary, /73 \(Greed\)/);
+  assert.deepEqual(result.data.crypto, [{ symbol: 'BTC', price: 65000 }]);
+});
+
 test('unhealthy client returns error in summary', async () => {
   const tools = makeAggregateTools({
     checkHealth: async () => false,
@@ -72,4 +88,23 @@ test('unhealthy client returns error in summary', async () => {
   });
   const result = await tools.get_sitrep();
   assert.ok(result.warnings.length > 0);
+  assert.equal(result.healthy, false);
+  assert.deepEqual(result.sources, []);
+});
+
+test('infrastructure reports unhealthy when every source fails', async () => {
+  const error = { error: 'upstream unavailable' };
+  const tools = makeAggregateTools(mockClient({
+    '/api/power-grid': error,
+    '/api/grid-alerts': error,
+    '/api/epa-sdwis-proxy': error,
+    '/api/epa-radnet-proxy': error,
+    '/api/usgs-water-proxy': error,
+  }));
+
+  const result = await tools.get_infrastructure_status();
+
+  assert.equal(result.healthy, false);
+  assert.deepEqual(result.sources, []);
+  assert.equal(result.warnings.length, 5);
 });

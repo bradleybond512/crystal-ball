@@ -1,0 +1,480 @@
+# Usability Uplift — Handoff for Codex
+
+- **Date:** 2026-08-23
+- **Author:** Claude; corrected after Codex audit of `origin/main` @ `3bf6d23e`
+- **Status:** OPEN — roadmap correction in PR #1659; no implementation task claimed
+- **Audience:** Codex / ChatGPT sessions working this repo
+- **Companion docs:** [`docs/superpowers/specs/2026-06-14-grand-strategy-survival-os-design.md`](superpowers/specs/2026-06-14-grand-strategy-survival-os-design.md) (the north star this measures against)
+
+---
+
+## How to use this document
+
+1. Read the **Verified findings** section. It is evidence, not opinion — every
+   finding includes either a command you can re-run or the exact code paths and
+   method used. Do not re-derive it from scratch; if the evidence now returns
+   something different, say so in your PR and update this doc.
+2. Pick ONE `UX-NNN` task. Claim it by opening a draft PR whose title names the
+   task, and set its row in the Progress Tracker to `IN PROGRESS` in the same PR.
+3. Follow the normal delivery path in [`AGENTS.md`](../AGENTS.md): `codex/*` branch,
+   PR, cross-agent review verdict (`codex/*` → reviewed by **Claude**), then
+   `bash scripts/pr-closeout.sh`.
+4. Update the tracker row to `DONE` with the PR number in the same PR that
+   completes the work.
+
+**Do not** bundle multiple `UX-NNN` tasks into one PR. They are ordered so each
+ships an independently verifiable user outcome or prerequisite gate.
+
+---
+
+## The single finding that frames all of this
+
+**The app's stated centerpiece is not on its default screen.**
+
+The north star defines success as: *open it, and within ~10 seconds you know your
+survival posture across every domain, the top threats with time-to-impact and
+confidence, the single best move — and you can commit it.*
+
+Measured against the current default surface, posture scores zero. The survival
+engine is real, wired, and fed by live data. It is funnelled through one
+library-tier panel and one concatenated HTML string.
+
+**This is a surfacing problem, not an engine problem. Do not write new engines.**
+The repo's own guardrail from the Surfacing & Coherence cycle — *no engine merges
+without a read-surface* — is nominally satisfied and functionally violated here.
+
+---
+
+## Verified findings
+
+Each row was verified against `origin/main` @ `3bf6d23e`. Re-run the shown
+commands or inspect the named paths and method to confirm.
+
+### F1 — Posture has zero presence on the default surface
+
+```bash
+grep -ci posture src/components/HomeShellOverlay.ts src/services/home-shell/*.ts
+```
+
+Returns `0` for all eight files. The Home Shell (default surface since Phase 2 for
+the full desktop variant) renders three briefing bands — `personal`, `changed`,
+`critical` (see `src/services/home-shell/briefing-view.ts`) — and none of them
+carry posture, moves, or time-to-impact.
+
+### F2 — Exactly one surface renders survival posture
+
+```bash
+grep -rln "survival-outlook\|SurvivalOutlook" src/components src/app --include="*.ts"
+```
+
+Returns only `src/components/StormPosturePanel.ts` (257 lines). Its registration:
+
+- `src/config/panels.ts:321` → `'storm-posture': { name: 'Storm Posture', enabled: true, priority: 1 }`
+- `src/config/panel-metadata.ts:403` → `tier: 'library'`, `domain: 'hazards-weather'`
+
+So the multi-axis survival posture is discoverable only by knowing to look for a
+weather panel, in the Library tier, among 408 panels.
+
+### F3 — 16 imports collapse into one string
+
+`StormPosturePanel.ts:126-129` calls `renderSurvivalOutlook(...)` and string-concatenates
+the result: `` `${banner}${modeChips}${overall}${cards}${movesCard}${outlook}` ``.
+
+`src/services/survival/survival-outlook.ts` aggregates:
+
+```bash
+rg -o "from './[^']+'" src/services/survival/survival-outlook.ts \
+  | rg -v "survival-types" | sort -u | wc -l
+```
+
+```
+comms-fallback  comms-fallback-view  decision-consequence  decision-consequence-view
+grid-down-certify  grid-down-certify-view  offline-playbook  offline-playbook-view
+posture-calibration  posture-trajectory  posture-trajectory-view  projection-calibration
+retrospective-digest  retrospective-view  world-branches  world-branches-view
+```
+
+The list contains 14 runtime imports and two type-only calibration imports. It is
+the currently wired user-visible output of epics **E5** (world branches,
+decision-consequence), **E6** (grid-down certification, offline playbook, comms
+fallback) and the E7 retrospective view — rendered as a fragment at the bottom
+of one panel. Retrospective output is normally empty until a live calibration
+store is wired, so this does not establish that all E7 behavior is live.
+
+### F4 — Static reachability leaves 5 modules outside the app graph
+
+Static reachability walk from real app entry points over
+`src/services/survival/` (56 modules): **51 reachable, 5 not imported by
+non-test app code.** This establishes wiring, not runtime health.
+
+Entry points (imported by non-test app code): `board-events`, `scrubber-view`,
+`storm-posture-state`, `survival-map-modes`, `survival-moves`, `survival-outlook`,
+`survival-outlook-render`, `survival-types`, `time-scrubber`, `world-snapshot`.
+
+Outside the app graph: `lens-board`, `lens-marker-apply`, `lens-marker-style`,
+`scrubber-loop`, `survival-posture-view`.
+
+They do not share one blocker:
+
+- The three `lens-*` modules need a stable identity join between incoming events
+  and Cesium entities before they can be mounted reliably.
+- `survival-posture-view` is a tested, render-ready projection that UX-001 can
+  mount; it does not depend on Cesium identity.
+- `scrubber-loop` is pure loop bookkeeping, while `TimeScrubberHud` is already
+  mounted in `GodsVisionView`. Treat timeline consolidation and map-cursor wiring
+  as a design task, not as an unmounted-module task.
+
+> **Note on method:** an earlier pass of this walk reported 46 unreachable. That
+> was wrong — the edge regex missed the `.ts` extension used in relative imports
+> (`from './survival-posture.ts'`). If you re-run a reachability check, match
+> `from '\./([A-Za-z0-9._-]+?)(?:\.ts|\.js)?'`.
+
+```bash
+node --input-type=module - <<'NODE'
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+const root = 'src';
+const survival = 'src/services/survival';
+const walk = (dir) => readdirSync(dir).flatMap((name) => {
+  const path = join(dir, name);
+  return statSync(path).isDirectory() ? walk(path) : [path];
+});
+const appFile = (path) => path.endsWith('.ts')
+  && !path.includes('/__tests__/') && !/\.test\.[cm]?ts$/.test(path);
+const files = walk(survival).filter(appFile);
+const byName = new Map(
+  files.map((path) => [path.slice(survival.length + 1, -3), path]),
+);
+const importPattern = (prefix) => new RegExp(
+  String.raw`(?:from\s*|import\s*\(\s*)['"]${prefix}([A-Za-z0-9._-]+?)(?:\.ts|\.js)?['"]`,
+  'g',
+);
+const entries = new Set();
+for (const path of walk(root).filter(
+  (file) => appFile(file) && !file.startsWith(`${survival}/`),
+)) {
+  for (const match of readFileSync(path, 'utf8').matchAll(
+    importPattern('@/services/survival/'),
+  )) if (byName.has(match[1])) entries.add(match[1]);
+}
+const reachable = new Set(entries);
+const queue = [...entries];
+while (queue.length > 0) {
+  const current = queue.shift();
+  for (const match of readFileSync(byName.get(current), 'utf8').matchAll(
+    importPattern('\\./'),
+  )) if (byName.has(match[1]) && !reachable.has(match[1])) {
+    reachable.add(match[1]);
+    queue.push(match[1]);
+  }
+}
+console.log({
+  modules: files.length,
+  reachable: reachable.size,
+  outside: [...byName.keys()].filter((x) => !reachable.has(x)).sort(),
+});
+NODE
+```
+
+### F5 — Panel count is now a usability liability
+
+```bash
+sed -n '/^const FULL_PANELS:/,/^const TECH_PANELS:/p' src/config/panels.ts \
+  | rg -o ': \{ name:' | wc -l
+```
+
+Returns **408**. The earlier 502 command was invalid because it continued through
+the tech, finance, happy, and category maps. The `intelligence`
+`PANEL_CATEGORY_MAP` entry
+in `src/config/panels.ts:1239`
+holds 307 panel keys. Library's 12 domains and ⌘K make panels *searchable*,
+but you must already know what to search for.
+
+### F6 — `CLAUDE.md` is stale on this point
+
+At the reviewed base, `CLAUDE.md` states 406 panels in the Home Shell / Library
+sections. The actual count is 408 (F5). This roadmap-integration PR corrects that
+single stale number without reflowing the surrounding prose.
+
+---
+
+## Tasks
+
+### UX-000 — Zero-key first-run contract *(do this before UX-001)*
+
+The packaged zero-key runtime is still unmeasured, but static wiring and a
+disposable sidecar show that most capability is designed to work without keys:
+50 of 58 definitions in `src/services/providers/provider-registry.ts` use no
+authentication, 66 of 78 entries in `src/services/runtime-config.ts` require no
+effective desktop secret, and a disposable sidecar starts with zero provider/API
+keys (its local trust token remains mandatory).
+
+```bash
+node --import tsx --input-type=module - <<'NODE'
+const { PROVIDER_DEFINITIONS } =
+  await import('./src/services/providers/provider-registry.ts');
+const { RUNTIME_FEATURES } =
+  await import('./src/services/runtime-config.ts');
+const noAuth = PROVIDER_DEFINITIONS.filter((x) => x.authType === 'none').length;
+const noDesktopKey = RUNTIME_FEATURES.filter(
+  (x) => (x.desktopRequiredSecrets ?? x.requiredSecrets).length === 0,
+).length;
+console.log({ providers: PROVIDER_DEFINITIONS.length, noAuth,
+  features: RUNTIME_FEATURES.length, noDesktopKey });
+NODE
+```
+
+The first visible state is still misleading and not decision-useful:
+
+- `WelcomeFlow` says listed sources work with "no key" while naming NewsAPI and
+  OpenWeatherMap; both require configured keys in repository wiring.
+- A clean Home Shell begins with an unavailable change digest and all 12 default
+  Deck cards marked `not loaded`, without a readiness budget or clear next step.
+
+- **Correct:** distinguish no-key sources from services with free-key tiers.
+- **Show:** explicit startup/readiness progress and useful keyless coverage.
+- **Require:** every default card settles to useful data or an actionable,
+  truthful degraded state within a defined budget; it must not remain an
+  indefinite loading placeholder.
+- **Non-goal:** a broad provider rewrite. Fix the first-run contract, measure it,
+  then proceed to posture surfacing.
+- **Done when:** a clean zero-key run tells the user what works now, what is still
+  loading, and exactly what an optional key would unlock.
+
+### UX-001 — Posture band on the Home Shell
+
+Add survival posture to the default surface as a fourth briefing band.
+
+- **Read from:** `storm-posture-state` — already an entry point, already fed live
+  by `src/app/data-loader.ts`. Hydrate persisted posture once for cold/offline
+  startup, then subscribe/unsubscribe to shared state; do not add a second fetch
+  timer.
+- **Reuse:** adapt the existing tested
+  `src/services/survival/survival-posture-view.ts` projection, then render it in
+  `src/components/HomeShellOverlay.ts`. Do not create a competing view-model.
+- **Show:** overall band + the worst 2–3 axes and their lead-threat arrival and
+  threat confidence. Do not present `AxisState.confidence` as epistemic
+  confidence: production currently aliases its total to threat severity. Omit
+  axis confidence until that contract is repaired. Likewise, omit trend unless
+  it comes from a real prior-state comparison rather than the default `steady`.
+- **Constraint:** the Home Shell is a **read-only** consumer of shared state
+  (CommandCenterPanel is the single what-changed snapshot writer). Do not add a
+  second writer. A stale, degraded, or non-secure posture must also prevent the
+  shell's generic all-clear collapse.
+- **Done when:** opening the app with no navigation shows current posture or an
+  honest no-snapshot/stale state.
+
+### UX-002 — "Best move now" + commit on the posture band
+
+- **Read from:** `buildSurvivalOutlook(...).decision.recommendedMoveId`, whose
+  ranking path is `projectPostureTrajectory` → `buildWorldBranches` →
+  `evaluateDecisionConsequences`. `null` means Hold.
+- **Reuse:** `StormPosturePanel.ts` already implements working commit UI. Extract
+  a scoped renderer/commit seam rather than reimplementing or adding another
+  document-wide listener. Map the recommended ID back to the exact candidate and
+  keep the `commitStormMove` path identical so after-action grading keeps working.
+- **Show:** the single top-ranked move with its modeled effect, plus commit.
+- **Done when:** the north star's "single best move to make now — and you can
+  commit it" is true from the default surface.
+
+### UX-003 — Give Emergency readiness its own reachable surface
+
+Cornerstone #4 is "works at zero bars." Today `grid-down-certify`,
+`offline-playbook`, and `comms-fallback` render as a fragment of a string inside a
+weather panel (F3). The one thing that must be findable in an emergency is
+currently the least findable thing in the app.
+
+- Create one first-class, **read-only Emergency readiness** surface combining
+  grid-down certification, offline playbook, comms fallback, and the current
+  Lifelines v1 receipt. Show each capability independently with its capture time
+  and expiry.
+- The v1 receipt proves only a Lifelines snapshot. It must never make the whole
+  Emergency Pack read "ready," and UX-003 must not change manifest schemas,
+  storage, migration, or fabricate receipts for absent artifacts. UX-009
+  exclusively owns the real multi-artifact Pack v2.
+- Validate restored survival snapshots before use; do not cast untrusted
+  localStorage JSON directly to `WorldSnapshot`.
+- Must degrade correctly with the network disabled — that is the whole point of
+  the feature. Verify offline, not just in tests.
+
+### UX-004 — Make panels contextual instead of topical
+
+Reuse what already exists rather than adding taxonomy: `src/config/panel-metadata.ts`
+already carries `evidenceFor` keyed by `PlaybookCategory` (the situation dossier
+consumes it).
+
+- Add an explicit, curated **axis → panels** mapping so a degraded posture axis
+  reveals a bounded, deduplicated, ranked set of relevant suggestions on the
+  Deck. Keep contextual suggestions separate from persisted user pins.
+- Include Disaster Lifelines for relevant supply, mobility, health,
+  physical-safety, and energy/water states.
+- Goal: panels stop being a 408-item catalog and become consequences of state.
+- This is the task that actually pays down the panel count instead of managing it.
+
+### UX-005 — Wire stable identity and mount the personal lens *(High Assurance)*
+
+Standardize stable identity at both incoming-event production and Cesium
+entity-creation boundaries, compose existing timeline opacity with lens styling,
+then mount `lens-board` / `lens-marker-apply` / `lens-marker-style`.
+
+This remains blocked until the producer-to-renderer identity design lands — do
+not start here. Adding IDs only at the renderer is insufficient because current
+incoming-event and marker IDs do not consistently join.
+
+### UX-006 — Correct the stale panel count in `CLAUDE.md` *(completed in #1659)*
+
+Update 406 → 408 (F5/F6). PR #1659 makes only that factual `CLAUDE.md` correction.
+
+### UX-007 — Truthful Lifelines discovery *(first Lifelines uplift)*
+
+The server already enforces exact query radii and per-category caps. The panel
+currently clamps explicit saved-place requests to 25 km and globally slices its
+"All" results, which can hide whole categories.
+
+- Offer explicit 5/10/25/50 km choices. A saved radius is the initial preference,
+  not a ceiling on a later user selection.
+- Guarantee category representation before filling remaining result slots.
+- Show requested radius, returned coverage, and provider coverage/expiry. Say
+  "none reported" only inside coverage proven by the current response.
+- Put Call and Open in Maps actions directly on eligible result cards; keep the
+  existing map-popup actions as well.
+- Add no provider, sidecar route, secret, or operational-status inference.
+
+### UX-008 — Immediate, observable Lifelines prewarm
+
+When a user pins a place or explicitly selects Prepare offline, persist the
+choice first and enqueue the exact selected Lifelines fingerprint immediately.
+
+- Expose queued/fetching/verifying/ready/partial/failed/cooldown states through
+  an accessible live status.
+- Verify the written snapshot by reading it back before reporting ready.
+- Reuse one coordinator for manual, startup, and storm-triggered preparation.
+- Back off failed work with a retry action; never turn failure into a success
+  cooldown.
+
+### UX-009 — Real multi-artifact Emergency Pack v2 *(High Assurance)*
+
+Replace the current lifelines-only "pack ready" shortcut with receipts for
+artifacts that were actually captured and read-back verified:
+
+- exact Lifelines snapshot;
+- scoped alerts;
+- validated primary route (alternate optional);
+- bounded offline-map coverage;
+- bounded comms/contacts export.
+
+Show readiness and expiry per artifact. Migrate v1 manifests as partial,
+lifelines-only packs; never promote them to complete. Stage replacement so a
+failed refresh cannot erase the last known-good pack. This task requires the
+High Assurance storage/migration approval gate before implementation.
+
+### UX-010 — Explicit current-location Lifelines mode *(High Assurance)*
+
+Add a click-initiated, session-only location anchor:
+
+- disclose permission, accuracy, and observation time;
+- handle denial, stale fixes, and zero-valued coordinates honestly;
+- do not continuously watch, log, analyze, persist, or include the location in a
+  pack without a second explicit save/prepare action.
+
+This task requires the precise-location privacy approval gate. Do not add a new
+Tauri permission/plugin without a separate design and approval.
+
+### UX-011 — Hazard and closure exposure, never "safe" routing *(High Assurance)*
+
+Keep route computation separate from hazard evidence. Report only:
+
+- reported intersection/impact;
+- no reported intersection within the explicitly covered, current feeds; or
+- unknown.
+
+Start with existing allowlisted NWS/IPAWS geometry where it is jurisdictionally
+applicable. Add 511/WZDx feeds one jurisdiction at a time only after a live body
+probe and usage-rights review. Never label a site or route safe, clear, or open
+from missing data. This safety-critical reasoning/provider task requires the
+High Assurance approval gate.
+
+### UX-012 — Outage coverage matrix and provider telemetry
+
+First surface the evidence already available from ODIN and provider health:
+accepted, dropped, and contributed rows; observation time/expiry; covered versus
+unknown geography; and the exact source behind every claim. A provider that
+contributed zero valid observations must not count as healthy corroboration.
+
+Any new outage origin, sidecar route, allowlist, secret, or cross-provider
+reconciliation belongs to tracked High Assurance task UX-015 with live
+response-body evidence. Never sum overlapping providers or turn uncovered empty
+data into zero outages.
+
+### UX-013 — Hotel operational evidence *(High Assurance provider task)*
+
+Keep OSM lodging as directory-only. Add an operational hotel adapter only if its
+license permits the required display/cache behavior and a live probe proves the
+consumed schema. Every row must identify source, coverage, observation time, and
+expiry. Never infer vacancy, power, access, or availability from a listing,
+hours, price, capacity arithmetic, or HTTP 200. If no suitable source exists,
+ship only Call/Open in Maps/confirm-directly actions and retain `unknown` status.
+
+### UX-014 — Fuel operational evidence *(High Assurance provider task)*
+
+Keep OSM fuel sites as directory-only. Add operational fuel evidence only behind
+the same license, live-probe, bounded-timeout, cache, allowlist, health, and
+expiry contract as UX-013. Never infer fuel inventory, power, access, or queue
+conditions from a listing, price, hours, or missing report. Hotel and fuel remain
+separate PRs so one provider cannot broaden the other's truth boundary.
+
+### UX-015 — New outage provider integration *(High Assurance provider task)*
+
+Add at most one new outage origin per PR after a live response-body probe,
+coverage/overlap design, and usage-rights review. Normalize at the provider
+boundary, record accepted/dropped/contributed counts, and keep the source
+independent from ODIN unless evidence proves otherwise. A valid HTTP response
+with zero accepted observations cannot cast a healthy corroboration vote.
+
+### UX-016 — Consolidate timeline controller and cursor wiring *(High Assurance)*
+
+`TimeScrubberHud` is already mounted. Select one timeline controller, connect it
+to map-cursor behavior, and remove redundant loop ownership without adding a
+second animation loop. Compose its opacity contract with UX-005 lens styling so
+two independent writers cannot fight over marker alpha.
+
+---
+
+## What was NOT verified
+
+State these as open questions rather than treating them as settled:
+
+- **The packaged cold start remains unmeasured.** There are 77 entries in
+  `SUPPORTED_SECRET_KEYS` (`src-tauri/src/main.rs:41`). UX-000 records static and
+  disposable-sidecar evidence, but not a real packaged desktop run with empty
+  keychain/app data and normal provider access.
+- The original review covered **structure and reachability, not packaged runtime
+  behavior.** UX-000 adds static, deterministic-harness, and disposable-sidecar
+  evidence; the packaged desktop UI was not launched.
+- Mobile and the non-full site variants were not examined at all.
+
+---
+
+## Progress Tracker
+
+Update the row in the same PR that does the work.
+
+| Task | Title | Status | PR |
+|---|---|---|---|
+| UX-000 | Zero-key first-run contract | NOT STARTED | — |
+| UX-001 | Posture band on Home Shell | NOT STARTED | — |
+| UX-002 | Best move + commit on band | NOT STARTED | — |
+| UX-003 | Emergency readiness surface | NOT STARTED | — |
+| UX-004 | Contextual panel reveal | NOT STARTED | — |
+| UX-005 | Stable identity + personal lens | BLOCKED — HIGH ASSURANCE | — |
+| UX-006 | Fix stale panel count in CLAUDE.md | DONE | #1659 |
+| UX-007 | Truthful Lifelines discovery | NOT STARTED | — |
+| UX-008 | Observable Lifelines prewarm | NOT STARTED | — |
+| UX-009 | Emergency Pack v2 | NOT STARTED — HIGH ASSURANCE | — |
+| UX-010 | Current-location Lifelines | NOT STARTED — HIGH ASSURANCE | — |
+| UX-011 | Hazard/closure exposure | NOT STARTED — HIGH ASSURANCE | — |
+| UX-012 | Outage coverage + telemetry | NOT STARTED | — |
+| UX-013 | Hotel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
+| UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
+| UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
+| UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |

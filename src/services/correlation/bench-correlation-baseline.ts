@@ -288,7 +288,7 @@ export const CORRELATION_BENCH_V12_TO_V13_MIGRATION: CorrelationBenchMigrationV1
   toSchemaVersion: 13,
   previousCorpusDigest: '1a0377333099795fe0ccff8dc5a7a2cf',
   previousReportDigest: '354a7790613214a893698b1882eda0ae',
-  previousPayloadDigest: '129ab5924c521a1897a907059de7ffac',
+  previousPayloadDigest: '4c9417f274c058c7661edde0da2caa73',
   previousTolerancesDigest: benchTolerancesDigest({
     couplingPrecisionDrop: 0.02,
     couplingRecallDrop: 0,
@@ -345,6 +345,68 @@ export function benchTolerancesDigest(tolerances: CorrelationBenchBaseline['tole
   canonicalRecords(tolerances, '', records);
   return digestRecords(records);
 }
+
+export interface CorrelationBenchV13StatisticalReseed {
+  fromSchemaVersion: 13;
+  toSchemaVersion: 13;
+  previousCorpusDigest: string;
+  previousReportDigest: string;
+  previousPayloadDigest: string;
+  previousTolerancesDigest: string;
+  nextReportDigest: string;
+  previousMultipleTestingFamily: MultipleTestingFamily;
+  nextMultipleTestingFamily: MultipleTestingFamily;
+  expectedMovement: Record<string, { from: number; to: number }>;
+  reason: string;
+}
+
+/**
+ * ACC-503/ACC-504 deliberately changes the miner while leaving the benchmark
+ * schema and frozen corpus intact. Pin both complete reports and the previous
+ * baseline payload so the reseed guard permits exactly this reviewed
+ * transition, not an arbitrary method-label edit or a self-consistent forgery.
+ */
+export const CORRELATION_BENCH_V13_STATISTICAL_RESEED: CorrelationBenchV13StatisticalReseed = {
+  fromSchemaVersion: 13,
+  toSchemaVersion: 13,
+  previousCorpusDigest: '1a0377333099795fe0ccff8dc5a7a2cf',
+  previousReportDigest: '6d8489c850bea5b7cd3aef6d3b69b12e',
+  previousPayloadDigest: '129ab5924c521a1897a907059de7ffac',
+  previousTolerancesDigest: '0c24f1a31e8401fc64c2dc7e96968c4a',
+  nextReportDigest: 'fdf1ead2d5503886781b125c125bf799',
+  previousMultipleTestingFamily: {
+    alpha: 0.05,
+    eligibleOrderedPairs: 272,
+    windowCount: 4,
+    pairWindowTests: 1088,
+    tails: 2,
+    criticalAbsZ: 4.621_899_151_113_062_5,
+    method: 'gaussian-union-bound',
+  },
+  nextMultipleTestingFamily: {
+    alpha: 0.05,
+    eligibleOrderedPairs: 272,
+    windowCount: 4,
+    pairWindowTests: 1088,
+    tails: 2,
+    criticalAbsZ: 4.621_899_151_113_062_5,
+    method: 'exact-binomial-holm',
+  },
+  expectedMovement: {
+    couplingPrecision: { from: 0.2941, to: 1 },
+    minedEdgeCount: { from: 258, to: 257 },
+    significantEdgeCount: { from: 17, to: 5 },
+    falseEdgeCount: { from: 12, to: 0 },
+    fixedCandidateEvidenceSeparation: { from: 13.4241, to: 14.3647 },
+    learnedRuleCount: { from: 12, to: 5 },
+    learnedRuleFalsePositives: { from: 7, to: 0 },
+    learnedRulePairCount: { from: 102, to: 32 },
+  },
+  reason:
+    'ACC-503/ACC-504 replace the gaussian union-bound approximation with exact '
+    + 'binomial pair-level Holm correction, decluster bursty streams, and demote '
+    + 'redundant edges without changing the frozen corpus or benchmark shape.',
+};
 
 /**
  * Pure one-hop schema check, extracted so it is directly testable in
@@ -849,6 +911,18 @@ export function compareCorrelationBenchReseedToPrevious(
   report: CorrelationBenchReport,
   previous: CorrelationBenchBaseline,
 ): CorrelationBenchComparison {
+  if (
+    previous.schemaVersion === CORRELATION_BENCH_V13_STATISTICAL_RESEED.fromSchemaVersion
+    && previous.reportDigest === CORRELATION_BENCH_V13_STATISTICAL_RESEED.previousReportDigest
+    && benchReportDigest(report) === CORRELATION_BENCH_V13_STATISTICAL_RESEED.nextReportDigest
+  ) {
+    return validateCorrelationBenchV13StatisticalReseed(
+      report,
+      previous,
+      CORRELATION_BENCH_V13_STATISTICAL_RESEED,
+    );
+  }
+
   const preflightReasons = [
     ...checkPreviousReseedAnchors(previous),
     ...checkReseedRuleCoverage(previous, report),
@@ -860,6 +934,68 @@ export function compareCorrelationBenchReseedToPrevious(
     reportDigest: benchReportDigest(report),
     witnessed: benchWitnessedFields(report),
     ruleCoverage: Array.isArray(report.ruleCoverage) ? [...report.ruleCoverage] : report.ruleCoverage,
+  };
+  return compareCorrelationBenchToBaseline(report, comparisonBaseline);
+}
+
+export function validateCorrelationBenchV13StatisticalReseed(
+  report: CorrelationBenchReport,
+  previous: CorrelationBenchBaseline,
+  manifest: CorrelationBenchV13StatisticalReseed,
+): CorrelationBenchComparison {
+  const reasons: string[] = [];
+  if (JSON.stringify(manifest) !== JSON.stringify(CORRELATION_BENCH_V13_STATISTICAL_RESEED)) {
+    return { ok: false, reasons: ['v13 statistical reseed manifest does not match the pinned transition'] };
+  }
+  if (previous.schemaVersion !== manifest.fromSchemaVersion) {
+    reasons.push(`v13 statistical reseed source is schemaVersion ${previous.schemaVersion}, not 13`);
+  }
+  if (previous.corpusDigest !== manifest.previousCorpusDigest) {
+    reasons.push('v13 statistical reseed source is not the reviewed corpus');
+  }
+  if (report.corpusDigest !== manifest.previousCorpusDigest) {
+    reasons.push('v13 statistical reseed changed the frozen corpus');
+  }
+  if (previous.reportDigest !== manifest.previousReportDigest) {
+    reasons.push('v13 statistical reseed source is not the reviewed previous report');
+  }
+  if (benchBaselinePayloadDigest(previous) !== manifest.previousPayloadDigest) {
+    reasons.push('v13 statistical reseed source does not carry the reviewed previous payload');
+  }
+  if (benchTolerancesDigest(previous.tolerances) !== manifest.previousTolerancesDigest) {
+    reasons.push('v13 statistical reseed source does not carry the reviewed tolerances');
+  }
+  if (benchReportDigest(report) !== manifest.nextReportDigest) {
+    reasons.push('v13 statistical reseed live report is not the reviewed next report');
+  }
+  if (JSON.stringify(previous.multipleTestingFamily)
+    !== JSON.stringify(manifest.previousMultipleTestingFamily)) {
+    reasons.push('v13 statistical reseed source has an unreviewed multiple-testing family');
+  }
+  if (JSON.stringify(report.multipleTestingFamily)
+    !== JSON.stringify(manifest.nextMultipleTestingFamily)) {
+    reasons.push('v13 statistical reseed live report has an unreviewed multiple-testing family');
+  }
+
+  const previousRecord = previous as unknown as Record<string, unknown>;
+  const reportRecord = report as unknown as Record<string, unknown>;
+  for (const [field, expected] of Object.entries(manifest.expectedMovement)) {
+    if (previousRecord[field] !== expected.from || reportRecord[field] !== expected.to) {
+      reasons.push(
+        `v13 statistical reseed ${field} moved outside the reviewed transition: expected `
+        + `${expected.from}→${expected.to}, got ${String(previousRecord[field])}→`
+        + `${String(reportRecord[field])}`,
+      );
+    }
+  }
+  if (reasons.length > 0) return { ok: false, reasons };
+
+  const comparisonBaseline: CorrelationBenchBaseline = {
+    ...previous,
+    reportDigest: benchReportDigest(report),
+    witnessed: benchWitnessedFields(report),
+    ruleCoverage: [...report.ruleCoverage],
+    multipleTestingFamily: { ...report.multipleTestingFamily },
   };
   return compareCorrelationBenchToBaseline(report, comparisonBaseline);
 }

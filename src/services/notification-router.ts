@@ -8,6 +8,8 @@
 
 import type { ReactorAlert } from './threat-reactor';
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+import { getNotificationTraceRegistry } from './diagnostics/diagnostics-state';
+import type { NotificationTraceRegistry, NotificationUrgency } from './diagnostics/notification-trace';
 
 type Severity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -50,6 +52,7 @@ const RATE_LIMIT_MS: Record<Severity, number> = {
 };
 
 const lastNotifiedBySeverity = new Map<Severity, number>();
+let nextTraceId = 1;
 
 const DEFAULT_CONFIG: RouterConfig = {
   minSeverity: 'medium',
@@ -269,17 +272,32 @@ async function safeNative(
   alert: ReactorAlert,
   ghost: boolean,
   nowMs: number,
+  trace?: RouterTrace,
 ): Promise<void> {
-  if (!config.notifyNative || ghost) return;
+  if (!config.notifyNative) {
+ recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'native-disabled' });
+ return;
+  }
+  if (ghost) {
+ recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'ghost-mode' });
+ return;
+  }
   const sev = alert.threat.severity;
   const limit = RATE_LIMIT_MS[sev];
   const last = lastNotifiedBySeverity.get(sev) ?? 0;
-  if (limit !== 0 && nowMs - last < limit) return;
+  if (limit !== 0 && nowMs - last < limit) {
+ recordRouterNativeResult(trace, { delivered: false, surface: 'in_app', error: 'severity-rate-limit' });
+ return;
+  }
   lastNotifiedBySeverity.set(sev, nowMs);
   try {
  await deps.sendNativeNotification(alert.threat.title, alert.threat.body);
+ recordRouterNativeResult(trace, {
+ delivered: true,
+ surface: sev === 'critical' ? 'critical' : 'banner',
+ });
   } catch {
- // ignore
+ recordRouterNativeResult(trace, { delivered: false, surface: 'failed', error: 'native-delivery-failed' });
   }
 }
 
@@ -295,16 +313,83 @@ function safeMarker(deps: RouterDeps, alert: ReactorAlert, ghost: boolean): void
 }
 
 async function deliver(alert: ReactorAlert, deps: RouterDeps): Promise<void> {
+  const nowMs = deps.now();
+  const trace = createRouterTrace(alert, nowMs);
   if (SEVERITY_RANK[alert.threat.severity] < SEVERITY_RANK[config.minSeverity]) {
+ suppressRouterTrace(trace, 'below-min-severity');
  return;
   }
-  const nowMs = deps.now();
-  if (await isDuplicate(alert, deps, nowMs)) return;
+  if (await isDuplicate(alert, deps, nowMs)) {
+ suppressRouterTrace(trace, 'duplicate-within-window');
+ return;
+  }
   const ghost = await safeIsGhost(deps);
   await safePut(deps, alertToUnified(alert));
   safeToast(deps, alert);
-  await safeNative(deps, alert, ghost, nowMs);
+  dispatchRouterTrace(trace, nowMs);
+  await safeNative(deps, alert, ghost, nowMs, trace);
   safeMarker(deps, alert, ghost);
+}
+
+interface RouterTrace {
+  registry: NotificationTraceRegistry;
+  candidateId: string;
+}
+
+function routerUrgency(severity: Severity): NotificationUrgency {
+  switch (severity) {
+    case 'critical': { return 'critical'; }
+    case 'high': { return 'high'; }
+    case 'medium': { return 'normal'; }
+    case 'low': { return 'low'; }
+  }
+}
+
+function createRouterTrace(alert: ReactorAlert, nowMs: number): RouterTrace | undefined {
+  try {
+    const registry = getNotificationTraceRegistry();
+    const candidateId = `router-${alert.alertId}-${nowMs}-${nextTraceId++}`;
+    const severity = alert.threat.severity;
+    registry.register({
+      candidateId,
+      situationId: alert.alertId,
+      domain: 'cyber',
+      urgency: routerUrgency(severity),
+      confidence: Math.max(0, Math.min(1, alert.relevance.score / 100)),
+      userRelevance: Math.max(0, Math.min(1, alert.relevance.score / 100)),
+      safetyCritical: severity === 'critical',
+      createdAt: nowMs,
+      headline: alert.threat.title,
+    });
+    registry.recordEvent(candidateId, {
+      kind: 'urgency_check',
+      reason: `Severity ${severity}; minimum ${config.minSeverity}.`,
+    });
+    return { registry, candidateId };
+  } catch {
+    return undefined;
+  }
+}
+
+function suppressRouterTrace(trace: RouterTrace | undefined, reason: string): void {
+  try {
+    trace?.registry.suppress(trace.candidateId, reason);
+  } catch { /* diagnostics must not block delivery */ }
+}
+
+function dispatchRouterTrace(trace: RouterTrace | undefined, at: number): void {
+  try {
+    trace?.registry.dispatch(trace.candidateId, 'in_app', at);
+  } catch { /* diagnostics must not block delivery */ }
+}
+
+function recordRouterNativeResult(
+  trace: RouterTrace | undefined,
+  result: Parameters<NotificationTraceRegistry['recordNativeResult']>[1],
+): void {
+  try {
+    trace?.registry.recordNativeResult(trace.candidateId, result);
+  } catch { /* diagnostics must not block delivery */ }
 }
 
 const NOOP = (): void => {
@@ -347,6 +432,7 @@ export async function __deliverForTesting(alert: ReactorAlert): Promise<void> {
 /** Test hook: reset module state. */
 export function __resetForTesting(): void {
   lastNotifiedBySeverity.clear();
+  nextTraceId = 1;
   config = { ...DEFAULT_CONFIG };
   activeDeps = null;
   routerStarted = false;

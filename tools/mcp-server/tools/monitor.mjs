@@ -181,12 +181,20 @@ function captureSnapshot(feedHealth, algorithmResult, at) {
   const forecast = diagnostics.forecastCalibration ?? {};
   const evaluation = forecast.evaluation ?? {};
   const exclusions = evaluation.overall?.exclusions ?? {};
+  const sidecar = feedHealth?.data?.sidecar;
+  const feedRows = Array.isArray(feedHealth?.data?.feeds)
+    ? feedHealth.data.feeds
+    : [];
   return {
     at,
-    sidecarAvailable: !feedHealth?.data?.sidecar?.error,
+    sidecarAvailable: sidecar !== null
+      && typeof sidecar === 'object'
+      && !sidecar.error
+      && Number.isFinite(sidecar.pid),
+    feedHealthValid: Array.isArray(feedHealth?.data?.feeds),
     algorithmDiagnosticsAvailable: algorithmResult?.available === true,
     algorithmDiagnosticsStale: algorithmResult?.stale === true,
-    feeds: Object.fromEntries((feedHealth?.data?.feeds ?? [])
+    feeds: Object.fromEntries(feedRows
       .map((feed) => [feed.route, feed.status])),
     brier: metricValue(evaluation.overall?.brier),
     resolutionCoverage: finiteOrNull(
@@ -211,6 +219,14 @@ function detectFindings(previous, current) {
       nextAction: 'Launch Crystal Ball and verify the authenticated local sidecar.',
     });
   }
+  if (!current.feedHealthValid) {
+    findings.push({
+      id: 'collection.feed-health-invalid',
+      severity: 'red',
+      summary: 'Crystal Ball feed-health diagnostics are invalid.',
+      nextAction: 'Repair the feed-health response before trusting provider readiness.',
+    });
+  }
   if (!current.algorithmDiagnosticsAvailable) {
     findings.push({
       id: 'collection.algorithm-diagnostics-unavailable',
@@ -233,18 +249,20 @@ function detectFindings(previous, current) {
     summary: `${algorithmId} is quarantined from derived conclusions.`,
     nextAction: 'Replay recent direct-outcome evidence and require manual review before restoring output.',
   })));
-  if (!previous) return findings;
-
   for (const [route, status] of Object.entries(current.feeds)) {
-    if (previous.feeds?.[route] === 'ok' && status !== 'ok') {
+    if (status !== 'ok') {
+      const changed = previous?.feeds?.[route] === 'ok';
       findings.push({
         id: `drift.feed.${route}`,
         severity: 'yellow',
-        summary: `${route} changed from ready to ${status}.`,
+        summary: changed
+          ? `${route} changed from ready to ${status}.`
+          : `${route} is ${status}.`,
         nextAction: 'Check credentials, provider health, and recent request errors.',
       });
     }
   }
+  if (!previous) return findings;
   if (hasDelta(previous.brier, current.brier, 0.05)) {
     findings.push({
       id: 'drift.calibration.brier',

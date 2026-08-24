@@ -412,6 +412,138 @@ test('listener crashes do not break subsequent listeners', () => {
   assert.equal(secondCalled, true);
 });
 
+test('exact duplicate ingest is unchanged and does not persist or notify', () => {
+  __storage.clear();
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  let writes = 0;
+  const nativeSet = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = (key: string, value: string): void => {
+    writes += 1;
+    nativeSet(key, value);
+  };
+  try {
+    const store = new SituationStoreV2({
+      engine: new CorrelateEngine(),
+      clock: () => NOW,
+      persistenceScheduler: (callback, delayMs) => {
+        scheduled.push({ callback, delayMs });
+        return () => {};
+      },
+    });
+    let mutationCalls = 0;
+    let viewSchedules = 0;
+    store.subscribeMutations(() => { mutationCalls += 1; });
+    store.subscribeView(() => {}, (callback) => {
+      viewSchedules += 1;
+      return callback;
+    });
+
+    const event = makeEvent({ id: 'duplicate', title: 'Stable event' });
+    const first = store.ingest([event]);
+    const updatedAt = store.list()[0]!.updatedAt.getTime();
+    const duplicate = store.ingest([event]);
+
+    assert.equal(first.status, 'changed');
+    assert.equal('observations' in first.mutations[0]!.situation, false);
+    assert.equal('edges' in first.mutations[0]!.situation, false);
+    assert.equal(first.mutations[0]!.situation.observationCount, 1);
+    assert.equal(duplicate.status, 'unchanged');
+    assert.deepEqual(duplicate.mutations, []);
+    assert.equal(store.list()[0]!.updatedAt.getTime(), updatedAt);
+    assert.equal(mutationCalls, 1);
+    assert.equal(viewSchedules, 1);
+    assert.equal(scheduled.length, 1);
+    assert.equal(scheduled[0]!.delayMs, 1_000);
+    assert.equal(writes, 0);
+    scheduled[0]!.callback();
+    assert.equal(writes, 1);
+  } finally {
+    localStorage.setItem = nativeSet;
+  }
+});
+
+test('mixed replay batches correlate only novel observations', () => {
+  const store = freshStore();
+  const known = makeEvent({ id: 'known' });
+  store.ingest([known]);
+  let emittedPairs = 0;
+  store.setPairListener((pairs) => { emittedPairs += pairs.length; });
+
+  const result = store.ingest([known, makeEvent({ id: 'novel' })]);
+
+  assert.equal(result.status, 'changed');
+  assert.deepEqual(result.mutations[0]!.observationIds, ['novel']);
+  assert.equal(result.mutations[0]!.situation.edgeCount, 0);
+  assert.equal(emittedPairs, 0);
+});
+
+test('live store flushes pending persistence before unload', () => {
+  __storage.clear();
+  const listeners = new Map<string, () => void>();
+  const runtime = globalThis as typeof globalThis & {
+    addEventListener?: (type: string, listener: () => void) => void;
+    removeEventListener?: (type: string, listener: () => void) => void;
+  };
+  const savedAdd = runtime.addEventListener;
+  const savedRemove = runtime.removeEventListener;
+  const nativeSet = localStorage.setItem.bind(localStorage);
+  let writes = 0;
+  runtime.addEventListener = (type, listener) => { listeners.set(type, listener); };
+  runtime.removeEventListener = (type) => { listeners.delete(type); };
+  localStorage.setItem = (key: string, value: string): void => {
+    writes += 1;
+    nativeSet(key, value);
+  };
+  try {
+    const store = new SituationStoreV2({
+      engine: new CorrelateEngine(),
+      clock: () => NOW,
+      diagnosticsMode: 'live',
+      persistenceScheduler: () => () => {},
+    });
+    store.ingest([makeEvent({ id: 'pending-before-unload' })]);
+    assert.equal(writes, 0);
+    listeners.get('beforeunload')!();
+    assert.equal(writes, 1);
+    store.resetForTesting();
+  } finally {
+    localStorage.setItem = nativeSet;
+    runtime.addEventListener = savedAdd;
+    runtime.removeEventListener = savedRemove;
+  }
+});
+
+test('mutation receipts are synchronous while view fanout coalesces a burst', () => {
+  __storage.clear();
+  const viewQueue: Array<() => void> = [];
+  const store = new SituationStoreV2({
+    engine: new CorrelateEngine(),
+    clock: () => NOW,
+    persistenceScheduler: () => () => {},
+  });
+  const mutationIds: string[] = [];
+  const viewCounts: number[] = [];
+  store.subscribeMutations((result) => {
+    mutationIds.push(...result.mutations.map((mutation) => mutation.situationId));
+  });
+  store.subscribeView(
+    (situations) => { viewCounts.push(situations.length); },
+    (callback) => {
+      viewQueue.push(callback);
+      return callback;
+    },
+  );
+
+  store.ingest([makeEvent({ id: 'one', location: { lat: 10, lon: 10 } })]);
+  store.ingest([makeEvent({ id: 'two', location: { lat: -40, lon: 100 } })]);
+
+  assert.equal(mutationIds.length, 2);
+  assert.equal(viewQueue.length, 1);
+  assert.deepEqual(viewCounts, []);
+  viewQueue.shift()!();
+  assert.deepEqual(viewCounts, [2]);
+});
+
 // ── Stats ──────────────────────────────────────────────────────────
 
 test('stats() counts total, active, watching, resolved + per-domain', () => {
@@ -429,11 +561,12 @@ test('stats() counts total, active, watching, resolved + per-domain', () => {
 
 // ── Persistence ────────────────────────────────────────────────────
 
-test('situations persist across instances via localStorage', () => {
+test('situations persist across instances via localStorage', async () => {
   __storage.clear();
   const engine = new CorrelateEngine();
   const a = new SituationStoreV2({ engine, clock: () => NOW });
   a.ingest([makeEvent({ id: 'a', title: 'Persisted observation' })]);
+  await a.flushPersistence();
   // New instance with the same clock sees the persisted blob.
   const b = new SituationStoreV2({ engine, clock: () => NOW });
   assert.equal(b.list().length, 1);

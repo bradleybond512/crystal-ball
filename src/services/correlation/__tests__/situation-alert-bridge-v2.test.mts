@@ -7,7 +7,7 @@ import {
   toEmitRecord,
   traceDomainFor,
 } from '../situation-alert-bridge-v2';
-import type { Situation } from '../../intelligence/situation-store-v2';
+import type { Situation, SituationIngestResult } from '../../intelligence/situation-store-v2';
 import type { UnifiedAlert } from '../../unified-alerts';
 import type { ObservationEvent } from '../../../types/intelligence';
 
@@ -100,7 +100,7 @@ test('shouldReemit: first sight yes; unchanged no; each meaningful change yes', 
 interface FakeStore {
   listeners: ((s: Situation[]) => void)[];
   items: Situation[];
-  subscribe(l: (s: Situation[]) => void): () => void;
+  subscribeMutations(l: (result: SituationIngestResult) => void): () => void;
   list(): Situation[];
 }
 
@@ -108,7 +108,26 @@ function fakeStore(items: Situation[]): FakeStore {
   return {
     listeners: [],
     items,
-    subscribe(l) { this.listeners.push(l); return () => {}; },
+    subscribeMutations(l) {
+      let previous = new Map(this.items.map((item) => [item.id, item]));
+      this.listeners.push((items) => {
+        const current = new Map(items.map((item) => [item.id, item]));
+        const mutations: SituationIngestResult['mutations'] = items.map((item) => ({
+          kind: previous.has(item.id) ? 'updated' : 'created',
+          situationId: item.id,
+          situation: item,
+          observationIds: item.observations.map((observation) => observation.id),
+        }));
+        for (const [id, item] of previous) {
+          if (!current.has(id)) mutations.push({
+            kind: 'removed', situationId: id, situation: item, observationIds: [],
+          });
+        }
+        previous = current;
+        l({ status: mutations.length > 0 ? 'changed' : 'unchanged', mutations });
+      });
+      return () => {};
+    },
     list() { return this.items; },
   };
 }

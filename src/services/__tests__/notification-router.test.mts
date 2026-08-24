@@ -3,6 +3,7 @@ import test, { beforeEach } from 'node:test';
 
 import type { ReactorAlert, NormalizedThreat } from '../threat-reactor.ts';
 import type { UnifiedAlert } from '../unified-alerts.ts';
+import { getNotificationTraceRegistry, resetDiagnosticsState } from '../diagnostics/diagnostics-state.ts';
 
 interface Recorder {
   putCalls: UnifiedAlert[];
@@ -84,6 +85,7 @@ async function loadFresh() {
 }
 
 beforeEach(() => {
+  resetDiagnosticsState();
   // clean localStorage stub
   (globalThis as { localStorage?: Storage }).localStorage = {
  _s: new Map<string, string>(),
@@ -189,4 +191,55 @@ test('notifyToast=false suppresses toast but other channels still fire', async (
   assert.equal(rec.putCalls.length, 1);
   assert.equal(rec.nativeCalls.length, 1);
   assert.equal(rec.markerCalls.length, 1);
+});
+
+test('severity gate is recorded in the production notification trace', async () => {
+  const rec = makeRecorder();
+  const mod = await loadFresh();
+  mod.updateRouterConfig({ minSeverity: 'high' });
+  const stop = mod.startNotificationRouter(makeDeps(rec));
+
+  await mod.__deliverForTesting(makeAlert({ severity: 'medium' }, 'trace-severity'));
+  stop();
+
+  const [entry] = getNotificationTraceRegistry().all();
+  assert.equal(entry?.decision, 'suppressed');
+  assert.equal(entry?.decisionReason, 'below-min-severity');
+});
+
+test('ghost-mode native suppression is recorded while in-app delivery remains dispatched', async () => {
+  const rec = makeRecorder();
+  rec.ghost = true;
+  const mod = await loadFresh();
+  const stop = mod.startNotificationRouter(makeDeps(rec));
+
+  await mod.__deliverForTesting(makeAlert({ severity: 'critical' }, 'trace-ghost'));
+  stop();
+
+  const [entry] = getNotificationTraceRegistry().all();
+  assert.equal(entry?.decision, 'dispatched');
+  assert.equal(entry?.rung, 'in_app');
+  assert.deepEqual(entry?.nativeResult, {
+    delivered: false,
+    surface: 'in_app',
+    error: 'ghost-mode',
+  });
+});
+
+test('native delivery failure is recorded in the production notification trace', async () => {
+  const rec = makeRecorder();
+  const deps = makeDeps(rec);
+  deps.sendNativeNotification = async () => { throw new Error('native down'); };
+  const mod = await loadFresh();
+  const stop = mod.startNotificationRouter(deps);
+
+  await mod.__deliverForTesting(makeAlert({ severity: 'critical' }, 'trace-native-failure'));
+  stop();
+
+  const [entry] = getNotificationTraceRegistry().all();
+  assert.deepEqual(entry?.nativeResult, {
+    delivered: false,
+    surface: 'failed',
+    error: 'native-delivery-failed',
+  });
 });

@@ -102,6 +102,20 @@ test('diagnose_runtime supports explicit section projection', async () => {
   );
 });
 
+test('diagnose_runtime reports malformed feed-health responses instead of treating zero feeds as healthy', async () => {
+  const tools = makeDiagnosticsTools(fakeClient({
+    '/api/health': { ok: true, port: 46123 },
+    '/api/feeds/health': { unexpected: true },
+    '/api/analyst-state': { available: true, stale: false },
+  }));
+
+  const result = await tools.diagnose_runtime({});
+
+  assert.equal(result.status, 'yellow');
+  assert.ok(result.findings.some((finding) => finding.id === 'runtime.feed_health_invalid'));
+  assert.deepEqual(result.feedSummary, { total: 0, healthy: 0, impaired: 0, available: false });
+});
+
 test('get_algorithm_diagnostics returns the mirrored snapshot without unrelated analyst data', async () => {
   const snapshot = {
     health: { status: 'degraded', algorithms: [{ algorithmId: 'x', status: 'degraded' }] },

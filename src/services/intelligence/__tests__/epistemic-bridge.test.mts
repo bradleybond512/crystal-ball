@@ -79,7 +79,7 @@ function makeOptions(
   advanceClock: (ms: number) => void;
 } {
   let clockVal = clockMs;
-  let storedListener: ((s: unknown[]) => void) | null = null;
+  let storedListener: ((situations: unknown[]) => void) | null = null;
   let busListener: ((e: unknown) => void) | null = null;
   const estimateCalls: unknown[] = [];
   const generateCalls: unknown[] = [];
@@ -88,7 +88,7 @@ function makeOptions(
   const recorded: RecordedCall[] = [];
 
   const fakeStore = {
-    subscribe: (l: (s: unknown[]) => void) => {
+    subscribeView: (l: (situations: unknown[]) => void) => {
       storedListener = l;
       return () => { storedListener = null; };
     },

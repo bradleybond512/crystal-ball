@@ -91,6 +91,8 @@ The MCP server's in-process safety scheduler is off unless explicitly configured
 
 The installer supports `--prefix DIR` and `--no-monitor`. See `docs/AGENT_ACCESS.md` for client setup, exit codes, permissions, evidence format, upgrades, uninstall, troubleshooting, and rollback.
 
+Client registrations should use the absolute installed `crystalball-mcp` path. The installed `crystalball doctor` verifies that sibling executable with an MCP initialize handshake and reports path-dependent registrations as non-portable without exposing the path.
+
 ## Key files
 
 | File | Role |

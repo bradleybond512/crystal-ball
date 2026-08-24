@@ -99,6 +99,40 @@ export interface SituationStats {
 
 export type SituationListener = (situations: Situation[]) => void;
 
+export interface SituationMutationSnapshot {
+  id: string;
+  name: string;
+  domain: string;
+  relatedDomains: string[];
+  severity: SituationSeverity;
+  status: SituationStatus;
+  summary: string;
+  entityIds: string[];
+  confidence: number;
+  startedAt: Date;
+  updatedAt: Date;
+  resolvedAt?: Date;
+  location?: SituationLocation;
+  tags: string[];
+  observationCount: number;
+  edgeCount: number;
+}
+
+export interface SituationMutationReceipt {
+  kind: 'created' | 'updated' | 'resolved' | 'removed';
+  situationId: string;
+  situation: SituationMutationSnapshot;
+  observationIds: string[];
+}
+
+export interface SituationIngestResult {
+  status: 'changed' | 'unchanged';
+  mutations: SituationMutationReceipt[];
+}
+
+export type SituationMutationListener = (result: SituationIngestResult) => void;
+export type SituationViewScheduler = (callback: () => void) => (() => void) | void;
+
 // ── Constants + helpers ───────────────────────────────────────────────
 
 const STORAGE_KEY = 'wm-situation-store-v2';
@@ -106,6 +140,8 @@ const MAX_SITUATIONS = 200;
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const MERGE_DISTANCE_KM = 500;
 const MERGE_TIME_MS = 6 * 60 * 60 * 1000;
+const PERSISTENCE_WINDOW_MS = 1000;
+const VIEW_FANOUT_CAP_MS = 100;
 
 const SEVERITY_RANK: Record<SituationSeverity, number> = {
   low: 1,
@@ -501,11 +537,19 @@ export interface SituationStoreV2Options {
   clock?: () => number;
   /** Runtime diagnostics are opt-in except for the live singleton. */
   diagnosticsMode?: CorrelationRuntimeMode | 'disabled';
+  persistenceScheduler?: (callback: () => void, delayMs: number) => (() => void) | void;
 }
 
 export class SituationStoreV2 {
   private situations: Situation[] = [];
+  private observationIds = new Set<string>();
   private listeners = new Set<SituationListener>();
+  private mutationListeners = new Set<SituationMutationListener>();
+  private viewListeners = new Map<SituationListener, {
+    scheduler: SituationViewScheduler;
+    pending: boolean;
+    cancel?: () => void;
+  }>();
   private hydrated = false;
   private engine: CorrelateEngine;
   private clock: () => number;
@@ -514,12 +558,21 @@ export class SituationStoreV2 {
   private readonly pairListeners = new Set<(pairs: readonly CorrelatedPair[]) => void>();
   private reliabilityProvider?: (ruleId: string) => number;
   private regimeProvider?: SituationRegimeProvider;
+  private readonly persistenceScheduler: NonNullable<SituationStoreV2Options['persistenceScheduler']>;
+  private cancelPersist?: () => void;
+  private lifecycleCleanup?: () => void;
 
   constructor(options: SituationStoreV2Options = {}) {
     this.engine = options.engine ?? this.defaultEngine();
     this.clock = options.clock ?? (() => Date.now());
+    this.persistenceScheduler = options.persistenceScheduler
+      ?? ((callback, delayMs) => {
+        const timer = setTimeout(callback, delayMs);
+        return () => clearTimeout(timer);
+      });
     if (options.diagnosticsMode && options.diagnosticsMode !== 'disabled') {
       registerCorrelationRuntime(this.engine, options.diagnosticsMode);
+      this.installLifecycleFlush();
     }
   }
 
@@ -580,6 +633,7 @@ export class SituationStoreV2 {
     if (!raw) return;
     try {
       this.situations = deserialize(JSON.parse(raw));
+      this.rebuildObservationIndex();
     } catch {
       // Corrupt blob — start clean.
     }
@@ -592,7 +646,11 @@ export class SituationStoreV2 {
   private schedulePersist(): void {
     if (this.persistScheduled) return;
     this.persistScheduled = true;
-    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
+    this.cancelPersist = this.persistenceScheduler(() => {
+      this.persistScheduled = false;
+      this.cancelPersist = undefined;
+      this.persist();
+    }, PERSISTENCE_WINDOW_MS) ?? undefined;
   }
 
   private persist(): void {
@@ -605,56 +663,179 @@ export class SituationStoreV2 {
     }
   }
 
+  flushPersistence(): void {
+    if (!this.persistScheduled) return;
+    this.cancelPersist?.();
+    this.cancelPersist = undefined;
+    this.persistScheduled = false;
+    this.persist();
+  }
+
+  private installLifecycleFlush(): void {
+    const target = globalThis as typeof globalThis & {
+      addEventListener?: (type: string, listener: () => void) => void;
+      removeEventListener?: (type: string, listener: () => void) => void;
+      document?: { hidden?: boolean; addEventListener?: (type: string, listener: () => void) => void; removeEventListener?: (type: string, listener: () => void) => void };
+    };
+    const onPageHide = this.flushPersistence.bind(this);
+    const onVisibility = (): void => {
+      if (target.document?.hidden) this.flushPersistence();
+    };
+    target.addEventListener?.('pagehide', onPageHide);
+    target.addEventListener?.('beforeunload', onPageHide);
+    target.document?.addEventListener?.('visibilitychange', onVisibility);
+    this.lifecycleCleanup = () => {
+      target.removeEventListener?.('pagehide', onPageHide);
+      target.removeEventListener?.('beforeunload', onPageHide);
+      target.document?.removeEventListener?.('visibilitychange', onVisibility);
+    };
+  }
+
   private nextId(now: number): string {
     this.idCounter += 1;
     return `sit-v2-${now.toString(36)}-${this.idCounter}`;
   }
 
-  private notify(): void {
-    const snapshot = this.list();
-    for (const l of this.listeners) {
-      try { l(snapshot); } catch { /* listener crash isolation */ }
+  private notify(result: SituationIngestResult): void {
+    for (const listener of this.mutationListeners) {
+      try { listener(result); } catch { /* listener crash isolation */ }
+    }
+    if (this.listeners.size > 0) {
+      const snapshot = this.list();
+      for (const listener of this.listeners) {
+        try { listener(snapshot); } catch { /* listener crash isolation */ }
+      }
+    }
+    for (const [listener, state] of this.viewListeners) {
+      if (state.pending) continue;
+      state.pending = true;
+      state.cancel = state.scheduler(() => {
+        state.pending = false;
+        state.cancel = undefined;
+        if (!this.viewListeners.has(listener)) return;
+        try { listener(this.list()); } catch { /* listener crash isolation */ }
+      }) ?? undefined;
     }
   }
 
   /** Ingest a batch of ObservationEvents. Runs CorrelateEngine to find
    *  evidence edges, then merges results into existing open situations
    *  or creates new ones. Auto-resolves stale situations. */
-  ingest(observations: readonly ObservationEvent[]): void {
+  ingest(observations: readonly ObservationEvent[]): SituationIngestResult {
     this.ensureHydrated();
-    if (observations.length === 0) {
-      this.autoResolveStale();
-      this.schedulePersist();
-      this.notify();
-      return;
-    }
+    if (observations.length === 0) return this.resolveStaleOnly();
+    const unique = [...new Map(observations.map((observation) => [observation.id, observation])).values()];
+    const novel = unique.filter((observation) => !this.observationIds.has(observation.id));
+    if (novel.length === 0) return unchangedResult();
+    const replayTarget = this.findReplayTarget(unique);
     const correlatedAt = this.clock();
-    const result = this.engine.correlate(observations, new Date(correlatedAt));
-    recordCorrelationBatch(this.engine, observations.length, result.pairs, correlatedAt);
-    if (result.pairs.length > 0) {
-      for (const listener of this.pairListeners) {
-        try { listener(result.pairs); } catch { /* listener crash isolation */ }
-      }
-      if (this.pairListener) {
-        try { this.pairListener(result.pairs); } catch { /* listener crash isolation */ }
-      }
-    }
-    const drafts = groupPairsByConnectivity(observations, result.pairs);
-    for (const draft of drafts) this.mergeOrCreate(draft);
-    this.autoResolveStale();
-    this.enforceCapacity();
+    const correlation = this.engine.correlate(novel, new Date(correlatedAt));
+    recordCorrelationBatch(this.engine, novel.length, correlation.pairs, correlatedAt);
+    this.publishPairs(correlation.pairs);
+    const mutations = this.applyDrafts(novel, correlation.pairs, replayTarget);
+    if (mutations.length === 0) return unchangedResult();
+    const result = changedResult(mutations);
     this.schedulePersist();
-    this.notify();
+    this.notify(result);
+    return result;
   }
 
-  private mergeOrCreate(draft: DraftSituation): void {
-    const now = this.clock();
-    const match = this.findMergeTarget(draft);
-    if (match) {
-      this.mergeIntoExisting(match, draft, now);
-      return;
+  private resolveStaleOnly(): SituationIngestResult {
+    const resolved = this.autoResolveStale();
+    if (resolved.length === 0) return unchangedResult();
+    const result = changedResult(resolved.map((situation) => this.receipt('resolved', situation, [])));
+    this.schedulePersist();
+    this.notify(result);
+    return result;
+  }
+
+  private findReplayTarget(observations: readonly ObservationEvent[]): Situation | undefined {
+    const replayedIds = new Set(
+      observations
+        .filter((observation) => this.observationIds.has(observation.id))
+        .map((observation) => observation.id),
+    );
+    const referenced = this.situations.filter((situation) =>
+      situation.observations.some((existing) => replayedIds.has(existing.id)),
+    );
+    return referenced.length === 1 ? referenced[0] : undefined;
+  }
+
+  private publishPairs(pairs: readonly CorrelatedPair[]): void {
+    if (pairs.length === 0) return;
+    for (const listener of this.pairListeners) {
+      try { listener(pairs); } catch { /* listener crash isolation */ }
     }
-    this.situations.push(this.buildSituation(draft, now));
+    if (this.pairListener) {
+      try { this.pairListener(pairs); } catch { /* listener crash isolation */ }
+    }
+  }
+
+  private applyDrafts(
+    observations: readonly ObservationEvent[],
+    pairs: readonly CorrelatedPair[],
+    replayTarget?: Situation,
+  ): SituationMutationReceipt[] {
+    const mutations: SituationMutationReceipt[] = [];
+    for (const draft of groupPairsByConnectivity(observations, pairs)) {
+      const mutation = this.mergeOrCreate(draft, replayTarget);
+      if (mutation) mutations.push(mutation);
+    }
+    for (const resolved of this.autoResolveStale()) {
+      if (!mutations.some((mutation) => mutation.situationId === resolved.id)) {
+        mutations.push(this.receipt('resolved', resolved, []));
+      }
+    }
+    for (const removed of this.enforceCapacity()) {
+      mutations.push(this.receipt('removed', removed, []));
+    }
+    return mutations;
+  }
+
+  private mergeOrCreate(
+    draft: DraftSituation,
+    replayTarget?: Situation,
+  ): SituationMutationReceipt | undefined {
+    const now = this.clock();
+    const match = replayTarget ?? this.findMergeTarget(draft);
+    if (match) {
+      if (!this.mergeIntoExisting(match, draft, now)) return undefined;
+      return this.receipt('updated', match, draft.observations.map((observation) => observation.id));
+    }
+    const situation = this.buildSituation(draft, now);
+    this.situations.push(situation);
+    for (const observation of situation.observations) this.observationIds.add(observation.id);
+    return this.receipt('created', situation, draft.observations.map((observation) => observation.id));
+  }
+
+  private receipt(
+    kind: SituationMutationReceipt['kind'],
+    situation: Situation,
+    observationIds: string[],
+  ): SituationMutationReceipt {
+    return {
+      kind,
+      situationId: situation.id,
+      observationIds,
+      situation: {
+        id: situation.id,
+        name: situation.name,
+        domain: situation.domain,
+        relatedDomains: [...situation.relatedDomains],
+        severity: situation.severity,
+        status: situation.status,
+        summary: situation.summary,
+        entityIds: [...situation.entityIds],
+        confidence: situation.confidence,
+        startedAt: new Date(situation.startedAt),
+        updatedAt: new Date(situation.updatedAt),
+        resolvedAt: situation.resolvedAt ? new Date(situation.resolvedAt) : undefined,
+        location: situation.location ? { ...situation.location } : undefined,
+        tags: [...situation.tags],
+        observationCount: situation.observations.length,
+        edgeCount: situation.edges.length,
+      },
+    };
   }
 
   private findMergeTarget(draft: DraftSituation): Situation | undefined {
@@ -712,13 +893,14 @@ export class SituationStoreV2 {
     };
   }
 
-  private mergeIntoExisting(target: Situation, draft: DraftSituation, now: number): void {
+  private mergeIntoExisting(target: Situation, draft: DraftSituation, now: number): boolean {
     const seenObs = new Set(target.observations.map((o) => o.id));
     const newObs = draft.observations.filter((o) => !seenObs.has(o.id));
     const observations = [...target.observations, ...newObs];
 
     const seenEdge = new Set(target.edges.map((e) => edgeKey(e)));
     const newEdges = draft.edges.filter((e) => !seenEdge.has(edgeKey(e)));
+    if (newObs.length === 0 && newEdges.length === 0) return false;
     const edges = [...target.edges, ...newEdges];
 
     const location = locationFromObservations(observations);
@@ -743,10 +925,13 @@ export class SituationStoreV2 {
       updatedAt: new Date(now),
       resolvedAt: status === 'resolved' ? (target.resolvedAt ?? new Date(now)) : undefined,
     } satisfies Partial<Situation>);
+    for (const observation of newObs) this.observationIds.add(observation.id);
+    return true;
   }
 
-  private autoResolveStale(): void {
+  private autoResolveStale(): Situation[] {
     const now = this.clock();
+    const resolved: Situation[] = [];
     for (const s of this.situations) {
       if (s.status === 'resolved') continue;
       const newest = s.observations.reduce((m, o) => Math.max(m, o.timestamp), 0);
@@ -755,19 +940,30 @@ export class SituationStoreV2 {
         s.status = 'resolved';
         s.resolvedAt = new Date(now);
         s.updatedAt = new Date(now);
+        resolved.push(s);
       }
     }
+    return resolved;
   }
 
-  private enforceCapacity(): void {
-    if (this.situations.length <= MAX_SITUATIONS) return;
+  private enforceCapacity(): Situation[] {
+    if (this.situations.length <= MAX_SITUATIONS) return [];
     // Drop oldest (by updatedAt) resolved first; then oldest overall.
     this.situations.sort((a, b) => {
       if (a.status === 'resolved' && b.status !== 'resolved') return -1;
       if (b.status === 'resolved' && a.status !== 'resolved') return 1;
       return a.updatedAt.getTime() - b.updatedAt.getTime();
     });
-    this.situations.splice(0, this.situations.length - MAX_SITUATIONS);
+    const removed = this.situations.splice(0, this.situations.length - MAX_SITUATIONS);
+    this.rebuildObservationIndex();
+    return removed;
+  }
+
+  private rebuildObservationIndex(): void {
+    this.observationIds.clear();
+    for (const situation of this.situations) {
+      for (const observation of situation.observations) this.observationIds.add(observation.id);
+    }
   }
 
   list(): Situation[] {
@@ -807,6 +1003,23 @@ export class SituationStoreV2 {
     return () => this.listeners.delete(listener);
   }
 
+  subscribeMutations(listener: SituationMutationListener): () => void {
+    this.mutationListeners.add(listener);
+    return () => this.mutationListeners.delete(listener);
+  }
+
+  subscribeView(
+    listener: SituationListener,
+    scheduler: SituationViewScheduler = defaultViewScheduler,
+  ): () => void {
+    const state = { scheduler, pending: false, cancel: undefined as (() => void) | undefined };
+    this.viewListeners.set(listener, state);
+    return () => {
+      state.cancel?.();
+      this.viewListeners.delete(listener);
+    };
+  }
+
   stats(): SituationStats {
     this.ensureHydrated();
     const byDomain: Record<string, number> = {};
@@ -824,8 +1037,17 @@ export class SituationStoreV2 {
 
   /** Test seam — empties the store and the persisted blob. */
   resetForTesting(): void {
+    this.cancelPersist?.();
+    this.cancelPersist = undefined;
+    this.persistScheduled = false;
     this.situations = [];
+    this.observationIds.clear();
     this.listeners.clear();
+    this.mutationListeners.clear();
+    for (const state of this.viewListeners.values()) state.cancel?.();
+    this.viewListeners.clear();
+    this.lifecycleCleanup?.();
+    this.lifecycleCleanup = undefined;
     this.idCounter = 0;
     this.hydrated = true;
     const store = safeStorage();
@@ -833,6 +1055,33 @@ export class SituationStoreV2 {
       try { store.removeItem(STORAGE_KEY); } catch { /* best effort */ }
     }
   }
+}
+
+function unchangedResult(): SituationIngestResult {
+  return { status: 'unchanged', mutations: [] };
+}
+
+function changedResult(mutations: SituationMutationReceipt[]): SituationIngestResult {
+  return { status: 'changed', mutations };
+}
+
+function defaultViewScheduler(callback: () => void): () => void {
+  let done = false;
+  const run = (): void => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    callback();
+  };
+  const timer = setTimeout(run, VIEW_FANOUT_CAP_MS);
+  const requestFrame = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
+  const cancelFrame = (globalThis as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame;
+  const frame = requestFrame?.(run);
+  return () => {
+    done = true;
+    clearTimeout(timer);
+    if (frame !== undefined) cancelFrame?.(frame);
+  };
 }
 
 function edgeKey(edge: EvidenceEdge): string {
@@ -868,6 +1117,7 @@ export function getSituationStoreV2(): SituationStoreV2 {
 
 /** Test seam — replaces the singleton with a fresh instance. */
 export function __resetSituationStoreV2Singleton(): void {
+  _singleton?.flushPersistence();
   _singleton = null;
 }
 
@@ -885,4 +1135,6 @@ export const __internals = {
   MERGE_DISTANCE_KM,
   MERGE_TIME_MS,
   MAX_SITUATIONS,
+  PERSISTENCE_WINDOW_MS,
+  VIEW_FANOUT_CAP_MS,
 };

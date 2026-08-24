@@ -14,7 +14,16 @@
 import type { UnifiedAlert, AlertSeverity, AlertSource } from './unified-alerts';
 import type { CompoundThreat } from './compound-threat';
 import type { Anomaly } from './anomaly-detection';
-import { shouldNotify, type NotificationDomain } from './notifications/notification-settings-service';
+import {
+  evaluateNotificationPreference,
+  type NotificationDomain,
+} from './notifications/notification-settings-service';
+import { getNotificationTraceRegistry } from './diagnostics/diagnostics-state';
+import type {
+  NotificationUrgency,
+  NotificationRung,
+  NotificationTraceRegistry,
+} from './diagnostics/notification-trace';
 
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -44,6 +53,8 @@ const RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
  *  OS notification tag never coalesces — they stack. Bucketing the id by a
  *  location cell + this window collapses repeats of the same convergence. */
 const CONVERGENCE_COALESCE_MS = 30 * 60 * 1000; // 30 minutes
+
+let nextTraceId = 1;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -151,6 +162,92 @@ function alertSourceToDomain(source: AlertSource): NotificationDomain {
   }
 }
 
+function traceDomainFor(domain: NotificationDomain): Parameters<NotificationTraceRegistry['byDomain']>[0] {
+  switch (domain) {
+    case 'weather': { return 'weather'; }
+    case 'cyber': { return 'cyber'; }
+    case 'geopolitical': { return 'conflict'; }
+    case 'infrastructure': { return 'energy'; }
+    default: { return 'other'; }
+  }
+}
+
+function rungForAction(action: NotificationAction, critical: boolean): NotificationRung {
+  if (action === 'silent') return 'silent';
+  if (action === 'badge') return 'in_app';
+  if (critical) return 'critical';
+  if (action === 'sound+banner') return 'banner_sound';
+  return 'banner';
+}
+
+function urgencyForSeverity(severity: AlertSeverity): NotificationUrgency {
+  switch (severity) {
+    case 'critical': { return 'critical'; }
+    case 'high': { return 'high'; }
+    case 'medium': { return 'normal'; }
+    default: { return 'low'; }
+  }
+}
+
+interface DispatchTrace {
+  registry: NotificationTraceRegistry;
+  candidateId: string;
+}
+
+function createDispatchTrace(
+  alert: UnifiedAlert,
+  action: NotificationAction,
+  domain: NotificationDomain,
+): DispatchTrace | undefined {
+  try {
+    const registry = getNotificationTraceRegistry();
+    const candidateId = `dispatcher-${alert.source}-${alert.id}-${Date.now()}-${nextTraceId++}`;
+    registry.register({
+      candidateId,
+      situationId: alert.id,
+      domain: traceDomainFor(domain),
+      urgency: urgencyForSeverity(alert.severity),
+      confidence: Math.max(0, Math.min(1, alert.relevanceScore / 100)),
+      userRelevance: Math.max(0, Math.min(1, alert.relevanceScore / 100)),
+      safetyCritical: alert.severity === 'critical',
+      createdAt: Date.now(),
+      headline: alert.title,
+    });
+    registry.recordEvent(candidateId, {
+      kind: 'urgency_check',
+      reason: `Severity ${alert.severity}; action ${action}.`,
+    });
+    return { registry, candidateId };
+  } catch {
+    return undefined;
+  }
+}
+
+function suppressTrace(trace: DispatchTrace | undefined, reason: string): void {
+  try {
+    trace?.registry.suppress(trace.candidateId, reason);
+  } catch { /* diagnostics must not block delivery */ }
+}
+
+function dispatchTrace(
+  trace: DispatchTrace | undefined,
+  action: NotificationAction,
+  critical: boolean,
+): void {
+  try {
+    trace?.registry.dispatch(trace.candidateId, rungForAction(action, critical));
+  } catch { /* diagnostics must not block delivery */ }
+}
+
+function recordNativeResult(
+  trace: DispatchTrace | undefined,
+  result: Parameters<NotificationTraceRegistry['recordNativeResult']>[1],
+): void {
+  try {
+    trace?.registry.recordNativeResult(trace.candidateId, result);
+  } catch { /* diagnostics must not block delivery */ }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Dispatcher class
 // ──────────────────────────────────────────────────────────────────────────────
@@ -166,38 +263,59 @@ class NotificationDispatcher {
  * sending through the appropriate channel (Tauri native or Web API).
  */
   dispatchNotification(alert: UnifiedAlert, action: NotificationAction): void {
+ const domain = alertSourceToDomain(alert.source);
+ const trace = createDispatchTrace(alert, action, domain);
+
  // ── Silent action — nothing to do ──
- if (action === 'silent') return;
+ if (action === 'silent') {
+ suppressTrace(trace, 'silent-action');
+ return;
+ }
 
  // ── Ghost Mode — suppress ALL notifications (outermost gate) ──
- if (isGhostMode()) return;
+ if (isGhostMode()) {
+ suppressTrace(trace, 'ghost-mode');
+ return;
+ }
 
  // ── Per-domain settings — user's notification preferences ──
- const domain = alertSourceToDomain(alert.source);
- if (!shouldNotify(domain, alert.severity)) return;
+ const preference = evaluateNotificationPreference(domain, alert.severity);
+ if (!preference.allowed) {
+ suppressTrace(trace, preference.reason);
+ return;
+ }
 
  // ── Quiet hours (legacy wm-quiet-hours key) — suppress unless critical ──
- if (isQuietHoursActive() && alert.severity !== 'critical') return;
+ if (isQuietHoursActive() && alert.severity !== 'critical') {
+ suppressTrace(trace, 'legacy-quiet-hours');
+ return;
+ }
 
  // ── Rate limiting — max 1 per source per RATE_LIMIT_MS ──
  const now = Date.now();
  const lastTime = this.rateLimitMap.get(alert.source);
- if (lastTime !== undefined && now - lastTime < RATE_LIMIT_MS) return;
+ if (alert.severity !== 'critical' && lastTime !== undefined && now - lastTime < RATE_LIMIT_MS) {
+ suppressTrace(trace, 'source-rate-limit');
+ return;
+ }
  this.rateLimitMap.set(alert.source, now);
 
  // ── Badge-only — no visible notification ──
  if (action === 'badge') {
+ dispatchTrace(trace, action, false);
+ recordNativeResult(trace, { delivered: true, surface: 'in_app' });
  this.incrementBadge();
  return;
  }
 
  // ── Send notification (sound+banner or banner) ──
  const withSound = action === 'sound+banner';
+ dispatchTrace(trace, action, alert.severity === 'critical');
 
  if (isTauriContext()) {
- this.sendTauriNotification(alert, withSound);
+ this.sendTauriNotification(alert, withSound, trace);
  } else {
- this.sendWebNotification(alert, withSound);
+ this.sendWebNotification(alert, withSound, trace);
  }
   }
 
@@ -273,29 +391,41 @@ class NotificationDispatcher {
 
   // ── Tauri native notification ──────────────────────────────────────────────
 
-  private sendTauriNotification(alert: UnifiedAlert, withSound: boolean): void {
+  private sendTauriNotification(alert: UnifiedAlert, withSound: boolean, trace?: DispatchTrace): void {
  // Plugin not installed — skip dynamic import entirely to avoid Vite preload errors
- this.sendWebNotification(alert, withSound);
+ this.sendWebNotification(alert, withSound, trace);
   }
 
   // ── Web Notifications API fallback ─────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private sendWebNotification(alert: UnifiedAlert, _withSound?: boolean): void {
+  private sendWebNotification(alert: UnifiedAlert, _withSound?: boolean, trace?: DispatchTrace): void {
  try {
- if (!('Notification' in window)) return;
+ if (!('Notification' in window)) {
+ recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-api-unavailable' });
+ return;
+ }
 
  if (Notification.permission === 'granted') {
  this.createWebNotification(alert);
- } else if (Notification.permission !== 'denied') {
+ recordNativeResult(trace, { delivered: true, surface: alert.severity === 'critical' ? 'critical' : 'banner' });
+ } else if (Notification.permission === 'denied') {
+ recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-denied' });
+ } else {
  Notification.requestPermission()
  .then(perm => {
- if (perm === 'granted') this.createWebNotification(alert);
+ if (perm === 'granted') {
+ this.createWebNotification(alert);
+ recordNativeResult(trace, { delivered: true, surface: alert.severity === 'critical' ? 'critical' : 'banner' });
+ } else {
+ recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-denied' });
+ }
  })
- .catch(() => { /* permission request failed */ });
+ .catch(() => {
+ recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'permission-request-failed' });
+ });
  }
  } catch {
- // Notifications unavailable in this environment
+ recordNativeResult(trace, { delivered: false, surface: 'failed', error: 'notification-delivery-failed' });
  }
   }
 

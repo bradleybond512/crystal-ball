@@ -76,7 +76,7 @@ async function persistCounters(): Promise<void> {
     const { putMemory } = await import('./reasoning-memory');
     const snap: Record<string, number> = {};
     for (const [k, v] of counters) snap[k] = v;
-    await putMemory(COUNTERS_KEY, snap);
+    await putMemory(COUNTERS_KEY, snap, { instrument: false });
   } catch { /* IDB unavailable — not a hard failure */ }
 }
 
@@ -90,7 +90,7 @@ function loadCounters(): void {
   if (countersLoaded) return;
   countersLoaded = true;
   void import('./reasoning-memory')
-    .then(({ getMemory }) => getMemory<Record<string, number>>(COUNTERS_KEY))
+    .then(({ getMemory }) => getMemory<Record<string, number>>(COUNTERS_KEY, { instrument: false }))
     .then((stored) => {
       if (stored !== null && typeof stored === 'object') hydrateCounters(stored);
     })

@@ -1783,10 +1783,10 @@ because the algorithm does not exist as a tuning target.
 There are no per-factor weights to declare: the kernel is a plain product of the
 six factors. The tunable surface is the set of named **shape constants** that
 determine how each factor is computed, plus the clamps —
-`SPATIAL_DECAY_KM` (400), `SPATIAL_FLOOR` (0.5), `ENTITY_BOOST_PER_SHARED`
-(0.15), `ENTITY_BOOST_MAX_SHARED` (2), `VALUE_FLOOR` (0.2), the temporal
-half-life kernel's shape, and the `reliability` `[0.5, 1.5]` and `regime`
-`[1, 1.15]` bounds.
+`SPATIAL_NEUTRAL_KM` (25), `SPATIAL_DECAY_KM` (400), `SPATIAL_FLOOR` (0.5),
+`ENTITY_BOOST_PER_SHARED` (0.15), `ENTITY_BOOST_MAX_SHARED` (2), `VALUE_FLOOR`
+(0.2), the temporal half-life kernel's shape, and the `reliability` `[0.5, 1.5]`
+and `regime` `[1, 1.15]` bounds.
 
 Declare those as bounded tunables in `tunable-params-store` with defaults equal
 to the current constants, so an empty store is byte-identical to today's

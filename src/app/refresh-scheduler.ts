@@ -24,6 +24,7 @@ export class RefreshScheduler implements AppModule {
   private ctx: AppContext;
   private refreshTimeoutIds = new Map<string, ReturnType<typeof setTimeout>>();
   private refreshRunners = new Map<string, { run: () => Promise<void>; intervalMs: number }>();
+  private lastSuccessfulAt = new Map<string, number>();
   private hiddenSince = 0;
 
   constructor(ctx: AppContext) {
@@ -40,6 +41,7 @@ export class RefreshScheduler implements AppModule {
  }
  this.refreshTimeoutIds.clear();
  this.refreshRunners.clear();
+ this.lastSuccessfulAt.clear();
  this.flushQueue = [];
  this.flushInFlight = 0;
  this.flushScheduled.clear();
@@ -108,6 +110,7 @@ export class RefreshScheduler implements AppModule {
  // the underlying fetch (per cross-agent review). Runners self-heal on resume
  // when the suspended fetch settles.
  const changed = await fn();
+ this.lastSuccessfulAt.set(name, Date.now());
  const elapsed = performance.now() - refreshStart;
  if (elapsed >= SLOW_REFRESH_THRESHOLD_MS) {
  // console.warn is intercepted by log-bridge so this reaches ~/Library/Logs
@@ -127,6 +130,7 @@ export class RefreshScheduler implements AppModule {
  }
  };
  this.refreshRunners.set(name, { run, intervalMs });
+ this.lastSuccessfulAt.set(name, Date.now());
  scheduleNext(computeDelay(intervalMs, document.visibilityState === 'hidden'));
   }
 
@@ -136,15 +140,17 @@ export class RefreshScheduler implements AppModule {
   private flushInFlight = 0;
   private flushScheduled = new Set<string>();
 
-  flushStaleRefreshes(): void {
+ flushStaleRefreshes(): void {
  if (!this.hiddenSince) return;
- const hiddenMs = Date.now() - this.hiddenSince;
+ const fallbackSuccessAt = this.hiddenSince;
+ const now = Date.now();
  this.hiddenSince = 0;
 
  // Collect stale refreshes
  const stale: { name: string; run: () => Promise<void>; intervalMs: number }[] = [];
  for (const [name, { run, intervalMs }] of this.refreshRunners) {
- if (hiddenMs < intervalMs) continue;
+ const lastSuccessAt = this.lastSuccessfulAt.get(name) ?? fallbackSuccessAt;
+ if (now - lastSuccessAt < intervalMs) continue;
  if (this.flushScheduled.has(name)) continue;
  const pending = this.refreshTimeoutIds.get(name);
  if (pending) clearTimeout(pending);

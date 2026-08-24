@@ -133,6 +133,21 @@ test('critical alerts bypass rate limit', async () => {
   assert.equal(rec.nativeCalls.length, 2);
 });
 
+test('trace confidence stays finite when relevance is non-finite', async () => {
+  const rec = makeRecorder();
+  const mod = await loadFresh();
+  const stop = mod.startNotificationRouter(makeDeps(rec));
+  const candidate = makeAlert({ severity: 'high' }, 'non-finite');
+  candidate.relevance.score = Number.NaN;
+
+  await mod.__deliverForTesting(candidate);
+  stop();
+
+  const [entry] = getNotificationTraceRegistry().all();
+  assert.equal(entry?.candidate.confidence, 0);
+  assert.equal(entry?.candidate.userRelevance, 0);
+});
+
 test('ghost mode: skips native + map marker, still writes inbox + toast', async () => {
   const rec = makeRecorder();
   rec.ghost = true;

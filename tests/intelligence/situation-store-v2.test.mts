@@ -477,6 +477,29 @@ test('mixed replay batches correlate only novel observations', () => {
   assert.equal(emittedPairs, 0);
 });
 
+test('a replayed observation cannot force an unrelated novel event into its situation', () => {
+  const store = freshStore();
+  const known = makeEvent({
+    id: 'known-replay',
+    domain: 'security',
+    location: { lat: 10, lon: 10 },
+  });
+  store.ingest([known]);
+
+  store.ingest([known, makeEvent({
+    id: 'unrelated-novel',
+    domain: 'finance',
+    location: { lat: -40, lon: 100 },
+  })]);
+
+  const situations = store.list();
+  assert.equal(situations.length, 2);
+  assert.deepEqual(
+    situations.map((situation) => situation.observations.map((observation) => observation.id)),
+    [['known-replay'], ['unrelated-novel']],
+  );
+});
+
 test('live store flushes pending persistence before unload', () => {
   __storage.clear();
   const listeners = new Map<string, () => void>();

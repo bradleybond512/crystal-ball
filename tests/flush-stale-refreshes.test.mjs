@@ -175,6 +175,22 @@ describe('RefreshScheduler.flushStaleRefreshes', () => {
       'Non-stale service timeout should be untouched');
   });
 
+  it('uses each service last successful run when deciding resume staleness', () => {
+    const flushed = [];
+    seed('recent-success', 60_000, async () => { flushed.push('recent-success'); });
+    seed('stale-success', 60_000, async () => { flushed.push('stale-success'); });
+    scheduler['lastSuccessfulAt'] = new Map([
+      ['recent-success', timers.now - 30_000],
+      ['stale-success', timers.now - 120_000],
+    ]);
+
+    scheduler.setHiddenSince(timers.now - 600_000);
+    scheduler.flushStaleRefreshes();
+    timers.runAll();
+
+    assert.deepEqual(flushed, ['stale-success']);
+  });
+
   it('tolerates runners that return non-Promise values', () => {
     let called = false;
     scheduler['refreshRunners'].set('sync-service', {

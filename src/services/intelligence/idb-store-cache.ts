@@ -58,6 +58,7 @@ export interface SyncStorageLike {
 
 const CACHE_PREFIX = 'store-cache/';
 const FLUSH_DEBOUNCE_MS = 800;
+const MAX_WRITE_ATTEMPTS = 3;
 
 /**
  * The localStorage keys whose stores are relocated to IndexedDB. Every entry is
@@ -94,9 +95,11 @@ const mirror = new Map<string, string>();
 interface PendingWrite {
   value: string | null;
   generation: number;
+  attempts: number;
 }
 const pending = new Map<string, PendingWrite>();
 const durable = new Map<string, string | null>();
+const exhausted = new Map<string, string | null>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let flushPromise: Promise<void> | null = null;
 let generation = 0;
@@ -109,7 +112,8 @@ function scheduleFlush(): void {
 }
 
 function queueWrite(key: string, value: string | null): void {
-  pending.set(key, { value, generation: ++generation });
+  exhausted.delete(key);
+  pending.set(key, { value, generation: ++generation, attempts: 0 });
   scheduleFlush();
 }
 
@@ -143,9 +147,15 @@ async function persistPendingWrite(key: string, write: PendingWrite): Promise<bo
       ? backend.deleteMemory(CACHE_PREFIX + key)
       : backend.putMemory(CACHE_PREFIX + key, write.value));
     durable.set(key, write.value);
+    exhausted.delete(key);
     return true;
   } catch {
-    if (!pending.has(key)) pending.set(key, write);
+    const attempts = write.attempts + 1;
+    if (!pending.has(key) && attempts < MAX_WRITE_ATTEMPTS) {
+      pending.set(key, { ...write, attempts });
+    } else if (!pending.has(key)) {
+      exhausted.set(key, write.value);
+    }
     return false;
   }
 }
@@ -289,12 +299,12 @@ export function getIdbBackedStorage(): SyncStorageLike {
       return mirror.has(key) ? mirror.get(key)! : null;
     },
     setItem(key: string, value: string): void {
-      if (mirror.get(key) === value) return;
+      if (mirror.get(key) === value && exhausted.get(key) !== value) return;
       mirror.set(key, value);
       queueWrite(key, value);
     },
     removeItem(key: string): void {
-      if (!mirror.has(key)) return;
+      if (!mirror.has(key) && !(exhausted.has(key) && exhausted.get(key) === null)) return;
       mirror.delete(key);
       queueWrite(key, null);
     },
@@ -352,7 +362,7 @@ export function installIdbStorageRouting(): void {
 
   host.setItem = function (this: Storage, key: string, value: string): void {
     if (this === target && routedKeys.has(key)) {
-      if (mirror.get(key) === value) return;
+      if (mirror.get(key) === value && exhausted.get(key) !== value) return;
       mirror.set(key, value);
       queueWrite(key, value);
       return;
@@ -362,7 +372,7 @@ export function installIdbStorageRouting(): void {
 
   host.removeItem = function (this: Storage, key: string): void {
     if (this === target && routedKeys.has(key)) {
-      if (!mirror.has(key)) return;
+      if (!mirror.has(key) && !(exhausted.has(key) && exhausted.get(key) === null)) return;
       mirror.delete(key);
       queueWrite(key, null);
       return;
@@ -378,6 +388,7 @@ export function _resetIdbStoreCacheForTest(): void {
   mirror.clear();
   pending.clear();
   durable.clear();
+  exhausted.clear();
   generation = 0;
   if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
   preloaded = false;

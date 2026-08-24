@@ -292,6 +292,74 @@ test('falls back to cloud when cloudFallback is enabled and local handler return
   }
 });
 
+test('FRED sidecar reports live provenance once and cache provenance on reuse', async () => {
+  _resetSidecarCacheForTests();
+  const priorKey = process.env.FRED_API_KEY;
+  process.env.FRED_API_KEY = 'fred-route-test-key';
+  const restoreHttps = mockHttpsRequestOnce({
+    statusCode: 200,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ observations: [{ date: '2026-08-01', value: '4.25' }] }),
+  });
+  const app = await createLocalApiServer({
+    port: 0,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+    const liveResponse = await authFetch(`http://127.0.0.1:${port}/api/fred-series?ids=FEDFUNDS`);
+    assert.equal(liveResponse.status, 200);
+    const live = await liveResponse.json();
+    assert.equal(live.provenance, 'live');
+    assert.equal(Number.isFinite(live.fetchedAt), true);
+
+    const cachedResponse = await authFetch(`http://127.0.0.1:${port}/api/fred-series?ids=FEDFUNDS`);
+    assert.equal(cachedResponse.status, 200);
+    const cached = await cachedResponse.json();
+    assert.equal(cached.provenance, 'cache');
+    assert.equal(cached.fetchedAt, live.fetchedAt);
+  } finally {
+    restoreHttps();
+    await app.close();
+    _resetSidecarCacheForTests();
+    if (priorKey === undefined) delete process.env.FRED_API_KEY;
+    else process.env.FRED_API_KEY = priorKey;
+  }
+});
+
+test('free FRED fallback reports live provenance once and cache provenance on reuse', async () => {
+  _resetSidecarCacheForTests();
+  const restoreHttps = mockHttpsRequestOnce({
+    statusCode: 200,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ Results: { series: [] } }),
+  });
+  const app = await createLocalApiServer({
+    port: 0,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+    const liveResponse = await authFetch(`http://127.0.0.1:${port}/api/fred-fallback`);
+    assert.equal(liveResponse.status, 200);
+    const live = await liveResponse.json();
+    assert.equal(live.provenance, 'live');
+    assert.equal(Number.isFinite(live.fetchedAt), true);
+
+    const cachedResponse = await authFetch(`http://127.0.0.1:${port}/api/fred-fallback`);
+    assert.equal(cachedResponse.status, 200);
+    const cached = await cachedResponse.json();
+    assert.equal(cached.provenance, 'cache');
+    assert.equal(cached.fetchedAt, live.fetchedAt);
+  } finally {
+    restoreHttps();
+    await app.close();
+    _resetSidecarCacheForTests();
+  }
+});
+
 test('preserves POST body when cloud fallback is triggered after local non-OK response', async () => {
   const remoteBodies = [];
   const remote = createServer((req, res) => {

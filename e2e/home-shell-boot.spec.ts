@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-async function skipFirstRunWelcome(page: import('@playwright/test').Page): Promise<void> {
-  await page.addInitScript(() => localStorage.setItem('cb:onboarding-complete', 'true'));
+async function skipFirstRunDialogs(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('cb:onboarding-complete', 'true');
+    localStorage.setItem('wm-analytics-consent-prompt-seen', 'true');
+  });
 }
 
 // Phase 2: the Home Shell is the default opening surface (full variant, desktop).
@@ -15,8 +18,18 @@ test.describe('home shell default boot', () => {
     await page.goto('/');
 
     const welcome = page.locator('.cb-backdrop');
+    const dialog = welcome.getByRole('dialog', { name: 'Set Your Location' });
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
     await expect(welcome.getByRole('heading', { name: 'Set Your Location' })).toBeVisible({ timeout: 30_000 });
-    await welcome.getByRole('button', { name: 'Skip for now' }).click();
+    const useLocation = welcome.getByRole('button', { name: 'Use My Location' });
+    const skipLocation = welcome.getByRole('button', { name: 'Skip for now' });
+    await expect(useLocation).toBeFocused();
+    await skipLocation.focus();
+    await page.keyboard.press('Tab');
+    await expect(useLocation).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(skipLocation).toBeFocused();
+    await skipLocation.click();
     await expect(welcome.getByRole('heading', { name: 'What interests you?' })).toBeVisible();
     await welcome.getByRole('button', { name: 'Continue' }).click();
     await expect(welcome.getByRole('heading', { name: 'Connect your data sources' })).toBeVisible();
@@ -88,7 +101,7 @@ test.describe('home shell default boot', () => {
   });
 
   test('boots into the shell and Escape returns to classic', async ({ page }) => {
-    await skipFirstRunWelcome(page);
+    await skipFirstRunDialogs(page);
     await page.goto('/');
     const shell = page.locator('.home-shell');
     await expect(shell).toBeVisible({ timeout: 30_000 });
@@ -109,7 +122,7 @@ test.describe('home shell default boot', () => {
   });
 
   test('dossier opens from an injected situation and Escape closes drawer only', async ({ page }) => {
-    await skipFirstRunWelcome(page);
+    await skipFirstRunDialogs(page);
     await page.goto('/');
     await expect(page.locator('.home-shell')).toBeVisible({ timeout: 30_000 });
     await page.evaluate(async () => {
@@ -131,8 +144,6 @@ test.describe('home shell default boot', () => {
         severityScore: 90,
         confidence: 'high',
       });
-    });
-    await page.evaluate(() => {
       document.dispatchEvent(new CustomEvent('cb:open-dossier', { detail: { situationId: 'e2e-sit' } }));
     });
     const drawer = page.locator('.hs-dossier');
@@ -146,7 +157,7 @@ test.describe('home shell default boot', () => {
   });
 
   test('deck card opens the panel in the focus host and Escape restores it', async ({ page }) => {
-    await skipFirstRunWelcome(page);
+    await skipFirstRunDialogs(page);
     await page.goto('/');
     await expect(page.locator('.home-shell')).toBeVisible({ timeout: 30_000 });
     // Scroll the deck into view and open the first pinned card.

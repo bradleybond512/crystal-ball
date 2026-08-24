@@ -65,3 +65,10 @@ test('GDACS breaker fallback empty cannot be recorded as a successful refresh', 
     updatedAt: 1_752_000_000_000,
   }, 'a validated live zero-row response is still a successful refresh');
 });
+
+test('GDACS breaker cache cannot claim a successful fresh adapter update', () => {
+  assert.equal(getGDACSSuccessfulUpdate({
+    events: [],
+    dataState: { mode: 'cached', timestamp: 1_752_000_000_000, offline: true },
+  }), null, 'cached breaker data remains useful fallback data, but is not a live adapter success');
+});

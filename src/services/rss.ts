@@ -4,10 +4,11 @@ import { chunkArray, fetchWithProxy } from '@/utils';
 import { classifyByKeyword, classifyWithAI } from './threat-classifier';
 import { inferGeoHubsFromTitle } from './geo-hub-index';
 import { getPersistentCache, setPersistentCache } from './persistent-cache';
-import { dataFreshness } from './data-freshness';
 import { ingestHeadlines } from './trending-keywords';
 import { getCurrentLanguage } from './i18n';
 import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from './ai-classify-queue';
+import { summarizeAdapterDataStates } from './adapter-provenance';
+import type { BreakerDataState } from '@/utils/circuit-breaker';
 
 const FEED_COOLDOWN_MS = 5 * 60 * 1000;
 const MAX_FAILURES = 2;
@@ -42,13 +43,18 @@ function getPersistentFeedKey(feedScope: string): string {
   return `feed:${feedScope}`;
 }
 
-async function readPersistentFeed(key: string): Promise<NewsItem[] | null> {
-  const entry = await getPersistentCache<(Omit<NewsItem, 'pubDate'> & { pubDate: string })[]>(key);
-  if (!entry?.data?.length) return null;
-  return fromSerializable(entry.data);
+interface CachedFeedItems {
+  items: NewsItem[];
+  timestamp: number;
 }
 
-async function loadPersistentFeed(feedScope: string): Promise<NewsItem[] | null> {
+async function readPersistentFeed(key: string): Promise<CachedFeedItems | null> {
+  const entry = await getPersistentCache<(Omit<NewsItem, 'pubDate'> & { pubDate: string })[]>(key);
+  if (!entry?.data?.length) return null;
+  return { items: fromSerializable(entry.data), timestamp: entry.updatedAt };
+}
+
+async function loadPersistentFeed(feedScope: string): Promise<CachedFeedItems | null> {
   const scopedKey = getPersistentFeedKey(feedScope);
   const scoped = await readPersistentFeed(scopedKey);
   if (scoped) return scoped;
@@ -94,6 +100,7 @@ function isFeedOnCooldown(feedScope: string): boolean {
   return false;
 }
 
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, no-console, sonarjs/cognitive-complexity, sonarjs/no-clear-text-protocols, @typescript-eslint/no-empty-function */
 function recordFeedFailure(feedScope: string): void {
   const state = feedFailures.get(feedScope) || { count: 0, cooldownUntil: 0 };
   state.count++;
@@ -194,20 +201,34 @@ function extractImageUrl(item: Element): string | undefined {
   return undefined;
 }
 
-export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
+export interface RssFeedFetchResult {
+  items: NewsItem[];
+  dataState: BreakerDataState;
+}
+
+export async function fetchFeedTracked(feed: Feed): Promise<RssFeedFetchResult> {
   if (feedCache.size > MAX_CACHE_ENTRIES / 2) cleanupCaches();
   const currentLang = getCurrentLanguage();
   const feedScope = getFeedScope(feed.name, currentLang);
+  const cached = feedCache.get(feedScope);
+
+  const cachedFallback = async (): Promise<RssFeedFetchResult> => {
+    if (cached) {
+      return { items: cached.items, dataState: { mode: 'cached', timestamp: cached.timestamp, offline: false } };
+    }
+    const persistent = await loadPersistentFeed(feedScope);
+    if (persistent) {
+      return { items: persistent.items, dataState: { mode: 'cached', timestamp: persistent.timestamp, offline: false } };
+    }
+    return { items: [], dataState: { mode: 'unavailable', timestamp: null, offline: false } };
+  };
 
   if (isFeedOnCooldown(feedScope)) {
- const cached = feedCache.get(feedScope);
- if (cached) return cached.items;
- return (await loadPersistentFeed(feedScope)) || [];
+ return cachedFallback();
   }
 
-  const cached = feedCache.get(feedScope);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
- return cached.items;
+ return { items: cached.items, dataState: { mode: 'cached', timestamp: cached.timestamp, offline: false } };
   }
 
   try {
@@ -228,8 +249,7 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
  if (parseError) {
  console.warn(`Parse error for ${feed.name}`);
  recordFeedFailure(feedScope);
- const persistent = await loadPersistentFeed(feedScope);
- return cached?.items || persistent || [];
+ return cachedFallback();
  }
 
  let items = doc.querySelectorAll('item');
@@ -296,22 +316,33 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
  }).catch(() => {});
  }
 
- return parsed;
+ const timestamp = Date.now();
+ return { items: parsed, dataState: { mode: 'live', timestamp, offline: false } };
   } catch (error) {
  console.error(`Failed to fetch ${feed.name}:`, error);
  recordFeedFailure(feedScope);
- const persistent = await loadPersistentFeed(feedScope);
- return cached?.items || persistent || [];
+ return cachedFallback();
   }
 }
+/* eslint-enable @typescript-eslint/prefer-nullish-coalescing, no-console, sonarjs/cognitive-complexity, sonarjs/no-clear-text-protocols, @typescript-eslint/no-empty-function */
 
-export async function fetchCategoryFeeds(
+export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
+  const result = await fetchFeedTracked(feed);
+  return result.items;
+}
+
+export interface RssCategoryFetchResult {
+  items: NewsItem[];
+  dataState: BreakerDataState;
+}
+
+export async function fetchCategoryFeedsTracked(
   feeds: Feed[],
   options: {
  batchSize?: number;
  onBatch?: (items: NewsItem[]) => void;
   } = {}
-): Promise<NewsItem[]> {
+): Promise<RssCategoryFetchResult> {
   const topLimit = 20;
   const batchSize = options.batchSize ?? 5;
   const currentLang = getCurrentLanguage();
@@ -323,12 +354,11 @@ export async function fetchCategoryFeeds(
 
   const batches = chunkArray(filteredFeeds, batchSize);
   const topItems: NewsItem[] = [];
-  let totalItems = 0;
+  const feedStates: BreakerDataState[] = [];
 
   const ensureSortedDescending = () => [...topItems].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 
   const insertTopItem = (item: NewsItem) => {
- totalItems += 1;
  if (topItems.length < topLimit) {
  topItems.push(item);
  if (topItems.length === topLimit) topItems.sort((a, b) => a.pubDate.getTime() - b.pubDate.getTime());
@@ -346,14 +376,19 @@ export async function fetchCategoryFeeds(
   };
 
   for (const batch of batches) {
- const results = await Promise.all(batch.map(fetchFeed));
- results.flat().forEach(insertTopItem);
+ const results = await Promise.all(batch.map((feed) => fetchFeedTracked(feed)));
+ feedStates.push(...results.map((result) => result.dataState));
+ results.flatMap((result) => result.items).forEach((item) => insertTopItem(item));
  options.onBatch?.(ensureSortedDescending());
   }
 
-  if (totalItems > 0) {
- dataFreshness.recordUpdate('rss', totalItems);
-  }
+  return { items: ensureSortedDescending(), dataState: summarizeAdapterDataStates(feedStates) };
+}
 
-  return ensureSortedDescending();
+export async function fetchCategoryFeeds(
+  feeds: Feed[],
+  options: { batchSize?: number; onBatch?: (items: NewsItem[]) => void } = {},
+): Promise<NewsItem[]> {
+  const result = await fetchCategoryFeedsTracked(feeds, options);
+  return result.items;
 }

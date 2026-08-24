@@ -4,6 +4,7 @@ import { OPTIONAL_ONBOARDING_SOURCES } from '@/services/home-shell/onboarding-so
 
 const ONBOARDING_KEY = 'cb:onboarding-complete';
 const WELCOME_BACKDROP_Z_INDEX = 100_000;
+const WELCOME_TITLE_ID = 'cb-welcome-title';
 
 const INTERESTS = [
   'Geopolitical',
@@ -52,6 +53,9 @@ export class WelcomeFlow {
   private step = 0;
   private selectedInterests = new Set<string>(['Geopolitical', 'Weather']);
   private options: WelcomeFlowOptions;
+  private restoreFocus: HTMLElement | null = null;
+  private completed = false;
+  private readonly backdropKeydownHandler = (event: KeyboardEvent) => this.handleKeydown(event);
 
   constructor(options: WelcomeFlowOptions = {}) {
     this.options = options;
@@ -70,6 +74,9 @@ export class WelcomeFlow {
 
     this.modal = document.createElement('div');
     this.modal.className = 'cb-modal-content';
+    this.modal.setAttribute('role', 'dialog');
+    this.modal.setAttribute('aria-modal', 'true');
+    this.modal.setAttribute('aria-labelledby', WELCOME_TITLE_ID);
     Object.assign(this.modal.style, {
       width: '440px',
       maxWidth: 'calc(100vw - 32px)',
@@ -97,6 +104,7 @@ export class WelcomeFlow {
     this.modal.append(this.dotsEl);
     this.modal.append(this.stepEl);
     this.backdrop.append(this.modal);
+    this.backdrop.addEventListener('keydown', this.backdropKeydownHandler);
   }
 
   static shouldShow(): boolean {
@@ -104,19 +112,57 @@ export class WelcomeFlow {
   }
 
   show(): void {
+    this.restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.append(this.backdrop);
     this.renderDots();
     this.renderStep();
+    this.focusFirstControl();
     void animateIn(this.modal, 'scale');
   }
 
   private close(): void {
+    this.backdrop.removeEventListener('keydown', this.backdropKeydownHandler);
     this.modal.classList.add('closing');
     this.backdrop.classList.add('closing');
 
     this.backdrop.addEventListener('animationend', () => this.backdrop.remove(), { once: true });
     // Fallback if reduced-motion or animation doesn't fire
     setTimeout(() => this.backdrop.remove(), 500);
+    this.restoreFocus?.focus();
+    this.restoreFocus = null;
+  }
+
+  private focusableControls(): HTMLElement[] {
+    return [...this.modal.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  }
+
+  private focusFirstControl(): void {
+    this.focusableControls()[0]?.focus();
+  }
+
+  private handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.complete();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const controls = this.focusableControls();
+    if (controls.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = controls[0]!;
+    const last = controls[controls.length - 1]!;
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || !this.modal.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || !this.modal.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   private renderDots(): void {
@@ -144,6 +190,9 @@ export class WelcomeFlow {
       case 2: { this.renderApiKeys(); break;
       }
     }
+    const title = this.stepEl.querySelector('h2');
+    if (title) title.id = WELCOME_TITLE_ID;
+    if (this.backdrop.isConnected) this.focusFirstControl();
   }
 
   private renderLocation(): void {
@@ -198,10 +247,12 @@ export class WelcomeFlow {
 
     void locationService.getLocation({ timeoutMs: 8000 })
       .then((fix) => {
+        if (this.completed) return;
         this.options.onLocationSet?.(fix.lat, fix.lon);
         this.advance();
       })
       .catch(() => {
+        if (this.completed) return;
         btn.textContent = originalText;
         btn.disabled = false;
       });
@@ -429,6 +480,8 @@ export class WelcomeFlow {
   }
 
   private complete(): void {
+    if (this.completed) return;
+    this.completed = true;
     localStorage.setItem(ONBOARDING_KEY, 'true');
     this.options.onComplete?.();
     this.close();

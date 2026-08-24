@@ -27,6 +27,9 @@ const COUNTRY_FLAGS: Record<string, string> = {
   'China': '🇨🇳',
 };
 
+const GDELT_REFRESH_INTERVAL_MS = 15 * 60_000;
+const GDELT_REQUEST_TIMEOUT_MS = 30_000;
+
 function toneBadge(tone: number): string {
   if (tone < -5) return '<span class="gdelt-badge gdelt-badge--alarming">Alarming</span>';
   if (tone <= -2) return '<span class="gdelt-badge gdelt-badge--tense">Tense</span>';
@@ -46,6 +49,9 @@ export class GdeltIntelPanel extends Panel {
   private data: GdeltIntelResponse | null = null;
   private loading = true;
   private error: string | null = null;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private fetchPromise: Promise<void> | null = null;
+  private destroyed = false;
 
   constructor() {
  super({
@@ -56,14 +62,36 @@ export class GdeltIntelPanel extends Panel {
  infoTooltip: 'Global news intelligence from GDELT — 65 languages, 100+ countries, updated every 15 minutes. Sorted by tone severity. Fully open, no API key required.',
  });
  void this.fetchData();
+ this.refreshTimer = setInterval(() => void this.fetchData(), GDELT_REFRESH_INTERVAL_MS);
+  }
+
+  public override destroy(): void {
+ this.destroyed = true;
+ if (this.refreshTimer !== null) {
+ clearInterval(this.refreshTimer);
+ this.refreshTimer = null;
+ }
+ super.destroy();
   }
 
   public async fetchData(): Promise<void> {
+ if (this.destroyed) return;
+ if (this.fetchPromise) return this.fetchPromise;
+ const request = this.runFetch().finally(() => {
+   if (this.fetchPromise === request) this.fetchPromise = null;
+ });
+ this.fetchPromise = request;
+ return request;
+  }
+
+  private async runFetch(): Promise<void> {
  this.loading = true;
  this.showLoading();
 
  try {
- const res = await fetch(`${getApiBaseUrl()}/api/gdelt-intel`);
+ const signal = AbortSignal.any([this.signal, AbortSignal.timeout(GDELT_REQUEST_TIMEOUT_MS)]);
+ const res = await fetch(`${getApiBaseUrl()}/api/gdelt-intel`, { signal });
+ if (this.destroyed) return;
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const json = await res.json() as GdeltIntelResponse;
  const evidence = getGdeltNewsAdapterEvidence(json);
@@ -81,7 +109,7 @@ export class GdeltIntelPanel extends Panel {
  dataFreshness.recordError('gdelt-news', adapterError ?? 'GDELT adapter output was unavailable or malformed');
  }
  } catch (error) {
- if (this.isAbortError(error)) return;
+ if (this.destroyed || this.isAbortError(error)) return;
  // Source: GDELT 2.0 (free, no key needed). Stale cache will be
  // shown when available; otherwise the panel surfaces this message.
  this.error = error instanceof Error
@@ -90,6 +118,7 @@ export class GdeltIntelPanel extends Panel {
  dataFreshness.recordError('gdelt-news', this.error);
  }
 
+ if (this.destroyed) return;
  this.loading = false;
  this.renderPanel();
   }

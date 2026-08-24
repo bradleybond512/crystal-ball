@@ -14,6 +14,7 @@ function installDom(): Window {
   globals.Element = happyWindow.Element;
   globals.Event = happyWindow.Event;
   globals.CustomEvent = happyWindow.CustomEvent;
+  globals.KeyboardEvent = happyWindow.KeyboardEvent;
   globals.getComputedStyle = happyWindow.getComputedStyle.bind(happyWindow);
   globals.requestAnimationFrame = (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0);
   globals.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
@@ -101,4 +102,76 @@ test('Open Settings completes once and opens API-key settings', async () => {
 
   assert.equal(completions, 1);
   assert.equal(settingsOpens, 1);
+});
+
+test('first-run onboarding behaves as a keyboard modal and restores focus on Escape', async () => {
+  const happyWindow = installDom();
+  const { WelcomeFlow } = await import('../WelcomeFlow.ts');
+  let completions = 0;
+  const trigger = happyWindow.document.createElement('button');
+  trigger.textContent = 'Launch onboarding';
+  happyWindow.document.body.append(trigger);
+  trigger.focus();
+
+  const flow = new WelcomeFlow({ onComplete: () => { completions += 1; } });
+  flow.show();
+  const testFlow = flow as unknown as { backdrop: HTMLElement; modal: HTMLElement };
+  const buttons = [...testFlow.modal.querySelectorAll<HTMLButtonElement>('button:not([disabled])')];
+  const first = buttons[0]!;
+  const last = buttons[buttons.length - 1]!;
+
+  assert.equal(testFlow.modal.getAttribute('role'), 'dialog');
+  assert.equal(testFlow.modal.getAttribute('aria-modal'), 'true');
+  const titleId = testFlow.modal.getAttribute('aria-labelledby');
+  assert.ok(titleId);
+  assert.equal(testFlow.modal.querySelector(`#${titleId}`)?.textContent, 'Set Your Location');
+  assert.equal(happyWindow.document.activeElement, first);
+
+  last.focus();
+  last.dispatchEvent(new happyWindow.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  assert.equal(happyWindow.document.activeElement, first);
+  first.dispatchEvent(new happyWindow.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+  assert.equal(happyWindow.document.activeElement, last);
+
+  last.dispatchEvent(new happyWindow.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(completions, 1);
+  assert.equal(happyWindow.localStorage.getItem('cb:onboarding-complete'), 'true');
+  assert.equal(happyWindow.document.activeElement, trigger);
+  happyWindow.document.body.replaceChildren();
+});
+
+test('Escape cancels onboarding effects from an outstanding location lookup', async () => {
+  const happyWindow = installDom();
+  const { locationService } = await import('../../services/location.ts');
+  const { WelcomeFlow } = await import('../WelcomeFlow.ts');
+  const originalGetLocation = locationService.getLocation.bind(locationService);
+  let resolveLocation!: (value: { lat: number; lon: number; timestamp: number; source: 'browser' }) => void;
+  const pendingLocation = new Promise<{ lat: number; lon: number; timestamp: number; source: 'browser' }>((resolve) => {
+    resolveLocation = resolve;
+  });
+  locationService.getLocation = () => pendingLocation;
+  let locations = 0;
+  let completions = 0;
+
+  try {
+    const flow = new WelcomeFlow({
+      onLocationSet: () => { locations += 1; },
+      onComplete: () => { completions += 1; },
+    });
+    flow.show();
+    const useLocation = [...happyWindow.document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Use My Location');
+    assert.ok(useLocation);
+    useLocation.click();
+    useLocation.dispatchEvent(new happyWindow.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    resolveLocation({ lat: 41.8, lon: -87.6, timestamp: Date.now(), source: 'browser' });
+    await pendingLocation;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(completions, 1);
+    assert.equal(locations, 0);
+  } finally {
+    locationService.getLocation = originalGetLocation;
+    happyWindow.document.body.replaceChildren();
+  }
 });

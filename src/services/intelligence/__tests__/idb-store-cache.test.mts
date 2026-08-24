@@ -306,4 +306,33 @@ describe('idb-store-cache — coordinated flushes', () => {
     await _flushPendingForTest();
     assert.deepEqual(writes, ['same']);
   });
+
+  it('bounds retries when the IDB backend keeps failing', async () => {
+    let writes = 0;
+    _setMemoryBackendForTest({
+      getMemory: async () => null,
+      putMemory: async () => {
+        writes += 1;
+        throw new Error('persistent failure');
+      },
+      deleteMemory: async () => {},
+    });
+    getIdbBackedStorage().setItem(BACKED, 'never-durable');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await _flushPendingForTest();
+    }
+
+    assert.equal(writes, 3);
+
+    const recovered: string[] = [];
+    _setMemoryBackendForTest({
+      getMemory: async () => null,
+      putMemory: async (_key: string, value: unknown) => { recovered.push(String(value)); },
+      deleteMemory: async () => {},
+    });
+    getIdbBackedStorage().setItem(BACKED, 'never-durable');
+    await _flushPendingForTest();
+    assert.deepEqual(recovered, ['never-durable']);
+  });
 });

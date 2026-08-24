@@ -194,6 +194,10 @@ interface DispatchTrace {
   candidateId: string;
 }
 
+function normalizedTraceScore(score: number): number {
+  return Number.isFinite(score) ? Math.max(0, Math.min(1, score / 100)) : 0;
+}
+
 function createDispatchTrace(
   alert: UnifiedAlert,
   action: NotificationAction,
@@ -207,8 +211,8 @@ function createDispatchTrace(
       situationId: alert.id,
       domain: traceDomainFor(domain),
       urgency: urgencyForSeverity(alert.severity),
-      confidence: Math.max(0, Math.min(1, alert.relevanceScore / 100)),
-      userRelevance: Math.max(0, Math.min(1, alert.relevanceScore / 100)),
+      confidence: normalizedTraceScore(alert.relevanceScore),
+      userRelevance: normalizedTraceScore(alert.relevanceScore),
       safetyCritical: alert.severity === 'critical',
       createdAt: Date.now(),
       headline: alert.title,

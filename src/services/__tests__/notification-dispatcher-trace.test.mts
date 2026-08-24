@@ -99,3 +99,15 @@ test('production dispatcher records native permission denial after dispatch', as
     error: 'permission-denied',
   });
 });
+
+test('production dispatcher records finite confidence for a non-finite relevance score', async () => {
+  const { notificationDispatcher } = await loadFresh();
+  const candidate = alert('non-finite-relevance', 'high');
+  candidate.relevanceScore = Number.NaN;
+
+  notificationDispatcher.dispatchNotification(candidate, 'banner');
+
+  const [entry] = getNotificationTraceRegistry().all();
+  assert.equal(entry?.candidate.confidence, 0);
+  assert.equal(entry?.candidate.userRelevance, 0);
+});

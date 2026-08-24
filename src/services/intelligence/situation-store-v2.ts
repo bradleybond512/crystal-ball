@@ -797,7 +797,9 @@ export class SituationStoreV2 {
     replayTarget?: Situation,
   ): SituationMutationReceipt | undefined {
     const now = this.clock();
-    const match = replayTarget ?? this.findMergeTarget(draft);
+    const match = replayTarget && this.isReplayCompatible(replayTarget, draft)
+      ? replayTarget
+      : this.findMergeTarget(draft);
     if (match) {
       if (!this.mergeIntoExisting(match, draft, now)) return undefined;
       return this.receipt('updated', match, draft.observations.map((observation) => observation.id));
@@ -848,6 +850,23 @@ export class SituationStoreV2 {
       if (existing.location && this.isWithinMergeWindow(existing, draft)) return existing;
     }
     return undefined;
+  }
+
+  private isReplayCompatible(existing: Situation, draft: DraftSituation): boolean {
+    const existingDomains = new Set([existing.domain, ...existing.relatedDomains]);
+    if (!draft.observations.some((observation) => existingDomains.has(observation.domain))) return false;
+    const newest = draft.observations.reduce((latest, observation) =>
+      Math.max(latest, observation.timestamp), 0);
+    if (Math.abs(existing.updatedAt.getTime() - newest) > MERGE_TIME_MS) return false;
+    const draftLocation = locationFromObservations(draft.observations);
+    if (!existing.location && !draftLocation) return true;
+    if (!existing.location || !draftLocation) return false;
+    return haversineKm(
+      existing.location.lat,
+      existing.location.lon,
+      draftLocation.lat,
+      draftLocation.lon,
+    ) <= MERGE_DISTANCE_KM;
   }
 
   private isWithinMergeWindow(existing: Situation, draft: DraftSituation): boolean {

@@ -345,6 +345,10 @@ function routerUrgency(severity: Severity): NotificationUrgency {
   }
 }
 
+function normalizedTraceScore(score: number): number {
+  return Number.isFinite(score) ? Math.max(0, Math.min(1, score / 100)) : 0;
+}
+
 function createRouterTrace(alert: ReactorAlert, nowMs: number): RouterTrace | undefined {
   try {
     const registry = getNotificationTraceRegistry();
@@ -355,8 +359,8 @@ function createRouterTrace(alert: ReactorAlert, nowMs: number): RouterTrace | un
       situationId: alert.alertId,
       domain: 'cyber',
       urgency: routerUrgency(severity),
-      confidence: Math.max(0, Math.min(1, alert.relevance.score / 100)),
-      userRelevance: Math.max(0, Math.min(1, alert.relevance.score / 100)),
+      confidence: normalizedTraceScore(alert.relevance.score),
+      userRelevance: normalizedTraceScore(alert.relevance.score),
       safetyCritical: severity === 'critical',
       createdAt: nowMs,
       headline: alert.threat.title,

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-23
 - **Author:** Claude; corrected after Codex audit of `origin/main` @ `3bf6d23e`
-- **Status:** OPEN — roadmap correction in PR #1659; no implementation task claimed
+- **Status:** ACTIVE — UX-000 IN PROGRESS in PR #1660; browser CI and packaged desktop verification pending
 - **Audience:** Codex / ChatGPT sessions working this repo
 - **Companion docs:** [`docs/superpowers/specs/2026-06-14-grand-strategy-survival-os-design.md`](superpowers/specs/2026-06-14-grand-strategy-survival-os-design.md) (the north star this measures against)
 
@@ -202,12 +202,13 @@ single stale number without reflowing the surrounding prose.
 
 ### UX-000 — Zero-key first-run contract *(do this before UX-001)*
 
-The packaged zero-key runtime is still unmeasured, but static wiring and a
-disposable sidecar show that most capability is designed to work without keys:
-50 of 58 definitions in `src/services/providers/provider-registry.ts` use no
-authentication, 66 of 78 entries in `src/services/runtime-config.ts` require no
-effective desktop secret, and a disposable sidecar starts with zero provider/API
-keys (its local trust token remains mandatory).
+The packaged zero-key runtime is still unmeasured. Static wiring shows only that
+credentials are not universally required; it does not establish network,
+upstream, provider, or data availability: 50 of 58 definitions in
+`src/services/providers/provider-registry.ts` use no authentication, 66 of 78
+entries in `src/services/runtime-config.ts` require no effective desktop secret,
+and a disposable sidecar starts with zero provider/API keys (its local trust
+token remains mandatory).
 
 ```bash
 node --import tsx --input-type=module - <<'NODE'
@@ -234,8 +235,8 @@ The first visible state is still misleading and not decision-useful:
 - **Correct:** distinguish no-key sources from services with free-key tiers.
 - **Show:** explicit startup/readiness progress and useful keyless coverage.
 - **Require:** every default card settles to useful data or an actionable,
-  truthful degraded state within a defined budget; it must not remain an
-  indefinite loading placeholder.
+  truthful degraded state within a defined budget; it must not
+  remain an indefinite loading placeholder.
 - **Non-goal:** a broad provider rewrite. Fix the first-run contract, measure it,
   then proceed to posture surfacing.
 - **Done when:** a clean zero-key run tells the user what works now, what is still
@@ -449,8 +450,8 @@ State these as open questions rather than treating them as settled:
   disposable-sidecar evidence, but not a real packaged desktop run with empty
   keychain/app data and normal provider access.
 - The original review covered **structure and reachability, not packaged runtime
-  behavior.** UX-000 adds static, deterministic-harness, and disposable-sidecar
-  evidence; the packaged desktop UI was not launched.
+  behavior.** The focused browser harness is wired into CI but has not yet run
+  on this commit; the packaged desktop UI was not launched.
 - Mobile and the non-full site variants were not examined at all.
 
 ---
@@ -461,7 +462,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | NOT STARTED | — |
+| UX-000 | Zero-key first-run contract | IN PROGRESS | #1660 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | NOT STARTED | — |

@@ -28,45 +28,51 @@ import { isFeatureAvailable } from '../runtime-config';
 import { dataFreshness } from '../data-freshness';
 import { getHydratedData } from '@/services/bootstrap';
 import { getApiBaseUrl } from '@/services/runtime';
+import { getSidecarDataState, summarizeAdapterDataStates } from '@/services/adapter-provenance';
+import type { BreakerDataState } from '@/utils/circuit-breaker';
 
 // ---- Sidecar helpers ----
 
 interface SidecarFredObs { date: string; value: number; }
 interface SidecarFredSeries { id: string; observations: SidecarFredObs[]; error?: string; }
 
-async function fetchFredFromSidecar(): Promise<SidecarFredSeries[] | null> {
+interface SidecarFredFetchResult {
+  series: SidecarFredSeries[];
+  dataState: BreakerDataState;
+}
+
+async function parseSidecarFredResponse(
+  response: Response,
+  minimumSeries: number,
+): Promise<SidecarFredFetchResult | null> {
+  if (!response.ok) return null;
+  const raw = await response.json() as unknown;
+  if (!raw || typeof raw !== 'object') return null;
+  const series = (raw as { series?: SidecarFredSeries[] }).series;
+  if (!Array.isArray(series)) return null;
+  const valid = series.filter((entry) => entry.observations?.length > 0);
+  if (valid.length < minimumSeries) return null;
+  return { series: valid, dataState: getSidecarDataState(raw) };
+}
+
+async function fetchFredFromSidecar(): Promise<SidecarFredFetchResult | null> {
   try {
  const base = getApiBaseUrl();
  // Try direct FRED API call first (uses stored key, returns richer data)
- const directResp = await fetch(`${base}/api/fred-series`);
- if (directResp.ok) {
- const raw = await directResp.json() as unknown;
- if (raw && typeof raw === 'object') {
- const d = raw as { series?: SidecarFredSeries[] };
- if (Array.isArray(d.series)) {
- const valid = d.series.filter(s => s.observations?.length > 0);
- if (valid.length >= 4) return valid;
- }
- }
- }
+ const result = await parseSidecarFredResponse(await fetch(`${base}/api/fred-series`), 4);
+ if (result) return result;
   } catch { /* fall through */ }
   try {
  const base = getApiBaseUrl();
  // Fall back to free public sources (Yahoo Finance + BLS + Treasury)
- const fallbackResp = await fetch(`${base}/api/fred-fallback`);
- if (fallbackResp.ok) {
- const raw = await fallbackResp.json() as unknown;
- if (raw && typeof raw === 'object') {
- const d = raw as { series?: SidecarFredSeries[] };
- if (Array.isArray(d.series) && d.series.length > 0) return d.series;
- }
- }
+ const result = await parseSidecarFredResponse(await fetch(`${base}/api/fred-fallback`), 1);
+ if (result) return result;
   } catch { /* fall through */ }
   return null;
 }
 
 function sidecarSeriesToFredSeries(s: SidecarFredSeries, config: { name: string; unit: string; precision: number }): FredSeries | null {
-  const obs = s.observations.filter(o => typeof o.value === 'number' && !isNaN(o.value));
+  const obs = s.observations.filter(o => typeof o.value === 'number' && !Number.isNaN(o.value));
   if (obs.length === 0) return null;
   const latest = obs[obs.length - 1]!;
   let displayValue = latest.value;
@@ -166,13 +172,18 @@ const FRED_SERIES: FredConfig[] = [
   { id: 'VIXCLS', name: 'VIX', unit: '', precision: 2 },
 ];
 
-async function fetchSingleFredSeries(config: FredConfig): Promise<FredSeries | null> {
-  const resp = await getFredBreaker(config.id).execute(async () => {
+interface FredSeriesFetchResult {
+  data: FredSeries | null;
+  dataState: BreakerDataState;
+}
+
+async function fetchSingleFredSeriesTracked(config: FredConfig): Promise<FredSeriesFetchResult> {
+  const { data: resp, dataState } = await getFredBreaker(config.id).executeTracked(async () => {
  return client.getFredSeries({ seriesId: config.id, limit: 120 });
   }, emptyFredFallback);
 
   const obs = resp.series?.observations;
-  if (!obs || obs.length === 0) return null;
+  if (!obs || obs.length === 0) return { data: null, dataState };
 
   if (obs.length >= 2) {
  const latest = obs[obs.length - 1]!;
@@ -183,7 +194,7 @@ async function fetchSingleFredSeries(config: FredConfig): Promise<FredSeries | n
  let displayValue = latest.value;
  if (config.id === 'WALCL') displayValue = latest.value / 1000;
 
- return {
+ return { data: {
  id: config.id,
  name: config.name,
  value: Number(displayValue.toFixed(config.precision)),
@@ -192,14 +203,14 @@ async function fetchSingleFredSeries(config: FredConfig): Promise<FredSeries | n
  changePercent: Number(changePercent.toFixed(2)),
  date: latest.date,
  unit: config.unit,
- };
+ }, dataState };
   }
 
   const latest = obs[0]!;
   let displayValue = latest.value;
   if (config.id === 'WALCL') displayValue = latest.value / 1000;
 
-  return {
+  return { data: {
  id: config.id,
  name: config.name,
  value: Number(displayValue.toFixed(config.precision)),
@@ -208,29 +219,48 @@ async function fetchSingleFredSeries(config: FredConfig): Promise<FredSeries | n
  changePercent: null,
  date: latest.date,
  unit: config.unit,
-  };
+  }, dataState };
 }
 
-export async function fetchFredData(): Promise<FredSeries[]> {
+export interface FredFetchResult {
+  data: FredSeries[];
+  dataState: BreakerDataState;
+}
+
+export async function fetchFredDataTracked(): Promise<FredFetchResult> {
   // Try sidecar first (direct FRED API with stored key, then free fallback sources).
   // This works whether or not the feature is "available" in runtime-config.
   const sidecarData = await fetchFredFromSidecar();
-  if (sidecarData && sidecarData.length >= 3) {
+  if (sidecarData && sidecarData.series.length >= 3) {
  const configMap = new Map(FRED_SERIES.map(c => [c.id, c]));
- const results = sidecarData
+ const results = sidecarData.series
  .map(s => {
  const cfg = configMap.get(s.id);
  if (!cfg) return null;
  return sidecarSeriesToFredSeries(s, cfg);
  })
  .filter((r): r is FredSeries => r !== null);
- if (results.length >= 3) return results;
+ if (results.length >= 3) {
+   return { data: results, dataState: sidecarData.dataState };
+ }
   }
 
   // Fall back to upstream cloud API (requires valid FRED feature + key)
-  if (!isFeatureAvailable('economicFred')) return [];
-  const results = await Promise.all(FRED_SERIES.map(fetchSingleFredSeries));
-  return results.filter((r): r is FredSeries => r !== null);
+  if (!isFeatureAvailable('economicFred')) {
+    return { data: [], dataState: { mode: 'unavailable', timestamp: null, offline: false } };
+  }
+  const results = await Promise.all(FRED_SERIES.map((config) => fetchSingleFredSeriesTracked(config)));
+  const data = results.flatMap((result) => result.data ? [result.data] : []);
+  let dataState = summarizeAdapterDataStates(results.map((result) => result.dataState));
+  if (data.length < 3 || results.some((result) => result.data === null)) {
+    dataState = { ...dataState, mode: 'unavailable' };
+  }
+  return { data, dataState };
+}
+
+export async function fetchFredData(): Promise<FredSeries[]> {
+  const result = await fetchFredDataTracked();
+  return result.data;
 }
 
 export function getFredStatus(): string {
@@ -284,6 +314,7 @@ export interface OilAnalytics {
   fetchedAt: Date;
 }
 
+/* eslint-disable sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, @typescript-eslint/require-await, @typescript-eslint/prefer-nullish-coalescing, unicorn/consistent-function-scoping, sonarjs/different-types-comparison */
 function protoEnergyToOilMetric(proto: ProtoEnergyPrice): OilMetric {
   const change = proto.change;
   return {
@@ -702,3 +733,4 @@ export async function fetchBisData(): Promise<BisData> {
 }
 
 export {type BisPolicyRate, type BisExchangeRate, type BisCreditToGdp} from '@/generated/client/crystalball/economic/v1/service_client';
+/* eslint-enable sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, @typescript-eslint/require-await, @typescript-eslint/prefer-nullish-coalescing, unicorn/consistent-function-scoping, sonarjs/different-types-comparison */

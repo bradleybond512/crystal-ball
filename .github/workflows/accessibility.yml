@@ -25,3 +25,7 @@ jobs:
       - run: npx playwright test e2e/a11y-baseline.spec.ts
         env:
           VITE_VARIANT: full
+      - name: Zero-key Home Shell browser harness only
+        run: npx playwright test e2e/home-shell-boot.spec.ts --grep "browser harness only"
+        env:
+          VITE_VARIANT: full

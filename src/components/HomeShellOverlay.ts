@@ -12,6 +12,8 @@
 
 import { DEFAULT_PANELS, STORAGE_KEYS } from '@/config/panels';
 import { PanelFocusHost } from '@/components/PanelFocusHost';
+import { createHomeShellStartupReadiness } from '@/components/HomeShellStartupReadiness';
+import type { HomeShellStartupReadinessPresenter } from '@/components/HomeShellStartupReadiness';
 import { SituationDossier } from '@/components/SituationDossier';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import {
@@ -37,15 +39,24 @@ import { buildBriefingView } from '@/services/home-shell/briefing-view';
 import type { BriefingBandView, BriefingView } from '@/services/home-shell/briefing-view';
 import { matchPinnablePanels } from '@/services/home-shell/pin-picker-filter';
 import {
+  DECK_CONTRIBUTOR_SOURCE_IDS,
   buildDeckCards,
   movePin,
   parseDeckPins,
   serializeDeckPins,
   togglePin,
 } from '@/services/home-shell/deck-view';
-import type { DeckCardView } from '@/services/home-shell/deck-view';
+import type { ContributorEvidenceLike, DeckCardView } from '@/services/home-shell/deck-view';
 import { buildStatusRibbon } from '@/services/home-shell/status-ribbon-view';
 import type { StatusRibbonView } from '@/services/home-shell/status-ribbon-view';
+import {
+  KEYLESS_SOURCE_IDS,
+  buildHomeShellReadinessView,
+  buildKeylessSourceReadiness,
+} from '@/services/home-shell/startup-readiness-view';
+import type { KeylessSourceStateLike } from '@/services/home-shell/startup-readiness-view';
+import { dataFreshness } from '@/services/data-freshness';
+import type { DataSourceId } from '@/services/data-freshness';
 import { safeSetItem } from '@/utils/safe-storage';
 
 const DECK_PINS_KEY = STORAGE_KEYS.deckPins;
@@ -60,12 +71,16 @@ export interface HomeShellOptions {
   getPanel: (panelId: string) => NarrativeSource | undefined;
   /** Mounts a lazy panel without touching the classic grid's scroll. */
   ensurePanel: (panelId: string) => Promise<unknown>;
+  /** Deterministic clock seam for first-run readiness tests. */
+  now?: () => number;
 }
 
 export class HomeShellOverlay {
   private root: HTMLElement | null = null;
   private mapSlot: HTMLElement | null = null;
   private topbarEl: HTMLElement | null = null;
+  private readinessEl: HTMLElement | null = null;
+  private readinessPresenter: HomeShellStartupReadinessPresenter | null = null;
   private briefingEl: HTMLElement | null = null;
   private deckEl: HTMLElement | null = null;
   private ribbonEl: HTMLElement | null = null;
@@ -80,9 +95,11 @@ export class HomeShellOverlay {
   private _onOpenDossier: ((e: Event) => void) | null = null;
   private _onOpenPanel: ((e: Event) => void) | null = null;
   private lastSituationCommandId: string | null = null;
+  private startupStartedAt: number | undefined;
   private readonly getPanel: HomeShellOptions['getPanel'];
   // used by the focus host
   private readonly ensurePanel: HomeShellOptions['ensurePanel'];
+  private readonly now: () => number;
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
@@ -91,6 +108,7 @@ export class HomeShellOverlay {
   constructor(options: HomeShellOptions) {
     this.getPanel = options.getPanel;
     this.ensurePanel = options.ensurePanel;
+    this.now = options.now ?? Date.now;
   }
 
   mount(parent: HTMLElement): void {
@@ -128,6 +146,7 @@ export class HomeShellOverlay {
       void tryInvokeTauri('plugin:window|start_dragging').catch(() => {/* web build / silent */});
     });
 
+    this.readinessEl = el('div', 'home-shell-readiness-slot');
     this.briefingEl = el('div', 'home-shell-briefing');
     // The map backdrop now owns wheel/drag (scroll-zoom + pan), so wheeling
     // over empty areas zooms the map instead of scrolling to the deck — make
@@ -136,7 +155,7 @@ export class HomeShellOverlay {
     deckHint.addEventListener('click', () => {
       this.deckEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    viewport.append(this.briefingEl, deckHint);
+    viewport.append(this.readinessEl, this.briefingEl, deckHint);
 
     this.deckEl = el('section', 'home-shell-deck');
     this.ribbonEl = el('footer', 'home-shell-ribbon');
@@ -224,6 +243,7 @@ export class HomeShellOverlay {
     if (!this.root || this.visible) return;
     this.visible = true;
     this.root.hidden = false;
+    this.startupStartedAt ??= this.now();
     document.body.classList.add('home-shell-active');
     // The sticky topbar lives above the 100dvh viewport in the scroll flow, so
     // publish its measured height to CSS (--hs-topbar-h) — now that the shell is
@@ -280,12 +300,13 @@ export class HomeShellOverlay {
     }
     this.root?.remove();
     this.root = null;
+    this.readinessPresenter = null;
   }
 
   // ── Data + render ─────────────────────────────────────────────────
 
   private refresh(): void {
-    const now = Date.now();
+    const now = this.now();
 
     let personal;
     try {
@@ -330,7 +351,9 @@ export class HomeShellOverlay {
     // Skip the deck rebuild while focus is inside it — a 10 s re-render
     // would yank the open pin picker shut mid-filter. Direct calls from
     // setPins still render unconditionally, which releases the guard.
-    if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(now);
+    const cards = this.buildDeckView(now);
+    this.renderReadiness(cards);
+    if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(cards);
     this.renderRibbon(now);
     this.syncSituationCommand(getActiveSituation());
   }
@@ -367,23 +390,70 @@ export class HomeShellOverlay {
     this.briefingEl.replaceChildren(...view.bands.map((b) => renderBand(b)));
   }
 
-  private renderDeck(now: number): void {
-    if (!this.deckEl) return;
+  private buildDeckView(now: number): DeckCardView[] {
     const narratives: Record<string, string | undefined> = {};
+    const contributors: Record<string, ContributorEvidenceLike[]> = {};
     for (const id of this.pins) {
       const n = this.getPanel(id)?.getNarrative();
       narratives[id] = n === '' || n === undefined ? undefined : n;
+      contributors[id] = (DECK_CONTRIBUTOR_SOURCE_IDS[id] ?? []).flatMap((sourceId) => {
+        const source = dataFreshness.getSource(sourceId as DataSourceId);
+        if (!source) return [];
+        return [{
+          sourceId,
+          name: source.name,
+          status: source.status,
+          lastUpdateAt: source.lastUpdate?.getTime() ?? null,
+          latestItemCount: source.lastBatchItemCount,
+          lastError: source.lastError,
+        }];
+      });
     }
-    const cards = buildDeckCards(
+    return buildDeckCards(
       this.pins,
-      { names: DEFAULT_PANELS, health: getPanelHealthRegistry().all(), narratives },
+      { names: DEFAULT_PANELS, health: getPanelHealthRegistry().all(), narratives, contributors },
       now,
+      this.startupStartedAt ?? now,
     );
+  }
 
+  private renderReadiness(cards: readonly DeckCardView[]): void {
+    if (!this.readinessEl) return;
+    const now = this.now();
+    const sourceSnapshots: KeylessSourceStateLike[] = KEYLESS_SOURCE_IDS.map((id) => {
+      const source = dataFreshness.getSource(id);
+      return {
+        id,
+        status: source?.status ?? 'no_data',
+        lastUpdateAt: source?.lastUpdate?.getTime() ?? null,
+        lastError: source?.lastError ?? null,
+        latestItemCount: source?.lastBatchItemCount ?? 0,
+        unknownReason: source?.unknownReason ?? null,
+      };
+    });
+    const sources = buildKeylessSourceReadiness(sourceSnapshots, now, this.startupStartedAt ?? now);
+    const view = buildHomeShellReadinessView(cards, sources);
+    if (this.readinessPresenter) {
+      this.readinessPresenter.update(view);
+      return;
+    }
+    this.readinessPresenter = createHomeShellStartupReadiness(view, {
+      onRetryAll: () => {
+        document.dispatchEvent(new CustomEvent('cb:panel-retry'));
+      },
+      onOpenSettings: () => {
+        document.dispatchEvent(new CustomEvent('wm:open-settings'));
+      },
+    });
+    this.readinessEl.replaceChildren(this.readinessPresenter.element);
+  }
+
+  private renderDeck(cards: readonly DeckCardView[]): void {
+    if (!this.deckEl) return;
     const header = el('div', 'hs-deck-header');
     header.append(
       el('span', undefined, 'Your Deck'),
-      el('span', 'hs-deck-sub', `${cards.length} pinned · click a card to open`),
+      el('span', 'hs-deck-sub', `${cards.length} pinned · use Open panel to inspect`),
       this.buildPinPicker(),
     );
 
@@ -527,14 +597,17 @@ export class HomeShellOverlay {
       this.setPins(movePin(this.pins, key, 1));
       return;
     }
-    // Plain card click → open the panel in the focus host.
-    this.openInFocus(key);
+    if (action === 'open') {
+      this.openInFocus(key);
+    }
   }
 
   private setPins(pins: string[]): void {
     this.pins = pins;
     safeSetItem(DECK_PINS_KEY, serializeDeckPins(pins));
-    this.renderDeck(Date.now());
+    const cards = this.buildDeckView(this.now());
+    this.renderReadiness(cards);
+    this.renderDeck(cards);
   }
 
   // ── Map adoption ──────────────────────────────────────────────────
@@ -630,22 +703,25 @@ function renderBand(b: BriefingBandView): HTMLElement {
   return band;
 }
 
-function renderDeckCard(c: DeckCardView): HTMLElement {
-  const card = el('div', `hs-card hs-card-${c.tone}`);
+export function renderDeckCard(c: DeckCardView): HTMLElement {
+  const card = el('article', `hs-card hs-card-${c.tone} hs-card-readiness-${c.readiness}`);
   card.dataset.panelKey = c.panelId;
   card.append(el('div', 'hs-card-title', c.title));
   if (c.narrative) card.append(el('div', 'hs-card-narrative', c.narrative));
   card.append(el('div', 'hs-card-status', c.statusLabel));
 
   const actions = el('div', 'hs-card-actions');
-  const controls: readonly (readonly [string, string, string])[] = [
+  const controls: (readonly [string, string, string])[] = [
+    ['open', 'Open panel', `Open ${c.title}`],
     ['move-left', '‹', 'Move left'],
     ['move-right', '›', 'Move right'],
     ['unpin', '×', 'Unpin'],
   ];
   for (const [action, glyph, title] of controls) {
     const b = button('', action, glyph);
+    if (action === 'open') b.className = 'hs-card-open';
     b.title = title;
+    b.setAttribute('aria-label', title);
     b.dataset.panelKey = c.panelId;
     actions.append(b);
   }

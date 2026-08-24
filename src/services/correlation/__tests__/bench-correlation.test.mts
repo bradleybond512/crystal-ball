@@ -3418,6 +3418,100 @@ describe('round 14 — the gate stops taking the producer at its word', () => {
   });
 });
 
+describe('ACC-503/ACC-504 — the schema-13 statistical reseed is pinned', () => {
+  const report = runCorrelationBenchmark();
+  const committed = loadBaseline();
+  const previousV13 = (): CorrelationBenchBaseline => ({
+    ...committed,
+    seededAt: '2026-08-05T02:14:06.820Z',
+    reportDigest: '6d8489c850bea5b7cd3aef6d3b69b12e',
+    multipleTestingFamily: {
+      ...committed.multipleTestingFamily,
+      method: 'gaussian-union-bound',
+    },
+    couplingPrecision: 0.2941,
+    minedEdgeCount: 258,
+    significantEdgeCount: 17,
+    confoundedFalsePositives: 2,
+    mediatedFalsePositives: 1,
+    unplantedFalsePositives: 9,
+    falseEdgeCount: 12,
+    edgeEvidenceSeparation: 6.8894,
+    fixedCandidateEvidenceSeparation: 13.4241,
+    learnedRuleCount: 12,
+    learnedRuleFalsePositives: 7,
+    learnedRulePairCount: 102,
+    witnessed: {
+      ...committed.witnessed,
+      meanCausalEdgeStrength: 1,
+      meanCausalEdgeZ: 15.0045,
+      edgeEvidenceSeparation: 6.8894,
+      sectionDigests: {
+        ...committed.witnessed.sectionDigests,
+        edges: '6c4f26a125dc1959a3d3600a1b77b03e',
+        learnedPairs: '5facb47718ff80e5fb1c3447ac98df60',
+      },
+    },
+  });
+
+  it('accepts only the reviewed exact-binomial-Holm transition', () => {
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV13StatisticalReseed(
+      report,
+      previousV13(),
+      correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED,
+    );
+    assert.equal(ok, true, JSON.stringify(reasons));
+  });
+
+  it('pins the exact reviewed previous payload and tolerances', () => {
+    const manifest = correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED;
+    assert.equal(
+      correlationBaseline.benchBaselinePayloadDigest(previousV13()),
+      manifest.previousPayloadDigest,
+    );
+    assert.equal(
+      correlationBaseline.benchTolerancesDigest(previousV13().tolerances),
+      manifest.previousTolerancesDigest,
+    );
+  });
+
+  it('refuses a self-consistent previous payload forgery', () => {
+    const previous = { ...previousV13(), minedEdgeCount: report.minedEdgeCount };
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV13StatisticalReseed(
+      report,
+      previous,
+      correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /reviewed previous payload|moved outside/);
+  });
+
+  it('refuses any next report other than the reviewed exact report', () => {
+    const changed = {
+      ...report,
+      multipleTestingFamily: {
+        ...report.multipleTestingFamily,
+        method: 'gaussian-union-bound' as const,
+      },
+    };
+    const { ok, reasons } = correlationBaseline.validateCorrelationBenchV13StatisticalReseed(
+      changed,
+      previousV13(),
+      correlationBaseline.CORRELATION_BENCH_V13_STATISTICAL_RESEED,
+    );
+    assert.equal(ok, false);
+    assert.match(reasons.join(' '), /reviewed next report|unreviewed multiple-testing family/);
+  });
+
+  it('routes the ordinary reseed guard through the pinned transition', () => {
+    const { ok, reasons } = correlationBaseline.compareCorrelationBenchReseedToPrevious(
+      report,
+      previousV13(),
+    );
+    assert.equal(ok, true, JSON.stringify(reasons));
+  });
+});
+
 describe('round 15 — the v12→v13 schema bump is a pinned migration, not a skipped check', () => {
   const report = runCorrelationBenchmark();
   const committed = loadBaseline();

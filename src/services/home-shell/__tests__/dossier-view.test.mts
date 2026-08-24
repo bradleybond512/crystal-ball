@@ -80,6 +80,8 @@ test('evidence composes only matching category, system tier excluded from top, c
   assert.ok(!all.includes('earthquakes'), 'wrong-category panel leaked in');
   assert.ok(!view.evidence.map((c) => c.panelId).includes('self-test'), 'system-tier panel leaked into top evidence');
   assert.equal(view.evidence[0]!.panelId, 'nws-alerts', 'featured+healthy ranks first');
+  assert.equal(view.evidence[0]!.readiness, 'attention');
+  assert.match(view.evidence[0]!.statusLabel, /data usefulness unverified.*open panel/i);
   assert.ok(view.evidence[0]!.reason.length > 0);
 });
 

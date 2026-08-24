@@ -810,7 +810,7 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
   {
  id: 'owmWeatherTiles',
  name: 'Weather map tile overlays',
- description: 'OpenWeatherMap tile layers for temperature, precipitation, clouds, wind, and pressure overlays on the map.',
+ description: 'Weather map tile overlays from OpenWeatherMap for temperature, precipitation, clouds, wind, and pressure.',
  requiredSecrets: ['OWM_API_KEY'],
  desktopRequiredSecrets: [],
  fallback: 'Weather tile overlays disabled. Free weather radar (RainViewer), satellite imagery (NOAA), and lightning data still available.',

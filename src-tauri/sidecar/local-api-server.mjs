@@ -12265,7 +12265,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const ids = (requestUrl.searchParams.get('ids') || 'WALCL,FEDFUNDS,T10Y2Y,UNRATE,CPIAUCSL,DGS10,VIXCLS').split(',').map(s => s.trim()).filter(Boolean);
  const _fredCacheKey = `fred-series:${[...ids].sort().join(',')}`;
  const _fredCached = getCached(_fredCacheKey, 6 * 60 * 60 * 1000);
- if (_fredCached) return json(_fredCached);
+ if (_fredCached) return json({ ..._fredCached, provenance: 'cache' });
  try {
  const results = await Promise.all(ids.map(async id => {
  try {
@@ -12283,7 +12283,7 @@ async function dispatch(requestUrl, req, routes, context) {
  return { id, observations: [], error: String(error.message ?? error) };
  }
  }));
- const _fredResult = { series: results };
+ const _fredResult = { series: results, provenance: 'live', fetchedAt: Date.now() };
  setCached(_fredCacheKey, _fredResult, 6 * 60 * 60 * 1000);
  return json(_fredResult);
  } catch (error) {
@@ -12295,7 +12295,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // Combines Yahoo Finance (VIX, yields), US Treasury yield curve, BLS (UNRATE/CPI)
   if (requestUrl.pathname === '/api/fred-fallback') {
  const _fbCached = getCached('fred-fallback', 6 * 60 * 60 * 1000);
- if (_fbCached) return json(_fbCached);
+ if (_fbCached) return json({ ..._fbCached, provenance: 'cache' });
  try {
  // FRED CSV replaces Yahoo Finance for VIX and Fed Funds — free, no auth, no Cloudflare block.
  // Treasury XML (DGS10, T10Y2Y) and BLS (UNRATE, CPIAUCSL) are already free — kept as-is.
@@ -12384,7 +12384,7 @@ async function dispatch(requestUrl, req, routes, context) {
  })();
  if (blsCpiObs?.length) series.push({ id: 'CPIAUCSL', observations: blsCpiObs });
 
- const _fbResult = { series, source: 'free-fallback' };
+ const _fbResult = { series, source: 'free-fallback', provenance: 'live', fetchedAt: Date.now() };
  setCached('fred-fallback', _fbResult, 6 * 60 * 60 * 1000);
  return json(_fbResult);
  } catch (error) {

@@ -16,14 +16,14 @@ import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
 import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
 import { fetchJsonCached } from '@/utils/point-fetch-cache';
 import {
-  fetchCategoryFeeds,
+  fetchCategoryFeedsTracked,
   getFeedFailures,
   fetchMultipleStocks,
   fetchCrypto,
   fetchPredictions,
-  fetchEarthquakes,
+  fetchEarthquakesTracked,
   fetchUgcZonesForPoint,
-  fetchFredData,
+  fetchFredDataTracked,
   fetchInternetOutages,
   isOutagesConfigured,
   fetchAisSignals,
@@ -71,7 +71,11 @@ import {
 import { refreshStormPosture } from '@/services/survival/storm-posture-state';
 import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
 import { reportElevatedPanel } from '@/services/panel-correlation';
-import { fetchGDACSEvents } from '@/services/gdacs';
+import {
+  fetchGDACSEvents,
+  fetchGDACSEventsTracked,
+  getGDACSSuccessfulUpdate,
+} from '@/services/gdacs';
 import { normalizeNaturalEventToAlert } from '@/services/eonet';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
@@ -196,6 +200,14 @@ import { fetchPositiveGeoEvents, geocodePositiveNewsItems } from '@/services/pos
 import { fetchKindnessData } from '@/services/kindness-data';
 import { getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
 import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot } from '@/services/offline-alert-cache';
+import {
+  getEarthquakeSuccessfulUpdate,
+  getFredSuccessfulUpdate,
+  getOldestValidTimestamp,
+  getRssSuccessfulUpdate,
+  summarizeAdapterDataStates,
+} from '@/services/adapter-provenance';
+import type { BreakerDataState } from '@/utils/circuit-breaker';
 import {
   ingestCyberToIoc, ingestCisaKevToIoc,
   ingestAisToDarkVessel, ingestMilVesselsToDarkVessel,
@@ -488,6 +500,16 @@ export interface DataLoaderCallbacks {
   renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
 }
 
+interface RssDigestFetchResult {
+  digest: ListFeedDigestResponse | null;
+  dataState: BreakerDataState;
+}
+
+interface RssNewsLoadResult {
+  items: NewsItem[];
+  dataState: BreakerDataState | null;
+}
+
 export class DataLoaderManager implements AppModule {
   private ctx: AppContext;
   private callbacks: DataLoaderCallbacks;
@@ -519,7 +541,7 @@ export class DataLoaderManager implements AppModule {
   public updateSearchIndex: () => void = () => {};
 
   private digestBreaker = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, cooldownUntil: 0 };
-  private lastGoodDigest: ListFeedDigestResponse | null = null;
+  private lastGoodDigest: { digest: ListFeedDigestResponse; timestamp: number } | null = null;
 
   constructor(ctx: AppContext, callbacks: DataLoaderCallbacks) {
  this.ctx = ctx;
@@ -567,7 +589,7 @@ export class DataLoaderManager implements AppModule {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
  withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
- withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
+ withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
  const proximate = getDisasterProximateCameras(raw, nwsResult.data, gdacsResult.data);
  // Panel-side disaster badge only — map keeps the full set.
@@ -584,12 +606,14 @@ export class DataLoaderManager implements AppModule {
  stopOrefPolling();
   }
 
-  private async tryFetchDigest(): Promise<ListFeedDigestResponse | null> {
+  private async tryFetchDigest(): Promise<RssDigestFetchResult> {
  const now = Date.now();
 
  if (this.digestBreaker.state === 'open') {
  if (now < this.digestBreaker.cooldownUntil) {
- return this.lastGoodDigest ?? await this.loadPersistedDigest();
+ return this.lastGoodDigest
+   ? { digest: this.lastGoodDigest.digest, dataState: { mode: 'cached', timestamp: this.lastGoodDigest.timestamp, offline: false } }
+   : await this.loadPersistedDigest();
  }
  this.digestBreaker.state = 'half-open';
  }
@@ -604,12 +628,13 @@ export class DataLoaderManager implements AppModule {
  );
  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
  const data = await resp.json() as ListFeedDigestResponse;
+ const fetchedAt = Date.now();
  const catCount = Object.keys(data.categories ?? {}).length;
  console.info(`[News] Digest fetched: ${catCount} categories`);
- this.lastGoodDigest = data;
+ this.lastGoodDigest = { digest: data, timestamp: fetchedAt };
  this.persistDigest(data);
  this.digestBreaker = { state: 'closed', failures: 0, cooldownUntil: 0 };
- return data;
+ return { digest: data, dataState: { mode: 'live', timestamp: fetchedAt, offline: false } };
  } catch (error) {
  console.warn('[News] Digest fetch failed, using fallback:', error);
  this.digestBreaker.failures++;
@@ -617,7 +642,9 @@ export class DataLoaderManager implements AppModule {
  this.digestBreaker.state = 'open';
  this.digestBreaker.cooldownUntil = now + 60_000;
  }
- return this.lastGoodDigest ?? await this.loadPersistedDigest();
+ return this.lastGoodDigest
+   ? { digest: this.lastGoodDigest.digest, dataState: { mode: 'cached', timestamp: this.lastGoodDigest.timestamp, offline: false } }
+   : await this.loadPersistedDigest();
  }
   }
 
@@ -625,14 +652,20 @@ export class DataLoaderManager implements AppModule {
  setPersistentCache('digest:last-good', data).catch(() => {});
   }
 
-  private async loadPersistedDigest(): Promise<ListFeedDigestResponse | null> {
+  private async loadPersistedDigest(): Promise<RssDigestFetchResult> {
  try {
  const envelope = await getPersistentCache<ListFeedDigestResponse>('digest:last-good');
- if (!envelope) return null;
- if (Date.now() - envelope.updatedAt > 30 * 60 * 1000) return null;
- this.lastGoodDigest = envelope.data;
- return envelope.data;
- } catch { return null; }
+ if (!envelope || Date.now() - envelope.updatedAt > 30 * 60 * 1000) {
+   return { digest: null, dataState: { mode: 'unavailable', timestamp: null, offline: false } };
+ }
+ this.lastGoodDigest = { digest: envelope.data, timestamp: envelope.updatedAt };
+ return {
+   digest: envelope.data,
+   dataState: { mode: 'cached', timestamp: envelope.updatedAt, offline: false },
+ };
+ } catch {
+   return { digest: null, dataState: { mode: 'unavailable', timestamp: null, offline: false } };
+ }
   }
 
   private shouldShowIntelligenceNotifications(): boolean {
@@ -1057,7 +1090,7 @@ export class DataLoaderManager implements AppModule {
  this.applyTimeRangeFilterToNewsPanelsDebounced();
   }
 
-  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: ListFeedDigestResponse | null): Promise<NewsItem[]> {
+  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: RssDigestFetchResult): Promise<RssNewsLoadResult> {
  try {
  const panel = this.ctx.newsPanels[category];
 
@@ -1069,13 +1102,13 @@ export class DataLoaderManager implements AppModule {
  status: 'ok',
  itemCount: 0,
  });
- return [];
+ return { items: [], dataState: null };
  }
 
  // Digest branch: server already aggregated feeds — map proto items to client types
- if (digest?.categories && category in digest.categories) {
+ if (digest?.digest?.categories && category in digest.digest.categories) {
  const enabledNames = new Set(enabledFeeds.map(f => f.name));
- const items = (digest.categories[category]?.items ?? [])
+ const items = (digest.digest.categories[category]?.items ?? [])
  .map(protoItemToNewsItem)
  .filter(i => enabledNames.has(i.source));
 
@@ -1099,9 +1132,14 @@ export class DataLoaderManager implements AppModule {
  this.flashMapForNews(items);
  this.renderNewsForCategory(category, items);
 
- this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
- status: 'ok',
- itemCount: items.length,
+ const digestIsLive = digest.dataState.mode === 'live' && digest.dataState.timestamp !== null;
+ this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), digestIsLive ? {
+   status: 'ok',
+   itemCount: items.length,
+ } : {
+   status: 'error',
+   itemCount: items.length,
+   errorMessage: 'RSS digest served from cache without live provenance',
  });
 
  if (panel) {
@@ -1112,7 +1150,7 @@ export class DataLoaderManager implements AppModule {
  } catch (error) { console.warn(`[Baseline] news:${category} write failed:`, error); }
  }
 
- return items;
+ return { items, dataState: digest.dataState };
  }
 
  // Per-feed fallback: fetch each feed individually (first load or digest unavailable)
@@ -1149,13 +1187,15 @@ export class DataLoaderManager implements AppModule {
  }
  };
 
- const { data: items } = await withOfflineCache(`news-rss:${category}`, () => fetchCategoryFeeds(enabledFeeds, {
+ const rssSnapshot = await withOfflineCache(`news-rss:${category}`, () => fetchCategoryFeedsTracked(enabledFeeds, {
  onBatch: (partialItems) => {
  scheduleRender(partialItems);
  this.flashMapForNews(partialItems);
  checkBatchForBreakingAlerts(partialItems);
  },
  }), 2 * 60 * 60 * 1000);
+ const rssResult = rssSnapshot.data;
+ const items = rssResult.items;
 
  this.renderNewsForCategory(category, items);
  if (panel) {
@@ -1181,21 +1221,36 @@ export class DataLoaderManager implements AppModule {
  } catch (error) { console.warn(`[Baseline] news:${category} write failed:`, error); }
  }
 
+ const freshness = feedFreshnessFromSnapshot(rssSnapshot);
+ const dataState: BreakerDataState = freshness.fresh
+   ? rssResult.dataState
+   : { mode: 'cached', timestamp: freshness.staleTimestamp, offline: true };
+ if (dataState.mode === 'live' && dataState.timestamp !== null) {
  this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
  status: 'ok',
  itemCount: items.length,
  });
- this.ctx.statusPanel?.updateApi('RSS2JSON', { status: 'ok' });
+ } else {
+ const staleReason = freshness.staleReason
+   ?? `RSS adapter returned ${dataState.mode} data without live provenance`;
+ this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+ status: 'error',
+ itemCount: items.length,
+ errorMessage: staleReason,
+ });
+ }
 
- return items;
+ return { items, dataState };
  } catch (error) {
  this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
  status: 'error',
  errorMessage: String(error),
  });
- this.ctx.statusPanel?.updateApi('RSS2JSON', { status: 'error' });
  delete this.ctx.newsByCategory[category];
- return [];
+ return {
+   items: [],
+   dataState: { mode: 'unavailable', timestamp: null, offline: false },
+ };
  }
   }
 
@@ -1212,23 +1267,25 @@ export class DataLoaderManager implements AppModule {
  .filter((entry): entry is [string, typeof FEEDS[keyof typeof FEEDS]] => Array.isArray(entry[1]) && entry[1].length > 0)
  .map(([key, feeds]) => ({ key, feeds }));
 
- const digest = await digestPromise;
+ const digestResult = await digestPromise;
 
  const maxCategoryConcurrency = SITE_VARIANT === 'tech' ? 4 : 5;
  const categoryConcurrency = Math.max(1, Math.min(maxCategoryConcurrency, categories.length));
- const categoryResults: PromiseSettledResult<NewsItem[]>[] = [];
+ const categoryResults: PromiseSettledResult<RssNewsLoadResult>[] = [];
  for (let i = 0; i < categories.length; i += categoryConcurrency) {
  const chunk = categories.slice(i, i + categoryConcurrency);
  const chunkResults = await Promise.allSettled(
- chunk.map(({ key, feeds }) => this.loadNewsCategory(key, feeds, digest))
+ chunk.map(({ key, feeds }) => this.loadNewsCategory(key, feeds, digestResult))
  );
  categoryResults.push(...chunkResults);
  }
 
  const collectedNews: NewsItem[] = [];
+ const rssLoadResults: Array<{ itemCount: number; dataState: BreakerDataState }> = [];
  categoryResults.forEach((result, idx) => {
  if (result.status === 'fulfilled') {
- const items = result.value;
+ const { items, dataState } = result.value;
+ if (dataState) rssLoadResults.push({ itemCount: items.length, dataState });
  // Tag items with content categories for happy variant
  if (SITE_VARIANT === 'happy') {
  for (const item of items) {
@@ -1240,6 +1297,10 @@ export class DataLoaderManager implements AppModule {
  collectedNews.push(...items);
  } else {
  console.error(`[App] News category ${categories[idx]?.key} failed:`, result.reason);
+ rssLoadResults.push({
+   itemCount: 0,
+   dataState: { mode: 'unavailable', timestamp: null, offline: false },
+ });
  }
  });
 
@@ -1250,10 +1311,10 @@ export class DataLoaderManager implements AppModule {
  delete this.ctx.newsByCategory.intel;
  if (intelPanel) intelPanel.showError(t('common.allIntelSourcesDisabled'));
  this.ctx.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: 0 });
- } else if (digest?.categories && 'intel' in digest.categories) {
+ } else if (digestResult.digest?.categories && 'intel' in digestResult.digest.categories) {
  // Digest branch for intel
  const enabledNames = new Set(enabledIntelSources.map(f => f.name));
- const intel = (digest.categories.intel?.items ?? [])
+ const intel = (digestResult.digest.categories.intel?.items ?? [])
  .map(protoItemToNewsItem)
  .filter(i => enabledNames.has(i.source));
  checkBatchForBreakingAlerts(intel);
@@ -1265,13 +1326,17 @@ export class DataLoaderManager implements AppModule {
  intelPanel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
  } catch (error) { console.warn('[Baseline] news:intel write failed:', error); }
  }
- this.ctx.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: intel.length });
+ const digestIsLive = digestResult.dataState.mode === 'live' && digestResult.dataState.timestamp !== null;
+ this.ctx.statusPanel?.updateFeed('Intel', digestIsLive
+   ? { status: 'ok', itemCount: intel.length }
+   : { status: 'error', itemCount: intel.length, errorMessage: 'RSS digest served from cache without live provenance' });
+ rssLoadResults.push({ itemCount: intel.length, dataState: digestResult.dataState });
  collectedNews.push(...intel);
  this.flashMapForNews(intel);
  } else {
- const intelResult = await Promise.allSettled([fetchCategoryFeeds(enabledIntelSources)]);
+ const intelResult = await Promise.allSettled([fetchCategoryFeedsTracked(enabledIntelSources)]);
  if (intelResult[0]?.status === 'fulfilled') {
- const intel = intelResult[0].value;
+ const { items: intel, dataState } = intelResult[0].value;
  checkBatchForBreakingAlerts(intel);
  this.renderNewsForCategory('intel', intel);
  if (intelPanel) {
@@ -1281,14 +1346,35 @@ export class DataLoaderManager implements AppModule {
  intelPanel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
  } catch (error) { console.warn('[Baseline] news:intel write failed:', error); }
  }
- this.ctx.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: intel.length });
+ const intelIsLive = dataState.mode === 'live' && dataState.timestamp !== null;
+ this.ctx.statusPanel?.updateFeed('Intel', intelIsLive
+   ? { status: 'ok', itemCount: intel.length }
+   : { status: 'error', itemCount: intel.length, errorMessage: `RSS adapter returned ${dataState.mode} data without live provenance` });
+ rssLoadResults.push({ itemCount: intel.length, dataState });
  collectedNews.push(...intel);
  this.flashMapForNews(intel);
  } else {
  delete this.ctx.newsByCategory.intel;
  console.error('[App] Intel feed failed:', intelResult[0]?.reason);
+ rssLoadResults.push({
+   itemCount: 0,
+   dataState: { mode: 'unavailable', timestamp: null, offline: false },
+ });
  }
  }
+ }
+
+ if (rssLoadResults.length > 0) {
+   const successfulUpdate = getRssSuccessfulUpdate(rssLoadResults);
+   if (successfulUpdate) {
+     this.ctx.statusPanel?.updateApi('RSS2JSON', { status: 'ok' });
+     dataFreshness.recordUpdate('rss', successfulUpdate.itemCount, successfulUpdate.updatedAt);
+   } else {
+     const aggregateState = summarizeAdapterDataStates(rssLoadResults.map((result) => result.dataState));
+     const staleReason = `one or more RSS loads returned ${aggregateState.mode} data without live provenance`;
+     this.ctx.statusPanel?.updateApi('RSS2JSON', { status: 'error' });
+     dataFreshness.recordError('rss', staleReason);
+   }
  }
 
  // Augment with NewsAPI and NewsData headlines (non-blocking, best-effort)
@@ -1519,20 +1605,23 @@ export class DataLoaderManager implements AppModule {
 
   async loadNatural(): Promise<void> {
  const [earthquakeResult, eonetResult] = await Promise.allSettled([
- withOfflineCache('earthquake-data', () => fetchEarthquakes(), 1 * 60 * 60 * 1000).then(r => r.data),
+ withOfflineCache('earthquake-data', () => fetchEarthquakesTracked(), 1 * 60 * 60 * 1000),
  fetchNaturalEvents(30),
  ]);
 
  if (earthquakeResult.status === 'fulfilled') {
- this.ctx.intelligenceCache.earthquakes = earthquakeResult.value;
- this.ctx.map?.setEarthquakes(earthquakeResult.value);
- ingestEarthquakes(earthquakeResult.value);
- checkGeofenceEarthquakes(earthquakeResult.value);
- ingestEarthquakesToPoL(earthquakeResult.value);
- ingestEarthquakesToTimeline(earthquakeResult.value);
- ingestEarthquakesToMatrix(earthquakeResult.value);
- ingestEarthquakesUnified(earthquakeResult.value);
- const eqObs = earthquakesToObservations(earthquakeResult.value);
+ const earthquakeSnapshot = earthquakeResult.value;
+ const earthquakeResultData = earthquakeSnapshot.data;
+ const earthquakes = earthquakeResultData.earthquakes;
+ this.ctx.intelligenceCache.earthquakes = earthquakes;
+ this.ctx.map?.setEarthquakes(earthquakes);
+ ingestEarthquakes(earthquakes);
+ checkGeofenceEarthquakes(earthquakes);
+ ingestEarthquakesToPoL(earthquakes);
+ ingestEarthquakesToTimeline(earthquakes);
+ ingestEarthquakesToMatrix(earthquakes);
+ ingestEarthquakesUnified(earthquakes);
+ const eqObs = earthquakesToObservations(earthquakes);
  ingestObservations(eqObs);
  if (eqObs.length > 0) {
    try {
@@ -1541,9 +1630,18 @@ export class DataLoaderManager implements AppModule {
      annotateModelOutput(`earthquake-batch-${latestId}`, 'score', { observations: eqObs.slice(0, 50) }, { algorithmId: 'big-event-detector', domain: 'earthquake' });
    } catch { /* assumption instrumentation is non-critical */ }
  }
- (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
+ (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakes);
+ const freshness = feedFreshnessFromSnapshot(earthquakeSnapshot);
+ const update = getEarthquakeSuccessfulUpdate(earthquakeResultData, freshness.fresh);
+ if (update) {
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
- dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
+ dataFreshness.recordUpdate('usgs', update.itemCount, update.updatedAt);
+ } else {
+ const staleReason = freshness.staleReason
+   ?? `USGS adapter returned ${earthquakeResultData.dataState.mode} data without live provenance`;
+ this.ctx.statusPanel?.updateApi('USGS', { status: 'error' });
+ dataFreshness.recordError('usgs', staleReason);
+ }
  // No recordDomainObservations here: this path reads through a 1-hour
  // offline cache and is gated on a map layer, so it cannot honour the
  // provider's 10 min TTL. loadUsgsSeismic owns the fusion vote.
@@ -1577,20 +1675,20 @@ export class DataLoaderManager implements AppModule {
  this.ctx.statusPanel?.updateApi('NASA EONET', { status: 'error' });
  }
 
- const hasEarthquakes = earthquakeResult.status === 'fulfilled' && earthquakeResult.value.length > 0;
+ const hasEarthquakes = earthquakeResult.status === 'fulfilled' && earthquakeResult.value.data.earthquakes.length > 0;
  const hasEonet = eonetResult.status === 'fulfilled' && eonetResult.value.length > 0;
  this.ctx.map?.setLayerReady('natural', hasEarthquakes || hasEonet);
  this.pushObservationsToSidecar();
 
  // Evaluate disaster auto-trigger (uses cached GDACS data — no extra fetch)
- const earthquakes = earthquakeResult.status === 'fulfilled' ? earthquakeResult.value : [];
+ const earthquakes = earthquakeResult.status === 'fulfilled' ? earthquakeResult.value.data.earthquakes : [];
 
  // Report elevated panels for correlation detector
  if (earthquakes.some(eq => eq.magnitude >= 6.5)) {
  reportElevatedPanel('earthquakes', 'Earthquakes');
  }
 
- withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
+ withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
  if (gdacs.some(e => e.alertLevel === 'Red')) {
  reportElevatedPanel('gdacs-alerts', 'GDACS Disaster Alerts');
  }
@@ -2237,11 +2335,12 @@ export class DataLoaderManager implements AppModule {
  // thing in the tick, long after the safety-critical chip publication.
  const openMeteoReadings: TempReading[] = [];
  const metNorwayReadings: TempReading[] = [];
+ let openMeteoSavedPlaceCount: number | null = null;
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
- const places = getSavedPlaces().slice(0, 3);
+ const places = getSavedPlaces().slice(0, 3).filter((place) => isUsableLatLon(place.lat, place.lon));
+ openMeteoSavedPlaceCount = places.length;
  await Promise.allSettled(places.map(async (place) => {
- if (!isUsableLatLon(place.lat, place.lon)) return;
  const [om, mn] = await Promise.allSettled([
  fetchOpenMeteoTemp(place.lat, place.lon),
  fetchMetNorwayTemp(place.lat, place.lon),
@@ -2259,6 +2358,16 @@ export class DataLoaderManager implements AppModule {
  const mnVote = tempVote('met-norway', metNorwayReadings);
  recordDomainObservations('open-meteo-forecast', omVote.observations, omVote.ok);
  recordDomainObservations('met-norway', mnVote.observations, mnVote.ok);
+ if (openMeteoSavedPlaceCount === 0) {
+ dataFreshness.recordUnknown('open-meteo', 'Add a saved place to start local forecasts.');
+ } else if (omVote.ok) {
+ // Success follows the validated adapter output, never the raw HTTP/readings.
+ dataFreshness.recordUpdate('open-meteo', omVote.observations.length);
+ } else {
+ dataFreshness.recordError('open-meteo', openMeteoSavedPlaceCount === null
+   ? 'Saved-place forecast setup could not be evaluated'
+   : 'Open-Meteo returned no validated saved-place forecast observations');
+ }
  }
 
  } catch (error) {
@@ -2979,7 +3088,12 @@ export class DataLoaderManager implements AppModule {
 
   async loadGDACSAlerts(): Promise<void> {
  try {
- const { data: events } = await withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000);
+ const snapshot = await withOfflineCache(
+   'gdacs-events',
+   () => this.fetchVerifiedGDACSEvents(),
+   1 * 60 * 60 * 1000,
+ );
+ const events = snapshot.data;
  this.ctx.intelligenceCache.gdacsAlerts = events;
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update(events);
  unifiedAlertStore.ingest(events.map(normalizeGDACSEvent));
@@ -2999,10 +3113,26 @@ export class DataLoaderManager implements AppModule {
  const domain = (event.eventType === 'TC' || event.eventType === 'FL' || event.eventType === 'DR') ? 'weather' : 'infrastructure';
  ingestCorrelationMatrix(lat, lon, domain, severity);
  }
+ const freshness = feedFreshnessFromSnapshot(snapshot);
+ if (!freshness.fresh) {
+ dataFreshness.recordError('gdacs', freshness.staleReason ?? 'GDACS update provenance unavailable');
+ }
  } catch (error) {
  console.warn('[gdacs-alerts] fetch failed', error);
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update([]);
+ dataFreshness.recordError('gdacs', String(error));
  }
+  }
+
+  private async fetchVerifiedGDACSEvents(): Promise<Awaited<ReturnType<typeof fetchGDACSEvents>>> {
+ const result = await fetchGDACSEventsTracked();
+ const update = getGDACSSuccessfulUpdate(result);
+ if (!update) {
+ dataFreshness.recordError('gdacs', 'GDACS adapter returned circuit-breaker fallback without successful provenance');
+ throw new Error('GDACS adapter returned circuit-breaker fallback without successful provenance');
+ }
+ dataFreshness.recordUpdate('gdacs', update.itemCount, update.updatedAt);
+ return result.events;
   }
 
   /** NOAA CO-OPS flood gauge observations — redundant source alongside USGS water data.
@@ -3579,7 +3709,22 @@ export class DataLoaderManager implements AppModule {
 
  try {
  economicPanel?.setLoading(true);
- const { data } = await withOfflineCache('economic-data', () => fetchFredData(), 4 * 60 * 60 * 1000);
+ const fredSnapshot = await withOfflineCache('economic-data', () => fetchFredDataTracked(), 4 * 60 * 60 * 1000);
+ const fredResult = fredSnapshot.data;
+ const data = fredResult.data;
+ const freshness = feedFreshnessFromSnapshot(fredSnapshot);
+ const update = getFredSuccessfulUpdate(fredResult, freshness.fresh);
+
+ if (!update) {
+ const staleReason = freshness.staleReason
+   ?? `FRED adapter returned ${fredResult.dataState.mode} data without live provenance`;
+ const fallbackTimestamp = getOldestValidTimestamp(freshness.staleTimestamp, fredResult.dataState.timestamp);
+ if (data.length > 0) economicPanel?.update(data, fallbackTimestamp);
+ economicPanel?.setErrorState(true, staleReason);
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ dataFreshness.recordError('economic', staleReason);
+ return;
+ }
 
  const postInfo = getCircuitBreakerCooldownInfo('FRED Economic');
  if (postInfo.onCooldown) {
@@ -3596,34 +3741,38 @@ export class DataLoaderManager implements AppModule {
  }
  economicPanel?.showRetrying();
  await new Promise(r => setTimeout(r, 20_000));
- const retryData = await fetchFredData();
- if (retryData.length === 0) {
+ const retryResult = await fetchFredDataTracked();
+ const retryUpdate = getFredSuccessfulUpdate(retryResult, true);
+ if (!retryUpdate || retryResult.data.length === 0) {
+ if (retryResult.data.length > 0) economicPanel?.update(retryResult.data, retryResult.dataState.timestamp);
  economicPanel?.setErrorState(true, 'FRED data temporarily unavailable — will retry');
  this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ dataFreshness.recordError('economic', 'FRED retry returned data without live provenance');
  return;
  }
  economicPanel?.setErrorState(false);
- economicPanel?.update(retryData);
+ economicPanel?.update(retryResult.data, retryUpdate.updatedAt);
  this.ctx.statusPanel?.updateApi('FRED', { status: 'ok' });
- dataFreshness.recordUpdate('economic', retryData.length);
+ dataFreshness.recordUpdate('economic', retryUpdate.itemCount, retryUpdate.updatedAt);
  return;
  }
 
  economicPanel?.setErrorState(false);
- economicPanel?.update(data);
+ economicPanel?.update(data, update.updatedAt);
  this.ctx.statusPanel?.updateApi('FRED', { status: 'ok' });
- dataFreshness.recordUpdate('economic', data.length);
+ dataFreshness.recordUpdate('economic', update.itemCount, update.updatedAt);
  } catch {
  if (isFeatureAvailable('economicFred')) {
  economicPanel?.showRetrying();
  try {
  await new Promise(r => setTimeout(r, 20_000));
- const retryData = await fetchFredData();
- if (retryData.length > 0) {
+ const retryResult = await fetchFredDataTracked();
+ const retryUpdate = getFredSuccessfulUpdate(retryResult, true);
+ if (retryUpdate && retryResult.data.length > 0) {
  economicPanel?.setErrorState(false);
- economicPanel?.update(retryData);
+ economicPanel?.update(retryResult.data, retryUpdate.updatedAt);
  this.ctx.statusPanel?.updateApi('FRED', { status: 'ok' });
- dataFreshness.recordUpdate('economic', retryData.length);
+ dataFreshness.recordUpdate('economic', retryUpdate.itemCount, retryUpdate.updatedAt);
  return;
  }
  } catch { /* fall through */ }
@@ -4176,7 +4325,7 @@ export class DataLoaderManager implements AppModule {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
  fetchFAACameras(),
  withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
- withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
+ withOfflineCache('gdacs-events', () => this.fetchVerifiedGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
  const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data, gdacsResult.data);
  this.ctx.map?.setFAACameras(scored);

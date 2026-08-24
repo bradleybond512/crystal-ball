@@ -30,9 +30,9 @@ export class EconomicPanel extends Panel {
  });
   }
 
-  public update(data: FredSeries[]): void {
+  public update(data: FredSeries[], updatedAt: number | null = Date.now()): void {
  this.fredData = data;
- this.lastUpdate = new Date();
+ this.lastUpdate = updatedAt === null ? null : new Date(updatedAt);
  this.render();
   }
 

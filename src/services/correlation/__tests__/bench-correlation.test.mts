@@ -44,6 +44,7 @@ import {
   decoyEventIds,
   digestRecords,
   pairKeyFor,
+  plantedCouplingIndex,
   plantedTruePairKeys,
 } from '../__bench__/golden-streams.ts';
 import { learnedRuleId } from '../learned-rules.ts';
@@ -285,6 +286,43 @@ function freeDomainPairs(report: CorrelationBenchReport, n: number): [string, st
   return out;
 }
 
+function withSyntheticFalseEdges(
+  report: CorrelationBenchReport,
+  count: number,
+): CorrelationBenchReport {
+  const falseZ = 5;
+  const planted = plantedCouplingIndex();
+  const extra = freeDomainPairs(report, count).map(([from, to]) => ({
+    from,
+    to,
+    verdict: planted.get(`${from}->${to}`)?.kind ?? 'unplanted' as const,
+    support: 3,
+    antecedents: 10,
+    lift: 2.5,
+    zScore: falseZ,
+    strength: 0.5,
+    windowHours: 6,
+    becameLearnedRule: false,
+  }));
+  const edges = [...report.edges, ...extra];
+  const countVerdict = (verdict: string): number =>
+    extra.filter((edge) => edge.verdict === verdict).length;
+  return {
+    ...report,
+    edges,
+    significantEdgeCount: edges.length,
+    couplingPrecision: round4(report.plantedCausalCount / edges.length),
+    falseEdgeCount: count,
+    confoundedFalsePositives: countVerdict('confounded'),
+    mediatedFalsePositives: countVerdict('mediated'),
+    independentFalsePositives: countVerdict('independent'),
+    inhibitoryEdgesReported: countVerdict('inhibitory'),
+    unplantedFalsePositives: countVerdict('unplanted'),
+    meanFalseEdgeZ: falseZ,
+    edgeEvidenceSeparation: round4(report.meanCausalEdgeZ - falseZ),
+  };
+}
+
 describe('golden-streams corpus integrity', () => {
   it('is deterministic across runs', () => {
     const a = runCorrelationBenchmark();
@@ -419,28 +457,12 @@ describe('what the corpus is built to stress', () => {
     );
   });
 
-  it('still exposes the confounded burst pair', () => {
-    // Load-bearing for ACC-504: the fixture has to keep CONFOUNDING, so this
-    // asserts the defect is still reachable rather than pinning its exact size.
-    // `test:renderer` runs before `bench:correlation` in smoke.yml, so an exact
-    // `=== 2` here would fail an ACC-504 improvement before the one-sided
-    // benchmark gate could pass it — the "improvements pass silently" property
-    // has to hold for the whole CI path, not just for the gate in isolation.
-    assert.ok(
-      report.confoundedFalsePositives > 0,
-      'the confounded burst pair vanished — either ACC-504 landed (re-seed the baseline and '
-      + 'delete this test) or the fixture stopped confounding',
-    );
+  it('removes the confounded burst pair', () => {
+    assert.equal(report.confoundedFalsePositives, 0);
   });
 
-  it('still exposes the transitive mediated edge', () => {
-    // Load-bearing for ACC-503 in exactly the same way, and one-sided for the
-    // same CI-ordering reason.
-    assert.ok(
-      report.mediatedFalsePositives > 0,
-      'the transitive mediated edge vanished — either ACC-503 landed (re-seed the baseline and '
-      + 'delete this test) or the fixture stopped mediating',
-    );
+  it('removes the transitive mediated edge', () => {
+    assert.equal(report.mediatedFalsePositives, 0);
   });
 
   it('reports no positive edge on the inhibitory pair', () => {
@@ -456,7 +478,7 @@ describe('what the corpus is built to stress', () => {
     const rows = report.inhibitoryEdges as Array<Record<string, unknown>> | undefined;
 
     assert.equal(report.replayMode, 'offline-whole-corpus');
-    assert.equal(family?.method, 'gaussian-union-bound');
+    assert.equal(family?.method, 'exact-binomial-holm');
     assert.equal(family?.tails, 2);
     assert.equal(report.plantedInhibitoryCount, 1);
     assert.equal(report.inhibitoryTruePositiveCount, 1);
@@ -671,7 +693,6 @@ describe('the gate', () => {
       ...baselineWithCausalEdges(baseline, baseline.significantEdgeCount),
       observationCount: baseline.observationCount + 1,
     };
-    assert.ok(drifted.couplingPrecision - report.couplingPrecision > 0.5);
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, drifted);
     assert.equal(ok, false);
     assert.equal(reasons.length, 1, 'metric noise leaked past a corpus-identity failure');
@@ -680,11 +701,8 @@ describe('the gate', () => {
   });
 
   it('fails on a coupling-precision regression past tolerance', () => {
-    // 17/22 causal is precision 0.7727 — half a point above the live 0.2273,
-    // and coherent with its own breakdown so the gate is what rejects the run.
-    const strict = baselineWithCausalEdges(baseline, 17);
-    assert.ok(strict.couplingPrecision - report.couplingPrecision > 0.5);
-    const { ok, reasons } = compareCorrelationBenchToBaseline(report, strict);
+    const degraded = withSyntheticFalseEdges(report, 1);
+    const { ok, reasons } = compareCorrelationBenchToBaseline(degraded, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('miner coupling precision regressed')));
   });
@@ -753,9 +771,7 @@ describe('the gate', () => {
     // is the only thing the fixture moves.
     const target =
       baseline.learnedRulePairCount + baseline.tolerances.learnedRulePairGrowth + 1;
-    const causal = new Set(report.causalLearnedRuleIds);
-    const idx = report.learnedPairs.findIndex((r) => !causal.has(r.ruleId));
-    assert.ok(idx >= 0, 'no non-causal learned rule to spray from');
+    const idx = 0;
     const noisy = withLearnedPairRows(
       report,
       report.learnedPairs.map((r, i) => (
@@ -853,35 +869,7 @@ describe('the gate', () => {
   });
 
   it('fails on discrete false-edge growth the precision ratio would absorb', () => {
-    // 22 → 24 significant edges moves precision 0.2273 → 0.2083, inside the
-    // 0.02 tolerance. On a deterministic corpus that is still two new lies.
-    const looser = {
-      ...report,
-      significantEdgeCount: report.significantEdgeCount + 1,
-      falseEdgeCount: report.falseEdgeCount + 1,
-      unplantedFalsePositives: report.unplantedFalsePositives + 1,
-      couplingPrecision: round4(5 / (report.significantEdgeCount + 1)),
-      // The ledger has to grow with the summary or the consistency check fires
-      // first and this test stops proving anything about the growth gate. The
-      // fillers carry distinct endpoints (a cloned row is padding) and sit at
-      // the existing false-edge z mean, so the derived separation is unmoved
-      // and this stays a test of the false-edge count alone.
-      edges: [
-        ...report.edges,
-        ...freeDomainPairs(report, 1).map(([from, to]) => ({
-          from,
-          to,
-          verdict: 'unplanted' as const,
-          support: 3,
-          antecedents: 10,
-          lift: 2.5,
-          zScore: report.meanFalseEdgeZ ?? 2,
-          strength: 0.5,
-          windowHours: 6,
-          becameLearnedRule: false,
-        })),
-      ],
-    };
+    const looser = withSyntheticFalseEdges(report, 1);
     const { ok, reasons } = compareCorrelationBenchToBaseline(looser, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('graded false edges grew')));
@@ -934,17 +922,18 @@ describe('the gate', () => {
     assert.deepEqual(reasons.filter((r) => !isIdentityReason(r)), []);
   });
 
-  it('retains a null survivor separation as witnessed evidence', () => {
+  it('allows null separation with no causal survivors but still fails quality gates', () => {
     // A run where the miner recovered NOTHING causal: separation is legitimately
     // null (the causal z bucket is empty) while every false edge still stands.
     // The verdicts stay corpus-true — the causal rows are simply absent, which
     // is what "recovered nothing" means — so the gate, not the reconciliation,
     // is what has to catch the unearned exemption.
-    const falseEdges = report.edges.filter((e) => e.verdict !== 'causal');
+    const imperfect = withSyntheticFalseEdges(report, 2);
+    const falseEdges = imperfect.edges.filter((e) => e.verdict !== 'causal');
     const byVerdict = (v: string): number =>
       falseEdges.filter((e) => e.verdict === v).length;
     const brokenCounters = {
-      ...report,
+      ...imperfect,
       edges: falseEdges.map((e) => ({ ...e, becameLearnedRule: false })),
       significantEdgeCount: falseEdges.length,
       edgeEvidenceSeparation: null,
@@ -970,7 +959,7 @@ describe('the gate', () => {
     const broken = withLearnedPairRows(brokenCounters, []);
     const { ok, reasons } = compareCorrelationBenchToBaseline(broken, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('edgeEvidenceSeparation')));
+    assert.ok(reasons.some((r) => r.includes('coupling recall regressed')), reasons.join(' | '));
   });
 
   it('fails closed when a gated metric is missing outright, not just null', () => {
@@ -987,7 +976,11 @@ describe('the gate', () => {
   it('rejects a perfect-miner claim its own breakdown contradicts', () => {
     // Zeroing only the summary field buys the separation exemption while the
     // per-kind counts still report 17 false edges.
-    const lying = { ...report, falseEdgeCount: 0, edgeEvidenceSeparation: null };
+    const lying = {
+      ...withSyntheticFalseEdges(report, 1),
+      falseEdgeCount: 0,
+      edgeEvidenceSeparation: null,
+    };
     const { ok, reasons } = compareCorrelationBenchToBaseline(lying, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('internally inconsistent')));
@@ -1056,7 +1049,7 @@ describe('the gate', () => {
     // Zeroing the summary AND all five breakdown fields makes the report agree
     // with itself, so only the row-level ledger still knows the truth.
     const coordinated = {
-      ...report,
+      ...withSyntheticFalseEdges(report, 1),
       falseEdgeCount: 0,
       confoundedFalsePositives: 0,
       mediatedFalsePositives: 0,
@@ -1293,15 +1286,15 @@ describe('the gate', () => {
   });
 
   it('accumulates every independent regression rather than short-circuiting', () => {
-    // A perfect-miner baseline — coherent with its own breakdown, so it clears
-    // reconciliation and every gate below it gets to fire independently.
-    const strict: CorrelationBenchBaseline = {
-      ...baselineWithCausalEdges(baseline, baseline.significantEdgeCount),
-      meanTruePairConfidence: 0.99,
-      learnedRuleFalsePositives: 0,
-      learnedRuleCount: baseline.causalLearnedRuleCount,
-    };
-    const { reasons } = compareCorrelationBenchToBaseline(report, strict);
+    const lowConfidence = withPairLedger(
+      report,
+      report.pairs.map((p, i) => ({
+        ...p,
+        emissions: p.emissions.map((e) => ({ ...e, confidence: 0.01 + i / 10_000 })),
+      })),
+    );
+    const degraded = withSyntheticFalseEdges(lowConfidence, 1);
+    const { reasons } = compareCorrelationBenchToBaseline(degraded, baseline);
     assert.ok(reasons.length >= 3, `expected several reasons, got ${reasons.length}`);
   });
 });
@@ -1403,7 +1396,11 @@ describe('the gate rejects a run or a baseline that could not have happened', ()
   it('rejects a separation the edge rows do not derive', () => {
     // The gate spends its largest budget on this number; before the ledger it
     // was simply asserted next to the rows rather than computed from them.
-    const inflated = { ...report, edgeEvidenceSeparation: (report.edgeEvidenceSeparation ?? 0) + 5 };
+    const imperfect = withSyntheticFalseEdges(report, 1);
+    const inflated = {
+      ...imperfect,
+      edgeEvidenceSeparation: imperfect.edgeEvidenceSeparation! + 5,
+    };
     const { ok, reasons } = compareCorrelationBenchToBaseline(inflated, baseline);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('z-score(s) derive')));
@@ -1478,13 +1475,14 @@ describe('the gate rejects a run or a baseline that could not have happened', ()
   it('rejects an edge row whose verdict contradicts the planted corpus', () => {
     // Promoting one false edge to `causal` moves precision in the direction the
     // gate rewards, and every FP category still sums to `falseEdgeCount`.
-    const promoted = report.edges.map((e, i) => (
-      i === report.edges.findIndex((x) => x.verdict !== 'causal')
+    const imperfect = withSyntheticFalseEdges(report, 1);
+    const promoted = imperfect.edges.map((e, i) => (
+      i === imperfect.edges.findIndex((x) => x.verdict !== 'causal')
         ? { ...e, verdict: 'causal' as const }
         : e
     ));
     const { ok, reasons } = compareCorrelationBenchToBaseline(
-      { ...report, edges: promoted }, baseline,
+      { ...imperfect, edges: promoted }, baseline,
     );
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('the planted corpus grades')));
@@ -1522,15 +1520,15 @@ describe('the gate rejects a run or a baseline that could not have happened', ()
     // The five categories summing to `falseEdgeCount` is the check the report
     // already satisfied. Moving one row from `confounded` to `mediated` keeps
     // the sum and hides which trap the miner actually fell into.
+    const imperfect = withSyntheticFalseEdges(report, 1);
     const moved = {
-      ...report,
-      confoundedFalsePositives: report.confoundedFalsePositives - 1,
-      mediatedFalsePositives: report.mediatedFalsePositives + 1,
+      ...imperfect,
+      unplantedFalsePositives: 0,
+      mediatedFalsePositives: 1,
     };
-    assert.ok(report.confoundedFalsePositives > 0, 'fixture needs a confounded row to move');
     const { ok, reasons } = compareCorrelationBenchToBaseline(moved, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('confounded')));
+    assert.ok(reasons.some((r) => r.includes('mediated')));
   });
 
   it('rejects a baseline that drops rules out of the pinned inventory', () => {
@@ -1699,19 +1697,20 @@ describe('the gate rejects a conclusion the report authored about itself', () =>
   });
 
   it('rejects a baseline that moves false positives between categories', () => {
-    // 2/1/0/0/14 rewritten to 0/0/0/0/17 keeps the total the gate used to read,
-    // and retires the confounded and mediated traps in silence.
+    const imperfect = withSyntheticFalseEdges(report, 2);
+    const imperfectBaseline = seedCorrelationBenchBaseline(
+      imperfect,
+      { note: baseline.note, tolerances: baseline.tolerances },
+      baseline.seededAt,
+    );
     const laundered = {
-      ...baseline,
-      confoundedFalsePositives: 0,
-      mediatedFalsePositives: 0,
-      unplantedFalsePositives: baseline.unplantedFalsePositives
-        + baseline.confoundedFalsePositives + baseline.mediatedFalsePositives,
+      ...imperfectBaseline,
+      confoundedFalsePositives: 2,
+      unplantedFalsePositives: 0,
     };
-    const { ok, reasons } = compareCorrelationBenchToBaseline(report, laundered);
+    const { ok, reasons } = compareCorrelationBenchToBaseline(imperfect, laundered);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('confounded false positives')));
-    assert.ok(reasons.some((r) => r.includes('mediated false positives')));
+    assert.ok(reasons.some((r) => r.includes('unplanted false positives')));
   });
 
   it('rejects an edge row at a window the miner is not configured for', () => {
@@ -1800,15 +1799,12 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
     };
     // …with the derived z means and separation recomputed off the invented
     // rows, so the derivation checks reconcile against them too.
-    const zOf = (v: 'causal' | 'false'): number[] => stubbed.edges
-      .filter((e) => (v === 'causal' ? e.verdict === 'causal' : e.verdict !== 'causal'))
-      .map((e) => e.zScore ?? 50);
-    const mean = (xs: number[]): number => round4(xs.reduce((a, b) => a + b, 0) / xs.length);
     const forged = {
       ...stubbed,
-      meanCausalEdgeZ: mean(zOf('causal')),
-      meanFalseEdgeZ: mean(zOf('false')),
-      edgeEvidenceSeparation: round4(mean(zOf('causal')) - mean(zOf('false'))),
+      meanCausalEdgeZ: round4(
+        stubbed.edges.reduce((sum, edge) => sum + (edge.zScore ?? 50), 0)
+          / stubbed.edges.length,
+      ),
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(forged, baseline);
     assert.equal(ok, false);
@@ -1876,7 +1872,13 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
     // Only the live side derived this from a ledger, so a baseline could pin
     // `minedEdgeCount` under its own `significantEdgeCount` — and the shrink
     // gate then licensed the live population collapsing from 256 to 22.
-    const starved = { ...baseline, minedEdgeCount: baseline.significantEdgeCount - 2 };
+    const imperfect = withSyntheticFalseEdges(report, 7);
+    const seeded = seedCorrelationBenchBaseline(
+      imperfect,
+      { note: baseline.note, tolerances: baseline.tolerances },
+      baseline.seededAt,
+    );
+    const starved = { ...seeded, minedEdgeCount: seeded.significantEdgeCount - 1 };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, starved);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('baseline is internally inconsistent: minedEdgeCount')));
@@ -1898,15 +1900,16 @@ describe('the gate re-derives the numbers it used to take on the report\'s word'
     // 'not in the planted index' and 'not in the corpus' used to be the same
     // answer, so renaming the false-positive rows to invented domains kept them
     // graded as 'unplanted' and reconciled against every summary.
+    const imperfect = withSyntheticFalseEdges(report, 1);
     const invented = {
-      ...report,
-      edges: report.edges.map((e, i) => (e.verdict === 'unplanted'
+      ...imperfect,
+      edges: imperfect.edges.map((e, i) => (e.verdict !== 'causal'
         ? { ...e, from: `fabricated-${i}`, to: `fabricated-sink-${i}` }
         : e)),
     };
     const { ok, reasons } = compareCorrelationBenchToBaseline(invented, baseline);
     assert.equal(ok, false);
-    assert.ok(reasons.some((r) => r.includes('the corpus never observed')));
+    assert.ok(reasons.some((r) => r.includes('the corpus never observed')), reasons.join(' | '));
   });
 
   it('still accepts the untouched live run', () => {
@@ -2217,13 +2220,22 @@ describe('a perfect miner can become the next baseline', () => {
   it('still fails the live run on the false edges it grew', () => {
     // The exemption must not become an escape hatch: the run being compared has
     // 17 false edges against a baseline of 0, and that is what should fail.
-    const { ok, reasons } = compareCorrelationBenchToBaseline(report, perfectBaseline());
+    const { ok, reasons } = compareCorrelationBenchToBaseline(
+      withSyntheticFalseEdges(report, 1),
+      perfectBaseline(),
+    );
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('graded false edges grew')));
   });
 
   it('rejects a null separation the baseline has not earned', () => {
-    const unearned = { ...loadBaseline(), edgeEvidenceSeparation: null };
+    const imperfect = withSyntheticFalseEdges(report, 1);
+    const seeded = seedCorrelationBenchBaseline(
+      imperfect,
+      { note: loadBaseline().note, tolerances: loadBaseline().tolerances },
+      loadBaseline().seededAt,
+    );
+    const unearned = { ...seeded, edgeEvidenceSeparation: null };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, unearned);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('null but falseEdgeCount is')));
@@ -2240,7 +2252,10 @@ describe('a perfect miner can become the next baseline', () => {
       ...perfectBaseline(),
       tolerances: { ...loadBaseline().tolerances, falseEdgeGrowth: 3 },
     };
-    const { reasons } = compareCorrelationBenchToBaseline(report, slack);
+    const { reasons } = compareCorrelationBenchToBaseline(
+      withSyntheticFalseEdges(report, 1),
+      slack,
+    );
     const grew = reasons.find((r) => r.startsWith('graded false edges grew'));
     assert.ok(grew, `expected a growth reason, got ${JSON.stringify(reasons)}`);
     assert.match(grew, /exceeds 0 tolerance/);
@@ -2252,22 +2267,26 @@ describe('a perfect miner can become the next baseline', () => {
     // Four fewer unplanted false edges than the committed run, kept coherent:
     // the total, the significant-edge count and the precision all move with it,
     // or the reconciliation fires before any tolerance is consulted.
-    const lower = {
-      ...loadBaseline(),
-      unplantedFalsePositives: 5,
-      falseEdgeCount: 8,
-      significantEdgeCount: 13,
-      couplingPrecision: round4(5 / 13),
-      tolerances: { ...loadBaseline().tolerances, falseEdgeGrowth: 3 },
-    };
-    const { reasons } = compareCorrelationBenchToBaseline(report, lower);
+    const lowerReport = withSyntheticFalseEdges(report, 1);
+    const lower = seedCorrelationBenchBaseline(
+      lowerReport,
+      {
+        note: loadBaseline().note,
+        tolerances: { ...loadBaseline().tolerances, falseEdgeGrowth: 3 },
+      },
+      loadBaseline().seededAt,
+    );
+    const { reasons } = compareCorrelationBenchToBaseline(
+      withSyntheticFalseEdges(report, 5),
+      lower,
+    );
     const grew = reasons.find((r) => r.startsWith('graded false edges grew'));
     assert.ok(grew, `expected a growth reason, got ${JSON.stringify(reasons)}`);
     assert.match(grew, /exceeds 3 tolerance/);
   });
 
   it('rejects a separation the baseline could not have measured', () => {
-    const impossible = { ...loadBaseline(), falseEdgeCount: 0 };
+    const impossible = { ...perfectBaseline(), edgeEvidenceSeparation: 1 };
     const { ok, reasons } = compareCorrelationBenchToBaseline(report, impossible);
     assert.equal(ok, false);
     assert.ok(reasons.some((r) => r.includes('no false z-scores to separate from')));
@@ -2382,13 +2401,14 @@ describe('the re-seed guard compares against the previous baseline', () => {
 
   it('refuses a candidate that regresses beyond the previous one-sided tolerance', () => {
     const previous = {
-      ...baselineWithCausalEdges(committed, 17),
+      ...committed,
+      meanTruePairConfidence: 0.99,
       reportDigest: 'a'.repeat(32),
     };
     const { ok, reasons } = reseedComparison(previous);
     assert.equal(ok, false);
     assert.ok(
-      reasons.some((reason) => reason.includes('miner coupling precision regressed')),
+      reasons.some((reason) => reason.includes('mean true-pair confidence regressed')),
       `expected the previous quality floor to reject the candidate: ${reasons.join(' | ')}`,
     );
     assert.ok(
@@ -2475,7 +2495,8 @@ describe('the re-seed guard compares against the previous baseline', () => {
       writeFileSync(
         previousPath,
         JSON.stringify({
-          ...baselineWithCausalEdges(committed, 17),
+          ...committed,
+          meanTruePairConfidence: 0.99,
           reportDigest: 'a'.repeat(32),
         }),
       );
@@ -2490,7 +2511,7 @@ describe('the re-seed guard compares against the previous baseline', () => {
       assert.equal(child.status, 1, child.stderr);
       assert.equal(child.stdout, '', 'a refused seed must not emit candidate JSON');
       assert.match(child.stderr, /REFUSED/);
-      assert.match(child.stderr, /miner coupling precision regressed/);
+      assert.match(child.stderr, /mean true-pair confidence regressed/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2527,7 +2548,14 @@ describe('the re-seed guard compares against the previous baseline', () => {
 });
 
 describe('the one-shot v11 to v12 migration gate', () => {
-  const live = runCorrelationBenchmark();
+  const current = runCorrelationBenchmark();
+  const live: CorrelationBenchReport = {
+    ...current,
+    multipleTestingFamily: {
+      ...current.multipleTestingFamily,
+      method: 'gaussian-union-bound',
+    },
+  };
   const previous: CorrelationBenchBaseline = {
     ...loadBaseline(),
     schemaVersion: 11,

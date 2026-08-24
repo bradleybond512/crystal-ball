@@ -1,15 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  benjaminiHochberg,
+  declusterDomainEvents,
   DEFAULT_WINDOWS_MS,
+  exactBinomialTail,
+  holmAdjust,
   mineLeadLag,
+  posteriorEvidence,
   type DomainEvent,
   type PromotingLeadLagEdge,
 } from '../lead-lag';
 import { learnedRulesFromEdges, learnedRuleId, syncLearnedRules, MAX_LEARNED_RULES } from '../learned-rules';
 import { CorrelateEngine } from '../../intelligence/correlate-engine';
+import {
+  allGoldenObservations,
+  CORPUS_SPAN_DAYS,
+  CORPUS_T0,
+} from '../__bench__/golden-streams.ts';
 
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 const T0 = 1_000_000_000;
 
 function ev(domain: string, at: number): DomainEvent {
@@ -51,7 +62,7 @@ test('records the exact two-tailed multiple-testing family across eligible order
     pairWindowTests: 8,
     tails: 2,
     criticalAbsZ: Math.sqrt(2 * Math.log((2 * 8) / 0.05)),
-    method: 'gaussian-union-bound',
+    method: 'exact-binomial-holm',
   });
   const oneWindow = mineLeadLag(events, { windowsMs: [HOUR] }).family!;
   assert.equal(family && family.pairWindowTests, 2 * oneWindow.pairWindowTests);
@@ -269,7 +280,7 @@ test('positive admission applies support and configurable z gates at full precis
   ));
 });
 
-test('mining output is deterministic across input order and has no statistical caps', () => {
+test('mining output is deterministic, uncapped, and keeps mediated evidence out of promotion', () => {
   const events = [
     ...coupledHistory(),
     ...absentFollowHistory(20, [8, 16]).map((event) => ({
@@ -289,7 +300,9 @@ test('mining output is deterministic across input order and has no statistical c
     }
   }
   const uncapped = mineLeadLag(manyEdges, { windowsMs: [HOUR] });
-  assert.equal(uncapped.promoting.length, 15);
+  assert.equal(uncapped.candidates.length, 15);
+  assert.equal(uncapped.promoting.length, 5);
+  assert.equal(uncapped.candidates.filter((edge) => edge.redundancy?.kind === 'chain').length, 10);
 });
 
 test('genuine lagged coupling is mined with high lift and significance', () => {
@@ -383,12 +396,12 @@ test('learnedRulesFromEdges caps at MAX_LEARNED_RULES by strength', () => {
   assert.ok(!rules.some((r) => r.id === learnedRuleId({ from: 'd0', to: 'e0' })));
 });
 
-test('learned rule window comes from lag p90, clamped to [1h, 7d]', () => {
+test('learned rule window comes from the tested window, clamped to [1h, 7d]', () => {
   const [rule] = learnedRulesFromEdges([fakeEdge('x', 'y', 0.9)]);
-  assert.equal(rule!.timeWindowMs, 3 * HOUR);
-  const [tiny] = learnedRulesFromEdges([{ ...fakeEdge('x', 'y', 0.9), lagP90Ms: 1000 }]);
+  assert.equal(rule!.timeWindowMs, 6 * HOUR);
+  const [tiny] = learnedRulesFromEdges([{ ...fakeEdge('x', 'y', 0.9), windowMs: 1000 }]);
   assert.equal(tiny!.timeWindowMs, HOUR);
-  const [huge] = learnedRulesFromEdges([{ ...fakeEdge('x', 'y', 0.9), lagP90Ms: 99 * 24 * HOUR }]);
+  const [huge] = learnedRulesFromEdges([{ ...fakeEdge('x', 'y', 0.9), windowMs: 99 * 24 * HOUR }]);
   assert.equal(huge!.timeWindowMs, 7 * 24 * HOUR);
 });
 
@@ -433,4 +446,118 @@ test('syncLearnedRules is idempotent for an unchanged set', () => {
 test('DEFAULT_WINDOWS_MS spans hours to days', () => {
   assert.ok(DEFAULT_WINDOWS_MS.includes(HOUR));
   assert.ok(DEFAULT_WINDOWS_MS.includes(72 * HOUR));
+});
+
+test('exact binomial tails stay accurate for sparse support', () => {
+  assert.ok(Math.abs(exactBinomialTail(5, 3, 0.1, 'upper') - 0.00856) < 1e-12);
+  assert.ok(Math.abs(exactBinomialTail(5, 1, 0.1, 'lower') - 0.91854) < 1e-12);
+});
+
+test('Holm and Benjamini-Hochberg adjustments preserve original order', () => {
+  const p = [0.04, 0.001, 0.03, 0.2];
+  assert.deepEqual(
+    holmAdjust(p).map((value) => Number(value.toFixed(3))),
+    [0.09, 0.004, 0.09, 0.2],
+  );
+  assert.deepEqual(
+    benjaminiHochberg(p).map((value) => Number(value.toFixed(3))),
+    [0.053, 0.004, 0.053, 0.2],
+  );
+});
+
+test('automatic declustering collapses tight repeated bursts without merging quiet episodes', () => {
+  const events: DomainEvent[] = [];
+  for (const day of [0, 6, 12, 18, 24]) {
+    const anchor = T0 + day * 24 * HOUR;
+    events.push(ev('bursty', anchor), ev('bursty', anchor + 20 * 60_000), ev('bursty', anchor + 40 * 60_000));
+  }
+  events.push(ev('steady', T0), ev('steady', T0 + 6 * 24 * HOUR), ev('steady', T0 + 12 * 24 * HOUR));
+
+  const clustered = declusterDomainEvents(events);
+
+  assert.equal(clustered.filter((event) => event.domain === 'bursty').length, 5);
+  assert.equal(clustered.filter((event) => event.domain === 'steady').length, 3);
+});
+
+test('Bayesian evidence exposes non-saturating posterior log odds and decision utility', () => {
+  const moderate = posteriorEvidence({ support: 4, antecedentCount: 10, expectedRate: 0.1 });
+  const strong = posteriorEvidence({ support: 8, antecedentCount: 10, expectedRate: 0.1 });
+
+  assert.ok(Number.isFinite(moderate.posteriorLogOdds));
+  assert.ok(Number.isFinite(strong.posteriorLogOdds));
+  assert.ok(strong.posteriorLogOdds > moderate.posteriorLogOdds);
+  assert.ok(strong.expectedUtility > moderate.expectedUtility);
+});
+
+test('a mediated shortcut is retained as evidence but excluded from promoting rules', () => {
+  const events: DomainEvent[] = [];
+  for (let index = 0; index < 12; index++) {
+    const anchor = T0 + index * 4 * 24 * HOUR;
+    events.push(ev('x', anchor), ev('m', anchor + 45 * 60_000), ev('z', anchor + 2 * HOUR));
+  }
+
+  const result = mineLeadLag(events, { windowsMs: [HOUR, 6 * HOUR] });
+  const shortcut = result.candidates.find((edge) => edge.from === 'x' && edge.to === 'z');
+
+  assert.equal(shortcut?.redundancy?.kind, 'chain');
+  assert.ok(result.promoting.some((edge) => edge.from === 'x' && edge.to === 'm'));
+  assert.ok(result.promoting.some((edge) => edge.from === 'm' && edge.to === 'z'));
+  assert.ok(!result.promoting.some((edge) => edge.from === 'x' && edge.to === 'z'));
+});
+
+test('reciprocal within-burst evidence is demoted as directionally ambiguous', () => {
+  const events: DomainEvent[] = [];
+  for (let burst = 0; burst < 8; burst++) {
+    const anchor = T0 + burst * 5 * 24 * HOUR;
+    for (let item = 0; item < 3; item++) {
+      events.push(ev('a', anchor + item * 40 * 60_000));
+      events.push(ev('b', anchor + item * 40 * 60_000 + 20 * 60_000));
+    }
+  }
+
+  const result = mineLeadLag(events, { windowsMs: [HOUR, 6 * HOUR] });
+  const ambiguous = result.candidates.filter((edge) =>
+    (edge.from === 'a' && edge.to === 'b') || (edge.from === 'b' && edge.to === 'a'));
+
+  assert.ok(ambiguous.some((edge) => edge.redundancy?.kind === 'reciprocal'));
+  assert.ok(!result.promoting.some((edge) =>
+    (edge.from === 'a' && edge.to === 'b') || (edge.from === 'b' && edge.to === 'a')));
+});
+
+test('a promoting edge cannot contradict its significant inhibitory reverse', () => {
+  const events = allGoldenObservations().map((observation) => ({
+    domain: observation.domain,
+    at: observation.timestamp,
+  }));
+  const result = mineLeadLag(events, {
+    observationEndMs: CORPUS_T0 + CORPUS_SPAN_DAYS * DAY,
+  });
+  const reverse = result.candidates.find((edge) =>
+    edge.from === 'escalation' && edge.to === 'calm-signal');
+
+  assert.ok(result.inhibitory.some((edge) =>
+    edge.from === 'calm-signal' && edge.to === 'escalation'));
+  assert.equal(reverse?.redundancy?.kind as string | undefined, 'inhibitory-reverse');
+  assert.ok(!result.promoting.some((edge) =>
+    edge.from === 'escalation' && edge.to === 'calm-signal'));
+});
+
+test('learned rules use the tested window and rank by non-saturating evidence', () => {
+  const weaker = {
+    ...fakeEdge('weak', 'effect', 1),
+    windowMs: HOUR,
+    lagP90Ms: 6 * HOUR,
+    rankingScore: 4,
+  };
+  const stronger = {
+    ...fakeEdge('strong', 'effect', 1),
+    windowMs: 6 * HOUR,
+    lagP90Ms: HOUR,
+    rankingScore: 9,
+  };
+
+  const rules = learnedRulesFromEdges([weaker, stronger]);
+
+  assert.equal(rules[0]?.id, learnedRuleId(stronger));
+  assert.equal(rules[0]?.timeWindowMs, 6 * HOUR);
 });

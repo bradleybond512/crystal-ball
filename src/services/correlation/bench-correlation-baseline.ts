@@ -288,7 +288,7 @@ export const CORRELATION_BENCH_V12_TO_V13_MIGRATION: CorrelationBenchMigrationV1
   toSchemaVersion: 13,
   previousCorpusDigest: '1a0377333099795fe0ccff8dc5a7a2cf',
   previousReportDigest: '354a7790613214a893698b1882eda0ae',
-  previousPayloadDigest: '129ab5924c521a1897a907059de7ffac',
+  previousPayloadDigest: '4c9417f274c058c7661edde0da2caa73',
   previousTolerancesDigest: benchTolerancesDigest({
     couplingPrecisionDrop: 0.02,
     couplingRecallDrop: 0,

@@ -1645,10 +1645,15 @@ Outcome — delivered:
   mediated or confounded shortcut while the observation itself survives for
   inspection.
 
-This closes the six systematic near-coincidence edges (z = 4.63) that the
-ACC-501 baseline predicted would survive any multiple-comparisons correction,
-because they were never noise — they were the S2 grid-storm anchors sitting a
-fixed interval ahead of the S8 chain triplets.
+The six systematic near-coincidence edges (z = 4.63) that the ACC-501 baseline
+flagged — the S2 grid-storm anchors sitting a fixed interval ahead of the S8
+chain triplets — are indeed rejected in the schema-13 result, but **not by this
+filter**: they carry no redundancy annotation, and it is ACC-504's admission
+gates that reject them (Holm-adjusted p ≈ 0.216, posterior ≈ 0.785, negative
+expected utility). Cross-agent review corrected an earlier draft that credited
+the rejection to ACC-503 and asserted the edges would survive "any"
+multiple-comparisons correction; the exact-binomial-Holm result disproves that
+assertion.
 
 ### ACC-504 — Dispersion correction for bursty streams
 
@@ -1691,12 +1696,15 @@ Combined ACC-503 + ACC-504 benchmark movement, at unchanged recall 1.0:
 | Learned rules | 12 | 5 |
 | False learned rules | 7 | 0 |
 | Learned-pair blast radius | 102 | 32 |
-| Couplings evicted at cap | 2 | 0 |
 
 All five planted causal couplings and the planted inhibitory edge remain
-recovered; inhibitory precision and recall stay at 1.0/1.0. The two couplings
-previously evicted at `MAX_LEARNED_RULES` by burst artefacts — `macro→maritime`
-and `space→infra` — are both promoted again.
+recovered; inhibitory precision and recall stay at 1.0/1.0.
+
+Correction (cross-agent review, 2026-08-24): an earlier draft of this table
+claimed cap evictions fell from 2 to 0. That was wrong — the schema-12 baseline
+already recorded `causalCouplingsLostToCap: []`, so no causal coupling was ever
+evicted at `MAX_LEARNED_RULES` and the movement was 0 to 0. The precision gain
+came from rejecting false edges, not from freeing cap slots.
 
 Verification evidence (re-run independently on a clean worktree at main
 `8da854fe`, 2026-08-24):
@@ -1710,10 +1718,24 @@ Verification evidence (re-run independently on a clean worktree at main
 
 Known limitation:
 
-- benchmark recall is measured only against couplings that clear the critical
-  threshold by a wide margin (surviving edges sit at z 10.77–26.72 against
-  `criticalAbsZ` 4.6219). Recall near the decision boundary is unmeasured —
+- benchmark recall is measured only against couplings that clear the admission
+  gate by a wide margin. Recall near the decision boundary is unmeasured —
   ACC-508 owns closing that gate.
+
+Note on the decision boundary (corrected in cross-agent review, 2026-08-24):
+promotion is a conjunction, not a z threshold —
+
+```text
+lift >= 2 && support >= 3 && zScore >= minZ (default 2)
+  && adjustedPValue <= alpha (0.05, Holm over the eligible pair family)
+  && posteriorProbability >= 0.8
+  && expectedUtility > 0
+```
+
+`criticalAbsZ` (4.6219) gates **inhibitory** edges only — see
+`isInhibitorySignificant()`. Any reasoning that treats `criticalAbsZ` as the
+promoting-edge threshold, including margin ratios computed against it, is
+measuring the wrong boundary.
 
 ### ACC-505 — Per-regime correlation reliability
 
@@ -1748,9 +1770,15 @@ Dependencies: ACC-505
 
 The `edge-confidence.ts` kernel multiplies six factors —
 `base × temporal × spatial × entity × reliability × regime`, clamped to
-`[0.2, 1]` — and every factor weight is currently a hard-coded constant. None of
-them are declared tunable, so the self-tuning loop reports `no_tunable` for the
-correlation edge algorithm and cannot improve it from observed outcomes.
+`[0.2, 1]`. Several of those factors are dynamic inputs; what is hard-coded is
+the kernel's own parameters (the per-factor clamp bounds and the value floor).
+
+Two things are missing, and both are required: the kernel parameters are not
+declared as bounded tunables, **and** no correlation edge algorithm is
+registered in `algorithm-registry` at all — the closest entry is
+`correlation-feedback`, which is a different algorithm. So the self-tuning loop
+does not report `no_tunable` for the edge kernel; it has nothing to report on,
+because the algorithm does not exist as a tuning target.
 
 Declare the kernel factor weights as bounded tunables in
 `tunable-params-store`, defaults equal to the current constants so an empty
@@ -1799,23 +1827,39 @@ Dependencies: ACC-503 (DONE), ACC-504 (DONE)
 
 ACC-502 through ACC-504 moved the miner's failure mode from false positives to
 possible false negatives, and the frozen benchmark cannot currently see the new
-mode. Every planted causal coupling clears `criticalAbsZ` by 2.3x to 5.8x, and
-every test in `lead-lag.test.mts` containing "weak" asserts *rejection*, so
-`couplingRecall: 1.0` and `couplingRecallDrop: 0` today certify only that the
-miner still finds couplings it could not plausibly miss.
+mode. No planted promoting coupling exercises the admission boundary: every one
+clears it comfortably, so `couplingRecall: 1.0` and `couplingRecallDrop: 0`
+certify only that the miner still finds couplings it could not plausibly miss.
 
 The operational risk this leaves open is specific: a real but statistically
 marginal coupling — which is what a novel cross-domain signal looks like on
 first appearance, and the case the product exists to catch — can be discarded
 silently while the gate reports a clean 1.0/1.0.
 
-Plant at least one additional causal coupling in `__bench__/golden-streams.ts`
-calibrated to roughly 1.3-1.6x critical z, gate on its recovery, and record the
-realised margin in the baseline so a future tightening of the correction that
-would drop it fails the gate rather than passing it. The near-threshold
-coupling must be distinguishable from the existing decoy and confounder
-streams, so its planted truth has to be asserted in `golden-streams.ts`
-alongside the others rather than inferred.
+**Target the real gate.** Promotion requires all six of `lift >= 2`,
+`support >= 3`, `zScore >= minZ`, `adjustedPValue <= alpha`,
+`posteriorProbability >= 0.8`, and `expectedUtility > 0`. A near-threshold
+fixture must be calibrated against whichever of these actually binds for a
+marginal coupling — in this corpus the Holm-adjusted exact p-value and the
+posterior floor bind long before `minZ` does — and the recorded margin must be
+the distance to that binding gate, not a ratio against `criticalAbsZ`, which
+governs inhibition and is not a promotion threshold at all.
+
+Deliverables:
+
+- plant at least one additional causal coupling in `__bench__/golden-streams.ts`
+  sitting just inside the admission boundary, with its planted truth asserted
+  explicitly alongside the existing decoys and confounders so it is
+  distinguishable from them rather than inferred;
+- gate on its recovery, and record in the baseline **which gate binds** and the
+  realised margin to it, so a future tightening that would drop the coupling
+  fails the gate rather than passing it;
+- the calibration must be stable under family-size drift. Adding a stream
+  changes `eligibleOrderedPairs`, which moves the Holm threshold, so a fixture
+  pinned to an absolute p-value would silently drift across the boundary.
+  Calibrate and assert against the realised margin recomputed from the run, and
+  fail the gate if the margin moves outside a recorded tolerance in either
+  direction — too far inside means the fixture has stopped testing the boundary.
 
 ## Phase 6 — Evaluate better statistical models
 

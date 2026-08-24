@@ -22,7 +22,12 @@
  * `wm-situation-store-v2`.
  */
 
-import { CorrelateEngine, type CorrelatedPair, type EdgeType } from './correlate-engine';
+import {
+  CorrelateEngine,
+  type CorrelatedPair,
+  type CorrelationResult,
+  type EdgeType,
+} from './correlate-engine';
 import { builtInCorrelationRules } from './built-in-correlation-rules';
 import {
   recordCorrelationBatch,
@@ -737,6 +742,26 @@ export class SituationStoreV2 {
     const result = changedResult(mutations);
     this.schedulePersist();
     this.notify(result);
+    return result;
+  }
+
+  publishIncrementalCorrelation(
+    current: ObservationEvent,
+    history: readonly ObservationEvent[],
+  ): CorrelationResult {
+    const correlatedAt = this.clock();
+    const result = this.engine.correlateIncremental(
+      current,
+      history,
+      new Date(correlatedAt),
+    );
+    recordCorrelationBatch(
+      this.engine,
+      result.observationsConsidered,
+      result.pairs,
+      correlatedAt,
+    );
+    this.publishPairs(result.pairs);
     return result;
   }
 

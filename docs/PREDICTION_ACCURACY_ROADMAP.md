@@ -1776,7 +1776,16 @@ Dependencies: ACC-502 (DONE)
 
 Production `SituationStoreV2.ingest()` is invoked with one event at a time, so
 the correlation engine cannot form learned-rule pairs even when rules are
-installed. Introduce a bounded, time-windowed event handoff that preserves
+installed. The live producer is `situation-hypothesis-bridge.ts`, whose queue
+calls `store.ingest([event])` once per `schedule()` tick.
+
+The singleton shape is deliberate, not an oversight: a single `ingest()` runs
+the correlate engine plus a full `SituationStoreV2` notify fan-out
+(meta-confidence, counterfactuals, bias, panels), and a boot burst of events
+run synchronously through it previously wedged the main thread for 30s+ and
+tripped the renderer-watchdog reload loop. Any fix that simply widens the batch
+at this call site reintroduces that hang, so the handoff must decouple pair
+formation from the synchronous fan-out rather than enlarging it. Introduce a bounded, time-windowed event handoff that preserves
 startup and ingest latency, deduplicates events, expires history, and never
 allows learned correlation to delay safety-critical ingestion. Prove the live
 path with a deterministic multi-call fixture and require liveness diagnostics

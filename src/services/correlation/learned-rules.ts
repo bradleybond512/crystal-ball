@@ -28,7 +28,9 @@ export function learnedRuleId(edge: Pick<PromotingLeadLagEdge, 'from' | 'to'>): 
 /** Build capped, strength-ranked rules from significant edges. */
 export function learnedRulesFromEdges(edges: readonly PromotingLeadLagEdge[]): CorrelationRule[] {
   const ranked = [...edges]
-    .sort((a, b) => b.strength - a.strength || b.support - a.support)
+    .sort((a, b) =>
+      (b.rankingScore ?? b.strength) - (a.rankingScore ?? a.strength)
+      || b.support - a.support)
     .slice(0, MAX_LEARNED_RULES);
   return ranked.map((edge) => toRule(edge));
 }
@@ -36,7 +38,7 @@ export function learnedRulesFromEdges(edges: readonly PromotingLeadLagEdge[]): C
 function toRule(edge: PromotingLeadLagEdge): CorrelationRule {
   const from = edge.from;
   const to = edge.to;
-  const windowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, edge.lagP90Ms));
+  const windowMs = Math.max(MIN_WINDOW_MS, Math.min(MAX_WINDOW_MS, edge.windowMs));
   return {
     id: learnedRuleId(edge),
     name: `Learned: ${from} → ${to}`,

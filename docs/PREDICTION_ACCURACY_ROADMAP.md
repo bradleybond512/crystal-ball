@@ -893,7 +893,7 @@ These tasks retain their detailed designs in
 | ACC-504 | DONE | Dispersion correction for bursty streams | ACC-501 (DONE) |
 | ACC-505 | TODO | Per-regime correlation reliability | ACC-501 (DONE) |
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
-| ACC-507 | TODO | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
+| ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
@@ -1810,7 +1810,11 @@ values would have to be re-derived once the reliability input changes shape.
 
 ### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
 
-Status: `TODO`
+Status: `DONE`
+
+Owner: Codex
+Branch: `codex/acc-507-bounded-correlation`
+PR: #1665
 
 Dependencies: ACC-502 (DONE)
 
@@ -1830,6 +1834,26 @@ startup and ingest latency, deduplicates events, expires history, and never
 allows learned correlation to delay safety-critical ingestion. Prove the live
 path with a deterministic multi-call fixture and require liveness diagnostics
 to recover from degraded to healthy after a learned pair is emitted.
+
+Outcome — delivered:
+
+- a 512-event, 14-day in-memory handoff deduplicates IDs, rejects non-finite
+  timestamps, expires old evidence, and evicts the oldest retained event under
+  capacity pressure;
+- incremental correlation evaluates only the current event against retained
+  history, bounding each event to 512 candidates per installed rule instead of
+  recomputing history-to-history pairs;
+- normal singleton situation ingestion completes before the lower-priority
+  handoff drains, and correlation-only publication does not mutate situations,
+  schedule persistence, or notify situation listeners;
+- deterministic multi-call coverage proves a learned weather-to-infrastructure
+  pair moves live liveness from `learned_rules_dormant_on_singletons` to
+  `learned_rules_active`, including out-of-order arrival;
+- mutation proofs independently removed handoff wiring, deduplication, expiry,
+  capacity eviction, incremental-only matching, ingress priority, and liveness
+  publication; each corresponding focused test failed before restoration;
+- `test:correlation`, `test:intelligence`, `test:algorithms`,
+  `test:diagnostics`, and the unchanged frozen `bench:correlation` gate pass.
 
 ### ACC-508 — Near-threshold coupling recall gate
 

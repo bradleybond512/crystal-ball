@@ -113,6 +113,54 @@ export class CorrelateEngine {
       observationsConsidered: observations.length,
     };
   }
+
+  correlateIncremental(
+    current: ObservationEvent,
+    history: readonly ObservationEvent[],
+    now: Date = new Date(),
+  ): CorrelationResult {
+    const timer = this.options.timer ?? nowMs;
+    const start = timer();
+    const pairs: CorrelatedPair[] = [];
+    const seen = new Set<string>();
+
+    for (const rule of this.rules.values()) {
+      applyRuleIncremental(rule, current, history, now, seen, pairs, this.options);
+    }
+
+    return {
+      pairs,
+      processingMs: Math.max(0, timer() - start),
+      rulesApplied: this.rules.size,
+      observationsConsidered: history.length + 1,
+    };
+  }
+}
+
+function applyRuleIncremental(
+  rule: CorrelationRule,
+  current: ObservationEvent,
+  history: readonly ObservationEvent[],
+  now: Date,
+  seen: Set<string>,
+  pairs: CorrelatedPair[],
+  options: CorrelateEngineOptions,
+): void {
+  const domainSet = new Set(rule.domains);
+  const effectiveWindowMs = effectiveWindowFor(rule, options);
+  for (const previous of history) {
+    if (previous.id === current.id) continue;
+    const pair = evaluatePair(
+      rule,
+      domainSet,
+      previous,
+      current,
+      seen,
+      options,
+      effectiveWindowMs,
+    );
+    if (pair) pairs.push({ ...pair, detectedAt: now });
+  }
 }
 
 function applyRule(

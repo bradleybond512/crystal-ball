@@ -1715,6 +1715,59 @@ Known limitation:
   `criticalAbsZ` 4.6219). Recall near the decision boundary is unmeasured —
   ACC-508 owns closing that gate.
 
+### ACC-505 — Per-regime correlation reliability
+
+Status: `TODO`
+
+Dependencies: ACC-501 (DONE)
+
+`reliabilityForRule()` returns a single unconditional multiplier in `[0.5, 1.5]`
+per rule, neutral at 1.0 until the rule has ≥5 resolved outcomes. A rule that is
+reliable during a calm epoch and unreliable during a regime shift — the case the
+product most needs to distinguish — is averaged into one number, so the engine
+applies calm-epoch reliability to shift-epoch predictions and vice versa.
+
+Tag each `correlation-calibration.ts` ledger entry with the active BOCPD shift
+state at outcome-record time (`RegimeShift` already carries `metric`,
+`detectedAt`, `direction`, and `changeProbability`). Compute per-rule Brier both
+overall and per-regime; the engine's reliability provider prefers the
+regime-conditional bucket when that bucket's n is large enough to be worth
+trusting, and falls back to the overall multiplier otherwise, keeping the
+existing shrinkage so a thin bucket cannot swing the multiplier. The fallback
+threshold must be stated in the code and asserted in a test, not left implicit.
+
+Constraint: the regime tag is recorded at outcome time, never back-filled from
+the current regime at read time — back-filling would let a later shift rewrite
+the reliability of predictions that resolved under different conditions.
+
+### ACC-506 — Bounded correlation-kernel tunables and safety fixtures
+
+Status: `WAITING`
+
+Dependencies: ACC-505
+
+The `edge-confidence.ts` kernel multiplies six factors —
+`base × temporal × spatial × entity × reliability × regime`, clamped to
+`[0.2, 1]` — and every factor weight is currently a hard-coded constant. None of
+them are declared tunable, so the self-tuning loop reports `no_tunable` for the
+correlation edge algorithm and cannot improve it from observed outcomes.
+
+Declare the kernel factor weights as bounded tunables in
+`tunable-params-store`, defaults equal to the current constants so an empty
+store is byte-identical to today's behaviour (the established convention).
+Register the correlation edge algorithm in `algorithm-registry`, graded from the
+correlation outcome ledger.
+
+Each knob needs a safety-fixture suite following the `episodic-analog:minSim`
+discriminating pattern — the suite must block clearly-bad values and allow
+adjacent ones, so it proves discrimination rather than merely passing. A knob
+without a passing suite fails closed to `held_for_approval` and is never
+auto-applied.
+
+Waits on ACC-505 because tuning a kernel whose `reliability` factor is still
+regime-blind would fit the weights to an averaged signal, and the fitted values
+would have to be re-derived once the reliability input changes shape.
+
 ### ACC-507 — Bounded cross-event correlation ingestion and liveness proof
 
 Status: `TODO`

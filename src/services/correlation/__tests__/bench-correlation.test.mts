@@ -3510,6 +3510,19 @@ describe('ACC-503/ACC-504 — the schema-13 statistical reseed is pinned', () =>
     );
     assert.equal(ok, true, JSON.stringify(reasons));
   });
+
+  it('routes an unreviewed next report through the normal fail-closed comparator', () => {
+    const changed = { ...report, meanTruePairConfidence: 0.01 };
+    const { ok, reasons } = correlationBaseline.compareCorrelationBenchReseedToPrevious(
+      changed,
+      previousV13(),
+    );
+    assert.equal(ok, false);
+    assert.ok(
+      reasons.some((reason) => reason.includes('multiple-testing family changed')),
+      reasons.join(' | '),
+    );
+  });
 });
 
 describe('round 15 — the v12→v13 schema bump is a pinned migration, not a skipped check', () => {

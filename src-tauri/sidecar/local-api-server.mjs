@@ -1595,6 +1595,11 @@ const ALLOWED_ENV_KEYS = new Set([
   'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN',
 ]);
 
+const VALIDATABLE_SECRET_KEYS = new Set([
+  ...ALLOWED_ENV_KEYS,
+  'GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'CESIUM_ION_TOKEN',
+]);
+
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 // Shared equities fusion ticker set (Finnhub / Yahoo / FMP routes). Module
 // scope: shared across three route blocks, so function-body placement would
@@ -6118,7 +6123,7 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  if (/not authorized|API not activated|API has not been used/i.test(msg)) {
  return fail(`Google Maps key valid but Directions API isn't enabled — see APIs & Services → Library`);
  }
- return fail(`Google Maps rejected this key (${msg})`);
+ return fail('Google Maps rejected this key');
  }
  if (!response.ok) return fail(`Google Maps probe failed (${response.status})`);
  return ok('Google Maps key verified (Directions API)');
@@ -15295,7 +15300,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!body) return json({ error: 'expected { key, value }' }, 400);
  try {
  const { key, value, context } = JSON.parse(body.toString());
- if (typeof key !== 'string' || !ALLOWED_ENV_KEYS.has(key)) {
+ if (typeof key !== 'string' || !VALIDATABLE_SECRET_KEYS.has(key)) {
  return json({ error: 'key not in allowlist' }, 403);
  }
  const safeContext = (context && typeof context === 'object') ? context : {};

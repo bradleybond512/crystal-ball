@@ -4,7 +4,6 @@ import test from 'node:test';
 import {
   CrossEventCorrelationHandoff,
   CROSS_EVENT_HISTORY_LIMIT,
-  CROSS_EVENT_MAX_FUTURE_SKEW_MS,
   CROSS_EVENT_HISTORY_WINDOW_MS,
 } from '../cross-event-correlation-handoff.ts';
 import {
@@ -144,6 +143,7 @@ test('expires old events and bounds retained plus pending events', () => {
   const seenHistory: string[][] = [];
   const handoff = new CrossEventCorrelationHandoff({
     schedule: scheduled.schedule,
+    clock: () => NOW,
     correlate: (_current, history) => {
       seenHistory.push(history.map((item) => item.id));
     },
@@ -169,6 +169,7 @@ test('expiry removes a queued event before correlation work runs', () => {
   const correlated: string[] = [];
   const handoff = new CrossEventCorrelationHandoff({
     schedule: scheduled.schedule,
+    clock: () => NOW,
     maxEvents: 10,
     correlate: (current) => { correlated.push(current.id); },
   });
@@ -200,7 +201,7 @@ test('rejects non-finite timestamps and stop cancels queued work', () => {
   assert.deepEqual(handoff.stats(), { history: 0, pending: 0 });
 });
 
-test('rejects far-future timestamps without pruning legitimate retained events', () => {
+test('retains far-future events without letting them prune legitimate history', () => {
   const scheduled = scheduler();
   const calls: Array<{ current: string; history: string[] }> = [];
   const handoff = new CrossEventCorrelationHandoff({
@@ -215,15 +216,16 @@ test('rejects far-future timestamps without pruning legitimate retained events',
   assert.equal(handoff.offer(event(
     'far-future',
     'infra',
-    NOW + CROSS_EVENT_MAX_FUTURE_SKEW_MS + 1,
-  )), false);
+    NOW + 100 * 24 * 60 * 60_000,
+  )), true);
   assert.equal(handoff.offer(event('legitimate-2', 'infra', NOW + 1)), true);
   handoff.resume();
   scheduled.runAll();
 
   assert.deepEqual(calls, [
     { current: 'legitimate-1', history: [] },
-    { current: 'legitimate-2', history: ['legitimate-1'] },
+    { current: 'far-future', history: ['legitimate-1'] },
+    { current: 'legitimate-2', history: ['legitimate-1', 'far-future'] },
   ]);
 });
 

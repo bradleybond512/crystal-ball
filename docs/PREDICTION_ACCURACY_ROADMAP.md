@@ -1837,9 +1837,10 @@ to recover from degraded to healthy after a learned pair is emitted.
 
 Outcome — delivered:
 
-- a 512-event, 14-day in-memory handoff deduplicates IDs, rejects non-finite or
-  far-future timestamps, expires old evidence, and evicts the oldest retained
-  event under capacity pressure;
+- a 512-event, 14-day in-memory handoff deduplicates IDs, rejects non-finite
+  timestamps, clamps future-dated retention ages without changing event time,
+  expires old evidence, and evicts the oldest retained event under capacity
+  pressure;
 - incremental correlation evaluates only the current event against retained
   history, bounding each event to 512 candidates per installed rule instead of
   recomputing history-to-history pairs;

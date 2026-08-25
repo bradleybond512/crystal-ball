@@ -2,7 +2,6 @@ import type { ObservationEvent } from '../intelligence/observation-adapters';
 
 export const CROSS_EVENT_HISTORY_LIMIT = 512;
 export const CROSS_EVENT_HISTORY_WINDOW_MS = 14 * 24 * 60 * 60_000;
-export const CROSS_EVENT_MAX_FUTURE_SKEW_MS = 5 * 60_000;
 
 type Correlate = (
   current: ObservationEvent,
@@ -28,6 +27,7 @@ export class CrossEventCorrelationHandoff {
   private readonly history: ObservationEvent[] = [];
   private readonly pending: ObservationEvent[] = [];
   private readonly retainedIds = new Set<string>();
+  private readonly retentionTimestamps = new Map<string, number>();
   private watermark = Number.NEGATIVE_INFINITY;
   private cancelScheduled?: () => void;
   private scheduled = false;
@@ -50,18 +50,19 @@ export class CrossEventCorrelationHandoff {
       this.stopped
       || !Number.isFinite(now)
       || !Number.isFinite(event.timestamp)
-      || event.timestamp > now + CROSS_EVENT_MAX_FUTURE_SKEW_MS
       || this.retainedIds.has(event.id)
     ) {
       return false;
     }
-    this.watermark = Math.max(this.watermark, event.timestamp);
+    const retentionTimestamp = Math.min(event.timestamp, now);
+    this.watermark = Math.max(this.watermark, retentionTimestamp);
     this.pruneExpired();
     while (this.history.length + this.pending.length >= this.maxEvents) {
       this.evictOldest();
     }
     this.pending.push(event);
     this.retainedIds.add(event.id);
+    this.retentionTimestamps.set(event.id, retentionTimestamp);
     return true;
   }
 
@@ -98,6 +99,7 @@ export class CrossEventCorrelationHandoff {
     this.history.length = 0;
     this.pending.length = 0;
     this.retainedIds.clear();
+    this.retentionTimestamps.clear();
   }
 
   stats(): { history: number; pending: number } {
@@ -107,8 +109,12 @@ export class CrossEventCorrelationHandoff {
   private pruneExpired(): void {
     if (!Number.isFinite(this.watermark)) return;
     const minimumTimestamp = this.watermark - this.maxAgeMs;
-    this.removeWhere(this.history, (event) => event.timestamp < minimumTimestamp);
-    this.removeWhere(this.pending, (event) => event.timestamp < minimumTimestamp);
+    const expired = (event: ObservationEvent): boolean => {
+      const retentionTimestamp = this.retentionTimestamps.get(event.id);
+      return retentionTimestamp === undefined || retentionTimestamp < minimumTimestamp;
+    };
+    this.removeWhere(this.history, expired);
+    this.removeWhere(this.pending, expired);
   }
 
   private removeWhere(
@@ -120,18 +126,23 @@ export class CrossEventCorrelationHandoff {
       if (!predicate(event)) continue;
       events.splice(index, 1);
       this.retainedIds.delete(event.id);
+      this.retentionTimestamps.delete(event.id);
     }
   }
 
   private evictOldest(): void {
     let oldestList = this.history;
     let oldestIndex = 0;
-    let oldest = this.history[0];
+    let oldest: ObservationEvent | undefined;
+    let oldestTimestamp = Number.POSITIVE_INFINITY;
     for (const list of [this.history, this.pending]) {
       for (let index = 0; index < list.length; index += 1) {
         const candidate = list[index]!;
-        if (!oldest || candidate.timestamp < oldest.timestamp) {
+        const candidateTimestamp = this.retentionTimestamps.get(candidate.id)
+          ?? Number.NEGATIVE_INFINITY;
+        if (!oldest || candidateTimestamp < oldestTimestamp) {
           oldest = candidate;
+          oldestTimestamp = candidateTimestamp;
           oldestList = list;
           oldestIndex = index;
         }
@@ -140,6 +151,7 @@ export class CrossEventCorrelationHandoff {
     if (!oldest) return;
     oldestList.splice(oldestIndex, 1);
     this.retainedIds.delete(oldest.id);
+    this.retentionTimestamps.delete(oldest.id);
   }
 }
 

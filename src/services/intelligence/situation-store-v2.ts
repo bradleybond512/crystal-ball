@@ -755,12 +755,14 @@ export class SituationStoreV2 {
       history,
       new Date(correlatedAt),
     );
-    recordCorrelationBatch(
-      this.engine,
-      1,
-      result.pairs,
-      correlatedAt,
-    );
+    if (result.pairs.length > 0) {
+      recordCorrelationBatch(
+        this.engine,
+        1,
+        result.pairs,
+        correlatedAt,
+      );
+    }
     this.publishPairs(result.pairs);
     return result;
   }

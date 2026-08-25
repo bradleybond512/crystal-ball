@@ -2341,6 +2341,83 @@ test('renderer-only map credential validation never reflects Google provider err
   }
 });
 
+test('renderer-only map credential validation fails closed on malformed Google responses', async () => {
+  const submittedSecret = 'google-malformed-response-canary-c3g9';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'text/html; charset=utf-8' },
+ body: `<html><body>Upstream error for ${submittedSecret}</body></html>`,
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), {
+ valid: false,
+ message: 'Google Maps returned an invalid response',
+ });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
+test('renderer-only map credential validation fails closed on unknown Google statuses', async () => {
+  const submittedSecret = 'google-unknown-status-canary-d4h0';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({
+ status: 'UNRECOGNIZED_STATUS',
+ diagnostic: `Unexpected provider state for ${submittedSecret}`,
+ }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), {
+ valid: false,
+ message: 'Google Maps returned an invalid response',
+ });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
 test('rejects unauthenticated POST to /api/local-env-update', async () => {
   await withSecuredSidecar(async (port) => {
  const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {

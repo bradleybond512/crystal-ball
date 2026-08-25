@@ -1600,6 +1600,12 @@ const VALIDATABLE_SECRET_KEYS = new Set([
   'GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'CESIUM_ION_TOKEN',
 ]);
 
+const GOOGLE_DIRECTIONS_STATUSES = new Set([
+  'OK', 'ZERO_RESULTS', 'NOT_FOUND', 'MAX_WAYPOINTS_EXCEEDED',
+  'MAX_ROUTE_LENGTH_EXCEEDED', 'INVALID_REQUEST', 'OVER_DAILY_LIMIT',
+  'OVER_QUERY_LIMIT', 'REQUEST_DENIED', 'UNKNOWN_ERROR',
+]);
+
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 // Shared equities fusion ticker set (Finnhub / Yahoo / FMP routes). Module
 // scope: shared across three route blocks, so function-body placement would
@@ -6117,6 +6123,15 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
  const text = await response.text();
  let payload = null; try { payload = JSON.parse(text); } catch { /* ignore */ }
+ if (
+ payload === null
+ || typeof payload !== 'object'
+ || Array.isArray(payload)
+ || typeof payload.status !== 'string'
+ || !GOOGLE_DIRECTIONS_STATUSES.has(payload.status)
+ ) {
+ return fail('Google Maps returned an invalid response');
+ }
  if (payload?.status === 'REQUEST_DENIED') {
  const msg = String(payload?.error_message ?? 'denied');
  // If the key works but Directions isn't enabled, surface that hint.

@@ -16,8 +16,12 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import https from 'node:https';
+import os from 'node:os';
 import path from 'node:path';
+import { PassThrough, Readable } from 'node:stream';
 
 const { join, dirname } = path;
 import {
@@ -35,6 +39,11 @@ import {
   normalizeUsgsLatestContinuousSidecar,
   normalizeInfrastructureBgpPayload,
   infrastructureBgpPageIsComplete,
+  mergeInfrastructureBgpPages,
+  fetchInfrastructureBgpCompletePayload,
+  createLocalApiServer,
+  _resetSidecarCacheForTests,
+  _resetFeedTracker,
   infraRiskCisaKevEnvelopeIsUsable,
   infraRiskRipeEnvelopeIsUsable,
   normalizeInfrastructureRadiationPayload,
@@ -61,6 +70,20 @@ function cloudflareBgpEvent(index = 1, overrides = {}) {
     prefixes: [`203.0.${index}.0/24`],
     victim_asns: [64_496],
     ...overrides,
+  };
+}
+
+function cloudflareBgpPage(pageNumber, events, totalCount, overrides = {}) {
+  return {
+    success: true,
+    result: { events },
+    result_info: {
+      page: pageNumber,
+      per_page: 100,
+      count: events.length,
+      total_count: totalCount,
+      ...overrides,
+    },
   };
 }
 
@@ -261,7 +284,8 @@ test('BGP sidecar fails unknown when pagination metadata proves the first page i
   const start = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/bgp'");
   const end = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/radiation'", start);
   const route = sidecarSource.slice(start, end);
-  assert.match(route, /if \(result\.coverage !== 'reported'\) return json\(result, 502\);\s*setCached/);
+  assert.match(route, /if \(result\.coverage !== 'reported'\) \{[\s\S]+return json\(result, 502\);[\s\S]+\}/);
+  assert.ok(route.indexOf("result.coverage !== 'reported'") < route.indexOf('setCached(cacheKey'));
 });
 
 test('BGP sidecar requires completeness proof for a saturated page', () => {
@@ -278,6 +302,327 @@ test('BGP sidecar requires completeness proof for a saturated page', () => {
   };
   assert.equal(infrastructureBgpPageIsComplete(complete, 20, 20), true);
   assert.equal(normalizeInfrastructureBgpPayload(complete).coverage, 'reported');
+});
+
+test('BGP sidecar merges and normalizes every complete bounded Cloudflare page', () => {
+  const fetchedAt = Date.parse('2026-08-14T14:00:00Z');
+  const firstEvents = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
+  const secondEvents = [
+    ...Array.from({ length: 52 }, (_, index) => cloudflareBgpEvent(index + 101)),
+    cloudflareBgpEvent(153, { on_going_count: undefined }),
+  ];
+  const merged = mergeInfrastructureBgpPages([
+    {
+      success: true,
+      result: { events: firstEvents },
+      result_info: { page: 1, per_page: 100, count: 100, total_count: 153 },
+    },
+    {
+      success: true,
+      result: { events: secondEvents },
+      result_info: { page: 2, per_page: 100, count: 53, total_count: 153 },
+    },
+  ]);
+
+  assert.equal(merged.error, null);
+  assert.equal(merged.payload.result.events.length, 153);
+  assert.deepEqual(merged.payload.result_info, {
+    page: 1, per_page: 500, count: 153, total_count: 153, total_pages: 1,
+  });
+  const normalized = normalizeInfrastructureBgpPayload(merged.payload, fetchedAt, 500);
+  assert.equal(normalized.coverage, 'reported');
+  assert.equal(normalized.acceptedRows, 152);
+  assert.equal(normalized.droppedRows, 1, 'an invalid page-two row must count as dropped');
+  assert.equal(normalized.events.length, 152);
+  assert.equal(normalized.events.at(-1)?.id, '1152', 'a valid event from page two must reach the route envelope');
+});
+
+test('BGP sidecar rejects inconsistent pages, duplicate IDs, and results beyond the five-page bound', () => {
+  const first = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
+  const second = [cloudflareBgpEvent(101)];
+
+  assert.equal(mergeInfrastructureBgpPages([
+    cloudflareBgpPage(1, first, 101), cloudflareBgpPage(2, second, 102),
+  ]).error, 'inconsistent_pagination');
+  assert.equal(mergeInfrastructureBgpPages([
+    cloudflareBgpPage(1, first, 101), cloudflareBgpPage(2, [cloudflareBgpEvent(1)], 101),
+  ]).error, 'duplicate_event');
+  assert.equal(mergeInfrastructureBgpPages([
+    cloudflareBgpPage(1, first, 501),
+  ]).error, 'result_too_large');
+  assert.equal(mergeInfrastructureBgpPages([
+    cloudflareBgpPage(1, first, 101), cloudflareBgpPage(2, second, 101, { count: 2 }),
+  ]).error, 'inconsistent_pagination');
+});
+
+test('BGP sidecar fetches page one before at most four required pages within one decreasing budget', async () => {
+  const calls = [];
+  let active = 0;
+  let maximumActive = 0;
+  let clock = 1000;
+  const first = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
+  const requestPage = async (page, timeoutMs) => {
+    calls.push({ page, timeoutMs });
+    clock += 100;
+    active += 1;
+    maximumActive = Math.max(maximumActive, active);
+    await Promise.resolve();
+    active -= 1;
+    const totalCount = 500;
+    const events = page === 1
+      ? first
+      : Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent((page - 1) * 100 + index + 1));
+    return {
+      success: true,
+      result: { events },
+      result_info: { page, per_page: 100, count: 100, total_count: totalCount },
+    };
+  };
+
+  const result = await fetchInfrastructureBgpCompletePayload(requestPage, () => clock);
+  assert.equal(result.error, null);
+  assert.deepEqual(calls.map(({ page }) => page), [1, 2, 3, 4, 5]);
+  assert.ok(calls.every(({ timeoutMs }) => timeoutMs > 0 && timeoutMs <= 15_000));
+  assert.deepEqual(calls.map(({ timeoutMs }) => timeoutMs), [15_000, 14_900, 14_800, 14_700, 14_600]);
+  assert.equal(maximumActive, 4);
+  assert.equal(result.payload.result.events.length, 500);
+});
+
+test('BGP sidecar reports sanitized malformed, timeout, rate-limit, and partial-fetch failures', async () => {
+  const malformed = await fetchInfrastructureBgpCompletePayload(async () => ({ success: true, result: {} }));
+  assert.equal(malformed.error, 'malformed_response');
+
+  const timeout = await fetchInfrastructureBgpCompletePayload(
+    async () => { throw new Error('Request timed out'); },
+  );
+  assert.equal(timeout.error, 'timeout');
+
+  const rateLimited = await fetchInfrastructureBgpCompletePayload(
+    async () => { throw Object.assign(new Error('secret provider body'), { code: 'rate_limited' }); },
+  );
+  assert.equal(rateLimited.error, 'rate_limited');
+
+  let calls = 0;
+  const partial = await fetchInfrastructureBgpCompletePayload(async (page) => {
+    calls += 1;
+    if (page === 2) throw Object.assign(new Error('provider detail'), { code: 'http_error' });
+    const events = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
+    return {
+      success: true,
+      result: { events },
+      result_info: { page: 1, per_page: 100, count: 100, total_count: 101 },
+    };
+  });
+  assert.equal(calls, 2);
+  assert.equal(partial.error, 'http_error');
+  assert.equal(partial.payload, null);
+});
+
+test('BGP sidecar retries one transient page failure within the shared budget', async () => {
+  let attempts = 0;
+  let clock = 5000;
+  const budgets = [];
+  const result = await fetchInfrastructureBgpCompletePayload(async (page, timeoutMs) => {
+    attempts += 1;
+    budgets.push(timeoutMs);
+    if (attempts === 1) {
+      clock += 14_999;
+      throw Object.assign(new Error('temporary upstream failure'), { code: 'transient_http' });
+    }
+    return {
+      success: true,
+      result: { events: [] },
+      result_info: { page, per_page: 100, count: 0, total_count: 0 },
+    };
+  }, () => clock);
+  assert.equal(attempts, 2);
+  assert.deepEqual(budgets, [15_000, 1]);
+  assert.equal(result.error, null);
+  assert.equal(result.payload.result.events.length, 0);
+});
+
+test('BGP sidecar refuses a retry after the shared deadline is exhausted', async () => {
+  let attempts = 0;
+  let clock = 10_000;
+  const result = await fetchInfrastructureBgpCompletePayload(async () => {
+    attempts += 1;
+    clock += 15_000;
+    throw Object.assign(new Error('temporary upstream failure'), { code: 'transient_http' });
+  }, () => clock);
+  assert.equal(attempts, 1);
+  assert.equal(result.error, 'timeout');
+  assert.equal(result.payload, null);
+});
+
+test('BGP sidecar route uses bounded complete retrieval and preserves fail-closed cache ordering', () => {
+  const start = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/bgp'");
+  const end = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/radiation'", start);
+  const route = sidecarSource.slice(start, end);
+  assert.match(route, /fetchInfrastructureBgpCompletePayload/);
+  assert.match(route, /per_page=\$\{INFRASTRUCTURE_BGP_PER_PAGE\}/);
+  assert.match(route, /maxResponseBytes: INFRASTRUCTURE_BGP_MAX_RESPONSE_BYTES/);
+  assert.match(route, /recordFeedFailure\('cloudflare-bgp', fetched\.error\)/);
+  assert.match(route, /recordFeedFailure\('cloudflare-bgp', result\.error/);
+  assert.match(route, /recordFeedSuccess\('cloudflare-bgp'/);
+  assert.ok(route.indexOf("result.coverage !== 'reported'") < route.indexOf('setCached(cacheKey'));
+  assert.ok(route.indexOf("result.coverage !== 'reported'") < route.indexOf("recordFeedSuccess('cloudflare-bgp'"));
+  assert.ok(route.indexOf("recordFeedSuccess('cloudflare-bgp'") < route.indexOf('setCached(cacheKey'));
+});
+
+function mockCloudflareBgpHttps(pages) {
+  const original = https.request;
+  const requests = [];
+  https.request = (options, onResponse) => {
+    const requestedUrl = new URL(`https://${options.hostname}${options.path}`);
+    const page = Number(requestedUrl.searchParams.get('page'));
+    requests.push({ hostname: options.hostname, path: options.path, page });
+    const req = new PassThrough();
+    req.setTimeout = () => req;
+    req.end = () => {
+      queueMicrotask(() => {
+        const payload = pages.get(page);
+        const body = JSON.stringify(payload ?? { success: false, errors: [{ code: 404 }] });
+        const response = Readable.from([Buffer.from(body)]);
+        response.statusCode = payload ? 200 : 404;
+        response.statusMessage = '';
+        response.headers = {
+          'content-type': 'application/json',
+          'content-length': String(Buffer.byteLength(body)),
+        };
+        onResponse(response);
+      });
+    };
+    return req;
+  };
+  return {
+    requests,
+    restore() { https.request = original; },
+  };
+}
+
+async function startBgpRouteServer() {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'crystalball-bgp-route-'));
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: path.resolve('api'),
+    dataDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  return {
+    port,
+    async close() {
+      await app.close();
+      await rm(dataDir, { recursive: true, force: true });
+    },
+  };
+}
+
+test('BGP HTTP route enforces auth and reports a missing key through both health surfaces', async () => {
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'test-token-bgp-route';
+  delete process.env.CLOUDFLARE_API_TOKEN;
+  _resetSidecarCacheForTests();
+  _resetFeedTracker();
+  const server = await startBgpRouteServer();
+  const origin = 'https://crystalball.app';
+  try {
+    const unauthorized = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, {
+      headers: { Origin: origin },
+    });
+    assert.equal(unauthorized.status, 401);
+    assert.deepEqual(await unauthorized.json(), { error: 'Unauthorized' });
+    assert.equal(unauthorized.headers.get('access-control-allow-origin'), origin);
+
+    const missing = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, {
+      headers: { Authorization: 'Bearer test-token-bgp-route', Origin: origin },
+    });
+    assert.equal(missing.status, 503);
+    assert.equal(missing.headers.get('access-control-allow-origin'), origin);
+    const missingBody = await missing.json();
+    assert.deepEqual({ ...missingBody, fetchedAt: 0 }, {
+      schemaVersion: 1,
+      provider: 'cloudflare-radar',
+      coverage: 'unknown',
+      events: [],
+      acceptedRows: 0,
+      droppedRows: 0,
+      error: 'missing_key',
+      keyMissing: true,
+      fetchedAt: 0,
+    });
+    assert.ok(Number.isSafeInteger(missingBody.fetchedAt) && missingBody.fetchedAt > 0);
+
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const healthBody = await health.json();
+    assert.equal(healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp')?.lastError, 'missing_key');
+
+    const feeds = await fetch(`http://127.0.0.1:${server.port}/api/feeds/health`, {
+      headers: { Authorization: 'Bearer test-token-bgp-route' },
+    });
+    const feedsBody = await feeds.json();
+    assert.equal(feedsBody.feeds.find((feed) => feed.feedId === 'cloudflare-bgp')?.status, 'down');
+  } finally {
+    await server.close();
+    if (originalToken === undefined) delete process.env.LOCAL_API_TOKEN;
+    else process.env.LOCAL_API_TOKEN = originalToken;
+    if (originalCloudflare === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
+    else process.env.CLOUDFLARE_API_TOKEN = originalCloudflare;
+  }
+});
+
+test('BGP HTTP route retrieves two complete pages once, caches only normalized success, and reports health', async () => {
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'test-token-bgp-route-success';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-secret';
+  _resetSidecarCacheForTests();
+  _resetFeedTracker();
+  const first = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
+  const second = [cloudflareBgpEvent(101)];
+  const mock = mockCloudflareBgpHttps(new Map([
+    [1, { success: true, result: { events: first }, result_info: { page: 1, per_page: 100, count: 100, total_count: 101 } }],
+    [2, { success: true, result: { events: second }, result_info: { page: 2, per_page: 100, count: 1, total_count: 101 } }],
+  ]));
+  const server = await startBgpRouteServer();
+  const headers = { Authorization: 'Bearer test-token-bgp-route-success', Origin: 'https://crystalball.app' };
+  try {
+    const firstResponse = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
+    assert.equal(firstResponse.status, 200);
+    const firstBody = await firstResponse.json();
+    assert.equal(firstBody.coverage, 'reported');
+    assert.equal(firstBody.acceptedRows, 101);
+    assert.equal(firstBody.droppedRows, 0);
+    assert.equal(firstBody.events.length, 101);
+    assert.equal(firstBody.events.at(-1)?.id, '1101', 'the page-two event must survive HTTP normalization');
+    assert.deepEqual(mock.requests.map(({ page }) => page), [1, 2]);
+    assert.ok(mock.requests.every(({ hostname }) => hostname === 'api.cloudflare.com'));
+
+    const cachedResponse = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
+    assert.equal(cachedResponse.status, 200);
+    assert.deepEqual(await cachedResponse.json(), firstBody);
+    assert.equal(mock.requests.length, 2, 'cached response must not refetch either upstream page');
+
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const healthBody = await health.json();
+    const snapshot = healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp');
+    assert.equal(snapshot.lastError, null);
+    assert.equal(snapshot.lastSuccessAt, firstBody.fetchedAt);
+
+    const feeds = await fetch(`http://127.0.0.1:${server.port}/api/feeds/health`, {
+      headers: { Authorization: 'Bearer test-token-bgp-route-success' },
+    });
+    const feedsBody = await feeds.json();
+    assert.equal(feedsBody.feeds.find((feed) => feed.feedId === 'cloudflare-bgp')?.status, 'up');
+  } finally {
+    mock.restore();
+    await server.close();
+    if (originalToken === undefined) delete process.env.LOCAL_API_TOKEN;
+    else process.env.LOCAL_API_TOKEN = originalToken;
+    if (originalCloudflare === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
+    else process.env.CLOUDFLARE_API_TOKEN = originalCloudflare;
+  }
 });
 
 test('radiation sidecar distinguishes reported empty, known zero, malformed, and zero-valid rows', () => {

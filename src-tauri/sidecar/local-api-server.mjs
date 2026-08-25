@@ -17833,23 +17833,48 @@ async function dispatch(requestUrl, req, routes, context) {
  const cacheKey = 'infrastructure-bgp';
  const cached = getCached(cacheKey, 10 * 60 * 1000);
  if (cached) return json(cached);
- if (!cfToken) return json(infrastructureBgpUnknown('missing_key', Date.now(), true), 503);
+ if (!cfToken) {
+ trackFailure('cloudflare-bgp', 'missing_key');
+ recordFeedFailure('cloudflare-bgp', 'missing_key');
+ return json(infrastructureBgpUnknown('missing_key', Date.now(), true), 503);
+ }
  try {
- const url = 'https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&page=1&per_page=20';
+ const fetched = await fetchInfrastructureBgpCompletePayload(async (page, timeoutMs) => {
+ const url = `https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&page=${page}&per_page=${INFRASTRUCTURE_BGP_PER_PAGE}`;
  const r = await fetchWithTimeout(url, {
  headers: {
  Accept: 'application/json',
  Authorization: `Bearer ${cfToken}`,
  },
- maxResponseBytes: 2 * 1024 * 1024,
- }, 15000);
- if (!r.ok) throw new Error(`Cloudflare Radar HTTP ${r.status}`);
- const data = await r.json();
- const result = normalizeInfrastructureBgpPayload(data, Date.now());
- if (result.coverage !== 'reported') return json(result, 502);
+ maxResponseBytes: INFRASTRUCTURE_BGP_MAX_RESPONSE_BYTES,
+ }, timeoutMs);
+ if (!r.ok) throw Object.assign(new Error('Cloudflare Radar request failed'), {
+ code: r.status === 429 ? 'rate_limited' : (r.status === 408 || r.status >= 500 ? 'transient_http' : 'http_error'),
+ });
+ try {
+ return await r.json();
+ } catch {
+ throw Object.assign(new Error('Cloudflare Radar response was malformed'), { code: 'malformed_response' });
+ }
+ });
+ if (fetched.error) {
+ trackFailure('cloudflare-bgp', fetched.error);
+ recordFeedFailure('cloudflare-bgp', fetched.error);
+ return json(infrastructureBgpUnknown(fetched.error, Date.now()), 502);
+ }
+ const result = normalizeInfrastructureBgpPayload(fetched.payload, Date.now(), INFRASTRUCTURE_BGP_MAX_EVENTS);
+ if (result.coverage !== 'reported') {
+ trackFailure('cloudflare-bgp', result.error ?? 'no_contributed_rows');
+ recordFeedFailure('cloudflare-bgp', result.error ?? 'no_contributed_rows');
+ return json(result, 502);
+ }
+ trackSuccess('cloudflare-bgp', 'primary', result.fetchedAt);
+ recordFeedSuccess('cloudflare-bgp', result.fetchedAt);
  setCached(cacheKey, result, 10 * 60 * 1000);
  return json(result);
  } catch {
+ trackFailure('cloudflare-bgp', 'provider_unavailable');
+ recordFeedFailure('cloudflare-bgp', 'provider_unavailable');
  return json(infrastructureBgpUnknown('provider_unavailable', Date.now()), 502);
  }
   }
@@ -20373,6 +20398,23 @@ export function parseFaaNasEvents(raw) {
 const INFRA_RISK_CISA_KEV_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const INFRA_RISK_CISA_KEV_MAX_CATALOG_ENTRIES = 20_000;
 const INFRA_RISK_CISA_KEV_FUTURE_SKEW_MS = 5 * 60_000;
+const INFRASTRUCTURE_BGP_PER_PAGE = 100;
+const INFRASTRUCTURE_BGP_MAX_PAGES = 5;
+const INFRASTRUCTURE_BGP_MAX_EVENTS = INFRASTRUCTURE_BGP_PER_PAGE * INFRASTRUCTURE_BGP_MAX_PAGES;
+const INFRASTRUCTURE_BGP_MAX_CONCURRENCY = 4;
+const INFRASTRUCTURE_BGP_FETCH_BUDGET_MS = 15_000;
+const INFRASTRUCTURE_BGP_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const INFRASTRUCTURE_BGP_FETCH_ERRORS = new Set([
+  'duplicate_event',
+  'http_error',
+  'incomplete_page',
+  'inconsistent_pagination',
+  'malformed_response',
+  'provider_unavailable',
+  'rate_limited',
+  'result_too_large',
+  'timeout',
+]);
 
 function infrastructureRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -20421,6 +20463,150 @@ function readInfrastructureBgpRows(payload) {
   if (!infrastructureRecord(payload) || payload.success !== true) return null;
   if (infrastructureRecord(payload.result) && Array.isArray(payload.result.events)) return payload.result.events;
   return null;
+}
+
+function infrastructureBgpPageInfo(payload) {
+  if (!infrastructureRecord(payload)) return null;
+  const nestedResult = infrastructureRecord(payload.result) ? payload.result : null;
+  const rawInfo = infrastructureRecord(payload.result_info)
+    ? payload.result_info
+    : (infrastructureRecord(nestedResult?.result_info) ? nestedResult.result_info : null);
+  if (!rawInfo) return null;
+  const required = ['page', 'per_page', 'count', 'total_count'];
+  if (!required.every((field) => Number.isSafeInteger(rawInfo[field]) && rawInfo[field] >= 0)) return null;
+  if (rawInfo.total_pages !== undefined
+    && (!Number.isSafeInteger(rawInfo.total_pages) || rawInfo.total_pages < 0)) return null;
+  return rawInfo;
+}
+
+function infrastructureBgpEventId(row) {
+  if (!infrastructureRecord(row)) return null;
+  if (typeof row.id === 'number' && Number.isSafeInteger(row.id) && row.id >= 0) return String(row.id);
+  if (typeof row.id === 'string' && row.id.length > 0 && row.id.length <= 160) return row.id;
+  return null;
+}
+
+function infrastructureBgpFetchError(error) {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  if (code === 'transient_http') return 'http_error';
+  if (INFRASTRUCTURE_BGP_FETCH_ERRORS.has(code)) return code;
+  if (/timed out|timeout/i.test(String(error?.message ?? ''))) return 'timeout';
+  return 'provider_unavailable';
+}
+
+/** Validate and combine every page into one completeness-proven envelope.
+ * The synthetic page is consumed by the existing event allowlist normalizer. */
+export function mergeInfrastructureBgpPages(pages) {
+  if (!Array.isArray(pages) || pages.length === 0 || pages.length > INFRASTRUCTURE_BGP_MAX_PAGES) {
+    return { payload: null, error: 'incomplete_page' };
+  }
+  const firstRows = readInfrastructureBgpRows(pages[0]);
+  const firstInfo = infrastructureBgpPageInfo(pages[0]);
+  if (firstRows === null || firstInfo === null) return { payload: null, error: 'malformed_response' };
+  if (firstInfo.page !== 1 || firstInfo.per_page !== INFRASTRUCTURE_BGP_PER_PAGE
+    || firstInfo.count !== firstRows.length) return { payload: null, error: 'inconsistent_pagination' };
+  if (firstInfo.total_count > INFRASTRUCTURE_BGP_MAX_EVENTS) {
+    return { payload: null, error: 'result_too_large' };
+  }
+
+  const totalCount = firstInfo.total_count;
+  const requiredPages = Math.max(1, Math.ceil(totalCount / INFRASTRUCTURE_BGP_PER_PAGE));
+  if (requiredPages > INFRASTRUCTURE_BGP_MAX_PAGES) return { payload: null, error: 'result_too_large' };
+  if (pages.length !== requiredPages) return { payload: null, error: 'incomplete_page' };
+
+  const events = [];
+  const seenIds = new Set();
+  for (const [index, payload] of pages.entries()) {
+    const rows = readInfrastructureBgpRows(payload);
+    const info = infrastructureBgpPageInfo(payload);
+    if (rows === null || info === null) return { payload: null, error: 'malformed_response' };
+    const page = index + 1;
+    const expectedCount = page < requiredPages
+      ? INFRASTRUCTURE_BGP_PER_PAGE
+      : totalCount - ((requiredPages - 1) * INFRASTRUCTURE_BGP_PER_PAGE);
+    if (info.page !== page || info.per_page !== INFRASTRUCTURE_BGP_PER_PAGE
+      || info.count !== rows.length || rows.length !== expectedCount
+      || info.total_count !== totalCount
+      || (info.total_pages !== undefined && info.total_pages !== requiredPages)) {
+      return { payload: null, error: 'inconsistent_pagination' };
+    }
+    for (const row of rows) {
+      const id = infrastructureBgpEventId(row);
+      if (id !== null && seenIds.has(id)) return { payload: null, error: 'duplicate_event' };
+      if (id !== null) seenIds.add(id);
+      events.push(row);
+    }
+  }
+  if (events.length !== totalCount) return { payload: null, error: 'incomplete_page' };
+  return {
+    payload: {
+      success: true,
+      result: { events },
+      result_info: {
+        page: 1,
+        per_page: INFRASTRUCTURE_BGP_MAX_EVENTS,
+        count: events.length,
+        total_count: events.length,
+        total_pages: 1,
+      },
+    },
+    error: null,
+  };
+}
+
+/** Retrieve page one before its bounded fan-out, sharing one wall-clock budget. */
+export async function fetchInfrastructureBgpCompletePayload(requestPage, now = Date.now) {
+  if (typeof requestPage !== 'function' || typeof now !== 'function') {
+    return { payload: null, error: 'provider_unavailable' };
+  }
+  const startedAt = now();
+  const deadline = startedAt + INFRASTRUCTURE_BGP_FETCH_BUDGET_MS;
+  const fetchPage = async (page) => {
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const remaining = deadline - now();
+      if (!Number.isFinite(remaining) || remaining <= 0) {
+        throw Object.assign(new Error('Cloudflare Radar fetch timed out'), { code: 'timeout' });
+      }
+      try {
+        return await requestPage(
+          page,
+          Math.min(INFRASTRUCTURE_BGP_FETCH_BUDGET_MS, Math.ceil(remaining)),
+        );
+      } catch (error) {
+        lastError = error;
+        const code = typeof error?.code === 'string' ? error.code : '';
+        const timedOut = /timed out|timeout/i.test(String(error?.message ?? ''));
+        if (attempt === 0 && (code === 'transient_http' || code === '' || timedOut)) continue;
+        throw error;
+      }
+    }
+    throw lastError;
+  };
+
+  try {
+    const first = await fetchPage(1);
+    const firstRows = readInfrastructureBgpRows(first);
+    const firstInfo = infrastructureBgpPageInfo(first);
+    if (firstRows === null || firstInfo === null) return { payload: null, error: 'malformed_response' };
+    if (firstInfo.page !== 1 || firstInfo.per_page !== INFRASTRUCTURE_BGP_PER_PAGE
+      || firstInfo.count !== firstRows.length) return { payload: null, error: 'inconsistent_pagination' };
+    if (firstInfo.total_count > INFRASTRUCTURE_BGP_MAX_EVENTS) {
+      return { payload: null, error: 'result_too_large' };
+    }
+    const requiredPages = Math.max(1, Math.ceil(firstInfo.total_count / INFRASTRUCTURE_BGP_PER_PAGE));
+    if (requiredPages > INFRASTRUCTURE_BGP_MAX_PAGES) {
+      return { payload: null, error: 'result_too_large' };
+    }
+    const remainingPageNumbers = Array.from({ length: requiredPages - 1 }, (_, index) => index + 2);
+    if (remainingPageNumbers.length > INFRASTRUCTURE_BGP_MAX_CONCURRENCY) {
+      return { payload: null, error: 'result_too_large' };
+    }
+    const rest = await Promise.all(remainingPageNumbers.map(fetchPage));
+    return mergeInfrastructureBgpPages([first, ...rest]);
+  } catch (error) {
+    return { payload: null, error: infrastructureBgpFetchError(error) };
+  }
 }
 
 /** Prove that the Cloudflare response contains the complete requested page.
@@ -20635,14 +20821,14 @@ export function infrastructureBgpUnknown(error, fetchedAt, keyMissing = false, d
   };
 }
 
-export function normalizeInfrastructureBgpPayload(payload, fetchedAt = Date.now()) {
+export function normalizeInfrastructureBgpPayload(payload, fetchedAt = Date.now(), requestedLimit = 20) {
   const rows = readInfrastructureBgpRows(payload);
   if (rows === null) return infrastructureBgpUnknown('malformed_response', fetchedAt);
-  if (!infrastructureBgpPageIsComplete(payload, rows.length, 20)) {
+  if (!infrastructureBgpPageIsComplete(payload, rows.length, requestedLimit)) {
     return infrastructureBgpUnknown('incomplete_page', fetchedAt);
   }
   const events = [];
-  for (const row of rows.slice(0, 100)) {
+  for (const row of rows) {
     const normalized = normalizeInfrastructureCloudflareBgpEvent(row, fetchedAt);
     if (normalized) events.push(normalized);
   }

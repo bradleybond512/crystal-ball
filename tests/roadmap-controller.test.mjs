@@ -194,6 +194,21 @@ test('baseline comparison blocks task deletion and terminal-state mutation', () 
   assert.ok(compareRoadmaps(baseline, reopened).some((message) => /ACC-001.*terminal.*DONE.*TODO/.test(message)));
 });
 
+test('the live UX-001 task is machine-blocked by UX-000 monitoring', () => {
+  const live = parseRoadmaps({
+    'docs/USABILITY_UPLIFT_FOR_CODEX.md': readFileSync(
+      join(root, 'docs/USABILITY_UPLIFT_FOR_CODEX.md'), 'utf8',
+    ),
+    'docs/PREDICTION_ACCURACY_ROADMAP.md': readFileSync(
+      join(root, 'docs/PREDICTION_ACCURACY_ROADMAP.md'), 'utf8',
+    ),
+  });
+  assert.deepEqual(live.tasks.find(({ id }) => id === 'UX-001').dependencies, ['UX-000']);
+  assert.notEqual(reconcileRoadmaps(live, null, {
+    now: '2026-08-25T12:00:00.000Z', baseBranch: 'main',
+  }).nextEligible?.id, 'UX-001');
+});
+
 test('validates a bounded, complete, main-only token-free snapshot', () => {
   assert.deepEqual(validateSnapshot(snapshot([pr(10, 'MERGED', 'ACC-001')])), []);
   assert.match(validateSnapshot({ ...snapshot(), complete: false })[0], /complete/);
@@ -221,7 +236,7 @@ test('reconciliation accepts merged terminal evidence and monitored merged work'
     pr(1660, 'MERGED', 'UX-000'),
   ]), { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
   assert.deepEqual(report.blocking, []);
-  assert.equal(report.nextEligible.id, 'ACC-502');
+  assert.equal(report.nextEligible.id, 'UX-001');
 });
 
 test('the candidate PR may provisionally supply terminal evidence, but an unrelated open PR may not', () => {
@@ -347,11 +362,16 @@ test('reconciliation reports overdue wait reviews and supports OR dependencies',
   const anyOfAcc = ACC
     .replace('| ACC-503 | WAITING | Tunables | ACC-502 |', '| ACC-503 | TODO | Tunables | ACC-502 or ACC-501 |')
     .replace('Status: `WAITING`\nDependencies: ACC-502\nExit condition: ACC-502 is DONE.\nReview after: 2026-09-03', 'Status: `TODO`\nDependencies: ACC-502 or ACC-501');
-  const anyOf = parse(UX, anyOfAcc);
+  const completedUx = UX.replace(
+    '| UX-001 | Home shell | NOT STARTED | — |',
+    '| UX-001 | Home shell | DONE | #21 |',
+  );
+  const anyOf = parse(completedUx, anyOfAcc);
   assert.deepEqual(anyOf.tasks.find(({ id }) => id === 'ACC-503').dependencyAnyOf, ['ACC-502', 'ACC-501']);
   const report = reconcileRoadmaps(anyOf, snapshot([
     pr(10, 'MERGED', 'ACC-001'),
     pr(20, 'MERGED', 'ACC-501'),
+    pr(21, 'MERGED', 'UX-001'),
     pr(1660, 'MERGED', 'UX-000'),
     pr(30, 'OPEN', 'Roadmap task: ACC-502'),
   ]), { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
@@ -359,10 +379,14 @@ test('reconciliation reports overdue wait reviews and supports OR dependencies',
 });
 
 test('task IDs mentioned incidentally in a PR body are not treated as claims', () => {
-  const state = parse();
+  const state = parse(UX.replace(
+    '| UX-001 | Home shell | NOT STARTED | — |',
+    '| UX-001 | Home shell | DONE | #21 |',
+  ));
   const report = reconcileRoadmaps(state, snapshot([
     pr(10, 'MERGED', 'ACC-001'),
     pr(20, 'MERGED', 'ACC-501'),
+    pr(21, 'MERGED', 'UX-001'),
     pr(1660, 'MERGED', 'UX-000'),
     pr(30, 'OPEN', 'Unrelated docs', {
       body: 'The next eligible task remains ACC-502, but this PR does not claim it.',
@@ -383,7 +407,7 @@ test('watchdog Markdown is deterministic, marked, and carries a body digest', ()
   assert.equal(first, second);
   assert.match(first, /<!-- crystal-ball-roadmap-controller:v1 -->/);
   assert.match(first, /<!-- roadmap-body-sha256:[a-f0-9]{64} -->/);
-  assert.match(first, /Next eligible task:.*ACC-502/);
+  assert.match(first, /Next eligible task:.*UX-001/);
 });
 
 test('CLI exits 0 offline, 1 for policy drift, and 2 for invalid snapshot input', () => {
@@ -446,6 +470,8 @@ test('workflow is pinned, least-privileged, token-free at the Node boundary, and
   assert.equal([...workflow.matchAll(/--references-output/g)].length, 3);
   assert.match(workflow, /ROADMAP_REFERENCES_PATH/);
   assert.doesNotMatch(workflow, /docs\.matchAll/);
+  assert.doesNotMatch(workflow, /github\.paginate/);
+  assert.match(workflow, /limit \+ 1/);
   assert.match(workflow, /concurrency:\s*\n\s*group: roadmap-controller-watchdog/);
   assert.doesNotMatch(workflow, /node scripts\/roadmap-controller\.mjs[^\n]*\$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(workflow, /crystal-ball-roadmap-controller:v1/);

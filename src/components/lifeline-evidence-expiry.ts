@@ -1,6 +1,8 @@
 import type { LocalLogisticsSnapshot } from '../services/local-logistics-types';
+import { projectLocalLogisticsCoverage } from '../services/local-logistics';
 
 export const MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS = 60 * 60_000;
+export type LifelineExpiryKind = 'evidence' | 'provider-coverage';
 
 export interface LifelineEvidenceIdentity {
   placeId: string;
@@ -8,7 +10,7 @@ export interface LifelineEvidenceIdentity {
 }
 
 interface LifelineEvidenceExpirySchedulerOptions {
-  onExpiry: (snapshot: LocalLogisticsSnapshot, expiresAt: number) => void;
+  onExpiry: (snapshot: LocalLogisticsSnapshot, expiresAt: number, kind: LifelineExpiryKind) => void;
   now?: () => number;
   setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
@@ -21,21 +23,40 @@ interface ExpiredLifelineEvidenceEffects {
   publishSnapshot: (snapshot: LocalLogisticsSnapshot) => void;
 }
 
-function expiryTimes(snapshot: LocalLogisticsSnapshot): number[] {
-  return [
-    ...snapshot.nodes,
-    ...snapshot.observations,
-    ...snapshot.areaConditions,
-  ].map((item) => item.expiresAt.getTime()).filter((expiresAt) => Number.isFinite(expiresAt));
+interface LifelineExpiryDeadline {
+  expiresAt: number;
+  kind: LifelineExpiryKind;
 }
 
-function nextFutureExpiry(snapshot: LocalLogisticsSnapshot, now: number): number | null {
-  let next: number | null = null;
-  for (const expiresAt of expiryTimes(snapshot)) {
+function expiryDeadlines(snapshot: LocalLogisticsSnapshot, now: number): LifelineExpiryDeadline[] {
+  const providerDeadlines = projectLocalLogisticsCoverage(snapshot, now).providers
+    .filter((provider) => provider.state === 'current-complete' || provider.state === 'current-partial')
+    .map((provider) => ({
+      expiresAt: provider.projectedExpiresAt?.getTime() ?? Number.NaN,
+      kind: 'provider-coverage' as const,
+    }));
+  return [
+    ...[
+      ...snapshot.nodes,
+      ...snapshot.observations,
+      ...snapshot.areaConditions,
+    ].map((item) => ({ expiresAt: item.expiresAt.getTime(), kind: 'evidence' as const })),
+    ...providerDeadlines,
+  ]
+    .filter((deadline) => Number.isFinite(deadline.expiresAt));
+}
+
+function nextFutureExpiry(snapshot: LocalLogisticsSnapshot, now: number): LifelineExpiryDeadline | null {
+  let next: LifelineExpiryDeadline | null = null;
+  for (const deadline of expiryDeadlines(snapshot, now)) {
     // Already-expired evidence is already rendered as unknown. Ignoring it
     // here prevents a zero-delay rescheduling loop.
-    if (expiresAt <= now) continue;
-    if (next === null || expiresAt < next) next = expiresAt;
+    if (deadline.expiresAt <= now) continue;
+    if (next === null
+      || deadline.expiresAt < next.expiresAt
+      || (deadline.expiresAt === next.expiresAt
+        && deadline.kind === 'evidence'
+        && next.kind === 'provider-coverage')) next = deadline;
   }
   return next;
 }
@@ -87,18 +108,18 @@ export class LifelineEvidenceExpiryScheduler {
   private schedule(snapshot: LocalLogisticsSnapshot, generation: number): void {
     if (this.destroyed || generation !== this.generation || this.currentSnapshot !== snapshot) return;
     const now = this.now();
-    const expiresAt = nextFutureExpiry(snapshot, now);
-    if (expiresAt === null) return;
-    const delayMs = Math.min(expiresAt - now, MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS);
+    const deadline = nextFutureExpiry(snapshot, now);
+    if (deadline === null) return;
+    const delayMs = Math.min(deadline.expiresAt - now, MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS);
     this.timer = this.setTimer(() => {
       if (this.destroyed || generation !== this.generation || this.currentSnapshot !== snapshot) return;
       this.timer = null;
-      if (this.now() < expiresAt) {
+      if (this.now() < deadline.expiresAt) {
         this.schedule(snapshot, generation);
         return;
       }
       try {
-        this.onExpiry(snapshot, expiresAt);
+        this.onExpiry(snapshot, deadline.expiresAt, deadline.kind);
       } finally {
         if (!this.destroyed && generation === this.generation && this.currentSnapshot === snapshot) {
           this.schedule(snapshot, generation);
@@ -121,5 +142,20 @@ export function applyExpiredLifelineEvidenceTransition(
   effects.renderAtExpiry();
   effects.clearExactOverlay(identity);
   effects.publishSnapshot(snapshot);
+  return true;
+}
+
+export function applyLifelineExpiryTransition(
+  snapshot: LocalLogisticsSnapshot,
+  kind: LifelineExpiryKind,
+  effects: ExpiredLifelineEvidenceEffects,
+): boolean {
+  if (kind === 'evidence') return applyExpiredLifelineEvidenceTransition(snapshot, effects);
+  const identity = {
+    placeId: snapshot.placeId,
+    queryFingerprint: snapshot.queryFingerprint,
+  };
+  if (!effects.isCurrent(identity)) return false;
+  effects.renderAtExpiry();
   return true;
 }

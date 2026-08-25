@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   applyExpiredLifelineEvidenceTransition,
+  applyLifelineExpiryTransition,
   LifelineEvidenceExpiryScheduler,
   MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS,
 } from '../src/components/lifeline-evidence-expiry.ts';
@@ -63,6 +64,7 @@ function makeSnapshot(options: {
   nodeExpiry?: number;
   observationExpiry?: number;
   outageExpiry?: number;
+  includeProvider?: boolean;
 } = {}): LocalLogisticsSnapshot {
   const placeId = options.placeId ?? 'home';
   const queryFingerprint = options.fingerprint ?? 'exact-home';
@@ -97,7 +99,7 @@ function makeSnapshot(options: {
       expiresAt: new Date(outageExpiry),
       source: 'ornl-odin',
     }],
-    providers: [{
+    providers: options.includeProvider === false ? [] : [{
       id: 'ornl-odin',
       state: 'ok',
       acceptedRows: outageExpiry === undefined ? 0 : 1,
@@ -123,11 +125,13 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
   const renders: number[] = [];
   const cleared: Array<{ placeId: string; queryFingerprint: string }> = [];
   const commsKnowledge: string[] = [];
+  const transitionKinds: Array<string | undefined> = [];
   const scheduler = new LifelineEvidenceExpiryScheduler({
     now: clock.now,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
-    onExpiry: (snapshot) => {
+    onExpiry: (snapshot, _expiresAt, kind?: string) => {
+      transitionKinds.push(kind);
       applyExpiredLifelineEvidenceTransition(snapshot, {
         isCurrent: (identity) => identity.placeId === accepted.placeId
           && identity.queryFingerprint === accepted.queryFingerprint,
@@ -147,9 +151,56 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
 
   clock.advanceBy(1);
   assert.deepEqual(renders, [NOW + 1_000]);
+  assert.deepEqual(transitionKinds, ['evidence']);
   assert.deepEqual(cleared, [{ placeId: 'home', queryFingerprint: 'exact-home' }]);
   assert.deepEqual(commsKnowledge, ['unknown']);
   assert.deepEqual(clock.pendingDelays(), [1_000], 'the next accepted expiry remains scheduled');
+});
+
+test('provider coverage expiry repaints current-completeness claims without another event', () => {
+  const clock = new FakeClock();
+  const transitions: Array<{ at: number; kind: string | undefined }> = [];
+  const scheduler = new LifelineEvidenceExpiryScheduler({
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    onExpiry: (_snapshot, _expiresAt, kind?: string) => transitions.push({ at: clock.now(), kind }),
+  });
+  scheduler.track(makeSnapshot());
+
+  assert.deepEqual(clock.pendingDelays(), [30 * 60_000]);
+  clock.advanceBy(30 * 60_000 - 1);
+  assert.deepEqual(transitions, []);
+  clock.advanceBy(1);
+  assert.deepEqual(transitions, [{ at: NOW + 30 * 60_000, kind: 'provider-coverage' }]);
+});
+
+test('provider-only coverage transition repaints without clearing or publishing evidence', () => {
+  const effects: string[] = [];
+  const transitioned = applyLifelineExpiryTransition(makeSnapshot(), 'provider-coverage', {
+    isCurrent: () => true,
+    renderAtExpiry: () => effects.push('render'),
+    clearExactOverlay: () => effects.push('clear'),
+    publishSnapshot: () => effects.push('publish'),
+  });
+
+  assert.equal(transitioned, true);
+  assert.deepEqual(effects, ['render']);
+});
+
+test('evidence expiry wins when it shares a provider coverage deadline', () => {
+  const clock = new FakeClock();
+  const kinds: Array<string | undefined> = [];
+  const scheduler = new LifelineEvidenceExpiryScheduler({
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    onExpiry: (_snapshot, _expiresAt, kind?: string) => kinds.push(kind),
+  });
+  scheduler.track(makeSnapshot({ nodeExpiry: NOW + 30 * 60_000 }));
+
+  clock.advanceBy(30 * 60_000);
+  assert.deepEqual(kinds, ['evidence']);
 });
 
 test('replacing the exact snapshot cancels the prior place transition', () => {
@@ -194,7 +245,7 @@ test('already-expired evidence is ignored and far timers use a bounded delay', (
     clearTimer: clock.clearTimer,
     onExpiry: () => transitions.push(clock.now()),
   });
-  scheduler.track(makeSnapshot({ outageExpiry: NOW, nodeExpiry: futureExpiry }));
+  scheduler.track(makeSnapshot({ outageExpiry: NOW, nodeExpiry: futureExpiry, includeProvider: false }));
 
   assert.deepEqual(clock.pendingDelays(), [MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS]);
   clock.advanceBy(MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS);

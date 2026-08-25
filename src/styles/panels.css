@@ -875,3 +875,36 @@
     min-height: 44px;
   }
 }
+
+/* Emergency Readiness panel */
+.emergency-readiness { min-width: 0; padding: 10px; }
+.emergency-readiness__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+.emergency-readiness-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-subtle, #333);
+  border-left: 3px solid var(--sev-low, #34c759);
+  border-radius: 8px;
+  background: var(--surface-raised, rgba(255, 255, 255, 0.02));
+  overflow-wrap: anywhere;
+}
+.emergency-readiness-card--degraded { border-left-color: var(--sev-medium, #ffd60a); }
+.emergency-readiness-card--expired { border-left-color: var(--sev-high, #ff9f0a); }
+.emergency-readiness-card--unavailable { border-left-color: var(--text-muted, #777); }
+.emergency-readiness-card h3 { margin: 0; color: var(--text-primary, #ddd); font-size: 13px; }
+.emergency-readiness-card__headline { margin: 7px 0 0; color: var(--text-primary, #ddd); font-size: 12px; font-weight: 600; }
+.emergency-readiness-card__detail { margin: 4px 0 10px; color: var(--text-secondary, #999); font-size: 11px; }
+.emergency-readiness-card dl { display: grid; gap: 5px; margin: 0; }
+.emergency-readiness-card dl > div {
+  display: grid;
+  grid-template-columns: minmax(60px, auto) minmax(0, 1fr);
+  gap: 8px;
+  font-size: 11px;
+}
+.emergency-readiness-card dt { color: var(--text-muted, #777); }
+.emergency-readiness-card dd { min-width: 0; margin: 0; color: var(--text-secondary, #aaa); }
+.emergency-readiness-card time { font-variant-numeric: tabular-nums; }

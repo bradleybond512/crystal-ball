@@ -49,7 +49,7 @@ const AXIS_FRESHNESS_DOMAIN: Partial<Record<SurvivalAxis, SnapshotDomain>> = {
 export const GUIDANCE_LEVEL = 40;
 
 const DEFAULT_STALE_AFTER_MS = 6 * 60 * 60_000; // 6h — flag as stale beyond this
-const DEFAULT_BLIND_AFTER_MS = 24 * 60 * 60_000; // 24h — too old to certify at all
+export const DEFAULT_BLIND_AFTER_MS = 24 * 60 * 60_000; // 24h — too old to certify at all
 
 export type GridDownStatus = 'ready' | 'degraded' | 'blind';
 

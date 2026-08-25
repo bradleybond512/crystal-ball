@@ -70,7 +70,7 @@ function directRules(
 ): ContextualPanelRules {
   return Object.fromEntries(AXES.map((axis) => [
     axis,
-    (overrides[axis] ?? []).map((panelId) => ({ panelId, kind: 'direct' as const })),
+    (overrides[axis] ?? []).map((panelId) => [panelId] as const),
   ])) as unknown as ContextualPanelRules;
 }
 
@@ -117,7 +117,7 @@ test('restored duplicate and extra axes cannot add panels or replace the fixed k
   ] as WorldSnapshot['posture']['axes'];
   const rules = {
     ...directRules({ security: ['security-1'], supply: ['supply-1'] }),
-    rogue: [{ panelId: 'rogue-1', kind: 'direct' }],
+    rogue: [['rogue-1']],
   } as unknown as ContextualPanelRules;
 
   const view = buildContextualDeckView({
@@ -169,17 +169,18 @@ test('a canonical suggestion keeps earliest rank while explaining every qualifyi
 });
 
 test('Disaster Lifelines is mapped to exactly the five physical logistics axes', () => {
-  const mapped = AXES.filter((axis) => CONTEXTUAL_PANEL_RULES[axis].some((rule) => rule.panelId === 'local-logistics'));
+  const mapped = AXES.filter((axis) => CONTEXTUAL_PANEL_RULES[axis].some(([panelId]) => panelId === 'local-logistics'));
   assert.deepEqual(mapped, ['physical_safety', 'supply', 'mobility', 'health', 'energy_water']);
 });
 
 test('category-backed mapping rules agree with PanelMeta.evidenceFor', () => {
   for (const rules of Object.values(CONTEXTUAL_PANEL_RULES)) {
     for (const rule of rules) {
-      if (rule.kind !== 'category') continue;
+      const [panelId, category] = rule;
+      if (!category) continue;
       assert.ok(
-        PANEL_METADATA[rule.panelId]?.evidenceFor?.includes(rule.category),
-        `${rule.panelId} must declare evidenceFor ${rule.category}`,
+        PANEL_METADATA[panelId]?.evidenceFor?.includes(category),
+        `${panelId} must declare evidenceFor ${category}`,
       );
     }
   }
@@ -226,26 +227,27 @@ test('state copy distinguishes checking, unavailable, quiet, active, and stale w
   const rules = directRules({ physical_safety: ['local-logistics'] });
   const checking = buildContextualDeckView({ snapshot: undefined, pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(checking.state, 'checking');
-  assert.equal(checking.summary, 'Checking the latest saved posture…');
+  assert.equal(checking.summary, 'Checking saved posture…');
 
   const unavailable = buildContextualDeckView({ snapshot: null, pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(unavailable.state, 'unavailable');
-  assert.equal(unavailable.summary, 'No posture snapshot yet. Suggestions appear when an axis reaches elevated.');
+  assert.equal(unavailable.summary, 'No posture snapshot yet; suggestions begin at elevated.');
 
   const quiet = buildContextualDeckView({ snapshot: snapshot(), pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(quiet.state, 'quiet');
-  assert.equal(quiet.summary, 'No posture axis is elevated; no contextual panels are needed.');
+  assert.equal(quiet.headline, 'No elevated posture axes');
+  assert.equal(quiet.summary, 'Suggestions appear when an axis reaches elevated.');
 
   const active = buildContextualDeckView({ snapshot: snapshot({ physical_safety: 40 }), pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(active.state, 'active');
-  assert.equal(active.headline, 'Suggested for this posture');
+  assert.equal(active.headline, 'Suggested panels');
   assert.equal(active.cards[0]?.reason, 'Physical safety elevated (40).');
 
   const staleSnapshot = snapshot({ physical_safety: 40 }, NOW - 20 * 60_000);
   const stale = buildContextualDeckView({ snapshot: staleSnapshot, pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(stale.state, 'stale');
   assert.equal(stale.headline, 'Suggestions from last known posture');
-  assert.match(stale.summary, /captured 20m ago/i);
+  assert.match(stale.summary, /snapshot 20m old/i);
   assert.doesNotMatch(JSON.stringify(stale), /restored/i);
 });
 
@@ -262,10 +264,10 @@ test('a stale secure snapshot reports last-known age and asks for current verifi
   }, NOW);
 
   assert.equal(view.state, 'stale');
-  assert.equal(view.headline, 'Last known posture needs verification');
+  assert.equal(view.headline, 'Last known posture—verify now');
   assert.equal(
     view.summary,
-    'Snapshot captured 20m ago · last known posture had no elevated axes; verify current conditions before relying on it.',
+    'Snapshot 20m old · no elevated axes then; verify current conditions.',
   );
   assert.deepEqual(view.cards, []);
 });
@@ -282,10 +284,10 @@ test('stale elevated posture without an available card does not imply current sa
   }, NOW);
 
   assert.equal(view.state, 'stale');
-  assert.equal(view.headline, 'Suggestions unavailable from last known posture');
+  assert.equal(view.headline, 'Last known suggestions unavailable');
   assert.equal(
     view.summary,
-    'Snapshot captured 20m ago · elevated posture had no available contextual panel in this variant; verify current conditions before acting.',
+    'Snapshot 20m old · elevated axes had no available panel; verify current conditions.',
   );
   assert.deepEqual(view.cards, []);
 });

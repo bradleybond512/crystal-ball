@@ -396,6 +396,7 @@ export class HomeShellOverlay {
     const cards = this.buildDeckView(now);
     this.renderReadiness(cards);
     if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(cards);
+    this.renderCurrentContextualView();
     this.renderRibbon(now);
     this.syncSituationCommand(getActiveSituation());
   }

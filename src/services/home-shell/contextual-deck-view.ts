@@ -17,76 +17,67 @@ import { formatAge } from './deck-view.ts';
 export const GUIDANCE_LEVEL = 40;
 export const MAX_CONTEXTUAL_PANELS = 6;
 
-export type ContextualPanelRule =
-  | { panelId: string; kind: 'direct' }
-  | { panelId: string; kind: 'category'; category: PlaybookCategory };
+export type ContextualPanelRule = readonly [panelId: string, category?: PlaybookCategory];
 
 export type ContextualPanelRules = Readonly<Record<SurvivalAxis, readonly ContextualPanelRule[]>>;
 
-const direct = (panelId: string): ContextualPanelRule => ({ panelId, kind: 'direct' });
-const category = (panelId: string, value: PlaybookCategory): ContextualPanelRule => ({
-  panelId,
-  kind: 'category',
-  category: value,
-});
-
-export const CONTEXTUAL_PANEL_RULES: ContextualPanelRules = {
+export const CONTEXTUAL_PANEL_RULES = {
   physical_safety: [
-    direct('local-logistics'),
-    category('nws-alerts', 'severe_weather'),
-    category('survival-guide', 'severe_weather'),
-    category('evacuation', 'severe_weather'),
-    category('saved-places', 'severe_weather'),
+    ['local-logistics'],
+    ['nws-alerts', 'severe_weather'],
+    ['survival-guide', 'severe_weather'],
+    ['evacuation', 'severe_weather'],
+    ['saved-places', 'severe_weather'],
   ],
   supply: [
-    direct('local-logistics'),
-    category('shortage-radar', 'food_shortage'),
-    category('supply-chain', 'food_shortage'),
-    category('humanitarian-crisis', 'food_shortage'),
-    direct('survival-guide'),
+    ['local-logistics'],
+    ['shortage-radar', 'food_shortage'],
+    ['supply-chain', 'food_shortage'],
+    ['humanitarian-crisis', 'food_shortage'],
+    ['survival-guide'],
   ],
   financial: [
-    category('markets', 'banking_outage'),
-    category('macro-signals', 'banking_outage'),
-    category('stablecoins', 'banking_outage'),
-    category('threat-intel-hub', 'banking_outage'),
+    ['markets', 'banking_outage'],
+    ['macro-signals', 'banking_outage'],
+    ['stablecoins', 'banking_outage'],
+    ['threat-intel-hub', 'banking_outage'],
   ],
   mobility: [
-    direct('local-logistics'),
-    category('travel-safety', 'travel_disruption'),
-    category('air-traffic', 'travel_disruption'),
-    category('amtrak-alerts', 'travel_disruption'),
-    category('security-advisories', 'travel_disruption'),
+    ['local-logistics'],
+    ['travel-safety', 'travel_disruption'],
+    ['air-traffic', 'travel_disruption'],
+    ['amtrak-alerts', 'travel_disruption'],
+    ['security-advisories', 'travel_disruption'],
   ],
   comms: [
-    category('internet-disruptions', 'grid_outage'),
-    category('grid-intelligence', 'grid_outage'),
-    direct('comms-health'),
-    category('cyber-threats', 'cyber_campaign'),
-    category('threat-intel-hub', 'cyber_campaign'),
+    ['internet-disruptions', 'grid_outage'],
+    ['grid-intelligence', 'grid_outage'],
+    ['comms-health'],
+    ['cyber-threats', 'cyber_campaign'],
+    ['threat-intel-hub', 'cyber_campaign'],
   ],
   health: [
-    direct('local-logistics'),
-    category('disease-intel', 'disease_outbreak'),
-    category('air-quality', 'disease_outbreak'),
-    category('disease-outbreaks', 'disease_outbreak'),
-    category('pandemic-preparedness', 'disease_outbreak'),
+    ['local-logistics'],
+    ['disease-intel', 'disease_outbreak'],
+    ['air-quality', 'disease_outbreak'],
+    ['disease-outbreaks', 'disease_outbreak'],
+    ['pandemic-preparedness', 'disease_outbreak'],
   ],
   energy_water: [
-    direct('local-logistics'),
-    category('power-grid', 'grid_outage'),
-    category('grid-intelligence', 'grid_outage'),
-    direct('water-quality'),
-    category('infrastructure', 'grid_outage'),
+    ['local-logistics'],
+    ['power-grid', 'grid_outage'],
+    ['grid-intelligence', 'grid_outage'],
+    ['water-quality'],
+    ['infrastructure', 'grid_outage'],
   ],
   security: [
-    category('threat-intel-hub', 'cyber_campaign'),
-    category('threat-inbox', 'cyber_campaign'),
-    category('live-news', 'conflict_escalation'),
-    category('security-advisories', 'travel_disruption'),
-    category('survival-guide', 'conflict_escalation'),
+    ['threat-intel-hub', 'cyber_campaign'],
+    ['threat-inbox', 'cyber_campaign'],
+    ['live-news', 'conflict_escalation'],
+    ['security-advisories', 'travel_disruption'],
+    ['survival-guide', 'conflict_escalation'],
   ],
-};
+} as const satisfies ContextualPanelRules;
 
 export type ContextualDeckState = 'checking' | 'unavailable' | 'quiet' | 'active' | 'stale';
 
@@ -145,13 +136,13 @@ export interface ContextualDeckInputs {
 
 export function buildContextualDeckView(inputs: ContextualDeckInputs, now: number): ContextualDeckView {
   if (inputs.snapshot === undefined) {
-    return stateView('checking', 'Contextual panels', 'Checking the latest saved posture…');
+    return stateView('checking', 'Contextual panels', 'Checking saved posture…');
   }
   if (inputs.snapshot === null) {
     return stateView(
       'unavailable',
-      'Contextual panels unavailable',
-      'No posture snapshot yet. Suggestions appear when an axis reaches elevated.',
+      'Contextual panels',
+      'No posture snapshot yet; suggestions begin at elevated.',
     );
   }
 
@@ -160,15 +151,15 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
   if (axes.length === 0) {
     if (status.stale) {
       return staleStateView(
-        'Last known posture needs verification',
-        'last known posture had no elevated axes; verify current conditions before relying on it.',
+        'Last known posture—verify now',
+        'no elevated axes then; verify current conditions.',
         status.age,
       );
     }
     return stateView(
       'quiet',
-      'No contextual panels needed',
-      'No posture axis is elevated; no contextual panels are needed.',
+      'No elevated posture axes',
+      'Suggestions appear when an axis reaches elevated.',
     );
   }
 
@@ -179,15 +170,15 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
   if (cards.length === 0) {
     if (status.stale) {
       return staleStateView(
-        'Suggestions unavailable from last known posture',
-        'elevated posture had no available contextual panel in this variant; verify current conditions before acting.',
+        'Last known suggestions unavailable',
+        'elevated axes had no available panel; verify current conditions.',
         status.age,
       );
     }
     return stateView(
       'quiet',
-      'No contextual panels available',
-      'Elevated posture has no available contextual panel in this variant.',
+      'No contextual panels',
+      'Elevated posture has no available panel in this variant.',
     );
   }
 
@@ -215,10 +206,10 @@ function collectContextualCards(
 ): ContextualCardDraft[] {
   const cards: ContextualCardDraft[] = [];
   const cardsById = new Map<string, ContextualCardDraft>();
-  const maxSlots = Math.max(0, ...axes.map((axis) => rules[axis.axis]?.length ?? 0));
+  const maxSlots = Math.max(...axes.map((axis) => rules[axis.axis].length));
   for (let slot = 0; slot < maxSlots; slot += 1) {
     for (const axis of axes) {
-      const rule = rules[axis.axis]?.[slot];
+      const rule = rules[axis.axis][slot];
       const candidate = rule
         ? contextualCandidate(rule, axis, excluded, panels, metadata)
         : null;
@@ -235,12 +226,13 @@ function contextualCandidate(
   panels: Readonly<Record<string, ActivePanelLike | undefined>>,
   metadata: Readonly<Record<string, PanelMeta | undefined>>,
 ): ContextualCandidate | null {
-  const panelId = canonicalPanelId(rule.panelId, metadata);
+  const [requestedPanelId, category] = rule;
+  const panelId = canonicalPanelId(requestedPanelId, metadata);
   if (!panelId || excluded.has(panelId)) return null;
   const meta = metadata[panelId];
   const panel = panels[panelId];
   if (!meta || !panel?.enabled) return null;
-  if (rule.kind === 'category' && !meta.evidenceFor?.includes(rule.category)) return null;
+  if (category && !meta.evidenceFor?.includes(category)) return null;
   return {
     panelId,
     title: panel.name,
@@ -279,18 +271,18 @@ function populatedView(
   status: SnapshotStatus,
 ): ContextualDeckView {
   const state: ContextualDeckState = status.stale ? 'stale' : 'active';
-  const headline = status.stale ? 'Suggestions from last known posture' : 'Suggested for this posture';
+  const headline = status.stale ? 'Suggestions from last known posture' : 'Suggested panels';
   const panelLabel = cards.length === 1 ? 'panel' : 'panels';
   const summary = status.stale
-    ? `Snapshot captured ${status.age} ago · verify current conditions before acting.`
-    : `${cards.length} relevant ${panelLabel} for elevated posture axes.`;
+    ? `Snapshot ${status.age} old · verify current conditions before acting.`
+    : `${cards.length} relevant ${panelLabel} for elevated axes.`;
   const cardViews = cards.map((card) => formatContextualCard(card));
   return {
     state,
     headline,
     summary,
     cards: cardViews,
-    semanticKey: `${state}|${headline}|${summary}|${cardViews.map((card) => card.semanticKey).join('|')}`,
+    semanticKey: `${state}|${summary}|${cardViews.map((card) => card.semanticKey).join('|')}`,
   };
 }
 
@@ -303,7 +295,7 @@ function snapshotStatus(snapshot: WorldSnapshot, now: number): SnapshotStatus {
 }
 
 function staleStateView(headline: string, detail: string, age: string): ContextualDeckView {
-  return stateView('stale', headline, `Snapshot captured ${age} ago · ${detail}`);
+  return stateView('stale', headline, `Snapshot ${age} old · ${detail}`);
 }
 
 function formatContextualCard(card: ContextualCardDraft): ContextualPanelCardView {
@@ -320,7 +312,6 @@ function formatContextualCard(card: ContextualCardDraft): ContextualPanelCardVie
 }
 
 function qualifyingAxes(axes: readonly AxisState[]): AxisState[] {
-  const order = new Map(SURVIVAL_AXES.map((axis, index) => [axis, index]));
   return SURVIVAL_AXES
     .flatMap((axisName) => {
       const axis = axes.find((candidate) => candidate.axis === axisName);
@@ -329,7 +320,7 @@ function qualifyingAxes(axes: readonly AxisState[]): AxisState[] {
     .sort((a, b) => (
       bandRank(b.band) - bandRank(a.band)
       || b.level - a.level
-      || (order.get(a.axis) ?? SURVIVAL_AXES.length) - (order.get(b.axis) ?? SURVIVAL_AXES.length)
+      || SURVIVAL_AXES.indexOf(a.axis) - SURVIVAL_AXES.indexOf(b.axis)
     ));
 }
 
@@ -350,5 +341,5 @@ function canonicalPanelId(
 }
 
 function stateView(state: ContextualDeckState, headline: string, summary: string): ContextualDeckView {
-  return { state, headline, summary, cards: [], semanticKey: `${state}|${headline}|${summary}` };
+  return { state, headline, summary, cards: [], semanticKey: `${state}|${summary}` };
 }

@@ -48,8 +48,11 @@ import {
   togglePin,
 } from '@/services/home-shell/deck-view';
 import type { ContributorEvidenceLike, DeckCardView } from '@/services/home-shell/deck-view';
-import { buildContextualDeckView } from '@/services/home-shell/contextual-deck-view';
-import type { ContextualDeckView, ContextualPanelCardView } from '@/services/home-shell/contextual-deck-view';
+import type {
+  ContextualDeckInputs,
+  ContextualDeckView,
+  ContextualPanelCardView,
+} from '@/services/home-shell/contextual-deck-view';
 import { buildStatusRibbon } from '@/services/home-shell/status-ribbon-view';
 import type { StatusRibbonView } from '@/services/home-shell/status-ribbon-view';
 import {
@@ -76,6 +79,37 @@ interface NarrativeSource {
   getNarrative(): string;
 }
 
+export type ContextualDeckBuilder = (
+  inputs: ContextualDeckInputs,
+  now: number,
+) => ContextualDeckView;
+
+export type ContextualProjectionSource =
+  | { kind: 'ready'; build: ContextualDeckBuilder }
+  | { kind: 'lazy'; load: () => Promise<ContextualDeckBuilder> };
+
+const DEFAULT_CONTEXTUAL_PROJECTION: ContextualProjectionSource = {
+  kind: 'lazy',
+  load: () => import('@/services/home-shell/contextual-deck-view')
+    .then((module) => module.buildContextualDeckView),
+};
+
+const CONTEXTUAL_LOADING_VIEW: ContextualDeckView = {
+  state: 'checking',
+  headline: 'Contextual panels',
+  summary: 'Loading contextual guidance…',
+  cards: [],
+  semanticKey: 'contextual-loading',
+};
+
+const CONTEXTUAL_FAILED_VIEW: ContextualDeckView = {
+  state: 'unavailable',
+  headline: 'Contextual panels unavailable',
+  summary: 'Use Your Deck or Library to open panels.',
+  cards: [],
+  semanticKey: 'contextual-unavailable',
+};
+
 export interface HomeShellOptions {
   getPanel: (panelId: string) => NarrativeSource | undefined;
   /** Mounts a lazy panel without touching the classic grid's scroll. */
@@ -88,6 +122,8 @@ export interface HomeShellOptions {
     subscribe: (callback: () => void) => () => void;
     hydrate: () => Promise<void>;
   };
+  /** Pure contextual projection seam; production loads it only when the shell opens. */
+  contextualProjection?: ContextualProjectionSource;
 }
 
 export class HomeShellOverlay {
@@ -118,11 +154,15 @@ export class HomeShellOverlay {
   private contextualHydrationSettled = false;
   private contextualSemanticKey: string | null = null;
   private pendingContextualView: ContextualDeckView | null = null;
+  private contextualBuilder: ContextualDeckBuilder | null = null;
+  private contextualProjectionLoad: Promise<ContextualDeckBuilder> | null = null;
+  private contextualProjectionFailed = false;
   private readonly getPanel: HomeShellOptions['getPanel'];
   // used by the focus host
   private readonly ensurePanel: HomeShellOptions['ensurePanel'];
   private readonly now: () => number;
   private readonly contextualSnapshotSource: NonNullable<HomeShellOptions['contextualSnapshotSource']>;
+  private readonly contextualProjection: ContextualProjectionSource;
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
@@ -132,6 +172,10 @@ export class HomeShellOverlay {
     this.getPanel = options.getPanel;
     this.ensurePanel = options.ensurePanel;
     this.now = options.now ?? Date.now;
+    this.contextualProjection = options.contextualProjection ?? DEFAULT_CONTEXTUAL_PROJECTION;
+    if (this.contextualProjection.kind === 'ready') {
+      this.contextualBuilder = this.contextualProjection.build;
+    }
     this.contextualSnapshotSource = options.contextualSnapshotSource ?? {
       get: getStormSnapshot,
       subscribe: subscribeStormPosture,
@@ -513,6 +557,7 @@ export class HomeShellOverlay {
       this.renderCurrentContextualView();
     });
     this.renderCurrentContextualView();
+    this.startContextualProjectionLoad();
     if (this.contextualHydrationStarted) return;
     this.contextualHydrationStarted = true;
     void this.contextualSnapshotSource.hydrate().then(
@@ -534,10 +579,44 @@ export class HomeShellOverlay {
     this.pendingContextualView = null;
   }
 
+  private startContextualProjectionLoad(): void {
+    if (
+      this.contextualBuilder
+      || this.contextualProjection.kind === 'ready'
+      || this.contextualProjectionLoad
+      || this.contextualProjectionFailed
+    ) return;
+    const pending = this.loadContextualProjection();
+    this.contextualProjectionLoad = pending;
+    void pending.then(
+      (builder) => {
+        this.contextualBuilder = builder;
+        if (this.visible && this.root) this.renderCurrentContextualView();
+      },
+      () => this.finishContextualProjectionFailure(),
+    );
+  }
+
+  private async loadContextualProjection(): Promise<ContextualDeckBuilder> {
+    if (this.contextualProjection.kind === 'ready') return this.contextualProjection.build;
+    return this.contextualProjection.load();
+  }
+
+  private finishContextualProjectionFailure(): void {
+    this.contextualProjectionFailed = true;
+    if (this.visible && this.root) this.renderCurrentContextualView();
+  }
+
   private renderCurrentContextualView(): void {
+    if (!this.contextualBuilder) {
+      this.renderContextualView(
+        this.contextualProjectionFailed ? CONTEXTUAL_FAILED_VIEW : CONTEXTUAL_LOADING_VIEW,
+      );
+      return;
+    }
     const current = this.contextualSnapshotSource.get();
     const snapshot = current ?? (this.contextualHydrationSettled ? null : undefined);
-    this.renderContextualView(buildContextualDeckView({
+    this.renderContextualView(this.contextualBuilder({
       snapshot,
       pins: this.pins,
       panels: DEFAULT_PANELS,

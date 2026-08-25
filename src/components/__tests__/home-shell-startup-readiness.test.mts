@@ -269,6 +269,41 @@ test('hide and destroy invalidate a pending contextual hydration completion', as
   assert.equal(parent.querySelector('.home-shell-contextual'), null);
 });
 
+test('a pending first hydration settles into the currently visible reshow generation', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  let resolveHydrate!: () => void;
+  const pending = new Promise<void>((resolve) => { resolveHydrate = resolve; });
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualSnapshotSource: {
+      get: () => null,
+      subscribe: () => () => {},
+      hydrate: () => pending,
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  shell.hide();
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  assert.equal(section?.dataset.state, 'checking');
+
+  resolveHydrate();
+  await pending;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const settledState = section?.dataset.state;
+  const settledText = section?.textContent ?? '';
+  shell.destroy();
+  assert.equal(settledState, 'unavailable');
+  assert.match(settledText, /no posture snapshot yet/i);
+});
+
 test('an unchanged contextual projection preserves its focused DOM node and defers changed replacement until focus leaves', async () => {
   const happyWindow = installDom();
   const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
@@ -312,6 +347,80 @@ test('an unchanged contextual projection preserves its focused DOM node and defe
   assert.equal(focusedUpdateDeferred, true);
   assert.equal(changedProjectionReplaced, true);
   assert.equal(outsideFocused, true);
+});
+
+test('a focused contextual A to B to A update cancels the obsolete deferred B view', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  let current = contextualSnapshot(80);
+  let listener: (() => void) | undefined;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualSnapshotSource: {
+      get: () => current,
+      subscribe: (callback) => { listener = callback; return () => { listener = undefined; }; },
+      hydrate: async () => {},
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  const initialCard = section?.querySelector<HTMLElement>('[data-panel-key="local-logistics"]');
+  const open = section?.querySelector<HTMLButtonElement>('[data-action="context-open"]');
+  open?.focus();
+
+  current = contextualSnapshot(60);
+  listener?.();
+  current = contextualSnapshot(80);
+  listener?.();
+  const testShell = shell as unknown as { pendingContextualView: unknown };
+
+  const finalCard = section?.querySelector('[data-panel-key="local-logistics"]');
+  const finalText = section?.textContent ?? '';
+  const pendingView = testShell.pendingContextualView;
+  shell.destroy();
+  assert.equal(finalCard, initialCard);
+  assert.match(finalText, /critical \(80\)/i);
+  assert.equal(pendingView, null);
+});
+
+test('the Deck hint reveals actionable contextual suggestions before falling through to saved cards', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  let current = contextualSnapshot(80);
+  let listener: (() => void) | undefined;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualSnapshotSource: {
+      get: () => current,
+      subscribe: (callback) => { listener = callback; return () => { listener = undefined; }; },
+      hydrate: async () => {},
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  const hint = parent.querySelector<HTMLButtonElement>('.home-shell-deck-hint');
+  const contextual = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  const deck = parent.querySelector<HTMLElement>('.home-shell-deck');
+  const reached: string[] = [];
+  if (contextual) contextual.scrollIntoView = () => { reached.push('contextual'); };
+  if (deck) deck.scrollIntoView = () => { reached.push('deck'); };
+
+  hint?.click();
+  current = contextualSnapshot(0);
+  listener?.();
+  hint?.click();
+
+  shell.destroy();
+  assert.deepEqual(reached, ['contextual', 'deck']);
 });
 
 test('contextual Open leaves persisted pins byte-for-byte unchanged and exposes no pin controls', async () => {

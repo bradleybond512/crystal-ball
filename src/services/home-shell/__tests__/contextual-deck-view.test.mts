@@ -248,3 +248,44 @@ test('state copy distinguishes checking, unavailable, quiet, active, and stale w
   assert.match(stale.summary, /captured 20m ago/i);
   assert.doesNotMatch(JSON.stringify(stale), /restored/i);
 });
+
+test('a stale secure snapshot reports last-known age and asks for current verification', () => {
+  const panels = activePanels('local-logistics');
+  const metas = metadata('local-logistics');
+  const rules = directRules({ physical_safety: ['local-logistics'] });
+  const view = buildContextualDeckView({
+    snapshot: snapshot({}, NOW - 20 * 60_000),
+    pins: [],
+    panels,
+    metadata: metas,
+    rules,
+  }, NOW);
+
+  assert.equal(view.state, 'stale');
+  assert.equal(view.headline, 'Last known posture needs verification');
+  assert.equal(
+    view.summary,
+    'Snapshot captured 20m ago · last known posture had no elevated axes; verify current conditions before relying on it.',
+  );
+  assert.deepEqual(view.cards, []);
+});
+
+test('stale elevated posture without an available card does not imply current safety', () => {
+  const metas = metadata('local-logistics');
+  const rules = directRules({ physical_safety: ['local-logistics'] });
+  const view = buildContextualDeckView({
+    snapshot: snapshot({ physical_safety: 40 }, NOW - 20 * 60_000),
+    pins: [],
+    panels: {},
+    metadata: metas,
+    rules,
+  }, NOW);
+
+  assert.equal(view.state, 'stale');
+  assert.equal(view.headline, 'Suggestions unavailable from last known posture');
+  assert.equal(
+    view.summary,
+    'Snapshot captured 20m ago · elevated posture had no available contextual panel in this variant; verify current conditions before acting.',
+  );
+  assert.deepEqual(view.cards, []);
+});

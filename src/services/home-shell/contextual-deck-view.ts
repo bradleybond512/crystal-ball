@@ -129,6 +129,11 @@ interface ContextualCandidate {
   contribution: ContextualAxisContribution;
 }
 
+interface SnapshotStatus {
+  stale: boolean;
+  age: string;
+}
+
 export interface ContextualDeckInputs {
   /** undefined while first hydration is unsettled; null once it settles empty. */
   snapshot: WorldSnapshot | null | undefined;
@@ -150,8 +155,16 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
     );
   }
 
+  const status = snapshotStatus(inputs.snapshot, now);
   const axes = qualifyingAxes(inputs.snapshot.posture.axes);
   if (axes.length === 0) {
+    if (status.stale) {
+      return staleStateView(
+        'Last known posture needs verification',
+        'last known posture had no elevated axes; verify current conditions before relying on it.',
+        status.age,
+      );
+    }
     return stateView(
       'quiet',
       'No contextual panels needed',
@@ -164,6 +177,13 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
   const cards = collectContextualCards(axes, rules, excluded, inputs.panels, inputs.metadata);
 
   if (cards.length === 0) {
+    if (status.stale) {
+      return staleStateView(
+        'Suggestions unavailable from last known posture',
+        'elevated posture had no available contextual panel in this variant; verify current conditions before acting.',
+        status.age,
+      );
+    }
     return stateView(
       'quiet',
       'No contextual panels available',
@@ -171,7 +191,7 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
     );
   }
 
-  return populatedView(inputs.snapshot, cards, now);
+  return populatedView(cards, status);
 }
 
 function canonicalPinIds(
@@ -255,17 +275,14 @@ function addContextualCandidate(
 }
 
 function populatedView(
-  snapshot: WorldSnapshot,
   cards: readonly ContextualCardDraft[],
-  now: number,
+  status: SnapshotStatus,
 ): ContextualDeckView {
-  const projected = projectView(snapshot, { now });
-  const stale = projected.isStale || projected.posture.staleInputs.length > 0;
-  const state: ContextualDeckState = stale ? 'stale' : 'active';
-  const headline = stale ? 'Suggestions from last known posture' : 'Suggested for this posture';
+  const state: ContextualDeckState = status.stale ? 'stale' : 'active';
+  const headline = status.stale ? 'Suggestions from last known posture' : 'Suggested for this posture';
   const panelLabel = cards.length === 1 ? 'panel' : 'panels';
-  const summary = stale
-    ? `Snapshot captured ${formatAge(Math.max(0, now - snapshot.capturedAtMs))} ago · verify current conditions before acting.`
+  const summary = status.stale
+    ? `Snapshot captured ${status.age} ago · verify current conditions before acting.`
     : `${cards.length} relevant ${panelLabel} for elevated posture axes.`;
   const cardViews = cards.map((card) => formatContextualCard(card));
   return {
@@ -275,6 +292,18 @@ function populatedView(
     cards: cardViews,
     semanticKey: `${state}|${headline}|${summary}|${cardViews.map((card) => card.semanticKey).join('|')}`,
   };
+}
+
+function snapshotStatus(snapshot: WorldSnapshot, now: number): SnapshotStatus {
+  const projected = projectView(snapshot, { now });
+  return {
+    stale: projected.isStale || projected.posture.staleInputs.length > 0,
+    age: formatAge(Math.max(0, now - snapshot.capturedAtMs)),
+  };
+}
+
+function staleStateView(headline: string, detail: string, age: string): ContextualDeckView {
+  return stateView('stale', headline, `Snapshot captured ${age} ago · ${detail}`);
 }
 
 function formatContextualCard(card: ContextualCardDraft): ContextualPanelCardView {

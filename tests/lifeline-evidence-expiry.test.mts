@@ -124,11 +124,13 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
   const renders: number[] = [];
   const cleared: Array<{ placeId: string; queryFingerprint: string }> = [];
   const commsKnowledge: string[] = [];
+  const transitionKinds: Array<string | undefined> = [];
   const scheduler = new LifelineEvidenceExpiryScheduler({
     now: clock.now,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
-    onExpiry: (snapshot) => {
+    onExpiry: (snapshot, _expiresAt, kind?: string) => {
+      transitionKinds.push(kind);
       applyExpiredLifelineEvidenceTransition(snapshot, {
         isCurrent: (identity) => identity.placeId === accepted.placeId
           && identity.queryFingerprint === accepted.queryFingerprint,
@@ -148,6 +150,7 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
 
   clock.advanceBy(1);
   assert.deepEqual(renders, [NOW + 1_000]);
+  assert.deepEqual(transitionKinds, ['evidence']);
   assert.deepEqual(cleared, [{ placeId: 'home', queryFingerprint: 'exact-home' }]);
   assert.deepEqual(commsKnowledge, ['unknown']);
   assert.deepEqual(clock.pendingDelays(), [1_000], 'the next accepted expiry remains scheduled');
@@ -155,12 +158,12 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
 
 test('provider coverage expiry repaints current-completeness claims without another event', () => {
   const clock = new FakeClock();
-  const transitions: number[] = [];
+  const transitions: Array<{ at: number; kind: string | undefined }> = [];
   const scheduler = new LifelineEvidenceExpiryScheduler({
     now: clock.now,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
-    onExpiry: () => transitions.push(clock.now()),
+    onExpiry: (_snapshot, _expiresAt, kind?: string) => transitions.push({ at: clock.now(), kind }),
   });
   scheduler.track(makeSnapshot());
 
@@ -168,7 +171,22 @@ test('provider coverage expiry repaints current-completeness claims without anot
   clock.advanceBy(30 * 60_000 - 1);
   assert.deepEqual(transitions, []);
   clock.advanceBy(1);
-  assert.deepEqual(transitions, [NOW + 30 * 60_000]);
+  assert.deepEqual(transitions, [{ at: NOW + 30 * 60_000, kind: 'provider-coverage' }]);
+});
+
+test('evidence expiry wins when it shares a provider coverage deadline', () => {
+  const clock = new FakeClock();
+  const kinds: Array<string | undefined> = [];
+  const scheduler = new LifelineEvidenceExpiryScheduler({
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    onExpiry: (_snapshot, _expiresAt, kind?: string) => kinds.push(kind),
+  });
+  scheduler.track(makeSnapshot({ nodeExpiry: NOW + 30 * 60_000 }));
+
+  clock.advanceBy(30 * 60_000);
+  assert.deepEqual(kinds, ['evidence']);
 });
 
 test('replacing the exact snapshot cancels the prior place transition', () => {

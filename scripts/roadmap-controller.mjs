@@ -376,11 +376,12 @@ function idsClaimedBy(pull) {
 
 function eligibleTask(tasks, openClaims) {
   const byId = new Map(tasks.map((task) => [task.id, task]));
-  return tasks.find((task) => task.status === 'TODO'
+  const eligible = tasks.filter((task) => task.status === 'TODO'
     && !openClaims.has(task.id)
     && task.dependencies.every((id) => TERMINAL_STATUSES.has(byId.get(id)?.status))
     && (task.dependencyAnyOf.length === 0
       || task.dependencyAnyOf.some((id) => TERMINAL_STATUSES.has(byId.get(id)?.status))));
+  return eligible.find((task) => task.id.startsWith('UX-')) ?? eligible[0];
 }
 
 // Reconciliation deliberately evaluates every task and claim before producing a deterministic report.

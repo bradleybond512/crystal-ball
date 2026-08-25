@@ -249,6 +249,8 @@ The first visible state is still misleading and not decision-useful:
 
 ### UX-001 — Posture band on the Home Shell
 
+Dependencies: UX-000
+
 Add survival posture to the default surface as a fourth briefing band.
 
 - **Read from:** `storm-posture-state` — already an entry point, already fed live

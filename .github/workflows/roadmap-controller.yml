@@ -49,14 +49,22 @@ jobs:
               throw new Error('roadmap reference export is invalid');
             }
             if (referenced.length > 256) throw new Error('roadmap references exceed the 256-PR snapshot bound');
-            const open = await github.paginate(github.rest.pulls.list, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              base,
-              per_page: 100,
-            });
-            if (open.length > 256) throw new Error('open main PRs exceed the 256-PR snapshot bound');
+            const limit = 256;
+            const open = [];
+            for (let page = 1; open.length <= limit; page += 1) {
+              const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                base,
+                per_page: 100,
+                page,
+              });
+              const remaining = limit + 1 - open.length;
+              open.push(...data.slice(0, remaining));
+              if (data.length < 100 || open.length > limit) break;
+            }
+            if (open.length > limit) throw new Error('open main PRs exceed the 256-PR snapshot bound');
             const byNumber = new Map(open.map((pull) => [pull.number, pull]));
             for (const number of referenced) {
               if (byNumber.has(number)) continue;
@@ -170,14 +178,22 @@ jobs:
               throw new Error('roadmap reference export is invalid');
             }
             if (referenced.length > 256) throw new Error('roadmap references exceed the 256-PR snapshot bound');
-            const open = await github.paginate(github.rest.pulls.list, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              base,
-              per_page: 100,
-            });
-            if (open.length > 256) throw new Error('open main PRs exceed the 256-PR snapshot bound');
+            const limit = 256;
+            const open = [];
+            for (let page = 1; open.length <= limit; page += 1) {
+              const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                base,
+                per_page: 100,
+                page,
+              });
+              const remaining = limit + 1 - open.length;
+              open.push(...data.slice(0, remaining));
+              if (data.length < 100 || open.length > limit) break;
+            }
+            if (open.length > limit) throw new Error('open main PRs exceed the 256-PR snapshot bound');
             const byNumber = new Map(open.map((pull) => [pull.number, pull]));
             for (const number of referenced) {
               if (byNumber.has(number)) continue;
@@ -240,13 +256,21 @@ jobs:
             const marker = '<!-- crystal-ball-roadmap-controller:v1 -->';
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
             if (!body.includes(marker)) throw new Error('watchdog report marker is missing');
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              per_page: 100,
-            });
-            if (issues.length > 512) throw new Error('open issue scan exceeds 512 entries');
+            const limit = 512;
+            const issues = [];
+            for (let page = 1; issues.length <= limit; page += 1) {
+              const { data } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100,
+                page,
+              });
+              const remaining = limit + 1 - issues.length;
+              issues.push(...data.slice(0, remaining));
+              if (data.length < 100 || issues.length > limit) break;
+            }
+            if (issues.length > limit) throw new Error('open issue scan exceeds 512 entries');
             const matches = issues.filter((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
             if (matches.length > 1) throw new Error('multiple roadmap watchdog issues found');
             if (matches.length === 0) {

@@ -91,7 +91,7 @@ function field(body, name) {
 }
 
 function prNumbers(value) {
-  return [...new Set([...value.matchAll(/(?:\bPR\s*)?#(\d+)\b/gi)].map((match) => Number(match[1])))];
+  return [...new Set([...value.matchAll(/#(\d+)\b/g)].map((match) => Number(match[1])))];
 }
 
 function taskFrom({ id, title, statusText, body = '', evidence = '', source, mirror = false }) {
@@ -102,22 +102,42 @@ function taskFrom({ id, title, statusText, body = '', evidence = '', source, mir
       .some((prefix) => lower.startsWith(prefix));
   });
   const evidenceText = evidenceLines.map((line) => line.slice(line.indexOf(':') + 1).trim()).join('\n');
-  const dependencyIds = (field(body, 'Dependencies') ?? '').match(TASK_ID);
+  const dependencyText = field(body, 'Dependencies') ?? '';
+  const dependencyIds = dependencyText.match(TASK_ID);
+  const evidencePrs = prNumbers(`${evidence}\n${evidenceText}`);
+  const evidenceMain = evidenceLines.some((line) => /\b(?:main|merged|landed)\b[^\n]*\b[a-f0-9]{7,40}\b/i.test(line));
+  const dependencyAnyOf = /\bor\b/i.test(dependencyText) && dependencyIds
+    ? [...new Set(dependencyIds)]
+    : [];
   return {
     id,
     title,
     status: normalized.status,
     rawStatus: normalized.raw,
     highAssurance: normalized.highAssurance,
-    dependencies: dependencyIds ? [...new Set(dependencyIds)] : [],
-    evidencePrs: prNumbers(`${evidence}\n${evidenceText}`),
-    hasEvidence: (evidence.trim() !== '' && evidence.trim() !== '—') || evidenceLines.length > 0,
-    evidenceMain: evidenceLines.some((line) => /\bmain\b|`[a-f0-9]{7,40}`/i.test(line)),
+    dependencies: dependencyIds && dependencyAnyOf.length === 0 ? [...new Set(dependencyIds)] : [],
+    dependencyAnyOf,
+    evidencePrs,
+    hasEvidence: evidencePrs.length > 0 || evidenceMain,
+    evidenceMain,
     exitCondition: field(body, 'Exit condition'),
     reviewAfter: field(body, 'Review after'),
     source,
     mirror,
   };
+}
+
+function programStatus(markdown, pattern, name, errors) {
+  const raw = pattern.exec(markdown)?.[1]?.toUpperCase() ?? null;
+  if (!raw) {
+    errors.push(`${name} program status is missing`);
+    return null;
+  }
+  if (!['ACTIVE', 'COMPLETE'].includes(raw)) {
+    errors.push(`${name} program has unrecognized status ${raw}`);
+    return null;
+  }
+  return raw;
 }
 
 function addTask(task, tasks, errors) {
@@ -154,6 +174,7 @@ function isCalendarDate(value) {
 export function parseRoadmaps(files) {
   const errors = [];
   const tasks = new Map();
+  const programs = { accuracy: null, usability: null };
   const ux = files?.[UX_PATH];
   const acc = files?.[ACC_PATH];
   if (typeof ux !== 'string') errors.push(`${UX_PATH} is missing`);
@@ -162,13 +183,21 @@ export function parseRoadmaps(files) {
   else if (Buffer.byteLength(acc) > MAX_ROADMAP_BYTES) errors.push(`${ACC_PATH} exceeds the 2 MiB limit`);
 
   if (typeof ux === 'string' && Buffer.byteLength(ux) <= MAX_ROADMAP_BYTES) {
-    const blocks = new Map(headingBlocks(ux, 'UX').map((block) => [block.id, block]));
+    programs.usability = programStatus(ux, /^- \*\*Status:\*\*\s*([A-Z]+)/m, 'usability', errors);
+    const uxBlocks = headingBlocks(ux, 'UX');
+    const blocks = new Map();
+    for (const block of uxBlocks) {
+      if (blocks.has(block.id)) errors.push(`${block.id} is defined more than once`);
+      else blocks.set(block.id, block);
+    }
     const tracker = sectionAfter(ux, '## Progress Tracker');
     const rows = tableRows(tracker).filter((row) => /^UX-\d{3}$/.test(row[0] ?? ''));
     if (rows.length === 0) errors.push(`${UX_PATH} has no Progress Tracker task rows`);
     for (const row of rows) {
       const [id, title, statusText, evidence = ''] = row;
-      const body = blocks.get(id)?.body ?? '';
+      const block = blocks.get(id);
+      if (!block) errors.push(`${id} appears in the Progress Tracker without a task heading`);
+      const body = block?.body ?? '';
       addTask(taskFrom({ id, title, statusText, body, evidence, source: UX_PATH }), tasks, errors);
     }
     for (const id of blocks.keys()) {
@@ -177,6 +206,7 @@ export function parseRoadmaps(files) {
   }
 
   if (typeof acc === 'string' && Buffer.byteLength(acc) <= MAX_ROADMAP_BYTES) {
+    programs.accuracy = programStatus(acc, /^> Status:\s*([A-Z]+)/m, 'accuracy', errors);
     const phase0 = tableRows(sectionAfter(acc, '## Phase 0'))
       .filter((row) => /^ACC-\d{3}$/.test(row[0] ?? ''));
     if (phase0.length === 0) errors.push(`${ACC_PATH} has no Phase 0 task rows`);
@@ -202,7 +232,8 @@ export function parseRoadmaps(files) {
       }), tasks, errors);
     }
 
-    const phase5 = tableRows(sectionAfter(acc, '## Phase 5'))
+    const phase5Section = sectionAfter(acc, '## Phase 5');
+    const phase5 = tableRows(phase5Section)
       .filter((row) => /^ACC-\d{3}$/.test(row[0] ?? ''));
     if (phase5.length === 0) errors.push(`${ACC_PATH} has no Phase 5 mirror rows`);
     const mirrorIds = new Set();
@@ -221,6 +252,12 @@ export function parseRoadmaps(files) {
         errors.push(`${id} mirror status ${normalizedMirror.raw} does not match heading status ${heading.rawStatus}`);
       }
     }
+    const phase5HeadingIds = new Set(blocks
+      .filter((block) => /^ACC-5\d{2}$/.test(block.id))
+      .map((block) => block.id));
+    for (const id of phase5HeadingIds) {
+      if (!mirrorIds.has(id)) errors.push(`${id} has a Phase 5 task heading but is missing from the Phase 5 mirror`);
+    }
   }
 
   const ordered = [...tasks.values()].sort((left, right) => left.id.localeCompare(right.id));
@@ -234,8 +271,17 @@ export function parseRoadmaps(files) {
     for (const dependency of task.dependencies) {
       if (!ids.has(dependency)) errors.push(`${task.id} depends on ${dependency}, which is missing from the roadmaps`);
     }
+    for (const dependency of task.dependencyAnyOf) {
+      if (!ids.has(dependency)) errors.push(`${task.id} depends on ${dependency}, which is missing from the roadmaps`);
+    }
   }
-  return { tasks: ordered, errors: [...new Set(errors)].sort() };
+  for (const [program, status] of Object.entries(programs)) {
+    const source = program === 'usability' ? UX_PATH : ACC_PATH;
+    if (status === 'COMPLETE' && ordered.some((task) => task.source === source && !TERMINAL_STATUSES.has(task.status))) {
+      errors.push(`${program} program is COMPLETE but has unfinished tasks`);
+    }
+  }
+  return { tasks: ordered, programs, errors: [...new Set(errors)].sort() };
 }
 
 export function compareRoadmaps(baseline, candidate) {
@@ -330,7 +376,9 @@ function eligibleTask(tasks, openClaims) {
   const byId = new Map(tasks.map((task) => [task.id, task]));
   return tasks.find((task) => task.status === 'TODO'
     && !openClaims.has(task.id)
-    && task.dependencies.every((id) => TERMINAL_STATUSES.has(byId.get(id)?.status)));
+    && task.dependencies.every((id) => TERMINAL_STATUSES.has(byId.get(id)?.status))
+    && (task.dependencyAnyOf.length === 0
+      || task.dependencyAnyOf.some((id) => TERMINAL_STATUSES.has(byId.get(id)?.status))));
 }
 
 // Reconciliation deliberately evaluates every task and claim before producing a deterministic report.
@@ -348,7 +396,13 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
   const claims = new Map();
 
   for (const pull of pulls) {
-    for (const id of idsClaimedBy(pull)) {
+    const claimedIds = idsClaimedBy(pull);
+    if (pull.state === 'OPEN' && claimedIds.length > 1) {
+      const message = `candidate PR #${pull.number} must claim exactly one roadmap task; found ${claimedIds.join(', ')}`;
+      if (candidatePrNumbers.has(pull.number)) blocking.push(message);
+      else advisory.push(message);
+    }
+    for (const id of claimedIds) {
       if (pull.state === 'OPEN') {
         if (!claims.has(id)) claims.set(id, []);
         claims.get(id).push(pull);
@@ -357,6 +411,22 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
         const message = `${id} is claimed by open PR #${pull.number} but is missing from the roadmaps`;
         if (candidatePrNumbers.has(pull.number)) blocking.push(message);
         else advisory.push(message);
+      } else if (pull.state === 'OPEN' && byId.has(id)) {
+        const task = byId.get(id);
+        const terminalCompletion = TERMINAL_STATUSES.has(task.status) && task.evidencePrs.includes(pull.number);
+        if (task.status !== 'IN_REVIEW' && !terminalCompletion) {
+          const prefix = candidatePrNumbers.has(pull.number) ? `candidate PR #${pull.number}` : `open PR #${pull.number}`;
+          blocking.push(`${id} is claimed by ${prefix} but its roadmap status is ${task.status}; expected IN_REVIEW`);
+        }
+      }
+    }
+  }
+
+  if (Number.isFinite(now)) {
+    const today = new Date(now).toISOString().slice(0, 10);
+    for (const task of tasks) {
+      if (WAIT_STATUSES.has(task.status) && task.reviewAfter && task.reviewAfter < today) {
+        advisory.push(`${task.id} review overdue since ${task.reviewAfter}`);
       }
     }
   }
@@ -407,6 +477,7 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
       counts[task.status ?? 'INVALID'] = (counts[task.status ?? 'INVALID'] ?? 0) + 1;
       return counts;
     }, {}),
+    programs: state.programs,
   };
 }
 
@@ -423,6 +494,8 @@ export function renderWatchdog(report) {
   const body = [
     '<!-- crystal-ball-roadmap-controller:v1 -->',
     '# Roadmap controller',
+    '',
+    `Accuracy program: ${report.programs?.accuracy ?? 'INVALID'} | Usability program: ${report.programs?.usability ?? 'INVALID'}`,
     '',
     counts || 'No tasks parsed.',
     '',
@@ -442,18 +515,22 @@ export function renderWatchdog(report) {
 
 function usage(message) {
   if (message) console.error(message);
-  console.error(`Usage: node ${path.basename(process.argv[1] ?? 'roadmap-controller.mjs')} [--snapshot FILE] [--baseline-ux FILE --baseline-acc FILE] [--format markdown|json] [--output FILE]`);
+  console.error(`Usage: node ${path.basename(process.argv[1] ?? 'roadmap-controller.mjs')} [--snapshot FILE] [--baseline-ux FILE --baseline-acc FILE] [--format markdown|json] [--output FILE] [--references-output FILE]`);
   return 2;
 }
 
 function parseArgs(argv) {
-  const options = { snapshot: null, baselineUx: null, baselineAcc: null, format: 'markdown', output: null };
+  const options = {
+    snapshot: null, baselineUx: null, baselineAcc: null, format: 'markdown', output: null,
+    referencesOutput: null,
+  };
   const valueOptions = new Map([
     ['--snapshot', 'snapshot'],
     ['--baseline-ux', 'baselineUx'],
     ['--baseline-acc', 'baselineAcc'],
     ['--format', 'format'],
     ['--output', 'output'],
+    ['--references-output', 'referencesOutput'],
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -473,6 +550,13 @@ function parseArgs(argv) {
   return options;
 }
 
+function writeReferenceExport(state, outputPath) {
+  if (!outputPath) return;
+  const references = [...new Set(state.tasks.flatMap((task) => task.evidencePrs))]
+    .sort((left, right) => left - right);
+  writeFileSync(path.resolve(outputPath), `${JSON.stringify(references)}\n`);
+}
+
 export function runCli(argv = process.argv.slice(2)) {
   let options;
   try {
@@ -489,6 +573,7 @@ export function runCli(argv = process.argv.slice(2)) {
     return 2;
   }
   const state = parseRoadmaps(files);
+  writeReferenceExport(state, options.referencesOutput);
   if (options.baselineUx && options.baselineAcc) {
     try {
       const baseline = parseRoadmaps({

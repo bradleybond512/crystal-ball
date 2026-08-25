@@ -10,6 +10,7 @@ const ACC_PATH = 'docs/PREDICTION_ACCURACY_ROADMAP.md';
 const TASK_ID = /\b(?:UX|ACC)-\d{3}\b/g;
 const WAIT_STATUSES = new Set(['WAITING', 'MONITOR', 'BLOCKED']);
 const TERMINAL_STATUSES = new Set(['DONE', 'REJECTED']);
+const EVIDENCE_STATUSES = new Set([...TERMINAL_STATUSES, 'MONITOR']);
 const MAX_ROADMAP_BYTES = 2 * 1024 * 1024;
 const SNAPSHOT_FIELDS = new Set([
   'schemaVersion', 'complete', 'truncated', 'baseBranch', 'eventType', 'candidatePrNumbers',
@@ -105,7 +106,6 @@ function taskFrom({ id, title, statusText, body = '', evidence = '', source, mir
   const dependencyText = field(body, 'Dependencies') ?? '';
   const dependencyIds = dependencyText.match(TASK_ID);
   const evidencePrs = prNumbers(`${evidence}\n${evidenceText}`);
-  const evidenceMain = evidenceLines.some((line) => /\b(?:main|merged|landed)\b[^\n]*\b[a-f0-9]{7,40}\b/i.test(line));
   const dependencyAnyOf = /\bor\b/i.test(dependencyText) && dependencyIds
     ? [...new Set(dependencyIds)]
     : [];
@@ -118,8 +118,7 @@ function taskFrom({ id, title, statusText, body = '', evidence = '', source, mir
     dependencies: dependencyIds && dependencyAnyOf.length === 0 ? [...new Set(dependencyIds)] : [],
     dependencyAnyOf,
     evidencePrs,
-    hasEvidence: evidencePrs.length > 0 || evidenceMain,
-    evidenceMain,
+    hasEvidence: evidencePrs.length > 0,
     exitCondition: field(body, 'Exit condition'),
     reviewAfter: field(body, 'Review after'),
     source,
@@ -268,6 +267,9 @@ export function parseRoadmaps(files) {
       && !task.hasEvidence) {
       errors.push(`${task.id} is terminal (${task.status}) without evidence`);
     }
+    if (task.status === 'MONITOR' && !task.hasEvidence) {
+      errors.push(`${task.id} (MONITOR) is missing evidence`);
+    }
     for (const dependency of task.dependencies) {
       if (!ids.has(dependency)) errors.push(`${task.id} depends on ${dependency}, which is missing from the roadmaps`);
     }
@@ -413,8 +415,8 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
         else advisory.push(message);
       } else if (pull.state === 'OPEN' && byId.has(id)) {
         const task = byId.get(id);
-        const terminalCompletion = TERMINAL_STATUSES.has(task.status) && task.evidencePrs.includes(pull.number);
-        if (task.status !== 'IN_REVIEW' && !terminalCompletion) {
+        const evidenceTransition = EVIDENCE_STATUSES.has(task.status) && task.evidencePrs.includes(pull.number);
+        if (task.status !== 'IN_REVIEW' && !evidenceTransition) {
           const prefix = candidatePrNumbers.has(pull.number) ? `candidate PR #${pull.number}` : `open PR #${pull.number}`;
           blocking.push(`${id} is claimed by ${prefix} but its roadmap status is ${task.status}; expected IN_REVIEW`);
         }
@@ -453,13 +455,17 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
         if (merged) blocking.push(`${task.id} is active but referenced PR #${merged.number} is merged`);
         if (taskClaims.length === 0 && !merged) blocking.push(`${task.id} is active but has no open PR claim`);
       }
-      if (TERMINAL_STATUSES.has(task.status) || task.status === 'MONITOR') {
+      if (EVIDENCE_STATUSES.has(task.status)) {
         for (const number of task.evidencePrs) {
           const evidence = pullsByNumber.get(number);
           if (!evidence) {
             blocking.push(`${task.id} evidence PR #${number} is missing from the complete snapshot`);
-          } else if (evidence.state !== 'MERGED' && !candidatePrNumbers.has(number)) {
-            blocking.push(`${task.id} evidence PR #${number} is not merged (state ${evidence.state})`);
+          } else if (evidence.state !== 'MERGED') {
+            if (!candidatePrNumbers.has(number)) {
+              blocking.push(`${task.id} evidence PR #${number} is not merged (state ${evidence.state})`);
+            } else if (!idsClaimedBy(evidence).includes(task.id)) {
+              blocking.push(`${task.id} evidence PR #${number} does not claim ${task.id}`);
+            }
           }
         }
       }

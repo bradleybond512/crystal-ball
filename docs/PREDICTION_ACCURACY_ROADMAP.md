@@ -1638,6 +1638,8 @@ Landed: main `a7947ac4` ("fix: prevent spurious correlation rules"), jointly
 with ACC-504. Recorded retroactively — the implementation shipped without the
 tracker row being flipped, and this section documents it after the fact.
 
+PR: #1661
+
 Dependencies: ACC-501 (DONE)
 
 Outcome — delivered:
@@ -1676,6 +1678,8 @@ assertion.
 Status: `DONE`
 
 Landed: main `a7947ac4`, jointly with ACC-503.
+
+PR: #1661
 
 Dependencies: ACC-501 (DONE)
 

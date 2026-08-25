@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   applyExpiredLifelineEvidenceTransition,
+  applyLifelineExpiryTransition,
   LifelineEvidenceExpiryScheduler,
   MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS,
 } from '../src/components/lifeline-evidence-expiry.ts';
@@ -172,6 +173,19 @@ test('provider coverage expiry repaints current-completeness claims without anot
   assert.deepEqual(transitions, []);
   clock.advanceBy(1);
   assert.deepEqual(transitions, [{ at: NOW + 30 * 60_000, kind: 'provider-coverage' }]);
+});
+
+test('provider-only coverage transition repaints without clearing or publishing evidence', () => {
+  const effects: string[] = [];
+  const transitioned = applyLifelineExpiryTransition(makeSnapshot(), 'provider-coverage', {
+    isCurrent: () => true,
+    renderAtExpiry: () => effects.push('render'),
+    clearExactOverlay: () => effects.push('clear'),
+    publishSnapshot: () => effects.push('publish'),
+  });
+
+  assert.equal(transitioned, true);
+  assert.deepEqual(effects, ['render']);
 });
 
 test('evidence expiry wins when it shares a provider coverage deadline', () => {

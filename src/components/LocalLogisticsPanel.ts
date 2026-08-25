@@ -29,7 +29,7 @@ import {
   buildLifelinesPlaceMatchSignature,
 } from './disaster-lifelines-map-helpers';
 import {
-  applyExpiredLifelineEvidenceTransition,
+  applyLifelineExpiryTransition,
   LifelineEvidenceExpiryScheduler,
   type LifelineExpiryKind,
 } from './lifeline-evidence-expiry';
@@ -386,17 +386,9 @@ export class LocalLogisticsPanel extends Panel {
   private transitionExpiredEvidence(
  snapshot: LocalLogisticsSnapshot,
  _expiresAt: number,
- kind: LifelineExpiryKind,
+  kind: LifelineExpiryKind,
   ): void {
- if (kind === 'provider-coverage') {
-   const place = this.resolvePlace();
-   if (place && this.snapshot === snapshot
-     && snapshot.placeId === this.activePlaceId
-     && this.snapshotPlaceSignature === buildLifelinesPlaceMatchSignature(place)
-     && this.snapshotMatchesPlace(snapshot, place)) this.render();
-   return;
- }
- applyExpiredLifelineEvidenceTransition(snapshot, {
+ applyLifelineExpiryTransition(snapshot, kind, {
    isCurrent: (identity) => {
      const place = this.resolvePlace();
      return Boolean(place && this.snapshot === snapshot

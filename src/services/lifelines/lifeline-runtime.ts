@@ -44,6 +44,13 @@ export interface LifelineRuntimeUpdate {
   outage: OdinOutageState | null;
 }
 
+export interface VerifiedLifelinesReceipt {
+  placeId: string;
+  capturedAt: Date;
+  expiresAt: Date | null;
+  isExpired: boolean;
+}
+
 interface CurrentSituation {
   snapshotAt: number;
   situation: LifelineSituation;
@@ -388,6 +395,29 @@ export function createLifelineRuntime(
     return deriveLifelineOfflinePackReadiness(fingerprint, manifest, now);
   }
 
+  function getVerifiedLifelinesReceipt(place: LifelineSavedPlace): VerifiedLifelinesReceipt | null {
+    const queryFingerprint = exactFingerprint(place);
+    const now = clock();
+    const manifest = verifiedPackManifest(storage, readPack(storage, place.id), {
+      placeId: place.id,
+      queryFingerprint,
+      lat: place.lat,
+      lon: place.lon,
+    }, now);
+    if (manifest?.queryFingerprint !== queryFingerprint) return null;
+    const artifact = manifest.artifacts.find((candidate) => (
+      candidate.kind === 'lifelines' && candidate.queryFingerprint === queryFingerprint
+    ));
+    if (!artifact) return null;
+    const expiresAt = artifact.expiresAt ? new Date(artifact.expiresAt) : null;
+    return {
+      placeId: place.id,
+      capturedAt: new Date(artifact.cachedAt),
+      expiresAt,
+      isExpired: expiresAt !== null && expiresAt.getTime() <= now,
+    };
+  }
+
   function processSnapshot(snapshot: LocalLogisticsSnapshot): LifelineRuntimeUpdate | null {
     const snapshotAt = snapshot.fetchedAt.getTime();
     if (!Number.isFinite(snapshotAt)) return null;
@@ -457,6 +487,7 @@ export function createLifelineRuntime(
   return {
     processSnapshot,
     getPackReadiness,
+    getVerifiedLifelinesReceipt,
     getRecentChanges(placeId: string, queryFingerprint: string): LifelineChange[] {
       return parseChangeLog(storage, placeId, queryFingerprint)
         .sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime());
@@ -482,6 +513,12 @@ export function getLifelinePackReadinessForPlace(
   place: LifelineSavedPlace,
 ): LifelineOfflinePackReadiness {
   return lifelineRuntime.getPackReadiness(place);
+}
+
+export function getVerifiedLifelinesReceiptForPlace(
+  place: LifelineSavedPlace,
+): VerifiedLifelinesReceipt | null {
+  return lifelineRuntime.getVerifiedLifelinesReceipt(place);
 }
 
 export function getRecentLifelineChangesForPlace(

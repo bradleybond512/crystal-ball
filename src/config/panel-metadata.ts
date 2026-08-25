@@ -165,6 +165,7 @@ export const PANEL_METADATA: Record<string, PanelMeta> = {
   'election-monitoring': { domain: 'global-intel', tags: ['election', 'monitoring'], tier: 'library' },
   'electric-grid-vulnerability': { domain: 'cyber-infrastructure', tags: ['electric', 'grid', 'vulnerability'], tier: 'library', evidenceFor: ['grid_outage'] },
   'emergency-broadcast': { domain: 'personal-safety', tags: ['broadcast', 'broadcasts', 'emergency'], tier: 'library' },
+  'emergency-readiness': { domain: 'personal-safety', tags: ['emergency', 'readiness', 'offline', 'grid down', 'lifelines', 'communications'], tier: 'library', featured: true, icon: '🛟' },
   'emsc-seismic': { domain: 'hazards-weather', tags: ['emsc', 'nuclear', 'seismic', 'test', 'watch'], tier: 'library', evidenceFor: ['earthquake'] },
   'energy': { domain: 'markets-economy', tags: ['energy', 'oil news', 'resources'], tier: 'library', icon: '\u26A1' },
   'energy-geopolitics': { domain: 'global-intel', tags: ['energy', 'geopolitics'], tier: 'library' },

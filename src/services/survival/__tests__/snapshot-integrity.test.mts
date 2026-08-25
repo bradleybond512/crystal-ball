@@ -15,6 +15,7 @@ import type { NwsAlertMinimal, AlertPolygon, SavedPlace } from '../../weather/we
 import type { WorldSnapshot } from '../survival-types.ts';
 
 const NOW = 1_700_000_000_000;
+const CLOCK_SKEW_MS = 5 * 60_000;
 const HOME: SavedPlace = { id: 'home', label: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 };
 
 function around(lat: number, lon: number): AlertPolygon {
@@ -217,6 +218,84 @@ test('a saved place with a non-finite coordinate is rejected', () => {
   const v = validateSnapshot(snap);
   assert.equal(v.ok, false);
   assert.ok(v.errors.some((e) => e.includes('savedPlaces[0].lat')));
+});
+
+test('malformed nested threat and driver entries are rejected before projection', () => {
+  const snap = structuredClone(realSnapshot());
+  snap.posture.axes[0]!.drivers = [{} as never];
+  snap.posture.axes[0]!.threats = [null as never];
+
+  const result = safeDeserializeSnapshot(JSON.stringify(snap), { now: NOW });
+
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
+  assert.equal(result.reason, 'invalid_shape');
+  assert.ok((result.errors ?? []).some((error) => error.includes('posture.axes[0].drivers[0]')));
+  assert.ok((result.errors ?? []).some((error) => error.includes('posture.axes[0].threats[0]')));
+});
+
+test('capture time accepts the clock-skew boundary and rejects one millisecond beyond it', () => {
+  const boundary = structuredClone(realSnapshot());
+  boundary.capturedAtMs = NOW + CLOCK_SKEW_MS;
+  boundary.posture.capturedAtMs = boundary.capturedAtMs;
+  boundary.freshness[0]!.fetchedAtMs = boundary.capturedAtMs;
+  boundary.freshness[0]!.ageMs = 0;
+
+  const accepted = safeDeserializeSnapshot(JSON.stringify(boundary), { now: NOW });
+  assert.equal(accepted.ok, true);
+
+  const beyond = structuredClone(boundary);
+  beyond.capturedAtMs += 1;
+  beyond.posture.capturedAtMs += 1;
+  beyond.freshness[0]!.fetchedAtMs += 1;
+  const rejected = safeDeserializeSnapshot(JSON.stringify(beyond), { now: NOW });
+  assert.equal(rejected.ok, false);
+  assert.ok(!rejected.ok);
+  assert.equal(rejected.reason, 'invalid_shape');
+  assert.ok((rejected.errors ?? []).some((error) => error.includes('capturedAtMs is in the future')));
+});
+
+test('freshness accepts the source-skew boundary and rejects one millisecond beyond it', () => {
+  const boundary = structuredClone(realSnapshot());
+  boundary.freshness[0]!.fetchedAtMs = boundary.capturedAtMs + CLOCK_SKEW_MS;
+  boundary.freshness[0]!.ageMs = -CLOCK_SKEW_MS;
+
+  const accepted = validateSnapshot(boundary, { now: NOW });
+  assert.equal(accepted.ok, true, accepted.errors.join('\n'));
+
+  const beyond = structuredClone(boundary);
+  beyond.freshness[0]!.fetchedAtMs += 1;
+  beyond.freshness[0]!.ageMs -= 1;
+  const rejected = validateSnapshot(beyond, { now: NOW });
+  assert.equal(rejected.ok, false);
+  assert.ok(rejected.errors.some((error) => error.includes('freshness[0].fetchedAtMs is after snapshot capture')));
+});
+
+test('freshness cannot stack source skew on top of a future capture boundary', () => {
+  const snap = structuredClone(realSnapshot());
+  snap.capturedAtMs = NOW + CLOCK_SKEW_MS;
+  snap.posture.capturedAtMs = snap.capturedAtMs;
+  snap.freshness[0]!.fetchedAtMs = snap.capturedAtMs + 1;
+  snap.freshness[0]!.ageMs = -1;
+
+  const result = validateSnapshot(snap, { now: NOW });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes('freshness[0].fetchedAtMs is in the future')));
+});
+
+test('posture capture and freshness age must match the snapshot chronology', () => {
+  const postureMismatch = structuredClone(realSnapshot());
+  postureMismatch.posture.capturedAtMs += 1;
+  const postureResult = validateSnapshot(postureMismatch, { now: NOW });
+  assert.equal(postureResult.ok, false);
+  assert.ok(postureResult.errors.some((error) => error.includes('posture.capturedAtMs does not match')));
+
+  const ageMismatch = structuredClone(realSnapshot());
+  ageMismatch.freshness[0]!.ageMs += 1;
+  const freshnessResult = validateSnapshot(ageMismatch, { now: NOW });
+  assert.equal(freshnessResult.ok, false);
+  assert.ok(freshnessResult.errors.some((error) => error.includes('freshness[0].ageMs does not match')));
 });
 
 // ── validateSnapshot directly ────────────────────────────────────────────────

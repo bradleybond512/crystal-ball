@@ -11,10 +11,14 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const DEFAULT_LABEL = 'com.bradleybond.crystalball.main-sync';
 const LAUNCHCTL_PATH = '/bin/launchctl';
-const LAUNCH_AGENT_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+const SYSTEM_EXECUTABLE_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 export const DEFAULT_INTERVAL_SECONDS = 300;
 
-export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoot, logDir, intervalSeconds, envPath }) {
+export function buildLaunchAgentEnvironmentPath(homeDir = os.homedir()) {
+  return `${path.join(homeDir, '.cargo', 'bin')}:${SYSTEM_EXECUTABLE_PATH}`;
+}
+
+export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoot, logDir, intervalSeconds, envPath = buildLaunchAgentEnvironmentPath() }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -121,7 +125,6 @@ async function installLaunchAgent(options) {
  syncRoot: options.syncRoot,
  logDir: options.logDir,
  intervalSeconds: options.intervalSeconds,
-	envPath: LAUNCH_AGENT_PATH,
   });
   await writeFile(options.launchAgentPath, plist);
   await chmod(options.launchAgentPath, 0o644);

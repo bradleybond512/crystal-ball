@@ -3,10 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import {
-  DEFAULT_INTERVAL_SECONDS,
-  buildLaunchAgentPlist,
-} from '../scripts/setup-main-sync-agent.mjs';
+import * as mainSyncAgent from '../scripts/setup-main-sync-agent.mjs';
 import {
   buildSyncPaths,
   collectCheckStates,
@@ -20,6 +17,10 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 const syncScriptPath = path.join(repoRoot, 'scripts', 'sync-main-to-mac.mjs');
 const setupScriptPath = path.join(repoRoot, 'scripts', 'setup-main-sync-agent.mjs');
 const packageJsonPath = path.join(repoRoot, 'package.json');
+const {
+  DEFAULT_INTERVAL_SECONDS,
+  buildLaunchAgentPlist,
+} = mainSyncAgent;
 
 function readIfExists(filePath) {
   if (!existsSync(filePath)) {
@@ -114,10 +115,20 @@ test('main sync launch agent plist runs Node on a fixed interval', () => {
   assert.match(plist, /sync-main-to-mac\.mjs/);
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(plist, /<key>StartInterval<\/key>\s*<integer>60<\/integer>/);
+  assert.match(plist, /<string>[^<]+\/\.cargo\/bin:\/opt\/homebrew\/bin:/);
+  assert.doesNotMatch(plist, /<string>undefined<\/string>/);
 });
 
 test('main sync launch agent defaults to a five-minute poll interval', () => {
   assert.equal(DEFAULT_INTERVAL_SECONDS, 300);
+});
+
+test('main sync launch agent PATH includes the current user Cargo bin directory', () => {
+  assert.equal(typeof mainSyncAgent.buildLaunchAgentEnvironmentPath, 'function');
+  assert.equal(
+    mainSyncAgent.buildLaunchAgentEnvironmentPath('/Users/example'),
+    '/Users/example/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+  );
 });
 
 test('unchanged healthy installs take the idle path before checks and workspace cleanup', () => {

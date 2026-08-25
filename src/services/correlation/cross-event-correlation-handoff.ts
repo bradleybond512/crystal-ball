@@ -2,6 +2,7 @@ import type { ObservationEvent } from '../intelligence/observation-adapters';
 
 export const CROSS_EVENT_HISTORY_LIMIT = 512;
 export const CROSS_EVENT_HISTORY_WINDOW_MS = 14 * 24 * 60 * 60_000;
+export const CROSS_EVENT_MAX_FUTURE_SKEW_MS = 5 * 60_000;
 
 type Correlate = (
   current: ObservationEvent,
@@ -13,6 +14,7 @@ type Schedule = (callback: () => void) => (() => void) | void;
 export interface CrossEventCorrelationHandoffOptions {
   correlate: Correlate;
   schedule?: Schedule;
+  clock?: () => number;
   maxEvents?: number;
   maxAgeMs?: number;
 }
@@ -20,6 +22,7 @@ export interface CrossEventCorrelationHandoffOptions {
 export class CrossEventCorrelationHandoff {
   private readonly correlate: Correlate;
   private readonly schedule: Schedule;
+  private readonly clock: () => number;
   private readonly maxEvents: number;
   private readonly maxAgeMs: number;
   private readonly history: ObservationEvent[] = [];
@@ -36,12 +39,20 @@ export class CrossEventCorrelationHandoff {
       const timer = setTimeout(callback, 0);
       return () => clearTimeout(timer);
     });
+    this.clock = options.clock ?? Date.now;
     this.maxEvents = positiveInteger(options.maxEvents) ?? CROSS_EVENT_HISTORY_LIMIT;
     this.maxAgeMs = positiveFinite(options.maxAgeMs) ?? CROSS_EVENT_HISTORY_WINDOW_MS;
   }
 
   offer(event: ObservationEvent): boolean {
-    if (this.stopped || !Number.isFinite(event.timestamp) || this.retainedIds.has(event.id)) {
+    const now = this.clock();
+    if (
+      this.stopped
+      || !Number.isFinite(now)
+      || !Number.isFinite(event.timestamp)
+      || event.timestamp > now + CROSS_EVENT_MAX_FUTURE_SKEW_MS
+      || this.retainedIds.has(event.id)
+    ) {
       return false;
     }
     this.watermark = Math.max(this.watermark, event.timestamp);

@@ -239,6 +239,43 @@ test('contextual posture does no hidden work, subscribes before one hydration, a
   assert.equal(unsubscribeCount, 2);
 });
 
+test('the 10-second shell refresh marks a snapshot stale after time crosses the freshness boundary without a posture event', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  let now = CONTEXT_NOW + 15 * 60_000;
+  let postureEvents = 0;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => now,
+    contextualSnapshotSource: {
+      get: () => contextualSnapshot(),
+      subscribe: () => () => { postureEvents += 1; },
+      hydrate: async () => {},
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  const testShell = shell as unknown as {
+    loop: { inspect(): { intervalMs: number } };
+    refresh(): void;
+  };
+  assert.equal(testShell.loop.inspect().intervalMs, 10_000);
+  assert.equal(section?.dataset.state, 'active');
+
+  now += 1;
+  testShell.refresh();
+
+  assert.equal(postureEvents, 0);
+  assert.equal(section?.dataset.state, 'stale');
+  assert.match(section?.textContent ?? '', /verify current conditions before acting/i);
+  assert.ok(section?.querySelector('[data-panel-key="local-logistics"]'));
+  shell.destroy();
+});
+
 test('hide and destroy invalidate a pending contextual hydration completion', async () => {
   const happyWindow = installDom();
   const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
@@ -259,13 +296,13 @@ test('hide and destroy invalidate a pending contextual hydration completion', as
   });
   shell.mount(parent);
   shell.show();
-  assert.equal(gets, 1);
+  assert.equal(gets, 2);
   shell.hide();
   shell.destroy();
   resolveHydrate();
   await pending;
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(gets, 1);
+  assert.equal(gets, 2);
   assert.equal(parent.querySelector('.home-shell-contextual'), null);
 });
 

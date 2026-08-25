@@ -1,9 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { makeFinancialContributor } from '../financial-contributor.ts';
 import type { ForecastSnapshot, ModeAdvisory, ForecastDomain } from '../../mode-forecast.ts';
 
 const NOW = 1_700_000_000_000;
+const FINANCIAL_CONTRIBUTOR_SOURCE = readFileSync(
+  new URL('../financial-contributor.ts', import.meta.url),
+  'utf8',
+);
+const SECURITY_CONTRIBUTOR_SOURCE = readFileSync(
+  new URL('../security-contributor.ts', import.meta.url),
+  'utf8',
+);
 
 function advisory(over: Partial<ModeAdvisory> & { domain: ForecastDomain }): ModeAdvisory {
   return {
@@ -23,6 +32,12 @@ function makeSnapshot(advisories: ModeAdvisory[]): ForecastSnapshot {
     pressure: { finance: 0, security: 0, disaster: 0, cyber: 0 },
   };
 }
+
+test('mode-forecast contributors use the shared source-event identifiers', () => {
+  assert.match(FINANCIAL_CONTRIBUTOR_SOURCE, /MODE_FORECAST_THREAT_SOURCE_IDS\.finance/);
+  assert.match(SECURITY_CONTRIBUTOR_SOURCE, /MODE_FORECAST_THREAT_SOURCE_IDS\.security/);
+  assert.match(SECURITY_CONTRIBUTOR_SOURCE, /MODE_FORECAST_THREAT_SOURCE_IDS\.cyber/);
+});
 
 test('no advisories -> no financial threats', () => {
   const c = makeFinancialContributor(makeSnapshot([]));

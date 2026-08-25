@@ -12,6 +12,7 @@ import type {
   SurvivalBand,
   WorldSnapshot,
 } from '../survival/survival-types.ts';
+import { isModeForecastThreatSourceEventId } from '../survival/mode-forecast-threats.ts';
 import { formatAge } from './deck-view.ts';
 
 export const GUIDANCE_LEVEL = 40;
@@ -122,7 +123,13 @@ interface ContextualCandidate {
 
 interface SnapshotStatus {
   stale: boolean;
-  age: string;
+  warning: string | null;
+}
+
+interface AxisSelection {
+  axes: AxisState[];
+  forecastWithheld: number;
+  unsupportedWithheld: number;
 }
 
 export interface ContextualDeckInputs {
@@ -147,20 +154,10 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
   }
 
   const status = snapshotStatus(inputs.snapshot, now);
-  const axes = qualifyingAxes(inputs.snapshot.posture.axes);
+  const selection = qualifyingAxes(inputs.snapshot.posture.axes);
+  const { axes, forecastWithheld, unsupportedWithheld } = selection;
   if (axes.length === 0) {
-    if (status.stale) {
-      return staleStateView(
-        'Last known posture—verify now',
-        'no elevated axes then; verify current conditions.',
-        status.age,
-      );
-    }
-    return stateView(
-      'quiet',
-      'No elevated posture axes',
-      'Suggestions appear when an axis reaches elevated.',
-    );
+    return emptyAxesView(status, forecastWithheld, unsupportedWithheld);
   }
 
   const rules = inputs.rules ?? CONTEXTUAL_PANEL_RULES;
@@ -168,21 +165,70 @@ export function buildContextualDeckView(inputs: ContextualDeckInputs, now: numbe
   const cards = collectContextualCards(axes, rules, excluded, inputs.panels, inputs.metadata);
 
   if (cards.length === 0) {
-    if (status.stale) {
-      return staleStateView(
-        'Last known suggestions unavailable',
-        'elevated axes had no available panel; verify current conditions.',
-        status.age,
-      );
-    }
-    return stateView(
-      'quiet',
-      'No contextual panels',
-      'Elevated posture has no available panel in this variant.',
-    );
+    return emptyCardsView(status, forecastWithheld, unsupportedWithheld);
   }
 
-  return populatedView(cards, status);
+  return populatedView(cards, status, forecastWithheld, unsupportedWithheld);
+}
+
+function emptyAxesView(
+  status: SnapshotStatus,
+  forecastWithheld: number,
+  unsupportedWithheld: number,
+): ContextualDeckView {
+  if (status.stale || forecastWithheld > 0) {
+    return stateView(
+      'stale',
+      forecastWithheld > 0 ? 'Forecast-derived posture withheld' : 'Last known posture—verify now',
+      degradedSummary(
+        status,
+        forecastWithheld,
+        unsupportedWithheld,
+        forecastWithheld > 0
+          ? 'Verify source freshness before acting.'
+          : 'no elevated axes then; verify current conditions.',
+      ),
+    );
+  }
+  if (unsupportedWithheld > 0) {
+    return stateView(
+      'quiet',
+      'No supported elevated posture axes',
+      unsupportedAxesWarning(unsupportedWithheld),
+    );
+  }
+  return stateView(
+    'quiet',
+    'No elevated posture axes',
+    'Suggestions appear when an axis reaches elevated.',
+  );
+}
+
+function emptyCardsView(
+  status: SnapshotStatus,
+  forecastWithheld: number,
+  unsupportedWithheld: number,
+): ContextualDeckView {
+  if (status.stale || forecastWithheld > 0) {
+    return stateView(
+      'stale',
+      'Last known suggestions unavailable',
+      degradedSummary(
+        status,
+        forecastWithheld,
+        unsupportedWithheld,
+        'elevated axes had no available panel; verify current conditions.',
+      ),
+    );
+  }
+  return stateView(
+    'quiet',
+    'No contextual panels',
+    joinSummary([
+      'Elevated posture has no available panel in this variant.',
+      unsupportedWithheld > 0 ? unsupportedAxesWarning(unsupportedWithheld) : null,
+    ]),
+  );
 }
 
 function canonicalPinIds(
@@ -269,13 +315,19 @@ function addContextualCandidate(
 function populatedView(
   cards: readonly ContextualCardDraft[],
   status: SnapshotStatus,
+  forecastWithheld: number,
+  unsupportedWithheld: number,
 ): ContextualDeckView {
-  const state: ContextualDeckState = status.stale ? 'stale' : 'active';
-  const headline = status.stale ? 'Suggestions from last known posture' : 'Suggested panels';
+  const state: ContextualDeckState = status.stale || forecastWithheld > 0 ? 'stale' : 'active';
+  const headline = populatedHeadline(status, forecastWithheld);
   const panelLabel = cards.length === 1 ? 'panel' : 'panels';
-  const summary = status.stale
-    ? `Snapshot ${status.age} old · verify current conditions before acting.`
-    : `${cards.length} relevant ${panelLabel} for elevated axes.`;
+  const summary = joinSummary([
+    `${cards.length} relevant ${panelLabel} for elevated axes.`,
+    status.warning,
+    forecastWithheld > 0 ? forecastAxesWarning(forecastWithheld) : null,
+    unsupportedWithheld > 0 ? unsupportedAxesWarning(unsupportedWithheld) : null,
+    state === 'stale' ? 'Verify current conditions before acting.' : null,
+  ]);
   const cardViews = cards.map((card) => formatContextualCard(card));
   return {
     state,
@@ -286,16 +338,50 @@ function populatedView(
   };
 }
 
+function populatedHeadline(status: SnapshotStatus, forecastWithheld: number): string {
+  if (status.stale) return 'Suggestions from last known posture';
+  if (forecastWithheld > 0) return 'Suggested panels with withheld posture';
+  return 'Suggested panels';
+}
+
 function snapshotStatus(snapshot: WorldSnapshot, now: number): SnapshotStatus {
   const projected = projectView(snapshot, { now });
+  const warnings = [
+    projected.isStale
+      ? `Weather data ${formatAge(Math.max(0, projected.weatherAgeMs))} old`
+      : null,
+    snapshot.posture.staleInputs.length > 0 ? 'Posture contains stale inputs' : null,
+  ];
   return {
-    stale: projected.isStale || projected.posture.staleInputs.length > 0,
-    age: formatAge(Math.max(0, now - snapshot.capturedAtMs)),
+    stale: warnings.some(Boolean),
+    warning: joinSummary(warnings),
   };
 }
 
-function staleStateView(headline: string, detail: string, age: string): ContextualDeckView {
-  return stateView('stale', headline, `Snapshot ${age} old · ${detail}`);
+function degradedSummary(
+  status: SnapshotStatus,
+  forecastWithheld: number,
+  unsupportedWithheld: number,
+  detail: string,
+): string {
+  return joinSummary([
+    status.warning,
+    forecastWithheld > 0 ? forecastAxesWarning(forecastWithheld) : null,
+    unsupportedWithheld > 0 ? unsupportedAxesWarning(unsupportedWithheld) : null,
+    detail,
+  ]);
+}
+
+function forecastAxesWarning(count: number): string {
+  return `${count} forecast-derived posture ${count === 1 ? 'axis' : 'axes'} withheld because source age is unknown.`;
+}
+
+function unsupportedAxesWarning(count: number): string {
+  return `${count} elevated posture ${count === 1 ? 'axis' : 'axes'} withheld without a supporting threat.`;
+}
+
+function joinSummary(parts: readonly (string | null)[]): string {
+  return parts.filter((part): part is string => part !== null && part.length > 0).join(' · ');
 }
 
 function formatContextualCard(card: ContextualCardDraft): ContextualPanelCardView {
@@ -311,17 +397,29 @@ function formatContextualCard(card: ContextualCardDraft): ContextualPanelCardVie
   };
 }
 
-function qualifyingAxes(axes: readonly AxisState[]): AxisState[] {
-  return SURVIVAL_AXES
+function qualifyingAxes(axes: readonly AxisState[]): AxisSelection {
+  let forecastWithheld = 0;
+  let unsupportedWithheld = 0;
+  const qualified = SURVIVAL_AXES
     .flatMap((axisName) => {
       const axis = axes.find((candidate) => candidate.axis === axisName);
-      return axis && Number.isFinite(axis.level) && axis.level >= GUIDANCE_LEVEL ? [axis] : [];
+      if (!axis || !Number.isFinite(axis.level) || axis.level < GUIDANCE_LEVEL) return [];
+      if (axis.threats.length === 0) {
+        unsupportedWithheld += 1;
+        return [];
+      }
+      if (axis.threats.some((threat) => isModeForecastThreatSourceEventId(threat.sourceEventId))) {
+        forecastWithheld += 1;
+        return [];
+      }
+      return [axis];
     })
     .sort((a, b) => (
       bandRank(b.band) - bandRank(a.band)
       || b.level - a.level
       || SURVIVAL_AXES.indexOf(a.axis) - SURVIVAL_AXES.indexOf(b.axis)
     ));
+  return { axes: qualified, forecastWithheld, unsupportedWithheld };
 }
 
 function canonicalPanelId(

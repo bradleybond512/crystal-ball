@@ -38,6 +38,8 @@ export const OVERRIDES = {
   'api/osrm-route.js': ['test:lifelines-map'],
   'api/usgs-water-proxy.js': ['test:lifelines'],
   'src/app/data-loader.ts': ['test:providers'],
+  'src/config/panel-metadata.ts': ['test:emergency-readiness'],
+  'src/config/panels.ts': ['test:emergency-readiness'],
   'scripts/agentic-validate.sh': ['test:agentic-gate'],
   'scripts/roadmap-controller.mjs': ['test:roadmap-controller'],
   'scripts/check-docs-freshness.mjs': ['test:agentic-gate'],

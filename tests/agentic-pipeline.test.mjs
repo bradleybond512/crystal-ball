@@ -233,6 +233,17 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   assert.deepEqual(scripts, ['test:providers']);
 });
 
+test('Emergency Readiness panel config changes select their focused wiring suite', () => {
+  const index = deriveScriptIndex({
+    'test:emergency-readiness': 'tsx --import ./tests/panels/register-hook.mjs --test tests/emergency-readiness-panel-wiring.test.mjs',
+  });
+  const result = selectScripts([
+    'src/config/panel-metadata.ts',
+    'src/config/panels.ts',
+  ], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:emergency-readiness'], unmapped: [] });
+});
+
 test('roadmap docs and controller changes select the roadmap suite', () => {
   const index = deriveScriptIndex({
     ...SCRIPTS,

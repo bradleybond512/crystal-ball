@@ -274,6 +274,8 @@ Add survival posture to the default surface as a fourth briefing band.
 
 ### UX-002 — "Best move now" + commit on the posture band
 
+Dependencies: UX-001
+
 - **Read from:** `buildSurvivalOutlook(...).decision.recommendedMoveId`, whose
   ranking path is `projectPostureTrajectory` → `buildWorldBranches` →
   `evaluateDecisionConsequences`. `null` means Hold.

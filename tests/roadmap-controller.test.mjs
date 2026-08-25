@@ -194,7 +194,7 @@ test('baseline comparison blocks task deletion and terminal-state mutation', () 
   assert.ok(compareRoadmaps(baseline, reopened).some((message) => /ACC-001.*terminal.*DONE.*TODO/.test(message)));
 });
 
-test('the live UX-001 task is machine-blocked by UX-000 monitoring', () => {
+test('the live posture sequence is machine-blocked behind UX-000 monitoring', () => {
   const live = parseRoadmaps({
     'docs/USABILITY_UPLIFT_FOR_CODEX.md': readFileSync(
       join(root, 'docs/USABILITY_UPLIFT_FOR_CODEX.md'), 'utf8',
@@ -204,9 +204,12 @@ test('the live UX-001 task is machine-blocked by UX-000 monitoring', () => {
     ),
   });
   assert.deepEqual(live.tasks.find(({ id }) => id === 'UX-001').dependencies, ['UX-000']);
-  assert.notEqual(reconcileRoadmaps(live, null, {
+  assert.deepEqual(live.tasks.find(({ id }) => id === 'UX-002').dependencies, ['UX-001']);
+  const nextEligible = reconcileRoadmaps(live, null, {
     now: '2026-08-25T12:00:00.000Z', baseBranch: 'main',
-  }).nextEligible?.id, 'UX-001');
+  }).nextEligible?.id;
+  assert.notEqual(nextEligible, 'UX-001');
+  assert.notEqual(nextEligible, 'UX-002');
 });
 
 test('validates a bounded, complete, main-only token-free snapshot', () => {

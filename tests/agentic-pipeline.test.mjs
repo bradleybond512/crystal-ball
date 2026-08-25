@@ -246,6 +246,18 @@ test('the ESLint runner override selects its focused behavioral suite', () => {
   assert.deepEqual(result, { scripts: ['test:eslint-runner'], unmapped: [] });
 });
 
+test('main sync agent changes select the data suite that covers them', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:data': 'tsx --test tests/*.test.mjs tests/*.test.mts',
+  });
+  const result = selectScripts([
+    'scripts/setup-main-sync-agent.mjs',
+    'tests/main-sync-agent.test.mjs',
+  ], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:data'], unmapped: [] });
+});
+
 test('the bundle budget policy override selects its focused behavioral suite', () => {
   const index = deriveScriptIndex({
     ...SCRIPTS,

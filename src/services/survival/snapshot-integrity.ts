@@ -28,8 +28,8 @@
 //   simply recompute it. Authenticating a snapshot against forgery is a separate
 //   concern (a keyed MAC) deliberately out of scope here.
 //
-// Pure: no DOM, no fetch, no globals, no clock, no crypto. A function of its
-// input bytes alone.
+// Pure: no DOM, no fetch, no storage, no crypto. Time-sensitive validation is
+// driven by an injectable clock boundary.
 
 import type {
   AxisState,
@@ -40,11 +40,20 @@ import { SNAPSHOT_VERSION, SURVIVAL_AXES } from './survival-types.ts';
 
 export const SNAPSHOT_ENVELOPE_KIND = 'crystalball.survival.snapshot';
 export const SNAPSHOT_ENVELOPE_VERSION = 1;
+export const SNAPSHOT_CLOCK_SKEW_MS = 5 * 60_000;
 
 const AXIS_SET = new Set<string>(SURVIVAL_AXES);
 const BAND_SET = new Set<SurvivalBand>(['secure', 'guarded', 'elevated', 'high', 'critical']);
 const TREND_SET = new Set<AxisState['trend']>(['improving', 'steady', 'worsening']);
 const MOVE_STATUS_SET = new Set<string>(['planned', 'in_progress', 'done', 'skipped']);
+const THREAT_LEVEL_SET = new Set<string>(['none', 'watch', 'advisory', 'warning', 'emergency']);
+const HAZARD_KIND_SET = new Set<string>([
+  'tornado', 'severe_thunderstorm', 'flash_flood', 'flood', 'high_wind',
+  'winter_storm', 'blizzard', 'ice_storm', 'extreme_heat', 'extreme_cold',
+  'fire_weather', 'wildfire_smoke', 'tropical', 'storm_surge',
+  'special_marine', 'dust_storm', 'other',
+]);
+const CONFIDENCE_LABEL_SET = new Set<string>(['low', 'medium', 'high']);
 
 export interface SnapshotEnvelope {
   kind: string;
@@ -80,6 +89,10 @@ export type SnapshotImportResult = SnapshotImportOk | SnapshotImportFail;
 export interface SnapshotValidation {
   ok: boolean;
   errors: string[];
+}
+
+export interface SnapshotValidationOptions {
+  now?: number;
 }
 
 // ── Canonical encoding + checksum ───────────────────────────────────────────
@@ -149,6 +162,29 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
+function validateThreat(threat: unknown, axisName: unknown, where: string, errors: string[]): void {
+  if (!isObject(threat)) {
+    errors.push(`${where} is not an object`);
+    return;
+  }
+  if (typeof threat.sourceEventId !== 'string') errors.push(`${where}.sourceEventId is not a string`);
+  if (!AXIS_SET.has(threat.axis as string)) errors.push(`${where}.axis "${String(threat.axis)}" is not a survival axis`);
+  else if (threat.axis !== axisName) errors.push(`${where}.axis does not match its parent axis`);
+  if (!isFiniteNumber(threat.severity)) errors.push(`${where}.severity is not a finite number`);
+  else if (threat.severity < 0 || threat.severity > 100) errors.push(`${where}.severity is out of range 0..100`);
+  if (!THREAT_LEVEL_SET.has(threat.threatLevel as string)) errors.push(`${where}.threatLevel is invalid`);
+  if (!HAZARD_KIND_SET.has(threat.hazardKind as string)) errors.push(`${where}.hazardKind is invalid`);
+  if (typeof threat.hazardLabel !== 'string') errors.push(`${where}.hazardLabel is not a string`);
+  if (threat.timeToImpactMins !== null && !isFiniteNumber(threat.timeToImpactMins)) {
+    errors.push(`${where}.timeToImpactMins is not a finite number or null`);
+  }
+  if (threat.arrivalLabel !== null && typeof threat.arrivalLabel !== 'string') {
+    errors.push(`${where}.arrivalLabel is not a string or null`);
+  }
+  if (typeof threat.why !== 'string') errors.push(`${where}.why is not a string`);
+  if (!CONFIDENCE_LABEL_SET.has(threat.confidenceLabel as string)) errors.push(`${where}.confidenceLabel is invalid`);
+}
+
 function validateAxis(axis: unknown, index: number, errors: string[]): void {
   const where = `posture.axes[${index}]`;
   if (!isObject(axis)) {
@@ -160,8 +196,12 @@ function validateAxis(axis: unknown, index: number, errors: string[]): void {
   else if (axis.level < 0 || axis.level > 100) errors.push(`${where}.level ${axis.level} is out of range 0..100`);
   if (!BAND_SET.has(axis.band as SurvivalBand)) errors.push(`${where}.band "${String(axis.band)}" is not a band`);
   if (!TREND_SET.has(axis.trend as AxisState['trend'])) errors.push(`${where}.trend "${String(axis.trend)}" is invalid`);
-  if (!Array.isArray(axis.threats)) errors.push(`${where}.threats is not an array`);
-  if (!Array.isArray(axis.drivers)) errors.push(`${where}.drivers is not an array`);
+  if (Array.isArray(axis.threats)) {axis.threats.forEach((threat, threatIndex) => validateThreat(threat, axis.axis, `${where}.threats[${threatIndex}]`, errors));}
+  else {errors.push(`${where}.threats is not an array`);}
+  if (Array.isArray(axis.drivers)) {axis.drivers.forEach((driver, driverIndex) => {
+    if (typeof driver !== 'string') errors.push(`${where}.drivers[${driverIndex}] is not a string`);
+  });}
+  else {errors.push(`${where}.drivers is not an array`);}
   if (!isObject(axis.confidence)) errors.push(`${where}.confidence is missing`);
   if (!isObject(axis.explanation)) errors.push(`${where}.explanation is missing`);
 }
@@ -180,7 +220,7 @@ function validateAxisCoverage(axes: unknown[], errors: string[]): void {
   }
 }
 
-function validatePosture(posture: unknown, errors: string[]): void {
+function validatePosture(posture: unknown, capturedAtMs: unknown, errors: string[]): void {
   if (!isObject(posture)) {
     errors.push('posture is not an object');
     return;
@@ -193,10 +233,16 @@ function validatePosture(posture: unknown, errors: string[]): void {
   if (!AXIS_SET.has(posture.worstAxis as string)) errors.push('posture.worstAxis is not a survival axis');
   if (typeof posture.headline !== 'string') errors.push('posture.headline is not a string');
   if (!isFiniteNumber(posture.capturedAtMs)) errors.push('posture.capturedAtMs is not a finite number');
-  if (!Array.isArray(posture.staleInputs)) errors.push('posture.staleInputs is not an array');
+  else if (isFiniteNumber(capturedAtMs) && posture.capturedAtMs !== capturedAtMs) {
+    errors.push('posture.capturedAtMs does not match snapshot capturedAtMs');
+  }
+  if (Array.isArray(posture.staleInputs)) {posture.staleInputs.forEach((input, index) => {
+    if (typeof input !== 'string') errors.push(`posture.staleInputs[${index}] is not a string`);
+  });}
+  else {errors.push('posture.staleInputs is not an array');}
 }
 
-function validateFreshness(freshness: unknown, errors: string[]): void {
+function validateFreshness(freshness: unknown, capturedAtMs: unknown, now: number, errors: string[]): void {
   if (!Array.isArray(freshness)) {
     errors.push('freshness is not an array');
     return;
@@ -210,6 +256,17 @@ function validateFreshness(freshness: unknown, errors: string[]): void {
     if (f.domain !== 'weather') errors.push(`${where}.domain "${String(f.domain)}" is not a snapshot domain`);
     if (!isFiniteNumber(f.fetchedAtMs)) errors.push(`${where}.fetchedAtMs is not a finite number`);
     if (!isFiniteNumber(f.ageMs)) errors.push(`${where}.ageMs is not a finite number`);
+    if (isFiniteNumber(capturedAtMs) && isFiniteNumber(f.fetchedAtMs)) {
+      if (f.fetchedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) {
+        errors.push(`${where}.fetchedAtMs is in the future beyond allowed clock skew`);
+      }
+      if (f.fetchedAtMs > capturedAtMs + SNAPSHOT_CLOCK_SKEW_MS) {
+        errors.push(`${where}.fetchedAtMs is after snapshot capture beyond allowed clock skew`);
+      }
+      if (isFiniteNumber(f.ageMs) && f.ageMs !== capturedAtMs - f.fetchedAtMs) {
+        errors.push(`${where}.ageMs does not match snapshot capture minus fetchedAtMs`);
+      }
+    }
     if (typeof f.ok !== 'boolean') errors.push(`${where}.ok is not a boolean`);
   });
 }
@@ -273,19 +330,28 @@ function validatePlan(plan: unknown, errors: string[]): void {
  *  imported save file was rejected. Version is checked as shape, but callers
  *  that need a distinct "wrong version" signal should compare `version`
  *  themselves first — see importSnapshotEnvelope / safeDeserializeSnapshot. */
-export function validateSnapshot(value: unknown): SnapshotValidation {
+export function validateSnapshot(
+  value: unknown,
+  options: SnapshotValidationOptions = {},
+): SnapshotValidation {
   const errors: string[] = [];
   if (!isObject(value)) {
     return { ok: false, errors: ['snapshot is not an object'] };
   }
+  const now = Number.isFinite(options.now) ? (options.now as number) : Date.now();
   if (value.version !== SNAPSHOT_VERSION) {
     errors.push(`version ${String(value.version)} is not the supported version ${SNAPSHOT_VERSION}`);
   }
-  if (!isFiniteNumber(value.capturedAtMs)) errors.push('capturedAtMs is not a finite number');
-  validateFreshness(value.freshness, errors);
+  if (isFiniteNumber(value.capturedAtMs)) {
+    if (value.capturedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) {
+      errors.push('capturedAtMs is in the future beyond allowed clock skew');
+    }
+  }
+  else {errors.push('capturedAtMs is not a finite number');}
+  validateFreshness(value.freshness, value.capturedAtMs, now, errors);
   validateWeatherAlerts(value.weatherAlerts, errors);
   validateSavedPlaces(value.savedPlaces, errors);
-  validatePosture(value.posture, errors);
+  validatePosture(value.posture, value.capturedAtMs, errors);
   validatePlan(value.plan, errors);
   return { ok: errors.length === 0, errors };
 }
@@ -312,7 +378,10 @@ function fail(reason: SnapshotImportError, detail: string, errors?: string[]): S
 /** Import a snapshot from an export envelope, failing CLOSED on any problem.
  *  Never throws — untrusted bytes become a typed failure the caller can render,
  *  never a half-trusted posture. */
-export function importSnapshotEnvelope(json: string): SnapshotImportResult {
+export function importSnapshotEnvelope(
+  json: string,
+  options: SnapshotValidationOptions = {},
+): SnapshotImportResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -337,27 +406,30 @@ export function importSnapshotEnvelope(json: string): SnapshotImportResult {
   if (expected !== actual) {
     return fail('checksum_mismatch', `checksum ${expected || '(none)'} does not match ${actual} — the snapshot was truncated or altered`);
   }
-  return finishImport(snapshot);
+  return finishImport(snapshot, options);
 }
 
 /** Import a bare snapshot (no envelope) — e.g. a value already persisted by an
  *  older path — with the same fail-closed shape validation, but no checksum
  *  guard (there is nothing to check it against). */
-export function safeDeserializeSnapshot(json: string): SnapshotImportResult {
+export function safeDeserializeSnapshot(
+  json: string,
+  options: SnapshotValidationOptions = {},
+): SnapshotImportResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
     return fail('malformed_json', 'snapshot is not valid JSON');
   }
-  return finishImport(parsed);
+  return finishImport(parsed, options);
 }
 
-function finishImport(snapshot: unknown): SnapshotImportResult {
+function finishImport(snapshot: unknown, options: SnapshotValidationOptions): SnapshotImportResult {
   if (isObject(snapshot) && snapshot.version !== SNAPSHOT_VERSION) {
     return fail('unsupported_snapshot_version', `snapshot version ${String(snapshot.version)} is unsupported`);
   }
-  const validation = validateSnapshot(snapshot);
+  const validation = validateSnapshot(snapshot, options);
   if (!validation.ok) {
     return fail('invalid_shape', 'snapshot failed structural validation', validation.errors);
   }

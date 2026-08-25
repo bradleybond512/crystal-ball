@@ -1,5 +1,6 @@
 // src/services/survival/snapshot-store.ts
 import type { WorldSnapshot } from './survival-types.ts';
+import { safeDeserializeSnapshot } from './snapshot-integrity.ts';
 
 const KEY = 'cb:survival-snapshot/v1';
 
@@ -18,7 +19,9 @@ export function saveSnapshot(snapshot: WorldSnapshot): Promise<void> {
 export function loadLatestSnapshot(): Promise<WorldSnapshot | null> {
   try {
     const raw = localStorage.getItem(KEY);
-    return Promise.resolve(raw ? (JSON.parse(raw) as WorldSnapshot) : null);
+    if (!raw) return Promise.resolve(null);
+    const restored = safeDeserializeSnapshot(raw);
+    return Promise.resolve(restored.ok ? restored.snapshot : null);
   } catch {
     return Promise.resolve(null);
   }

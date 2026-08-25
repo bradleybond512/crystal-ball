@@ -15,8 +15,9 @@ const fingerprint = 'v2|41.61110|-86.72250|25.00|fuel,hospital,hotel,pharmacy,re
 
 class MemoryStorage {
   readonly values = new Map<string, string>();
+  writes = 0;
   getItem(key: string): string | null { return this.values.get(key) ?? null; }
-  setItem(key: string, value: string): void { this.values.set(key, value); }
+  setItem(key: string, value: string): void { this.writes += 1; this.values.set(key, value); }
   removeItem(key: string): void { this.values.delete(key); }
 }
 
@@ -108,6 +109,21 @@ function persistExactArtifact(storage: MemoryStorage, value: LocalLogisticsSnaps
   );
 }
 
+interface Receipt {
+  placeId: string;
+  capturedAt: Date;
+  expiresAt: Date | null;
+  isExpired: boolean;
+}
+
+function getReceipt(runtime: ReturnType<typeof createLifelineRuntime>, target = place): Receipt | null {
+  const getter = (runtime as unknown as {
+    getVerifiedLifelinesReceipt?: (candidate: typeof place) => Receipt | null;
+  }).getVerifiedLifelinesReceipt;
+  assert.equal(typeof getter, 'function', 'runtime should expose the narrow verified receipt accessor');
+  return getter.call(runtime, target);
+}
+
 test('a verified network snapshot creates exact-fingerprint offline Lifelines readiness', () => {
   const storage = new MemoryStorage();
   const runtime = createLifelineRuntime(storage, () => T0 + 60_000);
@@ -175,6 +191,59 @@ test('evicting the exact artifact after manifest creation demotes readiness', ()
   assert.deepEqual(readiness.missingKinds, ['lifelines']);
   assert.equal(runtime.getLatestUpdate('home', fingerprint)?.pack.status, 'not-saved',
     'cached runtime updates must not preserve stale readiness after eviction');
+});
+
+test('verified receipt accessor returns only cloned receipt dates and never writes', () => {
+  const storage = new MemoryStorage();
+  const accepted = snapshot();
+  persistExactArtifact(storage, accepted);
+  const runtime = createLifelineRuntime(storage, () => T0 + 60_000);
+  runtime.processSnapshot(accepted);
+  storage.writes = 0;
+
+  const first = getReceipt(runtime);
+  assert.deepEqual(Object.keys(first ?? {}).sort(), ['capturedAt', 'expiresAt', 'isExpired', 'placeId']);
+  assert.equal(first?.placeId, place.id, 'receipt identity must match the exact requested place');
+  assert.equal(first?.capturedAt.getTime(), T0);
+  assert.equal(first?.expiresAt?.getTime(), T0 + 24 * 60 * 60_000);
+  assert.equal(first?.isExpired, false);
+  first?.capturedAt.setTime(0);
+  first?.expiresAt?.setTime(0);
+
+  const second = getReceipt(runtime);
+  assert.equal(second?.capturedAt.getTime(), T0, 'capture date should be cloned per read');
+  assert.equal(second?.expiresAt?.getTime(), T0 + 24 * 60 * 60_000, 'expiry date should be cloned per read');
+  assert.equal(storage.writes, 0, 'receipt reads must not mutate persisted state');
+});
+
+test('verified receipt accessor rejects absent, moved, and evicted artifacts', () => {
+  const emptyStorage = new MemoryStorage();
+  assert.equal(getReceipt(createLifelineRuntime(emptyStorage, () => T0 + 60_000)), null);
+
+  const storage = new MemoryStorage();
+  const accepted = snapshot();
+  persistExactArtifact(storage, accepted);
+  const runtime = createLifelineRuntime(storage, () => T0 + 60_000);
+  runtime.processSnapshot(accepted);
+  assert.equal(getReceipt(runtime, { ...place, lat: 41.7 }), null, 'moved place must not inherit the prior receipt');
+
+  storage.removeItem(`wm_offline_${artifactServiceId(accepted)}`);
+  assert.equal(getReceipt(runtime), null, 'evicted exact artifact must revoke its receipt');
+});
+
+test('verified receipt accessor retains an expired receipt with explicit expiry state', () => {
+  const storage = new MemoryStorage();
+  const accepted = snapshot();
+  persistExactArtifact(storage, accepted);
+  let now = T0 + 60_000;
+  const runtime = createLifelineRuntime(storage, () => now);
+  runtime.processSnapshot(accepted);
+
+  now = T0 + 24 * 60 * 60_000;
+  const receipt = getReceipt(runtime);
+  assert.equal(receipt?.capturedAt.getTime(), T0);
+  assert.equal(receipt?.expiresAt?.getTime(), now);
+  assert.equal(receipt?.isExpired, true);
 });
 
 test('a newer official transition creates a shadow-only change while an older response is ignored', () => {

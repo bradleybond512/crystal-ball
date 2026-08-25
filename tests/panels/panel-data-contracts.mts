@@ -210,6 +210,7 @@ export const PANEL_DATA_CONTRACTS: Record<string, PanelContractEntry> = {
   'family-tracker': { contract: 'requires-user-config' },
   'evacuation': { contract: 'requires-user-config' },
   'comms-plan': { contract: 'static-local' },
+  'emergency-readiness': { contract: 'static-local', reason: 'Read-only projection over the hydrated survival snapshot and verified Lifelines receipt.' },
   'resource-inventory': { contract: 'static-local' },
   'after-action-review': { contract: 'static-local' },
   'alert-rules': { contract: 'static-local' },

@@ -87,6 +87,10 @@ export const PANEL_SMOKE_REGISTRY: Record<string, SmokeFactory> = {
   'economic-stress': wrap(async () => { const m = await import('@/components/EconomicStressPanel'); return new m.EconomicStressPanel(); }),
   'edgar-filings': wrap(async () => { const m = await import('@/components/EdgarFilingsPanel'); return new m.EdgarFilingsPanel(); }),
   'emergency-broadcast': wrap(async () => { const m = await import('@/components/EmergencyBroadcastPanel'); return new m.EmergencyBroadcastPanel(); }),
+  'emergency-readiness': {
+    create: async () => { const m = await import('@/components/EmergencyReadinessPanel'); return new m.EmergencyReadinessPanel(); },
+    waitMs: 200,
+  },
   'emsc-seismic': wrap(async () => { const m = await import('@/components/EmscSeismicPanel'); return new m.EmscSeismicPanel(); }),
   'entity-link-graph': wrap(async () => { const m = await import('@/components/EntityLinkGraphPanel'); return new m.EntityLinkGraphPanel(); }),
   'escalation-forecast': wrap(async () => { const m = await import('@/components/EscalationForecastPanel'); return new m.EscalationForecastPanel(); }),

@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { PANEL_METADATA } from '../../../config/panel-metadata.ts';
 import type { PanelMeta } from '../../../config/panel-metadata.ts';
-import type { WorldSnapshot } from '../../survival/survival-types.ts';
+import type { PostureThreat, SurvivalAxis, WorldSnapshot } from '../../survival/survival-types.ts';
 import {
   CONTEXTUAL_PANEL_RULES,
   GUIDANCE_LEVEL,
@@ -18,6 +18,21 @@ const AXES = [
   'comms', 'health', 'energy_water', 'security',
 ] as const;
 
+function supportingThreat(axis: SurvivalAxis, sourceEventId = `test-${axis}`): PostureThreat {
+  return {
+    sourceEventId,
+    axis,
+    severity: 60,
+    threatLevel: 'advisory',
+    hazardKind: 'other',
+    hazardLabel: 'Test threat',
+    timeToImpactMins: null,
+    arrivalLabel: null,
+    why: 'Test support',
+    confidenceLabel: 'medium',
+  };
+}
+
 function snapshot(
   levels: Partial<Record<(typeof AXES)[number], number>> = {},
   capturedAtMs = NOW,
@@ -29,7 +44,7 @@ function snapshot(
       level,
       band: level >= 80 ? 'critical' : level >= 60 ? 'high' : level >= 40 ? 'elevated' : level >= 20 ? 'guarded' : 'secure',
       trend: 'steady',
-      threats: [],
+      threats: level >= 40 ? [supportingThreat(axis)] : [],
       confidence: { score: 1, factors: [] },
       explanation: { summary: '', factors: [], limitations: [] },
       drivers: [],
@@ -84,6 +99,68 @@ test('39 stays quiet while the elevated boundary at 40 reveals guidance', () => 
   const elevated = buildContextualDeckView({ snapshot: snapshot({ physical_safety: 40 }), pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(elevated.state, 'active');
   assert.deepEqual(elevated.cards.map((card) => card.panelId), ['local-logistics']);
+});
+
+test('an elevated axis without a supporting threat is withheld', () => {
+  const unsupported = snapshot({ physical_safety: 70 });
+  unsupported.posture.axes.find((axis) => axis.axis === 'physical_safety')!.threats = [];
+  const view = buildContextualDeckView({
+    snapshot: unsupported,
+    pins: [],
+    panels: activePanels('local-logistics'),
+    metadata: metadata('local-logistics'),
+    rules: directRules({ physical_safety: ['local-logistics'] }),
+  }, NOW);
+
+  assert.deepEqual(view.cards, []);
+  assert.match(`${view.headline} ${view.summary}`, /supporting threat/i);
+  assert.doesNotMatch(`${view.headline} ${view.summary}`, /no elevated posture axes/i);
+});
+
+test('mode-forecast source ids quarantine their whole axes at the contextual boundary', () => {
+  for (const sourceEventId of ['finance-pressure', 'security-pressure', 'cyber-pressure']) {
+    const forecast = snapshot({ security: 80 });
+    forecast.posture.axes.find((axis) => axis.axis === 'security')!.threats = [
+      supportingThreat('security', sourceEventId),
+    ];
+    const view = buildContextualDeckView({
+      snapshot: forecast,
+      pins: [],
+      panels: activePanels('security-1'),
+      metadata: metadata('security-1'),
+      rules: directRules({ security: ['security-1'] }),
+    }, NOW);
+
+    assert.equal(view.state, 'stale', sourceEventId);
+    assert.deepEqual(view.cards, [], sourceEventId);
+    assert.match(view.summary, /1 forecast-derived posture axis withheld.*source age is unknown/i);
+  }
+});
+
+test('mixed supported and quarantined axes keep safe cards but disclose the withheld axis count', () => {
+  const mixed = snapshot({ physical_safety: 60, financial: 70, security: 80 });
+  mixed.posture.axes.find((axis) => axis.axis === 'financial')!.threats = [
+    supportingThreat('financial', 'finance-pressure'),
+  ];
+  mixed.posture.axes.find((axis) => axis.axis === 'security')!.threats = [
+    supportingThreat('security', 'cyber-pressure'),
+  ];
+  const ids = ['physical-1', 'financial-1', 'security-1'];
+  const view = buildContextualDeckView({
+    snapshot: mixed,
+    pins: [],
+    panels: activePanels(...ids),
+    metadata: metadata(...ids),
+    rules: directRules({
+      physical_safety: ['physical-1'],
+      financial: ['financial-1'],
+      security: ['security-1'],
+    }),
+  }, NOW);
+
+  assert.equal(view.state, 'stale');
+  assert.deepEqual(view.cards.map((card) => card.panelId), ['physical-1']);
+  assert.match(view.summary, /2 forecast-derived posture axes withheld.*source age is unknown/i);
 });
 
 test('worst axes lead each mapping slot in round-robin order and suggestions cap at six', () => {
@@ -247,8 +324,45 @@ test('state copy distinguishes checking, unavailable, quiet, active, and stale w
   const stale = buildContextualDeckView({ snapshot: staleSnapshot, pins: [], panels, metadata: metas, rules }, NOW);
   assert.equal(stale.state, 'stale');
   assert.equal(stale.headline, 'Suggestions from last known posture');
-  assert.match(stale.summary, /snapshot 20m old/i);
+  assert.match(stale.summary, /weather data 20m old/i);
   assert.doesNotMatch(JSON.stringify(stale), /restored/i);
+});
+
+test('weather staleness reports weather age instead of the newer snapshot capture age', () => {
+  const weatherStale = snapshot({ physical_safety: 60 });
+  weatherStale.freshness = [{
+    domain: 'weather',
+    fetchedAtMs: NOW - 20 * 60_000,
+    ageMs: 20 * 60_000,
+    ok: false,
+  }];
+  const view = buildContextualDeckView({
+    snapshot: weatherStale,
+    pins: [],
+    panels: activePanels('local-logistics'),
+    metadata: metadata('local-logistics'),
+    rules: directRules({ physical_safety: ['local-logistics'] }),
+  }, NOW);
+
+  assert.equal(view.state, 'stale');
+  assert.match(view.summary, /weather data 20m old/i);
+  assert.doesNotMatch(view.summary, /snapshot (?:0s|20m) old/i);
+});
+
+test('opaque stale posture inputs use a generic warning without a fabricated age', () => {
+  const opaqueStale = snapshot({ supply: 60 });
+  opaqueStale.posture.staleInputs = ['provider-specific restored marker'];
+  const view = buildContextualDeckView({
+    snapshot: opaqueStale,
+    pins: [],
+    panels: activePanels('supply-1'),
+    metadata: metadata('supply-1'),
+    rules: directRules({ supply: ['supply-1'] }),
+  }, NOW);
+
+  assert.equal(view.state, 'stale');
+  assert.match(view.summary, /posture contains stale inputs/i);
+  assert.doesNotMatch(view.summary, /\b\d+[smhd] old\b/i);
 });
 
 test('a stale secure snapshot reports last-known age and asks for current verification', () => {
@@ -267,7 +381,7 @@ test('a stale secure snapshot reports last-known age and asks for current verifi
   assert.equal(view.headline, 'Last known posture—verify now');
   assert.equal(
     view.summary,
-    'Snapshot 20m old · no elevated axes then; verify current conditions.',
+    'Weather data 20m old · no elevated axes then; verify current conditions.',
   );
   assert.deepEqual(view.cards, []);
 });
@@ -287,7 +401,7 @@ test('stale elevated posture without an available card does not imply current sa
   assert.equal(view.headline, 'Last known suggestions unavailable');
   assert.equal(
     view.summary,
-    'Snapshot 20m old · elevated axes had no available panel; verify current conditions.',
+    'Weather data 20m old · elevated axes had no available panel; verify current conditions.',
   );
   assert.deepEqual(view.cards, []);
 });

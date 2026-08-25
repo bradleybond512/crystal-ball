@@ -12,6 +12,7 @@ import type { ForecastSnapshot } from '../mode-forecast.ts';
 import type { PostureThreat } from './survival-types.ts';
 import { severityToThreatLevel } from './survival-types.ts';
 import type { PostureContributor } from './posture-contributor.ts';
+import { MODE_FORECAST_THREAT_SOURCE_IDS } from './mode-forecast-threats.ts';
 import { formatDurationMinutes } from '../../utils/format-duration.ts';
 
 export function makeFinancialContributor(snapshot: ForecastSnapshot): PostureContributor {
@@ -23,7 +24,7 @@ export function makeFinancialContributor(snapshot: ForecastSnapshot): PostureCon
       if (!adv) return [];
       const severity = Math.max(0, Math.min(100, Math.round(adv.pressure * 100)));
       return [{
-        sourceEventId: 'finance-pressure',
+        sourceEventId: MODE_FORECAST_THREAT_SOURCE_IDS.finance,
         axis: 'financial',
         severity,
         threatLevel: severityToThreatLevel(severity),

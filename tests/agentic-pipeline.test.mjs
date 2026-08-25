@@ -233,6 +233,19 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   assert.deepEqual(scripts, ['test:providers']);
 });
 
+test('roadmap docs and controller changes select the roadmap suite', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:roadmap-controller': 'node --test tests/roadmap-controller.test.mjs',
+  });
+  const result = selectScripts([
+    'docs/USABILITY_UPLIFT_FOR_CODEX.md',
+    'docs/PREDICTION_ACCURACY_ROADMAP.md',
+    'scripts/roadmap-controller.mjs',
+  ], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:roadmap-controller'], unmapped: [] });
+});
+
 test('the ESLint runner override selects its focused behavioral suite', () => {
   const index = deriveScriptIndex({
     ...SCRIPTS,

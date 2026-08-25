@@ -405,6 +405,7 @@ test('workflow is pinned, least-privileged, token-free at the Node boundary, and
   assert.match(workflow, /git show origin\/main:docs\/USABILITY_UPLIFT_FOR_CODEX\.md/);
   assert.match(workflow, /--baseline-ux/);
   assert.match(workflow, /--references-output/);
+  assert.equal([...workflow.matchAll(/--references-output/g)].length, 3);
   assert.match(workflow, /ROADMAP_REFERENCES_PATH/);
   assert.doesNotMatch(workflow, /docs\.matchAll/);
   assert.match(workflow, /concurrency:\s*\n\s*group: roadmap-controller-watchdog/);

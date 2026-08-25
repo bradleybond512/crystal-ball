@@ -11,6 +11,7 @@
  */
 
 import { DEFAULT_PANELS, STORAGE_KEYS } from '@/config/panels';
+import { PANEL_METADATA } from '@/config/panel-metadata';
 import { PanelFocusHost } from '@/components/PanelFocusHost';
 import { createHomeShellStartupReadiness } from '@/components/HomeShellStartupReadiness';
 import type { HomeShellStartupReadinessPresenter } from '@/components/HomeShellStartupReadiness';
@@ -47,6 +48,8 @@ import {
   togglePin,
 } from '@/services/home-shell/deck-view';
 import type { ContributorEvidenceLike, DeckCardView } from '@/services/home-shell/deck-view';
+import { buildContextualDeckView } from '@/services/home-shell/contextual-deck-view';
+import type { ContextualDeckView, ContextualPanelCardView } from '@/services/home-shell/contextual-deck-view';
 import { buildStatusRibbon } from '@/services/home-shell/status-ribbon-view';
 import type { StatusRibbonView } from '@/services/home-shell/status-ribbon-view';
 import {
@@ -58,6 +61,12 @@ import type { KeylessSourceStateLike } from '@/services/home-shell/startup-readi
 import { dataFreshness } from '@/services/data-freshness';
 import type { DataSourceId } from '@/services/data-freshness';
 import { safeSetItem } from '@/utils/safe-storage';
+import {
+  getStormSnapshot,
+  hydrateStormPosture,
+  subscribeStormPosture,
+} from '@/services/survival/storm-posture-state';
+import type { WorldSnapshot } from '@/services/survival/survival-types';
 
 const DECK_PINS_KEY = STORAGE_KEYS.deckPins;
 const CHANGED_WINDOW_MS = 60 * 60 * 1000;
@@ -73,6 +82,12 @@ export interface HomeShellOptions {
   ensurePanel: (panelId: string) => Promise<unknown>;
   /** Deterministic clock seam for first-run readiness tests. */
   now?: () => number;
+  /** Snapshot lifecycle seam; defaults to the existing survival posture store. */
+  contextualSnapshotSource?: {
+    get: () => WorldSnapshot | null;
+    subscribe: (callback: () => void) => () => void;
+    hydrate: () => Promise<void>;
+  };
 }
 
 export class HomeShellOverlay {
@@ -83,6 +98,7 @@ export class HomeShellOverlay {
   private readinessPresenter: HomeShellStartupReadinessPresenter | null = null;
   private briefingEl: HTMLElement | null = null;
   private deckEl: HTMLElement | null = null;
+  private contextualEl: HTMLElement | null = null;
   private ribbonEl: HTMLElement | null = null;
   private mapHome: Comment | null = null;
   private loop: LoopHandle | null = null;
@@ -96,10 +112,17 @@ export class HomeShellOverlay {
   private _onOpenPanel: ((e: Event) => void) | null = null;
   private lastSituationCommandId: string | null = null;
   private startupStartedAt: number | undefined;
+  private contextualUnsubscribe: (() => void) | null = null;
+  private contextualGeneration = 0;
+  private contextualHydrationStarted = false;
+  private contextualHydrationSettled = false;
+  private contextualSemanticKey: string | null = null;
+  private pendingContextualView: ContextualDeckView | null = null;
   private readonly getPanel: HomeShellOptions['getPanel'];
   // used by the focus host
   private readonly ensurePanel: HomeShellOptions['ensurePanel'];
   private readonly now: () => number;
+  private readonly contextualSnapshotSource: NonNullable<HomeShellOptions['contextualSnapshotSource']>;
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
@@ -109,6 +132,11 @@ export class HomeShellOverlay {
     this.getPanel = options.getPanel;
     this.ensurePanel = options.ensurePanel;
     this.now = options.now ?? Date.now;
+    this.contextualSnapshotSource = options.contextualSnapshotSource ?? {
+      get: getStormSnapshot,
+      subscribe: subscribeStormPosture,
+      hydrate: hydrateStormPosture,
+    };
   }
 
   mount(parent: HTMLElement): void {
@@ -158,12 +186,18 @@ export class HomeShellOverlay {
     viewport.append(this.readinessEl, this.briefingEl, deckHint);
 
     this.deckEl = el('section', 'home-shell-deck');
+    this.contextualEl = el('section', 'home-shell-contextual');
+    this.contextualEl.setAttribute('aria-labelledby', 'home-shell-contextual-title');
+    this.contextualEl.addEventListener('focusout', (event) => {
+      const next = (event as FocusEvent).relatedTarget as Node | null;
+      if (!next || !this.contextualEl?.contains(next)) this.flushPendingContextualView();
+    });
     this.ribbonEl = el('footer', 'home-shell-ribbon');
     // Topbar is a direct child of the scroll container (not the viewport) so its
     // sticky containing block spans the whole scroll — it stays pinned even when
     // the viewport scrolls past to reach the deck. (Nested in the viewport it
     // unstuck the moment the viewport left the scrollport — the vanishing-header bug.)
-    scroll.append(topbar, viewport, this.deckEl, this.ribbonEl);
+    scroll.append(topbar, viewport, this.contextualEl, this.deckEl, this.ribbonEl);
     root.append(this.mapSlot, scroll);
 
     this.dossier = new SituationDossier({
@@ -252,6 +286,7 @@ export class HomeShellOverlay {
     if (topH && topH > 0) this.root.style.setProperty('--hs-topbar-h', `${topH}px`);
     document.addEventListener('keydown', this.onKeydown);
     this.adoptMap();
+    this.startContextualView();
     this.loop = registerRecurringLoop('home-shell-refresh', () => this.refresh(), REFRESH_MS, {
       priority: 'low',
       runImmediately: true,
@@ -263,6 +298,7 @@ export class HomeShellOverlay {
     this.visible = false;
     this.loop?.cancel();
     this.loop = null;
+    this.stopContextualView();
     document.removeEventListener('keydown', this.onKeydown);
     this.focusHost?.close();
     this.dossier?.close();
@@ -301,6 +337,9 @@ export class HomeShellOverlay {
     this.root?.remove();
     this.root = null;
     this.readinessPresenter = null;
+    this.contextualEl = null;
+    this.contextualSemanticKey = null;
+    this.pendingContextualView = null;
   }
 
   // ── Data + render ─────────────────────────────────────────────────
@@ -462,6 +501,76 @@ export class HomeShellOverlay {
     this.deckEl.replaceChildren(header, grid);
   }
 
+  private startContextualView(): void {
+    if (!this.contextualEl) return;
+    const generation = ++this.contextualGeneration;
+    this.contextualUnsubscribe = this.contextualSnapshotSource.subscribe(() => {
+      if (!this.visible || generation !== this.contextualGeneration) return;
+      this.renderCurrentContextualView();
+    });
+    this.renderCurrentContextualView();
+    if (this.contextualHydrationStarted) return;
+    this.contextualHydrationStarted = true;
+    void this.contextualSnapshotSource.hydrate().then(
+      () => this.finishContextualHydration(generation),
+      () => this.finishContextualHydration(generation),
+    );
+  }
+
+  private finishContextualHydration(generation: number): void {
+    this.contextualHydrationSettled = true;
+    if (!this.visible || generation !== this.contextualGeneration || !this.root) return;
+    this.renderCurrentContextualView();
+  }
+
+  private stopContextualView(): void {
+    this.contextualGeneration += 1;
+    this.contextualUnsubscribe?.();
+    this.contextualUnsubscribe = null;
+    this.pendingContextualView = null;
+  }
+
+  private renderCurrentContextualView(): void {
+    const current = this.contextualSnapshotSource.get();
+    const snapshot = current ?? (this.contextualHydrationSettled ? null : undefined);
+    this.renderContextualView(buildContextualDeckView({
+      snapshot,
+      pins: this.pins,
+      panels: DEFAULT_PANELS,
+      metadata: PANEL_METADATA,
+    }, this.now()));
+  }
+
+  private renderContextualView(view: ContextualDeckView): void {
+    if (!this.contextualEl || view.semanticKey === this.contextualSemanticKey) return;
+    if (this.contextualEl.contains(document.activeElement)) {
+      this.pendingContextualView = view;
+      return;
+    }
+    this.commitContextualView(view);
+  }
+
+  private flushPendingContextualView(): void {
+    const pending = this.pendingContextualView;
+    if (!pending || !this.contextualEl) return;
+    this.pendingContextualView = null;
+    this.commitContextualView(pending);
+  }
+
+  private commitContextualView(view: ContextualDeckView): void {
+    if (!this.contextualEl) return;
+    const header = el('div', 'hs-contextual-header');
+    const heading = el('h2', 'hs-contextual-title', view.headline);
+    heading.id = 'home-shell-contextual-title';
+    header.append(heading, el('div', 'hs-contextual-summary', view.summary));
+    const grid = el('div', 'hs-contextual-grid');
+    grid.append(...view.cards.map((card) => renderContextualCard(card)));
+    this.contextualEl.dataset.state = view.state;
+    this.contextualEl.replaceChildren(header, grid);
+    this.contextualSemanticKey = view.semanticKey;
+    this.pendingContextualView = null;
+  }
+
   /** Filterable pin picker. Replaces a 185-item native <select> whose
    *  type-to-jump fired `change` on every matching keystroke and pinned the
    *  wrong panel. This input+list commits ONLY on an explicit item click. */
@@ -599,6 +708,10 @@ export class HomeShellOverlay {
     }
     if (action === 'open') {
       this.openInFocus(key);
+      return;
+    }
+    if (action === 'context-open') {
+      this.openInFocus(key);
     }
   }
 
@@ -608,6 +721,7 @@ export class HomeShellOverlay {
     const cards = this.buildDeckView(this.now());
     this.renderReadiness(cards);
     this.renderDeck(cards);
+    if (this.visible) this.renderCurrentContextualView();
   }
 
   // ── Map adoption ──────────────────────────────────────────────────
@@ -727,4 +841,19 @@ export function renderDeckCard(c: DeckCardView): HTMLElement {
   }
   card.append(actions);
   return card;
+}
+
+export function renderContextualCard(card: ContextualPanelCardView): HTMLElement {
+  const node = el('article', 'hs-contextual-card');
+  node.dataset.panelKey = card.panelId;
+  node.dataset.semanticKey = card.semanticKey;
+  node.append(
+    el('div', 'hs-contextual-card-title', card.title),
+    el('div', 'hs-contextual-card-reason', card.reason),
+  );
+  const open = button('hs-contextual-open', 'context-open', 'Open');
+  open.dataset.panelKey = card.panelId;
+  open.setAttribute('aria-label', `Open ${card.title} — ${card.reason}`);
+  node.append(open);
+  return node;
 }

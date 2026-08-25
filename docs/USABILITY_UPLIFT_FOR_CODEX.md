@@ -596,7 +596,7 @@ Update the row in the same PR that does the work.
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | DONE | #1670 |
-| UX-004 | Contextual panel reveal | IN REVIEW | #1673 |
+| UX-004 | Contextual panel reveal | DONE | #1673 |
 | UX-005 | Stable identity + personal lens | BLOCKED — HIGH ASSURANCE | — |
 | UX-006 | Fix stale panel count in CLAUDE.md | DONE | #1659 |
 | UX-007 | Truthful Lifelines discovery | DONE | #1669 |

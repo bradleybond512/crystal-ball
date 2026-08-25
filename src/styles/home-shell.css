@@ -294,6 +294,83 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
 
 .home-shell-deck-hint:hover { color: var(--hs-fg); background: var(--accent-selection); }
 
+.home-shell-contextual {
+  padding: 18px;
+  background: var(--mat-solid-1);
+  pointer-events: auto;
+}
+
+.hs-contextual-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hs-contextual-title {
+  margin: 0;
+  color: var(--hs-fg);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.hs-contextual-summary {
+  color: var(--hs-fg-faint);
+  font-size: var(--text-xs);
+}
+
+.home-shell-contextual[data-state='stale'] .hs-contextual-summary {
+  color: var(--hs-warn);
+}
+
+.hs-contextual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.hs-contextual-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-lg);
+  background: var(--mat-solid-2);
+  box-shadow: var(--e-2), var(--edge-highlight);
+}
+
+.hs-contextual-card-title {
+  color: var(--hs-fg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.hs-contextual-card-reason {
+  color: var(--hs-fg-dim);
+  font-size: var(--text-xs);
+}
+
+.hs-contextual-open {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 5px 11px;
+  background: rgba(var(--hs-white-rgb), 0.08);
+  color: var(--hs-fg-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.hs-contextual-open:hover,
+.hs-contextual-open:focus-visible {
+  color: var(--hs-fg);
+  background: var(--accent-selection);
+}
+
 .home-shell-deck {
   position: relative;
   background: var(--hs-bg-deck);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
+import * as lifelineMapHelpers from '../src/components/disaster-lifelines-map-helpers.ts';
+const {
   bindLifelinePopupActions,
   buildLifelinesPlaceMatchSignature,
   buildExternalMapsUrl,
@@ -8,7 +9,7 @@ import {
   getTemporaryMapBounds,
   getLifelineMarkerPresentation,
   parseLifelinesOverlayEventDetailWithContext,
-} from '../src/components/disaster-lifelines-map-helpers.ts';
+} = lifelineMapHelpers;
 import type { LocalLogisticsSnapshot } from '../src/services/local-logistics-types.ts';
 import type { SavedPlace } from '../src/services/saved-places.ts';
 
@@ -268,6 +269,22 @@ test('external maps URL is inert data until a click handler explicitly opens it'
   assert.equal(url.searchParams.get('mlat'), '41.6');
   assert.equal(url.searchParams.get('mlon'), '-86.7');
   assert.equal(url.hash, '#map=16/41.6/-86.7');
+});
+
+test('lifeline call href accepts only bounded, explicitly formatted phone numbers', () => {
+  const buildLifelineCallHref = (lifelineMapHelpers as {
+    buildLifelineCallHref?: (phone: string | undefined) => string | null;
+  }).buildLifelineCallHref;
+  assert.equal(typeof buildLifelineCallHref, 'function');
+  if (!buildLifelineCallHref) return;
+  assert.equal(buildLifelineCallHref('+1 (219) 555-0100'), 'tel:+12195550100');
+  assert.equal(buildLifelineCallHref('219-555-0100'), 'tel:2195550100');
+  assert.equal(buildLifelineCallHref(undefined), null);
+  assert.equal(buildLifelineCallHref(''), null);
+  assert.equal(buildLifelineCallHref('555-CALL'), null);
+  assert.equal(buildLifelineCallHref('21+95550100'), null);
+  assert.equal(buildLifelineCallHref('123456'), null);
+  assert.equal(buildLifelineCallHref('+1234567890123456'), null);
 });
 
 test('popup copy and external-map effects remain inert until their buttons are clicked', async () => {

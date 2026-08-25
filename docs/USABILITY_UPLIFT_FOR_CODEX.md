@@ -469,7 +469,7 @@ Update the row in the same PR that does the work.
 | UX-004 | Contextual panel reveal | NOT STARTED | — |
 | UX-005 | Stable identity + personal lens | BLOCKED — HIGH ASSURANCE | — |
 | UX-006 | Fix stale panel count in CLAUDE.md | DONE | #1659 |
-| UX-007 | Truthful Lifelines discovery | IN PROGRESS | — |
+| UX-007 | Truthful Lifelines discovery | DONE | #1669 |
 | UX-008 | Observable Lifelines prewarm | NOT STARTED | — |
 | UX-009 | Emergency Pack v2 | NOT STARTED — HIGH ASSURANCE | — |
 | UX-010 | Current-location Lifelines | NOT STARTED — HIGH ASSURANCE | — |

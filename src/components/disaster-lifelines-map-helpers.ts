@@ -523,6 +523,15 @@ export function buildExternalMapsUrl(node: Pick<LogisticsNode, 'lat' | 'lon'>): 
   return url.toString();
 }
 
+export function buildLifelineCallHref(phone: string | undefined): string | null {
+  if (!phone || phone.length > 80) return null;
+  const trimmed = phone.trim();
+  if (!/^\+?[\d().\s-]+$/.test(trimmed)) return null;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  return `tel:${trimmed.startsWith('+') ? '+' : ''}${digits}`;
+}
+
 interface LifelinePopupActionDependencies {
   writeClipboard?: (value: string) => Promise<void>;
   openMaps?: (url: string) => void;

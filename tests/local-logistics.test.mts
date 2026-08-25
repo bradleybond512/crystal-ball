@@ -13,10 +13,24 @@ import {
   rankLocalLogisticsNodes,
   validateLocalLogisticsSnapshotEvent,
 } from '../src/services/local-logistics.ts';
+import * as localLogisticsModule from '../src/services/local-logistics.ts';
+import type {
+  LifelineCategoryCoverage,
+  LifelineCoverageState,
+  LifelineProviderCoverage,
+  LocalLogisticsRadiusChoiceKm,
+} from '../src/services/local-logistics.ts';
 import type { LogisticsNode } from '../src/services/local-logistics-types.ts';
+import type { LocalLogisticsSnapshot, ProviderStatus } from '../src/services/local-logistics-types.ts';
 import type { SavedPlace } from '../src/services/saved-places.ts';
 
 const NOW = new Date('2026-03-29T19:00:00.000Z');
+const feature = localLogisticsModule as Record<string, unknown>;
+
+function requireFeature<T>(name: string): T {
+  assert.equal(typeof feature[name], 'function', `${name} must be exported`);
+  return feature[name] as T;
+}
 
 function makePlace(overrides: Partial<SavedPlace> = {}): SavedPlace {
   return {
@@ -67,6 +81,214 @@ function makeNode(overrides: Partial<LogisticsNode> = {}): LogisticsNode {
  ...overrides,
   };
 }
+
+test('saved radii initialize to the next supported Lifelines radius', () => {
+  const initialLocalLogisticsRadiusKm = requireFeature<(radiusKm: number) => LocalLogisticsRadiusChoiceKm>(
+    'initialLocalLogisticsRadiusKm',
+  );
+  const LOCAL_LOGISTICS_RADIUS_CHOICES_KM = feature.LOCAL_LOGISTICS_RADIUS_CHOICES_KM as readonly number[];
+  assert.deepEqual(LOCAL_LOGISTICS_RADIUS_CHOICES_KM, [5, 10, 25, 50]);
+  assert.equal(initialLocalLogisticsRadiusKm(1), 5);
+  assert.equal(initialLocalLogisticsRadiusKm(5), 5);
+  assert.equal(initialLocalLogisticsRadiusKm(6), 10);
+  assert.equal(initialLocalLogisticsRadiusKm(24), 25);
+  assert.equal(initialLocalLogisticsRadiusKm(26), 50);
+  assert.equal(initialLocalLogisticsRadiusKm(75), 50);
+});
+
+test('explicit fetch radii override the saved preference and clamp independently to 1..50 km', async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedRadii: number[] = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input), 'http://localhost');
+    const radiusKm = Number(url.searchParams.get('radiusKm'));
+    const categories = url.searchParams.get('categories')?.split(',') ?? [];
+    requestedRadii.push(radiusKm);
+    const providers = [
+      ...(categories.some((category) => category !== 'recovery') ? ['osm'] : []),
+      ...(categories.includes('shelter') ? ['fema-open-shelters'] : []),
+      ...(categories.includes('recovery') ? ['fema-recovery-centers'] : []),
+    ].map((id) => ({
+      id, state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW.toISOString(),
+    }));
+    return new Response(JSON.stringify({
+      schemaVersion: 2,
+      query: { lat: 35.994, lon: -78.8986, radiusKm, categories },
+      sites: [], observations: [], providers,
+      fetchedAt: NOW.toISOString(), retrievedAt: NOW.toISOString(),
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const place = makePlace({ radiusKm: 6 });
+    await fetchLocalLogistics(place, { radiusKm: 50 });
+    await fetchLocalLogistics(place, { radiusKm: 75 });
+    await fetchLocalLogistics(place, { radiusKm: 0 });
+    await fetchLocalLogistics(place);
+    assert.deepEqual(requestedRadii, [50, 50, 1, 6]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('representative selection includes one ranked result per category before filling remaining slots', () => {
+  const selectRepresentativeLocalLogisticsNodes = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    category?: LogisticsNode['category'] | 'all',
+    limit?: number,
+  ) => LogisticsNode[]>('selectRepresentativeLocalLogisticsNodes');
+  const snapshot = buildLocalLogisticsSnapshot(makePlace(), [
+    makeNode({ id: 'fuel-best', category: 'fuel', distanceKm: 1, operational: 'open', verification: 'official', directoryOnly: false }),
+    makeNode({ id: 'fuel-second', category: 'fuel', distanceKm: 2, operational: 'open', verification: 'official', directoryOnly: false }),
+    makeNode({ id: 'hospital', category: 'hospital', distanceKm: 4 }),
+    makeNode({ id: 'water', category: 'water', distanceKm: 5 }),
+  ], { fetchedAt: NOW });
+
+  assert.deepEqual(
+    selectRepresentativeLocalLogisticsNodes(snapshot, 'all', 3).map((node) => node.id),
+    ['fuel-best', 'hospital', 'water'],
+  );
+  assert.deepEqual(
+    selectRepresentativeLocalLogisticsNodes(snapshot, 'all', 4).map((node) => node.id),
+    ['fuel-best', 'hospital', 'water', 'fuel-second'],
+  );
+  assert.deepEqual(
+    selectRepresentativeLocalLogisticsNodes(snapshot, 'fuel', 1).map((node) => node.id),
+    ['fuel-best'],
+  );
+});
+
+test('coverage projection exposes provider scope, TTL, and fail-closed completeness', () => {
+  const projectLocalLogisticsCoverage = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    now?: number,
+  ) => { providers: LifelineProviderCoverage[]; categories: LifelineCategoryCoverage[] }>(
+    'projectLocalLogisticsCoverage',
+  );
+  const providers: ProviderStatus[] = [
+    { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+    { id: 'fema-open-shelters', state: 'ok', acceptedRows: 1, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+    { id: 'fema-recovery-centers', state: 'partial', acceptedRows: 1, droppedRows: 3, observedAt: NOW, retrievedAt: NOW },
+    { id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+  ];
+  const snapshot = buildLocalLogisticsSnapshot(makePlace(), [], {
+    fetchedAt: NOW,
+    categories: ['fuel', 'shelter', 'recovery'],
+    providers,
+  });
+
+  const coverage = projectLocalLogisticsCoverage(snapshot, NOW.getTime());
+  const providerById = new Map(coverage.providers.map((provider) => [provider.providerId, provider]));
+  const categoryById = new Map(coverage.categories.map((category) => [category.category, category]));
+  assert.deepEqual(providerById.get('osm'), {
+    providerId: 'osm',
+    state: 'current-complete',
+    facilityCategories: ['fuel', 'shelter'],
+    retrievedAt: NOW,
+    projectedExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+    acceptedRows: 0,
+    droppedRows: 0,
+    scope: 'facilities',
+  });
+  assert.deepEqual(providerById.get('fema-open-shelters'), {
+    providerId: 'fema-open-shelters',
+    state: 'current-complete',
+    facilityCategories: ['shelter'],
+    retrievedAt: NOW,
+    projectedExpiresAt: new Date(NOW.getTime() + 30 * 60 * 1000),
+    acceptedRows: 1,
+    droppedRows: 0,
+    scope: 'facilities',
+  });
+  assert.deepEqual(providerById.get('fema-recovery-centers'), {
+    providerId: 'fema-recovery-centers',
+    state: 'current-partial',
+    facilityCategories: ['recovery'],
+    retrievedAt: NOW,
+    projectedExpiresAt: new Date(NOW.getTime() + 30 * 60 * 1000),
+    acceptedRows: 1,
+    droppedRows: 3,
+    scope: 'facilities',
+  });
+  assert.deepEqual(providerById.get('ornl-odin'), {
+    providerId: 'ornl-odin',
+    state: 'current-complete',
+    facilityCategories: [],
+    retrievedAt: NOW,
+    projectedExpiresAt: new Date(NOW.getTime() + 30 * 60 * 1000),
+    acceptedRows: 0,
+    droppedRows: 0,
+    scope: 'county-outage-context',
+  });
+
+  assert.deepEqual(categoryById.get('fuel'), {
+    category: 'fuel', state: 'proven-current', requiredProviders: ['osm'],
+    expiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+  });
+  assert.deepEqual(categoryById.get('shelter'), {
+    category: 'shelter', state: 'proven-current', requiredProviders: ['osm', 'fema-open-shelters'],
+    expiresAt: new Date(NOW.getTime() + 30 * 60 * 1000),
+  });
+  assert.deepEqual(categoryById.get('recovery'), {
+    category: 'recovery', state: 'not-proven', requiredProviders: ['fema-recovery-centers'], expiresAt: null,
+  });
+});
+
+test('coverage expires at the exact boundary and unavailable providers never prove categories', () => {
+  const projectLocalLogisticsCoverage = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    now?: number,
+  ) => { providers: LifelineProviderCoverage[]; categories: LifelineCategoryCoverage[] }>(
+    'projectLocalLogisticsCoverage',
+  );
+  const femaRetrievedAt = new Date(NOW.getTime() - 30 * 60 * 1000);
+  const providers: ProviderStatus[] = [
+    { id: 'osm', state: 'error', acceptedRows: 0, droppedRows: 0, observedAt: null },
+    {
+      id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0,
+      observedAt: femaRetrievedAt, retrievedAt: femaRetrievedAt,
+    },
+  ];
+  const snapshot = buildLocalLogisticsSnapshot(makePlace(), [], {
+    fetchedAt: NOW,
+    categories: ['fuel', 'shelter'],
+    providers,
+  });
+  const coverage = projectLocalLogisticsCoverage(snapshot, NOW.getTime());
+  const providerStates = Object.fromEntries(coverage.providers.map((provider) => [provider.providerId, provider.state]));
+  const categoryStates = Object.fromEntries(coverage.categories.map((category) => [category.category, category.state]));
+  const exactStates: Record<string, LifelineCoverageState> = {
+    osm: 'unavailable',
+    'fema-open-shelters': 'expired',
+  };
+
+  assert.deepEqual(providerStates, exactStates);
+  assert.deepEqual(categoryStates, { fuel: 'not-proven', shelter: 'not-proven' });
+  assert.equal(coverage.providers.find((provider) => provider.providerId === 'fema-open-shelters')?.projectedExpiresAt?.getTime(), NOW.getTime());
+  assert.ok(coverage.categories.every((category) => category.expiresAt === null));
+});
+
+test('dropped provider rows downgrade nominally complete coverage and cannot prove none reported', () => {
+  const projectLocalLogisticsCoverage = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    now?: number,
+  ) => { providers: LifelineProviderCoverage[]; categories: LifelineCategoryCoverage[] }>(
+    'projectLocalLogisticsCoverage',
+  );
+  const snapshot = buildLocalLogisticsSnapshot(makePlace(), [], {
+    fetchedAt: NOW,
+    categories: ['fuel'],
+    providers: [{
+      id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 1, observedAt: NOW, retrievedAt: NOW,
+    }],
+  });
+
+  const coverage = projectLocalLogisticsCoverage(snapshot, NOW.getTime());
+  assert.equal(coverage.providers[0]?.state, 'current-partial');
+  assert.deepEqual(coverage.categories[0], {
+    category: 'fuel', state: 'not-proven', requiredProviders: ['osm'], expiresAt: null,
+  });
+});
 
 test('rankLocalLogisticsNodes prioritizes viable nodes before nearer unknown nodes', () => {
   const ranked = rankLocalLogisticsNodes([

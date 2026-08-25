@@ -17,7 +17,7 @@ import { getHotspotEscalation, getEscalationChange24h } from '@/services/hotspot
 import { getCableHealthRecord } from '@/services/cable-health';
 import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 import type { LogisticsNode } from '@/services/local-logistics-types';
-import { bindLifelinePopupActions, getLifelineMarkerPresentation } from './disaster-lifelines-map-helpers';
+import { bindLifelinePopupActions, buildLifelineCallHref, getLifelineMarkerPresentation } from './disaster-lifelines-map-helpers';
 
 export type PopupType = 'conflict' | 'hotspot' | 'earthquake' | 'weather' | 'base' | 'waterway' | 'apt' | 'cyberThreat' | 'nuclear' | 'economic' | 'irradiator' | 'pipeline' | 'cable' | 'cable-advisory' | 'repair-ship' | 'outage' | 'datacenter' | 'datacenterCluster' | 'ais' | 'protest' | 'protestCluster' | 'flight' | 'militaryFlight' | 'militaryVessel' | 'militaryFlightCluster' | 'militaryVesselCluster' | 'natEvent' | 'port' | 'spaceport' | 'mineral' | 'startupHub' | 'cloudRegion' | 'techHQ' | 'accelerator' | 'techEvent' | 'techHQCluster' | 'techEventCluster' | 'techActivity' | 'geoActivity' | 'stockExchange' | 'financialCenter' | 'centralBank' | 'commodityHub' | 'iranEvent' | 'gpsJamming' | 'faaCamera' | 'lifeline';
 
@@ -538,9 +538,9 @@ export class MapPopup {
  const retrieved = (node.retrievedAt ?? node.observedAt).toLocaleString();
  const sourceReported = node.sourceObservedAt?.toLocaleString();
  const expires = node.expiresAt.toLocaleString();
- const safePhone = node.publicPhone?.replace(/[^+\d]/g, '').replace(/(?!^)\+/g, '') ?? '';
- const callAction = safePhone
- ? `<a class="lifeline-popup-action" data-lifeline-call href="tel:${escapeHtml(safePhone)}" aria-label="Call ${escapeHtml(node.name)}">Call</a>`
+ const callHref = buildLifelineCallHref(node.publicPhone);
+ const callAction = callHref
+ ? `<a class="lifeline-popup-action" data-lifeline-call href="${escapeHtml(callHref)}" aria-label="Call ${escapeHtml(node.name)}">Call</a>`
  : '';
  const addressAction = node.address
  ? `<button class="lifeline-popup-action" data-lifeline-copy="address" type="button">Copy address</button>`

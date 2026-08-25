@@ -1,4 +1,5 @@
 import type { LocalLogisticsSnapshot } from '../services/local-logistics-types';
+import { projectLocalLogisticsCoverage } from '../services/local-logistics';
 
 export const MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS = 60 * 60_000;
 
@@ -21,17 +22,24 @@ interface ExpiredLifelineEvidenceEffects {
   publishSnapshot: (snapshot: LocalLogisticsSnapshot) => void;
 }
 
-function expiryTimes(snapshot: LocalLogisticsSnapshot): number[] {
+function expiryTimes(snapshot: LocalLogisticsSnapshot, now: number): number[] {
+  const providerExpiries = projectLocalLogisticsCoverage(snapshot, now).providers
+    .filter((provider) => provider.state === 'current-complete' || provider.state === 'current-partial')
+    .map((provider) => provider.projectedExpiresAt?.getTime() ?? Number.NaN);
   return [
-    ...snapshot.nodes,
-    ...snapshot.observations,
-    ...snapshot.areaConditions,
-  ].map((item) => item.expiresAt.getTime()).filter((expiresAt) => Number.isFinite(expiresAt));
+    ...[
+      ...snapshot.nodes,
+      ...snapshot.observations,
+      ...snapshot.areaConditions,
+    ].map((item) => item.expiresAt.getTime()),
+    ...providerExpiries,
+  ]
+    .filter((expiresAt) => Number.isFinite(expiresAt));
 }
 
 function nextFutureExpiry(snapshot: LocalLogisticsSnapshot, now: number): number | null {
   let next: number | null = null;
-  for (const expiresAt of expiryTimes(snapshot)) {
+  for (const expiresAt of expiryTimes(snapshot, now)) {
     // Already-expired evidence is already rendered as unknown. Ignoring it
     // here prevents a zero-delay rescheduling loop.
     if (expiresAt <= now) continue;

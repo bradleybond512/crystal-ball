@@ -10,14 +10,24 @@ import {
 import {
   buildLocalLogisticsFingerprint,
   fetchLocalLogistics,
+  initialLocalLogisticsRadiusKm,
   LOCAL_LOGISTICS_CATEGORIES,
   LOCAL_LOGISTICS_CATEGORY_LABELS,
-  selectTopLocalLogisticsNodes,
+  LOCAL_LOGISTICS_RADIUS_CHOICES_KM,
+  projectLocalLogisticsCoverage,
+  selectRepresentativeLocalLogisticsNodes,
+  type LifelineCategoryCoverage,
+  type LifelineProviderCoverage,
   type LocalLogisticsSnapshot,
+  type LocalLogisticsRadiusChoiceKm,
   type LogisticsCategory,
   type LogisticsNode,
 } from '@/services/local-logistics';
-import { buildLifelinesPlaceMatchSignature } from './disaster-lifelines-map-helpers';
+import {
+  buildExternalMapsUrl,
+  buildLifelineCallHref,
+  buildLifelinesPlaceMatchSignature,
+} from './disaster-lifelines-map-helpers';
 import {
   applyExpiredLifelineEvidenceTransition,
   LifelineEvidenceExpiryScheduler,
@@ -30,13 +40,23 @@ import { deleteRoute, getEvacRouteDisclosure, planRoute } from '@/services/evacu
 
 interface LocalLogisticsPanelOptions {
   focusNode: (lat: number, lon: number) => void;
+  fetchSnapshot?: typeof fetchLocalLogistics;
 }
 
 type LocalLogisticsFilter = 'all' | LogisticsCategory;
-const DEFAULT_LIFELINES_RADIUS_KM = 25;
 
 function formatUpdatedAt(date: Date): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatRetrievedAt(date: Date | null): string {
+  if (!date) return 'unknown';
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function formatDistance(distanceKm: number): string {
@@ -71,14 +91,20 @@ function renderStaleSnapshot(snapshot: LocalLogisticsSnapshot): string {
 
 export class LocalLogisticsPanel extends Panel {
   private readonly options: LocalLogisticsPanelOptions;
+  private readonly fetchSnapshot: typeof fetchLocalLogistics;
   private activePlaceId: string | null = null;
   private activeFilter: LocalLogisticsFilter = 'all';
+  private activeRadiusKm: LocalLogisticsRadiusChoiceKm | null = null;
+  private radiusPlaceSignature: string | null = null;
   private snapshot: LocalLogisticsSnapshot | null = null;
   private error: string | null = null;
+  private loading = false;
+  private pendingRadiusFocusKm: LocalLogisticsRadiusChoiceKm | null = null;
   private routeFeedback: string | null = null;
   private routingNodeId: string | null = null;
   private routeGeneration = 0;
   private refreshGeneration = 0;
+  private placeGeneration = 0;
   private activePlaceSignature: string | null = null;
   private snapshotPlaceSignature: string | null = null;
   private unsubscribeSavedPlaces: (() => void) | null = null;
@@ -104,6 +130,7 @@ export class LocalLogisticsPanel extends Panel {
  infoTooltip: 'Nearby shelter, hotel, care, fuel, water, FEMA recovery centers, and county outage context. Every dynamic status shows its own evidence and expiry.',
  });
  this.options = options;
+ this.fetchSnapshot = options.fetchSnapshot ?? fetchLocalLogistics;
  this.showLoading('Loading disaster lifelines…');
 
  this.content.addEventListener('click', (event) => this.handleContentClick(event));
@@ -115,40 +142,73 @@ export class LocalLogisticsPanel extends Panel {
   private handleContentClick(event: MouseEvent): void {
  const target = event.target as HTMLElement | null;
  if (!target) return;
- const filterButton = target?.closest<HTMLElement>('[data-logistics-filter]');
- if (filterButton) {
+ if (this.handleRadiusClick(target)) return;
+ if (this.handleFilterClick(target)) return;
+ if (target.closest('[data-logistics-refresh]')) { void this.refresh(); return; }
+ if (target.closest('[data-logistics-map]')) { this.showCurrentOverlay(); return; }
+ if (this.handleSourceClick(target)) return;
+ if (this.handleExternalMapClick(target)) return;
+ if (this.handleCallClick(target)) return;
+ if (this.handleRouteClick(target)) return;
+ this.handleNodeFocusClick(target);
+  }
+
+  private handleRadiusClick(target: HTMLElement): boolean {
+ const radiusButton = target.closest<HTMLElement>('[data-logistics-radius]');
+ if (!radiusButton) return false;
+ const rawRadius = radiusButton.dataset.logisticsRadius;
+ const radiusKm = LOCAL_LOGISTICS_RADIUS_CHOICES_KM.find((choice) => String(choice) === rawRadius);
+ if (radiusKm === undefined) return true;
+ this.activeRadiusKm = radiusKm;
+ this.pendingRadiusFocusKm = radiusKm;
+ void this.refresh();
+ return true;
+  }
+
+  private handleFilterClick(target: HTMLElement): boolean {
+ const filterButton = target.closest<HTMLElement>('[data-logistics-filter]');
+ if (!filterButton) return false;
  this.activeFilter = (filterButton.dataset.logisticsFilter ?? 'all') as LocalLogisticsFilter;
  this.render();
- return;
- }
+ return true;
+  }
 
- if (target?.closest('[data-logistics-refresh]')) {
- void this.refresh();
- return;
- }
-
- const mapButton = target?.closest<HTMLElement>('[data-logistics-map]');
- if (mapButton) {
- this.showCurrentOverlay();
- return;
- }
-
- const sourceButton = target?.closest<HTMLElement>('[data-logistics-source]');
- if (sourceButton) {
+  private handleSourceClick(target: HTMLElement): boolean {
+ const sourceButton = target.closest<HTMLElement>('[data-logistics-source]');
+ if (!sourceButton) return false;
  const sourceNode = this.nodeLookup.get(sourceButton.dataset.logisticsSource ?? '');
  const safeUrl = sourceNode ? sanitizeUrl(sourceNode.sourceUrl ?? sourceNode.url ?? '') : '';
  if (safeUrl && safeUrl !== '#') window.open(safeUrl, '_blank', 'noopener,noreferrer');
- return;
- }
+ return true;
+  }
 
- const routeButton = target?.closest<HTMLElement>('[data-logistics-route]');
- if (routeButton) {
+  private handleExternalMapClick(target: HTMLElement): boolean {
+ const externalMapButton = target.closest<HTMLElement>('[data-logistics-external-map]');
+ if (!externalMapButton) return false;
+ const node = this.nodeLookup.get(externalMapButton.dataset.logisticsExternalMap ?? '');
+ if (node) window.open(buildExternalMapsUrl(node), '_blank', 'noopener,noreferrer');
+ return true;
+  }
+
+  private handleCallClick(target: HTMLElement): boolean {
+ const callButton = target.closest<HTMLElement>('[data-logistics-call]');
+ if (!callButton) return false;
+ const node = this.nodeLookup.get(callButton.dataset.logisticsCall ?? '');
+ const callHref = buildLifelineCallHref(node?.publicPhone);
+ if (callHref) window.open(callHref, '_self');
+ return true;
+  }
+
+  private handleRouteClick(target: HTMLElement): boolean {
+ const routeButton = target.closest<HTMLElement>('[data-logistics-route]');
+ if (!routeButton) return false;
  const routeNode = this.nodeLookup.get(routeButton.dataset.logisticsRoute ?? '');
  if (routeNode) void this.routeToNode(routeNode);
- return;
- }
+ return true;
+  }
 
- const nodeButton = target?.closest<HTMLElement>('[data-logistics-focus]');
+  private handleNodeFocusClick(target: HTMLElement): void {
+ const nodeButton = target.closest<HTMLElement>('[data-logistics-focus]');
  const nodeId = nodeButton?.dataset.logisticsNodeId;
  if (!nodeId) return;
  const node = this.nodeLookup.get(nodeId);
@@ -169,6 +229,9 @@ export class LocalLogisticsPanel extends Panel {
  const priorSnapshot = this.snapshot;
  this.activePlaceId = placeId;
  this.activePlaceId = this.getActivePlaceId();
+ this.placeGeneration += 1;
+ this.activeRadiusKm = null;
+ this.radiusPlaceSignature = null;
  // Reselecting the same saved-place ID still supersedes the accepted exact
  // snapshot. Clear that overlay before dropping either snapshot or timer
  // ownership so its expiry transition cannot be orphaned on the map.
@@ -177,6 +240,8 @@ export class LocalLogisticsPanel extends Panel {
  this.activePlaceSignature = null;
  this.snapshotPlaceSignature = null;
  this.snapshot = null;
+ this.loading = false;
+ this.error = null;
  this.routeFeedback = null;
  this.routingNodeId = null;
  this.routeGeneration += 1;
@@ -191,6 +256,8 @@ export class LocalLogisticsPanel extends Panel {
   }
 
   override destroy(): void {
+ this.refreshGeneration += 1;
+ this.placeGeneration += 1;
  this.routeGeneration += 1;
  this.routingNodeId = null;
  this.evidenceExpiryScheduler.destroy();
@@ -215,6 +282,7 @@ export class LocalLogisticsPanel extends Panel {
  if (!place) {
  this.activePlaceSignature = null;
  this.error = null;
+ this.loading = false;
  this.setCount(0);
  this.setContent('<div class="panel-empty">Save a place to unlock nearby logistics.</div>');
  return;
@@ -222,32 +290,61 @@ export class LocalLogisticsPanel extends Panel {
 
  this.activePlaceId = place.id;
  const placeSignature = buildLifelinesPlaceMatchSignature(place);
+ if (this.activeRadiusKm === null || this.radiusPlaceSignature !== placeSignature) {
+ this.activeRadiusKm = initialLocalLogisticsRadiusKm(place.radiusKm);
+ this.radiusPlaceSignature = placeSignature;
+ }
+ const requestedRadiusKm = this.activeRadiusKm;
+ const expectedFingerprint = buildLocalLogisticsFingerprint(
+ place,
+ requestedRadiusKm,
+ [...LOCAL_LOGISTICS_CATEGORIES],
+ );
+ const expectedPlaceGeneration = this.placeGeneration;
  this.activePlaceSignature = placeSignature;
- this.showLoading(`Loading lifelines near ${place.name}…`);
+ this.error = null;
+ this.loading = true;
+ this.render();
  try {
- const snapshot = await fetchLocalLogistics(place);
+ const snapshot = await this.fetchSnapshot(place, { radiusKm: requestedRadiusKm });
  const currentPlace = this.resolvePlace();
- if (generation !== this.refreshGeneration || this.activePlaceId !== place.id
-   || !currentPlace || buildLifelinesPlaceMatchSignature(currentPlace) !== placeSignature) return;
- if (!this.snapshotMatchesPlace(snapshot, currentPlace)) {
+ if (!this.requestMatchesCurrentState(
+   generation,
+   expectedPlaceGeneration,
+   place,
+   placeSignature,
+   requestedRadiusKm,
+   expectedFingerprint,
+   currentPlace,
+ )) return;
+ if (!this.snapshotMatchesPlace(snapshot, currentPlace, requestedRadiusKm, expectedFingerprint)) {
    throw new Error('Lifeline results did not match the current saved place');
  }
  this.snapshot = snapshot;
  this.snapshotPlaceSignature = placeSignature;
  this.evidenceExpiryScheduler.track(snapshot);
  this.error = null;
+ this.loading = false;
  document.dispatchEvent(new CustomEvent('wm:active-local-logistics-snapshot-updated', {
    detail: { snapshot: this.snapshot },
  }));
  } catch (error) {
  const currentPlace = this.resolvePlace();
- if (generation !== this.refreshGeneration || this.activePlaceId !== place.id
-   || !currentPlace || buildLifelinesPlaceMatchSignature(currentPlace) !== placeSignature) return;
+ if (!this.requestMatchesCurrentState(
+   generation,
+   expectedPlaceGeneration,
+   place,
+   placeSignature,
+   requestedRadiusKm,
+   expectedFingerprint,
+   currentPlace,
+ )) return;
  // fetchLocalLogistics already performs an exact-fingerprint fallback. A
  // place-only lookup here could surface a cache for old coordinates/options.
  this.snapshot = null;
  this.snapshotPlaceSignature = null;
  this.error = error instanceof Error ? error.message : 'Failed to load disaster lifelines';
+ this.loading = false;
  }
 
  this.render();
@@ -259,7 +356,11 @@ export class LocalLogisticsPanel extends Panel {
  if (nextSignature === this.activePlaceSignature) return;
  if (this.snapshot) this.requestOverlayClear(this.snapshot);
  this.activePlaceId = place?.id ?? null;
+ this.placeGeneration += 1;
+ this.activeRadiusKm = null;
+ this.radiusPlaceSignature = null;
  this.snapshot = null;
+ this.loading = false;
  this.snapshotPlaceSignature = null;
  this.activePlaceSignature = nextSignature;
  this.routeFeedback = null;
@@ -304,13 +405,38 @@ export class LocalLogisticsPanel extends Panel {
  });
   }
 
-  private snapshotMatchesPlace(snapshot: LocalLogisticsSnapshot, place: SavedPlace): boolean {
- const radiusKm = Math.max(1, Math.min(place.radiusKm, DEFAULT_LIFELINES_RADIUS_KM));
- const expectedFingerprint = buildLocalLogisticsFingerprint(
-   place,
-   radiusKm,
-   [...LOCAL_LOGISTICS_CATEGORIES],
- );
+  private requestMatchesCurrentState(
+ generation: number,
+ expectedPlaceGeneration: number,
+ place: SavedPlace,
+ placeSignature: string,
+ requestedRadiusKm: LocalLogisticsRadiusChoiceKm,
+  expectedFingerprint: string,
+  currentPlace: SavedPlace | null,
+  ): currentPlace is SavedPlace {
+ if (!currentPlace) return false;
+ return generation === this.refreshGeneration
+   && expectedPlaceGeneration === this.placeGeneration
+   && this.activePlaceId === place.id
+   && this.activeRadiusKm === requestedRadiusKm
+   && this.radiusPlaceSignature === placeSignature
+   && buildLifelinesPlaceMatchSignature(currentPlace) === placeSignature
+   && buildLocalLogisticsFingerprint(
+     currentPlace,
+     requestedRadiusKm,
+     [...LOCAL_LOGISTICS_CATEGORIES],
+   ) === expectedFingerprint;
+  }
+
+  private snapshotMatchesPlace(
+ snapshot: LocalLogisticsSnapshot,
+ place: SavedPlace,
+ radiusKm = this.activeRadiusKm,
+ expectedFingerprint = radiusKm === null
+   ? null
+   : buildLocalLogisticsFingerprint(place, radiusKm, [...LOCAL_LOGISTICS_CATEGORIES]),
+  ): boolean {
+ if (radiusKm === null || expectedFingerprint === null) return false;
  return snapshot.placeId === place.id
    && snapshot.placeName === place.name
    && snapshot.queryFingerprint === expectedFingerprint
@@ -333,59 +459,133 @@ export class LocalLogisticsPanel extends Panel {
  return;
  }
 
- if (!this.snapshot) {
- if (this.error) {
- this.showError(this.error);
- return;
- }
- this.showLoading(`Loading lifelines near ${place.name}…`);
- return;
- }
-
- const categories = this.snapshot.categories.length > 0
- ? this.snapshot.categories
- : [...LOCAL_LOGISTICS_CATEGORIES];
- const nodes = selectTopLocalLogisticsNodes(this.snapshot, this.activeFilter, this.activeFilter === 'all' ? 12 : 6);
+ const requestedRadiusKm = this.activeRadiusKm ?? initialLocalLogisticsRadiusKm(place.radiusKm);
+ const categories = this.displayCategories();
+ const nodes = this.displayNodes();
  this.setCount(nodes.length);
- for (const node of this.snapshot.nodes) {
+ for (const node of this.snapshot?.nodes ?? []) {
  this.nodeLookup.set(node.id, node);
  }
 
- const headerHtml = `
- <div class="watchlist-card-top" style="margin-bottom:10px;">
+ const headerHtml = this.renderHeader(place, requestedRadiusKm);
+ const statusHtml = this.renderLoadStatus(place);
+
+ const staleHtml = this.snapshot ? renderStaleSnapshot(this.snapshot) : '';
+
+ const packHtml = this.renderPackStatus(place);
+
+ const outageHtml = this.snapshot ? this.renderOutageContext() : '';
+ const coverage = this.snapshot ? projectLocalLogisticsCoverage(this.snapshot) : null;
+ const providerHtml = coverage ? this.renderProviderCoverage(coverage.providers) : '';
+
+ const filtersHtml = this.renderFilters(categories);
+ const listHtml = this.renderNodeList(nodes, coverage?.categories ?? []);
+
+ const routeFeedbackHtml = this.routeFeedback
+ ? `<div class="panel-empty" style="margin-top:10px;" role="status">${escapeHtml(this.routeFeedback)}</div>`
+ : '';
+
+ this.setContent(`
+ <div class="sa-panel-content local-logistics-content" data-local-logistics-content="1" aria-busy="${this.loading}">
+ ${headerHtml}
+ ${statusHtml}
+ ${staleHtml}
+ ${packHtml}
+ ${outageHtml}
+ ${providerHtml}
+ ${filtersHtml}
+ ${listHtml}
+ ${routeFeedbackHtml}
+ </div>
+ `, () => this.restoreRadiusFocus());
+  }
+
+  private displayCategories(): LogisticsCategory[] {
+ const categories = this.snapshot?.categories ?? [];
+ return categories.length > 0 ? categories : [...LOCAL_LOGISTICS_CATEGORIES];
+  }
+
+  private displayNodes(): LogisticsNode[] {
+ if (!this.snapshot) return [];
+ const limit = this.activeFilter === 'all' ? 12 : 6;
+ return selectRepresentativeLocalLogisticsNodes(this.snapshot, this.activeFilter, limit);
+  }
+
+  private renderRadiusControls(requestedRadiusKm: LocalLogisticsRadiusChoiceKm): string {
+ return `
+ <fieldset class="local-logistics-radius" aria-label="Lifeline search radius">
+ <legend>Search radius</legend>
+ <div class="local-logistics-radius__choices">
+ ${LOCAL_LOGISTICS_RADIUS_CHOICES_KM.map((radiusKm) => `
+ <button
+ class="sa-filter local-logistics-radius__button ${requestedRadiusKm === radiusKm ? 'sa-filter-active' : ''}"
+ data-logistics-radius="${radiusKm}"
+ type="button"
+ aria-pressed="${requestedRadiusKm === radiusKm}"
+ >${radiusKm} km</button>
+ `).join('')}
+ </div>
+ </fieldset>
+ `;
+  }
+
+  private renderHeader(place: SavedPlace, requestedRadiusKm: LocalLogisticsRadiusChoiceKm): string {
+ const returnedRadiusHtml = this.snapshot
+   ? ` • Returned radius ${this.snapshot.effectiveRadiusKm.toLocaleString()} km`
+   : '';
+ const updatedHtml = this.snapshot
+   ? ` • Updated ${escapeHtml(formatUpdatedAt(this.snapshot.fetchedAt))}`
+   : '';
+ const mapDisabled = !this.snapshot || this.snapshot.nodes.length === 0;
+ return `
+ <div class="watchlist-card-top local-logistics-header">
  <div>
  <div class="watchlist-country">${escapeHtml(place.name)}</div>
- <div class="watchlist-scenario">Radius ${this.snapshot.effectiveRadiusKm.toLocaleString()} km • Updated ${escapeHtml(formatUpdatedAt(this.snapshot.fetchedAt))}</div>
+ <div class="watchlist-scenario">Requested radius ${requestedRadiusKm.toLocaleString()} km${returnedRadiusHtml}${updatedHtml}</div>
  </div>
  <div class="watchlist-card-bottom">
  <button
  class="sa-refresh-btn"
  data-logistics-map="1"
  type="button"
- aria-label="Show ${escapeHtml(this.snapshot.nodes.length.toLocaleString())} disaster lifelines near ${escapeHtml(place.name)} on the map"
- ${this.snapshot.nodes.length === 0 ? 'disabled' : ''}
+ aria-label="Show ${escapeHtml((this.snapshot?.nodes.length ?? 0).toLocaleString())} disaster lifelines near ${escapeHtml(place.name)} on the map"
+ ${mapDisabled ? 'disabled' : ''}
  >Map</button>
  <button class="sa-refresh-btn" data-logistics-refresh="1" type="button" aria-label="Refresh disaster lifelines near ${escapeHtml(place.name)}">Refresh</button>
  </div>
  </div>
+ ${this.renderRadiusControls(requestedRadiusKm)}
  `;
+  }
 
- const staleHtml = renderStaleSnapshot(this.snapshot);
+  private renderLoadStatus(place: SavedPlace): string {
+ if (this.loading) {
+   return `<div class="panel-empty local-logistics-status" role="status">Loading lifelines near ${escapeHtml(place.name)}…</div>`;
+ }
+ if (this.error) {
+   return `<div class="panel-empty local-logistics-status" role="alert">${escapeHtml(this.error)}</div>`;
+ }
+ return '';
+  }
 
+  private renderPackStatus(place: SavedPlace): string {
+ if (!this.snapshot) return '';
  const readiness = getLifelinePackReadinessForPlace(place);
  const latestChange = getRecentLifelineChangesForPlace(place)[0] ?? null;
- const packHtml = `
+ let changeHtml = '';
+ if (latestChange) {
+   changeHtml = `<br>Recent evidence change (review-only): ${escapeHtml(formatState(latestChange.attribute))} ${escapeHtml(String(latestChange.from ?? 'unknown'))} → ${escapeHtml(String(latestChange.to ?? 'unknown'))}, ${escapeHtml(formatUpdatedAt(latestChange.observedAt))}.`;
+ }
+ return `
  <div class="panel-empty" style="margin-bottom:10px;">
  Offline Lifelines: ${escapeHtml(formatPackStatus(readiness.status))}.
- ${latestChange
-   ? `<br>Recent evidence change (review-only): ${escapeHtml(formatState(latestChange.attribute))} ${escapeHtml(String(latestChange.from ?? 'unknown'))} → ${escapeHtml(String(latestChange.to ?? 'unknown'))}, ${escapeHtml(formatUpdatedAt(latestChange.observedAt))}.`
-   : ''}
+ ${changeHtml}
  </div>
  `;
+  }
 
- const outageHtml = this.renderOutageContext();
-
- const filtersHtml = `
+  private renderFilters(categories: LogisticsCategory[]): string {
+ return `
  <div class="sa-filters">
  <button class="sa-filter ${this.activeFilter === 'all' ? 'sa-filter-active' : ''}" data-logistics-filter="all" type="button" aria-pressed="${this.activeFilter === 'all'}">All</button>
  ${categories.map((category) => `
@@ -398,34 +598,80 @@ export class LocalLogisticsPanel extends Panel {
  `).join('')}
  </div>
  `;
+  }
 
- const listHtml = nodes.length === 0
- ? '<div class="panel-empty">No nearby logistics nodes matched this place yet. Try refresh or widen the place radius.</div>'
- : `
+  private renderNodeList(nodes: LogisticsNode[], coverage: LifelineCategoryCoverage[]): string {
+ if (!this.snapshot) return '';
+ if (nodes.length === 0) {
+   return this.renderCategoryEmptyState(coverage, this.snapshot.effectiveRadiusKm);
+ }
+ return `
  <div class="watchlist-list">
  ${nodes.map((node) => this.renderNode(node)).join('')}
  </div>
  `;
+  }
 
- const errorHtml = this.error
- ? `<div class="watchlist-scenario" style="margin-top:10px;">${escapeHtml(this.error)}</div>`
- : '';
- const routeFeedbackHtml = this.routeFeedback
- ? `<div class="panel-empty" style="margin-top:10px;" role="status">${escapeHtml(this.routeFeedback)}</div>`
- : '';
+  private restoreRadiusFocus(): void {
+ const radiusKm = this.pendingRadiusFocusKm;
+ if (radiusKm === null || radiusKm !== this.activeRadiusKm) return;
+ const button = this.content.querySelector<HTMLButtonElement>(
+   `[data-logistics-radius="${radiusKm}"]`,
+ );
+ if (!button) return;
+ this.pendingRadiusFocusKm = null;
+ button.focus();
+  }
 
- this.setContent(`
- <div class="sa-panel-content">
- ${headerHtml}
- ${staleHtml}
- ${packHtml}
- ${outageHtml}
- ${filtersHtml}
- ${listHtml}
- ${routeFeedbackHtml}
- ${errorHtml}
+  private renderProviderCoverage(providers: LifelineProviderCoverage[]): string {
+ if (providers.length === 0) {
+ return '<div class="panel-empty local-logistics-coverage">Provider coverage unavailable; results may be incomplete.</div>';
+ }
+ const labels: Record<LifelineProviderCoverage['providerId'], string> = {
+   osm: 'OSM',
+   fema: 'FEMA',
+   'fema-open-shelters': 'FEMA Open Shelters',
+   'fema-recovery-centers': 'FEMA Recovery Centers',
+   'ornl-odin': 'ODIN',
+ };
+ return `
+ <section class="local-logistics-coverage" aria-label="Provider coverage">
+ <div class="watchlist-country">Provider coverage</div>
+ <div class="local-logistics-provider-list">
+ ${providers.map((provider) => `
+ <div class="local-logistics-provider-row">
+ <strong>${escapeHtml(labels[provider.providerId])}</strong>
+ <span>${escapeHtml(provider.state.replace(/[-_]/g, ' '))}</span>
+ <span>Retrieved ${escapeHtml(formatRetrievedAt(provider.retrievedAt))}</span>
+ <span>Projected expiry ${escapeHtml(formatRetrievedAt(provider.projectedExpiresAt))}</span>
+ <span>${provider.acceptedRows.toLocaleString()} accepted • ${provider.droppedRows.toLocaleString()} dropped</span>
+ <span>${provider.scope === 'county-outage-context'
+   ? 'county outage context; not facility coverage'
+   : 'facility coverage'}</span>
  </div>
- `);
+ `).join('')}
+ </div>
+ </section>
+ `;
+  }
+
+  private renderCategoryEmptyState(
+ coverage: LifelineCategoryCoverage[],
+ returnedRadiusKm: number,
+  ): string {
+ const categories = this.activeFilter === 'all'
+   ? (this.snapshot?.categories ?? [...LOCAL_LOGISTICS_CATEGORIES])
+   : [this.activeFilter];
+ return `<div class="local-logistics-empty-list">
+ ${categories.map((category) => {
+   const label = LOCAL_LOGISTICS_CATEGORY_LABELS[category];
+   const categoryCoverage = coverage.find((item) => item.category === category);
+   if (categoryCoverage?.state === 'proven-current' && categoryCoverage.expiresAt) {
+     return `<div class="panel-empty">None reported within the current returned ${returnedRadiusKm.toLocaleString()} km coverage for ${escapeHtml(label)}. Coverage expires at ${escapeHtml(formatRetrievedAt(categoryCoverage.expiresAt))}.</div>`;
+   }
+   return `<div class="panel-empty">No ${escapeHtml(label)} results displayed. Current provider coverage is incomplete or expired; this does not mean none exist.</div>`;
+ }).join('')}
+ </div>`;
   }
 
   private renderNode(node: LogisticsNode): string {
@@ -449,7 +695,7 @@ export class LocalLogisticsPanel extends Panel {
  : `Status expires ${escapeHtml(formatUpdatedAt(node.expiresAt))}`;
 
  return `
- <article class="watchlist-card">
+ <article class="watchlist-card local-logistics-node-card" data-logistics-node-card="${escapeHtml(node.id)}">
  <div class="watchlist-card-top">
  <div>
  <div class="watchlist-country">${escapeHtml(node.name)}</div>
@@ -465,6 +711,10 @@ export class LocalLogisticsPanel extends Panel {
  <div class="watchlist-scenario">${escapeHtml(formatStatus(node))} • ${expiry} • ${escapeHtml(node.source)}</div>
  <div class="watchlist-card-bottom">
  <button class="sa-refresh-btn" data-logistics-focus="1" data-logistics-node-id="${escapeHtml(node.id)}" type="button" aria-label="Focus ${escapeHtml(node.name)} on map">Show on map</button>
+ <button class="sa-refresh-btn" data-logistics-external-map="${escapeHtml(node.id)}" type="button" aria-label="Open ${escapeHtml(node.name)} in external maps">Open in Maps</button>
+ ${buildLifelineCallHref(node.publicPhone)
+   ? `<button class="sa-refresh-btn" data-logistics-call="${escapeHtml(node.id)}" type="button" aria-label="Call ${escapeHtml(node.name)}">Call</button>`
+   : ''}
  <button class="sa-refresh-btn" data-logistics-route="${escapeHtml(node.id)}" type="button" aria-label="Plan an unverified road-graph route to ${escapeHtml(node.name)}" ${this.routingNodeId ? 'disabled' : ''}>${this.routingNodeId === node.id ? 'Routing…' : 'Graph route'}</button>
  <button class="sa-refresh-btn" data-logistics-source="${escapeHtml(node.id)}" type="button" aria-label="Open source for ${escapeHtml(node.name)}">Source</button>
  </div>

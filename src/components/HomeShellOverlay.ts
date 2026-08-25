@@ -181,7 +181,10 @@ export class HomeShellOverlay {
     // the hint an explicit scroll-to-deck button.
     const deckHint = el('button', 'home-shell-deck-hint', '▼ Your Deck');
     deckHint.addEventListener('click', () => {
-      this.deckEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const target = this.contextualEl?.querySelector('[data-action="context-open"]')
+        ? this.contextualEl
+        : this.deckEl;
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     viewport.append(this.readinessEl, this.briefingEl, deckHint);
 
@@ -512,14 +515,14 @@ export class HomeShellOverlay {
     if (this.contextualHydrationStarted) return;
     this.contextualHydrationStarted = true;
     void this.contextualSnapshotSource.hydrate().then(
-      () => this.finishContextualHydration(generation),
-      () => this.finishContextualHydration(generation),
+      () => this.finishContextualHydration(),
+      () => this.finishContextualHydration(),
     );
   }
 
-  private finishContextualHydration(generation: number): void {
+  private finishContextualHydration(): void {
     this.contextualHydrationSettled = true;
-    if (!this.visible || generation !== this.contextualGeneration || !this.root) return;
+    if (!this.visible || !this.root) return;
     this.renderCurrentContextualView();
   }
 
@@ -542,7 +545,11 @@ export class HomeShellOverlay {
   }
 
   private renderContextualView(view: ContextualDeckView): void {
-    if (!this.contextualEl || view.semanticKey === this.contextualSemanticKey) return;
+    if (!this.contextualEl) return;
+    if (view.semanticKey === this.contextualSemanticKey) {
+      this.pendingContextualView = null;
+      return;
+    }
     if (this.contextualEl.contains(document.activeElement)) {
       this.pendingContextualView = view;
       return;

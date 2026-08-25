@@ -605,8 +605,9 @@ test('priority ingest drains before bounded correlation and learned liveness rec
   assert.equal(learnedPairs, 3);
   assert.equal(recovered.status, 'healthy');
   assert.equal(recovered.reason, 'learned_rules_active');
+  assert.equal(recovered.live.batchCount, 5);
   assert.deepEqual(recovered.live.batchSizeDistribution, {
-    singleton: 8,
+    singleton: 5,
     small: 0,
     medium: 0,
     large: 0,

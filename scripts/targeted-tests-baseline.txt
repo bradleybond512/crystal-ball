@@ -189,6 +189,7 @@ scripts/render-vault.sh
 scripts/repair-little-snitch-exporter.sh
 scripts/research-eval.sh
 scripts/restore-keys.sh
+scripts/roadmap-controller.mjs
 scripts/secret-scan.mjs
 scripts/security-quarantine-mode.sh
 scripts/seed-military-bases.mjs

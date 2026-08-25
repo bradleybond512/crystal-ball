@@ -176,6 +176,12 @@ test('rejects oversized roadmap documents and terminal tasks without evidence', 
 
   const placeholderEvidence = parse(UX, ACC.replace('Evidence: PR #20', 'Evidence: pending'));
   assert.ok(placeholderEvidence.errors.some((message) => /ACC-501.*terminal.*evidence/.test(message)));
+
+  const fakeMainEvidence = parse(UX, ACC.replace('Evidence: PR #20', 'Evidence: main deadbee'));
+  assert.ok(fakeMainEvidence.errors.some((message) => /ACC-501.*terminal.*evidence/.test(message)));
+
+  const monitorWithoutEvidence = parse(UX.replace('| UX-000 | First run | MONITOR | #1660 |', '| UX-000 | First run | MONITOR | — |'));
+  assert.ok(monitorWithoutEvidence.errors.some((message) => /UX-000.*MONITOR.*evidence/.test(message)));
 });
 
 test('baseline comparison blocks task deletion and terminal-state mutation', () => {
@@ -253,6 +259,38 @@ test('candidate PR claims are one-to-one and synchronized with roadmap state', (
     candidatePrNumbers: [41],
   }, { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
   assert.ok(multiClaim.blocking.some((message) => /candidate PR #41.*exactly one.*ACC-502.*UX-001/.test(message)));
+
+  const twoCompletions = parse(UX
+    .replace('| UX-001 | Home shell | NOT STARTED | — |', '| UX-001 | Home shell | DONE | #42 |')
+    .replace('| UX-002 | Blocked lens | BLOCKED — HIGH ASSURANCE | — |', '| UX-002 | Blocked lens | DONE | #42 |'));
+  const extraCompletion = reconcileRoadmaps(twoCompletions, {
+    ...snapshot([
+      pr(10, 'MERGED', 'ACC-001'),
+      pr(20, 'MERGED', 'ACC-501'),
+      pr(1660, 'MERGED', 'UX-000'),
+      pr(42, 'OPEN', 'Roadmap task: UX-001'),
+    ]),
+    eventType: 'pull_request',
+    candidatePrNumbers: [42],
+  }, { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+  assert.ok(extraCompletion.blocking.some((message) => /UX-002.*evidence PR #42.*does not claim UX-002/.test(message)));
+});
+
+test('the owning candidate PR may move its task to evidence-backed MONITOR', () => {
+  const monitored = parse(UX
+    .replace('### UX-001 — Home shell\n\n', '### UX-001 — Home shell\n\nExit condition: Packaged verification passes.\nReview after: 2026-09-04\n\n')
+    .replace('| UX-001 | Home shell | NOT STARTED | — |', '| UX-001 | Home shell | MONITOR | #43 |'));
+  const report = reconcileRoadmaps(monitored, {
+    ...snapshot([
+      pr(10, 'MERGED', 'ACC-001'),
+      pr(20, 'MERGED', 'ACC-501'),
+      pr(1660, 'MERGED', 'UX-000'),
+      pr(43, 'OPEN', 'Roadmap task: UX-001'),
+    ]),
+    eventType: 'pull_request',
+    candidatePrNumbers: [43],
+  }, { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+  assert.ok(!report.blocking.some((message) => /UX-001/.test(message)), report.blocking.join('\n'));
 });
 
 test('reconciliation catches merged active work, unmerged evidence, and duplicate claims', () => {

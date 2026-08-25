@@ -453,6 +453,122 @@ to map-cursor behavior, and remove redundant loop ownership without adding a
 second animation loop. Compose its opacity contract with UX-005 lens styling so
 two independent writers cannot fight over marker alpha.
 
+### UX-017 — Complete fail-closed Mac main-sync toolchain repair
+
+Implementation merged through PR #1667. Post-merge operational verification is
+still required: when this task was added, the local sync agent was in its build
+phase and had not yet recorded a successful installation of current `main`.
+
+Dependencies: none
+
+Exit condition: the LaunchAgent installs the merged commit through
+`npm run main-sync:run` with Cargo available from
+`/Users/bradleybond/.cargo/bin`, Node 22 selected, all required checks green,
+and `status.json` recording a successful installation.
+
+Review after: 2026-08-25
+
+- **Change surface:** `scripts/setup-main-sync-agent.mjs`,
+  `scripts/sync-main-to-mac.mjs`, and `tests/main-sync-agent.test.mjs` in #1667.
+- **Preserve:** the canonical `~/Applications/Crystal Ball.app` target and every
+  fail-closed lockfile, typecheck, build, packaging, signing, and required-check
+  gate. Do not substitute manual app copying for the installer.
+- **Verify:** rerun `npm run main-sync:setup`, then `npm run main-sync:run`, and
+  confirm the installed commit and successful phase in
+  `~/.crystalball-main-sync/status.json`.
+
+### UX-018 — Restore timely, authoritative forecast resolution
+
+The 2026-08-24 live diagnostic snapshot reported 320 uncertain proxy labels,
+348 late resolutions, and 12 overdue outcomes. Treat those counts as a baseline
+to refresh, not immutable acceptance thresholds.
+
+Dependencies: UX-017
+
+- **Change surface:** `src/services/intelligence/prediction-resolver.ts`,
+  `prediction-resolution-cadence.ts`, `outcome-resolvers.ts`, and the resolution
+  quality audit and focused tests.
+- **Fix:** make resolver cadence observable and reliable, improve corroboration,
+  and increase direct-label collection. Preserve provenance and keep direct,
+  proxy, manual, and LLM-derived outcomes separable.
+- **Fail closed:** uncertain proxies must never silently become authoritative
+  labels or promotion evidence, and stale upstream data must not resolve a
+  forecast as though it were current.
+- **Done when:** no eligible outcome is overdue for seven consecutive scheduled
+  runs; late-resolution causes are classified; direct-label coverage improves;
+  and the audit can account for every remaining proxy or unresolved outcome.
+- **Verify:** focused resolver/audit tests, `npm run test:intelligence`,
+  `npm run test:diagnostics`, `npm run typecheck:all`, and fresh packaged-runtime
+  diagnostics after installing merged `main`.
+
+### UX-019 — Recalibrate weak forecast algorithms without lowering safety floors *(High Assurance)*
+
+Use the clean direct/manual evidence produced by UX-018 to replay and, only when
+the holdout result supports it, refit `warning-verification`, `analyst-loop`, and
+`hierarchical-base-rate`.
+
+Dependencies: UX-018
+
+- **Change surface:** the relevant prediction bridges and algorithm ledger,
+  calibration, replay, safe-adjustment, tuning-fixture, and diagnostics modules.
+- **Preserve:** current minimum evidence, safety recall, lead-time, calibration,
+  and promotion floors. Never make a failing algorithm appear healthy by
+  weakening its gate or mixing proxy outcomes into the direct-label cohort.
+- **Quarantine:** `warning-verification` remains quarantined until a versioned
+  candidate passes the existing safety fixtures and a frozen holdout replay.
+- **Done when:** each algorithm has a reproducible before/after decision with
+  matched cohorts, Brier/log-loss and calibration evidence, sample counts, and
+  an explicit promote, retain, or reject result.
+- **Verify:** `npm run test:algorithms`, `npm run test:intelligence`,
+  `npm run bench:cognition`, `npm run test:diagnostics`, and the applicable
+  champion/challenger promotion gate.
+
+### UX-020 — Grow entity and analog evidence before tuning
+
+The 2026-08-24 snapshot had only 10 entity-trajectory and 24 analyst-loop
+evaluations; episodic-analog had 117. These are evidence-collection signals,
+not permission to tune against a tiny or repeatedly reused cohort.
+
+Dependencies: UX-018
+
+- **Change surface:** entity-trajectory, episodic-analog, and analyst-loop
+  emitters plus their outcome identity, grading, and diagnostics seams.
+- **First:** prove eligible forecasts are emitted, uniquely joined, resolved,
+  and graded exactly once. Classify missingness before changing weights.
+- **Then:** improve evidence weighting only through a versioned challenger and
+  frozen, time-ordered holdout comparison after the existing promotion sample
+  floor is met. Shared target/window labels must remain deduplicated.
+- **Done when:** diagnostics show why any record is excluded, each candidate
+  reaches the existing evidence gate, and the resulting promote/retain/reject
+  decision is reproducible without proxy-only support.
+- **Verify:** focused emitter/grading tests, `npm run test:algorithms`,
+  `npm run test:cognition`, `npm run bench:cognition`, and
+  `npm run typecheck:all`.
+
+### UX-021 — Classify and recover degraded optional feeds
+
+The 2026-08-24 snapshot reported ACLED, ThreatFox, and AIS as failing, with
+AirNow intermittently impaired. A red feed is not automatically a code defect:
+the runtime must distinguish absent user-owned credentials, upstream outage,
+rate limiting, schema drift, and local adapter failure.
+
+Dependencies: UX-017
+
+- **Change surface:** the affected provider adapters and the shared feed health,
+  resilience, latency, diagnostics, and dashboard paths. Add provider code only
+  where a fresh live response-body probe demonstrates an implementation defect.
+- **Credentials:** document actionable setup for missing optional keys without
+  storing or printing secrets. Credential absence must remain `not configured`,
+  not be misreported as a healthy feed or a retryable outage.
+- **Recovery:** keep bounded timeout, retry/backoff, freshness, provenance, and
+  fail-closed semantics. Never infer zero events from missing coverage.
+- **Done when:** each named feed has a reproducible state classification and
+  either returns fresh validated observations or exposes a truthful actionable
+  degraded state; intermittent recovery clears only after a healthy live probe.
+- **Verify:** focused adapter/resilience tests, `npm run test:diagnostics`,
+  `npm run smoke`, `npm run typecheck:all`, and packaged-runtime feed diagnostics
+  using only credentials already configured by the user.
+
 ---
 
 ## What was NOT verified
@@ -493,3 +609,8 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
+| UX-017 | Complete Mac main-sync toolchain repair | WAITING | #1667 |
+| UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
+| UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
+| UX-020 | Entity and analog evidence growth | NOT STARTED | — |
+| UX-021 | Optional-feed classification and recovery | NOT STARTED | — |

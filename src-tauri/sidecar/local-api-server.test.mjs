@@ -2157,6 +2157,354 @@ async function withSecuredSidecar(fn) {
   }
 }
 
+const RENDERER_ONLY_MAP_CREDENTIALS = [
+  {
+ key: 'GOOGLE_MAPS_API_KEY',
+ value: 'google-maps-validation-canary-7f3a',
+ responseBody: JSON.stringify({ status: 'OK', routes: [] }),
+ expectedMessage: 'Google Maps key verified (Directions API)',
+ assertRequest(options) {
+ assert.equal(options.hostname, 'maps.googleapis.com');
+ const requestUrl = new URL(options.path, 'https://maps.googleapis.com');
+ assert.equal(requestUrl.pathname, '/maps/api/directions/json');
+ assert.equal(requestUrl.searchParams.get('key'), this.value);
+ },
+  },
+  {
+ key: 'MAPBOX_API_KEY',
+ value: 'mapbox-validation-canary-8b4c',
+ responseBody: '{}',
+ expectedMessage: 'Mapbox token verified',
+ assertRequest(options) {
+ assert.equal(options.hostname, 'api.mapbox.com');
+ const requestUrl = new URL(options.path, 'https://api.mapbox.com');
+ assert.equal(requestUrl.pathname, '/geocoding/v5/mapbox.places/SanFrancisco.json');
+ assert.equal(requestUrl.searchParams.get('access_token'), this.value);
+ },
+  },
+  {
+ key: 'MAPTILER_API_KEY',
+ value: 'maptiler-validation-canary-9c5d',
+ responseBody: '{}',
+ expectedMessage: 'MapTiler key verified',
+ assertRequest(options) {
+ assert.equal(options.hostname, 'api.maptiler.com');
+ const requestUrl = new URL(options.path, 'https://api.maptiler.com');
+ assert.equal(requestUrl.pathname, '/maps/streets-v2/style.json');
+ assert.equal(requestUrl.searchParams.get('key'), this.value);
+ },
+  },
+  {
+ key: 'CESIUM_ION_TOKEN',
+ value: 'cesium-validation-canary-0d6e',
+ responseBody: '{}',
+ expectedMessage: 'Cesium ion token verified',
+ assertRequest(options) {
+ assert.equal(options.hostname, 'api.cesium.com');
+ assert.equal(options.path, '/v1/me');
+ assert.equal(options.headers.Authorization, `Bearer ${this.value}`);
+ },
+  },
+];
+
+for (const credential of RENDERER_ONLY_MAP_CREDENTIALS) {
+  test(`renderer-only map credential validation reaches ${credential.key} provider branch`, async () => {
+ let requestedOptions = null;
+ const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: credential.responseBody,
+ onRequest(options) {
+ requestedOptions = options;
+ },
+ });
+
+ try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: credential.key, value: credential.value }),
+ });
+
+ assert.ok(requestedOptions, `${credential.key} must issue an outbound provider probe`);
+ credential.assertRequest(requestedOptions);
+ assert.equal(response.status, 200);
+ const body = await response.json();
+ assert.deepEqual(body, { valid: true, message: credential.expectedMessage });
+ });
+ } finally {
+ restoreHttps();
+ }
+  });
+}
+
+test('renderer-only map credentials remain rejected by env update without mutation or secret echo', async () => {
+  await withSecuredSidecar(async (port, token) => {
+ for (const { key } of RENDERER_ONLY_MAP_CREDENTIALS) {
+ const originalValue = process.env[key];
+ const sentinelValue = `${key.toLowerCase()}-existing-sentinel`;
+ const submittedSecret = `${key.toLowerCase()}-env-update-canary`;
+ process.env[key] = sentinelValue;
+
+ try {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key, value: submittedSecret }),
+ });
+ assert.equal(response.status, 403, `${key} must remain outside the env-update allowlist`);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.equal(process.env[key], sentinelValue, `${key} must not mutate process.env`);
+ } finally {
+ if (originalValue === undefined) delete process.env[key];
+ else process.env[key] = originalValue;
+ }
+ }
+  });
+});
+
+test('renderer-only map credential validation rejects unknown keys without a probe or secret echo', async () => {
+  let outboundRequests = 0;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: '{}',
+ onRequest() {
+ outboundRequests++;
+ },
+  });
+  const submittedSecret = 'unknown-validation-secret-canary-a1e7';
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'UNKNOWN_MAP_PROVIDER_KEY', value: submittedSecret }),
+ });
+ assert.equal(response.status, 403);
+ const text = await response.text();
+ assert.equal(outboundRequests, 0);
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), { error: 'key not in allowlist' });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
+test('renderer-only map credential validation never reflects Google provider error details', async () => {
+  const submittedSecret = 'google-provider-error-canary-b2f8';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({
+ status: 'REQUEST_DENIED',
+ error_message: `Credential ${submittedSecret} was rejected`,
+ }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), { valid: false, message: 'Google Maps rejected this key' });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
+test('renderer-only map credential validation fails closed on malformed Google responses', async () => {
+  const submittedSecret = 'google-malformed-response-canary-c3g9';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'text/html; charset=utf-8' },
+ body: `<html><body>Upstream error for ${submittedSecret}</body></html>`,
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), {
+ valid: false,
+ message: 'Google Maps returned an invalid response',
+ });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
+test('renderer-only map credential validation fails closed on unknown Google statuses', async () => {
+  const submittedSecret = 'google-unknown-status-canary-d4h0';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({
+ status: 'UNRECOGNIZED_STATUS',
+ diagnostic: `Unexpected provider state for ${submittedSecret}`,
+ }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), {
+ valid: false,
+ message: 'Google Maps returned an invalid response',
+ });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
+const GOOGLE_DIRECTIONS_NON_SUCCESS_STATUSES = [
+  'NOT_FOUND',
+  'MAX_WAYPOINTS_EXCEEDED',
+  'MAX_ROUTE_LENGTH_EXCEEDED',
+  'INVALID_REQUEST',
+  'OVER_DAILY_LIMIT',
+  'OVER_QUERY_LIMIT',
+  'UNKNOWN_ERROR',
+];
+
+for (const status of GOOGLE_DIRECTIONS_NON_SUCCESS_STATUSES) {
+  test(`renderer-only map credential validation fails closed on Google ${status}`, async () => {
+ const submittedSecret = `google-${status.toLowerCase()}-canary-e5j1`;
+ let requestedOptions = null;
+ const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({
+ status,
+ error_message: `Provider detail for ${submittedSecret}`,
+ }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+ });
+
+ try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), {
+ valid: false,
+ message: 'Google Maps could not verify this key',
+ });
+ });
+ } finally {
+ restoreHttps();
+ }
+  });
+}
+
+test('renderer-only map credential validation accepts Google ZERO_RESULTS as successful authentication', async () => {
+  const submittedSecret = 'google-zero-results-canary-f6k2';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({ status: 'ZERO_RESULTS', routes: [] }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 200);
+ assert.deepEqual(await response.json(), {
+ valid: true,
+ message: 'Google Maps key verified (Directions API)',
+ });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
 test('rejects unauthenticated POST to /api/local-env-update', async () => {
   await withSecuredSidecar(async (port) => {
  const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {

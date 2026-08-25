@@ -63,6 +63,7 @@ function makeSnapshot(options: {
   nodeExpiry?: number;
   observationExpiry?: number;
   outageExpiry?: number;
+  includeProvider?: boolean;
 } = {}): LocalLogisticsSnapshot {
   const placeId = options.placeId ?? 'home';
   const queryFingerprint = options.fingerprint ?? 'exact-home';
@@ -97,7 +98,7 @@ function makeSnapshot(options: {
       expiresAt: new Date(outageExpiry),
       source: 'ornl-odin',
     }],
-    providers: [{
+    providers: options.includeProvider === false ? [] : [{
       id: 'ornl-odin',
       state: 'ok',
       acceptedRows: outageExpiry === undefined ? 0 : 1,
@@ -152,6 +153,24 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
   assert.deepEqual(clock.pendingDelays(), [1_000], 'the next accepted expiry remains scheduled');
 });
 
+test('provider coverage expiry repaints current-completeness claims without another event', () => {
+  const clock = new FakeClock();
+  const transitions: number[] = [];
+  const scheduler = new LifelineEvidenceExpiryScheduler({
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    onExpiry: () => transitions.push(clock.now()),
+  });
+  scheduler.track(makeSnapshot());
+
+  assert.deepEqual(clock.pendingDelays(), [30 * 60_000]);
+  clock.advanceBy(30 * 60_000 - 1);
+  assert.deepEqual(transitions, []);
+  clock.advanceBy(1);
+  assert.deepEqual(transitions, [NOW + 30 * 60_000]);
+});
+
 test('replacing the exact snapshot cancels the prior place transition', () => {
   const clock = new FakeClock();
   const transitioned: string[] = [];
@@ -194,7 +213,7 @@ test('already-expired evidence is ignored and far timers use a bounded delay', (
     clearTimer: clock.clearTimer,
     onExpiry: () => transitions.push(clock.now()),
   });
-  scheduler.track(makeSnapshot({ outageExpiry: NOW, nodeExpiry: futureExpiry }));
+  scheduler.track(makeSnapshot({ outageExpiry: NOW, nodeExpiry: futureExpiry, includeProvider: false }));
 
   assert.deepEqual(clock.pendingDelays(), [MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS]);
   clock.advanceBy(MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS);

@@ -105,14 +105,18 @@ test('panel renders the effective query radius and never broad-falls back across
 
 test('panel ignores superseded async refresh completions', () => {
   assert.match(localLogisticsPanelSrc, /refreshGeneration/);
-  assert.match(localLogisticsPanelSrc, /generation\s*!==\s*this\.refreshGeneration/);
-  assert.match(localLogisticsPanelSrc, /this\.activePlaceId\s*!==\s*place\.id/);
+  assert.match(localLogisticsPanelSrc, /requestMatchesCurrentState/);
+  assert.match(localLogisticsPanelSrc, /generation\s*===\s*this\.refreshGeneration/);
+  assert.match(localLogisticsPanelSrc, /expectedPlaceGeneration\s*===\s*this\.placeGeneration/);
+  assert.match(localLogisticsPanelSrc, /this\.activePlaceId\s*===\s*place\.id/);
+  assert.match(localLogisticsPanelSrc, /this\.activeRadiusKm\s*===\s*requestedRadiusKm/);
+  assert.match(localLogisticsPanelSrc, /expectedFingerprint/);
 });
 
 test('same-place refresh clears the prior map snapshot before requesting replacement evidence', () => {
   assert.match(
     localLogisticsPanelSrc,
-    /public async refresh[\s\S]{0,500}const priorSnapshot = this\.snapshot;[\s\S]{0,160}requestOverlayClear\(priorSnapshot\)[\s\S]{0,400}this\.snapshot = null;[\s\S]{0,1200}await fetchLocalLogistics\(place\)/,
+    /public async refresh[\s\S]*const priorSnapshot = this\.snapshot;[\s\S]*requestOverlayClear\(priorSnapshot\)[\s\S]*this\.snapshot = null;[\s\S]*await this\.fetchSnapshot\(place, \{ radiusKm: requestedRadiusKm \}\)/,
   );
 });
 
@@ -123,7 +127,7 @@ test('same-ID reselection clears the exact prior overlay before snapshot and exp
   );
   assert.match(
     setPlaceBlock,
-    /const priorSnapshot = this\.snapshot;[\s\S]{0,300}if \(priorSnapshot\) this\.requestOverlayClear\(priorSnapshot\);[\s\S]{0,160}evidenceExpiryScheduler\.track\(null\);[\s\S]{0,240}this\.snapshot = null;[\s\S]{0,400}void this\.refresh\(\);/,
+    /const priorSnapshot = this\.snapshot;[\s\S]*if \(priorSnapshot\) this\.requestOverlayClear\(priorSnapshot\);[\s\S]*evidenceExpiryScheduler\.track\(null\);[\s\S]*this\.snapshot = null;[\s\S]*void this\.refresh\(\);/,
   );
   assert.doesNotMatch(setPlaceBlock, /activePlaceId\s*!==\s*priorPlaceId/);
 });

@@ -117,6 +117,26 @@ interface LocalLogisticsBriefItem {
   link?: string;
 }
 
+export type LifelineCoverageState = 'current-complete' | 'current-partial' | 'expired' | 'unavailable';
+
+export interface LifelineProviderCoverage {
+  providerId: ProviderStatus['id'];
+  state: LifelineCoverageState;
+  facilityCategories: readonly LogisticsCategory[];
+  retrievedAt: Date | null;
+  projectedExpiresAt: Date | null;
+  acceptedRows: number;
+  droppedRows: number;
+  scope: 'facilities' | 'county-outage-context';
+}
+
+export interface LifelineCategoryCoverage {
+  category: LogisticsCategory;
+  state: 'proven-current' | 'not-proven';
+  requiredProviders: readonly ProviderStatus['id'][];
+  expiresAt: Date | null;
+}
+
 type LocatedResourceSite = ResourceSite & { distanceKm: number };
 
 interface ParsedObservationDates {
@@ -153,6 +173,14 @@ const VERIFICATION = new Set<VerificationMethod>(['directory', 'official']);
 const CONFIDENCE = new Set<ObservationConfidence>(['high', 'medium', 'low', 'unknown']);
 const PROVIDER_STATES = new Set<ProviderState>(['ok', 'empty', 'partial', 'stale', 'error']);
 const EARLIEST_SOURCE_TIME_MS = Date.UTC(2000, 0, 1);
+
+export const LOCAL_LOGISTICS_RADIUS_CHOICES_KM = [5, 10, 25, 50] as const;
+export type LocalLogisticsRadiusChoiceKm = typeof LOCAL_LOGISTICS_RADIUS_CHOICES_KM[number];
+
+export function initialLocalLogisticsRadiusKm(savedRadiusKm: number): LocalLogisticsRadiusChoiceKm {
+  const radiusKm = Number.isFinite(savedRadiusKm) ? savedRadiusKm : DEFAULT_RADIUS_KM;
+  return LOCAL_LOGISTICS_RADIUS_CHOICES_KM.find((choice) => choice >= radiusKm) ?? 50;
+}
 
 function boundedSet<K, V>(map: Map<K, V>, key: K, value: V, maximum = 100): void {
   if (!map.has(key) && map.size >= maximum) {
@@ -1083,6 +1111,111 @@ export function selectTopLocalLogisticsNodes(snapshot: LocalLogisticsSnapshot, c
   return filtered.slice(0, Math.max(1, limit));
 }
 
+export function selectRepresentativeLocalLogisticsNodes(
+  snapshot: LocalLogisticsSnapshot,
+  category: LogisticsCategory | 'all' = 'all',
+  limit = 3,
+): LogisticsNode[] {
+  if (category !== 'all') return selectTopLocalLogisticsNodes(snapshot, category, limit);
+  const boundedLimit = Math.max(1, Math.trunc(limit));
+  const selected: LogisticsNode[] = [];
+  const selectedIds = new Set<string>();
+  const representedCategories = new Set<LogisticsCategory>();
+  for (const node of snapshot.nodes) {
+    if (selected.length >= boundedLimit) break;
+    if (representedCategories.has(node.category)) continue;
+    selected.push(node);
+    selectedIds.add(node.id);
+    representedCategories.add(node.category);
+  }
+  for (const node of snapshot.nodes) {
+    if (selected.length >= boundedLimit) break;
+    if (selectedIds.has(node.id)) continue;
+    selected.push(node);
+    selectedIds.add(node.id);
+  }
+  return selected;
+}
+
+const PROVIDER_COVERAGE_TTL_MS: Record<ProviderStatus['id'], number> = {
+  osm: DIRECTORY_OBSERVATION_TTL_MS,
+  fema: FEMA_OBSERVATION_TTL_MS,
+  'fema-open-shelters': FEMA_OBSERVATION_TTL_MS,
+  'fema-recovery-centers': FEMA_OBSERVATION_TTL_MS,
+  'ornl-odin': ODIN_OBSERVATION_TTL_MS,
+};
+
+function providerFacilityCategories(
+  providerId: ProviderStatus['id'],
+  categories: readonly LogisticsCategory[],
+): LogisticsCategory[] {
+  if (providerId === 'osm') return categories.filter((category) => category !== 'recovery');
+  if (providerId === 'fema-open-shelters') return categories.includes('shelter') ? ['shelter'] : [];
+  if (providerId === 'fema-recovery-centers') return categories.includes('recovery') ? ['recovery'] : [];
+  return [];
+}
+
+function requiredCategoryProviders(category: LogisticsCategory): ProviderStatus['id'][] {
+  if (category === 'recovery') return ['fema-recovery-centers'];
+  if (category === 'shelter') return ['osm', 'fema-open-shelters'];
+  return ['osm'];
+}
+
+function projectProviderCoverage(
+  provider: ProviderStatus,
+  categories: readonly LogisticsCategory[],
+  now: number,
+): LifelineProviderCoverage {
+  const retrievedAtValue = provider.retrievedAt ?? provider.observedAt;
+  const retrievedAt = retrievedAtValue instanceof Date && Number.isFinite(retrievedAtValue.getTime())
+    ? retrievedAtValue
+    : null;
+  const projectedExpiresAt = retrievedAt
+    ? new Date(retrievedAt.getTime() + PROVIDER_COVERAGE_TTL_MS[provider.id])
+    : null;
+  let state: LifelineCoverageState;
+  if (provider.state === 'error' || !projectedExpiresAt) state = 'unavailable';
+  else if (provider.state === 'stale' || projectedExpiresAt.getTime() <= now) state = 'expired';
+  else if (provider.state === 'partial' || provider.droppedRows > 0) state = 'current-partial';
+  else state = 'current-complete';
+  return {
+    providerId: provider.id,
+    state,
+    facilityCategories: providerFacilityCategories(provider.id, categories),
+    retrievedAt,
+    projectedExpiresAt,
+    acceptedRows: provider.acceptedRows,
+    droppedRows: provider.droppedRows,
+    scope: provider.id === 'ornl-odin' ? 'county-outage-context' : 'facilities',
+  };
+}
+
+export function projectLocalLogisticsCoverage(
+  snapshot: LocalLogisticsSnapshot,
+  now = Date.now(),
+): { providers: LifelineProviderCoverage[]; categories: LifelineCategoryCoverage[] } {
+  const providers = snapshot.providers.map((provider) => projectProviderCoverage(provider, snapshot.categories, now));
+  const providerById = new Map(providers.map((provider) => [provider.providerId, provider]));
+  const categories = snapshot.categories.map((category): LifelineCategoryCoverage => {
+    const requiredProviders = requiredCategoryProviders(category);
+    const requiredCoverage = requiredProviders.map((providerId) => providerById.get(providerId));
+    const proven = requiredCoverage.every((coverage) => coverage?.state === 'current-complete');
+    const expiryTimes = proven
+      ? requiredCoverage.map((coverage) => coverage?.projectedExpiresAt?.getTime() ?? Number.NaN)
+      : [];
+    const expiresAt = expiryTimes.length > 0 && expiryTimes.every((expiryTime) => Number.isFinite(expiryTime))
+      ? new Date(Math.min(...expiryTimes))
+      : null;
+    return {
+      category,
+      state: expiresAt && expiresAt.getTime() > now ? 'proven-current' : 'not-proven',
+      requiredProviders,
+      expiresAt: expiresAt && expiresAt.getTime() > now ? expiresAt : null,
+    };
+  });
+  return { providers, categories };
+}
+
 function formatDistance(distanceKm: number): string {
   if (!Number.isFinite(distanceKm)) return 'distance unknown';
   return distanceKm < 10 ? `${distanceKm.toFixed(1)} km away` : `${Math.round(distanceKm)} km away`;
@@ -1203,7 +1336,10 @@ async function runFetch(place: SavedPlace, categories: LogisticsCategory[], radi
 export function fetchLocalLogistics(place: SavedPlace, options: FetchLocalLogisticsOptions = {}): Promise<LocalLogisticsSnapshot> {
   const requested = options.categories?.length ? options.categories : [...LOCAL_LOGISTICS_CATEGORIES];
   const categories = [...new Set(requested.filter((item) => LOCAL_LOGISTICS_CATEGORIES.includes(item)))].sort(compareStrings);
-  const radiusKm = Math.max(1, Math.min(place.radiusKm, options.radiusKm ?? DEFAULT_RADIUS_KM));
+  const radiusCandidate = options.radiusKm ?? Math.min(place.radiusKm, DEFAULT_RADIUS_KM);
+  const radiusKm = Number.isFinite(radiusCandidate)
+    ? Math.max(1, Math.min(50, radiusCandidate))
+    : DEFAULT_RADIUS_KM;
   const limitPerCategory = Math.max(1, Math.min(5, Math.trunc(options.limitPerCategory ?? DEFAULT_LIMIT_PER_CATEGORY)));
   const fingerprint = buildLocalLogisticsFingerprint(place, radiusKm, categories, limitPerCategory);
   const inFlightKey = `${place.id}|${fingerprint}`;

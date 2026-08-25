@@ -94,6 +94,14 @@ test('lifeline popup keeps external and clipboard actions inert until explicit c
   popup.hide();
 });
 
+test('lifeline popup omits the call action for malformed public phone data', () => {
+  const popup = mountPopup();
+  popup.show({ type: 'lifeline', data: { ...NODE, publicPhone: '21+95550100' }, x: 100, y: 100 });
+
+  assert.equal(document.querySelector('[data-lifeline-call]'), null);
+  popup.hide();
+});
+
 test('lifeline popup surfaces evidence expiry as unknown rather than open', () => {
   const popup = mountPopup();
   popup.show({

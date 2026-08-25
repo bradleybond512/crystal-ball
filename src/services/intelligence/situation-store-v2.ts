@@ -757,7 +757,7 @@ export class SituationStoreV2 {
     );
     recordCorrelationBatch(
       this.engine,
-      result.observationsConsidered,
+      1,
       result.pairs,
       correlatedAt,
     );

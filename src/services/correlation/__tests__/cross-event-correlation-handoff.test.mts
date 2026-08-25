@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   CrossEventCorrelationHandoff,
   CROSS_EVENT_HISTORY_LIMIT,
+  CROSS_EVENT_MAX_FUTURE_SKEW_MS,
   CROSS_EVENT_HISTORY_WINDOW_MS,
 } from '../cross-event-correlation-handoff.ts';
 import {
@@ -197,6 +198,33 @@ test('rejects non-finite timestamps and stop cancels queued work', () => {
 
   assert.equal(calls, 0);
   assert.deepEqual(handoff.stats(), { history: 0, pending: 0 });
+});
+
+test('rejects far-future timestamps without pruning legitimate retained events', () => {
+  const scheduled = scheduler();
+  const calls: Array<{ current: string; history: string[] }> = [];
+  const handoff = new CrossEventCorrelationHandoff({
+    schedule: scheduled.schedule,
+    clock: () => NOW,
+    correlate: (current, history) => {
+      calls.push({ current: current.id, history: history.map((item) => item.id) });
+    },
+  });
+
+  assert.equal(handoff.offer(event('legitimate-1', 'weather', NOW)), true);
+  assert.equal(handoff.offer(event(
+    'far-future',
+    'infra',
+    NOW + CROSS_EVENT_MAX_FUTURE_SKEW_MS + 1,
+  )), false);
+  assert.equal(handoff.offer(event('legitimate-2', 'infra', NOW + 1)), true);
+  handoff.resume();
+  scheduled.runAll();
+
+  assert.deepEqual(calls, [
+    { current: 'legitimate-1', history: [] },
+    { current: 'legitimate-2', history: ['legitimate-1'] },
+  ]);
 });
 
 test('incremental engine work is bounded to current-versus-history candidates', () => {

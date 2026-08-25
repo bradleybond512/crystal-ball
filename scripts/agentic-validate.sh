@@ -103,6 +103,7 @@ run npm run cross-agent:check
 # entries automatically, so it was 10 deep on a pristine `main` and failed every
 # branch for work the branch did not do.
 run npm run docs:check -- --changelog-advisory
+run npm run roadmap:check
 
 run npm run build
 

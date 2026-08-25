@@ -1768,6 +1768,11 @@ Status: `WAITING`
 
 Dependencies: ACC-505
 
+Exit condition: ACC-505 is `DONE` with its regime-conditional reliability
+contract and fallback threshold verified.
+
+Review after: 2026-09-01
+
 The `edge-confidence.ts` kernel multiplies six factors —
 `base × temporal × spatial × entity × reliability × regime`, clamped to
 `[0.2, 1]`. Several of those factors are dynamic inputs; what is hard-coded is
@@ -1909,6 +1914,11 @@ Status: `WAITING`
 
 Dependencies: ACC-204
 
+Exit condition: The current production cohort contains enough resolved and
+class-balanced evidence to issue a model-readiness verdict for every domain.
+
+Review after: 2026-09-07
+
 For every domain, report:
 
 - resolved outcomes and class balance;
@@ -1923,6 +1933,11 @@ Status: `WAITING`
 
 Dependencies: ACC-601 and at least 200 resolved, class-balanced-enough outcomes
 
+Exit condition: ACC-601 is `DONE` and records at least 200 resolved outcomes
+with usable class balance for an eligible domain.
+
+Review after: 2026-09-07
+
 Use regularized or hierarchical logistic prediction with domain/horizon priors.
 It must expose coefficients or feature contributions and run in shadow mode.
 
@@ -1931,6 +1946,11 @@ It must expose coefficients or feature contributions and run in shadow mode.
 Status: `WAITING`
 
 Dependencies: ACC-601 and at least 300 timestamped event/censoring records
+
+Exit condition: ACC-601 is `DONE` and records at least 300 usable timestamped
+event or censoring records.
+
+Review after: 2026-09-07
 
 Use a time-to-event model for questions such as escalation within a horizon.
 Score both occurrence probability and timing. Keep censoring explicit.
@@ -1942,6 +1962,11 @@ Status: `WAITING`
 Dependencies: ACC-601 and at least 1,000 resolved records with at least 100
 positive and 100 negative outcomes in the training cohort
 
+Exit condition: ACC-601 is `DONE` and records at least 1,000 resolved outcomes,
+including at least 100 outcomes in each class, for an eligible cohort.
+
+Review after: 2026-09-07
+
 Use only lagged, prediction-time-available features. Compare against the
 regularized model and base rate. Reject it if the added complexity does not
 improve the frozen walk-forward benchmark.
@@ -1951,6 +1976,11 @@ improve the frozen walk-forward benchmark.
 Status: `WAITING`
 
 Dependencies: ACC-602 or ACC-604
+
+Exit condition: ACC-602 or ACC-604 is `DONE` with a frozen comparison cohort
+that can support the ablation.
+
+Review after: 2026-09-07
 
 Compare:
 
@@ -2056,6 +2086,11 @@ Status: `WAITING`
 
 Dependencies: all earlier phases required by the completion definition
 
+Exit condition: All earlier required phases are terminal and a complete 30-day
+production evidence window is available for the closure checks.
+
+Review after: 2026-09-23
+
 Record:
 
 - matched-cohort benchmark versus the 2026-07-26 starting point;
@@ -2069,6 +2104,11 @@ Record:
 Status: `WAITING`
 
 Dependencies: ACC-703 and all tasks `DONE` or `REJECTED`
+
+Exit condition: ACC-703 is `DONE` and every other roadmap task is `DONE` or
+evidence-backed `REJECTED`.
+
+Review after: 2026-09-24
 
 Update this document to `COMPLETE`, move superseded implementation details to
 the archive, update `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md`, and leave the

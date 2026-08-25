@@ -64,6 +64,7 @@ const MANDATORY_PIPELINE = [
   ['run', 'secrets:scan'],
   ['run', 'cross-agent:check'],
   ['run', 'docs:check', '--', '--changelog-advisory'],
+  ['run', 'roadmap:check'],
   ['run', 'build'],
 ];
 

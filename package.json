@@ -216,6 +216,8 @@
     "test:mcp-intel": "node --test tools/mcp-server/__tests__/intel-expansion-tools.test.mjs",
     "test:agentic-gate": "tsx --test tests/agentic-gate.test.mjs",
     "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs",
+    "test:roadmap-controller": "node --test tests/roadmap-controller.test.mjs",
+    "roadmap:check": "node scripts/roadmap-controller.mjs",
     "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs"
   },
   "devDependencies": {

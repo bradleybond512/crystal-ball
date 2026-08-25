@@ -300,6 +300,8 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 Status: `DONE`
 
+PR: #1521
+
 Owner: Codex
 
 Branch: `codex/acc-104-authoritative-grading`
@@ -338,6 +340,8 @@ production build, offline smoke, lockfile, and secret-scan gates passed.
 ### ACC-105 — Resolution-quality audit
 
 Status: `DONE`
+
+PR: #1523
 
 Owner: Codex
 
@@ -378,6 +382,8 @@ driven by evidence instead of intuition.
 ### ACC-201 — Proper-scoring and cohort metrics
 
 Status: `DONE`
+
+PR: #1524
 
 Owner: Codex
 
@@ -433,6 +439,8 @@ audit, lockfile, documentation, and secret-scan gates passed.
 
 Status: `DONE`
 
+PR: #1525
+
 Owner: Codex
 
 Branch: `codex/acc-202-forecast-workbench`
@@ -473,6 +481,8 @@ overflow.
 ### ACC-203 — Diagnostics and MCP evaluation export
 
 Status: `DONE`
+
+PR: #1527
 
 Owner: Codex
 
@@ -747,6 +757,8 @@ Extend `src/services/cognition/shadow-rollout.ts`:
 
 Status: `DONE`
 
+PR: #1566
+
 Owner: Claude
 Branch: `claude/acc-402-promotion-gate`
 
@@ -792,6 +804,8 @@ typecheck:all, scoped ESLint.
 
 Status: `DONE`
 
+PR: #1571
+
 Owner: Claude
 Branch: `claude/acc-403-status-surface`
 
@@ -830,6 +844,8 @@ bench:forecast + bench:baselines unchanged.
 ### ACC-404 — First production promotion decision
 
 Status: `DONE`
+
+PR: #1592
 
 Owner: Claude
 Branch: `claude/acc-404-first-decision`

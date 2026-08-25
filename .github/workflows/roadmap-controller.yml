@@ -21,22 +21,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+      - name: Export roadmap PR references
+        env:
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
+        run: |
+          git fetch origin main --quiet
+          if git show origin/main:scripts/roadmap-controller.mjs 2>/dev/null | grep -q -- '--references-output'; then
+            git show origin/main:scripts/roadmap-controller.mjs > "$RUNNER_TEMP/roadmap-controller.mjs"
+            RUNNER="$RUNNER_TEMP/roadmap-controller.mjs"
+          else
+            RUNNER="scripts/roadmap-controller.mjs"
+          fi
+          node "$RUNNER" --references-output "$ROADMAP_REFERENCES_PATH" \
+            --output "$RUNNER_TEMP/roadmap-reference-check.md"
       - name: Build bounded PR snapshot
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           SNAPSHOT_PATH: ${{ runner.temp }}/roadmap-snapshot.json
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const base = 'main';
-            const docs = [
-              'docs/USABILITY_UPLIFT_FOR_CODEX.md',
-              'docs/PREDICTION_ACCURACY_ROADMAP.md',
-            ].map((path) => fs.readFileSync(path, 'utf8')).join('\n');
-            const referenced = [...new Set(
-              [...docs.matchAll(/\b(?:PR\s*)?#(\d+)\b/gi)].map((match) => Number(match[1])),
-            )];
+            const referenced = JSON.parse(fs.readFileSync(process.env.ROADMAP_REFERENCES_PATH, 'utf8'));
+            if (!Array.isArray(referenced) || referenced.some((number) => !Number.isSafeInteger(number) || number < 1)) {
+              throw new Error('roadmap reference export is invalid');
+            }
             if (referenced.length > 256) throw new Error('roadmap references exceed the 256-PR snapshot bound');
             const open = await github.paginate(github.rest.pulls.list, {
               owner: context.repo.owner,
@@ -137,22 +148,27 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+      - name: Export roadmap PR references
+        env:
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
+        run: |
+          node scripts/roadmap-controller.mjs \
+            --references-output "$ROADMAP_REFERENCES_PATH" \
+            --output "$RUNNER_TEMP/roadmap-reference-check.md"
       - name: Build bounded PR snapshot
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
           SNAPSHOT_PATH: ${{ runner.temp }}/roadmap-snapshot.json
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const base = 'main';
-            const docs = [
-              'docs/USABILITY_UPLIFT_FOR_CODEX.md',
-              'docs/PREDICTION_ACCURACY_ROADMAP.md',
-            ].map((path) => fs.readFileSync(path, 'utf8')).join('\n');
-            const referenced = [...new Set(
-              [...docs.matchAll(/\b(?:PR\s*)?#(\d+)\b/gi)].map((match) => Number(match[1])),
-            )];
+            const referenced = JSON.parse(fs.readFileSync(process.env.ROADMAP_REFERENCES_PATH, 'utf8'));
+            if (!Array.isArray(referenced) || referenced.some((number) => !Number.isSafeInteger(number) || number < 1)) {
+              throw new Error('roadmap reference export is invalid');
+            }
             if (referenced.length > 256) throw new Error('roadmap references exceed the 256-PR snapshot bound');
             const open = await github.paginate(github.rest.pulls.list, {
               owner: context.repo.owner,

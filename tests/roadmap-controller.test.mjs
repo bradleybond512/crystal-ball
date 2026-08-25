@@ -19,6 +19,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const UX = `
 # Usability
 
+- **Status:** ACTIVE
+
 ### UX-000 — First run
 
 Exit condition: Packaged verification passes.
@@ -42,6 +44,8 @@ Review after: 2026-09-02
 
 const ACC = `
 # Accuracy
+
+> Status: ACTIVE
 
 ## Phase 0 — Spine
 
@@ -113,6 +117,7 @@ function pr(number, state, text, extra = {}) {
 test('parses UX, Phase 0, and Phase 5 tasks into one normalized state', () => {
   const state = parse();
   assert.deepEqual(state.errors, []);
+  assert.deepEqual(state.programs, { accuracy: 'ACTIVE', usability: 'ACTIVE' });
   assert.equal(state.tasks.length, 7);
   assert.deepEqual(
     state.tasks.map(({ id, status, highAssurance }) => ({ id, status, highAssurance })),
@@ -127,7 +132,25 @@ test('parses UX, Phase 0, and Phase 5 tasks into one normalized state', () => {
     ],
   );
   assert.deepEqual(state.tasks.find(({ id }) => id === 'ACC-502').dependencies, ['ACC-501']);
+  assert.deepEqual(state.tasks.find(({ id }) => id === 'ACC-502').dependencyAnyOf, []);
   assert.deepEqual(state.tasks.find(({ id }) => id === 'UX-000').evidencePrs, [1660]);
+});
+
+test('rejects incomplete program structure and COMPLETE programs with unfinished tasks', () => {
+  const duplicateUx = UX.replace(
+    '### UX-001 — Home shell\n\n',
+    '### UX-001 — Home shell\n\n### UX-001 — Duplicate shell\n\n',
+  );
+  assert.ok(parse(duplicateUx).errors.some((message) => /UX-001.*defined more than once/.test(message)));
+
+  const trackerOnly = UX.replace('### UX-001 — Home shell\n\n', '');
+  assert.ok(parse(trackerOnly).errors.some((message) => /UX-001.*Progress Tracker.*heading/.test(message)));
+
+  const missingMirror = ACC.replace('| ACC-502 | TODO | Reliability | ACC-501 (DONE) |\n', '');
+  assert.ok(parse(UX, missingMirror).errors.some((message) => /ACC-502.*missing from the Phase 5 mirror/.test(message)));
+
+  const complete = parse(UX.replace('**Status:** ACTIVE', '**Status:** COMPLETE'));
+  assert.ok(complete.errors.some((message) => /usability program is COMPLETE.*unfinished/i.test(message)));
 });
 
 test('reports duplicate definitions, mirror drift, unknown status, and missing wait metadata', () => {
@@ -150,6 +173,9 @@ test('rejects oversized roadmap documents and terminal tasks without evidence', 
 
   const missingEvidence = parse(UX, ACC.replace('Evidence: PR #20\n', ''));
   assert.ok(missingEvidence.errors.some((message) => /ACC-501.*terminal.*evidence/.test(message)));
+
+  const placeholderEvidence = parse(UX, ACC.replace('Evidence: PR #20', 'Evidence: pending'));
+  assert.ok(placeholderEvidence.errors.some((message) => /ACC-501.*terminal.*evidence/.test(message)));
 });
 
 test('baseline comparison blocks task deletion and terminal-state mutation', () => {
@@ -212,6 +238,23 @@ test('the candidate PR may provisionally supply terminal evidence, but an unrela
   assert.ok(unrelated.blocking.some((message) => /ACC-001.*not merged/.test(message)));
 });
 
+test('candidate PR claims are one-to-one and synchronized with roadmap state', () => {
+  const state = parse();
+  const todoClaim = reconcileRoadmaps(state, {
+    ...snapshot([pr(40, 'OPEN', 'Roadmap task: ACC-502')]),
+    eventType: 'pull_request',
+    candidatePrNumbers: [40],
+  }, { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+  assert.ok(todoClaim.blocking.some((message) => /ACC-502.*candidate PR #40.*IN_REVIEW/.test(message)));
+
+  const multiClaim = reconcileRoadmaps(state, {
+    ...snapshot([pr(41, 'OPEN', 'ACC-502 and UX-001')]),
+    eventType: 'pull_request',
+    candidatePrNumbers: [41],
+  }, { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+  assert.ok(multiClaim.blocking.some((message) => /candidate PR #41.*exactly one.*ACC-502.*UX-001/.test(message)));
+});
+
 test('reconciliation catches merged active work, unmerged evidence, and duplicate claims', () => {
   const activeUx = UX.replace('| UX-000 | First run | MONITOR |', '| UX-000 | First run | IN PROGRESS |');
   const state = parse(activeUx);
@@ -254,6 +297,27 @@ test('reconciliation advises on claims stalled beyond 72 hours and names the nex
   ]), { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
   assert.ok(report.advisory.some((message) => /ACC-502.*#30.*stalled.*72 hours/.test(message)));
   assert.equal(report.nextEligible.id, 'UX-001');
+});
+
+test('reconciliation reports overdue wait reviews and supports OR dependencies', () => {
+  const overdue = parse(UX.replace('Review after: 2026-09-02', 'Review after: 2026-08-20'));
+  const overdueReport = reconcileRoadmaps(overdue, null, {
+    now: '2026-08-24T12:00:00.000Z', baseBranch: 'main',
+  });
+  assert.ok(overdueReport.advisory.some((message) => /UX-002.*review overdue since 2026-08-20/.test(message)));
+
+  const anyOfAcc = ACC
+    .replace('| ACC-503 | WAITING | Tunables | ACC-502 |', '| ACC-503 | TODO | Tunables | ACC-502 or ACC-501 |')
+    .replace('Status: `WAITING`\nDependencies: ACC-502\nExit condition: ACC-502 is DONE.\nReview after: 2026-09-03', 'Status: `TODO`\nDependencies: ACC-502 or ACC-501');
+  const anyOf = parse(UX, anyOfAcc);
+  assert.deepEqual(anyOf.tasks.find(({ id }) => id === 'ACC-503').dependencyAnyOf, ['ACC-502', 'ACC-501']);
+  const report = reconcileRoadmaps(anyOf, snapshot([
+    pr(10, 'MERGED', 'ACC-001'),
+    pr(20, 'MERGED', 'ACC-501'),
+    pr(1660, 'MERGED', 'UX-000'),
+    pr(30, 'OPEN', 'Roadmap task: ACC-502'),
+  ]), { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+  assert.equal(report.nextEligible.id, 'ACC-503');
 });
 
 test('task IDs mentioned incidentally in a PR body are not treated as claims', () => {
@@ -313,6 +377,19 @@ test('CLI exits 0 offline, 1 for policy drift, and 2 for invalid snapshot input'
   assert.match(`${policy.stdout}${policy.stderr}`, /Blocking/);
 });
 
+test('CLI exports every PR reference parsed from the real roadmaps for the workflow snapshot', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'roadmap-references-'));
+  const output = join(dir, 'references.json');
+  const result = spawnSync(process.execPath, [
+    'scripts/roadmap-controller.mjs', '--references-output', output,
+  ], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  const references = JSON.parse(readFileSync(output, 'utf8'));
+  assert.ok(references.includes(1596));
+  assert.ok(references.includes(1624));
+  assert.ok(references.includes(1665));
+});
+
 test('workflow is pinned, least-privileged, token-free at the Node boundary, and main-only for writes', () => {
   const workflow = readFileSync(join(root, '.github/workflows/roadmap-controller.yml'), 'utf8');
   assert.doesNotMatch(workflow, /pull_request_target/);
@@ -327,6 +404,9 @@ test('workflow is pinned, least-privileged, token-free at the Node boundary, and
   assert.match(workflow, /git show origin\/main:scripts\/roadmap-controller\.mjs/);
   assert.match(workflow, /git show origin\/main:docs\/USABILITY_UPLIFT_FOR_CODEX\.md/);
   assert.match(workflow, /--baseline-ux/);
+  assert.match(workflow, /--references-output/);
+  assert.match(workflow, /ROADMAP_REFERENCES_PATH/);
+  assert.doesNotMatch(workflow, /docs\.matchAll/);
   assert.match(workflow, /concurrency:\s*\n\s*group: roadmap-controller-watchdog/);
   assert.doesNotMatch(workflow, /node scripts\/roadmap-controller\.mjs[^\n]*\$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(workflow, /crystal-ball-roadmap-controller:v1/);

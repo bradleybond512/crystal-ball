@@ -31,6 +31,7 @@ import {
 import {
   applyExpiredLifelineEvidenceTransition,
   LifelineEvidenceExpiryScheduler,
+  type LifelineExpiryKind,
 } from './lifeline-evidence-expiry';
 import {
   getLifelinePackReadinessForPlace,
@@ -110,7 +111,7 @@ export class LocalLogisticsPanel extends Panel {
   private unsubscribeSavedPlaces: (() => void) | null = null;
   private readonly nodeLookup = new Map<string, LogisticsNode>();
   private readonly evidenceExpiryScheduler = new LifelineEvidenceExpiryScheduler({
- onExpiry: (snapshot) => this.transitionExpiredEvidence(snapshot),
+ onExpiry: (snapshot, expiresAt, kind) => this.transitionExpiredEvidence(snapshot, expiresAt, kind),
   });
   private readonly onLifelineSituationUpdated = (event: Event) => {
  const detail = (event as CustomEvent<unknown>).detail;
@@ -382,7 +383,19 @@ export class LocalLogisticsPanel extends Panel {
  }));
   }
 
-  private transitionExpiredEvidence(snapshot: LocalLogisticsSnapshot): void {
+  private transitionExpiredEvidence(
+ snapshot: LocalLogisticsSnapshot,
+ _expiresAt: number,
+ kind: LifelineExpiryKind,
+  ): void {
+ if (kind === 'provider-coverage') {
+   const place = this.resolvePlace();
+   if (place && this.snapshot === snapshot
+     && snapshot.placeId === this.activePlaceId
+     && this.snapshotPlaceSignature === buildLifelinesPlaceMatchSignature(place)
+     && this.snapshotMatchesPlace(snapshot, place)) this.render();
+   return;
+ }
  applyExpiredLifelineEvidenceTransition(snapshot, {
    isCurrent: (identity) => {
      const place = this.resolvePlace();
@@ -485,7 +498,7 @@ export class LocalLogisticsPanel extends Panel {
  ? `<div class="panel-empty" style="margin-top:10px;" role="status">${escapeHtml(this.routeFeedback)}</div>`
  : '';
 
- this.setContent(`
+ const html = `
  <div class="sa-panel-content local-logistics-content" data-local-logistics-content="1" aria-busy="${this.loading}">
  ${headerHtml}
  ${statusHtml}
@@ -497,7 +510,12 @@ export class LocalLogisticsPanel extends Panel {
  ${listHtml}
  ${routeFeedbackHtml}
  </div>
- `, () => this.restoreRadiusFocus());
+ `;
+ if (this.error) {
+   this.setErrorContent(html, this.error, () => this.restoreRadiusFocus());
+   return;
+ }
+ this.setContent(html, () => this.restoreRadiusFocus());
   }
 
   private displayCategories(): LogisticsCategory[] {

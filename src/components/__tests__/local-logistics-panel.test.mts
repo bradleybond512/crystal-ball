@@ -16,6 +16,10 @@ import {
   type LocalLogisticsSnapshot,
   type LogisticsNode,
 } from '../../services/local-logistics.ts';
+import {
+  getPanelHealthRegistry,
+  resetDiagnosticsState,
+} from '../../services/diagnostics/diagnostics-state.ts';
 
 const happyWindow = new Window({ url: 'http://127.0.0.1/' });
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -152,6 +156,7 @@ async function settleRender(): Promise<void> {
 }
 
 beforeEach(() => {
+  resetDiagnosticsState();
   document.body.replaceChildren();
   for (const place of getSavedPlaces()) removeSavedPlace(place.id);
   happyWindow.localStorage.clear();
@@ -348,6 +353,7 @@ test('failed refresh resolves to an error without removing radius and refresh co
   const content = panel.getContentElement();
   assert.equal(requiredElement<HTMLElement>(content, '[data-local-logistics-content]').getAttribute('aria-busy'), 'false');
   assert.match(requiredElement<HTMLElement>(content, '[role="alert"]').textContent ?? '', /provider unavailable/i);
+  assert.equal(getPanelHealthRegistry().get('local-logistics')?.lastError, 'provider unavailable');
   assert.ok(content.querySelector('[data-logistics-radius="25"]'));
   assert.ok(content.querySelector('[data-logistics-refresh]'));
 });

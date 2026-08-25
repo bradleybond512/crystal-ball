@@ -758,10 +758,22 @@ export class Panel {
   }
 
   public showError(message = t('common.failedToLoad')): void {
- this.clearLoadingBudget();
- try { getPanelHealthRegistry().recordError(this.panelId, message); } catch { /* diagnostics optional */ }
+ this.recordPanelError(message);
  replaceChildren(this.content, h('div', { className: 'error-message' }, message));
  this.invalidateContentCache();
+  }
+
+  protected recordPanelError(message: string): void {
+ this.clearLoadingBudget();
+ try { getPanelHealthRegistry().recordError(this.panelId, message); } catch { /* diagnostics optional */ }
+  }
+
+  protected setErrorContent(html: string, message: string, onRendered?: () => void): void {
+ this.setContent(html, () => {
+   onRendered?.();
+   this.recordPanelError(message);
+ });
+ this.recordPanelError(message);
   }
 
   public showRetrying(message = t('common.retrying')): void {

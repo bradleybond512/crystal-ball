@@ -1,0 +1,294 @@
+name: Roadmap controller
+
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Export roadmap PR references
+        env:
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
+        run: |
+          git fetch origin main --quiet
+          if git show origin/main:scripts/roadmap-controller.mjs 2>/dev/null | grep -q -- '--references-output'; then
+            git show origin/main:scripts/roadmap-controller.mjs > "$RUNNER_TEMP/roadmap-controller.mjs"
+            RUNNER="$RUNNER_TEMP/roadmap-controller.mjs"
+          else
+            RUNNER="scripts/roadmap-controller.mjs"
+          fi
+          node "$RUNNER" --references-output "$ROADMAP_REFERENCES_PATH" \
+            --output "$RUNNER_TEMP/roadmap-reference-check.md"
+      - name: Build bounded PR snapshot
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          SNAPSHOT_PATH: ${{ runner.temp }}/roadmap-snapshot.json
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const base = 'main';
+            const referenced = JSON.parse(fs.readFileSync(process.env.ROADMAP_REFERENCES_PATH, 'utf8'));
+            if (!Array.isArray(referenced) || referenced.some((number) => !Number.isSafeInteger(number) || number < 1)) {
+              throw new Error('roadmap reference export is invalid');
+            }
+            if (referenced.length > 256) throw new Error('roadmap references exceed the 256-PR snapshot bound');
+            const limit = 256;
+            const open = [];
+            for (let page = 1; open.length <= limit; page += 1) {
+              const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                base,
+                per_page: 100,
+                page,
+              });
+              const remaining = limit + 1 - open.length;
+              open.push(...data.slice(0, remaining));
+              if (data.length < 100 || open.length > limit) break;
+            }
+            if (open.length > limit) throw new Error('open main PRs exceed the 256-PR snapshot bound');
+            const byNumber = new Map(open.map((pull) => [pull.number, pull]));
+            for (const number of referenced) {
+              if (byNumber.has(number)) continue;
+              const { data } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+              });
+              if (data.base.ref === base) byNumber.set(number, data);
+            }
+            const eventType = context.eventName;
+            const candidatePrNumbers = [];
+            if (eventType === 'pull_request') {
+              candidatePrNumbers.push(context.payload.pull_request.number);
+            } else if (eventType === 'merge_group') {
+              const mergeHead = context.payload.merge_group.head_sha;
+              for (const pull of open) {
+                const { data } = await github.rest.repos.compareCommits({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  base: pull.head.sha,
+                  head: mergeHead,
+                });
+                if (data.status === 'ahead' || data.status === 'identical') {
+                  candidatePrNumbers.push(pull.number);
+                }
+              }
+            }
+            if (byNumber.size > 512) throw new Error('complete PR snapshot exceeds 512 entries');
+            const pullRequests = [...byNumber.values()]
+              .sort((left, right) => left.number - right.number)
+              .map((pull) => {
+                const title = pull.title ?? '';
+                const body = pull.body ?? '';
+                if (title.length > 512 || body.length > 131072) {
+                  throw new Error(`PR #${pull.number} exceeds snapshot field bounds`);
+                }
+                return {
+                  number: pull.number,
+                  state: pull.merged_at ? 'MERGED' : pull.state.toUpperCase(),
+                  base: pull.base.ref,
+                  draft: Boolean(pull.draft),
+                  title,
+                  body,
+                  updatedAt: pull.updated_at,
+                  mergedAt: pull.merged_at,
+                };
+              });
+            fs.writeFileSync(process.env.SNAPSHOT_PATH, JSON.stringify({
+              schemaVersion: 1,
+              complete: true,
+              truncated: false,
+              baseBranch: base,
+              eventType,
+              candidatePrNumbers,
+              generatedAt: new Date().toISOString(),
+              pullRequests,
+            }));
+      - name: Reconcile roadmaps
+        env:
+          SNAPSHOT_PATH: ${{ runner.temp }}/roadmap-snapshot.json
+        run: |
+          git fetch origin main --quiet
+          git show origin/main:docs/USABILITY_UPLIFT_FOR_CODEX.md > "$RUNNER_TEMP/baseline-usability.md"
+          git show origin/main:docs/PREDICTION_ACCURACY_ROADMAP.md > "$RUNNER_TEMP/baseline-prediction.md"
+          if git cat-file -e origin/main:scripts/roadmap-controller.mjs 2>/dev/null; then
+            git show origin/main:scripts/roadmap-controller.mjs > "$RUNNER_TEMP/roadmap-controller.mjs"
+            RUNNER="$RUNNER_TEMP/roadmap-controller.mjs"
+          else
+            RUNNER="scripts/roadmap-controller.mjs"
+          fi
+          node "$RUNNER" --snapshot "$SNAPSHOT_PATH" \
+            --baseline-ux "$RUNNER_TEMP/baseline-usability.md" \
+            --baseline-acc "$RUNNER_TEMP/baseline-prediction.md"
+
+  watchdog:
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: roadmap-controller-watchdog
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Export roadmap PR references
+        env:
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
+        run: |
+          node scripts/roadmap-controller.mjs \
+            --references-output "$ROADMAP_REFERENCES_PATH" \
+            --output "$RUNNER_TEMP/roadmap-reference-check.md"
+      - name: Build bounded PR snapshot
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          SNAPSHOT_PATH: ${{ runner.temp }}/roadmap-snapshot.json
+          ROADMAP_REFERENCES_PATH: ${{ runner.temp }}/roadmap-references.json
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const base = 'main';
+            const referenced = JSON.parse(fs.readFileSync(process.env.ROADMAP_REFERENCES_PATH, 'utf8'));
+            if (!Array.isArray(referenced) || referenced.some((number) => !Number.isSafeInteger(number) || number < 1)) {
+              throw new Error('roadmap reference export is invalid');
+            }
+            if (referenced.length > 256) throw new Error('roadmap references exceed the 256-PR snapshot bound');
+            const limit = 256;
+            const open = [];
+            for (let page = 1; open.length <= limit; page += 1) {
+              const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                base,
+                per_page: 100,
+                page,
+              });
+              const remaining = limit + 1 - open.length;
+              open.push(...data.slice(0, remaining));
+              if (data.length < 100 || open.length > limit) break;
+            }
+            if (open.length > limit) throw new Error('open main PRs exceed the 256-PR snapshot bound');
+            const byNumber = new Map(open.map((pull) => [pull.number, pull]));
+            for (const number of referenced) {
+              if (byNumber.has(number)) continue;
+              const { data } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+              });
+              if (data.base.ref === base) byNumber.set(number, data);
+            }
+            if (byNumber.size > 512) throw new Error('complete PR snapshot exceeds 512 entries');
+            const pullRequests = [...byNumber.values()]
+              .sort((left, right) => left.number - right.number)
+              .map((pull) => {
+                const title = pull.title ?? '';
+                const body = pull.body ?? '';
+                if (title.length > 512 || body.length > 131072) {
+                  throw new Error(`PR #${pull.number} exceeds snapshot field bounds`);
+                }
+                return {
+                  number: pull.number,
+                  state: pull.merged_at ? 'MERGED' : pull.state.toUpperCase(),
+                  base: pull.base.ref,
+                  draft: Boolean(pull.draft),
+                  title,
+                  body,
+                  updatedAt: pull.updated_at,
+                  mergedAt: pull.merged_at,
+                };
+              });
+            fs.writeFileSync(process.env.SNAPSHOT_PATH, JSON.stringify({
+              schemaVersion: 1,
+              complete: true,
+              truncated: false,
+              baseBranch: base,
+              eventType: 'schedule',
+              candidatePrNumbers: [],
+              generatedAt: new Date().toISOString(),
+              pullRequests,
+            }));
+      - name: Render watchdog body
+        id: reconcile
+        env:
+          SNAPSHOT_PATH: ${{ runner.temp }}/roadmap-snapshot.json
+          REPORT_PATH: ${{ runner.temp }}/roadmap-watchdog.md
+        run: |
+          set +e
+          node scripts/roadmap-controller.mjs --snapshot "$SNAPSHOT_PATH" --output "$REPORT_PATH"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Create or update tracking issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          REPORT_PATH: ${{ runner.temp }}/roadmap-watchdog.md
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- crystal-ball-roadmap-controller:v1 -->';
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            if (!body.includes(marker)) throw new Error('watchdog report marker is missing');
+            const limit = 512;
+            const issues = [];
+            for (let page = 1; issues.length <= limit; page += 1) {
+              const { data } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100,
+                page,
+              });
+              const remaining = limit + 1 - issues.length;
+              issues.push(...data.slice(0, remaining));
+              if (data.length < 100 || issues.length > limit) break;
+            }
+            if (issues.length > limit) throw new Error('open issue scan exceeds 512 entries');
+            const matches = issues.filter((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
+            if (matches.length > 1) throw new Error('multiple roadmap watchdog issues found');
+            if (matches.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '[Roadmap Controller] Program status',
+                body,
+              });
+            } else if ((matches[0].body ?? '') !== body) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: matches[0].number,
+                body,
+              });
+            }
+      - name: Enforce reconciliation result
+        env:
+          STATUS: ${{ steps.reconcile.outputs.status }}
+        run: exit "$STATUS"

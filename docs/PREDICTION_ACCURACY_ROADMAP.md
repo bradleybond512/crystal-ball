@@ -300,6 +300,8 @@ Reference: `docs/PREDICTION_UPLIFT_PLAN.md`, Workstream B3.
 
 Status: `DONE`
 
+PR: #1521
+
 Owner: Codex
 
 Branch: `codex/acc-104-authoritative-grading`
@@ -338,6 +340,8 @@ production build, offline smoke, lockfile, and secret-scan gates passed.
 ### ACC-105 — Resolution-quality audit
 
 Status: `DONE`
+
+PR: #1523
 
 Owner: Codex
 
@@ -378,6 +382,8 @@ driven by evidence instead of intuition.
 ### ACC-201 — Proper-scoring and cohort metrics
 
 Status: `DONE`
+
+PR: #1524
 
 Owner: Codex
 
@@ -433,6 +439,8 @@ audit, lockfile, documentation, and secret-scan gates passed.
 
 Status: `DONE`
 
+PR: #1525
+
 Owner: Codex
 
 Branch: `codex/acc-202-forecast-workbench`
@@ -473,6 +481,8 @@ overflow.
 ### ACC-203 — Diagnostics and MCP evaluation export
 
 Status: `DONE`
+
+PR: #1527
 
 Owner: Codex
 
@@ -747,6 +757,8 @@ Extend `src/services/cognition/shadow-rollout.ts`:
 
 Status: `DONE`
 
+PR: #1566
+
 Owner: Claude
 Branch: `claude/acc-402-promotion-gate`
 
@@ -792,6 +804,8 @@ typecheck:all, scoped ESLint.
 
 Status: `DONE`
 
+PR: #1571
+
 Owner: Claude
 Branch: `claude/acc-403-status-surface`
 
@@ -830,6 +844,8 @@ bench:forecast + bench:baselines unchanged.
 ### ACC-404 — First production promotion decision
 
 Status: `DONE`
+
+PR: #1592
 
 Owner: Claude
 Branch: `claude/acc-404-first-decision`
@@ -1622,6 +1638,8 @@ Landed: main `a7947ac4` ("fix: prevent spurious correlation rules"), jointly
 with ACC-504. Recorded retroactively — the implementation shipped without the
 tracker row being flipped, and this section documents it after the fact.
 
+PR: #1661
+
 Dependencies: ACC-501 (DONE)
 
 Outcome — delivered:
@@ -1660,6 +1678,8 @@ assertion.
 Status: `DONE`
 
 Landed: main `a7947ac4`, jointly with ACC-503.
+
+PR: #1661
 
 Dependencies: ACC-501 (DONE)
 
@@ -1767,6 +1787,11 @@ the reliability of predictions that resolved under different conditions.
 Status: `WAITING`
 
 Dependencies: ACC-505
+
+Exit condition: ACC-505 is `DONE` with its regime-conditional reliability
+contract and fallback threshold verified.
+
+Review after: 2026-09-01
 
 The `edge-confidence.ts` kernel multiplies six factors —
 `base × temporal × spatial × entity × reliability × regime`, clamped to
@@ -1909,6 +1934,11 @@ Status: `WAITING`
 
 Dependencies: ACC-204
 
+Exit condition: The current production cohort contains enough resolved and
+class-balanced evidence to issue a model-readiness verdict for every domain.
+
+Review after: 2026-09-07
+
 For every domain, report:
 
 - resolved outcomes and class balance;
@@ -1923,6 +1953,11 @@ Status: `WAITING`
 
 Dependencies: ACC-601 and at least 200 resolved, class-balanced-enough outcomes
 
+Exit condition: ACC-601 is `DONE` and records at least 200 resolved outcomes
+with usable class balance for an eligible domain.
+
+Review after: 2026-09-07
+
 Use regularized or hierarchical logistic prediction with domain/horizon priors.
 It must expose coefficients or feature contributions and run in shadow mode.
 
@@ -1931,6 +1966,11 @@ It must expose coefficients or feature contributions and run in shadow mode.
 Status: `WAITING`
 
 Dependencies: ACC-601 and at least 300 timestamped event/censoring records
+
+Exit condition: ACC-601 is `DONE` and records at least 300 usable timestamped
+event or censoring records.
+
+Review after: 2026-09-07
 
 Use a time-to-event model for questions such as escalation within a horizon.
 Score both occurrence probability and timing. Keep censoring explicit.
@@ -1942,6 +1982,11 @@ Status: `WAITING`
 Dependencies: ACC-601 and at least 1,000 resolved records with at least 100
 positive and 100 negative outcomes in the training cohort
 
+Exit condition: ACC-601 is `DONE` and records at least 1,000 resolved outcomes,
+including at least 100 outcomes in each class, for an eligible cohort.
+
+Review after: 2026-09-07
+
 Use only lagged, prediction-time-available features. Compare against the
 regularized model and base rate. Reject it if the added complexity does not
 improve the frozen walk-forward benchmark.
@@ -1951,6 +1996,11 @@ improve the frozen walk-forward benchmark.
 Status: `WAITING`
 
 Dependencies: ACC-602 or ACC-604
+
+Exit condition: ACC-602 or ACC-604 is `DONE` with a frozen comparison cohort
+that can support the ablation.
+
+Review after: 2026-09-07
 
 Compare:
 
@@ -2056,6 +2106,11 @@ Status: `WAITING`
 
 Dependencies: all earlier phases required by the completion definition
 
+Exit condition: All earlier required phases are terminal and a complete 30-day
+production evidence window is available for the closure checks.
+
+Review after: 2026-09-23
+
 Record:
 
 - matched-cohort benchmark versus the 2026-07-26 starting point;
@@ -2069,6 +2124,11 @@ Record:
 Status: `WAITING`
 
 Dependencies: ACC-703 and all tasks `DONE` or `REJECTED`
+
+Exit condition: ACC-703 is `DONE` and every other roadmap task is `DONE` or
+evidence-backed `REJECTED`.
+
+Review after: 2026-09-24
 
 Update this document to `COMPLETE`, move superseded implementation details to
 the archive, update `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md`, and leave the

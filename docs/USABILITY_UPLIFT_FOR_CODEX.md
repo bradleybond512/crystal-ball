@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-23
 - **Author:** Claude; corrected after Codex audit of `origin/main` @ `3bf6d23e`
-- **Status:** ACTIVE — UX-000 IN PROGRESS in PR #1660; browser CI and packaged desktop verification pending
+- **Status:** ACTIVE — UX-000 MONITOR after merged PR #1660; packaged desktop verification pending
 - **Audience:** Codex / ChatGPT sessions working this repo
 - **Companion docs:** [`docs/superpowers/specs/2026-06-14-grand-strategy-survival-os-design.md`](superpowers/specs/2026-06-14-grand-strategy-survival-os-design.md) (the north star this measures against)
 
@@ -202,6 +202,11 @@ single stale number without reflowing the surrounding prose.
 
 ### UX-000 — Zero-key first-run contract *(do this before UX-001)*
 
+Exit condition: Packaged desktop verification confirms the merged zero-key
+first-run contract on the installed app.
+
+Review after: 2026-08-31
+
 The packaged zero-key runtime is still unmeasured. Static wiring shows only that
 credentials are not universally required; it does not establish network,
 upstream, provider, or data availability: 50 of 58 definitions in
@@ -244,6 +249,8 @@ The first visible state is still misleading and not decision-useful:
 
 ### UX-001 — Posture band on the Home Shell
 
+Dependencies: UX-000
+
 Add survival posture to the default surface as a fourth briefing band.
 
 - **Read from:** `storm-posture-state` — already an entry point, already fed live
@@ -266,6 +273,8 @@ Add survival posture to the default surface as a fourth briefing band.
   honest no-snapshot/stale state.
 
 ### UX-002 — "Best move now" + commit on the posture band
+
+Dependencies: UX-001
 
 - **Read from:** `buildSurvivalOutlook(...).decision.recommendedMoveId`, whose
   ranking path is `projectPostureTrajectory` → `buildWorldBranches` →
@@ -313,6 +322,11 @@ consumes it).
 - This is the task that actually pays down the panel count instead of managing it.
 
 ### UX-005 — Wire stable identity and mount the personal lens *(High Assurance)*
+
+Exit condition: A producer-to-renderer stable-identity design is approved and
+merged with explicit timeline-opacity composition rules.
+
+Review after: 2026-09-01
 
 Standardize stable identity at both incoming-event production and Cesium
 entity-creation boundaries, compose existing timeline opacity with lens styling,
@@ -462,7 +476,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | IN PROGRESS | #1660 |
+| UX-000 | Zero-key first-run contract | MONITOR | #1660 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | NOT STARTED | — |

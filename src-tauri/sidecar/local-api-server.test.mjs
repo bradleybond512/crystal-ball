@@ -2418,6 +2418,93 @@ test('renderer-only map credential validation fails closed on unknown Google sta
   }
 });
 
+const GOOGLE_DIRECTIONS_NON_SUCCESS_STATUSES = [
+  'NOT_FOUND',
+  'MAX_WAYPOINTS_EXCEEDED',
+  'MAX_ROUTE_LENGTH_EXCEEDED',
+  'INVALID_REQUEST',
+  'OVER_DAILY_LIMIT',
+  'OVER_QUERY_LIMIT',
+  'UNKNOWN_ERROR',
+];
+
+for (const status of GOOGLE_DIRECTIONS_NON_SUCCESS_STATUSES) {
+  test(`renderer-only map credential validation fails closed on Google ${status}`, async () => {
+ const submittedSecret = `google-${status.toLowerCase()}-canary-e5j1`;
+ let requestedOptions = null;
+ const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({
+ status,
+ error_message: `Provider detail for ${submittedSecret}`,
+ }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+ });
+
+ try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 422);
+ const text = await response.text();
+ assert.doesNotMatch(text, new RegExp(submittedSecret));
+ assert.deepEqual(JSON.parse(text), {
+ valid: false,
+ message: 'Google Maps could not verify this key',
+ });
+ });
+ } finally {
+ restoreHttps();
+ }
+  });
+}
+
+test('renderer-only map credential validation accepts Google ZERO_RESULTS as successful authentication', async () => {
+  const submittedSecret = 'google-zero-results-canary-f6k2';
+  let requestedOptions = null;
+  const restoreHttps = mockHttpsRequestOnce({
+ statusCode: 200,
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify({ status: 'ZERO_RESULTS', routes: [] }),
+ onRequest(options) {
+ requestedOptions = options;
+ },
+  });
+
+  try {
+ await withSecuredSidecar(async (port, token) => {
+ const response = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'GOOGLE_MAPS_API_KEY', value: submittedSecret }),
+ });
+
+ assert.ok(requestedOptions, 'Google validation must reach the provider branch');
+ assert.equal(response.status, 200);
+ assert.deepEqual(await response.json(), {
+ valid: true,
+ message: 'Google Maps key verified (Directions API)',
+ });
+ });
+  } finally {
+ restoreHttps();
+  }
+});
+
 test('rejects unauthenticated POST to /api/local-env-update', async () => {
   await withSecuredSidecar(async (port) => {
  const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {

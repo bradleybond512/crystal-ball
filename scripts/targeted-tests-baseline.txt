@@ -642,3 +642,7 @@ api/usgs-water-proxy.js
 # ESLint ratchet rollout bridge: main's trusted runner cannot see this PR's
 # OVERRIDES. Remove this entry after the mapping lands on main.
 scripts/lint-baseline.mjs
+# UX-003 Emergency Readiness rollout bridge: main's trusted runner cannot see
+# this PR's OVERRIDES. Remove these two entries after the mappings land on main.
+src/config/panel-metadata.ts
+src/config/panels.ts

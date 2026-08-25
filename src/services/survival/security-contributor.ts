@@ -12,11 +12,20 @@ import type { ForecastSnapshot } from '../mode-forecast.ts';
 import type { PostureThreat } from './survival-types.ts';
 import { severityToThreatLevel } from './survival-types.ts';
 import type { PostureContributor } from './posture-contributor.ts';
+import { MODE_FORECAST_THREAT_SOURCE_IDS } from './mode-forecast-threats.ts';
 import { formatDurationMinutes } from '../../utils/format-duration.ts';
 
 const MAPPED = [
-  { domain: 'security' as const, hazardLabel: 'Security pressure elevated', sourceEventId: 'security-pressure' },
-  { domain: 'cyber' as const, hazardLabel: 'Cyber threat pressure elevated', sourceEventId: 'cyber-pressure' },
+  {
+    domain: 'security' as const,
+    hazardLabel: 'Security pressure elevated',
+    sourceEventId: MODE_FORECAST_THREAT_SOURCE_IDS.security,
+  },
+  {
+    domain: 'cyber' as const,
+    hazardLabel: 'Cyber threat pressure elevated',
+    sourceEventId: MODE_FORECAST_THREAT_SOURCE_IDS.cyber,
+  },
 ];
 
 export function makeSecurityContributor(snapshot: ForecastSnapshot): PostureContributor {

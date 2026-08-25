@@ -19,6 +19,7 @@ import {
   type HypothesisType,
 } from './competitive-hypothesis';
 import { recordAlgorithmEvaluation } from '../algorithms/record-evaluation';
+import { CrossEventCorrelationHandoff } from '../correlation/cross-event-correlation-handoff';
 import type { ObservationEvent } from '@/types/intelligence';
 
 // ── Alignment classification ──────────────────────────────────────────────
@@ -161,6 +162,7 @@ export interface BridgeOptions {
    * instead of being starved through a 30s+ situation/hypothesis storm.
    */
   schedule?: (cb: () => void) => void;
+  correlationSchedule?: (cb: () => void) => (() => void) | void;
 }
 
 function seedSituation(
@@ -274,6 +276,12 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const bus = options.observationBus ?? onIngest;
   const onHypothesisRefuted = options.onHypothesisRefuted;
   const schedule = options.schedule ?? ((cb: () => void): void => { cb(); });
+  const correlationHandoff = new CrossEventCorrelationHandoff({
+    schedule: options.correlationSchedule,
+    correlate: (current, history) => {
+      store.publishIncrementalCorrelation(current, history);
+    },
+  });
 
   const tracked = new Map<string, SituationTrackingState>();
 
@@ -335,6 +343,7 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
       }
     }
     stats.loopMs += perfNow() - t1;
+    correlationHandoff.offer(event);
   };
 
   const logSettleStats = (): void => {
@@ -357,14 +366,25 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const drain = (): void => {
     if (stopped) { draining = false; return; }
     const event = queue.shift();
-    if (event === undefined) { draining = false; logSettleStats(); return; }
+    if (event === undefined) {
+      draining = false;
+      logSettleStats();
+      correlationHandoff.resume();
+      return;
+    }
     try { processEvent(event); } finally { schedule(drain); }
   };
 
-  _cancelQueue = (): void => { stopped = true; queue.length = 0; draining = false; };
+  _cancelQueue = (): void => {
+    stopped = true;
+    queue.length = 0;
+    draining = false;
+    correlationHandoff.stop();
+  };
 
   _unsubscribe = bus((event: ObservationEvent) => {
     if (stopped) return;
+    correlationHandoff.pause();
     queue.push(event);
     if (!draining) { draining = true; schedule(drain); }
   });
@@ -379,5 +399,5 @@ export const __internals = {
   isSeverityDecreasing,
   SEVERITY_RANK,
   /** Test seam: clear the module-level idempotency flag between tests. */
-  reset(): void { _unsubscribe = null; },
+  reset(): void { stopSituationHypothesisBridge(); },
 };

@@ -16,6 +16,12 @@ import {
 import type { ObservationEvent } from '@/types/intelligence';
 import type { RecordEvaluationInput } from '../../algorithms/record-evaluation.ts';
 import type { AlgorithmDomain, EvaluationRecord } from '../../algorithms/algorithm-evaluation-ledger.ts';
+import { syncLearnedRules } from '../../correlation/learned-rules.ts';
+import {
+  __resetCorrelationLivenessForTests,
+  getCorrelationLivenessDiagnostics,
+} from '../../correlation/correlation-liveness.ts';
+import { CorrelateEngine, type CorrelationRule } from '../correlate-engine.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -518,4 +524,94 @@ test('default (no scheduler) still processes synchronously — semantics preserv
   fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'usgs-primary' }));
   // No scheduler injected → synchronous default → processed immediately.
   assert.ok(store.list().length >= 1, 'event processed synchronously with default scheduler');
+});
+
+test('priority ingest drains before bounded correlation and learned liveness recovers', () => {
+  __internals.reset();
+  __resetCorrelationLivenessForTests();
+  const ingressCallbacks: Array<() => void> = [];
+  const correlationCallbacks: Array<() => void> = [];
+  const schedule = (callback: () => void): void => { ingressCallbacks.push(callback); };
+  const correlationSchedule = (callback: () => void): (() => void) => {
+    let cancelled = false;
+    correlationCallbacks.push(() => {
+      if (!cancelled) callback();
+    });
+    return () => { cancelled = true; };
+  };
+  const correlationEngine = new CorrelateEngine();
+  const learnedRule: CorrelationRule = {
+    id: 'learned:weather->infra',
+    name: 'fixture learned rule',
+    description: 'fixture',
+    domains: ['weather', 'infra'],
+    timeWindowMs: 60_000,
+    edgeType: 'causal-candidate',
+    matchFn: (a, b) => (
+      a.domain === 'weather'
+      && b.domain === 'infra'
+      && b.timestamp > a.timestamp
+    ),
+  };
+  const store = new SituationStoreV2({
+    engine: correlationEngine,
+    clock: () => BASE_TIME,
+    diagnosticsMode: 'live',
+  });
+  syncLearnedRules(correlationEngine, [learnedRule]);
+  const hypothesisEngine = new CompetitiveHypothesisEngine({
+    storage: nullStorage,
+    clock: () => BASE_TIME,
+  });
+  let busListener: ((event: ObservationEvent) => void) | null = null;
+  let learnedPairs = 0;
+  store.addPairListener((pairs) => {
+    learnedPairs += pairs.filter((pair) => pair.ruleId === learnedRule.id).length;
+  });
+  const stop = startSituationHypothesisBridge({
+    store,
+    engine: hypothesisEngine,
+    clock: () => BASE_TIME,
+    observationBus: (listener) => {
+      busListener = listener;
+      return () => { busListener = null; };
+    },
+    schedule,
+    correlationSchedule,
+  });
+
+  for (let index = 0; index < 3; index += 1) {
+    busListener!(makeEvent({
+      id: `weather-${index}`,
+      domain: 'weather',
+      timestamp: BASE_TIME - 10_000 + index,
+    }));
+  }
+  busListener!(makeEvent({ id: 'infra', domain: 'infra', timestamp: BASE_TIME }));
+
+  assert.equal(correlationCallbacks.length, 0);
+  ingressCallbacks.shift()?.();
+  assert.equal(correlationCallbacks.length, 0);
+  while (ingressCallbacks.length > 0) ingressCallbacks.shift()?.();
+
+  const situationsBeforeCorrelation = store.list();
+  assert.equal(correlationCallbacks.length, 1);
+  assert.equal(getCorrelationLivenessDiagnostics(BASE_TIME).status, 'degraded');
+  assert.equal(learnedPairs, 0);
+
+  while (correlationCallbacks.length > 0) correlationCallbacks.shift()?.();
+
+  const recovered = getCorrelationLivenessDiagnostics(BASE_TIME);
+  assert.equal(learnedPairs, 3);
+  assert.equal(recovered.status, 'healthy');
+  assert.equal(recovered.reason, 'learned_rules_active');
+  assert.equal(recovered.live.batchCount, 5);
+  assert.deepEqual(recovered.live.batchSizeDistribution, {
+    singleton: 5,
+    small: 0,
+    medium: 0,
+    large: 0,
+  });
+  assert.deepEqual(store.list(), situationsBeforeCorrelation);
+  stop();
 });

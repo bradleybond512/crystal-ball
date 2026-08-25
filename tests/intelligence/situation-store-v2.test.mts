@@ -144,6 +144,51 @@ test('two distant unrelated observations → 2 separate situations', () => {
   assert.equal(store.list().length, 2);
 });
 
+test('incremental correlation publishes pairs without situation or persistence fan-out', () => {
+  __storage.clear();
+  const engine = new CorrelateEngine();
+  engine.registerRule({
+    id: 'learned:weather->infra',
+    name: 'fixture learned rule',
+    description: 'fixture',
+    domains: ['weather', 'infra'],
+    timeWindowMs: 60_000,
+    edgeType: 'causal-candidate',
+    matchFn: (a, b) => a.domain === 'weather' && b.domain === 'infra',
+  });
+  let persistenceSchedules = 0;
+  const store = new SituationStoreV2({
+    engine,
+    clock: () => NOW,
+    persistenceScheduler: () => {
+      persistenceSchedules += 1;
+      return () => {};
+    },
+  });
+  const weather = makeEvent({ id: 'incremental-weather', domain: 'weather', timestamp: NOW - 1 });
+  const infra = makeEvent({ id: 'incremental-infra', domain: 'infra', timestamp: NOW });
+  store.ingest([weather]);
+  store.ingest([infra]);
+  const before = store.list();
+  const schedulesBefore = persistenceSchedules;
+  let mutationCalls = 0;
+  let situationCalls = 0;
+  let pairCalls = 0;
+  store.subscribeMutations(() => { mutationCalls += 1; });
+  store.subscribe(() => { situationCalls += 1; });
+  store.addPairListener((pairs) => { pairCalls += pairs.length; });
+
+  const result = store.publishIncrementalCorrelation(infra, [weather]);
+
+  assert.equal(result.pairs.length, 1);
+  assert.equal(result.pairs[0]!.ruleId, 'learned:weather->infra');
+  assert.equal(pairCalls, 1);
+  assert.equal(mutationCalls, 0);
+  assert.equal(situationCalls, 0);
+  assert.equal(persistenceSchedules, schedulesBefore);
+  assert.deepEqual(store.list(), before);
+});
+
 // ── Severity rollup ──────────────────────────────────────────────────
 
 test('severity = critical when any observation is CRITICAL', () => {

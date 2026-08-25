@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "12c70e30b3a006c517881225c0a6ceeb9c5e597f",
+  "reviewer": "claude",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-08-25T23:11:35.012Z",
+  "evidence": "Review: commit 12c70e30 — \"test: make renderer harness self-contained\"\n\nChange under review: a single added line at src/components/__tests__/emergency-readiness-panel.test.mts:5:\n\nimport '../../../tests/panels/register-hook.mjs';\n\nFindings\n\nNo blocking findings.\n\nThe change is minimal, conforms to an established pattern, correctly targets the dynamic import, and preserves the deliberate false-green defenses. No CI hazard, no regression, no false-green introduced.\n\nTest gaps / residual risk (non-blocking)\n\n- No guard that the loader hook is actually active beyond the panel importing successfully. Acceptable — a mis-pathed hook surfaces as a loud PanelClass() failure, not a silent pass.\n- Process isolation is an existing property of the six-file convention and is not introduced by this change.\n\nVERDICT: PASS"
+}

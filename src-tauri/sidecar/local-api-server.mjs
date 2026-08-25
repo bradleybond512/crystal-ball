@@ -1600,8 +1600,10 @@ const VALIDATABLE_SECRET_KEYS = new Set([
   'GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'CESIUM_ION_TOKEN',
 ]);
 
+const GOOGLE_DIRECTIONS_ACCEPTED_STATUSES = new Set(['OK', 'ZERO_RESULTS']);
+
 const GOOGLE_DIRECTIONS_STATUSES = new Set([
-  'OK', 'ZERO_RESULTS', 'NOT_FOUND', 'MAX_WAYPOINTS_EXCEEDED',
+  ...GOOGLE_DIRECTIONS_ACCEPTED_STATUSES, 'NOT_FOUND', 'MAX_WAYPOINTS_EXCEEDED',
   'MAX_ROUTE_LENGTH_EXCEEDED', 'INVALID_REQUEST', 'OVER_DAILY_LIMIT',
   'OVER_QUERY_LIMIT', 'REQUEST_DENIED', 'UNKNOWN_ERROR',
 ]);
@@ -6139,6 +6141,9 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  return fail(`Google Maps key valid but Directions API isn't enabled — see APIs & Services → Library`);
  }
  return fail('Google Maps rejected this key');
+ }
+ if (!GOOGLE_DIRECTIONS_ACCEPTED_STATUSES.has(payload.status)) {
+ return fail('Google Maps could not verify this key');
  }
  if (!response.ok) return fail(`Google Maps probe failed (${response.status})`);
  return ok('Google Maps key verified (Directions API)');

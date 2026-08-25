@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test, { beforeEach } from 'node:test';
 
+import '../../../tests/panels/register-hook.mjs';
 import { clearFetchCalls, getFetchCalls, happyWindow } from '../../../tests/panels/setup-dom.mts';
 import type { SavedPlace } from '../../services/saved-places.ts';
 import { buildSnapshot } from '../../services/survival/world-snapshot.ts';

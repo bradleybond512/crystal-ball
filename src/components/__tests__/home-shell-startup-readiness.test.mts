@@ -1,10 +1,35 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { Window } from 'happy-dom';
 
 import { createHomeShellStartupReadiness } from '../HomeShellStartupReadiness.ts';
+import { buildContextualDeckView } from '../../services/home-shell/contextual-deck-view.ts';
 import type { HomeShellReadinessView } from '../../services/home-shell/startup-readiness-view.ts';
 import type { WorldSnapshot } from '../../services/survival/survival-types.ts';
+
+const READY_CONTEXTUAL_PROJECTION = {
+  kind: 'ready' as const,
+  build: buildContextualDeckView,
+};
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushAsync(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function installDom(): Window {
   const happyWindow = new Window({ url: 'https://crystalball.app/' });
@@ -211,6 +236,303 @@ test('the explicit Open panel action mounts a no-report panel in the focus host'
   shell.destroy();
 });
 
+test('contextual projection stays behind a dynamic production boundary', async () => {
+  const source = await readFile(new URL('../HomeShellOverlay.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(
+    source,
+    /import\s+(?!type\b)[^;]+\sfrom\s*['"]@\/services\/home-shell\/contextual-deck-view['"];/,
+  );
+  assert.match(
+    source,
+    /import\(\s*['"]@\/services\/home-shell\/contextual-deck-view['"]\s*\)/,
+  );
+});
+
+test('lazy contextual projection does no constructor or mount work and loads once on show', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  const load = deferred<typeof buildContextualDeckView>();
+  const hydrate = deferred<void>();
+  let loads = 0;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualProjection: {
+      kind: 'lazy',
+      load: () => { loads += 1; return load.promise; },
+    },
+    contextualSnapshotSource: {
+      get: () => contextualSnapshot(),
+      subscribe: () => () => {},
+      hydrate: () => hydrate.promise,
+    },
+  });
+
+  assert.equal(loads, 0);
+  shell.mount(parent);
+  assert.equal(loads, 0);
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  assert.equal(loads, 1);
+  assert.equal(section?.dataset.state, 'checking');
+  assert.match(section?.textContent ?? '', /loading contextual guidance/i);
+
+  shell.hide();
+  shell.show();
+  assert.equal(loads, 1);
+  shell.destroy();
+  load.resolve(buildContextualDeckView);
+  hydrate.resolve();
+  await flushAsync();
+});
+
+test('lazy projection and hydration use the latest snapshot in either completion order', async () => {
+  for (const completionOrder of ['projection-first', 'hydration-first'] as const) {
+    const happyWindow = installDom();
+    const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+    const parent = happyWindow.document.createElement('main');
+    happyWindow.document.body.append(parent);
+    const load = deferred<typeof buildContextualDeckView>();
+    const hydrate = deferred<void>();
+    let current: WorldSnapshot | null = null;
+    let loads = 0;
+    const shell = new HomeShellOverlay({
+      getPanel: () => undefined,
+      ensurePanel: async () => undefined,
+      now: () => CONTEXT_NOW,
+      contextualProjection: {
+        kind: 'lazy',
+        load: () => { loads += 1; return load.promise; },
+      },
+      contextualSnapshotSource: {
+        get: () => current,
+        subscribe: () => () => {},
+        hydrate: () => hydrate.promise,
+      },
+    });
+    shell.mount(parent);
+    shell.show();
+    const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+    assert.equal(section?.dataset.state, 'checking', completionOrder);
+    current = contextualSnapshot();
+
+    if (completionOrder === 'projection-first') {
+      load.resolve(buildContextualDeckView);
+      await flushAsync();
+      assert.equal(section?.dataset.state, 'active', completionOrder);
+      hydrate.resolve();
+    } else {
+      hydrate.resolve();
+      await flushAsync();
+      assert.equal(section?.dataset.state, 'checking', completionOrder);
+      load.resolve(buildContextualDeckView);
+    }
+    await flushAsync();
+
+    assert.equal(loads, 1, completionOrder);
+    assert.equal(section?.dataset.state, 'active', completionOrder);
+    assert.ok(section?.querySelector('[data-panel-key="local-logistics"]'), completionOrder);
+    shell.destroy();
+  }
+});
+
+test('a hidden lazy resolution caches without touching DOM and renders synchronously on reshow', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  const load = deferred<typeof buildContextualDeckView>();
+  const hydrate = deferred<void>();
+  let gets = 0;
+  let loads = 0;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualProjection: {
+      kind: 'lazy',
+      load: () => { loads += 1; return load.promise; },
+    },
+    contextualSnapshotSource: {
+      get: () => { gets += 1; return contextualSnapshot(); },
+      subscribe: () => () => {},
+      hydrate: () => hydrate.promise,
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  assert.equal(section?.dataset.state, 'checking');
+  shell.hide();
+
+  load.resolve(buildContextualDeckView);
+  await flushAsync();
+  assert.equal(section?.dataset.state, 'checking');
+  assert.equal(gets, 0);
+
+  shell.show();
+  assert.equal(loads, 1);
+  assert.equal(gets, 2);
+  assert.equal(section?.dataset.state, 'active');
+  shell.destroy();
+  hydrate.resolve();
+  await flushAsync();
+});
+
+test('a hidden lazy rejection preserves checking DOM and renders cached failure on reshow', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  const load = deferred<typeof buildContextualDeckView>();
+  void load.promise.catch(() => {});
+  let gets = 0;
+  let loads = 0;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualProjection: {
+      kind: 'lazy',
+      load: () => { loads += 1; return load.promise; },
+    },
+    contextualSnapshotSource: {
+      get: () => { gets += 1; return contextualSnapshot(); },
+      subscribe: () => () => {},
+      hydrate: async () => {},
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  const checkingNode = section?.firstElementChild;
+  const checkingText = section?.textContent;
+  assert.equal(section?.dataset.state, 'checking');
+  shell.hide();
+
+  load.reject(new Error('contextual chunk unavailable'));
+  await flushAsync();
+  assert.equal(section?.dataset.state, 'checking');
+  assert.equal(section?.firstElementChild, checkingNode);
+  assert.equal(section?.textContent, checkingText);
+  assert.equal(gets, 0);
+
+  shell.show();
+  assert.equal(section?.dataset.state, 'unavailable');
+  assert.match(section?.textContent ?? '', /use your deck or library to open panels/i);
+  assert.equal(loads, 1);
+  shell.hide();
+  shell.show();
+  assert.equal(loads, 1);
+  shell.destroy();
+});
+
+test('destroyed lazy projection completions never render or access the detached section', async () => {
+  for (const outcome of ['resolve', 'reject'] as const) {
+    const happyWindow = installDom();
+    const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+    const parent = happyWindow.document.createElement('main');
+    happyWindow.document.body.append(parent);
+    const load = deferred<typeof buildContextualDeckView>();
+    void load.promise.catch(() => {});
+    let loads = 0;
+    let gets = 0;
+    let builderCalls = 0;
+    let detachedWrites = 0;
+    const builder: typeof buildContextualDeckView = (inputs, now) => {
+      builderCalls += 1;
+      return buildContextualDeckView(inputs, now);
+    };
+    const shell = new HomeShellOverlay({
+      getPanel: () => undefined,
+      ensurePanel: async () => undefined,
+      now: () => CONTEXT_NOW,
+      contextualProjection: {
+        kind: 'lazy',
+        load: () => { loads += 1; return load.promise; },
+      },
+      contextualSnapshotSource: {
+        get: () => { gets += 1; return contextualSnapshot(); },
+        subscribe: () => () => {},
+        hydrate: async () => {},
+      },
+    });
+    shell.mount(parent);
+    shell.show();
+    const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+    shell.destroy();
+    if (section) section.replaceChildren = () => { detachedWrites += 1; };
+
+    if (outcome === 'resolve') load.resolve(builder);
+    else load.reject(new Error('contextual chunk unavailable'));
+    await flushAsync();
+
+    assert.equal(loads, 1, outcome);
+    assert.equal(gets, 0, outcome);
+    assert.equal(builderCalls, 0, outcome);
+    assert.equal(detachedWrites, 0, outcome);
+    assert.equal(parent.querySelector('.home-shell-contextual'), null, outcome);
+  }
+});
+
+test('a visible lazy rejection is stable, fail-closed, and leaves Your Deck usable', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  const panelGrid = happyWindow.document.createElement('div');
+  panelGrid.id = 'panelsGrid';
+  const panelElement = happyWindow.document.createElement('section');
+  panelGrid.append(panelElement);
+  happyWindow.document.body.append(parent, panelGrid);
+  const load = deferred<typeof buildContextualDeckView>();
+  void load.promise.catch(() => {});
+  let loads = 0;
+  const requested: string[] = [];
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async (panelId) => {
+      requested.push(panelId);
+      return { getElement: () => panelElement };
+    },
+    now: () => CONTEXT_NOW,
+    contextualProjection: {
+      kind: 'lazy',
+      load: () => { loads += 1; return load.promise; },
+    },
+    contextualSnapshotSource: {
+      get: () => contextualSnapshot(),
+      subscribe: () => () => {},
+      hydrate: async () => {},
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  load.reject(new Error('contextual chunk unavailable'));
+  await flushAsync();
+
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  assert.equal(section?.dataset.state, 'unavailable');
+  assert.match(section?.textContent ?? '', /use your deck or library to open panels/i);
+  assert.equal(section?.querySelector('[data-action="context-open"]'), null);
+  assert.equal(section?.querySelector('[data-action*="retry"]'), null);
+  const deckOpen = parent.querySelector<HTMLButtonElement>('.home-shell-deck [data-action="open"]');
+  assert.ok(deckOpen);
+  deckOpen?.click();
+  await flushAsync();
+  assert.equal(requested.length, 1);
+
+  shell.hide();
+  shell.show();
+  assert.equal(loads, 1);
+  assert.equal(section?.dataset.state, 'unavailable');
+  assert.match(section?.textContent ?? '', /use your deck or library to open panels/i);
+  shell.destroy();
+});
+
 test('contextual posture does no hidden work, subscribes before one hydration, and unsubscribes while hidden', async () => {
   const happyWindow = installDom();
   const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
@@ -223,6 +545,7 @@ test('contextual posture does no hidden work, subscribes before one hydration, a
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => { order.push('get'); return null; },
       subscribe: (callback) => {
@@ -261,6 +584,7 @@ test('the 10-second shell refresh marks a snapshot stale after time crosses the 
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => now,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => contextualSnapshot(),
       subscribe: () => () => { postureEvents += 1; },
@@ -299,6 +623,7 @@ test('hide and destroy invalidate a pending contextual hydration completion', as
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => { gets += 1; return null; },
       subscribe: () => () => {},
@@ -328,6 +653,7 @@ test('a pending first hydration settles into the currently visible reshow genera
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => null,
       subscribe: () => () => {},
@@ -364,6 +690,7 @@ test('an unchanged contextual projection preserves its focused DOM node and defe
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => current,
       subscribe: (callback) => { listener = callback; return () => { listener = undefined; }; },
@@ -408,6 +735,7 @@ test('a focused contextual A to B to A update cancels the obsolete deferred B vi
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => current,
       subscribe: (callback) => { listener = callback; return () => { listener = undefined; }; },
@@ -447,6 +775,7 @@ test('the Deck hint reveals actionable contextual suggestions before falling thr
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => current,
       subscribe: (callback) => { listener = callback; return () => { listener = undefined; }; },
@@ -488,6 +817,7 @@ test('contextual Open leaves persisted pins byte-for-byte unchanged and exposes 
     getPanel: () => undefined,
     ensurePanel: async (panelId) => { requested.push(panelId); return { getElement: () => panelElement }; },
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => contextualSnapshot(),
       subscribe: () => () => {},
@@ -521,6 +851,7 @@ test('persisting a pin immediately removes its canonical contextual suggestion',
     getPanel: () => undefined,
     ensurePanel: async () => undefined,
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => contextualSnapshot(),
       subscribe: () => () => {},
@@ -555,6 +886,7 @@ test('a runtime-disabled contextual panel uses the existing classic fallback', a
     getPanel: () => undefined,
     ensurePanel: async () => ({ getElement: () => disabled }),
     now: () => CONTEXT_NOW,
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
     contextualSnapshotSource: {
       get: () => contextualSnapshot(),
       subscribe: () => () => {},

@@ -144,3 +144,18 @@ export function applyExpiredLifelineEvidenceTransition(
   effects.publishSnapshot(snapshot);
   return true;
 }
+
+export function applyLifelineExpiryTransition(
+  snapshot: LocalLogisticsSnapshot,
+  kind: LifelineExpiryKind,
+  effects: ExpiredLifelineEvidenceEffects,
+): boolean {
+  if (kind === 'evidence') return applyExpiredLifelineEvidenceTransition(snapshot, effects);
+  const identity = {
+    placeId: snapshot.placeId,
+    queryFingerprint: snapshot.queryFingerprint,
+  };
+  if (!effects.isCurrent(identity)) return false;
+  effects.renderAtExpiry();
+  return true;
+}

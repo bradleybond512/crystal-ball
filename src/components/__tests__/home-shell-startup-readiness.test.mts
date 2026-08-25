@@ -383,6 +383,54 @@ test('a hidden lazy resolution caches without touching DOM and renders synchrono
   await flushAsync();
 });
 
+test('a hidden lazy rejection preserves checking DOM and renders cached failure on reshow', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  const load = deferred<typeof buildContextualDeckView>();
+  void load.promise.catch(() => {});
+  let gets = 0;
+  let loads = 0;
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async () => undefined,
+    now: () => CONTEXT_NOW,
+    contextualProjection: {
+      kind: 'lazy',
+      load: () => { loads += 1; return load.promise; },
+    },
+    contextualSnapshotSource: {
+      get: () => { gets += 1; return contextualSnapshot(); },
+      subscribe: () => () => {},
+      hydrate: async () => {},
+    },
+  });
+  shell.mount(parent);
+  shell.show();
+  const section = parent.querySelector<HTMLElement>('.home-shell-contextual');
+  const checkingNode = section?.firstElementChild;
+  const checkingText = section?.textContent;
+  assert.equal(section?.dataset.state, 'checking');
+  shell.hide();
+
+  load.reject(new Error('contextual chunk unavailable'));
+  await flushAsync();
+  assert.equal(section?.dataset.state, 'checking');
+  assert.equal(section?.firstElementChild, checkingNode);
+  assert.equal(section?.textContent, checkingText);
+  assert.equal(gets, 0);
+
+  shell.show();
+  assert.equal(section?.dataset.state, 'unavailable');
+  assert.match(section?.textContent ?? '', /use your deck or library to open panels/i);
+  assert.equal(loads, 1);
+  shell.hide();
+  shell.show();
+  assert.equal(loads, 1);
+  shell.destroy();
+});
+
 test('destroyed lazy projection completions never render or access the detached section', async () => {
   for (const outcome of ['resolve', 'reject'] as const) {
     const happyWindow = installDom();

@@ -129,6 +129,12 @@ test('Lifelines capture requires the exact cached snapshot and its current verif
     { getVerifiedLifelinesReceipt: () => null },
     { getLifelinesSnapshot: () => ({ placeId: PLACE_ID, queryFingerprint: 'stale-query' }) },
     { getVerifiedLifelinesReceipt: () => ({
+      placeId: PLACE_ID,
+      capturedAt: new Date(NOW - 30_000),
+      expiresAt: new Date(NOW + 60 * 60_000),
+      isExpired: false,
+    }) },
+    { getVerifiedLifelinesReceipt: () => ({
       placeId: 'other', capturedAt: new Date(NOW), expiresAt: new Date(NOW + 1), isExpired: false,
     }) },
     { getVerifiedLifelinesReceipt: () => ({
@@ -222,6 +228,15 @@ test('routes select two current exact place-bound candidates, expire at 24h, and
   assert.deepEqual(geometry.coordinates[0], routes[2]?.geometry.coordinates[0]);
   assert.deepEqual(geometry.coordinates.at(-1), routes[2]?.geometry.coordinates.at(-1));
   assert.equal((primary.steps as unknown[]).length, 1_000);
+
+  const onlyBoundaryStale = createSources({
+    getRoutes: () => [route('boundary-stale', routeFingerprint, NOW - 24 * 60 * 60_000)],
+  });
+  assert.equal(
+    await onlyBoundaryStale.sources['route-primary']?.(onlyBoundaryStale.scope),
+    null,
+    'a route exactly 24 hours old is expired and cannot be selected',
+  );
 });
 
 test('comms and contacts require consent and persist only selected contacts in a separate private body', async () => {

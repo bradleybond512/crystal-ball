@@ -124,3 +124,33 @@ test('ready copy is allowed only for all required exact receipts; an absent alte
   assertMarkup(html, /Optional.*not captured|not captured.*Optional/is, 'missing alternate route should stay optional');
   assert.equal((html.match(/data-readiness-card=/g) ?? []).length, 4);
 });
+
+test('an artifact that expires at render time revokes ready copy and offers an expired refresh', () => {
+  const project = requireFunction('projectEmergencyReadiness');
+  const render = requireFunction('renderEmergencyReadiness');
+  const required = ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'];
+  const emergencyPack = packInput({
+    readiness: {
+      status: 'ready',
+      packId: 'pack-expiring',
+      requiredKinds: required,
+      optionalKinds: ['route-alternate'],
+      receipts: required.map((kind) => ({
+        kind,
+        capturedAt: new Date(NOW - 60_000).toISOString(),
+        expiresAt: new Date(kind === 'offline-map' ? NOW : NOW + 60 * 60_000).toISOString(),
+        semanticState: 'verified',
+        summary: `${kind} verified`,
+      })),
+      missingKinds: [],
+      expiredKinds: [],
+    },
+    captureState: { status: 'complete', completed: 6, total: 6, message: 'Required pack captured.' },
+  });
+  const html = render(project(snapshot(), null, { now: NOW, emergencyPack }));
+
+  refuteMarkup(html, /Emergency Pack ready/i, 'render-time expiry must revoke stale ready copy');
+  assertMarkup(html, /Emergency Pack expired/i, 'render-time expiry should be explicit');
+  assertMarkup(html, /Refresh expired artifacts/i, 'expired evidence should have the correct action');
+  assertMarkup(html, /value="5"/, 'progress must count only current required artifacts');
+});

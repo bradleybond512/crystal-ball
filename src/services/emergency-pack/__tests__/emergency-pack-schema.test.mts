@@ -21,6 +21,7 @@ interface SchemaApi {
   migrateLifelinePackV1?: (value: unknown, scope: {
     placeId: string;
     profileFingerprint: string;
+    legacyQueryFingerprint: string;
     now: number;
   }, verifiedLifelinesReceipt: ReturnType<typeof receipt>) => ManifestFixture | null;
 }
@@ -85,20 +86,26 @@ test('expired required evidence and a moved place fail closed while expired opti
 test('v1 migration preserves only Lifelines evidence and can never claim a complete v2 pack', () => {
   const migrate = requireFunction(api, 'migrateLifelinePackV1');
   const derive = requireFunction(api, 'deriveEmergencyPackReadiness');
+  const legacyQueryFingerprint = 'lifelines-exact-v2';
   const migrated = migrate({
     schemaVersion: 1,
     placeId: PLACE_ID,
-    queryFingerprint: PROFILE,
+    queryFingerprint: legacyQueryFingerprint,
     requiredKinds: ['lifelines'],
     artifacts: [{
       kind: 'lifelines',
-      queryFingerprint: PROFILE,
+      queryFingerprint: legacyQueryFingerprint,
       cachedAt: new Date(NOW - 60_000).toISOString(),
       expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
     }],
     createdAt: new Date(NOW - 60_000).toISOString(),
     updatedAt: new Date(NOW - 30_000).toISOString(),
-  }, { placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }, receipt('lifelines'));
+  }, {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    legacyQueryFingerprint,
+    now: NOW,
+  }, receipt('lifelines'));
 
   assert.ok(migrated);
   assert.deepEqual(migrated.receipts.map((item) => item.kind), ['lifelines']);
@@ -107,4 +114,24 @@ test('v1 migration preserves only Lifelines evidence and can never claim a compl
     derive(migrated, { placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }).status,
     'partial',
   );
+
+  assert.equal(migrate({
+    schemaVersion: 1,
+    placeId: PLACE_ID,
+    queryFingerprint: `${legacyQueryFingerprint}:moved`,
+    requiredKinds: ['lifelines'],
+    artifacts: [{
+      kind: 'lifelines',
+      queryFingerprint: `${legacyQueryFingerprint}:moved`,
+      cachedAt: new Date(NOW - 60_000).toISOString(),
+      expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
+    }],
+    createdAt: new Date(NOW - 60_000).toISOString(),
+    updatedAt: new Date(NOW - 30_000).toISOString(),
+  }, {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    legacyQueryFingerprint,
+    now: NOW,
+  }, receipt('lifelines')), null);
 });

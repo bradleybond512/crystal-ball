@@ -35,6 +35,20 @@ interface StoreApi {
         itemCount: number;
       }>;
     }) => Promise<{ ok: boolean; packId?: string; reason?: string }>;
+    migrateLifelineGeneration: (input: {
+      placeId: string;
+      profileFingerprint: string;
+      legacyQueryFingerprint: string;
+      legacyManifest: unknown;
+      artifact: {
+        kind: 'lifelines';
+        body: string;
+        expiresAt: number;
+        semanticState: 'verified' | 'verified-empty';
+        summary: string;
+        itemCount: number;
+      };
+    }) => Promise<{ ok: boolean; packId?: string; reason?: string }>;
     readActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
       status: string;
       packId: string | null;
@@ -156,6 +170,87 @@ test('active reads re-hash bodies and recover the previous verified generation a
     [...metadata.values.values()].some((value) => value.includes('pack-1')),
     'recovery republishes only a verified generation',
   );
+});
+
+test('active and detailed reads reject same-length body corruption before reporting readiness', async () => {
+  const { bodies, store } = harness();
+  assert.deepEqual(await commit(store, 'exact'), { ok: true, packId: 'pack-1' });
+  const activeKey = [...bodies.values.keys()].find((key) => key.includes('pack-1'));
+  assert.ok(activeKey);
+  const original = bodies.values.get(activeKey);
+  assert.ok(original);
+  const replacement = original.startsWith('{') ? `[${original.slice(1)}` : `x${original.slice(1)}`;
+  assert.equal(new TextEncoder().encode(replacement).byteLength, new TextEncoder().encode(original).byteLength);
+  bodies.values.set(activeKey, replacement);
+
+  assert.deepEqual(
+    await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'corrupt', packId: null, reason: 'verification-failed' },
+  );
+  assert.equal(
+    (await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })).status,
+    'not-saved',
+  );
+});
+
+test('v1 Lifelines migration publishes one verified partial v2 generation without replacing a valid v2 head', async () => {
+  const { metadata, bodies, store } = harness();
+  const legacyQueryFingerprint = 'lifelines-exact-v1';
+  const legacyManifest = {
+    schemaVersion: 1,
+    placeId: PLACE_ID,
+    queryFingerprint: legacyQueryFingerprint,
+    requiredKinds: ['lifelines'],
+    artifacts: [{
+      kind: 'lifelines',
+      queryFingerprint: legacyQueryFingerprint,
+      cachedAt: new Date(NOW - 60_000).toISOString(),
+      expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
+    }],
+    createdAt: new Date(NOW - 60_000).toISOString(),
+    updatedAt: new Date(NOW - 30_000).toISOString(),
+  };
+  const body = JSON.stringify({ snapshot: legacyManifest, marker: 'legacy-exact-body' });
+  const migrated = await store.migrateLifelineGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    legacyQueryFingerprint,
+    legacyManifest,
+    artifact: {
+      kind: 'lifelines',
+      body,
+      expiresAt: NOW + 60 * 60_000,
+      semanticState: 'verified',
+      summary: 'Migrated exact Lifelines snapshot',
+      itemCount: 1,
+    },
+  });
+  assert.deepEqual(migrated, { ok: true, packId: 'pack-1' });
+  const readiness = await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
+  assert.equal(readiness.status, 'partial');
+  assert.deepEqual(readiness.receipts.map(({ kind }) => kind), ['lifelines']);
+  assert.deepEqual(readiness.missingKinds, REQUIRED_KINDS.filter((kind) => kind !== 'lifelines'));
+  assert.equal(bodies.values.get(readiness.receipts[0]?.cacheKey ?? ''), body);
+  const encodedManifest = [...metadata.values.entries()].find(([key]) => key.includes(':manifest:'))?.[1];
+  assert.ok(encodedManifest);
+  assert.equal(JSON.parse(encodedManifest).migration.source, 'lifeline-pack-v1');
+
+  const replacement = await store.migrateLifelineGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    legacyQueryFingerprint,
+    legacyManifest,
+    artifact: {
+      kind: 'lifelines',
+      body: `${body}:replacement`,
+      expiresAt: NOW + 60 * 60_000,
+      semanticState: 'verified',
+      summary: 'Must not replace current v2',
+      itemCount: 1,
+    },
+  });
+  assert.deepEqual(replacement, { ok: false, reason: 'active-v2-exists' });
+  assert.equal((await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })).packId, 'pack-1');
 });
 
 test('an unreferenced manifest left by a crash cannot displace the last-known-good head', async () => {

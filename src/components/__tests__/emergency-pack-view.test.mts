@@ -84,7 +84,7 @@ test('keeps four independent readiness cards and renders a separate truthful Eme
   assertMarkup(html, /name="emergency-pack-place"/, 'place selector should be rendered');
   assertMarkup(html, /Required/, 'required artifacts should be identified');
   assertMarkup(html, /Optional/, 'optional artifacts should be identified');
-  assertMarkup(html, /Retry missing|required artifacts missing/i, 'partial state should offer a retry');
+  assertMarkup(html, /Recapture Emergency Pack|full recapture/i, 'partial state should disclose full recapture');
   assertMarkup(html, /<progress[^>]+max="6"[^>]+value="1"/, 'capture progress should be semantic');
   assertMarkup(html, /type="checkbox"[^>]+name="emergency-pack-contact-consent"/, 'contact consent should be explicit');
   assertMarkup(html, /stored locally|local device|private/i, 'private local contact storage should be disclosed');
@@ -125,7 +125,7 @@ test('ready copy is allowed only for all required exact receipts; an absent alte
   assert.equal((html.match(/data-readiness-card=/g) ?? []).length, 4);
 });
 
-test('an artifact that expires at render time revokes ready copy and offers an expired refresh', () => {
+test('an artifact that expires at render time revokes ready copy and offers a full recapture', () => {
   const project = requireFunction('projectEmergencyReadiness');
   const render = requireFunction('renderEmergencyReadiness');
   const required = ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'];
@@ -152,7 +152,7 @@ test('an artifact that expires at render time revokes ready copy and offers an e
   refuteMarkup(html, /Emergency Pack ready/i, 'render-time expiry must revoke stale ready copy');
   assertMarkup(html, /data-emergency-pack="expired"/, 'the aggregate status must agree with expired artifacts');
   assertMarkup(html, /Emergency Pack expired/i, 'render-time expiry should be explicit');
-  assertMarkup(html, /Refresh expired artifacts/i, 'expired evidence should have the correct action');
+  assertMarkup(html, /Recapture Emergency Pack/i, 'expired evidence should disclose full recapture');
   assertMarkup(html, /value="5"/, 'progress must count only current required artifacts');
   refuteMarkup(html, /Required pack captured\./, 'the live message must not retain stale completion copy');
   assertMarkup(html, /Required artifacts have expired\./, 'the live message should explain the expiry transition');

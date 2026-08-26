@@ -31,6 +31,12 @@ function waitForRender(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 180));
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   happyWindow.document.body.replaceChildren();
   happyWindow.localStorage.clear();
@@ -132,4 +138,131 @@ test('pack invalidation re-reads authoritative state, preserves action focus, an
   packSubscriber?.();
   await waitForRender();
   assert.equal(/Emergency Pack ready/i.test(panel.getContentElement().textContent ?? ''), true);
+});
+
+test('only the first five retained places are disclosed and actionable', async (context) => {
+  const Panel = PanelClass();
+  const places = Array.from({ length: 7 }, (_, index) => place(`place-${index + 1}`, `Place ${index + 1}`));
+  const panel = new Panel({
+    getSnapshot: () => null,
+    subscribe: () => () => undefined,
+    getPrimaryPlace: () => places[0] ?? null,
+    getPlaces: () => places,
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeEmergencyPack: () => () => undefined,
+    hydrate: () => Promise.resolve(),
+    getReceipt: () => null,
+    getEmergencyPackState: (candidate: SavedPlace) => ({
+      status: 'not-saved', packId: null, profileFingerprint: candidate.id,
+      requiredKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      optionalKinds: ['route-alternate'], receipts: [],
+      missingKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      expiredKinds: [],
+    }),
+    captureEmergencyPack: async () => ({ ok: false }),
+    now: () => NOW,
+    deadlineScheduler: { track: () => undefined, destroy: () => undefined },
+  });
+  context.after(() => panel.destroy());
+  await waitForRender();
+
+  const options = [...panel.getContentElement().querySelectorAll<HTMLOptionElement>(
+    '[name="emergency-pack-place"] option',
+  )];
+  assert.deepEqual(options.map(({ value }) => value), places.slice(0, 5).map(({ id }) => id));
+  assert.equal(options.some(({ textContent }) => textContent === 'Place 6' || textContent === 'Place 7'), false);
+});
+
+test('a failed first capture does not claim that a nonexistent last-known-good pack was preserved', async (context) => {
+  const Panel = PanelClass();
+  const home = place('home', 'Home');
+  const panel = new Panel({
+    getSnapshot: () => null,
+    subscribe: () => () => undefined,
+    getPrimaryPlace: () => home,
+    getPlaces: () => [home],
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeEmergencyPack: () => () => undefined,
+    hydrate: () => Promise.resolve(),
+    getReceipt: () => null,
+    getEmergencyPackState: () => ({
+      status: 'not-saved', packId: null, profileFingerprint: home.id,
+      requiredKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      optionalKinds: ['route-alternate'], receipts: [],
+      missingKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      expiredKinds: [],
+    }),
+    captureEmergencyPack: async () => ({ ok: false, failedKind: 'lifelines' }),
+    now: () => NOW,
+    deadlineScheduler: { track: () => undefined, destroy: () => undefined },
+  });
+  context.after(() => panel.destroy());
+  await waitForRender();
+  panel.getContentElement().querySelector<HTMLButtonElement>('[data-pack-action]')?.click();
+  await waitForRender();
+
+  const text = panel.getContentElement().textContent ?? '';
+  assert.match(text, /No verified Emergency Pack was published/i);
+  assert.doesNotMatch(text, /last known good pack was preserved/i);
+});
+
+test('place and consent controls stay locked to the exact scope during capture', async (context) => {
+  const Panel = PanelClass();
+  const places = [place('home', 'Home'), place('work', 'Work')];
+  const pending = deferred<{ ok: boolean; packId?: string }>();
+  const captures: Array<{ placeId: string; contactConsent: boolean }> = [];
+  const panel = new Panel({
+    getSnapshot: () => null,
+    subscribe: () => () => undefined,
+    getPrimaryPlace: () => places[0],
+    getPlaces: () => places,
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeEmergencyPack: () => () => undefined,
+    hydrate: () => Promise.resolve(),
+    getReceipt: () => null,
+    getEmergencyPackState: (candidate: SavedPlace) => ({
+      status: 'not-saved', packId: null, profileFingerprint: candidate.id,
+      requiredKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      optionalKinds: ['route-alternate'], receipts: [],
+      missingKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      expiredKinds: [],
+    }),
+    captureEmergencyPack: (candidate: SavedPlace, contactConsent: boolean) => {
+      captures.push({ placeId: candidate.id, contactConsent });
+      return pending.promise;
+    },
+    now: () => NOW,
+    deadlineScheduler: { track: () => undefined, destroy: () => undefined },
+  });
+  context.after(() => panel.destroy());
+  await waitForRender();
+
+  let content = panel.getContentElement();
+  const consent = content.querySelector<HTMLInputElement>('[name="emergency-pack-contact-consent"]');
+  assert.ok(consent);
+  consent.checked = true;
+  consent.dispatchEvent(new happyWindow.Event('change', { bubbles: true }));
+  content.querySelector<HTMLButtonElement>('[data-pack-action]')?.click();
+  await waitForRender();
+
+  content = panel.getContentElement();
+  const lockedPlace = content.querySelector<HTMLSelectElement>('[name="emergency-pack-place"]');
+  const lockedConsent = content.querySelector<HTMLInputElement>('[name="emergency-pack-contact-consent"]');
+  const lockedAction = content.querySelector<HTMLButtonElement>('[data-pack-action]');
+  assert.ok(lockedPlace && lockedConsent && lockedAction);
+  assert.equal(lockedPlace.disabled, true);
+  assert.equal(lockedConsent.disabled, true);
+  assert.equal(lockedAction.disabled, true);
+
+  lockedPlace.value = 'work';
+  lockedPlace.dispatchEvent(new happyWindow.Event('change', { bubbles: true }));
+  lockedConsent.checked = false;
+  lockedConsent.dispatchEvent(new happyWindow.Event('change', { bubbles: true }));
+  pending.resolve({ ok: true, packId: 'pack-home' });
+  await waitForRender();
+
+  content = panel.getContentElement();
+  assert.deepEqual(captures, [{ placeId: 'home', contactConsent: true }]);
+  assert.equal(content.querySelector<HTMLSelectElement>('[name="emergency-pack-place"]')?.value, 'home');
+  assert.equal(content.querySelector<HTMLInputElement>('[name="emergency-pack-contact-consent"]')?.checked, true);
 });

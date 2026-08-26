@@ -69,11 +69,16 @@ interface StoreApi {
       expiredKinds: string[];
       reason?: string;
     }>;
+    readOfflineMapRevision: (scope: {
+      placeId: string;
+      profileFingerprint: string;
+      now: number;
+    }) => string | null;
     readVerifiedOfflineMapArtifact: (scope: {
       placeId: string;
       profileFingerprint: string;
       now: number;
-    }) => Promise<string | null>;
+    }) => Promise<{ body: string; revision: string; expiresAt: number } | null>;
     invalidateArtifacts: (input: {
       placeId: string;
       profileFingerprint: string;
@@ -455,9 +460,14 @@ test('offline map consumers receive only the active profile-bound unexpired veri
     optionalKinds: ['route-alternate'],
     artifacts: first,
   }), { ok: true, packId: 'pack-1' });
-  assert.equal(await store.readVerifiedOfflineMapArtifact({
+  const firstVerified = await store.readVerifiedOfflineMapArtifact({
     placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
-  }), firstMap.body);
+  });
+  assert.equal(firstVerified?.body, firstMap.body);
+  assert.equal(firstVerified?.revision, store.readOfflineMapRevision({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  }));
+  assert.equal(firstVerified?.expiresAt, firstMap.expiresAt);
   assert.equal(await store.readVerifiedOfflineMapArtifact({
     placeId: PLACE_ID, profileFingerprint: `${PROFILE}:moved`, now: NOW,
   }), null);
@@ -476,9 +486,11 @@ test('offline map consumers receive only the active profile-bound unexpired veri
     optionalKinds: ['route-alternate'],
     artifacts: second,
   }), { ok: true, packId: 'pack-2' });
-  assert.equal(await store.readVerifiedOfflineMapArtifact({
+  const secondVerified = await store.readVerifiedOfflineMapArtifact({
     placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
-  }), secondMap.body, 'the previous generation must never be selected');
+  });
+  assert.equal(secondVerified?.body, secondMap.body, 'the previous generation must never be selected');
+  assert.notEqual(secondVerified?.revision, firstVerified?.revision, 'the active head revision must advance');
 
   const activeMapKey = [...bodies.values.keys()].find((key) => key.includes('pack-2:offline-map'));
   assert.ok(activeMapKey);

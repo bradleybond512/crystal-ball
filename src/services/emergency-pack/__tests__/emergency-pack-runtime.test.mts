@@ -30,6 +30,7 @@ interface RuntimeApi {
     getState: (place: Place) => State;
     capture: (place: Place, contactConsent: boolean) => Promise<State>;
     subscribe: (listener: (state: State) => void) => () => void;
+    resolveOfflineMapTile: (url: string) => Promise<{ data: ArrayBuffer; contentType: string } | null>;
     destroy: () => void;
   };
   getEmergencyPackState?: (place: Place) => State;
@@ -98,6 +99,11 @@ interface HarnessOptions {
     itemCount: number;
   };
   recoveryGate?: Promise<void>;
+  offlineMap?: {
+    body: string;
+    expiresAt: number;
+    cache: object;
+  };
 }
 
 function createHarness(initialPlaces = [place('home')], options: HarnessOptions = {}) {
@@ -115,6 +121,8 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
   const releasedArtifacts: unknown[] = [];
   let commitCalls = 0;
   let readCalls = 0;
+  let offlineMapReads = 0;
+  const offlineMapRevision = () => `map-${commitCalls}-${invalidationCalls.length}`;
 
   const store = {
     async readActive(scope: Scope): Promise<State> {
@@ -162,6 +170,21 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     }): Promise<{ ok: boolean }> {
       invalidationCalls.push({ ...input, kinds: [...input.kinds] });
       return { ok: true };
+    },
+    readOfflineMapRevision(): string | null {
+      return options.offlineMap ? offlineMapRevision() : null;
+    },
+    async readVerifiedOfflineMapArtifact(): Promise<{
+      body: string;
+      revision: string;
+      expiresAt: number;
+    } | null> {
+      offlineMapReads += 1;
+      return options.offlineMap ? {
+        body: options.offlineMap.body,
+        revision: offlineMapRevision(),
+        expiresAt: options.offlineMap.expiresAt,
+      } : null;
     },
     async prune(input: { placeIds: string[]; maxPlaces: number; generationsPerPlace: number }): Promise<void> {
       pruneCalls.push({ ...input, placeIds: [...input.placeIds] });
@@ -229,6 +252,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       callbacks.set('alerts', (payload) => callback(payload as { sourceRevision: string }));
       return () => { unsubscribed.push('alerts'); };
     },
+    openOfflineMapCache: async () => options.offlineMap?.cache ?? Promise.reject(new Error('cache unavailable')),
   });
 
   return {
@@ -245,6 +269,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     profile,
     get commitCalls() { return commitCalls; },
     get readCalls() { return readCalls; },
+    get offlineMapReads() { return offlineMapReads; },
     setPlaces(value: Place[]) { places = value; },
   };
 }
@@ -577,9 +602,17 @@ test('offline tile resolver re-reads one exact generation tile and rejects corru
       : undefined,
   };
   const reads: unknown[] = [];
+  let revision = 'head-1';
+  let verifiedArtifact: unknown = {
+    body: artifact,
+    revision,
+    expiresAt: NOW + 60_000,
+  };
+  let scopes = [{ placeId: 'home', profileFingerprint: 'profile-home', now: NOW }];
   const resolver = create({
-    getScopes: () => [{ placeId: 'home', profileFingerprint: 'profile-home', now: NOW }],
-    readVerifiedOfflineMapArtifact: async (scope: unknown) => { reads.push(scope); return artifact; },
+    getScopes: () => scopes,
+    getScopeRevision: () => revision,
+    readVerifiedOfflineMapArtifact: async (scope: unknown) => { reads.push(scope); return verifiedArtifact; },
     openCache: async (name: string) => {
       assert.equal(name, 'wm-offline-maps');
       return cache;
@@ -593,12 +626,83 @@ test('offline tile resolver re-reads one exact generation tile and rejects corru
 
   cachedBytes = new Uint8Array([137, 80, 78, 71, 9, 9, 9, 9]);
   assert.equal(await resolver(sourceUrl), null, 'same-length corrupt cached bytes fail closed');
+  assert.equal(reads.length, 1, 'warm tile reads reuse the verified source URL index');
+
+  cachedBytes = bytes;
+  scopes = [{ placeId: 'home', profileFingerprint: 'profile-home', now: NOW + 60_001 }];
+  assert.equal(await resolver(sourceUrl), null, 'expired indexed evidence fails closed without a body re-read');
+  assert.equal(reads.length, 1);
+  scopes = [];
+  assert.equal(await resolver(sourceUrl), null, 'pruned scopes cannot retain indexed tiles');
+  scopes = [{ placeId: 'home', profileFingerprint: 'moved', now: NOW }];
+  assert.equal(await resolver(sourceUrl), null, 'moved profiles cannot retain indexed tiles');
+  assert.equal(reads.length, 2);
+
+  scopes = [{ placeId: 'home', profileFingerprint: 'profile-home', now: NOW }];
+  revision = 'head-2';
+  verifiedArtifact = null;
+  assert.equal(await resolver(sourceUrl), null, 'an active head revision change drops the prior index');
+  assert.equal(reads.length, 3, 'a new head revision rebuilds verified index evidence');
+
   const unavailable = create({
     getScopes: () => [{ placeId: 'home', profileFingerprint: 'moved', now: NOW }],
+    getScopeRevision: () => null,
     readVerifiedOfflineMapArtifact: async () => null,
     openCache: async () => cache,
   });
   assert.equal(await unavailable(sourceUrl), null, 'missing, moved, expired, or pruned evidence fails closed');
+});
+
+test('runtime invalidates the verified tile index on source cutoffs and pack lifecycle changes', async () => {
+  const home = place('home');
+  const profile = JSON.stringify([2, home.id, home.lat, home.lon, home.radiusKm]);
+  const bytes = new Uint8Array([137, 80, 78, 71, 5, 6, 7, 8]);
+  const digestBuffer = await crypto.subtle.digest('SHA-256', bytes);
+  const sha256 = [...new Uint8Array(digestBuffer)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+  const generationId = 'runtime-index-invalidation';
+  const sourceUrl = 'https://a.basemaps.cartocdn.com/dark_all/4/3/2@2x.png';
+  const cacheKey = `https://offline-map.crystalball.invalid/exact/${generationId}/0`;
+  const body = JSON.stringify({
+    kind: 'offline-map',
+    placeId: home.id,
+    profileFingerprint: profile,
+    capturedAt: NOW,
+    generationId,
+    tiles: [{
+      url: sourceUrl,
+      cacheKey,
+      sha256,
+      generationId,
+      byteLength: bytes.byteLength,
+      verified: true,
+    }],
+    totalBytes: bytes.byteLength,
+  });
+  const cache = {
+    put: async () => undefined,
+    delete: async () => true,
+    match: async (key: RequestInfo | URL) => String(key) === cacheKey
+      ? new Response(bytes.slice(), { status: 200, headers: { 'content-type': 'image/png' } })
+      : undefined,
+  };
+  const harness = createHarness([home], { offlineMap: { body, expiresAt: NOW + 60_000, cache } });
+  await harness.runtime.hydrate();
+
+  assert.ok(await harness.runtime.resolveOfflineMapTile(sourceUrl));
+  assert.ok(await harness.runtime.resolveOfflineMapTile(sourceUrl));
+  assert.equal(harness.offlineMapReads, 1, 'warm requests share the verified index');
+
+  harness.callbacks.get('routes')?.();
+  await flush();
+  assert.ok(await harness.runtime.resolveOfflineMapTile(sourceUrl));
+  assert.equal(harness.offlineMapReads, 2, 'source cutoff invalidates the index');
+
+  await harness.runtime.capture(home, false);
+  assert.ok(await harness.runtime.resolveOfflineMapTile(sourceUrl));
+  assert.equal(harness.offlineMapReads, 3, 'pack commit lifecycle invalidates the index');
+  harness.runtime.destroy();
 });
 
 test('runtime keeps at most five place heads and requests only active plus previous generations', async () => {

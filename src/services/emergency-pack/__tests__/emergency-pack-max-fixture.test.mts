@@ -126,7 +126,12 @@ test('maximum offline generation cold and warm tile reads stay within the render
   };
   const makeResolver = () => create({
     getScopes: () => [{ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }],
-    readVerifiedOfflineMapArtifact: async () => body,
+    getScopeRevision: () => 'head-1',
+    readVerifiedOfflineMapArtifact: async () => ({
+      body,
+      revision: 'head-1',
+      expiresAt: NOW + 60_000,
+    }),
     openCache: async () => cache,
   });
   const measure = async (runs: number, cold: boolean): Promise<number[]> => {

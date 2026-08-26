@@ -13,13 +13,14 @@ import {
   EXACT_OFFLINE_MAP_MAX_TILES,
   EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES,
   planOfflineMapTileUrls,
+  readOfflineMapTileExact,
   verifyOfflineMapGenerationExact,
   type ExactOfflineMapCache,
   type ExactOfflineMapCaptureResult,
   type ExactOfflineMapTile,
 } from '@/services/offline-map-cache';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace } from '@/services/saved-places';
-import { getStormSnapshot } from '@/services/survival/storm-posture-state';
+import { getStormSnapshot, subscribeStormPosture } from '@/services/survival/storm-posture-state';
 import { matchAlertToPlace } from '@/services/weather/nws-polygon-match';
 import type {
   NwsAlertMinimal,
@@ -50,6 +51,10 @@ import {
   type EmergencyPackArtifactSource,
 } from './emergency-pack-sources';
 import { createEmergencyPackStore } from './emergency-pack-store';
+import {
+  emergencyPackMapSourceUrls,
+  type EmergencyPackMapTileData,
+} from './emergency-pack-map-protocol';
 
 const MAX_PLACES = 5;
 const GENERATIONS_PER_PLACE = 2;
@@ -90,6 +95,7 @@ interface EmergencyPackRuntimeStore {
     expiredKinds?: readonly string[];
     reason?: string;
   }>;
+  readVerifiedOfflineMapArtifact?(scope: EmergencyPackCaptureScope & { now: number }): Promise<string | null>;
   recoverActive(scope: EmergencyPackCaptureScope & { now: number }): Promise<{
     status: string;
     packId: string | null;
@@ -108,6 +114,12 @@ interface EmergencyPackRuntimeStore {
     legacyManifest: unknown;
     artifact: EmergencyPackCapturedArtifact;
   }): Promise<{ ok: boolean; packId?: string; reason?: string }>;
+  invalidateArtifacts(input: {
+    placeId: string;
+    profileFingerprint: string;
+    kinds: readonly EmergencyPackArtifactKind[];
+    capturedAt: number;
+  }): Promise<{ ok: boolean; reason?: string }>;
   prune?(input: { placeIds: string[]; maxPlaces: number; generationsPerPlace: number }): Promise<void>;
 }
 
@@ -130,6 +142,8 @@ interface EmergencyPackRuntimeDependencies {
   subscribeRoutes(callback: () => void): () => void;
   subscribeComms(callback: () => void): () => void;
   subscribeLifelines(callback: () => void): () => void;
+  subscribeAlerts(callback: () => void): () => void;
+  openOfflineMapCache?(name: string): Promise<ExactOfflineMapCache>;
 }
 
 interface EmergencyPackRuntimeCaptureResult extends EmergencyPackCaptureResult {
@@ -349,6 +363,48 @@ export function createEmergencyPackOfflineMapLifecycle(
   };
 }
 
+export function createEmergencyPackOfflineMapTileResolver(dependencies: {
+  getScopes(): Array<{ placeId: string; profileFingerprint: string; now: number }>;
+  readVerifiedOfflineMapArtifact(scope: {
+    placeId: string;
+    profileFingerprint: string;
+    now: number;
+  }): Promise<string | null>;
+  openCache(name: string): Promise<ExactOfflineMapCache>;
+}) {
+  return async (requestUrl: string): Promise<EmergencyPackMapTileData | null> => {
+    const sourceUrls = emergencyPackMapSourceUrls(requestUrl);
+    if (sourceUrls.length === 0) return null;
+    let cache: ExactOfflineMapCache | null = null;
+    for (const scope of dependencies.getScopes().slice(0, MAX_PLACES)) {
+      let body: string | null;
+      try {
+        body = await dependencies.readVerifiedOfflineMapArtifact(scope);
+      } catch {
+        continue;
+      }
+      if (body === null) continue;
+      const evidence = parseOfflineMapGenerationEvidence(body);
+      if (!evidence) continue;
+      let parsed: Record<string, unknown> | null;
+      try {
+        parsed = strictJsonRecord(JSON.parse(body));
+      } catch {
+        continue;
+      }
+      if (parsed?.placeId !== scope.placeId || parsed.profileFingerprint !== scope.profileFingerprint) continue;
+      try {
+        cache ??= await dependencies.openCache(MAP_CACHE_NAME);
+        const tile = await readOfflineMapTileExact({ ...evidence, sourceUrls, cache });
+        if (tile) return tile;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+}
+
 export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDependencies) {
   const adapters = dependencies.createBrowserAdapters();
   const store = dependencies.createStore(adapters);
@@ -357,8 +413,25 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   const placeGenerations = new Map<string, number>();
   const captureContexts = new Map<string, { place: RuntimePlace; contactConsent: boolean }>();
   const captureResults = new Map<string, EmergencyPackCaptureResult>();
+  const detailedOperationStates = new Map<string, EmergencyPackRuntimeState>();
   const operationQueues = new Map<string, Promise<void>>();
   let active = true;
+
+  const resolveOfflineMapTile = createEmergencyPackOfflineMapTileResolver({
+    getScopes: () => retainedPlaces().flatMap((place) => {
+      const scope = scopeFor(place);
+      return scope ? [{
+        placeId: scope.placeId,
+        profileFingerprint: scope.profileFingerprint,
+        now: dependencies.now(),
+      }] : [];
+    }),
+    readVerifiedOfflineMapArtifact: (scope) => store.readVerifiedOfflineMapArtifact?.({
+      ...scope,
+      contactConsent: false,
+    }) ?? Promise.resolve(null),
+    openCache: (name) => dependencies.openOfflineMapCache?.(name) ?? Promise.reject(new Error('cache unavailable')),
+  });
 
   const readDetailed = async (scope: EmergencyPackCaptureScope): Promise<EmergencyPackRuntimeState> => {
     const operation = store.readReadiness?.bind(store) ?? store.readActive.bind(store);
@@ -374,14 +447,20 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   };
 
   const coordinator = dependencies.createCoordinator({
-    readActive: async (scope) => coordinatorState(await readDetailed({ ...scope, contactConsent: false })),
+    readActive: async (scope) => {
+      const detailed = await readDetailed({ ...scope, contactConsent: false });
+      detailedOperationStates.set(scope.placeId, detailed);
+      return coordinatorState(detailed);
+    },
     recoverActive: async (scope) => {
       try {
         await store.recoverActive({ ...scope, contactConsent: false, now: dependencies.now() });
       } catch {
         return coordinatorState(notSaved(scope.profileFingerprint, 'storage-failure'));
       }
-      return coordinatorState(await readDetailed({ ...scope, contactConsent: false }));
+      const detailed = await readDetailed({ ...scope, contactConsent: false });
+      detailedOperationStates.set(scope.placeId, detailed);
+      return coordinatorState(detailed);
     },
     captureAndCommit: async (scope) => {
       const context = captureContexts.get(scope.placeId);
@@ -398,9 +477,17 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         ...scope,
         contactConsent: context.contactConsent,
       }));
-      return coordinatorState(await readDetailed({ ...scope, contactConsent: context.contactConsent }));
+      const detailed = await readDetailed({ ...scope, contactConsent: context.contactConsent });
+      detailedOperationStates.set(scope.placeId, detailed);
+      return coordinatorState(detailed);
     },
   });
+
+  function takeDetailedState(scope: EmergencyPackCaptureScope): EmergencyPackRuntimeState | null {
+    const detailed = detailedOperationStates.get(scope.placeId);
+    detailedOperationStates.delete(scope.placeId);
+    return detailed?.profileFingerprint === scope.profileFingerprint ? detailed : null;
+  }
 
   function scopeFor(place: RuntimePlace): EmergencyPackCaptureScope | null {
     try {
@@ -441,7 +528,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     scope: EmergencyPackCaptureScope,
   ): Promise<EmergencyPackRuntimeState> {
     await coordinator.recover(scope);
-    const recovered = await readDetailed(scope);
+    const recovered = takeDetailedState(scope) ?? await readDetailed(scope);
     if (recovered.status !== 'not-saved' || !store.migrateLifelineGeneration) return recovered;
 
     const legacyManifest = strictJsonRecord(dependencies.getLegacyLifelinePackManifest(place.id));
@@ -474,7 +561,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           state = await recoverAndMigrate(place, scope);
         } else {
           await coordinator.refresh(scope);
-          state = await readDetailed(scope);
+          state = takeDetailedState(scope) ?? await readDetailed(scope);
         }
         publish(place.id, generation, state);
         return state;
@@ -512,12 +599,57 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     }
   }
 
-  const invalidate = () => { void refreshAll(false); };
+  async function invalidateKinds(kinds: readonly EmergencyPackArtifactKind[]): Promise<void> {
+    const places = retainedPlaces();
+    await Promise.all(places.map((place) => enqueuePlaceOperation(place.id, async () => {
+      const scope = scopeFor(place);
+      if (!scope) return;
+      const generation = begin(place.id);
+      let state: EmergencyPackRuntimeState;
+      try {
+        const invalidated = await store.invalidateArtifacts({
+          placeId: scope.placeId,
+          profileFingerprint: scope.profileFingerprint,
+          kinds,
+          capturedAt: dependencies.now(),
+        });
+        if (!invalidated.ok) {
+          state = notSaved(scope.profileFingerprint, invalidated.reason ?? 'storage-failure');
+        } else {
+          await coordinator.refresh(scope);
+          state = takeDetailedState(scope) ?? await readDetailed(scope);
+        }
+      } catch {
+        state = notSaved(scope.profileFingerprint, 'storage-failure');
+      }
+      publish(place.id, generation, state);
+    })));
+  }
+
+  let savedPlaceNames = new Map(retainedPlaces().map((place) => [place.id, {
+    profileFingerprint: scopeFor(place)?.profileFingerprint ?? '',
+    name: place.name,
+  }]));
+  const savedPlacesChanged = () => {
+    const nextPlaces = retainedPlaces();
+    const renamed = nextPlaces.some((place) => {
+      const previous = savedPlaceNames.get(place.id);
+      const profileFingerprint = scopeFor(place)?.profileFingerprint ?? '';
+      return previous?.profileFingerprint === profileFingerprint && previous.name !== place.name;
+    });
+    savedPlaceNames = new Map(nextPlaces.map((place) => [place.id, {
+      profileFingerprint: scopeFor(place)?.profileFingerprint ?? '',
+      name: place.name,
+    }]));
+    if (renamed) void invalidateKinds(['route-primary', 'route-alternate']);
+    else void refreshAll(false);
+  };
   const unsubscribers = [
-    dependencies.subscribeSavedPlaces(invalidate),
-    dependencies.subscribeRoutes(invalidate),
-    dependencies.subscribeComms(invalidate),
-    dependencies.subscribeLifelines(invalidate),
+    dependencies.subscribeSavedPlaces(savedPlacesChanged),
+    dependencies.subscribeRoutes(() => { void invalidateKinds(['route-primary', 'route-alternate']); }),
+    dependencies.subscribeComms(() => { void invalidateKinds(['comms-plan', 'contacts']); }),
+    dependencies.subscribeLifelines(() => { void invalidateKinds(['lifelines']); }),
+    dependencies.subscribeAlerts(() => { void invalidateKinds(['alerts']); }),
   ];
 
   async function executeCapture(
@@ -546,7 +678,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     } finally {
       captureContexts.delete(place.id);
     }
-    const state = await readDetailed({ ...scope, contactConsent });
+    const state = takeDetailedState(scope) ?? await readDetailed({ ...scope, contactConsent });
     const generation = begin(place.id);
     publish(place.id, generation, state);
     const result = captureResults.get(place.id) ?? { ok: false, reason: 'capture-failed' };
@@ -595,6 +727,8 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       return () => listeners.delete(listener);
     },
 
+    resolveOfflineMapTile,
+
     destroy(): void {
       if (!active) return;
       active = false;
@@ -603,6 +737,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       placeGenerations.clear();
       captureContexts.clear();
       captureResults.clear();
+      detailedOperationStates.clear();
       operationQueues.clear();
     },
   };
@@ -807,6 +942,8 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
     subscribeRoutes: subscribeEvacRoutes,
     subscribeComms: (callback) => subscribeCommsPlans(() => callback()),
     subscribeLifelines,
+    subscribeAlerts: subscribeStormPosture,
+    openOfflineMapCache: (name) => caches.open(name),
   });
 }
 
@@ -851,4 +988,8 @@ export async function captureEmergencyPack(
 
 export function subscribeEmergencyPack(listener: () => void): () => void {
   return getSingleton()?.subscribe(() => listener()) ?? (() => undefined);
+}
+
+export function resolveEmergencyPackOfflineMapTile(url: string): Promise<EmergencyPackMapTileData | null> {
+  return getSingleton()?.resolveOfflineMapTile(url) ?? Promise.resolve(null);
 }

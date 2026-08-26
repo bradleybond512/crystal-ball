@@ -29,6 +29,7 @@ const ARTIFACT_KINDS = new Set<EmergencyPackArtifactKind>([
   ...EMERGENCY_PACK_REQUIRED_KINDS,
   ...EMERGENCY_PACK_OPTIONAL_KINDS,
 ]);
+const INVALIDATION_SCHEMA_VERSION = 1;
 
 export interface EmergencyPackMetadataBoundary {
   getItem(key: string): string | null;
@@ -135,6 +136,13 @@ interface RetainedGenerations {
   bodyKeys: Set<string>;
 }
 
+interface EmergencyPackInvalidationRecord {
+  schemaVersion: 1;
+  placeId: string;
+  profileFingerprint: string;
+  cutoffs: Partial<Record<EmergencyPackArtifactKind, number>>;
+}
+
 function headKey(placeId: string): string {
   return `${KEY_PREFIX}:head:${encodeURIComponent(placeId)}`;
 }
@@ -145,6 +153,10 @@ function manifestKey(placeId: string, packId: string): string {
 
 function bodyKey(packId: string, kind: string): string {
   return `${KEY_PREFIX}:body:${encodeURIComponent(packId)}:${kind}`;
+}
+
+function invalidationKey(placeId: string): string {
+  return `${KEY_PREFIX}:invalidation:${encodeURIComponent(placeId)}`;
 }
 
 function placeIdFromKey(key: string, kind: 'head' | 'manifest'): string | null {
@@ -162,6 +174,33 @@ function placeIdFromKey(key: string, kind: 'head' | 'manifest'): string | null {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function parseInvalidationRecord(value: string | null): EmergencyPackInvalidationRecord | null {
+  if (value === null) return null;
+  const raw: unknown = JSON.parse(value);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid invalidation record');
+  const record = raw as Record<string, unknown>;
+  if (Object.keys(record).length !== 4
+    || record.schemaVersion !== INVALIDATION_SCHEMA_VERSION
+    || !isNonEmptyString(record.placeId)
+    || !isNonEmptyString(record.profileFingerprint)
+    || !record.cutoffs
+    || typeof record.cutoffs !== 'object'
+    || Array.isArray(record.cutoffs)) throw new Error('invalid invalidation record');
+  const cutoffs = record.cutoffs as Record<string, unknown>;
+  for (const [kind, cutoff] of Object.entries(cutoffs)) {
+    if (!ARTIFACT_KINDS.has(kind as EmergencyPackArtifactKind)
+      || !Number.isSafeInteger(cutoff)
+      || (cutoff as number) <= 0
+      || (cutoff as number) > 8_640_000_000_000_000) throw new Error('invalid invalidation cutoff');
+  }
+  return {
+    schemaVersion: 1,
+    placeId: record.placeId,
+    profileFingerprint: record.profileFingerprint,
+    cutoffs: { ...cutoffs } as Partial<Record<EmergencyPackArtifactKind, number>>,
+  };
 }
 
 function parseHead(value: string | null): PackHead | null {
@@ -363,6 +402,18 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     return parsed;
   }
 
+  function applyInvalidations(manifest: EmergencyPackManifest): EmergencyPackManifest {
+    const record = parseInvalidationRecord(metadata.getItem(invalidationKey(manifest.placeId)));
+    if (!record || record.profileFingerprint !== manifest.profileFingerprint) return manifest;
+    return {
+      ...manifest,
+      receipts: manifest.receipts.filter((receipt) => {
+        const cutoff = record.cutoffs[receipt.kind];
+        return cutoff === undefined || Date.parse(receipt.capturedAt) > cutoff;
+      }),
+    };
+  }
+
   async function readActive(scope: EmergencyPackScope): Promise<EmergencyPackStoreState> {
     try {
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
@@ -373,7 +424,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (head.profileFingerprint !== scope.profileFingerprint) {
         return { status: 'not-saved', packId: null, reason: 'profile-fingerprint-mismatch' };
       }
-      const manifest = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+      const verified = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+      const manifest = verified ? applyInvalidations(verified) : null;
       if (manifest?.packId !== head.packId) {
         return { status: 'corrupt', packId: null, reason: 'verification-failed' };
       }
@@ -393,7 +445,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (head.profileFingerprint !== scope.profileFingerprint) {
         return emptyReadiness(scope.profileFingerprint, 'profile-fingerprint-mismatch');
       }
-      const manifest = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+      const verified = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+      const manifest = verified ? applyInvalidations(verified) : null;
       if (manifest?.packId !== head.packId) {
         return emptyReadiness(scope.profileFingerprint, 'verification-failed');
       }
@@ -411,6 +464,35 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       };
     } catch {
       return emptyReadiness(scope.profileFingerprint, 'storage-failure');
+    }
+  }
+
+  async function readVerifiedOfflineMapArtifact(scope: EmergencyPackScope): Promise<string | null> {
+    try {
+      if (!Number.isFinite(scope.now)) return null;
+      const head = parseHead(metadata.getItem(headKey(scope.placeId)));
+      if (head?.placeId !== scope.placeId || head.profileFingerprint !== scope.profileFingerprint) return null;
+      const encoded = metadata.getItem(head.manifestKey);
+      if (encoded === null || await digest(encoded) !== head.manifestSha256) return null;
+      const parsed = parseEmergencyPackManifest(JSON.parse(encoded));
+      const manifest = parsed ? applyInvalidations(parsed) : null;
+      if (!manifest
+        || manifest.packId !== head.packId
+        || manifest.placeId !== scope.placeId
+        || manifest.profileFingerprint !== scope.profileFingerprint
+        || manifestKey(manifest.placeId, manifest.packId) !== head.manifestKey) return null;
+      const receipt = manifest.receipts.find(({ kind }) => kind === 'offline-map');
+      if (!receipt
+        || receipt.profileFingerprint !== scope.profileFingerprint
+        || receipt.cacheKey !== bodyKey(manifest.packId, 'offline-map')
+        || Date.parse(receipt.expiresAt) <= scope.now) return null;
+      const body = await bodies.get(receipt.cacheKey);
+      if (body === null
+        || new TextEncoder().encode(body).byteLength !== receipt.byteLength
+        || await digest(body) !== receipt.sha256) return null;
+      return body;
+    } catch {
+      return null;
     }
   }
 
@@ -447,7 +529,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       }
 
       for (const key of recoveryKeys(metadata, scope, head)) {
-        const manifest = await loadVerifiedManifest(key);
+        const verified = await loadVerifiedManifest(key);
+        const manifest = verified ? applyInvalidations(verified) : null;
         if (manifest?.profileFingerprint !== scope.profileFingerprint) continue;
         const state = stateForManifest(manifest, scope);
         if (state.status !== 'ready') continue;
@@ -659,6 +742,53 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
+  async function invalidateArtifacts(input: {
+    placeId: string;
+    profileFingerprint: string;
+    kinds: readonly EmergencyPackArtifactKind[];
+    capturedAt: number;
+  }): Promise<{ ok: true } | { ok: false; reason: string }> {
+    if (!isNonEmptyString(input.placeId)
+      || input.placeId.length > 512
+      || !isNonEmptyString(input.profileFingerprint)
+      || input.profileFingerprint.length > 1024
+      || input.kinds.length === 0
+      || input.kinds.length > ARTIFACT_KINDS.size
+      || new Set(input.kinds).size !== input.kinds.length
+      || input.kinds.some((kind) => !ARTIFACT_KINDS.has(kind))
+      || !Number.isSafeInteger(input.capturedAt)
+      || input.capturedAt <= 0
+      || input.capturedAt > 8_640_000_000_000_000) return { ok: false, reason: 'invalid-input' };
+    const key = invalidationKey(input.placeId);
+    let previous: string | null | undefined;
+    try {
+      previous = metadata.getItem(key);
+      const existing = parseInvalidationRecord(previous);
+      const cutoffs: Partial<Record<EmergencyPackArtifactKind, number>> = existing?.placeId === input.placeId
+        && existing.profileFingerprint === input.profileFingerprint
+        ? { ...existing.cutoffs }
+        : {};
+      for (const kind of input.kinds) cutoffs[kind] = Math.max(cutoffs[kind] ?? 0, input.capturedAt);
+      const encoded = JSON.stringify({
+        schemaVersion: INVALIDATION_SCHEMA_VERSION,
+        placeId: input.placeId,
+        profileFingerprint: input.profileFingerprint,
+        cutoffs,
+      });
+      metadata.setItem(key, encoded);
+      if (metadata.getItem(key) !== encoded) throw new Error('invalidation readback mismatch');
+      return { ok: true };
+    } catch (error) {
+      try {
+        if (previous === null) metadata.removeItem(key);
+        else if (previous !== undefined) metadata.setItem(key, previous);
+      } catch {
+        // Failed persistence stays fail-closed at the runtime boundary.
+      }
+      return { ok: false, reason: safeReason(error) };
+    }
+  }
+
   async function migrateLifelineGeneration(input: EmergencyPackLifelineMigrationInput): Promise<
     { ok: true; packId: string } | { ok: false; reason: string }
   > {
@@ -827,9 +957,11 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
 
   return {
     commitGeneration,
+    invalidateArtifacts,
     migrateLifelineGeneration,
     readActive,
     readReadiness,
+    readVerifiedOfflineMapArtifact,
     recoverActive,
     prune,
   };

@@ -23,6 +23,7 @@ interface VerifiedLifelinesReceipt {
 interface AlertFeed {
   alerts: unknown[];
   capturedAt: number;
+  sourceRevision: string;
 }
 
 export interface EmergencyPackSourceDependencies {
@@ -48,6 +49,7 @@ export interface EmergencyPackSourceDependencies {
 
 export interface EmergencyPackSourceArtifact extends EmergencyPackCapturedArtifact {
   capturedAt: number;
+  sourceRevision?: string;
 }
 
 export type EmergencyPackArtifactSource = (
@@ -306,6 +308,7 @@ function createAlertsSource(
     if (!isTimestamp(now)
       || !feed
       || !Array.isArray(feed.alerts)
+      || !/^[a-f0-9]{64}$/.test(feed.sourceRevision)
       || !isTimestamp(feed.capturedAt)
       || feed.capturedAt > now
       || !isTimestamp(feed.capturedAt + ALERT_FRESHNESS_MS)
@@ -324,13 +327,15 @@ function createAlertsSource(
     const summary = matched.length === 0
       ? 'No current matched alerts; coverage not inferred'
       : `${matched.length} current matched alert${alertSuffix}`;
-    return buildArtifact('alerts', {
+    const artifact = buildArtifact('alerts', {
       kind: 'alerts',
       placeId: place.id,
       profileFingerprint: scope.profileFingerprint,
       alerts: matched,
       sourceFetchedAt: feed.capturedAt,
+      sourceRevision: feed.sourceRevision,
     }, feed.capturedAt, expiresAt, summary);
+    return artifact ? { ...artifact, sourceRevision: feed.sourceRevision } : null;
   };
 }
 

@@ -22,7 +22,11 @@ import {
   type ExactOfflineMapTile,
 } from '@/services/offline-map-cache';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace } from '@/services/saved-places';
-import { getStormSnapshot, subscribeStormPosture } from '@/services/survival/storm-posture-state';
+import {
+  getStormAlertSourceRevision,
+  getStormSnapshot,
+  subscribeStormAlerts,
+} from '@/services/survival/storm-posture-state';
 import { matchAlertToPlace } from '@/services/weather/nws-polygon-match';
 import type {
   NwsAlertMinimal,
@@ -132,6 +136,7 @@ interface EmergencyPackRuntimeStore {
     profileFingerprint: string;
     kinds: readonly EmergencyPackArtifactKind[];
     capturedAt: number;
+    sourceRevision?: string;
   }): Promise<{ ok: boolean; reason?: string }>;
   prune?(input: { placeIds: string[]; maxPlaces: number; generationsPerPlace: number }): Promise<void>;
 }
@@ -155,7 +160,7 @@ interface EmergencyPackRuntimeDependencies {
   subscribeRoutes(callback: () => void): () => void;
   subscribeComms(callback: () => void): () => void;
   subscribeLifelines(callback: () => void): () => void;
-  subscribeAlerts(callback: () => void): () => void;
+  subscribeAlerts(callback: (event: { sourceRevision: string }) => void): () => void;
   openOfflineMapCache?(name: string): Promise<ExactOfflineMapCache>;
 }
 
@@ -651,6 +656,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   async function invalidateKinds(
     kinds: readonly EmergencyPackArtifactKind[],
     affectedPlaceIds?: ReadonlySet<string>,
+    sourceRevision?: string,
   ): Promise<void> {
     const places = retainedPlaces().filter((place) => !affectedPlaceIds || affectedPlaceIds.has(place.id));
     await Promise.all(places.map((place) => enqueuePlaceOperation(place.id, async () => {
@@ -664,6 +670,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           profileFingerprint: scope.profileFingerprint,
           kinds,
           capturedAt: dependencies.now(),
+          ...(sourceRevision ? { sourceRevision } : {}),
         });
         if (invalidated.ok) {
           await coordinator.refresh(scope);
@@ -703,7 +710,11 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     dependencies.subscribeRoutes(() => { void invalidateKinds(['route-primary', 'route-alternate']); }),
     dependencies.subscribeComms(() => { void invalidateKinds(['comms-plan', 'contacts']); }),
     dependencies.subscribeLifelines(() => { void invalidateKinds(['lifelines']); }),
-    dependencies.subscribeAlerts(() => { void invalidateKinds(['alerts']); }),
+    dependencies.subscribeAlerts((event) => {
+      if (/^[a-f0-9]{64}$/.test(event?.sourceRevision)) {
+        void invalidateKinds(['alerts'], undefined, event.sourceRevision);
+      }
+    }),
   ];
 
   async function executeCapture(
@@ -985,8 +996,9 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
       getAlertFeed: () => {
         const snapshot = getStormSnapshot();
         const weather = snapshot?.freshness.find(({ domain }) => domain === 'weather');
-        return snapshot && weather?.ok
-          ? { alerts: snapshot.weatherAlerts, capturedAt: weather.fetchedAtMs }
+        const sourceRevision = getStormAlertSourceRevision();
+        return snapshot && weather?.ok && sourceRevision
+          ? { alerts: snapshot.weatherAlerts, capturedAt: weather.fetchedAtMs, sourceRevision }
           : null;
       },
       matchAlertToPlace: (alert, place, options) => matchAlertToPlace(
@@ -1006,7 +1018,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
     subscribeRoutes: subscribeEvacRoutes,
     subscribeComms: (callback) => subscribeCommsPlans(() => callback()),
     subscribeLifelines,
-    subscribeAlerts: subscribeStormPosture,
+    subscribeAlerts: subscribeStormAlerts,
     openOfflineMapCache: (name) => caches.open(name),
   });
 }

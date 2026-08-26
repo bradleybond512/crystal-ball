@@ -36,6 +36,11 @@ import { adaptLiveAlert, adaptSavedPlace, type LiveAlertInput } from './storm-po
 import { saveSnapshot, loadLatestSnapshot } from './snapshot-store.ts';
 import type { PostureContributor } from './posture-contributor.ts';
 import type { SurvivalMove, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
+import {
+  buildStormAlertSourceRevision,
+  createStormAlertRevisionChannel,
+  type StormAlertSourceRevisionEvent,
+} from './storm-alert-source-revision.ts';
 
 // ── Shortage-entry TTL cache ────────────────────────────────────────────────
 // The three shortage feeds (drought / chokepoint / grid) move slowly, but
@@ -205,6 +210,7 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
 
 let current: WorldSnapshot | null = null;
 const listeners = new Set<() => void>();
+const alertRevisions = createStormAlertRevisionChannel();
 
 function notify(): void { for (const l of listeners) { try { l(); } catch { /* isolate */ } } }
 
@@ -215,10 +221,26 @@ export function subscribeStormPosture(cb: () => void): () => void {
   return () => { listeners.delete(cb); };
 }
 
+export function subscribeStormAlerts(
+  cb: (event: StormAlertSourceRevisionEvent) => void,
+): () => void {
+  return alertRevisions.subscribe(cb);
+}
+
+export function getStormAlertSourceRevision(): string | null {
+  return alertRevisions.current();
+}
+
 export async function hydrateStormPosture(): Promise<void> {
   if (current) return;
   const saved = await loadLatestSnapshot();
-  if (saved && !current) { current = saved; notify(); }
+  if (saved && !current) {
+    const sourceRevision = await buildStormAlertSourceRevision(saved.weatherAlerts);
+    if (current) return;
+    if (sourceRevision) alertRevisions.seedRevision(sourceRevision);
+    current = saved;
+    notify();
+  }
 }
 
 export async function refreshStormPosture(now = Date.now()): Promise<void> {
@@ -228,7 +250,9 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const alerts = (rawAlerts as unknown as LiveAlertInput[]).map((a) => adaptLiveAlert(a));
     const places = appPlaces.map((p) => adaptSavedPlace(p));
     const plan = current?.plan;
-    const nwsLastUpdate = dataFreshness.getSource('nws-alerts')?.lastUpdate;
+    const nwsState = dataFreshness.getSource('nws-alerts');
+    const nwsLastUpdate = nwsState?.lastUpdate;
+    const authoritativeAlerts = nwsLastUpdate !== null && nwsLastUpdate !== undefined && nwsState?.lastError === null;
     const priorFetchedAt = current?.freshness.find((f) => f.domain === 'weather')?.fetchedAtMs;
     // Real successful-fetch time when available; otherwise carry the prior
     // snapshot's fetch time so a failed/never-confirmed fetch stays honestly stale
@@ -260,6 +284,11 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
       return;
     }
 
+    const nextAlertSourceRevision = authoritativeAlerts
+      ? await buildStormAlertSourceRevision(alerts)
+      : null;
+    if (authoritativeAlerts && !nextAlertSourceRevision) throw new Error('invalid alert source revision');
+
     // Thread supply into the stored snapshot after the weather-driven guard.
     // Live shortage feeds (TTL-cached) drive the supply axis; a feed failure
     // degrades to baseline inside getSupplyEntries. Once this resolves the cache
@@ -267,6 +296,7 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     await getSupplyEntries(now);
     const next = withSupplyPosture(weatherOnly, now, current);
     current = next;
+    if (nextAlertSourceRevision) alertRevisions.publishRevision(nextAlertSourceRevision);
     notify();
     void saveSnapshot(next);
   } catch {

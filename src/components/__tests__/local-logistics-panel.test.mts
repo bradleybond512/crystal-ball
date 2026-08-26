@@ -136,11 +136,16 @@ function makeSnapshot(
   };
 }
 
-function mountPanel(loader: SnapshotLoader, prewarmCoordinator?: unknown): InstanceType<typeof LocalLogisticsPanel> {
+function mountPanel(
+  loader: SnapshotLoader,
+  prewarmCoordinator?: unknown,
+  getExactPackReadiness?: unknown,
+): InstanceType<typeof LocalLogisticsPanel> {
   const panel = new LocalLogisticsPanel({
     focusNode: () => {},
     fetchSnapshot: loader,
     ...(prewarmCoordinator ? { prewarmCoordinator } : {}),
+    ...(getExactPackReadiness ? { getExactPackReadiness } : {}),
   } as never);
   mountedPanels.push(panel);
   document.body.append(panel.getElement());
@@ -300,6 +305,35 @@ test('radius controls initialize from the saved place, allowlist clicks, retain 
   await Promise.resolve();
   assert.equal(requests[2]?.radiusKm, 50, 'manual refresh should retain the transient radius choice');
   assert.deepEqual(getSavedPlaces()[0], originalPlace, 'radius selection must not mutate the saved place');
+});
+
+test('pack readiness follows the exact active 10 km and 50 km radii', async () => {
+  const place = addSavedPlace({
+    name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 8, offlinePinned: true,
+  });
+  const requested: number[] = [];
+  const panel = mountPanel(
+    async (requestedPlace, options) => makeSnapshot(requestedPlace, options?.radiusKm ?? 10),
+    undefined,
+    (_place: SavedPlace, radiusKm: number) => {
+      requested.push(radiusKm);
+      return { status: 'ready' };
+    },
+  );
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  let content = panel.getContentElement().textContent ?? '';
+  assert.match(content, /Offline Lifelines: saved for this exact place/);
+  assert.doesNotMatch(content, /not saved for this exact place/);
+  assert.ok(requested.includes(10), 'saved radius 8 km must verify the visible 10 km pack');
+
+  requiredElement<HTMLButtonElement>(panel.getContentElement(), '[data-logistics-radius="50"]').click();
+  await settleRender();
+  content = panel.getContentElement().textContent ?? '';
+  assert.match(content, /Offline Lifelines: saved for this exact place/);
+  assert.doesNotMatch(content, /not saved for this exact place/);
+  assert.equal(requested.at(-1), 50, 'manual 50 km selection must verify the 50 km pack');
 });
 
 test('out-of-order radius responses cannot display, publish, or reach the map overlay', async () => {

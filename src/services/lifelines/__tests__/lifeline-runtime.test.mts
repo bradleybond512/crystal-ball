@@ -140,6 +140,25 @@ test('a verified network snapshot creates exact-fingerprint offline Lifelines re
   assert.equal(runtime.verifyExactSnapshot(place, 25, snapshot({ source: 'offline-cache' })), null);
 });
 
+test('exact snapshot verification requires the persisted artifact and its verified manifest', () => {
+  const storage = new MemoryStorage();
+  const runtime = createLifelineRuntime(storage, () => T0 + 60_000);
+  const accepted = snapshot();
+
+  persistExactArtifact(storage, accepted);
+  assert.equal(runtime.verifyExactSnapshot(place, 25, accepted), null,
+    'an exact artifact without a verified manifest is not ready');
+
+  runtime.processSnapshot(accepted);
+  assert.deepEqual(runtime.verifyExactSnapshot(place, 25, accepted), {
+    status: 'ready', exact: true,
+  });
+
+  storage.removeItem(`wm_offline_${artifactServiceId(accepted)}`);
+  assert.equal(runtime.verifyExactSnapshot(place, 25, accepted), null,
+    'evicting the exact artifact revokes verification even when the manifest remains');
+});
+
 test('storage failure never claims the offline pack is ready', () => {
   const runtime = createLifelineRuntime({
     getItem: () => null,

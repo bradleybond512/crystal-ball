@@ -79,8 +79,9 @@ describe('saved places panel wiring', () => {
     const liveRegions = savedPlacesPanelSrc.match(/aria-live=["']polite["']/g) ?? [];
     assert.equal(liveRegions.length, 1, 'one region should announce all prewarm transitions');
     assert.match(savedPlacesPanelSrc, /aria-atomic=["']true["']/);
-    assert.match(savedPlacesPanelSrc, /lifelinePrewarmCoordinator\.subscribe/);
-    assert.match(savedPlacesPanelSrc, /lifelinePrewarmCoordinator\.retry\([^,]+,\s*[^)]+queryFingerprint/);
+    assert.match(savedPlacesPanelSrc, /options\.prewarmCoordinator\s*\?\?\s*lifelinePrewarmCoordinator/);
+    assert.match(savedPlacesPanelSrc, /this\.prewarmCoordinator\.subscribe/);
+    assert.match(savedPlacesPanelSrc, /this\.prewarmCoordinator\.retry\([^,]+,\s*[^)]+queryFingerprint/);
     assert.match(savedPlacesPanelSrc, /unsubscribeLifelinePrewarm\?\.\(\)/);
   });
 });

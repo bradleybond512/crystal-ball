@@ -2,9 +2,10 @@ import { Panel } from './Panel';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
 import { getSavedPlaceBrief, computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
 import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
-import { getLifelinePackReadinessForPlace } from '@/services/lifelines/lifeline-runtime';
+import { getExactLifelinePackReadinessForPlace } from '@/services/lifelines/lifeline-runtime';
 import {
   lifelinePrewarmCoordinator,
+  type LifelinePrewarmCoordinator,
   type LifelinePrewarmState,
 } from '@/services/lifelines/lifeline-prewarm';
 
@@ -12,6 +13,8 @@ interface SavedPlacesPanelOptions {
   focusPlace: (placeId: string) => void;
   editPlace?: (placeId: string) => void;
   createPlace?: () => void;
+  prewarmCoordinator?: LifelinePrewarmCoordinator;
+  getExactPackReadiness?: typeof getExactLifelinePackReadinessForPlace;
 }
 
 const TAG_LABELS: Record<SavedPlaceTag, string> = {
@@ -33,7 +36,7 @@ const PENCIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="1
 
 const MAX_PLACES = 20;
 
-type LifelinePackStatus = ReturnType<typeof getLifelinePackReadinessForPlace>['status'];
+type LifelinePackStatus = ReturnType<typeof getExactLifelinePackReadinessForPlace>['status'];
 
 function lifelinePackLabel(status: LifelinePackStatus | null): string {
   switch (status) {
@@ -82,6 +85,8 @@ const SEVERITY_COLOR: Record<UnifiedAlert['severity'], string> = {
 
 export class SavedPlacesPanel extends Panel {
   private options: SavedPlacesPanelOptions;
+  private readonly prewarmCoordinator: LifelinePrewarmCoordinator;
+  private readonly getExactPackReadiness: typeof getExactLifelinePackReadinessForPlace;
   private unsubscribeSavedPlaces: (() => void) | null = null;
   private unsubscribeAlerts: (() => void) | null = null;
   private unsubscribeLifelinePrewarm: (() => void) | null = null;
@@ -99,6 +104,8 @@ export class SavedPlacesPanel extends Panel {
       infoTooltip: 'Personal locations prioritized for place-first monitoring, fast map focus, and later place briefs.',
     });
     this.options = options;
+    this.prewarmCoordinator = options.prewarmCoordinator ?? lifelinePrewarmCoordinator;
+    this.getExactPackReadiness = options.getExactPackReadiness ?? getExactLifelinePackReadinessForPlace;
 
     if (options.createPlace) {
       const addBtn = document.createElement('button');
@@ -130,9 +137,9 @@ export class SavedPlacesPanel extends Panel {
       if (retryButton) {
         event.stopPropagation();
         const placeId = retryButton.dataset.savedPlacePrewarmRetry;
-        const state = placeId ? lifelinePrewarmCoordinator.getState(placeId) : null;
+        const state = placeId ? this.prewarmCoordinator.getState(placeId) : null;
         if (state?.phase === 'failed') {
-          lifelinePrewarmCoordinator.retry(state.placeId, state.queryFingerprint);
+          this.prewarmCoordinator.retry(state.placeId, state.queryFingerprint);
         }
         return;
       }
@@ -166,7 +173,7 @@ export class SavedPlacesPanel extends Panel {
     document.addEventListener('wm:storm-data-updated', this.boundRefresh);
     this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.boundRefresh());
     this.unsubscribeAlerts = unifiedAlertStore.subscribe(() => this.boundRefresh());
-    this.unsubscribeLifelinePrewarm = lifelinePrewarmCoordinator.subscribe((state) => {
+    this.unsubscribeLifelinePrewarm = this.prewarmCoordinator.subscribe((state) => {
       const place = getSavedPlaces().find((candidate) => candidate.id === state.placeId);
       this.prewarmLiveRegion.textContent = place
         ? `${place.name}: ${prewarmLabel(state)}.`
@@ -322,11 +329,12 @@ export class SavedPlacesPanel extends Panel {
     const threatBadge = this.buildThreatBadge(threats);
     if (threatBadge) panelsRow.append(threatBadge);
 
+    const prewarmState = this.prewarmCoordinator.getState(place.id);
+    const exactRadiusKm = prewarmState?.radiusKm ?? this.prewarmCoordinator.resolveRadius(place);
     const packStatus = place.offlinePinned
-      ? getLifelinePackReadinessForPlace(place).status
+      ? this.getExactPackReadiness(place, exactRadiusKm).status
       : null;
     const packLabel = lifelinePackLabel(packStatus);
-    const prewarmState = lifelinePrewarmCoordinator.getState(place.id);
     const currentPrewarmLabel = prewarmLabel(prewarmState);
     const chips: string[] = [
       place.primary ? 'Primary' : '',

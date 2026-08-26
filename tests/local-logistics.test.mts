@@ -131,6 +131,70 @@ test('explicit fetch radii override the saved preference and clamp independently
   }
 });
 
+test('a false internal commit guard blocks cache, persistence, latest pointer, and events', async () => {
+  const place = makePlace({ id: 'guarded-fetch', radiusKm: 10 });
+  const originalFetch = globalThis.fetch;
+  const priorStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const priorCustomEvent = Object.getOwnPropertyDescriptor(globalThis, 'CustomEvent');
+  const persisted = new Map<string, string>();
+  let events = 0;
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => persisted.get(key) ?? null,
+      setItem: (key: string, value: string) => { persisted.set(key, value); },
+      removeItem: (key: string) => { persisted.delete(key); },
+    },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { dispatchEvent: () => { events += 1; } },
+  });
+  Object.defineProperty(globalThis, 'CustomEvent', {
+    configurable: true,
+    value: class { constructor(_type: string, _init: unknown) {} },
+  });
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input), 'http://localhost');
+    const radiusKm = Number(url.searchParams.get('radiusKm'));
+    const categories = url.searchParams.get('categories')?.split(',') ?? [];
+    const now = new Date().toISOString();
+    return new Response(JSON.stringify({
+      schemaVersion: 2,
+      query: { lat: place.lat, lon: place.lon, radiusKm, categories },
+      sites: [],
+      observations: [],
+      providers: [
+        { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: now },
+        { id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: now },
+        { id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: now },
+      ],
+      fetchedAt: now,
+      retrievedAt: now,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await fetchLocalLogistics(place, {
+      radiusKm: 10,
+      shouldCommit: () => false,
+    } as never);
+    assert.equal(result.effectiveRadiusKm, 10);
+    assert.equal(getCachedLocalLogistics(place.id), null);
+    assert.equal(persisted.size, 0);
+    assert.equal(events, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (priorStorage) Object.defineProperty(globalThis, 'localStorage', priorStorage);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+    if (priorDocument) Object.defineProperty(globalThis, 'document', priorDocument);
+    else Reflect.deleteProperty(globalThis, 'document');
+    if (priorCustomEvent) Object.defineProperty(globalThis, 'CustomEvent', priorCustomEvent);
+    else Reflect.deleteProperty(globalThis, 'CustomEvent');
+  }
+});
+
 test('representative selection includes one ranked result per category before filling remaining slots', () => {
   const selectRepresentativeLocalLogisticsNodes = requireFeature<(
     snapshot: LocalLogisticsSnapshot,

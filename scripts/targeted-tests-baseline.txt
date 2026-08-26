@@ -102,6 +102,7 @@ api/newsdata-feed.js
 api/nws-alerts.js
 api/og-story.js
 api/og-story.test.mjs
+api/openaq-readings.js
 api/openphish-feed.js
 api/opensky.js
 api/oref-alerts.js

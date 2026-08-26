@@ -459,7 +459,22 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   const captureResults = new Map<string, EmergencyPackCaptureResult>();
   const detailedOperationStates = new Map<string, EmergencyPackRuntimeState>();
   const operationQueues = new Map<string, Promise<void>>();
+  let offlineMapLifecycleTail = Promise.resolve();
   let active = true;
+
+  async function acquireOfflineMapLifecycle(): Promise<() => void> {
+    let finishLease: (() => void) | null = null;
+    const lease = new Promise<void>((resolve) => { finishLease = resolve; });
+    const prior = offlineMapLifecycleTail;
+    offlineMapLifecycleTail = prior.then(() => lease, () => lease);
+    await prior.catch(() => undefined);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      finishLease?.();
+    };
+  }
 
   const resolveOfflineMapTile = createEmergencyPackOfflineMapTileResolver({
     getScopes: () => retainedPlaces().flatMap((place) => {
@@ -522,15 +537,49 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         captureResults.set(scope.placeId, { ok: false, reason: 'scope-changed' });
         return coordinatorState(notSaved(scope.profileFingerprint, 'scope-changed'));
       }
-      const orchestrator = dependencies.createCaptureOrchestrator({
-        sources: dependencies.createSources(context.place),
-        commitGeneration: store.commitGeneration.bind(store),
-        releaseArtifact: dependencies.releaseArtifact,
-      });
-      captureResults.set(scope.placeId, await orchestrator.capture({
-        ...scope,
-        contactConsent: context.contactConsent,
-      }));
+      const sources = dependencies.createSources(context.place);
+      const offlineMapSource = sources['offline-map'];
+      let releaseOfflineMapLifecycle: (() => void) | null = null;
+      const finishOfflineMapLifecycle = (): void => {
+        releaseOfflineMapLifecycle?.();
+        releaseOfflineMapLifecycle = null;
+      };
+      const serializedSources = typeof offlineMapSource === 'function'
+        ? {
+            ...sources,
+            'offline-map': async (captureScope: EmergencyPackCaptureScope) => {
+              releaseOfflineMapLifecycle = await acquireOfflineMapLifecycle();
+              return offlineMapSource(captureScope);
+            },
+          }
+        : sources;
+      try {
+        const orchestrator = dependencies.createCaptureOrchestrator({
+          sources: serializedSources,
+          commitGeneration: typeof offlineMapSource === 'function'
+            ? async (input) => {
+                const committed = await store.commitGeneration(input);
+                if (committed.ok) finishOfflineMapLifecycle();
+                return committed;
+              }
+            : store.commitGeneration.bind(store),
+          releaseArtifact: typeof offlineMapSource === 'function'
+            ? async (artifact) => {
+                try {
+                  await dependencies.releaseArtifact(artifact);
+                } finally {
+                  if (artifact.kind === 'offline-map') finishOfflineMapLifecycle();
+                }
+              }
+            : dependencies.releaseArtifact,
+        });
+        captureResults.set(scope.placeId, await orchestrator.capture({
+          ...scope,
+          contactConsent: context.contactConsent,
+        }));
+      } finally {
+        finishOfflineMapLifecycle();
+      }
       const detailed = await readDetailed({ ...scope, contactConsent: context.contactConsent });
       detailedOperationStates.set(scope.placeId, detailed);
       return coordinatorState(detailed);

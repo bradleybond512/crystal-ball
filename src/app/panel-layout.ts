@@ -566,6 +566,7 @@ import {
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { isLowPowerMode, setLowPowerMode } from '@/services/low-power';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
+import { isDesktopRuntime } from '@/services/runtime';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
 import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlaces } from '@/services/saved-places';
@@ -2018,11 +2019,13 @@ export class PanelLayoutManager implements AppModule {
  });
  this.ctx.panels['strategic-posture'] = strategicPosturePanel;
 
+ if (isDesktopRuntime()) {
  const ucdpEventsPanel = new UcdpEventsPanel();
  ucdpEventsPanel.setEventClickHandler((lat, lon) => {
  this.ctx.map?.setCenter(lat, lon, 5);
  });
  this.ctx.panels['ucdp-events'] = ucdpEventsPanel;
+ }
 
  this.ctx.panels['nuclear-risk'] = new NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker'); this.ctx.panels['nuclear-near-miss'] = new NuclearNearMissPanel();
 

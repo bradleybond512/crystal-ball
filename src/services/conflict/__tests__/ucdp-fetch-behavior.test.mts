@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 
-import { fetchUcdpClassifications, fetchUcdpEvents } from '../index.ts';
+import {
+  assessUcdpDatasetCurrency,
+  fetchUcdpClassifications,
+  fetchUcdpEvents,
+} from '../index.ts';
 import { calculateCII, clearCountryData, ingestUcdpForCII } from '../../country-instability.ts';
 
 const originalFetch = globalThis.fetch;
@@ -32,6 +36,12 @@ test('renderer fetches exactly one bounded event response and never follows next
   const result = await fetchUcdpEvents();
   assert.equal(result.success, true);
   assert.equal(result.count, 1);
+  assert.deepEqual(result.dataset, {
+    kind: 'historical_window',
+    version: '26.1',
+    windowStart: '2025-09-02',
+    windowEnd: '2025-12-31',
+  });
   assert.equal(calls, 1);
 });
 
@@ -47,11 +57,13 @@ test('renderer fetches classifications once and maps presence without event-coun
       ],
       totalCount: 2,
       version: '26.1',
+      dataset: { kind: 'annual_classification', version: '26.1', year: 2025 },
     });
   };
   const result = await fetchUcdpClassifications();
-  assert.equal(result.get('Ukraine')?.intensity, 'none');
-  assert.equal(result.get('Ghana')?.intensity, 'none');
+  assert.equal(result.classifications.get('Ukraine')?.intensity, 'none');
+  assert.equal(result.classifications.get('Ghana')?.intensity, 'none');
+  assert.deepEqual(result.dataset, { kind: 'annual_classification', version: '26.1', year: 2025 });
   assert.equal(calls, 1);
 });
 
@@ -76,9 +88,10 @@ test('annual conflict presence remains descriptive and does not impose a current
     ],
     totalCount: 1,
     version: '26.1',
+    dataset: { kind: 'annual_classification', version: '26.1', year: 2025 },
   });
 
-  const classifications = await fetchUcdpClassifications();
+  const { classifications } = await fetchUcdpClassifications();
   ingestUcdpForCII(classifications);
 
   assert.equal(calculateCII().find((score) => score.code === 'ZA')?.score, baseline);
@@ -91,9 +104,10 @@ test('annual conflict presence retains official classification fields', async ()
     ],
     totalCount: 1,
     version: '26.1',
+    dataset: { kind: 'annual_classification', version: '26.1', year: 2025 },
   });
 
-  const status = await fetchUcdpClassifications().then((classifications) => classifications.get('ZA'));
+  const status = await fetchUcdpClassifications().then(({ classifications }) => classifications.get('ZA'));
 
   assert.deepEqual(status && {
     countryId: status.countryId,
@@ -111,6 +125,39 @@ test('annual conflict presence retains official classification fields', async ()
 });
 
 test('renderer rejects classification responses that normalize to zero usable observations', async () => {
-  globalThis.fetch = async () => Response.json({ classifications: [], totalCount: 0, version: '26.1' });
+  globalThis.fetch = async () => Response.json({
+    classifications: [],
+    totalCount: 0,
+    version: '26.1',
+    dataset: { kind: 'annual_classification', version: '26.1', year: 2025 },
+  });
   await assert.rejects(() => fetchUcdpClassifications(), /usable UCDP classifications/);
+});
+
+test('dataset currency never treats historical transport as current and degrades annual data after rollover', () => {
+  const historical = assessUcdpDatasetCurrency({
+    kind: 'historical_window', version: '26.1', windowStart: '2025-09-02', windowEnd: '2025-12-31',
+  }, Date.UTC(2025, 11, 31));
+  assert.equal(historical.current, false);
+  assert.match(historical.reason, /historical window 2025-09-02 through 2025-12-31/);
+
+  const annualCurrent = assessUcdpDatasetCurrency(
+    { kind: 'annual_classification', version: '26.1', year: 2025 },
+    Date.UTC(2025, 11, 31),
+  );
+  assert.deepEqual(annualCurrent, { current: true, reason: '' });
+
+  const rollover = assessUcdpDatasetCurrency(
+    { kind: 'annual_classification', version: '26.1', year: 2025 },
+    Date.UTC(2026, 2, 31, 23, 59, 59),
+  );
+  assert.equal(rollover.current, false);
+  assert.match(rollover.reason, /annual rollover/);
+
+  const degraded = assessUcdpDatasetCurrency(
+    { kind: 'annual_classification', version: '26.1', year: 2025 },
+    Date.UTC(2026, 7, 25),
+  );
+  assert.equal(degraded.current, false);
+  assert.match(degraded.reason, /historical annual classification/);
 });

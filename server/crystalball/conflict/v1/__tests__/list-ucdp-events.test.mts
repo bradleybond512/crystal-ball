@@ -189,11 +189,28 @@ test('defaults event pages to 100 cached rows', async () => {
   assert.ok(result.pagination?.nextCursor);
 });
 
-test('rejects pagination beyond 8 pages before claiming more pages', async () => {
+test('accepts a complete ten-page corpus at the calibrated cap', async () => {
+  let calls = 0;
+  globalThis.fetch = async (input) => {
+    calls++;
+    const pageIndex = Number(new URL(String(input)).searchParams.get('page'));
+    return jsonResponse(page(
+      Array.from({ length: 1000 }, (_, i) => row(pageIndex * 1000 + i + 1)),
+      10_000,
+      10,
+    ));
+  };
+  const result = await listUcdpEvents(localContext, request());
+  assert.equal(result.pagination?.totalCount, 10_000);
+  assert.equal(result.events.length, 100);
+  assert.equal(calls, 10);
+});
+
+test('rejects pagination beyond 10 pages or 10,000 rows before claiming more pages', async () => {
   let calls = 0;
   globalThis.fetch = async () => {
     calls++;
-    return jsonResponse(page(Array.from({ length: 1000 }, (_, i) => row(i + 1)), 8001, 9));
+    return jsonResponse(page(Array.from({ length: 1000 }, (_, i) => row(i + 1)), 10_001, 11));
   };
   await assert.rejects(() => listUcdpEvents(localContext, request()), /pagination metadata/);
   assert.equal(calls, 1);

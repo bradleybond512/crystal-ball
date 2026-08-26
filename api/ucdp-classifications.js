@@ -165,7 +165,12 @@ function normalize(body) {
       oneSided: raw.os_exist === 1,
     });
   }
-  return { classifications, totalCount: classifications.length, version: VERSION };
+  return {
+    classifications,
+    totalCount: classifications.length,
+    version: VERSION,
+    dataset: { kind: 'annual_classification', version: VERSION, year: YEAR },
+  };
 }
 
 async function load(snapshot, controller) {

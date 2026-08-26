@@ -90,7 +90,16 @@ import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOut
 import { fetchGpsInterference } from '@/services/gps-interference';
 import { situationEngine } from '@/services/situation-engine';
 import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
-import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchUcdpEvents, deduplicateAgainstAcled, fetchIranEvents } from '@/services/conflict';
+import {
+  assessUcdpDatasetCurrency,
+  fetchConflictEvents,
+  fetchUcdpClassifications,
+  fetchHapiSummary,
+  fetchUcdpEvents,
+  deduplicateAgainstAcled,
+  fetchIranEvents,
+  type UcdpDataset,
+} from '@/services/conflict';
 import { fetchUnhcrPopulation } from '@/services/displacement';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { fetchSecurityAdvisories } from '@/services/security-advisories';
@@ -392,6 +401,15 @@ import {
   ucdpEventsToObservations,
 } from '@/services/intelligence/conflict-observation-adapters';
 import { slog } from '@/services/structured-log';
+
+function recordUcdpDatasetState(sourceId: 'ucdp' | 'ucdp_events', dataset: UcdpDataset, itemCount: number): void {
+  const currency = assessUcdpDatasetCurrency(dataset);
+  if (currency.current) {
+    dataFreshness.recordUpdate(sourceId, itemCount);
+    return;
+  }
+  dataFreshness.recordError(sourceId, currency.reason);
+}
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -2459,9 +2477,9 @@ export class DataLoaderManager implements AppModule {
 
  tasks.push((async () => {
  try {
- const classifications = await fetchUcdpClassifications();
+ const { classifications, dataset } = await fetchUcdpClassifications();
  ingestUcdpForCII(classifications);
- if (classifications.size > 0) dataFreshness.recordUpdate('ucdp', classifications.size);
+ if (classifications.size > 0) recordUcdpDatasetState('ucdp', dataset, classifications.size);
  } catch (error) {
  console.error('[Intelligence] UCDP fetch failed:', error);
  dataFreshness.recordError('ucdp', String(error));
@@ -2589,7 +2607,7 @@ export class DataLoaderManager implements AppModule {
  if (this.ctx.mapLayers.ucdpEvents) {
  this.ctx.map?.setUcdpEvents(events);
  }
- if (events.length > 0) dataFreshness.recordUpdate('ucdp_events', events.length);
+ if (events.length > 0) recordUcdpDatasetState('ucdp_events', result.dataset, events.length);
  } catch (error) {
  console.error('[Intelligence] UCDP events fetch failed:', error);
  dataFreshness.recordError('ucdp_events', String(error));

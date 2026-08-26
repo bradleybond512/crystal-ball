@@ -74,4 +74,13 @@ describe('saved places panel wiring', () => {
  'search manager should handle saved place search selections',
  );
   });
+
+  it('owns one polite atomic prewarm status and retries the exact failed job', () => {
+    const liveRegions = savedPlacesPanelSrc.match(/aria-live=["']polite["']/g) ?? [];
+    assert.equal(liveRegions.length, 1, 'one region should announce all prewarm transitions');
+    assert.match(savedPlacesPanelSrc, /aria-atomic=["']true["']/);
+    assert.match(savedPlacesPanelSrc, /lifelinePrewarmCoordinator\.subscribe/);
+    assert.match(savedPlacesPanelSrc, /lifelinePrewarmCoordinator\.retry\([^,]+,\s*[^)]+queryFingerprint/);
+    assert.match(savedPlacesPanelSrc, /unsubscribeLifelinePrewarm\?\.\(\)/);
+  });
 });

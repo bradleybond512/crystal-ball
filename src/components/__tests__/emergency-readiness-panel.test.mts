@@ -369,6 +369,31 @@ test('without a live primary place only Lifelines is unavailable with explicit s
   assert.match(content.textContent ?? '', /Save a primary place to verify an exact Lifelines snapshot receipt/);
 });
 
+test('default panel dependencies use the real Emergency Pack runtime facade', () => {
+  const source = readFileSync(new URL('../EmergencyReadinessPanel.ts', import.meta.url), 'utf8');
+  const runtimeImport = source.match(
+    /import\s*\{(?<bindings>[^}]+)\}\s*from ['"]@\/services\/emergency-pack\/emergency-pack-runtime\.ts['"]/,
+  );
+  assert.ok(runtimeImport?.groups?.bindings);
+  for (const binding of [
+    'captureEmergencyPack',
+    'getEmergencyPackState',
+    'hydrateEmergencyPacks',
+    'subscribeEmergencyPack',
+  ]) {
+    assert.match(runtimeImport.groups.bindings, new RegExp(`\\b${binding}\\b`));
+  }
+
+  const defaultsStart = source.indexOf('const DEFAULT_DEPENDENCIES');
+  const defaultsEnd = source.indexOf('\nfunction captureMessage', defaultsStart);
+  assert.ok(defaultsStart >= 0 && defaultsEnd > defaultsStart);
+  const defaults = source.slice(defaultsStart, defaultsEnd);
+  assert.match(defaults, /\bsubscribeEmergencyPack\s*,/);
+  assert.match(defaults, /\bhydrateEmergencyPacks\(\)/);
+  assert.match(defaults, /\bgetEmergencyPackState\(place\)/);
+  assert.match(defaults, /\bcaptureEmergencyPack\s*,/);
+});
+
 test('panel CSS reflows cards as the window or resized panel narrows', () => {
   const css = readFileSync(new URL('../../styles/panels.css', import.meta.url), 'utf8');
   assert.match(css, /\.emergency-readiness__grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*220px\),\s*1fr\)\)/s);

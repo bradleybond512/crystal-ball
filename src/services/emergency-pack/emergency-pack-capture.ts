@@ -210,6 +210,7 @@ function validateOfflineMap(payload: Record<string, unknown>): EmergencyPackArti
 
 function validContact(value: unknown): value is Record<string, unknown> {
   return isRecord(value)
+    && hasAllowedKeys(value, ['id', 'label', 'value', 'role'], ['id', 'label', 'value', 'role'])
     && isBoundedString(value.id, 180)
     && isBoundedString(value.label, 300)
     && isBoundedString(value.value, 1000)
@@ -218,7 +219,12 @@ function validContact(value: unknown): value is Record<string, unknown> {
 
 function validFallbackStep(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  if (!isBoundedString(value.id, 180)
+  if (!hasAllowedKeys(
+    value,
+    ['id', 'label', 'kind', 'instruction', 'priority', 'link'],
+    ['id', 'label', 'kind', 'instruction', 'priority'],
+  )
+    || !isBoundedString(value.id, 180)
     || !isBoundedString(value.label, 300)
     || !isBoundedString(value.kind, 32)
     || !CHANNEL_KINDS.has(value.kind)
@@ -229,42 +235,76 @@ function validFallbackStep(value: unknown): boolean {
 
 function validCheckInWindow(value: unknown): boolean {
   return isRecord(value)
+    && hasAllowedKeys(value, ['id', 'label', 'cadenceMinutes', 'note'], ['id', 'label', 'cadenceMinutes', 'note'])
     && isBoundedString(value.id, 180)
     && isBoundedString(value.label, 300)
     && isSafeCount(value.cadenceMinutes, 525_600, false)
     && isBoundedString(value.note, 2000, true);
 }
 
-function validateComms(payload: Record<string, unknown>): EmergencyPackArtifactValidationResult {
+function hasAllowedKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  required: readonly string[],
+): boolean {
+  const keys = Object.keys(value);
+  return keys.every((key) => allowed.includes(key))
+    && required.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function readSelectedContactIds(payload: Record<string, unknown>): Set<string> | null {
+  if (!Array.isArray(payload.selectedContactIds)
+    || payload.selectedContactIds.length === 0
+    || payload.selectedContactIds.length > MAX_CONTACTS
+    || !payload.selectedContactIds.every((id) => isBoundedString(id, 180))) {
+    return null;
+  }
+  const selectedIds = new Set(payload.selectedContactIds);
+  return selectedIds.size === payload.selectedContactIds.length ? selectedIds : null;
+}
+
+function validateCommsPlan(payload: Record<string, unknown>): EmergencyPackArtifactValidationResult {
+  if (!hasAllowedKeys(
+    payload,
+    ['kind', 'placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'fallbackSteps', 'checkInWindows', 'notes'],
+    ['placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'fallbackSteps', 'checkInWindows', 'notes'],
+  ) || (payload.kind !== undefined && payload.kind !== 'comms-plan')) return invalid('invalid-comms-plan-shape');
   if (payload.consent !== true) return invalid('contacts-consent-required');
+  const selectedIds = readSelectedContactIds(payload);
+  if (!selectedIds) return invalid('selected-contact-required');
+  if (!Array.isArray(payload.fallbackSteps)
+    || payload.fallbackSteps.length > MAX_FALLBACK_STEPS
+    || !payload.fallbackSteps.every((step) => validFallbackStep(step))) return invalid('invalid-fallback-steps');
+  const fallbackIds = new Set(payload.fallbackSteps.map((step) => (step as Record<string, unknown>).id));
+  if (fallbackIds.size !== payload.fallbackSteps.length) return invalid('duplicate-fallback-step-id');
+  if (!Array.isArray(payload.checkInWindows)
+    || payload.checkInWindows.length > MAX_CHECK_IN_WINDOWS
+    || !payload.checkInWindows.every((window) => validCheckInWindow(window))) return invalid('invalid-check-in-windows');
+  const windowIds = new Set(payload.checkInWindows.map((window) => (window as Record<string, unknown>).id));
+  if (windowIds.size !== payload.checkInWindows.length) return invalid('duplicate-check-in-window-id');
+  if (!isBoundedString(payload.notes, 8192, true)) return invalid('invalid-comms-notes');
+  return verified(selectedIds.size);
+}
+
+function validateContacts(payload: Record<string, unknown>): EmergencyPackArtifactValidationResult {
+  if (!hasAllowedKeys(
+    payload,
+    ['kind', 'placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'contacts'],
+    ['placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'contacts'],
+  ) || (payload.kind !== undefined && payload.kind !== 'contacts')) return invalid('invalid-contacts-shape');
+  if (payload.consent !== true) return invalid('contacts-consent-required');
+  const selectedIds = readSelectedContactIds(payload);
+  if (!selectedIds) return invalid('selected-contact-required');
   if (!Array.isArray(payload.contacts)
     || payload.contacts.length === 0
     || payload.contacts.length > MAX_CONTACTS
     || !payload.contacts.every((contact) => validContact(contact))) return invalid('invalid-contacts');
 
-  const contactIds = new Set<string>();
-  for (const contact of payload.contacts) {
-    const id = contact.id as string;
-    if (contactIds.has(id)) return invalid('duplicate-contact-id');
-    contactIds.add(id);
-  }
-  if (!Array.isArray(payload.selectedContactIds)
-    || payload.selectedContactIds.length === 0
-    || payload.selectedContactIds.length > MAX_CONTACTS
-    || !payload.selectedContactIds.every((id) => isBoundedString(id, 180))) {
-    return invalid('selected-contact-required');
-  }
-  const selectedIds = new Set(payload.selectedContactIds);
-  if (selectedIds.size !== payload.selectedContactIds.length
+  const contactIds = new Set(payload.contacts.map((contact) => (contact as Record<string, unknown>).id));
+  if (contactIds.size !== payload.contacts.length) return invalid('duplicate-contact-id');
+  if (contactIds.size !== selectedIds.size
     || [...selectedIds].some((id) => !contactIds.has(id))) return invalid('selected-contact-mismatch');
-  if (!Array.isArray(payload.fallbackSteps)
-    || payload.fallbackSteps.length > MAX_FALLBACK_STEPS
-    || !payload.fallbackSteps.every((step) => validFallbackStep(step))) return invalid('invalid-fallback-steps');
-  if (!Array.isArray(payload.checkInWindows)
-    || payload.checkInWindows.length > MAX_CHECK_IN_WINDOWS
-    || !payload.checkInWindows.every((window) => validCheckInWindow(window))) return invalid('invalid-check-in-windows');
-  if (!isBoundedString(payload.notes, 8192, true)) return invalid('invalid-comms-notes');
-  return verified(selectedIds.size);
+  return verified(contactIds.size);
 }
 
 export function validateEmergencyPackArtifact(
@@ -298,9 +338,12 @@ export function validateEmergencyPackArtifact(
       result = validateOfflineMap(input.payload);
       break;
     }
-    case 'comms-plan':
+    case 'comms-plan': {
+      result = validateCommsPlan(input.payload);
+      break;
+    }
     case 'contacts': {
-      result = validateComms(input.payload);
+      result = validateContacts(input.payload);
       break;
     }
   }

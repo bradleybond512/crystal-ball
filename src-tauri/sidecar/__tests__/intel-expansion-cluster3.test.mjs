@@ -58,6 +58,8 @@ const sidecarSource = readFileSync(join(__dir, '..', 'local-api-server.mjs'), 'u
 const DOCUMENTATION_TEST_PREFIX = `${[1, 1, 1, 0].join('.')}/24`;
 
 function cloudflareBgpEvent(index = 1, overrides = {}) {
+  const secondOctet = Math.floor(index / 256);
+  const thirdOctet = index % 256;
   return {
     id: 1000 + index,
     confidence_score: 9,
@@ -67,7 +69,7 @@ function cloudflareBgpEvent(index = 1, overrides = {}) {
     min_hijack_ts: '2026-08-14T13:00:00.000',
     max_hijack_ts: '2026-08-14T13:05:00.000',
     on_going_count: 1,
-    prefixes: [`203.0.${index}.0/24`],
+    prefixes: [`203.${secondOctet}.${thirdOctet}.0/24`],
     victim_asns: [64_496],
     ...overrides,
   };
@@ -234,6 +236,36 @@ test('BGP sidecar emits a bounded allowlisted event envelope', () => {
   assert.equal(result.events[0].expected_origin, '13335');
   assert.deepEqual(result.events[0].involved_asns, ['13335', '64513', '64512']);
   assert.equal(result.events[0].id, '1234');
+});
+
+test('BGP sidecar accepts only range-valid IPv4 and IPv6 CIDR prefixes', () => {
+  const fetchedAt = Date.parse('2026-08-14T14:00:00Z');
+  const valid = normalizeInfrastructureBgpPayload(cloudflareBgpPage(1, [
+    cloudflareBgpEvent(1, { prefixes: ['203.0.113.0/24', '2001:db8:1234::/48'] }),
+  ], 1), fetchedAt, 100);
+  assert.equal(valid.coverage, 'reported');
+  assert.deepEqual(valid.events[0].prefixes, ['203.0.113.0/24', '2001:db8:1234::/48']);
+
+  const malformedPrefixes = [
+    '8.8.8.not-a-cidr',
+    '999.0.0.0/24',
+    '192.0.2.0/33',
+    '192.0.2.0/-1',
+    '192.0.2.0/024',
+    '2001:db8::/129',
+    '2001:db8:::1/64',
+    '2001:db8:gggg::/48',
+    '2001:db8::',
+    'not-an-address/24',
+  ];
+  const invalid = normalizeInfrastructureBgpPayload(cloudflareBgpPage(1,
+    malformedPrefixes.map((prefix, index) => cloudflareBgpEvent(index + 10, { prefixes: [prefix] })),
+    malformedPrefixes.length,
+  ), fetchedAt, 100);
+  assert.equal(invalid.coverage, 'unknown');
+  assert.equal(invalid.error, 'no_valid_events');
+  assert.equal(invalid.acceptedRows, 0);
+  assert.equal(invalid.droppedRows, malformedPrefixes.length);
 });
 
 test('BGP sidecar models explicit ongoing/resolved lifecycle and rejects ambiguous lifecycle evidence', () => {

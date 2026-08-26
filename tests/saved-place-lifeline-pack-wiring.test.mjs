@@ -18,3 +18,14 @@ test('saved-place modal persists the offline pin and strictly parses coordinates
   assert.match(source, /const lon = Number\(this\.formState\.lon\)/);
   assert.doesNotMatch(source, /Number\.parseFloat\(this\.formState\.(?:lat|lon)\)/);
 });
+
+test('saved-place modal confirms the persisted record before manual prewarm', () => {
+  assert.match(source, /confirmSavedPlacePersistence/);
+  assert.match(source, /onOfflinePinnedSaved/);
+  const save = source.match(/private save\(\): void \{([\s\S]*?)\n  \}\n\n  private deletePlace/);
+  assert.ok(save, 'save implementation should exist');
+  const confirmation = save[1].indexOf('confirmSavedPlacePersistence');
+  const enqueueCallback = save[1].indexOf('onOfflinePinnedSaved');
+  assert.ok(confirmation >= 0 && enqueueCallback > confirmation,
+    'the canonical persisted readback must precede the prewarm callback');
+});

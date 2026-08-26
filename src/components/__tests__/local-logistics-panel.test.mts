@@ -44,6 +44,7 @@ globals.getComputedStyle = happyWindow.getComputedStyle.bind(happyWindow);
 globals.matchMedia = happyWindow.matchMedia.bind(happyWindow);
 
 const { LocalLogisticsPanel } = await import('../LocalLogisticsPanel.ts');
+const { createLifelinePrewarmCoordinator } = await import('../../services/lifelines/lifeline-prewarm.ts');
 
 type SnapshotLoader = (
   place: SavedPlace,
@@ -135,15 +136,102 @@ function makeSnapshot(
   };
 }
 
-function mountPanel(loader: SnapshotLoader): InstanceType<typeof LocalLogisticsPanel> {
+function mountPanel(
+  loader: SnapshotLoader,
+  prewarmCoordinator?: unknown,
+  getExactPackReadiness?: unknown,
+): InstanceType<typeof LocalLogisticsPanel> {
   const panel = new LocalLogisticsPanel({
     focusNode: () => {},
     fetchSnapshot: loader,
+    ...(prewarmCoordinator ? { prewarmCoordinator } : {}),
+    ...(getExactPackReadiness ? { getExactPackReadiness } : {}),
   } as never);
   mountedPanels.push(panel);
   document.body.append(panel.getElement());
   return panel;
 }
+
+test('Prepare offline enqueues the active exact radius and cleanup unsubscribes', async () => {
+  const place = addSavedPlace({
+    name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 8, offlinePinned: true,
+  });
+  localStorage.setItem('wm_saved_places_v1', JSON.stringify(getSavedPlaces()));
+  const enqueued: Array<{ placeId: string; radiusKm: number; trigger: string }> = [];
+  let subscriptions = 0;
+  let unsubscriptions = 0;
+  let prewarmListener: ((state: Record<string, unknown>) => void) | null = null;
+  const coordinator = {
+    enqueue: (input: { place: SavedPlace; radiusKm: number; trigger: string }) => {
+      enqueued.push({ placeId: input.place.id, radiusKm: input.radiusKm, trigger: input.trigger });
+      prewarmListener?.({
+        placeId: input.place.id,
+        radiusKm: input.radiusKm,
+        queryFingerprint: 'exact',
+        phase: 'queued',
+        triggers: [input.trigger],
+        retryAt: null,
+        error: null,
+      });
+    },
+    retry: () => {},
+    getState: () => null,
+    subscribe: (listener: (state: Record<string, unknown>) => void) => {
+      subscriptions += 1;
+      prewarmListener = listener;
+      return () => { prewarmListener = null; unsubscriptions += 1; };
+    },
+  };
+  const panel = mountPanel(
+    async (requestedPlace, options) => makeSnapshot(requestedPlace, options?.radiusKm ?? 25),
+    coordinator,
+  );
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  const content = panel.getContentElement();
+  requiredElement<HTMLButtonElement>(content, '[data-logistics-radius="50"]').click();
+  await settleRender();
+  requiredElement<HTMLButtonElement>(content, '[data-lifeline-prewarm]').click();
+  await settleRender();
+
+  assert.deepEqual(enqueued, [{ placeId: place.id, radiusKm: 50, trigger: 'manual' }]);
+  assert.equal(
+    document.activeElement?.getAttribute('data-lifeline-prewarm'),
+    '1',
+    'preparation status rerenders should restore keyboard focus to the action',
+  );
+  assert.equal(subscriptions, 1);
+  panel.destroy();
+  mountedPanels.splice(mountedPanels.indexOf(panel), 1);
+  assert.equal(unsubscriptions, 1);
+});
+
+test('failed preparation displays an actionable generic error without provider details', async () => {
+  const place = addSavedPlace({
+    name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25, offlinePinned: true,
+  });
+  localStorage.setItem('wm_saved_places_v1', JSON.stringify(getSavedPlaces()));
+  const secretMessage = 'provider-token=super-secret-upstream-detail';
+  const coordinator = createLifelinePrewarmCoordinator({
+    fetchSnapshot: async () => { throw new Error(secretMessage); },
+    verifySnapshot: () => ({ status: 'ready', exact: true }),
+  });
+  const panel = mountPanel(
+    async (requestedPlace, options) => makeSnapshot(requestedPlace, options?.radiusKm ?? 25),
+    coordinator,
+  );
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  requiredElement<HTMLButtonElement>(panel.getContentElement(), '[data-lifeline-prewarm]').click();
+  await settleRender();
+
+  const content = panel.getContentElement().textContent ?? '';
+  assert.doesNotMatch(content, /super-secret|provider-token|upstream-detail/);
+  assert.match(content, /try again/i);
+  coordinator.destroy();
+});
 
 function requiredElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -217,6 +305,35 @@ test('radius controls initialize from the saved place, allowlist clicks, retain 
   await Promise.resolve();
   assert.equal(requests[2]?.radiusKm, 50, 'manual refresh should retain the transient radius choice');
   assert.deepEqual(getSavedPlaces()[0], originalPlace, 'radius selection must not mutate the saved place');
+});
+
+test('pack readiness follows the exact active 10 km and 50 km radii', async () => {
+  const place = addSavedPlace({
+    name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 8, offlinePinned: true,
+  });
+  const requested: number[] = [];
+  const panel = mountPanel(
+    async (requestedPlace, options) => makeSnapshot(requestedPlace, options?.radiusKm ?? 10),
+    undefined,
+    (_place: SavedPlace, radiusKm: number) => {
+      requested.push(radiusKm);
+      return { status: 'ready' };
+    },
+  );
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  let content = panel.getContentElement().textContent ?? '';
+  assert.match(content, /Offline Lifelines: saved for this exact place/);
+  assert.doesNotMatch(content, /not saved for this exact place/);
+  assert.ok(requested.includes(10), 'saved radius 8 km must verify the visible 10 km pack');
+
+  requiredElement<HTMLButtonElement>(panel.getContentElement(), '[data-logistics-radius="50"]').click();
+  await settleRender();
+  content = panel.getContentElement().textContent ?? '';
+  assert.match(content, /Offline Lifelines: saved for this exact place/);
+  assert.doesNotMatch(content, /not saved for this exact place/);
+  assert.equal(requested.at(-1), 50, 'manual 50 km selection must verify the 50 km pack');
 });
 
 test('out-of-order radius responses cannot display, publish, or reach the map overlay', async () => {

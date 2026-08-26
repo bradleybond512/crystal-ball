@@ -1,9 +1,11 @@
 import {
   LOCAL_LOGISTICS_CATEGORIES,
+  buildLifelinePrewarmFingerprint,
   buildLocalLogisticsFingerprint,
   deserializeLocalLogisticsSnapshot,
   getLocalLogisticsOfflineCacheServiceId,
   validateLocalLogisticsSnapshotEvent,
+  type LocalLogisticsRadiusChoiceKm,
 } from '../local-logistics';
 import type { LocalLogisticsSnapshot } from '../local-logistics-types';
 import { readOfflineCacheEntry } from '../offline-alert-cache';
@@ -395,6 +397,47 @@ export function createLifelineRuntime(
     return deriveLifelineOfflinePackReadiness(fingerprint, manifest, now);
   }
 
+  function getExactPackReadiness(
+    place: LifelineSavedPlace,
+    radiusKm: LocalLogisticsRadiusChoiceKm,
+  ): LifelineOfflinePackReadiness {
+    const queryFingerprint = buildLifelinePrewarmFingerprint(place, radiusKm);
+    const now = clock();
+    const manifest = verifiedPackManifest(storage, readPack(storage, place.id), {
+      placeId: place.id,
+      queryFingerprint,
+      lat: place.lat,
+      lon: place.lon,
+    }, now);
+    return deriveLifelineOfflinePackReadiness(queryFingerprint, manifest, now);
+  }
+
+  function verifyExactSnapshot(
+    place: LifelineSavedPlace,
+    radiusKm: LocalLogisticsRadiusChoiceKm,
+    snapshot: LocalLogisticsSnapshot,
+  ): { status: 'ready' | 'partial'; exact: true } | null {
+    const queryFingerprint = buildLifelinePrewarmFingerprint(place, radiusKm);
+    if (snapshot.source !== 'network'
+      || snapshot.isExpired
+      || snapshot.placeId !== place.id
+      || snapshot.queryFingerprint !== queryFingerprint
+      || snapshot.effectiveRadiusKm !== radiusKm) return null;
+    const now = clock();
+    const exactArtifact = readExactLifelinesArtifact(storage, {
+      placeId: place.id,
+      queryFingerprint,
+      lat: place.lat,
+      lon: place.lon,
+      fetchedAt: snapshot.fetchedAt.getTime(),
+    }, now);
+    if (!exactArtifact) return null;
+    const readiness = getExactPackReadiness(place, radiusKm);
+    return readiness.status === 'ready' || readiness.status === 'partial'
+      ? { status: readiness.status, exact: true }
+      : null;
+  }
+
   function getVerifiedLifelinesReceipt(place: LifelineSavedPlace): VerifiedLifelinesReceipt | null {
     const queryFingerprint = exactFingerprint(place);
     const now = clock();
@@ -418,12 +461,59 @@ export function createLifelineRuntime(
     };
   }
 
+  function reconcileExactLifelinesArtifact(snapshot: LocalLogisticsSnapshot, snapshotAt: number): void {
+    const exactArtifact = snapshot.source === 'network' && !snapshot.isExpired
+      ? readExactLifelinesArtifact(storage, {
+        placeId: snapshot.placeId,
+        queryFingerprint: snapshot.queryFingerprint,
+        fetchedAt: snapshotAt,
+      }, clock())
+      : null;
+    if (!exactArtifact) return;
+    const existing = readPack(storage, snapshot.placeId);
+    const createdAt = existing?.queryFingerprint === snapshot.queryFingerprint
+      && existing.createdAt.getTime() <= snapshotAt
+      ? existing.createdAt
+      : snapshot.fetchedAt;
+    const manifest = buildLifelineOfflinePackManifest({
+      placeId: snapshot.placeId,
+      queryFingerprint: snapshot.queryFingerprint,
+      requiredKinds: ['lifelines'],
+      artifacts: [{
+        kind: 'lifelines',
+        queryFingerprint: snapshot.queryFingerprint,
+        cachedAt: snapshot.fetchedAt,
+        expiresAt: new Date(snapshotAt + PACK_TTL_MS),
+      }],
+      createdAt,
+      updatedAt: snapshot.fetchedAt,
+    });
+    safeWrite(storage, packKey(snapshot.placeId), serializePack(manifest));
+  }
+
+  function packReadinessForSnapshot(snapshot: LocalLogisticsSnapshot): LifelineOfflinePackReadiness {
+    const now = clock();
+    return deriveLifelineOfflinePackReadiness(snapshot.queryFingerprint, verifiedPackManifest(
+      storage,
+      readPack(storage, snapshot.placeId),
+      { placeId: snapshot.placeId, queryFingerprint: snapshot.queryFingerprint },
+      now,
+    ), now);
+  }
+
   function processSnapshot(snapshot: LocalLogisticsSnapshot): LifelineRuntimeUpdate | null {
     const snapshotAt = snapshot.fetchedAt.getTime();
     if (!Number.isFinite(snapshotAt)) return null;
     const runtimeKey = `${snapshot.placeId}|${snapshot.queryFingerprint}`;
+    reconcileExactLifelinesArtifact(snapshot, snapshotAt);
     const previous = current.get(runtimeKey);
-    if (previous && snapshotAt <= previous.snapshotAt) return updates.get(runtimeKey) ?? null;
+    if (previous && snapshotAt <= previous.snapshotAt) {
+      const retained = updates.get(runtimeKey);
+      if (!retained) return null;
+      const reconciled = { ...retained, pack: packReadinessForSnapshot(snapshot) };
+      updates.set(runtimeKey, reconciled);
+      return reconciled;
+    }
 
     // Evaluate evidence expiry against the real clock, but use the accepted
     // snapshot retrieval watermark for ordering. Re-renders must not invent a
@@ -445,40 +535,8 @@ export function createLifelineRuntime(
       safeWrite(storage, changeKey(snapshot.placeId, snapshot.queryFingerprint), retained);
     }
 
-    const exactArtifact = snapshot.source === 'network' && !snapshot.isExpired
-      ? readExactLifelinesArtifact(storage, {
-        placeId: snapshot.placeId,
-        queryFingerprint: snapshot.queryFingerprint,
-        fetchedAt: snapshotAt,
-      }, clock())
-      : null;
-    if (exactArtifact) {
-      const existing = readPack(storage, snapshot.placeId);
-      const manifest = buildLifelineOfflinePackManifest({
-        placeId: snapshot.placeId,
-        queryFingerprint: snapshot.queryFingerprint,
-        requiredKinds: ['lifelines'],
-        artifacts: [{
-          kind: 'lifelines',
-          queryFingerprint: snapshot.queryFingerprint,
-          cachedAt: snapshot.fetchedAt,
-          expiresAt: new Date(snapshotAt + PACK_TTL_MS),
-        }],
-        createdAt: existing?.queryFingerprint === snapshot.queryFingerprint ? existing.createdAt : snapshot.fetchedAt,
-        updatedAt: snapshot.fetchedAt,
-      });
-      safeWrite(storage, packKey(snapshot.placeId), serializePack(manifest));
-    }
-
     const outage = updateOdinHistory(storage, snapshot, clock());
-
-    const packNow = clock();
-    const pack = deriveLifelineOfflinePackReadiness(snapshot.queryFingerprint, verifiedPackManifest(
-      storage,
-      readPack(storage, snapshot.placeId),
-      { placeId: snapshot.placeId, queryFingerprint: snapshot.queryFingerprint },
-      packNow,
-    ), packNow);
+    const pack = packReadinessForSnapshot(snapshot);
     const update = { situation, changes, pack, outage };
     updates.set(runtimeKey, update);
     return update;
@@ -487,6 +545,8 @@ export function createLifelineRuntime(
   return {
     processSnapshot,
     getPackReadiness,
+    getExactPackReadiness,
+    verifyExactSnapshot,
     getVerifiedLifelinesReceipt,
     getRecentChanges(placeId: string, queryFingerprint: string): LifelineChange[] {
       return parseChangeLog(storage, placeId, queryFingerprint)
@@ -513,6 +573,21 @@ export function getLifelinePackReadinessForPlace(
   place: LifelineSavedPlace,
 ): LifelineOfflinePackReadiness {
   return lifelineRuntime.getPackReadiness(place);
+}
+
+export function getExactLifelinePackReadinessForPlace(
+  place: LifelineSavedPlace,
+  radiusKm: LocalLogisticsRadiusChoiceKm,
+): LifelineOfflinePackReadiness {
+  return lifelineRuntime.getExactPackReadiness(place, radiusKm);
+}
+
+export function verifyExactLifelinesSnapshot(
+  place: LifelineSavedPlace,
+  radiusKm: LocalLogisticsRadiusChoiceKm,
+  snapshot: LocalLogisticsSnapshot,
+): { status: 'ready' | 'partial'; exact: true } | null {
+  return lifelineRuntime.verifyExactSnapshot(place, radiusKm, snapshot);
 }
 
 export function getVerifiedLifelinesReceiptForPlace(

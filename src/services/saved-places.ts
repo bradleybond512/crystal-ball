@@ -204,6 +204,38 @@ function safeParsePlaces(raw: string | null): SavedPlace[] {
   }
 }
 
+function placesMatch(left: SavedPlace, right: SavedPlace): boolean {
+  return left.id === right.id
+    && left.name === right.name
+    && left.lat === right.lat
+    && left.lon === right.lon
+    && left.radiusKm === right.radiusKm
+    && left.priority === right.priority
+    && left.notes === right.notes
+    && left.offlinePinned === right.offlinePinned
+    && left.primary === right.primary
+    && left.source === right.source
+    && left.sortIndex === right.sortIndex
+    && left.createdAt === right.createdAt
+    && left.updatedAt === right.updatedAt
+    && left.tags.length === right.tags.length
+    && left.tags.every((tag, index) => tag === right.tags[index]);
+}
+
+export function confirmSavedPlacePersistence(
+  expected: SavedPlace,
+  storage: SavedPlacesStorageLike | null = defaultStorage(),
+): SavedPlace | null {
+  if (!storage) return null;
+  try {
+    const persisted = safeParsePlaces(storage.getItem(STORAGE_KEY))
+      .find((place) => place.id === expected.id);
+    return persisted && placesMatch(persisted, expected) ? clonePlace(persisted) : null;
+  } catch {
+    return null;
+  }
+}
+
 function persistPlaces(storage: SavedPlacesStorageLike | null, places: SavedPlace[]): void {
   if (!storage) return;
   if (places.length === 0) {

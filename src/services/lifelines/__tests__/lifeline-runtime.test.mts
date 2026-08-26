@@ -133,6 +133,30 @@ test('a verified network snapshot creates exact-fingerprint offline Lifelines re
   assert.equal(update?.pack.status, 'ready');
   assert.equal(runtime.getPackReadiness(place).status, 'ready');
   assert.equal(runtime.getPackReadiness({ ...place, lat: 41.7 }).status, 'not-saved');
+  assert.deepEqual(runtime.verifyExactSnapshot(place, 25, snapshot()), {
+    status: 'ready', exact: true,
+  });
+  assert.equal(runtime.verifyExactSnapshot(place, 50, snapshot()), null);
+  assert.equal(runtime.verifyExactSnapshot(place, 25, snapshot({ source: 'offline-cache' })), null);
+});
+
+test('exact snapshot verification requires the persisted artifact and its verified manifest', () => {
+  const storage = new MemoryStorage();
+  const runtime = createLifelineRuntime(storage, () => T0 + 60_000);
+  const accepted = snapshot();
+
+  persistExactArtifact(storage, accepted);
+  assert.equal(runtime.verifyExactSnapshot(place, 25, accepted), null,
+    'an exact artifact without a verified manifest is not ready');
+
+  runtime.processSnapshot(accepted);
+  assert.deepEqual(runtime.verifyExactSnapshot(place, 25, accepted), {
+    status: 'ready', exact: true,
+  });
+
+  storage.removeItem(`wm_offline_${artifactServiceId(accepted)}`);
+  assert.equal(runtime.verifyExactSnapshot(place, 25, accepted), null,
+    'evicting the exact artifact revokes verification even when the manifest remains');
 });
 
 test('storage failure never claims the offline pack is ready', () => {
@@ -176,6 +200,46 @@ test('a failed replacement artifact write cannot advance an existing exact manif
   assert.equal(storage.getItem(manifestKey), priorManifest,
     'an unpersisted replacement must not extend the artifact timestamp or TTL');
 });
+
+for (const recoveryAge of ['older', 'equal'] as const) {
+  test(`${recoveryAge} exact persistence recovery updates readiness without stale derivation`, () => {
+    const storage = new MemoryStorage();
+    const runtime = createLifelineRuntime(storage, () => T0 + 5 * 60_000);
+    const newerAt = recoveryAge === 'older' ? T0 + 60_000 : T0;
+    const recoveryAt = T0;
+    const newer = snapshot({
+      fetchedAt: new Date(newerAt),
+    });
+    const recovery = snapshot({
+      fetchedAt: new Date(recoveryAt),
+      placeName: 'Stale recovery must not replace the situation',
+    });
+
+    const initial = runtime.processSnapshot(newer);
+    assert.equal(initial?.pack.status, 'not-saved');
+    assert.equal(initial?.situation.sites[0]?.operational.value, 'open');
+    const outageKey = 'wm_lifeline_odin_history_v1:home:18091';
+    const initialOutageHistory = storage.getItem(outageKey);
+    assert.ok(initialOutageHistory);
+
+    persistExactArtifact(storage, recovery);
+    const reconciled = runtime.processSnapshot(recovery);
+    const manifest = JSON.parse(storage.getItem('wm_lifeline_pack_manifest_v1:home') ?? 'null') as {
+      artifacts?: Array<{ kind?: string; cachedAt?: string }>;
+    } | null;
+
+    assert.equal(reconciled?.pack.status, 'ready');
+    assert.equal(runtime.getPackReadiness(place).status, 'ready');
+    assert.deepEqual(runtime.verifyExactSnapshot(place, 25, recovery), { status: 'ready', exact: true });
+    assert.equal(manifest?.artifacts?.find((item) => item.kind === 'lifelines')?.cachedAt, recovery.fetchedAt.toISOString());
+    assert.equal(reconciled?.situation, initial?.situation);
+    assert.equal(reconciled?.situation.placeName, 'Home');
+    assert.equal(reconciled?.situation.sites[0]?.operational.value, 'open');
+    assert.deepEqual(reconciled?.changes, initial?.changes);
+    assert.equal(reconciled?.outage, initial?.outage);
+    assert.equal(storage.getItem(outageKey), initialOutageHistory);
+  });
+}
 
 test('evicting the exact artifact after manifest creation demotes readiness', () => {
   const storage = new MemoryStorage();

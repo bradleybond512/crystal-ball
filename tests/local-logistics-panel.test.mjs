@@ -92,9 +92,10 @@ test('service uses schema-v2 query fingerprints, coalescing, and outage context'
 test('offline Lifelines persistence is observable and the latest pointer follows only a proven exact write', () => {
   assert.match(offlineCacheSrc, /export function writeOfflineCacheEntry<T>[\s\S]{0,180}: boolean/);
   assert.match(offlineCacheSrc, /getItem\(storageKey\(serviceId\)\) === serialized/);
+  assert.match(localLogisticsServiceSrc, /function commitLocalLogisticsSnapshot\(/);
   assert.match(
     localLogisticsServiceSrc,
-    /const exactPersisted = writeOfflineCacheEntry\(key, serialized\);[\s\S]{0,160}if \(exactPersisted\)[\s\S]{0,120}writeOfflineCacheEntry\(latestKey\(place\.id\)/,
+    /const exactPersisted = writeOfflineCacheEntry\(key, serialized\);[\s\S]{0,160}if \(exactPersisted\)[\s\S]{0,120}writeOfflineCacheEntry\(latestKey\(placeId\)/,
   );
 });
 

@@ -43,6 +43,7 @@ interface FetchLocalLogisticsOptions {
   categories?: LogisticsCategory[];
   radiusKm?: number;
   limitPerCategory?: number;
+  shouldCommit?: () => boolean;
 }
 
 interface BuildSnapshotOptions {
@@ -152,7 +153,6 @@ const DIRECTORY_OBSERVATION_TTL_MS = 24 * 60 * 60 * 1000;
 const FEMA_OBSERVATION_TTL_MS = 30 * 60 * 1000;
 const ODIN_OBSERVATION_TTL_MS = 30 * 60 * 1000;
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
-const PREWARM_COOLDOWN_MS = 15 * 60 * 1000;
 const DEFAULT_RADIUS_KM = 25;
 const DEFAULT_LIMIT_PER_CATEGORY = 3;
 const MAX_RESOURCE_ROWS = LOCAL_LOGISTICS_CATEGORIES.length * 5;
@@ -163,7 +163,6 @@ const MAX_CUSTOMERS_OUT = 100_000_000;
 const memoryCache = new Map<string, CachedLocalLogisticsSnapshot>();
 const latestFingerprintByPlace = new Map<string, string>();
 const inFlight = new Map<string, Promise<LocalLogisticsSnapshot>>();
-const lastPrewarmByPlace = new Map<string, number>();
 
 const OPERATIONAL = new Set<OperationalStatus>(['open', 'closed', 'unknown']);
 const INVENTORY = new Set<InventoryStatus>(['available', 'limited', 'full', 'out', 'unknown']);
@@ -180,6 +179,24 @@ export type LocalLogisticsRadiusChoiceKm = typeof LOCAL_LOGISTICS_RADIUS_CHOICES
 export function initialLocalLogisticsRadiusKm(savedRadiusKm: number): LocalLogisticsRadiusChoiceKm {
   const radiusKm = Number.isFinite(savedRadiusKm) ? savedRadiusKm : DEFAULT_RADIUS_KM;
   return LOCAL_LOGISTICS_RADIUS_CHOICES_KM.find((choice) => choice >= radiusKm) ?? 50;
+}
+
+export function resolveLifelinePrewarmRadius(
+  place: Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>,
+  explicitRadiusKm?: number,
+): LocalLogisticsRadiusChoiceKm {
+  if (LOCAL_LOGISTICS_RADIUS_CHOICES_KM.includes(explicitRadiusKm as LocalLogisticsRadiusChoiceKm)) {
+    return explicitRadiusKm as LocalLogisticsRadiusChoiceKm;
+  }
+  return readLatestExactLifelinePrewarmRadius(place)
+    ?? initialLocalLogisticsRadiusKm(place.radiusKm);
+}
+
+export function buildLifelinePrewarmFingerprint(
+  place: Pick<SavedPlace, 'lat' | 'lon'>,
+  radiusKm: LocalLogisticsRadiusChoiceKm,
+): string {
+  return buildLocalLogisticsFingerprint(place, radiusKm, [...LOCAL_LOGISTICS_CATEGORIES]);
 }
 
 function boundedSet<K, V>(map: Map<K, V>, key: K, value: V, maximum = 100): void {
@@ -315,6 +332,36 @@ export function getLocalLogisticsOfflineCacheServiceId(placeId: string, fingerpr
 
 function latestKey(placeId: string): string {
   return `${CACHE_PREFIX}:latest:${placeId}`;
+}
+
+function readLatestExactLifelinePrewarmRadius(
+  place: Pick<SavedPlace, 'id' | 'lat' | 'lon'>,
+): LocalLogisticsRadiusChoiceKm | null {
+  const latest = readOfflineCacheEntry<{ schemaVersion: 2; fingerprint: string }>(latestKey(place.id));
+  if (latest?.data.schemaVersion !== 2 || typeof latest.data.fingerprint !== 'string') return null;
+  const queryFingerprint = latest.data.fingerprint;
+  const parsed = parseLogisticsFingerprint(queryFingerprint);
+  if (parsed?.limitPerCategory !== DEFAULT_LIMIT_PER_CATEGORY) return null;
+  const radiusKm = LOCAL_LOGISTICS_RADIUS_CHOICES_KM.find((choice) => choice === parsed.radiusKm);
+  if (radiusKm === undefined) return null;
+  const expectedCategories = [...LOCAL_LOGISTICS_CATEGORIES].sort(compareStrings);
+  if (parsed.categories.length !== expectedCategories.length
+    || [...parsed.categories].sort(compareStrings).join(',') !== expectedCategories.join(',')) return null;
+  if (buildLifelinePrewarmFingerprint(place, radiusKm) !== queryFingerprint) return null;
+  const cached = readOfflineCacheEntry<CachedLocalLogisticsSnapshot>(
+    cacheKey(place.id, queryFingerprint),
+  )?.data;
+  if (!cached) return null;
+  const snapshot = deserializeLocalLogisticsSnapshot(cached, Date.now(), {
+    placeId: place.id,
+    queryFingerprint,
+    lat: place.lat,
+    lon: place.lon,
+  });
+  if (snapshot?.effectiveRadiusKm !== radiusKm
+    || snapshot.categories.length !== expectedCategories.length
+    || [...snapshot.categories].sort(compareStrings).join(',') !== expectedCategories.join(',')) return null;
+  return radiusKm;
 }
 
 function emitLocalLogisticsUpdated(snapshot: LocalLogisticsSnapshot): void {
@@ -1278,7 +1325,50 @@ export function getCachedLocalLogistics(placeOrId: SavedPlace | string): LocalLo
   return parsed;
 }
 
-async function runFetch(place: SavedPlace, categories: LogisticsCategory[], radiusKm: number, limitPerCategory: number, fingerprint: string): Promise<LocalLogisticsSnapshot> {
+function commitLocalLogisticsSnapshot(
+  placeId: string,
+  fingerprint: string,
+  snapshot: LocalLogisticsSnapshot,
+  shouldCommit?: () => boolean,
+): void {
+  if (shouldCommit && !shouldCommit()) return;
+  const key = cacheKey(placeId, fingerprint);
+  const fingerprintIdentity = parseLogisticsFingerprint(fingerprint);
+  const persisted = readOfflineCacheEntry<unknown>(key)?.data;
+  const committed = fingerprintIdentity
+    ? deserializeLocalLogisticsSnapshot(persisted, Date.now(), {
+      placeId,
+      queryFingerprint: fingerprint,
+      lat: fingerprintIdentity.lat,
+      lon: fingerprintIdentity.lon,
+    })
+    : null;
+  if (committed && snapshot.fetchedAt.getTime() <= committed.fetchedAt.getTime()) return;
+  const serialized = serializeSnapshot(snapshot);
+  boundedSet(memoryCache, key, serialized);
+  boundedSet(latestFingerprintByPlace, placeId, fingerprint);
+  const exactPersisted = writeOfflineCacheEntry(key, serialized);
+  if (exactPersisted) {
+    writeOfflineCacheEntry(latestKey(placeId), { schemaVersion: 2, fingerprint });
+  }
+  emitLocalLogisticsUpdated(snapshot);
+}
+
+function emitLocalLogisticsIfCurrent(
+  snapshot: LocalLogisticsSnapshot,
+  shouldCommit?: () => boolean,
+): void {
+  if (!shouldCommit || shouldCommit()) emitLocalLogisticsUpdated(snapshot);
+}
+
+async function runFetch(
+  place: SavedPlace,
+  categories: LogisticsCategory[],
+  radiusKm: number,
+  limitPerCategory: number,
+  fingerprint: string,
+  shouldCommit?: () => boolean,
+): Promise<LocalLogisticsSnapshot> {
   const params = new URLSearchParams({
  lat: String(place.lat), lon: String(place.lon), radiusKm: String(radiusKm),
  categories: categories.join(','), limitPerCategory: String(limitPerCategory),
@@ -1309,15 +1399,7 @@ async function runFetch(place: SavedPlace, categories: LogisticsCategory[], radi
  areaConditions, providers, sites: parsed.sites, observations: parsed.observations,
  categories: parsed.categories, source: 'network',
  });
- const serialized = serializeSnapshot(snapshot);
- const key = cacheKey(place.id, fingerprint);
- boundedSet(memoryCache, key, serialized);
- boundedSet(latestFingerprintByPlace, place.id, fingerprint);
- const exactPersisted = writeOfflineCacheEntry(key, serialized);
- if (exactPersisted) {
-   writeOfflineCacheEntry(latestKey(place.id), { schemaVersion: 2, fingerprint });
- }
- emitLocalLogisticsUpdated(snapshot);
+ commitLocalLogisticsSnapshot(place.id, fingerprint, snapshot, shouldCommit);
  return snapshot;
   } catch (error) {
  const key = cacheKey(place.id, fingerprint);
@@ -1326,7 +1408,7 @@ async function runFetch(place: SavedPlace, categories: LogisticsCategory[], radi
    placeId: place.id, queryFingerprint: fingerprint, lat: place.lat, lon: place.lon,
  }) : null;
  if (cached) {
- emitLocalLogisticsUpdated(cached);
+ emitLocalLogisticsIfCurrent(cached, shouldCommit);
  return cached;
  }
  throw error;
@@ -1342,10 +1424,26 @@ export function fetchLocalLogistics(place: SavedPlace, options: FetchLocalLogist
     : DEFAULT_RADIUS_KM;
   const limitPerCategory = Math.max(1, Math.min(5, Math.trunc(options.limitPerCategory ?? DEFAULT_LIMIT_PER_CATEGORY)));
   const fingerprint = buildLocalLogisticsFingerprint(place, radiusKm, categories, limitPerCategory);
+  if (options.shouldCommit) {
+    return runFetch(
+      place,
+      categories,
+      radiusKm,
+      limitPerCategory,
+      fingerprint,
+      options.shouldCommit,
+    );
+  }
   const inFlightKey = `${place.id}|${fingerprint}`;
   const existing = inFlight.get(inFlightKey);
   if (existing) return existing;
-  const request = runFetch(place, categories, radiusKm, limitPerCategory, fingerprint);
+  const request = runFetch(
+    place,
+    categories,
+    radiusKm,
+    limitPerCategory,
+    fingerprint,
+  );
   inFlight.set(inFlightKey, request);
   return request.finally(() => {
  if (inFlight.get(inFlightKey) === request) inFlight.delete(inFlightKey);
@@ -1362,31 +1460,6 @@ export function selectLifelinePrewarmPlaces(places: SavedPlace[], stormMatchedPl
  }
   }
   return selected;
-}
-
-export async function prewarmLocalLogistics(
-  places: SavedPlace[],
-  stormMatchedPlaceId: string | null | undefined = null,
-  now = Date.now(),
-  fetcher: (place: SavedPlace) => Promise<unknown> = fetchLocalLogistics,
-): Promise<{ succeeded: string[]; failed: string[]; skipped: string[] }> {
-  const eligible = selectLifelinePrewarmPlaces(places, stormMatchedPlaceId);
- const cooldownKey = (place: SavedPlace) => `${place.id}:${buildLocalLogisticsFingerprint(place, Math.min(place.radiusKm, DEFAULT_RADIUS_KM), [...LOCAL_LOGISTICS_CATEGORIES])}`;
- const queue = eligible.filter((place) => now - (lastPrewarmByPlace.get(cooldownKey(place)) ?? 0) >= PREWARM_COOLDOWN_MS);
-  const skipped = eligible.filter((place) => !queue.includes(place)).map((place) => place.id);
-  const succeeded: string[] = [];
-  const failed: string[] = [];
-  let cursor = 0;
-  async function worker(): Promise<void> {
- while (cursor < queue.length) {
- const place = queue[cursor++];
- if (!place) return;
- boundedSet(lastPrewarmByPlace, cooldownKey(place), now);
- try { await fetcher(place); succeeded.push(place.id); } catch { failed.push(place.id); }
- }
-  }
-  await Promise.all(Array.from({ length: Math.min(2, queue.length) }, () => worker()));
-  return { succeeded, failed, skipped };
 }
 
 export type { LocalLogisticsBriefItem };

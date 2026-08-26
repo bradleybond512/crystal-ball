@@ -21,10 +21,10 @@ Object.assign(globals, {
 });
 
 const { SavedPlaceModal } = await import('../src/components/SavedPlaceModal.ts');
-const { getSavedPlaces } = await import('../src/services/saved-places.ts');
+const { getSavedPlace, getSavedPlaces } = await import('../src/services/saved-places.ts');
 
 function input(field: string, value: string): void {
-  const element = happyWindow.document.querySelector<HTMLInputElement>(`[data-field="${field}"]`);
+  const element = happyWindow.document.querySelector<HTMLInputElement>(`.modal-overlay.active [data-field="${field}"]`);
   assert.ok(element, `missing ${field} input`);
   element.value = value;
   element.dispatchEvent(new happyWindow.Event('input', { bubbles: true }));
@@ -34,7 +34,7 @@ test('saved-place Emergency Pack control persists offlinePinned only after expli
   const modal = new SavedPlaceModal({ onPickLocationMode: () => {} });
   modal.openCreate();
 
-  const offlineButton = happyWindow.document.querySelector<HTMLButtonElement>('[data-action="toggle-offline"]');
+  const offlineButton = happyWindow.document.querySelector<HTMLButtonElement>('.modal-overlay.active [data-action="toggle-offline"]');
   assert.ok(offlineButton);
   assert.equal(offlineButton.getAttribute('aria-pressed'), 'false');
 
@@ -44,7 +44,7 @@ test('saved-place Emergency Pack control persists offlinePinned only after expli
   offlineButton.click();
   assert.equal(offlineButton.getAttribute('aria-pressed'), 'true');
 
-  const saveButton = happyWindow.document.querySelector<HTMLButtonElement>('[data-action="save"]');
+  const saveButton = happyWindow.document.querySelector<HTMLButtonElement>('.modal-overlay.active [data-action="save"]');
   assert.ok(saveButton);
   saveButton.click();
   assert.equal(getSavedPlaces().length, 0, 'partial numeric coordinates must be rejected');
@@ -56,4 +56,41 @@ test('saved-place Emergency Pack control persists offlinePinned only after expli
   assert.equal(saved.length, 1);
   assert.equal(saved[0]?.name, 'Home');
   assert.equal(saved[0]?.offlinePinned, true);
+});
+
+test('offline pin callback runs only after the exact saved place is readable', () => {
+  const confirmations: Array<{ callbackPlaceId: string; persistedPlaceId: string | null }> = [];
+  const modal = new SavedPlaceModal({
+    onPickLocationMode: () => {},
+    onOfflinePinnedSaved: (savedPlace: { id: string }) => {
+      confirmations.push({
+        callbackPlaceId: savedPlace.id,
+        persistedPlaceId: getSavedPlace(savedPlace.id)?.id ?? null,
+      });
+    },
+  } as never);
+  modal.openCreate();
+  input('name', 'Pinned Home');
+  input('lat', '41.6111');
+  input('lon', '-86.7225');
+  happyWindow.document.querySelector<HTMLButtonElement>('.modal-overlay.active [data-action="toggle-offline"]')?.click();
+  happyWindow.document.querySelector<HTMLButtonElement>('.modal-overlay.active [data-action="save"]')?.click();
+
+  assert.equal(confirmations.length, 1);
+  const pinned = getSavedPlaces().find((place) => place.name === 'Pinned Home');
+  assert.deepEqual(confirmations[0], {
+    callbackPlaceId: pinned?.id,
+    persistedPlaceId: pinned?.id,
+  });
+
+  const second = new SavedPlaceModal({
+    onPickLocationMode: () => {},
+    onOfflinePinnedSaved: () => confirmations.push({ callbackPlaceId: 'unexpected', persistedPlaceId: null }),
+  } as never);
+  second.openCreate();
+  input('name', 'Unpinned Work');
+  input('lat', '41.7');
+  input('lon', '-86.8');
+  happyWindow.document.querySelector<HTMLButtonElement>('.modal-overlay.active [data-action="save"]')?.click();
+  assert.equal(confirmations.length, 1, 'ordinary saves must not enqueue an offline pack');
 });

@@ -3282,8 +3282,14 @@ export class DataLoaderManager implements AppModule {
  // pinned places. This consumes the storm selection without changing scoring,
  // urgency, or alert delivery. The service enforces a 15m cooldown and two
  // concurrent requests so repeated NWS refreshes cannot stampede providers.
- void import('@/services/local-logistics')
- .then(({ prewarmLocalLogistics }) => prewarmLocalLogistics(places, bestDecision?.matchedPlaceId))
+ void import('@/services/lifelines/lifeline-prewarm')
+ .then(({ lifelinePrewarmCoordinator }) => {
+   for (const place of places.filter((candidate) => (
+     candidate.offlinePinned || candidate.id === bestDecision?.matchedPlaceId
+   ))) {
+     lifelinePrewarmCoordinator.enqueue({ place, trigger: 'storm' });
+   }
+ })
  .catch(() => { /* Lifeline Pack prewarm is best-effort and non-blocking. */ });
  }
  } catch { /* saved-places unavailable — non-fatal */ }

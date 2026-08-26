@@ -2,12 +2,19 @@ import { Panel } from './Panel';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
 import { getSavedPlaceBrief, computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
 import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
-import { getLifelinePackReadinessForPlace } from '@/services/lifelines/lifeline-runtime';
+import { getExactLifelinePackReadinessForPlace } from '@/services/lifelines/lifeline-runtime';
+import {
+  lifelinePrewarmCoordinator,
+  type LifelinePrewarmCoordinator,
+  type LifelinePrewarmState,
+} from '@/services/lifelines/lifeline-prewarm';
 
 interface SavedPlacesPanelOptions {
   focusPlace: (placeId: string) => void;
   editPlace?: (placeId: string) => void;
   createPlace?: () => void;
+  prewarmCoordinator?: LifelinePrewarmCoordinator;
+  getExactPackReadiness?: typeof getExactLifelinePackReadinessForPlace;
 }
 
 const TAG_LABELS: Record<SavedPlaceTag, string> = {
@@ -29,7 +36,7 @@ const PENCIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="1
 
 const MAX_PLACES = 20;
 
-type LifelinePackStatus = ReturnType<typeof getLifelinePackReadinessForPlace>['status'];
+type LifelinePackStatus = ReturnType<typeof getExactLifelinePackReadinessForPlace>['status'];
 
 function lifelinePackLabel(status: LifelinePackStatus | null): string {
   switch (status) {
@@ -39,6 +46,26 @@ function lifelinePackLabel(status: LifelinePackStatus | null): string {
     case 'not-saved': { return 'Lifelines Not Saved'; }
     default: { return ''; }
   }
+}
+
+function prewarmLabel(state: LifelinePrewarmState | null): string {
+  if (!state) return '';
+  const radius = `${state.radiusKm} km`;
+  switch (state.phase) {
+    case 'queued': { return `Lifelines queued for ${radius}`; }
+    case 'fetching': { return `Lifelines fetching for ${radius}`; }
+    case 'verifying': { return `Lifelines verifying for ${radius}`; }
+    case 'ready': { return `Lifelines ready for ${radius}`; }
+    case 'partial': { return `Lifelines partial for ${radius}`; }
+    case 'failed': { return `Lifelines failed for ${radius}`; }
+    case 'cooldown': { return `Lifelines recently prepared for ${radius}`; }
+  }
+}
+
+function createPrewarmLiveRegion(): HTMLElement {
+  const container = document.createElement('div');
+  container.innerHTML = '<div class="sr-only" aria-live="polite" aria-atomic="true"></div>';
+  return container.firstElementChild as HTMLElement;
 }
 
 interface PlaceThreatSummary {
@@ -58,8 +85,12 @@ const SEVERITY_COLOR: Record<UnifiedAlert['severity'], string> = {
 
 export class SavedPlacesPanel extends Panel {
   private options: SavedPlacesPanelOptions;
+  private readonly prewarmCoordinator: LifelinePrewarmCoordinator;
+  private readonly getExactPackReadiness: typeof getExactLifelinePackReadinessForPlace;
   private unsubscribeSavedPlaces: (() => void) | null = null;
   private unsubscribeAlerts: (() => void) | null = null;
+  private unsubscribeLifelinePrewarm: (() => void) | null = null;
+  private readonly prewarmLiveRegion = createPrewarmLiveRegion();
   private readonly boundRefresh: () => void;
   private places: SavedPlace[] = [];
   private refreshPending = false;
@@ -73,6 +104,8 @@ export class SavedPlacesPanel extends Panel {
       infoTooltip: 'Personal locations prioritized for place-first monitoring, fast map focus, and later place briefs.',
     });
     this.options = options;
+    this.prewarmCoordinator = options.prewarmCoordinator ?? lifelinePrewarmCoordinator;
+    this.getExactPackReadiness = options.getExactPackReadiness ?? getExactLifelinePackReadinessForPlace;
 
     if (options.createPlace) {
       const addBtn = document.createElement('button');
@@ -97,6 +130,17 @@ export class SavedPlacesPanel extends Panel {
         event.stopPropagation();
         const placeId = editButton.dataset.savedPlaceEdit;
         if (placeId) this.options.editPlace?.(placeId);
+        return;
+      }
+
+      const retryButton = target?.closest<HTMLElement>('[data-saved-place-prewarm-retry]');
+      if (retryButton) {
+        event.stopPropagation();
+        const placeId = retryButton.dataset.savedPlacePrewarmRetry;
+        const state = placeId ? this.prewarmCoordinator.getState(placeId) : null;
+        if (state?.phase === 'failed') {
+          this.prewarmCoordinator.retry(state.placeId, state.queryFingerprint);
+        }
         return;
       }
 
@@ -129,6 +173,13 @@ export class SavedPlacesPanel extends Panel {
     document.addEventListener('wm:storm-data-updated', this.boundRefresh);
     this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.boundRefresh());
     this.unsubscribeAlerts = unifiedAlertStore.subscribe(() => this.boundRefresh());
+    this.unsubscribeLifelinePrewarm = this.prewarmCoordinator.subscribe((state) => {
+      const place = getSavedPlaces().find((candidate) => candidate.id === state.placeId);
+      this.prewarmLiveRegion.textContent = place
+        ? `${place.name}: ${prewarmLabel(state)}.`
+        : prewarmLabel(state);
+      this.boundRefresh();
+    });
     this.refresh();
   }
 
@@ -143,6 +194,8 @@ export class SavedPlacesPanel extends Panel {
     this.unsubscribeSavedPlaces = null;
     this.unsubscribeAlerts?.();
     this.unsubscribeAlerts = null;
+    this.unsubscribeLifelinePrewarm?.();
+    this.unsubscribeLifelinePrewarm = null;
     super.destroy();
   }
 
@@ -212,7 +265,7 @@ export class SavedPlacesPanel extends Panel {
         firstBtn.textContent = 'Add your first place';
         emptyEl.append(firstBtn);
       }
-      this.content.replaceChildren(emptyEl);
+      this.content.replaceChildren(emptyEl, this.prewarmLiveRegion);
       return;
     }
 
@@ -236,7 +289,7 @@ export class SavedPlacesPanel extends Panel {
       addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add place`;
       listEl.append(addBtn);
     }
-    this.content.replaceChildren(listEl);
+    this.content.replaceChildren(listEl, this.prewarmLiveRegion);
   }
 
   private renderCardEl(place: SavedPlace, brief: PlaceBrief | null, allAlerts: UnifiedAlert[]): HTMLElement {
@@ -276,13 +329,17 @@ export class SavedPlacesPanel extends Panel {
     const threatBadge = this.buildThreatBadge(threats);
     if (threatBadge) panelsRow.append(threatBadge);
 
+    const prewarmState = this.prewarmCoordinator.getState(place.id);
+    const exactRadiusKm = prewarmState?.radiusKm ?? this.prewarmCoordinator.resolveRadius(place);
     const packStatus = place.offlinePinned
-      ? getLifelinePackReadinessForPlace(place).status
+      ? this.getExactPackReadiness(place, exactRadiusKm).status
       : null;
     const packLabel = lifelinePackLabel(packStatus);
+    const currentPrewarmLabel = prewarmLabel(prewarmState);
     const chips: string[] = [
       place.primary ? 'Primary' : '',
       packLabel,
+      currentPrewarmLabel,
       brief?.isStale ? 'Cached' : '',
       hasStormPosture ? 'Storm' : '',
       hasForecastRisk ? 'Forecast' : '',
@@ -312,6 +369,16 @@ export class SavedPlacesPanel extends Panel {
       editBtn.title = 'Edit place';
       editBtn.innerHTML = PENCIL_SVG;
       wrapper.append(editBtn);
+    }
+
+
+    if (prewarmState?.phase === 'failed') {
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'sa-refresh-btn';
+      retryBtn.dataset.savedPlacePrewarmRetry = place.id;
+      retryBtn.type = 'button';
+      retryBtn.textContent = 'Retry Lifelines';
+      wrapper.append(retryBtn);
     }
 
     return wrapper;

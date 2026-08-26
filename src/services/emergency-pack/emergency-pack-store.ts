@@ -383,12 +383,13 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function releaseBody(kind: EmergencyPackArtifactKind, body: string): Promise<void> {
-    if (kind !== 'offline-map') return;
+  async function releaseBody(kind: EmergencyPackArtifactKind, body: string): Promise<boolean> {
+    if (kind !== 'offline-map') return true;
     try {
       await dependencies.releaseArtifactBody?.(kind, body);
+      return true;
     } catch {
-      // External cleanup is best effort and cannot change publication state.
+      return false;
     }
   }
 
@@ -586,29 +587,38 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function cleanupStoredBody(artifact: StoredArtifactBody): Promise<void> {
+  async function prepareStoredBodyRelease(artifact: StoredArtifactBody): Promise<boolean> {
+    if (artifact.kind !== 'offline-map') return true;
     try {
       const body = artifact.body ?? await bodies.get(artifact.cacheKey);
-      if (body !== null && (artifact.sha256 === undefined || await digest(body) === artifact.sha256)) {
-        await releaseBody(artifact.kind, body);
-      }
+      if (body === null || (artifact.sha256 !== undefined && await digest(body) !== artifact.sha256)) return false;
+      return releaseBody(artifact.kind, body);
     } catch {
-      // A failed release or read cannot make an unpublished body active.
+      return false;
     }
+  }
+
+  async function deleteStoredBody(artifact: StoredArtifactBody): Promise<boolean> {
     try {
       await bodies.delete(artifact.cacheKey);
+      return true;
     } catch {
-      // Orphaned immutable bodies are safe and may be removed later.
+      return false;
     }
   }
 
   async function cleanupGeneration(key: string, artifacts: readonly StoredArtifactBody[]): Promise<void> {
+    for (const artifact of artifacts) {
+      if (!await prepareStoredBodyRelease(artifact)) return;
+    }
+    for (const artifact of artifacts) {
+      if (!await deleteStoredBody(artifact)) return;
+    }
     try {
       metadata.removeItem(key);
     } catch {
-      // Best effort: an unpublished generation is never selected by the head.
+      // Retaining metadata is safe and permits a later cleanup retry.
     }
-    for (const artifact of artifacts) await cleanupStoredBody(artifact);
   }
 
   async function cleanupOldGenerations(active: EmergencyPackManifest): Promise<void> {
@@ -970,14 +980,13 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       const encoded = metadata.getItem(key);
       parsed = encoded === null ? null : parseEmergencyPackManifest(JSON.parse(encoded));
       if (parsed?.placeId !== placeId || manifestKey(parsed.placeId, parsed.packId) !== key) return;
-      metadata.removeItem(key);
     } catch {
       return;
     }
-    for (const { kind, cacheKey, sha256 } of parsed.receipts) {
-      if (retainedBodyKeys.has(cacheKey)) continue;
-      await cleanupStoredBody({ kind, cacheKey, sha256 });
-    }
+    const artifacts = parsed.receipts
+      .filter(({ cacheKey }) => !retainedBodyKeys.has(cacheKey))
+      .map(({ kind, cacheKey, sha256 }) => ({ kind, cacheKey, sha256 }));
+    await cleanupGeneration(key, artifacts);
   }
 
   async function removeUnretainedManifests(

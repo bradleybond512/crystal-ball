@@ -8,6 +8,7 @@ import {
 import { getVerifiedLifelinesReceiptForPlace } from '@/services/lifelines/lifeline-runtime';
 import {
   captureOfflineMapTilesExact,
+  createExactOfflineMapCleanupCoordinator,
   deleteOfflineMapGenerationExact,
   EXACT_OFFLINE_MAP_MAX_TILE_BYTES,
   EXACT_OFFLINE_MAP_MAX_TILES,
@@ -17,6 +18,7 @@ import {
   verifyOfflineMapGenerationExact,
   type ExactOfflineMapCache,
   type ExactOfflineMapCaptureResult,
+  type ExactOfflineMapCleanupCoordinator,
   type ExactOfflineMapTile,
 } from '@/services/offline-map-cache';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace } from '@/services/saved-places';
@@ -252,7 +254,8 @@ interface EmergencyPackOfflineMapOperations {
     generationId: string;
     tiles: ExactOfflineMapTile[];
     cache: ExactOfflineMapCache;
-  }): Promise<{ ok: boolean }>;
+    cleanup?: ExactOfflineMapCleanupCoordinator;
+  }): Promise<{ ok: boolean; durableCleanup?: true }>;
 }
 
 function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
@@ -338,6 +341,7 @@ const DEFAULT_OFFLINE_MAP_OPERATIONS: EmergencyPackOfflineMapOperations = {
 export function createEmergencyPackOfflineMapLifecycle(
   cacheStorage: { open(name: string): Promise<ExactOfflineMapCache> },
   operations: EmergencyPackOfflineMapOperations = DEFAULT_OFFLINE_MAP_OPERATIONS,
+  cleanup?: ExactOfflineMapCleanupCoordinator,
 ): {
   verifyArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<boolean>;
   releaseArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
@@ -349,8 +353,10 @@ export function createEmergencyPackOfflineMapLifecycle(
     if (!evidence) return false;
     try {
       const cache = await cacheStorage.open(MAP_CACHE_NAME);
-      const result = await operations.verify({ ...evidence, cache });
-      return result.ok;
+      const verified = await operations.verify({ ...evidence, cache });
+      if (!verified.ok) return false;
+      cleanup?.adoptGeneration(evidence.generationId, evidence.tiles.map(({ cacheKey }) => cacheKey));
+      return true;
     } catch {
       return false;
     }
@@ -361,8 +367,8 @@ export function createEmergencyPackOfflineMapLifecycle(
     if (!evidence) throw new Error('invalid offline map artifact evidence');
     try {
       const cache = await cacheStorage.open(MAP_CACHE_NAME);
-      const released = await operations.release({ ...evidence, cache });
-      if (!released.ok) throw new Error('offline map generation release failed');
+      const released = await operations.release({ ...evidence, cache, ...(cleanup ? { cleanup } : {}) });
+      if (!released.ok && !released.durableCleanup) throw new Error('offline map generation release failed');
     } catch {
       throw new Error('offline map generation release failed');
     }
@@ -812,11 +818,13 @@ interface EmergencyPackOfflineMapCaptureDependencies {
     tileUrls: string[];
   };
   openCache(name: string): Promise<ExactOfflineMapCache>;
+  cleanup: ExactOfflineMapCleanupCoordinator;
   fetchTile(url: string, signal: AbortSignal): Promise<Response>;
   captureTiles(input: {
     generationId: string;
     tileUrls: string[];
     cache: ExactOfflineMapCache;
+    cleanup: ExactOfflineMapCleanupCoordinator;
     fetchTile: (url: string) => Promise<Response>;
     concurrency: number;
   }): Promise<ExactOfflineMapCaptureResult>;
@@ -861,6 +869,7 @@ export async function captureEmergencyPackOfflineMap(
       generationId,
       tileUrls: plan.tileUrls,
       cache,
+      cleanup: dependencies.cleanup,
       fetchTile: (url) => dependencies.fetchTile(url, controller.signal),
       concurrency: 4,
     });
@@ -904,6 +913,7 @@ export async function captureEmergencyPackOfflineMap(
 async function captureDefaultOfflineMap(
   place: RuntimePlace,
   scope: EmergencyPackCaptureScope,
+  cleanup: ExactOfflineMapCleanupCoordinator,
 ): Promise<EmergencyPackCapturedArtifact | null> {
   if (typeof caches === 'undefined' || typeof fetch !== 'function') return null;
   return captureEmergencyPackOfflineMap(place, scope, {
@@ -911,6 +921,7 @@ async function captureDefaultOfflineMap(
     randomUUID: () => globalThis.crypto?.randomUUID(),
     planTileUrls: planOfflineMapTileUrls,
     openCache: (name) => caches.open(name),
+    cleanup,
     fetchTile: fetchDefaultMapTile,
     captureTiles: captureOfflineMapTilesExact,
   });
@@ -928,7 +939,8 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
     typeof localStorage === 'undefined'
     || typeof caches === 'undefined'
   ) return null;
-  const offlineMapLifecycle = createEmergencyPackOfflineMapLifecycle(caches);
+  const offlineMapCleanup = createExactOfflineMapCleanupCoordinator({ metadata: localStorage });
+  const offlineMapLifecycle = createEmergencyPackOfflineMapLifecycle(caches, undefined, offlineMapCleanup);
   return createEmergencyPackRuntime({
     now: Date.now,
     buildProfileFingerprint: buildEmergencyPackProfileFingerprint,
@@ -977,7 +989,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
       getRoutes: getSavedRoutes,
       getCommsPlan,
       getSelectedContactIds: (placeId) => getCommsPlan(placeId)?.contacts.map(({ id }) => id) ?? [],
-      captureOfflineMap: captureDefaultOfflineMap,
+      captureOfflineMap: (place, scope) => captureDefaultOfflineMap(place, scope, offlineMapCleanup),
     }),
     createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
     releaseArtifact: offlineMapLifecycle.releaseArtifact,

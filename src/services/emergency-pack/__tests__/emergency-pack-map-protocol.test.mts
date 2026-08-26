@@ -17,6 +17,10 @@ interface ProtocolApi {
 
 const ORIGINAL_URL = 'https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png';
 const MAX_TILE_BYTES = 1024 * 1024;
+const NON_DEFAULT_PORT_URLS = [
+  'https://a.basemaps.cartocdn.com:8443/rastertiles/dark_nolabels/4/1/2.png',
+  'https://d.basemaps.cartocdn.com:444/dark_all/4/1/2@2x.png',
+];
 
 const api = await import('../emergency-pack-map-protocol.ts').catch(() => ({} as ProtocolApi)) as ProtocolApi;
 
@@ -38,6 +42,21 @@ test('a Carto raster tile is wrapped without changing unrelated or non-tile requ
     transform('https://a.basemaps.cartocdn.com/rastertiles/voyager/4/1/2.png', 'Tile'),
     { url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/4/1/2.png' },
   );
+});
+
+test('Carto tile URLs with explicit non-default ports are never wrapped', () => {
+  const transform = requireFunction('transformEmergencyPackMapRequest');
+  for (const url of NON_DEFAULT_PORT_URLS) {
+    assert.notEqual(new URL(url).port, '', 'fixture must retain its explicit port after URL normalization');
+    assert.deepEqual(transform(url, 'Tile'), { url });
+  }
+});
+
+test('wrapped Carto tile URLs with explicit non-default ports are never handled', () => {
+  const unwrap = requireFunction('unwrapEmergencyPackMapUrl');
+  for (const url of NON_DEFAULT_PORT_URLS) {
+    assert.equal(unwrap(`wm-emergency-pack-map://tile/${encodeURIComponent(url)}`), null);
+  }
 });
 
 test('protocol serves verified offline bytes without network and preserves exact HTTPS fallback', async () => {

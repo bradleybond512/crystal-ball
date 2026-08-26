@@ -14,6 +14,16 @@ Object.defineProperty(globalThis, 'navigator', { value: happyWindow.navigator, c
 Object.defineProperty(globalThis, 'location', { value: happyWindow.location, configurable: true });
 
 const { RUNTIME_FEATURES, isFeatureAvailable } = await import('../runtime-config.ts');
+const { isLocalOnlyApiTarget } = await import('../runtime.ts');
+
+test('UCDP routes are exact local-only targets, including query strings', () => {
+  assert.equal(isLocalOnlyApiTarget('/api/conflict/v1/list-ucdp-events'), true);
+  assert.equal(isLocalOnlyApiTarget('/api/conflict/v1/list-ucdp-events?page_size=100'), true);
+  assert.equal(isLocalOnlyApiTarget('/api/ucdp-classifications'), true);
+  assert.equal(isLocalOnlyApiTarget('/api/ucdp-classifications?refresh=1'), true);
+  assert.equal(isLocalOnlyApiTarget('/api/conflict/v1/list-ucdp-events-extra'), false);
+  assert.equal(isLocalOnlyApiTarget('/api/ucdp-classifications/extra'), false);
+});
 
 test('UCDP is unavailable in the web runtime even before the vault is unlocked', () => {
   assert.equal(isFeatureAvailable('ucdpEvents'), false);

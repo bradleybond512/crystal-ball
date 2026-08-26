@@ -1,6 +1,6 @@
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
-import { getApiBaseUrl } from '@/services/runtime';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 import { loadProximityConfig } from '@/services/proximity-filter';
 import {
   parseOpenaqEnvelope,
@@ -21,6 +21,7 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 export class OpenaqMonitorPanel extends Panel {
+  private readonly desktopRuntime = isDesktopRuntime();
   private activeTab: Tab = readStoredTab();
   private nearby: MonitorReading[] = [];
   private worst: MonitorReading[] = [];
@@ -42,6 +43,7 @@ export class OpenaqMonitorPanel extends Panel {
       infoTooltip: 'OpenAQ v3 air-quality monitors. Nearby uses your saved home location. PM2.5 readings are scored on the EPA AQI ladder.',
     });
     this.render();
+    if (!this.desktopRuntime) return;
     // Defer the first fetch off the constructor so we don't block the
     // boot path on a network round-trip.
     queueMicrotask(() => { void this.ensureTabData(this.activeTab); });
@@ -77,7 +79,7 @@ export class OpenaqMonitorPanel extends Panel {
       return;
     }
     const { lat, lon } = config.location;
-    const response = await fetchJson(`/api/airquality/openaq?lat=${lat}&lon=${lon}&radius=25000`);
+    const response = await fetchJson(`/api/local-airquality/openaq?lat=${lat}&lon=${lon}&radius=25000`);
     const parsed = response.ok ? parseOpenaqEnvelope(response.data) : { ok: false as const, error: response.error };
     this.nearbyError = parsed.ok ? null : parsed.error;
     this.nearby = parsed.ok ? summarizeNearby(parsed.readings, Date.now()).readings : [];
@@ -86,7 +88,7 @@ export class OpenaqMonitorPanel extends Panel {
   }
 
   private async loadWorst(): Promise<void> {
-    const response = await fetchJson('/api/airquality/openaq/worst');
+    const response = await fetchJson('/api/local-airquality/openaq/worst');
     const parsed = response.ok ? parseOpenaqEnvelope(response.data) : { ok: false as const, error: response.error };
     this.worstError = parsed.ok ? null : parsed.error;
     this.worst = parsed.ok ? pickGlobalWorst(parsed.readings, Date.now(), 20) : [];
@@ -169,6 +171,10 @@ export class OpenaqMonitorPanel extends Panel {
   }
 
   private render(): void {
+    if (!this.desktopRuntime) {
+      this.setContent(emptyState('OpenAQ readings require the Crystal Ball desktop app.'));
+      return;
+    }
     let body = '';
     switch (this.activeTab) {
       case 'nearby': { body = this.renderNearbyTab(); break; }

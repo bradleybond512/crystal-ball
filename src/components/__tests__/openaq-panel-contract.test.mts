@@ -54,6 +54,7 @@ const reading = {
 };
 
 function envelope(readings: unknown[]) {
+  const now = Date.now();
   return {
     schemaVersion: 2,
     provider: 'openaq-v3',
@@ -61,8 +62,8 @@ function envelope(readings: unknown[]) {
     complete: false,
     readings,
     sample: {
-      windowStart: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      windowEnd: new Date().toISOString(),
+      windowStart: new Date(now - 60 * 60 * 1000).toISOString(),
+      windowEnd: new Date(now).toISOString(),
       reportedFoundAtStart: readings.length,
       plannedPages: 1,
       fetchedPages: 1,
@@ -71,8 +72,19 @@ function envelope(readings: unknown[]) {
       acceptedRows: readings.length,
       duplicateRows: 0,
       invalidRows: 0,
-      rejectionReasons: {},
+      rejectionReasons: {
+        invalidSensorId: 0,
+        invalidLocationId: 0,
+        invalidValue: 0,
+        invalidCoordinates: 0,
+        invalidTimestamp: 0,
+        outsideWindow: 0,
+        equalTimestampConflict: 0,
+      },
     },
+    source: 'api.openaq.org/v3/parameters/2/latest',
+    fetchedAt: new Date(now).toISOString(),
+    servedAt: new Date(now).toISOString(),
   };
 }
 
@@ -86,8 +98,15 @@ function setInitialTab(tab: Tab): void {
   }));
 }
 
+function setDesktopRuntime(desktop: boolean): void {
+  const runtimeWindow = happyWindow as unknown as Record<string, unknown>;
+  if (desktop) runtimeWindow.__TAURI_INTERNALS__ = {};
+  else delete runtimeWindow.__TAURI_INTERNALS__;
+}
+
 async function renderResult(tab: Tab, response: Response): Promise<string> {
   setInitialTab(tab);
+  setDesktopRuntime(true);
   globals.fetch = async () => response;
   const panel = new OpenaqMonitorPanel();
   document.body.replaceChildren(panel.getElement());
@@ -96,6 +115,24 @@ async function renderResult(tab: Tab, response: Response): Promise<string> {
   panel.destroy();
   return text;
 }
+
+test('web panel explains that OpenAQ requires desktop and performs no fetch', async () => {
+  setInitialTab('nearby');
+  setDesktopRuntime(false);
+  let fetches = 0;
+  globals.fetch = async () => {
+    fetches += 1;
+    return Response.json(envelope([reading]));
+  };
+
+  const panel = new OpenaqMonitorPanel();
+  document.body.replaceChildren(panel.getElement());
+  await new Promise((resolve) => setTimeout(resolve, 225));
+
+  assert.match(panel.getElement().textContent ?? '', /OpenAQ readings require the Crystal Ball desktop app/);
+  assert.equal(fetches, 0);
+  panel.destroy();
+});
 
 for (const tab of ['nearby', 'worst'] as const) {
   const label = tab === 'nearby' ? 'Nearby' : 'Recent Highs';
@@ -134,6 +171,7 @@ test('OpenAQ panel labels the bounded feed as Recent Highs and discloses sample 
 
 test('OpenAQ search promises only fields present in the normalized sample', async () => {
   setInitialTab('nearby');
+  setDesktopRuntime(true);
   localStorage.setItem('cb:openaq-tab', 'search');
   globals.fetch = async () => Response.json(envelope([]));
   const panel = new OpenaqMonitorPanel();

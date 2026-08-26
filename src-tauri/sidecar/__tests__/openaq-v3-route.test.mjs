@@ -6,6 +6,8 @@ process.env.LOCAL_API_TOKEN ??= 'test-token-openaq-v3';
 const sidecar = await import('../local-api-server.mjs');
 
 const NOW = Date.UTC(2026, 7, 25, 12, 0, 0);
+const OPENAQ_NEARBY_PATH = '/api/local-airquality/openaq';
+const OPENAQ_WORST_PATH = '/api/local-airquality/openaq/worst';
 
 function latestRow(overrides = {}) {
   return {
@@ -104,6 +106,40 @@ test('normalizer allowlists safe IDs, nonnegative readings, coordinates, and non
   assert.equal(out.error, 'no_usable_readings');
   assert.equal(out.acceptedRows, 0);
   assert.equal(out.droppedRows, 7);
+});
+
+test('normalizer accepts only canonical UTC RFC3339 seconds or exactly milliseconds', () => {
+  const accepted = [
+    '2026-08-25T11:30:00Z',
+    '2026-08-25T11:30:00.123Z',
+  ];
+  for (const [index, utc] of accepted.entries()) {
+    const out = normalizePages([page(1, 1, [latestRow({ sensorsId: index + 1, datetime: { utc, local: utc } })])]);
+    assert.equal(out.error, null, utc);
+    assert.equal(out.acceptedRows, 1, utc);
+    assert.equal(out.readings[0].observedAt, Date.parse(utc), utc);
+  }
+});
+
+test('normalizer rejects noncanonical or impossible upstream timestamps', () => {
+  const rejected = [
+    '2026-08-25T11:30:00+00:00',
+    '2026-08-25T06:30:00-05:00',
+    '2026-08-25T11:30:00z',
+    ' 2026-08-25T11:30:00Z',
+    '2026-08-25T11:30:00Z ',
+    '2026-08-25T11:30Z',
+    '2026-08-25T11:30:00.1Z',
+    '2026-08-25T11:30:00.12Z',
+    '2026-08-25T11:30:00.1234Z',
+    '2026-02-30T11:30:00Z',
+  ];
+  for (const [index, utc] of rejected.entries()) {
+    const out = normalizePages([page(1, 1, [latestRow({ sensorsId: index + 1, datetime: { utc, local: utc } })])]);
+    assert.equal(out.error, 'no_usable_readings', utc);
+    assert.equal(out.acceptedRows, 0, utc);
+    assert.equal(out.sample.rejectionReasons.invalidTimestamp, 1, utc);
+  }
 });
 
 test('normalizer rejects malformed metadata and missing planned pages', () => {
@@ -352,12 +388,39 @@ function httpJson(url, options = {}) {
   });
 }
 
+test('legacy OpenAQ paths no longer serve the provider or call upstream', async () => {
+  const originalFetch = globalThis.fetch;
+  const saved = process.env.OPENAQ_API_KEY;
+  process.env.OPENAQ_API_KEY = 'test-key';
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => {
+    upstreamCalls += 1;
+    return Response.json(page(1, 1, [latestRow()]));
+  };
+  const app = await startSidecar();
+  try {
+    for (const path of ['/api/airquality/openaq/worst', '/api/airquality/openaq?lat=0&lon=0&radius=25000']) {
+      const response = await httpJson(`${app.base}${path}`);
+      assert.equal(response.status, 200, path);
+      assert.equal(response.body.degraded, true, path);
+      assert.equal(response.body.provider, undefined, path);
+      assert.equal(response.body.schemaVersion, undefined, path);
+    }
+    assert.equal(upstreamCalls, 0);
+  } finally {
+    await app.close();
+    globalThis.fetch = originalFetch;
+    if (saved === undefined) delete process.env.OPENAQ_API_KEY;
+    else process.env.OPENAQ_API_KEY = saved;
+  }
+});
+
 test('OpenAQ routes fail explicitly when the API key is missing', async () => {
   const saved = process.env.OPENAQ_API_KEY;
   delete process.env.OPENAQ_API_KEY;
   const app = await startSidecar();
   try {
-    for (const path of ['/api/airquality/openaq/worst', '/api/airquality/openaq?lat=0&lon=0&radius=25000']) {
+    for (const path of [OPENAQ_WORST_PATH, `${OPENAQ_NEARBY_PATH}?lat=0&lon=0&radius=25000`]) {
       const response = await httpJson(`${app.base}${path}`);
       assert.equal(response.status, 400);
       assert.equal(response.body.error, 'OPENAQ_API_KEY not configured');
@@ -374,7 +437,7 @@ test('nearby route validates coordinates and radius before fetching upstream', a
   const app = await startSidecar();
   try {
     for (const query of ['lat=&lon=0', 'lat=91&lon=0', 'lat=0&lon=181', 'lat=0&lon=0&radius=25001']) {
-      const response = await httpJson(`${app.base}/api/airquality/openaq?${query}`);
+      const response = await httpJson(`${app.base}${OPENAQ_NEARBY_PATH}?${query}`);
       assert.equal(response.status, 400, query);
       assert.equal(response.body.error, 'invalid OpenAQ nearby query');
     }
@@ -394,7 +457,7 @@ test('OpenAQ routes preserve sanitized upstream 401 and 403 semantics', async ()
     for (const status of [401, 403]) {
       sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
       globalThis.fetch = async () => Response.json({ detail: `secret upstream detail ${status}` }, { status });
-      const response = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+      const response = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
       assert.equal(response.status, status);
       assert.deepEqual(response.body, { error: `OpenAQ authentication ${status === 401 ? 'required' : 'forbidden'}` });
       assert.doesNotMatch(JSON.stringify(response.body), /secret upstream detail/);
@@ -427,12 +490,12 @@ test('worst and nearby routes share one complete normalized corpus', async () =>
   sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
   const app = await startSidecar();
   try {
-    const worst = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const worst = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     assert.equal(worst.status, 200);
     assert.equal(worst.body.readings.length, 2);
     assert.equal(worst.body.readings[0].locationId, 10);
 
-    const nearby = await httpJson(`${app.base}/api/airquality/openaq?lat=0&lon=0&radius=25000`);
+    const nearby = await httpJson(`${app.base}${OPENAQ_NEARBY_PATH}?lat=0&lon=0&radius=25000`);
     assert.equal(nearby.status, 200);
     assert.equal(nearby.body.readings.length, 1);
     assert.equal(nearby.body.readings[0].lat, 0);
@@ -459,8 +522,8 @@ test('route reports metadata drift as sampled and caches the positive normalized
   sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
   const app = await startSidecar();
   try {
-    const first = await httpJson(`${app.base}/api/airquality/openaq/worst`);
-    const second = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const first = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
+    const second = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     assert.equal(first.status, 200);
     assert.equal(first.body.complete, false);
     assert.equal(first.body.coverage, 'best_effort_sample');
@@ -492,7 +555,7 @@ test('credential rotation aborts the old generation and deletion clears its cach
   sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
   const app = await startSidecar();
   try {
-    const oldRequest = httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const oldRequest = httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     while (seenKeys.length === 0) await new Promise((resolve) => setTimeout(resolve, 1));
     const rotated = await httpJson(`${app.base}/api/local-env-update`, {
       method: 'POST', body: { key: 'OPENAQ_API_KEY', value: 'generation-b' },
@@ -501,10 +564,10 @@ test('credential rotation aborts the old generation and deletion clears its cach
     const oldResponse = await oldRequest;
     assert.equal(oldResponse.status, 409);
 
-    const fresh = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const fresh = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     assert.equal(fresh.status, 200);
     assert.deepEqual(seenKeys, ['generation-a', 'generation-b']);
-    const cached = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const cached = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     assert.equal(cached.status, 200);
     assert.deepEqual(seenKeys, ['generation-a', 'generation-b']);
     assert.equal(cached.body.fetchedAt, fresh.body.fetchedAt);
@@ -513,7 +576,7 @@ test('credential rotation aborts the old generation and deletion clears its cach
       method: 'POST', body: { key: 'OPENAQ_API_KEY', value: '' },
     });
     assert.equal(deleted.status, 200);
-    const missing = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const missing = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     assert.equal(missing.status, 400);
   } finally {
     await app.close();
@@ -532,7 +595,7 @@ test('worst route rejects a complete corpus when every reading is stale', async 
   sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
   const app = await startSidecar();
   try {
-    const response = await httpJson(`${app.base}/api/airquality/openaq/worst`);
+    const response = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
     assert.equal(response.status, 502);
     assert.equal(response.body.error, 'OpenAQ returned no usable readings');
   } finally {

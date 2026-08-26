@@ -39,6 +39,8 @@ export interface EmergencyPackReceipt {
   verifiedAt: string;
   semanticState: EmergencyPackSemanticState;
   summary: string;
+  sourceRevision?: string;
+  alertSequence?: number;
 }
 
 export interface EmergencyPackManifest {
@@ -103,6 +105,7 @@ const RECEIPT_KEYS = [
   'semanticState',
   'summary',
 ] as const;
+const ALERT_RECEIPT_KEYS = [...RECEIPT_KEYS, 'sourceRevision', 'alertSequence'] as const;
 
 const V1_MANIFEST_KEYS = [
   'schemaVersion',
@@ -157,10 +160,19 @@ function hasValidOptionalKinds(value: unknown): value is EmergencyPackOptionalKi
   return isUniqueArray<EmergencyPackOptionalKind>(value, new Set(EMERGENCY_PACK_OPTIONAL_KINDS));
 }
 
+function hasValidSourceBinding(kind: EmergencyPackArtifactKind, value: Record<string, unknown>): boolean {
+  if (kind !== 'alerts') return true;
+  return typeof value.sourceRevision === 'string'
+    && SHA256_HEX_PATTERN.test(value.sourceRevision)
+    && Number.isSafeInteger(value.alertSequence)
+    && (value.alertSequence as number) >= 0;
+}
+
 function parseReceipt(value: unknown, profileFingerprint?: string): EmergencyPackReceipt | null {
-  if (!isRecord(value) || !hasExactKeys(value, RECEIPT_KEYS)) return null;
+  if (!isRecord(value)) return null;
   if (typeof value.kind !== 'string' || !ALL_KINDS.has(value.kind)) return null;
   const kind = value.kind as EmergencyPackArtifactKind;
+  if (!hasExactKeys(value, kind === 'alerts' ? ALERT_RECEIPT_KEYS : RECEIPT_KEYS)) return null;
   if (!isBoundedString(value.profileFingerprint) || value.profileFingerprint !== profileFingerprint) return null;
   if (!isBoundedString(value.cacheKey, 1024)
     || typeof value.sha256 !== 'string'
@@ -176,6 +188,7 @@ function parseReceipt(value: unknown, profileFingerprint?: string): EmergencyPac
   if (capturedAt > verifiedAt || verifiedAt >= expiresAt) return null;
   if (value.semanticState !== 'verified' && value.semanticState !== 'verified-empty') return null;
   if (!isBoundedString(value.summary, 512)) return null;
+  if (!hasValidSourceBinding(kind, value)) return null;
   return {
     kind,
     profileFingerprint: value.profileFingerprint,
@@ -188,6 +201,10 @@ function parseReceipt(value: unknown, profileFingerprint?: string): EmergencyPac
     verifiedAt: value.verifiedAt,
     semanticState: value.semanticState,
     summary: value.summary,
+    ...(kind === 'alerts' ? {
+      sourceRevision: value.sourceRevision as string,
+      alertSequence: value.alertSequence as number,
+    } : {}),
   };
 }
 

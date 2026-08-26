@@ -78,6 +78,35 @@ test('v2 receipts preserve mixed evidence ages with strict chronology, hashes, a
   })] })), null);
 });
 
+test('v2 receipts bind one strict alert source revision and reject it for every other kind', () => {
+  const parse = requireFunction(api, 'parseEmergencyPackManifest');
+  const validRevision = 'b'.repeat(64);
+  assert.deepEqual(parse(manifest({
+    receipts: [receipt('alerts', { sourceRevision: validRevision })],
+  })), manifest({
+    receipts: [receipt('alerts', { sourceRevision: validRevision })],
+  }));
+  for (const sourceRevision of ['', 'a'.repeat(63), 'A'.repeat(64), `${'a'.repeat(63)}z`]) {
+    assert.equal(parse(manifest({
+      receipts: [receipt('alerts', { sourceRevision })],
+    })), null);
+  }
+  assert.equal(parse(manifest({
+    receipts: [receipt('lifelines', { sourceRevision: validRevision })],
+  })), null);
+  for (const alertSequence of [-1, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(parse(manifest({
+      receipts: [receipt('alerts', { alertSequence })],
+    })), null);
+  }
+  assert.equal(parse(manifest({
+    receipts: [receipt('lifelines', { alertSequence: 1 })],
+  })), null);
+  const missingRevision = receipt('alerts') as ReturnType<typeof receipt> & { sourceRevision?: string | null };
+  delete missingRevision.sourceRevision;
+  assert.equal(parse(manifest({ receipts: [missingRevision as ReturnType<typeof receipt>] })), null);
+});
+
 test('readiness requires every exact, current required receipt but not an optional route', () => {
   const derive = requireFunction(api, 'deriveEmergencyPackReadiness');
   assert.deepEqual(derive(manifest(), { placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }), {

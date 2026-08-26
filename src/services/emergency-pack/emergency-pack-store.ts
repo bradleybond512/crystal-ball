@@ -335,6 +335,24 @@ function emptyReadiness(
   };
 }
 
+function detailedStateForManifest(
+  manifest: EmergencyPackManifest,
+  scope: EmergencyPackScope,
+): EmergencyPackDetailedReadiness {
+  const readiness = deriveEmergencyPackReadiness(manifest, scope);
+  return {
+    status: readiness.status,
+    packId: manifest.packId,
+    profileFingerprint: manifest.profileFingerprint,
+    requiredKinds: [...manifest.requiredKinds],
+    optionalKinds: [...manifest.optionalKinds],
+    receipts: manifest.receipts.map((receipt) => ({ ...receipt })),
+    missingKinds: [...readiness.missingKinds],
+    expiredKinds: [...readiness.expiredKinds],
+    ...(readiness.reasons[0] ? { reason: readiness.reasons[0] } : {}),
+  };
+}
+
 function recoveryKeys(
   metadata: EmergencyPackMetadataBoundary,
   scope: EmergencyPackScope,
@@ -404,7 +422,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
 
   function applyInvalidations(manifest: EmergencyPackManifest): EmergencyPackManifest {
     const record = parseInvalidationRecord(metadata.getItem(invalidationKey(manifest.placeId)));
-    if (!record || record.profileFingerprint !== manifest.profileFingerprint) return manifest;
+    if (record?.profileFingerprint !== manifest.profileFingerprint) return manifest;
     return {
       ...manifest,
       receipts: manifest.receipts.filter((receipt) => {
@@ -471,19 +489,17 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     try {
       if (!Number.isFinite(scope.now)) return null;
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
-      if (head?.placeId !== scope.placeId || head.profileFingerprint !== scope.profileFingerprint) return null;
+      if (head?.placeId !== scope.placeId || head?.profileFingerprint !== scope.profileFingerprint) return null;
       const encoded = metadata.getItem(head.manifestKey);
       if (encoded === null || await digest(encoded) !== head.manifestSha256) return null;
       const parsed = parseEmergencyPackManifest(JSON.parse(encoded));
       const manifest = parsed ? applyInvalidations(parsed) : null;
-      if (!manifest
-        || manifest.packId !== head.packId
+      if (manifest?.packId !== head.packId
         || manifest.placeId !== scope.placeId
         || manifest.profileFingerprint !== scope.profileFingerprint
         || manifestKey(manifest.placeId, manifest.packId) !== head.manifestKey) return null;
       const receipt = manifest.receipts.find(({ kind }) => kind === 'offline-map');
-      if (!receipt
-        || receipt.profileFingerprint !== scope.profileFingerprint
+      if (receipt?.profileFingerprint !== scope.profileFingerprint
         || receipt.cacheKey !== bodyKey(manifest.packId, 'offline-map')
         || Date.parse(receipt.expiresAt) <= scope.now) return null;
       const body = await bodies.get(receipt.cacheKey);
@@ -514,6 +530,35 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     return true;
   }
 
+  async function readVerifiedActiveManifest(
+    scope: EmergencyPackScope,
+    head: PackHead | null,
+  ): Promise<EmergencyPackManifest | null> {
+    if (!head) return null;
+    const verified = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+    const active = verified ? applyInvalidations(verified) : null;
+    return active?.packId === head.packId
+      && active.placeId === scope.placeId
+      && active.profileFingerprint === scope.profileFingerprint
+      ? active
+      : null;
+  }
+
+  async function recoverVerifiedManifest(scope: EmergencyPackScope): Promise<EmergencyPackManifest | null> {
+    const head = parseHead(metadata.getItem(headKey(scope.placeId)));
+    if (head?.profileFingerprint && head.profileFingerprint !== scope.profileFingerprint) return null;
+    const active = await readVerifiedActiveManifest(scope, head);
+    if (active) return active;
+    for (const key of recoveryKeys(metadata, scope, head)) {
+      const verified = await loadVerifiedManifest(key);
+      const manifest = verified ? applyInvalidations(verified) : null;
+      if (manifest?.profileFingerprint !== scope.profileFingerprint) continue;
+      if (stateForManifest(manifest, scope).status !== 'ready') continue;
+      if (await publishRecovered(manifest)) return manifest;
+    }
+    return null;
+  }
+
   async function recoverActive(scope: EmergencyPackScope): Promise<EmergencyPackStoreState> {
     try {
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
@@ -523,23 +568,21 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (head?.profileFingerprint && head.profileFingerprint !== scope.profileFingerprint) {
         return { status: 'not-saved', packId: null, reason: 'profile-fingerprint-mismatch' };
       }
-      if (head) {
-        const active = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
-        if (active?.packId === head.packId) return stateForManifest(active, scope);
-      }
-
-      for (const key of recoveryKeys(metadata, scope, head)) {
-        const verified = await loadVerifiedManifest(key);
-        const manifest = verified ? applyInvalidations(verified) : null;
-        if (manifest?.profileFingerprint !== scope.profileFingerprint) continue;
-        const state = stateForManifest(manifest, scope);
-        if (state.status !== 'ready') continue;
-        if (!await publishRecovered(manifest)) continue;
-        return state;
-      }
-      return { status: 'not-saved', packId: null };
+      const manifest = await recoverVerifiedManifest(scope);
+      return manifest ? stateForManifest(manifest, scope) : { status: 'not-saved', packId: null };
     } catch {
       return { status: 'unavailable', packId: null, reason: 'storage-failure' };
+    }
+  }
+
+  async function recoverReadiness(scope: EmergencyPackScope): Promise<EmergencyPackDetailedReadiness> {
+    try {
+      const manifest = await recoverVerifiedManifest(scope);
+      return manifest
+        ? detailedStateForManifest(manifest, scope)
+        : emptyReadiness(scope.profileFingerprint);
+    } catch {
+      return emptyReadiness(scope.profileFingerprint, 'storage-failure');
     }
   }
 
@@ -742,7 +785,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function invalidateArtifacts(input: {
+  function invalidateArtifacts(input: {
     placeId: string;
     profileFingerprint: string;
     kinds: readonly EmergencyPackArtifactKind[];
@@ -758,7 +801,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       || input.kinds.some((kind) => !ARTIFACT_KINDS.has(kind))
       || !Number.isSafeInteger(input.capturedAt)
       || input.capturedAt <= 0
-      || input.capturedAt > 8_640_000_000_000_000) return { ok: false, reason: 'invalid-input' };
+      || input.capturedAt > 8_640_000_000_000_000) {
+      return Promise.resolve({ ok: false, reason: 'invalid-input' });
+    }
     const key = invalidationKey(input.placeId);
     let previous: string | null | undefined;
     try {
@@ -777,7 +822,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       });
       metadata.setItem(key, encoded);
       if (metadata.getItem(key) !== encoded) throw new Error('invalidation readback mismatch');
-      return { ok: true };
+      return Promise.resolve({ ok: true });
     } catch (error) {
       try {
         if (previous === null) metadata.removeItem(key);
@@ -785,7 +830,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       } catch {
         // Failed persistence stays fail-closed at the runtime boundary.
       }
-      return { ok: false, reason: safeReason(error) };
+      return Promise.resolve({ ok: false, reason: safeReason(error) });
     }
   }
 
@@ -963,6 +1008,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     readReadiness,
     readVerifiedOfflineMapArtifact,
     recoverActive,
+    recoverReadiness,
     prune,
   };
 }

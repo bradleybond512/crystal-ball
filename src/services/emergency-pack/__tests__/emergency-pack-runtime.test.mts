@@ -110,14 +110,20 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
   const invalidationCalls: unknown[] = [];
   const releasedArtifacts: unknown[] = [];
   let commitCalls = 0;
+  let readCalls = 0;
 
   const store = {
     async readActive(scope: Scope): Promise<State> {
+      readCalls += 1;
       return authoritative.get(scope.profileFingerprint) ?? {
         status: 'not-saved', packId: null, profileFingerprint: scope.profileFingerprint,
       };
     },
     async recoverActive(scope: Scope): Promise<State> {
+      await options.recoveryGate;
+      return this.readActive(scope);
+    },
+    async recoverReadiness(scope: Scope): Promise<State> {
       await options.recoveryGate;
       return this.readActive(scope);
     },
@@ -233,6 +239,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     authoritative,
     profile,
     get commitCalls() { return commitCalls; },
+    get readCalls() { return readCalls; },
     setPlaces(value: Place[]) { places = value; },
   };
 }
@@ -384,6 +391,15 @@ test('runtime composes browser adapters, store, coordinator, sources, and orches
   assert.ok(harness.compositions.includes('orchestrator'));
   assert.deepEqual(harness.sourcePlaces, ['home']);
   assert.deepEqual(harness.runtime.getState(place('home')), captured);
+  harness.runtime.destroy();
+});
+
+test('hydrate and capture consume one detailed verification read per lifecycle operation', async () => {
+  const harness = createHarness();
+  await harness.runtime.hydrate();
+  assert.equal(harness.readCalls, 1, 'recovery result must be reused by hydrate');
+  await harness.runtime.capture(place('home'), true);
+  assert.equal(harness.readCalls, 2, 'commit verification result must be reused by capture');
   harness.runtime.destroy();
 });
 

@@ -121,22 +121,27 @@ test('five-scope verified source index bounds cold and warm hit and miss paths',
       tiles,
       totalBytes: tiles.length * tileBytes.byteLength,
     });
-    const artifacts = EMERGENCY_PACK_REQUIRED_KINDS.map((kind: EmergencyPackArtifactKind) => ({
-      kind,
-      body: kind === 'offline-map'
-        ? offlineMapBody
-        : JSON.stringify({
-          kind,
-          placeId: scope.placeId,
-          profileFingerprint: scope.profileFingerprint,
-          capturedAt: NOW,
-        }),
-      capturedAt: NOW,
-      expiresAt: NOW + 60 * 60_000,
-      semanticState: 'verified' as const,
-      summary: `${kind} benchmark evidence`,
-      itemCount: 1,
-    }));
+    const artifacts = EMERGENCY_PACK_REQUIRED_KINDS.map((kind: EmergencyPackArtifactKind) => {
+      const sourceRevision = kind === 'alerts' ? 'a'.repeat(64) : undefined;
+      return {
+        kind,
+        body: kind === 'offline-map'
+          ? offlineMapBody
+          : JSON.stringify({
+            kind,
+            placeId: scope.placeId,
+            profileFingerprint: scope.profileFingerprint,
+            capturedAt: NOW,
+            ...(sourceRevision === undefined ? {} : { sourceRevision }),
+          }),
+        capturedAt: NOW,
+        ...(sourceRevision === undefined ? {} : { sourceRevision }),
+        expiresAt: NOW + 60 * 60_000,
+        semanticState: 'verified' as const,
+        summary: `${kind} benchmark evidence`,
+        itemCount: 1,
+      };
+    });
     const committed = await store.commitGeneration({
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,

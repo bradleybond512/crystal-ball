@@ -8,7 +8,15 @@ import {
 import { getVerifiedLifelinesReceiptForPlace } from '@/services/lifelines/lifeline-runtime';
 import {
   captureOfflineMapTilesExact,
+  deleteOfflineMapGenerationExact,
+  EXACT_OFFLINE_MAP_MAX_TILE_BYTES,
+  EXACT_OFFLINE_MAP_MAX_TILES,
+  EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES,
   planOfflineMapTileUrls,
+  verifyOfflineMapGenerationExact,
+  type ExactOfflineMapCache,
+  type ExactOfflineMapCaptureResult,
+  type ExactOfflineMapTile,
 } from '@/services/offline-map-cache';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace } from '@/services/saved-places';
 import { getStormSnapshot } from '@/services/survival/storm-posture-state';
@@ -32,6 +40,7 @@ import {
 import {
   EMERGENCY_PACK_OPTIONAL_KINDS,
   EMERGENCY_PACK_REQUIRED_KINDS,
+  type EmergencyPackArtifactKind,
   type EmergencyPackReceipt,
   type EmergencyPackStatus,
 } from './emergency-pack-schema';
@@ -113,7 +122,9 @@ interface EmergencyPackRuntimeDependencies {
   createCaptureOrchestrator(dependencies: {
     sources: Partial<Record<string, EmergencyPackArtifactSource>>;
     commitGeneration: EmergencyPackRuntimeStore['commitGeneration'];
+    releaseArtifact?: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
   }): { capture(scope: EmergencyPackCaptureScope): Promise<EmergencyPackCaptureResult> };
+  releaseArtifact(artifact: EmergencyPackCapturedArtifact): Promise<void>;
   getLegacyLifelinePackManifest(placeId: string): unknown | null;
   subscribeSavedPlaces(callback: () => void): () => void;
   subscribeRoutes(callback: () => void): () => void;
@@ -183,6 +194,161 @@ export function readLegacyLifelinePackManifestV1(
   }
 }
 
+const OFFLINE_MAP_BODY_KEYS = [
+  'kind',
+  'placeId',
+  'profileFingerprint',
+  'generationId',
+  'tiles',
+  'totalBytes',
+] as const;
+const OFFLINE_MAP_TILE_KEYS = [
+  'url',
+  'cacheKey',
+  'sha256',
+  'generationId',
+  'byteLength',
+  'verified',
+] as const;
+const OFFLINE_MAP_GENERATION_ID_MAX_LENGTH = 180;
+
+interface OfflineMapGenerationEvidence {
+  generationId: string;
+  tiles: ExactOfflineMapTile[];
+}
+
+interface EmergencyPackOfflineMapOperations {
+  verify(input: {
+    generationId: string;
+    tiles: ExactOfflineMapTile[];
+    cache: ExactOfflineMapCache;
+  }): Promise<{ ok: boolean }>;
+  release(input: {
+    generationId: string;
+    tiles: ExactOfflineMapTile[];
+    cache: ExactOfflineMapCache;
+  }): Promise<{ ok: boolean }>;
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
+
+function isBoundedText(value: unknown, maximum: number): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= maximum;
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function parseOfflineMapGenerationEvidence(body: string): OfflineMapGenerationEvidence | null {
+  if (typeof body !== 'string' || body.length === 0 || body.length > EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES) return null;
+  let payload: Record<string, unknown> | null;
+  try {
+    payload = strictJsonRecord(JSON.parse(body));
+  } catch {
+    return null;
+  }
+  if (!payload
+    || !hasExactKeys(payload, OFFLINE_MAP_BODY_KEYS)
+    || payload.kind !== 'offline-map'
+    || !isBoundedText(payload.placeId, 180)
+    || !isBoundedText(payload.profileFingerprint, 800)
+    || !isBoundedText(payload.generationId, OFFLINE_MAP_GENERATION_ID_MAX_LENGTH)
+    || !Array.isArray(payload.tiles)
+    || payload.tiles.length === 0
+    || payload.tiles.length > EXACT_OFFLINE_MAP_MAX_TILES
+    || !Number.isSafeInteger(payload.totalBytes)
+    || (payload.totalBytes as number) <= 0
+    || (payload.totalBytes as number) > EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES) return null;
+
+  const generationId = payload.generationId;
+  const urls = new Set<string>();
+  const cacheKeys = new Set<string>();
+  const tiles: ExactOfflineMapTile[] = [];
+  let totalBytes = 0;
+  for (const candidate of payload.tiles) {
+    const tile = strictJsonRecord(candidate);
+    if (!tile
+      || !hasExactKeys(tile, OFFLINE_MAP_TILE_KEYS)
+      || !isBoundedText(tile.url, 2048)
+      || !isHttpsUrl(tile.url)
+      || !isBoundedText(tile.cacheKey, 4096)
+      || !isBoundedText(tile.sha256, 64)
+      || !/^[a-f0-9]{64}$/.test(tile.sha256)
+      || tile.generationId !== generationId
+      || !Number.isSafeInteger(tile.byteLength)
+      || (tile.byteLength as number) <= 0
+      || (tile.byteLength as number) > EXACT_OFFLINE_MAP_MAX_TILE_BYTES
+      || tile.verified !== true
+      || urls.has(tile.url)
+      || cacheKeys.has(tile.cacheKey)) return null;
+    urls.add(tile.url);
+    cacheKeys.add(tile.cacheKey);
+    totalBytes += tile.byteLength as number;
+    if (!Number.isSafeInteger(totalBytes) || totalBytes > EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES) return null;
+    tiles.push({
+      url: tile.url,
+      cacheKey: tile.cacheKey,
+      sha256: tile.sha256,
+      generationId,
+      byteLength: tile.byteLength as number,
+      verified: true,
+    });
+  }
+  return totalBytes === payload.totalBytes ? { generationId, tiles } : null;
+}
+
+export function createEmergencyPackOfflineMapLifecycle(
+  cacheStorage: { open(name: string): Promise<ExactOfflineMapCache> },
+  operations: EmergencyPackOfflineMapOperations = {
+    verify: verifyOfflineMapGenerationExact,
+    release: deleteOfflineMapGenerationExact,
+  },
+): {
+  verifyArtifactBody(kind: EmergencyPackArtifactKind, body: string): Promise<boolean>;
+  releaseArtifactBody(kind: EmergencyPackArtifactKind, body: string): Promise<void>;
+  releaseArtifact(artifact: EmergencyPackCapturedArtifact): Promise<void>;
+} {
+  const verifyArtifactBody = async (kind: EmergencyPackArtifactKind, body: string): Promise<boolean> => {
+    if (kind !== 'offline-map') return true;
+    const evidence = parseOfflineMapGenerationEvidence(body);
+    if (!evidence) return false;
+    try {
+      const cache = await cacheStorage.open(MAP_CACHE_NAME);
+      return (await operations.verify({ ...evidence, cache })).ok;
+    } catch {
+      return false;
+    }
+  };
+  const releaseArtifactBody = async (kind: EmergencyPackArtifactKind, body: string): Promise<void> => {
+    if (kind !== 'offline-map') return;
+    const evidence = parseOfflineMapGenerationEvidence(body);
+    if (!evidence) throw new Error('invalid offline map artifact evidence');
+    try {
+      const cache = await cacheStorage.open(MAP_CACHE_NAME);
+      const released = await operations.release({ ...evidence, cache });
+      if (!released.ok) throw new Error('offline map generation release failed');
+    } catch {
+      throw new Error('offline map generation release failed');
+    }
+  };
+  return {
+    verifyArtifactBody,
+    releaseArtifactBody,
+    async releaseArtifact(artifact): Promise<void> {
+      if (artifact.kind !== 'offline-map') return;
+      await releaseArtifactBody('offline-map', artifact.body);
+    },
+  };
+}
+
 export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDependencies) {
   const adapters = dependencies.createBrowserAdapters();
   const store = dependencies.createStore(adapters);
@@ -226,6 +392,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       const orchestrator = dependencies.createCaptureOrchestrator({
         sources: dependencies.createSources(context.place),
         commitGeneration: store.commitGeneration.bind(store),
+        releaseArtifact: dependencies.releaseArtifact,
       });
       captureResults.set(scope.placeId, await orchestrator.capture({
         ...scope,
@@ -458,38 +625,116 @@ function fetchDefaultMapTile(url: string, signal: AbortSignal): Promise<Response
   });
 }
 
+interface EmergencyPackOfflineMapCaptureDependencies {
+  now(): number;
+  randomUUID(): string | undefined;
+  planTileUrls(lat: number, lon: number, radiusKm: number): {
+    ok: boolean;
+    tileUrls: string[];
+  };
+  openCache(name: string): Promise<ExactOfflineMapCache>;
+  fetchTile(url: string, signal: AbortSignal): Promise<Response>;
+  captureTiles(input: {
+    generationId: string;
+    tileUrls: string[];
+    cache: ExactOfflineMapCache;
+    fetchTile: (url: string) => Promise<Response>;
+    concurrency: number;
+  }): Promise<ExactOfflineMapCaptureResult>;
+}
+
+function createOfflineMapGenerationId(randomUUID: () => string | undefined): string | null {
+  try {
+    const uniqueId = randomUUID();
+    if (!isBoundedText(uniqueId, 160) || !/^[a-zA-Z0-9._-]+$/.test(uniqueId)) return null;
+    const generationId = `emergency-pack-${uniqueId}`;
+    return generationId.length <= OFFLINE_MAP_GENERATION_ID_MAX_LENGTH ? generationId : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function captureEmergencyPackOfflineMap(
+  place: RuntimePlace,
+  scope: EmergencyPackCaptureScope,
+  dependencies: EmergencyPackOfflineMapCaptureDependencies,
+): Promise<EmergencyPackCapturedArtifact | null> {
+  const generationId = createOfflineMapGenerationId(dependencies.randomUUID);
+  if (!generationId) return null;
+  let plan: { ok: boolean; tileUrls: string[] };
+  try {
+    plan = dependencies.planTileUrls(place.lat, place.lon, Math.min(place.radiusKm, 100));
+  } catch {
+    return null;
+  }
+  if (!plan.ok) return null;
+  let cache: ExactOfflineMapCache;
+  try {
+    cache = await dependencies.openCache(MAP_CACHE_NAME);
+  } catch {
+    return null;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MAP_CAPTURE_TIMEOUT_MS);
+  let captured: ExactOfflineMapCaptureResult;
+  try {
+    captured = await dependencies.captureTiles({
+      generationId,
+      tileUrls: plan.tileUrls,
+      cache,
+      fetchTile: (url) => dependencies.fetchTile(url, controller.signal),
+      concurrency: 4,
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!captured.ok) return null;
+  let body: string;
+  try {
+    body = JSON.stringify({
+      kind: 'offline-map',
+      placeId: scope.placeId,
+      profileFingerprint: scope.profileFingerprint,
+      generationId,
+      tiles: captured.tiles,
+      totalBytes: captured.totalBytes,
+    });
+  } catch {
+    return null;
+  }
+  if (!parseOfflineMapGenerationEvidence(body)) return null;
+  let now: number;
+  try {
+    now = dependencies.now();
+  } catch {
+    return null;
+  }
+  if (!Number.isSafeInteger(now) || now <= 0 || now + MAP_EXPIRY_MS > 8_640_000_000_000_000) return null;
+  return {
+    kind: 'offline-map',
+    body,
+    expiresAt: now + MAP_EXPIRY_MS,
+    semanticState: 'verified',
+    summary: `${captured.tiles.length} offline map tiles verified`,
+    itemCount: captured.tiles.length,
+  };
+}
+
 async function captureDefaultOfflineMap(
   place: RuntimePlace,
   scope: EmergencyPackCaptureScope,
 ): Promise<EmergencyPackCapturedArtifact | null> {
   if (typeof caches === 'undefined' || typeof fetch !== 'function') return null;
-  const plan = planOfflineMapTileUrls(place.lat, place.lon, Math.min(place.radiusKm, 100));
-  if (!plan.ok) return null;
-  const cache = await caches.open(MAP_CACHE_NAME);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MAP_CAPTURE_TIMEOUT_MS);
-  const captured = await captureOfflineMapTilesExact({
-    tileUrls: plan.tileUrls,
-    cache,
-    fetchTile: (url) => fetchDefaultMapTile(url, controller.signal),
-    concurrency: 4,
-  }).finally(() => clearTimeout(timeout));
-  if (!captured.ok) return null;
-  const body = JSON.stringify({
-    kind: 'offline-map',
-    placeId: scope.placeId,
-    profileFingerprint: scope.profileFingerprint,
-    tiles: captured.tiles,
-    totalBytes: captured.totalBytes,
+  return captureEmergencyPackOfflineMap(place, scope, {
+    now: Date.now,
+    randomUUID: () => globalThis.crypto?.randomUUID(),
+    planTileUrls: planOfflineMapTileUrls,
+    openCache: (name) => caches.open(name),
+    fetchTile: fetchDefaultMapTile,
+    captureTiles: captureOfflineMapTilesExact,
   });
-  return {
-    kind: 'offline-map',
-    body,
-    expiresAt: Date.now() + MAP_EXPIRY_MS,
-    semanticState: 'verified',
-    summary: `${captured.tiles.length} offline map tiles verified`,
-    itemCount: captured.tiles.length,
-  };
 }
 
 function createDefaultBrowserAdapters(): ReturnType<typeof createEmergencyPackBrowserAdapters> {
@@ -504,16 +749,22 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
     typeof localStorage === 'undefined'
     || typeof caches === 'undefined'
   ) return null;
+  const offlineMapLifecycle = createEmergencyPackOfflineMapLifecycle(caches);
   return createEmergencyPackRuntime({
     now: Date.now,
     buildProfileFingerprint: buildEmergencyPackProfileFingerprint,
     getSavedPlaces,
     createBrowserAdapters: createDefaultBrowserAdapters,
-    createStore: (boundaries) => createEmergencyPackStore({
-      ...(boundaries as ReturnType<typeof createDefaultBrowserAdapters>),
-      now: Date.now,
-      createPackId: () => crypto.randomUUID(),
-    }),
+    createStore: (boundaries) => {
+      const storeDependencies = {
+        ...(boundaries as ReturnType<typeof createDefaultBrowserAdapters>),
+        now: Date.now,
+        createPackId: () => crypto.randomUUID(),
+        verifyArtifactBody: offlineMapLifecycle.verifyArtifactBody,
+        releaseArtifactBody: offlineMapLifecycle.releaseArtifactBody,
+      };
+      return createEmergencyPackStore(storeDependencies);
+    },
     createCoordinator: createEmergencyPackCoordinator,
     createSources: (place) => createEmergencyPackSources(place, {
       now: Date.now,
@@ -550,6 +801,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
       captureOfflineMap: captureDefaultOfflineMap,
     }),
     createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
+    releaseArtifact: offlineMapLifecycle.releaseArtifact,
     getLegacyLifelinePackManifest: (placeId) => readLegacyLifelinePackManifestV1(localStorage, placeId),
     subscribeSavedPlaces: (callback) => subscribeSavedPlaces(() => callback()),
     subscribeRoutes: subscribeEvacRoutes,

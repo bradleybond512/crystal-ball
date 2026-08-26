@@ -67,6 +67,11 @@ interface StoreApi {
       expiredKinds: string[];
       reason?: string;
     }>;
+    readVerifiedOfflineMapArtifact: (scope: {
+      placeId: string;
+      profileFingerprint: string;
+      now: number;
+    }) => Promise<string | null>;
     recoverActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
       status: string;
       packId: string | null;
@@ -348,6 +353,52 @@ test('active, detailed, and recovery reads fail closed on invalid external offli
     await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
     { status: 'corrupt', packId: null, reason: 'verification-failed' },
   );
+});
+
+test('offline map consumers receive only the active profile-bound unexpired verified map artifact', async () => {
+  const { bodies, store } = harness();
+  const first = artifacts('first');
+  const firstMap = first.find(({ kind }) => kind === 'offline-map');
+  assert.ok(firstMap);
+  firstMap.body = JSON.stringify({ marker: 'first-map' });
+  assert.deepEqual(await store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: first,
+  }), { ok: true, packId: 'pack-1' });
+  assert.equal(await store.readVerifiedOfflineMapArtifact({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  }), firstMap.body);
+  assert.equal(await store.readVerifiedOfflineMapArtifact({
+    placeId: PLACE_ID, profileFingerprint: `${PROFILE}:moved`, now: NOW,
+  }), null);
+  assert.equal(await store.readVerifiedOfflineMapArtifact({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW + 2 * 60 * 60_000,
+  }), null);
+
+  const second = artifacts('second');
+  const secondMap = second.find(({ kind }) => kind === 'offline-map');
+  assert.ok(secondMap);
+  secondMap.body = JSON.stringify({ marker: 'second-map' });
+  assert.deepEqual(await store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: second,
+  }), { ok: true, packId: 'pack-2' });
+  assert.equal(await store.readVerifiedOfflineMapArtifact({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  }), secondMap.body, 'the previous generation must never be selected');
+
+  const activeMapKey = [...bodies.values.keys()].find((key) => key.includes('pack-2:offline-map'));
+  assert.ok(activeMapKey);
+  bodies.values.set(activeMapKey, JSON.stringify({ marker: 'tampered-xx' }));
+  assert.equal(await store.readVerifiedOfflineMapArtifact({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  }), null);
 });
 
 test('failed offline-map staging and publication release only the staged external generation', async () => {

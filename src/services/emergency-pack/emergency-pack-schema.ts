@@ -54,6 +54,11 @@ export interface EmergencyPackScope {
   now: number;
 }
 
+export interface LifelinePackV1MigrationScope extends EmergencyPackScope {
+  legacyQueryFingerprint: string;
+  packId?: string;
+}
+
 export interface EmergencyPackReadiness {
   status: EmergencyPackStatus;
   missingKinds: EmergencyPackRequiredKind[];
@@ -235,26 +240,37 @@ export function deriveEmergencyPackReadiness(
   return { status: 'ready', missingKinds, expiredKinds, reasons };
 }
 
-function parseV1LifelinesArtifact(value: unknown, profileFingerprint: string, now: number): boolean {
+function parseV1LifelinesArtifact(value: unknown, queryFingerprint: string, now: number): boolean {
   if (!isRecord(value) || !hasExactKeys(value, V1_ARTIFACT_KEYS)) return false;
-  if (value.kind !== 'lifelines' || value.queryFingerprint !== profileFingerprint) return false;
+  if (value.kind !== 'lifelines' || value.queryFingerprint !== queryFingerprint) return false;
   if (!isIsoDate(value.cachedAt) || !isIsoDate(value.expiresAt)) return false;
   return Date.parse(value.expiresAt) > Math.max(Date.parse(value.cachedAt), now);
 }
 
 export function migrateLifelinePackV1(
   value: unknown,
-  scope: EmergencyPackScope,
+  scope: LifelinePackV1MigrationScope,
   verifiedLifelinesReceipt: EmergencyPackReceipt,
 ): EmergencyPackManifest | null {
+  if (!isBoundedString(scope.placeId)
+    || !isBoundedString(scope.profileFingerprint, 1024)
+    || !isBoundedString(scope.legacyQueryFingerprint, 1024)
+    || !Number.isFinite(scope.now)) return null;
+  if (scope.packId !== undefined && !isBoundedString(scope.packId)) return null;
   if (!isRecord(value) || !hasExactKeys(value, V1_MANIFEST_KEYS)) return null;
-  if (value.schemaVersion !== 1 || value.placeId !== scope.placeId || value.queryFingerprint !== scope.profileFingerprint) {
+  if (value.schemaVersion !== 1
+    || value.placeId !== scope.placeId
+    || value.queryFingerprint !== scope.legacyQueryFingerprint) {
     return null;
   }
-  if (!isUniqueArray<string>(value.requiredKinds, ALL_KINDS) || !Array.isArray(value.artifacts)) return null;
+  if (!Array.isArray(value.requiredKinds)
+    || value.requiredKinds.length !== 1
+    || value.requiredKinds[0] !== 'lifelines'
+    || !Array.isArray(value.artifacts)
+    || value.artifacts.length !== 1) return null;
   if (!isIsoDate(value.createdAt) || !isIsoDate(value.updatedAt)) return null;
-  if (Date.parse(value.updatedAt) < Date.parse(value.createdAt)) return null;
-  if (!value.artifacts.some((artifact) => parseV1LifelinesArtifact(artifact, scope.profileFingerprint, scope.now))) {
+  if (Date.parse(value.updatedAt) < Date.parse(value.createdAt) || Date.parse(value.updatedAt) > scope.now) return null;
+  if (!parseV1LifelinesArtifact(value.artifacts[0], scope.legacyQueryFingerprint, scope.now)) {
     return null;
   }
   const receipt = parseReceipt(verifiedLifelinesReceipt, scope.profileFingerprint);
@@ -262,7 +278,7 @@ export function migrateLifelinePackV1(
   const migratedAt = new Date(scope.now).toISOString();
   return {
     schemaVersion: EMERGENCY_PACK_SCHEMA_VERSION,
-    packId: `migrated-v1:${scope.placeId}`,
+    packId: scope.packId ?? `migrated-v1:${scope.placeId}`,
     placeId: scope.placeId,
     profileFingerprint: scope.profileFingerprint,
     requiredKinds: [...EMERGENCY_PACK_REQUIRED_KINDS],

@@ -135,3 +135,38 @@ test('v1 migration preserves only Lifelines evidence and can never claim a compl
     now: NOW,
   }, receipt('lifelines')), null);
 });
+
+test('v1 migration rejects malformed, ambiguous, expired, and mismatched legacy evidence', () => {
+  const migrate = requireFunction(api, 'migrateLifelinePackV1');
+  const legacyQueryFingerprint = 'lifelines-exact-v2';
+  const scope = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    legacyQueryFingerprint,
+    now: NOW,
+  };
+  const legacy = {
+    schemaVersion: 1,
+    placeId: PLACE_ID,
+    queryFingerprint: legacyQueryFingerprint,
+    requiredKinds: ['lifelines'],
+    artifacts: [{
+      kind: 'lifelines',
+      queryFingerprint: legacyQueryFingerprint,
+      cachedAt: new Date(NOW - 60_000).toISOString(),
+      expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
+    }],
+    createdAt: new Date(NOW - 60_000).toISOString(),
+    updatedAt: new Date(NOW - 30_000).toISOString(),
+  };
+
+  assert.equal(migrate({ ...legacy, requiredKinds: [] }, scope, receipt('lifelines')), null);
+  assert.equal(migrate({ ...legacy, requiredKinds: ['lifelines', 'alerts'] }, scope, receipt('lifelines')), null);
+  assert.equal(migrate({ ...legacy, artifacts: [...legacy.artifacts, legacy.artifacts[0]] }, scope, receipt('lifelines')), null);
+  assert.equal(migrate({
+    ...legacy,
+    artifacts: [{ ...legacy.artifacts[0], expiresAt: new Date(NOW).toISOString() }],
+  }, scope, receipt('lifelines')), null);
+  assert.equal(migrate(legacy, scope, receipt('lifelines', { profileFingerprint: `${PROFILE}:moved` })), null);
+  assert.equal(migrate(legacy, { ...scope, now: Number.NaN }, receipt('lifelines')), null);
+});

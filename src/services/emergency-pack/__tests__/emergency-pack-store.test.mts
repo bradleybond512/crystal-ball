@@ -119,6 +119,40 @@ async function commitScope(
   });
 }
 
+function legacyMigrationInput(
+  profileFingerprint = PROFILE,
+  legacyQueryFingerprint = 'lifelines-exact-v1',
+) {
+  const legacyManifest = {
+    schemaVersion: 1,
+    placeId: PLACE_ID,
+    queryFingerprint: legacyQueryFingerprint,
+    requiredKinds: ['lifelines'],
+    artifacts: [{
+      kind: 'lifelines',
+      queryFingerprint: legacyQueryFingerprint,
+      cachedAt: new Date(NOW - 60_000).toISOString(),
+      expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
+    }],
+    createdAt: new Date(NOW - 60_000).toISOString(),
+    updatedAt: new Date(NOW - 30_000).toISOString(),
+  };
+  return {
+    placeId: PLACE_ID,
+    profileFingerprint,
+    legacyQueryFingerprint,
+    legacyManifest,
+    artifact: {
+      kind: 'lifelines' as const,
+      body: JSON.stringify({ snapshot: legacyManifest, marker: 'legacy-exact-body' }),
+      expiresAt: NOW + 60 * 60_000,
+      semanticState: 'verified' as const,
+      summary: 'Migrated exact Lifelines snapshot',
+      itemCount: 1,
+    },
+  };
+}
+
 test('a generation is published only after every body is written, read back, and hashed', async () => {
   const { operations, store } = harness();
   const result = await commit(store, 'first');
@@ -194,63 +228,84 @@ test('active and detailed reads reject same-length body corruption before report
 });
 
 test('v1 Lifelines migration publishes one verified partial v2 generation without replacing a valid v2 head', async () => {
-  const { metadata, bodies, store } = harness();
-  const legacyQueryFingerprint = 'lifelines-exact-v1';
-  const legacyManifest = {
-    schemaVersion: 1,
-    placeId: PLACE_ID,
-    queryFingerprint: legacyQueryFingerprint,
-    requiredKinds: ['lifelines'],
-    artifacts: [{
-      kind: 'lifelines',
-      queryFingerprint: legacyQueryFingerprint,
-      cachedAt: new Date(NOW - 60_000).toISOString(),
-      expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
-    }],
-    createdAt: new Date(NOW - 60_000).toISOString(),
-    updatedAt: new Date(NOW - 30_000).toISOString(),
-  };
-  const body = JSON.stringify({ snapshot: legacyManifest, marker: 'legacy-exact-body' });
-  const migrated = await store.migrateLifelineGeneration({
-    placeId: PLACE_ID,
-    profileFingerprint: PROFILE,
-    legacyQueryFingerprint,
-    legacyManifest,
-    artifact: {
-      kind: 'lifelines',
-      body,
-      expiresAt: NOW + 60 * 60_000,
-      semanticState: 'verified',
-      summary: 'Migrated exact Lifelines snapshot',
-      itemCount: 1,
-    },
-  });
+  const { metadata, bodies, operations, store } = harness();
+  const input = legacyMigrationInput();
+  const migrated = await store.migrateLifelineGeneration(input);
   assert.deepEqual(migrated, { ok: true, packId: 'pack-1' });
+  const publicationOperations = [...operations];
   const readiness = await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
   assert.equal(readiness.status, 'partial');
   assert.deepEqual(readiness.receipts.map(({ kind }) => kind), ['lifelines']);
   assert.deepEqual(readiness.missingKinds, REQUIRED_KINDS.filter((kind) => kind !== 'lifelines'));
-  assert.equal(bodies.values.get(readiness.receipts[0]?.cacheKey ?? ''), body);
+  const lifelinesReceipt = readiness.receipts[0];
+  assert.ok(lifelinesReceipt);
+  assert.equal(lifelinesReceipt.cacheKey, 'wm-emergency-pack-v2:body:pack-1:lifelines');
+  assert.equal(lifelinesReceipt.sha256, `sha256:${input.artifact.body}`);
+  assert.equal(bodies.values.get(lifelinesReceipt.cacheKey), input.artifact.body);
   const encodedManifest = [...metadata.values.entries()].find(([key]) => key.includes(':manifest:'))?.[1];
   assert.ok(encodedManifest);
   assert.equal(JSON.parse(encodedManifest).migration.source, 'lifeline-pack-v1');
+  const lastBodyRead = Math.max(...publicationOperations
+    .map((entry, index) => entry.startsWith('body:get:') ? index : -1));
+  const manifestWrite = publicationOperations
+    .findIndex((entry) => entry.includes('metadata:set:') && entry.includes(':manifest:'));
+  const headWrite = publicationOperations
+    .findIndex((entry) => entry.includes('metadata:set:') && entry.includes(':head:'));
+  assert.ok(lastBodyRead >= 0 && manifestWrite > lastBodyRead, 'migration manifest follows exact body readback');
+  assert.ok(headWrite > manifestWrite, 'migration head is published last');
 
   const replacement = await store.migrateLifelineGeneration({
-    placeId: PLACE_ID,
-    profileFingerprint: PROFILE,
-    legacyQueryFingerprint,
-    legacyManifest,
-    artifact: {
-      kind: 'lifelines',
-      body: `${body}:replacement`,
-      expiresAt: NOW + 60 * 60_000,
-      semanticState: 'verified',
-      summary: 'Must not replace current v2',
-      itemCount: 1,
-    },
+    ...input,
+    artifact: { ...input.artifact, body: `${input.artifact.body}:replacement` },
   });
   assert.deepEqual(replacement, { ok: false, reason: 'active-v2-exists' });
   assert.equal((await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })).packId, 'pack-1');
+});
+
+test('v1 migration fails closed across staging and publication failures', async () => {
+  for (const failure of ['quota', 'readback', 'manifest', 'head'] as const) {
+    const { metadata, bodies, operations, store } = harness();
+    if (failure === 'quota') bodies.failPut = true;
+    if (failure === 'readback') bodies.alterReadback = true;
+    if (failure === 'manifest') metadata.fail = (key) => key.includes('manifest');
+    if (failure === 'head') metadata.fail = (key) => key.includes('head');
+
+    assert.equal((await store.migrateLifelineGeneration(legacyMigrationInput())).ok, false, failure);
+    bodies.failPut = false;
+    bodies.alterReadback = false;
+    metadata.fail = null;
+    assert.deepEqual(
+      await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'not-saved', packId: null },
+      failure,
+    );
+    assert.equal([...metadata.values.keys()].some((key) => key.includes(':head:')), false, failure);
+    assert.equal(operations.filter((entry) => entry.includes('metadata:set:') && entry.includes(':head:')).length <= 1, true);
+  }
+});
+
+test('v1 migration rejects invalid legacy evidence and never replaces a valid v2 head for the place', async () => {
+  const invalidHarness = harness();
+  const invalid = legacyMigrationInput();
+  invalid.legacyManifest = { ...invalid.legacyManifest, queryFingerprint: 'wrong-legacy-query' };
+  assert.deepEqual(
+    await invalidHarness.store.migrateLifelineGeneration(invalid),
+    { ok: false, reason: 'invalid-legacy-pack' },
+  );
+  assert.equal([...invalidHarness.metadata.values.keys()].some((key) => key.includes(':head:')), false);
+  assert.equal(invalidHarness.bodies.values.size, 0);
+
+  const existingHarness = harness();
+  assert.deepEqual(await commit(existingHarness.store, 'existing-v2'), { ok: true, packId: 'pack-1' });
+  const moved = legacyMigrationInput(`${PROFILE}:moved`);
+  assert.deepEqual(
+    await existingHarness.store.migrateLifelineGeneration(moved),
+    { ok: false, reason: 'active-v2-exists' },
+  );
+  assert.deepEqual(
+    await existingHarness.store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
+  );
 });
 
 test('an unreferenced manifest left by a crash cannot displace the last-known-good head', async () => {

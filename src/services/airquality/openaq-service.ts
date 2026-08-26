@@ -80,26 +80,61 @@ const OPENAQ_REJECTION_REASONS = new Set([
   'invalidSensorId', 'invalidLocationId', 'invalidValue', 'invalidCoordinates',
   'invalidTimestamp', 'outsideWindow', 'equalTimestampConflict',
 ]);
+const OPENAQ_ENVELOPE_KEYS = [
+  'schemaVersion', 'provider', 'coverage', 'complete', 'readings', 'sample',
+  'source', 'fetchedAt', 'servedAt',
+] as const;
+const OPENAQ_SAMPLE_KEYS = [
+  'windowStart', 'windowEnd', 'reportedFoundAtStart', 'plannedPages',
+  'fetchedPages', 'rawRows', 'uniqueSensorRows', 'acceptedRows',
+  'duplicateRows', 'invalidRows', 'rejectionReasons',
+] as const;
+const OPENAQ_READING_KEYS = [
+  'id', 'sensorId', 'locationId', 'station', 'city', 'country', 'lat', 'lon',
+  'parameter', 'value', 'unit', 'observedAt',
+] as const;
+const OPENAQ_MAX_PAGES = 25;
+const OPENAQ_PAGE_SIZE = 1000;
 
 export function parseOpenaqEnvelope(raw: unknown): OpenaqEnvelopeResult {
   if (!raw || typeof raw !== 'object') return { ok: false, error: 'invalid OpenAQ response' };
   const value = raw as Record<string, unknown>;
-  if (value.schemaVersion !== 2 || value.provider !== 'openaq-v3'
-    || value.coverage !== 'best_effort_sample' || value.complete !== false || !Array.isArray(value.readings)) {
+  if (!hasExactKeys(value, OPENAQ_ENVELOPE_KEYS)
+    || value.schemaVersion !== 2 || value.provider !== 'openaq-v3'
+    || value.coverage !== 'best_effort_sample' || value.complete !== false
+    || value.source !== 'api.openaq.org/v3/parameters/2/latest'
+    || !Array.isArray(value.readings)) {
     return { ok: false, error: 'invalid OpenAQ response' };
   }
   const sample = value.sample as Record<string, unknown> | null;
   const counters = ['reportedFoundAtStart', 'plannedPages', 'fetchedPages', 'rawRows', 'uniqueSensorRows', 'acceptedRows', 'duplicateRows', 'invalidRows'];
-  if (!sample || typeof sample.windowStart !== 'string' || typeof sample.windowEnd !== 'string'
-    || !Number.isFinite(Date.parse(sample.windowStart)) || !Number.isFinite(Date.parse(sample.windowEnd))
+  if (!sample || !hasExactKeys(sample, OPENAQ_SAMPLE_KEYS)
+    || !isCanonicalUtcTimestamp(sample.windowStart) || !isCanonicalUtcTimestamp(sample.windowEnd)
+    || !isCanonicalUtcTimestamp(value.fetchedAt) || !isCanonicalUtcTimestamp(value.servedAt)
     || counters.some((key) => !Number.isSafeInteger(sample[key]) || (sample[key] as number) < 0)
+    || (sample.reportedFoundAtStart as number) > OPENAQ_MAX_PAGES * OPENAQ_PAGE_SIZE
+    || (sample.plannedPages as number) < 1 || (sample.plannedPages as number) > OPENAQ_MAX_PAGES
+    || sample.plannedPages !== Math.max(1, Math.ceil((sample.reportedFoundAtStart as number) / OPENAQ_PAGE_SIZE))
     || sample.fetchedPages !== sample.plannedPages
+    || (sample.rawRows as number) > (sample.plannedPages as number) * OPENAQ_PAGE_SIZE
     || sample.rawRows !== (sample.acceptedRows as number) + (sample.duplicateRows as number) + (sample.invalidRows as number)
-    || !validRejectionReasons(sample.rejectionReasons, sample.rawRows as number)) {
+    || (sample.uniqueSensorRows as number) > (sample.rawRows as number)
+    || (sample.acceptedRows as number) > (sample.uniqueSensorRows as number)
+    || !validRejectionReasons(sample.rejectionReasons, sample.invalidRows as number)) {
     return { ok: false, error: 'invalid OpenAQ response' };
   }
-  const readings = parseOpenaqReadings(value.readings as OpenaqNormalizedReadingRaw[]);
+  const windowStart = Date.parse(sample.windowStart as string);
+  const windowEnd = Date.parse(sample.windowEnd as string);
+  const fetchedAt = Date.parse(value.fetchedAt as string);
+  const servedAt = Date.parse(value.servedAt as string);
+  if (windowStart > windowEnd || fetchedAt < windowEnd || servedAt < fetchedAt) {
+    return { ok: false, error: 'invalid OpenAQ response' };
+  }
+  const readings = parseOpenaqReadings(value.readings as OpenaqNormalizedReadingRaw[], windowStart, windowEnd);
   if (readings.length !== value.readings.length || readings.length > (sample.acceptedRows as number)) {
+    return { ok: false, error: 'invalid OpenAQ response' };
+  }
+  if (new Set(readings.map((reading) => reading.sensorId)).size !== readings.length) {
     return { ok: false, error: 'invalid OpenAQ response' };
   }
   return { ok: true, readings, sample: sample as unknown as OpenaqSampleMetadata };
@@ -108,19 +143,29 @@ export function parseOpenaqEnvelope(raw: unknown): OpenaqEnvelopeResult {
 // ─── Parser ───────────────────────────────────────────────────────────
 
 /** Validate the app-owned schema returned by the sidecar OpenAQ boundary. */
-export function parseOpenaqReadings(rows: readonly OpenaqNormalizedReadingRaw[]): MonitorReading[] {
+export function parseOpenaqReadings(
+  rows: readonly OpenaqNormalizedReadingRaw[],
+  windowStart = Number.NEGATIVE_INFINITY,
+  windowEnd = Number.POSITIVE_INFINITY,
+): MonitorReading[] {
   const readings: MonitorReading[] = [];
   for (const row of rows) {
+    if (!row || typeof row !== 'object' || !hasExactKeys(row as Record<string, unknown>, OPENAQ_READING_KEYS)) continue;
     const sensorId = positiveSafeInteger(row.sensorId);
     const locationId = positiveSafeInteger(row.locationId);
     const lat = coordinateOrNull(row.lat, -90, 90);
     const lon = coordinateOrNull(row.lon, -180, 180);
     const value = typeof row.value === 'number' && Number.isFinite(row.value) && row.value >= 0 ? row.value : null;
-    const observedAt = typeof row.observedAt === 'number' && Number.isFinite(row.observedAt) && row.observedAt > 0
+    const observedAt = typeof row.observedAt === 'number' && Number.isSafeInteger(row.observedAt) && row.observedAt > 0
       ? row.observedAt
       : null;
+    const station = requiredText(row.station);
+    const city = nullableText(row.city);
+    const country = nullableText(row.country);
     if (sensorId === null || locationId === null || lat === null || lon === null
-      || value === null || observedAt === null || row.parameter !== 'pm25' || row.unit !== 'µg/m³') {
+      || value === null || observedAt === null || observedAt < windowStart || observedAt > windowEnd
+      || row.id !== `openaq:${sensorId}` || station === null || city === undefined || country === undefined
+      || row.parameter !== 'pm25' || row.unit !== 'µg/m³') {
       continue;
     }
     const aqi = pm25ToAqi(value);
@@ -129,9 +174,9 @@ export function parseOpenaqReadings(rows: readonly OpenaqNormalizedReadingRaw[])
       id: `openaq:${sensorId}`,
       sensorId,
       locationId,
-      station: stringOrEmpty(row.station) || `OpenAQ location ${locationId}`,
-      city: stringOrNull(row.city),
-      country: stringOrNull(row.country),
+      station,
+      city,
+      country,
       lat,
       lon,
       parameter: 'pm25',
@@ -196,26 +241,38 @@ export function pickGlobalWorst(readings: readonly MonitorReading[], now: number
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function stringOrEmpty(v: unknown): string {
-  return typeof v === 'string' ? v.trim() : '';
+function requiredText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
-function stringOrNull(v: unknown): string | null {
-  if (typeof v === 'string') {
-    const s = v.trim();
-    return s || null;
+function nullableText(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return requiredText(value) ?? undefined;
+}
+
+function validRejectionReasons(value: unknown, invalidRows: number): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || !hasExactKeys(value as Record<string, unknown>, [...OPENAQ_REJECTION_REASONS])) return false;
+  const counts = Object.values(value);
+  if (!counts.every((count) => Number.isSafeInteger(count) && (count as number) >= 0 && (count as number) <= invalidRows)) {
+    return false;
   }
-  return null;
+  const total = counts.reduce<number>((sum, count) => sum + (count as number), 0);
+  return invalidRows === 0 ? total === 0 : total >= invalidRows;
 }
 
-function validRejectionReasons(value: unknown, rawRows: number): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  return Object.entries(value).every(([key, count]) => (
-    OPENAQ_REJECTION_REASONS.has(key)
-    && Number.isSafeInteger(count)
-    && (count as number) >= 0
-    && (count as number) <= rawRows
-  ));
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === expected.length
+    && expected.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function isCanonicalUtcTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const epoch = Date.parse(value);
+  return Number.isFinite(epoch) && new Date(epoch).toISOString() === value;
 }
 
 function positiveSafeInteger(v: unknown): number | null {

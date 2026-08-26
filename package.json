@@ -128,7 +128,7 @@
     "test:globe": "tsx --test src/services/globe/__tests__/heatmap-layers.test.mts src/components/globe/__tests__/heatmap-grid.test.mts src/components/globe/__tests__/cursor-opacity.test.mts src/components/globe/__tests__/GlobeHeatmapRenderer.test.mts",
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
     "test:sanctions": "tsx --test src/services/sanctions/__tests__/ofac.test.mts",
-    "test:openaq": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs",
+    "test:openaq": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
     "test:infrarisks": "tsx --test src/services/infrarisks/__tests__/infra-risk-service.test.mts",
     "test:earthquake": "tsx --test src/services/earthquake/__tests__/earthquake-intelligence.test.mts src/services/earthquake/__tests__/earthquake-fusion-observations.test.mts",
     "test:news": "tsx --test src/services/news/__tests__/news-aggregator.test.mts",

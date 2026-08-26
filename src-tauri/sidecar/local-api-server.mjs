@@ -6761,6 +6761,19 @@ function openaqFoundCount(value) {
   return null;
 }
 
+const OPENAQ_UTC_RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+
+function openaqCanonicalUtcTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const match = OPENAQ_UTC_RFC3339_PATTERN.exec(value);
+  if (!match) return null;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+  const canonical = new Date(timestamp).toISOString();
+  const expected = match[1] === undefined ? canonical.replace('.000Z', 'Z') : canonical;
+  return expected === value ? timestamp : null;
+}
+
 function openaqPageMeta(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.results)) return null;
   const meta = raw.meta;
@@ -6820,7 +6833,7 @@ export function normalizeOpenaqLatestPages(rawPages, windowEnd = Date.now(), win
       const latitude = row?.coordinates?.latitude;
       const longitude = row?.coordinates?.longitude;
       const utc = row?.datetime?.utc;
-      const observedAt = typeof utc === 'string' ? Date.parse(utc) : Number.NaN;
+      const observedAt = openaqCanonicalUtcTimestamp(utc);
       let invalid = false;
       if (sensorId === null) { rejectionReasons.invalidSensorId += 1; invalid = true; }
       if (locationId === null) { rejectionReasons.invalidLocationId += 1; invalid = true; }
@@ -6829,7 +6842,7 @@ export function normalizeOpenaqLatestPages(rawPages, windowEnd = Date.now(), win
         || typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
         rejectionReasons.invalidCoordinates += 1; invalid = true;
       }
-      if (!Number.isFinite(observedAt)) { rejectionReasons.invalidTimestamp += 1; invalid = true; }
+      if (observedAt === null) { rejectionReasons.invalidTimestamp += 1; invalid = true; }
       else if (observedAt < windowStart || observedAt > windowEnd) { rejectionReasons.outsideWindow += 1; invalid = true; }
       if (invalid) {
         invalidRows += 1;
@@ -13388,7 +13401,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── OpenAQ v3: nearby stations ──────────────────────────────────────────
   // Filters the shared, bounded PM2.5 sample by Haversine distance.
-  if (requestUrl.pathname === '/api/airquality/openaq') {
+  if (requestUrl.pathname === '/api/local-airquality/openaq') {
  const rawLatitude = requestUrl.searchParams.get('lat');
  const rawLongitude = requestUrl.searchParams.get('lon');
  const rawRadius = requestUrl.searchParams.get('radius') ?? '25000';
@@ -13415,7 +13428,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── OpenAQ v3: recent high readings ────────────────────────────────────
   // Returns the top 100 fresh readings from the same normalized corpus.
-  if (requestUrl.pathname === '/api/airquality/openaq/worst') {
+  if (requestUrl.pathname === '/api/local-airquality/openaq/worst') {
  const apiKey = process.env.OPENAQ_API_KEY ?? '';
  if (!apiKey) return openaqErrorResponse('missing_key', req);
  const result = await getOpenaqLatestCorpus(apiKey);

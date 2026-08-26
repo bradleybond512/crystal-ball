@@ -1968,8 +1968,10 @@ export class PanelLayoutManager implements AppModule {
  const airQualityPanel = new AirQualityPanel();
  this.ctx.panels['air-quality'] = airQualityPanel;
 
+ if ('openaq-monitor' in DEFAULT_PANELS) {
  const openaqMonitorPanel = new OpenaqMonitorPanel();
  this.ctx.panels['openaq-monitor'] = openaqMonitorPanel;
+ }
 
  this.ctx.panels['what-changed'] = new WhatChangedPanel();
 

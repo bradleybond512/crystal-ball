@@ -27,7 +27,7 @@ This file is the canonical to-do list across all build sessions. Update status m
 | ✅ | `pulsedive-intel` panel | Pulsedive indicators — `PulsediveIntelPanel.ts` |
 | ✅ | `bitcoin-abuse` panel | scam addresses — `BitcoinAbusePanel.ts` + `crypto/bitcoin-abuse-service.ts` |
 | ✅ | `reddit-osint` panel | multi-subreddit — `RedditOsintPanel.ts` + `osint/reddit-service.ts` |
-| ✅ | `openaq-monitor` panel | OpenAQ air quality — `OpenaqMonitorPanel.ts`, `api/openaq-readings.js` |
+| ✅ | `openaq-monitor` panel | OpenAQ v3 air quality — `OpenaqMonitorPanel.ts`, desktop sidecar |
 | ✅ | `mediastack-news` panel | news aggregator — `MediastackNewsPanel.ts`, `api/mediastack-news.js` |
 
 ---

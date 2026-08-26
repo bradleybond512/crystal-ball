@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createSavedPlacesStore } from '../src/services/saved-places.ts';
+import * as savedPlacesModule from '../src/services/saved-places.ts';
+
+const { createSavedPlacesStore } = savedPlacesModule;
 
 function createMemoryStorage() {
   const store = new Map();
@@ -110,6 +112,28 @@ test('first added place becomes primary', () => {
   assert.equal(home.primary, true);
   assert.equal(work.primary, false);
   assert.equal(savedPlaces.getPrimaryPlace()?.id, home.id);
+});
+
+test('post-write confirmation returns only an exact persisted saved-place readback', () => {
+  const confirmSavedPlacePersistence = savedPlacesModule.confirmSavedPlacePersistence;
+  assert.equal(typeof confirmSavedPlacePersistence, 'function', 'persistence confirmation helper should exist');
+  const storage = createMemoryStorage();
+  const savedPlaces = createSavedPlacesStore(storage);
+  const home = savedPlaces.addPlace({
+    name: 'Home',
+    lat: 35.9,
+    lon: -78.9,
+    radiusKm: 50,
+    offlinePinned: true,
+  });
+
+  assert.deepEqual(confirmSavedPlacePersistence(home, storage), home);
+  storage.setItem('wm_saved_places_v1', JSON.stringify([{ ...home, radiusKm: 25 }]));
+  assert.equal(confirmSavedPlacePersistence(home, storage), null, 'a mismatched persisted record must fail closed');
+  assert.equal(confirmSavedPlacePersistence(home, {
+    getItem: () => { throw new Error('storage unavailable'); },
+    setItem: () => {},
+  }), null, 'a readback failure must not confirm persistence');
 });
 
 test('setPrimaryPlace enforces a single primary', () => {

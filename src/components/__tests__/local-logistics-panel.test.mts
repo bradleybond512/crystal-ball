@@ -135,15 +135,51 @@ function makeSnapshot(
   };
 }
 
-function mountPanel(loader: SnapshotLoader): InstanceType<typeof LocalLogisticsPanel> {
+function mountPanel(loader: SnapshotLoader, prewarmCoordinator?: unknown): InstanceType<typeof LocalLogisticsPanel> {
   const panel = new LocalLogisticsPanel({
     focusNode: () => {},
     fetchSnapshot: loader,
+    ...(prewarmCoordinator ? { prewarmCoordinator } : {}),
   } as never);
   mountedPanels.push(panel);
   document.body.append(panel.getElement());
   return panel;
 }
+
+test('Prepare offline enqueues the active exact radius and cleanup unsubscribes', async () => {
+  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 8 });
+  const enqueued: Array<{ placeId: string; radiusKm: number; trigger: string }> = [];
+  let subscriptions = 0;
+  let unsubscriptions = 0;
+  const coordinator = {
+    enqueue: (input: { place: SavedPlace; radiusKm: number; trigger: string }) => {
+      enqueued.push({ placeId: input.place.id, radiusKm: input.radiusKm, trigger: input.trigger });
+    },
+    retry: () => {},
+    getState: () => null,
+    subscribe: () => {
+      subscriptions += 1;
+      return () => { unsubscriptions += 1; };
+    },
+  };
+  const panel = mountPanel(
+    async (requestedPlace, options) => makeSnapshot(requestedPlace, options?.radiusKm ?? 25),
+    coordinator,
+  );
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  const content = panel.getContentElement();
+  requiredElement<HTMLButtonElement>(content, '[data-logistics-radius="50"]').click();
+  await settleRender();
+  requiredElement<HTMLButtonElement>(content, '[data-lifeline-prewarm]').click();
+
+  assert.deepEqual(enqueued, [{ placeId: place.id, radiusKm: 50, trigger: 'manual' }]);
+  assert.equal(subscriptions, 1);
+  panel.destroy();
+  mountedPanels.splice(mountedPanels.indexOf(panel), 1);
+  assert.equal(unsubscriptions, 1);
+});
 
 function requiredElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);

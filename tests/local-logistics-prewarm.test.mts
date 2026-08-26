@@ -31,6 +31,20 @@ test('storm decision wiring prewarms without modifying warning routing', () => {
   assert.match(source, /cb:storm-decision/);
 });
 
+test('manual, startup, and storm paths share the renderer coordinator singleton', () => {
+  const panel = readFileSync(new URL('../src/components/LocalLogisticsPanel.ts', import.meta.url), 'utf8');
+  const layout = readFileSync(new URL('../src/app/panel-layout.ts', import.meta.url), 'utf8');
+  const loader = readFileSync(new URL('../src/app/data-loader.ts', import.meta.url), 'utf8');
+  for (const source of [panel, layout, loader]) {
+    assert.match(source, /lifelinePrewarmCoordinator/);
+  }
+  assert.match(layout, /trigger:\s*['"]startup['"]/);
+  assert.match(loader, /trigger:\s*['"]storm['"]/);
+  assert.match(panel, /trigger:\s*['"]manual['"]/);
+  assert.doesNotMatch(layout, /prewarmLocalLogistics\(/);
+  assert.doesNotMatch(loader, /prewarmLocalLogistics\(/);
+});
+
 test('shipped panel-layout startup prewarms at most three explicitly pinned places', () => {
   const source = readFileSync(new URL('../src/app/panel-layout.ts', import.meta.url), 'utf8');
   assert.match(source, /getSavedPlaces\(\)\.filter\(\(place\) => place\.offlinePinned\)\.slice\(0, 3\)/);

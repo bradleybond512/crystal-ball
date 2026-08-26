@@ -21,7 +21,7 @@ Object.assign(globals, {
 });
 
 const { SavedPlaceModal } = await import('../src/components/SavedPlaceModal.ts');
-const { getSavedPlaces } = await import('../src/services/saved-places.ts');
+const { getSavedPlace, getSavedPlaces } = await import('../src/services/saved-places.ts');
 
 function input(field: string, value: string): void {
   const element = happyWindow.document.querySelector<HTMLInputElement>(`[data-field="${field}"]`);
@@ -56,4 +56,40 @@ test('saved-place Emergency Pack control persists offlinePinned only after expli
   assert.equal(saved.length, 1);
   assert.equal(saved[0]?.name, 'Home');
   assert.equal(saved[0]?.offlinePinned, true);
+});
+
+test('offline pin callback runs only after the exact saved place is readable', () => {
+  const confirmations: Array<{ callbackPlaceId: string; persistedPlaceId: string | null }> = [];
+  const modal = new SavedPlaceModal({
+    onPickLocationMode: () => {},
+    onOfflinePinnedSaved: (savedPlace: { id: string }) => {
+      confirmations.push({
+        callbackPlaceId: savedPlace.id,
+        persistedPlaceId: getSavedPlace(savedPlace.id)?.id ?? null,
+      });
+    },
+  } as never);
+  modal.openCreate();
+  input('name', 'Pinned Home');
+  input('lat', '41.6111');
+  input('lon', '-86.7225');
+  happyWindow.document.querySelector<HTMLButtonElement>('[data-action="toggle-offline"]')?.click();
+  happyWindow.document.querySelector<HTMLButtonElement>('[data-action="save"]')?.click();
+
+  assert.equal(confirmations.length, 1);
+  assert.deepEqual(confirmations[0], {
+    callbackPlaceId: getSavedPlaces()[0]?.id,
+    persistedPlaceId: getSavedPlaces()[0]?.id,
+  });
+
+  const second = new SavedPlaceModal({
+    onPickLocationMode: () => {},
+    onOfflinePinnedSaved: () => confirmations.push({ callbackPlaceId: 'unexpected', persistedPlaceId: null }),
+  } as never);
+  second.openCreate();
+  input('name', 'Unpinned Work');
+  input('lat', '41.7');
+  input('lon', '-86.8');
+  happyWindow.document.querySelector<HTMLButtonElement>('[data-action="save"]')?.click();
+  assert.equal(confirmations.length, 1, 'ordinary saves must not enqueue an offline pack');
 });

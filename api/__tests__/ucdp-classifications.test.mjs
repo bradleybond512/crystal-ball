@@ -50,6 +50,7 @@ test('fetches one exact 26.1 page with exact auth and returns compact presence c
     ],
     totalCount: 2,
     version: '26.1',
+    dataset: { kind: 'annual_classification', version: '26.1', year: 2025 },
   });
   assert.equal(captured.url.pathname, '/api/organizedviolencecy/26.1');
   assert.equal(captured.url.search, '?Year=2025&pagesize=1000&page=0');

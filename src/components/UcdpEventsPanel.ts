@@ -2,6 +2,8 @@ import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import type { UcdpGeoEvent, UcdpEventType } from '@/types';
 import { t } from '@/services/i18n';
+import { isDesktopRuntime } from '@/services/runtime';
+import { isFeatureAvailable } from '@/services/runtime-config';
 
 export class UcdpEventsPanel extends Panel {
   private events: UcdpGeoEvent[] = [];
@@ -16,7 +18,16 @@ export class UcdpEventsPanel extends Panel {
  trackActivity: true,
  infoTooltip: t('components.ucdpEvents.infoTooltip'),
  });
+ this.requiredFeature = 'ucdpEvents';
+ if (isDesktopRuntime()) {
+ if (isFeatureAvailable('ucdpEvents')) {
  this.showLoading(t('common.loadingUcdpEvents'));
+ } else {
+ this.showConfigError('Add your UCDP API token in Settings → API Keys to load conflict events.');
+ }
+ return;
+ }
+ this.showConfigError('UCDP events are available in the Crystal Ball desktop app.');
   }
 
   public setEventClickHandler(handler: (lat: number, lon: number) => void): void {
@@ -63,9 +74,9 @@ export class UcdpEventsPanel extends Panel {
  bodyHtml = `<div class="panel-empty">${t('common.noEventsInCategory')}</div>`;
  } else {
  const rows = displayed.map(e => {
- const deathsClass = e.type_of_violence === 'state-based' ? 'ucdp-deaths-state'
- : (e.type_of_violence === 'non-state' ? 'ucdp-deaths-nonstate'
- : 'ucdp-deaths-onesided');
+ let deathsClass = 'ucdp-deaths-onesided';
+ if (e.type_of_violence === 'state-based') deathsClass = 'ucdp-deaths-state';
+ else if (e.type_of_violence === 'non-state') deathsClass = 'ucdp-deaths-nonstate';
  const deathsHtml = e.deaths_best > 0
  ? `<span class="${deathsClass}">${e.deaths_best}</span> <small class="ucdp-range">(${e.deaths_low}-${e.deaths_high})</small>`
  : '<span class="ucdp-deaths-zero">0</span>';

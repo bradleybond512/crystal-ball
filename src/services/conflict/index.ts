@@ -65,6 +65,59 @@ export interface UcdpConflictStatus {
   sideB?: string;
 }
 
+export interface UcdpHistoricalWindowDataset {
+  kind: 'historical_window';
+  version: '26.1';
+  windowStart: '2025-09-02';
+  windowEnd: '2025-12-31';
+}
+
+export interface UcdpAnnualClassificationDataset {
+  kind: 'annual_classification';
+  version: '26.1';
+  year: 2025;
+}
+
+export type UcdpDataset = UcdpHistoricalWindowDataset | UcdpAnnualClassificationDataset;
+
+const UCDP_EVENT_DATASET: UcdpHistoricalWindowDataset = {
+  kind: 'historical_window',
+  version: '26.1',
+  windowStart: '2025-09-02',
+  windowEnd: '2025-12-31',
+};
+
+const UCDP_CLASSIFICATION_DATASET: UcdpAnnualClassificationDataset = {
+  kind: 'annual_classification',
+  version: '26.1',
+  year: 2025,
+};
+
+export function assessUcdpDatasetCurrency(
+  dataset: UcdpDataset,
+  now = Date.now(),
+): { current: boolean; reason: string } {
+  if (dataset.kind === 'historical_window') {
+    return {
+      current: false,
+      reason: `UCDP ${dataset.version} historical window ${dataset.windowStart} through ${dataset.windowEnd}`,
+    };
+  }
+  const currentYear = new Date(now).getUTCFullYear();
+  if (dataset.year === currentYear) return { current: true, reason: '' };
+  const rolloverEnds = Date.UTC(currentYear, 3, 1);
+  if (dataset.year === currentYear - 1 && now < rolloverEnds) {
+    return {
+      current: false,
+      reason: `UCDP ${dataset.version} ${dataset.year} annual rollover; ${currentYear} classification unavailable`,
+    };
+  }
+  return {
+    current: false,
+    reason: `UCDP ${dataset.version} historical annual classification for ${dataset.year}; current year is ${currentYear}`,
+  };
+}
+
 export interface HapiConflictSummary {
   iso2: string;
   locationName: string;
@@ -207,13 +260,19 @@ export async function fetchConflictEvents(): Promise<ConflictData> {
   };
 }
 
-export async function fetchUcdpClassifications(): Promise<Map<string, UcdpConflictStatus>> {
+export async function fetchUcdpClassifications(): Promise<{
+  classifications: Map<string, UcdpConflictStatus>;
+  dataset: UcdpAnnualClassificationDataset;
+}> {
   const response = await globalThis.fetch('/api/ucdp-classifications');
   if (!response.ok) throw new Error('UCDP classifications unavailable');
   const payload = await response.json() as unknown;
   if (!payload || typeof payload !== 'object') throw new Error('Invalid UCDP classifications');
   const record = payload as Record<string, unknown>;
+  const dataset = record.dataset as Record<string, unknown> | undefined;
   if (record.version !== '26.1' || !Array.isArray(record.classifications)
+    || dataset?.kind !== UCDP_CLASSIFICATION_DATASET.kind
+    || dataset.version !== UCDP_CLASSIFICATION_DATASET.version || dataset.year !== UCDP_CLASSIFICATION_DATASET.year
     || !Number.isSafeInteger(record.totalCount) || record.totalCount !== record.classifications.length) {
     throw new Error('Invalid UCDP classifications');
   }
@@ -236,7 +295,7 @@ export async function fetchUcdpClassifications(): Promise<Map<string, UcdpConfli
     });
   }
   if (result.size === 0) throw new Error('No usable UCDP classifications');
-  return result;
+  return { classifications: result, dataset: UCDP_CLASSIFICATION_DATASET };
 }
 
 const hapiLimiter = createConcurrencyLimiter(3);
@@ -270,6 +329,7 @@ interface UcdpEventsResponse {
   count: number;
   data: UcdpGeoEvent[];
   cached_at: string;
+  dataset: UcdpHistoricalWindowDataset;
 }
 
 export async function fetchUcdpEvents(): Promise<UcdpEventsResponse> {
@@ -287,6 +347,7 @@ export async function fetchUcdpEvents(): Promise<UcdpEventsResponse> {
  count: events.length,
  data: events,
  cached_at: '',
+ dataset: UCDP_EVENT_DATASET,
   };
 }
 

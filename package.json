@@ -129,7 +129,7 @@
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
     "test:sanctions": "tsx --test src/services/sanctions/__tests__/ofac.test.mts",
     "test:openaq": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts src/components/__tests__/openaq-panel-contract.test.mts src/app/__tests__/openaq-desktop-boundary.test.mts && node --test src-tauri/sidecar/__tests__/openaq-v3-route.test.mjs tests/openaq-local-boundary.test.mjs",
-    "test:ucdp-provider": "npm run build:sidecar-sebuf && tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs",
+    "test:ucdp-provider": "npm run build:sidecar-sebuf && tsx --test server/crystalball/conflict/v1/__tests__/list-ucdp-events.test.mts src/services/conflict/__tests__/ucdp-fetch-behavior.test.mts src/services/__tests__/ucdp-runtime-boundary.test.mts src/components/__tests__/ucdp-events-panel.test.mts src/app/__tests__/ucdp-desktop-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs src-tauri/sidecar/__tests__/ucdp-local-routes.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs",
     "test:infrarisks": "tsx --test src/services/infrarisks/__tests__/infra-risk-service.test.mts",
     "test:earthquake": "tsx --test src/services/earthquake/__tests__/earthquake-intelligence.test.mts src/services/earthquake/__tests__/earthquake-fusion-observations.test.mts",
     "test:news": "tsx --test src/services/news/__tests__/news-aggregator.test.mts",

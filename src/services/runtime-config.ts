@@ -172,6 +172,7 @@ export interface RuntimeFeatureDefinition {
   description: string;
   requiredSecrets: RuntimeSecretKey[];
   desktopRequiredSecrets?: RuntimeSecretKey[];
+  desktopOnly?: boolean;
   fallback: string;
 }
 
@@ -351,9 +352,10 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  id: 'ucdpEvents',
  name: 'UCDP georeferenced events',
  description: 'Uppsala Conflict Data Program — peer-reviewed georeferenced conflict events feed.',
- requiredSecrets: ['UCDP_API_TOKEN'],
- desktopRequiredSecrets: [],
- fallback: 'UCDP overlay shows degraded state until a token is provided.',
+ requiredSecrets: [],
+ desktopRequiredSecrets: ['UCDP_API_TOKEN'],
+ desktopOnly: true,
+ fallback: 'UCDP events require the desktop app and a configured API token.',
   },
   {
  id: 'acledAirstrikes',
@@ -1085,6 +1087,7 @@ export function isFeatureAvailable(featureId: RuntimeFeatureId): boolean {
   if (!feature) return false;
 
   if (!isDesktopRuntime()) {
+ if (feature.desktopOnly) return false;
  // Once the user has unlocked their browser vault we know whether each
  // required key is actually present locally, so gate on that. Before
  // unlock we optimistically trust server-managed credentials (the cloud

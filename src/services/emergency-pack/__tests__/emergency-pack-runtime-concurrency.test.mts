@@ -401,3 +401,232 @@ test('prune release finishes before a new place can stage an offline-map generat
   assert.ok(harness.events.indexOf('prune:end') < harness.events.indexOf('home:map-start'));
   harness.runtime.destroy();
 });
+
+function createAlertRevisionRaceHarness() {
+  const place: Place = { id: 'home', name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 };
+  const profileFingerprint = 'profile-home';
+  const revisionA = 'a'.repeat(64);
+  let currentRevision = revisionA;
+  let alertSequence = 0;
+  let alertSubscriber: ((event: { sourceRevision: string }) => void) | null = null;
+  let state = {
+    status: 'not-saved' as 'ready' | 'not-saved',
+    packId: null as string | null,
+    profileFingerprint,
+  };
+  const alertCaptured = deferred();
+  const continueCapture = deferred();
+  const invalidations: string[] = [];
+
+  function artifact(kind: string, scope: EmergencyPackCaptureScope): EmergencyPackCapturedArtifact {
+    const body = JSON.stringify({
+      kind,
+      placeId: scope.placeId,
+      profileFingerprint: scope.profileFingerprint,
+      capturedAt: NOW,
+      ...(kind === 'alerts' ? { sourceRevision: revisionA } : {}),
+    });
+    return {
+      kind,
+      body,
+      capturedAt: NOW,
+      expiresAt: NOW + 60_000,
+      semanticState: 'verified',
+      summary: `${kind} verified`,
+      itemCount: 1,
+      ...(kind === 'alerts' ? { sourceRevision: revisionA } : {}),
+    };
+  }
+
+  const runtime = createEmergencyPackRuntime({
+    now: () => NOW,
+    buildProfileFingerprint: () => profileFingerprint,
+    getSavedPlaces: () => [place],
+    createBrowserAdapters: () => ({}),
+    createStore: () => ({
+      async readActive() { return state; },
+      async recoverActive() { return state; },
+      async commitGeneration(input: { artifacts: EmergencyPackCapturedArtifact[] }) {
+        const capturedRevision = input.artifacts.find(({ kind }) => kind === 'alerts')?.sourceRevision;
+        const boundSequence = alertSequence;
+        if (capturedRevision !== currentRevision || boundSequence !== alertSequence) {
+          return { ok: false, reason: 'alert-source-changed' };
+        }
+        state = { status: 'ready', packId: 'pack-home', profileFingerprint };
+        return { ok: true, packId: 'pack-home' };
+      },
+      async invalidateArtifacts(input: { kinds: readonly string[]; sourceRevision?: string }) {
+        if (input.kinds.includes('alerts') && input.sourceRevision) {
+          if (currentRevision !== input.sourceRevision) alertSequence += 1;
+          currentRevision = input.sourceRevision;
+          invalidations.push(input.sourceRevision);
+          state = { status: 'not-saved', packId: null, profileFingerprint };
+        }
+        return { ok: true };
+      },
+    }),
+    createCoordinator: createEmergencyPackCoordinator,
+    createSources: () => Object.fromEntries(REQUIRED_KINDS.map((kind) => [kind, async (scope: EmergencyPackCaptureScope) => {
+      if (kind === 'route-primary') {
+        alertCaptured.resolve();
+        await continueCapture.promise;
+      }
+      return artifact(kind, scope);
+    }])),
+    createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
+    releaseArtifact: async () => undefined,
+    getLegacyLifelinePackManifest: () => null,
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeRoutes: () => () => undefined,
+    subscribeComms: () => () => undefined,
+    subscribeLifelines: () => () => undefined,
+    subscribeAlerts: (callback) => {
+      alertSubscriber = callback;
+      return () => { alertSubscriber = null; };
+    },
+  });
+
+  return {
+    place,
+    runtime,
+    revisionA,
+    revisionB: 'b'.repeat(64),
+    alertCaptured: alertCaptured.promise,
+    continueCapture: continueCapture.resolve,
+    emitAlertRevision(sourceRevision: string): void { alertSubscriber?.({ sourceRevision }); },
+    invalidations,
+  };
+}
+
+test('capture cannot publish alert revision A after authoritative subscription advances to B', async () => {
+  const harness = createAlertRevisionRaceHarness();
+  const emitted: string[] = [];
+  harness.runtime.subscribe(({ status }) => { emitted.push(status); });
+  const capture = harness.runtime.capture(harness.place, true);
+
+  await within(harness.alertCaptured);
+  harness.emitAlertRevision(harness.revisionB);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const invalidatedBeforeCommitFinished = harness.invalidations.includes(harness.revisionB);
+  harness.continueCapture();
+  const captured = await within(capture);
+
+  assert.equal(invalidatedBeforeCommitFinished, true, 'authoritative B must persist outside the blocked place queue');
+  assert.notEqual(captured.status, 'ready', 'capture must fail closed when its captured alert revision is stale');
+  assert.equal(emitted.includes('ready'), false, 'stale readiness must never be published to subscribers');
+  harness.runtime.destroy();
+});
+
+test('capture does not rebind an old alert A artifact after authoritative A to B to A transitions', async () => {
+  const harness = createAlertRevisionRaceHarness();
+  const emitted: string[] = [];
+  harness.runtime.subscribe(({ status }) => { emitted.push(status); });
+  const capture = harness.runtime.capture(harness.place, true);
+
+  await within(harness.alertCaptured);
+  harness.emitAlertRevision(harness.revisionB);
+  harness.emitAlertRevision(harness.revisionA);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const persistedSequence = [...harness.invalidations];
+  harness.continueCapture();
+  const captured = await within(capture);
+
+  assert.deepEqual(persistedSequence, [harness.revisionB, harness.revisionA]);
+  assert.notEqual(captured.status, 'ready', 'the old A artifact must not bind to the later A sequence');
+  assert.equal(emitted.includes('ready'), false);
+  harness.runtime.destroy();
+});
+
+test('verified offline-map tile resolution holds the lifecycle lease until its cache digest read completes', async () => {
+  const place: Place = { id: 'home', name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 };
+  const profileFingerprint = 'profile-home';
+  const sourceUrl = 'https://a.basemaps.cartocdn.com/dark_all/4/1/2@2x.png';
+  const generationId = 'resolver-prune-race';
+  const cacheKey = `https://offline-map.crystalball.invalid/exact/${generationId}/0`;
+  const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const sha256 = [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+  const body = JSON.stringify({
+    kind: 'offline-map',
+    placeId: place.id,
+    profileFingerprint,
+    capturedAt: NOW,
+    generationId,
+    tiles: [{
+      url: sourceUrl,
+      cacheKey,
+      sha256,
+      generationId,
+      byteLength: bytes.byteLength,
+      verified: true,
+    }],
+    totalBytes: bytes.byteLength,
+  });
+  const tileReadStarted = deferred();
+  const releaseTileRead = deferred();
+  const secondPruneStarted = deferred();
+  let savedPlacesSubscriber: (() => void) | null = null;
+  let pruneCalls = 0;
+  const ready = { status: 'ready' as const, packId: 'pack-home', profileFingerprint };
+  const cache: ExactOfflineMapCache = {
+    async put() { return undefined; },
+    async delete() { return true; },
+    async match(key) {
+      if (String(key) !== cacheKey) return undefined;
+      tileReadStarted.resolve();
+      await releaseTileRead.promise;
+      return new Response(bytes.slice(), { status: 200, headers: { 'content-type': 'image/png' } });
+    },
+  };
+  const runtime = createEmergencyPackRuntime({
+    now: () => NOW,
+    buildProfileFingerprint: () => profileFingerprint,
+    getSavedPlaces: () => [place],
+    createBrowserAdapters: () => ({}),
+    createStore: () => ({
+      async readActive() { return ready; },
+      async recoverActive() { return ready; },
+      async commitGeneration() { return { ok: false, reason: 'not-used' }; },
+      async invalidateArtifacts() { return { ok: true }; },
+      readOfflineMapRevision: () => 'head-1',
+      async readVerifiedOfflineMapArtifact() {
+        return { body, revision: 'head-1', expiresAt: NOW + 60_000 };
+      },
+      async prune() {
+        pruneCalls += 1;
+        if (pruneCalls === 2) secondPruneStarted.resolve();
+      },
+    }),
+    createCoordinator: createEmergencyPackCoordinator,
+    createSources: () => ({}),
+    createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
+    releaseArtifact: async () => undefined,
+    getLegacyLifelinePackManifest: () => null,
+    subscribeSavedPlaces: (callback) => {
+      savedPlacesSubscriber = callback;
+      return () => { savedPlacesSubscriber = null; };
+    },
+    subscribeRoutes: () => () => undefined,
+    subscribeComms: () => () => undefined,
+    subscribeLifelines: () => () => undefined,
+    subscribeAlerts: () => () => undefined,
+    openOfflineMapCache: async () => cache,
+  });
+  await runtime.hydrate();
+  assert.equal(pruneCalls, 1);
+
+  const resolution = runtime.resolveOfflineMapTile(sourceUrl);
+  await within(tileReadStarted.promise);
+  savedPlacesSubscriber?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const pruneStartedBeforeTileReadFinished = pruneCalls > 1;
+  releaseTileRead.resolve();
+  const tile = await within(resolution);
+  await within(secondPruneStarted.promise);
+
+  assert.equal(pruneStartedBeforeTileReadFinished, false, 'prune must wait for the exact cache read and digest');
+  assert.deepEqual(new Uint8Array(tile?.data ?? new ArrayBuffer(0)), bytes);
+  runtime.destroy();
+});

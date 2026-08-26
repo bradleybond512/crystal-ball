@@ -638,8 +638,11 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     }
   }
 
-  async function invalidateKinds(kinds: readonly EmergencyPackArtifactKind[]): Promise<void> {
-    const places = retainedPlaces();
+  async function invalidateKinds(
+    kinds: readonly EmergencyPackArtifactKind[],
+    affectedPlaceIds?: ReadonlySet<string>,
+  ): Promise<void> {
+    const places = retainedPlaces().filter((place) => !affectedPlaceIds || affectedPlaceIds.has(place.id));
     await Promise.all(places.map((place) => enqueuePlaceOperation(place.id, async () => {
       const scope = scopeFor(place);
       if (!scope) return;
@@ -671,16 +674,18 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   }]));
   const savedPlacesChanged = () => {
     const nextPlaces = retainedPlaces();
-    const renamed = nextPlaces.some((place) => {
+    const renamedPlaceIds = new Set(nextPlaces.filter((place) => {
       const previous = savedPlaceNames.get(place.id);
       const profileFingerprint = scopeFor(place)?.profileFingerprint ?? '';
       return previous?.profileFingerprint === profileFingerprint && previous.name !== place.name;
-    });
+    }).map(({ id }) => id));
     savedPlaceNames = new Map(nextPlaces.map((place) => [place.id, {
       profileFingerprint: scopeFor(place)?.profileFingerprint ?? '',
       name: place.name,
     }]));
-    if (renamed) void invalidateKinds(['route-primary', 'route-alternate']);
+    if (renamedPlaceIds.size > 0) {
+      void invalidateKinds(['route-primary', 'route-alternate'], renamedPlaceIds);
+    }
     else void refreshAll(false);
   };
   const unsubscribers = [

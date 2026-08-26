@@ -44,6 +44,12 @@ export interface EmergencyPackScope {
   now: number;
 }
 
+export interface EmergencyPackVerifiedOfflineMapArtifact {
+  body: string;
+  revision: string;
+  expiresAt: number;
+}
+
 export interface EmergencyPackStoreState {
   status: string;
   packId: string | null;
@@ -507,9 +513,27 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function readVerifiedOfflineMapArtifact(scope: EmergencyPackScope): Promise<string | null> {
+  function readOfflineMapRevision(scope: EmergencyPackScope): string | null {
+    try {
+      const head = parseHead(metadata.getItem(headKey(scope.placeId)));
+      if (head?.placeId !== scope.placeId || head?.profileFingerprint !== scope.profileFingerprint) return null;
+      const invalidation = parseInvalidationRecord(metadata.getItem(invalidationKey(scope.placeId)));
+      const cutoff = invalidation?.profileFingerprint === scope.profileFingerprint
+        ? invalidation.cutoffs['offline-map'] ?? 0
+        : 0;
+      return `${head.manifestKey}:${head.manifestSha256}:${cutoff}`;
+    } catch {
+      return null;
+    }
+  }
+
+  async function readVerifiedOfflineMapArtifact(
+    scope: EmergencyPackScope,
+  ): Promise<EmergencyPackVerifiedOfflineMapArtifact | null> {
     try {
       if (!Number.isFinite(scope.now)) return null;
+      const revision = readOfflineMapRevision(scope);
+      if (revision === null) return null;
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
       if (head?.placeId !== scope.placeId || head?.profileFingerprint !== scope.profileFingerprint) return null;
       const encoded = metadata.getItem(head.manifestKey);
@@ -528,7 +552,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (body === null
         || new TextEncoder().encode(body).byteLength !== receipt.byteLength
         || await digest(body) !== receipt.sha256) return null;
-      return body;
+      if (readOfflineMapRevision(scope) !== revision) return null;
+      return { body, revision, expiresAt: Date.parse(receipt.expiresAt) };
     } catch {
       return null;
     }
@@ -1040,6 +1065,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     migrateLifelineGeneration,
     readActive,
     readReadiness,
+    readOfflineMapRevision,
     readVerifiedOfflineMapArtifact,
     recoverActive,
     recoverReadiness,

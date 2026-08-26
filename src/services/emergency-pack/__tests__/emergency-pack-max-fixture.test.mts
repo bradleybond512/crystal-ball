@@ -38,11 +38,16 @@ test('documented maximum fixtures validate synchronously within a coarse rendere
     })),
     cachedAt: NOW - 60_000,
   };
+  const generationId = 'max-fixture';
   const map = {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
+    generationId,
     tiles: Array.from({ length: 512 }, (_, index) => ({
       url: `https://a.basemaps.cartocdn.com/dark_all/12/${index}/95@2x.png`,
+      cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/${index}`,
+      sha256: index.toString(16).padStart(64, '0'),
+      generationId,
       byteLength: 32_000,
       verified: true,
     })),

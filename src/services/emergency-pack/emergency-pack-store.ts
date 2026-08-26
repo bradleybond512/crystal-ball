@@ -676,7 +676,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     try {
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
       if (head?.placeId !== scope.placeId || head?.profileFingerprint !== scope.profileFingerprint) return null;
-      const invalidation = parseInvalidationRecord(metadata.getItem(invalidationKey(scope.placeId)));
+      const invalidation = parseInvalidationRecord(metadata.getItem(
+        invalidationKey(scope.placeId, scope.profileFingerprint),
+      ));
       const cutoff = invalidation?.profileFingerprint === scope.profileFingerprint
         ? invalidation.cutoffs['offline-map'] ?? 0
         : 0;

@@ -1325,35 +1325,29 @@ export function getCachedLocalLogistics(placeOrId: SavedPlace | string): LocalLo
   return parsed;
 }
 
-async function fetchGridOutageContext(countyFips?: string): Promise<{
-  areaConditions: AreaCondition[];
-  provider: ProviderStatus;
-}> {
-  if (!countyFips) {
-    return {
-      areaConditions: [],
-      provider: {
-        id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 0,
-        observedAt: null, reasonCode: 'county_fips_unknown',
-      },
-    };
+function commitLocalLogisticsSnapshot(
+  placeId: string,
+  fingerprint: string,
+  snapshot: LocalLogisticsSnapshot,
+  shouldCommit?: () => boolean,
+): void {
+  if (shouldCommit && !shouldCommit()) return;
+  const serialized = serializeSnapshot(snapshot);
+  const key = cacheKey(placeId, fingerprint);
+  boundedSet(memoryCache, key, serialized);
+  boundedSet(latestFingerprintByPlace, placeId, fingerprint);
+  const exactPersisted = writeOfflineCacheEntry(key, serialized);
+  if (exactPersisted) {
+    writeOfflineCacheEntry(latestKey(placeId), { schemaVersion: 2, fingerprint });
   }
-  try {
-    const response = await fetch(`${getApiBaseUrl()}/api/grid-outages?fips=${encodeURIComponent(countyFips)}&limit=100`, {
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new Error(`ODIN HTTP ${response.status}`);
-    const outage = parseGridOutages(await response.json(), countyFips);
-    return { areaConditions: outage.areaConditions, provider: outage.provider };
-  } catch {
-    return {
-      areaConditions: [],
-      provider: {
-        id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 0,
-        observedAt: null, reasonCode: 'request_failed',
-      },
-    };
-  }
+  emitLocalLogisticsUpdated(snapshot);
+}
+
+function emitLocalLogisticsIfCurrent(
+  snapshot: LocalLogisticsSnapshot,
+  shouldCommit?: () => boolean,
+): void {
+  if (!shouldCommit || shouldCommit()) emitLocalLogisticsUpdated(snapshot);
 }
 
 async function runFetch(
@@ -1373,25 +1367,28 @@ async function runFetch(
  if (!response.ok) throw new Error(`Lifelines HTTP ${response.status}`);
  const parsed = parseLocalLogisticsApiResponse(place, await response.json(), Date.now(), categories);
  if (parsed.effectiveRadiusKm !== radiusKm) throw new Error('lifelines radius mismatch');
+ let areaConditions: AreaCondition[] = [];
  const providers = [...parsed.providers];
- const outage = await fetchGridOutageContext(parsed.countyFips);
+ if (parsed.countyFips) {
+ try {
+ const outageResponse = await fetch(`${getApiBaseUrl()}/api/grid-outages?fips=${encodeURIComponent(parsed.countyFips)}&limit=100`, { signal: AbortSignal.timeout(10_000) });
+ if (!outageResponse.ok) throw new Error(`ODIN HTTP ${outageResponse.status}`);
+ const outage = parseGridOutages(await outageResponse.json(), parsed.countyFips);
+ areaConditions = outage.areaConditions;
  providers.push(outage.provider);
+ } catch {
+ providers.push({ id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 0, observedAt: null, reasonCode: 'request_failed' });
+ }
+ } else {
+ providers.push({ id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 0, observedAt: null, reasonCode: 'county_fips_unknown' });
+ }
  const snapshot = buildLocalLogisticsSnapshot(place, parsed.nodes, {
  fetchedAt: parsed.retrievedAt, queryFingerprint: fingerprint, effectiveRadiusKm: parsed.effectiveRadiusKm,
  countyFips: parsed.countyFips,
- areaConditions: outage.areaConditions, providers, sites: parsed.sites, observations: parsed.observations,
+ areaConditions, providers, sites: parsed.sites, observations: parsed.observations,
  categories: parsed.categories, source: 'network',
  });
- if (shouldCommit && !shouldCommit()) return snapshot;
- const serialized = serializeSnapshot(snapshot);
- const key = cacheKey(place.id, fingerprint);
- boundedSet(memoryCache, key, serialized);
- boundedSet(latestFingerprintByPlace, place.id, fingerprint);
- const exactPersisted = writeOfflineCacheEntry(key, serialized);
- if (exactPersisted) {
-   writeOfflineCacheEntry(latestKey(place.id), { schemaVersion: 2, fingerprint });
- }
- emitLocalLogisticsUpdated(snapshot);
+ commitLocalLogisticsSnapshot(place.id, fingerprint, snapshot, shouldCommit);
  return snapshot;
   } catch (error) {
  const key = cacheKey(place.id, fingerprint);
@@ -1400,7 +1397,7 @@ async function runFetch(
    placeId: place.id, queryFingerprint: fingerprint, lat: place.lat, lon: place.lon,
  }) : null;
  if (cached) {
- if (!shouldCommit || shouldCommit()) emitLocalLogisticsUpdated(cached);
+ emitLocalLogisticsIfCurrent(cached, shouldCommit);
  return cached;
  }
  throw error;
@@ -1416,6 +1413,16 @@ export function fetchLocalLogistics(place: SavedPlace, options: FetchLocalLogist
     : DEFAULT_RADIUS_KM;
   const limitPerCategory = Math.max(1, Math.min(5, Math.trunc(options.limitPerCategory ?? DEFAULT_LIMIT_PER_CATEGORY)));
   const fingerprint = buildLocalLogisticsFingerprint(place, radiusKm, categories, limitPerCategory);
+  if (options.shouldCommit) {
+    return runFetch(
+      place,
+      categories,
+      radiusKm,
+      limitPerCategory,
+      fingerprint,
+      options.shouldCommit,
+    );
+  }
   const inFlightKey = `${place.id}|${fingerprint}`;
   const existing = inFlight.get(inFlightKey);
   if (existing) return existing;
@@ -1425,7 +1432,6 @@ export function fetchLocalLogistics(place: SavedPlace, options: FetchLocalLogist
     radiusKm,
     limitPerCategory,
     fingerprint,
-    options.shouldCommit,
   );
   inFlight.set(inFlightKey, request);
   return request.finally(() => {

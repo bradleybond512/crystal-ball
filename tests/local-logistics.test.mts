@@ -82,6 +82,89 @@ function makeNode(overrides: Partial<LogisticsNode> = {}): LogisticsNode {
   };
 }
 
+interface DeferredResponse {
+  promise: Promise<Response>;
+  resolve(response: Response): void;
+}
+
+function deferredResponse(): DeferredResponse {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function emptyLogisticsResponse(place: SavedPlace, input: string | URL | Request, fetchedAt: string): Response {
+  const url = new URL(String(input), 'http://localhost');
+  const radiusKm = Number(url.searchParams.get('radiusKm'));
+  const categories = url.searchParams.get('categories')?.split(',') ?? [];
+  return new Response(JSON.stringify({
+    schemaVersion: 2,
+    query: { lat: place.lat, lon: place.lon, radiusKm, categories },
+    sites: [],
+    observations: [],
+    providers: [
+      { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: fetchedAt },
+      { id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: fetchedAt },
+      { id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: fetchedAt },
+    ],
+    fetchedAt,
+    retrievedAt: fetchedAt,
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
+
+function installCommitRaceHarness(): {
+  pending: Array<{ input: string | URL | Request; response: DeferredResponse }>;
+  persisted: Map<string, string>;
+  events: Array<{ detail?: LocalLogisticsSnapshot }>;
+  restore(): void;
+} {
+  const originalFetch = globalThis.fetch;
+  const priorStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const priorCustomEvent = Object.getOwnPropertyDescriptor(globalThis, 'CustomEvent');
+  const pending: Array<{ input: string | URL | Request; response: DeferredResponse }> = [];
+  const persisted = new Map<string, string>();
+  const events: Array<{ detail?: LocalLogisticsSnapshot }> = [];
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => persisted.get(key) ?? null,
+      setItem: (key: string, value: string) => { persisted.set(key, value); },
+      removeItem: (key: string) => { persisted.delete(key); },
+    },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { dispatchEvent: (event: { detail?: LocalLogisticsSnapshot }) => { events.push(event); } },
+  });
+  Object.defineProperty(globalThis, 'CustomEvent', {
+    configurable: true,
+    value: class {
+      readonly detail?: LocalLogisticsSnapshot;
+      constructor(_type: string, init?: { detail?: LocalLogisticsSnapshot }) { this.detail = init?.detail; }
+    },
+  });
+  globalThis.fetch = async (input) => {
+    const response = deferredResponse();
+    pending.push({ input, response });
+    return response.promise;
+  };
+  return {
+    pending,
+    persisted,
+    events,
+    restore: () => {
+      globalThis.fetch = originalFetch;
+      if (priorStorage) Object.defineProperty(globalThis, 'localStorage', priorStorage);
+      else Reflect.deleteProperty(globalThis, 'localStorage');
+      if (priorDocument) Object.defineProperty(globalThis, 'document', priorDocument);
+      else Reflect.deleteProperty(globalThis, 'document');
+      if (priorCustomEvent) Object.defineProperty(globalThis, 'CustomEvent', priorCustomEvent);
+      else Reflect.deleteProperty(globalThis, 'CustomEvent');
+    },
+  };
+}
+
 test('saved radii initialize to the next supported Lifelines radius', () => {
   const initialLocalLogisticsRadiusKm = requireFeature<(radiusKm: number) => LocalLogisticsRadiusChoiceKm>(
     'initialLocalLogisticsRadiusKm',
@@ -192,6 +275,64 @@ test('a false internal commit guard blocks cache, persistence, latest pointer, a
     else Reflect.deleteProperty(globalThis, 'document');
     if (priorCustomEvent) Object.defineProperty(globalThis, 'CustomEvent', priorCustomEvent);
     else Reflect.deleteProperty(globalThis, 'CustomEvent');
+  }
+});
+
+test('ordinary-first and superseded guarded requests keep independent commit ownership', async () => {
+  const place = makePlace({ id: 'ordinary-first-race', radiusKm: 10 });
+  const harness = installCommitRaceHarness();
+  let guardedCurrent = true;
+  const ordinaryAt = new Date(Date.now() - 2_000).toISOString();
+  const guardedAt = new Date(Date.now() - 1_000).toISOString();
+  try {
+    const ordinary = fetchLocalLogistics(place, { radiusKm: 10 });
+    const guarded = fetchLocalLogistics(place, {
+      radiusKm: 10,
+      shouldCommit: () => guardedCurrent,
+    } as never);
+    guardedCurrent = false;
+    harness.pending[0]?.response.resolve(emptyLogisticsResponse(place, harness.pending[0].input, ordinaryAt));
+    harness.pending[1]?.response.resolve(emptyLogisticsResponse(place, harness.pending[1].input, guardedAt));
+
+    const [foregroundResult, guardedResult] = await Promise.all([ordinary, guarded]);
+    assert.equal(harness.pending.length, 2, 'foreground and guarded requests must not share one policy');
+    assert.equal(foregroundResult.fetchedAt.toISOString(), ordinaryAt);
+    assert.equal(guardedResult.fetchedAt.toISOString(), guardedAt);
+    assert.equal(getCachedLocalLogistics(place.id)?.fetchedAt.toISOString(), ordinaryAt);
+    assert.equal(harness.events.length, 1);
+    assert.equal(harness.events[0]?.detail?.fetchedAt.toISOString(), ordinaryAt);
+    assert.ok([...harness.persisted.keys()].some((key) => key.includes(`latest:${place.id}`)));
+  } finally {
+    harness.restore();
+  }
+});
+
+test('guarded-first and ordinary requests keep foreground persistence after supersession', async () => {
+  const place = makePlace({ id: 'guarded-first-race', radiusKm: 10 });
+  const harness = installCommitRaceHarness();
+  let guardedCurrent = true;
+  const guardedAt = new Date(Date.now() - 2_000).toISOString();
+  const ordinaryAt = new Date(Date.now() - 1_000).toISOString();
+  try {
+    const guarded = fetchLocalLogistics(place, {
+      radiusKm: 10,
+      shouldCommit: () => guardedCurrent,
+    } as never);
+    const ordinary = fetchLocalLogistics(place, { radiusKm: 10 });
+    guardedCurrent = false;
+    harness.pending[0]?.response.resolve(emptyLogisticsResponse(place, harness.pending[0].input, guardedAt));
+    harness.pending[1]?.response.resolve(emptyLogisticsResponse(place, harness.pending[1].input, ordinaryAt));
+
+    const [guardedResult, foregroundResult] = await Promise.all([guarded, ordinary]);
+    assert.equal(harness.pending.length, 2, 'guarded and foreground requests must not share one policy');
+    assert.equal(guardedResult.fetchedAt.toISOString(), guardedAt);
+    assert.equal(foregroundResult.fetchedAt.toISOString(), ordinaryAt);
+    assert.equal(getCachedLocalLogistics(place.id)?.fetchedAt.toISOString(), ordinaryAt);
+    assert.equal(harness.events.length, 1);
+    assert.equal(harness.events[0]?.detail?.fetchedAt.toISOString(), ordinaryAt);
+    assert.ok([...harness.persisted.keys()].some((key) => key.includes(`latest:${place.id}`)));
+  } finally {
+    harness.restore();
   }
 });
 

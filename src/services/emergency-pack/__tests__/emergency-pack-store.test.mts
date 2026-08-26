@@ -565,6 +565,25 @@ test('release failures cannot report a failed publication as success or revoke t
   );
 });
 
+test('tombstone persistence failure retains the generation manifest and body for a later safe release', async () => {
+  const { metadata, bodies, store } = harness({
+    releaseArtifactBody: (kind) => kind === 'offline-map'
+      ? Promise.reject(new Error('cleanup tombstone write failed'))
+      : Promise.resolve(),
+  });
+  assert.equal((await commit(store, 'first')).ok, true);
+  assert.equal((await commit(store, 'second')).ok, true);
+  const firstManifestKey = [...metadata.values.keys()].find((key) => key.includes(':manifest:') && key.endsWith(':pack-1'));
+  const firstMapBodyKey = [...bodies.values.keys()].find((key) => key.endsWith('pack-1:offline-map'));
+  assert.ok(firstManifestKey);
+  assert.ok(firstMapBodyKey);
+
+  assert.equal((await commit(store, 'third')).ok, true);
+
+  assert.equal(metadata.values.has(firstManifestKey), true, 'manifest ownership is retained without a durable tombstone');
+  assert.equal(bodies.values.has(firstMapBodyKey), true, 'map artifact body is retained without a durable tombstone');
+});
+
 test('v1 Lifelines migration publishes one verified partial v2 generation without replacing a valid v2 head', async () => {
   const { metadata, bodies, operations, store } = harness();
   const input = legacyMigrationInput();

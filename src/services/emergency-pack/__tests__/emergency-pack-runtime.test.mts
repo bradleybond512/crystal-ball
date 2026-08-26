@@ -45,6 +45,9 @@ interface RuntimeApi {
       verify(input: { generationId: string; tiles: unknown[]; cache: object }): Promise<{ ok: boolean }>;
       release(input: { generationId: string; tiles: unknown[]; cache: object }): Promise<{ ok: boolean }>;
     },
+    cleanup?: {
+      adoptGeneration(generationId: string, cacheKeys: string[]): void;
+    },
   ) => {
     verifyArtifactBody(kind: string, body: string): Promise<boolean>;
     releaseArtifactBody(kind: string, body: string): Promise<void>;
@@ -332,11 +335,57 @@ test('offline map lifecycle verifies and releases only strict immutable generati
   await assert.rejects(() => unavailable.releaseArtifactBody('offline-map', body));
 });
 
+test('offline map lifecycle adopts after exact verification and accepts only durable deferred cleanup', async () => {
+  const create = requireFunction('createEmergencyPackOfflineMapLifecycle');
+  const cache = { id: 'wm-offline-maps' };
+  const adopted: unknown[] = [];
+  const cleanup = {
+    adoptGeneration(generationId: string, cacheKeys: string[]) {
+      adopted.push({ generationId, cacheKeys });
+    },
+  };
+  const generationId = 'generation-lifecycle-owner';
+  const tile = {
+    url: 'https://a.basemaps.cartocdn.com/dark_all/4/1/2@2x.png',
+    cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/0`,
+    sha256: 'c'.repeat(64),
+    generationId,
+    byteLength: 4,
+    verified: true,
+  };
+  const body = JSON.stringify({
+    kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home',
+    generationId, tiles: [tile], totalBytes: 4,
+  });
+  const durable = create({ open: async () => cache }, {
+    verify: async () => ({ ok: true }),
+    release: async (input: unknown) => {
+      assert.equal((input as { cleanup: unknown }).cleanup, cleanup);
+      return { ok: false, durableCleanup: true };
+    },
+  }, cleanup);
+
+  assert.equal(await durable.verifyArtifactBody('offline-map', body), true);
+  assert.deepEqual(adopted, [{ generationId, cacheKeys: [tile.cacheKey] }]);
+  await assert.doesNotReject(() => durable.releaseArtifactBody('offline-map', body));
+
+  const rejected = create({ open: async () => cache }, {
+    verify: async () => ({ ok: false }),
+    release: async () => ({ ok: false }),
+  }, cleanup);
+  assert.equal(await rejected.verifyArtifactBody('offline-map', body), false);
+  assert.equal(adopted.length, 1, 'failed tile verification must not adopt generation ownership');
+  await assert.rejects(() => rejected.releaseArtifactBody('offline-map', body));
+});
+
 test('default runtime wires immutable map verification and cleanup through store and orchestrator boundaries', () => {
   assert.match(runtimeSource, /verifyArtifactBody:\s*offlineMapLifecycle\.verifyArtifactBody/);
   assert.match(runtimeSource, /releaseArtifactBody:\s*offlineMapLifecycle\.releaseArtifactBody/);
   assert.match(runtimeSource, /releaseArtifact:\s*offlineMapLifecycle\.releaseArtifact/);
   assert.match(runtimeSource, /captureTiles\(\{\s*generationId,/);
+  assert.match(runtimeSource, /createExactOfflineMapCleanupCoordinator\(\{\s*metadata:\s*localStorage/);
+  assert.match(runtimeSource, /captureDefaultOfflineMap\(place,\s*scope,\s*offlineMapCleanup\)/);
+  assert.match(runtimeSource, /createEmergencyPackOfflineMapLifecycle\(caches,\s*undefined,\s*offlineMapCleanup\)/);
 });
 
 test('default offline map capture supplies unique bounded ids and serializes exact tile evidence', async () => {
@@ -348,8 +397,10 @@ test('default offline map capture supplies unique bounded ids and serializes exa
     randomUUID: () => generationIds.shift(),
     planTileUrls: () => ({ ok: true, tileUrls: ['https://a.basemaps.cartocdn.com/tile.png'] }),
     openCache: async () => ({ id: 'wm-offline-maps' }),
+    cleanup: { id: 'shared-cleanup-coordinator' },
     fetchTile: async () => new Response(),
-    captureTiles: async (input: { generationId: string }) => {
+    captureTiles: async (input: { generationId: string; cleanup: unknown }) => {
+      assert.equal(input.cleanup, dependencies.cleanup);
       captureInputs.push(input);
       const tile = {
         url: 'https://a.basemaps.cartocdn.com/tile.png',

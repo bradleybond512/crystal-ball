@@ -2,6 +2,7 @@ import {
   EMERGENCY_PACK_OPTIONAL_KINDS,
   EMERGENCY_PACK_REQUIRED_KINDS,
   deriveEmergencyPackReadiness,
+  migrateLifelinePackV1,
   parseEmergencyPackManifest,
 } from './emergency-pack-schema';
 import type {
@@ -78,6 +79,14 @@ export interface EmergencyPackGenerationInput {
   requiredKinds: readonly EmergencyPackRequiredKind[];
   optionalKinds: readonly EmergencyPackOptionalKind[];
   artifacts: EmergencyPackArtifactInput[];
+}
+
+export interface EmergencyPackLifelineMigrationInput {
+  placeId: string;
+  profileFingerprint: string;
+  legacyQueryFingerprint: string;
+  legacyManifest: unknown;
+  artifact: EmergencyPackArtifactInput & { kind: 'lifelines' };
 }
 
 interface EmergencyPackStoreDependencies {
@@ -220,6 +229,25 @@ function validateGenerationInput(input: EmergencyPackGenerationInput): boolean {
     && Number.isSafeInteger(artifact.itemCount)
     && artifact.itemCount >= 0
   ));
+}
+
+function validateMigrationInput(input: EmergencyPackLifelineMigrationInput): boolean {
+  const { artifact } = input;
+  return isNonEmptyString(input.placeId)
+    && input.placeId.length <= 512
+    && isNonEmptyString(input.profileFingerprint)
+    && input.profileFingerprint.length <= 1024
+    && isNonEmptyString(input.legacyQueryFingerprint)
+    && input.legacyQueryFingerprint.length <= 1024
+    && artifact?.kind === 'lifelines'
+    && isNonEmptyString(artifact.body)
+    && new TextEncoder().encode(artifact.body).byteLength <= ARTIFACT_BYTE_CAPS.lifelines
+    && Number.isFinite(artifact.expiresAt)
+    && artifact.semanticState === 'verified'
+    && isNonEmptyString(artifact.summary)
+    && artifact.summary.length <= 512
+    && Number.isSafeInteger(artifact.itemCount)
+    && artifact.itemCount > 0;
 }
 
 function stateForManifest(
@@ -437,6 +465,13 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     return previous?.packId === head.packId ? previous.packId : null;
   }
 
+  async function hasValidActiveHead(placeId: string): Promise<boolean> {
+    const head = parseHead(metadata.getItem(headKey(placeId)));
+    if (head?.placeId !== placeId) return false;
+    const manifest = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+    return manifest?.packId === head.packId && manifest.placeId === placeId;
+  }
+
   async function stageArtifacts(
     input: EmergencyPackGenerationInput,
     packId: string,
@@ -568,6 +603,91 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
+  async function migrateLifelineGeneration(input: EmergencyPackLifelineMigrationInput): Promise<
+    { ok: true; packId: string } | { ok: false; reason: string }
+  > {
+    try {
+      if (!validateMigrationInput(input)) return { ok: false, reason: 'invalid-input' };
+    } catch {
+      return { ok: false, reason: 'invalid-input' };
+    }
+
+    let key: string | null = null;
+    const stagedBodyKeys: string[] = [];
+    try {
+      if (await hasValidActiveHead(input.placeId)) return { ok: false, reason: 'active-v2-exists' };
+      const packId = createPackId();
+      if (!isNonEmptyString(packId) || packId.length > 512) return { ok: false, reason: 'invalid-pack-id' };
+      key = manifestKey(input.placeId, packId);
+      if (metadata.getItem(key) !== null) return { ok: false, reason: 'pack-id-collision' };
+
+      const timestamp = now();
+      if (!Number.isFinite(timestamp) || input.artifact.expiresAt <= timestamp) {
+        return { ok: false, reason: 'invalid-input' };
+      }
+      const capturedAt = new Date(timestamp).toISOString();
+      const cacheKey = bodyKey(packId, 'lifelines');
+      const provisionalReceipt: EmergencyPackReceipt = {
+        kind: 'lifelines',
+        profileFingerprint: input.profileFingerprint,
+        cacheKey,
+        sha256: await digest(input.artifact.body),
+        byteLength: new TextEncoder().encode(input.artifact.body).byteLength,
+        itemCount: input.artifact.itemCount,
+        capturedAt,
+        expiresAt: new Date(input.artifact.expiresAt).toISOString(),
+        verifiedAt: capturedAt,
+        semanticState: input.artifact.semanticState,
+        summary: input.artifact.summary,
+      };
+      const migrationScope = {
+        placeId: input.placeId,
+        profileFingerprint: input.profileFingerprint,
+        legacyQueryFingerprint: input.legacyQueryFingerprint,
+        packId,
+        now: timestamp,
+      };
+      if (!migrateLifelinePackV1(input.legacyManifest, migrationScope, provisionalReceipt)) {
+        return { ok: false, reason: 'invalid-legacy-pack' };
+      }
+
+      const stagedReceipts = await stageArtifacts({
+        placeId: input.placeId,
+        profileFingerprint: input.profileFingerprint,
+        requiredKinds: EMERGENCY_PACK_REQUIRED_KINDS,
+        optionalKinds: EMERGENCY_PACK_OPTIONAL_KINDS,
+        artifacts: [input.artifact],
+      }, packId, timestamp, stagedBodyKeys);
+      const receipt = stagedReceipts[0];
+      if (receipt?.cacheKey !== cacheKey) throw new Error('migration receipt mismatch');
+      const manifest = migrateLifelinePackV1(input.legacyManifest, migrationScope, receipt);
+      if (!manifest) throw new Error('migration validation failed');
+
+      if (await hasValidActiveHead(input.placeId)) {
+        await cleanupGeneration(key, stagedBodyKeys);
+        return { ok: false, reason: 'active-v2-exists' };
+      }
+      const activeHeadKey = headKey(input.placeId);
+      const encodedExistingHead = metadata.getItem(activeHeadKey);
+      const manifestSha256 = await writeManifest(key, manifest);
+      const head: PackHead = {
+        schemaVersion: 2,
+        packId,
+        placeId: input.placeId,
+        profileFingerprint: input.profileFingerprint,
+        manifestKey: key,
+        manifestSha256,
+        previousPackId: null,
+        committedAt: manifest.committedAt,
+      };
+      writeHead(activeHeadKey, head, encodedExistingHead);
+      return { ok: true, packId };
+    } catch (error) {
+      if (key !== null) await cleanupGeneration(key, stagedBodyKeys);
+      return { ok: false, reason: safeReason(error) };
+    }
+  }
+
   async function collectRetainedGenerations(allowedPlaceIds: Set<string>): Promise<RetainedGenerations> {
     const retained: RetainedGenerations = {
       verifiedPlaceIds: new Set<string>(),
@@ -653,5 +773,12 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     await removeUnretainedManifests(allowedPlaceIds, retained);
   }
 
-  return { commitGeneration, readActive, readReadiness, recoverActive, prune };
+  return {
+    commitGeneration,
+    migrateLifelineGeneration,
+    readActive,
+    readReadiness,
+    recoverActive,
+    prune,
+  };
 }

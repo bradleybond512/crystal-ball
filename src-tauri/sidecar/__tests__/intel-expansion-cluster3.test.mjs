@@ -284,7 +284,7 @@ test('BGP sidecar fails unknown when pagination metadata proves the first page i
   const start = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/bgp'");
   const end = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/radiation'", start);
   const route = sidecarSource.slice(start, end);
-  assert.match(route, /if \(result\.coverage !== 'reported'\) \{[\s\S]+return json\(result, 502\);[\s\S]+\}/);
+  assert.match(route, /if \(result\.coverage !== 'reported'\) \{[\s\S]+return \{ body: result, status: 502 \};[\s\S]+\}/);
   assert.ok(route.indexOf("result.coverage !== 'reported'") < route.indexOf('setCached(cacheKey'));
 });
 
@@ -454,6 +454,65 @@ test('BGP sidecar refuses a retry after the shared deadline is exhausted', async
   assert.equal(result.payload, null);
 });
 
+test('BGP sidecar aborts and settles sibling page work after an early fanout failure', async () => {
+  const first = Array.from({ length: 100 }, (_, index) => cloudflareBgpEvent(index + 1));
+  let active = 0;
+  let settled = 0;
+  let aborted = 0;
+  const result = await fetchInfrastructureBgpCompletePayload(async (page, _timeoutMs, signal) => {
+    if (page === 1) {
+      return cloudflareBgpPage(1, first, 500);
+    }
+    active += 1;
+    try {
+      if (page === 2) throw Object.assign(new Error('upstream 400'), { code: 'http_error' });
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 5000);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          aborted += 1;
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        }, { once: true });
+      });
+      return cloudflareBgpPage(page, Array.from(
+        { length: 100 },
+        (_, index) => cloudflareBgpEvent((page - 1) * 100 + index + 1),
+      ), 500);
+    } finally {
+      active -= 1;
+      settled += 1;
+    }
+  });
+
+  assert.equal(result.error, 'http_error');
+  assert.equal(active, 0, 'the helper must not return while sibling requests remain active');
+  assert.equal(settled, 4);
+  assert.equal(aborted, 3);
+});
+
+test('BGP sidecar retries only allowlisted transient failures and never retries oversized bodies', async () => {
+  for (const code of ['transient_http', 'rate_limited', 'ECONNRESET']) {
+    let attempts = 0;
+    const result = await fetchInfrastructureBgpCompletePayload(async (page) => {
+      attempts += 1;
+      if (attempts === 1) throw Object.assign(new Error('sanitized transient failure'), { code });
+      return cloudflareBgpPage(page, [], 0);
+    });
+    assert.equal(result.error, null, `${code} should receive one bounded retry`);
+    assert.equal(attempts, 2, `${code} should be attempted exactly twice`);
+  }
+
+  for (const code of ['result_too_large', 'http_error', 'malformed_response', 'EACCES']) {
+    let attempts = 0;
+    const result = await fetchInfrastructureBgpCompletePayload(async () => {
+      attempts += 1;
+      throw Object.assign(new Error('secret upstream detail'), { code });
+    });
+    assert.equal(attempts, 1, `${code} must never be retried`);
+    assert.equal(result.error, code === 'EACCES' ? 'provider_unavailable' : code);
+  }
+});
+
 test('BGP sidecar route uses bounded complete retrieval and preserves fail-closed cache ordering', () => {
   const start = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/bgp'");
   const end = sidecarSource.indexOf("requestUrl.pathname === '/api/infrastructure/radiation'", start);
@@ -496,6 +555,51 @@ function mockCloudflareBgpHttps(pages) {
   };
   return {
     requests,
+    restore() { https.request = original; },
+  };
+}
+
+function mockCloudflareBgpHttpsHandler(handler) {
+  const original = https.request;
+  const requests = [];
+  let active = 0;
+  let maximumActive = 0;
+  https.request = (options, onResponse) => {
+    const requestedUrl = new URL(`https://${options.hostname}${options.path}`);
+    const page = Number(requestedUrl.searchParams.get('page'));
+    const record = { hostname: options.hostname, path: options.path, page, headers: options.headers };
+    requests.push(record);
+    const req = new PassThrough();
+    let destroyed = false;
+    req.setTimeout = () => req;
+    req.destroy = (error) => {
+      if (destroyed) return req;
+      destroyed = true;
+      queueMicrotask(() => req.emit('error', error ?? new Error('request destroyed')));
+      return req;
+    };
+    req.end = () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      Promise.resolve(handler(record)).then(({ status = 200, body, headers = {} }) => {
+        if (destroyed) return;
+        const bytes = Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
+        const response = Readable.from([bytes]);
+        response.statusCode = status;
+        response.statusMessage = '';
+        response.headers = {
+          'content-type': 'application/json',
+          'content-length': String(bytes.length),
+          ...headers,
+        };
+        onResponse(response);
+      }).catch((error) => req.emit('error', error)).finally(() => { active -= 1; });
+    };
+    return req;
+  };
+  return {
+    requests,
+    get maximumActive() { return maximumActive; },
     restore() { https.request = original; },
   };
 }
@@ -615,6 +719,149 @@ test('BGP HTTP route retrieves two complete pages once, caches only normalized s
     });
     const feedsBody = await feeds.json();
     assert.equal(feedsBody.feeds.find((feed) => feed.feedId === 'cloudflare-bgp')?.status, 'up');
+  } finally {
+    mock.restore();
+    await server.close();
+    if (originalToken === undefined) delete process.env.LOCAL_API_TOKEN;
+    else process.env.LOCAL_API_TOKEN = originalToken;
+    if (originalCloudflare === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
+    else process.env.CLOUDFLARE_API_TOKEN = originalCloudflare;
+  }
+});
+
+test('BGP HTTP route coalesces concurrent cold requests into one bounded page fanout', async () => {
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'test-token-bgp-coalescing';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-coalescing-secret';
+  _resetSidecarCacheForTests();
+  _resetFeedTracker();
+  const mock = mockCloudflareBgpHttpsHandler(async ({ page }) => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return {
+      body: cloudflareBgpPage(page, Array.from(
+        { length: 100 },
+        (_, index) => cloudflareBgpEvent((page - 1) * 100 + index + 1),
+      ), 500),
+    };
+  });
+  const server = await startBgpRouteServer();
+  const headers = { Authorization: 'Bearer test-token-bgp-coalescing' };
+  try {
+    const responses = await Promise.all([
+      fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers }),
+      fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers }),
+    ]);
+    assert.deepEqual(responses.map(({ status }) => status), [200, 200]);
+    const bodies = await Promise.all(responses.map((response) => response.json()));
+    assert.deepEqual(bodies[0], bodies[1]);
+    assert.equal(bodies[0].events.length, 500);
+    assert.deepEqual(mock.requests.map(({ page }) => page).sort(), [1, 2, 3, 4, 5]);
+    assert.ok(mock.maximumActive <= 4, `maximum active upstream requests was ${mock.maximumActive}`);
+  } finally {
+    mock.restore();
+    await server.close();
+    if (originalToken === undefined) delete process.env.LOCAL_API_TOKEN;
+    else process.env.LOCAL_API_TOKEN = originalToken;
+    if (originalCloudflare === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
+    else process.env.CLOUDFLARE_API_TOKEN = originalCloudflare;
+  }
+});
+
+test('BGP HTTP route invalidates and aborts an old credential generation on rotation and deletion', async () => {
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'test-token-bgp-generation';
+  process.env.CLOUDFLARE_API_TOKEN = 'old-cloudflare-generation-secret';
+  _resetSidecarCacheForTests();
+  _resetFeedTracker();
+  let releaseOld;
+  const oldStarted = new Promise((resolve) => { releaseOld = resolve; });
+  let releaseDeleting;
+  const deletingStarted = new Promise((resolve) => { releaseDeleting = resolve; });
+  let newGenerationRequests = 0;
+  const mock = mockCloudflareBgpHttpsHandler(async ({ page, headers }) => {
+    const authorization = headers.Authorization ?? headers.authorization;
+    if (authorization === 'Bearer old-cloudflare-generation-secret') {
+      releaseOld();
+      await new Promise((resolve) => setTimeout(resolve, 60_000).unref());
+    }
+    if (authorization === 'Bearer new-cloudflare-generation-secret') {
+      newGenerationRequests += 1;
+      if (newGenerationRequests === 2) {
+        releaseDeleting();
+        await new Promise((resolve) => setTimeout(resolve, 60_000).unref());
+      }
+    }
+    return { body: cloudflareBgpPage(page, [cloudflareBgpEvent(page)], 1, { count: 1 }) };
+  });
+  const server = await startBgpRouteServer();
+  const headers = {
+    Authorization: 'Bearer test-token-bgp-generation',
+    'Content-Type': 'application/json',
+  };
+  try {
+    const oldRequest = fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
+    await oldStarted;
+    const rotated = await fetch(`http://127.0.0.1:${server.port}/api/local-env-update`, {
+      method: 'POST', headers, body: JSON.stringify({ key: 'CLOUDFLARE_API_TOKEN', value: 'new-cloudflare-generation-secret' }),
+    });
+    assert.equal(rotated.status, 200);
+    const oldResponse = await oldRequest;
+    assert.equal(oldResponse.status, 503);
+
+    const fresh = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
+    assert.equal(fresh.status, 200);
+    const freshBody = await fresh.json();
+    assert.equal(freshBody.coverage, 'reported');
+    assert.equal(mock.requests.filter(({ headers: upstreamHeaders }) =>
+      (upstreamHeaders.Authorization ?? upstreamHeaders.authorization) === 'Bearer new-cloudflare-generation-secret').length, 1);
+
+    _resetSidecarCacheForTests();
+    const deletingRequest = fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
+    await deletingStarted;
+    await fetch(`http://127.0.0.1:${server.port}/api/local-env-update`, {
+      method: 'POST', headers, body: JSON.stringify({ key: 'CLOUDFLARE_API_TOKEN', value: '' }),
+    });
+    const deletedResponse = await deletingRequest;
+    assert.equal(deletedResponse.status, 503);
+    const missing = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
+    assert.equal(missing.status, 503);
+    const missingBody = await missing.json();
+    assert.equal(missingBody.error, 'missing_key');
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+    const healthBody = await health.json();
+    assert.equal(healthBody.feeds.find((feed) => feed.key === 'cloudflare-bgp')?.lastError, 'missing_key');
+  } finally {
+    mock.restore();
+    await server.close();
+    if (originalToken === undefined) delete process.env.LOCAL_API_TOKEN;
+    else process.env.LOCAL_API_TOKEN = originalToken;
+    if (originalCloudflare === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
+    else process.env.CLOUDFLARE_API_TOKEN = originalCloudflare;
+  }
+});
+
+test('BGP HTTP route attempts an oversized upstream body once and returns result_too_large', async () => {
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  const originalCloudflare = process.env.CLOUDFLARE_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'test-token-bgp-size';
+  process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-size-secret';
+  _resetSidecarCacheForTests();
+  _resetFeedTracker();
+  const mock = mockCloudflareBgpHttpsHandler(async () => ({
+    body: '{}',
+    headers: { 'content-length': String((2 * 1024 * 1024) + 1) },
+  }));
+  const server = await startBgpRouteServer();
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, {
+      headers: { Authorization: 'Bearer test-token-bgp-size' },
+    });
+    assert.equal(response.status, 502);
+    const responseBody = await response.json();
+    assert.equal(responseBody.error, 'result_too_large');
+    assert.equal(mock.requests.length, 1);
   } finally {
     mock.restore();
     await server.close();

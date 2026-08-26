@@ -1379,14 +1379,16 @@ function boundedResponseCollector(headers, maxResponseBytes) {
   const declared = declaredResponseLength(headers);
   if (maximum !== null && declared !== null
     && (!/^\d+$/.test(declared) || Number(declared) > maximum)) {
-    throw new Error('Upstream response exceeded byte limit');
+    throw Object.assign(new Error('Upstream response exceeded byte limit'), { code: 'result_too_large' });
   }
   const chunks = [];
   let total = 0;
   return {
     push(chunk) {
       total += chunk.length;
-      if (maximum !== null && total > maximum) throw new Error('Upstream response exceeded byte limit');
+      if (maximum !== null && total > maximum) {
+        throw Object.assign(new Error('Upstream response exceeded byte limit'), { code: 'result_too_large' });
+      }
       chunks.push(chunk);
     },
     finish() { return Buffer.concat(chunks, total); },
@@ -5053,6 +5055,18 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
  res.on('aborted', () => fail(new Error('Upstream response aborted')));
  });
  req.on('error', reject);
+ const signal = options.signal;
+ if (signal?.aborted) {
+ const abortError = signal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+ req.destroy(abortError);
+ return;
+ }
+ const abortRequest = () => {
+ const abortError = signal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+ req.destroy(abortError);
+ };
+ signal?.addEventListener('abort', abortRequest, { once: true });
+ if (signal) req.once('close', () => signal.removeEventListener('abort', abortRequest));
  req.setTimeout(timeoutMs, () => { req.destroy(new Error('Request timed out')); });
  const deadline = maxResponseBytes === null ? null : setTimeout(() => {
  req.destroy(new Error('Request timed out'));
@@ -5355,6 +5369,7 @@ export function odinRequestCanStart(inFlight, cacheKey, maximum = ODIN_IN_FLIGHT
 export function _resetSidecarCacheForTests() {
   _sidecarCache.clear();
   _odinInFlight.clear();
+  resetInfrastructureBgpCredentialState();
 }
 
 // ── Webcam helpers (shared by /api/webcams aggregator and sub-handlers) ──
@@ -15606,6 +15621,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (key === 'OPENAQ_API_KEY') invalidateOpenaqCredentialState();
  if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
  if (key === 'ACLED_ACCESS_TOKEN') acledTokenState.expiresAt = null; // expiry unknown after manual key update
+ if (key === 'CLOUDFLARE_API_TOKEN') synchronizeInfrastructureBgpCredential(value || null);
  if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {
  s2uXmppApplyCreds().catch((error) => {
  context.logger.log(`[s2u-xmpp] reapply creds failed: ${error?.message ?? error}`);
@@ -17828,9 +17844,10 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Infrastructure intelligence: BGP hijacks (Cloudflare Radar) ──────────
   // GET /api/infrastructure/bgp — recent BGP hijack events. 10-min cache.
-  if (requestUrl.pathname === '/api/infrastructure/bgp') {
+ if (requestUrl.pathname === '/api/infrastructure/bgp') {
  const cfToken = process.env.CLOUDFLARE_API_TOKEN;
  const cacheKey = 'infrastructure-bgp';
+ const credential = synchronizeInfrastructureBgpCredential(cfToken);
  const cached = getCached(cacheKey, 10 * 60 * 1000);
  if (cached) return json(cached);
  if (!cfToken) {
@@ -17838,16 +17855,31 @@ async function dispatch(requestUrl, req, routes, context) {
  recordFeedFailure('cloudflare-bgp', 'missing_key');
  return json(infrastructureBgpUnknown('missing_key', Date.now(), true), 503);
  }
+ let operation = infrastructureBgpCredentialState.inFlight?.generation === credential.generation
+ ? infrastructureBgpCredentialState.inFlight.promise
+ : null;
+ if (!operation) {
+ const controller = new AbortController();
+ operation = (async () => {
  try {
- const fetched = await fetchInfrastructureBgpCompletePayload(async (page, timeoutMs) => {
+ const fetched = await fetchInfrastructureBgpCompletePayload(async (page, timeoutMs, signal) => {
  const url = `https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&page=${page}&per_page=${INFRASTRUCTURE_BGP_PER_PAGE}`;
- const r = await fetchWithTimeout(url, {
+ let r;
+ try {
+ r = await fetchWithTimeout(url, {
  headers: {
  Accept: 'application/json',
  Authorization: `Bearer ${cfToken}`,
  },
  maxResponseBytes: INFRASTRUCTURE_BGP_MAX_RESPONSE_BYTES,
+ signal,
  }, timeoutMs);
+ } catch (error) {
+ if (error?.code === 'result_too_large') {
+ throw Object.assign(new Error('Cloudflare Radar response exceeded byte limit'), { code: 'result_too_large' });
+ }
+ throw error;
+ }
  if (!r.ok) throw Object.assign(new Error('Cloudflare Radar request failed'), {
  code: r.status === 429 ? 'rate_limited' : (r.status === 408 || r.status >= 500 ? 'transient_http' : 'http_error'),
  });
@@ -17856,27 +17888,43 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  throw Object.assign(new Error('Cloudflare Radar response was malformed'), { code: 'malformed_response' });
  }
- });
+ }, Date.now, controller.signal);
+ if (!infrastructureBgpCredentialIsCurrent(credential)) {
+ return { body: infrastructureBgpUnknown('provider_unavailable', Date.now()), status: 503 };
+ }
  if (fetched.error) {
  trackFailure('cloudflare-bgp', fetched.error);
  recordFeedFailure('cloudflare-bgp', fetched.error);
- return json(infrastructureBgpUnknown(fetched.error, Date.now()), 502);
+ return { body: infrastructureBgpUnknown(fetched.error, Date.now()), status: 502 };
  }
  const result = normalizeInfrastructureBgpPayload(fetched.payload, Date.now(), INFRASTRUCTURE_BGP_MAX_EVENTS);
  if (result.coverage !== 'reported') {
  trackFailure('cloudflare-bgp', result.error ?? 'no_contributed_rows');
  recordFeedFailure('cloudflare-bgp', result.error ?? 'no_contributed_rows');
- return json(result, 502);
+ return { body: result, status: 502 };
  }
  trackSuccess('cloudflare-bgp', 'primary', result.fetchedAt);
  recordFeedSuccess('cloudflare-bgp', result.fetchedAt);
  setCached(cacheKey, result, 10 * 60 * 1000);
- return json(result);
+ return { body: result, status: 200 };
  } catch {
+ if (!infrastructureBgpCredentialIsCurrent(credential)) {
+ return { body: infrastructureBgpUnknown('provider_unavailable', Date.now()), status: 503 };
+ }
  trackFailure('cloudflare-bgp', 'provider_unavailable');
  recordFeedFailure('cloudflare-bgp', 'provider_unavailable');
- return json(infrastructureBgpUnknown('provider_unavailable', Date.now()), 502);
+ return { body: infrastructureBgpUnknown('provider_unavailable', Date.now()), status: 502 };
  }
+ })();
+ infrastructureBgpCredentialState.inFlight = { generation: credential.generation, controller, promise: operation };
+ operation.finally(() => {
+ if (infrastructureBgpCredentialState.inFlight?.promise === operation) {
+ infrastructureBgpCredentialState.inFlight = null;
+ }
+ });
+ }
+ const outcome = await operation;
+ return json(outcome.body, outcome.status);
   }
 
   // ── Infrastructure intelligence: radiation (EPA RadNet) ──────────────────
@@ -20415,6 +20463,68 @@ const INFRASTRUCTURE_BGP_FETCH_ERRORS = new Set([
   'result_too_large',
   'timeout',
 ]);
+const INFRASTRUCTURE_BGP_RETRYABLE_ERRORS = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'EPIPE',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'rate_limited',
+  'transient_http',
+  'transient_transport',
+]);
+let infrastructureBgpCredentialState = {
+  initialized: false,
+  fingerprint: null,
+  generation: 0,
+  inFlight: null,
+};
+
+function infrastructureBgpCredentialFingerprint(token) {
+  return typeof token === 'string' && token.length > 0
+    ? createHash('sha256').update(token).digest('hex')
+    : null;
+}
+
+function synchronizeInfrastructureBgpCredential(token) {
+  const fingerprint = infrastructureBgpCredentialFingerprint(token);
+  if (!infrastructureBgpCredentialState.initialized
+    || fingerprint !== infrastructureBgpCredentialState.fingerprint) {
+    infrastructureBgpCredentialState.inFlight?.controller.abort(
+      Object.assign(new Error('Cloudflare credential changed'), { name: 'AbortError', code: 'credential_changed' }),
+    );
+    infrastructureBgpCredentialState = {
+      initialized: true,
+      fingerprint,
+      generation: infrastructureBgpCredentialState.generation + 1,
+      inFlight: null,
+    };
+    _sidecarCache.delete('infrastructure-bgp');
+  }
+  return {
+    fingerprint: infrastructureBgpCredentialState.fingerprint,
+    generation: infrastructureBgpCredentialState.generation,
+  };
+}
+
+function infrastructureBgpCredentialIsCurrent(credential) {
+  return credential?.generation === infrastructureBgpCredentialState.generation
+    && credential?.fingerprint === infrastructureBgpCredentialState.fingerprint;
+}
+
+function resetInfrastructureBgpCredentialState() {
+  infrastructureBgpCredentialState.inFlight?.controller.abort(
+    Object.assign(new Error('Cloudflare credential state reset'), { name: 'AbortError', code: 'credential_changed' }),
+  );
+  infrastructureBgpCredentialState = {
+    initialized: false,
+    fingerprint: null,
+    generation: infrastructureBgpCredentialState.generation + 1,
+    inFlight: null,
+  };
+}
 
 function infrastructureRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -20555,12 +20665,18 @@ export function mergeInfrastructureBgpPages(pages) {
 }
 
 /** Retrieve page one before its bounded fan-out, sharing one wall-clock budget. */
-export async function fetchInfrastructureBgpCompletePayload(requestPage, now = Date.now) {
+export async function fetchInfrastructureBgpCompletePayload(requestPage, now = Date.now, externalSignal = null) {
   if (typeof requestPage !== 'function' || typeof now !== 'function') {
     return { payload: null, error: 'provider_unavailable' };
   }
   const startedAt = now();
   const deadline = startedAt + INFRASTRUCTURE_BGP_FETCH_BUDGET_MS;
+  const controller = new AbortController();
+  const abortFromExternal = () => controller.abort(
+    externalSignal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }),
+  );
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener('abort', abortFromExternal, { once: true });
   const fetchPage = async (page) => {
     let lastError = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -20569,15 +20685,16 @@ export async function fetchInfrastructureBgpCompletePayload(requestPage, now = D
         throw Object.assign(new Error('Cloudflare Radar fetch timed out'), { code: 'timeout' });
       }
       try {
+        if (controller.signal.aborted) throw controller.signal.reason;
         return await requestPage(
           page,
           Math.min(INFRASTRUCTURE_BGP_FETCH_BUDGET_MS, Math.ceil(remaining)),
+          controller.signal,
         );
       } catch (error) {
         lastError = error;
         const code = typeof error?.code === 'string' ? error.code : '';
-        const timedOut = /timed out|timeout/i.test(String(error?.message ?? ''));
-        if (attempt === 0 && (code === 'transient_http' || code === '' || timedOut)) continue;
+        if (attempt === 0 && INFRASTRUCTURE_BGP_RETRYABLE_ERRORS.has(code)) continue;
         throw error;
       }
     }
@@ -20602,10 +20719,22 @@ export async function fetchInfrastructureBgpCompletePayload(requestPage, now = D
     if (remainingPageNumbers.length > INFRASTRUCTURE_BGP_MAX_CONCURRENCY) {
       return { payload: null, error: 'result_too_large' };
     }
-    const rest = await Promise.all(remainingPageNumbers.map(fetchPage));
+    let fanoutError = null;
+    const restSettled = await Promise.allSettled(remainingPageNumbers.map((page) =>
+      fetchPage(page).catch((error) => {
+        if (!controller.signal.aborted) {
+          fanoutError = error;
+          controller.abort(error);
+        }
+        throw error;
+      })));
+    if (fanoutError) throw fanoutError;
+    const rest = restSettled.map((entry) => entry.value);
     return mergeInfrastructureBgpPages([first, ...rest]);
   } catch (error) {
     return { payload: null, error: infrastructureBgpFetchError(error) };
+  } finally {
+    externalSignal?.removeEventListener('abort', abortFromExternal);
   }
 }
 

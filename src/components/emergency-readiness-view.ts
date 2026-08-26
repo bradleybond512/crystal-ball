@@ -249,16 +249,16 @@ function packCopy(input: EmergencyPackInput): Pick<EmergencyPackView, 'headline'
   if (input.readiness.status === 'expired') {
     return {
       headline: 'Emergency Pack expired',
-      detail: 'One or more required artifacts must be refreshed before this pack is ready.',
-      actionLabel: 'Refresh expired artifacts',
+      detail: 'A full recapture is required before this pack can be ready again.',
+      actionLabel: 'Recapture Emergency Pack',
     };
   }
   if (input.readiness.status === 'partial') {
     const missing = input.readiness.missingKinds.length;
     return {
       headline: 'Emergency Pack partial',
-      detail: `${missing} required ${missing === 1 ? 'artifact is' : 'artifacts are'} missing.`,
-      actionLabel: 'Retry missing artifacts',
+      detail: `${missing} required ${missing === 1 ? 'artifact is' : 'artifacts are'} missing. A full recapture is required.`,
+      actionLabel: 'Recapture Emergency Pack',
     };
   }
   return {
@@ -282,6 +282,16 @@ function effectivePackStatus(
     : input.readiness.status;
 }
 
+function packCaptureMessage(status: EmergencyPackStatus, missing: number): string {
+  if (status === 'ready') return 'All required artifacts are current.';
+  if (status === 'expired') return 'Required artifacts have expired.';
+  if (status === 'partial') {
+    const missingLabel = missing === 1 ? 'artifact is' : 'artifacts are';
+    return `${missing} required ${missingLabel} missing or expired.`;
+  }
+  return 'No verified Emergency Pack is saved.';
+}
+
 function effectiveCaptureState(
   input: EmergencyPackInput,
   status: EmergencyPackStatus,
@@ -293,18 +303,11 @@ function effectiveCaptureState(
   const required = artifacts.filter((artifact) => artifact.requirement === 'Required');
   const completed = required.filter((artifact) => artifact.status === 'current').length;
   const missing = required.length - completed;
-  const message = status === 'ready'
-    ? 'All required artifacts are current.'
-    : status === 'expired'
-      ? 'Required artifacts have expired.'
-      : status === 'partial'
-        ? `${missing} required ${missing === 1 ? 'artifact is' : 'artifacts are'} missing or expired.`
-        : 'No verified Emergency Pack is saved.';
   return {
     status: status === 'ready' && input.captureState.status === 'complete' ? 'complete' : 'idle',
     completed,
     total: required.length,
-    message,
+    message: packCaptureMessage(status, missing),
   };
 }
 
@@ -442,7 +445,8 @@ function renderPackArtifact(artifact: EmergencyPackArtifactView): string {
 function renderEmergencyPack(pack: EmergencyPackView): string {
   const max = Math.max(1, pack.captureState.total);
   const value = Math.max(0, Math.min(max, pack.captureState.completed));
-  const disabled = pack.places.length === 0 || pack.captureState.status === 'capturing';
+  const capturing = pack.captureState.status === 'capturing';
+  const disabled = pack.places.length === 0 || capturing;
   return `<section class="emergency-pack emergency-pack--${escapeHtml(pack.status)}" data-emergency-pack="${escapeHtml(pack.status)}" aria-labelledby="emergency-pack-heading" aria-busy="${pack.captureState.status === 'capturing' ? 'true' : 'false'}">
     <div class="emergency-pack__heading">
       <div>
@@ -450,7 +454,7 @@ function renderEmergencyPack(pack: EmergencyPackView): string {
         <p class="emergency-pack__headline">${escapeHtml(pack.headline)}</p>
       </div>
       <label class="emergency-pack__place">Place
-        <select name="emergency-pack-place" ${pack.places.length === 0 ? 'disabled' : ''}>
+        <select name="emergency-pack-place" ${disabled ? 'disabled' : ''}>
           ${pack.places.length === 0 ? '<option value="">No saved places</option>' : pack.places.map((place) => `<option value="${escapeHtml(place.id)}"${place.id === pack.selectedPlaceId ? ' selected' : ''}>${escapeHtml(place.name)}</option>`).join('')}
         </select>
       </label>
@@ -463,7 +467,7 @@ function renderEmergencyPack(pack: EmergencyPackView): string {
     </div>
     <ul class="emergency-pack__artifacts">${pack.artifacts.map((artifact) => renderPackArtifact(artifact)).join('')}</ul>
     <label class="emergency-pack__consent">
-      <input type="checkbox" name="emergency-pack-contact-consent"${pack.contactConsent ? ' checked' : ''}>
+      <input type="checkbox" name="emergency-pack-contact-consent"${pack.contactConsent ? ' checked' : ''}${capturing ? ' disabled' : ''}>
       <span>I consent to copy my selected emergency contacts into this pack. Contact details stay private on this local device.</span>
     </label>
     <button type="button" class="emergency-pack__action" data-pack-action${disabled ? ' disabled' : ''}>${escapeHtml(pack.actionLabel)}</button>

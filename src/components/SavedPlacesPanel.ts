@@ -59,6 +59,12 @@ function prewarmLabel(state: LifelinePrewarmState | null): string {
   }
 }
 
+function createPrewarmLiveRegion(): HTMLElement {
+  const container = document.createElement('div');
+  container.innerHTML = '<div class="sr-only" aria-live="polite" aria-atomic="true"></div>';
+  return container.firstElementChild as HTMLElement;
+}
+
 interface PlaceThreatSummary {
   total: number;
   critical: number;
@@ -79,7 +85,7 @@ export class SavedPlacesPanel extends Panel {
   private unsubscribeSavedPlaces: (() => void) | null = null;
   private unsubscribeAlerts: (() => void) | null = null;
   private unsubscribeLifelinePrewarm: (() => void) | null = null;
-  private prewarmAnnouncement = '';
+  private readonly prewarmLiveRegion = createPrewarmLiveRegion();
   private readonly boundRefresh: () => void;
   private places: SavedPlace[] = [];
   private refreshPending = false;
@@ -162,7 +168,7 @@ export class SavedPlacesPanel extends Panel {
     this.unsubscribeAlerts = unifiedAlertStore.subscribe(() => this.boundRefresh());
     this.unsubscribeLifelinePrewarm = lifelinePrewarmCoordinator.subscribe((state) => {
       const place = getSavedPlaces().find((candidate) => candidate.id === state.placeId);
-      this.prewarmAnnouncement = place
+      this.prewarmLiveRegion.textContent = place
         ? `${place.name}: ${prewarmLabel(state)}.`
         : prewarmLabel(state);
       this.boundRefresh();
@@ -252,7 +258,7 @@ export class SavedPlacesPanel extends Panel {
         firstBtn.textContent = 'Add your first place';
         emptyEl.append(firstBtn);
       }
-      this.content.replaceChildren(emptyEl, this.buildPrewarmLiveRegion());
+      this.content.replaceChildren(emptyEl, this.prewarmLiveRegion);
       return;
     }
 
@@ -276,15 +282,7 @@ export class SavedPlacesPanel extends Panel {
       addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add place`;
       listEl.append(addBtn);
     }
-    this.content.replaceChildren(listEl, this.buildPrewarmLiveRegion());
-  }
-
-  private buildPrewarmLiveRegion(): HTMLElement {
-    const container = document.createElement('div');
-    container.innerHTML = '<div class="sr-only" aria-live="polite" aria-atomic="true"></div>';
-    const live = container.firstElementChild as HTMLElement;
-    live.textContent = this.prewarmAnnouncement;
-    return live;
+    this.content.replaceChildren(listEl, this.prewarmLiveRegion);
   }
 
   private renderCardEl(place: SavedPlace, brief: PlaceBrief | null, allAlerts: UnifiedAlert[]): HTMLElement {

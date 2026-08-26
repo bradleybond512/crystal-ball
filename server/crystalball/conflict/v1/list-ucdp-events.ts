@@ -188,6 +188,7 @@ function abortError(signal: AbortSignal): UcdpHttpError {
 async function readBoundedJson(response: Response, signal: AbortSignal): Promise<{ body: unknown; bytes: number }> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > runtime.maxPageBytes) {
+    await response.body?.cancel().catch(() => undefined);
     throw httpError(502, 'UCDP response exceeded byte limit');
   }
   if (!response.body) throw httpError(502, 'UCDP returned a malformed response');
@@ -238,6 +239,10 @@ function parseRetryAfter(response: Response): number | undefined {
   return Number.isSafeInteger(seconds) ? Math.min(seconds, QUOTA_COOLDOWN_MS / 1000) : undefined;
 }
 
+async function cancelUnusedBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
+}
+
 async function fetchPage(page: number, credential: CredentialSnapshot, signal: AbortSignal) {
   if (signal.aborted) throw abortError(signal);
   const url = new URL(`https://ucdpapi.pcr.uu.se/api/gedevents/${UCDP_VERSION}`);
@@ -249,6 +254,7 @@ async function fetchPage(page: number, credential: CredentialSnapshot, signal: A
   try {
     response = await fetch(url, {
       headers: { Accept: 'application/json', 'User-Agent': CHROME_UA, 'x-ucdp-access-token': credential.token },
+      redirect: 'error',
       signal,
     });
   } catch (error) {
@@ -258,10 +264,21 @@ async function fetchPage(page: number, credential: CredentialSnapshot, signal: A
     }
     throw httpError(502, 'UCDP upstream unavailable');
   }
-  if (response.status === 401 || response.status === 403) throw httpError(response.status, 'UCDP authentication failed');
-  if (response.status === 429) throw httpError(429, 'UCDP rate limited', parseRetryAfter(response));
-  if (!response.ok) throw httpError(502, 'UCDP upstream unavailable');
+  if (response.status === 401 || response.status === 403) {
+    await cancelUnusedBody(response);
+    throw httpError(response.status, 'UCDP authentication failed');
+  }
+  if (response.status === 429) {
+    const retryAfter = parseRetryAfter(response);
+    await cancelUnusedBody(response);
+    throw httpError(429, 'UCDP rate limited', retryAfter);
+  }
+  if (!response.ok) {
+    await cancelUnusedBody(response);
+    throw httpError(502, 'UCDP upstream unavailable');
+  }
   if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    await cancelUnusedBody(response);
     throw httpError(502, 'UCDP returned a malformed response');
   }
   const { body, bytes } = await readBoundedJson(response, signal);

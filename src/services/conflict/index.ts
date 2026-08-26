@@ -54,7 +54,10 @@ export type ConflictIntensity = 'none' | 'minor' | 'war';
 export interface UcdpConflictStatus {
   location: string;
   intensity: ConflictIntensity;
-  conflictId?: number;
+  countryId: number;
+  stateBased: boolean;
+  nonState: boolean;
+  oneSided: boolean;
   conflictName?: string;
   year: number;
   typeOfConflict?: number;
@@ -222,12 +225,14 @@ export async function fetchUcdpClassifications(): Promise<Map<string, UcdpConfli
       || !Number.isSafeInteger(item.countryId) || item.year !== 2025
       || typeof item.stateBased !== 'boolean' || typeof item.nonState !== 'boolean' || typeof item.oneSided !== 'boolean'
       || result.has(item.country)) throw new Error('Invalid UCDP classifications');
-    const active = item.stateBased || item.nonState || item.oneSided;
     result.set(item.country, {
       location: item.country,
-      conflictId: item.countryId as number,
-      intensity: active ? 'minor' : 'none',
-      year: 2025,
+      countryId: item.countryId as number,
+      intensity: 'none',
+      year: item.year as number,
+      stateBased: item.stateBased,
+      nonState: item.nonState,
+      oneSided: item.oneSided,
     });
   }
   if (result.size === 0) throw new Error('No usable UCDP classifications');

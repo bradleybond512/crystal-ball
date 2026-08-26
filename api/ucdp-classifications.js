@@ -84,6 +84,10 @@ function parseRetryAfter(response) {
   return Number.isSafeInteger(seconds) ? Math.min(seconds, 1800) : undefined;
 }
 
+async function cancelUnusedBody(upstream) {
+  await upstream.body?.cancel().catch(() => undefined);
+}
+
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -171,15 +175,20 @@ async function load(snapshot, controller) {
   url.searchParams.set('page', '0');
   const upstream = await fetch(url, {
     headers: { Accept: 'application/json', 'x-ucdp-access-token': snapshot.token },
+    redirect: 'error',
     signal: controller.signal,
   });
   if (upstream.status === 401 || upstream.status === 403 || upstream.status === 429) {
     const error = new Error('upstream');
     error.status = upstream.status;
     error.retryAfter = upstream.status === 429 ? parseRetryAfter(upstream) : undefined;
+    await cancelUnusedBody(upstream);
     throw error;
   }
-  if (!upstream.ok || !upstream.headers.get('content-type')?.toLowerCase().includes('application/json')) throw new Error('upstream');
+  if (!upstream.ok || !upstream.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    await cancelUnusedBody(upstream);
+    throw new Error('upstream');
+  }
   const normalized = normalize(await readBoundedJson(upstream, controller.signal));
   if ((process.env.UCDP_API_TOKEN?.trim() ?? '') !== snapshot.token || credential?.generation !== snapshot.generation) {
     throw new Error('credential changed');

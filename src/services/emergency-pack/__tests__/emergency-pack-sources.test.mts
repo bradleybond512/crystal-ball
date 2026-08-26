@@ -268,11 +268,54 @@ test('comms and contacts require consent and persist only selected contacts in a
   assert.deepEqual((contacts.contacts as Array<{ id: string }>).map(({ id }) => id), ['c2']);
   assert.equal(contactsArtifact?.body.includes('+15550000001'), false);
   assert.equal(contactsArtifact?.body.includes('three@example.com'), false);
-  assert.equal(selectionReads, 2);
+  assert.equal(selectionReads, 1, 'one capture must read one contact selection snapshot');
 
   selectionReads = 0;
   const deniedScope = { ...candidate.scope, contactConsent: false };
   assert.equal(await candidate.sources['comms-plan']?.(deniedScope), null);
   assert.equal(await candidate.sources.contacts?.(deniedScope), null);
   assert.equal(selectionReads, 0, 'denied consent must stop before reading private selections');
+});
+
+test('comms and contacts use one immutable snapshot when backing state changes between source calls', async () => {
+  let planReads = 0;
+  let selectionReads = 0;
+  const plans = [
+    {
+      placeId: PLACE_ID,
+      contacts: [
+        { id: 'first', label: 'First', value: '+15550000001', role: 'family' },
+        { id: 'second', label: 'Second', value: '+15550000002', role: 'pickup' },
+      ],
+      fallbackSteps: [{ id: 'sms', label: 'SMS', kind: 'sms', instruction: 'Send first status', priority: 1 }],
+      checkInWindows: [{ id: 'hourly', label: 'Hourly', cadenceMinutes: 60, note: '' }],
+      notes: 'First plan',
+    },
+    {
+      placeId: PLACE_ID,
+      contacts: [
+        { id: 'first', label: 'First changed', value: '+15559999999', role: 'changed' },
+        { id: 'second', label: 'Second changed', value: '+15558888888', role: 'changed' },
+      ],
+      fallbackSteps: [{ id: 'call', label: 'Call', kind: 'call', instruction: 'Use changed plan', priority: 1 }],
+      checkInWindows: [{ id: 'daily', label: 'Daily', cadenceMinutes: 1440, note: 'Changed' }],
+      notes: 'Changed plan',
+    },
+  ];
+  const selections = [['first'], ['second']];
+  const candidate = createSources({
+    getCommsPlan: () => plans[Math.min(planReads++, plans.length - 1)],
+    getSelectedContactIds: () => selections[Math.min(selectionReads++, selections.length - 1)]!,
+  });
+
+  const comms = jsonBody(await candidate.sources['comms-plan']?.(candidate.scope) ?? null);
+  const contacts = jsonBody(await candidate.sources.contacts?.(candidate.scope) ?? null);
+
+  assert.deepEqual(comms.selectedContactIds, ['first']);
+  assert.deepEqual(contacts.selectedContactIds, comms.selectedContactIds);
+  assert.deepEqual(contacts.contacts, [{
+    id: 'first', label: 'First', value: '+15550000001', role: 'family',
+  }]);
+  assert.equal(planReads, 1, 'one capture must validate one comms plan snapshot');
+  assert.equal(selectionReads, 1, 'one capture must validate one contact selection snapshot');
 });

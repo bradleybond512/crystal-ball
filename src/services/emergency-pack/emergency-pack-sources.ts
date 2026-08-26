@@ -409,6 +409,13 @@ interface SelectedCommsPlan {
   notes: string;
 }
 
+type CommsArtifactKind = 'comms-plan' | 'contacts';
+
+type ReadCommsSnapshot = (
+  scope: EmergencyPackCaptureScope,
+  kind: CommsArtifactKind,
+) => SelectedCommsPlan | null;
+
 function parseSelectedContactIds(value: unknown): string[] | null {
   if (!Array.isArray(value)
     || value.length === 0
@@ -498,16 +505,42 @@ function readSelectedCommsPlan(
   };
 }
 
+function createCommsSnapshotReader(
+  place: EmergencyPackSourcePlace,
+  dependencies: EmergencyPackSourceDependencies,
+): ReadCommsSnapshot {
+  const captures = new WeakMap<EmergencyPackCaptureScope, {
+    selected: SelectedCommsPlan | null;
+    pendingKind: CommsArtifactKind;
+  }>();
+
+  return (scope, kind) => {
+    const capture = captures.get(scope);
+    if (capture?.pendingKind === kind) {
+      captures.delete(scope);
+      return capture.selected;
+    }
+
+    const selected = readSelectedCommsPlan(place, dependencies);
+    captures.set(scope, {
+      selected,
+      pendingKind: kind === 'comms-plan' ? 'contacts' : 'comms-plan',
+    });
+    return selected;
+  };
+}
+
 function createCommsSource(
   place: EmergencyPackSourcePlace,
   dependencies: EmergencyPackSourceDependencies,
-  kind: 'comms-plan' | 'contacts',
+  kind: CommsArtifactKind,
+  readSnapshot: ReadCommsSnapshot,
 ): EmergencyPackArtifactSource {
   return async (scope) => {
     if (!scopeMatchesPlace(scope, place) || scope.contactConsent !== true) return null;
     const now = await Promise.resolve(dependencies.now());
     if (!isTimestamp(now)) return null;
-    const selected = readSelectedCommsPlan(place, dependencies);
+    const selected = readSnapshot(scope, kind);
     if (!selected) return null;
     const payload = kind === 'comms-plan'
       ? {
@@ -580,13 +613,14 @@ export function createEmergencyPackSources(
   dependencies: EmergencyPackSourceDependencies,
 ): Partial<Record<EmergencyPackArtifactKind, EmergencyPackArtifactSource>> {
   if (!validPlace(place)) return {};
+  const readCommsSnapshot = createCommsSnapshotReader(place, dependencies);
   return {
     lifelines: createLifelinesSource(place, dependencies),
     alerts: createAlertsSource(place, dependencies),
     'route-primary': createRouteSource(place, dependencies, 'route-primary'),
     'route-alternate': createRouteSource(place, dependencies, 'route-alternate'),
     'offline-map': createOfflineMapSource(place, dependencies),
-    'comms-plan': createCommsSource(place, dependencies, 'comms-plan'),
-    contacts: createCommsSource(place, dependencies, 'contacts'),
+    'comms-plan': createCommsSource(place, dependencies, 'comms-plan', readCommsSnapshot),
+    contacts: createCommsSource(place, dependencies, 'contacts', readCommsSnapshot),
   };
 }

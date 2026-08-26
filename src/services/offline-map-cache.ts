@@ -53,6 +53,27 @@ export interface ExactOfflineMapCaptureResult {
   totalBytes: number;
   tiles: ExactOfflineMapTile[];
   reason?: string;
+  cleanupTombstone?: {
+    generationId: string;
+    cacheKeys: string[];
+  };
+}
+
+export interface ExactOfflineMapCleanupMetadata {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface ExactOfflineMapCleanupCoordinator {
+  prepareCapture(cache: ExactOfflineMapCache): Promise<{ ok: boolean; reason?: string }>;
+  stageGeneration(generationId: string, cacheKeys: string[]): void;
+  adoptGeneration(generationId: string, cacheKeys: string[]): void;
+  releaseGeneration(input: {
+    generationId: string;
+    cacheKeys: string[];
+    cache: ExactOfflineMapCache;
+  }): Promise<{ ok: boolean; reason?: string }>;
 }
 
 export interface OfflineMapTilePlan {
@@ -81,6 +102,8 @@ const MAX_WEB_MERCATOR_LAT = 85.05112878;
 const EXACT_TILE_CONTENT_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif']);
 const EXACT_TILE_CACHE_PREFIX = 'https://offline-map.crystalball.invalid/exact';
 const EXACT_GENERATION_ID_MAX_LENGTH = 180;
+const EXACT_CLEANUP_TOMBSTONE_KEY = 'wm-offline-map-exact-cleanup-v1';
+const EXACT_CLEANUP_TOMBSTONE_MAX_BYTES = 384 * 1024;
 
 // ---------------------------------------------------------------------------
 // Tile math helpers (Slippy-map / Web Mercator)
@@ -160,6 +183,169 @@ function isValidGenerationId(value: string | undefined): value is string {
 
 function exactTileCacheKey(generationId: string, index: number): string {
   return `${EXACT_TILE_CACHE_PREFIX}/${encodeURIComponent(generationId)}/${index}`;
+}
+
+interface ExactOfflineMapCleanupTombstone {
+  schemaVersion: 1;
+  generationId: string;
+  cacheKeys: string[];
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function validateCleanupIdentity(
+  generationId: string,
+  cacheKeys: readonly string[],
+): ExactOfflineMapCleanupTombstone | null {
+  if (!isValidGenerationId(generationId)
+    || cacheKeys.length === 0
+    || cacheKeys.length > EXACT_OFFLINE_MAP_MAX_TILES
+    || new Set(cacheKeys).size !== cacheKeys.length) return null;
+  const prefix = `${EXACT_TILE_CACHE_PREFIX}/${encodeURIComponent(generationId)}/`;
+  for (const cacheKey of cacheKeys) {
+    if (typeof cacheKey !== 'string' || !cacheKey.startsWith(prefix)) return null;
+    const indexText = cacheKey.slice(prefix.length);
+    const index = Number(indexText);
+    if (!Number.isSafeInteger(index)
+      || index < 0
+      || index >= EXACT_OFFLINE_MAP_MAX_TILES
+      || exactTileCacheKey(generationId, index) !== cacheKey) return null;
+  }
+  return { schemaVersion: 1, generationId, cacheKeys: [...cacheKeys] };
+}
+
+function encodeCleanupTombstone(tombstone: ExactOfflineMapCleanupTombstone): string {
+  const encoded = JSON.stringify(tombstone);
+  if (new TextEncoder().encode(encoded).byteLength > EXACT_CLEANUP_TOMBSTONE_MAX_BYTES) {
+    throw new Error('offline map cleanup tombstone exceeds bound');
+  }
+  return encoded;
+}
+
+function parseCleanupTombstone(encoded: string): ExactOfflineMapCleanupTombstone | null {
+  if (new TextEncoder().encode(encoded).byteLength > EXACT_CLEANUP_TOMBSTONE_MAX_BYTES) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(encoded);
+  } catch {
+    return null;
+  }
+  if (!isPlainRecord(value)
+    || Object.keys(value).length !== 3
+    || value.schemaVersion !== 1
+    || typeof value.generationId !== 'string'
+    || !Array.isArray(value.cacheKeys)
+    || !value.cacheKeys.every((cacheKey) => typeof cacheKey === 'string')) return null;
+  return validateCleanupIdentity(
+    value.generationId,
+    value.cacheKeys,
+  );
+}
+
+function sameCleanupIdentity(
+  tombstone: ExactOfflineMapCleanupTombstone,
+  generationId: string,
+  cacheKeys: readonly string[],
+): boolean {
+  return tombstone.generationId === generationId
+    && tombstone.cacheKeys.length === cacheKeys.length
+    && tombstone.cacheKeys.every((cacheKey, index) => cacheKey === cacheKeys[index]);
+}
+
+export function createExactOfflineMapCleanupCoordinator(input: {
+  metadata: ExactOfflineMapCleanupMetadata;
+}): ExactOfflineMapCleanupCoordinator {
+  const activeGenerations = new Set<string>();
+
+  const readTombstone = (): ExactOfflineMapCleanupTombstone | null => {
+    const encoded = input.metadata.getItem(EXACT_CLEANUP_TOMBSTONE_KEY);
+    if (encoded === null) return null;
+    const tombstone = parseCleanupTombstone(encoded);
+    if (!tombstone) throw new Error('offline map cleanup tombstone invalid');
+    return tombstone;
+  };
+
+  const writeTombstone = (generationId: string, cacheKeys: string[]): void => {
+    const tombstone = validateCleanupIdentity(generationId, cacheKeys);
+    if (!tombstone) throw new Error('offline map cleanup tombstone invalid');
+    const existing = readTombstone();
+    if (existing && !sameCleanupIdentity(existing, generationId, cacheKeys)) {
+      throw new Error('offline map cleanup tombstone pending');
+    }
+    const encoded = encodeCleanupTombstone(tombstone);
+    try {
+      input.metadata.setItem(EXACT_CLEANUP_TOMBSTONE_KEY, encoded);
+      if (input.metadata.getItem(EXACT_CLEANUP_TOMBSTONE_KEY) !== encoded) {
+        throw new Error('readback mismatch');
+      }
+    } catch {
+      throw new Error('offline map cleanup tombstone write failed');
+    }
+  };
+
+  const removeTombstone = (): void => {
+    input.metadata.removeItem(EXACT_CLEANUP_TOMBSTONE_KEY);
+    if (input.metadata.getItem(EXACT_CLEANUP_TOMBSTONE_KEY) !== null) {
+      throw new Error('offline map cleanup tombstone removal failed');
+    }
+  };
+
+  const drain = async (cache: ExactOfflineMapCache): Promise<{ ok: boolean; reason?: string }> => {
+    let tombstone: ExactOfflineMapCleanupTombstone | null;
+    try {
+      tombstone = readTombstone();
+    } catch {
+      return { ok: false, reason: 'cleanup-tombstone-invalid' };
+    }
+    if (!tombstone) return { ok: true };
+    if (activeGenerations.has(tombstone.generationId)) {
+      return { ok: false, reason: 'generation-cleanup-pending' };
+    }
+    if (!await cleanupExactCacheKeys(cache, tombstone.cacheKeys)) {
+      return { ok: false, reason: 'generation-cleanup-pending' };
+    }
+    try {
+      removeTombstone();
+    } catch {
+      return { ok: false, reason: 'cleanup-tombstone-storage-failure' };
+    }
+    return { ok: true };
+  };
+
+  return {
+    prepareCapture: drain,
+    stageGeneration(generationId, cacheKeys): void {
+      writeTombstone(generationId, cacheKeys);
+      activeGenerations.add(generationId);
+    },
+    adoptGeneration(generationId, cacheKeys): void {
+      const tombstone = readTombstone();
+      if (!tombstone) {
+        if (activeGenerations.has(generationId)) {
+          throw new Error('offline map cleanup tombstone ownership mismatch');
+        }
+        return;
+      }
+      if (!sameCleanupIdentity(tombstone, generationId, cacheKeys)) {
+        throw new Error('offline map cleanup tombstone ownership mismatch');
+      }
+      removeTombstone();
+      activeGenerations.delete(generationId);
+    },
+    async releaseGeneration({ generationId, cacheKeys, cache }): Promise<{ ok: boolean; reason?: string }> {
+      const tombstone = readTombstone();
+      if (!tombstone) writeTombstone(generationId, cacheKeys);
+      else if (!sameCleanupIdentity(tombstone, generationId, cacheKeys)) {
+        throw new Error('offline map cleanup tombstone pending');
+      }
+      activeGenerations.delete(generationId);
+      return drain(cache);
+    },
+  };
 }
 
 async function cancelBody(response: Response): Promise<void> {
@@ -344,6 +530,7 @@ export async function captureOfflineMapTilesExact(input: {
   generationId?: string;
   tileUrls: string[];
   cache: ExactOfflineMapCache;
+  cleanup?: ExactOfflineMapCleanupCoordinator;
   fetchTile: (url: string) => Promise<Response>;
   concurrency?: number;
 }): Promise<ExactOfflineMapCaptureResult> {
@@ -368,33 +555,53 @@ export async function captureOfflineMapTilesExact(input: {
     }
     urls.add(url);
   }
+  if (!input.cleanup) {
+    return { ok: false, total, downloaded: 0, totalBytes: 0, tiles: [], reason: 'cleanup-coordinator-required' };
+  }
+  let prepared: { ok: boolean; reason?: string };
+  try {
+    prepared = await input.cleanup.prepareCapture(input.cache);
+  } catch {
+    return { ok: false, total, downloaded: 0, totalBytes: 0, tiles: [], reason: 'cleanup-tombstone-storage-failure' };
+  }
+  if (!prepared.ok) {
+    return {
+      ok: false,
+      total,
+      downloaded: 0,
+      totalBytes: 0,
+      tiles: [],
+      reason: prepared.reason ?? 'generation-cleanup-pending',
+    };
+  }
+
+  const generationCacheKeys = input.tileUrls.map((_, index) => exactTileCacheKey(generationId, index));
+  try {
+    for (const cacheKey of generationCacheKeys) {
+      if (await input.cache.match(cacheKey)) {
+        return { ok: false, total, downloaded: 0, totalBytes: 0, tiles: [], reason: 'generation-collision' };
+      }
+    }
+    input.cleanup.stageGeneration(generationId, generationCacheKeys);
+  } catch {
+    return { ok: false, total, downloaded: 0, totalBytes: 0, tiles: [], reason: 'cleanup-tombstone-write-failed' };
+  }
 
   const requestedConcurrency = Number.isSafeInteger(input.concurrency) ? input.concurrency! : EXACT_OFFLINE_MAP_MAX_CONCURRENCY;
   const concurrency = Math.max(1, Math.min(requestedConcurrency, EXACT_OFFLINE_MAP_MAX_CONCURRENCY, total));
   const results = Array.from<ExactOfflineMapTile | null>({ length: total }).fill(null);
-  const stagedCacheKeys: string[] = [];
   let reservedBytes = 0;
   let cursor = 0;
-  let collision = false;
 
   const worker = async (): Promise<void> => {
     while (cursor < total) {
       const index = cursor++;
       const url = input.tileUrls[index]!;
-      const cacheKey = exactTileCacheKey(generationId, index);
-      try {
-        if (await input.cache.match(cacheKey)) {
-          collision = true;
-          continue;
-        }
-      } catch {
-        continue;
-      }
+      const cacheKey = generationCacheKeys[index]!;
       const tileBody = await readSourceTileExact(input.cache, input.fetchTile, url);
       if (!tileBody) continue;
       if (reservedBytes + tileBody.bytes.byteLength > EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES) continue;
       reservedBytes += tileBody.bytes.byteLength;
-      stagedCacheKeys.push(cacheKey);
       const tile = await storeTileGenerationExact({
         cache: input.cache,
         cacheKey,
@@ -410,23 +617,39 @@ export async function captureOfflineMapTilesExact(input: {
 
   const tiles = results.filter((tile): tile is ExactOfflineMapTile => tile !== null);
   const totalBytes = tiles.reduce((sum, tile) => sum + tile.byteLength, 0);
-  if (tiles.length !== total || collision) {
-    const cleaned = await cleanupExactCacheKeys(input.cache, stagedCacheKeys);
+  if (tiles.length !== total) {
+    let cleanup: { ok: boolean; reason?: string };
+    try {
+      cleanup = await input.cleanup.releaseGeneration({
+        generationId,
+        cacheKeys: generationCacheKeys,
+        cache: input.cache,
+      });
+    } catch {
+      cleanup = { ok: false, reason: 'cleanup-tombstone-storage-failure' };
+    }
     return {
       ok: false,
       total,
-      downloaded: collision ? 0 : tiles.length,
-      totalBytes: collision ? 0 : totalBytes,
-      tiles: collision ? [] : tiles,
-      reason: cleaned
-        ? collision ? 'generation-collision' : 'tile-verification-incomplete'
-        : 'generation-cleanup-failed',
+      downloaded: tiles.length,
+      totalBytes,
+      tiles,
+      reason: cleanup.ok ? 'tile-verification-incomplete' : cleanup.reason ?? 'generation-cleanup-pending',
+      ...(!cleanup.ok ? { cleanupTombstone: { generationId, cacheKeys: [...generationCacheKeys] } } : {}),
     };
   }
   const bounds = validateOfflineMapCaptureBounds(tiles);
-  let cleanupFailed = false;
+  let cleanup: { ok: boolean; reason?: string } = { ok: true };
   if (!bounds.ok) {
-    cleanupFailed = !await cleanupExactCacheKeys(input.cache, stagedCacheKeys);
+    try {
+      cleanup = await input.cleanup.releaseGeneration({
+        generationId,
+        cacheKeys: generationCacheKeys,
+        cache: input.cache,
+      });
+    } catch {
+      cleanup = { ok: false, reason: 'cleanup-tombstone-storage-failure' };
+    }
   }
   return {
     ok: bounds.ok,
@@ -434,7 +657,12 @@ export async function captureOfflineMapTilesExact(input: {
     downloaded: bounds.ok ? tiles.length : 0,
     totalBytes: bounds.ok ? totalBytes : 0,
     tiles: bounds.ok ? tiles : [],
-    ...(cleanupFailed ? { reason: 'generation-cleanup-failed' } : bounds.reason ? { reason: bounds.reason } : {}),
+    ...(!cleanup.ok
+      ? {
+        reason: cleanup.reason ?? 'generation-cleanup-pending',
+        cleanupTombstone: { generationId, cacheKeys: [...generationCacheKeys] },
+      }
+      : bounds.reason ? { reason: bounds.reason } : {}),
   };
 }
 
@@ -483,7 +711,8 @@ export async function deleteOfflineMapGenerationExact(input: {
   tiles: ExactOfflineMapTile[];
   retainedCacheKeys?: string[];
   cache: ExactOfflineMapCache;
-}): Promise<{ ok: boolean; deleted: number; retained: number; reason?: string }> {
+  cleanup?: ExactOfflineMapCleanupCoordinator;
+}): Promise<{ ok: boolean; deleted: number; retained: number; reason?: string; durableCleanup?: true }> {
   const validation = validateExactGenerationTiles(input.generationId, input.tiles);
   if (!validation.ok) {
     return { ok: false, deleted: 0, retained: 0, ...(validation.reason ? { reason: validation.reason } : {}) };
@@ -491,21 +720,29 @@ export async function deleteOfflineMapGenerationExact(input: {
   const retainedCacheKeys = input.retainedCacheKeys
     ? new Set(input.retainedCacheKeys)
     : new Set<string>();
-  let deleted = 0;
-  let retained = 0;
-  try {
-    for (const tile of input.tiles) {
-      if (retainedCacheKeys.has(tile.cacheKey)) {
-        retained += 1;
-        continue;
-      }
-      await input.cache.delete(tile.cacheKey);
-      deleted += 1;
-    }
-  } catch {
-    return { ok: false, deleted, retained, reason: 'storage-failure' };
+  const cacheKeys = input.tiles
+    .map(({ cacheKey }) => cacheKey)
+    .filter((cacheKey) => !retainedCacheKeys.has(cacheKey));
+  const retained = input.tiles.length - cacheKeys.length;
+  if (cacheKeys.length === 0) return { ok: true, deleted: 0, retained };
+  if (!input.cleanup) {
+    return { ok: false, deleted: 0, retained, reason: 'cleanup-coordinator-required' };
   }
-  return { ok: true, deleted, retained };
+  const released = await input.cleanup.releaseGeneration({
+    generationId: input.generationId,
+    cacheKeys,
+    cache: input.cache,
+  });
+  if (!released.ok) {
+    return {
+      ok: false,
+      deleted: 0,
+      retained,
+      reason: released.reason ?? 'generation-cleanup-pending',
+      durableCleanup: true,
+    };
+  }
+  return { ok: true, deleted: cacheKeys.length, retained };
 }
 
 export function planOfflineMapTileUrls(

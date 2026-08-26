@@ -122,7 +122,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
   let commitCalls = 0;
   let readCalls = 0;
   let offlineMapReads = 0;
-  const offlineMapRevision = () => `map-${commitCalls}-${invalidationCalls.length}`;
+  const offlineMapRevision = () => `map-${commitCalls}`;
 
   const store = {
     async readActive(scope: Scope): Promise<State> {

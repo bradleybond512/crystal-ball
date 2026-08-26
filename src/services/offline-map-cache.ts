@@ -729,6 +729,32 @@ export async function readOfflineMapTileExact(input: {
   return { data: readback.bytes.slice().buffer, contentType: readback.contentType };
 }
 
+export async function readOfflineMapTileAtIndexExact(input: {
+  generationId: string;
+  tileIndex: number;
+  tile: ExactOfflineMapTile;
+  cache: ExactOfflineMapCache;
+}): Promise<{ data: ArrayBuffer; contentType: string } | null> {
+  if (!isValidGenerationId(input.generationId)
+    || !Number.isSafeInteger(input.tileIndex)
+    || input.tileIndex < 0
+    || input.tileIndex >= EXACT_OFFLINE_MAP_MAX_TILES
+    || input.tile.generationId !== input.generationId
+    || input.tile.cacheKey !== exactTileCacheKey(input.generationId, input.tileIndex)
+    || !validateOfflineMapCaptureBounds([input.tile]).ok
+    || !/^[a-f0-9]{64}$/.test(input.tile.sha256)) return null;
+  let readback: ExactTileBody | null;
+  try {
+    readback = await readTileResponseBounded(await input.cache.match(input.tile.cacheKey));
+  } catch {
+    return null;
+  }
+  if (!readback
+    || readback.bytes.byteLength !== input.tile.byteLength
+    || await sha256(readback.bytes) !== input.tile.sha256) return null;
+  return { data: readback.bytes.slice().buffer, contentType: readback.contentType };
+}
+
 export async function deleteOfflineMapGenerationExact(input: {
   generationId: string;
   tiles: ExactOfflineMapTile[];

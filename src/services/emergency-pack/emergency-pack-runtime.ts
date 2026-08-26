@@ -14,7 +14,7 @@ import {
   EXACT_OFFLINE_MAP_MAX_TILES,
   EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES,
   planOfflineMapTileUrls,
-  readOfflineMapTileExact,
+  readOfflineMapTileAtIndexExact,
   verifyOfflineMapGenerationExact,
   type ExactOfflineMapCache,
   type ExactOfflineMapCaptureResult,
@@ -57,6 +57,7 @@ import {
   type EmergencyPackArtifactSource,
 } from './emergency-pack-sources';
 import { createEmergencyPackStore } from './emergency-pack-store';
+import type { EmergencyPackVerifiedOfflineMapArtifact } from './emergency-pack-store';
 import {
   emergencyPackMapSourceUrls,
   type EmergencyPackMapTileData,
@@ -101,7 +102,10 @@ interface EmergencyPackRuntimeStore {
     expiredKinds?: readonly string[];
     reason?: string;
   }>;
-  readVerifiedOfflineMapArtifact?(scope: EmergencyPackCaptureScope & { now: number }): Promise<string | null>;
+  readOfflineMapRevision?(scope: EmergencyPackCaptureScope & { now: number }): string | null;
+  readVerifiedOfflineMapArtifact?(
+    scope: EmergencyPackCaptureScope & { now: number },
+  ): Promise<EmergencyPackVerifiedOfflineMapArtifact | null>;
   recoverActive(scope: EmergencyPackCaptureScope & { now: number }): Promise<{
     status: string;
     packId: string | null;
@@ -400,49 +404,148 @@ interface EmergencyPackOfflineMapScope {
 
 interface EmergencyPackOfflineMapTileResolverDependencies {
   getScopes(): EmergencyPackOfflineMapScope[];
+  getScopeRevision(scope: EmergencyPackOfflineMapScope): string | null;
   readVerifiedOfflineMapArtifact(scope: {
     placeId: string;
     profileFingerprint: string;
     now: number;
-  }): Promise<string | null>;
+  }): Promise<EmergencyPackVerifiedOfflineMapArtifact | null>;
   openCache(name: string): Promise<ExactOfflineMapCache>;
+}
+
+interface IndexedOfflineMapScope extends EmergencyPackOfflineMapScope {
+  revision: string | null;
+  key: string;
+}
+
+interface IndexedOfflineMapTile {
+  scopeKey: string;
+  revision: string;
+  expiresAt: number;
+  generationId: string;
+  tileIndex: number;
+  tile: ExactOfflineMapTile;
+}
+
+interface OfflineMapSourceIndex {
+  key: string;
+  bySourceUrl: Map<string, IndexedOfflineMapTile[]>;
+}
+
+function snapshotOfflineMapScopes(
+  dependencies: EmergencyPackOfflineMapTileResolverDependencies,
+): { key: string; scopes: IndexedOfflineMapScope[] } {
+  const scopes = dependencies.getScopes().slice(0, MAX_PLACES).map((scope) => {
+    const revision = dependencies.getScopeRevision(scope);
+    return { ...scope, revision, key: `${scope.placeId}\u0000${scope.profileFingerprint}` };
+  });
+  return {
+    key: JSON.stringify(scopes.map(({ placeId, profileFingerprint, revision }) => (
+      [placeId, profileFingerprint, revision]
+    ))),
+    scopes,
+  };
 }
 
 async function readScopedOfflineMapEvidence(
   dependencies: EmergencyPackOfflineMapTileResolverDependencies,
-  scope: EmergencyPackOfflineMapScope,
-): Promise<ReturnType<typeof parseOfflineMapGenerationEvidence>> {
+  scope: IndexedOfflineMapScope,
+): Promise<{ artifact: EmergencyPackVerifiedOfflineMapArtifact; evidence: OfflineMapGenerationEvidence } | null> {
   try {
-    const body = await dependencies.readVerifiedOfflineMapArtifact(scope);
-    if (body === null) return null;
-    const evidence = parseOfflineMapGenerationEvidence(body);
-    const parsed = strictJsonRecord(JSON.parse(body));
+    if (scope.revision === null) return null;
+    const artifact = await dependencies.readVerifiedOfflineMapArtifact({
+      placeId: scope.placeId,
+      profileFingerprint: scope.profileFingerprint,
+      now: scope.now,
+    });
+    if (artifact?.revision !== scope.revision
+      || !Number.isFinite(artifact.expiresAt)
+      || artifact.expiresAt <= scope.now) return null;
+    const evidence = parseOfflineMapGenerationEvidence(artifact.body);
+    const parsed = strictJsonRecord(JSON.parse(artifact.body));
     return evidence
       && parsed?.placeId === scope.placeId
       && parsed.profileFingerprint === scope.profileFingerprint
-      ? evidence
+      ? { artifact, evidence }
       : null;
   } catch {
     return null;
   }
 }
 
+async function buildOfflineMapSourceIndex(
+  dependencies: EmergencyPackOfflineMapTileResolverDependencies,
+  snapshot: ReturnType<typeof snapshotOfflineMapScopes>,
+): Promise<OfflineMapSourceIndex | null> {
+  const artifacts = await Promise.all(snapshot.scopes.map((scope) => (
+    readScopedOfflineMapEvidence(dependencies, scope)
+  )));
+  if (snapshotOfflineMapScopes(dependencies).key !== snapshot.key) return null;
+  const bySourceUrl = new Map<string, IndexedOfflineMapTile[]>();
+  for (let index = 0; index < snapshot.scopes.length; index += 1) {
+    const scoped = artifacts[index];
+    const scope = snapshot.scopes[index];
+    if (!scoped || !scope) continue;
+    for (const [tileIndex, tile] of scoped.evidence.tiles.entries()) {
+      const entries = bySourceUrl.get(tile.url) ?? [];
+      entries.push({
+        scopeKey: scope.key,
+        revision: scoped.artifact.revision,
+        expiresAt: scoped.artifact.expiresAt,
+        generationId: scoped.evidence.generationId,
+        tileIndex,
+        tile,
+      });
+      bySourceUrl.set(tile.url, entries);
+    }
+  }
+  return { key: snapshot.key, bySourceUrl };
+}
+
 export function createEmergencyPackOfflineMapTileResolver(
   dependencies: EmergencyPackOfflineMapTileResolverDependencies,
 ) {
+  let indexed: OfflineMapSourceIndex | null = null;
+  let building: { key: string; promise: Promise<OfflineMapSourceIndex | null> } | null = null;
+
+  const getIndex = async (
+    snapshot: ReturnType<typeof snapshotOfflineMapScopes>,
+  ): Promise<OfflineMapSourceIndex | null> => {
+    if (indexed?.key === snapshot.key) return indexed;
+    if (building?.key !== snapshot.key) {
+      const promise = buildOfflineMapSourceIndex(dependencies, snapshot);
+      building = { key: snapshot.key, promise };
+    }
+    const pending = building;
+    const built = await pending.promise;
+    if (building === pending) building = null;
+    if (built && snapshotOfflineMapScopes(dependencies).key === snapshot.key) indexed = built;
+    return indexed?.key === snapshot.key ? indexed : null;
+  };
+
   return async (requestUrl: string): Promise<EmergencyPackMapTileData | null> => {
     const sourceUrls = emergencyPackMapSourceUrls(requestUrl);
     if (sourceUrls.length === 0) return null;
-    let cache: ExactOfflineMapCache | null = null;
-    for (const scope of dependencies.getScopes().slice(0, MAX_PLACES)) {
-      const evidence = await readScopedOfflineMapEvidence(dependencies, scope);
-      if (!evidence) continue;
-      try {
-        cache ??= await dependencies.openCache(MAP_CACHE_NAME);
-        const tile = await readOfflineMapTileExact({ ...evidence, sourceUrls, cache });
-        if (tile) return tile;
-      } catch {
-        return null;
+    const snapshot = snapshotOfflineMapScopes(dependencies);
+    const index = await getIndex(snapshot);
+    if (!index) return null;
+    const liveScopes = new Map(snapshot.scopes.map((scope) => [scope.key, scope]));
+    for (const sourceUrl of sourceUrls) {
+      for (const candidate of index.bySourceUrl.get(sourceUrl) ?? []) {
+        const scope = liveScopes.get(candidate.scopeKey);
+        if (scope?.revision !== candidate.revision
+          || candidate.expiresAt <= scope.now) continue;
+        try {
+          const cache = await dependencies.openCache(MAP_CACHE_NAME);
+          return await readOfflineMapTileAtIndexExact({
+            generationId: candidate.generationId,
+            tileIndex: candidate.tileIndex,
+            tile: candidate.tile,
+            cache,
+          });
+        } catch {
+          return null;
+        }
       }
     }
     return null;
@@ -460,6 +563,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   const detailedOperationStates = new Map<string, EmergencyPackRuntimeState>();
   const operationQueues = new Map<string, Promise<void>>();
   let offlineMapLifecycleTail = Promise.resolve();
+  let offlineMapIndexEpoch = 0;
   let active = true;
 
   async function acquireOfflineMapLifecycle(): Promise<() => void> {
@@ -485,10 +589,15 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         now: dependencies.now(),
       }] : [];
     }),
+    getScopeRevision: (scope) => {
+      const revision = store.readOfflineMapRevision?.({ ...scope, contactConsent: false });
+      return revision === null || revision === undefined ? null : `${offlineMapIndexEpoch}:${revision}`;
+    },
     readVerifiedOfflineMapArtifact: (scope) => store.readVerifiedOfflineMapArtifact?.({
       ...scope,
       contactConsent: false,
-    }) ?? Promise.resolve(null),
+    }).then((artifact) => artifact && ({ ...artifact, revision: `${offlineMapIndexEpoch}:${artifact.revision}` }))
+      ?? Promise.resolve(null),
     openCache: (name) => dependencies.openOfflineMapCache?.(name) ?? Promise.reject(new Error('cache unavailable')),
   });
 
@@ -516,6 +625,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         const operation = store.recoverReadiness?.bind(store);
         if (operation) {
           const recovered = await operation({ ...scope, contactConsent: false, now: dependencies.now() });
+          offlineMapIndexEpoch += 1;
           const scoped = { ...recovered, profileFingerprint: recovered.profileFingerprint ?? scope.profileFingerprint };
           const detailed = validState(scoped, scope.profileFingerprint)
             ? scoped
@@ -524,6 +634,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           return coordinatorState(detailed);
         }
         await store.recoverActive({ ...scope, contactConsent: false, now: dependencies.now() });
+        offlineMapIndexEpoch += 1;
       } catch {
         return coordinatorState(notSaved(scope.profileFingerprint, 'storage-failure'));
       }
@@ -580,6 +691,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       } finally {
         finishOfflineMapLifecycle();
       }
+      offlineMapIndexEpoch += 1;
       const detailed = await readDetailed({ ...scope, contactConsent: context.contactConsent });
       detailedOperationStates.set(scope.placeId, detailed);
       return coordinatorState(detailed);
@@ -689,6 +801,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
 
   async function refreshAll(recover: boolean): Promise<void> {
     if (!active) return;
+    offlineMapIndexEpoch += 1;
     const places = retainedPlaces();
     await Promise.all(places.map((place) => refreshPlace(place, recover)));
     try {
@@ -697,6 +810,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         maxPlaces: MAX_PLACES,
         generationsPerPlace: GENERATIONS_PER_PLACE,
       });
+      offlineMapIndexEpoch += 1;
     } catch {
       // Pruning is best effort and never changes the verified readiness map.
     }
@@ -721,6 +835,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           capturedAt: dependencies.now(),
           ...(sourceRevision ? { sourceRevision } : {}),
         });
+        offlineMapIndexEpoch += 1;
         if (invalidated.ok) {
           await coordinator.refresh(scope);
           state = takeDetailedState(scope) ?? await readDetailed(scope);
@@ -739,6 +854,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     name: place.name,
   }]));
   const savedPlacesChanged = () => {
+    offlineMapIndexEpoch += 1;
     const nextPlaces = retainedPlaces();
     const renamedPlaceIds = new Set(nextPlaces.filter((place) => {
       const previous = savedPlaceNames.get(place.id);
@@ -784,6 +900,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       return { ok: false, reason: 'place-not-retained', state };
     }
     captureContexts.set(place.id, { place, contactConsent });
+    offlineMapIndexEpoch += 1;
     captureResults.set(place.id, { ok: false, reason: 'capture-failed' });
     try {
       await coordinator.capture(scope);
@@ -846,6 +963,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     destroy(): void {
       if (!active) return;
       active = false;
+      offlineMapIndexEpoch += 1;
       for (const unsubscribe of unsubscribers) unsubscribe();
       listeners.clear();
       placeGenerations.clear();

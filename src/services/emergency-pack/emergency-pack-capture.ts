@@ -1,3 +1,8 @@
+import {
+  EMERGENCY_PACK_OPTIONAL_KINDS,
+  EMERGENCY_PACK_REQUIRED_KINDS,
+} from './emergency-pack-schema';
+
 export type EmergencyPackArtifactKind =
   | 'lifelines'
   | 'alerts'
@@ -302,4 +307,240 @@ export function validateEmergencyPackArtifact(
   if (!result.ok) return result;
   if (serializedByteLength(input.payload) !== input.byteLength) return invalid('artifact-byte-count-mismatch');
   return result;
+}
+
+export interface EmergencyPackCaptureScope {
+  readonly placeId: string;
+  readonly profileFingerprint: string;
+  readonly contactConsent: boolean;
+}
+
+export interface EmergencyPackCapturedArtifact {
+  kind: string;
+  body: string;
+  expiresAt: number;
+  semanticState: string;
+  summary: string;
+  itemCount: number;
+}
+
+export interface EmergencyPackCaptureResult {
+  ok: boolean;
+  packId?: string;
+  failedKind?: string;
+  reason?: string;
+}
+
+type EmergencyPackArtifactSource = (
+  scope: EmergencyPackCaptureScope,
+) => Promise<EmergencyPackCapturedArtifact | null>;
+
+interface EmergencyPackCaptureDependencies {
+  sources: Partial<Record<EmergencyPackArtifactKind, EmergencyPackArtifactSource>>;
+  commitGeneration: (input: {
+    placeId: string;
+    profileFingerprint: string;
+    requiredKinds: readonly string[];
+    optionalKinds: readonly string[];
+    artifacts: EmergencyPackCapturedArtifact[];
+  }) => Promise<{ ok: boolean; packId?: string; reason?: string }>;
+}
+
+const CAPTURED_ARTIFACT_KEYS = [
+  'kind',
+  'body',
+  'expiresAt',
+  'semanticState',
+  'summary',
+  'itemCount',
+] as const;
+
+const ARTIFACT_ITEM_CAPS: Readonly<Record<EmergencyPackArtifactKind, number>> = {
+  lifelines: 1,
+  alerts: 100,
+  'route-primary': MAX_ROUTE_COORDINATES,
+  'route-alternate': MAX_ROUTE_COORDINATES,
+  'offline-map': MAX_MAP_TILES,
+  'comms-plan': MAX_CONTACTS,
+  contacts: MAX_CONTACTS,
+};
+
+function hasExactCapturedArtifactKeys(value: Record<string, unknown>): boolean {
+  const keys = Object.keys(value);
+  return keys.length === CAPTURED_ARTIFACT_KEYS.length
+    && keys.every((key) => CAPTURED_ARTIFACT_KEYS.includes(key as typeof CAPTURED_ARTIFACT_KEYS[number]));
+}
+
+function parseCapturedArtifact(
+  value: unknown,
+  expectedKind: EmergencyPackArtifactKind,
+  scope: EmergencyPackCaptureScope,
+): EmergencyPackCapturedArtifact | null {
+  if (!isRecord(value)
+    || !hasExactCapturedArtifactKeys(value)
+    || value.kind !== expectedKind
+    || !isBoundedString(value.body, ARTIFACT_BYTE_CAPS[expectedKind])
+    || new TextEncoder().encode(value.body).byteLength > ARTIFACT_BYTE_CAPS[expectedKind]
+    || !isTimestamp(value.expiresAt)
+    || (value.semanticState !== 'verified' && value.semanticState !== 'verified-empty')
+    || !isBoundedString(value.summary, 300)
+    || !isSafeCount(value.itemCount, ARTIFACT_ITEM_CAPS[expectedKind])) return null;
+  if (value.semanticState === 'verified-empty' && value.itemCount !== 0) return null;
+
+  let body: unknown;
+  try {
+    body = JSON.parse(value.body) as unknown;
+  } catch {
+    return null;
+  }
+  if (!isRecord(body)
+    || body.kind !== expectedKind
+    || body.placeId !== scope.placeId
+    || body.profileFingerprint !== scope.profileFingerprint) return null;
+
+  return {
+    kind: expectedKind,
+    body: value.body,
+    expiresAt: value.expiresAt,
+    semanticState: value.semanticState,
+    summary: value.summary,
+    itemCount: value.itemCount,
+  };
+}
+
+function captureFailureReason(error: unknown): string {
+  if (error instanceof Error && isBoundedString(error.message, 500)) return error.message;
+  return 'source-failed';
+}
+
+interface CapturedArtifactSuccess {
+  artifact: EmergencyPackCapturedArtifact;
+  failure?: never;
+}
+
+interface CapturedArtifactFailure {
+  artifact?: never;
+  failure: EmergencyPackCaptureResult;
+}
+
+type CapturedArtifactOutcome = CapturedArtifactSuccess | CapturedArtifactFailure;
+
+function scopeIdentityMatches(
+  scope: EmergencyPackCaptureScope,
+  placeId: string,
+  profileFingerprint: string,
+): boolean {
+  return scope.placeId === placeId && scope.profileFingerprint === profileFingerprint;
+}
+
+async function captureRequiredArtifact(
+  dependencies: EmergencyPackCaptureDependencies,
+  kind: typeof EMERGENCY_PACK_REQUIRED_KINDS[number],
+  scope: EmergencyPackCaptureScope,
+  placeId: string,
+  profileFingerprint: string,
+): Promise<CapturedArtifactOutcome> {
+  const source = dependencies.sources[kind];
+  if (typeof source !== 'function') {
+    return { failure: { ok: false, failedKind: kind, reason: 'source-unavailable' } };
+  }
+  let candidate: EmergencyPackCapturedArtifact | null;
+  try {
+    candidate = await source(scope);
+  } catch (error) {
+    return { failure: { ok: false, failedKind: kind, reason: captureFailureReason(error) } };
+  }
+  if (!scopeIdentityMatches(scope, placeId, profileFingerprint)) {
+    return { failure: { ok: false, failedKind: kind, reason: 'scope-changed' } };
+  }
+  if (candidate === null) {
+    return { failure: { ok: false, failedKind: kind, reason: 'artifact-missing' } };
+  }
+  const artifact = parseCapturedArtifact(candidate, kind, scope);
+  return artifact
+    ? { artifact }
+    : { failure: { ok: false, failedKind: kind, reason: 'artifact-invalid' } };
+}
+
+async function captureRequiredArtifacts(
+  dependencies: EmergencyPackCaptureDependencies,
+  scope: EmergencyPackCaptureScope,
+  placeId: string,
+  profileFingerprint: string,
+): Promise<{ artifacts: EmergencyPackCapturedArtifact[]; failure?: never } | CapturedArtifactFailure> {
+  const artifacts: EmergencyPackCapturedArtifact[] = [];
+  for (const kind of EMERGENCY_PACK_REQUIRED_KINDS) {
+    const outcome = await captureRequiredArtifact(dependencies, kind, scope, placeId, profileFingerprint);
+    if (outcome.failure) return outcome;
+    artifacts.push(outcome.artifact);
+  }
+  return { artifacts };
+}
+
+async function captureOptionalArtifact(
+  dependencies: EmergencyPackCaptureDependencies,
+  scope: EmergencyPackCaptureScope,
+  placeId: string,
+  profileFingerprint: string,
+): Promise<{ artifact?: EmergencyPackCapturedArtifact; failure?: EmergencyPackCaptureResult }> {
+  const kind = EMERGENCY_PACK_OPTIONAL_KINDS[0];
+  const source = dependencies.sources[kind];
+  if (typeof source !== 'function') return {};
+  try {
+    const candidate = await source(scope);
+    if (!scopeIdentityMatches(scope, placeId, profileFingerprint)) {
+      return { failure: { ok: false, failedKind: kind, reason: 'scope-changed' } };
+    }
+    if (candidate === null) return {};
+    return { artifact: parseCapturedArtifact(candidate, kind, scope) ?? undefined };
+  } catch {
+    return {};
+  }
+}
+
+async function commitCapturedArtifacts(
+  dependencies: EmergencyPackCaptureDependencies,
+  placeId: string,
+  profileFingerprint: string,
+  artifacts: EmergencyPackCapturedArtifact[],
+): Promise<EmergencyPackCaptureResult> {
+  try {
+    const committed = await dependencies.commitGeneration({
+      placeId,
+      profileFingerprint,
+      requiredKinds: [...EMERGENCY_PACK_REQUIRED_KINDS],
+      optionalKinds: [...EMERGENCY_PACK_OPTIONAL_KINDS],
+      artifacts,
+    });
+    if (!committed.ok) return { ok: false, reason: committed.reason ?? 'commit-failed' };
+    return committed.packId === undefined
+      ? { ok: true }
+      : { ok: true, packId: committed.packId };
+  } catch (error) {
+    return { ok: false, reason: captureFailureReason(error) };
+  }
+}
+
+export function createEmergencyPackCaptureOrchestrator(
+  dependencies: EmergencyPackCaptureDependencies,
+): { capture: (scope: EmergencyPackCaptureScope) => Promise<EmergencyPackCaptureResult> } {
+  return {
+    async capture(scope): Promise<EmergencyPackCaptureResult> {
+      if (!isBoundedString(scope.placeId, 180) || !isBoundedString(scope.profileFingerprint, 800)) {
+        return { ok: false, reason: 'scope-invalid' };
+      }
+      if (scope.contactConsent !== true) {
+        return { ok: false, failedKind: 'contacts', reason: 'contact-consent-required' };
+      }
+
+      const placeId = scope.placeId;
+      const profileFingerprint = scope.profileFingerprint;
+      const required = await captureRequiredArtifacts(dependencies, scope, placeId, profileFingerprint);
+      if (required.failure) return required.failure;
+      const optional = await captureOptionalArtifact(dependencies, scope, placeId, profileFingerprint);
+      if (optional.failure) return optional.failure;
+      if (optional.artifact) required.artifacts.push(optional.artifact);
+      return commitCapturedArtifacts(dependencies, placeId, profileFingerprint, required.artifacts);
+    },
+  };
 }

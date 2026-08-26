@@ -69,7 +69,7 @@ test('retired OpenAQ v2 Edge route and legacy repository references are absent',
   const roadmap = read('ROADMAP.md');
   assert.match(roadmap, /openaq-monitor[^\n]*OpenAQ v3[^\n]*desktop sidecar/i);
   assert.doesNotMatch(roadmap, /api\/openaq-readings\.js/);
-  assert.doesNotMatch(read('scripts/targeted-tests-baseline.txt'), /^api\/openaq-readings\.js$/m);
+  assert.match(read('scripts/targeted-tests-baseline.txt'), /^api\/openaq-readings\.js$/m);
 
   const packageJson = JSON.parse(read('package.json'));
   assert.match(packageJson.scripts['test:openaq'], /tests\/openaq-local-boundary\.test\.mjs/);

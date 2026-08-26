@@ -6921,12 +6921,20 @@ function openaqFailure(error) {
   return 'upstream';
 }
 
+async function cancelOpenaqResponseBody(response) {
+  await response.body?.cancel().catch(() => undefined);
+}
+
 async function readOpenaqJsonResponse(response) {
   const contentType = response.headers.get('content-type') ?? '';
-  if (!/^application\/json(?:;|$)/i.test(contentType)) throw Object.assign(new Error('OpenAQ non-JSON response'), { openaqCode: 'malformed' });
+  if (!/^application\/json(?:;|$)/i.test(contentType)) {
+    await cancelOpenaqResponseBody(response);
+    throw Object.assign(new Error('OpenAQ non-JSON response'), { openaqCode: 'malformed' });
+  }
   const declaredLength = response.headers.get('content-length');
   if (declaredLength !== null
     && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > OPENAQ_MAX_RESPONSE_BYTES)) {
+    await cancelOpenaqResponseBody(response);
     throw Object.assign(new Error('OpenAQ response exceeded byte limit'), { openaqCode: 'oversized' });
   }
   if (!response.body) throw Object.assign(new Error('OpenAQ empty response'), { openaqCode: 'malformed' });
@@ -6976,6 +6984,7 @@ export async function fetchOpenaqLatestCorpus(apiKey, options = {}) {
       try {
         response = await fetchImpl(url.href, {
           headers: { Accept: 'application/json', 'X-API-Key': apiKey },
+          redirect: 'error',
           signal: controller.signal,
           maxResponseBytes: OPENAQ_MAX_RESPONSE_BYTES,
         });
@@ -6988,13 +6997,19 @@ export async function fetchOpenaqLatestCorpus(apiKey, options = {}) {
         return readOpenaqJsonResponse(response);
       }
       if (response.status === 401 || response.status === 403) {
+        await cancelOpenaqResponseBody(response);
         throw Object.assign(new Error('OpenAQ authentication failed'), { openaqCode: `auth_${response.status}` });
       }
-      if (!OPENAQ_RETRYABLE_STATUSES.has(response.status)) throw Object.assign(new Error(`OpenAQ HTTP ${response.status}`), { openaqCode: 'upstream' });
+      if (!OPENAQ_RETRYABLE_STATUSES.has(response.status)) {
+        await cancelOpenaqResponseBody(response);
+        throw Object.assign(new Error(`OpenAQ HTTP ${response.status}`), { openaqCode: 'upstream' });
+      }
       if (attempt === 1) {
         const code = response.status === 429 ? 'rate_limited' : 'upstream';
+        await cancelOpenaqResponseBody(response);
         throw Object.assign(new Error(`OpenAQ HTTP ${response.status}`), { openaqCode: code });
       }
+      await cancelOpenaqResponseBody(response);
       const delay = openaqRetryDelay(response, options.retryDelayMs ?? 250);
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(delay, Math.max(0, deadlineAt - Date.now()))));
     }

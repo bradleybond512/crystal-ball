@@ -101,31 +101,39 @@ test('offline map receipts require every successful tile readback within per-til
 });
 
 test('comms and contacts require explicit consent, a selected contact, and bounded private content', () => {
-  const payload = {
+  const scope = {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
     consent: true,
     selectedContactIds: ['contact-1'],
+  };
+  const contactsPayload = {
+    ...scope,
     contacts: [{ id: 'contact-1', label: 'Family', value: '+15555550100', role: 'check-in' }],
+  };
+  const commsPlanPayload = {
+    ...scope,
     fallbackSteps: [{ id: 'sms', label: 'SMS', kind: 'sms', instruction: 'Send status', priority: 1 }],
     checkInWindows: [{ id: 'hourly', label: 'Hourly', cadenceMinutes: 60, note: '' }],
     notes: '',
   };
-  assert.equal(validate('contacts', payload).ok, true);
-  assert.equal(validate('comms-plan', payload).ok, true);
-  assert.equal(validate('contacts', { ...payload, consent: false }).ok, false);
-  assert.equal(validate('contacts', { ...payload, selectedContactIds: [] }).ok, false);
+  assert.equal(validate('contacts', contactsPayload).ok, true);
+  assert.equal(validate('comms-plan', commsPlanPayload).ok, true);
+  assert.equal(validate('contacts', { ...contactsPayload, consent: false }).ok, false);
+  assert.equal(validate('contacts', { ...contactsPayload, selectedContactIds: [] }).ok, false);
   assert.equal(validate('contacts', {
-    ...payload,
+    ...contactsPayload,
     contacts: Array.from({ length: 26 }, (_, id) => ({ id: String(id), label: 'Contact', value: '555', role: '' })),
   }).ok, false);
   assert.equal(validate('comms-plan', {
-    ...payload, fallbackSteps: Array.from({ length: 33 }, () => payload.fallbackSteps[0]),
+    ...commsPlanPayload,
+    fallbackSteps: Array.from({ length: 33 }, () => commsPlanPayload.fallbackSteps[0]),
   }).ok, false);
   assert.equal(validate('comms-plan', {
-    ...payload, checkInWindows: Array.from({ length: 17 }, () => payload.checkInWindows[0]),
+    ...commsPlanPayload,
+    checkInWindows: Array.from({ length: 17 }, () => commsPlanPayload.checkInWindows[0]),
   }).ok, false);
-  assert.equal(validate('comms-plan', payload, 128 * 1024 + 1).ok, false);
+  assert.equal(validate('comms-plan', commsPlanPayload, 128 * 1024 + 1).ok, false);
 });
 
 test('source-produced comms and contacts bodies validate when private values stay separate', () => {

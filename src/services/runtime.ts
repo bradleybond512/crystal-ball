@@ -200,7 +200,10 @@ function isLocalOnlyApiTarget(target: string): boolean {
   // Security boundary: endpoints that can carry local secrets must use the
   // `/api/local-*` prefix or an explicitly reviewed exact path.
   const path = target.split('?')[0] ?? target;
-  return target.startsWith('/api/local-') || LOCAL_ONLY_API_TARGETS.has(path);
+  if (LOCAL_ONLY_API_TARGETS.has(path)) {
+    return true;
+  }
+  return target.startsWith('/api/local-');
 }
 
 async function fetchLocalWithStartupRetry(

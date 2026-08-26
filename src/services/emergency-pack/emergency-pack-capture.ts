@@ -389,6 +389,7 @@ export interface EmergencyPackCapturedArtifact {
   semanticState: string;
   summary: string;
   itemCount: number;
+  sourceRevision?: string;
 }
 
 export interface EmergencyPackCaptureResult {
@@ -434,10 +435,15 @@ const ARTIFACT_ITEM_CAPS: Readonly<Record<EmergencyPackArtifactKind, number>> = 
   contacts: MAX_CONTACTS,
 };
 
-function hasExactCapturedArtifactKeys(value: Record<string, unknown>): boolean {
+function hasExactCapturedArtifactKeys(
+  value: Record<string, unknown>,
+  expectedKind: EmergencyPackArtifactKind,
+): boolean {
   const keys = Object.keys(value);
-  return keys.length === CAPTURED_ARTIFACT_KEYS.length
-    && keys.every((key) => CAPTURED_ARTIFACT_KEYS.includes(key as typeof CAPTURED_ARTIFACT_KEYS[number]));
+  const expectsSourceRevision = expectedKind === 'alerts';
+  return keys.length === CAPTURED_ARTIFACT_KEYS.length + (expectsSourceRevision ? 1 : 0)
+    && keys.every((key) => CAPTURED_ARTIFACT_KEYS.includes(key as typeof CAPTURED_ARTIFACT_KEYS[number])
+      || (expectsSourceRevision && key === 'sourceRevision'));
 }
 
 function parseCapturedArtifact(
@@ -446,7 +452,7 @@ function parseCapturedArtifact(
   scope: EmergencyPackCaptureScope,
 ): EmergencyPackCapturedArtifact | null {
   if (!isRecord(value)
-    || !hasExactCapturedArtifactKeys(value)
+    || !hasExactCapturedArtifactKeys(value, expectedKind)
     || value.kind !== expectedKind
     || !isBoundedString(value.body, ARTIFACT_BYTE_CAPS[expectedKind])
     || new TextEncoder().encode(value.body).byteLength > ARTIFACT_BYTE_CAPS[expectedKind]
@@ -457,6 +463,12 @@ function parseCapturedArtifact(
     || !isBoundedString(value.summary, 300)
     || !isSafeCount(value.itemCount, ARTIFACT_ITEM_CAPS[expectedKind])) return null;
   if (value.semanticState === 'verified-empty' && value.itemCount !== 0) return null;
+  const sourceRevisionValue = Object.prototype.hasOwnProperty.call(value, 'sourceRevision')
+    ? value.sourceRevision
+    : undefined;
+  const sourceRevision = typeof sourceRevisionValue === 'string' ? sourceRevisionValue : undefined;
+  if (expectedKind === 'alerts'
+    && (sourceRevision === undefined || !SHA256_HEX_PATTERN.test(sourceRevision))) return null;
 
   let body: unknown;
   try {
@@ -469,6 +481,9 @@ function parseCapturedArtifact(
     || body.placeId !== scope.placeId
     || body.profileFingerprint !== scope.profileFingerprint
     || body.capturedAt !== value.capturedAt) return null;
+  if (expectedKind === 'alerts') {
+    if (body.sourceRevision !== sourceRevision) return null;
+  } else if (Object.prototype.hasOwnProperty.call(body, 'sourceRevision')) return null;
 
   return {
     kind: expectedKind,
@@ -478,6 +493,7 @@ function parseCapturedArtifact(
     semanticState: value.semanticState,
     summary: value.summary,
     itemCount: value.itemCount,
+    ...(expectedKind === 'alerts' ? { sourceRevision } : {}),
   };
 }
 

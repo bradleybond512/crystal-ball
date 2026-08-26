@@ -305,6 +305,7 @@ function recoveryKeys(
   if (head?.previousPackId) candidates.push(manifestKey(scope.placeId, head.previousPackId));
   const prefix = `${KEY_PREFIX}:manifest:${encodeURIComponent(scope.placeId)}:`;
   for (const key of metadata.keys().filter((item) => item.startsWith(prefix)).reverse()) {
+    if (key === head?.manifestKey) continue;
     if (!candidates.includes(key)) candidates.push(key);
     if (candidates.length >= MAX_RECOVERY_MANIFESTS) break;
   }
@@ -434,8 +435,15 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
   async function recoverActive(scope: EmergencyPackScope): Promise<EmergencyPackStoreState> {
     try {
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
+      if (head && head.placeId !== scope.placeId) {
+        return { status: 'not-saved', packId: null, reason: 'place-id-mismatch' };
+      }
       if (head?.profileFingerprint && head.profileFingerprint !== scope.profileFingerprint) {
         return { status: 'not-saved', packId: null, reason: 'profile-fingerprint-mismatch' };
+      }
+      if (head) {
+        const active = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+        if (active?.packId === head.packId) return stateForManifest(active, scope);
       }
 
       for (const key of recoveryKeys(metadata, scope, head)) {

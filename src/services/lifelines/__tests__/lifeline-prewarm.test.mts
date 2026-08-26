@@ -207,6 +207,8 @@ test('coalesces an exact job and records every trigger without a duplicate fetch
   assert.equal(calls, 1);
   assert.deepEqual(coordinator.getState(item.id)?.triggers, ['startup', 'storm', 'manual']);
   request.resolve(snapshot(item, 25));
+  await waitForTerminal(coordinator, item.id);
+  assert.equal(calls, 1, 'coalesced triggers must not schedule a follow-up fetch');
 });
 
 test('serializes different fingerprints for one place and suppresses stale completion', async () => {

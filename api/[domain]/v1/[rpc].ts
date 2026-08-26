@@ -103,7 +103,9 @@ const RPC_CACHE_TIER: Record<string, CacheTier> = {
   '/api/climate/v1/list-climate-anomalies': 'static',
   '/api/research/v1/list-tech-events': 'static',
   '/api/military/v1/get-usni-fleet-report': 'static',
-  '/api/conflict/v1/list-ucdp-events': 'static',
+  // Desktop-local credential boundary; an accidental Edge invocation must
+  // never be cached or served as a stale successful provider response.
+  '/api/conflict/v1/list-ucdp-events': 'no-store',
   '/api/conflict/v1/get-humanitarian-summary': 'static',
   '/api/displacement/v1/get-displacement-summary': 'static',
   '/api/displacement/v1/get-population-exposure': 'static',

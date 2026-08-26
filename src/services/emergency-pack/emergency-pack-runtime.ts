@@ -102,6 +102,17 @@ interface EmergencyPackRuntimeStore {
     profileFingerprint?: string;
     reason?: string;
   }>;
+  recoverReadiness?(scope: EmergencyPackCaptureScope & { now: number }): Promise<{
+    status: string;
+    packId: string | null;
+    profileFingerprint: string;
+    requiredKinds?: readonly string[];
+    optionalKinds?: readonly string[];
+    receipts?: readonly EmergencyPackReceipt[];
+    missingKinds?: readonly string[];
+    expiredKinds?: readonly string[];
+    reason?: string;
+  }>;
   commitGeneration(input: Parameters<ReturnType<typeof createEmergencyPackStore>['commitGeneration']>[0]): Promise<{
     ok: boolean;
     packId?: string;
@@ -136,8 +147,8 @@ interface EmergencyPackRuntimeDependencies {
     commitGeneration: EmergencyPackRuntimeStore['commitGeneration'];
     releaseArtifact?: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
   }): { capture(scope: EmergencyPackCaptureScope): Promise<EmergencyPackCaptureResult> };
-  releaseArtifact(artifact: EmergencyPackCapturedArtifact): Promise<void>;
-  getLegacyLifelinePackManifest(placeId: string): unknown | null;
+  releaseArtifact: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
+  getLegacyLifelinePackManifest(placeId: string): unknown;
   subscribeSavedPlaces(callback: () => void): () => void;
   subscribeRoutes(callback: () => void): () => void;
   subscribeComms(callback: () => void): () => void;
@@ -198,7 +209,7 @@ function strictJsonRecord(value: unknown): Record<string, unknown> | null {
 export function readLegacyLifelinePackManifestV1(
   storage: Pick<Storage, 'getItem'>,
   placeId: string,
-): unknown | null {
+): unknown {
   try {
     const encoded = storage.getItem(`wm_lifeline_pack_manifest_v1:${placeId}`);
     if (encoded === null) return null;
@@ -319,16 +330,18 @@ function parseOfflineMapGenerationEvidence(body: string): OfflineMapGenerationEv
   return totalBytes === payload.totalBytes ? { generationId, tiles } : null;
 }
 
+const DEFAULT_OFFLINE_MAP_OPERATIONS: EmergencyPackOfflineMapOperations = {
+  verify: verifyOfflineMapGenerationExact,
+  release: deleteOfflineMapGenerationExact,
+};
+
 export function createEmergencyPackOfflineMapLifecycle(
   cacheStorage: { open(name: string): Promise<ExactOfflineMapCache> },
-  operations: EmergencyPackOfflineMapOperations = {
-    verify: verifyOfflineMapGenerationExact,
-    release: deleteOfflineMapGenerationExact,
-  },
+  operations: EmergencyPackOfflineMapOperations = DEFAULT_OFFLINE_MAP_OPERATIONS,
 ): {
-  verifyArtifactBody(kind: EmergencyPackArtifactKind, body: string): Promise<boolean>;
-  releaseArtifactBody(kind: EmergencyPackArtifactKind, body: string): Promise<void>;
-  releaseArtifact(artifact: EmergencyPackCapturedArtifact): Promise<void>;
+  verifyArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<boolean>;
+  releaseArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
+  releaseArtifact: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
 } {
   const verifyArtifactBody = async (kind: EmergencyPackArtifactKind, body: string): Promise<boolean> => {
     if (kind !== 'offline-map') return true;
@@ -336,7 +349,8 @@ export function createEmergencyPackOfflineMapLifecycle(
     if (!evidence) return false;
     try {
       const cache = await cacheStorage.open(MAP_CACHE_NAME);
-      return (await operations.verify({ ...evidence, cache })).ok;
+      const result = await operations.verify({ ...evidence, cache });
+      return result.ok;
     } catch {
       return false;
     }
@@ -363,36 +377,51 @@ export function createEmergencyPackOfflineMapLifecycle(
   };
 }
 
-export function createEmergencyPackOfflineMapTileResolver(dependencies: {
-  getScopes(): Array<{ placeId: string; profileFingerprint: string; now: number }>;
+interface EmergencyPackOfflineMapScope {
+  placeId: string;
+  profileFingerprint: string;
+  now: number;
+}
+
+interface EmergencyPackOfflineMapTileResolverDependencies {
+  getScopes(): EmergencyPackOfflineMapScope[];
   readVerifiedOfflineMapArtifact(scope: {
     placeId: string;
     profileFingerprint: string;
     now: number;
   }): Promise<string | null>;
   openCache(name: string): Promise<ExactOfflineMapCache>;
-}) {
+}
+
+async function readScopedOfflineMapEvidence(
+  dependencies: EmergencyPackOfflineMapTileResolverDependencies,
+  scope: EmergencyPackOfflineMapScope,
+): Promise<ReturnType<typeof parseOfflineMapGenerationEvidence>> {
+  try {
+    const body = await dependencies.readVerifiedOfflineMapArtifact(scope);
+    if (body === null) return null;
+    const evidence = parseOfflineMapGenerationEvidence(body);
+    const parsed = strictJsonRecord(JSON.parse(body));
+    return evidence
+      && parsed?.placeId === scope.placeId
+      && parsed.profileFingerprint === scope.profileFingerprint
+      ? evidence
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function createEmergencyPackOfflineMapTileResolver(
+  dependencies: EmergencyPackOfflineMapTileResolverDependencies,
+) {
   return async (requestUrl: string): Promise<EmergencyPackMapTileData | null> => {
     const sourceUrls = emergencyPackMapSourceUrls(requestUrl);
     if (sourceUrls.length === 0) return null;
     let cache: ExactOfflineMapCache | null = null;
     for (const scope of dependencies.getScopes().slice(0, MAX_PLACES)) {
-      let body: string | null;
-      try {
-        body = await dependencies.readVerifiedOfflineMapArtifact(scope);
-      } catch {
-        continue;
-      }
-      if (body === null) continue;
-      const evidence = parseOfflineMapGenerationEvidence(body);
+      const evidence = await readScopedOfflineMapEvidence(dependencies, scope);
       if (!evidence) continue;
-      let parsed: Record<string, unknown> | null;
-      try {
-        parsed = strictJsonRecord(JSON.parse(body));
-      } catch {
-        continue;
-      }
-      if (parsed?.placeId !== scope.placeId || parsed.profileFingerprint !== scope.profileFingerprint) continue;
       try {
         cache ??= await dependencies.openCache(MAP_CACHE_NAME);
         const tile = await readOfflineMapTileExact({ ...evidence, sourceUrls, cache });
@@ -454,6 +483,16 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     },
     recoverActive: async (scope) => {
       try {
+        const operation = store.recoverReadiness?.bind(store);
+        if (operation) {
+          const recovered = await operation({ ...scope, contactConsent: false, now: dependencies.now() });
+          const scoped = { ...recovered, profileFingerprint: recovered.profileFingerprint ?? scope.profileFingerprint };
+          const detailed = validState(scoped, scope.profileFingerprint)
+            ? scoped
+            : notSaved(scope.profileFingerprint, 'invalid-state');
+          detailedOperationStates.set(scope.placeId, detailed);
+          return coordinatorState(detailed);
+        }
         await store.recoverActive({ ...scope, contactConsent: false, now: dependencies.now() });
       } catch {
         return coordinatorState(notSaved(scope.profileFingerprint, 'storage-failure'));
@@ -538,7 +577,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     const lifelines = dependencies.createSources(place).lifelines;
     if (!lifelines) return recovered;
     const artifact = await lifelines(scope);
-    if (!artifact || artifact.kind !== 'lifelines') return recovered;
+    if (artifact?.kind !== 'lifelines') return recovered;
 
     const migrated = await store.migrateLifelineGeneration({
       placeId: scope.placeId,
@@ -613,11 +652,11 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           kinds,
           capturedAt: dependencies.now(),
         });
-        if (!invalidated.ok) {
-          state = notSaved(scope.profileFingerprint, invalidated.reason ?? 'storage-failure');
-        } else {
+        if (invalidated.ok) {
           await coordinator.refresh(scope);
           state = takeDetailedState(scope) ?? await readDetailed(scope);
+        } else {
+          state = notSaved(scope.profileFingerprint, invalidated.reason ?? 'storage-failure');
         }
       } catch {
         state = notSaved(scope.profileFingerprint, 'storage-failure');
@@ -762,7 +801,7 @@ function fetchDefaultMapTile(url: string, signal: AbortSignal): Promise<Response
 
 interface EmergencyPackOfflineMapCaptureDependencies {
   now(): number;
-  randomUUID(): string | undefined;
+  randomUUID: () => string | undefined;
   planTileUrls(lat: number, lon: number, radiusKm: number): {
     ok: boolean;
     tileUrls: string[];

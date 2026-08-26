@@ -110,7 +110,7 @@ import { getTopActiveGeoHubs } from '@/services/geo-activity';
 import { getTopActiveHubs } from '@/services/tech-activity';
 import { debounce, getCircuitBreakerCooldownInfo } from '@/utils';
 import { isFeatureAvailable } from '@/services/runtime-config';
-import { getApiBaseUrl } from '@/services/runtime';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 import { getAiFlowSettings } from '@/services/ai-flow-settings';
 import { t, getCurrentLanguage } from '@/services/i18n';
 import { getHydratedData } from '@/services/bootstrap';
@@ -2402,6 +2402,7 @@ export class DataLoaderManager implements AppModule {
 
   async loadIntelligenceSignals(): Promise<void> {
  const tasks: Promise<void>[] = [];
+ const ucdpAvailable = isDesktopRuntime() && isFeatureAvailable('ucdpEvents');
 
  tasks.push((async () => {
  try {
@@ -2475,6 +2476,7 @@ export class DataLoaderManager implements AppModule {
  }
  })());
 
+ if (ucdpAvailable) {
  tasks.push((async () => {
  try {
  const { classifications, dataset } = await fetchUcdpClassifications();
@@ -2485,6 +2487,7 @@ export class DataLoaderManager implements AppModule {
  dataFreshness.recordError('ucdp', String(error));
  }
  })());
+ }
 
  tasks.push((async () => {
  try {
@@ -2587,6 +2590,7 @@ export class DataLoaderManager implements AppModule {
  }
  })());
 
+ if (ucdpAvailable) {
  tasks.push((async () => {
  try {
  const protestEvents = await protestsTask;
@@ -2599,10 +2603,13 @@ export class DataLoaderManager implements AppModule {
  latitude: e.lat, longitude: e.lon, event_date: e.time.toISOString(), fatalities: e.fatalities ?? 0,
  }));
  const events = deduplicateAgainstAcled(result.data, acledEvents);
+ const ucdpIsCurrent = assessUcdpDatasetCurrency(result.dataset).current;
+ if (ucdpIsCurrent) {
  const ucdpObservations = this.dedupeConflictObservations(
    ucdpEventsToObservations(events),
  );
  if (ucdpObservations.length > 0) ingestObservations(ucdpObservations);
+ }
  (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.setEvents(events);
  if (this.ctx.mapLayers.ucdpEvents) {
  this.ctx.map?.setUcdpEvents(events);
@@ -2613,6 +2620,7 @@ export class DataLoaderManager implements AppModule {
  dataFreshness.recordError('ucdp_events', String(error));
  }
  })());
+ }
 
  // Air strikes & drone events (ACLED)
  tasks.push((async () => {

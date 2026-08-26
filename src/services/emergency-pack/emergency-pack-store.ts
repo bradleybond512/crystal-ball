@@ -95,6 +95,21 @@ interface EmergencyPackStoreDependencies {
   digest(body: string): Promise<string>;
   now(): number;
   createPackId(): string;
+  verifyArtifactBody?(
+    kind: EmergencyPackArtifactKind,
+    body: string,
+  ): boolean | Promise<boolean>;
+  releaseArtifactBody?(
+    kind: EmergencyPackArtifactKind,
+    body: string,
+  ): void | Promise<void>;
+}
+
+interface StoredArtifactBody {
+  kind: EmergencyPackArtifactKind;
+  cacheKey: string;
+  body?: string;
+  sha256?: string;
 }
 
 interface PackHead {
@@ -302,6 +317,32 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
   const now = () => dependencies.now();
   const createPackId = () => dependencies.createPackId();
 
+  async function verifyBody(kind: EmergencyPackArtifactKind, body: string): Promise<boolean> {
+    try {
+      return await (dependencies.verifyArtifactBody?.(kind, body) ?? true) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function releaseBody(kind: EmergencyPackArtifactKind, body: string): Promise<void> {
+    if (kind !== 'offline-map') return;
+    try {
+      await dependencies.releaseArtifactBody?.(kind, body);
+    } catch {
+      // External cleanup is best effort and cannot change publication state.
+    }
+  }
+
+  async function verifyReceiptBody(packId: string, receipt: EmergencyPackReceipt): Promise<boolean> {
+    if (receipt.cacheKey !== bodyKey(packId, receipt.kind)) return false;
+    const body = await bodies.get(receipt.cacheKey);
+    if (body === null) return false;
+    if (new TextEncoder().encode(body).byteLength !== receipt.byteLength) return false;
+    if (await digest(body) !== receipt.sha256) return false;
+    return verifyBody(receipt.kind, body);
+  }
+
   async function loadVerifiedManifest(key: string, expectedDigest?: string): Promise<EmergencyPackManifest | null> {
     const encoded = metadata.getItem(key);
     if (encoded === null) return null;
@@ -316,11 +357,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     if (!parsed || manifestKey(parsed.placeId, parsed.packId) !== key) return null;
 
     for (const receipt of parsed.receipts) {
-      if (receipt.cacheKey !== bodyKey(parsed.packId, receipt.kind)) return null;
-      const body = await bodies.get(receipt.cacheKey);
-      if (body === null) return null;
-      if (new TextEncoder().encode(body).byteLength !== receipt.byteLength) return null;
-      if (await digest(body) !== receipt.sha256) return null;
+      if (!await verifyReceiptBody(parsed.packId, receipt)) return null;
     }
     return parsed;
   }
@@ -415,19 +452,29 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function cleanupGeneration(key: string, bodyKeys: readonly string[]): Promise<void> {
+  async function cleanupStoredBody(artifact: StoredArtifactBody): Promise<void> {
+    try {
+      const body = artifact.body ?? await bodies.get(artifact.cacheKey);
+      if (body !== null && (artifact.sha256 === undefined || await digest(body) === artifact.sha256)) {
+        await releaseBody(artifact.kind, body);
+      }
+    } catch {
+      // A failed release or read cannot make an unpublished body active.
+    }
+    try {
+      await bodies.delete(artifact.cacheKey);
+    } catch {
+      // Orphaned immutable bodies are safe and may be removed later.
+    }
+  }
+
+  async function cleanupGeneration(key: string, artifacts: readonly StoredArtifactBody[]): Promise<void> {
     try {
       metadata.removeItem(key);
     } catch {
       // Best effort: an unpublished generation is never selected by the head.
     }
-    for (const cacheKey of bodyKeys) {
-      try {
-        await bodies.delete(cacheKey);
-      } catch {
-        // Best effort: orphaned immutable bodies are safe and may be removed later.
-      }
-    }
+    for (const artifact of artifacts) await cleanupStoredBody(artifact);
   }
 
   async function cleanupOldGenerations(active: EmergencyPackManifest): Promise<void> {
@@ -439,19 +486,19 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     const prefix = `${KEY_PREFIX}:manifest:${encodeURIComponent(active.placeId)}:`;
     for (const key of metadata.keys().filter((item) => item.startsWith(prefix))) {
       if (retained.has(key)) continue;
-      let bodyKeys: string[] = [];
+      let artifacts: StoredArtifactBody[] = [];
       try {
         const encoded = metadata.getItem(key);
         const parsed = encoded === null ? null : parseEmergencyPackManifest(JSON.parse(encoded));
         if (parsed && manifestKey(parsed.placeId, parsed.packId) === key) {
-          bodyKeys = parsed.receipts
+          artifacts = parsed.receipts
             .filter((receipt) => receipt.cacheKey === bodyKey(parsed.packId, receipt.kind))
-            .map(({ cacheKey }) => cacheKey);
+            .map(({ kind, cacheKey, sha256 }) => ({ kind, cacheKey, sha256 }));
         }
       } catch {
-        bodyKeys = [];
+        artifacts = [];
       }
-      await cleanupGeneration(key, bodyKeys);
+      await cleanupGeneration(key, artifacts);
     }
   }
 
@@ -476,7 +523,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     input: EmergencyPackGenerationInput,
     packId: string,
     timestamp: number,
-    stagedBodyKeys: string[],
+    stagedBodies: StoredArtifactBody[],
   ): Promise<EmergencyPackReceipt[]> {
     const capturedAt = new Date(timestamp).toISOString();
     const receipts: EmergencyPackReceipt[] = [];
@@ -484,11 +531,12 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (artifact.expiresAt <= timestamp) throw new Error('artifact expired');
       const cacheKey = bodyKey(packId, artifact.kind);
       await bodies.put(cacheKey, artifact.body);
-      stagedBodyKeys.push(cacheKey);
+      stagedBodies.push({ kind: artifact.kind, cacheKey, body: artifact.body });
       const readback = await bodies.get(cacheKey);
       if (readback === null || readback !== artifact.body) throw new Error('body readback mismatch');
       const expectedDigest = await digest(artifact.body);
       if (await digest(readback) !== expectedDigest) throw new Error('body digest mismatch');
+      if (!await verifyBody(artifact.kind, readback)) throw new Error('external artifact verification failed');
       receipts.push({
         kind: artifact.kind,
         profileFingerprint: input.profileFingerprint,
@@ -546,7 +594,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
 
     let key: string | null = null;
-    const stagedBodyKeys: string[] = [];
+    const stagedBodies: StoredArtifactBody[] = [];
 
     try {
       const packId = createPackId();
@@ -560,7 +608,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       const timestamp = now();
       if (!Number.isFinite(timestamp)) return { ok: false, reason: 'invalid-time' };
       const capturedAt = new Date(timestamp).toISOString();
-      const stagedReceipts = await stageArtifacts(input, packId, timestamp, stagedBodyKeys);
+      const stagedReceipts = await stageArtifacts(input, packId, timestamp, stagedBodies);
 
       const manifestCandidate = {
         schemaVersion: 2,
@@ -598,7 +646,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       }
       return { ok: true, packId };
     } catch (error) {
-      if (key !== null) await cleanupGeneration(key, stagedBodyKeys);
+      if (key !== null) await cleanupGeneration(key, stagedBodies);
       return { ok: false, reason: safeReason(error) };
     }
   }
@@ -613,7 +661,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
 
     let key: string | null = null;
-    const stagedBodyKeys: string[] = [];
+    const stagedBodies: StoredArtifactBody[] = [];
     try {
       if (await hasValidActiveHead(input.placeId)) return { ok: false, reason: 'active-v2-exists' };
       const packId = createPackId();
@@ -657,14 +705,14 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         requiredKinds: EMERGENCY_PACK_REQUIRED_KINDS,
         optionalKinds: EMERGENCY_PACK_OPTIONAL_KINDS,
         artifacts: [input.artifact],
-      }, packId, timestamp, stagedBodyKeys);
+      }, packId, timestamp, stagedBodies);
       const receipt = stagedReceipts[0];
       if (receipt?.cacheKey !== cacheKey) throw new Error('migration receipt mismatch');
       const manifest = migrateLifelinePackV1(input.legacyManifest, migrationScope, receipt);
       if (!manifest) throw new Error('migration validation failed');
 
       if (await hasValidActiveHead(input.placeId)) {
-        await cleanupGeneration(key, stagedBodyKeys);
+        await cleanupGeneration(key, stagedBodies);
         return { ok: false, reason: 'active-v2-exists' };
       }
       const activeHeadKey = headKey(input.placeId);
@@ -683,7 +731,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       writeHead(activeHeadKey, head, encodedExistingHead);
       return { ok: true, packId };
     } catch (error) {
-      if (key !== null) await cleanupGeneration(key, stagedBodyKeys);
+      if (key !== null) await cleanupGeneration(key, stagedBodies);
       return { ok: false, reason: safeReason(error) };
     }
   }
@@ -743,13 +791,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     } catch {
       return;
     }
-    for (const { cacheKey } of parsed.receipts) {
+    for (const { kind, cacheKey, sha256 } of parsed.receipts) {
       if (retainedBodyKeys.has(cacheKey)) continue;
-      try {
-        await bodies.delete(cacheKey);
-      } catch {
-        // Orphaned immutable bodies cannot become active without a head.
-      }
+      await cleanupStoredBody({ kind, cacheKey, sha256 });
     }
   }
 

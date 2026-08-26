@@ -20,6 +20,8 @@ interface StoreApi {
     digest: typeof digest;
     now: () => number;
     createPackId: () => string;
+    verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
+    releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   }) => {
     commitGeneration: (input: {
       placeId: string;
@@ -90,13 +92,23 @@ function artifacts(marker: string, placeId = PLACE_ID, profileFingerprint = PROF
   }));
 }
 
-function harness() {
+function harness(overrides: {
+  verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
+  releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
+} = {}) {
   const operations: string[] = [];
   const metadata = new MemoryMetadata(operations);
   const bodies = new MemoryBodies(operations);
   let nextId = 1;
   const create = requireFunction(api, 'createEmergencyPackStore');
-  const store = create({ metadata, bodies, digest, now: () => NOW, createPackId: () => `pack-${nextId++}` });
+  const store = create({
+    metadata,
+    bodies,
+    digest,
+    now: () => NOW,
+    createPackId: () => `pack-${nextId++}`,
+    ...overrides,
+  });
   return { metadata, bodies, operations, store };
 }
 
@@ -224,6 +236,128 @@ test('active and detailed reads reject same-length body corruption before report
   assert.equal(
     (await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })).status,
     'not-saved',
+  );
+});
+
+test('active, detailed, and recovery reads fail closed on invalid external offline-map generations', async () => {
+  let rejectMarker: string | null = null;
+  let throwVerification = false;
+  const verifiedBodies: string[] = [];
+  const { store } = harness({
+    verifyArtifactBody: (kind, body) => {
+      if (kind === 'offline-map') verifiedBodies.push(body);
+      if (kind === 'offline-map' && throwVerification) throw new Error('external verification failed');
+      return Promise.resolve(kind !== 'offline-map' || rejectMarker === null || !body.includes(rejectMarker));
+    },
+  });
+  assert.deepEqual(await commit(store, 'previous-map'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await commit(store, 'current-map'), { ok: true, packId: 'pack-2' });
+  rejectMarker = 'current-map';
+  verifiedBodies.length = 0;
+
+  assert.deepEqual(
+    await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'corrupt', packId: null, reason: 'verification-failed' },
+  );
+  assert.equal(
+    (await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })).status,
+    'not-saved',
+  );
+  assert.deepEqual(
+    await store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
+  );
+  assert.equal(verifiedBodies.some((body) => body.includes('current-map')), true);
+  assert.equal(verifiedBodies.some((body) => body.includes('previous-map')), true);
+  rejectMarker = '-map';
+  assert.deepEqual(
+    await store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'not-saved', packId: null },
+  );
+  rejectMarker = null;
+  throwVerification = true;
+  assert.deepEqual(
+    await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'corrupt', packId: null, reason: 'verification-failed' },
+  );
+});
+
+test('failed offline-map staging and publication release only the staged external generation', async () => {
+  const verificationReleases: string[] = [];
+  const verificationHarness = harness({
+    verifyArtifactBody: (kind) => Promise.resolve(kind !== 'offline-map'),
+    releaseArtifactBody: (kind, body) => {
+      if (kind === 'offline-map') verificationReleases.push(body);
+      return Promise.resolve();
+    },
+  });
+  assert.equal((await commit(verificationHarness.store, 'rejected-map')).ok, false);
+  assert.deepEqual(verificationReleases.map((body) => JSON.parse(body).marker), ['rejected-map']);
+  assert.equal(verificationHarness.bodies.values.size, 0);
+
+  const publicationReleases: string[] = [];
+  const publicationHarness = harness({
+    releaseArtifactBody: (kind, body) => {
+      if (kind === 'offline-map') publicationReleases.push(body);
+      return Promise.resolve();
+    },
+  });
+  publicationHarness.metadata.fail = (key) => key.includes(':head:');
+  assert.equal((await commit(publicationHarness.store, 'unpublished-map')).ok, false);
+  publicationHarness.metadata.fail = null;
+  assert.deepEqual(publicationReleases.map((body) => JSON.parse(body).marker), ['unpublished-map']);
+  assert.deepEqual(
+    await publicationHarness.store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'not-saved', packId: null },
+  );
+});
+
+test('old-generation cleanup and pruning release removed maps but retain active and previous maps', async () => {
+  const oldGenerationReleases: string[] = [];
+  const oldHarness = harness({
+    releaseArtifactBody: (kind, body) => {
+      if (kind === 'offline-map') oldGenerationReleases.push(body);
+      return Promise.resolve();
+    },
+  });
+  assert.equal((await commit(oldHarness.store, 'old-map')).ok, true);
+  assert.equal((await commit(oldHarness.store, 'previous-map')).ok, true);
+  assert.equal((await commit(oldHarness.store, 'active-map')).ok, true);
+  assert.deepEqual(oldGenerationReleases.map((body) => JSON.parse(body).marker), ['old-map']);
+
+  const pruneReleases: string[] = [];
+  const pruneHarness = harness({
+    releaseArtifactBody: (kind, body) => {
+      if (kind === 'offline-map') pruneReleases.push(body);
+      return Promise.resolve();
+    },
+  });
+  const placeIds = Array.from({ length: 6 }, (_, index) => `map-place-${index + 1}`);
+  for (const placeId of placeIds) {
+    assert.equal((await commitScope(pruneHarness.store, placeId, `profile:${placeId}`, placeId)).ok, true);
+  }
+  pruneReleases.length = 0;
+  await pruneHarness.store.prune({ placeIds, maxPlaces: 5, generationsPerPlace: 2 });
+  assert.deepEqual(pruneReleases.map((body) => JSON.parse(body).marker), [placeIds[5]]);
+  for (const placeId of placeIds.slice(0, 5)) {
+    assert.equal(
+      (await pruneHarness.store.readActive({ placeId, profileFingerprint: `profile:${placeId}`, now: NOW })).status,
+      'ready',
+    );
+  }
+});
+
+test('release failures cannot report a failed publication as success or revoke the verified head', async () => {
+  const { metadata, store } = harness({
+    releaseArtifactBody: () => Promise.reject(new Error('external release failed')),
+  });
+  assert.deepEqual(await commit(store, 'verified-head'), { ok: true, packId: 'pack-1' });
+  metadata.fail = (key) => key.includes(':head:');
+  assert.equal((await commit(store, 'failed-candidate')).ok, false);
+  metadata.fail = null;
+  assert.deepEqual(
+    await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
   );
 });
 

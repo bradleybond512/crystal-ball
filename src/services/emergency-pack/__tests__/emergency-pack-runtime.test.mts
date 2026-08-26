@@ -34,6 +34,10 @@ interface RuntimeApi {
   getEmergencyPackState?: (place: Place) => State;
   captureEmergencyPack?: (place: Place, contactConsent: boolean) => Promise<State>;
   subscribeEmergencyPack?: (listener: () => void) => () => void;
+  readLegacyLifelinePackManifestV1?: (
+    storage: { getItem(key: string): string | null },
+    placeId: string,
+  ) => unknown | null;
 }
 
 const api = await import('../emergency-pack-runtime.ts').catch(() => ({} as RuntimeApi)) as RuntimeApi;
@@ -193,6 +197,24 @@ test('runtime exports the exact default facade consumed by Emergency Readiness',
   requireFunction('getEmergencyPackState');
   requireFunction('captureEmergencyPack');
   requireFunction('subscribeEmergencyPack');
+});
+
+test('legacy migration reads only the exact v1 key and accepts only a JSON record', () => {
+  const read = requireFunction('readLegacyLifelinePackManifestV1');
+  const reads: string[] = [];
+  const manifest = { schemaVersion: 1, placeId: 'home' };
+  const storage = {
+    getItem(key: string): string | null {
+      reads.push(key);
+      return key === 'wm_lifeline_pack_manifest_v1:home' ? JSON.stringify(manifest) : null;
+    },
+  };
+
+  assert.deepEqual(read(storage, 'home'), manifest);
+  assert.deepEqual(reads, ['wm_lifeline_pack_manifest_v1:home']);
+  for (const malformed of ['null', '[]', '"text"', '{']) {
+    assert.equal(read({ getItem: () => malformed }, 'home'), null);
+  }
 });
 
 test('runtime composes browser adapters, store, coordinator, sources, and orchestrator for a real capture', async () => {

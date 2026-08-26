@@ -92,6 +92,13 @@ interface EmergencyPackRuntimeStore {
     packId?: string;
     reason?: string;
   }>;
+  migrateLifelineGeneration?(input: {
+    placeId: string;
+    profileFingerprint: string;
+    legacyQueryFingerprint: string;
+    legacyManifest: unknown;
+    artifact: EmergencyPackCapturedArtifact;
+  }): Promise<{ ok: boolean; packId?: string; reason?: string }>;
   prune?(input: { placeIds: string[]; maxPlaces: number; generationsPerPlace: number }): Promise<void>;
 }
 
@@ -107,6 +114,7 @@ interface EmergencyPackRuntimeDependencies {
     sources: Partial<Record<string, EmergencyPackArtifactSource>>;
     commitGeneration: EmergencyPackRuntimeStore['commitGeneration'];
   }): { capture(scope: EmergencyPackCaptureScope): Promise<EmergencyPackCaptureResult> };
+  getLegacyLifelinePackManifest(placeId: string): unknown | null;
   subscribeSavedPlaces(callback: () => void): () => void;
   subscribeRoutes(callback: () => void): () => void;
   subscribeComms(callback: () => void): () => void;
@@ -147,6 +155,34 @@ function validState(value: unknown, profileFingerprint: string): value is Emerge
     && (state.packId === null || (typeof state.packId === 'string' && state.packId.length > 0));
 }
 
+function strictJsonRecord(value: unknown): Record<string, unknown> | null {
+  try {
+    const encoded = JSON.stringify(value);
+    if (typeof encoded !== 'string') return null;
+    const parsed = JSON.parse(encoded) as unknown;
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const prototype: unknown = Object.getPrototypeOf(parsed);
+    return prototype === Object.prototype || prototype === null
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readLegacyLifelinePackManifestV1(
+  storage: Pick<Storage, 'getItem'>,
+  placeId: string,
+): unknown | null {
+  try {
+    const encoded = storage.getItem(`wm_lifeline_pack_manifest_v1:${placeId}`);
+    if (encoded === null) return null;
+    return strictJsonRecord(JSON.parse(encoded));
+  } catch {
+    return null;
+  }
+}
+
 export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDependencies) {
   const adapters = dependencies.createBrowserAdapters();
   const store = dependencies.createStore(adapters);
@@ -155,7 +191,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   const placeGenerations = new Map<string, number>();
   const captureContexts = new Map<string, { place: RuntimePlace; contactConsent: boolean }>();
   const captureResults = new Map<string, EmergencyPackCaptureResult>();
-  const captureQueues = new Map<string, Promise<void>>();
+  const operationQueues = new Map<string, Promise<void>>();
   let active = true;
 
   const readDetailed = async (scope: EmergencyPackCaptureScope): Promise<EmergencyPackRuntimeState> => {
@@ -221,24 +257,77 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     for (const listener of listeners) listener({ ...state });
   }
 
+  async function enqueuePlaceOperation<T>(placeId: string, operation: () => Promise<T>): Promise<T> {
+    const prior = operationQueues.get(placeId) ?? Promise.resolve();
+    const current = prior.catch(() => undefined).then(operation);
+    const tail = current.then(() => undefined, () => undefined);
+    operationQueues.set(placeId, tail);
+    try {
+      return await current;
+    } finally {
+      if (operationQueues.get(placeId) === tail) operationQueues.delete(placeId);
+    }
+  }
+
+  async function recoverAndMigrate(
+    place: RuntimePlace,
+    scope: EmergencyPackCaptureScope,
+  ): Promise<EmergencyPackRuntimeState> {
+    await coordinator.recover(scope);
+    const recovered = await readDetailed(scope);
+    if (recovered.status !== 'not-saved' || !store.migrateLifelineGeneration) return recovered;
+
+    const legacyManifest = strictJsonRecord(dependencies.getLegacyLifelinePackManifest(place.id));
+    const legacyQueryFingerprint = legacyManifest?.queryFingerprint;
+    if (typeof legacyQueryFingerprint !== 'string' || legacyQueryFingerprint.length === 0) return recovered;
+
+    const lifelines = dependencies.createSources(place).lifelines;
+    if (!lifelines) return recovered;
+    const artifact = await lifelines(scope);
+    if (!artifact || artifact.kind !== 'lifelines') return recovered;
+
+    const migrated = await store.migrateLifelineGeneration({
+      placeId: scope.placeId,
+      profileFingerprint: scope.profileFingerprint,
+      legacyQueryFingerprint,
+      legacyManifest,
+      artifact,
+    });
+    return migrated.ok ? readDetailed(scope) : recovered;
+  }
+
   async function refreshPlace(place: RuntimePlace, recover: boolean): Promise<EmergencyPackRuntimeState> {
     const scope = scopeFor(place);
     if (!scope) return notSaved('', 'scope-invalid');
-    const generation = begin(place.id);
-    try {
-      await (recover ? coordinator.recover(scope) : coordinator.refresh(scope));
-      const state = await readDetailed(scope);
-      publish(place.id, generation, state);
-      return state;
-    } catch {
-      const state = notSaved(scope.profileFingerprint, 'storage-failure');
-      publish(place.id, generation, state);
-      return state;
-    }
+    return enqueuePlaceOperation(place.id, async () => {
+      const generation = begin(place.id);
+      try {
+        let state: EmergencyPackRuntimeState;
+        if (recover) {
+          state = await recoverAndMigrate(place, scope);
+        } else {
+          await coordinator.refresh(scope);
+          state = await readDetailed(scope);
+        }
+        publish(place.id, generation, state);
+        return state;
+      } catch {
+        const state = notSaved(scope.profileFingerprint, 'storage-failure');
+        publish(place.id, generation, state);
+        return state;
+      }
+    });
   }
 
   function retainedPlaces(): RuntimePlace[] {
     return dependencies.getSavedPlaces().slice(0, MAX_PLACES);
+  }
+
+  function isRetainedPlace(place: RuntimePlace, scope: EmergencyPackCaptureScope): boolean {
+    return retainedPlaces().some((candidate) => {
+      if (candidate.id !== place.id) return false;
+      return scopeFor(candidate)?.profileFingerprint === scope.profileFingerprint;
+    });
   }
 
   async function refreshAll(recover: boolean): Promise<void> {
@@ -277,6 +366,10 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       const state = notSaved('', 'scope-invalid');
       return { ok: false, reason: 'scope-invalid', state };
     }
+    if (!isRetainedPlace(place, scope)) {
+      const state = notSaved(scope.profileFingerprint, 'place-not-retained');
+      return { ok: false, reason: 'place-not-retained', state };
+    }
     captureContexts.set(place.id, { place, contactConsent });
     captureResults.set(place.id, { ok: false, reason: 'capture-failed' });
     try {
@@ -304,15 +397,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     place: RuntimePlace,
     contactConsent: boolean,
   ): Promise<EmergencyPackRuntimeCaptureResult> {
-    const prior = captureQueues.get(place.id) ?? Promise.resolve();
-    const capture = prior.catch(() => undefined).then(() => executeCapture(place, contactConsent));
-    const tail = capture.then(() => undefined, () => undefined);
-    captureQueues.set(place.id, tail);
-    try {
-      return await capture;
-    } finally {
-      if (captureQueues.get(place.id) === tail) captureQueues.delete(place.id);
-    }
+    return enqueuePlaceOperation(place.id, () => executeCapture(place, contactConsent));
   }
 
   return {
@@ -351,7 +436,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       placeGenerations.clear();
       captureContexts.clear();
       captureResults.clear();
-      captureQueues.clear();
+      operationQueues.clear();
     },
   };
 }
@@ -465,6 +550,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
       captureOfflineMap: captureDefaultOfflineMap,
     }),
     createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
+    getLegacyLifelinePackManifest: (placeId) => readLegacyLifelinePackManifestV1(localStorage, placeId),
     subscribeSavedPlaces: (callback) => subscribeSavedPlaces(() => callback()),
     subscribeRoutes: subscribeEvacRoutes,
     subscribeComms: (callback) => subscribeCommsPlans(() => callback()),

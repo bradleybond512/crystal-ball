@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createEmergencyPackCoordinator } from '../emergency-pack-coordinator.ts';
@@ -38,9 +39,26 @@ interface RuntimeApi {
     storage: { getItem(key: string): string | null },
     placeId: string,
   ) => unknown | null;
+  createEmergencyPackOfflineMapLifecycle?: (
+    cacheStorage: { open(name: string): Promise<object> },
+    operations?: {
+      verify(input: { generationId: string; tiles: unknown[]; cache: object }): Promise<{ ok: boolean }>;
+      release(input: { generationId: string; tiles: unknown[]; cache: object }): Promise<{ ok: boolean }>;
+    },
+  ) => {
+    verifyArtifactBody(kind: string, body: string): Promise<boolean>;
+    releaseArtifactBody(kind: string, body: string): Promise<void>;
+    releaseArtifact(artifact: { kind: string; body: string }): Promise<void>;
+  };
+  captureEmergencyPackOfflineMap?: (
+    place: Place,
+    scope: Scope & { contactConsent: boolean },
+    dependencies: Record<string, unknown>,
+  ) => Promise<{ kind: string; body: string; itemCount: number } | null>;
 }
 
 const api = await import('../emergency-pack-runtime.ts').catch(() => ({} as RuntimeApi)) as RuntimeApi;
+const runtimeSource = readFileSync(new URL('../emergency-pack-runtime.ts', import.meta.url), 'utf8');
 
 function requireFunction<K extends keyof RuntimeApi>(name: K): NonNullable<RuntimeApi[K]> {
   const value = api[name];
@@ -86,6 +104,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
   const sourcePlaces: string[] = [];
   const pruneCalls: Array<{ placeIds: string[]; maxPlaces: number; generationsPerPlace: number }> = [];
   const migrationCalls: unknown[] = [];
+  const releasedArtifacts: unknown[] = [];
   let commitCalls = 0;
 
   const store = {
@@ -124,6 +143,9 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       pruneCalls.push({ ...input, placeIds: [...input.placeIds] });
     },
   };
+  const releaseArtifact = async (artifact: unknown): Promise<void> => {
+    releasedArtifacts.push(artifact);
+  };
 
   const runtime = requireFunction('createEmergencyPackRuntime')({
     now: () => NOW,
@@ -147,9 +169,11 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     createCaptureOrchestrator: (dependencies: {
       sources: unknown;
       commitGeneration: typeof store.commitGeneration;
+      releaseArtifact?: typeof releaseArtifact;
     }) => {
       compositions.push('orchestrator');
       assert.ok(dependencies.sources);
+      assert.equal(dependencies.releaseArtifact, releaseArtifact);
       return {
         capture: async (scope: Scope & { contactConsent: boolean }) => {
           const committed = await dependencies.commitGeneration({
@@ -160,6 +184,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
         },
       };
     },
+    releaseArtifact,
     subscribeSavedPlaces: (callback: () => void) => {
       callbacks.set('saved-places', callback);
       return () => { unsubscribed.push('saved-places'); };
@@ -185,6 +210,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     sourcePlaces,
     pruneCalls,
     migrationCalls,
+    releasedArtifacts,
     unsubscribed,
     authoritative,
     profile,
@@ -214,6 +240,117 @@ test('legacy migration reads only the exact v1 key and accepts only a JSON recor
   assert.deepEqual(reads, ['wm_lifeline_pack_manifest_v1:home']);
   for (const malformed of ['null', '[]', '"text"', '{']) {
     assert.equal(read({ getItem: () => malformed }, 'home'), null);
+  }
+});
+
+test('offline map lifecycle verifies and releases only strict immutable generation evidence', async () => {
+  const create = requireFunction('createEmergencyPackOfflineMapLifecycle');
+  const cache = { id: 'wm-offline-maps' };
+  const opened: string[] = [];
+  const verified: unknown[] = [];
+  const released: unknown[] = [];
+  const lifecycle = create({
+    async open(name: string): Promise<object> {
+      opened.push(name);
+      return cache;
+    },
+  }, {
+    async verify(input) { verified.push(input); return { ok: true }; },
+    async release(input) { released.push(input); return { ok: true }; },
+  });
+  const generationId = 'emergency-pack-generation-1';
+  const tile = {
+    url: 'https://a.basemaps.cartocdn.com/dark_all/4/1/2@2x.png',
+    cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/0`,
+    sha256: 'a'.repeat(64),
+    generationId,
+    byteLength: 4,
+    verified: true,
+  };
+  const body = JSON.stringify({
+    kind: 'offline-map',
+    placeId: 'home',
+    profileFingerprint: 'profile-home',
+    generationId,
+    tiles: [tile],
+    totalBytes: 4,
+  });
+
+  assert.equal(await lifecycle.verifyArtifactBody('offline-map', body), true);
+  await lifecycle.releaseArtifact({ kind: 'offline-map', body });
+  assert.deepEqual(opened, ['wm-offline-maps', 'wm-offline-maps']);
+  assert.deepEqual(verified, [{ generationId, tiles: [tile], cache }]);
+  assert.deepEqual(released, [{ generationId, tiles: [tile], cache }]);
+
+  assert.equal(await lifecycle.verifyArtifactBody('alerts', '{not-json'), true);
+  await lifecycle.releaseArtifactBody('contacts', '{not-json');
+  assert.equal(opened.length, 2, 'non-map bodies must not open or mutate the map cache');
+
+  for (const malformed of [
+    '{',
+    JSON.stringify({ kind: 'offline-map', generationId, tiles: [tile], totalBytes: 4 }),
+    JSON.stringify({
+      kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home', generationId,
+      tiles: [{ ...tile, sha256: undefined }], totalBytes: 4,
+    }),
+    JSON.stringify({
+      kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home', generationId,
+      tiles: [tile], totalBytes: 4, unexpected: true,
+    }),
+  ]) {
+    assert.equal(await lifecycle.verifyArtifactBody('offline-map', malformed), false);
+    await assert.rejects(() => lifecycle.releaseArtifactBody('offline-map', malformed));
+  }
+
+  const unavailable = create({ open: async () => { throw new Error('cache unavailable'); } });
+  assert.equal(await unavailable.verifyArtifactBody('offline-map', body), false);
+  await assert.rejects(() => unavailable.releaseArtifactBody('offline-map', body));
+});
+
+test('default runtime wires immutable map verification and cleanup through store and orchestrator boundaries', () => {
+  assert.match(runtimeSource, /verifyArtifactBody:\s*offlineMapLifecycle\.verifyArtifactBody/);
+  assert.match(runtimeSource, /releaseArtifactBody:\s*offlineMapLifecycle\.releaseArtifactBody/);
+  assert.match(runtimeSource, /releaseArtifact:\s*offlineMapLifecycle\.releaseArtifact/);
+  assert.match(runtimeSource, /captureTiles\(\{\s*generationId,/);
+});
+
+test('default offline map capture supplies unique bounded ids and serializes exact tile evidence', async () => {
+  const capture = requireFunction('captureEmergencyPackOfflineMap');
+  const generationIds = ['generation-one', 'generation-two'];
+  const captureInputs: Array<{ generationId: string }> = [];
+  const dependencies = {
+    now: () => NOW,
+    randomUUID: () => generationIds.shift(),
+    planTileUrls: () => ({ ok: true, tileUrls: ['https://a.basemaps.cartocdn.com/tile.png'] }),
+    openCache: async () => ({ id: 'wm-offline-maps' }),
+    fetchTile: async () => new Response(),
+    captureTiles: async (input: { generationId: string }) => {
+      captureInputs.push(input);
+      const tile = {
+        url: 'https://a.basemaps.cartocdn.com/tile.png',
+        cacheKey: `https://offline-map.crystalball.invalid/exact/${encodeURIComponent(input.generationId)}/0`,
+        sha256: 'b'.repeat(64),
+        generationId: input.generationId,
+        byteLength: 8,
+        verified: true,
+      };
+      return { ok: true, total: 1, downloaded: 1, totalBytes: 8, tiles: [tile] };
+    },
+  };
+  const home = place('home');
+  const scope = { placeId: home.id, profileFingerprint: 'profile-home', contactConsent: false };
+  const first = await capture(home, scope, dependencies);
+  const second = await capture(home, scope, dependencies);
+
+  assert.equal(captureInputs.length, 2);
+  assert.notEqual(captureInputs[0]?.generationId, captureInputs[1]?.generationId);
+  assert.ok(captureInputs.every(({ generationId }) => generationId.length > 0 && generationId.length <= 180));
+  for (const artifact of [first, second]) {
+    assert.ok(artifact);
+    const payload = JSON.parse(artifact.body) as Record<string, unknown>;
+    assert.equal(payload.generationId, (payload.tiles as Array<Record<string, unknown>>)[0]?.generationId);
+    assert.equal(typeof (payload.tiles as Array<Record<string, unknown>>)[0]?.cacheKey, 'string');
+    assert.match(String((payload.tiles as Array<Record<string, unknown>>)[0]?.sha256), /^[a-f0-9]{64}$/);
   }
 });
 

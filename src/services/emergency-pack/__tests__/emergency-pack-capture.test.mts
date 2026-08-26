@@ -76,27 +76,53 @@ test('route capture enforces exact endpoints, 5,000 coordinates, 1,000 steps, an
 });
 
 test('offline map receipts require every successful tile readback within per-tile and pack limits', () => {
-  const tiles = [{ url: 'https://a.basemaps.cartocdn.com/dark_all/8/66/95@2x.png', byteLength: 32_000, verified: true }];
+  const generationId = 'generation-home-1';
+  const tiles = [{
+    url: 'https://a.basemaps.cartocdn.com/dark_all/8/66/95@2x.png',
+    cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/0`,
+    sha256: 'a'.repeat(64),
+    generationId,
+    byteLength: 32_000,
+    verified: true,
+  }];
   assert.equal(validate('offline-map', {
-    placeId: PLACE_ID, profileFingerprint: PROFILE, tiles, totalBytes: 32_000,
+    placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles, totalBytes: 32_000,
   }).ok, true);
+  for (const payload of [
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, tiles, totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId: '', tiles, totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], generationId: 'other' }], totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], cacheKey: tiles[0]!.url }], totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], sha256: 'not-a-digest' }], totalBytes: 32_000 },
+  ]) {
+    assert.equal(validate('offline-map', payload).ok, false);
+  }
   assert.equal(validate('offline-map', {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
-    tiles: Array.from({ length: 513 }, (_, index) => ({ url: `https://tiles/${index}`, byteLength: 1, verified: true })),
+    generationId,
+    tiles: Array.from({ length: 513 }, (_, index) => ({
+      url: `https://tiles/${index}`,
+      cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/${index}`,
+      sha256: 'a'.repeat(64),
+      generationId,
+      byteLength: 1,
+      verified: true,
+    })),
     totalBytes: 513,
   }).ok, false);
   assert.equal(validate('offline-map', {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
+    generationId,
     tiles: [{ ...tiles[0], byteLength: 1024 * 1024 + 1 }],
     totalBytes: 1024 * 1024 + 1,
   }).ok, false);
   assert.equal(validate('offline-map', {
-    placeId: PLACE_ID, profileFingerprint: PROFILE, tiles: [{ ...tiles[0], verified: false }], totalBytes: 32_000,
+    placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], verified: false }], totalBytes: 32_000,
   }).ok, false);
   assert.equal(validate('offline-map', {
-    placeId: PLACE_ID, profileFingerprint: PROFILE, tiles, totalBytes: 50 * 1024 * 1024 + 1,
+    placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles, totalBytes: 50 * 1024 * 1024 + 1,
   }).ok, false);
 });
 

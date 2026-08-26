@@ -50,6 +50,9 @@ const MAX_ROUTE_DURATION_MINUTES = 525_600;
 const MAX_ENDPOINT_SNAP_DEGREES = 0.02;
 const MAX_MAP_TILES = 512;
 const MAX_MAP_TILE_BYTES = 1024 * 1024;
+const MAX_MAP_GENERATION_ID_LENGTH = 180;
+const MAP_CACHE_KEY_PREFIX = 'https://offline-map.crystalball.invalid/exact';
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 const MAX_CONTACTS = 25;
 const MAX_FALLBACK_STEPS = 32;
 const MAX_CHECK_IN_WINDOWS = 16;
@@ -185,15 +188,28 @@ function validateRoute(payload: Record<string, unknown>): EmergencyPackArtifactV
 }
 
 function validateOfflineMap(payload: Record<string, unknown>): EmergencyPackArtifactValidationResult {
+  if (!isBoundedString(payload.generationId, MAX_MAP_GENERATION_ID_LENGTH)) {
+    return invalid('invalid-map-generation');
+  }
+  const generationId = payload.generationId;
   if (!Array.isArray(payload.tiles)
     || payload.tiles.length === 0
     || payload.tiles.length > MAX_MAP_TILES) return invalid('invalid-map-tile-count');
   const urls = new Set<string>();
   let calculatedBytes = 0;
-  for (const tile of payload.tiles) {
+  for (const [index, tile] of payload.tiles.entries()) {
     if (!isRecord(tile)
+      || !hasAllowedKeys(
+        tile,
+        ['url', 'cacheKey', 'sha256', 'generationId', 'byteLength', 'verified'],
+        ['url', 'cacheKey', 'sha256', 'generationId', 'byteLength', 'verified'],
+      )
       || !isBoundedString(tile.url, 2048)
       || !tile.url.startsWith('https://')
+      || tile.generationId !== generationId
+      || tile.cacheKey !== `${MAP_CACHE_KEY_PREFIX}/${encodeURIComponent(generationId)}/${index}`
+      || typeof tile.sha256 !== 'string'
+      || !SHA256_HEX_PATTERN.test(tile.sha256)
       || !isSafeCount(tile.byteLength, MAX_MAP_TILE_BYTES, false)
       || tile.verified !== true
       || urls.has(tile.url)) return invalid('invalid-map-tile');
@@ -387,6 +403,7 @@ interface EmergencyPackCaptureDependencies {
     optionalKinds: readonly string[];
     artifacts: EmergencyPackCapturedArtifact[];
   }) => Promise<{ ok: boolean; packId?: string; reason?: string }>;
+  releaseArtifact?: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
 }
 
 const CAPTURED_ARTIFACT_KEYS = [
@@ -510,11 +527,17 @@ async function captureRequiredArtifacts(
   scope: EmergencyPackCaptureScope,
   placeId: string,
   profileFingerprint: string,
-): Promise<{ artifacts: EmergencyPackCapturedArtifact[]; failure?: never } | CapturedArtifactFailure> {
+): Promise<{ artifacts: EmergencyPackCapturedArtifact[]; failure?: EmergencyPackCaptureResult }> {
   const artifacts: EmergencyPackCapturedArtifact[] = [];
   for (const kind of EMERGENCY_PACK_REQUIRED_KINDS) {
+    if ((kind === 'comms-plan' || kind === 'contacts') && scope.contactConsent !== true) {
+      return {
+        artifacts,
+        failure: { ok: false, failedKind: 'contacts', reason: 'contact-consent-required' },
+      };
+    }
     const outcome = await captureRequiredArtifact(dependencies, kind, scope, placeId, profileFingerprint);
-    if (outcome.failure) return outcome;
+    if (outcome.failure) return { artifacts, failure: outcome.failure };
     artifacts.push(outcome.artifact);
   }
   return { artifacts };
@@ -564,6 +587,28 @@ async function commitCapturedArtifacts(
   }
 }
 
+async function releaseCapturedOfflineMap(
+  dependencies: EmergencyPackCaptureDependencies,
+  artifacts: readonly EmergencyPackCapturedArtifact[],
+): Promise<void> {
+  const artifact = artifacts.find((candidate) => candidate.kind === 'offline-map');
+  if (!artifact || typeof dependencies.releaseArtifact !== 'function') return;
+  try {
+    await dependencies.releaseArtifact(artifact);
+  } catch {
+    // The original capture failure remains authoritative when cleanup fails.
+  }
+}
+
+async function abortCapture(
+  dependencies: EmergencyPackCaptureDependencies,
+  artifacts: readonly EmergencyPackCapturedArtifact[],
+  failure: EmergencyPackCaptureResult,
+): Promise<EmergencyPackCaptureResult> {
+  await releaseCapturedOfflineMap(dependencies, artifacts);
+  return failure;
+}
+
 export function createEmergencyPackCaptureOrchestrator(
   dependencies: EmergencyPackCaptureDependencies,
 ): { capture: (scope: EmergencyPackCaptureScope) => Promise<EmergencyPackCaptureResult> } {
@@ -579,11 +624,14 @@ export function createEmergencyPackCaptureOrchestrator(
       const placeId = scope.placeId;
       const profileFingerprint = scope.profileFingerprint;
       const required = await captureRequiredArtifacts(dependencies, scope, placeId, profileFingerprint);
-      if (required.failure) return required.failure;
+      if (required.failure) return abortCapture(dependencies, required.artifacts, required.failure);
       const optional = await captureOptionalArtifact(dependencies, scope, placeId, profileFingerprint);
-      if (optional.failure) return optional.failure;
+      if (optional.failure) return abortCapture(dependencies, required.artifacts, optional.failure);
       if (optional.artifact) required.artifacts.push(optional.artifact);
-      return commitCapturedArtifacts(dependencies, placeId, profileFingerprint, required.artifacts);
+      const committed = await commitCapturedArtifacts(dependencies, placeId, profileFingerprint, required.artifacts);
+      return committed.ok
+        ? committed
+        : abortCapture(dependencies, required.artifacts, committed);
     },
   };
 }

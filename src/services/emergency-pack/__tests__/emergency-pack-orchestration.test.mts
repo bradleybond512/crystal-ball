@@ -22,6 +22,7 @@ interface OrchestrationApi {
       optionalKinds: readonly string[];
       artifacts: Artifact[];
     }) => Promise<{ ok: boolean; packId?: string; reason?: string }>;
+    releaseArtifact?: (artifact: Artifact) => Promise<void>;
   }) => {
     capture: (scope: Scope) => Promise<{
       ok: boolean;
@@ -42,9 +43,26 @@ const api = await import('../emergency-pack-capture.ts').catch(() => ({} as Orch
 const scope = { placeId: PLACE_ID, profileFingerprint: PROFILE, contactConsent: true };
 
 function artifact(kind: string): Artifact {
+  const body = kind === 'offline-map'
+    ? {
+      kind,
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      generationId: 'generation-home-1',
+      tiles: [{
+        url: 'https://a.basemaps.cartocdn.com/dark_all/8/66/95@2x.png',
+        cacheKey: 'https://offline-map.crystalball.invalid/exact/generation-home-1/0',
+        sha256: 'a'.repeat(64),
+        generationId: 'generation-home-1',
+        byteLength: 32_000,
+        verified: true,
+      }],
+      totalBytes: 32_000,
+    }
+    : { kind, placeId: PLACE_ID, profileFingerprint: PROFILE };
   return {
     kind,
-    body: JSON.stringify({ kind, placeId: PLACE_ID, profileFingerprint: PROFILE }),
+    body: JSON.stringify(body),
     expiresAt: NOW + 60 * 60_000,
     semanticState: 'verified',
     summary: `${kind} captured`,
@@ -164,4 +182,99 @@ test('alternate-route failure is reported as optional and does not block the req
 
   assert.deepEqual(await orchestrator.capture(scope), { ok: true, packId: 'pack-required-only' });
   assert.deepEqual(committedKinds, [[...REQUIRED_KINDS]]);
+});
+
+test('an already captured offline map is released on every later abort path', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  const scenarios = [
+    {
+      name: 'missing required source',
+      overrides: { 'comms-plan': async () => null },
+      commitGeneration: async () => ({ ok: true }),
+      expected: { ok: false, failedKind: 'comms-plan', reason: 'artifact-missing' },
+    },
+    {
+      name: 'thrown required source',
+      overrides: { contacts: async () => { throw new Error('contacts unavailable'); } },
+      commitGeneration: async () => ({ ok: true }),
+      expected: { ok: false, failedKind: 'contacts', reason: 'contacts unavailable' },
+    },
+    {
+      name: 'invalid required artifact',
+      overrides: { contacts: async () => ({ ...artifact('contacts'), body: '{not-json' }) },
+      commitGeneration: async () => ({ ok: true }),
+      expected: { ok: false, failedKind: 'contacts', reason: 'artifact-invalid' },
+    },
+    {
+      name: 'returned commit failure',
+      overrides: {},
+      commitGeneration: async () => ({ ok: false, reason: 'commit rejected' }),
+      expected: { ok: false, reason: 'commit rejected' },
+    },
+    {
+      name: 'thrown commit failure',
+      overrides: {},
+      commitGeneration: async () => { throw new Error('commit unavailable'); },
+      expected: { ok: false, reason: 'commit unavailable' },
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const released: Artifact[] = [];
+    const orchestrator = create({
+      sources: sources(scenario.overrides),
+      commitGeneration: scenario.commitGeneration,
+      releaseArtifact: async (candidate) => { released.push(candidate); },
+    });
+    assert.deepEqual(await orchestrator.capture({ ...scope }), scenario.expected, scenario.name);
+    assert.equal(released.length, 1, scenario.name);
+    assert.equal(released[0]?.kind, 'offline-map', scenario.name);
+  }
+});
+
+test('consent revoked after map capture releases the map before reading private sources', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  let privateReads = 0;
+  const released: Artifact[] = [];
+  const orchestrator = create({
+    sources: sources({
+      'offline-map': async (candidate) => {
+        candidate.contactConsent = false;
+        return artifact('offline-map');
+      },
+      'comms-plan': async () => { privateReads += 1; return artifact('comms-plan'); },
+      contacts: async () => { privateReads += 1; return artifact('contacts'); },
+    }),
+    commitGeneration: async () => ({ ok: true, packId: 'must-not-commit' }),
+    releaseArtifact: async (candidate) => { released.push(candidate); },
+  });
+
+  assert.deepEqual(await orchestrator.capture({ ...scope }), {
+    ok: false,
+    failedKind: 'contacts',
+    reason: 'contact-consent-required',
+  });
+  assert.equal(privateReads, 0);
+  assert.equal(released.length, 1);
+  assert.equal(released[0]?.kind, 'offline-map');
+});
+
+test('release failure cannot turn an aborted capture into success and successful commit never releases', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  let releaseAttempts = 0;
+  const rejected = create({
+    sources: sources(),
+    commitGeneration: async () => ({ ok: false, reason: 'commit rejected' }),
+    releaseArtifact: async () => { releaseAttempts += 1; throw new Error('release failed'); },
+  });
+  assert.deepEqual(await rejected.capture({ ...scope }), { ok: false, reason: 'commit rejected' });
+  assert.equal(releaseAttempts, 1);
+
+  const committed = create({
+    sources: sources(),
+    commitGeneration: async () => ({ ok: true, packId: 'pack-success' }),
+    releaseArtifact: async () => { releaseAttempts += 1; },
+  });
+  assert.deepEqual(await committed.capture({ ...scope }), { ok: true, packId: 'pack-success' });
+  assert.equal(releaseAttempts, 1, 'successful commit must retain its map generation');
 });

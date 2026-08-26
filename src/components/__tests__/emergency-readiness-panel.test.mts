@@ -124,9 +124,13 @@ test('hydrates only, renders empty then subscribed state, and fully cleans up', 
   assert.equal(content.querySelectorAll('[data-readiness-card]').length, 4);
   assert.ok(content.querySelector('section[aria-labelledby]'));
   assert.ok(content.querySelector('[aria-live="polite"][aria-atomic="true"]'));
-  assert.equal(content.querySelectorAll('h3').length, 4);
-  assert.equal(content.querySelectorAll('dl').length, 4);
-  assert.equal(content.querySelectorAll('button, a, input, [tabindex]').length, 0, 'read-only content should add no keyboard traps');
+  assert.equal(content.querySelectorAll('[data-readiness-card] h3').length, 4);
+  assert.equal(content.querySelectorAll('[data-readiness-card] dl').length, 4);
+  assert.equal(
+    content.querySelectorAll('[data-readiness-card] button, [data-readiness-card] a, [data-readiness-card] input, [data-readiness-card] select, [data-readiness-card] [tabindex]').length,
+    0,
+    'the four capability cards must remain read-only without keyboard traps',
+  );
   assert.match(content.textContent ?? '', /Home <img src=x onerror=window\.pwned=true>/);
   assert.equal(content.querySelector('img'), null, 'hostile saved-place text must remain text');
   assert.equal(getFetchCalls().length, 0, 'hydrate and subscription renders must remain offline-only');

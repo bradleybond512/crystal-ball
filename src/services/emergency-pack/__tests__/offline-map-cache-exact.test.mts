@@ -76,7 +76,7 @@ class ExactCache {
     const stored = this.values.get(key);
     if (!stored) return undefined;
     const bytes = this.corrupt.has(key)
-      ? new Uint8Array([...stored, 0xff])
+      ? new Uint8Array(stored.map((value, index) => index === 0 ? value ^ 0xff : value))
       : stored;
     return new Response(bytes, { status: 200, headers: { 'content-type': 'image/png' } });
   }

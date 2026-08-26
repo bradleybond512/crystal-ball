@@ -33,6 +33,9 @@ export type ProgressCallback = (progress: DownloadProgress) => void;
 
 export interface ExactOfflineMapTile {
   url: string;
+  cacheKey: string;
+  sha256: string;
+  generationId: string;
   byteLength: number;
   verified: true;
 }
@@ -40,6 +43,7 @@ export interface ExactOfflineMapTile {
 export interface ExactOfflineMapCache {
   put(request: RequestInfo | URL, response: Response): Promise<void>;
   match(request: RequestInfo | URL): Promise<Response | undefined>;
+  delete(request: RequestInfo | URL): Promise<boolean>;
 }
 
 export interface ExactOfflineMapCaptureResult {
@@ -75,6 +79,8 @@ export const EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 export const EXACT_OFFLINE_MAP_MAX_CONCURRENCY = 4;
 const MAX_WEB_MERCATOR_LAT = 85.05112878;
 const EXACT_TILE_CONTENT_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif']);
+const EXACT_TILE_CACHE_PREFIX = 'https://offline-map.crystalball.invalid/exact';
+const EXACT_GENERATION_ID_MAX_LENGTH = 180;
 
 // ---------------------------------------------------------------------------
 // Tile math helpers (Slippy-map / Web Mercator)
@@ -146,35 +152,101 @@ function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
   return true;
 }
 
-async function readTileResponse(response: Response | undefined): Promise<Uint8Array | null> {
-  if (!response?.ok) return null;
-  const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-  if (!EXACT_TILE_CONTENT_TYPES.has(contentType)) return null;
+function isValidGenerationId(value: string | undefined): value is string {
+  return typeof value === 'string'
+    && value.trim().length > 0
+    && value.length <= EXACT_GENERATION_ID_MAX_LENGTH;
+}
+
+function exactTileCacheKey(generationId: string, index: number): string {
+  return `${EXACT_TILE_CACHE_PREFIX}/${encodeURIComponent(generationId)}/${index}`;
+}
+
+async function cancelBody(response: Response): Promise<void> {
   try {
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > EXACT_OFFLINE_MAP_MAX_TILE_BYTES) return null;
-    return bytes;
+    await response.body?.cancel();
+  } catch {
+    // The response is rejected regardless of whether its producer accepts cancellation.
+  }
+}
+
+interface ExactTileBody {
+  bytes: Uint8Array;
+  contentType: string;
+}
+
+async function readTileResponseBounded(response: Response | undefined): Promise<ExactTileBody | null> {
+  if (!response) return null;
+  if (!response.ok) {
+    await cancelBody(response);
+    return null;
+  }
+  const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  if (!EXACT_TILE_CONTENT_TYPES.has(contentType)) {
+    await cancelBody(response);
+    return null;
+  }
+  const declaredLengthValue = response.headers.get('content-length');
+  const declaredLength = declaredLengthValue === null ? null : Number(declaredLengthValue);
+  if (declaredLength !== null
+    && (!Number.isSafeInteger(declaredLength)
+      || declaredLength <= 0
+      || declaredLength > EXACT_OFFLINE_MAP_MAX_TILE_BYTES)) {
+    await cancelBody(response);
+    return null;
+  }
+  if (!response.body) return null;
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      byteLength += chunk.value.byteLength;
+      if (byteLength > EXACT_OFFLINE_MAP_MAX_TILE_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(chunk.value);
+    }
+    if (byteLength === 0) return null;
+    const bytes = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { bytes, contentType };
+  } catch {
+    try {
+      await reader.cancel();
+    } catch {
+      // The read already failed closed.
+    }
+    return null;
+  }
+}
+
+async function sha256(bytes: Uint8Array): Promise<string | null> {
+  try {
+    const digest = await globalThis.crypto?.subtle.digest('SHA-256', bytes.slice().buffer);
+    if (!digest) return null;
+    return [...new Uint8Array(digest)]
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('');
   } catch {
     return null;
   }
 }
 
-async function readExistingTileExact(
-  cache: ExactOfflineMapCache,
-  url: string,
-): Promise<Uint8Array | null> {
-  const first = await readTileResponse(await cache.match(url));
-  if (!first) return null;
-  const readback = await readTileResponse(await cache.match(url));
-  return readback && bytesEqual(first, readback) ? readback : null;
-}
-
-async function fetchAndStoreTileExact(
+async function readSourceTileExact(
   cache: ExactOfflineMapCache,
   fetchTile: (url: string) => Promise<Response>,
   url: string,
-): Promise<Uint8Array | null> {
-  const existing = await readExistingTileExact(cache, url);
+): Promise<ExactTileBody | null> {
+  const existing = await readTileResponseBounded(await cache.match(url));
   if (existing) return existing;
 
   let response: Response;
@@ -183,24 +255,66 @@ async function fetchAndStoreTileExact(
   } catch {
     return null;
   }
-  const fetched = await readTileResponse(response);
-  if (!fetched) return null;
+  return readTileResponseBounded(response);
+}
+
+async function cleanupExactCacheKeys(
+  cache: ExactOfflineMapCache,
+  cacheKeys: readonly string[],
+): Promise<boolean> {
+  let cursor = 0;
+  let cleaned = true;
+  const worker = async (): Promise<void> => {
+    while (cursor < cacheKeys.length) {
+      const cacheKey = cacheKeys[cursor++]!;
+      try {
+        await cache.delete(cacheKey);
+        if (await cache.match(cacheKey)) cleaned = false;
+      } catch {
+        cleaned = false;
+      }
+    }
+  };
+  const concurrency = Math.min(EXACT_OFFLINE_MAP_MAX_CONCURRENCY, cacheKeys.length);
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  return cleaned;
+}
+
+async function storeTileGenerationExact(input: {
+  cache: ExactOfflineMapCache;
+  cacheKey: string;
+  generationId: string;
+  sourceUrl: string;
+  bytes: Uint8Array;
+  contentType: string;
+}): Promise<ExactOfflineMapTile | null> {
+  const digest = await sha256(input.bytes);
+  if (!digest) return null;
 
   try {
-    await cache.put(url, new Response(fetched.slice(), {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
+    await input.cache.put(input.cacheKey, new Response(input.bytes.slice(), {
+      status: 200,
+      headers: { 'content-type': input.contentType },
     }));
-    const readback = await readTileResponse(await cache.match(url));
-    return readback && bytesEqual(fetched, readback) ? readback : null;
+    const readback = await readTileResponseBounded(await input.cache.match(input.cacheKey));
+    if (!readback
+      || !bytesEqual(input.bytes, readback.bytes)
+      || await sha256(readback.bytes) !== digest) return null;
+    return {
+      url: input.sourceUrl,
+      cacheKey: input.cacheKey,
+      sha256: digest,
+      generationId: input.generationId,
+      byteLength: readback.bytes.byteLength,
+      verified: true,
+    };
   } catch {
     return null;
   }
 }
 
 export function validateOfflineMapCaptureBounds(
-  tiles: Array<{ url: string; byteLength: number; verified: boolean }>,
+  tiles: ReadonlyArray<{ url: string; byteLength: number; verified: boolean }>,
 ): { ok: boolean; reason?: string } {
   if (tiles.length === 0) return { ok: false, reason: 'tile-count-invalid' };
   if (tiles.length > EXACT_OFFLINE_MAP_MAX_TILES) return { ok: false, reason: 'tile-count-limit' };
@@ -227,12 +341,17 @@ export function validateOfflineMapCaptureBounds(
 }
 
 export async function captureOfflineMapTilesExact(input: {
+  generationId?: string;
   tileUrls: string[];
   cache: ExactOfflineMapCache;
   fetchTile: (url: string) => Promise<Response>;
   concurrency?: number;
 }): Promise<ExactOfflineMapCaptureResult> {
   const total = input.tileUrls.length;
+  const generationId = input.generationId;
+  if (!isValidGenerationId(generationId)) {
+    return { ok: false, total, downloaded: 0, totalBytes: 0, tiles: [], reason: 'generation-id-invalid' };
+  }
   if (total === 0) {
     return { ok: false, total, downloaded: 0, totalBytes: 0, tiles: [], reason: 'tile-count-invalid' };
   }
@@ -253,39 +372,140 @@ export async function captureOfflineMapTilesExact(input: {
   const requestedConcurrency = Number.isSafeInteger(input.concurrency) ? input.concurrency! : EXACT_OFFLINE_MAP_MAX_CONCURRENCY;
   const concurrency = Math.max(1, Math.min(requestedConcurrency, EXACT_OFFLINE_MAP_MAX_CONCURRENCY, total));
   const results = Array.from<ExactOfflineMapTile | null>({ length: total }).fill(null);
+  const stagedCacheKeys: string[] = [];
+  let reservedBytes = 0;
   let cursor = 0;
+  let collision = false;
 
   const worker = async (): Promise<void> => {
     while (cursor < total) {
       const index = cursor++;
       const url = input.tileUrls[index]!;
-      const bytes = await fetchAndStoreTileExact(input.cache, input.fetchTile, url);
-      if (bytes) results[index] = { url, byteLength: bytes.byteLength, verified: true };
+      const cacheKey = exactTileCacheKey(generationId, index);
+      try {
+        if (await input.cache.match(cacheKey)) {
+          collision = true;
+          continue;
+        }
+      } catch {
+        continue;
+      }
+      const tileBody = await readSourceTileExact(input.cache, input.fetchTile, url);
+      if (!tileBody) continue;
+      if (reservedBytes + tileBody.bytes.byteLength > EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES) continue;
+      reservedBytes += tileBody.bytes.byteLength;
+      stagedCacheKeys.push(cacheKey);
+      const tile = await storeTileGenerationExact({
+        cache: input.cache,
+        cacheKey,
+        generationId,
+        sourceUrl: url,
+        bytes: tileBody.bytes,
+        contentType: tileBody.contentType,
+      });
+      if (tile) results[index] = tile;
     }
   };
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
   const tiles = results.filter((tile): tile is ExactOfflineMapTile => tile !== null);
   const totalBytes = tiles.reduce((sum, tile) => sum + tile.byteLength, 0);
-  if (tiles.length !== total) {
+  if (tiles.length !== total || collision) {
+    const cleaned = await cleanupExactCacheKeys(input.cache, stagedCacheKeys);
     return {
       ok: false,
       total,
-      downloaded: tiles.length,
-      totalBytes,
-      tiles,
-      reason: 'tile-verification-incomplete',
+      downloaded: collision ? 0 : tiles.length,
+      totalBytes: collision ? 0 : totalBytes,
+      tiles: collision ? [] : tiles,
+      reason: cleaned
+        ? collision ? 'generation-collision' : 'tile-verification-incomplete'
+        : 'generation-cleanup-failed',
     };
   }
   const bounds = validateOfflineMapCaptureBounds(tiles);
+  let cleanupFailed = false;
+  if (!bounds.ok) {
+    cleanupFailed = !await cleanupExactCacheKeys(input.cache, stagedCacheKeys);
+  }
   return {
     ok: bounds.ok,
     total,
-    downloaded: tiles.length,
-    totalBytes,
-    tiles,
-    ...(bounds.reason ? { reason: bounds.reason } : {}),
+    downloaded: bounds.ok ? tiles.length : 0,
+    totalBytes: bounds.ok ? totalBytes : 0,
+    tiles: bounds.ok ? tiles : [],
+    ...(cleanupFailed ? { reason: 'generation-cleanup-failed' } : bounds.reason ? { reason: bounds.reason } : {}),
   };
+}
+
+function validateExactGenerationTiles(
+  generationId: string,
+  tiles: readonly ExactOfflineMapTile[],
+): { ok: boolean; reason?: string } {
+  if (!isValidGenerationId(generationId)) return { ok: false, reason: 'generation-id-invalid' };
+  const bounds = validateOfflineMapCaptureBounds(tiles);
+  if (!bounds.ok) return bounds;
+  for (const [index, tile] of tiles.entries()) {
+    if (tile.generationId !== generationId
+      || tile.cacheKey !== exactTileCacheKey(generationId, index)) {
+      return { ok: false, reason: 'generation-key-mismatch' };
+    }
+    if (!/^[a-f0-9]{64}$/.test(tile.sha256)) return { ok: false, reason: 'tile-digest-invalid' };
+  }
+  return { ok: true };
+}
+
+export async function verifyOfflineMapGenerationExact(input: {
+  generationId: string;
+  tiles: ExactOfflineMapTile[];
+  cache: ExactOfflineMapCache;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const validation = validateExactGenerationTiles(input.generationId, input.tiles);
+  if (!validation.ok) return validation;
+  for (const tile of input.tiles) {
+    let readback: ExactTileBody | null;
+    try {
+      readback = await readTileResponseBounded(await input.cache.match(tile.cacheKey));
+    } catch {
+      readback = null;
+    }
+    if (!readback
+      || readback.bytes.byteLength !== tile.byteLength
+      || await sha256(readback.bytes) !== tile.sha256) {
+      return { ok: false, reason: 'tile-readback-mismatch' };
+    }
+  }
+  return { ok: true };
+}
+
+export async function deleteOfflineMapGenerationExact(input: {
+  generationId: string;
+  tiles: ExactOfflineMapTile[];
+  retainedCacheKeys?: string[];
+  cache: ExactOfflineMapCache;
+}): Promise<{ ok: boolean; deleted: number; retained: number; reason?: string }> {
+  const validation = validateExactGenerationTiles(input.generationId, input.tiles);
+  if (!validation.ok) {
+    return { ok: false, deleted: 0, retained: 0, ...(validation.reason ? { reason: validation.reason } : {}) };
+  }
+  const retainedCacheKeys = input.retainedCacheKeys
+    ? new Set(input.retainedCacheKeys)
+    : new Set<string>();
+  let deleted = 0;
+  let retained = 0;
+  try {
+    for (const tile of input.tiles) {
+      if (retainedCacheKeys.has(tile.cacheKey)) {
+        retained += 1;
+        continue;
+      }
+      await input.cache.delete(tile.cacheKey);
+      deleted += 1;
+    }
+  } catch {
+    return { ok: false, deleted, retained, reason: 'storage-failure' };
+  }
+  return { ok: true, deleted, retained };
 }
 
 export function planOfflineMapTileUrls(

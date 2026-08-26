@@ -57,6 +57,10 @@ async function within<T>(promise: Promise<T>): Promise<T> {
 function createConcurrentCaptureHarness(input: {
   holdMapFor?: string;
   failContactsFor?: string;
+  concurrentCaptureCount?: number;
+  initiallyReady?: string[];
+  holdPrune?: boolean;
+  pruneMapFor?: string;
 }) {
   const places: Place[] = [
     { id: 'home', name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 },
@@ -68,8 +72,10 @@ function createConcurrentCaptureHarness(input: {
     packId: string | null;
     profileFingerprint: string;
   }>();
+  const activeMapBodies = new Map<string, string>();
   const events: string[] = [];
   const mapFailures: string[] = [];
+  const pruneFailures: string[] = [];
   const metadata = new Map<string, string>();
   const cache: ExactOfflineMapCache = {
     async put() { return undefined; },
@@ -103,7 +109,29 @@ function createConcurrentCaptureHarness(input: {
   const allNonMapStarted = deferred();
   const heldMapStaged = deferred();
   const releaseHeldMap = deferred();
+  const pruneStarted = deferred();
+  const releasePrune = deferred();
   const nonMapPlaces = new Set<string>();
+
+  function mapBody(scope: EmergencyPackCaptureScope, generationId: string): string {
+    const cacheKey = `https://offline-map.crystalball.invalid/exact/${generationId}/0`;
+    return JSON.stringify({
+      kind: 'offline-map',
+      placeId: scope.placeId,
+      profileFingerprint: scope.profileFingerprint,
+      capturedAt: NOW,
+      generationId,
+      tiles: [{
+        url: 'https://a.basemaps.cartocdn.com/dark_all/4/1/2@2x.png',
+        cacheKey,
+        sha256: 'a'.repeat(64),
+        generationId,
+        byteLength: 4,
+        verified: true,
+      }],
+      totalBytes: 4,
+    });
+  }
 
   function artifact(kind: string, scope: EmergencyPackCaptureScope): EmergencyPackCapturedArtifact {
     const body = JSON.stringify({
@@ -144,22 +172,7 @@ function createConcurrentCaptureHarness(input: {
       heldMapStaged.resolve();
       await releaseHeldMap.promise;
     }
-    const body = JSON.stringify({
-      kind: 'offline-map',
-      placeId: scope.placeId,
-      profileFingerprint: scope.profileFingerprint,
-      capturedAt: NOW,
-      generationId,
-      tiles: [{
-        url: 'https://a.basemaps.cartocdn.com/dark_all/4/1/2@2x.png',
-        cacheKey,
-        sha256: 'a'.repeat(64),
-        generationId,
-        byteLength: 4,
-        verified: true,
-      }],
-      totalBytes: 4,
-    });
+    const body = mapBody(scope, generationId);
     return {
       kind: 'offline-map',
       body,
@@ -171,9 +184,41 @@ function createConcurrentCaptureHarness(input: {
     };
   }
 
+  for (const placeId of input.initiallyReady ?? []) {
+    const candidate = places.find(({ id }) => id === placeId);
+    assert.ok(candidate);
+    const profileFingerprint = profile(candidate);
+    states.set(profileFingerprint, {
+      status: 'ready',
+      packId: `existing-${placeId}`,
+      profileFingerprint,
+    });
+    activeMapBodies.set(profileFingerprint, mapBody({
+      placeId,
+      profileFingerprint,
+      contactConsent: true,
+    }, `existing-${placeId}`));
+  }
+  const prunedMapBody = input.pruneMapFor
+    ? mapBody({
+        placeId: input.pruneMapFor,
+        profileFingerprint: `profile-${input.pruneMapFor}`,
+        contactConsent: true,
+      }, `pruned-${input.pruneMapFor}`)
+    : null;
+
   const store = {
     async readActive(scope: EmergencyPackCaptureScope) {
-      return states.get(scope.profileFingerprint) ?? {
+      const state = states.get(scope.profileFingerprint);
+      const mapBody = activeMapBodies.get(scope.profileFingerprint);
+      if (state && mapBody && !await lifecycle.verifyArtifactBody('offline-map', mapBody)) {
+        return {
+          status: 'not-saved' as const,
+          packId: null,
+          profileFingerprint: scope.profileFingerprint,
+        };
+      }
+      return state ?? {
         status: 'not-saved' as const,
         packId: null,
         profileFingerprint: scope.profileFingerprint,
@@ -198,9 +243,24 @@ function createConcurrentCaptureHarness(input: {
         profileFingerprint: commit.profileFingerprint,
       };
       states.set(commit.profileFingerprint, state);
+      activeMapBodies.set(commit.profileFingerprint, map.body);
       return { ok: true, packId: state.packId };
     },
     async invalidateArtifacts() { return { ok: true }; },
+    async prune() {
+      events.push('prune:start');
+      pruneStarted.resolve();
+      if (input.holdPrune) await releasePrune.promise;
+      if (prunedMapBody) {
+        try {
+          await lifecycle.releaseArtifactBody('offline-map', prunedMapBody);
+        } catch (error) {
+          pruneFailures.push(error instanceof Error ? error.message : 'prune-release-failed');
+          throw error;
+        }
+      }
+      events.push('prune:end');
+    },
   };
 
   const runtime = createEmergencyPackRuntime({
@@ -214,7 +274,7 @@ function createConcurrentCaptureHarness(input: {
       if (kind === 'lifelines') {
         events.push(`${scope.placeId}:non-map-start`);
         nonMapPlaces.add(scope.placeId);
-        if (nonMapPlaces.size === places.length) allNonMapStarted.resolve();
+        if (nonMapPlaces.size === (input.concurrentCaptureCount ?? places.length)) allNonMapStarted.resolve();
         await allNonMapStarted.promise;
       }
       if (kind === 'offline-map') return offlineMapArtifact(scope);
@@ -236,9 +296,12 @@ function createConcurrentCaptureHarness(input: {
     runtime,
     events,
     mapFailures,
+    pruneFailures,
     allNonMapStarted: allNonMapStarted.promise,
     heldMapStaged: heldMapStaged.promise,
     releaseHeldMap: releaseHeldMap.resolve,
+    pruneStarted: pruneStarted.promise,
+    releasePrune: releasePrune.resolve,
   };
 }
 
@@ -258,10 +321,12 @@ test('two places serialize the complete offline-map lifecycle without blocking e
     'home:map-staged',
     'home:verify',
     'home:adopted',
+    'home:verify',
     'work:map-start',
     'work:map-staged',
     'work:verify',
     'work:adopted',
+    'work:verify',
   ]);
   harness.runtime.destroy();
 });
@@ -283,6 +348,53 @@ test('failed capture releases the offline-map lifecycle before the next place wi
     'work:map-staged',
     'work:verify',
     'work:adopted',
+    'work:verify',
   ]);
+  harness.runtime.destroy();
+});
+
+test('refresh verification waits for another place map lifecycle without hiding its saved pack', async () => {
+  const harness = createConcurrentCaptureHarness({
+    concurrentCaptureCount: 1,
+    holdMapFor: 'home',
+    initiallyReady: ['work'],
+  });
+  const capture = harness.runtime.capture(harness.places[0]!, true);
+  await within(harness.heldMapStaged);
+
+  const hydration = harness.runtime.hydrate();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const verifiedWorkBeforeRelease = harness.events.includes('work:verify');
+  harness.releaseHeldMap();
+  await within(Promise.all([capture, hydration]));
+
+  assert.equal(verifiedWorkBeforeRelease, false);
+  assert.equal(harness.runtime.getState(harness.places[1]!).status, 'ready');
+  harness.runtime.destroy();
+});
+
+test('prune release finishes before a new place can stage an offline-map generation', async () => {
+  const harness = createConcurrentCaptureHarness({
+    concurrentCaptureCount: 1,
+    holdMapFor: 'home',
+    holdPrune: true,
+    pruneMapFor: 'stale',
+  });
+  const hydration = harness.runtime.hydrate();
+  await within(harness.pruneStarted);
+
+  const capture = harness.runtime.capture(harness.places[0]!, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const mapStartedBeforePruneFinished = harness.events.includes('home:map-start');
+  harness.releasePrune();
+  await within(hydration);
+  await within(harness.heldMapStaged);
+  harness.releaseHeldMap();
+  const state = await within(capture);
+
+  assert.equal(mapStartedBeforePruneFinished, false);
+  assert.deepEqual(harness.pruneFailures, []);
+  assert.equal(state.status, 'ready');
+  assert.ok(harness.events.indexOf('prune:end') < harness.events.indexOf('home:map-start'));
   harness.runtime.destroy();
 });

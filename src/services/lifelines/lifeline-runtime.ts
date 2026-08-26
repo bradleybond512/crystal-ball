@@ -461,12 +461,55 @@ export function createLifelineRuntime(
     };
   }
 
+  function reconcileExactLifelinesArtifact(snapshot: LocalLogisticsSnapshot, snapshotAt: number): void {
+    const exactArtifact = snapshot.source === 'network' && !snapshot.isExpired
+      ? readExactLifelinesArtifact(storage, {
+        placeId: snapshot.placeId,
+        queryFingerprint: snapshot.queryFingerprint,
+        fetchedAt: snapshotAt,
+      }, clock())
+      : null;
+    if (!exactArtifact) return;
+    const existing = readPack(storage, snapshot.placeId);
+    const manifest = buildLifelineOfflinePackManifest({
+      placeId: snapshot.placeId,
+      queryFingerprint: snapshot.queryFingerprint,
+      requiredKinds: ['lifelines'],
+      artifacts: [{
+        kind: 'lifelines',
+        queryFingerprint: snapshot.queryFingerprint,
+        cachedAt: snapshot.fetchedAt,
+        expiresAt: new Date(snapshotAt + PACK_TTL_MS),
+      }],
+      createdAt: existing?.queryFingerprint === snapshot.queryFingerprint ? existing.createdAt : snapshot.fetchedAt,
+      updatedAt: snapshot.fetchedAt,
+    });
+    safeWrite(storage, packKey(snapshot.placeId), serializePack(manifest));
+  }
+
+  function packReadinessForSnapshot(snapshot: LocalLogisticsSnapshot): LifelineOfflinePackReadiness {
+    const now = clock();
+    return deriveLifelineOfflinePackReadiness(snapshot.queryFingerprint, verifiedPackManifest(
+      storage,
+      readPack(storage, snapshot.placeId),
+      { placeId: snapshot.placeId, queryFingerprint: snapshot.queryFingerprint },
+      now,
+    ), now);
+  }
+
   function processSnapshot(snapshot: LocalLogisticsSnapshot): LifelineRuntimeUpdate | null {
     const snapshotAt = snapshot.fetchedAt.getTime();
     if (!Number.isFinite(snapshotAt)) return null;
     const runtimeKey = `${snapshot.placeId}|${snapshot.queryFingerprint}`;
+    reconcileExactLifelinesArtifact(snapshot, snapshotAt);
     const previous = current.get(runtimeKey);
-    if (previous && snapshotAt <= previous.snapshotAt) return updates.get(runtimeKey) ?? null;
+    if (previous && snapshotAt <= previous.snapshotAt) {
+      const retained = updates.get(runtimeKey);
+      if (!retained) return null;
+      const reconciled = { ...retained, pack: packReadinessForSnapshot(snapshot) };
+      updates.set(runtimeKey, reconciled);
+      return reconciled;
+    }
 
     // Evaluate evidence expiry against the real clock, but use the accepted
     // snapshot retrieval watermark for ordering. Re-renders must not invent a
@@ -488,40 +531,8 @@ export function createLifelineRuntime(
       safeWrite(storage, changeKey(snapshot.placeId, snapshot.queryFingerprint), retained);
     }
 
-    const exactArtifact = snapshot.source === 'network' && !snapshot.isExpired
-      ? readExactLifelinesArtifact(storage, {
-        placeId: snapshot.placeId,
-        queryFingerprint: snapshot.queryFingerprint,
-        fetchedAt: snapshotAt,
-      }, clock())
-      : null;
-    if (exactArtifact) {
-      const existing = readPack(storage, snapshot.placeId);
-      const manifest = buildLifelineOfflinePackManifest({
-        placeId: snapshot.placeId,
-        queryFingerprint: snapshot.queryFingerprint,
-        requiredKinds: ['lifelines'],
-        artifacts: [{
-          kind: 'lifelines',
-          queryFingerprint: snapshot.queryFingerprint,
-          cachedAt: snapshot.fetchedAt,
-          expiresAt: new Date(snapshotAt + PACK_TTL_MS),
-        }],
-        createdAt: existing?.queryFingerprint === snapshot.queryFingerprint ? existing.createdAt : snapshot.fetchedAt,
-        updatedAt: snapshot.fetchedAt,
-      });
-      safeWrite(storage, packKey(snapshot.placeId), serializePack(manifest));
-    }
-
     const outage = updateOdinHistory(storage, snapshot, clock());
-
-    const packNow = clock();
-    const pack = deriveLifelineOfflinePackReadiness(snapshot.queryFingerprint, verifiedPackManifest(
-      storage,
-      readPack(storage, snapshot.placeId),
-      { placeId: snapshot.placeId, queryFingerprint: snapshot.queryFingerprint },
-      packNow,
-    ), packNow);
+    const pack = packReadinessForSnapshot(snapshot);
     const update = { situation, changes, pack, outage };
     updates.set(runtimeKey, update);
     return update;

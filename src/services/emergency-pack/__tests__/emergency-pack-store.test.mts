@@ -43,15 +43,20 @@ interface StoreApi {
       status: string;
       packId: string | null;
     }>;
+    prune: (input: {
+      placeIds: string[];
+      maxPlaces: number;
+      generationsPerPlace: number;
+    }) => Promise<void>;
   };
 }
 
 const api = await import('../emergency-pack-store.ts').catch(() => ({} as StoreApi)) as StoreApi;
 
-function artifacts(marker: string) {
+function artifacts(marker: string, placeId = PLACE_ID, profileFingerprint = PROFILE) {
   return REQUIRED_KINDS.map((kind) => ({
     kind,
-    body: JSON.stringify({ marker, kind, placeId: PLACE_ID, profileFingerprint: PROFILE }),
+    body: JSON.stringify({ marker, kind, placeId, profileFingerprint }),
     expiresAt: NOW + 60 * 60_000,
     semanticState: 'verified',
     summary: `${kind} captured`,
@@ -70,12 +75,21 @@ function harness() {
 }
 
 async function commit(store: ReturnType<typeof harness>['store'], marker: string) {
+  return commitScope(store, PLACE_ID, PROFILE, marker);
+}
+
+async function commitScope(
+  store: ReturnType<typeof harness>['store'],
+  placeId: string,
+  profileFingerprint: string,
+  marker: string,
+) {
   return store.commitGeneration({
-    placeId: PLACE_ID,
-    profileFingerprint: PROFILE,
+    placeId,
+    profileFingerprint,
     requiredKinds: REQUIRED_KINDS,
     optionalKinds: ['route-alternate'],
-    artifacts: artifacts(marker),
+    artifacts: artifacts(marker, placeId, profileFingerprint),
   });
 }
 
@@ -152,4 +166,60 @@ test('a place move cannot read the prior profile even when the place id is uncha
     await store.readActive({ placeId: PLACE_ID, profileFingerprint: `${PROFILE}:moved`, now: NOW }),
     { status: 'not-saved', packId: null, reason: 'profile-fingerprint-mismatch' },
   );
+});
+
+test('pruning keeps only five allowed place heads and each active plus previous generation', async () => {
+  const { metadata, bodies, store } = harness();
+  const placeIds = Array.from({ length: 6 }, (_, index) => `place-${index + 1}`);
+  const profileFor = (placeId: string) => `profile:${placeId}`;
+
+  for (const placeId of placeIds) {
+    for (let generation = 1; generation <= 3; generation += 1) {
+      assert.equal(
+        (await commitScope(store, placeId, profileFor(placeId), `${placeId}-${generation}`)).ok,
+        true,
+      );
+    }
+  }
+
+  assert.equal(typeof store.prune, 'function', 'prune should be implemented');
+  await store.prune({ placeIds, maxPlaces: 5, generationsPerPlace: 2 });
+
+  const heads = [...metadata.values.entries()]
+    .filter(([key]) => key.includes(':head:'))
+    .map(([, value]) => JSON.parse(value) as { packId: string; placeId: string; previousPackId: string | null });
+  const retainedPlaceIds = placeIds.slice(0, 5);
+  assert.deepEqual(heads.map(({ placeId }) => placeId).sort(), [...retainedPlaceIds].sort());
+
+  const manifests = [...metadata.values.entries()]
+    .filter(([key]) => key.includes(':manifest:'))
+    .map(([, value]) => JSON.parse(value) as {
+      packId: string;
+      placeId: string;
+      receipts: Array<{ cacheKey: string }>;
+    });
+  const expectedBodyKeys = new Set<string>();
+  for (const placeId of retainedPlaceIds) {
+    const head = heads.find((candidate) => candidate.placeId === placeId);
+    assert.ok(head);
+    const retained = manifests.filter((candidate) => candidate.placeId === placeId);
+    assert.equal(retained.length, 2, `${placeId} should retain only active and previous manifests`);
+    assert.deepEqual(
+      retained.map(({ packId }) => packId).sort(),
+      [head.packId, head.previousPackId].filter((packId): packId is string => packId !== null).sort(),
+    );
+    for (const manifest of retained) {
+      for (const { cacheKey } of manifest.receipts) {
+        expectedBodyKeys.add(cacheKey);
+        assert.equal(bodies.values.has(cacheKey), true, `${cacheKey} must remain readable`);
+      }
+    }
+    assert.equal(
+      (await store.readActive({ placeId, profileFingerprint: profileFor(placeId), now: NOW })).status,
+      'ready',
+    );
+  }
+
+  assert.equal(manifests.some(({ placeId }) => placeId === placeIds[5]), false);
+  assert.deepEqual([...bodies.values.keys()].sort(), [...expectedBodyKeys].sort());
 });

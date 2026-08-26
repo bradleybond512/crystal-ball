@@ -580,6 +580,19 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     };
   }
 
+  async function withOfflineMapLifecycle<T>(
+    operation: () => Promise<T>,
+    lifecycleHeld = false,
+  ): Promise<T> {
+    if (lifecycleHeld) return operation();
+    const release = await acquireOfflineMapLifecycle();
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
   const resolveOfflineMapTile = createEmergencyPackOfflineMapTileResolver({
     getScopes: () => retainedPlaces().flatMap((place) => {
       const scope = scopeFor(place);
@@ -593,15 +606,21 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       const revision = store.readOfflineMapRevision?.({ ...scope, contactConsent: false });
       return revision === null || revision === undefined ? null : `${offlineMapIndexEpoch}:${revision}`;
     },
-    readVerifiedOfflineMapArtifact: (scope) => store.readVerifiedOfflineMapArtifact?.({
-      ...scope,
-      contactConsent: false,
-    }).then((artifact) => artifact && ({ ...artifact, revision: `${offlineMapIndexEpoch}:${artifact.revision}` }))
-      ?? Promise.resolve(null),
+    readVerifiedOfflineMapArtifact: async (scope) => {
+      if (!store.readVerifiedOfflineMapArtifact) return null;
+      const artifact = await withOfflineMapLifecycle(() => store.readVerifiedOfflineMapArtifact!({
+        ...scope,
+        contactConsent: false,
+      }));
+      return artifact && ({ ...artifact, revision: `${offlineMapIndexEpoch}:${artifact.revision}` });
+    },
     openCache: (name) => dependencies.openOfflineMapCache?.(name) ?? Promise.reject(new Error('cache unavailable')),
   });
 
-  const readDetailed = async (scope: EmergencyPackCaptureScope): Promise<EmergencyPackRuntimeState> => {
+  const readDetailed = async (
+    scope: EmergencyPackCaptureScope,
+    lifecycleHeld = false,
+  ): Promise<EmergencyPackRuntimeState> => withOfflineMapLifecycle(async () => {
     const operation = store.readReadiness?.bind(store) ?? store.readActive.bind(store);
     try {
       const state = await operation({ ...scope, now: dependencies.now() });
@@ -612,7 +631,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     } catch {
       return notSaved(scope.profileFingerprint, 'storage-failure');
     }
-  };
+  }, lifecycleHeld);
 
   const coordinator = dependencies.createCoordinator({
     readActive: async (scope) => {
@@ -624,7 +643,11 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       try {
         const operation = store.recoverReadiness?.bind(store);
         if (operation) {
-          const recovered = await operation({ ...scope, contactConsent: false, now: dependencies.now() });
+          const recovered = await withOfflineMapLifecycle(() => operation({
+            ...scope,
+            contactConsent: false,
+            now: dependencies.now(),
+          }));
           offlineMapIndexEpoch += 1;
           const scoped = { ...recovered, profileFingerprint: recovered.profileFingerprint ?? scope.profileFingerprint };
           const detailed = validState(scoped, scope.profileFingerprint)
@@ -633,7 +656,11 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           detailedOperationStates.set(scope.placeId, detailed);
           return coordinatorState(detailed);
         }
-        await store.recoverActive({ ...scope, contactConsent: false, now: dependencies.now() });
+        await withOfflineMapLifecycle(() => store.recoverActive({
+          ...scope,
+          contactConsent: false,
+          now: dependencies.now(),
+        }));
         offlineMapIndexEpoch += 1;
       } catch {
         return coordinatorState(notSaved(scope.profileFingerprint, 'storage-failure'));
@@ -667,34 +694,23 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       try {
         const orchestrator = dependencies.createCaptureOrchestrator({
           sources: serializedSources,
-          commitGeneration: typeof offlineMapSource === 'function'
-            ? async (input) => {
-                const committed = await store.commitGeneration(input);
-                if (committed.ok) finishOfflineMapLifecycle();
-                return committed;
-              }
-            : store.commitGeneration.bind(store),
-          releaseArtifact: typeof offlineMapSource === 'function'
-            ? async (artifact) => {
-                try {
-                  await dependencies.releaseArtifact(artifact);
-                } finally {
-                  if (artifact.kind === 'offline-map') finishOfflineMapLifecycle();
-                }
-              }
-            : dependencies.releaseArtifact,
+          commitGeneration: store.commitGeneration.bind(store),
+          releaseArtifact: dependencies.releaseArtifact,
         });
         captureResults.set(scope.placeId, await orchestrator.capture({
           ...scope,
           contactConsent: context.contactConsent,
         }));
+        offlineMapIndexEpoch += 1;
+        const detailed = await readDetailed(
+          { ...scope, contactConsent: context.contactConsent },
+          releaseOfflineMapLifecycle !== null,
+        );
+        detailedOperationStates.set(scope.placeId, detailed);
+        return coordinatorState(detailed);
       } finally {
         finishOfflineMapLifecycle();
       }
-      offlineMapIndexEpoch += 1;
-      const detailed = await readDetailed({ ...scope, contactConsent: context.contactConsent });
-      detailedOperationStates.set(scope.placeId, detailed);
-      return coordinatorState(detailed);
     },
   });
 
@@ -805,11 +821,13 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     const places = retainedPlaces();
     await Promise.all(places.map((place) => refreshPlace(place, recover)));
     try {
-      await store.prune?.({
-        placeIds: places.map(({ id }) => id),
-        maxPlaces: MAX_PLACES,
-        generationsPerPlace: GENERATIONS_PER_PLACE,
-      });
+      if (store.prune) {
+        await withOfflineMapLifecycle(() => store.prune!({
+          placeIds: places.map(({ id }) => id),
+          maxPlaces: MAX_PLACES,
+          generationsPerPlace: GENERATIONS_PER_PLACE,
+        }));
+      }
       offlineMapIndexEpoch += 1;
     } catch {
       // Pruning is best effort and never changes the verified readiness map.

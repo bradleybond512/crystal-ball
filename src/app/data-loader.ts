@@ -2949,11 +2949,11 @@ export class DataLoaderManager implements AppModule {
  // zero observations behind it. Which is the phantom healthy vote again, one
  // stage further down: lastSuccessAt re-stamped, the provider green, and the
  // domain counting a source that contributed nothing to the fused fact.
- if (openaqReadings.status === 'fulfilled') {
+ if (openaqReadings.status === 'fulfilled' && openaqReadings.value.applicable) {
  const r = openaqReadings.value;
  const openaqObs = openaqToObservations(r.readings);
  recordDomainObservations('openaq-v3', openaqObs, r.ok && openaqObs.length > 0);
- } else {
+ } else if (openaqReadings.status === 'rejected') {
  recordDomainObservations('openaq-v3', [], false);
  }
 

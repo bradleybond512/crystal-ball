@@ -6723,6 +6723,403 @@ const AIRNOW_TZ_OFFSETS = {
   AST: '-04:00', ChST: '+10:00', SST: '-11:00',
 };
 
+const OPENAQ_LATEST_URL = 'https://api.openaq.org/v3/parameters/2/latest';
+const OPENAQ_PAGE_LIMIT = 1000;
+const OPENAQ_MAX_PAGES = 25;
+const OPENAQ_MAX_ROWS = OPENAQ_PAGE_LIMIT * OPENAQ_MAX_PAGES;
+const OPENAQ_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const OPENAQ_MAX_AGGREGATE_BYTES = 8 * 1024 * 1024;
+const OPENAQ_CORPUS_TTL_MS = 30 * 60 * 1000;
+const OPENAQ_SHARED_DEADLINE_MS = 20_000;
+const OPENAQ_MAX_CONCURRENCY = 3;
+const OPENAQ_QUERY_WINDOW_MS = 2 * 60 * 60 * 1000;
+const OPENAQ_WORST_FRESHNESS_MS = 6 * 60 * 60 * 1000;
+const OPENAQ_CACHE_KEY = 'openaq-v3-pm25-corpus';
+const OPENAQ_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+let openaqCorpusInFlight = null;
+let openaqCredentialGeneration = 0;
+
+function invalidateOpenaqCredentialState() {
+  openaqCredentialGeneration += 1;
+  if (openaqCorpusInFlight?.controller && !openaqCorpusInFlight.controller.signal.aborted) {
+    openaqCorpusInFlight.controller.abort(Object.assign(new Error('OpenAQ credential changed'), { openaqCode: 'credential_changed' }));
+  }
+  openaqCorpusInFlight = null;
+  setCached(OPENAQ_CACHE_KEY, null, 1);
+}
+
+function openaqPositiveSafeInteger(value) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function openaqFoundCount(value) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+const OPENAQ_UTC_RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+
+function openaqCanonicalUtcTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const match = OPENAQ_UTC_RFC3339_PATTERN.exec(value);
+  if (!match) return null;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+  const canonical = new Date(timestamp).toISOString();
+  const expected = match[1] === undefined ? canonical.replace('.000Z', 'Z') : canonical;
+  return expected === value ? timestamp : null;
+}
+
+function openaqPageMeta(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.results)) return null;
+  const meta = raw.meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const page = openaqPositiveSafeInteger(meta.page);
+  const limit = openaqPositiveSafeInteger(meta.limit);
+  const found = openaqFoundCount(meta.found);
+  if (page === null || limit !== OPENAQ_PAGE_LIMIT || found === null || found > OPENAQ_MAX_ROWS) return null;
+  return { page, limit, found, results: raw.results };
+}
+
+function openaqMalformedResult(windowStart = 0, windowEnd = 0) {
+  const safeIso = (value) => new Date(Number.isFinite(value) ? value : 0).toISOString();
+  return {
+    readings: [], acceptedRows: 0, droppedRows: 0, found: 0, pages: 0,
+    coverage: 'unknown', complete: false,
+    sample: {
+      windowStart: safeIso(windowStart), windowEnd: safeIso(windowEnd),
+      reportedFoundAtStart: 0, plannedPages: 0, fetchedPages: 0, rawRows: 0,
+      uniqueSensorRows: 0, acceptedRows: 0, duplicateRows: 0, invalidRows: 0,
+      rejectionReasons: {},
+    },
+    error: 'incomplete_or_malformed',
+  };
+}
+
+export function normalizeOpenaqLatestPages(rawPages, windowEnd = Date.now(), windowStart = windowEnd - OPENAQ_QUERY_WINDOW_MS) {
+  if (!Array.isArray(rawPages) || rawPages.length === 0 || rawPages.length > OPENAQ_MAX_PAGES
+    || !Number.isFinite(windowEnd) || !Number.isFinite(windowStart) || windowStart > windowEnd) {
+    return openaqMalformedResult(windowStart, windowEnd);
+  }
+  const pageMetadata = rawPages.map(openaqPageMeta);
+  if (pageMetadata.includes(null)) return openaqMalformedResult(windowStart, windowEnd);
+  const first = pageMetadata[0];
+  const plannedPages = Math.max(1, Math.ceil(first.found / OPENAQ_PAGE_LIMIT));
+  if (pageMetadata.length !== plannedPages) return openaqMalformedResult(windowStart, windowEnd);
+  for (const [index, meta] of pageMetadata.entries()) {
+    if (meta.page !== index + 1 || meta.results.length > OPENAQ_PAGE_LIMIT) {
+      return openaqMalformedResult(windowStart, windowEnd);
+    }
+  }
+
+  const rejectionReasons = {
+    invalidSensorId: 0, invalidLocationId: 0, invalidValue: 0,
+    invalidCoordinates: 0, invalidTimestamp: 0, outsideWindow: 0,
+    equalTimestampConflict: 0,
+  };
+  const groups = new Map();
+  let rawRows = 0;
+  let invalidRows = 0;
+  for (const { results } of pageMetadata) {
+    for (const row of results) {
+      rawRows += 1;
+      const sensorId = openaqPositiveSafeInteger(row?.sensorsId);
+      const locationId = openaqPositiveSafeInteger(row?.locationsId);
+      const value = row?.value;
+      const latitude = row?.coordinates?.latitude;
+      const longitude = row?.coordinates?.longitude;
+      const utc = row?.datetime?.utc;
+      const observedAt = openaqCanonicalUtcTimestamp(utc);
+      let invalid = false;
+      if (sensorId === null) { rejectionReasons.invalidSensorId += 1; invalid = true; }
+      if (locationId === null) { rejectionReasons.invalidLocationId += 1; invalid = true; }
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) { rejectionReasons.invalidValue += 1; invalid = true; }
+      if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
+        || typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        rejectionReasons.invalidCoordinates += 1; invalid = true;
+      }
+      if (observedAt === null) { rejectionReasons.invalidTimestamp += 1; invalid = true; }
+      else if (observedAt < windowStart || observedAt > windowEnd) { rejectionReasons.outsideWindow += 1; invalid = true; }
+      if (invalid) {
+        invalidRows += 1;
+        continue;
+      }
+      const normalized = {
+        id: `openaq:${sensorId}`,
+        sensorId,
+        locationId,
+        station: `OpenAQ location ${locationId}`,
+        city: null,
+        country: null,
+        lat: latitude,
+        lon: longitude,
+        parameter: 'pm25',
+        value,
+        unit: 'µg/m³',
+        observedAt,
+      };
+      const group = groups.get(sensorId) ?? [];
+      group.push(normalized);
+      groups.set(sensorId, group);
+    }
+  }
+
+  const readings = [];
+  let duplicateRows = 0;
+  for (const group of groups.values()) {
+    group.sort((a, b) => b.observedAt - a.observedAt);
+    const newest = group[0];
+    const tied = group.filter((row) => row.observedAt === newest.observedAt);
+    const conflicting = tied.some((row) => row.value !== newest.value || row.locationId !== newest.locationId
+      || row.lat !== newest.lat || row.lon !== newest.lon);
+    if (conflicting) {
+      invalidRows += group.length;
+      rejectionReasons.equalTimestampConflict += group.length;
+      continue;
+    }
+    readings.push(newest);
+    duplicateRows += group.length - 1;
+  }
+  const sample = {
+    windowStart: new Date(windowStart).toISOString(),
+    windowEnd: new Date(windowEnd).toISOString(),
+    reportedFoundAtStart: first.found,
+    plannedPages,
+    fetchedPages: pageMetadata.length,
+    rawRows,
+    uniqueSensorRows: groups.size,
+    acceptedRows: readings.length,
+    duplicateRows,
+    invalidRows,
+    rejectionReasons,
+  };
+  return {
+    readings,
+    acceptedRows: readings.length,
+    droppedRows: duplicateRows + invalidRows,
+    found: first.found,
+    pages: plannedPages,
+    coverage: 'best_effort_sample',
+    complete: false,
+    sample,
+    error: rawRows > 0 && readings.length === 0 ? 'no_usable_readings' : null,
+  };
+}
+
+function openaqRetryDelay(response, fallbackMs) {
+  const raw = response.headers.get('retry-after');
+  if (raw !== null && /^\d+(?:\.\d+)?$/.test(raw)) return Math.min(1000, Number(raw) * 1000);
+  return Math.min(1000, Math.max(0, fallbackMs));
+}
+
+function openaqFailure(error) {
+  if (error instanceof Error && /exceeded byte limit/i.test(error.message)) return 'oversized';
+  return 'upstream';
+}
+
+async function cancelOpenaqResponseBody(response) {
+  await response.body?.cancel().catch(() => undefined);
+}
+
+async function readOpenaqJsonResponse(response) {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!/^application\/json(?:;|$)/i.test(contentType)) {
+    await cancelOpenaqResponseBody(response);
+    throw Object.assign(new Error('OpenAQ non-JSON response'), { openaqCode: 'malformed' });
+  }
+  const declaredLength = response.headers.get('content-length');
+  if (declaredLength !== null
+    && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > OPENAQ_MAX_RESPONSE_BYTES)) {
+    await cancelOpenaqResponseBody(response);
+    throw Object.assign(new Error('OpenAQ response exceeded byte limit'), { openaqCode: 'oversized' });
+  }
+  if (!response.body) throw Object.assign(new Error('OpenAQ empty response'), { openaqCode: 'malformed' });
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > OPENAQ_MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw Object.assign(new Error('OpenAQ response exceeded byte limit'), { openaqCode: 'oversized' });
+      }
+      chunks.push(value);
+    }
+    const body = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total).toString('utf8');
+    return { body: JSON.parse(body), bytes: total };
+  } catch (error) {
+    if (error?.openaqCode) throw error;
+    throw Object.assign(new Error('OpenAQ malformed JSON'), { openaqCode: 'malformed' });
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function fetchOpenaqLatestCorpus(apiKey, options = {}) {
+  if (typeof apiKey !== 'string' || apiKey.length === 0) return { ok: false, error: 'missing_key' };
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const normalizationNow = Number.isFinite(options.now) ? options.now : Date.now();
+  const deadlineMs = Number.isFinite(options.deadlineMs) && options.deadlineMs > 0
+    ? Math.min(OPENAQ_SHARED_DEADLINE_MS, options.deadlineMs)
+    : OPENAQ_SHARED_DEADLINE_MS;
+  const deadlineAt = Date.now() + deadlineMs;
+  const controller = options.controller ?? new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error('OpenAQ shared deadline exceeded')), deadlineMs);
+
+  const fetchPage = async (pageNumber) => {
+    const url = new URL(OPENAQ_LATEST_URL);
+    url.searchParams.set('limit', String(OPENAQ_PAGE_LIMIT));
+    url.searchParams.set('page', String(pageNumber));
+    url.searchParams.set('datetime_min', new Date(normalizationNow - OPENAQ_QUERY_WINDOW_MS).toISOString());
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (Date.now() >= deadlineAt || controller.signal.aborted) throw Object.assign(new Error('OpenAQ timeout'), { openaqCode: 'timeout' });
+      let response;
+      try {
+        response = await fetchImpl(url.href, {
+          headers: { Accept: 'application/json', 'X-API-Key': apiKey },
+          redirect: 'error',
+          signal: controller.signal,
+          maxResponseBytes: OPENAQ_MAX_RESPONSE_BYTES,
+        });
+      } catch (error) {
+        if (controller.signal.aborted || Date.now() >= deadlineAt) throw Object.assign(new Error('OpenAQ timeout'), { openaqCode: 'timeout' });
+        if (attempt === 0) continue;
+        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { openaqCode: openaqFailure(error) });
+      }
+      if (response.ok) {
+        return readOpenaqJsonResponse(response);
+      }
+      if (response.status === 401 || response.status === 403) {
+        await cancelOpenaqResponseBody(response);
+        throw Object.assign(new Error('OpenAQ authentication failed'), { openaqCode: `auth_${response.status}` });
+      }
+      if (!OPENAQ_RETRYABLE_STATUSES.has(response.status)) {
+        await cancelOpenaqResponseBody(response);
+        throw Object.assign(new Error(`OpenAQ HTTP ${response.status}`), { openaqCode: 'upstream' });
+      }
+      if (attempt === 1) {
+        const code = response.status === 429 ? 'rate_limited' : 'upstream';
+        await cancelOpenaqResponseBody(response);
+        throw Object.assign(new Error(`OpenAQ HTTP ${response.status}`), { openaqCode: code });
+      }
+      await cancelOpenaqResponseBody(response);
+      const delay = openaqRetryDelay(response, options.retryDelayMs ?? 250);
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(delay, Math.max(0, deadlineAt - Date.now()))));
+    }
+    throw Object.assign(new Error('OpenAQ upstream failure'), { openaqCode: 'upstream' });
+  };
+
+  try {
+    let aggregateBytes = 0;
+    const firstResult = await fetchPage(1);
+    aggregateBytes += firstResult.bytes;
+    const firstPage = firstResult.body;
+    const firstMeta = openaqPageMeta(firstPage);
+    if (!firstMeta || firstMeta.page !== 1) return { ok: false, error: 'incomplete_or_malformed' };
+    const pageCount = Math.max(1, Math.ceil(firstMeta.found / OPENAQ_PAGE_LIMIT));
+    const rawPages = [firstPage];
+    for (let nextPage = 2; nextPage <= pageCount; nextPage += OPENAQ_MAX_CONCURRENCY) {
+      const batch = [];
+      let terminalError = null;
+      for (let pageNumber = nextPage; pageNumber < nextPage + OPENAQ_MAX_CONCURRENCY && pageNumber <= pageCount; pageNumber += 1) {
+        batch.push(fetchPage(pageNumber).catch((error) => {
+          if (!controller.signal.aborted) {
+            terminalError = error;
+            controller.abort(error);
+          }
+          throw error;
+        }));
+      }
+      const settled = await Promise.allSettled(batch);
+      const rejected = settled.find((entry) => entry.status === 'rejected');
+      if (rejected) {
+        throw terminalError ?? rejected.reason;
+      }
+      const pageResults = settled.map((entry) => entry.value);
+      aggregateBytes += pageResults.reduce((sum, entry) => sum + entry.bytes, 0);
+      if (aggregateBytes > OPENAQ_MAX_AGGREGATE_BYTES) {
+        controller.abort(Object.assign(new Error('OpenAQ aggregate response exceeded byte limit'), { openaqCode: 'oversized' }));
+        throw Object.assign(new Error('OpenAQ aggregate response exceeded byte limit'), { openaqCode: 'oversized' });
+      }
+      rawPages.push(...pageResults.map((entry) => entry.body));
+    }
+    const corpus = normalizeOpenaqLatestPages(rawPages, normalizationNow, normalizationNow - OPENAQ_QUERY_WINDOW_MS);
+    if (corpus.error !== null) return { ok: false, error: corpus.error };
+    return { ok: true, corpus: { ...corpus, fetchedAt: new Date(normalizationNow).toISOString() } };
+  } catch (error) {
+    return { ok: false, error: error?.openaqCode ?? openaqFailure(error) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getOpenaqLatestCorpus(apiKey) {
+  const generation = openaqCredentialGeneration;
+  const cached = getCached(OPENAQ_CACHE_KEY, OPENAQ_CORPUS_TTL_MS);
+  if (cached?.generation === generation) return { ok: true, corpus: cached.corpus };
+  if (!openaqCorpusInFlight || openaqCorpusInFlight.generation !== generation) {
+    const controller = new AbortController();
+    const flight = { generation, controller, promise: null };
+    flight.promise = fetchOpenaqLatestCorpus(apiKey, { controller })
+      .then((result) => {
+        if (generation !== openaqCredentialGeneration) return { ok: false, error: 'credential_changed' };
+        if (result.ok && result.corpus.acceptedRows > 0) {
+          setCached(OPENAQ_CACHE_KEY, { generation, corpus: result.corpus }, OPENAQ_CORPUS_TTL_MS);
+        }
+        return result;
+      })
+      .finally(() => { if (openaqCorpusInFlight === flight) openaqCorpusInFlight = null; });
+    openaqCorpusInFlight = flight;
+  }
+  return openaqCorpusInFlight.promise;
+}
+
+function openaqErrorResponse(error, req) {
+  const headers = makeCorsHeaders(req);
+  if (error === 'missing_key') return json({ error: 'OPENAQ_API_KEY not configured' }, 400, headers);
+  if (error === 'auth_401') return json({ error: 'OpenAQ authentication required' }, 401, headers);
+  if (error === 'auth_403') return json({ error: 'OpenAQ authentication forbidden' }, 403, headers);
+  if (error === 'rate_limited') return json({ error: 'OpenAQ rate limit exhausted' }, 503, headers);
+  if (error === 'timeout') return json({ error: 'OpenAQ request timed out' }, 504, headers);
+  if (error === 'oversized') return json({ error: 'OpenAQ response exceeded size limit' }, 502, headers);
+  if (error === 'credential_changed') return json({ error: 'OpenAQ credential changed during request' }, 409, headers);
+  if (error === 'no_usable_readings') return json({ error: 'OpenAQ returned no usable readings' }, 502, headers);
+  if (error === 'incomplete_or_malformed' || error === 'malformed') {
+    return json({ error: 'OpenAQ returned incomplete or malformed data' }, 502, headers);
+  }
+  return json({ error: 'OpenAQ upstream unavailable' }, 502, headers);
+}
+
+function openaqReadingDistanceKm(reading, latitude, longitude) {
+  const toRadians = (degrees) => degrees * Math.PI / 180;
+  const dLat = toRadians(reading.lat - latitude);
+  const dLon = toRadians(reading.lon - longitude);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(latitude)) * Math.cos(toRadians(reading.lat)) * Math.sin(dLon / 2) ** 2;
+  return 6371.0088 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function openaqResponsePayload(readings, corpus) {
+  return {
+    schemaVersion: 2,
+    provider: 'openaq-v3',
+    coverage: corpus.coverage,
+    complete: false,
+    readings,
+    sample: corpus.sample,
+    source: 'api.openaq.org/v3/parameters/2/latest',
+    fetchedAt: corpus.fetchedAt,
+    servedAt: new Date().toISOString(),
+  };
+}
+
 async function dispatch(requestUrl, req, routes, context) {
   if (req.method === 'OPTIONS') {
  return new Response(null, { status: 204, headers: makeCorsHeaders(req) });
@@ -13017,121 +13414,46 @@ async function dispatch(requestUrl, req, routes, context) {
     });
   }
 
-  // ── OpenAQ real-time air quality readings ────────────────────────────────
-  if (requestUrl.pathname === '/api/openaq-readings') {
- const cached = getCached('openaq-readings');
- if (cached) return json(cached);
- try {
- const params = new URLSearchParams({
- limit: '100',
- page: '1',
- offset: '0',
- sort: 'desc',
- parameter: 'pm25',
- has_geo: 'true',
- order_by: 'lastUpdated',
- });
- const r = await fetchWithTimeout(
- `https://api.openaq.org/v2/latest?${params}`,
- { headers: { Accept: 'application/json', 'X-API-Key': '' } },
- 12000,
- );
- if (!r.ok) throw new Error(`OpenAQ ${r.status}`);
- const data = await r.json();
- const readings = (data.results ?? []).map(item => ({
- id: item.location ?? null,
- locationId: item.locationId ?? null,
- city: item.city ?? null,
- country: item.country ?? null,
- coordinates: item.coordinates ?? null,
- measurements: (item.measurements ?? []).map(m => ({
- parameter: m.parameter ?? null,
- value: m.value ?? null,
- unit: m.unit ?? null,
- lastUpdated: m.lastUpdated ?? null,
- })),
- }));
- setCached('openaq-readings', readings, 30 * 60 * 1000);
- return json(readings);
- } catch (error) {
- // OpenAQ v2 returns 410 since they migrated to v3 with API keys. We
- // degrade gracefully so the panel renders an empty list with a
- // banner rather than a 502 error storm.
- return json({ readings: [], degraded: true, reason: `openaq error: ${error.message ?? error}`, source: 'openaq.org', generatedAt: new Date().toISOString() });
- }
-  }
-
   // ── OpenAQ v3: nearby stations ──────────────────────────────────────────
-  // GET /api/airquality/openaq?lat=&lon=&radius=50000
-  // Pulls 50 locations near the given coords with parameters_id=2 (PM2.5)
-  // and 1 (PM10). v3 *does* accept anonymous reads for the locations
-  // endpoint; falls back to a 'degraded' empty payload on any error so
-  // the panel can render an empty-state instead of erroring.
-  if (requestUrl.pathname === '/api/airquality/openaq') {
- const lat = Number.parseFloat(requestUrl.searchParams.get('lat') ?? '');
- const lon = Number.parseFloat(requestUrl.searchParams.get('lon') ?? '');
- const radius = Math.max(1000, Math.min(100_000, Number.parseInt(requestUrl.searchParams.get('radius') ?? '50000', 10) || 50_000));
- if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
- return json({ locations: [], degraded: true, reason: 'lat + lon required', generatedAt: new Date().toISOString() });
+  // Filters the shared, bounded PM2.5 sample by Haversine distance.
+  if (requestUrl.pathname === '/api/local-airquality/openaq') {
+ const rawLatitude = requestUrl.searchParams.get('lat');
+ const rawLongitude = requestUrl.searchParams.get('lon');
+ const rawRadius = requestUrl.searchParams.get('radius') ?? '25000';
+ const latitude = rawLatitude !== null && rawLatitude.trim() !== '' ? Number(rawLatitude) : Number.NaN;
+ const longitude = rawLongitude !== null && rawLongitude.trim() !== '' ? Number(rawLongitude) : Number.NaN;
+ const radius = /^\d+$/.test(rawRadius) ? Number(rawRadius) : Number.NaN;
+ if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+   || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+   || !Number.isSafeInteger(radius) || radius < 1 || radius > 25_000) {
+ return json({ error: 'invalid OpenAQ nearby query' }, 400, makeCorsHeaders(req));
  }
- const cacheKey = `openaq-nearby:${lat.toFixed(3)},${lon.toFixed(3)},${radius}`;
- const cached = getCached(cacheKey, 30 * 60 * 1000);
- if (cached) return json(cached);
- try {
- const params = new URLSearchParams({
- limit: '50',
- radius: String(radius),
- coordinates: `${lat},${lon}`,
- 'parameters_id': '2',
- });
- params.append('parameters_id', '1');
- params.append('parameters_id', '3');
- params.append('parameters_id', '7');
- const url = `https://api.openaq.org/v3/locations?${params.toString()}`;
- const headers = { Accept: 'application/json' };
- const apiKey = process.env.OPENAQ_API_KEY;
- if (apiKey) headers['X-API-Key'] = apiKey;
- const r = await fetchWithTimeout(url, { headers }, 15_000);
- if (!r.ok) throw new Error(`OpenAQ v3 HTTP ${r.status}`);
- const data = await r.json();
- const locations = Array.isArray(data?.results) ? data.results : [];
- const payload = { locations, generatedAt: new Date().toISOString(), source: 'api.openaq.org/v3' };
- setCached(cacheKey, payload, 30 * 60 * 1000);
- return json(payload);
- } catch (error) {
- return json({ locations: [], degraded: true, reason: `openaq v3 error: ${error.message ?? error}`, generatedAt: new Date().toISOString() });
- }
+ const apiKey = process.env.OPENAQ_API_KEY ?? '';
+ if (!apiKey) return openaqErrorResponse('missing_key', req);
+ const result = await getOpenaqLatestCorpus(apiKey);
+ if (!result.ok) return openaqErrorResponse(result.error, req);
+ const readings = result.corpus.readings
+   .map((reading) => ({ reading, distanceKm: openaqReadingDistanceKm(reading, latitude, longitude) }))
+   .filter(({ distanceKm }) => distanceKm * 1000 <= radius)
+   .sort((a, b) => a.distanceKm - b.distanceKm || a.reading.sensorId - b.reading.sensorId)
+   .slice(0, 50)
+   .map(({ reading }) => reading);
+ return json(openaqResponsePayload(readings, result.corpus), 200, makeCorsHeaders(req));
   }
 
-  // ── OpenAQ v3: global worst readings ────────────────────────────────────
-  // GET /api/airquality/openaq/worst — top-100 most-recently-updated
-  // locations globally, so the renderer can rank/filter to "worst right
-  // now" using the same EPA AQI ladder it uses for the nearby tab.
-  if (requestUrl.pathname === '/api/airquality/openaq/worst') {
- const cacheKey = 'openaq-worst';
- const cached = getCached(cacheKey, 30 * 60 * 1000);
- if (cached) return json(cached);
- try {
- const params = new URLSearchParams({
- limit: '100',
- 'parameters_id': '2',
- order_by: 'lastUpdated',
- sort_order: 'desc',
- });
- const url = `https://api.openaq.org/v3/locations?${params.toString()}`;
- const headers = { Accept: 'application/json' };
- const apiKey = process.env.OPENAQ_API_KEY;
- if (apiKey) headers['X-API-Key'] = apiKey;
- const r = await fetchWithTimeout(url, { headers }, 15_000);
- if (!r.ok) throw new Error(`OpenAQ v3 HTTP ${r.status}`);
- const data = await r.json();
- const locations = Array.isArray(data?.results) ? data.results : [];
- const payload = { locations, generatedAt: new Date().toISOString(), source: 'api.openaq.org/v3' };
- setCached(cacheKey, payload, 30 * 60 * 1000);
- return json(payload);
- } catch (error) {
- return json({ locations: [], degraded: true, reason: `openaq v3 error: ${error.message ?? error}`, generatedAt: new Date().toISOString() });
- }
+  // ── OpenAQ v3: recent high readings ────────────────────────────────────
+  // Returns the top 100 fresh readings from the same normalized corpus.
+  if (requestUrl.pathname === '/api/local-airquality/openaq/worst') {
+ const apiKey = process.env.OPENAQ_API_KEY ?? '';
+ if (!apiKey) return openaqErrorResponse('missing_key', req);
+ const result = await getOpenaqLatestCorpus(apiKey);
+ if (!result.ok) return openaqErrorResponse(result.error, req);
+ const now = Date.now();
+ const readings = result.corpus.readings
+   .filter((reading) => now - reading.observedAt <= OPENAQ_WORST_FRESHNESS_MS)
+   .sort((a, b) => b.value - a.value || b.observedAt - a.observedAt || a.sensorId - b.sensorId)
+   .slice(0, 100);
+ return json(openaqResponsePayload(readings, result.corpus), 200, makeCorsHeaders(req));
   }
 
   // ── GeoNames place search ────────────────────────────────────────────────
@@ -15281,6 +15603,7 @@ async function dispatch(requestUrl, req, routes, context) {
  context.logger.log(`[local-api] env set: ${key}`);
  }
  if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
+ if (key === 'OPENAQ_API_KEY') invalidateOpenaqCredentialState();
  if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
  if (key === 'ACLED_ACCESS_TOKEN') acledTokenState.expiresAt = null; // expiry unknown after manual key update
  if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {

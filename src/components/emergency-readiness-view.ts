@@ -9,6 +9,10 @@ import { buildGridDownBoardView } from '@/services/survival/grid-down-certify-vi
 import { resolveOfflinePlaybook } from '@/services/survival/offline-playbook.ts';
 import { buildOfflinePlaybookBoardView } from '@/services/survival/offline-playbook-view.ts';
 import type { WorldSnapshot } from '@/services/survival/survival-types.ts';
+import type {
+  EmergencyPackArtifactKind,
+  EmergencyPackStatus,
+} from '@/services/emergency-pack/emergency-pack-schema.ts';
 import { escapeHtml } from '@/utils/sanitize.ts';
 import { MAX_LIFELINE_EXPIRY_TIMER_DELAY_MS } from './lifeline-evidence-expiry.ts';
 
@@ -30,6 +34,7 @@ export interface EmergencyReadinessView {
   cards: [EmergencyReadinessCard, EmergencyReadinessCard, EmergencyReadinessCard, EmergencyReadinessCard];
   deadlinesMs: number[];
   liveMessage: string;
+  pack: EmergencyPackView | null;
 }
 
 export interface EmergencyReadinessLifelinesInput {
@@ -39,7 +44,74 @@ export interface EmergencyReadinessLifelinesInput {
 
 interface EmergencyReadinessProjectionOptions {
   now?: number;
+  emergencyPack?: EmergencyPackInput | null;
 }
+
+export interface EmergencyPackReceiptInput {
+  kind: EmergencyPackArtifactKind;
+  capturedAt: string;
+  expiresAt: string;
+  semanticState: 'verified' | 'verified-empty';
+  summary: string;
+}
+
+export interface EmergencyPackReadinessInput {
+  status: EmergencyPackStatus;
+  packId: string | null;
+  requiredKinds: EmergencyPackArtifactKind[];
+  optionalKinds: EmergencyPackArtifactKind[];
+  receipts: EmergencyPackReceiptInput[];
+  missingKinds: EmergencyPackArtifactKind[];
+  expiredKinds: EmergencyPackArtifactKind[];
+}
+
+export interface EmergencyPackCaptureState {
+  status: 'idle' | 'capturing' | 'complete' | 'error';
+  completed: number;
+  total: number;
+  message: string;
+}
+
+export interface EmergencyPackInput {
+  places: { id: string; name: string }[];
+  selectedPlaceId: string | null;
+  readiness: EmergencyPackReadinessInput;
+  contactConsent: boolean;
+  captureState: EmergencyPackCaptureState;
+}
+
+interface EmergencyPackArtifactView {
+  kind: EmergencyPackArtifactKind;
+  label: string;
+  requirement: 'Required' | 'Optional';
+  status: 'current' | 'expired' | 'missing';
+  summary: string;
+  capturedAtMs: number | null;
+  expiresAtMs: number | null;
+}
+
+export interface EmergencyPackView {
+  places: { id: string; name: string }[];
+  selectedPlaceId: string | null;
+  status: EmergencyPackStatus;
+  artifacts: EmergencyPackArtifactView[];
+  contactConsent: boolean;
+  captureState: EmergencyPackCaptureState;
+  headline: string;
+  detail: string;
+  actionLabel: string;
+  liveMessage: string;
+}
+
+const ARTIFACT_LABELS: Record<EmergencyPackArtifactKind, string> = {
+  lifelines: 'Lifelines',
+  alerts: 'Scoped alerts',
+  'route-primary': 'Primary route',
+  'offline-map': 'Offline map',
+  'comms-plan': 'Comms plan',
+  contacts: 'Selected contacts',
+  'route-alternate': 'Alternate route',
+};
 
 function gridExpiry(snapshot: WorldSnapshot): number {
   const weatherFetchedAt = snapshot.freshness.find((item) => item.domain === 'weather')?.fetchedAtMs;
@@ -147,6 +219,99 @@ function lifelinesCard(input: EmergencyReadinessLifelinesInput | null): Emergenc
   };
 }
 
+function validTimestamp(value: string): number | null {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function packCopy(input: EmergencyPackInput): Pick<EmergencyPackView, 'headline' | 'detail' | 'actionLabel'> {
+  if (input.captureState.status === 'capturing') {
+    return {
+      headline: 'Capturing Emergency Pack',
+      detail: input.captureState.message || 'Verifying each required artifact before publication.',
+      actionLabel: 'Capturing…',
+    };
+  }
+  if (input.captureState.status === 'error') {
+    return {
+      headline: 'Emergency Pack capture failed',
+      detail: input.captureState.message || 'The last known good pack was preserved.',
+      actionLabel: 'Retry Emergency Pack',
+    };
+  }
+  if (input.readiness.status === 'ready') {
+    return {
+      headline: 'Emergency Pack ready',
+      detail: 'Every required artifact has an exact, current receipt for this place.',
+      actionLabel: 'Refresh Emergency Pack',
+    };
+  }
+  if (input.readiness.status === 'expired') {
+    return {
+      headline: 'Emergency Pack expired',
+      detail: 'One or more required artifacts must be refreshed before this pack is ready.',
+      actionLabel: 'Refresh expired artifacts',
+    };
+  }
+  if (input.readiness.status === 'partial') {
+    const missing = input.readiness.missingKinds.length;
+    return {
+      headline: 'Emergency Pack partial',
+      detail: `${missing} required ${missing === 1 ? 'artifact is' : 'artifacts are'} missing.`,
+      actionLabel: 'Retry missing artifacts',
+    };
+  }
+  return {
+    headline: 'No Emergency Pack saved',
+    detail: input.places.length > 0
+      ? 'Capture and verify the required offline artifacts for the selected place.'
+      : 'Save a place before capturing an Emergency Pack.',
+    actionLabel: 'Capture Emergency Pack',
+  };
+}
+
+function projectPack(input: EmergencyPackInput, now: number): EmergencyPackView {
+  const receipts = new Map(input.readiness.receipts.map((receipt) => [receipt.kind, receipt]));
+  const expired = new Set(input.readiness.expiredKinds);
+  const required = new Set(input.readiness.requiredKinds);
+  const kinds = [...input.readiness.requiredKinds, ...input.readiness.optionalKinds];
+  const artifacts = kinds.map((kind): EmergencyPackArtifactView => {
+    const receipt = receipts.get(kind);
+    const expiresAtMs = receipt ? validTimestamp(receipt.expiresAt) : null;
+    const isExpired = expired.has(kind) || (expiresAtMs !== null && expiresAtMs <= now);
+    const requirement = required.has(kind) ? 'Required' : 'Optional';
+    return {
+      kind,
+      label: ARTIFACT_LABELS[kind],
+      requirement,
+      status: artifactStatus(Boolean(receipt), isExpired),
+      summary: receipt?.summary
+        ?? (requirement === 'Optional' ? 'Optional — not captured.' : 'Required artifact missing.'),
+      capturedAtMs: receipt ? validTimestamp(receipt.capturedAt) : null,
+      expiresAtMs,
+    };
+  });
+  const copy = packCopy(input);
+  return {
+    places: input.places.map((place) => ({ ...place })),
+    selectedPlaceId: input.selectedPlaceId,
+    status: input.readiness.status,
+    artifacts,
+    contactConsent: input.contactConsent,
+    captureState: { ...input.captureState },
+    ...copy,
+    liveMessage: `${copy.headline}. ${input.captureState.message}`.trim(),
+  };
+}
+
+function artifactStatus(
+  hasReceipt: boolean,
+  isExpired: boolean,
+): EmergencyPackArtifactView['status'] {
+  if (!hasReceipt) return 'missing';
+  return isExpired ? 'expired' : 'current';
+}
+
 export function projectEmergencyReadiness(
   snapshot: WorldSnapshot | null,
   lifelines: EmergencyReadinessLifelinesInput | null,
@@ -161,15 +326,21 @@ export function projectEmergencyReadiness(
       unavailableCard('comms-fallback', 'Comms fallback', 'Restore a valid snapshot to resolve the fallback ladder.'),
     ] as const;
   const cards: EmergencyReadinessView['cards'] = [...baseCards, lifelinesCard(lifelines)];
-  const deadlinesMs = cards.flatMap((card) => {
+  const pack = options.emergencyPack ? projectPack(options.emergencyPack, now) : null;
+  const cardDeadlines = cards.flatMap((card) => {
     if (card.expiresAtMs === null || !Number.isFinite(card.expiresAtMs)) return [];
     const transitionAt = card.id === 'grid-down' ? card.expiresAtMs + 1 : card.expiresAtMs;
     return transitionAt > now ? [transitionAt] : [];
   });
+  const packDeadlines = pack?.artifacts.flatMap((artifact) => (
+    artifact.expiresAtMs !== null && artifact.expiresAtMs > now ? [artifact.expiresAtMs] : []
+  )) ?? [];
+  const deadlinesMs = [...cardDeadlines, ...packDeadlines];
   return {
     cards,
     deadlinesMs,
     liveMessage: cards.map((card) => `${card.title}: ${card.status}.`).join(' '),
+    pack,
   };
 }
 
@@ -202,11 +373,59 @@ function renderCard(card: EmergencyReadinessCard): string {
   </article>`;
 }
 
+function renderPackArtifact(artifact: EmergencyPackArtifactView): string {
+  const status = artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1);
+  return `<li class="emergency-pack-artifact emergency-pack-artifact--${escapeHtml(artifact.status)}" data-pack-artifact="${escapeHtml(artifact.kind)}">
+    <div class="emergency-pack-artifact__heading">
+      <strong>${escapeHtml(artifact.label)}</strong>
+      <span>${escapeHtml(artifact.requirement)}</span>
+    </div>
+    <p>${escapeHtml(status)} — ${escapeHtml(artifact.summary)}</p>
+    <dl>
+      <div><dt>Captured</dt><dd>${timeMarkup(artifact.capturedAtMs, 'Not captured')}</dd></div>
+      <div><dt>Expires</dt><dd>${timeMarkup(artifact.expiresAtMs, 'Not captured')}</dd></div>
+    </dl>
+  </li>`;
+}
+
+function renderEmergencyPack(pack: EmergencyPackView): string {
+  const max = Math.max(1, pack.captureState.total);
+  const value = Math.max(0, Math.min(max, pack.captureState.completed));
+  const disabled = pack.places.length === 0 || pack.captureState.status === 'capturing';
+  return `<section class="emergency-pack emergency-pack--${escapeHtml(pack.status)}" data-emergency-pack="${escapeHtml(pack.status)}" aria-labelledby="emergency-pack-heading" aria-busy="${pack.captureState.status === 'capturing' ? 'true' : 'false'}">
+    <div class="emergency-pack__heading">
+      <div>
+        <h2 id="emergency-pack-heading">Emergency Pack</h2>
+        <p class="emergency-pack__headline">${escapeHtml(pack.headline)}</p>
+      </div>
+      <label class="emergency-pack__place">Place
+        <select name="emergency-pack-place" ${pack.places.length === 0 ? 'disabled' : ''}>
+          ${pack.places.length === 0 ? '<option value="">No saved places</option>' : pack.places.map((place) => `<option value="${escapeHtml(place.id)}"${place.id === pack.selectedPlaceId ? ' selected' : ''}>${escapeHtml(place.name)}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <p class="emergency-pack__detail">${escapeHtml(pack.detail)}</p>
+    <div class="emergency-pack__progress">
+      <label for="emergency-pack-progress">Required artifacts verified</label>
+      <progress id="emergency-pack-progress" max="${max}" value="${value}">${value} of ${max}</progress>
+      <span>${value} of ${max}</span>
+    </div>
+    <ul class="emergency-pack__artifacts">${pack.artifacts.map((artifact) => renderPackArtifact(artifact)).join('')}</ul>
+    <label class="emergency-pack__consent">
+      <input type="checkbox" name="emergency-pack-contact-consent"${pack.contactConsent ? ' checked' : ''}>
+      <span>I consent to copy my selected emergency contacts into this pack. Contact details stay private on this local device.</span>
+    </label>
+    <button type="button" class="emergency-pack__action" data-pack-action${disabled ? ' disabled' : ''}>${escapeHtml(pack.actionLabel)}</button>
+    <p class="emergency-pack__live sr-only" aria-live="polite" aria-atomic="true">${escapeHtml(pack.liveMessage)}</p>
+  </section>`;
+}
+
 export function renderEmergencyReadiness(view: EmergencyReadinessView): string {
   return `<section class="emergency-readiness" aria-labelledby="emergency-readiness-heading">
     <h2 id="emergency-readiness-heading" class="sr-only">Emergency readiness capabilities</h2>
     <p class="emergency-readiness__live sr-only" aria-live="polite" aria-atomic="true">${escapeHtml(view.liveMessage)}</p>
     <div class="emergency-readiness__grid">${view.cards.map((card) => renderCard(card)).join('')}</div>
+    ${view.pack ? renderEmergencyPack(view.pack) : ''}
   </section>`;
 }
 

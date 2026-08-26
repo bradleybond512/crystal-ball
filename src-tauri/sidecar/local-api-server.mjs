@@ -20890,12 +20890,45 @@ function infrastructureCloudflareAsnArray(value, maximumItems = 50) {
   return asns.every((asn) => asn !== null) ? asns : null;
 }
 
+function infrastructureCloudflareIpv4(value) {
+  const octets = value.split('.');
+  return octets.length === 4 && octets.every((octet) =>
+    /^(?:0|[1-9]\d{0,2})$/.test(octet) && Number(octet) <= 255);
+}
+
+function infrastructureCloudflareIpv6(value) {
+  if (!value.includes(':') || value.includes('.')) return false;
+  const compression = value.indexOf('::');
+  if (compression !== -1 && value.includes('::', compression + 2)) return false;
+  const validGroup = (group) => /^[0-9a-fA-F]{1,4}$/.test(group);
+  if (compression === -1) {
+    const groups = value.split(':');
+    return groups.length === 8 && groups.every(validGroup);
+  }
+  const left = value.slice(0, compression);
+  const right = value.slice(compression + 2);
+  const leftGroups = left ? left.split(':') : [];
+  const rightGroups = right ? right.split(':') : [];
+  return leftGroups.length + rightGroups.length < 8
+    && leftGroups.every(validGroup) && rightGroups.every(validGroup);
+}
+
+function infrastructureCloudflareCidr(value) {
+  const parts = value.split('/');
+  if (parts.length !== 2 || !/^(?:0|[1-9]\d{0,2})$/.test(parts[1])) return false;
+  const prefixLength = Number(parts[1]);
+  return parts[0].includes(':')
+    ? prefixLength <= 128 && infrastructureCloudflareIpv6(parts[0])
+    : prefixLength <= 32 && infrastructureCloudflareIpv4(parts[0]);
+}
+
 function infrastructureCloudflarePrefixes(value) {
   if (!Array.isArray(value) || value.length === 0 || value.length > 50) return null;
   const prefixes = value.map((prefix) => {
     if (typeof prefix !== 'string') return null;
     const clean = prefix.trim();
-    return clean && clean.length <= 80 && !/[\u0000-\u001F\u007F]/.test(clean) ? clean : null;
+    return clean && clean.length <= 80 && !/[\u0000-\u001F\u007F]/.test(clean)
+      && infrastructureCloudflareCidr(clean) ? clean : null;
   });
   return prefixes.every((prefix) => prefix !== null) ? prefixes : null;
 }

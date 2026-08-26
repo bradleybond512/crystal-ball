@@ -237,21 +237,19 @@ export class EmergencyReadinessPanel extends Panel {
       result = { ok: false, failedKind: 'capture' };
     }
     if (!this.active || generation !== this.captureGeneration || selectedPlaceId !== this.selectedPlaceId) return;
-    this.captureState = result.ok
-      ? {
-        status: 'complete',
-        completed: EMERGENCY_PACK_REQUIRED_KINDS.length,
-        total: EMERGENCY_PACK_REQUIRED_KINDS.length,
-        message: 'Required pack captured. Verifying authoritative state.',
-      }
-      : {
+    if (result.ok) {
+      this.captureState = null;
+    } else {
+      const authoritativeProgress = idleCaptureState(this.dependencies.getEmergencyPackState(place));
+      this.captureState = {
         status: 'error',
-        completed: 0,
-        total: EMERGENCY_PACK_REQUIRED_KINDS.length,
+        completed: authoritativeProgress.completed,
+        total: authoritativeProgress.total,
         message: result.failedKind
           ? `Capture stopped at ${result.failedKind}; the last known good pack was preserved.`
           : 'Capture failed; the last known good pack was preserved.',
       };
+    }
     this.requestRender();
   }
 

@@ -26,6 +26,7 @@ interface Artifact {
   semanticState: string;
   summary: string;
   itemCount: number;
+  sourceRevision?: string;
 }
 
 interface SourcesApi {
@@ -41,7 +42,7 @@ interface SourcesApi {
       expiresAt: Date | null;
       isExpired: boolean;
     } | null;
-    getAlertFeed: () => { alerts: unknown[]; capturedAt: number } | null;
+    getAlertFeed: () => { alerts: unknown[]; capturedAt: number; sourceRevision: string } | null;
     matchAlertToPlace: (alert: unknown, place: Place, options: { now: number }) => unknown;
     getRoutes: () => unknown[];
     getCommsPlan: (placeId: string) => unknown | null;
@@ -116,7 +117,7 @@ function baseDependencies(overrides: Record<string, unknown> = {}) {
       expiresAt: new Date(NOW + 24 * 60 * 60_000),
       isExpired: false,
     }),
-    getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 60_000 }),
+    getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 60_000, sourceRevision: 'a'.repeat(64) }),
     matchAlertToPlace: (alert: unknown) => ({
       matchKind: (alert as { matched?: boolean }).matched === false ? 'no_match' : 'inside_polygon',
       msUntilExpires: 60 * 60_000,
@@ -210,7 +211,7 @@ test('alerts use exact place matching, cap at 100, and fail closed on stale veri
   }));
   const matchedIds: string[] = [];
   const candidate = createSources({
-    getAlertFeed: () => ({ alerts, capturedAt: NOW - 60_000 }),
+    getAlertFeed: () => ({ alerts, capturedAt: NOW - 60_000, sourceRevision: 'b'.repeat(64) }),
     matchAlertToPlace: (alert: unknown, target: Place, options: { now: number }) => {
       assert.equal(target, place);
       assert.equal(options.now, NOW);
@@ -228,25 +229,37 @@ test('alerts use exact place matching, cap at 100, and fail closed on stale veri
   const payload = jsonBody(artifact ?? null);
   assert.equal((payload.alerts as unknown[]).length, 100);
   assert.equal(artifact?.itemCount, 100);
+  assert.equal(artifact?.sourceRevision, 'b'.repeat(64));
+  assert.equal(payload.sourceRevision, artifact?.sourceRevision);
   assert.equal(artifact?.capturedAt, NOW - 60_000, 'feed fetch time is the evidence capture time');
   assert.equal(matchedIds.length, alerts.length, 'every candidate is scoped with the canonical matcher');
 
-  const emptyCurrent = createSources({ getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 60_000 }) });
+  const emptyCurrent = createSources({
+    getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 60_000, sourceRevision: 'c'.repeat(64) }),
+  });
   assert.equal((await emptyCurrent.sources.alerts?.(emptyCurrent.scope))?.semanticState, 'verified-empty');
 
   const emptyStale = createSources({
-    getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 15 * 60_000 }),
+    getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 15 * 60_000, sourceRevision: 'c'.repeat(64) }),
   });
   assert.equal(await emptyStale.sources.alerts?.(emptyStale.scope), null);
-  const missingTimestamp = createSources({ getAlertFeed: () => ({ alerts: [], capturedAt: Number.NaN }) });
+  const missingTimestamp = createSources({
+    getAlertFeed: () => ({ alerts: [], capturedAt: Number.NaN, sourceRevision: 'c'.repeat(64) }),
+  });
   assert.equal(await missingTimestamp.sources.alerts?.(missingTimestamp.scope), null);
+  for (const sourceRevision of ['', 'A'.repeat(64), 'a'.repeat(63), 'g'.repeat(64)]) {
+    const malformedRevision = createSources({
+      getAlertFeed: () => ({ alerts: [], capturedAt: NOW - 60_000, sourceRevision }),
+    });
+    assert.equal(await malformedRevision.sources.alerts?.(malformedRevision.scope), null);
+  }
 });
 
 test('alerts exclude expired and cancelled matches and fail closed on invalid matcher metadata', async () => {
   const alert = { id: 'weather-1', event: 'Tornado Warning' };
   const artifactFor = async (match: unknown) => {
     const candidate = createSources({
-      getAlertFeed: () => ({ alerts: [alert], capturedAt: NOW - 60_000 }),
+      getAlertFeed: () => ({ alerts: [alert], capturedAt: NOW - 60_000, sourceRevision: 'd'.repeat(64) }),
       matchAlertToPlace: () => match,
     });
     return await candidate.sources.alerts?.(candidate.scope) ?? null;
@@ -282,7 +295,11 @@ test('alerts exclude expired and cancelled matches and fail closed on invalid ma
 test('alerts expire at the 15-minute feed deadline or earliest included alert expiry', async () => {
   const feedCapturedAt = NOW - 60_000;
   const candidate = createSources({
-    getAlertFeed: () => ({ alerts: [{ id: 'soon' }, { id: 'later' }], capturedAt: feedCapturedAt }),
+    getAlertFeed: () => ({
+      alerts: [{ id: 'soon' }, { id: 'later' }],
+      capturedAt: feedCapturedAt,
+      sourceRevision: 'e'.repeat(64),
+    }),
     matchAlertToPlace: (alert: unknown) => ({
       matchKind: 'inside_polygon',
       msUntilExpires: (alert as { id: string }).id === 'soon' ? 2 * 60_000 : 30 * 60_000,
@@ -295,7 +312,9 @@ test('alerts expire at the 15-minute feed deadline or earliest included alert ex
   assert.equal(earliest?.expiresAt, NOW + 2 * 60_000);
 
   const feedLimited = createSources({
-    getAlertFeed: () => ({ alerts: [{ id: 'later' }], capturedAt: feedCapturedAt }),
+    getAlertFeed: () => ({
+      alerts: [{ id: 'later' }], capturedAt: feedCapturedAt, sourceRevision: 'e'.repeat(64),
+    }),
     matchAlertToPlace: () => ({
       matchKind: 'inside_polygon',
       msUntilExpires: 30 * 60_000,

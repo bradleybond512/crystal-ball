@@ -102,7 +102,7 @@ interface HarnessOptions {
 
 function createHarness(initialPlaces = [place('home')], options: HarnessOptions = {}) {
   let places = initialPlaces;
-  const callbacks = new Map<string, () => void>();
+  const callbacks = new Map<string, (payload?: unknown) => void>();
   const unsubscribed: string[] = [];
   const authoritative = new Map<string, State>();
   const profile = (candidate: Place) => JSON.stringify([2, candidate.id, candidate.lat, candidate.lon, candidate.radiusKm]);
@@ -158,6 +158,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       profileFingerprint: string;
       kinds: readonly string[];
       capturedAt: number;
+      sourceRevision?: string;
     }): Promise<{ ok: boolean }> {
       invalidationCalls.push({ ...input, kinds: [...input.kinds] });
       return { ok: true };
@@ -224,8 +225,8 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       callbacks.set('lifelines', callback);
       return () => { unsubscribed.push('lifelines'); };
     },
-    subscribeAlerts: (callback: () => void) => {
-      callbacks.set('alerts', callback);
+    subscribeAlerts: (callback: (event: { sourceRevision: string }) => void) => {
+      callbacks.set('alerts', (payload) => callback(payload as { sourceRevision: string }));
       return () => { unsubscribed.push('alerts'); };
     },
   });
@@ -388,6 +389,8 @@ test('default runtime wires immutable map verification and cleanup through store
   assert.match(runtimeSource, /createExactOfflineMapCleanupCoordinator\(\{\s*metadata:\s*localStorage/);
   assert.match(runtimeSource, /captureDefaultOfflineMap\(place,\s*scope,\s*offlineMapCleanup\)/);
   assert.match(runtimeSource, /createEmergencyPackOfflineMapLifecycle\(caches,\s*undefined,\s*offlineMapCleanup\)/);
+  assert.match(runtimeSource, /subscribeAlerts:\s*subscribeStormAlerts/);
+  assert.doesNotMatch(runtimeSource, /subscribeAlerts:\s*subscribeStormPosture/);
 });
 
 test('default offline map capture supplies unique bounded ids and serializes exact tile evidence', async () => {
@@ -467,7 +470,7 @@ test('saved-place, route, comms, Lifelines, and alert invalidations re-read auth
   await harness.runtime.hydrate();
   assert.equal(harness.runtime.getState(home).status, 'ready');
 
-  for (const event of ['routes', 'comms', 'lifelines', 'alerts'] as const) {
+  for (const event of ['routes', 'comms', 'lifelines'] as const) {
     harness.authoritative.set(fingerprint, {
       status: 'not-saved', packId: null, profileFingerprint: fingerprint,
     });
@@ -477,6 +480,12 @@ test('saved-place, route, comms, Lifelines, and alert invalidations re-read auth
     await flush();
     assert.equal(harness.runtime.getState(home).status, 'not-saved', event);
   }
+  harness.authoritative.set(fingerprint, {
+    status: 'not-saved', packId: null, profileFingerprint: fingerprint,
+  });
+  harness.callbacks.get('alerts')?.({ sourceRevision: 'f'.repeat(64) });
+  await flush();
+  assert.equal(harness.runtime.getState(home).status, 'not-saved', 'alerts');
 
   assert.deepEqual(
     harness.invalidationCalls.map((value) => (value as { kinds: string[] }).kinds),
@@ -487,6 +496,17 @@ test('saved-place, route, comms, Lifelines, and alert invalidations re-read auth
       ['alerts'],
     ],
   );
+  assert.equal(
+    (harness.invalidationCalls.at(-1) as { sourceRevision?: string }).sourceRevision,
+    'f'.repeat(64),
+  );
+
+  const invalidationCount = harness.invalidationCalls.length;
+  for (const malformed of [undefined, {}, { sourceRevision: 'F'.repeat(64) }, { sourceRevision: 'a'.repeat(63) }]) {
+    harness.callbacks.get('alerts')?.(malformed);
+  }
+  await flush();
+  assert.equal(harness.invalidationCalls.length, invalidationCount, 'malformed alert revisions fail closed');
 
   const renamed = { ...home, name: 'Renamed Home' };
   harness.setPlaces([renamed]);

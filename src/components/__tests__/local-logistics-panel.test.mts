@@ -154,15 +154,26 @@ test('Prepare offline enqueues the active exact radius and cleanup unsubscribes'
   const enqueued: Array<{ placeId: string; radiusKm: number; trigger: string }> = [];
   let subscriptions = 0;
   let unsubscriptions = 0;
+  let prewarmListener: ((state: Record<string, unknown>) => void) | null = null;
   const coordinator = {
     enqueue: (input: { place: SavedPlace; radiusKm: number; trigger: string }) => {
       enqueued.push({ placeId: input.place.id, radiusKm: input.radiusKm, trigger: input.trigger });
+      prewarmListener?.({
+        placeId: input.place.id,
+        radiusKm: input.radiusKm,
+        queryFingerprint: 'exact',
+        phase: 'queued',
+        triggers: [input.trigger],
+        retryAt: null,
+        error: null,
+      });
     },
     retry: () => {},
     getState: () => null,
-    subscribe: () => {
+    subscribe: (listener: (state: Record<string, unknown>) => void) => {
       subscriptions += 1;
-      return () => { unsubscriptions += 1; };
+      prewarmListener = listener;
+      return () => { prewarmListener = null; unsubscriptions += 1; };
     },
   };
   const panel = mountPanel(
@@ -176,8 +187,14 @@ test('Prepare offline enqueues the active exact radius and cleanup unsubscribes'
   requiredElement<HTMLButtonElement>(content, '[data-logistics-radius="50"]').click();
   await settleRender();
   requiredElement<HTMLButtonElement>(content, '[data-lifeline-prewarm]').click();
+  await settleRender();
 
   assert.deepEqual(enqueued, [{ placeId: place.id, radiusKm: 50, trigger: 'manual' }]);
+  assert.equal(
+    document.activeElement?.getAttribute('data-lifeline-prewarm'),
+    '1',
+    'preparation status rerenders should restore keyboard focus to the action',
+  );
   assert.equal(subscriptions, 1);
   panel.destroy();
   mountedPanels.splice(mountedPanels.indexOf(panel), 1);

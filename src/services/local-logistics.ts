@@ -1332,8 +1332,19 @@ function commitLocalLogisticsSnapshot(
   shouldCommit?: () => boolean,
 ): void {
   if (shouldCommit && !shouldCommit()) return;
-  const serialized = serializeSnapshot(snapshot);
   const key = cacheKey(placeId, fingerprint);
+  const fingerprintIdentity = parseLogisticsFingerprint(fingerprint);
+  const persisted = readOfflineCacheEntry<unknown>(key)?.data;
+  const committed = fingerprintIdentity
+    ? deserializeLocalLogisticsSnapshot(persisted, Date.now(), {
+      placeId,
+      queryFingerprint: fingerprint,
+      lat: fingerprintIdentity.lat,
+      lon: fingerprintIdentity.lon,
+    })
+    : null;
+  if (committed && snapshot.fetchedAt.getTime() <= committed.fetchedAt.getTime()) return;
+  const serialized = serializeSnapshot(snapshot);
   boundedSet(memoryCache, key, serialized);
   boundedSet(latestFingerprintByPlace, placeId, fingerprint);
   const exactPersisted = writeOfflineCacheEntry(key, serialized);

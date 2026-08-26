@@ -39,6 +39,45 @@ test('v2 parsing is strict about schema, keys, kinds, duplicates, and profile id
   assert.equal(parse({ ...manifest(), receipts: [receipt('lifelines'), receipt('lifelines')] }), null);
 });
 
+test('v2 receipts preserve mixed evidence ages with strict chronology, hashes, and per-kind byte caps', () => {
+  const parse = requireFunction(api, 'parseEmergencyPackManifest');
+  const byteCaps: Record<string, number> = {
+    lifelines: 1024 * 1024,
+    alerts: 256 * 1024,
+    'route-primary': 512 * 1024,
+    'route-alternate': 512 * 1024,
+    'offline-map': 50 * 1024 * 1024,
+    'comms-plan': 128 * 1024,
+    contacts: 128 * 1024,
+  };
+  const mixed = manifest({
+    committedAt: new Date(NOW).toISOString(),
+    receipts: REQUIRED_KINDS.map((kind, index) => receipt(kind, {
+      capturedAt: new Date(NOW - (index + 1) * 60_000).toISOString(),
+      verifiedAt: new Date(NOW).toISOString(),
+    })),
+  });
+  assert.deepEqual(parse(mixed), mixed);
+
+  for (const [kind, cap] of Object.entries(byteCaps)) {
+    assert.equal(parse(manifest({ receipts: [receipt(kind, { byteLength: cap + 1 })] })), null, kind);
+  }
+  for (const sha256 of ['', 'a'.repeat(63), 'A'.repeat(64), `${'a'.repeat(63)}z`]) {
+    assert.equal(parse(manifest({ receipts: [receipt('lifelines', { sha256 })] })), null, sha256);
+  }
+  assert.equal(parse(manifest({ receipts: [receipt('lifelines', {
+    capturedAt: new Date(NOW + 1).toISOString(),
+    verifiedAt: new Date(NOW).toISOString(),
+  })] })), null);
+  assert.equal(parse(manifest({ receipts: [receipt('lifelines', {
+    verifiedAt: new Date(NOW + 60 * 60_000).toISOString(),
+    expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
+  })] })), null);
+  assert.equal(parse(manifest({ receipts: [receipt('lifelines', {
+    verifiedAt: new Date(NOW - 1).toISOString(),
+  })] })), null);
+});
+
 test('readiness requires every exact, current required receipt but not an optional route', () => {
   const derive = requireFunction(api, 'deriveEmergencyPackReadiness');
   assert.deepEqual(derive(manifest(), { placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }), {
@@ -105,7 +144,7 @@ test('v1 migration preserves only Lifelines evidence and can never claim a compl
     profileFingerprint: PROFILE,
     legacyQueryFingerprint,
     now: NOW,
-  }, receipt('lifelines'));
+  }, receipt('lifelines', { verifiedAt: new Date(NOW).toISOString() }));
 
   assert.ok(migrated);
   assert.deepEqual(migrated.receipts.map((item) => item.kind), ['lifelines']);
@@ -133,7 +172,7 @@ test('v1 migration preserves only Lifelines evidence and can never claim a compl
     profileFingerprint: PROFILE,
     legacyQueryFingerprint,
     now: NOW,
-  }, receipt('lifelines')), null);
+  }, receipt('lifelines', { verifiedAt: new Date(NOW).toISOString() })), null);
 });
 
 test('v1 migration rejects malformed, ambiguous, expired, and mismatched legacy evidence', () => {
@@ -145,6 +184,7 @@ test('v1 migration rejects malformed, ambiguous, expired, and mismatched legacy 
     legacyQueryFingerprint,
     now: NOW,
   };
+  const verifiedReceipt = receipt('lifelines', { verifiedAt: new Date(NOW).toISOString() });
   const legacy = {
     schemaVersion: 1,
     placeId: PLACE_ID,
@@ -160,13 +200,17 @@ test('v1 migration rejects malformed, ambiguous, expired, and mismatched legacy 
     updatedAt: new Date(NOW - 30_000).toISOString(),
   };
 
-  assert.equal(migrate({ ...legacy, requiredKinds: [] }, scope, receipt('lifelines')), null);
-  assert.equal(migrate({ ...legacy, requiredKinds: ['lifelines', 'alerts'] }, scope, receipt('lifelines')), null);
-  assert.equal(migrate({ ...legacy, artifacts: [...legacy.artifacts, legacy.artifacts[0]] }, scope, receipt('lifelines')), null);
+  assert.equal(migrate({ ...legacy, requiredKinds: [] }, scope, verifiedReceipt), null);
+  assert.equal(migrate({ ...legacy, requiredKinds: ['lifelines', 'alerts'] }, scope, verifiedReceipt), null);
+  assert.equal(migrate({ ...legacy, artifacts: [...legacy.artifacts, legacy.artifacts[0]] }, scope, verifiedReceipt), null);
   assert.equal(migrate({
     ...legacy,
     artifacts: [{ ...legacy.artifacts[0], expiresAt: new Date(NOW).toISOString() }],
-  }, scope, receipt('lifelines')), null);
-  assert.equal(migrate(legacy, scope, receipt('lifelines', { profileFingerprint: `${PROFILE}:moved` })), null);
-  assert.equal(migrate(legacy, { ...scope, now: Number.NaN }, receipt('lifelines')), null);
+  }, scope, verifiedReceipt), null);
+  assert.equal(migrate(legacy, scope, receipt('lifelines', {
+    profileFingerprint: `${PROFILE}:moved`,
+    verifiedAt: new Date(NOW).toISOString(),
+  })), null);
+  assert.equal(migrate(legacy, { ...scope, now: Number.NaN }, verifiedReceipt), null);
+  assert.equal(migrate(legacy, scope, receipt('lifelines')), null);
 });

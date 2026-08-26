@@ -57,7 +57,7 @@ interface RuntimeApi {
     place: Place,
     scope: Scope & { contactConsent: boolean },
     dependencies: Record<string, unknown>,
-  ) => Promise<{ kind: string; body: string; itemCount: number } | null>;
+  ) => Promise<{ kind: string; body: string; capturedAt: number; itemCount: number } | null>;
   createEmergencyPackOfflineMapTileResolver?: (dependencies: Record<string, unknown>) => (
     url: string,
   ) => Promise<{ data: ArrayBuffer; contentType: string } | null>;
@@ -91,6 +91,7 @@ interface HarnessOptions {
   lifelinesArtifact?: {
     kind: 'lifelines';
     body: string;
+    capturedAt: number;
     expiresAt: number;
     semanticState: 'verified';
     summary: string;
@@ -299,6 +300,7 @@ test('offline map lifecycle verifies and releases only strict immutable generati
     kind: 'offline-map',
     placeId: 'home',
     profileFingerprint: 'profile-home',
+    capturedAt: NOW,
     generationId,
     tiles: [tile],
     totalBytes: 4,
@@ -318,11 +320,11 @@ test('offline map lifecycle verifies and releases only strict immutable generati
     '{',
     JSON.stringify({ kind: 'offline-map', generationId, tiles: [tile], totalBytes: 4 }),
     JSON.stringify({
-      kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home', generationId,
+      kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home', capturedAt: NOW, generationId,
       tiles: [{ ...tile, sha256: undefined }], totalBytes: 4,
     }),
     JSON.stringify({
-      kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home', generationId,
+      kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home', capturedAt: NOW, generationId,
       tiles: [tile], totalBytes: 4, unexpected: true,
     }),
   ]) {
@@ -424,6 +426,7 @@ test('default offline map capture supplies unique bounded ids and serializes exa
   for (const artifact of [first, second]) {
     assert.ok(artifact);
     const payload = JSON.parse(artifact.body) as Record<string, unknown>;
+    assert.equal(payload.capturedAt, artifact.capturedAt);
     assert.equal(payload.generationId, (payload.tiles as Array<Record<string, unknown>>)[0]?.generationId);
     assert.equal(typeof (payload.tiles as Array<Record<string, unknown>>)[0]?.cacheKey, 'string');
     assert.match(String((payload.tiles as Array<Record<string, unknown>>)[0]?.sha256), /^[a-f0-9]{64}$/);
@@ -610,10 +613,12 @@ test('hydrate migrates one exact legacy Lifelines pack to partial v2 without mut
   const encodedBefore = JSON.stringify(legacyManifest);
   const artifact = {
     kind: 'lifelines' as const,
+    capturedAt: NOW - 60_000,
     body: JSON.stringify({
       kind: 'lifelines',
       placeId: home.id,
       profileFingerprint: JSON.stringify([2, home.id, home.lat, home.lon, home.radiusKm]),
+      capturedAt: NOW - 60_000,
       snapshot: { queryFingerprint: legacyQueryFingerprint },
     }),
     expiresAt: NOW + 60 * 60_000,

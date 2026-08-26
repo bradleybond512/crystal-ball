@@ -1,4 +1,5 @@
 import {
+  EMERGENCY_PACK_ARTIFACT_BYTE_CAPS,
   EMERGENCY_PACK_OPTIONAL_KINDS,
   EMERGENCY_PACK_REQUIRED_KINDS,
   deriveEmergencyPackReadiness,
@@ -16,15 +17,8 @@ import type {
 
 const KEY_PREFIX = 'wm-emergency-pack-v2';
 const MAX_RECOVERY_MANIFESTS = 3;
-const ARTIFACT_BYTE_CAPS: Readonly<Record<EmergencyPackArtifactKind, number>> = {
-  lifelines: 1024 * 1024,
-  alerts: 256 * 1024,
-  'route-primary': 512 * 1024,
-  'route-alternate': 512 * 1024,
-  'offline-map': 50 * 1024 * 1024,
-  'comms-plan': 128 * 1024,
-  contacts: 128 * 1024,
-};
+const MAX_TIMESTAMP = 8_640_000_000_000_000;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 const ARTIFACT_KINDS = new Set<EmergencyPackArtifactKind>([
   ...EMERGENCY_PACK_REQUIRED_KINDS,
   ...EMERGENCY_PACK_OPTIONAL_KINDS,
@@ -68,6 +62,7 @@ export interface EmergencyPackDetailedReadiness extends EmergencyPackStoreState 
 export interface EmergencyPackArtifactInput {
   kind: EmergencyPackArtifactKind;
   body: string;
+  capturedAt: number;
   expiresAt: number;
   semanticState: EmergencyPackSemanticState;
   summary: string;
@@ -203,6 +198,24 @@ function parseInvalidationRecord(value: string | null): EmergencyPackInvalidatio
   };
 }
 
+function isTimestamp(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value > 0
+    && value <= MAX_TIMESTAMP;
+}
+
+function bodyCapturedAt(body: string): number | null {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const capturedAt = (parsed as Record<string, unknown>).capturedAt;
+    return isTimestamp(capturedAt) ? capturedAt : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseHead(value: string | null): PackHead | null {
   if (value === null) return null;
   try {
@@ -226,7 +239,8 @@ function parseHead(value: string | null): PackHead | null {
       || !isNonEmptyString(head.placeId)
       || !isNonEmptyString(head.profileFingerprint)
       || !isNonEmptyString(head.manifestKey)
-      || !isNonEmptyString(head.manifestSha256)
+      || typeof head.manifestSha256 !== 'string'
+      || !SHA256_HEX_PATTERN.test(head.manifestSha256)
       || !(head.previousPackId === null || isNonEmptyString(head.previousPackId))
       || !isNonEmptyString(head.committedAt)
       || !Number.isFinite(Date.parse(head.committedAt))
@@ -275,8 +289,11 @@ function validateGenerationInput(input: EmergencyPackGenerationInput): boolean {
     allowedKinds.has(artifact.kind)
     && ARTIFACT_KINDS.has(artifact.kind)
     && isNonEmptyString(artifact.body)
-    && new TextEncoder().encode(artifact.body).byteLength <= ARTIFACT_BYTE_CAPS[artifact.kind]
-    && Number.isFinite(artifact.expiresAt)
+    && new TextEncoder().encode(artifact.body).byteLength <= EMERGENCY_PACK_ARTIFACT_BYTE_CAPS[artifact.kind]
+    && isTimestamp(artifact.capturedAt)
+    && bodyCapturedAt(artifact.body) === artifact.capturedAt
+    && isTimestamp(artifact.expiresAt)
+    && artifact.capturedAt < artifact.expiresAt
     && (artifact.semanticState === 'verified' || artifact.semanticState === 'verified-empty')
     && isNonEmptyString(artifact.summary)
     && artifact.summary.length <= 512
@@ -295,8 +312,11 @@ function validateMigrationInput(input: EmergencyPackLifelineMigrationInput): boo
     && input.legacyQueryFingerprint.length <= 1024
     && artifact?.kind === 'lifelines'
     && isNonEmptyString(artifact.body)
-    && new TextEncoder().encode(artifact.body).byteLength <= ARTIFACT_BYTE_CAPS.lifelines
-    && Number.isFinite(artifact.expiresAt)
+    && new TextEncoder().encode(artifact.body).byteLength <= EMERGENCY_PACK_ARTIFACT_BYTE_CAPS.lifelines
+    && isTimestamp(artifact.capturedAt)
+    && bodyCapturedAt(artifact.body) === artifact.capturedAt
+    && isTimestamp(artifact.expiresAt)
+    && artifact.capturedAt < artifact.expiresAt
     && artifact.semanticState === 'verified'
     && isNonEmptyString(artifact.summary)
     && artifact.summary.length <= 512
@@ -398,6 +418,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     const body = await bodies.get(receipt.cacheKey);
     if (body === null) return false;
     if (new TextEncoder().encode(body).byteLength !== receipt.byteLength) return false;
+    if (bodyCapturedAt(body) !== Date.parse(receipt.capturedAt)) return false;
     if (await digest(body) !== receipt.sha256) return false;
     return verifyBody(receipt.kind, body);
   }
@@ -669,10 +690,12 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     timestamp: number,
     stagedBodies: StoredArtifactBody[],
   ): Promise<EmergencyPackReceipt[]> {
-    const capturedAt = new Date(timestamp).toISOString();
+    const verifiedAt = new Date(timestamp).toISOString();
     const receipts: EmergencyPackReceipt[] = [];
     for (const artifact of input.artifacts) {
-      if (artifact.expiresAt <= timestamp) throw new Error('artifact expired');
+      if (artifact.capturedAt > timestamp || timestamp >= artifact.expiresAt) {
+        throw new Error('artifact chronology invalid');
+      }
       const cacheKey = bodyKey(packId, artifact.kind);
       await bodies.put(cacheKey, artifact.body);
       stagedBodies.push({ kind: artifact.kind, cacheKey, body: artifact.body });
@@ -688,9 +711,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         sha256: expectedDigest,
         byteLength: new TextEncoder().encode(readback).byteLength,
         itemCount: artifact.itemCount,
-        capturedAt,
+        capturedAt: new Date(artifact.capturedAt).toISOString(),
         expiresAt: new Date(artifact.expiresAt).toISOString(),
-        verifiedAt: capturedAt,
+        verifiedAt,
         semanticState: artifact.semanticState,
         summary: artifact.summary,
       });
@@ -750,8 +773,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       const previousPackId = await findPreviousPackId(encodedExistingHead, input.profileFingerprint);
 
       const timestamp = now();
-      if (!Number.isFinite(timestamp)) return { ok: false, reason: 'invalid-time' };
-      const capturedAt = new Date(timestamp).toISOString();
+      if (!isTimestamp(timestamp)) return { ok: false, reason: 'invalid-time' };
+      const committedAt = new Date(timestamp).toISOString();
       const stagedReceipts = await stageArtifacts(input, packId, timestamp, stagedBodies);
 
       const manifestCandidate = {
@@ -763,8 +786,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         optionalKinds: [...input.optionalKinds],
         receipts: stagedReceipts,
         previousPackId,
-        createdAt: capturedAt,
-        committedAt: capturedAt,
+        createdAt: committedAt,
+        committedAt,
         migration: null,
       };
       const manifest = parseEmergencyPackManifest(manifestCandidate);
@@ -780,7 +803,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         manifestKey: key,
         manifestSha256,
         previousPackId,
-        committedAt: capturedAt,
+        committedAt,
       };
       writeHead(activeHeadKey, head, encodedExistingHead);
       try {
@@ -863,10 +886,12 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (metadata.getItem(key) !== null) return { ok: false, reason: 'pack-id-collision' };
 
       const timestamp = now();
-      if (!Number.isFinite(timestamp) || input.artifact.expiresAt <= timestamp) {
+      if (!isTimestamp(timestamp)
+        || input.artifact.capturedAt > timestamp
+        || timestamp >= input.artifact.expiresAt) {
         return { ok: false, reason: 'invalid-input' };
       }
-      const capturedAt = new Date(timestamp).toISOString();
+      const verifiedAt = new Date(timestamp).toISOString();
       const cacheKey = bodyKey(packId, 'lifelines');
       const provisionalReceipt: EmergencyPackReceipt = {
         kind: 'lifelines',
@@ -875,9 +900,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         sha256: await digest(input.artifact.body),
         byteLength: new TextEncoder().encode(input.artifact.body).byteLength,
         itemCount: input.artifact.itemCount,
-        capturedAt,
+        capturedAt: new Date(input.artifact.capturedAt).toISOString(),
         expiresAt: new Date(input.artifact.expiresAt).toISOString(),
-        verifiedAt: capturedAt,
+        verifiedAt,
         semanticState: input.artifact.semanticState,
         summary: input.artifact.summary,
       };

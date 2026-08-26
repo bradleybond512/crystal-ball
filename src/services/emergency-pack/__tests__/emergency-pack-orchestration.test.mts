@@ -6,6 +6,7 @@ import { NOW, PLACE_ID, PROFILE, REQUIRED_KINDS, requireFunction } from './test-
 interface Artifact {
   kind: string;
   body: string;
+  capturedAt: number;
   expiresAt: number;
   semanticState: string;
   summary: string;
@@ -43,11 +44,13 @@ const api = await import('../emergency-pack-capture.ts').catch(() => ({} as Orch
 const scope = { placeId: PLACE_ID, profileFingerprint: PROFILE, contactConsent: true };
 
 function artifact(kind: string): Artifact {
+  const capturedAt = NOW - 60_000;
   const body = kind === 'offline-map'
     ? {
       kind,
       placeId: PLACE_ID,
       profileFingerprint: PROFILE,
+      capturedAt,
       generationId: 'generation-home-1',
       tiles: [{
         url: 'https://a.basemaps.cartocdn.com/dark_all/8/66/95@2x.png',
@@ -59,10 +62,11 @@ function artifact(kind: string): Artifact {
       }],
       totalBytes: 32_000,
     }
-    : { kind, placeId: PLACE_ID, profileFingerprint: PROFILE };
+    : { kind, placeId: PLACE_ID, profileFingerprint: PROFILE, capturedAt };
   return {
     kind,
     body: JSON.stringify(body),
+    capturedAt,
     expiresAt: NOW + 60 * 60_000,
     semanticState: 'verified',
     summary: `${kind} captured`,
@@ -147,6 +151,50 @@ test('one missing or rejected required artifact prevents any generation commit',
     reason: 'artifact-invalid',
   });
   assert.equal(commits, 0);
+});
+
+test('capture rejects artifacts whose evidence time is missing, inconsistent, or not before expiry', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  for (const candidate of [
+    (() => {
+      const value = artifact('alerts') as Artifact & { capturedAt?: number };
+      delete value.capturedAt;
+      return value;
+    })(),
+    (() => {
+      const value = artifact('alerts');
+      value.body = JSON.stringify({
+        kind: value.kind,
+        placeId: PLACE_ID,
+        profileFingerprint: PROFILE,
+        capturedAt: value.capturedAt - 1,
+      });
+      return value;
+    })(),
+    (() => {
+      const value = artifact('alerts');
+      value.capturedAt = value.expiresAt;
+      value.body = JSON.stringify({
+        kind: value.kind,
+        placeId: PLACE_ID,
+        profileFingerprint: PROFILE,
+        capturedAt: value.capturedAt,
+      });
+      return value;
+    })(),
+  ]) {
+    let commits = 0;
+    const orchestrator = create({
+      sources: sources({ alerts: async () => candidate }),
+      commitGeneration: async () => { commits += 1; return { ok: true }; },
+    });
+    assert.deepEqual(await orchestrator.capture(scope), {
+      ok: false,
+      failedKind: 'alerts',
+      reason: 'artifact-invalid',
+    });
+    assert.equal(commits, 0);
+  }
 });
 
 test('private contacts are not read or copied without explicit consent', async () => {

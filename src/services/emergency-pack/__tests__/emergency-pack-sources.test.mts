@@ -64,7 +64,9 @@ const place: Place = {
 
 function jsonBody(artifact: Artifact | null): Record<string, unknown> {
   assert.ok(artifact);
-  return JSON.parse(artifact.body) as Record<string, unknown>;
+  const payload = JSON.parse(artifact.body) as Record<string, unknown>;
+  assert.equal(payload.capturedAt, artifact.capturedAt);
+  return payload;
 }
 
 function offlineMapArtifact(scope: Scope, capturedAt: number, expiresAt: number): Artifact {
@@ -75,6 +77,7 @@ function offlineMapArtifact(scope: Scope, capturedAt: number, expiresAt: number)
       kind: 'offline-map',
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
+      capturedAt,
       generationId,
       tiles: [{
         url: 'https://tiles.example/10/301/402.png',

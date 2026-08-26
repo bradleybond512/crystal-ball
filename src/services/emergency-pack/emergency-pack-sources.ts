@@ -147,7 +147,7 @@ function buildArtifact(
     || !isTimestamp(expiresAt)
     || expiresAt <= capturedAt
     || !isBoundedString(summary, 300)) return null;
-  const serialized = serializedRecord(payload);
+  const serialized = serializedRecord({ ...payload, capturedAt });
   if (!serialized) return null;
   const byteLength = new TextEncoder().encode(serialized.body).byteLength;
   const validation = validateEmergencyPackArtifact({
@@ -222,6 +222,79 @@ function createLifelinesSource(
   };
 }
 
+interface AlertMatch {
+  matchKind: string;
+  msUntilExpires: number;
+  isCancellation: boolean;
+  threatLevel: string;
+}
+
+function matchAlert(
+  alert: unknown,
+  place: EmergencyPackSourcePlace,
+  now: number,
+  dependencies: EmergencyPackSourceDependencies,
+): AlertMatch | null {
+  let value: unknown;
+  try {
+    value = dependencies.matchAlertToPlace(alert, place, { now });
+  } catch {
+    return null;
+  }
+  if (!isRecord(value)
+    || typeof value.matchKind !== 'string'
+    || !ALERT_MATCH_KINDS.has(value.matchKind)
+    || typeof value.msUntilExpires !== 'number'
+    || !Number.isFinite(value.msUntilExpires)
+    || typeof value.isCancellation !== 'boolean'
+    || typeof value.threatLevel !== 'string'
+    || !ALERT_THREAT_LEVELS.has(value.threatLevel)) return null;
+  return value as unknown as AlertMatch;
+}
+
+interface CurrentAlertCandidate {
+  ok: boolean;
+  alert?: Record<string, unknown>;
+  expiresAt?: number;
+}
+
+function currentAlertCandidate(
+  alert: unknown,
+  place: EmergencyPackSourcePlace,
+  now: number,
+  dependencies: EmergencyPackSourceDependencies,
+): CurrentAlertCandidate {
+  const match = matchAlert(alert, place, now, dependencies);
+  if (!match) return { ok: false };
+  if (match.matchKind === 'no_match') return { ok: match.threatLevel === 'none' };
+  if (!MATCHED_ALERT_KINDS.has(match.matchKind)) return { ok: false };
+  if (match.msUntilExpires <= 0 || match.isCancellation || match.threatLevel === 'none') return { ok: true };
+  if (!isRecord(alert)) return { ok: false };
+  const expiresAt = now + match.msUntilExpires;
+  return isTimestamp(expiresAt) && expiresAt > now
+    ? { ok: true, alert, expiresAt }
+    : { ok: false };
+}
+
+function selectCurrentAlerts(
+  alerts: unknown[],
+  place: EmergencyPackSourcePlace,
+  now: number,
+  maximumExpiresAt: number,
+  dependencies: EmergencyPackSourceDependencies,
+): { matched: Record<string, unknown>[]; expiresAt: number } | null {
+  const matched: Record<string, unknown>[] = [];
+  let expiresAt = maximumExpiresAt;
+  for (const alert of alerts) {
+    const candidate = currentAlertCandidate(alert, place, now, dependencies);
+    if (!candidate.ok) return null;
+    if (!candidate.alert || candidate.expiresAt === undefined || matched.length >= MAX_ALERTS) continue;
+    matched.push(candidate.alert);
+    expiresAt = Math.min(expiresAt, candidate.expiresAt);
+  }
+  return { matched, expiresAt };
+}
+
 function createAlertsSource(
   place: EmergencyPackSourcePlace,
   dependencies: EmergencyPackSourceDependencies,
@@ -238,39 +311,15 @@ function createAlertsSource(
       || !isTimestamp(feed.capturedAt + ALERT_FRESHNESS_MS)
       || feed.capturedAt + ALERT_FRESHNESS_MS <= now) return null;
 
-    const matched: Record<string, unknown>[] = [];
-    let expiresAt = feed.capturedAt + ALERT_FRESHNESS_MS;
-    for (const alert of feed.alerts) {
-      let match: unknown;
-      try {
-        match = dependencies.matchAlertToPlace(alert, place, { now });
-      } catch {
-        return null;
-      }
-      if (!isRecord(match)
-        || typeof match.matchKind !== 'string'
-        || !ALERT_MATCH_KINDS.has(match.matchKind)
-        || typeof match.msUntilExpires !== 'number'
-        || !Number.isFinite(match.msUntilExpires)
-        || typeof match.isCancellation !== 'boolean'
-        || typeof match.threatLevel !== 'string'
-        || !ALERT_THREAT_LEVELS.has(match.threatLevel)) return null;
-      if (match.matchKind === 'no_match') {
-        if (match.threatLevel !== 'none') return null;
-        continue;
-      }
-      if (!MATCHED_ALERT_KINDS.has(match.matchKind)) return null;
-      if (match.msUntilExpires <= 0
-        || match.isCancellation
-        || match.threatLevel === 'none') continue;
-      if (!isRecord(alert)) return null;
-      if (matched.length < MAX_ALERTS) {
-        const alertExpiresAt = now + match.msUntilExpires;
-        if (!isTimestamp(alertExpiresAt) || alertExpiresAt <= now) return null;
-        matched.push(alert);
-        expiresAt = Math.min(expiresAt, alertExpiresAt);
-      }
-    }
+    const selected = selectCurrentAlerts(
+      feed.alerts,
+      place,
+      now,
+      feed.capturedAt + ALERT_FRESHNESS_MS,
+      dependencies,
+    );
+    if (!selected) return null;
+    const { matched, expiresAt } = selected;
     const alertSuffix = matched.length === 1 ? '' : 's';
     const summary = matched.length === 0
       ? 'No current matched alerts; coverage not inferred'
@@ -627,18 +676,20 @@ function createOfflineMapSource(
       }
       return null;
     };
-    let capturedAt: number;
+    let completedAt: number;
     try {
-      capturedAt = dependencies.now();
+      completedAt = dependencies.now();
     } catch {
       return rejectCapturedArtifact();
     }
-    if (!isTimestamp(capturedAt)
-      || capturedAt < captureStartedAt
+    if (!isTimestamp(completedAt)
+      || !isTimestamp(artifact.capturedAt)
+      || artifact.capturedAt < captureStartedAt
+      || artifact.capturedAt > completedAt
       || artifact.kind !== 'offline-map'
       || !isTimestamp(artifact.expiresAt)
-      || artifact.expiresAt <= capturedAt
-      || artifact.expiresAt > capturedAt + THIRTY_DAYS_MS
+      || artifact.expiresAt <= artifact.capturedAt
+      || artifact.expiresAt > artifact.capturedAt + THIRTY_DAYS_MS
       || !isBoundedString(artifact.summary, 300)) return rejectCapturedArtifact();
     const payload = parseBody(artifact.body);
     if (payload?.kind !== 'offline-map'
@@ -649,13 +700,13 @@ function createOfflineMapSource(
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
       byteLength: new TextEncoder().encode(artifact.body).byteLength,
-      capturedAt,
+      capturedAt: artifact.capturedAt,
       payload,
     });
     if (!validation.ok
       || validation.itemCount !== artifact.itemCount
       || validation.semanticState !== artifact.semanticState) return rejectCapturedArtifact();
-    return { ...artifact, capturedAt };
+    return artifact;
   };
 }
 

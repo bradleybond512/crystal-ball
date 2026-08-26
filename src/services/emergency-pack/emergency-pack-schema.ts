@@ -17,6 +17,16 @@ export type EmergencyPackArtifactKind = EmergencyPackRequiredKind | EmergencyPac
 export type EmergencyPackStatus = 'ready' | 'partial' | 'expired' | 'not-saved';
 export type EmergencyPackSemanticState = 'verified' | 'verified-empty';
 
+export const EMERGENCY_PACK_ARTIFACT_BYTE_CAPS: Readonly<Record<EmergencyPackArtifactKind, number>> = {
+  lifelines: 1024 * 1024,
+  alerts: 256 * 1024,
+  'route-primary': 512 * 1024,
+  'route-alternate': 512 * 1024,
+  'offline-map': 50 * 1024 * 1024,
+  'comms-plan': 128 * 1024,
+  contacts: 128 * 1024,
+};
+
 export interface EmergencyPackReceipt {
   kind: EmergencyPackArtifactKind;
   profileFingerprint: string;
@@ -106,6 +116,7 @@ const V1_MANIFEST_KEYS = [
 
 const V1_ARTIFACT_KEYS = ['kind', 'queryFingerprint', 'cachedAt', 'expiresAt'] as const;
 const MIGRATION_KEYS = ['source', 'migratedAt'] as const;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 const ALL_KINDS = new Set<string>([
   ...EMERGENCY_PACK_REQUIRED_KINDS,
   ...EMERGENCY_PACK_OPTIONAL_KINDS,
@@ -149,17 +160,24 @@ function hasValidOptionalKinds(value: unknown): value is EmergencyPackOptionalKi
 function parseReceipt(value: unknown, profileFingerprint?: string): EmergencyPackReceipt | null {
   if (!isRecord(value) || !hasExactKeys(value, RECEIPT_KEYS)) return null;
   if (typeof value.kind !== 'string' || !ALL_KINDS.has(value.kind)) return null;
+  const kind = value.kind as EmergencyPackArtifactKind;
   if (!isBoundedString(value.profileFingerprint) || value.profileFingerprint !== profileFingerprint) return null;
-  if (!isBoundedString(value.cacheKey, 1024) || !isBoundedString(value.sha256, 1024)) return null;
-  if (!Number.isSafeInteger(value.byteLength) || (value.byteLength as number) <= 0) return null;
+  if (!isBoundedString(value.cacheKey, 1024)
+    || typeof value.sha256 !== 'string'
+    || !SHA256_HEX_PATTERN.test(value.sha256)) return null;
+  if (!Number.isSafeInteger(value.byteLength)
+    || (value.byteLength as number) <= 0
+    || (value.byteLength as number) > EMERGENCY_PACK_ARTIFACT_BYTE_CAPS[kind]) return null;
   if (!Number.isSafeInteger(value.itemCount) || (value.itemCount as number) < 0) return null;
   if (!isIsoDate(value.capturedAt) || !isIsoDate(value.expiresAt) || !isIsoDate(value.verifiedAt)) return null;
-  if (Date.parse(value.expiresAt) <= Date.parse(value.capturedAt)) return null;
-  if (Date.parse(value.verifiedAt) < Date.parse(value.capturedAt)) return null;
+  const capturedAt = Date.parse(value.capturedAt);
+  const verifiedAt = Date.parse(value.verifiedAt);
+  const expiresAt = Date.parse(value.expiresAt);
+  if (capturedAt > verifiedAt || verifiedAt >= expiresAt) return null;
   if (value.semanticState !== 'verified' && value.semanticState !== 'verified-empty') return null;
   if (!isBoundedString(value.summary, 512)) return null;
   return {
-    kind: value.kind as EmergencyPackArtifactKind,
+    kind,
     profileFingerprint: value.profileFingerprint,
     cacheKey: value.cacheKey,
     sha256: value.sha256,
@@ -197,6 +215,7 @@ export function parseEmergencyPackManifest(value: unknown): EmergencyPackManifes
   if (value.previousPackId !== null && !isBoundedString(value.previousPackId)) return null;
   if (!isIsoDate(value.createdAt) || !isIsoDate(value.committedAt)) return null;
   if (Date.parse(value.committedAt) < Date.parse(value.createdAt)) return null;
+  if (validReceipts.some((receipt) => receipt.verifiedAt !== value.committedAt)) return null;
   const migration = parseMigration(value.migration);
   if (migration === undefined) return null;
   return {
@@ -274,7 +293,9 @@ export function migrateLifelinePackV1(
     return null;
   }
   const receipt = parseReceipt(verifiedLifelinesReceipt, scope.profileFingerprint);
-  if (receipt?.kind !== 'lifelines' || Date.parse(receipt.expiresAt) <= scope.now) return null;
+  if (receipt?.kind !== 'lifelines'
+    || Date.parse(receipt.verifiedAt) !== scope.now
+    || Date.parse(receipt.expiresAt) <= scope.now) return null;
   const migratedAt = new Date(scope.now).toISOString();
   return {
     schemaVersion: EMERGENCY_PACK_SCHEMA_VERSION,

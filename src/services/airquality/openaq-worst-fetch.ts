@@ -1,5 +1,5 @@
 /**
- * Loader-callable fetch for OpenAQ v3 global "worst" stations (no key needed),
+ * Loader-callable fetch for OpenAQ v3 global "worst" stations,
  * so air-quality fusion has a real second source alongside Open-Meteo. Mirrors
  * the OpenaqMonitorPanel.loadWorst() fetch+parse path. Fail-closed: failures
  * record an error on the dedicated 'openaq-aqi' source (never silently drop).
@@ -8,10 +8,9 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { dataFreshness } from '@/services/data-freshness';
 import {
-  parseOpenaqLocations,
+  parseOpenaqEnvelope,
   pickGlobalWorst,
   type MonitorReading,
-  type OpenaqLocationRaw,
 } from './openaq-service';
 
 export interface OpenaqFetchResult {
@@ -31,12 +30,16 @@ export async function fetchOpenaqWorstReadings(now = Date.now()): Promise<Openaq
       dataFreshness.recordError('openaq-aqi', `HTTP ${res.status}`);
       return { ok: false, readings: [] };
     }
-    const data = (await res.json()) as { locations?: OpenaqLocationRaw[]; degraded?: boolean } | null;
-    if (data?.degraded) {
-      dataFreshness.recordError('openaq-aqi', 'upstream degraded');
+    const parsed = parseOpenaqEnvelope(await res.json());
+    if (!parsed.ok) {
+      dataFreshness.recordError('openaq-aqi', parsed.error);
       return { ok: false, readings: [] };
     }
-    const readings = pickGlobalWorst(parseOpenaqLocations(data?.locations ?? []), now, 100);
+    const readings = pickGlobalWorst(parsed.readings, now, 100);
+    if (readings.length === 0) {
+      dataFreshness.recordError('openaq-aqi', 'no usable readings');
+      return { ok: false, readings: [] };
+    }
     dataFreshness.recordUpdate('openaq-aqi', readings.length);
     return { ok: true, readings };
   } catch (error) {

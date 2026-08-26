@@ -2,14 +2,11 @@
  * OpenAQ v3 service — pure-deterministic parser + scorer.
  *
  * No DOM, no fetch at import time. The sidecar handles the network
- * round-trip; this module takes upstream-shaped JSON and produces
+ * round-trip; this module takes app-owned normalized JSON and produces
  * typed, sorted, JSON-serializable rows the renderer renders directly.
  *
- * The OpenAQ v3 API returns nested "locations" (each with multiple
- * "sensors") plus "latest" arrays keyed by parameter id. We flatten
- * those into one row per (location, parameter) and project the latest
- * measurement into a `MonitorReading` shape that pairs with our shared
- * EPA AQI ladder from purpleair-helpers.
+ * The sidecar owns OpenAQ's external schema and emits normalized readings.
+ * This module validates that app-owned contract and adds EPA AQI scoring.
  */
 
 import { pm25ToAqi, categoryForAqi, type AqiCategory } from './purpleair-helpers';
@@ -19,8 +16,9 @@ import { pm25ToAqi, categoryForAqi, type AqiCategory } from './purpleair-helpers
 export type OpenaqParameter = 'pm25' | 'pm10' | 'o3' | 'no2' | 'so2' | 'co';
 
 export interface MonitorReading {
-  /** Stable id: `${locationId}:${parameter}` */
+  /** Stable id from the normalized provider boundary. */
   id: string;
+  sensorId?: number;
   locationId: number;
   station: string;
   city: string | null;
@@ -45,122 +43,104 @@ export interface NearbySummary {
   unhealthyCount: number;
 }
 
-// ─── Upstream shapes (defensive subset) ───────────────────────────────
-
-export interface OpenaqLocationRaw {
+export interface OpenaqNormalizedReadingRaw {
   id?: unknown;
-  name?: unknown;
-  locality?: unknown;
+  sensorId?: unknown;
+  locationId?: unknown;
+  station?: unknown;
   city?: unknown;
   country?: unknown;
-  coordinates?: unknown;
-  /** v3 returns `sensors[]` with embedded `parameter` + `latest`. */
-  sensors?: unknown;
-  /** Some v3 endpoints return latest measurements as a flat array. */
-  latest?: unknown;
-}
-
-export interface OpenaqSensorRaw {
+  lat?: unknown;
+  lon?: unknown;
   parameter?: unknown;
-  /** v3 `latest` shape: { value, datetime: { utc }, unit }. */
-  latest?: unknown;
+  value?: unknown;
+  unit?: unknown;
+  observedAt?: unknown;
 }
 
-// ─── Parameter mapping ────────────────────────────────────────────────
+export interface OpenaqSampleMetadata {
+  windowStart: string;
+  windowEnd: string;
+  reportedFoundAtStart: number;
+  plannedPages: number;
+  fetchedPages: number;
+  rawRows: number;
+  uniqueSensorRows: number;
+  acceptedRows: number;
+  duplicateRows: number;
+  invalidRows: number;
+  rejectionReasons: Record<string, number>;
+}
 
-const PARAM_ALIASES: Record<string, OpenaqParameter> = {
-  pm25: 'pm25',
-  'pm2.5': 'pm25',
-  'pm 2.5': 'pm25',
-  pm10: 'pm10',
-  o3: 'o3',
-  ozone: 'o3',
-  no2: 'no2',
-  so2: 'so2',
-  co: 'co',
-};
+export type OpenaqEnvelopeResult =
+  | { ok: true; readings: MonitorReading[]; sample: OpenaqSampleMetadata }
+  | { ok: false; error: string };
 
-export function normalizeParameter(raw: unknown): OpenaqParameter | null {
-  if (typeof raw !== 'string') return null;
-  const key = raw.trim().toLowerCase();
-  return PARAM_ALIASES[key] ?? null;
+const OPENAQ_REJECTION_REASONS = new Set([
+  'invalidSensorId', 'invalidLocationId', 'invalidValue', 'invalidCoordinates',
+  'invalidTimestamp', 'outsideWindow', 'equalTimestampConflict',
+]);
+
+export function parseOpenaqEnvelope(raw: unknown): OpenaqEnvelopeResult {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'invalid OpenAQ response' };
+  const value = raw as Record<string, unknown>;
+  if (value.schemaVersion !== 2 || value.provider !== 'openaq-v3'
+    || value.coverage !== 'best_effort_sample' || value.complete !== false || !Array.isArray(value.readings)) {
+    return { ok: false, error: 'invalid OpenAQ response' };
+  }
+  const sample = value.sample as Record<string, unknown> | null;
+  const counters = ['reportedFoundAtStart', 'plannedPages', 'fetchedPages', 'rawRows', 'uniqueSensorRows', 'acceptedRows', 'duplicateRows', 'invalidRows'];
+  if (!sample || typeof sample.windowStart !== 'string' || typeof sample.windowEnd !== 'string'
+    || !Number.isFinite(Date.parse(sample.windowStart)) || !Number.isFinite(Date.parse(sample.windowEnd))
+    || counters.some((key) => !Number.isSafeInteger(sample[key]) || (sample[key] as number) < 0)
+    || sample.fetchedPages !== sample.plannedPages
+    || sample.rawRows !== (sample.acceptedRows as number) + (sample.duplicateRows as number) + (sample.invalidRows as number)
+    || !validRejectionReasons(sample.rejectionReasons, sample.rawRows as number)) {
+    return { ok: false, error: 'invalid OpenAQ response' };
+  }
+  const readings = parseOpenaqReadings(value.readings as OpenaqNormalizedReadingRaw[]);
+  if (readings.length > (sample.acceptedRows as number)) return { ok: false, error: 'invalid OpenAQ response' };
+  return { ok: true, readings, sample: sample as unknown as OpenaqSampleMetadata };
 }
 
 // ─── Parser ───────────────────────────────────────────────────────────
 
-/**
- * Walk an array of OpenAQ v3 location objects and emit one row per
- * supported (location, parameter) pair. Locations missing coordinates
- * or sensors are skipped silently; readings with non-finite values are
- * skipped.
- */
-export function parseOpenaqLocations(locations: readonly OpenaqLocationRaw[]): MonitorReading[] {
-  const out: MonitorReading[] = [];
-  for (const loc of locations) {
-    const locationId = numOrNull(loc.id);
-    if (locationId === null) continue;
-    const station = stringOrEmpty(loc.name) || 'Unknown station';
-    const city = stringOrNull(loc.city ?? loc.locality);
-    const country = stringOrNull(loc.country);
-    const coords = (loc.coordinates && typeof loc.coordinates === 'object') ? loc.coordinates as Record<string, unknown> : null;
-    const lat = numOrNull(coords?.latitude);
-    const lon = numOrNull(coords?.longitude);
-    const sensors = Array.isArray(loc.sensors) ? (loc.sensors as OpenaqSensorRaw[]) : [];
-    for (const sensor of sensors) {
-      const reading = projectSensorToReading(sensor, { locationId, station, city, country, lat, lon });
-      if (reading) out.push(reading);
+/** Validate the app-owned schema returned by the sidecar OpenAQ boundary. */
+export function parseOpenaqReadings(rows: readonly OpenaqNormalizedReadingRaw[]): MonitorReading[] {
+  const readings: MonitorReading[] = [];
+  for (const row of rows) {
+    const sensorId = positiveSafeInteger(row.sensorId);
+    const locationId = positiveSafeInteger(row.locationId);
+    const lat = coordinateOrNull(row.lat, -90, 90);
+    const lon = coordinateOrNull(row.lon, -180, 180);
+    const value = typeof row.value === 'number' && Number.isFinite(row.value) && row.value >= 0 ? row.value : null;
+    const observedAt = typeof row.observedAt === 'number' && Number.isFinite(row.observedAt) && row.observedAt > 0
+      ? row.observedAt
+      : null;
+    if (sensorId === null || locationId === null || lat === null || lon === null
+      || value === null || observedAt === null || row.parameter !== 'pm25' || row.unit !== 'µg/m³') {
+      continue;
     }
+    const aqi = pm25ToAqi(value);
+    if (aqi === null) continue;
+    readings.push({
+      id: `openaq:${sensorId}`,
+      sensorId,
+      locationId,
+      station: stringOrEmpty(row.station) || `OpenAQ location ${locationId}`,
+      city: stringOrNull(row.city),
+      country: stringOrNull(row.country),
+      lat,
+      lon,
+      parameter: 'pm25',
+      value,
+      unit: 'µg/m³',
+      observedAt,
+      aqi,
+      category: categoryForAqi(aqi),
+    });
   }
-  return out;
-}
-
-interface LocationContext {
-  locationId: number;
-  station: string;
-  city: string | null;
-  country: string | null;
-  lat: number | null;
-  lon: number | null;
-}
-
-function projectSensorToReading(sensor: OpenaqSensorRaw, ctx: LocationContext): MonitorReading | null {
-  const paramRaw = (sensor.parameter && typeof sensor.parameter === 'object')
-    ? (sensor.parameter as Record<string, unknown>).name
-    : sensor.parameter;
-  const parameter = normalizeParameter(paramRaw);
-  if (!parameter) return null;
-  const latest = (sensor.latest && typeof sensor.latest === 'object')
-    ? sensor.latest as Record<string, unknown>
-    : null;
-  if (!latest) return null;
-  const value = numOrNull(latest.value);
-  if (value === null) return null;
-  const datetime = (latest.datetime && typeof latest.datetime === 'object')
-    ? latest.datetime as Record<string, unknown>
-    : null;
-  const observedAt = parseTimestamp(datetime?.utc ?? latest.datetime);
-  const unit = stringOrEmpty(latest.unit) || defaultUnitFor(parameter);
-  const aqi = parameter === 'pm25' ? pm25ToAqi(value) : null;
-  const category = aqi === null ? null : categoryForAqi(aqi);
-  return {
-    id: `${ctx.locationId}:${parameter}`,
-    locationId: ctx.locationId,
-    station: ctx.station,
-    city: ctx.city,
-    country: ctx.country,
-    lat: ctx.lat,
-    lon: ctx.lon,
-    parameter,
-    value,
-    unit,
-    observedAt,
-    aqi,
-    category,
-  };
-}
-
-function defaultUnitFor(p: OpenaqParameter): string {
-  return p === 'pm25' || p === 'pm10' ? 'µg/m³' : 'ppm';
+  return readings;
 }
 
 // ─── Ranking + summaries ──────────────────────────────────────────────
@@ -226,20 +206,20 @@ function stringOrNull(v: unknown): string | null {
   return null;
 }
 
-function numOrNull(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const n = Number.parseFloat(v);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
+function validRejectionReasons(value: unknown, rawRows: number): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return Object.entries(value).every(([key, count]) => (
+    OPENAQ_REJECTION_REASONS.has(key)
+    && Number.isSafeInteger(count)
+    && (count as number) >= 0
+    && (count as number) <= rawRows
+  ));
 }
 
-function parseTimestamp(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const t = Date.parse(v);
-    return Number.isFinite(t) ? t : null;
-  }
-  return null;
+function positiveSafeInteger(v: unknown): number | null {
+  return typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : null;
+}
+
+function coordinateOrNull(v: unknown, minimum: number, maximum: number): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v >= minimum && v <= maximum ? v : null;
 }

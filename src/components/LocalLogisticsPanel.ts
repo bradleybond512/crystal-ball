@@ -4,7 +4,9 @@ import {
   getPrimarySavedPlace,
   getSavedPlace,
   getSavedPlaces,
+  confirmSavedPlacePersistence,
   subscribeSavedPlaces,
+  updateSavedPlace,
   type SavedPlace,
 } from '@/services/saved-places';
 import {
@@ -37,11 +39,17 @@ import {
   getLifelinePackReadinessForPlace,
   getRecentLifelineChangesForPlace,
 } from '@/services/lifelines/lifeline-runtime';
+import {
+  lifelinePrewarmCoordinator,
+  type LifelinePrewarmCoordinator,
+  type LifelinePrewarmState,
+} from '@/services/lifelines/lifeline-prewarm';
 import { deleteRoute, getEvacRouteDisclosure, planRoute } from '@/services/evacuation-router';
 
 interface LocalLogisticsPanelOptions {
   focusNode: (lat: number, lon: number) => void;
   fetchSnapshot?: typeof fetchLocalLogistics;
+  prewarmCoordinator?: LifelinePrewarmCoordinator;
 }
 
 type LocalLogisticsFilter = 'all' | LogisticsCategory;
@@ -93,6 +101,7 @@ function renderStaleSnapshot(snapshot: LocalLogisticsSnapshot): string {
 export class LocalLogisticsPanel extends Panel {
   private readonly options: LocalLogisticsPanelOptions;
   private readonly fetchSnapshot: typeof fetchLocalLogistics;
+  private readonly prewarmCoordinator: LifelinePrewarmCoordinator;
   private activePlaceId: string | null = null;
   private activeFilter: LocalLogisticsFilter = 'all';
   private activeRadiusKm: LocalLogisticsRadiusChoiceKm | null = null;
@@ -109,6 +118,8 @@ export class LocalLogisticsPanel extends Panel {
   private activePlaceSignature: string | null = null;
   private snapshotPlaceSignature: string | null = null;
   private unsubscribeSavedPlaces: (() => void) | null = null;
+  private unsubscribeLifelinePrewarm: (() => void) | null = null;
+  private prewarmState: LifelinePrewarmState | null = null;
   private readonly nodeLookup = new Map<string, LogisticsNode>();
   private readonly evidenceExpiryScheduler = new LifelineEvidenceExpiryScheduler({
  onExpiry: (snapshot, expiresAt, kind) => this.transitionExpiredEvidence(snapshot, expiresAt, kind),
@@ -132,11 +143,17 @@ export class LocalLogisticsPanel extends Panel {
  });
  this.options = options;
  this.fetchSnapshot = options.fetchSnapshot ?? fetchLocalLogistics;
+ this.prewarmCoordinator = options.prewarmCoordinator ?? lifelinePrewarmCoordinator;
  this.showLoading('Loading disaster lifelines…');
 
  this.content.addEventListener('click', (event) => this.handleContentClick(event));
 
  this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.handleSavedPlacesChanged());
+ this.unsubscribeLifelinePrewarm = this.prewarmCoordinator.subscribe((state) => {
+   if (state.placeId !== this.getActivePlaceId()) return;
+   this.prewarmState = state;
+   this.render();
+ });
  document.addEventListener('wm:lifeline-situation-updated', this.onLifelineSituationUpdated);
   }
 
@@ -145,6 +162,8 @@ export class LocalLogisticsPanel extends Panel {
  if (!target) return;
  if (this.handleRadiusClick(target)) return;
  if (this.handleFilterClick(target)) return;
+ if (target.closest('[data-lifeline-prewarm]')) { this.prepareOffline(); return; }
+ if (target.closest('[data-lifeline-prewarm-retry]')) { this.retryPrewarm(); return; }
  if (target.closest('[data-logistics-refresh]')) { void this.refresh(); return; }
  if (target.closest('[data-logistics-map]')) { this.showCurrentOverlay(); return; }
  if (this.handleSourceClick(target)) return;
@@ -246,6 +265,7 @@ export class LocalLogisticsPanel extends Panel {
  this.routeFeedback = null;
  this.routingNodeId = null;
  this.routeGeneration += 1;
+ this.prewarmState = placeId ? this.prewarmCoordinator.getState(placeId) : null;
  this.announceActivePlaceChanged();
  void this.refresh();
   }
@@ -265,6 +285,8 @@ export class LocalLogisticsPanel extends Panel {
  document.removeEventListener('wm:lifeline-situation-updated', this.onLifelineSituationUpdated);
  this.unsubscribeSavedPlaces?.();
  this.unsubscribeSavedPlaces = null;
+ this.unsubscribeLifelinePrewarm?.();
+ this.unsubscribeLifelinePrewarm = null;
  super.destroy();
   }
 
@@ -367,6 +389,7 @@ export class LocalLogisticsPanel extends Panel {
  this.routeFeedback = null;
  this.routingNodeId = null;
  this.routeGeneration += 1;
+ this.prewarmState = place ? this.prewarmCoordinator.getState(place.id) : null;
  this.announceActivePlaceChanged();
  void this.refresh();
   }
@@ -456,6 +479,22 @@ export class LocalLogisticsPanel extends Panel {
  return getPrimarySavedPlace() ?? getSavedPlaces()[0] ?? null;
   }
 
+  private prepareOffline(): void {
+ const place = this.resolvePlace();
+ const radiusKm = this.activeRadiusKm ?? initialLocalLogisticsRadiusKm(place?.radiusKm ?? 25);
+ if (!place) return;
+ const persisted = place.offlinePinned ? place : updateSavedPlace(place.id, { offlinePinned: true });
+ const confirmed = persisted ? confirmSavedPlacePersistence(persisted) : null;
+ if (!confirmed?.offlinePinned) return;
+ this.prewarmCoordinator.enqueue({ place: confirmed, radiusKm, trigger: 'manual' });
+  }
+
+  private retryPrewarm(): void {
+ const state = this.prewarmState;
+ if (state?.phase !== 'failed') return;
+ this.prewarmCoordinator.retry(state.placeId, state.queryFingerprint);
+  }
+
   private render(): void {
  const place = this.resolvePlace();
  if (!place) {
@@ -473,6 +512,7 @@ export class LocalLogisticsPanel extends Panel {
  }
 
  const headerHtml = this.renderHeader(place, requestedRadiusKm);
+ const prewarmHtml = this.renderPrewarmStatus(place, requestedRadiusKm);
  const statusHtml = this.renderLoadStatus(place);
 
  const staleHtml = this.snapshot ? renderStaleSnapshot(this.snapshot) : '';
@@ -493,6 +533,7 @@ export class LocalLogisticsPanel extends Panel {
  const html = `
  <div class="sa-panel-content local-logistics-content" data-local-logistics-content="1" aria-busy="${this.loading}">
  ${headerHtml}
+ ${prewarmHtml}
  ${statusHtml}
  ${staleHtml}
  ${packHtml}
@@ -562,9 +603,33 @@ export class LocalLogisticsPanel extends Panel {
  ${mapDisabled ? 'disabled' : ''}
  >Map</button>
  <button class="sa-refresh-btn" data-logistics-refresh="1" type="button" aria-label="Refresh disaster lifelines near ${escapeHtml(place.name)}">Refresh</button>
+ <button class="sa-refresh-btn" data-lifeline-prewarm="1" type="button">Prepare offline</button>
  </div>
  </div>
  ${this.renderRadiusControls(requestedRadiusKm)}
+ `;
+  }
+
+  private renderPrewarmStatus(place: SavedPlace, radiusKm: LocalLogisticsRadiusChoiceKm): string {
+ const state = this.prewarmState?.placeId === place.id ? this.prewarmState : null;
+ if (!state) return '';
+ const preparedRadiusKm = state.radiusKm ?? radiusKm;
+ const labels: Record<LifelinePrewarmState['phase'], string> = {
+   queued: `Offline preparation queued for ${preparedRadiusKm} km.`,
+   fetching: `Fetching Lifelines for ${preparedRadiusKm} km…`,
+   verifying: `Verifying the saved ${preparedRadiusKm} km Lifelines snapshot…`,
+   ready: `Offline Lifelines ready for ${preparedRadiusKm} km.`,
+   partial: `Offline Lifelines partially ready for ${preparedRadiusKm} km.`,
+   failed: state.error ?? 'Offline Lifelines preparation failed.',
+   cooldown: `Offline Lifelines for ${preparedRadiusKm} km were prepared recently.`,
+ };
+ return `
+ <div class="panel-empty local-logistics-prewarm-status" data-lifeline-prewarm-status="${state.phase}">
+ ${escapeHtml(labels[state.phase])}
+ ${state.phase === 'failed'
+   ? '<button class="sa-refresh-btn" data-lifeline-prewarm-retry="1" type="button">Retry</button>'
+   : ''}
+ </div>
  `;
   }
 

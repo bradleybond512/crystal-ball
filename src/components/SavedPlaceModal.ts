@@ -2,6 +2,7 @@ import { escapeHtml } from '@/utils/sanitize';
 import { forwardGeocode, reverseGeocodeLabel, type GeocodeResult } from '@/utils/geocode';
 import {
   addSavedPlace,
+  confirmSavedPlacePersistence,
   updateSavedPlace,
   removeSavedPlace,
   setPrimarySavedPlace,
@@ -33,6 +34,7 @@ const RADIUS_PRESETS = [
 
 export interface SavedPlaceModalOptions {
   onPickLocationMode: (active: boolean, callback: ((lat: number, lon: number) => void) | null) => void;
+  onOfflinePinnedSaved?: (place: SavedPlace) => void;
 }
 
 interface FormState {
@@ -616,17 +618,21 @@ export class SavedPlaceModal {
  source: 'manual' as const,
  };
 
+ let saved: SavedPlace | null;
  if (this.editingPlace) {
- const updated = updateSavedPlace(this.editingPlace.id, input);
- if (updated && this.formState.primary && !this.editingPlace.primary) {
- setPrimarySavedPlace(updated.id);
+ saved = updateSavedPlace(this.editingPlace.id, input);
+ if (saved && this.formState.primary && !this.editingPlace.primary) {
+ saved = setPrimarySavedPlace(saved.id);
  }
  } else {
- const added = addSavedPlace(input);
+ saved = addSavedPlace(input);
  if (this.formState.primary) {
- setPrimarySavedPlace(added.id);
+ saved = setPrimarySavedPlace(saved.id);
  }
  }
+
+ const confirmed = saved ? confirmSavedPlacePersistence(saved) : null;
+ if (confirmed?.offlinePinned) this.options.onOfflinePinnedSaved?.(confirmed);
 
  this.close();
   }

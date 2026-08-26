@@ -147,7 +147,10 @@ function mountPanel(loader: SnapshotLoader, prewarmCoordinator?: unknown): Insta
 }
 
 test('Prepare offline enqueues the active exact radius and cleanup unsubscribes', async () => {
-  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 8 });
+  const place = addSavedPlace({
+    name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 8, offlinePinned: true,
+  });
+  localStorage.setItem('wm_saved_places_v1', JSON.stringify(getSavedPlaces()));
   const enqueued: Array<{ placeId: string; radiusKm: number; trigger: string }> = [];
   let subscriptions = 0;
   let unsubscriptions = 0;

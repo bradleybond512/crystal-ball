@@ -94,7 +94,7 @@ test('offline Lifelines persistence is observable and the latest pointer follows
   assert.match(offlineCacheSrc, /getItem\(storageKey\(serviceId\)\) === serialized/);
   assert.match(
     localLogisticsServiceSrc,
-    /const exactPersisted = writeOfflineCacheEntry\(key, serialized\);[\s\S]{0,160}if \(exactPersisted\)[\s\S]{0,120}writeOfflineCacheEntry\(latestKey\(place\.id\)/,
+    /function commitLocalLogisticsSnapshot\([\s\S]{0,700}const exactPersisted = writeOfflineCacheEntry\(key, serialized\);[\s\S]{0,160}if \(exactPersisted\)[\s\S]{0,120}writeOfflineCacheEntry\(latestKey\(placeId\)/,
   );
 });
 

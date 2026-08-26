@@ -165,6 +165,26 @@ function legacyMigrationInput(
   };
 }
 
+function rewriteActiveManifest(
+  metadata: MemoryMetadata,
+  mutate: (manifest: {
+    receipts: ReceiptFixture[];
+    [key: string]: unknown;
+  }) => void,
+): void {
+  const headEntry = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
+  assert.ok(headEntry);
+  const head = JSON.parse(headEntry[1]) as { manifestKey: string; manifestSha256: string };
+  const encodedManifest = metadata.values.get(head.manifestKey);
+  assert.ok(encodedManifest);
+  const manifest = JSON.parse(encodedManifest) as { receipts: ReceiptFixture[]; [key: string]: unknown };
+  mutate(manifest);
+  const rewritten = JSON.stringify(manifest);
+  metadata.values.set(head.manifestKey, rewritten);
+  head.manifestSha256 = `sha256:${rewritten}`;
+  metadata.values.set(headEntry[0], JSON.stringify(head));
+}
+
 test('a generation is published only after every body is written, read back, and hashed', async () => {
   const { operations, store } = harness();
   const result = await commit(store, 'first');
@@ -215,6 +235,54 @@ test('active reads re-hash bodies and recover the previous verified generation a
   assert.ok(
     [...metadata.values.values()].some((value) => value.includes('pack-1')),
     'recovery republishes only a verified generation',
+  );
+  const recoveredHead = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
+  assert.ok(recoveredHead);
+  assert.equal(JSON.parse(recoveredHead[1]).packId, 'pack-1');
+});
+
+test('recovery keeps a verified current ready generation authoritative over its previous generation', async () => {
+  const { metadata, operations, store } = harness();
+  assert.deepEqual(await commit(store, 'previous-ready'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await commit(store, 'current-ready'), { ok: true, packId: 'pack-2' });
+  operations.length = 0;
+
+  assert.deepEqual(
+    await store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-2' },
+  );
+  assert.equal(
+    operations.some((entry) => entry.includes('metadata:set:') && entry.includes(':head:')),
+    false,
+    'a verified current head is returned without republishing an older generation',
+  );
+  const head = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
+  assert.ok(head);
+  assert.equal(JSON.parse(head[1]).packId, 'pack-2');
+});
+
+test('recovery keeps verified partial and expired current generations authoritative', async () => {
+  const partialHarness = harness();
+  assert.equal((await commit(partialHarness.store, 'previous-complete')).packId, 'pack-1');
+  assert.equal((await commit(partialHarness.store, 'current-partial')).packId, 'pack-2');
+  rewriteActiveManifest(partialHarness.metadata, (manifest) => {
+    manifest.receipts = manifest.receipts.filter(({ kind }) => kind !== 'alerts');
+  });
+  assert.deepEqual(
+    await partialHarness.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'partial', packId: 'pack-2' },
+  );
+
+  const expiredHarness = harness();
+  assert.equal((await commit(expiredHarness.store, 'previous-expiring')).packId, 'pack-1');
+  assert.equal((await commit(expiredHarness.store, 'current-expiring')).packId, 'pack-2');
+  assert.deepEqual(
+    await expiredHarness.store.recoverActive({
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      now: NOW + 2 * 60 * 60_000,
+    }),
+    { status: 'expired', packId: 'pack-2' },
   );
 });
 

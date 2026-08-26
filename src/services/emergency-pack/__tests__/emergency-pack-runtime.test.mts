@@ -455,6 +455,26 @@ test('saved-place, route, comms, Lifelines, and alert invalidations re-read auth
   assert.deepEqual(harness.unsubscribed.sort(), ['alerts', 'comms', 'lifelines', 'routes', 'saved-places']);
 });
 
+test('same-profile rename invalidation is scoped to only the changed place', async () => {
+  const home = place('home');
+  const work = place('work', 1);
+  const harness = createHarness([home, work]);
+  await harness.runtime.hydrate();
+  harness.invalidationCalls.length = 0;
+  harness.setPlaces([{ ...home, name: 'Renamed Home' }, work]);
+
+  harness.callbacks.get('saved-places')?.();
+  await flush();
+
+  assert.deepEqual(harness.invalidationCalls, [{
+    placeId: home.id,
+    profileFingerprint: harness.profile(home),
+    kinds: ['route-primary', 'route-alternate'],
+    capturedAt: NOW,
+  }]);
+  harness.runtime.destroy();
+});
+
 test('offline tile resolver re-reads one exact generation tile and rejects corrupt bytes', async () => {
   const create = requireFunction('createEmergencyPackOfflineMapTileResolver');
   const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);

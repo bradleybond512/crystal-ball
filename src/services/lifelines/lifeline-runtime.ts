@@ -471,6 +471,10 @@ export function createLifelineRuntime(
       : null;
     if (!exactArtifact) return;
     const existing = readPack(storage, snapshot.placeId);
+    const createdAt = existing?.queryFingerprint === snapshot.queryFingerprint
+      && existing.createdAt.getTime() <= snapshotAt
+      ? existing.createdAt
+      : snapshot.fetchedAt;
     const manifest = buildLifelineOfflinePackManifest({
       placeId: snapshot.placeId,
       queryFingerprint: snapshot.queryFingerprint,
@@ -481,7 +485,7 @@ export function createLifelineRuntime(
         cachedAt: snapshot.fetchedAt,
         expiresAt: new Date(snapshotAt + PACK_TTL_MS),
       }],
-      createdAt: existing?.queryFingerprint === snapshot.queryFingerprint ? existing.createdAt : snapshot.fetchedAt,
+      createdAt,
       updatedAt: snapshot.fetchedAt,
     });
     safeWrite(storage, packKey(snapshot.placeId), serializePack(manifest));

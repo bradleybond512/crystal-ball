@@ -532,6 +532,77 @@ for (const recoveryAge of ['older', 'equal'] as const) {
   });
 }
 
+for (const damagedNewerArtifact of ['evicted', 'malformed'] as const) {
+  test(`an older completion replaces a newer exact artifact that was ${damagedNewerArtifact}`, async () => {
+    const place = makePlace({ id: `manifest-recovery-${damagedNewerArtifact}`, radiusKm: 10 });
+    const harness = installCommitRaceHarness();
+    const runtime = createLifelineRuntime(harness.storage, () => Date.now());
+    harness.observeEvents((snapshot) => { runtime.processSnapshot(snapshot); });
+    const newerAt = new Date(Date.now() - 1_000).toISOString();
+    const olderAt = new Date(Date.now() - 2_000).toISOString();
+    try {
+      const coordinator = fetchLocalLogistics(place, {
+        radiusKm: 10,
+        shouldCommit: () => true,
+      } as never);
+      const foreground = fetchLocalLogistics(place, { radiusKm: 10 });
+      const fingerprint = buildLocalLogisticsFingerprint(place, 10, [...LOCAL_LOGISTICS_CATEGORIES]);
+      const exactServiceId = getLocalLogisticsOfflineCacheServiceId(place.id, fingerprint);
+      const exactStorageKey = `wm_offline_${exactServiceId}`;
+      const manifestKey = `wm_lifeline_pack_manifest_v1:${place.id}`;
+
+      harness.pending[0]?.response.resolve(emptyLogisticsResponse(place, harness.pending[0].input, newerAt));
+      const coordinatorResult = await coordinator;
+      const initialUpdate = runtime.getLatestUpdate(place.id, fingerprint);
+      assert.equal(initialUpdate?.pack.status, 'ready');
+      assert.deepEqual(runtime.verifyExactSnapshot(place, 10, coordinatorResult), { status: 'ready', exact: true });
+
+      if (damagedNewerArtifact === 'evicted') harness.storage.removeItem(exactStorageKey);
+      else harness.storage.setItem(exactStorageKey, JSON.stringify({ version: 1, cachedAt: Date.now(), data: { malformed: true } }));
+      assert.equal(runtime.getExactPackReadiness(place, 10).status, 'not-saved');
+
+      harness.pending[1]?.response.resolve(emptyLogisticsResponse(place, harness.pending[1].input, olderAt));
+      let foregroundResult: LocalLogisticsSnapshot | undefined;
+      await assert.doesNotReject(async () => { foregroundResult = await foreground; });
+
+      const artifact = readOfflineCacheEntry<{ fetchedAt: string }>(exactServiceId, harness.storage);
+      const latest = readOfflineCacheEntry<{ schemaVersion: 2; fingerprint: string }>(
+        `local-logistics:v2:latest:${place.id}`,
+        harness.storage,
+      );
+      const manifest = JSON.parse(harness.storage.getItem(manifestKey) ?? 'null') as {
+        createdAt?: string;
+        updatedAt?: string;
+        artifacts?: Array<{ kind?: string; cachedAt?: string }>;
+      } | null;
+      const recoveredUpdate = runtime.getLatestUpdate(place.id, fingerprint);
+
+      assert.equal(foregroundResult?.fetchedAt.toISOString(), olderAt);
+      assert.equal(artifact?.data.fetchedAt, olderAt);
+      assert.equal(latest?.data.fingerprint, fingerprint);
+      assert.equal(manifest?.artifacts?.find((item) => item.kind === 'lifelines')?.cachedAt, olderAt);
+      assert.equal(manifest?.createdAt, olderAt);
+      assert.equal(manifest?.updatedAt, olderAt);
+      assert.ok(Date.parse(manifest?.createdAt ?? '') <= Date.parse(manifest?.updatedAt ?? ''));
+      assert.equal(recoveredUpdate?.pack.status, 'ready');
+      assert.equal(recoveredUpdate?.situation, initialUpdate?.situation);
+      assert.equal(recoveredUpdate?.outage, initialUpdate?.outage);
+      assert.deepEqual(recoveredUpdate?.changes, initialUpdate?.changes);
+      assert.deepEqual(runtime.verifyExactSnapshot(place, 10, foregroundResult as LocalLogisticsSnapshot), {
+        status: 'ready',
+        exact: true,
+      });
+      assert.equal(runtime.verifyExactSnapshot(place, 10, coordinatorResult), null);
+      assert.deepEqual(
+        harness.events.map((event) => event.detail?.fetchedAt.toISOString()),
+        [newerAt, olderAt],
+      );
+    } finally {
+      harness.restore();
+    }
+  });
+}
+
 test('representative selection includes one ranked result per category before filling remaining slots', () => {
   const selectRepresentativeLocalLogisticsNodes = requireFeature<(
     snapshot: LocalLogisticsSnapshot,

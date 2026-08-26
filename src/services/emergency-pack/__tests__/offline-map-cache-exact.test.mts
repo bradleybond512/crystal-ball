@@ -3,12 +3,16 @@ import test from 'node:test';
 
 interface ExactTile {
   url: string;
+  cacheKey: string;
+  sha256: string;
+  generationId: string;
   byteLength: number;
   verified: true;
 }
 
 interface OfflineMapApi {
   captureOfflineMapTilesExact?: (input: {
+    generationId: string;
     tileUrls: string[];
     cache: ExactCache;
     fetchTile: (url: string) => Promise<Response>;
@@ -21,6 +25,17 @@ interface OfflineMapApi {
     tiles: ExactTile[];
     reason?: string;
   }>;
+  verifyOfflineMapGenerationExact?: (input: {
+    generationId: string;
+    tiles: ExactTile[];
+    cache: ExactCache;
+  }) => Promise<{ ok: boolean; reason?: string }>;
+  deleteOfflineMapGenerationExact?: (input: {
+    generationId: string;
+    tiles: ExactTile[];
+    retainedCacheKeys?: string[];
+    cache: ExactCache;
+  }) => Promise<{ ok: boolean; deleted: number; retained: number; reason?: string }>;
   validateOfflineMapCaptureBounds?: (tiles: Array<{ url: string; byteLength: number; verified: boolean }>) => {
     ok: boolean;
     reason?: string;
@@ -46,6 +61,7 @@ function requestKey(request: RequestInfo | URL): string {
 
 class ExactCache {
   readonly values = new Map<string, Uint8Array>();
+  readonly deleted: string[] = [];
   drop = new Set<string>();
   corrupt = new Set<string>();
 
@@ -66,7 +82,9 @@ class ExactCache {
   }
 
   async delete(request: RequestInfo | URL): Promise<boolean> {
-    return this.values.delete(requestKey(request));
+    const key = requestKey(request);
+    this.deleted.push(key);
+    return this.values.delete(key);
   }
 }
 
@@ -82,11 +100,16 @@ function tileUrls(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `https://a.basemaps.cartocdn.com/dark_all/12/${index}/95@2x.png`);
 }
 
+function exactCacheKey(generationId: string, index: number): string {
+  return `https://offline-map.crystalball.invalid/exact/${encodeURIComponent(generationId)}/${index}`;
+}
+
 test('exact tile capture never exceeds four concurrent fetches and verifies every CacheStorage readback', async () => {
   const capture = requireFunction('captureOfflineMapTilesExact');
   let active = 0;
   let maximumActive = 0;
   const result = await capture({
+    generationId: 'generation-concurrency',
     tileUrls: tileUrls(12),
     cache: new ExactCache(),
     concurrency: 4,
@@ -112,9 +135,10 @@ test('failed, dropped, or corrupt tiles never inflate success or publish a compl
   const capture = requireFunction('captureOfflineMapTilesExact');
   const urls = tileUrls(5);
   const cache = new ExactCache();
-  cache.drop.add(urls[2]!);
-  cache.corrupt.add(urls[3]!);
+  cache.drop.add(exactCacheKey('generation-incomplete', 2));
+  cache.corrupt.add(exactCacheKey('generation-incomplete', 3));
   const result = await capture({
+    generationId: 'generation-incomplete',
     tileUrls: urls,
     cache,
     fetchTile: async (url) => {
@@ -129,6 +153,155 @@ test('failed, dropped, or corrupt tiles never inflate success or publish a compl
   assert.equal(result.tiles.length, 2);
   assert.equal(result.reason, 'tile-verification-incomplete');
   assert.equal(result.totalBytes, result.tiles.reduce((sum, tile) => sum + tile.byteLength, 0));
+});
+
+test('oversized streamed response is cancelled before unbounded buffering and leaves no staged tile', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const cache = new ExactCache();
+  let cancelled = false;
+  let pulls = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulls += 1;
+      controller.enqueue(new Uint8Array(64 * 1024));
+      if (pulls > 20) controller.close();
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const response = new Response(body, { status: 200, headers: { 'content-type': 'image/png' } });
+  Object.defineProperty(response, 'arrayBuffer', {
+    value: () => { throw new Error('unbounded arrayBuffer must not be used'); },
+  });
+
+  const result = await capture({
+    generationId: 'generation-stream-cap',
+    tileUrls: tileUrls(1),
+    cache,
+    fetchTile: async () => response,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.downloaded, 0);
+  assert.equal(result.reason, 'tile-verification-incomplete');
+  assert.equal(cancelled, true);
+  assert.equal(pulls <= 18, true, 'reader must stop as soon as 1 MiB is exceeded');
+  assert.equal(cache.values.size, 0);
+});
+
+test('successful capture stores immutable generation-scoped keys and SHA-256 evidence', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const verify = requireFunction('verifyOfflineMapGenerationExact');
+  const cache = new ExactCache();
+  const result = await capture({
+    generationId: 'pack candidate / home',
+    tileUrls: tileUrls(2),
+    cache,
+    fetchTile: async (url) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.tiles.length, 2);
+  assert.ok(result.tiles.every((tile) => (
+    tile.generationId === 'pack candidate / home'
+    && tile.cacheKey !== tile.url
+    && tile.cacheKey.startsWith('https://offline-map.crystalball.invalid/exact/')
+    && /^[a-f0-9]{64}$/.test(tile.sha256)
+    && cache.values.has(tile.cacheKey)
+    && !cache.values.has(tile.url)
+  )));
+  assert.deepEqual(await verify({
+    generationId: 'pack candidate / home',
+    tiles: result.tiles,
+    cache,
+  }), { ok: true });
+
+  cache.corrupt.add(result.tiles[0]!.cacheKey);
+  assert.deepEqual(await verify({
+    generationId: 'pack candidate / home',
+    tiles: result.tiles,
+    cache,
+  }), { ok: false, reason: 'tile-readback-mismatch' });
+});
+
+test('failed capture deletes every staged generation key without deleting a colliding prior generation', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const cache = new ExactCache();
+  const first = await capture({
+    generationId: 'generation-collision',
+    tileUrls: tileUrls(1),
+    cache,
+    fetchTile: async (url) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(first.ok, true);
+  const retainedKey = first.tiles[0]!.cacheKey;
+  const retainedBytes = cache.values.get(retainedKey);
+
+  const collision = await capture({
+    generationId: 'generation-collision',
+    tileUrls: tileUrls(1),
+    cache,
+    fetchTile: async () => new Response('replacement', {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(collision.ok, false);
+  assert.equal(collision.reason, 'generation-collision');
+  assert.deepEqual(cache.values.get(retainedKey), retainedBytes);
+  assert.equal(cache.deleted.includes(retainedKey), false);
+
+  const incomplete = await capture({
+    generationId: 'generation-cleanup',
+    tileUrls: tileUrls(2),
+    cache,
+    fetchTile: async (url) => url === tileUrls(2)[1]
+      ? new Response('no', { status: 503 })
+      : new Response(`tile:${url}`, { status: 200, headers: { 'content-type': 'image/png' } }),
+  });
+  assert.equal(incomplete.ok, false);
+  assert.equal(incomplete.reason, 'tile-verification-incomplete');
+  assert.equal(cache.values.size, 1, 'only the prior successful generation may remain');
+});
+
+test('generation deletion removes only owned unretained keys and fails closed on foreign keys', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const remove = requireFunction('deleteOfflineMapGenerationExact');
+  const cache = new ExactCache();
+  const result = await capture({
+    generationId: 'generation-prune',
+    tileUrls: tileUrls(2),
+    cache,
+    fetchTile: async (url) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(result.ok, true);
+
+  assert.deepEqual(await remove({
+    generationId: 'generation-prune',
+    tiles: result.tiles,
+    retainedCacheKeys: [result.tiles[1]!.cacheKey],
+    cache,
+  }), { ok: true, deleted: 1, retained: 1 });
+  assert.equal(cache.values.has(result.tiles[0]!.cacheKey), false);
+  assert.equal(cache.values.has(result.tiles[1]!.cacheKey), true);
+
+  const foreign = { ...result.tiles[1]!, cacheKey: 'https://offline-map.crystalball.invalid/exact/foreign/0' };
+  assert.deepEqual(await remove({
+    generationId: 'generation-prune',
+    tiles: [foreign],
+    cache,
+  }), { ok: false, deleted: 0, retained: 0, reason: 'generation-key-mismatch' });
+  assert.equal(cache.values.has(result.tiles[1]!.cacheKey), true);
 });
 
 test('tile count, per-tile bytes, and total bytes fail closed at 512, 1 MiB, and 50 MiB', () => {

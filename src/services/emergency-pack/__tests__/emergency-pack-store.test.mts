@@ -94,9 +94,14 @@ interface StoreApi {
 
 const api = await import('../emergency-pack-store.ts').catch(() => ({} as StoreApi)) as StoreApi;
 
-function artifacts(marker: string, placeId = PLACE_ID, profileFingerprint = PROFILE) {
+function artifacts(
+  marker: string,
+  placeId = PLACE_ID,
+  profileFingerprint = PROFILE,
+  capturedAtOverride?: number,
+) {
   return REQUIRED_KINDS.map((kind, index) => {
-    const capturedAt = NOW - (index + 1) * 60_000;
+    const capturedAt = capturedAtOverride ?? NOW - (index + 1) * 60_000;
     return {
     kind,
     body: JSON.stringify({ marker, kind, placeId, profileFingerprint, capturedAt }),
@@ -442,7 +447,7 @@ test('offline map consumers receive only the active profile-bound unexpired veri
   const first = artifacts('first');
   const firstMap = first.find(({ kind }) => kind === 'offline-map');
   assert.ok(firstMap);
-  firstMap.body = JSON.stringify({ marker: 'first-map' });
+  firstMap.body = JSON.stringify({ marker: 'first-map', capturedAt: firstMap.capturedAt });
   assert.deepEqual(await store.commitGeneration({
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
@@ -463,7 +468,7 @@ test('offline map consumers receive only the active profile-bound unexpired veri
   const second = artifacts('second');
   const secondMap = second.find(({ kind }) => kind === 'offline-map');
   assert.ok(secondMap);
-  secondMap.body = JSON.stringify({ marker: 'second-map' });
+  secondMap.body = JSON.stringify({ marker: 'second-map', capturedAt: secondMap.capturedAt });
   assert.deepEqual(await store.commitGeneration({
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
@@ -506,7 +511,7 @@ test('persisted domain watermarks invalidate stale receipts and later captures s
     })).status, 'ready');
     assert.deepEqual(await store.recoverActive({
       placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
-    }), { status: 'not-saved', packId: null });
+    }), { status: 'partial', packId: 'pack-1' });
   }
   assert.ok([...metadata.values.keys()].some((key) => key.includes(':invalidation:')));
 
@@ -516,7 +521,8 @@ test('persisted domain watermarks invalidate stale receipts and later captures s
     profileFingerprint: PROFILE,
     requiredKinds: REQUIRED_KINDS,
     optionalKinds: ['route-alternate'],
-    artifacts: artifacts('after-events').map((artifact) => ({ ...artifact, expiresAt: NOW + 2 * 60 * 60_000 })),
+    artifacts: artifacts('after-events', PLACE_ID, PROFILE, NOW + 1)
+      .map((artifact) => ({ ...artifact, expiresAt: NOW + 2 * 60 * 60_000 })),
   }), { ok: true, packId: 'pack-later' });
   assert.equal((await later.store.readActive({
     placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW + 1,

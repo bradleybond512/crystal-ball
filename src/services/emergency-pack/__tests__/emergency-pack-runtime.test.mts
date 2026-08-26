@@ -357,7 +357,7 @@ test('offline map lifecycle adopts after exact verification and accepts only dur
   };
   const body = JSON.stringify({
     kind: 'offline-map', placeId: 'home', profileFingerprint: 'profile-home',
-    generationId, tiles: [tile], totalBytes: 4,
+    capturedAt: NOW, generationId, tiles: [tile], totalBytes: 4,
   });
   const durable = create({ open: async () => cache }, {
     verify: async () => ({ ok: true }),
@@ -541,6 +541,7 @@ test('offline tile resolver re-reads one exact generation tile and rejects corru
     kind: 'offline-map',
     placeId: 'home',
     profileFingerprint: 'profile-home',
+    capturedAt: NOW,
     generationId,
     tiles: [{
       url: sourceUrl, cacheKey, sha256: digest, generationId, byteLength: bytes.byteLength, verified: true,

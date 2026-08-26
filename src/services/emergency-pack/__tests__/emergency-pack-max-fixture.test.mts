@@ -111,6 +111,7 @@ test('maximum offline generation cold and warm tile reads stay within the render
     kind: 'offline-map',
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
+    capturedAt: NOW,
     generationId,
     tiles,
     totalBytes: tiles.length * tileBytes.byteLength,

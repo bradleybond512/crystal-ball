@@ -10,6 +10,7 @@ import {
   REQUIRED_KINDS,
   digest,
   requireFunction,
+  type ReceiptFixture,
 } from './test-support.mts';
 
 interface StoreApi {
@@ -37,6 +38,17 @@ interface StoreApi {
     readActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
       status: string;
       packId: string | null;
+      reason?: string;
+    }>;
+    readReadiness: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
+      status: string;
+      packId: string | null;
+      profileFingerprint: string;
+      requiredKinds: string[];
+      optionalKinds: string[];
+      receipts: ReceiptFixture[];
+      missingKinds: string[];
+      expiredKinds: string[];
       reason?: string;
     }>;
     recoverActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
@@ -165,6 +177,57 @@ test('a place move cannot read the prior profile even when the place id is uncha
   assert.deepEqual(
     await store.readActive({ placeId: PLACE_ID, profileFingerprint: `${PROFILE}:moved`, now: NOW }),
     { status: 'not-saved', packId: null, reason: 'profile-fingerprint-mismatch' },
+  );
+});
+
+test('detailed readiness returns exact re-hashed receipts and fails closed after a place move', async () => {
+  const { metadata, operations, store } = harness();
+  assert.deepEqual(await commit(store, 'verified-details'), { ok: true, packId: 'pack-1' });
+  const encodedManifest = [...metadata.values.entries()]
+    .find(([key]) => key.includes(':manifest:'))?.[1];
+  assert.ok(encodedManifest);
+  const manifest = JSON.parse(encodedManifest) as {
+    profileFingerprint: string;
+    requiredKinds: string[];
+    optionalKinds: string[];
+    receipts: ReceiptFixture[];
+  };
+
+  operations.length = 0;
+  assert.equal(typeof store.readReadiness, 'function', 'readReadiness should be implemented');
+  assert.deepEqual(
+    await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    {
+      status: 'ready',
+      packId: 'pack-1',
+      profileFingerprint: manifest.profileFingerprint,
+      requiredKinds: manifest.requiredKinds,
+      optionalKinds: manifest.optionalKinds,
+      receipts: manifest.receipts,
+      missingKinds: [],
+      expiredKinds: [],
+    },
+  );
+  assert.deepEqual(
+    new Set(operations.filter((entry) => entry.startsWith('body:get:')).map((entry) => entry.slice('body:get:'.length))),
+    new Set(manifest.receipts.map(({ cacheKey }) => cacheKey)),
+    'every returned receipt must be backed by an exact body readback',
+  );
+
+  const movedProfile = `${PROFILE}:moved`;
+  assert.deepEqual(
+    await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: movedProfile, now: NOW }),
+    {
+      status: 'not-saved',
+      packId: null,
+      profileFingerprint: movedProfile,
+      requiredKinds: [...REQUIRED_KINDS],
+      optionalKinds: ['route-alternate'],
+      receipts: [],
+      missingKinds: [...REQUIRED_KINDS],
+      expiredKinds: [],
+      reason: 'profile-fingerprint-mismatch',
+    },
   );
 });
 

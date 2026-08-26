@@ -293,6 +293,50 @@ test('corpus fetch distinguishes auth, rate-limit, oversized, and malformed fail
   }
 });
 
+test('corpus fetch disables redirects before sending the API key', async () => {
+  let calls = 0;
+  const out = await sidecar.fetchOpenaqLatestCorpus?.('redirect-secret', {
+    now: NOW,
+    retryDelayMs: 0,
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      assert.equal(options.redirect, 'error');
+      assert.equal(options.headers['X-API-Key'], 'redirect-secret');
+      return new Response(null, { status: 302, headers: { location: 'https://example.invalid/leak' } });
+    },
+  });
+  assert.equal(out?.ok, false);
+  assert.equal(out?.error, 'upstream');
+  assert.equal(calls, 1);
+});
+
+test('corpus fetch cancels every rejected response body', async (t) => {
+  const cases = [
+    ['authentication', 401, { 'content-type': 'application/json' }],
+    ['authorization', 403, { 'content-type': 'application/json' }],
+    ['rate limit', 429, { 'content-type': 'application/json', 'retry-after': '0' }],
+    ['non-ok', 500, { 'content-type': 'application/json' }],
+    ['wrong content type', 200, { 'content-type': 'text/html' }],
+    ['oversized content length', 200, { 'content-type': 'application/json', 'content-length': String(3 * 1024 * 1024) }],
+  ];
+  for (const [name, status, headers] of cases) {
+    await t.test(name, async () => {
+      let calls = 0;
+      let cancelled = 0;
+      const out = await sidecar.fetchOpenaqLatestCorpus?.('test-key', {
+        now: NOW,
+        retryDelayMs: 0,
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response(new ReadableStream({ cancel() { cancelled += 1; } }), { status, headers });
+        },
+      });
+      assert.equal(out?.ok, false);
+      assert.equal(cancelled, calls);
+    });
+  }
+});
+
 test('corpus fetch rejects a failed later page without returning page-one rows', async () => {
   assert.equal(typeof sidecar.fetchOpenaqLatestCorpus, 'function');
   const out = await sidecar.fetchOpenaqLatestCorpus?.('test-key', { fetchImpl: failedLaterPageFetch, now: NOW, retryDelayMs: 0 });

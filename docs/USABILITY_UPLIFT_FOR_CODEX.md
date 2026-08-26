@@ -569,6 +569,25 @@ Dependencies: UX-017
   `npm run smoke`, `npm run typecheck:all`, and packaged-runtime feed diagnostics
   using only credentials already configured by the user.
 
+### UX-022 — Make OpenAQ sampling truthful and desktop-local
+
+OpenAQ v3 global latest measurements are a changing offset-paginated sample,
+not a completeness-proven global ranking. Keep the user-owned API key and
+bounded collection in the desktop sidecar, and make web behavior explicitly
+inapplicable rather than recording a failed or healthy provider vote.
+
+- **Change surface:** OpenAQ sidecar collection, normalized renderer contract,
+  panel loading/error/empty states, runtime fallback policy, and dead v2 route.
+- **Security and reliability:** reject redirects before sending the API key;
+  cancel rejected response bodies; bound pages, bytes, concurrency, retries,
+  and deadline; invalidate cache and in-flight work on credential rotation.
+- **Done when:** the panel says `Recent Highs` and discloses best-effort sample
+  coverage; strict adapter output drives health; web performs no OpenAQ fetch;
+  malformed, stale, partial, oversized, or all-dropped data fail closed.
+- **Verify:** live response-body probes, focused renderer/sidecar mutation tests,
+  `npm run test:openaq`, `npm run test:airquality`, `npm run test:providers`,
+  `npm run test:sidecar`, and `npm run typecheck:all`.
+
 ---
 
 ## What was NOT verified
@@ -613,4 +632,5 @@ Update the row in the same PR that does the work.
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
-| UX-021 | Optional-feed classification and recovery | DONE | #1677 |
+| UX-021 | Optional-feed classification and recovery | NOT STARTED | — |
+| UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |

@@ -833,6 +833,7 @@ test('BGP HTTP route invalidates and aborts an old credential generation on rota
     'Content-Type': 'application/json',
   };
   try {
+    const oldRequestStartedAt = Date.now();
     const oldRequest = fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
     await oldStarted;
     const rotated = await fetch(`http://127.0.0.1:${server.port}/api/local-env-update`, {
@@ -841,6 +842,7 @@ test('BGP HTTP route invalidates and aborts an old credential generation on rota
     assert.equal(rotated.status, 200);
     const oldResponse = await oldRequest;
     assert.equal(oldResponse.status, 503);
+    assert.ok(Date.now() - oldRequestStartedAt < 5000, 'credential rotation must abort old upstream work promptly');
 
     const fresh = await fetch(`http://127.0.0.1:${server.port}/api/infrastructure/bgp`, { headers });
     assert.equal(fresh.status, 200);

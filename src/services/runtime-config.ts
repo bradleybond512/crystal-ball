@@ -1147,12 +1147,12 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
 
   // Push to sidecar so handlers pick it up immediately.
   // This is best-effort: keyring persistence is the source of truth.
-  if (sanitized) {
- try {
- await pushSecretToSidecar(key, sanitized);
- } catch {
- // Sidecar may not be ready yet — keychain is the source of truth.
- }
+  // Empty values must also be pushed or the deleted key remains live in the
+  // already-running sidecar environment until restart.
+  try {
+    await pushSecretToSidecar(key, sanitized);
+  } catch {
+    // Sidecar may not be ready yet — keychain is the source of truth.
   }
 
   // Signal other windows (main ↔ settings) to reload secrets from keychain.

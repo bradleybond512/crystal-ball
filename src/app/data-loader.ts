@@ -2572,11 +2572,7 @@ export class DataLoaderManager implements AppModule {
  tasks.push((async () => {
  try {
  const protestEvents = await protestsTask;
- let result = await fetchUcdpEvents();
- for (let attempt = 1; attempt < 3 && !result.success; attempt++) {
- await new Promise(r => setTimeout(r, 15_000));
- result = await fetchUcdpEvents();
- }
+ const result = await fetchUcdpEvents();
  if (!result.success) {
  dataFreshness.recordError('ucdp_events', 'UCDP events unavailable (retaining prior event state)');
  return;

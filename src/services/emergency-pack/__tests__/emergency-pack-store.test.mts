@@ -72,6 +72,12 @@ interface StoreApi {
       profileFingerprint: string;
       now: number;
     }) => Promise<string | null>;
+    invalidateArtifacts: (input: {
+      placeId: string;
+      profileFingerprint: string;
+      kinds: readonly string[];
+      capturedAt: number;
+    }) => Promise<{ ok: boolean; reason?: string }>;
     recoverActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
       status: string;
       packId: string | null;
@@ -115,6 +121,24 @@ function harness(overrides: {
     ...overrides,
   });
   return { metadata, bodies, operations, store };
+}
+
+function createEmergencyPackStoreForClock(
+  metadata: MemoryMetadata,
+  bodies: MemoryBodies,
+  timestamp: number,
+  packId: string,
+) {
+  const create = requireFunction(api, 'createEmergencyPackStore');
+  return {
+    store: create({
+      metadata,
+      bodies,
+      digest,
+      now: () => timestamp,
+      createPackId: () => packId,
+    }),
+  };
 }
 
 async function commit(store: ReturnType<typeof harness>['store'], marker: string) {
@@ -399,6 +423,67 @@ test('offline map consumers receive only the active profile-bound unexpired veri
   assert.equal(await store.readVerifiedOfflineMapArtifact({
     placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
   }), null);
+});
+
+test('persisted domain watermarks invalidate stale receipts and later captures supersede them', async () => {
+  const { metadata, bodies, store } = harness();
+  assert.deepEqual(await commit(store, 'before-events'), { ok: true, packId: 'pack-1' });
+  for (const [kinds, missing] of [
+    [['route-primary', 'route-alternate'], ['route-primary']],
+    [['comms-plan', 'contacts'], ['comms-plan', 'contacts']],
+    [['lifelines'], ['lifelines']],
+    [['alerts'], ['alerts']],
+  ] as const) {
+    assert.deepEqual(await store.invalidateArtifacts({
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      kinds,
+      capturedAt: NOW,
+    }), { ok: true });
+    const readiness = await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
+    assert.equal(readiness.status, 'partial');
+    for (const kind of missing) assert.ok(readiness.missingKinds.includes(kind));
+    assert.notEqual((await store.readActive({
+      placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+    })).status, 'ready');
+    assert.deepEqual(await store.recoverActive({
+      placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+    }), { status: 'not-saved', packId: null });
+  }
+  assert.ok([...metadata.values.keys()].some((key) => key.includes(':invalidation:')));
+
+  const later = createEmergencyPackStoreForClock(metadata, bodies, NOW + 1, 'pack-later');
+  assert.deepEqual(await later.store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: artifacts('after-events').map((artifact) => ({ ...artifact, expiresAt: NOW + 2 * 60 * 60_000 })),
+  }), { ok: true, packId: 'pack-later' });
+  assert.equal((await later.store.readActive({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW + 1,
+  })).status, 'ready');
+});
+
+test('invalid or failed watermark persistence fails closed without changing historical bodies', async () => {
+  const { metadata, bodies, store } = harness();
+  assert.equal((await commit(store, 'immutable')).ok, true);
+  const before = new Map(bodies.values);
+  metadata.fail = (key) => key.includes(':invalidation:');
+  assert.equal((await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'],
+    capturedAt: NOW,
+  })).ok, false);
+  metadata.fail = null;
+  assert.deepEqual(bodies.values, before);
+  assert.equal((await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['not-a-kind'],
+    capturedAt: NOW,
+  })).ok, false);
 });
 
 test('failed offline-map staging and publication release only the staged external generation', async () => {

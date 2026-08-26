@@ -107,6 +107,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
   const sourcePlaces: string[] = [];
   const pruneCalls: Array<{ placeIds: string[]; maxPlaces: number; generationsPerPlace: number }> = [];
   const migrationCalls: unknown[] = [];
+  const invalidationCalls: unknown[] = [];
   const releasedArtifacts: unknown[] = [];
   let commitCalls = 0;
 
@@ -141,6 +142,15 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       };
       authoritative.set(input.profileFingerprint, state);
       return { ok: true, packId: state.packId! };
+    },
+    async invalidateArtifacts(input: {
+      placeId: string;
+      profileFingerprint: string;
+      kinds: readonly string[];
+      capturedAt: number;
+    }): Promise<{ ok: boolean }> {
+      invalidationCalls.push({ ...input, kinds: [...input.kinds] });
+      return { ok: true };
     },
     async prune(input: { placeIds: string[]; maxPlaces: number; generationsPerPlace: number }): Promise<void> {
       pruneCalls.push({ ...input, placeIds: [...input.placeIds] });
@@ -217,6 +227,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     sourcePlaces,
     pruneCalls,
     migrationCalls,
+    invalidationCalls,
     releasedArtifacts,
     unsubscribed,
     authoritative,
@@ -396,6 +407,26 @@ test('saved-place, route, comms, Lifelines, and alert invalidations re-read auth
     await flush();
     assert.equal(harness.runtime.getState(home).status, 'not-saved', event);
   }
+
+  assert.deepEqual(
+    harness.invalidationCalls.map((value) => (value as { kinds: string[] }).kinds),
+    [
+      ['route-primary', 'route-alternate'],
+      ['comms-plan', 'contacts'],
+      ['lifelines'],
+      ['alerts'],
+    ],
+  );
+
+  const renamed = { ...home, name: 'Renamed Home' };
+  harness.setPlaces([renamed]);
+  harness.callbacks.get('saved-places')?.();
+  await flush();
+  assert.deepEqual(
+    (harness.invalidationCalls.at(-1) as { kinds: string[] }).kinds,
+    ['route-primary', 'route-alternate'],
+    'a same-profile saved-place rename invalidates route labels and instructions',
+  );
 
   const moved = { ...home, lat: home.lat + 0.1 };
   harness.setPlaces([moved]);

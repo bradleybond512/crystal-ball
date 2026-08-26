@@ -134,11 +134,13 @@ function createConcurrentCaptureHarness(input: {
   }
 
   function artifact(kind: string, scope: EmergencyPackCaptureScope): EmergencyPackCapturedArtifact {
+    const sourceRevision = 'a'.repeat(64);
     const body = JSON.stringify({
       kind,
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
       capturedAt: NOW,
+      ...(kind === 'alerts' ? { sourceRevision } : {}),
     });
     return {
       kind,
@@ -148,6 +150,7 @@ function createConcurrentCaptureHarness(input: {
       semanticState: 'verified',
       summary: `${kind} verified`,
       itemCount: 1,
+      ...(kind === 'alerts' ? { sourceRevision } : {}),
     };
   }
 

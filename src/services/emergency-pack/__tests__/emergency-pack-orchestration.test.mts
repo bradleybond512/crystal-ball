@@ -11,6 +11,7 @@ interface Artifact {
   semanticState: string;
   summary: string;
   itemCount: number;
+  sourceRevision?: string;
 }
 
 interface OrchestrationApi {
@@ -42,6 +43,7 @@ interface Scope {
 
 const api = await import('../emergency-pack-capture.ts').catch(() => ({} as OrchestrationApi)) as OrchestrationApi;
 const scope = { placeId: PLACE_ID, profileFingerprint: PROFILE, contactConsent: true };
+const ALERT_SOURCE_REVISION = 'a'.repeat(64);
 
 function artifact(kind: string): Artifact {
   const capturedAt = NOW - 60_000;
@@ -62,6 +64,14 @@ function artifact(kind: string): Artifact {
       }],
       totalBytes: 32_000,
     }
+    : kind === 'alerts'
+      ? {
+        kind,
+        placeId: PLACE_ID,
+        profileFingerprint: PROFILE,
+        capturedAt,
+        sourceRevision: ALERT_SOURCE_REVISION,
+      }
     : { kind, placeId: PLACE_ID, profileFingerprint: PROFILE, capturedAt };
   return {
     kind,
@@ -71,6 +81,7 @@ function artifact(kind: string): Artifact {
     semanticState: 'verified',
     summary: `${kind} captured`,
     itemCount: 1,
+    ...(kind === 'alerts' ? { sourceRevision: ALERT_SOURCE_REVISION } : {}),
   };
 }
 
@@ -113,6 +124,67 @@ test('capture assembles every existing required source and commits alternate rou
   assert.deepEqual(commits[0]?.artifacts.map((item) => item.kind), [...REQUIRED_KINDS, 'route-alternate']);
   assert.deepEqual(sourceScopes.map(({ kind }) => kind), [...REQUIRED_KINDS, 'route-alternate']);
   assert.ok(sourceScopes.every(({ scope: candidate }) => candidate === scope), 'all sources receive the exact capture scope');
+});
+
+test('alert source revision is strict, body-bound, forwarded unchanged, and forbidden on other kinds', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  const committedAlerts: Artifact[] = [];
+  const accepted = create({
+    sources: sources(),
+    commitGeneration: async (input) => {
+      const alert = input.artifacts.find(({ kind }) => kind === 'alerts');
+      if (alert) committedAlerts.push(alert);
+      return { ok: true, packId: 'revision-bound' };
+    },
+  });
+
+  assert.deepEqual(await accepted.capture(scope), { ok: true, packId: 'revision-bound' });
+  assert.equal(committedAlerts.length, 1);
+  assert.equal(committedAlerts[0]?.sourceRevision, ALERT_SOURCE_REVISION);
+  assert.equal(JSON.parse(committedAlerts[0]!.body).sourceRevision, ALERT_SOURCE_REVISION);
+
+  const missingEnvelope = artifact('alerts');
+  delete missingEnvelope.sourceRevision;
+  const missingBody = artifact('alerts');
+  const missingBodyPayload = JSON.parse(missingBody.body) as Record<string, unknown>;
+  delete missingBodyPayload.sourceRevision;
+  missingBody.body = JSON.stringify(missingBodyPayload);
+  const malformed = artifact('alerts');
+  malformed.sourceRevision = 'A'.repeat(64);
+  malformed.body = JSON.stringify({
+    ...(JSON.parse(malformed.body) as Record<string, unknown>),
+    sourceRevision: malformed.sourceRevision,
+  });
+  const mismatched = artifact('alerts');
+  mismatched.sourceRevision = 'b'.repeat(64);
+  const nonAlertRevision = artifact('lifelines');
+  nonAlertRevision.sourceRevision = ALERT_SOURCE_REVISION;
+  const nonAlertBodyRevision = artifact('lifelines');
+  nonAlertBodyRevision.body = JSON.stringify({
+    ...(JSON.parse(nonAlertBodyRevision.body) as Record<string, unknown>),
+    sourceRevision: ALERT_SOURCE_REVISION,
+  });
+
+  for (const [failedKind, candidate] of [
+    ['alerts', missingEnvelope],
+    ['alerts', missingBody],
+    ['alerts', malformed],
+    ['alerts', mismatched],
+    ['lifelines', nonAlertRevision],
+    ['lifelines', nonAlertBodyRevision],
+  ] as const) {
+    let commits = 0;
+    const rejected = create({
+      sources: sources({ [failedKind]: async () => candidate }),
+      commitGeneration: async () => { commits += 1; return { ok: true }; },
+    });
+    assert.deepEqual(await rejected.capture(scope), {
+      ok: false,
+      failedKind,
+      reason: 'artifact-invalid',
+    });
+    assert.equal(commits, 0);
+  }
 });
 
 test('one missing or rejected required artifact prevents any generation commit', async () => {

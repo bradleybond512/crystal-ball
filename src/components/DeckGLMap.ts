@@ -220,7 +220,7 @@ const BASEMAP_STORAGE_KEY = 'wm-basemap';
 
 const emergencyPackMapProtocolHandler = createEmergencyPackMapProtocolHandler({
   resolveTile: resolveEmergencyPackOfflineMapTile,
-  fetchTile: (url, signal) => fetch(url, { signal }),
+  fetchTile: (url, init) => fetch(url, init),
 });
 
 // Clade family → RGBA color for variant dot layer

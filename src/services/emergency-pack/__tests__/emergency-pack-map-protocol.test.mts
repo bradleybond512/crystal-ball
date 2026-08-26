@@ -110,13 +110,15 @@ function protocolRequest(): { url: string } {
 
 test('protocol cancels a chunked online tile as soon as it exceeds 1 MiB', async () => {
   let cancelled = 0;
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new Uint8Array(MAX_TILE_BYTES));
       controller.enqueue(new Uint8Array([1]));
-      controller.close();
+      closeTimer = setTimeout(() => controller.close(), 100);
     },
     cancel() {
+      if (closeTimer !== undefined) clearTimeout(closeTimer);
       cancelled += 1;
     },
   });

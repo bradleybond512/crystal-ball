@@ -150,7 +150,40 @@ test('an artifact that expires at render time revokes ready copy and offers an e
   const html = render(project(snapshot(), null, { now: NOW, emergencyPack }));
 
   refuteMarkup(html, /Emergency Pack ready/i, 'render-time expiry must revoke stale ready copy');
+  assertMarkup(html, /data-emergency-pack="expired"/, 'the aggregate status must agree with expired artifacts');
   assertMarkup(html, /Emergency Pack expired/i, 'render-time expiry should be explicit');
   assertMarkup(html, /Refresh expired artifacts/i, 'expired evidence should have the correct action');
   assertMarkup(html, /value="5"/, 'progress must count only current required artifacts');
+  refuteMarkup(html, /Required pack captured\./, 'the live message must not retain stale completion copy');
+  assertMarkup(html, /Required artifacts have expired\./, 'the live message should explain the expiry transition');
+});
+
+test('an optional artifact expiring at render time does not revoke required-pack readiness', () => {
+  const project = requireFunction('projectEmergencyReadiness');
+  const render = requireFunction('renderEmergencyReadiness');
+  const required = ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'];
+  const emergencyPack = packInput({
+    readiness: {
+      status: 'ready',
+      packId: 'pack-optional-expiring',
+      requiredKinds: required,
+      optionalKinds: ['route-alternate'],
+      receipts: [...required, 'route-alternate'].map((kind) => ({
+        kind,
+        capturedAt: new Date(NOW - 60_000).toISOString(),
+        expiresAt: new Date(kind === 'route-alternate' ? NOW : NOW + 60 * 60_000).toISOString(),
+        semanticState: 'verified',
+        summary: `${kind} verified`,
+      })),
+      missingKinds: [],
+      expiredKinds: [],
+    },
+    captureState: { status: 'complete', completed: 6, total: 6, message: 'Required pack captured.' },
+  });
+  const html = render(project(snapshot(), null, { now: NOW, emergencyPack }));
+
+  assertMarkup(html, /data-emergency-pack="ready"/, 'optional expiry must not downgrade required readiness');
+  assertMarkup(html, /Emergency Pack ready/i, 'all current required receipts remain ready');
+  assertMarkup(html, /data-pack-artifact="route-alternate"[\s\S]*?Expired/, 'the optional artifact should still show expiry');
+  assertMarkup(html, /<progress[^>]+max="6"[^>]+value="6"/, 'optional expiry must not reduce required progress');
 });

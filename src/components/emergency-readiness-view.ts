@@ -270,6 +270,44 @@ function packCopy(input: EmergencyPackInput): Pick<EmergencyPackView, 'headline'
   };
 }
 
+function effectivePackStatus(
+  input: EmergencyPackInput,
+  artifacts: EmergencyPackArtifactView[],
+): EmergencyPackStatus {
+  const requiredExpiredAtRender = artifacts.some((artifact) => (
+    artifact.requirement === 'Required' && artifact.status === 'expired'
+  ));
+  return input.readiness.status !== 'not-saved' && requiredExpiredAtRender
+    ? 'expired'
+    : input.readiness.status;
+}
+
+function effectiveCaptureState(
+  input: EmergencyPackInput,
+  status: EmergencyPackStatus,
+  artifacts: EmergencyPackArtifactView[],
+): EmergencyPackCaptureState {
+  if (input.captureState.status === 'capturing' || input.captureState.status === 'error') {
+    return { ...input.captureState };
+  }
+  const required = artifacts.filter((artifact) => artifact.requirement === 'Required');
+  const completed = required.filter((artifact) => artifact.status === 'current').length;
+  const missing = required.length - completed;
+  const message = status === 'ready'
+    ? 'All required artifacts are current.'
+    : status === 'expired'
+      ? 'Required artifacts have expired.'
+      : status === 'partial'
+        ? `${missing} required ${missing === 1 ? 'artifact is' : 'artifacts are'} missing or expired.`
+        : 'No verified Emergency Pack is saved.';
+  return {
+    status: status === 'ready' && input.captureState.status === 'complete' ? 'complete' : 'idle',
+    completed,
+    total: required.length,
+    message,
+  };
+}
+
 function projectPack(input: EmergencyPackInput, now: number): EmergencyPackView {
   const receipts = new Map(input.readiness.receipts.map((receipt) => [receipt.kind, receipt]));
   const expired = new Set(input.readiness.expiredKinds);
@@ -291,16 +329,29 @@ function projectPack(input: EmergencyPackInput, now: number): EmergencyPackView 
       expiresAtMs,
     };
   });
-  const copy = packCopy(input);
+  const status = effectivePackStatus(input, artifacts);
+  const captureState = effectiveCaptureState(input, status, artifacts);
+  const effectiveInput: EmergencyPackInput = {
+    ...input,
+    readiness: {
+      ...input.readiness,
+      status,
+      expiredKinds: [...new Set([...input.readiness.expiredKinds, ...artifacts
+        .filter((artifact) => artifact.requirement === 'Required' && artifact.status === 'expired')
+        .map((artifact) => artifact.kind)])],
+    },
+    captureState,
+  };
+  const copy = packCopy(effectiveInput);
   return {
     places: input.places.map((place) => ({ ...place })),
     selectedPlaceId: input.selectedPlaceId,
-    status: input.readiness.status,
+    status,
     artifacts,
     contactConsent: input.contactConsent,
-    captureState: { ...input.captureState },
+    captureState,
     ...copy,
-    liveMessage: `${copy.headline}. ${input.captureState.message}`.trim(),
+    liveMessage: `${copy.headline}. ${captureState.message}`.trim(),
   };
 }
 

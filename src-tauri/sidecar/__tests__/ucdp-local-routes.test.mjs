@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
@@ -6,6 +7,10 @@ import test from 'node:test';
 process.env.LOCAL_API_TOKEN ??= 'test-token-ucdp-local-routes';
 process.env.LOCAL_API_MODE = 'desktop-sidecar';
 const originalProviderToken = process.env.UCDP_API_TOKEN;
+execFileSync(process.execPath, ['scripts/build-sidecar-sebuf.mjs'], {
+  cwd: path.resolve('.'),
+  stdio: 'pipe',
+});
 const { createLocalApiServer } = await import('../local-api-server.mjs');
 
 function getJson(url) {

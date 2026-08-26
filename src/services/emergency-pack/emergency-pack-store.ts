@@ -54,6 +54,15 @@ export interface EmergencyPackStoreState {
   reason?: string;
 }
 
+export interface EmergencyPackDetailedReadiness extends EmergencyPackStoreState {
+  profileFingerprint: string;
+  requiredKinds: EmergencyPackRequiredKind[];
+  optionalKinds: EmergencyPackOptionalKind[];
+  receipts: EmergencyPackReceipt[];
+  missingKinds: EmergencyPackRequiredKind[];
+  expiredKinds: EmergencyPackRequiredKind[];
+}
+
 export interface EmergencyPackArtifactInput {
   kind: EmergencyPackArtifactKind;
   body: string;
@@ -90,6 +99,18 @@ interface PackHead {
   committedAt: string;
 }
 
+interface EmergencyPackPruneInput {
+  placeIds: string[];
+  maxPlaces: number;
+  generationsPerPlace: number;
+}
+
+interface RetainedGenerations {
+  verifiedPlaceIds: Set<string>;
+  manifestKeys: Set<string>;
+  bodyKeys: Set<string>;
+}
+
 function headKey(placeId: string): string {
   return `${KEY_PREFIX}:head:${encodeURIComponent(placeId)}`;
 }
@@ -100,6 +121,19 @@ function manifestKey(placeId: string, packId: string): string {
 
 function bodyKey(packId: string, kind: string): string {
   return `${KEY_PREFIX}:body:${encodeURIComponent(packId)}:${kind}`;
+}
+
+function placeIdFromKey(key: string, kind: 'head' | 'manifest'): string | null {
+  const prefix = `${KEY_PREFIX}:${kind}:`;
+  if (!key.startsWith(prefix)) return null;
+  const encodedPlaceId = key.slice(prefix.length).split(':', 1)[0];
+  if (!encodedPlaceId) return null;
+  try {
+    const placeId = decodeURIComponent(encodedPlaceId);
+    return isNonEmptyString(placeId) ? placeId : null;
+  } catch {
+    return null;
+  }
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -151,6 +185,13 @@ function uniqueStrings(values: readonly string[]): boolean {
     && new Set(values).size === values.length;
 }
 
+function validPruneInput(input: EmergencyPackPruneInput): boolean {
+  return Array.isArray(input.placeIds)
+    && input.maxPlaces === 5
+    && input.generationsPerPlace === 2
+    && input.placeIds.every((placeId) => isNonEmptyString(placeId) && placeId.length <= 512);
+}
+
 function validateGenerationInput(input: EmergencyPackGenerationInput): boolean {
   if (!isNonEmptyString(input.placeId) || input.placeId.length > 512) return false;
   if (!isNonEmptyString(input.profileFingerprint) || input.profileFingerprint.length > 1024) return false;
@@ -193,6 +234,23 @@ function stateForManifest(
   }
   const readiness = deriveEmergencyPackReadiness(manifest, scope);
   return { status: readiness.status, packId: manifest.packId };
+}
+
+function emptyReadiness(
+  profileFingerprint: string,
+  reason?: string,
+): EmergencyPackDetailedReadiness {
+  return {
+    status: 'not-saved',
+    packId: null,
+    profileFingerprint,
+    requiredKinds: [...EMERGENCY_PACK_REQUIRED_KINDS],
+    optionalKinds: [...EMERGENCY_PACK_OPTIONAL_KINDS],
+    receipts: [],
+    missingKinds: [...EMERGENCY_PACK_REQUIRED_KINDS],
+    expiredKinds: [],
+    ...(reason ? { reason } : {}),
+  };
 }
 
 function recoveryKeys(
@@ -256,6 +314,37 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       return stateForManifest(manifest, scope);
     } catch {
       return { status: 'unavailable', packId: null, reason: 'storage-failure' };
+    }
+  }
+
+  async function readReadiness(scope: EmergencyPackScope): Promise<EmergencyPackDetailedReadiness> {
+    try {
+      const head = parseHead(metadata.getItem(headKey(scope.placeId)));
+      if (!head) return emptyReadiness(scope.profileFingerprint);
+      if (head.placeId !== scope.placeId) {
+        return emptyReadiness(scope.profileFingerprint, 'place-id-mismatch');
+      }
+      if (head.profileFingerprint !== scope.profileFingerprint) {
+        return emptyReadiness(scope.profileFingerprint, 'profile-fingerprint-mismatch');
+      }
+      const manifest = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+      if (manifest?.packId !== head.packId) {
+        return emptyReadiness(scope.profileFingerprint, 'verification-failed');
+      }
+      const readiness = deriveEmergencyPackReadiness(manifest, scope);
+      return {
+        status: readiness.status,
+        packId: manifest.packId,
+        profileFingerprint: manifest.profileFingerprint,
+        requiredKinds: [...manifest.requiredKinds],
+        optionalKinds: [...manifest.optionalKinds],
+        receipts: manifest.receipts.map((receipt) => ({ ...receipt })),
+        missingKinds: [...readiness.missingKinds],
+        expiredKinds: [...readiness.expiredKinds],
+        ...(readiness.reasons[0] ? { reason: readiness.reasons[0] } : {}),
+      };
+    } catch {
+      return emptyReadiness(scope.profileFingerprint, 'storage-failure');
     }
   }
 
@@ -479,5 +568,90 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  return { commitGeneration, readActive, recoverActive };
+  async function collectRetainedGenerations(allowedPlaceIds: Set<string>): Promise<RetainedGenerations> {
+    const retained: RetainedGenerations = {
+      verifiedPlaceIds: new Set<string>(),
+      manifestKeys: new Set<string>(),
+      bodyKeys: new Set<string>(),
+    };
+    for (const placeId of allowedPlaceIds) {
+      try {
+        const head = parseHead(metadata.getItem(headKey(placeId)));
+        if (head?.placeId !== placeId) continue;
+        const active = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+        if (active?.packId !== head.packId || active.placeId !== placeId) continue;
+        retained.verifiedPlaceIds.add(placeId);
+        retained.manifestKeys.add(head.manifestKey);
+        for (const receipt of active.receipts) retained.bodyKeys.add(receipt.cacheKey);
+
+        if (!active.previousPackId) continue;
+        const previousKey = manifestKey(placeId, active.previousPackId);
+        const previous = await loadVerifiedManifest(previousKey);
+        if (previous?.placeId !== placeId || previous.packId !== active.previousPackId) continue;
+        retained.manifestKeys.add(previousKey);
+        for (const receipt of previous.receipts) retained.bodyKeys.add(receipt.cacheKey);
+      } catch {
+        // Preserve an allowed place when its active chain cannot be verified.
+      }
+    }
+    return retained;
+  }
+
+  function removeUnretainedHeads(allowedPlaceIds: Set<string>): void {
+    for (const key of metadata.keys()) {
+      const placeId = placeIdFromKey(key, 'head');
+      if (placeId === null || allowedPlaceIds.has(placeId)) continue;
+      try {
+        metadata.removeItem(key);
+      } catch {
+        // Pruning is best effort and never changes retained readiness.
+      }
+    }
+  }
+
+  async function removeUnretainedManifest(
+    key: string,
+    placeId: string,
+    retainedBodyKeys: Set<string>,
+  ): Promise<void> {
+    let parsed: EmergencyPackManifest | null = null;
+    try {
+      const encoded = metadata.getItem(key);
+      parsed = encoded === null ? null : parseEmergencyPackManifest(JSON.parse(encoded));
+      if (parsed?.placeId !== placeId || manifestKey(parsed.placeId, parsed.packId) !== key) return;
+      metadata.removeItem(key);
+    } catch {
+      return;
+    }
+    for (const { cacheKey } of parsed.receipts) {
+      if (retainedBodyKeys.has(cacheKey)) continue;
+      try {
+        await bodies.delete(cacheKey);
+      } catch {
+        // Orphaned immutable bodies cannot become active without a head.
+      }
+    }
+  }
+
+  async function removeUnretainedManifests(
+    allowedPlaceIds: Set<string>,
+    retained: RetainedGenerations,
+  ): Promise<void> {
+    for (const key of metadata.keys()) {
+      const placeId = placeIdFromKey(key, 'manifest');
+      if (placeId === null || retained.manifestKeys.has(key)) continue;
+      if (allowedPlaceIds.has(placeId) && !retained.verifiedPlaceIds.has(placeId)) continue;
+      await removeUnretainedManifest(key, placeId, retained.bodyKeys);
+    }
+  }
+
+  async function prune(input: EmergencyPackPruneInput): Promise<void> {
+    if (!validPruneInput(input)) return;
+    const allowedPlaceIds = new Set(input.placeIds.slice(0, input.maxPlaces));
+    const retained = await collectRetainedGenerations(allowedPlaceIds);
+    removeUnretainedHeads(allowedPlaceIds);
+    await removeUnretainedManifests(allowedPlaceIds, retained);
+  }
+
+  return { commitGeneration, readActive, readReadiness, recoverActive, prune };
 }

@@ -41,6 +41,7 @@ interface ReadinessDeadlineScheduler {
 }
 
 type LifelinesReceiptPlace = Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>;
+const MAX_ACTIONABLE_PACK_PLACES = 5;
 
 interface EmergencyReadinessPanelDependencies {
   getSnapshot: () => WorldSnapshot | null;
@@ -206,7 +207,7 @@ export class EmergencyReadinessPanel extends Panel {
   }
 
   private handleContentChange(event: Event): void {
-    if (!this.active) return;
+    if (!this.active || this.captureState?.status === 'capturing') return;
     const target = event.target as HTMLInputElement | HTMLSelectElement | null;
     if (target?.name === 'emergency-pack-place') {
       this.captureGeneration += 1;
@@ -226,7 +227,9 @@ export class EmergencyReadinessPanel extends Panel {
     if (!this.active || this.captureState?.status === 'capturing') return;
     const target = event.target as Element | null;
     if (!target || typeof target.closest !== 'function' || !target.closest('[data-pack-action]')) return;
-    const place = this.dependencies.getPlaces().find((candidate) => candidate.id === this.selectedPlaceId);
+    const place = this.dependencies.getPlaces()
+      .slice(0, MAX_ACTIONABLE_PACK_PLACES)
+      .find((candidate) => candidate.id === this.selectedPlaceId);
     if (!place) return;
     void this.capture(place);
   }
@@ -251,14 +254,18 @@ export class EmergencyReadinessPanel extends Panel {
     if (result.ok) {
       this.captureState = null;
     } else {
-      const authoritativeProgress = idleCaptureState(this.dependencies.getEmergencyPackState(place));
+      const authoritativeReadiness = this.dependencies.getEmergencyPackState(place);
+      const authoritativeProgress = idleCaptureState(authoritativeReadiness);
+      const preservation = authoritativeReadiness.packId === null
+        ? 'No verified Emergency Pack was published.'
+        : 'The last known good pack was preserved.';
       this.captureState = {
         status: 'error',
         completed: authoritativeProgress.completed,
         total: authoritativeProgress.total,
         message: result.failedKind
-          ? `Capture stopped at ${result.failedKind}; the last known good pack was preserved.`
-          : 'Capture failed; the last known good pack was preserved.',
+          ? `Capture stopped at ${result.failedKind}. ${preservation}`
+          : `Capture failed. ${preservation}`,
       };
     }
     this.requestRender();
@@ -285,7 +292,8 @@ export class EmergencyReadinessPanel extends Panel {
     const snapshot = this.dependencies.getSnapshot();
     const primaryPlace = this.dependencies.getPrimaryPlace();
     const places = this.dependencies.getPlaces();
-    const selectedPlace = this.resolveSelectedPlace(places, primaryPlace);
+    const actionablePlaces = places.slice(0, MAX_ACTIONABLE_PACK_PLACES);
+    const selectedPlace = this.resolveSelectedPlace(actionablePlaces, primaryPlace);
     const receiptPlace = primaryPlace && typeof primaryPlace.radiusKm === 'number'
       && Number.isFinite(primaryPlace.radiusKm) && primaryPlace.radiusKm > 0
       ? { id: primaryPlace.id, lat: primaryPlace.lat, lon: primaryPlace.lon, radiusKm: primaryPlace.radiusKm }
@@ -310,7 +318,7 @@ export class EmergencyReadinessPanel extends Panel {
     const view = projectEmergencyReadiness(snapshot, lifelines, {
       now: this.dependencies.now(),
       emergencyPack: {
-        places: places.map((place) => ({ id: place.id, name: place.name })),
+        places: actionablePlaces.map((place) => ({ id: place.id, name: place.name })),
         selectedPlaceId: selectedPlace?.id ?? null,
         readiness,
         contactConsent: this.contactConsent,

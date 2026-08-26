@@ -43,13 +43,18 @@ export interface EmergencyPackSourceDependencies {
     place: EmergencyPackSourcePlace,
     scope: EmergencyPackCaptureScope,
   ) => Promise<EmergencyPackCapturedArtifact | null>;
+  releaseArtifact?: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
+}
+
+export interface EmergencyPackSourceArtifact extends EmergencyPackCapturedArtifact {
+  capturedAt: number;
 }
 
 export type EmergencyPackArtifactSource = (
   scope: EmergencyPackCaptureScope,
 ) => Promise<EmergencyPackCapturedArtifact | null>;
 
-const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+const ALERT_FRESHNESS_MS = 15 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const THIRTY_DAYS_MS = 30 * ONE_DAY_MS;
 const MAX_DATE_MS = 8_640_000_000_000_000;
@@ -59,7 +64,9 @@ const MAX_ROUTE_STEPS = 1000;
 const MAX_CONTACTS = 25;
 const MAX_FALLBACK_STEPS = 32;
 const MAX_CHECK_IN_WINDOWS = 16;
+const ALERT_MATCH_KINDS = new Set(['inside_polygon', 'near_polygon', 'inside_zone', 'no_match']);
 const MATCHED_ALERT_KINDS = new Set(['inside_polygon', 'near_polygon', 'inside_zone']);
+const ALERT_THREAT_LEVELS = new Set(['none', 'watch', 'advisory', 'warning', 'emergency']);
 const COMMS_CHANNEL_KINDS = new Set(['sms', 'signal', 'call', 'radio', 'mesh', 'satcom', 'rally', 'other']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,7 +142,7 @@ function buildArtifact(
   capturedAt: number,
   expiresAt: number,
   summary: string,
-): EmergencyPackCapturedArtifact | null {
+): EmergencyPackSourceArtifact | null {
   if (!isTimestamp(capturedAt)
     || !isTimestamp(expiresAt)
     || expiresAt <= capturedAt
@@ -155,6 +162,7 @@ function buildArtifact(
   return {
     kind,
     body: serialized.body,
+    capturedAt,
     expiresAt,
     semanticState: validation.semanticState,
     summary,
@@ -210,7 +218,7 @@ function createLifelinesSource(
       placeId: place.id,
       profileFingerprint: scope.profileFingerprint,
       snapshot,
-    }, now, receipt.expiresAt.getTime(), 'Exact Lifelines snapshot verified');
+    }, receipt.capturedAt.getTime(), receipt.expiresAt.getTime(), 'Exact Lifelines snapshot verified');
   };
 }
 
@@ -227,9 +235,11 @@ function createAlertsSource(
       || !Array.isArray(feed.alerts)
       || !isTimestamp(feed.capturedAt)
       || feed.capturedAt > now
-      || feed.capturedAt + FOUR_HOURS_MS <= now) return null;
+      || !isTimestamp(feed.capturedAt + ALERT_FRESHNESS_MS)
+      || feed.capturedAt + ALERT_FRESHNESS_MS <= now) return null;
 
     const matched: Record<string, unknown>[] = [];
+    let expiresAt = feed.capturedAt + ALERT_FRESHNESS_MS;
     for (const alert of feed.alerts) {
       let match: unknown;
       try {
@@ -237,10 +247,29 @@ function createAlertsSource(
       } catch {
         return null;
       }
-      if (!isRecord(match) || typeof match.matchKind !== 'string') return null;
-      if (!MATCHED_ALERT_KINDS.has(match.matchKind)) continue;
+      if (!isRecord(match)
+        || typeof match.matchKind !== 'string'
+        || !ALERT_MATCH_KINDS.has(match.matchKind)
+        || typeof match.msUntilExpires !== 'number'
+        || !Number.isFinite(match.msUntilExpires)
+        || typeof match.isCancellation !== 'boolean'
+        || typeof match.threatLevel !== 'string'
+        || !ALERT_THREAT_LEVELS.has(match.threatLevel)) return null;
+      if (match.matchKind === 'no_match') {
+        if (match.threatLevel !== 'none') return null;
+        continue;
+      }
+      if (!MATCHED_ALERT_KINDS.has(match.matchKind)) return null;
+      if (match.msUntilExpires <= 0
+        || match.isCancellation
+        || match.threatLevel === 'none') continue;
       if (!isRecord(alert)) return null;
-      if (matched.length < MAX_ALERTS) matched.push(alert);
+      if (matched.length < MAX_ALERTS) {
+        const alertExpiresAt = now + match.msUntilExpires;
+        if (!isTimestamp(alertExpiresAt) || alertExpiresAt <= now) return null;
+        matched.push(alert);
+        expiresAt = Math.min(expiresAt, alertExpiresAt);
+      }
     }
     const alertSuffix = matched.length === 1 ? '' : 's';
     const summary = matched.length === 0
@@ -252,7 +281,7 @@ function createAlertsSource(
       profileFingerprint: scope.profileFingerprint,
       alerts: matched,
       sourceFetchedAt: feed.capturedAt,
-    }, now, feed.capturedAt + FOUR_HOURS_MS, summary);
+    }, feed.capturedAt, expiresAt, summary);
   };
 }
 
@@ -355,8 +384,7 @@ function routeArtifact(
   kind: 'route-primary' | 'route-alternate',
   route: RouteCandidate,
   scope: EmergencyPackCaptureScope,
-  capturedAt: number,
-): EmergencyPackCapturedArtifact | null {
+): EmergencyPackSourceArtifact | null {
   return buildArtifact(kind, {
     kind,
     placeId: scope.placeId,
@@ -369,7 +397,7 @@ function routeArtifact(
     geometry: { type: 'LineString', coordinates: downsampleCoordinates(route.coordinates) },
     steps: route.steps.slice(0, MAX_ROUTE_STEPS),
     cachedAt: route.cachedAt,
-  }, capturedAt, route.cachedAt + ONE_DAY_MS, `${kind === 'route-primary' ? 'Primary' : 'Alternate'} route verified`);
+  }, route.cachedAt, route.cachedAt + ONE_DAY_MS, `${kind === 'route-primary' ? 'Primary' : 'Alternate'} route verified`);
 }
 
 function readRoutes(
@@ -397,11 +425,12 @@ function createRouteSource(
     if (!isTimestamp(now)) return null;
     const routes = readRoutes(place, dependencies, now);
     const route = routes[kind === 'route-primary' ? 0 : 1];
-    return route ? routeArtifact(kind, route, scope, now) : null;
+    return route ? routeArtifact(kind, route, scope) : null;
   };
 }
 
 interface SelectedCommsPlan {
+  capturedAt: number;
   selectedContactIds: string[];
   contacts: Record<string, unknown>[];
   fallbackSteps: Record<string, unknown>[];
@@ -414,6 +443,7 @@ type CommsArtifactKind = 'comms-plan' | 'contacts';
 type ReadCommsSnapshot = (
   scope: EmergencyPackCaptureScope,
   kind: CommsArtifactKind,
+  capturedAt: number,
 ) => SelectedCommsPlan | null;
 
 function parseSelectedContactIds(value: unknown): string[] | null {
@@ -428,6 +458,7 @@ function parseSelectedContactIds(value: unknown): string[] | null {
 function readSelectedCommsPlan(
   place: EmergencyPackSourcePlace,
   dependencies: EmergencyPackSourceDependencies,
+  capturedAt: number,
 ): SelectedCommsPlan | null {
   const raw = dependencies.getCommsPlan(place.id);
   const selectedContactIds = parseSelectedContactIds(dependencies.getSelectedContactIds(place.id));
@@ -497,6 +528,7 @@ function readSelectedCommsPlan(
     });
   }
   return {
+    capturedAt,
     selectedContactIds,
     contacts: contacts as Record<string, unknown>[],
     fallbackSteps,
@@ -514,14 +546,14 @@ function createCommsSnapshotReader(
     pendingKind: CommsArtifactKind;
   }>();
 
-  return (scope, kind) => {
+  return (scope, kind, capturedAt) => {
     const capture = captures.get(scope);
     if (capture?.pendingKind === kind) {
       captures.delete(scope);
       return capture.selected;
     }
 
-    const selected = readSelectedCommsPlan(place, dependencies);
+    const selected = readSelectedCommsPlan(place, dependencies, capturedAt);
     captures.set(scope, {
       selected,
       pendingKind: kind === 'comms-plan' ? 'contacts' : 'comms-plan',
@@ -540,8 +572,8 @@ function createCommsSource(
     if (!scopeMatchesPlace(scope, place) || scope.contactConsent !== true) return null;
     const now = await Promise.resolve(dependencies.now());
     if (!isTimestamp(now)) return null;
-    const selected = readSnapshot(scope, kind);
-    if (!selected) return null;
+    const selected = readSnapshot(scope, kind, now);
+    if (!selected || selected.capturedAt > now) return null;
     const payload = kind === 'comms-plan'
       ? {
         kind,
@@ -568,8 +600,8 @@ function createCommsSource(
     return buildArtifact(
       kind,
       payload,
-      now,
-      now + THIRTY_DAYS_MS,
+      selected.capturedAt,
+      selected.capturedAt + THIRTY_DAYS_MS,
       summary,
     );
   };
@@ -581,30 +613,49 @@ function createOfflineMapSource(
 ): EmergencyPackArtifactSource {
   return async (scope) => {
     if (!scopeMatchesPlace(scope, place)) return null;
-    const now = dependencies.now();
-    if (!isTimestamp(now)) return null;
+    const captureStartedAt = dependencies.now();
+    if (!isTimestamp(captureStartedAt)) return null;
     const artifact = await dependencies.captureOfflineMap(place, scope);
-    if (artifact?.kind !== 'offline-map'
+    if (!artifact) return null;
+    const rejectCapturedArtifact = async (): Promise<null> => {
+      if (typeof dependencies.releaseArtifact === 'function') {
+        try {
+          await dependencies.releaseArtifact(artifact);
+        } catch {
+          // The source rejection remains authoritative when cleanup fails.
+        }
+      }
+      return null;
+    };
+    let capturedAt: number;
+    try {
+      capturedAt = dependencies.now();
+    } catch {
+      return rejectCapturedArtifact();
+    }
+    if (!isTimestamp(capturedAt)
+      || capturedAt < captureStartedAt
+      || artifact.kind !== 'offline-map'
       || !isTimestamp(artifact.expiresAt)
-      || artifact.expiresAt <= now
-      || artifact.expiresAt > now + THIRTY_DAYS_MS
-      || !isBoundedString(artifact.summary, 300)) return null;
+      || artifact.expiresAt <= capturedAt
+      || artifact.expiresAt > capturedAt + THIRTY_DAYS_MS
+      || !isBoundedString(artifact.summary, 300)) return rejectCapturedArtifact();
     const payload = parseBody(artifact.body);
     if (payload?.kind !== 'offline-map'
       || payload.placeId !== scope.placeId
-      || payload.profileFingerprint !== scope.profileFingerprint) return null;
+      || payload.profileFingerprint !== scope.profileFingerprint) return rejectCapturedArtifact();
     const validation = validateEmergencyPackArtifact({
       kind: 'offline-map',
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
       byteLength: new TextEncoder().encode(artifact.body).byteLength,
-      capturedAt: now,
+      capturedAt,
       payload,
     });
     if (!validation.ok
       || validation.itemCount !== artifact.itemCount
-      || validation.semanticState !== artifact.semanticState) return null;
-    return artifact;
+      || validation.semanticState !== artifact.semanticState) return rejectCapturedArtifact();
+    return { ...artifact, capturedAt };
   };
 }
 

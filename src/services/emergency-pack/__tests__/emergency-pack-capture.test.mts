@@ -128,6 +128,60 @@ test('comms and contacts require explicit consent, a selected contact, and bound
   assert.equal(validate('comms-plan', payload, 128 * 1024 + 1).ok, false);
 });
 
+test('source-produced comms and contacts bodies validate when private values stay separate', () => {
+  const scope = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    consent: true,
+    selectedContactIds: ['contact-1'],
+  };
+  const commsPlan = {
+    ...scope,
+    fallbackSteps: [{ id: 'sms', label: 'SMS', kind: 'sms', instruction: 'Send status', priority: 1 }],
+    checkInWindows: [{ id: 'hourly', label: 'Hourly', cadenceMinutes: 60, note: '' }],
+    notes: 'Meet at home',
+  };
+  const contacts = {
+    ...scope,
+    contacts: [{ id: 'contact-1', label: 'Family', value: '+15555550100', role: 'check-in' }],
+  };
+
+  assert.equal(Object.hasOwn(commsPlan, 'contacts'), false);
+  assert.equal(Object.hasOwn(contacts, 'fallbackSteps'), false);
+  assert.deepEqual(
+    [validate('comms-plan', commsPlan).ok, validate('contacts', contacts).ok],
+    [true, true],
+  );
+});
+
+test('split privacy validation rejects private values in comms and unselected contacts', () => {
+  const selected = { id: 'contact-1', label: 'Family', value: '+15555550100', role: 'check-in' };
+  const commsPlan = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    consent: true,
+    selectedContactIds: [selected.id],
+    fallbackSteps: [],
+    checkInWindows: [],
+    notes: '',
+  };
+  const contacts = [
+    selected,
+    { id: 'contact-2', label: 'Work', value: 'work@example.com', role: 'backup' },
+  ];
+  assert.deepEqual([
+    validate('comms-plan', { ...commsPlan, contacts: [selected] }).ok,
+    validate('contacts', {
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      consent: true,
+      selectedContactIds: [selected.id],
+      contacts,
+    }).ok,
+    validate('contacts', { ...commsPlan, contacts }).ok,
+  ], [false, false, false]);
+});
+
 test('Lifelines evidence is exact-profile and capped at 1 MiB', () => {
   const payload = {
     placeId: PLACE_ID,

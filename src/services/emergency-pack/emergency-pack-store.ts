@@ -23,7 +23,7 @@ const ARTIFACT_KINDS = new Set<EmergencyPackArtifactKind>([
   ...EMERGENCY_PACK_REQUIRED_KINDS,
   ...EMERGENCY_PACK_OPTIONAL_KINDS,
 ]);
-const INVALIDATION_SCHEMA_VERSION = 1;
+const INVALIDATION_SCHEMA_VERSION = 2;
 
 export interface EmergencyPackMetadataBoundary {
   getItem(key: string): string | null;
@@ -69,6 +69,7 @@ export interface EmergencyPackArtifactInput {
   kind: EmergencyPackArtifactKind;
   body: string;
   capturedAt: number;
+  sourceRevision?: string;
   expiresAt: number;
   semanticState: EmergencyPackSemanticState;
   summary: string;
@@ -138,10 +139,25 @@ interface RetainedGenerations {
 }
 
 interface EmergencyPackInvalidationRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   placeId: string;
   profileFingerprint: string;
   cutoffs: Partial<Record<EmergencyPackArtifactKind, number>>;
+  sourceRevision: string | null;
+  alertSequence: number;
+}
+
+interface AlertPublicationBinding {
+  sourceRevision: string;
+  alertSequence: number;
+}
+
+interface EmergencyPackInvalidationInput {
+  placeId: string;
+  profileFingerprint: string;
+  kinds: readonly EmergencyPackArtifactKind[];
+  capturedAt: number;
+  sourceRevision?: string;
 }
 
 function headKey(placeId: string): string {
@@ -156,8 +172,8 @@ function bodyKey(packId: string, kind: string): string {
   return `${KEY_PREFIX}:body:${encodeURIComponent(packId)}:${kind}`;
 }
 
-function invalidationKey(placeId: string): string {
-  return `${KEY_PREFIX}:invalidation:${encodeURIComponent(placeId)}`;
+function invalidationKey(placeId: string, profileFingerprint: string): string {
+  return `${KEY_PREFIX}:invalidation:${encodeURIComponent(placeId)}:${encodeURIComponent(profileFingerprint)}`;
 }
 
 function placeIdFromKey(key: string, kind: 'head' | 'manifest'): string | null {
@@ -182,25 +198,37 @@ function parseInvalidationRecord(value: string | null): EmergencyPackInvalidatio
   const raw: unknown = JSON.parse(value);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid invalidation record');
   const record = raw as Record<string, unknown>;
-  if (Object.keys(record).length !== 4
+  if (Object.keys(record).length !== 6
     || record.schemaVersion !== INVALIDATION_SCHEMA_VERSION
     || !isNonEmptyString(record.placeId)
     || !isNonEmptyString(record.profileFingerprint)
     || !record.cutoffs
     || typeof record.cutoffs !== 'object'
-    || Array.isArray(record.cutoffs)) throw new Error('invalid invalidation record');
+    || Array.isArray(record.cutoffs)
+    || !(record.sourceRevision === null
+      || (typeof record.sourceRevision === 'string' && SHA256_HEX_PATTERN.test(record.sourceRevision)))) {
+    throw new Error('invalid invalidation record');
+  }
+  if (!Number.isSafeInteger(record.alertSequence)
+    || (record.alertSequence as number) < 0
+    || (record.sourceRevision === null) !== (record.alertSequence === 0)) {
+    throw new Error('invalid alert invalidation sequence');
+  }
   const cutoffs = record.cutoffs as Record<string, unknown>;
   for (const [kind, cutoff] of Object.entries(cutoffs)) {
     if (!ARTIFACT_KINDS.has(kind as EmergencyPackArtifactKind)
+      || kind === 'alerts'
       || !Number.isSafeInteger(cutoff)
       || (cutoff as number) <= 0
       || (cutoff as number) > 8_640_000_000_000_000) throw new Error('invalid invalidation cutoff');
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: INVALIDATION_SCHEMA_VERSION,
     placeId: record.placeId,
     profileFingerprint: record.profileFingerprint,
     cutoffs: { ...cutoffs } as Partial<Record<EmergencyPackArtifactKind, number>>,
+    sourceRevision: record.sourceRevision,
+    alertSequence: record.alertSequence as number,
   };
 }
 
@@ -217,6 +245,19 @@ function bodyCapturedAt(body: string): number | null {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const capturedAt = (parsed as Record<string, unknown>).capturedAt;
     return isTimestamp(capturedAt) ? capturedAt : null;
+  } catch {
+    return null;
+  }
+}
+
+function bodySourceRevision(body: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const sourceRevision = (parsed as Record<string, unknown>).sourceRevision;
+    return typeof sourceRevision === 'string' && SHA256_HEX_PATTERN.test(sourceRevision)
+      ? sourceRevision
+      : null;
   } catch {
     return null;
   }
@@ -275,6 +316,58 @@ function validPruneInput(input: EmergencyPackPruneInput): boolean {
     && input.placeIds.every((placeId) => isNonEmptyString(placeId) && placeId.length <= 512);
 }
 
+function validInvalidationInput(input: EmergencyPackInvalidationInput): boolean {
+  const includesAlerts = input.kinds.includes('alerts');
+  return isNonEmptyString(input.placeId)
+    && input.placeId.length <= 512
+    && isNonEmptyString(input.profileFingerprint)
+    && input.profileFingerprint.length <= 1024
+    && input.kinds.length > 0
+    && input.kinds.length <= ARTIFACT_KINDS.size
+    && new Set(input.kinds).size === input.kinds.length
+    && input.kinds.every((kind) => ARTIFACT_KINDS.has(kind))
+    && isTimestamp(input.capturedAt)
+    && (includesAlerts
+      ? typeof input.sourceRevision === 'string' && SHA256_HEX_PATTERN.test(input.sourceRevision)
+      : input.sourceRevision === undefined);
+}
+
+function nextAlertSequence(
+  existing: EmergencyPackInvalidationRecord | null,
+  activeSequenceFloor: number,
+  requestedSourceRevision: string | null,
+): number {
+  if (requestedSourceRevision === null) return existing?.alertSequence ?? 0;
+  if (existing?.sourceRevision === requestedSourceRevision) return existing.alertSequence;
+  return Math.max(existing?.alertSequence ?? 0, activeSequenceFloor) + 1;
+}
+
+function nextInvalidationRecord(
+  input: EmergencyPackInvalidationInput,
+  existing: EmergencyPackInvalidationRecord | null,
+  activeSequenceFloor: number,
+): EmergencyPackInvalidationRecord {
+  const matchingExisting = existing?.placeId === input.placeId
+    && existing.profileFingerprint === input.profileFingerprint
+    ? existing
+    : null;
+  const cutoffs: Partial<Record<EmergencyPackArtifactKind, number>> = { ...matchingExisting?.cutoffs };
+  for (const kind of input.kinds) {
+    if (kind !== 'alerts') cutoffs[kind] = Math.max(cutoffs[kind] ?? 0, input.capturedAt);
+  }
+  const requestedSourceRevision = input.kinds.includes('alerts') && typeof input.sourceRevision === 'string'
+    ? input.sourceRevision
+    : null;
+  return {
+    schemaVersion: INVALIDATION_SCHEMA_VERSION,
+    placeId: input.placeId,
+    profileFingerprint: input.profileFingerprint,
+    cutoffs,
+    sourceRevision: requestedSourceRevision ?? matchingExisting?.sourceRevision ?? null,
+    alertSequence: nextAlertSequence(matchingExisting, activeSequenceFloor, requestedSourceRevision),
+  };
+}
+
 function validateGenerationInput(input: EmergencyPackGenerationInput): boolean {
   if (!isNonEmptyString(input.placeId) || input.placeId.length > 512) return false;
   if (!isNonEmptyString(input.profileFingerprint) || input.profileFingerprint.length > 1024) return false;
@@ -298,6 +391,11 @@ function validateGenerationInput(input: EmergencyPackGenerationInput): boolean {
     && new TextEncoder().encode(artifact.body).byteLength <= EMERGENCY_PACK_ARTIFACT_BYTE_CAPS[artifact.kind]
     && isTimestamp(artifact.capturedAt)
     && bodyCapturedAt(artifact.body) === artifact.capturedAt
+    && (artifact.kind === 'alerts'
+      ? typeof artifact.sourceRevision === 'string'
+        && SHA256_HEX_PATTERN.test(artifact.sourceRevision)
+        && bodySourceRevision(artifact.body) === artifact.sourceRevision
+      : artifact.sourceRevision === undefined)
     && isTimestamp(artifact.expiresAt)
     && artifact.capturedAt < artifact.expiresAt
     && (artifact.semanticState === 'verified' || artifact.semanticState === 'verified-empty')
@@ -425,6 +523,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     if (body === null) return false;
     if (new TextEncoder().encode(body).byteLength !== receipt.byteLength) return false;
     if (bodyCapturedAt(body) !== Date.parse(receipt.capturedAt)) return false;
+    if (receipt.kind === 'alerts'
+      && (typeof receipt.sourceRevision !== 'string'
+        || bodySourceRevision(body) !== receipt.sourceRevision)) return false;
     if (await digest(body) !== receipt.sha256) return false;
     return verifyBody(receipt.kind, body);
   }
@@ -448,12 +549,70 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     return parsed;
   }
 
+  function readAlertInvalidationBinding(
+    placeId: string,
+    profileFingerprint: string,
+  ): { sourceRevision: string | null; alertSequence: number } {
+    const record = parseInvalidationRecord(metadata.getItem(invalidationKey(placeId, profileFingerprint)));
+    return record?.placeId === placeId && record.profileFingerprint === profileFingerprint
+      ? { sourceRevision: record.sourceRevision, alertSequence: record.alertSequence }
+      : { sourceRevision: null, alertSequence: 0 };
+  }
+
+  function bindAlertReceipt(
+    input: EmergencyPackGenerationInput,
+    receipts: EmergencyPackReceipt[],
+  ): AlertPublicationBinding | null {
+    const artifact = input.artifacts.find(({ kind }) => kind === 'alerts');
+    const receipt = receipts.find(({ kind }) => kind === 'alerts');
+    if (!artifact || !receipt || typeof artifact.sourceRevision !== 'string') return null;
+    const current = readAlertInvalidationBinding(input.placeId, input.profileFingerprint);
+    if (current.sourceRevision !== null && current.sourceRevision !== artifact.sourceRevision) {
+      throw new Error('alert source revision stale');
+    }
+    const binding = {
+      sourceRevision: artifact.sourceRevision,
+      alertSequence: current.sourceRevision === null ? 0 : current.alertSequence,
+    };
+    receipt.alertSequence = binding.alertSequence;
+    return binding;
+  }
+
+  function alertBindingIsCurrent(
+    placeId: string,
+    profileFingerprint: string,
+    binding: AlertPublicationBinding | null,
+  ): boolean {
+    if (binding === null) return true;
+    const current = readAlertInvalidationBinding(placeId, profileFingerprint);
+    return current.sourceRevision === null
+      ? binding.alertSequence === 0
+      : current.sourceRevision === binding.sourceRevision
+        && current.alertSequence === binding.alertSequence;
+  }
+
+  async function activeAlertSequenceFloor(placeId: string, profileFingerprint: string): Promise<number> {
+    const head = parseHead(metadata.getItem(headKey(placeId)));
+    if (head?.placeId !== placeId || head.profileFingerprint !== profileFingerprint) return 0;
+    const manifest = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+    const alertSequence = manifest?.packId === head.packId
+      ? manifest.receipts.find(({ kind }) => kind === 'alerts')?.alertSequence
+      : null;
+    return typeof alertSequence === 'number' ? alertSequence : 0;
+  }
+
   function applyInvalidations(manifest: EmergencyPackManifest): EmergencyPackManifest {
-    const record = parseInvalidationRecord(metadata.getItem(invalidationKey(manifest.placeId)));
+    const record = parseInvalidationRecord(metadata.getItem(
+      invalidationKey(manifest.placeId, manifest.profileFingerprint),
+    ));
     if (record?.profileFingerprint !== manifest.profileFingerprint) return manifest;
     return {
       ...manifest,
       receipts: manifest.receipts.filter((receipt) => {
+        if (receipt.kind === 'alerts' && record.sourceRevision !== null) {
+          return receipt.sourceRevision === record.sourceRevision
+            && receipt.alertSequence === record.alertSequence;
+        }
         const cutoff = record.cutoffs[receipt.kind];
         return cutoff === undefined || Date.parse(receipt.capturedAt) > cutoff;
       }),
@@ -573,8 +732,30 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       previousPackId: manifest.previousPackId,
       committedAt: manifest.committedAt,
     };
-    metadata.setItem(headKey(manifest.placeId), JSON.stringify(recoveredHead));
-    return true;
+    const activeHeadKey = headKey(manifest.placeId);
+    const encodedExistingHead = metadata.getItem(activeHeadKey);
+    const encodedRecoveredHead = JSON.stringify(recoveredHead);
+    const alertReceipt = manifest.receipts.find(({ kind }) => kind === 'alerts');
+    const alertBinding = typeof alertReceipt?.sourceRevision === 'string'
+      && typeof alertReceipt.alertSequence === 'number'
+      ? { sourceRevision: alertReceipt.sourceRevision, alertSequence: alertReceipt.alertSequence }
+      : null;
+    try {
+      if (!alertBindingIsCurrent(manifest.placeId, manifest.profileFingerprint, alertBinding)) return false;
+      metadata.setItem(activeHeadKey, encodedRecoveredHead);
+      if (metadata.getItem(activeHeadKey) !== encodedRecoveredHead) {
+        throw new Error('recovered head readback mismatch');
+      }
+      return true;
+    } catch {
+      try {
+        if (encodedExistingHead === null) metadata.removeItem(activeHeadKey);
+        else metadata.setItem(activeHeadKey, encodedExistingHead);
+      } catch {
+        // Failed recovery publication must never be reported as persisted.
+      }
+      return false;
+    }
   }
 
   async function readVerifiedActiveManifest(
@@ -741,6 +922,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         verifiedAt,
         semanticState: artifact.semanticState,
         summary: artifact.summary,
+        ...(artifact.kind === 'alerts' ? { sourceRevision: artifact.sourceRevision, alertSequence: 0 } : {}),
       });
     }
     return receipts;
@@ -801,6 +983,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (!isTimestamp(timestamp)) return { ok: false, reason: 'invalid-time' };
       const committedAt = new Date(timestamp).toISOString();
       const stagedReceipts = await stageArtifacts(input, packId, timestamp, stagedBodies);
+      const alertBinding = bindAlertReceipt(input, stagedReceipts);
 
       const manifestCandidate = {
         schemaVersion: 2,
@@ -830,6 +1013,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         previousPackId,
         committedAt,
       };
+      if (!alertBindingIsCurrent(input.placeId, input.profileFingerprint, alertBinding)) {
+        throw new Error('alert invalidation changed during publication');
+      }
       writeHead(activeHeadKey, head, encodedExistingHead);
       try {
         await cleanupOldGenerations(manifest);
@@ -843,44 +1029,25 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  function invalidateArtifacts(input: {
-    placeId: string;
-    profileFingerprint: string;
-    kinds: readonly EmergencyPackArtifactKind[];
-    capturedAt: number;
-  }): Promise<{ ok: true } | { ok: false; reason: string }> {
-    if (!isNonEmptyString(input.placeId)
-      || input.placeId.length > 512
-      || !isNonEmptyString(input.profileFingerprint)
-      || input.profileFingerprint.length > 1024
-      || input.kinds.length === 0
-      || input.kinds.length > ARTIFACT_KINDS.size
-      || new Set(input.kinds).size !== input.kinds.length
-      || input.kinds.some((kind) => !ARTIFACT_KINDS.has(kind))
-      || !Number.isSafeInteger(input.capturedAt)
-      || input.capturedAt <= 0
-      || input.capturedAt > 8_640_000_000_000_000) {
-      return Promise.resolve({ ok: false, reason: 'invalid-input' });
-    }
-    const key = invalidationKey(input.placeId);
+  async function invalidateArtifacts(
+    input: EmergencyPackInvalidationInput,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const includesAlerts = input.kinds.includes('alerts');
+    if (!validInvalidationInput(input)) return { ok: false, reason: 'invalid-input' };
+    const key = invalidationKey(input.placeId, input.profileFingerprint);
     let previous: string | null | undefined;
     try {
+      const activeSequenceFloor = includesAlerts
+        ? await activeAlertSequenceFloor(input.placeId, input.profileFingerprint)
+        : 0;
       previous = metadata.getItem(key);
       const existing = parseInvalidationRecord(previous);
-      const cutoffs: Partial<Record<EmergencyPackArtifactKind, number>> = existing?.placeId === input.placeId
-        && existing.profileFingerprint === input.profileFingerprint
-        ? { ...existing.cutoffs }
-        : {};
-      for (const kind of input.kinds) cutoffs[kind] = Math.max(cutoffs[kind] ?? 0, input.capturedAt);
-      const encoded = JSON.stringify({
-        schemaVersion: INVALIDATION_SCHEMA_VERSION,
-        placeId: input.placeId,
-        profileFingerprint: input.profileFingerprint,
-        cutoffs,
-      });
+      const nextRecord = nextInvalidationRecord(input, existing, activeSequenceFloor);
+      if (!Number.isSafeInteger(nextRecord.alertSequence)) throw new Error('alert invalidation sequence exhausted');
+      const encoded = JSON.stringify(nextRecord);
       metadata.setItem(key, encoded);
       if (metadata.getItem(key) !== encoded) throw new Error('invalidation readback mismatch');
-      return Promise.resolve({ ok: true });
+      return { ok: true };
     } catch (error) {
       try {
         if (previous === null) metadata.removeItem(key);
@@ -888,7 +1055,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       } catch {
         // Failed persistence stays fail-closed at the runtime boundary.
       }
-      return Promise.resolve({ ok: false, reason: safeReason(error) });
+      return { ok: false, reason: safeReason(error) };
     }
   }
 

@@ -32,6 +32,7 @@ interface StoreApi {
         kind: string;
         body: string;
         capturedAt: number;
+        sourceRevision?: string;
         expiresAt: number;
         semanticState: string;
         summary: string;
@@ -84,6 +85,7 @@ interface StoreApi {
       profileFingerprint: string;
       kinds: readonly string[];
       capturedAt: number;
+      sourceRevision?: string;
     }) => Promise<{ ok: boolean; reason?: string }>;
     recoverActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
       status: string;
@@ -98,19 +100,26 @@ interface StoreApi {
 }
 
 const api = await import('../emergency-pack-store.ts').catch(() => ({} as StoreApi)) as StoreApi;
+const ALERT_REVISION_A = 'a'.repeat(64);
+const ALERT_REVISION_B = 'b'.repeat(64);
 
 function artifacts(
   marker: string,
   placeId = PLACE_ID,
   profileFingerprint = PROFILE,
   capturedAtOverride?: number,
+  alertSourceRevision = ALERT_REVISION_A,
 ) {
   return REQUIRED_KINDS.map((kind, index) => {
     const capturedAt = capturedAtOverride ?? NOW - (index + 1) * 60_000;
+    const sourceRevision = kind === 'alerts' ? alertSourceRevision : undefined;
     return {
     kind,
-    body: JSON.stringify({ marker, kind, placeId, profileFingerprint, capturedAt }),
+    body: JSON.stringify({ marker, kind, placeId, profileFingerprint, capturedAt, ...(
+      sourceRevision === undefined ? {} : { sourceRevision }
+    ) }),
     capturedAt,
+    ...(sourceRevision === undefined ? {} : { sourceRevision }),
     expiresAt: NOW + 60 * 60_000,
     semanticState: 'verified',
     summary: `${kind} captured`,
@@ -122,6 +131,7 @@ function artifacts(
 function harness(overrides: {
   verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
   releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
+  digest?: (body: string) => Promise<string>;
 } = {}) {
   const operations: string[] = [];
   const metadata = new MemoryMetadata(operations);
@@ -131,7 +141,7 @@ function harness(overrides: {
   const store = create({
     metadata,
     bodies,
-    digest,
+    digest: overrides.digest ?? digest,
     now: () => NOW,
     createPackId: () => `pack-${nextId++}`,
     ...overrides,
@@ -338,6 +348,42 @@ test('active reads re-hash bodies and recover the previous verified generation a
   assert.equal(JSON.parse(recoveredHead[1]).packId, 'pack-1');
 });
 
+for (const failure of ['silent-drop', 'altered-readback'] as const) {
+  test(`recovery refuses ${failure} head publication`, async () => {
+    const { metadata, bodies, store } = harness();
+    assert.deepEqual(await commit(store, 'previous'), { ok: true, packId: 'pack-1' });
+    assert.deepEqual(await commit(store, 'current'), { ok: true, packId: 'pack-2' });
+
+    const currentBodyKey = [...bodies.values.keys()].find((key) => key.includes('pack-2'));
+    assert.ok(currentBodyKey);
+    bodies.values.set(currentBodyKey, `${bodies.values.get(currentBodyKey)}tampered`);
+
+    const originalSetItem = metadata.setItem.bind(metadata);
+    metadata.setItem = (key, value) => {
+      const proposed = key.includes(':head:') ? JSON.parse(value) as { packId?: string } : null;
+      if (proposed?.packId !== 'pack-1') {
+        originalSetItem(key, value);
+        return;
+      }
+      if (failure === 'altered-readback') {
+        originalSetItem(key, value.replace('"packId":"pack-1"', '"packId":"altered"'));
+      }
+    };
+
+    assert.deepEqual(
+      await store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'not-saved', packId: null },
+    );
+    const persistedHead = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
+    assert.ok(persistedHead);
+    assert.equal(JSON.parse(persistedHead[1]).packId, 'pack-2');
+    assert.deepEqual(
+      await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'corrupt', packId: null, reason: 'verification-failed' },
+    );
+  });
+}
+
 test('recovery keeps a verified current ready generation authoritative over its previous generation', async () => {
   const { metadata, operations, store } = harness();
   assert.deepEqual(await commit(store, 'previous-ready'), { ok: true, packId: 'pack-1' });
@@ -514,6 +560,7 @@ test('persisted domain watermarks invalidate stale receipts and later captures s
       profileFingerprint: PROFILE,
       kinds,
       capturedAt: NOW,
+      ...(kinds.includes('alerts') ? { sourceRevision: ALERT_REVISION_B } : {}),
     }), { ok: true });
     const readiness = await store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
     assert.equal(readiness.status, 'partial');
@@ -533,12 +580,205 @@ test('persisted domain watermarks invalidate stale receipts and later captures s
     profileFingerprint: PROFILE,
     requiredKinds: REQUIRED_KINDS,
     optionalKinds: ['route-alternate'],
-    artifacts: artifacts('after-events', PLACE_ID, PROFILE, NOW + 1)
+    artifacts: artifacts('after-events', PLACE_ID, PROFILE, NOW + 1, ALERT_REVISION_B)
       .map((artifact) => ({ ...artifact, expiresAt: NOW + 2 * 60 * 60_000 })),
   }), { ok: true, packId: 'pack-later' });
   assert.equal((await later.store.readActive({
     placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW + 1,
   })).status, 'ready');
+});
+
+test('an exact alert revision and monotonic sequence supersede invalidation without replay', async () => {
+  const { metadata, bodies, store } = harness();
+  const sourceCapturedAt = NOW - 5 * 60_000;
+  assert.deepEqual(await store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: artifacts('alerts-before', PLACE_ID, PROFILE, sourceCapturedAt, ALERT_REVISION_A),
+  }), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'],
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_B,
+  }), { ok: true });
+  assert.ok((await store.readReadiness({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  })).missingKinds.includes('alerts'));
+  assert.deepEqual(await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'],
+    capturedAt: NOW + 1,
+    sourceRevision: ALERT_REVISION_A,
+  }), { ok: true });
+  assert.ok((await store.readReadiness({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  })).missingKinds.includes('alerts'), 'A→B→A must not replay the old sequence-zero A receipt');
+
+  const later = createEmergencyPackStoreForClock(metadata, bodies, NOW + 2, 'pack-2');
+  assert.deepEqual(await later.store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: artifacts('alerts-after', PLACE_ID, PROFILE, sourceCapturedAt, ALERT_REVISION_A)
+      .map((artifact) => ({ ...artifact, expiresAt: NOW + 60 * 60_000 })),
+  }), { ok: true, packId: 'pack-2' });
+  assert.deepEqual(await later.store.readActive({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW + 2,
+  }), { status: 'ready', packId: 'pack-2' });
+  const readiness = await later.store.readReadiness({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW + 2,
+  });
+  assert.equal(readiness.receipts.find(({ kind }) => kind === 'alerts')?.alertSequence, 2);
+
+  const persistedInvalidation = [...metadata.values.entries()]
+    .find(([key]) => key.includes(':invalidation:'))?.[1];
+  assert.ok(persistedInvalidation);
+  assert.deepEqual(JSON.parse(persistedInvalidation).cutoffs, {});
+  assert.equal(JSON.parse(persistedInvalidation).sourceRevision, ALERT_REVISION_A);
+  assert.equal(JSON.parse(persistedInvalidation).alertSequence, 2);
+});
+
+test('alert invalidation is idempotent for one digest and fails closed at sequence exhaustion', async () => {
+  const { metadata, store } = harness();
+  const input = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'] as const,
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_A,
+  };
+  assert.deepEqual(await store.invalidateArtifacts(input), { ok: true });
+  assert.deepEqual(await store.invalidateArtifacts({ ...input, capturedAt: NOW + 1 }), { ok: true });
+  const invalidationKey = [...metadata.values.keys()].find((key) => key.includes(':invalidation:'));
+  assert.ok(invalidationKey);
+  const persisted = JSON.parse(metadata.values.get(invalidationKey) ?? 'null') as Record<string, unknown>;
+  assert.equal(persisted.alertSequence, 1);
+
+  persisted.alertSequence = Number.MAX_SAFE_INTEGER;
+  metadata.values.set(invalidationKey, JSON.stringify(persisted));
+  assert.equal((await store.invalidateArtifacts({
+    ...input,
+    capturedAt: NOW + 2,
+    sourceRevision: ALERT_REVISION_B,
+  })).ok, false);
+  assert.equal(JSON.parse(metadata.values.get(invalidationKey) ?? 'null').alertSequence, Number.MAX_SAFE_INTEGER);
+});
+
+test('an alert revision change during manifest persistence prevents head publication', async () => {
+  let injectRevisionChange = false;
+  let metadata: MemoryMetadata;
+  const repair = harness({
+    digest: async (body) => {
+      if (injectRevisionChange && body.includes('"packId":"pack-2"') && body.includes('"receipts"')) {
+        injectRevisionChange = false;
+        const key = [...metadata.values.keys()].find((item) => item.includes(':invalidation:'));
+        assert.ok(key);
+        const persisted = JSON.parse(metadata.values.get(key) ?? 'null') as Record<string, unknown>;
+        persisted.sourceRevision = 'c'.repeat(64);
+        persisted.alertSequence = 2;
+        metadata.values.set(key, JSON.stringify(persisted));
+      }
+      return digest(body);
+    },
+  });
+  metadata = repair.metadata;
+  assert.deepEqual(await commit(repair.store, 'race-before'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await repair.store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'],
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_B,
+  }), { ok: true });
+  injectRevisionChange = true;
+  const laterArtifacts = artifacts('race-after', PLACE_ID, PROFILE, NOW - 60_000, ALERT_REVISION_B)
+    .map((artifact) => ({ ...artifact, expiresAt: NOW + 60 * 60_000 }));
+  assert.equal((await repair.store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: laterArtifacts,
+  })).ok, false);
+  const head = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
+  assert.ok(head);
+  assert.equal(JSON.parse(head[1]).packId, 'pack-1');
+});
+
+test('alert invalidation and generation revisions fail closed when missing, malformed, or mismatched', async () => {
+  const { store } = harness();
+  for (const sourceRevision of [undefined, 'a'.repeat(63), 'A'.repeat(64), `${'a'.repeat(63)}z`]) {
+    assert.equal((await store.invalidateArtifacts({
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      kinds: ['alerts'],
+      capturedAt: NOW,
+      ...(sourceRevision === undefined ? {} : { sourceRevision }),
+    })).ok, false);
+  }
+  assert.equal((await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['lifelines'],
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_A,
+  })).ok, false);
+
+  const missingRevision = artifacts('missing-alert-revision');
+  const missingAlert = missingRevision.find(({ kind }) => kind === 'alerts');
+  assert.ok(missingAlert);
+  delete missingAlert.sourceRevision;
+  assert.equal((await store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: missingRevision,
+  })).ok, false);
+
+  const mismatchedRevision = artifacts('mismatched-alert-revision');
+  const mismatchedAlert = mismatchedRevision.find(({ kind }) => kind === 'alerts');
+  assert.ok(mismatchedAlert);
+  mismatchedAlert.sourceRevision = ALERT_REVISION_B;
+  assert.equal((await store.commitGeneration({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: mismatchedRevision,
+  })).ok, false);
+});
+
+test('profile-scoped invalidations cannot resurrect stale alert evidence from another profile', async () => {
+  const { metadata, store } = harness();
+  assert.deepEqual(await commit(store, 'profile-a'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'],
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_B,
+  }), { ok: true });
+  assert.ok((await store.readReadiness({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  })).missingKinds.includes('alerts'));
+  const movedProfile = `${PROFILE}:moved`;
+  assert.deepEqual(await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: movedProfile,
+    kinds: ['lifelines'],
+    capturedAt: NOW + 1,
+  }), { ok: true });
+  assert.equal([...metadata.values.keys()].filter((key) => key.includes(':invalidation:')).length, 2);
+  assert.ok((await store.readReadiness({
+    placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW,
+  })).missingKinds.includes('alerts'), 'another profile must not overwrite the original alert tombstone');
 });
 
 test('invalid or failed watermark persistence fails closed without changing historical bodies', async () => {

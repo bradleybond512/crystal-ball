@@ -25,6 +25,8 @@ export interface ReceiptFixture {
   verifiedAt: string;
   semanticState: string;
   summary: string;
+  sourceRevision?: string;
+  alertSequence?: number;
 }
 
 export interface ManifestFixture {
@@ -55,6 +57,7 @@ export function receipt(kind: string, overrides: Partial<ReceiptFixture> = {}): 
     verifiedAt: new Date(NOW - 30_000).toISOString(),
     semanticState: 'verified',
     summary: `${kind} captured`,
+    ...(kind === 'alerts' ? { sourceRevision: 'a'.repeat(64), alertSequence: 0 } : {}),
     ...overrides,
   };
 }

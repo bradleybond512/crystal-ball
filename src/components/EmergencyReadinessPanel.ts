@@ -15,6 +15,12 @@ import {
   type EmergencyPackStatus,
 } from '@/services/emergency-pack/emergency-pack-schema.ts';
 import {
+  captureEmergencyPack,
+  getEmergencyPackState,
+  hydrateEmergencyPacks,
+  subscribeEmergencyPack,
+} from '@/services/emergency-pack/emergency-pack-runtime.ts';
+import {
   getStormSnapshot,
   hydrateStormPosture,
   subscribeStormPosture,
@@ -62,30 +68,35 @@ const DEFAULT_DEPENDENCIES: Omit<EmergencyReadinessPanelDependencies, 'deadlineS
   getPrimaryPlace: getPrimarySavedPlace,
   getPlaces: getSavedPlaces,
   subscribeSavedPlaces,
-  subscribeEmergencyPack: subscribeEmergencyPackUnavailable,
-  hydrate: hydrateStormPosture,
+  subscribeEmergencyPack,
+  hydrate: async () => {
+    await Promise.all([hydrateStormPosture(), hydrateEmergencyPacks()]);
+  },
   getReceipt: getVerifiedLifelinesReceiptForPlace,
-  getEmergencyPackState: (place) => ({
-    status: 'not-saved',
-    packId: null,
-    profileFingerprint: place.id,
-    requiredKinds: [...EMERGENCY_PACK_REQUIRED_KINDS],
-    optionalKinds: [...EMERGENCY_PACK_OPTIONAL_KINDS],
-    receipts: [],
-    missingKinds: [...EMERGENCY_PACK_REQUIRED_KINDS],
-    expiredKinds: [],
-  }),
-  captureEmergencyPack: () => Promise.resolve({ ok: false, failedKind: 'unavailable' }),
+  getEmergencyPackState: (place) => {
+    const state = getEmergencyPackState(place);
+    const requiredKinds = state.requiredKinds === undefined
+      ? [...EMERGENCY_PACK_REQUIRED_KINDS]
+      : EMERGENCY_PACK_REQUIRED_KINDS.filter((kind) => state.requiredKinds?.includes(kind));
+    const optionalKinds = state.optionalKinds === undefined
+      ? [...EMERGENCY_PACK_OPTIONAL_KINDS]
+      : EMERGENCY_PACK_OPTIONAL_KINDS.filter((kind) => state.optionalKinds?.includes(kind));
+    return {
+      ...state,
+      requiredKinds,
+      optionalKinds,
+      receipts: state.receipts?.map((receipt) => ({ ...receipt })) ?? [],
+      missingKinds: state.missingKinds === undefined
+        ? [...EMERGENCY_PACK_REQUIRED_KINDS]
+        : EMERGENCY_PACK_REQUIRED_KINDS.filter((kind) => state.missingKinds?.includes(kind)),
+      expiredKinds: state.expiredKinds === undefined
+        ? []
+        : EMERGENCY_PACK_REQUIRED_KINDS.filter((kind) => state.expiredKinds?.includes(kind)),
+    };
+  },
+  captureEmergencyPack,
   now: Date.now,
 };
-
-function subscribeEmergencyPackUnavailable(): () => void {
-  return unsubscribeEmergencyPackUnavailable;
-}
-
-function unsubscribeEmergencyPackUnavailable(): undefined {
-  return undefined;
-}
 
 function captureMessage(readiness: EmergencyPackReadinessInput, missing: number): string {
   if (readiness.status === 'ready') return 'All required artifacts are current.';

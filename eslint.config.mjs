@@ -176,6 +176,7 @@ export default tseslint.config(
  'src/**/__tests__/**/*.ts', 'src/**/__tests__/**/*.mts',
  'src/**/*.test.ts', 'src/**/*.test.mts',
  'src-tauri/sidecar/**/__tests__/**/*.mts',
+ 'server/**/__tests__/**/*.mts',
  // tests/ directory at the repo root (e.g. tests/panels/ smoke
  // harness) — same TS parser, no tsconfig membership required.
  'tests/**/*.ts', 'tests/**/*.mts',

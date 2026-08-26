@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 
 import { fetchUcdpClassifications, fetchUcdpEvents } from '../index.ts';
+import { calculateCII, clearCountryData, ingestUcdpForCII } from '../../country-instability.ts';
 
 const originalFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = originalFetch; });
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  clearCountryData();
+});
 
 function event(id: string) {
   return {
@@ -46,9 +50,64 @@ test('renderer fetches classifications once and maps presence without event-coun
     });
   };
   const result = await fetchUcdpClassifications();
-  assert.equal(result.get('Ukraine')?.intensity, 'minor');
+  assert.equal(result.get('Ukraine')?.intensity, 'none');
   assert.equal(result.get('Ghana')?.intensity, 'none');
   assert.equal(calls, 1);
+});
+
+test('annual conflict presence remains descriptive and does not impose a current CII floor', async () => {
+  clearCountryData();
+  ingestUcdpForCII(new Map([['ZA', {
+    location: 'South Africa',
+    countryId: 710,
+    intensity: 'none',
+    year: 2025,
+    stateBased: false,
+    nonState: false,
+    oneSided: false,
+  }]]));
+  const baseline = calculateCII().find((score) => score.code === 'ZA')?.score;
+  assert.ok(baseline !== undefined && baseline < 50);
+
+  clearCountryData();
+  globalThis.fetch = async () => Response.json({
+    classifications: [
+      { country: 'ZA', countryId: 710, year: 2025, stateBased: true, nonState: false, oneSided: true },
+    ],
+    totalCount: 1,
+    version: '26.1',
+  });
+
+  const classifications = await fetchUcdpClassifications();
+  ingestUcdpForCII(classifications);
+
+  assert.equal(calculateCII().find((score) => score.code === 'ZA')?.score, baseline);
+});
+
+test('annual conflict presence retains official classification fields', async () => {
+  globalThis.fetch = async () => Response.json({
+    classifications: [
+      { country: 'ZA', countryId: 710, year: 2025, stateBased: true, nonState: false, oneSided: true },
+    ],
+    totalCount: 1,
+    version: '26.1',
+  });
+
+  const status = await fetchUcdpClassifications().then((classifications) => classifications.get('ZA'));
+
+  assert.deepEqual(status && {
+    countryId: status.countryId,
+    year: status.year,
+    stateBased: status.stateBased,
+    nonState: status.nonState,
+    oneSided: status.oneSided,
+  }, {
+    countryId: 710,
+    year: 2025,
+    stateBased: true,
+    nonState: false,
+    oneSided: true,
+  });
 });
 
 test('renderer rejects classification responses that normalize to zero usable observations', async () => {

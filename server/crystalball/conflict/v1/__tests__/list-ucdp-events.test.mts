@@ -102,6 +102,7 @@ test('fetches complete fixed window with exact auth and returns at most 100 newe
     const headers = new Headers(call.init?.headers);
     assert.equal(headers.get('x-ucdp-access-token'), 'test-token-a');
     assert.equal(headers.has('authorization'), false);
+    assert.equal(call.init?.redirect, 'error');
     assert.equal(call.url.toString().includes('test-token-a'), false);
   }
   await listUcdpEvents(localContext, request());
@@ -274,6 +275,31 @@ test('classifies streamed-body deadline as sanitized timeout with no retry', asy
     return candidate.statusCode === 503 && candidate.message === 'UCDP request timed out';
   });
   assert.equal(calls, 1);
+});
+
+test('cancels rejected upstream bodies before returning safe failures', async (t) => {
+  const cases: Array<[string, number, HeadersInit, number]> = [
+    ['authentication', 401, { 'Content-Type': 'application/json' }, 401],
+    ['authorization', 403, { 'Content-Type': 'application/json' }, 403],
+    ['rate limit', 429, { 'Content-Type': 'application/json', 'Retry-After': '120' }, 429],
+    ['non-ok', 500, { 'Content-Type': 'application/json' }, 502],
+    ['wrong content type', 200, { 'Content-Type': 'text/html' }, 502],
+    ['oversized content length', 200, { 'Content-Type': 'application/json', 'Content-Length': String(4 * 1024 * 1024) }, 502],
+  ];
+  for (const [name, status, headers, expectedStatus] of cases) {
+    await t.test(name, async () => {
+      __resetUcdpStateForTests();
+      let cancelled = false;
+      globalThis.fetch = async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode('{}')); },
+        cancel() { cancelled = true; },
+      }), { status, headers });
+      await assert.rejects(() => listUcdpEvents(localContext, request()), (error: unknown) => {
+        return (error as { statusCode?: number }).statusCode === expectedStatus;
+      });
+      assert.equal(cancelled, true);
+    });
+  }
 });
 
 test('accepts only numeric Retry-After and reports bounded quota cooldown remaining', async () => {

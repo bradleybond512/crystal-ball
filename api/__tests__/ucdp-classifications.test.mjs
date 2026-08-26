@@ -56,6 +56,7 @@ test('fetches one exact 26.1 page with exact auth and returns compact presence c
   const headers = new Headers(captured.init.headers);
   assert.equal(headers.get('x-ucdp-access-token'), 'classification-secret');
   assert.equal(headers.has('authorization'), false);
+  assert.equal(captured.init.redirect, 'error');
   assert.equal(captured.url.toString().includes('classification-secret'), false);
 });
 
@@ -96,6 +97,30 @@ test('cancels a chunked response as soon as it crosses the byte limit', async ()
   const response = await handler(new Request('http://127.0.0.1:46123/api/ucdp-classifications'));
   assert.equal(response.status, 502);
   assert.equal(cancelled, true);
+});
+
+test('cancels every rejected upstream body before returning safe failures', async (t) => {
+  const cases = [
+    ['authentication', 401, { 'Content-Type': 'application/json' }, 401],
+    ['authorization', 403, { 'Content-Type': 'application/json' }, 403],
+    ['rate limit', 429, { 'Content-Type': 'application/json', 'Retry-After': '120' }, 429],
+    ['non-ok', 500, { 'Content-Type': 'application/json' }, 502],
+    ['wrong content type', 200, { 'Content-Type': 'text/html' }, 502],
+    ['oversized content length', 200, { 'Content-Type': 'application/json', 'Content-Length': String(4 * 1024 * 1024) }, 502],
+  ];
+  for (const [name, status, headers, expectedStatus] of cases) {
+    await t.test(name, async () => {
+      mod.__resetUcdpClassificationsForTests();
+      let cancelled = false;
+      globalThis.fetch = async () => new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode('{}')); },
+        cancel() { cancelled = true; },
+      }), { status, headers });
+      const response = await handler(new Request('http://127.0.0.1:46123/api/ucdp-classifications'));
+      assert.equal(response.status, expectedStatus);
+      assert.equal(cancelled, true);
+    });
+  }
 });
 
 test('rejects duplicates, unknown sentinels, and incomplete metadata without caching', async () => {

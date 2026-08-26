@@ -37,7 +37,10 @@ export interface LifelinePrewarmCoordinatorOptions {
   now?: () => number;
   fetchSnapshot?: (
     place: SavedPlace,
-    options: { radiusKm: LocalLogisticsRadiusChoiceKm },
+    options: {
+      radiusKm: LocalLogisticsRadiusChoiceKm;
+      shouldCommit?: () => boolean;
+    },
   ) => Promise<LocalLogisticsSnapshot>;
   verifySnapshot?: (
     snapshot: LocalLogisticsSnapshot,
@@ -169,7 +172,10 @@ export function createLifelinePrewarmCoordinator(
   const run = async (job: Job): Promise<void> => {
     publish(job, 'fetching');
     try {
-      const snapshot = await fetchSnapshot(job.place, { radiusKm: job.radiusKm });
+      const snapshot = await fetchSnapshot(job.place, {
+        radiusKm: job.radiusKm,
+        shouldCommit: () => isCurrent(job),
+      });
       if (!isCurrent(job)) return;
       publish(job, 'verifying');
       const verification = await verifySnapshot(snapshot, job.place, job.radiusKm);

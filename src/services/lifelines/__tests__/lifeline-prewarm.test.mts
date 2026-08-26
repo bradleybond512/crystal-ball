@@ -307,6 +307,45 @@ test('serializes different fingerprints for one place and suppresses stale compl
   assert.equal(coordinator.getState(item.id)?.queryFingerprint, fingerprint(item, 50));
 });
 
+test('superseded work receives a false commit guard before replacement failure', async () => {
+  const item = place('commit-owner');
+  const oldRequest = deferred<LocalLogisticsSnapshot>();
+  const stored = new Map<string, string>([
+    ['latest', fingerprint(item, 50)],
+    ['manifest', fingerprint(item, 50)],
+  ]);
+  let oldGuardResult: boolean | null = null;
+  const coordinator = createCoordinator({
+    now: () => NOW,
+    fetchSnapshot: (
+      _place: SavedPlace,
+      options: { radiusKm: number; shouldCommit?: () => boolean },
+    ) => {
+      if (options.radiusKm === 50) throw new Error('replacement failed');
+      return oldRequest.promise.then((value) => {
+        oldGuardResult = options.shouldCommit?.() ?? true;
+        if (oldGuardResult) {
+          stored.set('latest', value.queryFingerprint);
+          stored.set('manifest', value.queryFingerprint);
+        }
+        return value;
+      });
+    },
+    verifySnapshot: readyVerifier,
+  });
+
+  coordinator.enqueue({ place: item, radiusKm: 5, trigger: 'startup' });
+  await flush();
+  coordinator.enqueue({ place: item, radiusKm: 50, trigger: 'manual' });
+  oldRequest.resolve(snapshot(item, 5));
+  await waitForTerminal(coordinator, item.id);
+
+  assert.equal(oldGuardResult, false);
+  assert.equal(stored.get('latest'), fingerprint(item, 50));
+  assert.equal(stored.get('manifest'), fingerprint(item, 50));
+  assert.equal(coordinator.getState(item.id)?.phase, 'failed');
+});
+
 test('enters cooldown only after verified success', async () => {
   const item = place('cooldown');
   let calls = 0;

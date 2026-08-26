@@ -36,7 +36,7 @@ import {
   type LifelineExpiryKind,
 } from './lifeline-evidence-expiry';
 import {
-  getLifelinePackReadinessForPlace,
+  getExactLifelinePackReadinessForPlace,
   getRecentLifelineChangesForPlace,
 } from '@/services/lifelines/lifeline-runtime';
 import {
@@ -50,6 +50,7 @@ interface LocalLogisticsPanelOptions {
   focusNode: (lat: number, lon: number) => void;
   fetchSnapshot?: typeof fetchLocalLogistics;
   prewarmCoordinator?: LifelinePrewarmCoordinator;
+  getExactPackReadiness?: typeof getExactLifelinePackReadinessForPlace;
 }
 
 type LocalLogisticsFilter = 'all' | LogisticsCategory;
@@ -83,7 +84,7 @@ function formatState(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
-function formatPackStatus(status: ReturnType<typeof getLifelinePackReadinessForPlace>['status']): string {
+function formatPackStatus(status: ReturnType<typeof getExactLifelinePackReadinessForPlace>['status']): string {
   if (status === 'ready') return 'saved for this exact place';
   if (status === 'partial') return 'partial — some required content is missing';
   if (status === 'expired') return 'expired — refresh before relying on it';
@@ -102,6 +103,7 @@ export class LocalLogisticsPanel extends Panel {
   private readonly options: LocalLogisticsPanelOptions;
   private readonly fetchSnapshot: typeof fetchLocalLogistics;
   private readonly prewarmCoordinator: LifelinePrewarmCoordinator;
+  private readonly getExactPackReadiness: typeof getExactLifelinePackReadinessForPlace;
   private activePlaceId: string | null = null;
   private activeFilter: LocalLogisticsFilter = 'all';
   private activeRadiusKm: LocalLogisticsRadiusChoiceKm | null = null;
@@ -145,6 +147,7 @@ export class LocalLogisticsPanel extends Panel {
  this.options = options;
  this.fetchSnapshot = options.fetchSnapshot ?? fetchLocalLogistics;
  this.prewarmCoordinator = options.prewarmCoordinator ?? lifelinePrewarmCoordinator;
+ this.getExactPackReadiness = options.getExactPackReadiness ?? getExactLifelinePackReadinessForPlace;
  this.showLoading('Loading disaster lifelines…');
 
  this.content.addEventListener('click', (event) => this.handleContentClick(event));
@@ -520,7 +523,7 @@ export class LocalLogisticsPanel extends Panel {
 
  const staleHtml = this.snapshot ? renderStaleSnapshot(this.snapshot) : '';
 
- const packHtml = this.renderPackStatus(place);
+ const packHtml = this.renderPackStatus(place, requestedRadiusKm);
 
  const outageHtml = this.snapshot ? this.renderOutageContext() : '';
  const coverage = this.snapshot ? projectLocalLogisticsCoverage(this.snapshot) : null;
@@ -646,9 +649,9 @@ export class LocalLogisticsPanel extends Panel {
  return '';
   }
 
-  private renderPackStatus(place: SavedPlace): string {
+  private renderPackStatus(place: SavedPlace, radiusKm: LocalLogisticsRadiusChoiceKm): string {
  if (!this.snapshot) return '';
- const readiness = getLifelinePackReadinessForPlace(place);
+ const readiness = this.getExactPackReadiness(place, radiusKm);
  const latestChange = getRecentLifelineChangesForPlace(place)[0] ?? null;
  let changeHtml = '';
  if (latestChange) {

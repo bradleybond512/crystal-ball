@@ -561,8 +561,18 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
   const captureContexts = new Map<string, { place: RuntimePlace; contactConsent: boolean }>();
   const captureResults = new Map<string, EmergencyPackCaptureResult>();
   const detailedOperationStates = new Map<string, EmergencyPackRuntimeState>();
+  const captureAlertEpochs = new Map<string, number>();
   const operationQueues = new Map<string, Promise<void>>();
+  const alertPersistenceResults = new Map<string, {
+    epoch: number;
+    profileFingerprint: string;
+    ok: boolean;
+    reason?: string;
+  }>();
   let offlineMapLifecycleTail = Promise.resolve();
+  let alertRevisionTail = Promise.resolve();
+  let latestAlertSourceRevision: string | null = null;
+  let alertRevisionEpoch = 0;
   let offlineMapIndexEpoch = 0;
   let active = true;
 
@@ -593,7 +603,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     }
   }
 
-  const resolveOfflineMapTile = createEmergencyPackOfflineMapTileResolver({
+  const resolveOfflineMapTileUnlocked = createEmergencyPackOfflineMapTileResolver({
     getScopes: () => retainedPlaces().flatMap((place) => {
       const scope = scopeFor(place);
       return scope ? [{
@@ -608,14 +618,18 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     },
     readVerifiedOfflineMapArtifact: async (scope) => {
       if (!store.readVerifiedOfflineMapArtifact) return null;
-      const artifact = await withOfflineMapLifecycle(() => store.readVerifiedOfflineMapArtifact!({
+      const artifact = await store.readVerifiedOfflineMapArtifact({
         ...scope,
         contactConsent: false,
-      }));
+      });
       return artifact && ({ ...artifact, revision: `${offlineMapIndexEpoch}:${artifact.revision}` });
     },
     openCache: (name) => dependencies.openOfflineMapCache?.(name) ?? Promise.reject(new Error('cache unavailable')),
   });
+
+  const resolveOfflineMapTile = (requestUrl: string): Promise<EmergencyPackMapTileData | null> => (
+    withOfflineMapLifecycle(() => resolveOfflineMapTileUnlocked(requestUrl))
+  );
 
   const readDetailed = async (
     scope: EmergencyPackCaptureScope,
@@ -676,25 +690,44 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         return coordinatorState(notSaved(scope.profileFingerprint, 'scope-changed'));
       }
       const sources = dependencies.createSources(context.place);
+      const alertSource = sources.alerts;
       const offlineMapSource = sources['offline-map'];
       let releaseOfflineMapLifecycle: (() => void) | null = null;
+      const capturedAlert = { epoch: null as number | null, revision: null as string | null };
       const finishOfflineMapLifecycle = (): void => {
         releaseOfflineMapLifecycle?.();
         releaseOfflineMapLifecycle = null;
       };
-      const serializedSources = typeof offlineMapSource === 'function'
-        ? {
-            ...sources,
-            'offline-map': async (captureScope: EmergencyPackCaptureScope) => {
-              releaseOfflineMapLifecycle = await acquireOfflineMapLifecycle();
-              return offlineMapSource(captureScope);
-            },
-          }
-        : sources;
+      const serializedSources = { ...sources };
+      if (typeof alertSource === 'function') {
+        serializedSources.alerts = async (captureScope: EmergencyPackCaptureScope) => {
+          const artifact = await alertSource(captureScope);
+          capturedAlert.epoch = alertRevisionEpoch;
+          return artifact;
+        };
+      }
+      if (typeof offlineMapSource === 'function') {
+        serializedSources['offline-map'] = async (captureScope: EmergencyPackCaptureScope) => {
+          releaseOfflineMapLifecycle = await acquireOfflineMapLifecycle();
+          return offlineMapSource(captureScope);
+        };
+      }
       try {
         const orchestrator = dependencies.createCaptureOrchestrator({
           sources: serializedSources,
-          commitGeneration: store.commitGeneration.bind(store),
+          commitGeneration: async (input) => {
+            capturedAlert.revision = input.artifacts?.find(({ kind }) => kind === 'alerts')?.sourceRevision ?? null;
+            const settledEpoch = await settleAlertRevisions();
+            const persistence = alertPersistenceResults.get(scope.placeId);
+            if ((capturedAlert.revision !== null && capturedAlert.epoch !== settledEpoch)
+              || (latestAlertSourceRevision !== null && capturedAlert.revision !== latestAlertSourceRevision)
+              || (persistence?.epoch === settledEpoch
+                && persistence.profileFingerprint === scope.profileFingerprint
+                && !persistence.ok)) {
+              return { ok: false, reason: persistence?.reason ?? 'alert-source-changed' };
+            }
+            return store.commitGeneration(input);
+          },
           releaseArtifact: dependencies.releaseArtifact,
         });
         captureResults.set(scope.placeId, await orchestrator.capture({
@@ -702,12 +735,17 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
           contactConsent: context.contactConsent,
         }));
         offlineMapIndexEpoch += 1;
-        const detailed = await readDetailed(
+        const finalized = await readDetailedAfterAlertSettlement(
           { ...scope, contactConsent: context.contactConsent },
           releaseOfflineMapLifecycle !== null,
         );
-        detailedOperationStates.set(scope.placeId, detailed);
-        return coordinatorState(detailed);
+        if ((capturedAlert.revision !== null && capturedAlert.epoch !== finalized.epoch)
+          || (latestAlertSourceRevision !== null && capturedAlert.revision !== latestAlertSourceRevision)) {
+          captureResults.set(scope.placeId, { ok: false, reason: 'alert-source-changed' });
+        }
+        detailedOperationStates.set(scope.placeId, finalized.state);
+        captureAlertEpochs.set(scope.placeId, finalized.epoch);
+        return coordinatorState(finalized.state);
       } finally {
         finishOfflineMapLifecycle();
       }
@@ -867,6 +905,89 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     })));
   }
 
+  async function settleAlertRevisions(): Promise<number> {
+    while (true) {
+      const epoch = alertRevisionEpoch;
+      const tail = alertRevisionTail;
+      await tail.catch(() => undefined);
+      if (epoch === alertRevisionEpoch && tail === alertRevisionTail) return epoch;
+    }
+  }
+
+  async function readDetailedAfterAlertSettlement(
+    scope: EmergencyPackCaptureScope,
+    lifecycleHeld = false,
+  ): Promise<{ state: EmergencyPackRuntimeState; epoch: number }> {
+    while (true) {
+      const epoch = await settleAlertRevisions();
+      const persistence = alertPersistenceResults.get(scope.placeId);
+      const state = persistence?.epoch === epoch
+        && persistence.profileFingerprint === scope.profileFingerprint
+        && !persistence.ok
+        ? notSaved(scope.profileFingerprint, persistence.reason ?? 'storage-failure')
+        : await readDetailed(scope, lifecycleHeld);
+      if (epoch === alertRevisionEpoch) return { state, epoch };
+    }
+  }
+
+  async function refreshPersistedAlertInvalidations(
+    places: readonly RuntimePlace[],
+    epoch: number,
+  ): Promise<void> {
+    await Promise.all(places.map((place) => enqueuePlaceOperation(place.id, async () => {
+      const scope = scopeFor(place);
+      const persistence = alertPersistenceResults.get(place.id);
+      if (!scope
+        || persistence?.epoch !== epoch
+        || persistence.profileFingerprint !== scope.profileFingerprint) return;
+      const generation = begin(place.id);
+      let state: EmergencyPackRuntimeState;
+      if (persistence.ok) {
+        await coordinator.refresh(scope);
+        state = takeDetailedState(scope) ?? await readDetailed(scope);
+      } else {
+        state = notSaved(scope.profileFingerprint, persistence.reason ?? 'storage-failure');
+      }
+      publish(place.id, generation, state);
+    })));
+  }
+
+  function persistAlertRevision(sourceRevision: string): void {
+    latestAlertSourceRevision = sourceRevision;
+    alertRevisionEpoch += 1;
+    const epoch = alertRevisionEpoch;
+    const places = retainedPlaces();
+    const scopes = places.map((place) => ({ place, scope: scopeFor(place) }))
+      .filter((entry): entry is { place: RuntimePlace; scope: EmergencyPackCaptureScope } => entry.scope !== null);
+    const persistence = alertRevisionTail.catch(() => undefined).then(async () => {
+      await Promise.all(scopes.map(async ({ place, scope }) => {
+        let result: { ok: boolean; reason?: string };
+        try {
+          result = await store.invalidateArtifacts({
+            placeId: scope.placeId,
+            profileFingerprint: scope.profileFingerprint,
+            kinds: ['alerts'],
+            capturedAt: dependencies.now(),
+            sourceRevision,
+          });
+        } catch {
+          result = { ok: false, reason: 'storage-failure' };
+        }
+        alertPersistenceResults.set(place.id, {
+          epoch,
+          profileFingerprint: scope.profileFingerprint,
+          ok: result.ok,
+          ...(result.reason ? { reason: result.reason } : {}),
+        });
+      }));
+      offlineMapIndexEpoch += 1;
+    });
+    alertRevisionTail = persistence.then(() => undefined, () => undefined);
+    void persistence
+      .then(() => refreshPersistedAlertInvalidations(places, epoch))
+      .catch(() => undefined);
+  }
+
   let savedPlaceNames = new Map(retainedPlaces().map((place) => [place.id, {
     profileFingerprint: scopeFor(place)?.profileFingerprint ?? '',
     name: place.name,
@@ -895,7 +1016,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     dependencies.subscribeLifelines(() => { void invalidateKinds(['lifelines']); }),
     dependencies.subscribeAlerts((event) => {
       if (/^[a-f0-9]{64}$/.test(event?.sourceRevision)) {
-        void invalidateKinds(['alerts'], undefined, event.sourceRevision);
+        persistAlertRevision(event.sourceRevision);
       }
     }),
   ];
@@ -927,7 +1048,13 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     } finally {
       captureContexts.delete(place.id);
     }
-    const state = takeDetailedState(scope) ?? await readDetailed({ ...scope, contactConsent });
+    let state = takeDetailedState(scope) ?? await readDetailed({ ...scope, contactConsent });
+    const captureAlertEpoch = captureAlertEpochs.get(place.id);
+    captureAlertEpochs.delete(place.id);
+    if (captureAlertEpoch !== alertRevisionEpoch) {
+      const finalized = await readDetailedAfterAlertSettlement({ ...scope, contactConsent });
+      state = finalized.state;
+    }
     const generation = begin(place.id);
     publish(place.id, generation, state);
     const result = captureResults.get(place.id) ?? { ok: false, reason: 'capture-failed' };
@@ -987,7 +1114,9 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       placeGenerations.clear();
       captureContexts.clear();
       captureResults.clear();
+      captureAlertEpochs.clear();
       detailedOperationStates.clear();
+      alertPersistenceResults.clear();
       operationQueues.clear();
     },
   };

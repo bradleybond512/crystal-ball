@@ -1,4 +1,5 @@
 import {
+  EMERGENCY_PACK_ARTIFACT_BYTE_CAPS as ARTIFACT_BYTE_CAPS,
   EMERGENCY_PACK_OPTIONAL_KINDS,
   EMERGENCY_PACK_REQUIRED_KINDS,
 } from './emergency-pack-schema';
@@ -27,16 +28,6 @@ export interface EmergencyPackArtifactValidationResult {
   semanticState: 'verified' | 'verified-empty' | 'invalid';
   reason?: string;
 }
-
-const ARTIFACT_BYTE_CAPS: Readonly<Record<EmergencyPackArtifactKind, number>> = {
-  lifelines: 1024 * 1024,
-  alerts: 256 * 1024,
-  'route-primary': 512 * 1024,
-  'route-alternate': 512 * 1024,
-  'offline-map': 50 * 1024 * 1024,
-  'comms-plan': 128 * 1024,
-  contacts: 128 * 1024,
-};
 
 const ARTIFACT_KINDS = new Set<EmergencyPackArtifactKind>(
   Object.keys(ARTIFACT_BYTE_CAPS) as EmergencyPackArtifactKind[],
@@ -104,6 +95,18 @@ function scopeMatches(
   profileFingerprint: string,
 ): boolean {
   return payload.placeId === placeId && payload.profileFingerprint === profileFingerprint;
+}
+
+function sourceCaptureMatches(
+  kind: EmergencyPackArtifactKind,
+  payload: Record<string, unknown>,
+  capturedAt: number,
+): boolean {
+  if (kind === 'alerts') return payload.sourceFetchedAt === capturedAt;
+  if (kind === 'route-primary' || kind === 'route-alternate') return payload.cachedAt === capturedAt;
+  if (kind !== 'lifelines' || !isRecord(payload.snapshot)) return kind !== 'lifelines';
+  const fetchedAt = payload.snapshot.fetchedAt;
+  return typeof fetchedAt === 'string' && Date.parse(fetchedAt) === capturedAt;
 }
 
 function serializedByteLength(value: unknown): number | null {
@@ -282,8 +285,8 @@ function readSelectedContactIds(payload: Record<string, unknown>): Set<string> |
 function validateCommsPlan(payload: Record<string, unknown>): EmergencyPackArtifactValidationResult {
   if (!hasAllowedKeys(
     payload,
-    ['kind', 'placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'fallbackSteps', 'checkInWindows', 'notes'],
-    ['placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'fallbackSteps', 'checkInWindows', 'notes'],
+    ['kind', 'placeId', 'profileFingerprint', 'capturedAt', 'consent', 'selectedContactIds', 'fallbackSteps', 'checkInWindows', 'notes'],
+    ['placeId', 'profileFingerprint', 'capturedAt', 'consent', 'selectedContactIds', 'fallbackSteps', 'checkInWindows', 'notes'],
   ) || (payload.kind !== undefined && payload.kind !== 'comms-plan')) return invalid('invalid-comms-plan-shape');
   if (payload.consent !== true) return invalid('contacts-consent-required');
   const selectedIds = readSelectedContactIds(payload);
@@ -305,8 +308,8 @@ function validateCommsPlan(payload: Record<string, unknown>): EmergencyPackArtif
 function validateContacts(payload: Record<string, unknown>): EmergencyPackArtifactValidationResult {
   if (!hasAllowedKeys(
     payload,
-    ['kind', 'placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'contacts'],
-    ['placeId', 'profileFingerprint', 'consent', 'selectedContactIds', 'contacts'],
+    ['kind', 'placeId', 'profileFingerprint', 'capturedAt', 'consent', 'selectedContactIds', 'contacts'],
+    ['placeId', 'profileFingerprint', 'capturedAt', 'consent', 'selectedContactIds', 'contacts'],
   ) || (payload.kind !== undefined && payload.kind !== 'contacts')) return invalid('invalid-contacts-shape');
   if (payload.consent !== true) return invalid('contacts-consent-required');
   const selectedIds = readSelectedContactIds(payload);
@@ -334,6 +337,10 @@ export function validateEmergencyPackArtifact(
   if (!isSafeCount(input.byteLength, ARTIFACT_BYTE_CAPS[kind])) return invalid('artifact-byte-cap-exceeded');
   if (!isRecord(input.payload)
     || !scopeMatches(input.payload, input.placeId, input.profileFingerprint)) return invalid('artifact-scope-mismatch');
+  if (input.payload.capturedAt !== input.capturedAt
+    || !sourceCaptureMatches(kind, input.payload, input.capturedAt)) {
+    return invalid('artifact-capture-time-mismatch');
+  }
 
   let result: EmergencyPackArtifactValidationResult;
   switch (kind) {
@@ -377,6 +384,7 @@ export interface EmergencyPackCaptureScope {
 export interface EmergencyPackCapturedArtifact {
   kind: string;
   body: string;
+  capturedAt: number;
   expiresAt: number;
   semanticState: string;
   summary: string;
@@ -409,6 +417,7 @@ interface EmergencyPackCaptureDependencies {
 const CAPTURED_ARTIFACT_KEYS = [
   'kind',
   'body',
+  'capturedAt',
   'expiresAt',
   'semanticState',
   'summary',
@@ -441,7 +450,9 @@ function parseCapturedArtifact(
     || value.kind !== expectedKind
     || !isBoundedString(value.body, ARTIFACT_BYTE_CAPS[expectedKind])
     || new TextEncoder().encode(value.body).byteLength > ARTIFACT_BYTE_CAPS[expectedKind]
+    || !isTimestamp(value.capturedAt)
     || !isTimestamp(value.expiresAt)
+    || value.capturedAt >= value.expiresAt
     || (value.semanticState !== 'verified' && value.semanticState !== 'verified-empty')
     || !isBoundedString(value.summary, 300)
     || !isSafeCount(value.itemCount, ARTIFACT_ITEM_CAPS[expectedKind])) return null;
@@ -456,11 +467,13 @@ function parseCapturedArtifact(
   if (!isRecord(body)
     || body.kind !== expectedKind
     || body.placeId !== scope.placeId
-    || body.profileFingerprint !== scope.profileFingerprint) return null;
+    || body.profileFingerprint !== scope.profileFingerprint
+    || body.capturedAt !== value.capturedAt) return null;
 
   return {
     kind: expectedKind,
     body: value.body,
+    capturedAt: value.capturedAt,
     expiresAt: value.expiresAt,
     semanticState: value.semanticState,
     summary: value.summary,

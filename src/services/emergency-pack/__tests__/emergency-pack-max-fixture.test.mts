@@ -34,6 +34,7 @@ test('documented maximum fixtures validate synchronously within a coarse rendere
   const route = {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
+    capturedAt: NOW - 60_000,
     from: { lat: 41.6111, lon: -86.7225 },
     to: { lat: 41.7, lon: -86.8 },
     geometry: {
@@ -54,6 +55,7 @@ test('documented maximum fixtures validate synchronously within a coarse rendere
   const map = {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
+    capturedAt: NOW,
     generationId,
     tiles: Array.from({ length: 512 }, (_, index) => ({
       url: `https://a.basemaps.cartocdn.com/dark_all/12/${index}/95@2x.png`,
@@ -68,6 +70,7 @@ test('documented maximum fixtures validate synchronously within a coarse rendere
   const alerts = {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
+    capturedAt: NOW - 60_000,
     alerts: Array.from({ length: 100 }, (_, index) => ({ id: `alert-${index}`, headline: 'Warning' })),
     sourceFetchedAt: NOW - 60_000,
   };
@@ -75,7 +78,7 @@ test('documented maximum fixtures validate synchronously within a coarse rendere
   const startedAt = performance.now();
   assert.equal(validate({
     kind: 'route-primary', placeId: PLACE_ID, profileFingerprint: PROFILE,
-    byteLength: new TextEncoder().encode(JSON.stringify(route)).byteLength, capturedAt: NOW, payload: route,
+    byteLength: new TextEncoder().encode(JSON.stringify(route)).byteLength, capturedAt: NOW - 60_000, payload: route,
   }).ok, true);
   assert.equal(validate({
     kind: 'offline-map', placeId: PLACE_ID, profileFingerprint: PROFILE,
@@ -83,7 +86,7 @@ test('documented maximum fixtures validate synchronously within a coarse rendere
   }).ok, true);
   assert.equal(validate({
     kind: 'alerts', placeId: PLACE_ID, profileFingerprint: PROFILE,
-    byteLength: new TextEncoder().encode(JSON.stringify(alerts)).byteLength, capturedAt: NOW, payload: alerts,
+    byteLength: new TextEncoder().encode(JSON.stringify(alerts)).byteLength, capturedAt: NOW - 60_000, payload: alerts,
   }).ok, true);
   assert.ok(performance.now() - startedAt < 1_000, 'bounded fixtures should not consume a one-second renderer task');
 });

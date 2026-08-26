@@ -225,6 +225,7 @@ const OFFLINE_MAP_BODY_KEYS = [
   'kind',
   'placeId',
   'profileFingerprint',
+  'capturedAt',
   'generationId',
   'tiles',
   'totalBytes',
@@ -288,6 +289,9 @@ function parseOfflineMapGenerationEvidence(body: string): OfflineMapGenerationEv
     || payload.kind !== 'offline-map'
     || !isBoundedText(payload.placeId, 180)
     || !isBoundedText(payload.profileFingerprint, 800)
+    || !Number.isSafeInteger(payload.capturedAt)
+    || (payload.capturedAt as number) <= 0
+    || (payload.capturedAt as number) > 8_640_000_000_000_000
     || !isBoundedText(payload.generationId, OFFLINE_MAP_GENERATION_ID_MAX_LENGTH)
     || !Array.isArray(payload.tiles)
     || payload.tiles.length === 0
@@ -879,12 +883,22 @@ export async function captureEmergencyPackOfflineMap(
     clearTimeout(timeout);
   }
   if (!captured.ok) return null;
+  let capturedAt: number;
+  try {
+    capturedAt = dependencies.now();
+  } catch {
+    return null;
+  }
+  if (!Number.isSafeInteger(capturedAt)
+    || capturedAt <= 0
+    || capturedAt + MAP_EXPIRY_MS > 8_640_000_000_000_000) return null;
   let body: string;
   try {
     body = JSON.stringify({
       kind: 'offline-map',
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
+      capturedAt,
       generationId,
       tiles: captured.tiles,
       totalBytes: captured.totalBytes,
@@ -893,17 +907,11 @@ export async function captureEmergencyPackOfflineMap(
     return null;
   }
   if (!parseOfflineMapGenerationEvidence(body)) return null;
-  let now: number;
-  try {
-    now = dependencies.now();
-  } catch {
-    return null;
-  }
-  if (!Number.isSafeInteger(now) || now <= 0 || now + MAP_EXPIRY_MS > 8_640_000_000_000_000) return null;
   return {
     kind: 'offline-map',
     body,
-    expiresAt: now + MAP_EXPIRY_MS,
+    capturedAt,
+    expiresAt: capturedAt + MAP_EXPIRY_MS,
     semanticState: 'verified',
     summary: `${captured.tiles.length} offline map tiles verified`,
     itemCount: captured.tiles.length,

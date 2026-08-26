@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 export const NOW = Date.parse('2026-08-25T15:00:00.000Z');
 export const PLACE_ID = 'home';
@@ -46,7 +47,7 @@ export function receipt(kind: string, overrides: Partial<ReceiptFixture> = {}): 
     kind,
     profileFingerprint: PROFILE,
     cacheKey: `wm-emergency-pack:pack-1:${kind}`,
-    sha256: `sha256:${body}`,
+    sha256: createHash('sha256').update(body).digest('hex'),
     byteLength: new TextEncoder().encode(body).byteLength,
     itemCount: 1,
     capturedAt: new Date(NOW - 60_000).toISOString(),
@@ -134,5 +135,5 @@ export class MemoryBodies {
 }
 
 export function digest(body: string): Promise<string> {
-  return Promise.resolve(`sha256:${body}`);
+  return Promise.resolve(createHash('sha256').update(body).digest('hex'));
 }

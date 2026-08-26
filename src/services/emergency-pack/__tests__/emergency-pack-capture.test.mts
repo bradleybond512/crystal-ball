@@ -23,9 +23,34 @@ interface CaptureApi {
 
 const api = await import('../emergency-pack-capture.ts').catch(() => ({} as CaptureApi)) as CaptureApi;
 
-function validate(kind: string, payload: unknown, byteLength = JSON.stringify(payload).length): ValidationResult {
+function validate(kind: string, payload: unknown, byteLength?: number): ValidationResult {
   const fn = requireFunction(api, 'validateEmergencyPackArtifact');
-  return fn({ kind, placeId: PLACE_ID, profileFingerprint: PROFILE, byteLength, capturedAt: NOW, payload });
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+  const capturedAt = kind === 'alerts' && typeof record?.sourceFetchedAt === 'number'
+    ? record.sourceFetchedAt
+    : (kind === 'route-primary' || kind === 'route-alternate') && typeof record?.cachedAt === 'number'
+      ? record.cachedAt
+      : kind === 'lifelines'
+        && record?.snapshot
+        && typeof record.snapshot === 'object'
+        && !Array.isArray(record.snapshot)
+        && typeof (record.snapshot as Record<string, unknown>).fetchedAt === 'string'
+          ? Date.parse((record.snapshot as Record<string, unknown>).fetchedAt as string)
+          : NOW;
+  const capturedPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? { ...payload, capturedAt }
+    : payload;
+  const exactByteLength = byteLength ?? new TextEncoder().encode(JSON.stringify(capturedPayload)).byteLength;
+  return fn({
+    kind,
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    byteLength: exactByteLength,
+    capturedAt,
+    payload: capturedPayload,
+  });
 }
 
 test('alerts are scoped and bounded, and an exact zero-alert capture does not imply coverage', () => {
@@ -220,7 +245,13 @@ test('Lifelines evidence is exact-profile and capped at 1 MiB', () => {
   const payload = {
     placeId: PLACE_ID,
     profileFingerprint: PROFILE,
-    snapshot: { schemaVersion: 2, sites: [], observations: [], providers: [] },
+    snapshot: {
+      schemaVersion: 2,
+      fetchedAt: new Date(NOW - 60_000).toISOString(),
+      sites: [],
+      observations: [],
+      providers: [],
+    },
   };
   assert.equal(validate('lifelines', payload).ok, true);
   assert.equal(validate('lifelines', { ...payload, profileFingerprint: `${PROFILE}:old` }).ok, false);

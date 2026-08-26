@@ -31,6 +31,7 @@ interface StoreApi {
       artifacts: Array<{
         kind: string;
         body: string;
+        capturedAt: number;
         expiresAt: number;
         semanticState: string;
         summary: string;
@@ -45,6 +46,7 @@ interface StoreApi {
       artifact: {
         kind: 'lifelines';
         body: string;
+        capturedAt: number;
         expiresAt: number;
         semanticState: 'verified' | 'verified-empty';
         summary: string;
@@ -93,14 +95,18 @@ interface StoreApi {
 const api = await import('../emergency-pack-store.ts').catch(() => ({} as StoreApi)) as StoreApi;
 
 function artifacts(marker: string, placeId = PLACE_ID, profileFingerprint = PROFILE) {
-  return REQUIRED_KINDS.map((kind) => ({
+  return REQUIRED_KINDS.map((kind, index) => {
+    const capturedAt = NOW - (index + 1) * 60_000;
+    return {
     kind,
-    body: JSON.stringify({ marker, kind, placeId, profileFingerprint }),
+    body: JSON.stringify({ marker, kind, placeId, profileFingerprint, capturedAt }),
+    capturedAt,
     expiresAt: NOW + 60 * 60_000,
     semanticState: 'verified',
     summary: `${kind} captured`,
     itemCount: 1,
-  }));
+    };
+  });
 }
 
 function harness(overrides: {
@@ -178,6 +184,7 @@ function legacyMigrationInput(
     createdAt: new Date(NOW - 60_000).toISOString(),
     updatedAt: new Date(NOW - 30_000).toISOString(),
   };
+  const capturedAt = NOW - 60_000;
   return {
     placeId: PLACE_ID,
     profileFingerprint,
@@ -185,7 +192,8 @@ function legacyMigrationInput(
     legacyManifest,
     artifact: {
       kind: 'lifelines' as const,
-      body: JSON.stringify({ snapshot: legacyManifest, marker: 'legacy-exact-body' }),
+      body: JSON.stringify({ snapshot: legacyManifest, marker: 'legacy-exact-body', capturedAt }),
+      capturedAt,
       expiresAt: NOW + 60 * 60_000,
       semanticState: 'verified' as const,
       summary: 'Migrated exact Lifelines snapshot',
@@ -194,13 +202,13 @@ function legacyMigrationInput(
   };
 }
 
-function rewriteActiveManifest(
+async function rewriteActiveManifest(
   metadata: MemoryMetadata,
   mutate: (manifest: {
     receipts: ReceiptFixture[];
     [key: string]: unknown;
   }) => void,
-): void {
+): Promise<void> {
   const headEntry = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
   assert.ok(headEntry);
   const head = JSON.parse(headEntry[1]) as { manifestKey: string; manifestSha256: string };
@@ -210,7 +218,7 @@ function rewriteActiveManifest(
   mutate(manifest);
   const rewritten = JSON.stringify(manifest);
   metadata.values.set(head.manifestKey, rewritten);
-  head.manifestSha256 = `sha256:${rewritten}`;
+  head.manifestSha256 = await digest(rewritten);
   metadata.values.set(headEntry[0], JSON.stringify(head));
 }
 
@@ -224,6 +232,56 @@ test('a generation is published only after every body is written, read back, and
   const headWrite = operations.findIndex((entry) => entry.includes('metadata:set:') && entry.includes('head'));
   assert.ok(lastReadback >= 0 && manifestWrite > lastReadback, 'manifest follows exact body readback');
   assert.ok(headWrite > manifestWrite, 'head is the final publication write');
+});
+
+test('generation receipts preserve mixed source ages and reject future or body-inconsistent evidence', async () => {
+  const mixedHarness = harness();
+  assert.deepEqual(await commit(mixedHarness.store, 'mixed-age'), { ok: true, packId: 'pack-1' });
+  const readiness = await mixedHarness.store.readReadiness({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    now: NOW,
+  });
+  assert.deepEqual(
+    readiness.receipts.map(({ kind, capturedAt, verifiedAt }) => ({ kind, capturedAt, verifiedAt })),
+    REQUIRED_KINDS.map((kind, index) => ({
+      kind,
+      capturedAt: new Date(NOW - (index + 1) * 60_000).toISOString(),
+      verifiedAt: new Date(NOW).toISOString(),
+    })),
+  );
+
+  for (const scenario of ['future', 'body-mismatch'] as const) {
+    const candidate = artifacts(scenario);
+    const first = candidate[0];
+    assert.ok(first);
+    if (scenario === 'future') {
+      first.capturedAt = NOW + 1;
+      first.body = JSON.stringify({
+        marker: scenario,
+        kind: first.kind,
+        placeId: PLACE_ID,
+        profileFingerprint: PROFILE,
+        capturedAt: first.capturedAt,
+      });
+    } else {
+      first.body = JSON.stringify({
+        marker: scenario,
+        kind: first.kind,
+        placeId: PLACE_ID,
+        profileFingerprint: PROFILE,
+        capturedAt: first.capturedAt - 1,
+      });
+    }
+    const rejected = await harness().store.commitGeneration({
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      requiredKinds: REQUIRED_KINDS,
+      optionalKinds: ['route-alternate'],
+      artifacts: candidate,
+    });
+    assert.equal(rejected.ok, false, scenario);
+  }
 });
 
 test('quota, corrupt readback, manifest failure, and head failure retain the prior active generation', async () => {
@@ -294,7 +352,7 @@ test('recovery keeps verified partial and expired current generations authoritat
   const partialHarness = harness();
   assert.equal((await commit(partialHarness.store, 'previous-complete')).packId, 'pack-1');
   assert.equal((await commit(partialHarness.store, 'current-partial')).packId, 'pack-2');
-  rewriteActiveManifest(partialHarness.metadata, (manifest) => {
+  await rewriteActiveManifest(partialHarness.metadata, (manifest) => {
     manifest.receipts = manifest.receipts.filter(({ kind }) => kind !== 'alerts');
   });
   assert.deepEqual(
@@ -597,7 +655,7 @@ test('v1 Lifelines migration publishes one verified partial v2 generation withou
   const lifelinesReceipt = readiness.receipts[0];
   assert.ok(lifelinesReceipt);
   assert.equal(lifelinesReceipt.cacheKey, 'wm-emergency-pack-v2:body:pack-1:lifelines');
-  assert.equal(lifelinesReceipt.sha256, `sha256:${input.artifact.body}`);
+  assert.equal(lifelinesReceipt.sha256, await digest(input.artifact.body));
   assert.equal(bodies.values.get(lifelinesReceipt.cacheKey), input.artifact.body);
   const encodedManifest = [...metadata.values.entries()].find(([key]) => key.includes(':manifest:'))?.[1];
   assert.ok(encodedManifest);
@@ -611,9 +669,11 @@ test('v1 Lifelines migration publishes one verified partial v2 generation withou
   assert.ok(lastBodyRead >= 0 && manifestWrite > lastBodyRead, 'migration manifest follows exact body readback');
   assert.ok(headWrite > manifestWrite, 'migration head is published last');
 
+  const replacementBody = JSON.parse(input.artifact.body) as Record<string, unknown>;
+  replacementBody.marker = 'replacement';
   const replacement = await store.migrateLifelineGeneration({
     ...input,
-    artifact: { ...input.artifact, body: `${input.artifact.body}:replacement` },
+    artifact: { ...input.artifact, body: JSON.stringify(replacementBody) },
   });
   assert.deepEqual(replacement, { ok: false, reason: 'active-v2-exists' });
   assert.equal((await store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })).packId, 'pack-1');

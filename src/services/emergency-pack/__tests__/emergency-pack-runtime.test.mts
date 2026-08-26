@@ -55,6 +55,9 @@ interface RuntimeApi {
     scope: Scope & { contactConsent: boolean },
     dependencies: Record<string, unknown>,
   ) => Promise<{ kind: string; body: string; itemCount: number } | null>;
+  createEmergencyPackOfflineMapTileResolver?: (dependencies: Record<string, unknown>) => (
+    url: string,
+  ) => Promise<{ data: ArrayBuffer; contentType: string } | null>;
 }
 
 const api = await import('../emergency-pack-runtime.ts').catch(() => ({} as RuntimeApi)) as RuntimeApi;
@@ -200,6 +203,10 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
     subscribeLifelines: (callback: () => void) => {
       callbacks.set('lifelines', callback);
       return () => { unsubscribed.push('lifelines'); };
+    },
+    subscribeAlerts: (callback: () => void) => {
+      callbacks.set('alerts', callback);
+      return () => { unsubscribed.push('alerts'); };
     },
   });
 
@@ -369,7 +376,7 @@ test('runtime composes browser adapters, store, coordinator, sources, and orches
   harness.runtime.destroy();
 });
 
-test('saved-place, route, comms, and Lifelines invalidations re-read authoritative state and ignore payloads', async () => {
+test('saved-place, route, comms, Lifelines, and alert invalidations re-read authoritative state and ignore payloads', async () => {
   const home = place('home');
   const harness = createHarness([home]);
   const fingerprint = harness.profile(home);
@@ -379,7 +386,7 @@ test('saved-place, route, comms, and Lifelines invalidations re-read authoritati
   await harness.runtime.hydrate();
   assert.equal(harness.runtime.getState(home).status, 'ready');
 
-  for (const event of ['routes', 'comms', 'lifelines'] as const) {
+  for (const event of ['routes', 'comms', 'lifelines', 'alerts'] as const) {
     harness.authoritative.set(fingerprint, {
       status: 'not-saved', packId: null, profileFingerprint: fingerprint,
     });
@@ -398,7 +405,58 @@ test('saved-place, route, comms, and Lifelines invalidations re-read authoritati
   assert.ok(emitted.some((state) => state.status === 'not-saved'));
 
   harness.runtime.destroy();
-  assert.deepEqual(harness.unsubscribed.sort(), ['comms', 'lifelines', 'routes', 'saved-places']);
+  assert.deepEqual(harness.unsubscribed.sort(), ['alerts', 'comms', 'lifelines', 'routes', 'saved-places']);
+});
+
+test('offline tile resolver re-reads one exact generation tile and rejects corrupt bytes', async () => {
+  const create = requireFunction('createEmergencyPackOfflineMapTileResolver');
+  const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+  const sha256 = await crypto.subtle.digest('SHA-256', bytes);
+  const digest = [...new Uint8Array(sha256)].map((value) => value.toString(16).padStart(2, '0')).join('');
+  const generationId = 'emergency-pack-offline-consumer';
+  const sourceUrl = 'https://d.basemaps.cartocdn.com/dark_all/4/1/2@2x.png';
+  const cacheKey = `https://offline-map.crystalball.invalid/exact/${generationId}/0`;
+  const artifact = JSON.stringify({
+    kind: 'offline-map',
+    placeId: 'home',
+    profileFingerprint: 'profile-home',
+    generationId,
+    tiles: [{
+      url: sourceUrl, cacheKey, sha256: digest, generationId, byteLength: bytes.byteLength, verified: true,
+    }],
+    totalBytes: bytes.byteLength,
+  });
+  let cachedBytes = bytes;
+  const cache = {
+    put: async () => undefined,
+    delete: async () => true,
+    match: async (key: RequestInfo | URL) => String(key) === cacheKey
+      ? new Response(cachedBytes.slice(), { status: 200, headers: { 'content-type': 'image/png' } })
+      : undefined,
+  };
+  const reads: unknown[] = [];
+  const resolver = create({
+    getScopes: () => [{ placeId: 'home', profileFingerprint: 'profile-home', now: NOW }],
+    readVerifiedOfflineMapArtifact: async (scope: unknown) => { reads.push(scope); return artifact; },
+    openCache: async (name: string) => {
+      assert.equal(name, 'wm-offline-maps');
+      return cache;
+    },
+  });
+
+  const resolved = await resolver('https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png');
+  assert.deepEqual(new Uint8Array(resolved?.data ?? new ArrayBuffer(0)), bytes);
+  assert.equal(resolved?.contentType, 'image/png');
+  assert.deepEqual(reads, [{ placeId: 'home', profileFingerprint: 'profile-home', now: NOW }]);
+
+  cachedBytes = new Uint8Array([137, 80, 78, 71, 9, 9, 9, 9]);
+  assert.equal(await resolver(sourceUrl), null, 'same-length corrupt cached bytes fail closed');
+  const unavailable = create({
+    getScopes: () => [{ placeId: 'home', profileFingerprint: 'moved', now: NOW }],
+    readVerifiedOfflineMapArtifact: async () => null,
+    openCache: async () => cache,
+  });
+  assert.equal(await unavailable(sourceUrl), null, 'missing, moved, expired, or pruned evidence fails closed');
 });
 
 test('runtime keeps at most five place heads and requests only active plus previous generations', async () => {

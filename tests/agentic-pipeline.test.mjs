@@ -233,6 +233,19 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   assert.deepEqual(scripts, ['test:providers']);
 });
 
+test('UCDP source and boundary tests select the focused provider suite', () => {
+  const index = deriveScriptIndex({
+    'test:ucdp-provider': 'tsx --test src/services/__tests__/ucdp-runtime-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs',
+  });
+  const result = selectScripts([
+    'api/ucdp-classifications.js',
+    'api/__tests__/ucdp-classifications.test.mjs',
+    'tests/ucdp-local-boundary.test.mjs',
+    'tests/ucdp-loader-freshness.test.mjs',
+  ], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:ucdp-provider'], unmapped: [] });
+});
+
 test('Emergency Readiness panel config changes select their focused wiring suite', () => {
   const index = deriveScriptIndex({
     'test:emergency-readiness': 'tsx --import ./tests/panels/register-hook.mjs --test tests/emergency-readiness-panel-wiring.test.mjs',

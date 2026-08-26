@@ -36,6 +36,7 @@ export const OVERRIDES = {
   'api/_bounded-json.js': ['test:lifelines'],
   'api/grid-outages.js': ['test:lifelines-grid'],
   'api/osrm-route.js': ['test:lifelines-map'],
+  'api/ucdp-classifications.js': ['test:ucdp-provider'],
   'api/usgs-water-proxy.js': ['test:lifelines'],
   'src/app/data-loader.ts': ['test:providers'],
   'src/config/panel-metadata.ts': ['test:emergency-readiness'],

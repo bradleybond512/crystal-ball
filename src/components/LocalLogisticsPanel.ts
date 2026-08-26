@@ -110,6 +110,7 @@ export class LocalLogisticsPanel extends Panel {
   private error: string | null = null;
   private loading = false;
   private pendingRadiusFocusKm: LocalLogisticsRadiusChoiceKm | null = null;
+  private pendingPrewarmFocus = false;
   private routeFeedback: string | null = null;
   private routingNodeId: string | null = null;
   private routeGeneration = 0;
@@ -486,12 +487,14 @@ export class LocalLogisticsPanel extends Panel {
  const persisted = place.offlinePinned ? place : updateSavedPlace(place.id, { offlinePinned: true });
  const confirmed = persisted ? confirmSavedPlacePersistence(persisted) : null;
  if (!confirmed?.offlinePinned) return;
+ this.pendingPrewarmFocus = true;
  this.prewarmCoordinator.enqueue({ place: confirmed, radiusKm, trigger: 'manual' });
   }
 
   private retryPrewarm(): void {
  const state = this.prewarmState;
  if (state?.phase !== 'failed') return;
+ this.pendingPrewarmFocus = true;
  this.prewarmCoordinator.retry(state.placeId, state.queryFingerprint);
   }
 
@@ -689,12 +692,24 @@ export class LocalLogisticsPanel extends Panel {
 
   private restoreRadiusFocus(): void {
  const radiusKm = this.pendingRadiusFocusKm;
- if (radiusKm === null || radiusKm !== this.activeRadiusKm) return;
+ if (radiusKm === null || radiusKm !== this.activeRadiusKm) {
+   this.restorePrewarmFocus();
+   return;
+ }
  const button = this.content.querySelector<HTMLButtonElement>(
    `[data-logistics-radius="${radiusKm}"]`,
  );
  if (!button) return;
  this.pendingRadiusFocusKm = null;
+ button.focus();
+ this.restorePrewarmFocus();
+  }
+
+  private restorePrewarmFocus(): void {
+ if (!this.pendingPrewarmFocus) return;
+ const button = this.content.querySelector<HTMLButtonElement>('[data-lifeline-prewarm]');
+ if (!button) return;
+ this.pendingPrewarmFocus = false;
  button.focus();
   }
 

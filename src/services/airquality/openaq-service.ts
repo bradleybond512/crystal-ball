@@ -99,7 +99,9 @@ export function parseOpenaqEnvelope(raw: unknown): OpenaqEnvelopeResult {
     return { ok: false, error: 'invalid OpenAQ response' };
   }
   const readings = parseOpenaqReadings(value.readings as OpenaqNormalizedReadingRaw[]);
-  if (readings.length > (sample.acceptedRows as number)) return { ok: false, error: 'invalid OpenAQ response' };
+  if (readings.length !== value.readings.length || readings.length > (sample.acceptedRows as number)) {
+    return { ok: false, error: 'invalid OpenAQ response' };
+  }
   return { ok: true, readings, sample: sample as unknown as OpenaqSampleMetadata };
 }
 

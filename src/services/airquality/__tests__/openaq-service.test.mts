@@ -167,3 +167,12 @@ test('schema v2 parser rejects unknown or malformed rejection counters', () => {
   negative.sample.rejectionReasons = { invalidValue: -1 };
   assert.equal(openaq.parseOpenaqEnvelope(negative).ok, false);
 });
+
+test('schema v2 parser rejects an envelope when any returned reading is malformed', () => {
+  const result = openaq.parseOpenaqEnvelope(envelope([
+    normalizedReading({ sensorId: 1 }),
+    normalizedReading({ sensorId: 'malformed' }),
+  ]));
+
+  assert.deepEqual(result, { ok: false, error: 'invalid OpenAQ response' });
+});

@@ -569,8 +569,8 @@ import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
 import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlaces } from '@/services/saved-places';
-import { prewarmLocalLogistics } from '@/services/local-logistics';
 import { startLifelineRuntime } from '@/services/lifelines/lifeline-runtime';
+import { lifelinePrewarmCoordinator } from '@/services/lifelines/lifeline-prewarm';
 import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
 import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
@@ -854,9 +854,9 @@ export class PanelLayoutManager implements AppModule {
  const prewarmPinnedLifelines = () => {
  this.cancelPinnedLifelinePrewarm = null;
  if (this.destroyed) return;
- void prewarmLocalLogistics(
- getSavedPlaces().filter((place) => place.offlinePinned).slice(0, 3),
- ).catch(() => { /* Offline Lifelines prewarm is best-effort. */ });
+ for (const place of getSavedPlaces().filter((place) => place.offlinePinned).slice(0, 3)) {
+ lifelinePrewarmCoordinator.enqueue({ place, trigger: 'startup' });
+ }
  };
  if (typeof requestIdleCallback === 'function' && typeof cancelIdleCallback === 'function') {
  const idleId = requestIdleCallback(prewarmPinnedLifelines, { timeout: 5_000 });
@@ -1837,6 +1837,9 @@ export class PanelLayoutManager implements AppModule {
  const savedPlaceModal = new SavedPlaceModal({
  onPickLocationMode: (active, callback) => {
  this.ctx.map?.setPickLocationMode(active ? callback : null);
+ },
+ onOfflinePinnedSaved: (place) => {
+ lifelinePrewarmCoordinator.enqueue({ place, trigger: 'manual' });
  },
  });
 

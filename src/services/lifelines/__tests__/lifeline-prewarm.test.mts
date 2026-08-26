@@ -102,8 +102,7 @@ function createCoordinator(options: Record<string, unknown>): Coordinator {
 }
 
 async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 async function waitForTerminal(coordinator: Coordinator, placeId: string): Promise<PrewarmState> {
@@ -262,6 +261,26 @@ test('enters cooldown only after verified success', async () => {
   assert.equal(coordinator.getState(item.id)?.phase, 'cooldown');
 });
 
+test('starts a fresh exact job after the success cooldown expires', async () => {
+  const item = place('cooldown-expired');
+  let currentTime = NOW;
+  let calls = 0;
+  const coordinator = createCoordinator({
+    now: () => currentTime,
+    fetchSnapshot: async () => { calls += 1; return snapshot(item, 25); },
+    verifySnapshot: readyVerifier,
+  });
+
+  void coordinator.enqueue({ place: item, radiusKm: 25, trigger: 'startup' });
+  await waitForTerminal(coordinator, item.id);
+  currentTime += 15 * 60_000 + 1;
+  void coordinator.enqueue({ place: item, radiusKm: 25, trigger: 'storm' });
+  await waitForTerminal(coordinator, item.id);
+
+  assert.equal(calls, 2);
+  assert.equal(coordinator.getState(item.id)?.phase, 'ready');
+});
+
 test('backs off failures and exact Retry bypasses backoff without changing the job', async () => {
   const item = place('retry');
   let calls = 0;
@@ -373,4 +392,21 @@ test('destroyed subscribers receive no later state transitions', async () => {
   await flush();
 
   assert.equal(phases.length, countAtUnsubscribe);
+});
+
+test('one failing subscriber cannot interrupt preparation or other subscribers', async () => {
+  const item = place('listener-failure');
+  const phases: string[] = [];
+  const coordinator = createCoordinator({
+    now: () => NOW,
+    fetchSnapshot: async () => snapshot(item, 25),
+    verifySnapshot: readyVerifier,
+  });
+  coordinator.subscribe(() => { throw new Error('listener failed'); });
+  coordinator.subscribe((state) => phases.push(state.phase));
+
+  void coordinator.enqueue({ place: item, radiusKm: 25, trigger: 'manual' });
+  await waitForTerminal(coordinator, item.id);
+
+  assert.deepEqual(phases, ['queued', 'fetching', 'verifying', 'ready']);
 });

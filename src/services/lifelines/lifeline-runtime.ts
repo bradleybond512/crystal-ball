@@ -1,9 +1,11 @@
 import {
   LOCAL_LOGISTICS_CATEGORIES,
+  buildLifelinePrewarmFingerprint,
   buildLocalLogisticsFingerprint,
   deserializeLocalLogisticsSnapshot,
   getLocalLogisticsOfflineCacheServiceId,
   validateLocalLogisticsSnapshotEvent,
+  type LocalLogisticsRadiusChoiceKm,
 } from '../local-logistics';
 import type { LocalLogisticsSnapshot } from '../local-logistics-types';
 import { readOfflineCacheEntry } from '../offline-alert-cache';
@@ -395,6 +397,47 @@ export function createLifelineRuntime(
     return deriveLifelineOfflinePackReadiness(fingerprint, manifest, now);
   }
 
+  function getExactPackReadiness(
+    place: LifelineSavedPlace,
+    radiusKm: LocalLogisticsRadiusChoiceKm,
+  ): LifelineOfflinePackReadiness {
+    const queryFingerprint = buildLifelinePrewarmFingerprint(place, radiusKm);
+    const now = clock();
+    const manifest = verifiedPackManifest(storage, readPack(storage, place.id), {
+      placeId: place.id,
+      queryFingerprint,
+      lat: place.lat,
+      lon: place.lon,
+    }, now);
+    return deriveLifelineOfflinePackReadiness(queryFingerprint, manifest, now);
+  }
+
+  function verifyExactSnapshot(
+    place: LifelineSavedPlace,
+    radiusKm: LocalLogisticsRadiusChoiceKm,
+    snapshot: LocalLogisticsSnapshot,
+  ): { status: 'ready' | 'partial'; exact: true } | null {
+    const queryFingerprint = buildLifelinePrewarmFingerprint(place, radiusKm);
+    if (snapshot.source !== 'network'
+      || snapshot.isExpired
+      || snapshot.placeId !== place.id
+      || snapshot.queryFingerprint !== queryFingerprint
+      || snapshot.effectiveRadiusKm !== radiusKm) return null;
+    const now = clock();
+    const exactArtifact = readExactLifelinesArtifact(storage, {
+      placeId: place.id,
+      queryFingerprint,
+      lat: place.lat,
+      lon: place.lon,
+      fetchedAt: snapshot.fetchedAt.getTime(),
+    }, now);
+    if (!exactArtifact) return null;
+    const readiness = getExactPackReadiness(place, radiusKm);
+    return readiness.status === 'ready' || readiness.status === 'partial'
+      ? { status: readiness.status, exact: true }
+      : null;
+  }
+
   function getVerifiedLifelinesReceipt(place: LifelineSavedPlace): VerifiedLifelinesReceipt | null {
     const queryFingerprint = exactFingerprint(place);
     const now = clock();
@@ -487,6 +530,8 @@ export function createLifelineRuntime(
   return {
     processSnapshot,
     getPackReadiness,
+    getExactPackReadiness,
+    verifyExactSnapshot,
     getVerifiedLifelinesReceipt,
     getRecentChanges(placeId: string, queryFingerprint: string): LifelineChange[] {
       return parseChangeLog(storage, placeId, queryFingerprint)
@@ -513,6 +558,21 @@ export function getLifelinePackReadinessForPlace(
   place: LifelineSavedPlace,
 ): LifelineOfflinePackReadiness {
   return lifelineRuntime.getPackReadiness(place);
+}
+
+export function getExactLifelinePackReadinessForPlace(
+  place: LifelineSavedPlace,
+  radiusKm: LocalLogisticsRadiusChoiceKm,
+): LifelineOfflinePackReadiness {
+  return lifelineRuntime.getExactPackReadiness(place, radiusKm);
+}
+
+export function verifyExactLifelinesSnapshot(
+  place: LifelineSavedPlace,
+  radiusKm: LocalLogisticsRadiusChoiceKm,
+  snapshot: LocalLogisticsSnapshot,
+): { status: 'ready' | 'partial'; exact: true } | null {
+  return lifelineRuntime.verifyExactSnapshot(place, radiusKm, snapshot);
 }
 
 export function getVerifiedLifelinesReceiptForPlace(

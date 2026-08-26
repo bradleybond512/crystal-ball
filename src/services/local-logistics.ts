@@ -152,7 +152,6 @@ const DIRECTORY_OBSERVATION_TTL_MS = 24 * 60 * 60 * 1000;
 const FEMA_OBSERVATION_TTL_MS = 30 * 60 * 1000;
 const ODIN_OBSERVATION_TTL_MS = 30 * 60 * 1000;
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
-const PREWARM_COOLDOWN_MS = 15 * 60 * 1000;
 const DEFAULT_RADIUS_KM = 25;
 const DEFAULT_LIMIT_PER_CATEGORY = 3;
 const MAX_RESOURCE_ROWS = LOCAL_LOGISTICS_CATEGORIES.length * 5;
@@ -163,7 +162,6 @@ const MAX_CUSTOMERS_OUT = 100_000_000;
 const memoryCache = new Map<string, CachedLocalLogisticsSnapshot>();
 const latestFingerprintByPlace = new Map<string, string>();
 const inFlight = new Map<string, Promise<LocalLogisticsSnapshot>>();
-const lastPrewarmByPlace = new Map<string, number>();
 
 const OPERATIONAL = new Set<OperationalStatus>(['open', 'closed', 'unknown']);
 const INVENTORY = new Set<InventoryStatus>(['available', 'limited', 'full', 'out', 'unknown']);
@@ -180,6 +178,22 @@ export type LocalLogisticsRadiusChoiceKm = typeof LOCAL_LOGISTICS_RADIUS_CHOICES
 export function initialLocalLogisticsRadiusKm(savedRadiusKm: number): LocalLogisticsRadiusChoiceKm {
   const radiusKm = Number.isFinite(savedRadiusKm) ? savedRadiusKm : DEFAULT_RADIUS_KM;
   return LOCAL_LOGISTICS_RADIUS_CHOICES_KM.find((choice) => choice >= radiusKm) ?? 50;
+}
+
+export function resolveLifelinePrewarmRadius(
+  place: Pick<SavedPlace, 'radiusKm'>,
+  explicitRadiusKm?: number,
+): LocalLogisticsRadiusChoiceKm {
+  return LOCAL_LOGISTICS_RADIUS_CHOICES_KM.includes(explicitRadiusKm as LocalLogisticsRadiusChoiceKm)
+    ? explicitRadiusKm as LocalLogisticsRadiusChoiceKm
+    : initialLocalLogisticsRadiusKm(place.radiusKm);
+}
+
+export function buildLifelinePrewarmFingerprint(
+  place: Pick<SavedPlace, 'lat' | 'lon'>,
+  radiusKm: LocalLogisticsRadiusChoiceKm,
+): string {
+  return buildLocalLogisticsFingerprint(place, radiusKm, [...LOCAL_LOGISTICS_CATEGORIES]);
 }
 
 function boundedSet<K, V>(map: Map<K, V>, key: K, value: V, maximum = 100): void {
@@ -1362,31 +1376,6 @@ export function selectLifelinePrewarmPlaces(places: SavedPlace[], stormMatchedPl
  }
   }
   return selected;
-}
-
-export async function prewarmLocalLogistics(
-  places: SavedPlace[],
-  stormMatchedPlaceId: string | null | undefined = null,
-  now = Date.now(),
-  fetcher: (place: SavedPlace) => Promise<unknown> = fetchLocalLogistics,
-): Promise<{ succeeded: string[]; failed: string[]; skipped: string[] }> {
-  const eligible = selectLifelinePrewarmPlaces(places, stormMatchedPlaceId);
- const cooldownKey = (place: SavedPlace) => `${place.id}:${buildLocalLogisticsFingerprint(place, Math.min(place.radiusKm, DEFAULT_RADIUS_KM), [...LOCAL_LOGISTICS_CATEGORIES])}`;
- const queue = eligible.filter((place) => now - (lastPrewarmByPlace.get(cooldownKey(place)) ?? 0) >= PREWARM_COOLDOWN_MS);
-  const skipped = eligible.filter((place) => !queue.includes(place)).map((place) => place.id);
-  const succeeded: string[] = [];
-  const failed: string[] = [];
-  let cursor = 0;
-  async function worker(): Promise<void> {
- while (cursor < queue.length) {
- const place = queue[cursor++];
- if (!place) return;
- boundedSet(lastPrewarmByPlace, cooldownKey(place), now);
- try { await fetcher(place); succeeded.push(place.id); } catch { failed.push(place.id); }
- }
-  }
-  await Promise.all(Array.from({ length: Math.min(2, queue.length) }, () => worker()));
-  return { succeeded, failed, skipped };
 }
 
 export type { LocalLogisticsBriefItem };

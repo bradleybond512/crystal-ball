@@ -133,6 +133,11 @@ test('a verified network snapshot creates exact-fingerprint offline Lifelines re
   assert.equal(update?.pack.status, 'ready');
   assert.equal(runtime.getPackReadiness(place).status, 'ready');
   assert.equal(runtime.getPackReadiness({ ...place, lat: 41.7 }).status, 'not-saved');
+  assert.deepEqual(runtime.verifyExactSnapshot(place, 25, snapshot()), {
+    status: 'ready', exact: true,
+  });
+  assert.equal(runtime.verifyExactSnapshot(place, 50, snapshot()), null);
+  assert.equal(runtime.verifyExactSnapshot(place, 25, snapshot({ source: 'offline-cache' })), null);
 });
 
 test('storage failure never claims the offline pack is ready', () => {

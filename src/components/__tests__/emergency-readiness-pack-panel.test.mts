@@ -8,6 +8,7 @@ import type { SavedPlace } from '../../services/saved-places.ts';
 const NOW = Date.parse('2026-08-25T16:00:00.000Z');
 const moduleValue = await import('../EmergencyReadinessPanel.ts').catch(() => ({})) as {
   EmergencyReadinessPanel?: new (dependencies: Record<string, unknown>) => {
+    getElement: () => HTMLElement;
     getContentElement: () => HTMLElement;
     destroy: () => void;
   };
@@ -111,6 +112,7 @@ test('pack invalidation re-reads authoritative state, preserves action focus, an
     deadlineScheduler: { track: () => undefined, destroy: () => undefined },
   });
   context.after(() => panel.destroy());
+  happyWindow.document.body.append(panel.getElement());
   await waitForRender();
   const beforeReads = stateReads;
   const initialAction = panel.getContentElement().querySelector<HTMLButtonElement>('[data-pack-action]');

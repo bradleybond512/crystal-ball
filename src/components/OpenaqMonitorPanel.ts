@@ -50,13 +50,23 @@ export class OpenaqMonitorPanel extends Panel {
   private async ensureTabData(tab: Tab): Promise<void> {
     if (tab === 'nearby' && !this.nearbyLoaded && !this.loadingNearby) {
       this.loadingNearby = true;
-      await this.loadNearby();
-      this.loadingNearby = false;
+      if (this.activeTab === 'nearby') this.render();
+      try {
+        await this.loadNearby();
+      } finally {
+        this.loadingNearby = false;
+        if (this.activeTab === 'nearby') this.render();
+      }
     }
     if (tab === 'worst' && !this.worstLoaded && !this.loadingWorst) {
       this.loadingWorst = true;
-      await this.loadWorst();
-      this.loadingWorst = false;
+      if (this.activeTab === 'worst') this.render();
+      try {
+        await this.loadWorst();
+      } finally {
+        this.loadingWorst = false;
+        if (this.activeTab === 'worst') this.render();
+      }
     }
   }
 
@@ -64,7 +74,6 @@ export class OpenaqMonitorPanel extends Panel {
     const config = loadProximityConfig();
     if (!config.location) {
       this.nearbyLoaded = true;
-      this.render();
       return;
     }
     const { lat, lon } = config.location;
@@ -74,7 +83,6 @@ export class OpenaqMonitorPanel extends Panel {
     this.nearby = parsed.ok ? summarizeNearby(parsed.readings, Date.now()).readings : [];
     this.nearbyLoaded = true;
     this.setCount(this.nearby.length);
-    if (this.activeTab === 'nearby') this.render();
   }
 
   private async loadWorst(): Promise<void> {
@@ -83,7 +91,6 @@ export class OpenaqMonitorPanel extends Panel {
     this.worstError = parsed.ok ? null : parsed.error;
     this.worst = parsed.ok ? pickGlobalWorst(parsed.readings, Date.now(), 20) : [];
     this.worstLoaded = true;
-    if (this.activeTab === 'worst') this.render();
   }
 
   private async runSearch(query: string): Promise<void> {

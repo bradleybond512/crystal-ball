@@ -115,7 +115,7 @@ function emptyLogisticsResponse(place: SavedPlace, input: string | URL | Request
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
-function installCommitRaceHarness(): {
+function installCommitRaceHarness(options: { failExactWrites?: number } = {}): {
   pending: Array<{ input: string | URL | Request; response: DeferredResponse }>;
   persisted: Map<string, string>;
   events: Array<{ detail?: LocalLogisticsSnapshot }>;
@@ -130,10 +130,19 @@ function installCommitRaceHarness(): {
   const pending: Array<{ input: string | URL | Request; response: DeferredResponse }> = [];
   const persisted = new Map<string, string>();
   const events: Array<{ detail?: LocalLogisticsSnapshot }> = [];
+  let failedExactWrites = 0;
   let eventObserver: ((snapshot: LocalLogisticsSnapshot) => void) | null = null;
   const storage = {
     getItem: (key: string) => persisted.get(key) ?? null,
-    setItem: (key: string, value: string) => { persisted.set(key, value); },
+    setItem: (key: string, value: string) => {
+      const isExactArtifact = key.startsWith('wm_offline_local-logistics:v2:')
+        && !key.startsWith('wm_offline_local-logistics:v2:latest:');
+      if (isExactArtifact && failedExactWrites < (options.failExactWrites ?? 0)) {
+        failedExactWrites += 1;
+        return;
+      }
+      persisted.set(key, value);
+    },
     removeItem: (key: string) => { persisted.delete(key); },
   };
   Object.defineProperty(globalThis, 'localStorage', {
@@ -452,6 +461,76 @@ test('equal same-fingerprint completions are one committed duplicate', async () 
     harness.restore();
   }
 });
+
+for (const recoveryAge of ['older', 'equal'] as const) {
+  test(`a successful ${recoveryAge} exact completion reconciles readiness after the newer write failed`, async () => {
+    const place = makePlace({ id: `write-recovery-${recoveryAge}`, radiusKm: 10 });
+    const harness = installCommitRaceHarness({ failExactWrites: 1 });
+    const runtime = createLifelineRuntime(harness.storage, () => Date.now());
+    harness.observeEvents((snapshot) => { runtime.processSnapshot(snapshot); });
+    const newerAt = new Date(Date.now() - 1_000).toISOString();
+    const recoveryAt = recoveryAge === 'older'
+      ? new Date(Date.now() - 2_000).toISOString()
+      : newerAt;
+    try {
+      const coordinator = fetchLocalLogistics(place, {
+        radiusKm: 10,
+        shouldCommit: () => true,
+      } as never);
+      const foreground = fetchLocalLogistics(place, { radiusKm: 10 });
+      const fingerprint = buildLocalLogisticsFingerprint(place, 10, [...LOCAL_LOGISTICS_CATEGORIES]);
+
+      harness.pending[0]?.response.resolve(emptyLogisticsResponse(place, harness.pending[0].input, newerAt));
+      const coordinatorResult = await coordinator;
+      const initialUpdate = runtime.getLatestUpdate(place.id, fingerprint);
+      assert.equal(initialUpdate?.pack.status, 'not-saved');
+      assert.equal(runtime.verifyExactSnapshot(place, 10, coordinatorResult), null);
+      assert.equal(readOfflineCacheEntry(
+        getLocalLogisticsOfflineCacheServiceId(place.id, fingerprint),
+        harness.storage,
+      ), null);
+
+      harness.pending[1]?.response.resolve(emptyLogisticsResponse(place, harness.pending[1].input, recoveryAt));
+      const foregroundResult = await foreground;
+      const artifact = readOfflineCacheEntry<{ fetchedAt: string }>(
+        getLocalLogisticsOfflineCacheServiceId(place.id, fingerprint),
+        harness.storage,
+      );
+      const latest = readOfflineCacheEntry<{ schemaVersion: 2; fingerprint: string }>(
+        `local-logistics:v2:latest:${place.id}`,
+        harness.storage,
+      );
+      const manifest = JSON.parse(harness.storage.getItem(`wm_lifeline_pack_manifest_v1:${place.id}`) ?? 'null') as {
+        queryFingerprint?: string;
+        artifacts?: Array<{ kind?: string; cachedAt?: string }>;
+      } | null;
+      const recoveredUpdate = runtime.getLatestUpdate(place.id, fingerprint);
+
+      assert.equal(coordinatorResult.fetchedAt.toISOString(), newerAt);
+      assert.equal(foregroundResult.fetchedAt.toISOString(), recoveryAt);
+      assert.equal(artifact?.data.fetchedAt, recoveryAt);
+      assert.equal(getCachedLocalLogistics(place.id)?.fetchedAt.toISOString(), recoveryAt);
+      assert.equal(latest?.data.fingerprint, fingerprint);
+      assert.equal(manifest?.queryFingerprint, fingerprint);
+      assert.equal(manifest?.artifacts?.find((item) => item.kind === 'lifelines')?.cachedAt, recoveryAt);
+      assert.equal(recoveredUpdate?.pack.status, 'ready');
+      assert.equal(recoveredUpdate?.situation, initialUpdate?.situation);
+      assert.equal(recoveredUpdate?.outage, initialUpdate?.outage);
+      assert.deepEqual(recoveredUpdate?.changes, initialUpdate?.changes);
+      assert.deepEqual(runtime.verifyExactSnapshot(place, 10, foregroundResult), { status: 'ready', exact: true });
+      assert.deepEqual(
+        runtime.verifyExactSnapshot(place, 10, coordinatorResult),
+        recoveryAge === 'equal' ? { status: 'ready', exact: true } : null,
+      );
+      assert.deepEqual(
+        harness.events.map((event) => event.detail?.fetchedAt.toISOString()),
+        [newerAt, recoveryAt],
+      );
+    } finally {
+      harness.restore();
+    }
+  });
+}
 
 test('representative selection includes one ranked result per category before filling remaining slots', () => {
   const selectRepresentativeLocalLogisticsNodes = requireFeature<(

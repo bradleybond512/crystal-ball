@@ -18,6 +18,7 @@ function parseEligibleUrl(value: string): URL | null {
     const url = new URL(value);
     if (url.protocol !== 'https:'
       || !CARTO_HOST_PATTERN.test(url.hostname)
+      || url.port !== ''
       || url.username !== ''
       || url.password !== ''
       || url.search !== ''

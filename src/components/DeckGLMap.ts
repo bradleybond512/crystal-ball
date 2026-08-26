@@ -21,6 +21,12 @@ const AQI_MAP_COLOR: Record<AqiCategory, [number, number, number, number]> = {
   unknown: [139, 148, 158, 150],
 };
 import maplibregl from 'maplibre-gl';
+import { resolveEmergencyPackOfflineMapTile } from '@/services/emergency-pack/emergency-pack-runtime';
+import {
+  createEmergencyPackMapProtocolHandler,
+  registerEmergencyPackMapProtocolOnce,
+  transformEmergencyPackMapRequest,
+} from '@/services/emergency-pack/emergency-pack-map-protocol';
 import Supercluster from 'supercluster';
 import type {
   MapLayers,
@@ -211,6 +217,11 @@ const TERRAIN_STYLE = '/map-styles/terrain.json';
 
 type BaseMapStyle = 'dark' | 'light' | 'satellite' | 'terrain';
 const BASEMAP_STORAGE_KEY = 'wm-basemap';
+
+const emergencyPackMapProtocolHandler = createEmergencyPackMapProtocolHandler({
+  resolveTile: resolveEmergencyPackOfflineMapTile,
+  fetchTile: (url, signal) => fetch(url, { signal }),
+});
 
 // Clade family → RGBA color for variant dot layer
 const CLADE_COLORS: Record<string, [number, number, number, number]> = {
@@ -844,6 +855,8 @@ export class DeckGLMap {
  const savedBasemap = validBasemaps.includes(rawSaved as BaseMapStyle) ? rawSaved as BaseMapStyle : null;
  this.activeBaseMap = savedBasemap ?? (initialTheme === 'light' ? 'light' : 'dark');
 
+ registerEmergencyPackMapProtocolOnce(maplibregl.addProtocol, emergencyPackMapProtocolHandler);
+
  this.maplibreMap = new maplibregl.Map({
  container: 'deckgl-basemap',
  style: getStyleUrl(this.activeBaseMap),
@@ -852,6 +865,7 @@ export class DeckGLMap {
  renderWorldCopies: false,
  attributionControl: false,
  interactive: true,
+ transformRequest: transformEmergencyPackMapRequest,
  ...(MAP_INTERACTION_MODE === 'flat'
  ? {
  maxPitch: 0,

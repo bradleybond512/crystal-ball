@@ -44,6 +44,7 @@ globals.getComputedStyle = happyWindow.getComputedStyle.bind(happyWindow);
 globals.matchMedia = happyWindow.matchMedia.bind(happyWindow);
 
 const { LocalLogisticsPanel } = await import('../LocalLogisticsPanel.ts');
+const { createLifelinePrewarmCoordinator } = await import('../../services/lifelines/lifeline-prewarm.ts');
 
 type SnapshotLoader = (
   place: SavedPlace,
@@ -199,6 +200,32 @@ test('Prepare offline enqueues the active exact radius and cleanup unsubscribes'
   panel.destroy();
   mountedPanels.splice(mountedPanels.indexOf(panel), 1);
   assert.equal(unsubscriptions, 1);
+});
+
+test('failed preparation displays an actionable generic error without provider details', async () => {
+  const place = addSavedPlace({
+    name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25, offlinePinned: true,
+  });
+  localStorage.setItem('wm_saved_places_v1', JSON.stringify(getSavedPlaces()));
+  const secretMessage = 'provider-token=super-secret-upstream-detail';
+  const coordinator = createLifelinePrewarmCoordinator({
+    fetchSnapshot: async () => { throw new Error(secretMessage); },
+    verifySnapshot: () => ({ status: 'ready', exact: true }),
+  });
+  const panel = mountPanel(
+    async (requestedPlace, options) => makeSnapshot(requestedPlace, options?.radiusKm ?? 25),
+    coordinator,
+  );
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  requiredElement<HTMLButtonElement>(panel.getContentElement(), '[data-lifeline-prewarm]').click();
+  await settleRender();
+
+  const content = panel.getContentElement().textContent ?? '';
+  assert.doesNotMatch(content, /super-secret|provider-token|upstream-detail/);
+  assert.match(content, /try again/i);
+  coordinator.destroy();
 });
 
 function requiredElement<T extends Element>(root: ParentNode, selector: string): T {

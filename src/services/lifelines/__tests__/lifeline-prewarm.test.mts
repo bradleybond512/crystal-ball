@@ -3,9 +3,11 @@ import test from 'node:test';
 
 import {
   buildLocalLogisticsFingerprint,
+  getLocalLogisticsOfflineCacheServiceId,
   LOCAL_LOGISTICS_CATEGORIES,
   type LocalLogisticsSnapshot,
 } from '../../local-logistics.ts';
+import { writeOfflineCacheEntry } from '../../offline-alert-cache.ts';
 import type { SavedPlace } from '../../saved-places.ts';
 
 const prewarmModulePath = ['..', 'lifeline-prewarm.ts'].join('/');
@@ -157,6 +159,66 @@ test('keeps every explicit 5, 10, 25, and 50 km choice in the fetched fingerprin
   }
 
   assert.deepEqual(requests.map((request) => request.radiusKm), [5, 10, 25, 50]);
+});
+
+test('restart resolution reuses only a strictly verified latest exact persisted radius', async () => {
+  const item = place('restart-radius', 25);
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  };
+  const priorStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  const exactSnapshot = snapshot(item, 50);
+  exactSnapshot.providers = [
+    { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(NOW), retrievedAt: new Date(NOW) },
+    { id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(NOW), retrievedAt: new Date(NOW) },
+    { id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(NOW), retrievedAt: new Date(NOW) },
+    { id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(NOW), retrievedAt: new Date(NOW) },
+  ];
+  const exactFingerprint = exactSnapshot.queryFingerprint;
+  const latestServiceId = `local-logistics:v2:latest:${item.id}`;
+  try {
+    const first = createCoordinator({
+      now: () => NOW,
+      fetchSnapshot: async () => {
+        writeOfflineCacheEntry(
+          getLocalLogisticsOfflineCacheServiceId(item.id, exactFingerprint),
+          JSON.parse(JSON.stringify(exactSnapshot)) as unknown,
+        );
+        writeOfflineCacheEntry(latestServiceId, { schemaVersion: 2, fingerprint: exactFingerprint });
+        return exactSnapshot;
+      },
+      verifySnapshot: readyVerifier,
+    });
+    first.enqueue({ place: item, radiusKm: 50, trigger: 'manual' });
+    await waitForTerminal(first, item.id);
+    first.destroy?.();
+
+    const restarted = createCoordinator({
+      now: () => NOW,
+      fetchSnapshot: async () => exactSnapshot,
+      verifySnapshot: readyVerifier,
+    });
+    assert.equal(restarted.resolveRadius(item), 50);
+
+    const moved = { ...item, lat: item.lat + 1 };
+    const movedFingerprint = fingerprint(moved, 50);
+    writeOfflineCacheEntry(latestServiceId, { schemaVersion: 2, fingerprint: movedFingerprint });
+    writeOfflineCacheEntry(
+      getLocalLogisticsOfflineCacheServiceId(item.id, movedFingerprint),
+      JSON.parse(JSON.stringify({ ...exactSnapshot, queryFingerprint: movedFingerprint })) as unknown,
+    );
+    assert.equal(restarted.resolveRadius(item), 25, 'moved-place cache must not survive current coordinates');
+
+    writeOfflineCacheEntry(latestServiceId, { schemaVersion: 2, fingerprint: 'malformed' });
+    assert.equal(restarted.resolveRadius(item), 25, 'malformed latest entries must fail closed');
+  } finally {
+    if (priorStorage) Object.defineProperty(globalThis, 'localStorage', priorStorage);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  }
 });
 
 test('limits work to two concurrent fetches', async () => {
@@ -311,6 +373,23 @@ test('backs off failures and exact Retry bypasses backoff without changing the j
   await waitForTerminal(coordinator, item.id);
   assert.deepEqual(requested, [10, 10]);
   assert.equal(coordinator.getState(item.id)?.phase, 'ready');
+});
+
+test('failure state never exposes provider or internal error text', async () => {
+  const item = place('safe-error');
+  const secretMessage = 'provider-token=super-secret-upstream-detail';
+  const coordinator = createCoordinator({
+    now: () => NOW,
+    fetchSnapshot: async () => { throw new Error(secretMessage); },
+    verifySnapshot: readyVerifier,
+  });
+
+  coordinator.enqueue({ place: item, radiusKm: 25, trigger: 'manual' });
+  const failed = await waitForTerminal(coordinator, item.id);
+
+  assert.equal(failed.phase, 'failed');
+  assert.doesNotMatch(failed.error ?? '', /super-secret|provider-token|upstream-detail/);
+  assert.match(failed.error ?? '', /try again/i);
 });
 
 test('rejects retry requests that do not exactly match the failed job', async () => {

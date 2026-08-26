@@ -73,6 +73,7 @@ const INITIAL_FAILURE_BACKOFF_MS = 30_000;
 const MAX_FAILURE_BACKOFF_MS = 15 * 60_000;
 const MAX_TRACKED_JOBS = 100;
 const MAX_CONCURRENCY = 2;
+const PREWARM_FAILURE_MESSAGE = 'Offline Lifelines preparation failed. Check your connection and try again.';
 
 function cloneState(state: LifelinePrewarmState): LifelinePrewarmState {
   return { ...state, triggers: [...state.triggers] };
@@ -182,7 +183,7 @@ export function createLifelinePrewarmCoordinator(
       job.failureCount = 0;
       boundedSet(successAt, jobKey(job.place.id, job.queryFingerprint), now());
       publish(job, verification.status);
-    } catch (error) {
+    } catch {
       if (!isCurrent(job)) return;
       job.failureCount += 1;
       const delay = Math.min(
@@ -195,7 +196,7 @@ export function createLifelinePrewarmCoordinator(
         job,
         'failed',
         retryAt,
-        error instanceof Error ? error.message : 'Lifelines preparation failed',
+        PREWARM_FAILURE_MESSAGE,
       );
     }
   };
@@ -274,7 +275,7 @@ export function createLifelinePrewarmCoordinator(
     }
     const retryAt = failedUntil.get(key);
     if (retryAt !== undefined && now() < retryAt) {
-      publish(job, 'failed', retryAt, prior ? states.get(place.id)?.error ?? 'Lifelines preparation failed' : 'Lifelines preparation failed');
+      publish(job, 'failed', retryAt, prior ? states.get(place.id)?.error ?? PREWARM_FAILURE_MESSAGE : PREWARM_FAILURE_MESSAGE);
       return;
     }
     queueJob(job);

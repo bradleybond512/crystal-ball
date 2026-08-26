@@ -181,12 +181,14 @@ export function initialLocalLogisticsRadiusKm(savedRadiusKm: number): LocalLogis
 }
 
 export function resolveLifelinePrewarmRadius(
-  place: Pick<SavedPlace, 'radiusKm'>,
+  place: Pick<SavedPlace, 'id' | 'lat' | 'lon' | 'radiusKm'>,
   explicitRadiusKm?: number,
 ): LocalLogisticsRadiusChoiceKm {
-  return LOCAL_LOGISTICS_RADIUS_CHOICES_KM.includes(explicitRadiusKm as LocalLogisticsRadiusChoiceKm)
-    ? explicitRadiusKm as LocalLogisticsRadiusChoiceKm
-    : initialLocalLogisticsRadiusKm(place.radiusKm);
+  if (LOCAL_LOGISTICS_RADIUS_CHOICES_KM.includes(explicitRadiusKm as LocalLogisticsRadiusChoiceKm)) {
+    return explicitRadiusKm as LocalLogisticsRadiusChoiceKm;
+  }
+  return readLatestExactLifelinePrewarmRadius(place)
+    ?? initialLocalLogisticsRadiusKm(place.radiusKm);
 }
 
 export function buildLifelinePrewarmFingerprint(
@@ -329,6 +331,36 @@ export function getLocalLogisticsOfflineCacheServiceId(placeId: string, fingerpr
 
 function latestKey(placeId: string): string {
   return `${CACHE_PREFIX}:latest:${placeId}`;
+}
+
+function readLatestExactLifelinePrewarmRadius(
+  place: Pick<SavedPlace, 'id' | 'lat' | 'lon'>,
+): LocalLogisticsRadiusChoiceKm | null {
+  const latest = readOfflineCacheEntry<{ schemaVersion: 2; fingerprint: string }>(latestKey(place.id));
+  if (latest?.data.schemaVersion !== 2 || typeof latest.data.fingerprint !== 'string') return null;
+  const queryFingerprint = latest.data.fingerprint;
+  const parsed = parseLogisticsFingerprint(queryFingerprint);
+  if (parsed?.limitPerCategory !== DEFAULT_LIMIT_PER_CATEGORY) return null;
+  const radiusKm = LOCAL_LOGISTICS_RADIUS_CHOICES_KM.find((choice) => choice === parsed.radiusKm);
+  if (radiusKm === undefined) return null;
+  const expectedCategories = [...LOCAL_LOGISTICS_CATEGORIES].sort(compareStrings);
+  if (parsed.categories.length !== expectedCategories.length
+    || [...parsed.categories].sort(compareStrings).join(',') !== expectedCategories.join(',')) return null;
+  if (buildLifelinePrewarmFingerprint(place, radiusKm) !== queryFingerprint) return null;
+  const cached = readOfflineCacheEntry<CachedLocalLogisticsSnapshot>(
+    cacheKey(place.id, queryFingerprint),
+  )?.data;
+  if (!cached) return null;
+  const snapshot = deserializeLocalLogisticsSnapshot(cached, Date.now(), {
+    placeId: place.id,
+    queryFingerprint,
+    lat: place.lat,
+    lon: place.lon,
+  });
+  if (snapshot?.effectiveRadiusKm !== radiusKm
+    || snapshot.categories.length !== expectedCategories.length
+    || [...snapshot.categories].sort(compareStrings).join(',') !== expectedCategories.join(',')) return null;
+  return radiusKm;
 }
 
 function emitLocalLogisticsUpdated(snapshot: LocalLogisticsSnapshot): void {

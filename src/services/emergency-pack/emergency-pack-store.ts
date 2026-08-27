@@ -972,16 +972,6 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  function restoreHead(key: string, encodedPreviousHead: string | null): boolean {
-    try {
-      if (encodedPreviousHead === null) metadata.removeItem(key);
-      else metadata.setItem(key, encodedPreviousHead);
-      return metadata.getItem(key) === encodedPreviousHead;
-    } catch {
-      return false;
-    }
-  }
-
   async function commitGeneration(input: EmergencyPackGenerationInput): Promise<
     { ok: true; packId: string } | { ok: false; reason: string }
   > {
@@ -992,9 +982,6 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
 
     let key: string | null = null;
-    let activeHeadKey: string | null = null;
-    let encodedExistingHead: string | null = null;
-    let headPublished = false;
     const stagedBodies: StoredArtifactBody[] = [];
 
     try {
@@ -1002,8 +989,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (!isNonEmptyString(packId) || packId.length > 512) return { ok: false, reason: 'invalid-pack-id' };
       key = manifestKey(input.placeId, packId);
       if (metadata.getItem(key) !== null) return { ok: false, reason: 'pack-id-collision' };
-      activeHeadKey = headKey(input.placeId);
-      encodedExistingHead = metadata.getItem(activeHeadKey);
+      const activeHeadKey = headKey(input.placeId);
+      const encodedExistingHead = metadata.getItem(activeHeadKey);
       const previousPackId = await findPreviousPackId(encodedExistingHead, input.profileFingerprint);
 
       const timestamp = now();
@@ -1043,9 +1030,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (!alertBindingIsCurrent(input.placeId, input.profileFingerprint, alertBinding)) {
         throw new Error('alert invalidation changed during publication');
       }
-      writeHead(activeHeadKey, head, encodedExistingHead);
-      headPublished = true;
       await adoptStagedBodies(stagedBodies);
+      writeHead(activeHeadKey, head, encodedExistingHead);
       try {
         await cleanupOldGenerations(manifest);
       } catch {
@@ -1053,11 +1039,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       }
       return { ok: true, packId };
     } catch (error) {
-      let safeToCleanup = true;
-      if (headPublished && activeHeadKey !== null) {
-        safeToCleanup = restoreHead(activeHeadKey, encodedExistingHead);
-      }
-      if (safeToCleanup && key !== null) await cleanupGeneration(key, stagedBodies);
+      if (key !== null) await cleanupGeneration(key, stagedBodies);
       return { ok: false, reason: safeReason(error) };
     }
   }

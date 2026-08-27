@@ -6749,6 +6749,7 @@ const OPENAQ_SHARED_DEADLINE_MS = 20_000;
 const OPENAQ_MAX_CONCURRENCY = 3;
 const OPENAQ_QUERY_WINDOW_MS = 2 * 60 * 60 * 1000;
 const OPENAQ_WORST_FRESHNESS_MS = 6 * 60 * 60 * 1000;
+const OPENAQ_PM25_MAX_EXCLUSIVE = 9999;
 const OPENAQ_CACHE_KEY = 'openaq-v3-pm25-corpus';
 const OPENAQ_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 let openaqCorpusInFlight = null;
@@ -6852,7 +6853,8 @@ export function normalizeOpenaqLatestPages(rawPages, windowEnd = Date.now(), win
       let invalid = false;
       if (sensorId === null) { rejectionReasons.invalidSensorId += 1; invalid = true; }
       if (locationId === null) { rejectionReasons.invalidLocationId += 1; invalid = true; }
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) { rejectionReasons.invalidValue += 1; invalid = true; }
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0
+        || value >= OPENAQ_PM25_MAX_EXCLUSIVE) { rejectionReasons.invalidValue += 1; invalid = true; }
       if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
         || typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
         rejectionReasons.invalidCoordinates += 1; invalid = true;

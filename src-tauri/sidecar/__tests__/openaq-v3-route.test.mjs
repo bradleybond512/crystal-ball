@@ -108,6 +108,21 @@ test('normalizer allowlists safe IDs, nonnegative readings, coordinates, and non
   assert.equal(out.droppedRows, 7);
 });
 
+test('normalizer rejects the OpenAQ PM2.5 sentinel and overflow while preserving extreme smoke', () => {
+  const values = [0, 600, 9998.9, 9999, 10_000];
+  const out = normalizePages([page(1, values.length, values.map((value, index) => latestRow({
+    sensorsId: index + 1,
+    locationsId: index + 1,
+    value,
+  })))]);
+  assert.equal(out.error, null);
+  assert.equal(out.acceptedRows, 3);
+  assert.equal(out.droppedRows, 2);
+  assert.equal(out.sample.invalidRows, 2);
+  assert.equal(out.sample.rejectionReasons.invalidValue, 2);
+  assert.deepEqual(out.readings.map((reading) => reading.value), [0, 600, 9998.9]);
+});
+
 test('normalizer accepts only canonical UTC RFC3339 seconds or exactly milliseconds', () => {
   const accepted = [
     '2026-08-25T11:30:00Z',
@@ -526,9 +541,10 @@ test('worst and nearby routes share one complete normalized corpus', async () =>
     assert.equal(new URL(String(url)).searchParams.get('limit'), '1000');
     assert.equal(options.headers['X-API-Key'], 'test-key');
     assert.equal(options.maxResponseBytes, 2 * 1024 * 1024);
-    return Response.json(page(1, 2, [
+    return Response.json(page(1, 3, [
       latestRow({ sensorsId: 1, locationsId: 10, value: 55, coordinates: { latitude: 0, longitude: 0 }, datetime: { utc: recent, local: recent } }),
       latestRow({ sensorsId: 2, locationsId: 20, value: 10, coordinates: { latitude: 45, longitude: 45 }, datetime: { utc: recent, local: recent } }),
+      latestRow({ sensorsId: 3, locationsId: 30, value: 9999, coordinates: { latitude: 0, longitude: 0 }, datetime: { utc: recent, local: recent } }),
     ]));
   };
   sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
@@ -538,6 +554,8 @@ test('worst and nearby routes share one complete normalized corpus', async () =>
     assert.equal(worst.status, 200);
     assert.equal(worst.body.readings.length, 2);
     assert.equal(worst.body.readings[0].locationId, 10);
+    assert.equal(worst.body.sample.invalidRows, 1);
+    assert.equal(worst.body.sample.rejectionReasons.invalidValue, 1);
 
     const nearby = await httpJson(`${app.base}${OPENAQ_NEARBY_PATH}?lat=0&lon=0&radius=25000`);
     assert.equal(nearby.status, 200);
@@ -545,6 +563,34 @@ test('worst and nearby routes share one complete normalized corpus', async () =>
     assert.equal(nearby.body.readings[0].lat, 0);
     assert.equal(nearby.body.readings[0].lon, 0);
     assert.equal(upstreamCalls, 1);
+  } finally {
+    await app.close();
+    globalThis.fetch = originalFetch;
+    if (saved === undefined) delete process.env.OPENAQ_API_KEY;
+    else process.env.OPENAQ_API_KEY = saved;
+  }
+});
+
+test('sentinel-only corpus fails closed and is not cached', async () => {
+  const originalFetch = globalThis.fetch;
+  const saved = process.env.OPENAQ_API_KEY;
+  process.env.OPENAQ_API_KEY = 'test-key';
+  let upstreamCalls = 0;
+  const recent = new Date(Date.now() - 60_000).toISOString();
+  globalThis.fetch = async () => {
+    upstreamCalls += 1;
+    return Response.json(page(1, 1, [latestRow({ value: 9999, datetime: { utc: recent, local: recent } })]));
+  };
+  sidecar._setSidecarCachedForTests('openaq-v3-pm25-corpus', null, 1);
+  const app = await startSidecar();
+  try {
+    const first = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
+    const second = await httpJson(`${app.base}${OPENAQ_WORST_PATH}`);
+    assert.equal(first.status, 502);
+    assert.equal(first.body.error, 'OpenAQ returned no usable readings');
+    assert.equal(second.status, 502);
+    assert.equal(second.body.error, 'OpenAQ returned no usable readings');
+    assert.equal(upstreamCalls, 2);
   } finally {
     await app.close();
     globalThis.fetch = originalFetch;

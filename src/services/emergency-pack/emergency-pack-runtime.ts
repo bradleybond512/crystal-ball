@@ -569,6 +569,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     ok: boolean;
     reason?: string;
   }>();
+  const pendingAlertRevisions = new Map<string, string[]>();
   let offlineMapLifecycleTail = Promise.resolve();
   let alertRevisionTail = Promise.resolve();
   let latestAlertSourceRevision: string | null = null;
@@ -961,18 +962,29 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       .filter((entry): entry is { place: RuntimePlace; scope: EmergencyPackCaptureScope } => entry.scope !== null);
     const persistence = alertRevisionTail.catch(() => undefined).then(async () => {
       await Promise.all(scopes.map(async ({ place, scope }) => {
-        let result: { ok: boolean; reason?: string };
-        try {
-          result = await store.invalidateArtifacts({
-            placeId: scope.placeId,
-            profileFingerprint: scope.profileFingerprint,
-            kinds: ['alerts'],
-            capturedAt: dependencies.now(),
-            sourceRevision,
-          });
-        } catch {
-          result = { ok: false, reason: 'storage-failure' };
+        const pendingKey = `${scope.placeId}\u0000${scope.profileFingerprint}`;
+        const revisions = [...(pendingAlertRevisions.get(pendingKey) ?? []), sourceRevision];
+        let result: { ok: boolean; reason?: string } = { ok: true };
+        let failedAt = -1;
+        for (const [index, revision] of revisions.entries()) {
+          try {
+            result = await store.invalidateArtifacts({
+              placeId: scope.placeId,
+              profileFingerprint: scope.profileFingerprint,
+              kinds: ['alerts'],
+              capturedAt: dependencies.now(),
+              sourceRevision: revision,
+            });
+          } catch {
+            result = { ok: false, reason: 'storage-failure' };
+          }
+          if (!result.ok) {
+            failedAt = index;
+            break;
+          }
         }
+        if (failedAt >= 0) pendingAlertRevisions.set(pendingKey, revisions.slice(failedAt));
+        else pendingAlertRevisions.delete(pendingKey);
         alertPersistenceResults.set(place.id, {
           epoch,
           profileFingerprint: scope.profileFingerprint,
@@ -1117,6 +1129,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       captureAlertEpochs.clear();
       detailedOperationStates.clear();
       alertPersistenceResults.clear();
+      pendingAlertRevisions.clear();
       operationQueues.clear();
     },
   };

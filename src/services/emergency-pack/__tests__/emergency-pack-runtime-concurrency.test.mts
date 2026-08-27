@@ -402,7 +402,7 @@ test('prune release finishes before a new place can stage an offline-map generat
   harness.runtime.destroy();
 });
 
-function createAlertRevisionRaceHarness() {
+function createAlertRevisionRaceHarness(options: { initiallyReady?: boolean; failFirstRevisionB?: boolean } = {}) {
   const place: Place = { id: 'home', name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 };
   const profileFingerprint = 'profile-home';
   const revisionA = 'a'.repeat(64);
@@ -410,13 +410,14 @@ function createAlertRevisionRaceHarness() {
   let alertSequence = 0;
   let alertSubscriber: ((event: { sourceRevision: string }) => void) | null = null;
   let state = {
-    status: 'not-saved' as 'ready' | 'not-saved',
-    packId: null as string | null,
+    status: (options.initiallyReady ? 'ready' : 'not-saved') as 'ready' | 'not-saved',
+    packId: options.initiallyReady ? 'pack-old-a' : null as string | null,
     profileFingerprint,
   };
   const alertCaptured = deferred();
   const continueCapture = deferred();
   const invalidations: string[] = [];
+  let failedRevisionB = false;
 
   function artifact(kind: string, scope: EmergencyPackCaptureScope): EmergencyPackCapturedArtifact {
     const body = JSON.stringify({
@@ -457,10 +458,16 @@ function createAlertRevisionRaceHarness() {
       },
       async invalidateArtifacts(input: { kinds: readonly string[]; sourceRevision?: string }) {
         if (input.kinds.includes('alerts') && input.sourceRevision) {
-          if (currentRevision !== input.sourceRevision) alertSequence += 1;
-          currentRevision = input.sourceRevision;
           invalidations.push(input.sourceRevision);
-          state = { status: 'not-saved', packId: null, profileFingerprint };
+          if (options.failFirstRevisionB && input.sourceRevision === 'b'.repeat(64) && !failedRevisionB) {
+            failedRevisionB = true;
+            return { ok: false, reason: 'storage-failure' };
+          }
+          if (currentRevision !== input.sourceRevision) {
+            alertSequence += 1;
+            currentRevision = input.sourceRevision;
+            state = { status: 'not-saved', packId: null, profileFingerprint };
+          }
         }
         return { ok: true };
       },
@@ -537,6 +544,26 @@ test('capture does not rebind an old alert A artifact after authoritative A to B
   harness.runtime.destroy();
 });
 
+test('failed B persistence is replayed before A can clear the fail-closed alert barrier', async () => {
+  const harness = createAlertRevisionRaceHarness({ initiallyReady: true, failFirstRevisionB: true });
+  const emitted: string[] = [];
+  harness.runtime.subscribe(({ status }) => { emitted.push(status); });
+  const capture = harness.runtime.capture(harness.place, true);
+
+  await within(harness.alertCaptured);
+  harness.emitAlertRevision(harness.revisionB);
+  harness.emitAlertRevision(harness.revisionA);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const persistenceAttempts = [...harness.invalidations];
+  harness.continueCapture();
+  const captured = await within(capture);
+
+  assert.deepEqual(persistenceAttempts, [harness.revisionB, harness.revisionB, harness.revisionA]);
+  assert.notEqual(captured.status, 'ready', 'the old A pack must stay revoked after a failed B transition');
+  assert.equal(emitted.includes('ready'), false);
+  harness.runtime.destroy();
+});
+
 test('verified offline-map tile resolution holds the lifecycle lease until its cache digest read completes', async () => {
   const place: Place = { id: 'home', name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 };
   const profileFingerprint = 'profile-home';
@@ -566,15 +593,24 @@ test('verified offline-map tile resolution holds the lifecycle lease until its c
   });
   const tileReadStarted = deferred();
   const releaseTileRead = deferred();
+  const failingTileReadStarted = deferred();
+  const releaseFailingTileRead = deferred();
   const secondPruneStarted = deferred();
+  const thirdPruneStarted = deferred();
   let savedPlacesSubscriber: (() => void) | null = null;
   let pruneCalls = 0;
+  let rejectTileRead = false;
   const ready = { status: 'ready' as const, packId: 'pack-home', profileFingerprint };
   const cache: ExactOfflineMapCache = {
     async put() { return undefined; },
     async delete() { return true; },
     async match(key) {
       if (String(key) !== cacheKey) return undefined;
+      if (rejectTileRead) {
+        failingTileReadStarted.resolve();
+        await releaseFailingTileRead.promise;
+        throw new Error('cache read failed');
+      }
       tileReadStarted.resolve();
       await releaseTileRead.promise;
       return new Response(bytes.slice(), { status: 200, headers: { 'content-type': 'image/png' } });
@@ -597,6 +633,7 @@ test('verified offline-map tile resolution holds the lifecycle lease until its c
       async prune() {
         pruneCalls += 1;
         if (pruneCalls === 2) secondPruneStarted.resolve();
+        if (pruneCalls === 3) thirdPruneStarted.resolve();
       },
     }),
     createCoordinator: createEmergencyPackCoordinator,
@@ -628,5 +665,16 @@ test('verified offline-map tile resolution holds the lifecycle lease until its c
 
   assert.equal(pruneStartedBeforeTileReadFinished, false, 'prune must wait for the exact cache read and digest');
   assert.deepEqual(new Uint8Array(tile?.data ?? new ArrayBuffer(0)), bytes);
+
+  rejectTileRead = true;
+  const failedResolution = runtime.resolveOfflineMapTile(sourceUrl);
+  await within(failingTileReadStarted.promise);
+  savedPlacesSubscriber?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const pruneStartedBeforeFailedReadFinished = pruneCalls > 2;
+  releaseFailingTileRead.resolve();
+  assert.equal(await within(failedResolution), null);
+  await within(thirdPruneStarted.promise);
+  assert.equal(pruneStartedBeforeFailedReadFinished, false, 'a failed cache read must hold then release the lease');
   runtime.destroy();
 });

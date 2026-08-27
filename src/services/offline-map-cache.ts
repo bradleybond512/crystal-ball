@@ -69,12 +69,26 @@ export interface ExactOfflineMapCleanupCoordinator {
   prepareCapture(cache: ExactOfflineMapCache): Promise<{ ok: boolean; reason?: string }>;
   stageGeneration(generationId: string, cacheKeys: string[]): void;
   adoptGeneration(generationId: string, cacheKeys: string[]): void;
+  reconcileRecoveredGeneration(input: {
+    generationId: string;
+    cacheKeys: string[];
+  }): ExactOfflineMapRecoveredOwnershipResult;
   releaseGeneration(input: {
     generationId: string;
     cacheKeys: string[];
     cache: ExactOfflineMapCache;
   }): Promise<{ ok: boolean; reason?: string }>;
 }
+
+export type ExactOfflineMapRecoveredOwnershipResult =
+  | {
+    ok: true;
+    disposition: 'claimed-provisional' | 'already-owned' | 'unrelated-tombstone-preserved';
+  }
+  | {
+    ok: false;
+    reason: 'cleanup-tombstone-invalid' | 'cleanup-tombstone-storage-failure';
+  };
 
 export interface OfflineMapTilePlan {
   ok: boolean;
@@ -336,6 +350,31 @@ export function createExactOfflineMapCleanupCoordinator(input: {
       removeTombstone();
       activeGenerations.delete(generationId);
     },
+    reconcileRecoveredGeneration({ generationId, cacheKeys }): ExactOfflineMapRecoveredOwnershipResult {
+      if (!validateCleanupIdentity(generationId, cacheKeys)) {
+        return { ok: false, reason: 'cleanup-tombstone-invalid' };
+      }
+      let tombstone: ExactOfflineMapCleanupTombstone | null;
+      try {
+        tombstone = readTombstone();
+      } catch {
+        return { ok: false, reason: 'cleanup-tombstone-invalid' };
+      }
+      if (!tombstone) {
+        activeGenerations.delete(generationId);
+        return { ok: true, disposition: 'already-owned' };
+      }
+      if (!sameCleanupIdentity(tombstone, generationId, cacheKeys)) {
+        return { ok: true, disposition: 'unrelated-tombstone-preserved' };
+      }
+      try {
+        removeTombstone();
+      } catch {
+        return { ok: false, reason: 'cleanup-tombstone-storage-failure' };
+      }
+      activeGenerations.delete(generationId);
+      return { ok: true, disposition: 'claimed-provisional' };
+    },
     async releaseGeneration({ generationId, cacheKeys, cache }): Promise<{ ok: boolean; reason?: string }> {
       const tombstone = readTombstone();
       if (!tombstone) writeTombstone(generationId, cacheKeys);
@@ -592,6 +631,22 @@ export async function captureOfflineMapTilesExact(input: {
   const results = Array.from<ExactOfflineMapTile | null>({ length: total }).fill(null);
   let reservedBytes = 0;
   let cursor = 0;
+  let releasePromise: Promise<{ ok: boolean; reason?: string }> | null = null;
+
+  const releaseStagedGeneration = (): Promise<{ ok: boolean; reason?: string }> => {
+    releasePromise ??= (async () => {
+      try {
+        return await input.cleanup!.releaseGeneration({
+          generationId,
+          cacheKeys: generationCacheKeys,
+          cache: input.cache,
+        });
+      } catch {
+        return { ok: false, reason: 'cleanup-tombstone-storage-failure' };
+      }
+    })();
+    return releasePromise;
+  };
 
   const worker = async (): Promise<void> => {
     while (cursor < total) {
@@ -613,43 +668,31 @@ export async function captureOfflineMapTilesExact(input: {
       if (tile) results[index] = tile;
     }
   };
-  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  const workerSettlements = await Promise.allSettled(
+    Array.from({ length: concurrency }, () => worker()),
+  );
+  const workerFailed = workerSettlements.some(({ status }) => status === 'rejected');
 
   const tiles = results.filter((tile): tile is ExactOfflineMapTile => tile !== null);
   const totalBytes = tiles.reduce((sum, tile) => sum + tile.byteLength, 0);
-  if (tiles.length !== total) {
-    let cleanup: { ok: boolean; reason?: string };
-    try {
-      cleanup = await input.cleanup.releaseGeneration({
-        generationId,
-        cacheKeys: generationCacheKeys,
-        cache: input.cache,
-      });
-    } catch {
-      cleanup = { ok: false, reason: 'cleanup-tombstone-storage-failure' };
-    }
+  if (workerFailed || tiles.length !== total) {
+    const cleanup = await releaseStagedGeneration();
     return {
       ok: false,
       total,
       downloaded: tiles.length,
       totalBytes,
       tiles,
-      reason: cleanup.ok ? 'tile-verification-incomplete' : cleanup.reason ?? 'generation-cleanup-pending',
+      reason: cleanup.ok
+        ? workerFailed ? 'tile-worker-failed' : 'tile-verification-incomplete'
+        : cleanup.reason ?? 'generation-cleanup-pending',
       ...(!cleanup.ok ? { cleanupTombstone: { generationId, cacheKeys: [...generationCacheKeys] } } : {}),
     };
   }
   const bounds = validateOfflineMapCaptureBounds(tiles);
   let cleanup: { ok: boolean; reason?: string } = { ok: true };
   if (!bounds.ok) {
-    try {
-      cleanup = await input.cleanup.releaseGeneration({
-        generationId,
-        cacheKeys: generationCacheKeys,
-        cache: input.cache,
-      });
-    } catch {
-      cleanup = { ok: false, reason: 'cleanup-tombstone-storage-failure' };
-    }
+    cleanup = await releaseStagedGeneration();
   }
   return {
     ok: bounds.ok,

@@ -90,7 +90,16 @@ import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOut
 import { fetchGpsInterference } from '@/services/gps-interference';
 import { situationEngine } from '@/services/situation-engine';
 import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
-import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchUcdpEvents, deduplicateAgainstAcled, fetchIranEvents } from '@/services/conflict';
+import {
+  assessUcdpDatasetCurrency,
+  fetchConflictEvents,
+  fetchUcdpClassifications,
+  fetchHapiSummary,
+  fetchUcdpEvents,
+  deduplicateAgainstAcled,
+  fetchIranEvents,
+  type UcdpDataset,
+} from '@/services/conflict';
 import { fetchUnhcrPopulation } from '@/services/displacement';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { fetchSecurityAdvisories } from '@/services/security-advisories';
@@ -101,7 +110,7 @@ import { getTopActiveGeoHubs } from '@/services/geo-activity';
 import { getTopActiveHubs } from '@/services/tech-activity';
 import { debounce, getCircuitBreakerCooldownInfo } from '@/utils';
 import { isFeatureAvailable } from '@/services/runtime-config';
-import { getApiBaseUrl } from '@/services/runtime';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 import { getAiFlowSettings } from '@/services/ai-flow-settings';
 import { t, getCurrentLanguage } from '@/services/i18n';
 import { getHydratedData } from '@/services/bootstrap';
@@ -392,6 +401,15 @@ import {
   ucdpEventsToObservations,
 } from '@/services/intelligence/conflict-observation-adapters';
 import { slog } from '@/services/structured-log';
+
+function recordUcdpDatasetState(sourceId: 'ucdp' | 'ucdp_events', dataset: UcdpDataset, itemCount: number): void {
+  const currency = assessUcdpDatasetCurrency(dataset);
+  if (currency.current) {
+    dataFreshness.recordUpdate(sourceId, itemCount);
+    return;
+  }
+  dataFreshness.recordError(sourceId, currency.reason);
+}
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -2384,6 +2402,7 @@ export class DataLoaderManager implements AppModule {
 
   async loadIntelligenceSignals(): Promise<void> {
  const tasks: Promise<void>[] = [];
+ const ucdpAvailable = isDesktopRuntime() && isFeatureAvailable('ucdpEvents');
 
  tasks.push((async () => {
  try {
@@ -2457,16 +2476,18 @@ export class DataLoaderManager implements AppModule {
  }
  })());
 
+ if (ucdpAvailable) {
  tasks.push((async () => {
  try {
- const classifications = await fetchUcdpClassifications();
+ const { classifications, dataset } = await fetchUcdpClassifications();
  ingestUcdpForCII(classifications);
- if (classifications.size > 0) dataFreshness.recordUpdate('ucdp', classifications.size);
+ if (classifications.size > 0) recordUcdpDatasetState('ucdp', dataset, classifications.size);
  } catch (error) {
  console.error('[Intelligence] UCDP fetch failed:', error);
  dataFreshness.recordError('ucdp', String(error));
  }
  })());
+ }
 
  tasks.push((async () => {
  try {
@@ -2569,14 +2590,11 @@ export class DataLoaderManager implements AppModule {
  }
  })());
 
+ if (ucdpAvailable) {
  tasks.push((async () => {
  try {
  const protestEvents = await protestsTask;
- let result = await fetchUcdpEvents();
- for (let attempt = 1; attempt < 3 && !result.success; attempt++) {
- await new Promise(r => setTimeout(r, 15_000));
- result = await fetchUcdpEvents();
- }
+ const result = await fetchUcdpEvents();
  if (!result.success) {
  dataFreshness.recordError('ucdp_events', 'UCDP events unavailable (retaining prior event state)');
  return;
@@ -2585,20 +2603,24 @@ export class DataLoaderManager implements AppModule {
  latitude: e.lat, longitude: e.lon, event_date: e.time.toISOString(), fatalities: e.fatalities ?? 0,
  }));
  const events = deduplicateAgainstAcled(result.data, acledEvents);
+ const ucdpIsCurrent = assessUcdpDatasetCurrency(result.dataset).current;
+ if (ucdpIsCurrent) {
  const ucdpObservations = this.dedupeConflictObservations(
    ucdpEventsToObservations(events),
  );
  if (ucdpObservations.length > 0) ingestObservations(ucdpObservations);
+ }
  (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.setEvents(events);
  if (this.ctx.mapLayers.ucdpEvents) {
  this.ctx.map?.setUcdpEvents(events);
  }
- if (events.length > 0) dataFreshness.recordUpdate('ucdp_events', events.length);
+ if (events.length > 0) recordUcdpDatasetState('ucdp_events', result.dataset, events.length);
  } catch (error) {
  console.error('[Intelligence] UCDP events fetch failed:', error);
  dataFreshness.recordError('ucdp_events', String(error));
  }
  })());
+ }
 
  // Air strikes & drone events (ACLED)
  tasks.push((async () => {

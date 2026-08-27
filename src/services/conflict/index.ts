@@ -17,13 +17,11 @@ import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
 
 const client = new ConflictServiceClient('', { fetch: (...args) => globalThis.fetch(...args) });
 const acledBreaker = createCircuitBreaker<ListAcledEventsResponse>({ name: 'ACLED Conflicts', cacheTtlMs: 10 * 60 * 1000, persistCache: true });
-const ucdpBreaker = createCircuitBreaker<ListUcdpEventsResponse>({ name: 'UCDP Events', cacheTtlMs: 10 * 60 * 1000, persistCache: true });
+const ucdpBreaker = createCircuitBreaker<ListUcdpEventsResponse>({ name: 'UCDP Events', cacheTtlMs: 10 * 60 * 1000, persistCache: false });
 const hapiBreaker = createCircuitBreaker<GetHumanitarianSummaryResponse>({ name: 'HDX HAPI', cacheTtlMs: 10 * 60 * 1000, persistCache: true });
 const iranBreaker = createCircuitBreaker<ListIranEventsResponse>({ name: 'Iran Events', cacheTtlMs: 10 * 60 * 1000, persistCache: true });
 
 const emptyIranFallback: ListIranEventsResponse = { events: [], scrapedAt: 0 };
-
-
 
 // ---- Exported Types (match legacy shapes exactly) ----
 
@@ -56,12 +54,68 @@ export type ConflictIntensity = 'none' | 'minor' | 'war';
 export interface UcdpConflictStatus {
   location: string;
   intensity: ConflictIntensity;
-  conflictId?: number;
+  countryId: number;
+  stateBased: boolean;
+  nonState: boolean;
+  oneSided: boolean;
   conflictName?: string;
   year: number;
   typeOfConflict?: number;
   sideA?: string;
   sideB?: string;
+}
+
+export interface UcdpHistoricalWindowDataset {
+  kind: 'historical_window';
+  version: '26.1';
+  windowStart: '2025-09-02';
+  windowEnd: '2025-12-31';
+}
+
+export interface UcdpAnnualClassificationDataset {
+  kind: 'annual_classification';
+  version: '26.1';
+  year: 2025;
+}
+
+export type UcdpDataset = UcdpHistoricalWindowDataset | UcdpAnnualClassificationDataset;
+
+const UCDP_EVENT_DATASET: UcdpHistoricalWindowDataset = {
+  kind: 'historical_window',
+  version: '26.1',
+  windowStart: '2025-09-02',
+  windowEnd: '2025-12-31',
+};
+
+const UCDP_CLASSIFICATION_DATASET: UcdpAnnualClassificationDataset = {
+  kind: 'annual_classification',
+  version: '26.1',
+  year: 2025,
+};
+
+export function assessUcdpDatasetCurrency(
+  dataset: UcdpDataset,
+  now = Date.now(),
+): { current: boolean; reason: string } {
+  if (dataset.kind === 'historical_window') {
+    return {
+      current: false,
+      reason: `UCDP ${dataset.version} historical window ${dataset.windowStart} through ${dataset.windowEnd}`,
+    };
+  }
+  const currentYear = new Date(now).getUTCFullYear();
+  if (dataset.year === currentYear) return { current: true, reason: '' };
+  const rolloverEnds = Date.UTC(currentYear, 3, 1);
+  if (dataset.year === currentYear - 1 && now < rolloverEnds) {
+    return {
+      current: false,
+      reason: `UCDP ${dataset.version} ${dataset.year} annual rollover; ${currentYear} classification unavailable`,
+    };
+  }
+  return {
+    current: false,
+    reason: `UCDP ${dataset.version} historical annual classification for ${dataset.year}; current year is ${currentYear}`,
+  };
 }
 
 export interface HapiConflictSummary {
@@ -125,7 +179,7 @@ function toUcdpGeoEvent(proto: ProtoUcdpEvent): UcdpGeoEvent {
  deaths_best: proto.deathsBest,
  deaths_low: proto.deathsLow,
  deaths_high: proto.deathsHigh,
- type_of_violence: VIOLENCE_TYPE_REVERSE[proto.violenceType] || 'state-based',
+ type_of_violence: VIOLENCE_TYPE_REVERSE[proto.violenceType] ?? 'state-based',
  source_original: proto.sourceOriginal,
   };
 }
@@ -150,62 +204,6 @@ function toHapiSummary(proto: ProtoHumanSummary): HapiConflictSummary {
  fatalitiesTotalPoliticalViolence: proto.conflictFatalities || 0,
  fatalitiesTotalCivilianTargeting: 0, // Included in conflictFatalities
   };
-}
-
-// ---- UCDP classification derivation heuristic ----
-
-function deriveUcdpClassifications(events: ProtoUcdpEvent[]): Map<string, UcdpConflictStatus> {
-  const byCountry = new Map<string, ProtoUcdpEvent[]>();
-  for (const e of events) {
- const country = e.country;
- if (!byCountry.has(country)) byCountry.set(country, []);
- byCountry.get(country)!.push(e);
-  }
-
-  const now = Date.now();
-  const twoYearsMs = 2 * 365 * 24 * 60 * 60 * 1000;
-  const result = new Map<string, UcdpConflictStatus>();
-
-  for (const [country, countryEvents] of byCountry) {
- // Filter to trailing 2-year window
- const recentEvents = countryEvents.filter(e => (now - e.dateStart) < twoYearsMs);
- const totalDeaths = recentEvents.reduce((sum, e) => sum + e.deathsBest, 0);
- const eventCount = recentEvents.length;
-
- let intensity: ConflictIntensity;
- if (totalDeaths > 1000 || eventCount > 100) {
- intensity = 'war';
- } else if (eventCount > 10) {
- intensity = 'minor';
- } else {
- intensity = 'none';
- }
-
- // Find the highest-death event for sideA/sideB
- let maxDeathEvent: ProtoUcdpEvent | undefined;
- for (const e of recentEvents) {
- if (!maxDeathEvent || e.deathsBest > maxDeathEvent.deathsBest) {
- maxDeathEvent = e;
- }
- }
-
- // Most recent event year
- const mostRecentEvent = recentEvents.reduce<ProtoUcdpEvent | undefined>(
- (latest, e) => (!latest || e.dateStart > latest.dateStart) ? e : latest,
- undefined,
- );
- const year = mostRecentEvent ? new Date(mostRecentEvent.dateStart).getFullYear() : new Date().getFullYear();
-
- result.set(country, {
- location: country,
- intensity,
- year,
- sideA: maxDeathEvent?.sideA,
- sideB: maxDeathEvent?.sideB,
- });
-  }
-
-  return result;
 }
 
 // ---- Haversine helper (ported exactly from legacy ucdp-events.ts) ----
@@ -242,14 +240,14 @@ export async function fetchConflictEvents(): Promise<ConflictData> {
  return client.listAcledEvents({ country: '', start: 0, end: 0, pageSize: 0, cursor: '' });
   }, emptyAcledFallback);
 
-  const events = resp.events.map(toConflictEvent);
+  const events = resp.events.map((event) => toConflictEvent(event));
 
   const byCountry = new Map<string, ConflictEvent[]>();
   let totalFatalities = 0;
 
   for (const event of events) {
  totalFatalities += event.fatalities;
- const existing = byCountry.get(event.country) || [];
+ const existing = byCountry.get(event.country) ?? [];
  existing.push(event);
  byCountry.set(event.country, existing);
   }
@@ -262,15 +260,42 @@ export async function fetchConflictEvents(): Promise<ConflictData> {
   };
 }
 
-export async function fetchUcdpClassifications(): Promise<Map<string, UcdpConflictStatus>> {
-  const resp = await ucdpBreaker.execute(async () => {
- return client.listUcdpEvents({ country: '', start: 0, end: 0, pageSize: 0, cursor: '' });
-  }, emptyUcdpFallback);
-
-  // Don't let the breaker cache empty responses — clear so next call retries
-  if (resp.events.length === 0) ucdpBreaker.clearCache();
-
-  return deriveUcdpClassifications(resp.events);
+export async function fetchUcdpClassifications(): Promise<{
+  classifications: Map<string, UcdpConflictStatus>;
+  dataset: UcdpAnnualClassificationDataset;
+}> {
+  const response = await globalThis.fetch('/api/ucdp-classifications');
+  if (!response.ok) throw new Error('UCDP classifications unavailable');
+  const payload = await response.json() as unknown;
+  if (!payload || typeof payload !== 'object') throw new Error('Invalid UCDP classifications');
+  const record = payload as Record<string, unknown>;
+  const dataset = record.dataset as Record<string, unknown> | undefined;
+  if (record.version !== '26.1' || !Array.isArray(record.classifications)
+    || dataset?.kind !== UCDP_CLASSIFICATION_DATASET.kind
+    || dataset.version !== UCDP_CLASSIFICATION_DATASET.version || dataset.year !== UCDP_CLASSIFICATION_DATASET.year
+    || !Number.isSafeInteger(record.totalCount) || record.totalCount !== record.classifications.length) {
+    throw new Error('Invalid UCDP classifications');
+  }
+  const result = new Map<string, UcdpConflictStatus>();
+  for (const raw of record.classifications) {
+    if (!raw || typeof raw !== 'object') throw new Error('Invalid UCDP classifications');
+    const item = raw as Record<string, unknown>;
+    if (typeof item.country !== 'string' || !item.country
+      || !Number.isSafeInteger(item.countryId) || item.year !== 2025
+      || typeof item.stateBased !== 'boolean' || typeof item.nonState !== 'boolean' || typeof item.oneSided !== 'boolean'
+      || result.has(item.country)) throw new Error('Invalid UCDP classifications');
+    result.set(item.country, {
+      location: item.country,
+      countryId: item.countryId as number,
+      intensity: 'none',
+      year: item.year as number,
+      stateBased: item.stateBased,
+      nonState: item.nonState,
+      oneSided: item.oneSided,
+    });
+  }
+  if (result.size === 0) throw new Error('No usable UCDP classifications');
+  return { classifications: result, dataset: UCDP_CLASSIFICATION_DATASET };
 }
 
 const hapiLimiter = createConcurrencyLimiter(3);
@@ -304,23 +329,25 @@ interface UcdpEventsResponse {
   count: number;
   data: UcdpGeoEvent[];
   cached_at: string;
+  dataset: UcdpHistoricalWindowDataset;
 }
 
 export async function fetchUcdpEvents(): Promise<UcdpEventsResponse> {
   const resp = await ucdpBreaker.execute(async () => {
- return client.listUcdpEvents({ country: '', start: 0, end: 0, pageSize: 0, cursor: '' });
+ return client.listUcdpEvents({ country: '', start: 0, end: 0, pageSize: 100, cursor: '' });
   }, emptyUcdpFallback);
 
   // Don't let the breaker cache empty responses — clear so next call retries
   if (resp.events.length === 0) ucdpBreaker.clearCache();
 
-  const events = resp.events.map(toUcdpGeoEvent);
+  const events = resp.events.map((event) => toUcdpGeoEvent(event));
 
   return {
  success: events.length > 0,
  count: events.length,
  data: events,
  cached_at: '',
+ dataset: UCDP_EVENT_DATASET,
   };
 }
 

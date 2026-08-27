@@ -191,9 +191,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isLocalOnlyApiTarget(target: string): boolean {
+const LOCAL_ONLY_API_TARGETS = new Set([
+  '/api/conflict/v1/list-ucdp-events',
+  '/api/ucdp-classifications',
+]);
+
+export function isLocalOnlyApiTarget(target: string): boolean {
   // Security boundary: endpoints that can carry local secrets must use the
-  // `/api/local-*` prefix so cloud fallback is automatically blocked.
+  // `/api/local-*` prefix or an explicitly reviewed exact path.
+  const path = target.split('?')[0] ?? target;
+  if (LOCAL_ONLY_API_TARGETS.has(path)) {
+    return true;
+  }
   return target.startsWith('/api/local-');
 }
 

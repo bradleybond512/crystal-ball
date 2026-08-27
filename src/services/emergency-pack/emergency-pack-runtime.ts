@@ -384,6 +384,7 @@ export function createEmergencyPackOfflineMapLifecycle(
 ): {
   verifyArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<boolean>;
   adoptArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
+  reconcileRecoveredArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
   releaseArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
   releaseArtifact: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
 } {
@@ -414,6 +415,21 @@ export function createEmergencyPackOfflineMapLifecycle(
       throw new Error('offline map generation adoption failed');
     }
   };
+  const reconcileRecoveredArtifactBody = (kind: EmergencyPackArtifactKind, body: string): Promise<void> => {
+    if (kind !== 'offline-map') return Promise.resolve();
+    const evidence = parseOfflineMapGenerationEvidence(body);
+    if (!evidence) return Promise.reject(new Error('invalid offline map artifact evidence'));
+    try {
+      const reconciled = cleanup?.reconcileRecoveredGeneration({
+        generationId: evidence.generationId,
+        cacheKeys: evidence.tiles.map(({ cacheKey }) => cacheKey),
+      });
+      if (!reconciled?.ok) throw new Error('reconciliation failed');
+      return Promise.resolve();
+    } catch {
+      return Promise.reject(new Error('offline map recovered generation reconciliation failed'));
+    }
+  };
   const releaseArtifactBody = async (kind: EmergencyPackArtifactKind, body: string): Promise<void> => {
     if (kind !== 'offline-map') return;
     const evidence = parseOfflineMapGenerationEvidence(body);
@@ -434,6 +450,7 @@ export function createEmergencyPackOfflineMapLifecycle(
   return {
     verifyArtifactBody,
     adoptArtifactBody,
+    reconcileRecoveredArtifactBody,
     releaseArtifactBody,
     async releaseArtifact(artifact): Promise<void> {
       if (artifact.kind !== 'offline-map') return;
@@ -581,14 +598,15 @@ export function createEmergencyPackOfflineMapTileResolver(
           || candidate.expiresAt <= scope.now) continue;
         try {
           const cache = await dependencies.openCache(MAP_CACHE_NAME);
-          return await readOfflineMapTileAtIndexExact({
+          const resolved = await readOfflineMapTileAtIndexExact({
             generationId: candidate.generationId,
             tileIndex: candidate.tileIndex,
             tile: candidate.tile,
             cache,
           });
+          if (resolved !== null) return resolved;
         } catch {
-          return null;
+          // A candidate-local cache failure must not hide a later verified overlapping pack.
         }
       }
     }
@@ -1419,6 +1437,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
         createPackId: () => crypto.randomUUID(),
         verifyArtifactBody: offlineMapLifecycle.verifyArtifactBody,
         adoptArtifactBody: offlineMapLifecycle.adoptArtifactBody,
+        reconcileRecoveredArtifactBody: offlineMapLifecycle.reconcileRecoveredArtifactBody,
         releaseArtifactBody: offlineMapLifecycle.releaseArtifactBody,
       };
       return createEmergencyPackStore(storeDependencies);

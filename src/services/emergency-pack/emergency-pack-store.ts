@@ -106,6 +106,10 @@ interface EmergencyPackStoreDependencies {
     kind: EmergencyPackArtifactKind,
     body: string,
   ): void | Promise<void>;
+  reconcileRecoveredArtifactBody?(
+    kind: EmergencyPackArtifactKind,
+    body: string,
+  ): void | Promise<void>;
   releaseArtifactBody?(
     kind: EmergencyPackArtifactKind,
     body: string,
@@ -724,20 +728,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function publishRecovered(manifest: EmergencyPackManifest): Promise<boolean> {
-    const key = manifestKey(manifest.placeId, manifest.packId);
-    const encoded = metadata.getItem(key);
-    if (encoded === null) return false;
-    const recoveredHead: PackHead = {
-      schemaVersion: 2,
-      packId: manifest.packId,
-      placeId: manifest.placeId,
-      profileFingerprint: manifest.profileFingerprint,
-      manifestKey: key,
-      manifestSha256: await digest(encoded),
-      previousPackId: manifest.previousPackId,
-      committedAt: manifest.committedAt,
-    };
+  function publishRecovered(manifest: EmergencyPackManifest, recoveredHead: PackHead): boolean {
     const activeHeadKey = headKey(manifest.placeId);
     const encodedExistingHead = metadata.getItem(activeHeadKey);
     const encodedRecoveredHead = JSON.stringify(recoveredHead);
@@ -764,31 +755,76 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
+  async function reconcileRecoveredManifest(
+    manifest: EmergencyPackManifest,
+  ): Promise<EmergencyPackManifest | null> {
+    const receipt = manifest.receipts.find(({ kind }) => kind === 'offline-map');
+    if (receipt) {
+      const body = await bodies.get(receipt.cacheKey);
+      if (body === null
+        || new TextEncoder().encode(body).byteLength !== receipt.byteLength
+        || bodyCapturedAt(body) !== Date.parse(receipt.capturedAt)
+        || await digest(body) !== receipt.sha256
+        || !await verifyBody('offline-map', body)) return null;
+      await dependencies.reconcileRecoveredArtifactBody?.('offline-map', body);
+    }
+    const current = applyInvalidations(manifest);
+    const alertReceipt = current.receipts.find(({ kind }) => kind === 'alerts');
+    const alertBinding = typeof alertReceipt?.sourceRevision === 'string'
+      && typeof alertReceipt.alertSequence === 'number'
+      ? { sourceRevision: alertReceipt.sourceRevision, alertSequence: alertReceipt.alertSequence }
+      : null;
+    return alertBindingIsCurrent(current.placeId, current.profileFingerprint, alertBinding)
+      ? current
+      : { ...current, receipts: current.receipts.filter(({ kind }) => kind !== 'alerts') };
+  }
+
   async function readVerifiedActiveManifest(
     scope: EmergencyPackScope,
     head: PackHead | null,
   ): Promise<EmergencyPackManifest | null> {
     if (!head) return null;
     const verified = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
-    const active = verified ? applyInvalidations(verified) : null;
-    return active?.packId === head.packId
-      && active.placeId === scope.placeId
-      && active.profileFingerprint === scope.profileFingerprint
-      ? active
+    return verified?.packId === head.packId
+      && verified.placeId === scope.placeId
+      && verified.profileFingerprint === scope.profileFingerprint
+      ? verified
       : null;
+  }
+
+  async function recoverFallbackManifest(
+    key: string,
+    scope: EmergencyPackScope,
+  ): Promise<EmergencyPackManifest | null> {
+    const verified = await loadVerifiedManifest(key);
+    if (verified?.profileFingerprint !== scope.profileFingerprint) return null;
+    if (stateForManifest(applyInvalidations(verified), scope).status !== 'ready') return null;
+    const encoded = metadata.getItem(key);
+    if (encoded === null) return null;
+    const recoveredHead: PackHead = {
+      schemaVersion: 2,
+      packId: verified.packId,
+      placeId: verified.placeId,
+      profileFingerprint: verified.profileFingerprint,
+      manifestKey: key,
+      manifestSha256: await digest(encoded),
+      previousPackId: verified.previousPackId,
+      committedAt: verified.committedAt,
+    };
+    const manifest = await reconcileRecoveredManifest(verified);
+    if (!manifest || stateForManifest(manifest, scope).status !== 'ready') return null;
+    if (metadata.getItem(key) !== encoded) return null;
+    return publishRecovered(manifest, recoveredHead) ? manifest : null;
   }
 
   async function recoverVerifiedManifest(scope: EmergencyPackScope): Promise<EmergencyPackManifest | null> {
     const head = parseHead(metadata.getItem(headKey(scope.placeId)));
     if (head?.profileFingerprint && head.profileFingerprint !== scope.profileFingerprint) return null;
     const active = await readVerifiedActiveManifest(scope, head);
-    if (active) return active;
+    if (active) return reconcileRecoveredManifest(active);
     for (const key of recoveryKeys(metadata, scope, head)) {
-      const verified = await loadVerifiedManifest(key);
-      const manifest = verified ? applyInvalidations(verified) : null;
-      if (manifest?.profileFingerprint !== scope.profileFingerprint) continue;
-      if (stateForManifest(manifest, scope).status !== 'ready') continue;
-      if (await publishRecovered(manifest)) return manifest;
+      const recovered = await recoverFallbackManifest(key, scope);
+      if (recovered) return recovered;
     }
     return null;
   }

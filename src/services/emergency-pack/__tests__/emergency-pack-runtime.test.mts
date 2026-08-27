@@ -52,10 +52,14 @@ interface RuntimeApi {
     },
     cleanup?: {
       adoptGeneration(generationId: string, cacheKeys: string[]): void;
+      reconcileRecoveredGeneration?(input: { generationId: string; cacheKeys: string[] }):
+        | { ok: true; disposition: string }
+        | { ok: false; reason: string };
     },
   ) => {
     verifyArtifactBody(kind: string, body: string): Promise<boolean>;
     adoptArtifactBody(kind: string, body: string): Promise<void>;
+    reconcileRecoveredArtifactBody(kind: string, body: string): Promise<void>;
     releaseArtifactBody(kind: string, body: string): Promise<void>;
     releaseArtifact(artifact: { kind: string; body: string }): Promise<void>;
   };
@@ -391,9 +395,14 @@ test('offline map lifecycle keeps verification pure and adopts only at the expli
   const create = requireFunction('createEmergencyPackOfflineMapLifecycle');
   const cache = { id: 'wm-offline-maps' };
   const adopted: unknown[] = [];
+  const reconciled: unknown[] = [];
   const cleanup = {
     adoptGeneration(generationId: string, cacheKeys: string[]) {
       adopted.push({ generationId, cacheKeys });
+    },
+    reconcileRecoveredGeneration(input: { generationId: string; cacheKeys: string[] }) {
+      reconciled.push(input);
+      return { ok: true as const, disposition: 'claimed-provisional' as const };
     },
   };
   const generationId = 'generation-lifecycle-owner';
@@ -421,15 +430,29 @@ test('offline map lifecycle keeps verification pure and adopts only at the expli
   assert.deepEqual(adopted, [], 'verified reads must not mutate cleanup ownership');
   await durable.adoptArtifactBody('offline-map', body);
   assert.deepEqual(adopted, [{ generationId, cacheKeys: [tile.cacheKey] }]);
+  await durable.reconcileRecoveredArtifactBody('offline-map', body);
+  assert.deepEqual(reconciled, [{ generationId, cacheKeys: [tile.cacheKey] }]);
+  await assert.doesNotReject(() => durable.reconcileRecoveredArtifactBody('alerts', '{not-json'));
   await assert.doesNotReject(() => durable.releaseArtifactBody('offline-map', body));
 
   const rejected = create({ open: async () => cache }, {
     verify: async () => ({ ok: false }),
     release: async () => ({ ok: false }),
-  }, cleanup);
+  }, {
+    ...cleanup,
+    reconcileRecoveredGeneration: () => ({
+      ok: false as const,
+      reason: 'cleanup-tombstone-invalid' as const,
+    }),
+  });
   assert.equal(await rejected.verifyArtifactBody('offline-map', body), false);
   assert.equal(adopted.length, 1, 'failed tile verification must not adopt generation ownership');
   await assert.rejects(() => rejected.releaseArtifactBody('offline-map', body));
+  await assert.rejects(
+    () => rejected.reconcileRecoveredArtifactBody('offline-map', body),
+    /offline map recovered generation reconciliation failed/,
+  );
+  await assert.rejects(() => durable.reconcileRecoveredArtifactBody('offline-map', '{not-json'));
 });
 
 test('verified active map A remains readable while unrelated crash-staged B owns the cleanup tombstone', async () => {
@@ -483,6 +506,10 @@ test('verified active map A remains readable while unrelated crash-staged B owns
 test('default runtime wires immutable map verification and cleanup through store and orchestrator boundaries', () => {
   assert.match(runtimeSource, /verifyArtifactBody:\s*offlineMapLifecycle\.verifyArtifactBody/);
   assert.match(runtimeSource, /adoptArtifactBody:\s*offlineMapLifecycle\.adoptArtifactBody/);
+  assert.match(
+    runtimeSource,
+    /reconcileRecoveredArtifactBody:\s*offlineMapLifecycle\.reconcileRecoveredArtifactBody/,
+  );
   assert.match(runtimeSource, /releaseArtifactBody:\s*offlineMapLifecycle\.releaseArtifactBody/);
   assert.match(runtimeSource, /releaseArtifact:\s*offlineMapLifecycle\.releaseArtifact/);
   assert.match(runtimeSource, /captureTiles\(\{\s*generationId,/);
@@ -772,6 +799,67 @@ test('offline tile resolver re-reads one exact generation tile and rejects corru
     openCache: async () => cache,
   });
   assert.equal(await unavailable(sourceUrl), null, 'missing, moved, expired, or pruned evidence fails closed');
+});
+
+test('offline tile resolver continues across corrupt and throwing overlapping candidates', async () => {
+  const create = requireFunction('createEmergencyPackOfflineMapTileResolver');
+  const sourceUrl = 'https://a.basemaps.cartocdn.com/dark_all/4/7/6@2x.png';
+  const validBytes = new Uint8Array([137, 80, 78, 71, 1, 3, 3, 7]);
+  const validDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', validBytes))]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+  const invalidBytes = new Uint8Array([137, 80, 78, 71, 9, 9, 9, 9]);
+  const scopes = ['first', 'second'].map((placeId) => ({
+    placeId,
+    profileFingerprint: `profile-${placeId}`,
+    now: NOW,
+  }));
+  const artifactFor = (placeId: string) => {
+    const generationId = `generation-${placeId}`;
+    const cacheKey = `https://offline-map.crystalball.invalid/exact/${generationId}/0`;
+    return {
+      body: JSON.stringify({
+        kind: 'offline-map', placeId, profileFingerprint: `profile-${placeId}`, capturedAt: NOW,
+        generationId,
+        tiles: [{
+          url: sourceUrl, cacheKey, sha256: validDigest, generationId,
+          byteLength: validBytes.byteLength, verified: true,
+        }],
+        totalBytes: validBytes.byteLength,
+      }),
+      revision: `revision-${placeId}`,
+      expiresAt: NOW + 60_000,
+      cacheKey,
+    };
+  };
+  const artifacts = new Map(scopes.map(({ placeId }) => [placeId, artifactFor(placeId)]));
+  let firstBehavior: 'corrupt' | 'throw' = 'corrupt';
+  let secondValid = true;
+  const resolver = create({
+    getScopes: () => scopes,
+    getScopeRevision: (scope: { placeId: string }) => `revision-${scope.placeId}`,
+    readVerifiedOfflineMapArtifact: async (scope: { placeId: string }) => artifacts.get(scope.placeId),
+    openCache: async () => ({
+      put: async () => undefined,
+      delete: async () => true,
+      match: async (key: RequestInfo | URL) => {
+        if (String(key) === artifacts.get('first')?.cacheKey) {
+          if (firstBehavior === 'throw') throw new Error('candidate-local cache read failure');
+          return new Response(invalidBytes.slice(), { status: 200, headers: { 'content-type': 'image/png' } });
+        }
+        if (String(key) === artifacts.get('second')?.cacheKey && secondValid) {
+          return new Response(validBytes.slice(), { status: 200, headers: { 'content-type': 'image/png' } });
+        }
+        return undefined;
+      },
+    }),
+  });
+
+  assert.deepEqual(new Uint8Array((await resolver(sourceUrl))?.data ?? new ArrayBuffer(0)), validBytes);
+  firstBehavior = 'throw';
+  assert.deepEqual(new Uint8Array((await resolver(sourceUrl))?.data ?? new ArrayBuffer(0)), validBytes);
+  secondValid = false;
+  assert.equal(await resolver(sourceUrl), null, 'resolver returns null only after every candidate fails');
 });
 
 test('runtime invalidates the verified tile index on source cutoffs and pack lifecycle changes', async () => {

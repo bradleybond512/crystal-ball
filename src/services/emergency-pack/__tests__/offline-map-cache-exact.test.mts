@@ -14,6 +14,19 @@ interface CleanupCoordinator {
   prepareCapture(cache: ExactCache): Promise<{ ok: boolean; reason?: string }>;
   stageGeneration(generationId: string, cacheKeys: string[]): void;
   adoptGeneration(generationId: string, cacheKeys: string[]): void;
+  reconcileRecoveredGeneration(input: {
+    generationId: string;
+    cacheKeys: string[];
+  }): {
+    ok: boolean;
+    disposition?: 'claimed-provisional' | 'already-owned' | 'unrelated-tombstone-preserved';
+    reason?: 'cleanup-tombstone-invalid' | 'cleanup-tombstone-storage-failure';
+  };
+  releaseGeneration(input: {
+    generationId: string;
+    cacheKeys: string[];
+    cache: ExactCache;
+  }): Promise<{ ok: boolean; reason?: string }>;
 }
 
 interface OfflineMapApi {
@@ -104,6 +117,8 @@ class ExactCache {
 class MemoryMetadata {
   readonly values = new Map<string, string>();
   failSet = false;
+  failRemove = false;
+  retainOnRemove = false;
 
   getItem(key: string): string | null {
     return this.values.get(key) ?? null;
@@ -115,6 +130,8 @@ class MemoryMetadata {
   }
 
   removeItem(key: string): void {
+    if (this.failRemove) throw new Error('metadata unavailable');
+    if (this.retainOnRemove) return;
     this.values.delete(key);
   }
 }
@@ -139,6 +156,214 @@ function cleanupCoordinator(metadata = new MemoryMetadata()): CleanupCoordinator
   const create = requireFunction('createExactOfflineMapCleanupCoordinator');
   return create({ metadata });
 }
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => { resolve = settle; });
+  return { promise, resolve };
+}
+
+test('recovered generation reconciliation claims only exact provisional ownership and never deletes tiles', async () => {
+  const generationId = 'generation-recovered-exact';
+  const cacheKey = exactCacheKey(generationId, 0);
+  const cache = new ExactCache();
+  cache.values.set(cacheKey, new TextEncoder().encode('retained tile'));
+  const metadata = new MemoryMetadata();
+  const cleanup = cleanupCoordinator(metadata);
+  cleanup.stageGeneration(generationId, [cacheKey]);
+
+  assert.deepEqual(cleanup.reconcileRecoveredGeneration({ generationId, cacheKeys: [cacheKey] }), {
+    ok: true,
+    disposition: 'claimed-provisional',
+  });
+  assert.equal(metadata.values.size, 0);
+  assert.equal(cache.values.has(cacheKey), true);
+  assert.deepEqual(cache.deleted, []);
+  assert.deepEqual(await cleanup.prepareCapture(cache), { ok: true });
+  assert.equal(cache.values.has(cacheKey), true, 'the next cleanup preparation must retain the recovered map');
+  assert.deepEqual(cache.deleted, []);
+});
+
+test('recovered generation reconciliation is idempotent for already-owned generations', () => {
+  const cleanup = cleanupCoordinator();
+  const input = {
+    generationId: 'generation-already-owned',
+    cacheKeys: [exactCacheKey('generation-already-owned', 0)],
+  };
+
+  assert.deepEqual(cleanup.reconcileRecoveredGeneration(input), {
+    ok: true,
+    disposition: 'already-owned',
+  });
+  assert.deepEqual(cleanup.reconcileRecoveredGeneration(input), {
+    ok: true,
+    disposition: 'already-owned',
+  });
+});
+
+test('recovered generation reconciliation preserves an unrelated tombstone byte-for-byte', () => {
+  const metadata = new MemoryMetadata();
+  const cleanup = cleanupCoordinator(metadata);
+  const pendingGeneration = 'generation-pending-unrelated';
+  cleanup.stageGeneration(pendingGeneration, [exactCacheKey(pendingGeneration, 0)]);
+  const before = [...metadata.values.entries()];
+
+  assert.deepEqual(cleanup.reconcileRecoveredGeneration({
+    generationId: 'generation-recovered-owned',
+    cacheKeys: [exactCacheKey('generation-recovered-owned', 0)],
+  }), {
+    ok: true,
+    disposition: 'unrelated-tombstone-preserved',
+  });
+  assert.deepEqual([...metadata.values.entries()], before);
+});
+
+test('recovered generation reconciliation fails closed on malformed or unremovable ownership evidence', () => {
+  const tombstoneKey = 'wm-offline-map-exact-cleanup-v1';
+  const malformedMetadata = new MemoryMetadata();
+  malformedMetadata.values.set(tombstoneKey, '{not-json');
+  const malformedCleanup = cleanupCoordinator(malformedMetadata);
+  const malformedBefore = [...malformedMetadata.values.entries()];
+  assert.deepEqual(malformedCleanup.reconcileRecoveredGeneration({
+    generationId: 'generation-malformed-recovery',
+    cacheKeys: [exactCacheKey('generation-malformed-recovery', 0)],
+  }), { ok: false, reason: 'cleanup-tombstone-invalid' });
+  assert.deepEqual([...malformedMetadata.values.entries()], malformedBefore);
+
+  for (const failure of ['throw', 'readback'] as const) {
+    const metadata = new MemoryMetadata();
+    const cleanup = cleanupCoordinator(metadata);
+    const generationId = `generation-remove-${failure}`;
+    const cacheKey = exactCacheKey(generationId, 0);
+    const cache = new ExactCache();
+    cache.values.set(cacheKey, new TextEncoder().encode('retained tile'));
+    cleanup.stageGeneration(generationId, [cacheKey]);
+    if (failure === 'throw') metadata.failRemove = true;
+    else metadata.retainOnRemove = true;
+
+    assert.deepEqual(cleanup.reconcileRecoveredGeneration({ generationId, cacheKeys: [cacheKey] }), {
+      ok: false,
+      reason: 'cleanup-tombstone-storage-failure',
+    });
+    assert.equal(cache.values.has(cacheKey), true);
+    assert.deepEqual(cache.deleted, []);
+  }
+});
+
+test('post-stage worker rejection waits for siblings, releases once, and permits an immediate retry', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const urls = tileUrls(2);
+  const cache = new ExactCache();
+  const sibling = deferred<Response>();
+  let rejectSourceMatch = true;
+  const baseMatch = cache.match.bind(cache);
+  cache.match = async (request) => {
+    const key = requestKey(request);
+    if (rejectSourceMatch && key === urls[0]) {
+      rejectSourceMatch = false;
+      throw new Error('transient cache read');
+    }
+    return baseMatch(request);
+  };
+  const cleanup = cleanupCoordinator();
+  let releaseCount = 0;
+  const baseRelease = cleanup.releaseGeneration.bind(cleanup);
+  cleanup.releaseGeneration = async (input) => {
+    releaseCount += 1;
+    return baseRelease(input);
+  };
+  let settled = false;
+  const first = capture({
+    generationId: 'generation-worker-rejection',
+    tileUrls: urls,
+    cache,
+    cleanup,
+    concurrency: 2,
+    fetchTile: async (url) => url === urls[1]
+      ? sibling.promise
+      : new Response(`tile:${url}`, { status: 200, headers: { 'content-type': 'image/png' } }),
+  }).finally(() => { settled = true; });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(settled, false, 'capture must wait for every started worker');
+  assert.equal(releaseCount, 0, 'cleanup must not race a sibling that can still write');
+  sibling.resolve(new Response('late sibling tile', {
+    status: 200,
+    headers: { 'content-type': 'image/png' },
+  }));
+  const failed = await first;
+  assert.equal(failed.ok, false);
+  assert.equal(failed.reason, 'tile-worker-failed');
+  assert.equal(releaseCount, 1);
+  assert.equal(cache.values.size, 0, 'release must remove every late generation write');
+
+  const retried = await capture({
+    generationId: 'generation-worker-retry',
+    tileUrls: urls,
+    cache,
+    cleanup,
+    concurrency: 2,
+    fetchTile: async (url) => new Response(`retry:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(retried.ok, true);
+});
+
+test('post-stage worker rejection leaves a durable tombstone retryable after cleanup failure', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const urls = tileUrls(2);
+  const generationId = 'generation-worker-cleanup-failure';
+  const cache = new ExactCache();
+  const metadata = new MemoryMetadata();
+  const cleanup = cleanupCoordinator(metadata);
+  const baseMatch = cache.match.bind(cache);
+  let rejectSourceMatch = true;
+  cache.match = async (request) => {
+    if (rejectSourceMatch && requestKey(request) === urls[0]) {
+      rejectSourceMatch = false;
+      throw new Error('transient cache read');
+    }
+    return baseMatch(request);
+  };
+  cache.failDelete.add(exactCacheKey(generationId, 1));
+
+  const failed = await capture({
+    generationId,
+    tileUrls: urls,
+    cache,
+    cleanup,
+    concurrency: 2,
+    fetchTile: async (url) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.reason, 'generation-cleanup-pending');
+  assert.deepEqual(JSON.parse([...metadata.values.values()][0]!), {
+    schemaVersion: 1,
+    generationId,
+    cacheKeys: [exactCacheKey(generationId, 0), exactCacheKey(generationId, 1)],
+  });
+
+  cache.failDelete.clear();
+  const retried = await capture({
+    generationId: 'generation-after-worker-cleanup',
+    tileUrls: tileUrls(1),
+    cache,
+    cleanup,
+    fetchTile: async (url) => new Response(`retry:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(retried.ok, true);
+});
 
 test('exact tile capture never exceeds four concurrent fetches and verifies every CacheStorage readback', async () => {
   const capture = requireFunction('captureOfflineMapTilesExact');

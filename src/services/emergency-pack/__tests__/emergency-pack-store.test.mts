@@ -22,6 +22,7 @@ interface StoreApi {
     createPackId: () => string;
     verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
     adoptArtifactBody?: (kind: string, body: string) => void | Promise<void>;
+    reconcileRecoveredArtifactBody?: (kind: string, body: string) => void | Promise<void>;
     releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   }) => {
     commitGeneration: (input: {
@@ -138,6 +139,7 @@ function artifacts(
 function harness(overrides: {
   verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
   adoptArtifactBody?: (kind: string, body: string) => void | Promise<void>;
+  reconcileRecoveredArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   digest?: (body: string) => Promise<string>;
 } = {}) {
@@ -475,6 +477,146 @@ test('recovery keeps a verified current ready generation authoritative over its 
   const head = [...metadata.values.entries()].find(([key]) => key.includes(':head:'));
   assert.ok(head);
   assert.equal(JSON.parse(head[1]).packId, 'pack-2');
+});
+
+test('verified-current recovery reconciles offline map ownership before returning', async () => {
+  let reconciliationHasStarted = false;
+  let releaseReconciliation = () => undefined;
+  let signalReconciliationStarted = () => undefined;
+  const reconciliationStarted = new Promise<void>((resolve) => { signalReconciliationStarted = resolve; });
+  const reconciliationRelease = new Promise<void>((resolve) => { releaseReconciliation = resolve; });
+  const reconciled: string[] = [];
+  const { store } = harness({
+    async reconcileRecoveredArtifactBody(kind, body) {
+      if (kind !== 'offline-map') return;
+      reconciled.push((JSON.parse(body) as { marker: string }).marker);
+      reconciliationHasStarted = true;
+      signalReconciliationStarted();
+      await reconciliationRelease;
+    },
+  });
+  assert.deepEqual(await commit(store, 'current-ready'), { ok: true, packId: 'pack-1' });
+
+  let settled = false;
+  const recovery = store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })
+    .finally(() => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(reconciliationHasStarted, true, 'verified-current recovery must reconcile map ownership');
+  await reconciliationStarted;
+  assert.equal(settled, false, 'recovery must not return before ownership reconciliation');
+  assert.deepEqual(reconciled, ['current-ready']);
+  releaseReconciliation();
+  assert.deepEqual(await recovery, { status: 'ready', packId: 'pack-1' });
+});
+
+test('fallback recovery reconciles ownership before publishing and rejects an alert binding changed during the await', async () => {
+  let pauseReconciliation = false;
+  let reconciliationHasStarted = false;
+  let releaseReconciliation = () => undefined;
+  let signalReconciliationStarted = () => undefined;
+  let reconciliationStarted = new Promise<void>((resolve) => { signalReconciliationStarted = resolve; });
+  let reconciliationRelease = new Promise<void>((resolve) => { releaseReconciliation = resolve; });
+  const { metadata, bodies, store } = harness({
+    async reconcileRecoveredArtifactBody(kind) {
+      if (kind !== 'offline-map' || !pauseReconciliation) return;
+      reconciliationHasStarted = true;
+      signalReconciliationStarted();
+      await reconciliationRelease;
+    },
+  });
+  assert.deepEqual(await commit(store, 'previous-ready'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await commit(store, 'current-corrupt'), { ok: true, packId: 'pack-2' });
+  const currentBodyKey = [...bodies.values.keys()].find((key) => key.includes('pack-2'));
+  assert.ok(currentBodyKey);
+  bodies.values.set(currentBodyKey, `${bodies.values.get(currentBodyKey)}tampered`);
+  const activeHead = () => JSON.parse(
+    [...metadata.values.entries()].find(([key]) => key.includes(':head:'))?.[1] ?? '{}',
+  ) as { packId?: string };
+
+  pauseReconciliation = true;
+  const recovery = store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(reconciliationHasStarted, true, 'fallback recovery must reconcile map ownership');
+  await reconciliationStarted;
+  assert.equal(activeHead().packId, 'pack-2', 'fallback head must remain unpublished while ownership is unresolved');
+  releaseReconciliation();
+  assert.deepEqual(await recovery, { status: 'ready', packId: 'pack-1' });
+  assert.equal(activeHead().packId, 'pack-1');
+
+  metadata.values.set(
+    [...metadata.values.keys()].find((key) => key.includes(':head:')) ?? '',
+    JSON.stringify({
+      ...activeHead(),
+      packId: 'pack-2',
+      manifestKey: [...metadata.values.keys()].find((key) => key.includes(':manifest:') && key.includes('pack-2')),
+      manifestSha256: await digest(
+        metadata.values.get([...metadata.values.keys()].find(
+          (key) => key.includes(':manifest:') && key.includes('pack-2'),
+        ) ?? '') ?? '',
+      ),
+    }),
+  );
+  reconciliationStarted = new Promise<void>((resolve) => { signalReconciliationStarted = resolve; });
+  reconciliationRelease = new Promise<void>((resolve) => { releaseReconciliation = resolve; });
+  reconciliationHasStarted = false;
+  const staleRecovery = store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(reconciliationHasStarted, true);
+  await reconciliationStarted;
+  assert.deepEqual(await store.invalidateArtifacts({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    kinds: ['alerts'],
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_B,
+  }), { ok: true });
+  releaseReconciliation();
+  assert.deepEqual(await staleRecovery, { status: 'not-saved', packId: null });
+  assert.equal(activeHead().packId, 'pack-2', 'stale recovered alert evidence must not replace the prior head');
+});
+
+test('failed recovery reconciliation preserves storage and a claimed candidate is never released after head failure', async () => {
+  let rejectReconciliation = false;
+  let releaseCalls = 0;
+  const created = harness({
+    reconcileRecoveredArtifactBody: () => {
+      if (rejectReconciliation) throw new Error('recovery ownership reconciliation failed');
+    },
+    releaseArtifactBody: () => { releaseCalls += 1; },
+  });
+  assert.deepEqual(await commit(created.store, 'previous-ready'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await commit(created.store, 'current-corrupt'), { ok: true, packId: 'pack-2' });
+  const currentBodyKey = [...created.bodies.values.keys()].find((key) => key.includes('pack-2'));
+  assert.ok(currentBodyKey);
+  created.bodies.values.set(currentBodyKey, `${created.bodies.values.get(currentBodyKey)}tampered`);
+
+  rejectReconciliation = true;
+  const metadataBefore = [...created.metadata.values.entries()];
+  const bodiesBefore = [...created.bodies.values.entries()];
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+  assert.deepEqual([...created.metadata.values.entries()], metadataBefore);
+  assert.deepEqual([...created.bodies.values.entries()], bodiesBefore);
+  assert.equal(releaseCalls, 0);
+
+  rejectReconciliation = false;
+  let failRecoveredHeadOnce = true;
+  created.metadata.fail = (key) => {
+    if (!key.includes(':head:') || !failRecoveredHeadOnce) return false;
+    failRecoveredHeadOnce = false;
+    return true;
+  };
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'not-saved', packId: null },
+  );
+  created.metadata.fail = null;
+  const head = [...created.metadata.values.entries()].find(([key]) => key.includes(':head:'));
+  assert.ok(head);
+  assert.equal(JSON.parse(head[1]).packId, 'pack-2', 'failed recovered publication restores the prior head');
+  assert.equal(releaseCalls, 0, 'claimed recovered ownership must not be rolled back');
 });
 
 test('recovery keeps verified partial and expired current generations authoritative', async () => {

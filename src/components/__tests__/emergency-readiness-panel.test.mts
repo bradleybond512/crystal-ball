@@ -390,6 +390,7 @@ test('default panel dependencies use the real Emergency Pack runtime facade', ()
   const defaults = source.slice(defaultsStart, defaultsEnd);
   assert.match(defaults, /\bsubscribeEmergencyPack\s*,/);
   assert.match(defaults, /\bhydrateEmergencyPacks\(\)/);
+  assert.match(defaults, /await hydrateStormPosture\(\);\s*await hydrateEmergencyPacks\(\);/s);
   assert.match(defaults, /\bgetEmergencyPackState\(place\)/);
   assert.match(defaults, /\bcaptureEmergencyPack\s*,/);
 });

@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createEmergencyPackCoordinator } from '../emergency-pack-coordinator.ts';
+import {
+  createExactOfflineMapCleanupCoordinator,
+  type ExactOfflineMapCache,
+} from '../../offline-map-cache.ts';
 import { NOW } from './test-support.mts';
 
 interface Place {
@@ -51,6 +55,7 @@ interface RuntimeApi {
     },
   ) => {
     verifyArtifactBody(kind: string, body: string): Promise<boolean>;
+    adoptArtifactBody(kind: string, body: string): Promise<void>;
     releaseArtifactBody(kind: string, body: string): Promise<void>;
     releaseArtifact(artifact: { kind: string; body: string }): Promise<void>;
   };
@@ -99,6 +104,8 @@ interface HarnessOptions {
     itemCount: number;
   };
   recoveryGate?: Promise<void>;
+  currentAlertRevision?: string | null;
+  failAlertReconciliation?: boolean;
   offlineMap?: {
     body: string;
     expiresAt: number;
@@ -169,7 +176,23 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       sourceRevision?: string;
     }): Promise<{ ok: boolean }> {
       invalidationCalls.push({ ...input, kinds: [...input.kinds] });
+      if (options.failAlertReconciliation && input.kinds.includes('alerts')) {
+        return { ok: false, reason: 'storage-failure' };
+      }
+      if (input.kinds.includes('alerts') && input.sourceRevision) {
+        authoritative.set(input.profileFingerprint, {
+          status: 'not-saved', packId: null, profileFingerprint: input.profileFingerprint,
+        });
+      }
       return { ok: true };
+    },
+    async reconcileAlertRevision(input: {
+      placeId: string;
+      profileFingerprint: string;
+      sourceRevision: string;
+      capturedAt: number;
+    }): Promise<{ ok: boolean; reason?: string }> {
+      return this.invalidateArtifacts({ ...input, kinds: ['alerts'] });
     },
     readOfflineMapRevision(): string | null {
       return options.offlineMap ? offlineMapRevision() : null;
@@ -252,6 +275,7 @@ function createHarness(initialPlaces = [place('home')], options: HarnessOptions 
       callbacks.set('alerts', (payload) => callback(payload as { sourceRevision: string }));
       return () => { unsubscribed.push('alerts'); };
     },
+    getCurrentAlertSourceRevision: () => options.currentAlertRevision ?? null,
     openOfflineMapCache: async () => options.offlineMap?.cache ?? Promise.reject(new Error('cache unavailable')),
   });
 
@@ -363,7 +387,7 @@ test('offline map lifecycle verifies and releases only strict immutable generati
   await assert.rejects(() => unavailable.releaseArtifactBody('offline-map', body));
 });
 
-test('offline map lifecycle adopts after exact verification and accepts only durable deferred cleanup', async () => {
+test('offline map lifecycle keeps verification pure and adopts only at the explicit publication boundary', async () => {
   const create = requireFunction('createEmergencyPackOfflineMapLifecycle');
   const cache = { id: 'wm-offline-maps' };
   const adopted: unknown[] = [];
@@ -394,6 +418,8 @@ test('offline map lifecycle adopts after exact verification and accepts only dur
   }, cleanup);
 
   assert.equal(await durable.verifyArtifactBody('offline-map', body), true);
+  assert.deepEqual(adopted, [], 'verified reads must not mutate cleanup ownership');
+  await durable.adoptArtifactBody('offline-map', body);
   assert.deepEqual(adopted, [{ generationId, cacheKeys: [tile.cacheKey] }]);
   await assert.doesNotReject(() => durable.releaseArtifactBody('offline-map', body));
 
@@ -406,8 +432,57 @@ test('offline map lifecycle adopts after exact verification and accepts only dur
   await assert.rejects(() => rejected.releaseArtifactBody('offline-map', body));
 });
 
+test('verified active map A remains readable while unrelated crash-staged B owns the cleanup tombstone', async () => {
+  const create = requireFunction('createEmergencyPackOfflineMapLifecycle');
+  const metadata = new Map<string, string>();
+  const cache: ExactOfflineMapCache = {
+    async put() { return undefined; },
+    async match() { return undefined; },
+    async delete() { return true; },
+  };
+  const cleanup = createExactOfflineMapCleanupCoordinator({
+    metadata: {
+      getItem: (key) => metadata.get(key) ?? null,
+      setItem: (key, value) => { metadata.set(key, value); },
+      removeItem: (key) => { metadata.delete(key); },
+    },
+  });
+  const generationA = 'generation-active-a';
+  const generationB = 'generation-crash-staged-b';
+  const cacheKeyA = `https://offline-map.crystalball.invalid/exact/${generationA}/0`;
+  const cacheKeyB = `https://offline-map.crystalball.invalid/exact/${generationB}/0`;
+  cleanup.stageGeneration(generationB, [cacheKeyB]);
+  const bodyA = JSON.stringify({
+    kind: 'offline-map',
+    placeId: 'home',
+    profileFingerprint: 'profile-home',
+    capturedAt: NOW,
+    generationId: generationA,
+    tiles: [{
+      url: 'https://a.basemaps.cartocdn.com/dark_all/4/1/2@2x.png',
+      cacheKey: cacheKeyA,
+      sha256: 'd'.repeat(64),
+      generationId: generationA,
+      byteLength: 4,
+      verified: true,
+    }],
+    totalBytes: 4,
+  });
+  const lifecycle = create({ open: async () => cache }, {
+    verify: async () => ({ ok: true }),
+    release: async () => ({ ok: true }),
+  }, cleanup);
+
+  assert.equal(await lifecycle.verifyArtifactBody('offline-map', bodyA), true);
+  assert.ok(
+    [...metadata.values()].some((value) => value.includes(generationB)),
+    'pure A verification must leave the unrelated B cleanup evidence intact',
+  );
+});
+
 test('default runtime wires immutable map verification and cleanup through store and orchestrator boundaries', () => {
   assert.match(runtimeSource, /verifyArtifactBody:\s*offlineMapLifecycle\.verifyArtifactBody/);
+  assert.match(runtimeSource, /adoptArtifactBody:\s*offlineMapLifecycle\.adoptArtifactBody/);
   assert.match(runtimeSource, /releaseArtifactBody:\s*offlineMapLifecycle\.releaseArtifactBody/);
   assert.match(runtimeSource, /releaseArtifact:\s*offlineMapLifecycle\.releaseArtifact/);
   assert.match(runtimeSource, /captureTiles\(\{\s*generationId,/);
@@ -415,6 +490,7 @@ test('default runtime wires immutable map verification and cleanup through store
   assert.match(runtimeSource, /captureDefaultOfflineMap\(place,\s*scope,\s*offlineMapCleanup\)/);
   assert.match(runtimeSource, /createEmergencyPackOfflineMapLifecycle\(caches,\s*undefined,\s*offlineMapCleanup\)/);
   assert.match(runtimeSource, /subscribeAlerts:\s*subscribeStormAlerts/);
+  assert.match(runtimeSource, /getCurrentAlertSourceRevision:\s*getStormAlertSourceRevision/);
   assert.doesNotMatch(runtimeSource, /subscribeAlerts:\s*subscribeStormPosture/);
 });
 
@@ -473,6 +549,51 @@ test('runtime composes browser adapters, store, coordinator, sources, and orches
   assert.ok(harness.compositions.includes('orchestrator'));
   assert.deepEqual(harness.sourcePlaces, ['home']);
   assert.deepEqual(harness.runtime.getState(place('home')), captured);
+  harness.runtime.destroy();
+});
+
+test('hydrate reconciles a silently seeded authoritative alert revision before publishing readiness', async () => {
+  const home = place('home');
+  const revisionB = 'b'.repeat(64);
+  const harness = createHarness([home], { currentAlertRevision: revisionB });
+  const fingerprint = harness.profile(home);
+  harness.authoritative.set(fingerprint, {
+    status: 'ready', packId: 'pack-alert-a', profileFingerprint: fingerprint,
+  });
+  const emitted: State[] = [];
+  harness.runtime.subscribe((state) => emitted.push(state));
+
+  await harness.runtime.hydrate();
+
+  assert.deepEqual(harness.invalidationCalls, [{
+    placeId: home.id,
+    profileFingerprint: fingerprint,
+    kinds: ['alerts'],
+    capturedAt: NOW,
+    sourceRevision: revisionB,
+  }]);
+  assert.equal(harness.runtime.getState(home).status, 'not-saved');
+  assert.equal(emitted.some(({ status }) => status === 'ready'), false);
+  harness.runtime.destroy();
+});
+
+test('failed startup alert reconciliation prevents stale ready publication', async () => {
+  const home = place('home');
+  const harness = createHarness([home], {
+    currentAlertRevision: 'b'.repeat(64),
+    failAlertReconciliation: true,
+  });
+  const fingerprint = harness.profile(home);
+  harness.authoritative.set(fingerprint, {
+    status: 'ready', packId: 'pack-alert-a', profileFingerprint: fingerprint,
+  });
+  const emitted: State[] = [];
+  harness.runtime.subscribe((state) => emitted.push(state));
+
+  await harness.runtime.hydrate();
+
+  assert.equal(harness.runtime.getState(home).status, 'not-saved');
+  assert.equal(emitted.some(({ status }) => status === 'ready'), false);
   harness.runtime.destroy();
 });
 

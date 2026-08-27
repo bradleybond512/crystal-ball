@@ -71,7 +71,8 @@ const DEFAULT_DEPENDENCIES: Omit<EmergencyReadinessPanelDependencies, 'deadlineS
   subscribeSavedPlaces,
   subscribeEmergencyPack,
   hydrate: async () => {
-    await Promise.all([hydrateStormPosture(), hydrateEmergencyPacks()]);
+    await hydrateStormPosture();
+    await hydrateEmergencyPacks();
   },
   getReceipt: getVerifiedLifelinesReceiptForPlace,
   getEmergencyPackState: (place) => {

@@ -239,7 +239,6 @@ function createConcurrentCaptureHarness(input: {
       if (!map || !await lifecycle.verifyArtifactBody('offline-map', map.body)) {
         return { ok: false, reason: 'offline-map-verification-failed' };
       }
-      events.push(`${commit.placeId}:adopted`);
       const state = {
         status: 'ready' as const,
         packId: `pack-${commit.placeId}`,
@@ -247,6 +246,8 @@ function createConcurrentCaptureHarness(input: {
       };
       states.set(commit.profileFingerprint, state);
       activeMapBodies.set(commit.profileFingerprint, map.body);
+      await lifecycle.adoptArtifactBody('offline-map', map.body);
+      events.push(`${commit.placeId}:adopted`);
       return { ok: true, packId: state.packId };
     },
     async invalidateArtifacts() { return { ok: true }; },
@@ -292,6 +293,7 @@ function createConcurrentCaptureHarness(input: {
     subscribeComms: () => () => undefined,
     subscribeLifelines: () => () => undefined,
     subscribeAlerts: () => () => undefined,
+    getCurrentAlertSourceRevision: () => null,
   });
 
   return {
@@ -474,11 +476,12 @@ function createAlertRevisionRaceHarness(options: { initiallyReady?: boolean; fai
     }),
     createCoordinator: createEmergencyPackCoordinator,
     createSources: () => Object.fromEntries(REQUIRED_KINDS.map((kind) => [kind, async (scope: EmergencyPackCaptureScope) => {
-      if (kind === 'route-primary') {
+      const captured = artifact(kind, scope);
+      if (kind === 'alerts') {
         alertCaptured.resolve();
         await continueCapture.promise;
       }
-      return artifact(kind, scope);
+      return captured;
     }])),
     createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
     releaseArtifact: async () => undefined,
@@ -491,6 +494,7 @@ function createAlertRevisionRaceHarness(options: { initiallyReady?: boolean; fai
       alertSubscriber = callback;
       return () => { alertSubscriber = null; };
     },
+    getCurrentAlertSourceRevision: () => currentRevision,
   });
 
   return {
@@ -649,6 +653,7 @@ test('verified offline-map tile resolution holds the lifecycle lease until its c
     subscribeComms: () => () => undefined,
     subscribeLifelines: () => () => undefined,
     subscribeAlerts: () => () => undefined,
+    getCurrentAlertSourceRevision: () => null,
     openOfflineMapCache: async () => cache,
   });
   await runtime.hydrate();

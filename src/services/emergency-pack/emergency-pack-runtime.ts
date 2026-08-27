@@ -248,8 +248,11 @@ const OFFLINE_MAP_TILE_KEYS = [
   'verified',
 ] as const;
 const OFFLINE_MAP_GENERATION_ID_MAX_LENGTH = 180;
+const CAPTURED_CARTO_TILE_URL_PATTERN = /^https:\/\/[a-d]\.basemaps\.cartocdn\.com\/dark_all\/(?:0|[1-9]\d*)\/(?:0|[1-9]\d*)\/(?:0|[1-9]\d*)@2x\.png$/;
 
 interface OfflineMapGenerationEvidence {
+  placeId: string;
+  profileFingerprint: string;
   generationId: string;
   tiles: ExactOfflineMapTile[];
 }
@@ -273,11 +276,20 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
 
+function plainJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null
+    ? value as Record<string, unknown>
+    : null;
+}
+
 function isBoundedText(value: unknown, maximum: number): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= maximum;
 }
 
 function isHttpsUrl(value: string): boolean {
+  if (value.endsWith('.png') && CAPTURED_CARTO_TILE_URL_PATTERN.test(value)) return true;
   try {
     return new URL(value).protocol === 'https:';
   } catch {
@@ -289,7 +301,7 @@ function parseOfflineMapGenerationEvidence(body: string): OfflineMapGenerationEv
   if (typeof body !== 'string' || body.length === 0 || body.length > EXACT_OFFLINE_MAP_MAX_TOTAL_BYTES) return null;
   let payload: Record<string, unknown> | null;
   try {
-    payload = strictJsonRecord(JSON.parse(body));
+    payload = plainJsonRecord(JSON.parse(body));
   } catch {
     return null;
   }
@@ -315,7 +327,7 @@ function parseOfflineMapGenerationEvidence(body: string): OfflineMapGenerationEv
   const tiles: ExactOfflineMapTile[] = [];
   let totalBytes = 0;
   for (const candidate of payload.tiles) {
-    const tile = strictJsonRecord(candidate);
+    const tile = plainJsonRecord(candidate);
     if (!tile
       || !hasExactKeys(tile, OFFLINE_MAP_TILE_KEYS)
       || !isBoundedText(tile.url, 2048)
@@ -343,7 +355,14 @@ function parseOfflineMapGenerationEvidence(body: string): OfflineMapGenerationEv
       verified: true,
     });
   }
-  return totalBytes === payload.totalBytes ? { generationId, tiles } : null;
+  return totalBytes === payload.totalBytes
+    ? {
+      placeId: payload.placeId,
+      profileFingerprint: payload.profileFingerprint,
+      generationId,
+      tiles,
+    }
+    : null;
 }
 
 const DEFAULT_OFFLINE_MAP_OPERATIONS: EmergencyPackOfflineMapOperations = {
@@ -366,7 +385,11 @@ export function createEmergencyPackOfflineMapLifecycle(
     if (!evidence) return false;
     try {
       const cache = await cacheStorage.open(MAP_CACHE_NAME);
-      const verified = await operations.verify({ ...evidence, cache });
+      const verified = await operations.verify({
+        generationId: evidence.generationId,
+        tiles: evidence.tiles,
+        cache,
+      });
       if (!verified.ok) return false;
       cleanup?.adoptGeneration(evidence.generationId, evidence.tiles.map(({ cacheKey }) => cacheKey));
       return true;
@@ -380,7 +403,12 @@ export function createEmergencyPackOfflineMapLifecycle(
     if (!evidence) throw new Error('invalid offline map artifact evidence');
     try {
       const cache = await cacheStorage.open(MAP_CACHE_NAME);
-      const released = await operations.release({ ...evidence, cache, ...(cleanup ? { cleanup } : {}) });
+      const released = await operations.release({
+        generationId: evidence.generationId,
+        tiles: evidence.tiles,
+        cache,
+        ...(cleanup ? { cleanup } : {}),
+      });
       if (!released.ok && !released.durableCleanup) throw new Error('offline map generation release failed');
     } catch {
       throw new Error('offline map generation release failed');
@@ -462,10 +490,8 @@ async function readScopedOfflineMapEvidence(
       || !Number.isFinite(artifact.expiresAt)
       || artifact.expiresAt <= scope.now) return null;
     const evidence = parseOfflineMapGenerationEvidence(artifact.body);
-    const parsed = strictJsonRecord(JSON.parse(artifact.body));
-    return evidence
-      && parsed?.placeId === scope.placeId
-      && parsed.profileFingerprint === scope.profileFingerprint
+    return evidence?.placeId === scope.placeId
+      && evidence.profileFingerprint === scope.profileFingerprint
       ? { artifact, evidence }
       : null;
   } catch {

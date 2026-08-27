@@ -134,6 +134,41 @@ test('maximum offline generation cold and warm tile reads stay within the render
     }),
     openCache: async () => cache,
   });
+  const originalParse = JSON.parse;
+  const originalStringify = JSON.stringify;
+  const OriginalURL = globalThis.URL;
+  let artifactBodyParseCalls = 0;
+  let generationEvidenceStringifyCalls = 0;
+  let cartoUrlConstructions = 0;
+  try {
+    JSON.parse = ((...args: unknown[]) => {
+      if (args[0] === body) artifactBodyParseCalls += 1;
+      return Reflect.apply(originalParse, JSON, args) as unknown;
+    }) as typeof JSON.parse;
+    JSON.stringify = ((...args: unknown[]) => {
+      const value = args[0];
+      if (value !== null
+        && typeof value === 'object'
+        && 'generationId' in value
+        && value.generationId === generationId) generationEvidenceStringifyCalls += 1;
+      return Reflect.apply(originalStringify, JSON, args) as string | undefined;
+    }) as typeof JSON.stringify;
+    globalThis.URL = class CountingURL extends OriginalURL {
+      constructor(url: string | URL, base?: string | URL) {
+        if (typeof url === 'string' && url.includes('.basemaps.cartocdn.com/')) cartoUrlConstructions += 1;
+        super(url, base);
+      }
+    };
+    const resolved = await makeResolver()(target.url);
+    assert.deepEqual(new Uint8Array(resolved?.data ?? new ArrayBuffer(0)), tileBytes);
+  } finally {
+    JSON.parse = originalParse;
+    JSON.stringify = originalStringify;
+    globalThis.URL = OriginalURL;
+  }
+  assert.equal(artifactBodyParseCalls, 1, 'a cold index parses each verified artifact body once');
+  assert.equal(generationEvidenceStringifyCalls, 0, 'a cold index does not clone parsed generation evidence');
+  assert.equal(cartoUrlConstructions, 2, 'a cold index does not allocate one URL object per verified tile');
   const measure = async (runs: number, cold: boolean): Promise<number[]> => {
     const shared = makeResolver();
     const samples: number[] = [];

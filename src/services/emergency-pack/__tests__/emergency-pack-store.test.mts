@@ -334,13 +334,18 @@ test('quota, corrupt readback, manifest failure, and head failure retain the pri
   }
 });
 
-test('offline map adoption occurs after head publication and failed adoption restores the prior head before release', async () => {
+test('offline map adoption completes before head publication and failed adoption never displaces the prior head', async () => {
   let metadata: MemoryMetadata;
   let failAdoption = false;
+  let pauseAdoption = false;
+  let signalAdoptionStarted = () => undefined;
+  let releaseAdoption = () => undefined;
+  const adoptionStarted = new Promise<void>((resolve) => { signalAdoptionStarted = resolve; });
+  const adoptionRelease = new Promise<void>((resolve) => { releaseAdoption = resolve; });
   const adopted: Array<{ marker: string; publishedPackId: string | null }> = [];
   const released: string[] = [];
   const created = harness({
-    adoptArtifactBody(kind, body) {
+    async adoptArtifactBody(kind, body) {
       if (kind !== 'offline-map') return;
       const head = [...metadata.values.entries()].find(([key]) => key.includes(':head:'))?.[1] ?? null;
       adopted.push({
@@ -348,6 +353,10 @@ test('offline map adoption occurs after head publication and failed adoption res
         publishedPackId: head === null ? null : (JSON.parse(head) as { packId: string }).packId,
       });
       if (failAdoption) throw new Error('offline map generation adoption failed');
+      if (pauseAdoption) {
+        signalAdoptionStarted();
+        await adoptionRelease;
+      }
     },
     releaseArtifactBody(kind, body) {
       if (kind === 'offline-map') released.push((JSON.parse(body) as { marker: string }).marker);
@@ -356,22 +365,37 @@ test('offline map adoption occurs after head publication and failed adoption res
   metadata = created.metadata;
 
   assert.deepEqual(await commit(created.store, 'active-a'), { ok: true, packId: 'pack-1' });
-  assert.deepEqual(adopted, [{ marker: 'active-a', publishedPackId: 'pack-1' }]);
+  assert.deepEqual(adopted, [{ marker: 'active-a', publishedPackId: null }]);
 
   adopted.length = 0;
   await created.store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
   assert.deepEqual(adopted, [], 'verified active reads must never adopt map ownership');
 
-  failAdoption = true;
-  const failed = await commit(created.store, 'candidate-b');
-  failAdoption = false;
-
-  assert.equal(failed.ok, false);
-  assert.deepEqual(adopted, [{ marker: 'candidate-b', publishedPackId: 'pack-2' }]);
-  assert.deepEqual(released, ['candidate-b']);
+  pauseAdoption = true;
+  const candidate = commit(created.store, 'candidate-b');
+  await adoptionStarted;
   assert.deepEqual(
     await created.store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
     { status: 'ready', packId: 'pack-1' },
+    'the prior head remains authoritative until adoption completes',
+  );
+  releaseAdoption();
+  assert.deepEqual(await candidate, { ok: true, packId: 'pack-2' });
+  pauseAdoption = false;
+
+  failAdoption = true;
+  const failed = await commit(created.store, 'candidate-c');
+  failAdoption = false;
+
+  assert.equal(failed.ok, false);
+  assert.deepEqual(adopted, [
+    { marker: 'candidate-b', publishedPackId: 'pack-1' },
+    { marker: 'candidate-c', publishedPackId: 'pack-2' },
+  ]);
+  assert.deepEqual(released, ['candidate-c']);
+  assert.deepEqual(
+    await created.store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-2' },
   );
 });
 

@@ -102,6 +102,10 @@ interface EmergencyPackStoreDependencies {
     kind: EmergencyPackArtifactKind,
     body: string,
   ): boolean | Promise<boolean>;
+  adoptArtifactBody?(
+    kind: EmergencyPackArtifactKind,
+    body: string,
+  ): void | Promise<void>;
   releaseArtifactBody?(
     kind: EmergencyPackArtifactKind,
     body: string,
@@ -960,6 +964,24 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
+  async function adoptStagedBodies(stagedBodies: readonly StoredArtifactBody[]): Promise<void> {
+    for (const artifact of stagedBodies) {
+      if (artifact.body !== undefined) {
+        await dependencies.adoptArtifactBody?.(artifact.kind, artifact.body);
+      }
+    }
+  }
+
+  function restoreHead(key: string, encodedPreviousHead: string | null): boolean {
+    try {
+      if (encodedPreviousHead === null) metadata.removeItem(key);
+      else metadata.setItem(key, encodedPreviousHead);
+      return metadata.getItem(key) === encodedPreviousHead;
+    } catch {
+      return false;
+    }
+  }
+
   async function commitGeneration(input: EmergencyPackGenerationInput): Promise<
     { ok: true; packId: string } | { ok: false; reason: string }
   > {
@@ -970,6 +992,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
 
     let key: string | null = null;
+    let activeHeadKey: string | null = null;
+    let encodedExistingHead: string | null = null;
+    let headPublished = false;
     const stagedBodies: StoredArtifactBody[] = [];
 
     try {
@@ -977,8 +1002,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (!isNonEmptyString(packId) || packId.length > 512) return { ok: false, reason: 'invalid-pack-id' };
       key = manifestKey(input.placeId, packId);
       if (metadata.getItem(key) !== null) return { ok: false, reason: 'pack-id-collision' };
-      const activeHeadKey = headKey(input.placeId);
-      const encodedExistingHead = metadata.getItem(activeHeadKey);
+      activeHeadKey = headKey(input.placeId);
+      encodedExistingHead = metadata.getItem(activeHeadKey);
       const previousPackId = await findPreviousPackId(encodedExistingHead, input.profileFingerprint);
 
       const timestamp = now();
@@ -1019,6 +1044,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         throw new Error('alert invalidation changed during publication');
       }
       writeHead(activeHeadKey, head, encodedExistingHead);
+      headPublished = true;
+      await adoptStagedBodies(stagedBodies);
       try {
         await cleanupOldGenerations(manifest);
       } catch {
@@ -1026,7 +1053,11 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       }
       return { ok: true, packId };
     } catch (error) {
-      if (key !== null) await cleanupGeneration(key, stagedBodies);
+      let safeToCleanup = true;
+      if (headPublished && activeHeadKey !== null) {
+        safeToCleanup = restoreHead(activeHeadKey, encodedExistingHead);
+      }
+      if (safeToCleanup && key !== null) await cleanupGeneration(key, stagedBodies);
       return { ok: false, reason: safeReason(error) };
     }
   }
@@ -1057,6 +1088,45 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       } catch {
         // Failed persistence stays fail-closed at the runtime boundary.
       }
+      return { ok: false, reason: safeReason(error) };
+    }
+  }
+
+  async function activeAlertRevisionMatches(
+    placeId: string,
+    profileFingerprint: string,
+    sourceRevision: string,
+  ): Promise<boolean> {
+    const head = parseHead(metadata.getItem(headKey(placeId)));
+    if (head?.placeId !== placeId || head.profileFingerprint !== profileFingerprint) return false;
+    const verified = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+    if (verified?.packId !== head.packId) return false;
+    return verified.receipts.find(({ kind }) => kind === 'alerts')?.sourceRevision === sourceRevision;
+  }
+
+  async function reconcileAlertRevision(input: {
+    placeId: string;
+    profileFingerprint: string;
+    capturedAt: number;
+    sourceRevision: string;
+  }): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const invalidation = { ...input, kinds: ['alerts'] as const };
+    if (!validInvalidationInput(invalidation)) return { ok: false, reason: 'invalid-input' };
+    try {
+      const encoded = metadata.getItem(invalidationKey(input.placeId, input.profileFingerprint));
+      const existing = parseInvalidationRecord(encoded);
+      if (encoded !== null && existing === null) return { ok: false, reason: 'invalid-invalidation-record' };
+      if (existing?.placeId === input.placeId
+        && existing.profileFingerprint === input.profileFingerprint
+        && existing.sourceRevision === input.sourceRevision) return { ok: true };
+
+      if (existing === null && await activeAlertRevisionMatches(
+        input.placeId,
+        input.profileFingerprint,
+        input.sourceRevision,
+      )) return { ok: true };
+      return invalidateArtifacts(invalidation);
+    } catch (error) {
       return { ok: false, reason: safeReason(error) };
     }
   }
@@ -1231,6 +1301,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
   return {
     commitGeneration,
     invalidateArtifacts,
+    reconcileAlertRevision,
     migrateLifelineGeneration,
     readActive,
     readReadiness,

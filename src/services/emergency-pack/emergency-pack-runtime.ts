@@ -142,6 +142,12 @@ interface EmergencyPackRuntimeStore {
     capturedAt: number;
     sourceRevision?: string;
   }): Promise<{ ok: boolean; reason?: string }>;
+  reconcileAlertRevision?(input: {
+    placeId: string;
+    profileFingerprint: string;
+    capturedAt: number;
+    sourceRevision: string;
+  }): Promise<{ ok: boolean; reason?: string }>;
   prune?(input: { placeIds: string[]; maxPlaces: number; generationsPerPlace: number }): Promise<void>;
 }
 
@@ -165,6 +171,7 @@ interface EmergencyPackRuntimeDependencies {
   subscribeComms(callback: () => void): () => void;
   subscribeLifelines(callback: () => void): () => void;
   subscribeAlerts(callback: (event: { sourceRevision: string }) => void): () => void;
+  getCurrentAlertSourceRevision(): string | null;
   openOfflineMapCache?(name: string): Promise<ExactOfflineMapCache>;
 }
 
@@ -376,6 +383,7 @@ export function createEmergencyPackOfflineMapLifecycle(
   cleanup?: ExactOfflineMapCleanupCoordinator,
 ): {
   verifyArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<boolean>;
+  adoptArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
   releaseArtifactBody: (kind: EmergencyPackArtifactKind, body: string) => Promise<void>;
   releaseArtifact: (artifact: EmergencyPackCapturedArtifact) => Promise<void>;
 } {
@@ -390,11 +398,20 @@ export function createEmergencyPackOfflineMapLifecycle(
         tiles: evidence.tiles,
         cache,
       });
-      if (!verified.ok) return false;
-      cleanup?.adoptGeneration(evidence.generationId, evidence.tiles.map(({ cacheKey }) => cacheKey));
-      return true;
+      return verified.ok;
     } catch {
       return false;
+    }
+  };
+  const adoptArtifactBody = (kind: EmergencyPackArtifactKind, body: string): Promise<void> => {
+    if (kind !== 'offline-map') return Promise.resolve();
+    const evidence = parseOfflineMapGenerationEvidence(body);
+    if (!evidence) throw new Error('invalid offline map artifact evidence');
+    try {
+      cleanup?.adoptGeneration(evidence.generationId, evidence.tiles.map(({ cacheKey }) => cacheKey));
+      return Promise.resolve();
+    } catch {
+      throw new Error('offline map generation adoption failed');
     }
   };
   const releaseArtifactBody = async (kind: EmergencyPackArtifactKind, body: string): Promise<void> => {
@@ -416,6 +433,7 @@ export function createEmergencyPackOfflineMapLifecycle(
   };
   return {
     verifyArtifactBody,
+    adoptArtifactBody,
     releaseArtifactBody,
     async releaseArtifact(artifact): Promise<void> {
       if (artifact.kind !== 'offline-map') return;
@@ -728,9 +746,8 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       const serializedSources = { ...sources };
       if (typeof alertSource === 'function') {
         serializedSources.alerts = async (captureScope: EmergencyPackCaptureScope) => {
-          const artifact = await alertSource(captureScope);
           capturedAlert.epoch = alertRevisionEpoch;
-          return artifact;
+          return alertSource(captureScope);
         };
       }
       if (typeof offlineMapSource === 'function') {
@@ -851,6 +868,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     if (!scope) return notSaved('', 'scope-invalid');
     return enqueuePlaceOperation(place.id, async () => {
       const generation = begin(place.id);
+      const startingAlertEpoch = await settleAlertRevisions();
       try {
         let state: EmergencyPackRuntimeState;
         if (recover) {
@@ -858,6 +876,15 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         } else {
           await coordinator.refresh(scope);
           state = takeDetailedState(scope) ?? await readDetailed(scope);
+        }
+        const settledAlertEpoch = await settleAlertRevisions();
+        const persistence = alertPersistenceResults.get(scope.placeId);
+        if (settledAlertEpoch !== startingAlertEpoch
+          || (persistence?.epoch === settledAlertEpoch
+            && persistence.profileFingerprint === scope.profileFingerprint
+            && !persistence.ok)) {
+          const finalized = await readDetailedAfterAlertSettlement(scope);
+          state = finalized.state;
         }
         publish(place.id, generation, state);
         return state;
@@ -884,6 +911,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     if (!active) return;
     offlineMapIndexEpoch += 1;
     const places = retainedPlaces();
+    await reconcileCurrentAlertRevision(places);
     await Promise.all(places.map((place) => refreshPlace(place, recover)));
     try {
       if (store.prune) {
@@ -905,10 +933,12 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     sourceRevision?: string,
   ): Promise<void> {
     const places = retainedPlaces().filter((place) => !affectedPlaceIds || affectedPlaceIds.has(place.id));
+    if (sourceRevision === undefined) await reconcileCurrentAlertRevision(places);
     await Promise.all(places.map((place) => enqueuePlaceOperation(place.id, async () => {
       const scope = scopeFor(place);
       if (!scope) return;
       const generation = begin(place.id);
+      const startingAlertEpoch = await settleAlertRevisions();
       let state: EmergencyPackRuntimeState;
       try {
         const invalidated = await store.invalidateArtifacts({
@@ -927,6 +957,15 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
         }
       } catch {
         state = notSaved(scope.profileFingerprint, 'storage-failure');
+      }
+      const settledAlertEpoch = await settleAlertRevisions();
+      const persistence = alertPersistenceResults.get(scope.placeId);
+      if (settledAlertEpoch !== startingAlertEpoch
+        || (persistence?.epoch === settledAlertEpoch
+          && persistence.profileFingerprint === scope.profileFingerprint
+          && !persistence.ok)) {
+        const finalized = await readDetailedAfterAlertSettlement(scope);
+        state = finalized.state;
       }
       publish(place.id, generation, state);
     })));
@@ -979,51 +1018,105 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     })));
   }
 
-  function persistAlertRevision(sourceRevision: string): void {
-    latestAlertSourceRevision = sourceRevision;
-    alertRevisionEpoch += 1;
+  async function reconcileAlertScope(
+    scope: EmergencyPackCaptureScope,
+    sourceRevision: string,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    const reconcile = store.reconcileAlertRevision?.bind(store);
+    if (!reconcile) return { ok: false, reason: 'storage-failure' };
+    try {
+      return await reconcile({
+        placeId: scope.placeId,
+        profileFingerprint: scope.profileFingerprint,
+        capturedAt: dependencies.now(),
+        sourceRevision,
+      });
+    } catch {
+      return { ok: false, reason: 'storage-failure' };
+    }
+  }
+
+  async function persistAlertScope(
+    place: RuntimePlace,
+    scope: EmergencyPackCaptureScope,
+    sourceRevision: string,
+    epoch: number,
+    mode: 'event' | 'reconcile',
+  ): Promise<void> {
+    const pendingKey = `${scope.placeId}\u0000${scope.profileFingerprint}`;
+    const pending = pendingAlertRevisions.get(pendingKey) ?? [];
+    const revisions = mode === 'event' ? [...pending, sourceRevision] : [...pending];
+    let result: { ok: boolean; reason?: string } = { ok: true };
+    let failedAt = -1;
+    for (const [index, revision] of revisions.entries()) {
+      try {
+        result = await store.invalidateArtifacts({
+          placeId: scope.placeId,
+          profileFingerprint: scope.profileFingerprint,
+          kinds: ['alerts'],
+          capturedAt: dependencies.now(),
+          sourceRevision: revision,
+        });
+      } catch {
+        result = { ok: false, reason: 'storage-failure' };
+      }
+      if (!result.ok) {
+        failedAt = index;
+        break;
+      }
+    }
+    if (failedAt < 0 && mode === 'reconcile') result = await reconcileAlertScope(scope, sourceRevision);
+    if (failedAt >= 0) pendingAlertRevisions.set(pendingKey, revisions.slice(failedAt));
+    else if (result.ok) pendingAlertRevisions.delete(pendingKey);
+    alertPersistenceResults.set(place.id, {
+      epoch,
+      profileFingerprint: scope.profileFingerprint,
+      ok: result.ok,
+      ...(result.reason ? { reason: result.reason } : {}),
+    });
+  }
+
+  function queueAlertRevision(
+    sourceRevision: string,
+    places: readonly RuntimePlace[],
+    mode: 'event' | 'reconcile',
+  ): Promise<void> {
+    if (mode === 'event' || latestAlertSourceRevision !== sourceRevision) {
+      latestAlertSourceRevision = sourceRevision;
+      alertRevisionEpoch += 1;
+    }
     const epoch = alertRevisionEpoch;
-    const places = retainedPlaces();
     const scopes = places.map((place) => ({ place, scope: scopeFor(place) }))
       .filter((entry): entry is { place: RuntimePlace; scope: EmergencyPackCaptureScope } => entry.scope !== null);
     const persistence = alertRevisionTail.catch(() => undefined).then(async () => {
-      await Promise.all(scopes.map(async ({ place, scope }) => {
-        const pendingKey = `${scope.placeId}\u0000${scope.profileFingerprint}`;
-        const revisions = [...(pendingAlertRevisions.get(pendingKey) ?? []), sourceRevision];
-        let result: { ok: boolean; reason?: string } = { ok: true };
-        let failedAt = -1;
-        for (const [index, revision] of revisions.entries()) {
-          try {
-            result = await store.invalidateArtifacts({
-              placeId: scope.placeId,
-              profileFingerprint: scope.profileFingerprint,
-              kinds: ['alerts'],
-              capturedAt: dependencies.now(),
-              sourceRevision: revision,
-            });
-          } catch {
-            result = { ok: false, reason: 'storage-failure' };
-          }
-          if (!result.ok) {
-            failedAt = index;
-            break;
-          }
-        }
-        if (failedAt >= 0) pendingAlertRevisions.set(pendingKey, revisions.slice(failedAt));
-        else pendingAlertRevisions.delete(pendingKey);
-        alertPersistenceResults.set(place.id, {
-          epoch,
-          profileFingerprint: scope.profileFingerprint,
-          ok: result.ok,
-          ...(result.reason ? { reason: result.reason } : {}),
-        });
-      }));
+      await Promise.all(scopes.map(({ place, scope }) => (
+        persistAlertScope(place, scope, sourceRevision, epoch, mode)
+      )));
       offlineMapIndexEpoch += 1;
     });
     alertRevisionTail = persistence.then(() => undefined, () => undefined);
-    void persistence
-      .then(() => refreshPersistedAlertInvalidations(places, epoch))
-      .catch(() => undefined);
+    if (mode === 'event') {
+      void persistence
+        .then(() => refreshPersistedAlertInvalidations(places, epoch))
+        .catch(() => undefined);
+    }
+    return persistence;
+  }
+
+  async function reconcileCurrentAlertRevision(places: readonly RuntimePlace[]): Promise<void> {
+    let sourceRevision: string | null;
+    try {
+      sourceRevision = dependencies.getCurrentAlertSourceRevision();
+    } catch {
+      return;
+    }
+    if (sourceRevision === null || !/^[a-f0-9]{64}$/.test(sourceRevision)) return;
+    await queueAlertRevision(sourceRevision, places, 'reconcile').catch(() => undefined);
+    await settleAlertRevisions();
+  }
+
+  function persistAlertRevision(sourceRevision: string): void {
+    void queueAlertRevision(sourceRevision, retainedPlaces(), 'event');
   }
 
   let savedPlaceNames = new Map(retainedPlaces().map((place) => [place.id, {
@@ -1076,6 +1169,7 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
       const state = notSaved(scope.profileFingerprint, 'place-not-retained');
       return { ok: false, reason: 'place-not-retained', state };
     }
+    await reconcileCurrentAlertRevision([place]);
     captureContexts.set(place.id, { place, contactConsent });
     offlineMapIndexEpoch += 1;
     captureResults.set(place.id, { ok: false, reason: 'capture-failed' });
@@ -1324,6 +1418,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
         now: Date.now,
         createPackId: () => crypto.randomUUID(),
         verifyArtifactBody: offlineMapLifecycle.verifyArtifactBody,
+        adoptArtifactBody: offlineMapLifecycle.adoptArtifactBody,
         releaseArtifactBody: offlineMapLifecycle.releaseArtifactBody,
       };
       return createEmergencyPackStore(storeDependencies);
@@ -1372,6 +1467,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
     subscribeComms: (callback) => subscribeCommsPlans(() => callback()),
     subscribeLifelines,
     subscribeAlerts: subscribeStormAlerts,
+    getCurrentAlertSourceRevision: getStormAlertSourceRevision,
     openOfflineMapCache: (name) => caches.open(name),
   });
 }

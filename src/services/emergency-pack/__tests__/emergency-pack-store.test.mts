@@ -21,6 +21,7 @@ interface StoreApi {
     now: () => number;
     createPackId: () => string;
     verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
+    adoptArtifactBody?: (kind: string, body: string) => void | Promise<void>;
     releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   }) => {
     commitGeneration: (input: {
@@ -87,6 +88,12 @@ interface StoreApi {
       capturedAt: number;
       sourceRevision?: string;
     }) => Promise<{ ok: boolean; reason?: string }>;
+    reconcileAlertRevision: (input: {
+      placeId: string;
+      profileFingerprint: string;
+      capturedAt: number;
+      sourceRevision: string;
+    }) => Promise<{ ok: boolean; reason?: string }>;
     recoverActive: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
       status: string;
       packId: string | null;
@@ -130,6 +137,7 @@ function artifacts(
 
 function harness(overrides: {
   verifyArtifactBody?: (kind: string, body: string) => boolean | Promise<boolean>;
+  adoptArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   digest?: (body: string) => Promise<string>;
 } = {}) {
@@ -324,6 +332,47 @@ test('quota, corrupt readback, manifest failure, and head failure retain the pri
       failure,
     );
   }
+});
+
+test('offline map adoption occurs after head publication and failed adoption restores the prior head before release', async () => {
+  let metadata: MemoryMetadata;
+  let failAdoption = false;
+  const adopted: Array<{ marker: string; publishedPackId: string | null }> = [];
+  const released: string[] = [];
+  const created = harness({
+    adoptArtifactBody(kind, body) {
+      if (kind !== 'offline-map') return;
+      const head = [...metadata.values.entries()].find(([key]) => key.includes(':head:'))?.[1] ?? null;
+      adopted.push({
+        marker: (JSON.parse(body) as { marker: string }).marker,
+        publishedPackId: head === null ? null : (JSON.parse(head) as { packId: string }).packId,
+      });
+      if (failAdoption) throw new Error('offline map generation adoption failed');
+    },
+    releaseArtifactBody(kind, body) {
+      if (kind === 'offline-map') released.push((JSON.parse(body) as { marker: string }).marker);
+    },
+  });
+  metadata = created.metadata;
+
+  assert.deepEqual(await commit(created.store, 'active-a'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(adopted, [{ marker: 'active-a', publishedPackId: 'pack-1' }]);
+
+  adopted.length = 0;
+  await created.store.readReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW });
+  assert.deepEqual(adopted, [], 'verified active reads must never adopt map ownership');
+
+  failAdoption = true;
+  const failed = await commit(created.store, 'candidate-b');
+  failAdoption = false;
+
+  assert.equal(failed.ok, false);
+  assert.deepEqual(adopted, [{ marker: 'candidate-b', publishedPackId: 'pack-2' }]);
+  assert.deepEqual(released, ['candidate-b']);
+  assert.deepEqual(
+    await created.store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
+  );
 });
 
 test('active reads re-hash bodies and recover the previous verified generation after corruption', async () => {
@@ -642,6 +691,42 @@ test('an exact alert revision and monotonic sequence supersede invalidation with
   assert.deepEqual(JSON.parse(persistedInvalidation).cutoffs, {});
   assert.equal(JSON.parse(persistedInvalidation).sourceRevision, ALERT_REVISION_A);
   assert.equal(JSON.parse(persistedInvalidation).alertSequence, 2);
+});
+
+test('startup alert reconciliation preserves matching active evidence and revokes a differing revision', async () => {
+  const { metadata, store } = harness();
+  assert.deepEqual(await commit(store, 'startup-alert-a'), { ok: true, packId: 'pack-1' });
+
+  assert.deepEqual(await store.reconcileAlertRevision({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_A,
+  }), { ok: true });
+  assert.equal(
+    [...metadata.values.keys()].some((key) => key.includes(':invalidate:')),
+    false,
+    'matching startup evidence must not manufacture an invalidation sequence',
+  );
+  assert.equal((await store.readReadiness({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    now: NOW,
+  })).status, 'ready');
+
+  assert.deepEqual(await store.reconcileAlertRevision({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    capturedAt: NOW,
+    sourceRevision: ALERT_REVISION_B,
+  }), { ok: true });
+  const readiness = await store.readReadiness({
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    now: NOW,
+  });
+  assert.equal(readiness.status, 'partial');
+  assert.ok(readiness.missingKinds.includes('alerts'));
 });
 
 test('alert invalidation is idempotent for one digest and fails closed at sequence exhaustion', async () => {

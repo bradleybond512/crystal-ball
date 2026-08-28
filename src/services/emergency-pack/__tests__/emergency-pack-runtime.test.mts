@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createEmergencyPackCoordinator } from '../emergency-pack-coordinator.ts';
+import { createEmergencyPackSources } from '../emergency-pack-sources.ts';
 import {
   captureOfflineMapTilesExact,
   createExactOfflineMapCleanupCoordinator,
@@ -530,6 +531,10 @@ test('verified active map A remains readable while unrelated crash-staged B owns
 });
 
 test('default runtime wires immutable map verification and cleanup through store and orchestrator boundaries', () => {
+  const sourceBoundary = runtimeSource.slice(
+    runtimeSource.indexOf('    createSources: (place)'),
+    runtimeSource.indexOf('    createCaptureOrchestrator:', runtimeSource.indexOf('    createSources: (place)')),
+  );
   assert.match(runtimeSource, /verifyArtifactBody:\s*offlineMapLifecycle\.verifyArtifactBody/);
   assert.match(runtimeSource, /adoptArtifactBody:\s*offlineMapLifecycle\.adoptArtifactBody/);
   assert.match(
@@ -538,6 +543,7 @@ test('default runtime wires immutable map verification and cleanup through store
   );
   assert.match(runtimeSource, /releaseArtifactBody:\s*offlineMapLifecycle\.releaseArtifactBody/);
   assert.match(runtimeSource, /releaseArtifact:\s*offlineMapLifecycle\.releaseArtifact/);
+  assert.match(sourceBoundary, /releaseArtifact:\s*offlineMapLifecycle\.releaseArtifact/);
   assert.match(runtimeSource, /captureTiles\(\{\s*generationId,/);
   assert.match(runtimeSource, /createExactOfflineMapCleanupCoordinator\(\{\s*metadata:\s*localStorage/);
   assert.match(runtimeSource, /captureDefaultOfflineMap\(place,\s*scope,\s*offlineMapCleanup\)/);
@@ -551,10 +557,14 @@ test('default offline map capture supplies unique bounded ids and serializes exa
   const capture = requireFunction('captureEmergencyPackOfflineMap');
   const generationIds = ['generation-one', 'generation-two'];
   const captureInputs: Array<{ generationId: string }> = [];
+  const plannedZooms: number[][] = [];
   const dependencies = {
     now: () => NOW,
     randomUUID: () => generationIds.shift(),
-    planTileUrls: () => ({ ok: true, tileUrls: ['https://a.basemaps.cartocdn.com/tile.png'] }),
+    planTileUrls: (_lat: number, _lon: number, _radiusKm: number, zooms: readonly number[]) => {
+      plannedZooms.push([...zooms]);
+      return { ok: true, tileUrls: ['https://a.basemaps.cartocdn.com/tile.png'] };
+    },
     openCache: async () => ({ id: 'wm-offline-maps' }),
     cleanup: { id: 'shared-cleanup-coordinator' },
     fetchTile: async () => new Response(),
@@ -578,6 +588,10 @@ test('default offline map capture supplies unique bounded ids and serializes exa
   const second = await capture(home, scope, dependencies);
 
   assert.equal(captureInputs.length, 2);
+  assert.deepEqual(plannedZooms, [
+    [0, 2, 4, 6, 8, 10, 12],
+    [0, 2, 4, 6, 8, 10, 12],
+  ]);
   assert.notEqual(captureInputs[0]?.generationId, captureInputs[1]?.generationId);
   assert.ok(captureInputs.every(({ generationId }) => generationId.length > 0 && generationId.length <= 180));
   for (const artifact of [first, second]) {
@@ -588,6 +602,67 @@ test('default offline map capture supplies unique bounded ids and serializes exa
     assert.equal(typeof (payload.tiles as Array<Record<string, unknown>>)[0]?.cacheKey, 'string');
     assert.match(String((payload.tiles as Array<Record<string, unknown>>)[0]?.sha256), /^[a-f0-9]{64}$/);
   }
+});
+
+test('default offline source rejection releases once and the same coordinator retries immediately', async () => {
+  const capture = requireFunction('captureEmergencyPackOfflineMap');
+  const cache = new RuntimeExactMapCache();
+  const metadataValues = new Map<string, string>();
+  const cleanup = createExactOfflineMapCleanupCoordinator({
+    metadata: {
+      getItem: (key) => metadataValues.get(key) ?? null,
+      setItem: (key, value) => { metadataValues.set(key, value); },
+      removeItem: (key) => { metadataValues.delete(key); },
+    },
+  });
+  const lifecycle = requireFunction('createEmergencyPackOfflineMapLifecycle')({
+    open: async () => cache,
+  }, undefined, cleanup);
+  let releases = 0;
+  const releaseArtifact = async (artifact: { kind: string; body: string }): Promise<void> => {
+    releases += 1;
+    await lifecycle.releaseArtifact(artifact);
+  };
+  const clock = [NOW, NOW + 1_000, 0, NOW + 2_000, NOW + 3_000, NOW + 4_000];
+  const home = place('home');
+  const profileFingerprint = JSON.stringify([2, home.id, home.lat, home.lon, home.radiusKm]);
+  const scope = { placeId: home.id, profileFingerprint, contactConsent: false };
+  let generation = 0;
+  const captureOfflineMap = () => capture(home, scope, {
+    now: () => clock.shift(),
+    randomUUID: () => `default-source-${++generation}`,
+    planTileUrls: () => ({
+      ok: true,
+      tileUrls: ['https://a.basemaps.cartocdn.com/dark_all/0/0/0@2x.png'],
+    }),
+    openCache: async () => cache,
+    cleanup,
+    fetchTile: async (url: string) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+    captureTiles: captureOfflineMapTilesExact,
+  });
+  const sources = createEmergencyPackSources(home, {
+    now: () => clock.shift()!,
+    buildLifelinesQueryFingerprint: () => 'unused',
+    getLifelinesSnapshot: () => null,
+    getVerifiedLifelinesReceipt: () => null,
+    getAlertFeed: () => null,
+    matchAlertToPlace: () => ({
+      matchKind: 'no_match', msUntilExpires: 0, isCancellation: false, threatLevel: 'none',
+    }),
+    getRoutes: () => [],
+    getCommsPlan: () => null,
+    getSelectedContactIds: () => [],
+    captureOfflineMap,
+    releaseArtifact,
+  });
+
+  assert.equal(await sources['offline-map']?.(scope), null);
+  assert.equal(releases, 1, 'post-download source rejection releases exactly once');
+  assert.ok(await sources['offline-map']?.(scope), 'the same cleanup coordinator retries immediately');
+  assert.equal(releases, 1, 'the accepted retry transfers ownership');
 });
 
 type CapturedMapMutation = (result: {

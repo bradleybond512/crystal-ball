@@ -46,6 +46,24 @@ function createHarness(): { map: DeckGLMapHarness; canvas: HTMLCanvasElement; st
   return { map, canvas, styles };
 }
 
+function assertActiveBasemap(map: DeckGLMapHarness, expected: string): void {
+  const buttons = [...map.container.querySelectorAll<HTMLButtonElement>('.basemap-btn')];
+  assert.equal(buttons.length, 5, 'the selector should expose every basemap choice');
+  for (const button of buttons) {
+    const isExpected = button.dataset.basemap === expected;
+    assert.equal(
+      button.classList.contains('basemap-active'),
+      isExpected,
+      `${button.dataset.basemap} active class should match the selected basemap`,
+    );
+    assert.equal(
+      button.getAttribute('aria-pressed'),
+      String(isExpected),
+      `${button.dataset.basemap} aria-pressed should match the selected basemap`,
+    );
+  }
+}
+
 beforeEach(() => {
   happyWindow.document.body.replaceChildren();
   happyWindow.localStorage.clear();
@@ -53,7 +71,10 @@ beforeEach(() => {
 
 test('map error offers a focused keyboard button that activates Emergency without replacing the saved normal map', () => {
   const { map, canvas, styles } = createHarness();
+  map.state = { layers: {} };
   happyWindow.localStorage.setItem('wm-basemap', 'satellite');
+  map.createLayerToggles();
+  assertActiveBasemap(map, 'satellite');
 
   map.showMapErrorOverlay('<offline>', 'carto-emergency-base');
 
@@ -69,18 +90,15 @@ test('map error offers a focused keyboard button that activates Emergency withou
   assert.deepEqual(styles, ['/map-styles/emergency.json']);
   assert.equal(map.activeBaseMap, 'emergency');
   assert.equal(happyWindow.localStorage.getItem('wm-basemap'), 'satellite');
+  assertActiveBasemap(map, 'emergency');
   assert.equal(map.container.querySelector('.map-error-overlay'), null);
   assert.equal(happyWindow.document.activeElement, canvas, 'focus should return to the map after activation');
 });
 
-test('the shared basemap selector explicitly activates Emergency through its native keyboard button', () => {
-  const { map } = createHarness();
-  const selections: string[] = [];
+test('explicit selection and programmatic theme transitions share selector synchronization', () => {
+  const { map, styles } = createHarness();
   map.state = { layers: {} };
-  map.switchBasemap = (basemap) => {
-    selections.push(basemap);
-    map.activeBaseMap = basemap;
-  };
+  happyWindow.localStorage.setItem('wm-basemap', 'satellite');
 
   map.createLayerToggles();
 
@@ -89,6 +107,12 @@ test('the shared basemap selector explicitly activates Emergency through its nat
   assert.equal(action.textContent, 'Emergency (offline)');
   assert.equal(action.tabIndex, 0, 'native keyboard reachability should be preserved');
   action.click();
-  assert.deepEqual(selections, ['emergency']);
-  assert.equal(action.classList.contains('basemap-active'), true);
+  assert.deepEqual(styles, ['/map-styles/emergency.json']);
+  assert.equal(happyWindow.localStorage.getItem('wm-basemap'), 'satellite');
+  assertActiveBasemap(map, 'emergency');
+
+  map.switchBasemap('light');
+  assert.deepEqual(styles, ['/map-styles/emergency.json', '/map-styles/light.json']);
+  assert.equal(happyWindow.localStorage.getItem('wm-basemap'), 'light');
+  assertActiveBasemap(map, 'light');
 });

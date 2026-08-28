@@ -62,6 +62,7 @@ import {
   emergencyPackMapSourceUrls,
   type EmergencyPackMapTileData,
 } from './emergency-pack-map-protocol';
+import { EMERGENCY_PACK_CAPTURE_ZOOM_LEVELS } from './emergency-pack-map-style';
 
 const MAX_PLACES = 5;
 const GENERATIONS_PER_PLACE = 2;
@@ -1293,7 +1294,7 @@ function fetchDefaultMapTile(url: string, signal: AbortSignal): Promise<Response
 interface EmergencyPackOfflineMapCaptureDependencies {
   now(): number;
   randomUUID: () => string | undefined;
-  planTileUrls(lat: number, lon: number, radiusKm: number): {
+  planTileUrls(lat: number, lon: number, radiusKm: number, zoomLevels: number[]): {
     ok: boolean;
     tileUrls: string[];
   };
@@ -1330,7 +1331,12 @@ export async function captureEmergencyPackOfflineMap(
   if (!generationId) return null;
   let plan: { ok: boolean; tileUrls: string[] };
   try {
-    plan = dependencies.planTileUrls(place.lat, place.lon, Math.min(place.radiusKm, 100));
+    plan = dependencies.planTileUrls(
+      place.lat,
+      place.lon,
+      Math.min(place.radiusKm, 100),
+      [...EMERGENCY_PACK_CAPTURE_ZOOM_LEVELS],
+    );
   } catch {
     return null;
   }
@@ -1482,6 +1488,7 @@ function createDefaultRuntime(): ReturnType<typeof createEmergencyPackRuntime> |
       getCommsPlan,
       getSelectedContactIds: (placeId) => getCommsPlan(placeId)?.contacts.map(({ id }) => id) ?? [],
       captureOfflineMap: (place, scope) => captureDefaultOfflineMap(place, scope, offlineMapCleanup),
+      releaseArtifact: offlineMapLifecycle.releaseArtifact,
     }),
     createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
     releaseArtifact: offlineMapLifecycle.releaseArtifact,

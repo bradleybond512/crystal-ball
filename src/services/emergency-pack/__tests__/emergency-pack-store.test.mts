@@ -103,6 +103,11 @@ interface StoreApi {
       status: string;
       packId: string | null;
     }>;
+    recoverReadiness: (scope: { placeId: string; profileFingerprint: string; now: number }) => Promise<{
+      status: string;
+      packId: string | null;
+      reason?: string;
+    }>;
     prune: (input: {
       placeIds: string[];
       maxPlaces: number;
@@ -275,13 +280,277 @@ async function rewriteActiveManifest(
   metadata.values.set(headEntry[0], JSON.stringify(head));
 }
 
+const STAGING_PREFIX = 'wm-emergency-pack-v2:staging:';
+
+async function seedStagingJournal(
+  metadata: MemoryMetadata,
+  bodies: MemoryBodies,
+  marker: string,
+  packId: string,
+  kinds: readonly string[] = REQUIRED_KINDS,
+  storedBodyCount = kinds.length,
+): Promise<{ journalKey: string; manifestKey: string; bodyKeys: string[] }> {
+  const stagedArtifacts = artifacts(marker).filter(({ kind }) => kinds.includes(kind));
+  const bodyEntries = await Promise.all(stagedArtifacts.map(async (artifact) => ({
+    kind: artifact.kind,
+    cacheKey: `wm-emergency-pack-v2:body:${encodeURIComponent(packId)}:${artifact.kind}`,
+    sha256: await digest(artifact.body),
+    body: artifact.body,
+  })));
+  for (const entry of bodyEntries.slice(0, storedBodyCount)) bodies.values.set(entry.cacheKey, entry.body);
+  const key = `${STAGING_PREFIX}${encodeURIComponent(packId)}`;
+  const candidateManifestKey = `wm-emergency-pack-v2:manifest:${encodeURIComponent(PLACE_ID)}:${encodeURIComponent(packId)}`;
+  metadata.values.set(key, JSON.stringify({
+    schemaVersion: 1,
+    packId,
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    manifestKey: candidateManifestKey,
+    artifacts: bodyEntries.map(({ body: _body, ...entry }) => entry),
+  }));
+  metadata.values.set(candidateManifestKey, JSON.stringify({ unpublished: packId }));
+  return {
+    journalKey: key,
+    manifestKey: candidateManifestKey,
+    bodyKeys: bodyEntries.map(({ cacheKey }) => cacheKey),
+  };
+}
+
+test('a complete digest-only staging journal is read back before the first body write', async () => {
+  const created = harness();
+  const metadataWrites: Array<{ key: string; value: string }> = [];
+  const setItem = created.metadata.setItem.bind(created.metadata);
+  created.metadata.setItem = (key, value) => {
+    metadataWrites.push({ key, value });
+    setItem(key, value);
+  };
+  const generation = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    requiredKinds: REQUIRED_KINDS,
+    optionalKinds: ['route-alternate'],
+    artifacts: artifacts('journal-order').map((artifact) => artifact.kind === 'contacts'
+      ? {
+        ...artifact,
+        body: JSON.stringify({
+          marker: 'journal-order',
+          kind: artifact.kind,
+          placeId: PLACE_ID,
+          profileFingerprint: PROFILE,
+          capturedAt: artifact.capturedAt,
+          privateContact: 'do-not-store-in-metadata',
+        }),
+      }
+      : artifact),
+  };
+
+  assert.deepEqual(await created.store.commitGeneration(generation), { ok: true, packId: 'pack-1' });
+
+  const journalWrite = created.operations.findIndex((entry) => entry === `${'metadata:set:'}${STAGING_PREFIX}pack-1`);
+  const journalReadback = created.operations.findIndex((entry, index) => (
+    index > journalWrite && entry === `${'metadata:get:'}${STAGING_PREFIX}pack-1`
+  ));
+  const firstBodyWrite = created.operations.findIndex((entry) => entry.startsWith('body:put:'));
+  assert.ok(journalWrite >= 0 && journalReadback > journalWrite && firstBodyWrite > journalReadback);
+  const encodedJournal = metadataWrites.find(({ key }) => key === `${STAGING_PREFIX}pack-1`)?.value;
+  assert.ok(encodedJournal);
+  const journal = JSON.parse(encodedJournal) as { artifacts: Array<Record<string, unknown>> };
+  assert.equal(encodedJournal.includes('do-not-store-in-metadata'), false);
+  assert.deepEqual(
+    journal.artifacts.map((entry) => Object.keys(entry).sort()),
+    REQUIRED_KINDS.map(() => ['cacheKey', 'kind', 'sha256']),
+  );
+  assert.equal(created.metadata.values.has(`${STAGING_PREFIX}pack-1`), false);
+});
+
+test('restart recovery removes every uncommitted staged body and manifest before its journal', async () => {
+  const created = harness();
+  assert.deepEqual(await commit(created.store, 'known-good'), { ok: true, packId: 'pack-1' });
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'crash-restart', 'pack-crash');
+  const released: string[] = [];
+  const restarted = requireFunction(api, 'createEmergencyPackStore')({
+    metadata: created.metadata,
+    bodies: {
+      put: (key, body) => created.bodies.put(key, body),
+      get: (key) => created.bodies.get(key),
+      async delete(key) {
+        await created.bodies.delete(key);
+        return true;
+      },
+    },
+    digest,
+    now: () => NOW,
+    createPackId: () => 'pack-after-restart',
+    releaseArtifactBody(kind, body) {
+      if (kind === 'offline-map') released.push(body);
+    },
+  });
+  const start = created.operations.length;
+
+  assert.deepEqual(
+    await restarted.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
+  );
+  assert.deepEqual(released.map((body) => JSON.parse(body).marker), ['crash-restart']);
+  assert.equal(staged.bodyKeys.every((key) => !created.bodies.values.has(key)), true);
+  assert.equal(created.metadata.values.has(staged.manifestKey), false);
+  assert.equal(created.metadata.values.has(staged.journalKey), false);
+  const recoveryOperations = created.operations.slice(start);
+  const lastBodyDelete = Math.max(...staged.bodyKeys.map((key) => recoveryOperations.indexOf(`body:delete:${key}`)));
+  const manifestRemove = recoveryOperations.indexOf(`metadata:remove:${staged.manifestKey}`);
+  const journalRemove = recoveryOperations.indexOf(`metadata:remove:${staged.journalKey}`);
+  assert.ok(lastBodyDelete >= 0 && manifestRemove > lastBodyDelete && journalRemove > manifestRemove);
+});
+
+test('restart cleanup is deterministic after the journal and after each staged body including contacts', async () => {
+  for (let storedBodyCount = 0; storedBodyCount <= REQUIRED_KINDS.length; storedBodyCount += 1) {
+    const created = harness();
+    assert.deepEqual(await commit(created.store, 'known-good'), { ok: true, packId: 'pack-1' });
+    const staged = await seedStagingJournal(
+      created.metadata,
+      created.bodies,
+      `crash-after-${storedBodyCount}`,
+      'pack-crash',
+      REQUIRED_KINDS,
+      storedBodyCount,
+    );
+
+    assert.deepEqual(
+      await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'ready', packId: 'pack-1' },
+      `crash after ${storedBodyCount} bodies`,
+    );
+    assert.equal(created.metadata.values.has(staged.journalKey), false, `journal ${storedBodyCount}`);
+    assert.equal(created.metadata.values.has(staged.manifestKey), false, `manifest ${storedBodyCount}`);
+    assert.equal(staged.bodyKeys.every((key) => !created.bodies.values.has(key)), true, `bodies ${storedBodyCount}`);
+  }
+});
+
+test('restart recovery recognizes active and previous committed journal ownership without deleting bodies', async () => {
+  const created = harness();
+  assert.deepEqual(await commit(created.store, 'previous'), { ok: true, packId: 'pack-1' });
+  assert.deepEqual(await commit(created.store, 'active'), { ok: true, packId: 'pack-2' });
+  for (const packId of ['pack-2', 'pack-1']) {
+    const manifestEntry = [...created.metadata.values.entries()]
+      .find(([key]) => key.includes(':manifest:') && key.endsWith(`:${packId}`));
+    assert.ok(manifestEntry);
+    const manifest = JSON.parse(manifestEntry[1]) as { receipts: ReceiptFixture[] };
+    const journalKey = `${STAGING_PREFIX}${packId}`;
+    created.metadata.values.set(journalKey, JSON.stringify({
+      schemaVersion: 1,
+      packId,
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      manifestKey: manifestEntry[0],
+      artifacts: manifest.receipts.map(({ kind, cacheKey, sha256 }) => ({ kind, cacheKey, sha256 })),
+    }));
+    const bodiesBefore = new Map(created.bodies.values);
+    const deletesBefore = created.operations.filter((entry) => entry.startsWith('body:delete:')).length;
+
+    assert.deepEqual(
+      await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'ready', packId: 'pack-2' },
+    );
+    assert.equal(created.metadata.values.has(journalKey), false);
+    assert.deepEqual(created.bodies.values, bodiesBefore);
+    assert.equal(created.operations.filter((entry) => entry.startsWith('body:delete:')).length, deletesBefore);
+  }
+});
+
+test('malformed or digest-mismatched staging ownership blocks capture and recovery without changing the old head', async () => {
+  for (const defect of ['malformed', 'digest-mismatch'] as const) {
+    const created = harness();
+    assert.deepEqual(await commit(created.store, 'old-head'), { ok: true, packId: 'pack-1' });
+    const oldHead = [...created.metadata.values.entries()].find(([key]) => key.includes(':head:'));
+    assert.ok(oldHead);
+    const staged = await seedStagingJournal(created.metadata, created.bodies, defect, 'pack-crash', ['contacts']);
+    if (defect === 'malformed') created.metadata.values.set(staged.journalKey, '{');
+    else created.bodies.values.set(staged.bodyKeys[0]!, 'tampered-private-contacts');
+
+    assert.deepEqual(
+      await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'unavailable', packId: null, reason: 'storage-failure' },
+      defect,
+    );
+    assert.equal((await commit(created.store, 'must-not-start')).ok, false, defect);
+    assert.equal(created.metadata.values.get(oldHead[0]), oldHead[1], defect);
+    assert.equal(created.metadata.values.has(staged.journalKey), true, defect);
+    assert.equal(created.bodies.values.has(staged.bodyKeys[0]!), true, defect);
+  }
+});
+
+test('unconfirmed private-contact deletion retains its journal and retries cleanup before recovery', async () => {
+  let retainContacts = true;
+  const created = harness({
+    async deleteBody(key, deleteDefault) {
+      if (retainContacts && key.endsWith('pack-crash:contacts')) return false;
+      return deleteDefault();
+    },
+  });
+  assert.deepEqual(await commit(created.store, 'old-head'), { ok: true, packId: 'pack-1' });
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'private-retry', 'pack-crash');
+
+  assert.deepEqual(
+    await created.store.recoverReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    {
+      status: 'not-saved',
+      packId: null,
+      profileFingerprint: PROFILE,
+      requiredKinds: [...REQUIRED_KINDS],
+      optionalKinds: ['route-alternate'],
+      receipts: [],
+      missingKinds: [...REQUIRED_KINDS],
+      expiredKinds: [],
+      reason: 'storage-failure',
+    },
+  );
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
+  assert.equal(created.metadata.values.has(staged.manifestKey), true);
+  assert.equal(created.bodies.values.has(staged.bodyKeys.find((key) => key.endsWith(':contacts'))!), true);
+
+  retainContacts = false;
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
+  );
+  assert.equal(created.metadata.values.has(staged.journalKey), false);
+  assert.equal(created.metadata.values.has(staged.manifestKey), false);
+  assert.equal(staged.bodyKeys.every((key) => !created.bodies.values.has(key)), true);
+});
+
+test('a committed journal removal failure retains durable ownership and blocks until retry', async () => {
+  const created = harness();
+  const removeItem = created.metadata.removeItem.bind(created.metadata);
+  let rejectJournalRemoval = true;
+  created.metadata.removeItem = (key) => {
+    if (rejectJournalRemoval && key.startsWith(STAGING_PREFIX)) throw new Error('journal removal failed');
+    removeItem(key);
+  };
+
+  assert.deepEqual(await commit(created.store, 'committed'), { ok: true, packId: 'pack-1' });
+  assert.equal(created.metadata.values.has(`${STAGING_PREFIX}pack-1`), true);
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+
+  rejectJournalRemoval = false;
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'ready', packId: 'pack-1' },
+  );
+  assert.equal(created.metadata.values.has(`${STAGING_PREFIX}pack-1`), false);
+});
+
 test('a generation is published only after every body is written, read back, and hashed', async () => {
   const { operations, store } = harness();
   const result = await commit(store, 'first');
   assert.deepEqual(result, { ok: true, packId: 'pack-1' });
 
-  const lastReadback = Math.max(...operations.map((entry, index) => entry.startsWith('body:get:') ? index : -1));
   const manifestWrite = operations.findIndex((entry) => entry.includes('metadata:set:') && entry.includes('manifest'));
+  const lastReadback = Math.max(...operations.map((entry, index) => (
+    index < manifestWrite && entry.startsWith('body:get:') ? index : -1
+  )));
   const headWrite = operations.findIndex((entry) => entry.includes('metadata:set:') && entry.includes('head'));
   assert.ok(lastReadback >= 0 && manifestWrite > lastReadback, 'manifest follows exact body readback');
   assert.ok(headWrite > manifestWrite, 'head is the final publication write');
@@ -1279,10 +1548,10 @@ test('v1 Lifelines migration publishes one verified partial v2 generation withou
   const encodedManifest = [...metadata.values.entries()].find(([key]) => key.includes(':manifest:'))?.[1];
   assert.ok(encodedManifest);
   assert.equal(JSON.parse(encodedManifest).migration.source, 'lifeline-pack-v1');
-  const lastBodyRead = Math.max(...publicationOperations
-    .map((entry, index) => entry.startsWith('body:get:') ? index : -1));
   const manifestWrite = publicationOperations
     .findIndex((entry) => entry.includes('metadata:set:') && entry.includes(':manifest:'));
+  const lastBodyRead = Math.max(...publicationOperations
+    .map((entry, index) => index < manifestWrite && entry.startsWith('body:get:') ? index : -1));
   const headWrite = publicationOperations
     .findIndex((entry) => entry.includes('metadata:set:') && entry.includes(':head:'));
   assert.ok(lastBodyRead >= 0 && manifestWrite > lastBodyRead, 'migration manifest follows exact body readback');

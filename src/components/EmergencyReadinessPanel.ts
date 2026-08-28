@@ -329,8 +329,9 @@ export class EmergencyReadinessPanel extends Panel {
     this.deadlineScheduler.track(view.deadlinesMs);
     this.setContent(renderEmergencyReadiness(view), () => {
       if (!this.active || !focusedControl) return;
-      this.content.querySelector<HTMLElement>(focusedControl)?.focus();
-      this.pendingFocusControl = null;
+      const target = this.content.querySelector<HTMLElement>(focusedControl);
+      target?.focus();
+      if (target && document.activeElement === target) this.pendingFocusControl = null;
     });
   }
 }

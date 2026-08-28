@@ -16,7 +16,11 @@ import {
 interface StoreApi {
   createEmergencyPackStore?: (dependencies: {
     metadata: MemoryMetadata;
-    bodies: MemoryBodies;
+    bodies: {
+      put: (key: string, body: string) => Promise<void>;
+      get: (key: string) => Promise<string | null>;
+      delete: (key: string) => Promise<boolean>;
+    };
     digest: typeof digest;
     now: () => number;
     createPackId: () => string;
@@ -142,15 +146,27 @@ function harness(overrides: {
   reconcileRecoveredArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   releaseArtifactBody?: (kind: string, body: string) => void | Promise<void>;
   digest?: (body: string) => Promise<string>;
+  deleteBody?: (key: string, deleteDefault: () => Promise<boolean>) => Promise<boolean>;
 } = {}) {
   const operations: string[] = [];
   const metadata = new MemoryMetadata(operations);
   const bodies = new MemoryBodies(operations);
+  const bodyBoundary = {
+    put: (key: string, body: string) => bodies.put(key, body),
+    get: (key: string) => bodies.get(key),
+    delete: (key: string) => overrides.deleteBody?.(key, async () => {
+      await bodies.delete(key);
+      return true;
+    }) ?? (async () => {
+      await bodies.delete(key);
+      return true;
+    })(),
+  };
   let nextId = 1;
   const create = requireFunction(api, 'createEmergencyPackStore');
   const store = create({
     metadata,
-    bodies,
+    bodies: bodyBoundary,
     digest: overrides.digest ?? digest,
     now: () => NOW,
     createPackId: () => `pack-${nextId++}`,
@@ -169,7 +185,14 @@ function createEmergencyPackStoreForClock(
   return {
     store: create({
       metadata,
-      bodies,
+      bodies: {
+        put: (key, body) => bodies.put(key, body),
+        get: (key) => bodies.get(key),
+        async delete(key) {
+          await bodies.delete(key);
+          return true;
+        },
+      },
       digest,
       now: () => timestamp,
       createPackId: () => packId,
@@ -1149,6 +1172,93 @@ test('tombstone persistence failure retains the generation manifest and body for
 
   assert.equal(metadata.values.has(firstManifestKey), true, 'manifest ownership is retained without a durable tombstone');
   assert.equal(bodies.values.has(firstMapBodyKey), true, 'map artifact body is retained without a durable tombstone');
+});
+
+for (const retainedKind of ['lifelines', 'contacts'] as const) {
+  for (const failure of ['retained', 'error'] as const) {
+    test(`cleanup retains generation metadata when ${retainedKind} deletion is ${failure}`, async () => {
+      const created = harness({
+        async deleteBody(key, deleteDefault) {
+          if (key.endsWith(`pack-1:${retainedKind}`)) {
+            if (failure === 'error') throw new Error('cache deletion unavailable');
+            return false;
+          }
+          return deleteDefault();
+        },
+      });
+      assert.equal((await commit(created.store, 'first')).ok, true);
+      assert.equal((await commit(created.store, 'second')).ok, true);
+      const manifestKey = [...created.metadata.values.keys()]
+        .find((key) => key.includes(':manifest:') && key.endsWith(':pack-1'));
+      const bodyKey = [...created.bodies.values.keys()]
+        .find((key) => key.endsWith(`pack-1:${retainedKind}`));
+      assert.ok(manifestKey);
+      assert.ok(bodyKey);
+
+      assert.equal((await commit(created.store, 'third')).ok, true);
+
+      assert.equal(created.metadata.values.has(manifestKey), true, 'manifest keeps ownership metadata');
+      assert.equal(created.bodies.values.has(bodyKey), true, 'unconfirmed body remains owned by the manifest');
+      const mapKey = [...created.bodies.values.keys()].find((key) => key.endsWith('pack-1:offline-map'));
+      assert.equal(
+        mapKey !== undefined,
+        retainedKind === 'lifelines',
+        'cleanup stops before an early failure and preserves metadata after a late failure',
+      );
+    });
+  }
+}
+
+test('cleanup retry removes retained private contacts before their ownership manifest', async () => {
+  let retainContacts = true;
+  const created = harness({
+    async deleteBody(key, deleteDefault) {
+      if (retainContacts && key.endsWith('pack-1:contacts')) return false;
+      return deleteDefault();
+    },
+  });
+  assert.equal((await commit(created.store, 'first')).ok, true);
+  assert.equal((await commit(created.store, 'second')).ok, true);
+  const manifestKey = [...created.metadata.values.keys()]
+    .find((key) => key.includes(':manifest:') && key.endsWith(':pack-1'));
+  const contactsKey = [...created.bodies.values.keys()].find((key) => key.endsWith('pack-1:contacts'));
+  assert.ok(manifestKey);
+  assert.ok(contactsKey);
+
+  assert.equal((await commit(created.store, 'third')).ok, true);
+  assert.equal(created.metadata.values.has(manifestKey), true);
+  assert.equal(created.bodies.values.has(contactsKey), true);
+
+  retainContacts = false;
+  const retryStart = created.operations.length;
+  assert.equal((await commit(created.store, 'fourth')).ok, true);
+  assert.equal(created.bodies.values.has(contactsKey), false);
+  assert.equal(created.metadata.values.has(manifestKey), false);
+  const retryOperations = created.operations.slice(retryStart);
+  const bodyDelete = retryOperations.findIndex((entry) => entry === `body:delete:${contactsKey}`);
+  const manifestRemove = retryOperations.findIndex((entry) => entry === `metadata:remove:${manifestKey}`);
+  assert.ok(bodyDelete >= 0 && manifestRemove > bodyDelete, 'private body is gone before ownership metadata');
+});
+
+test('cleanup treats an already absent offline-map body as an idempotent retry', async () => {
+  const created = harness();
+  assert.equal((await commit(created.store, 'first')).ok, true);
+  assert.equal((await commit(created.store, 'second')).ok, true);
+  const manifestKey = [...created.metadata.values.keys()]
+    .find((key) => key.includes(':manifest:') && key.endsWith(':pack-1'));
+  const mapKey = [...created.bodies.values.keys()].find((key) => key.endsWith('pack-1:offline-map'));
+  assert.ok(manifestKey);
+  assert.ok(mapKey);
+  created.bodies.values.delete(mapKey);
+
+  assert.equal((await commit(created.store, 'third')).ok, true);
+
+  assert.equal(created.metadata.values.has(manifestKey), false);
+  assert.equal(
+    [...created.bodies.values.keys()].some((key) => key.includes('pack-1:')),
+    false,
+    'ordinary body cleanup completes when one body is already absent',
+  );
 });
 
 test('v1 Lifelines migration publishes one verified partial v2 generation without replacing a valid v2 head', async () => {

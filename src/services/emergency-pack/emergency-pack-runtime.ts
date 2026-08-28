@@ -1359,18 +1359,13 @@ export async function captureEmergencyPackOfflineMap(
     clearTimeout(timeout);
   }
   if (!captured.ok) return null;
-  let capturedAt: number;
+  let ownershipTransferred = false;
   try {
-    capturedAt = dependencies.now();
-  } catch {
-    return null;
-  }
-  if (!Number.isSafeInteger(capturedAt)
-    || capturedAt <= 0
-    || capturedAt + MAP_EXPIRY_MS > 8_640_000_000_000_000) return null;
-  let body: string;
-  try {
-    body = JSON.stringify({
+    const capturedAt = dependencies.now();
+    if (!Number.isSafeInteger(capturedAt)
+      || capturedAt <= 0
+      || capturedAt + MAP_EXPIRY_MS > 8_640_000_000_000_000) return null;
+    const body = JSON.stringify({
       kind: 'offline-map',
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
@@ -1379,19 +1374,29 @@ export async function captureEmergencyPackOfflineMap(
       tiles: captured.tiles,
       totalBytes: captured.totalBytes,
     });
+    if (!parseOfflineMapGenerationEvidence(body)) return null;
+    const artifact: EmergencyPackCapturedArtifact = {
+      kind: 'offline-map',
+      body,
+      capturedAt,
+      expiresAt: capturedAt + MAP_EXPIRY_MS,
+      semanticState: 'verified',
+      summary: `${captured.tiles.length} offline map tiles verified`,
+      itemCount: captured.tiles.length,
+    };
+    ownershipTransferred = true;
+    return artifact;
   } catch {
     return null;
+  } finally {
+    if (!ownershipTransferred) {
+      try {
+        await captured.releaseStagedGeneration();
+      } catch {
+        // The owner-bound release persists cleanup evidence before deleting staged tiles.
+      }
+    }
   }
-  if (!parseOfflineMapGenerationEvidence(body)) return null;
-  return {
-    kind: 'offline-map',
-    body,
-    capturedAt,
-    expiresAt: capturedAt + MAP_EXPIRY_MS,
-    semanticState: 'verified',
-    summary: `${captured.tiles.length} offline map tiles verified`,
-    itemCount: captured.tiles.length,
-  };
 }
 
 async function captureDefaultOfflineMap(

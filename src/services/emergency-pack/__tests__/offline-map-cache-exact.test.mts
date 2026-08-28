@@ -44,6 +44,7 @@ interface OfflineMapApi {
     totalBytes: number;
     tiles: ExactTile[];
     reason?: string;
+    releaseStagedGeneration?: () => Promise<{ ok: boolean; reason?: string }>;
   }>;
   verifyOfflineMapGenerationExact?: (input: {
     generationId: string;
@@ -513,6 +514,52 @@ test('successful capture stores immutable generation-scoped keys and SHA-256 evi
     tiles: result.tiles,
     cache,
   }), { ok: false, reason: 'tile-readback-mismatch' });
+});
+
+test('successful capture exposes one memoized owner-bound release and permits an immediate retry', async () => {
+  const capture = requireFunction('captureOfflineMapTilesExact');
+  const cache = new ExactCache();
+  const cleanup = cleanupCoordinator();
+  const release = cleanup.releaseGeneration.bind(cleanup);
+  let releases = 0;
+  cleanup.releaseGeneration = async (input) => {
+    releases += 1;
+    return release(input);
+  };
+  const first = await capture({
+    generationId: 'generation-release-capability',
+    tileUrls: tileUrls(1),
+    cache,
+    cleanup,
+    fetchTile: async (url) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+
+  assert.equal(first.ok, true);
+  assert.equal(typeof first.releaseStagedGeneration, 'function');
+  const releaseStagedGeneration = first.releaseStagedGeneration!;
+  const [releasedOnce, releasedTwice] = await Promise.all([
+    releaseStagedGeneration(),
+    releaseStagedGeneration(),
+  ]);
+  assert.deepEqual(releasedOnce, { ok: true });
+  assert.deepEqual(releasedTwice, { ok: true });
+  assert.equal(releases, 1, 'the exact capture owner must release its generation at most once');
+  assert.equal(cache.values.size, 0);
+
+  const retry = await capture({
+    generationId: 'generation-after-owner-release',
+    tileUrls: tileUrls(1),
+    cache,
+    cleanup,
+    fetchTile: async (url) => new Response(`retry:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+  });
+  assert.equal(retry.ok, true);
 });
 
 test('cleanup tombstones reject extra fields and more than 512 allowlisted generation keys', async () => {

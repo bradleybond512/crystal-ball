@@ -35,7 +35,7 @@ export interface EmergencyPackMetadataBoundary {
 export interface EmergencyPackBodiesBoundary {
   put(key: string, body: string): Promise<void>;
   get(key: string): Promise<string | null>;
-  delete(key: string): Promise<void>;
+  delete(key: string): Promise<boolean>;
 }
 
 export interface EmergencyPackScope {
@@ -860,7 +860,8 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     if (artifact.kind !== 'offline-map') return true;
     try {
       const body = artifact.body ?? await bodies.get(artifact.cacheKey);
-      if (body === null || (artifact.sha256 !== undefined && await digest(body) !== artifact.sha256)) return false;
+      if (body === null) return true;
+      if (artifact.sha256 !== undefined && await digest(body) !== artifact.sha256) return false;
       return releaseBody(artifact.kind, body);
     } catch {
       return false;
@@ -869,8 +870,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
 
   async function deleteStoredBody(artifact: StoredArtifactBody): Promise<boolean> {
     try {
-      await bodies.delete(artifact.cacheKey);
-      return true;
+      return await bodies.delete(artifact.cacheKey) === true;
     } catch {
       return false;
     }

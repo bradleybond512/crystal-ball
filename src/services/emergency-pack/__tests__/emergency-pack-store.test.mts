@@ -578,6 +578,275 @@ async function seedStagingJournal(
   };
 }
 
+type StagingJournal = {
+  schemaVersion: unknown;
+  packId: unknown;
+  placeId: unknown;
+  profileFingerprint: unknown;
+  manifestKey: unknown;
+  artifacts: unknown;
+  [key: string]: unknown;
+};
+
+function readStagingJournal(metadata: MemoryMetadata, key: string): StagingJournal {
+  const encoded = metadata.values.get(key);
+  assert.ok(encoded);
+  return JSON.parse(encoded) as StagingJournal;
+}
+
+function writeStagingJournal(metadata: MemoryMetadata, key: string, journal: unknown): void {
+  metadata.values.set(key, JSON.stringify(journal));
+}
+
+async function assertStagingJournalRejected(
+  created: ReturnType<typeof harness>,
+  staged: Awaited<ReturnType<typeof seedStagingJournal>>,
+  message: string,
+): Promise<void> {
+  const bodiesBefore = new Map(created.bodies.values);
+  const manifestBefore = created.metadata.values.get(staged.manifestKey);
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+    message,
+  );
+  assert.equal(created.metadata.values.has(staged.journalKey), true, `${message}: journal retained`);
+  assert.equal(created.metadata.values.get(staged.manifestKey), manifestBefore, `${message}: manifest retained`);
+  assert.deepEqual(created.bodies.values, bodiesBefore, `${message}: bodies retained`);
+}
+
+async function seedCustomStagingJournal(
+  created: ReturnType<typeof harness>,
+  values: { packId: string; placeId: string; profileFingerprint: string },
+) {
+  const kind = 'contacts';
+  const body = JSON.stringify({ marker: 'strict-journal', kind });
+  const journalKey = `${STAGING_PREFIX}${encodeURIComponent(values.packId)}`;
+  const candidateManifestKey = `wm-emergency-pack-v2:manifest:${encodeURIComponent(values.placeId)}:${encodeURIComponent(values.packId)}`;
+  const cacheKey = `wm-emergency-pack-v2:body:${encodeURIComponent(values.packId)}:${kind}`;
+  created.bodies.values.set(cacheKey, body);
+  created.metadata.values.set(candidateManifestKey, JSON.stringify({ unpublished: values.packId }));
+  writeStagingJournal(created.metadata, journalKey, {
+    schemaVersion: 1,
+    ...values,
+    manifestKey: candidateManifestKey,
+    artifacts: [{ kind, cacheKey, sha256: await digest(body) }],
+  });
+  return { journalKey, manifestKey: candidateManifestKey, bodyKeys: [cacheKey] };
+}
+
+test('staging journal enforces its 64 KiB UTF-8 byte cap before parsing', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'utf8-cap', 'pack-utf8', ['contacts']);
+  const valid = created.metadata.values.get(staged.journalKey);
+  assert.ok(valid);
+  const encoded = `{"placeId":"${'😀'.repeat(17_000)}",${valid.slice(1)}`;
+  assert.ok(encoded.length <= 64 * 1024, 'fixture stays within the UTF-16 fast-path bound');
+  assert.ok(new TextEncoder().encode(encoded).byteLength > 64 * 1024, 'fixture exceeds the UTF-8 byte bound');
+  created.metadata.values.set(staged.journalKey, encoded);
+
+  await assertStagingJournalRejected(created, staged, 'UTF-8 byte cap');
+});
+
+test('staging recovery rejects more than sixteen journals before deleting any ownership evidence', async () => {
+  const created = harness();
+  const staged = await Promise.all(Array.from({ length: 17 }, (_, index) => (
+    seedStagingJournal(created.metadata, created.bodies, `journal-${index}`, `pack-${index}`, ['contacts'])
+  )));
+  const bodiesBefore = new Map(created.bodies.values);
+
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+  assert.equal(staged.every(({ journalKey }) => created.metadata.values.has(journalKey)), true);
+  assert.deepEqual(created.bodies.values, bodiesBefore);
+});
+
+for (const [label, value] of [['null', null], ['array', []]] as const) {
+  test(`staging journal rejects a ${label} top-level value`, async () => {
+    const created = harness();
+    const staged = await seedStagingJournal(created.metadata, created.bodies, label, `pack-${label}`, ['contacts']);
+    writeStagingJournal(created.metadata, staged.journalKey, value);
+
+    await assertStagingJournalRejected(created, staged, `top-level ${label}`);
+  });
+}
+
+test('staging journal rejects unknown top-level fields', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'extra-field', 'pack-extra', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  journal.privateBody = 'must-not-be-accepted';
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'exact top-level fields');
+});
+
+test('staging journal accepts only schema version one', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'schema', 'pack-schema', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  journal.schemaVersion = 2;
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'schema version');
+});
+
+test('staging journal pack id must canonically match its metadata key', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'canonical-key', 'pack-canonical', ['contacts']);
+  const noncanonicalKey = `${STAGING_PREFIX}different-pack`;
+  created.metadata.values.set(noncanonicalKey, created.metadata.values.get(staged.journalKey)!);
+  created.metadata.values.delete(staged.journalKey);
+  const moved = { ...staged, journalKey: noncanonicalKey };
+
+  await assertStagingJournalRejected(created, moved, 'canonical staging key');
+});
+
+for (const [label, values] of [
+  ['empty pack id', { packId: '', placeId: PLACE_ID, profileFingerprint: PROFILE }],
+  ['oversized pack id', { packId: 'p'.repeat(513), placeId: PLACE_ID, profileFingerprint: PROFILE }],
+  ['empty place id', { packId: 'pack-empty-place', placeId: '', profileFingerprint: PROFILE }],
+  ['oversized place id', { packId: 'pack-long-place', placeId: 'p'.repeat(513), profileFingerprint: PROFILE }],
+  ['empty profile fingerprint', { packId: 'pack-empty-profile', placeId: PLACE_ID, profileFingerprint: '' }],
+  ['oversized profile fingerprint', {
+    packId: 'pack-long-profile',
+    placeId: PLACE_ID,
+    profileFingerprint: 'f'.repeat(1025),
+  }],
+] as const) {
+  test(`staging journal rejects ${label}`, async () => {
+    const created = harness();
+    const staged = await seedCustomStagingJournal(created, values);
+
+    await assertStagingJournalRejected(created, staged, label);
+  });
+}
+
+test('staging journal manifest key must exactly match its place and pack', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'manifest-key', 'pack-manifest', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  journal.manifestKey = 'wm-emergency-pack-v2:manifest:other:pack-manifest';
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'exact manifest key');
+});
+
+test('staging journal artifacts must be an array', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'artifact-array', 'pack-array', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  journal.artifacts = { 0: (journal.artifacts as unknown[])[0], length: 1 };
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'artifact array type');
+});
+
+test('staging journal artifact list must not be empty', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'empty-artifacts', 'pack-empty-artifacts', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  journal.artifacts = [];
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'nonempty artifacts');
+});
+
+test('staging journal artifact list is bounded to the allowlisted kind count', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'many-artifacts', 'pack-many');
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  const entries = journal.artifacts as unknown[];
+  journal.artifacts = [...entries, entries[0], entries[1]];
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'bounded artifacts');
+});
+
+for (const [label, value] of [['null', null], ['array', []]] as const) {
+  test(`staging journal rejects a ${label} artifact entry`, async () => {
+    const created = harness();
+    const staged = await seedStagingJournal(created.metadata, created.bodies, `artifact-${label}`, `pack-artifact-${label}`, ['contacts']);
+    const journal = readStagingJournal(created.metadata, staged.journalKey);
+    journal.artifacts = [value];
+    writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+    await assertStagingJournalRejected(created, staged, `artifact ${label}`);
+  });
+}
+
+test('staging journal artifact entries have exactly kind, cache key, and digest fields', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'artifact-fields', 'pack-artifact-fields', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  (journal.artifacts as Array<Record<string, unknown>>)[0]!.body = 'private-body';
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'exact artifact fields');
+});
+
+test('staging journal artifact kind must be allowlisted', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'artifact-kind', 'pack-artifact-kind', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  const artifact = (journal.artifacts as Array<Record<string, unknown>>)[0]!;
+  const oldCacheKey = artifact.cacheKey as string;
+  const cacheKey = 'wm-emergency-pack-v2:body:pack-artifact-kind:private-unknown';
+  created.bodies.values.set(cacheKey, created.bodies.values.get(oldCacheKey)!);
+  created.bodies.values.delete(oldCacheKey);
+  artifact.kind = 'private-unknown';
+  artifact.cacheKey = cacheKey;
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+  const mutated = { ...staged, bodyKeys: [cacheKey] };
+
+  await assertStagingJournalRejected(created, mutated, 'allowlisted artifact kind');
+});
+
+test('staging journal artifact cache key must exactly match its pack and kind', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'artifact-key', 'pack-artifact-key', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  const artifact = (journal.artifacts as Array<Record<string, unknown>>)[0]!;
+  const oldCacheKey = artifact.cacheKey as string;
+  const cacheKey = 'wm-emergency-pack-v2:body:other-pack:contacts';
+  created.bodies.values.set(cacheKey, created.bodies.values.get(oldCacheKey)!);
+  created.bodies.values.delete(oldCacheKey);
+  artifact.cacheKey = cacheKey;
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+  const mutated = { ...staged, bodyKeys: [cacheKey] };
+
+  await assertStagingJournalRejected(created, mutated, 'exact artifact cache key');
+});
+
+for (const [label, invalidDigest] of [
+  ['uppercase', 'A'.repeat(64)],
+  ['short', 'a'.repeat(63)],
+  ['non-hex', `${'a'.repeat(63)}z`],
+] as const) {
+  test(`staging journal rejects a ${label} SHA-256 digest`, async () => {
+    const created = harness({ digest: async () => invalidDigest });
+    const staged = await seedStagingJournal(created.metadata, created.bodies, `digest-${label}`, `pack-digest-${label}`, ['contacts']);
+    const journal = readStagingJournal(created.metadata, staged.journalKey);
+    (journal.artifacts as Array<Record<string, unknown>>)[0]!.sha256 = invalidDigest;
+    writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+    await assertStagingJournalRejected(created, staged, `strict ${label} digest`);
+  });
+}
+
+test('staging journal artifact kinds must be unique', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'duplicate-kind', 'pack-duplicate', ['contacts']);
+  const journal = readStagingJournal(created.metadata, staged.journalKey);
+  const artifact = (journal.artifacts as unknown[])[0];
+  journal.artifacts = [artifact, artifact];
+  writeStagingJournal(created.metadata, staged.journalKey, journal);
+
+  await assertStagingJournalRejected(created, staged, 'unique artifact kinds');
+});
+
 test('a complete digest-only staging journal is read back before the first body write', async () => {
   const created = harness();
   const metadataWrites: Array<{ key: string; value: string }> = [];
@@ -662,6 +931,111 @@ test('restart recovery removes every uncommitted staged body and manifest before
   const manifestRemove = recoveryOperations.indexOf(`metadata:remove:${staged.manifestKey}`);
   const journalRemove = recoveryOperations.indexOf(`metadata:remove:${staged.journalKey}`);
   assert.ok(lastBodyDelete >= 0 && manifestRemove > lastBodyDelete && journalRemove > manifestRemove);
+});
+
+test('restart cleanup verifies every staged body digest before deleting any body', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(
+    created.metadata,
+    created.bodies,
+    'digest-preflight',
+    'pack-digest-preflight',
+    ['lifelines', 'contacts'],
+  );
+  created.bodies.values.set(staged.bodyKeys[1]!, 'tampered-private-contacts');
+  const bodiesBefore = new Map(created.bodies.values);
+  const operationStart = created.operations.length;
+
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+  assert.equal(
+    created.operations.slice(operationStart).some((entry) => entry.startsWith('body:delete:')),
+    false,
+    'a later digest mismatch prevents every staged body deletion',
+  );
+  assert.deepEqual(created.bodies.values, bodiesBefore);
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
+  assert.equal(created.metadata.values.has(staged.manifestKey), true);
+});
+
+test('restart cleanup releases the offline generation before deleting the first staged body', async () => {
+  const operations: string[] = [];
+  const metadata = new MemoryMetadata(operations);
+  const bodies = new MemoryBodies(operations);
+  const staged = await seedStagingJournal(metadata, bodies, 'release-order', 'pack-release-order');
+  const store = requireFunction(api, 'createEmergencyPackStore')({
+    metadata,
+    bodies: {
+      put: (key, body) => bodies.put(key, body),
+      get: (key) => bodies.get(key),
+      async delete(key) {
+        await bodies.delete(key);
+        return true;
+      },
+    },
+    digest,
+    now: () => NOW,
+    createPackId: () => 'pack-after-release',
+    releaseArtifactBody(kind) {
+      operations.push(`body:release:${kind}`);
+    },
+  });
+  const operationStart = operations.length;
+
+  assert.deepEqual(
+    await store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'not-saved', packId: null },
+  );
+  const cleanup = operations.slice(operationStart);
+  const release = cleanup.indexOf('body:release:offline-map');
+  const firstDelete = cleanup.findIndex((entry) => entry.startsWith('body:delete:'));
+  assert.ok(release >= 0 && firstDelete > release, 'offline generation release precedes every body deletion');
+  assert.equal(staged.bodyKeys.every((key) => !bodies.values.has(key)), true);
+  assert.equal(metadata.values.has(staged.journalKey), false);
+});
+
+test('silent unpublished-manifest removal failure retains ownership and blocks later capture', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'manifest-noop', 'pack-manifest-noop');
+  const removeItem = created.metadata.removeItem.bind(created.metadata);
+  created.metadata.removeItem = (key) => {
+    if (key !== staged.manifestKey) removeItem(key);
+  };
+
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+  assert.equal(created.metadata.values.has(staged.manifestKey), true);
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
+  assert.deepEqual(await commit(created.store, 'blocked-after-manifest-noop'), {
+    ok: false,
+    reason: 'storage-failure',
+  });
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
+});
+
+test('silent staging-journal removal failure retains ownership and blocks later capture', async () => {
+  const created = harness();
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'journal-noop', 'pack-journal-noop');
+  const removeItem = created.metadata.removeItem.bind(created.metadata);
+  created.metadata.removeItem = (key) => {
+    if (key !== staged.journalKey) removeItem(key);
+  };
+
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
+  assert.equal(created.metadata.values.has(staged.manifestKey), false);
+  assert.deepEqual(await commit(created.store, 'blocked-after-journal-noop'), {
+    ok: false,
+    reason: 'storage-failure',
+  });
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
 });
 
 test('restart cleanup is deterministic after the journal and after each staged body including contacts', async () => {

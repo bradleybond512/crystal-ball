@@ -205,6 +205,63 @@ function createEmergencyPackStoreForClock(
   };
 }
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function pausingBodyBoundary(
+  bodies: MemoryBodies,
+  options: { failAfterRelease?: boolean } = {},
+) {
+  const entered = deferred();
+  const release = deferred();
+  let paused = false;
+  return {
+    entered: entered.promise,
+    release: release.resolve,
+    boundary: {
+      async put(key: string, body: string) {
+        if (!paused) {
+          paused = true;
+          entered.resolve();
+          await release.promise;
+          if (options.failAfterRelease) throw new Error('quota exceeded');
+        }
+        await bodies.put(key, body);
+      },
+      get: (key: string) => bodies.get(key),
+      async delete(key: string) {
+        await bodies.delete(key);
+        return true;
+      },
+    },
+  };
+}
+
+function sharedStore(
+  metadata: MemoryMetadata,
+  bodies: {
+    put(key: string, body: string): Promise<void>;
+    get(key: string): Promise<string | null>;
+    delete(key: string): Promise<boolean>;
+  },
+  packId: string,
+) {
+  return requireFunction(api, 'createEmergencyPackStore')({
+    metadata,
+    bodies,
+    digest,
+    now: () => NOW,
+    createPackId: () => packId,
+  });
+}
+
+async function drainMicrotasks(): Promise<void> {
+  for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+}
+
 async function commit(store: ReturnType<typeof harness>['store'], marker: string) {
   return commitScope(store, PLACE_ID, PROFILE, marker);
 }
@@ -281,6 +338,211 @@ async function rewriteActiveManifest(
 }
 
 const STAGING_PREFIX = 'wm-emergency-pack-v2:staging:';
+
+test('two store instances serialize migrations while the first owns a pre-body journal', async () => {
+  const operations: string[] = [];
+  const metadata = new MemoryMetadata(operations);
+  const bodies = new MemoryBodies(operations);
+  const paused = pausingBodyBoundary(bodies);
+  const writer = sharedStore(metadata, paused.boundary, 'pack-writer');
+  const follower = sharedStore(metadata, paused.boundary, 'pack-follower');
+  const writerResult = writer.migrateLifelineGeneration(legacyMigrationInput());
+  await paused.entered;
+  const writerJournal = `${STAGING_PREFIX}pack-writer`;
+  assert.equal(metadata.values.has(writerJournal), true);
+  let followerSettled = false;
+  const followerResult = follower.migrateLifelineGeneration(legacyMigrationInput())
+    .finally(() => { followerSettled = true; });
+  let assertionError: unknown;
+  try {
+    await drainMicrotasks();
+    assert.equal(followerSettled, false, 'second migration must wait for journal ownership transfer');
+    assert.equal(metadata.values.has(writerJournal), true, 'queued migration cannot reconcile writer ownership');
+    assert.equal(
+      operations.some((entry) => entry === `metadata:remove:${writerJournal}`),
+      false,
+      'queued migration cannot delete the writer journal',
+    );
+  } catch (error) {
+    assertionError = error;
+  } finally {
+    paused.release();
+  }
+  const [published, queued] = await Promise.all([writerResult, followerResult]);
+  if (assertionError) throw assertionError;
+  assert.deepEqual(published, { ok: true, packId: 'pack-writer' });
+  assert.deepEqual(queued, { ok: false, reason: 'active-v2-exists' });
+});
+
+test('commit and migration share one FIFO transaction across store instances', async () => {
+  const operations: string[] = [];
+  const metadata = new MemoryMetadata(operations);
+  const bodies = new MemoryBodies(operations);
+  const paused = pausingBodyBoundary(bodies);
+  const writer = sharedStore(metadata, paused.boundary, 'pack-commit');
+  const follower = sharedStore(metadata, paused.boundary, 'pack-migration');
+  const writerResult = commit(writer, 'paused-commit');
+  await paused.entered;
+  let followerSettled = false;
+  const followerResult = follower.migrateLifelineGeneration(legacyMigrationInput())
+    .finally(() => { followerSettled = true; });
+  let assertionError: unknown;
+  try {
+    await drainMicrotasks();
+    assert.equal(followerSettled, false, 'migration must queue behind a committing store instance');
+    assert.equal(metadata.values.has(`${STAGING_PREFIX}pack-commit`), true);
+  } catch (error) {
+    assertionError = error;
+  } finally {
+    paused.release();
+  }
+  const [published, queued] = await Promise.all([writerResult, followerResult]);
+  if (assertionError) throw assertionError;
+  assert.deepEqual(published, { ok: true, packId: 'pack-commit' });
+  assert.deepEqual(queued, { ok: false, reason: 'active-v2-exists' });
+});
+
+test('locked recovery waits for a paused writer while readActive keeps the old head available', async () => {
+  const operations: string[] = [];
+  const metadata = new MemoryMetadata(operations);
+  const bodies = new MemoryBodies(operations);
+  const initial = sharedStore(metadata, {
+    put: (key, body) => bodies.put(key, body),
+    get: (key) => bodies.get(key),
+    async delete(key) {
+      await bodies.delete(key);
+      return true;
+    },
+  }, 'pack-old');
+  assert.deepEqual(await commit(initial, 'old-head'), { ok: true, packId: 'pack-old' });
+
+  const paused = pausingBodyBoundary(bodies);
+  const writer = sharedStore(metadata, paused.boundary, 'pack-new');
+  const reader = sharedStore(metadata, paused.boundary, 'pack-reader');
+  const writerResult = commit(writer, 'new-head');
+  await paused.entered;
+  let activeRecoverySettled = false;
+  let readinessRecoverySettled = false;
+  const activeRecovery = reader.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })
+    .finally(() => { activeRecoverySettled = true; });
+  const readinessRecovery = reader.recoverReadiness({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })
+    .finally(() => { readinessRecoverySettled = true; });
+  let assertionError: unknown;
+  try {
+    assert.deepEqual(
+      await reader.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'ready', packId: 'pack-old' },
+      'ordinary reads remain available from the last-known-good head',
+    );
+    await drainMicrotasks();
+    assert.equal(activeRecoverySettled, false);
+    assert.equal(readinessRecoverySettled, false);
+    assert.equal(metadata.values.has(`${STAGING_PREFIX}pack-new`), true);
+  } catch (error) {
+    assertionError = error;
+  } finally {
+    paused.release();
+  }
+  const [published, recoveredActive, recoveredReadiness] = await Promise.all([
+    writerResult,
+    activeRecovery,
+    readinessRecovery,
+  ]);
+  if (assertionError) throw assertionError;
+  assert.deepEqual(published, { ok: true, packId: 'pack-new' });
+  assert.deepEqual(recoveredActive, { status: 'ready', packId: 'pack-new' });
+  assert.equal(recoveredReadiness.packId, 'pack-new');
+});
+
+test('prune queues behind a paused writer and cannot remove the old head mid-transaction', async () => {
+  const operations: string[] = [];
+  const metadata = new MemoryMetadata(operations);
+  const bodies = new MemoryBodies(operations);
+  const initial = sharedStore(metadata, {
+    put: (key, body) => bodies.put(key, body),
+    get: (key) => bodies.get(key),
+    async delete(key) {
+      await bodies.delete(key);
+      return true;
+    },
+  }, 'pack-old');
+  assert.deepEqual(await commit(initial, 'old-head'), { ok: true, packId: 'pack-old' });
+  const head = [...metadata.values.keys()].find((key) => key.includes(':head:'));
+  assert.ok(head);
+
+  const paused = pausingBodyBoundary(bodies);
+  const writer = sharedStore(metadata, paused.boundary, 'pack-new');
+  const pruner = sharedStore(metadata, paused.boundary, 'pack-pruner');
+  const writerResult = commit(writer, 'new-head');
+  await paused.entered;
+  let pruneSettled = false;
+  const pruneResult = pruner.prune({ placeIds: [], maxPlaces: 5, generationsPerPlace: 2 })
+    .finally(() => { pruneSettled = true; });
+  let assertionError: unknown;
+  try {
+    await drainMicrotasks();
+    assert.equal(pruneSettled, false);
+    assert.equal(metadata.values.has(head), true, 'queued prune cannot remove the last-known-good head');
+    assert.equal(metadata.values.has(`${STAGING_PREFIX}pack-new`), true);
+  } catch (error) {
+    assertionError = error;
+  } finally {
+    paused.release();
+  }
+  await Promise.all([writerResult, pruneResult]);
+  if (assertionError) throw assertionError;
+  assert.equal(metadata.values.has(head), false, 'prune executes after the writer releases the queue');
+});
+
+test('a failed writer releases the FIFO queue so the next recovery completes', async () => {
+  const operations: string[] = [];
+  const metadata = new MemoryMetadata(operations);
+  const bodies = new MemoryBodies(operations);
+  const initial = sharedStore(metadata, {
+    put: (key, body) => bodies.put(key, body),
+    get: (key) => bodies.get(key),
+    async delete(key) {
+      await bodies.delete(key);
+      return true;
+    },
+  }, 'pack-old');
+  assert.deepEqual(await commit(initial, 'old-head'), { ok: true, packId: 'pack-old' });
+
+  const paused = pausingBodyBoundary(bodies, { failAfterRelease: true });
+  const writer = sharedStore(metadata, paused.boundary, 'pack-failed');
+  const reader = sharedStore(metadata, paused.boundary, 'pack-reader');
+  const writerResult = commit(writer, 'failed-writer');
+  await paused.entered;
+  let recoverySettled = false;
+  const recoveryResult = reader.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW })
+    .finally(() => { recoverySettled = true; });
+  await drainMicrotasks();
+  const settledBeforeRelease = recoverySettled;
+  const journalRetainedBeforeRelease = metadata.values.has(`${STAGING_PREFIX}pack-failed`);
+  paused.release();
+
+  assert.equal(settledBeforeRelease, false, 'recovery remains FIFO-queued behind the failing writer');
+  assert.equal(journalRetainedBeforeRelease, true, 'queued recovery cannot reconcile the failing writer early');
+  assert.deepEqual(await writerResult, { ok: false, reason: 'storage-quota' });
+  assert.deepEqual(await recoveryResult, { status: 'ready', packId: 'pack-old' });
+});
+
+test('oversized but otherwise valid journal text is retained before parsing or cleanup', async () => {
+  const created = harness();
+  assert.deepEqual(await commit(created.store, 'old-head'), { ok: true, packId: 'pack-1' });
+  const staged = await seedStagingJournal(created.metadata, created.bodies, 'oversized', 'pack-oversized', ['contacts']);
+  const encoded = created.metadata.values.get(staged.journalKey);
+  assert.ok(encoded);
+  created.metadata.values.set(staged.journalKey, `${encoded}${' '.repeat(64 * 1024)}`);
+  const bodiesBefore = new Map(created.bodies.values);
+
+  assert.deepEqual(
+    await created.store.recoverActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+    { status: 'unavailable', packId: null, reason: 'storage-failure' },
+  );
+  assert.equal(created.metadata.values.has(staged.journalKey), true);
+  assert.deepEqual(created.bodies.values, bodiesBefore);
+});
 
 async function seedStagingJournal(
   metadata: MemoryMetadata,

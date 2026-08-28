@@ -615,6 +615,8 @@ export function createEmergencyPackOfflineMapTileResolver(
   };
 }
 
+let offlineMapLifecycleTail = Promise.resolve();
+
 export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDependencies) {
   const adapters = dependencies.createBrowserAdapters();
   const store = dependencies.createStore(adapters);
@@ -633,7 +635,6 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     reason?: string;
   }>();
   const pendingAlertRevisions = new Map<string, string[]>();
-  let offlineMapLifecycleTail = Promise.resolve();
   let alertRevisionTail = Promise.resolve();
   let latestAlertSourceRevision: string | null = null;
   let alertRevisionEpoch = 0;
@@ -872,13 +873,13 @@ export function createEmergencyPackRuntime(dependencies: EmergencyPackRuntimeDep
     const artifact = await lifelines(scope);
     if (artifact?.kind !== 'lifelines') return recovered;
 
-    const migrated = await store.migrateLifelineGeneration({
+    const migrated = await withOfflineMapLifecycle(() => store.migrateLifelineGeneration!({
       placeId: scope.placeId,
       profileFingerprint: scope.profileFingerprint,
       legacyQueryFingerprint,
       legacyManifest,
       artifact,
-    });
+    }));
     return migrated.ok ? readDetailed(scope) : recovered;
   }
 

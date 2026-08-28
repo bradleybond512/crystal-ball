@@ -40,13 +40,13 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-async function within<T>(promise: Promise<T>): Promise<T> {
+async function within<T>(promise: Promise<T>, message = 'concurrent capture deadlocked'): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       promise,
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error('concurrent capture deadlocked')), 1_000);
+        timer = setTimeout(() => reject(new Error(message)), 1_000);
       }),
     ]);
   } finally {
@@ -402,6 +402,322 @@ test('prune release finishes before a new place can stage an offline-map generat
   assert.equal(state.status, 'ready');
   assert.ok(harness.events.indexOf('prune:end') < harness.events.indexOf('home:map-start'));
   harness.runtime.destroy();
+});
+
+function createGlobalLifecycleRuntime(input: {
+  places: Place[];
+  source?: (kind: string, scope: EmergencyPackCaptureScope) => Promise<EmergencyPackCapturedArtifact | null>;
+  store?: {
+    readActive?(scope: EmergencyPackCaptureScope): Promise<{
+      status: 'ready' | 'not-saved';
+      packId: string | null;
+      profileFingerprint: string;
+    }>;
+    recoverActive?(scope: EmergencyPackCaptureScope): Promise<{
+      status: 'ready' | 'not-saved';
+      packId: string | null;
+      profileFingerprint: string;
+    }>;
+    commitGeneration?(value: { placeId: string; profileFingerprint: string }): Promise<{
+      ok: boolean;
+      packId?: string;
+      reason?: string;
+    }>;
+    migrateLifelineGeneration?(value: { placeId: string }): Promise<{
+      ok: boolean;
+      packId?: string;
+      reason?: string;
+    }>;
+  };
+  legacy?: boolean;
+}) {
+  const states = new Map<string, {
+    status: 'ready' | 'not-saved';
+    packId: string | null;
+    profileFingerprint: string;
+  }>();
+  const defaultState = (scope: EmergencyPackCaptureScope) => states.get(scope.placeId) ?? {
+    status: 'not-saved' as const,
+    packId: null,
+    profileFingerprint: scope.profileFingerprint,
+  };
+  const store = {
+    readActive: input.store?.readActive ?? (async (scope: EmergencyPackCaptureScope) => defaultState(scope)),
+    recoverActive: input.store?.recoverActive ?? (async (scope: EmergencyPackCaptureScope) => defaultState(scope)),
+    commitGeneration: input.store?.commitGeneration ?? (async (value: {
+      placeId: string;
+      profileFingerprint: string;
+    }) => {
+      states.set(value.placeId, {
+        status: 'ready',
+        packId: `pack-${value.placeId}`,
+        profileFingerprint: value.profileFingerprint,
+      });
+      return { ok: true, packId: `pack-${value.placeId}` };
+    }),
+    async invalidateArtifacts() { return { ok: true }; },
+    ...(input.store?.migrateLifelineGeneration
+      ? { migrateLifelineGeneration: input.store.migrateLifelineGeneration }
+      : {}),
+  };
+  const source = input.source ?? (async (kind: string, scope: EmergencyPackCaptureScope) => artifactFor(kind, scope));
+  const runtime = createEmergencyPackRuntime({
+    now: () => NOW,
+    buildProfileFingerprint: (place) => `profile-${place.id}`,
+    getSavedPlaces: () => input.places,
+    createBrowserAdapters: () => ({}),
+    createStore: () => store,
+    createCoordinator: createEmergencyPackCoordinator,
+    createSources: () => Object.fromEntries(REQUIRED_KINDS.map((kind) => [
+      kind,
+      (scope: EmergencyPackCaptureScope) => source(kind, scope),
+    ])),
+    createCaptureOrchestrator: createEmergencyPackCaptureOrchestrator,
+    releaseArtifact: async () => undefined,
+    getLegacyLifelinePackManifest: () => input.legacy ? { queryFingerprint: 'legacy-query' } : null,
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeRoutes: () => () => undefined,
+    subscribeComms: () => () => undefined,
+    subscribeLifelines: () => () => undefined,
+    subscribeAlerts: () => () => undefined,
+    getCurrentAlertSourceRevision: () => null,
+  });
+  return runtime;
+}
+
+function artifactFor(kind: string, scope: EmergencyPackCaptureScope): EmergencyPackCapturedArtifact {
+  const sourceRevision = 'a'.repeat(64);
+  return {
+    kind,
+    body: JSON.stringify({
+      kind,
+      placeId: scope.placeId,
+      profileFingerprint: scope.profileFingerprint,
+      capturedAt: NOW,
+      ...(kind === 'alerts' ? { sourceRevision } : {}),
+    }),
+    capturedAt: NOW,
+    expiresAt: NOW + 60_000,
+    semanticState: 'verified',
+    summary: `${kind} verified`,
+    itemCount: 1,
+    ...(kind === 'alerts' ? { sourceRevision } : {}),
+  };
+}
+
+test('separate runtime instances share one offline-map lifecycle queue', async () => {
+  const firstPlace = { id: 'first', name: 'First', lat: 1, lon: 1, radiusKm: 25 };
+  const secondPlace = { id: 'second', name: 'Second', lat: 2, lon: 2, radiusKm: 25 };
+  const firstStarted = deferred();
+  const releaseFirst = deferred();
+  let activeOfflineMaps = 0;
+  let maxActiveOfflineMaps = 0;
+  const source = (hold: boolean) => async (kind: string, scope: EmergencyPackCaptureScope) => {
+    if (kind === 'offline-map') {
+      activeOfflineMaps += 1;
+      maxActiveOfflineMaps = Math.max(maxActiveOfflineMaps, activeOfflineMaps);
+      if (hold) {
+        firstStarted.resolve();
+        await releaseFirst.promise;
+      }
+      activeOfflineMaps -= 1;
+    }
+    return artifactFor(kind, scope);
+  };
+  const first = createGlobalLifecycleRuntime({ places: [firstPlace], source: source(true) });
+  const second = createGlobalLifecycleRuntime({ places: [secondPlace], source: source(false) });
+
+  const firstCapture = first.capture(firstPlace, true);
+  const firstOutcome = await within(Promise.race([
+    firstStarted.promise.then(() => 'started' as const),
+    firstCapture.then((state) => `finished:${state.status}:${state.reason ?? ''}` as const),
+  ]), 'first offline map did not start');
+  assert.equal(firstOutcome, 'started');
+  const secondCapture = second.capture(secondPlace, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  releaseFirst.resolve();
+  await within(Promise.all([firstCapture, secondCapture]), 'cross-runtime captures did not finish');
+
+  assert.equal(maxActiveOfflineMaps, 1, 'runtime instances must not overlap offline-map lifecycles');
+  first.destroy();
+  second.destroy();
+});
+
+test('refreshAll keeps legacy source reads concurrent while serializing migration mutations', async () => {
+  const places = [
+    { id: 'home', name: 'Home', lat: 1, lon: 1, radiusKm: 25 },
+    { id: 'work', name: 'Work', lat: 2, lon: 2, radiusKm: 25 },
+  ];
+  const bothReadsStarted = deferred();
+  const firstMigrationStarted = deferred();
+  const releaseFirstMigration = deferred();
+  let activeReads = 0;
+  let maxActiveReads = 0;
+  let readStarts = 0;
+  let activeMigrations = 0;
+  let maxActiveMigrations = 0;
+  const runtime = createGlobalLifecycleRuntime({
+    places,
+    legacy: true,
+    source: async (kind, scope) => {
+      if (kind === 'lifelines') {
+        readStarts += 1;
+        activeReads += 1;
+        maxActiveReads = Math.max(maxActiveReads, activeReads);
+        if (readStarts === places.length) bothReadsStarted.resolve();
+        await bothReadsStarted.promise;
+        activeReads -= 1;
+      }
+      return artifactFor(kind, scope);
+    },
+    store: {
+      async migrateLifelineGeneration() {
+        activeMigrations += 1;
+        maxActiveMigrations = Math.max(maxActiveMigrations, activeMigrations);
+        if (maxActiveMigrations === 1) {
+          firstMigrationStarted.resolve();
+          await releaseFirstMigration.promise;
+        }
+        activeMigrations -= 1;
+        return { ok: false, reason: 'test-migration' };
+      },
+    },
+  });
+
+  const hydration = runtime.hydrate();
+  await within(bothReadsStarted.promise);
+  await within(firstMigrationStarted.promise);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  releaseFirstMigration.resolve();
+  await within(hydration);
+
+  assert.equal(maxActiveReads, 2, 'legacy source lookup must remain outside the lifecycle queue');
+  assert.equal(maxActiveMigrations, 1, 'migration mutations must be globally serialized');
+  runtime.destroy();
+});
+
+test('migration cleanup cannot overlap capture staging in another runtime', async () => {
+  const migrationPlace = { id: 'legacy', name: 'Legacy', lat: 1, lon: 1, radiusKm: 25 };
+  const capturePlace = { id: 'capture', name: 'Capture', lat: 2, lon: 2, radiusKm: 25 };
+  const migrationStarted = deferred();
+  const releaseMigration = deferred();
+  let captureStarted = false;
+  const migrating = createGlobalLifecycleRuntime({
+    places: [migrationPlace],
+    legacy: true,
+    store: {
+      async migrateLifelineGeneration() {
+        migrationStarted.resolve();
+        await releaseMigration.promise;
+        return { ok: false, reason: 'test-migration' };
+      },
+    },
+  });
+  const capturing = createGlobalLifecycleRuntime({
+    places: [capturePlace],
+    source: async (kind, scope) => {
+      if (kind === 'offline-map') captureStarted = true;
+      return artifactFor(kind, scope);
+    },
+  });
+
+  const hydration = migrating.hydrate();
+  await within(migrationStarted.promise);
+  const capture = capturing.capture(capturePlace, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const captureStartedDuringMigration = captureStarted;
+  releaseMigration.resolve();
+  await within(Promise.all([hydration, capture]));
+
+  assert.equal(captureStartedDuringMigration, false, 'migration cleanup must retain the global lifecycle lease');
+  assert.equal(captureStarted, true);
+  migrating.destroy();
+  capturing.destroy();
+});
+
+test('capture store commit precedes a queued startup migration without deadlock', async () => {
+  const capturePlace = { id: 'capture', name: 'Capture', lat: 1, lon: 1, radiusKm: 25 };
+  const migrationPlace = { id: 'legacy', name: 'Legacy', lat: 2, lon: 2, radiusKm: 25 };
+  const captureStaged = deferred();
+  const releaseCapture = deferred();
+  const events: string[] = [];
+  const capturing = createGlobalLifecycleRuntime({
+    places: [capturePlace],
+    source: async (kind, scope) => {
+      if (kind === 'offline-map') {
+        events.push('capture:staged');
+        captureStaged.resolve();
+        await releaseCapture.promise;
+      }
+      return artifactFor(kind, scope);
+    },
+    store: {
+      async commitGeneration(value) {
+        events.push('capture:store');
+        return { ok: true, packId: `pack-${value.placeId}` };
+      },
+    },
+  });
+  const migrating = createGlobalLifecycleRuntime({
+    places: [migrationPlace],
+    legacy: true,
+    store: {
+      async migrateLifelineGeneration() {
+        events.push('migration:store');
+        return { ok: false, reason: 'test-migration' };
+      },
+    },
+  });
+
+  const capture = capturing.capture(capturePlace, true);
+  await within(captureStaged.promise);
+  const hydration = migrating.hydrate();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  releaseCapture.resolve();
+  await within(Promise.all([capture, hydration]));
+
+  assert.ok(events.indexOf('capture:store') < events.indexOf('migration:store'), events.join(', '));
+  capturing.destroy();
+  migrating.destroy();
+});
+
+test('failed lifecycle work releases the global queue for another runtime', async () => {
+  const firstPlace = { id: 'failed', name: 'Failed', lat: 1, lon: 1, radiusKm: 25 };
+  const secondPlace = { id: 'next', name: 'Next', lat: 2, lon: 2, radiusKm: 25 };
+  const failedStarted = deferred();
+  const releaseFailure = deferred();
+  const events: string[] = [];
+  const failing = createGlobalLifecycleRuntime({
+    places: [firstPlace],
+    source: async (kind, scope) => {
+      if (kind === 'offline-map') {
+        events.push('failed:start');
+        failedStarted.resolve();
+        await releaseFailure.promise;
+        events.push('failed:end');
+        throw new Error('expected lifecycle failure');
+      }
+      return artifactFor(kind, scope);
+    },
+  });
+  const next = createGlobalLifecycleRuntime({
+    places: [secondPlace],
+    source: async (kind, scope) => {
+      if (kind === 'offline-map') events.push('next:start');
+      return artifactFor(kind, scope);
+    },
+  });
+
+  const failedCapture = failing.capture(firstPlace, true);
+  await within(failedStarted.promise);
+  const nextCapture = next.capture(secondPlace, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  releaseFailure.resolve();
+  await within(Promise.all([failedCapture, nextCapture]));
+
+  assert.ok(events.indexOf('failed:end') < events.indexOf('next:start'), events.join(', '));
+  failing.destroy();
+  next.destroy();
 });
 
 function createAlertRevisionRaceHarness(options: { initiallyReady?: boolean; failFirstRevisionB?: boolean } = {}) {

@@ -26,6 +26,17 @@ const ARTIFACT_KINDS = new Set<EmergencyPackArtifactKind>([
 const INVALIDATION_SCHEMA_VERSION = 2;
 const STAGING_SCHEMA_VERSION = 1;
 const MAX_STAGING_JOURNALS = 16;
+const MAX_STAGING_JOURNAL_BYTES = 64 * 1024;
+
+let storeTransactionTail: Promise<void> = Promise.resolve();
+
+function withStoreTransaction<T>(operation: () => Promise<T>): Promise<T> {
+  const predecessor = storeTransactionTail.catch(() => undefined);
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  storeTransactionTail = predecessor.then(() => current);
+  return predecessor.then(operation).finally(release);
+}
 
 export interface EmergencyPackMetadataBoundary {
   getItem(key: string): string | null;
@@ -224,6 +235,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function parseStagingJournal(value: string | null, key: string): EmergencyPackStagingJournal {
   if (value === null) throw new Error('missing staging journal');
+  if (value.length > MAX_STAGING_JOURNAL_BYTES) throw new Error('staging journal too large');
+  if (new TextEncoder().encode(value).byteLength > MAX_STAGING_JOURNAL_BYTES) {
+    throw new Error('staging journal too large');
+  }
   const raw: unknown = JSON.parse(value);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid staging journal');
   const journal = raw as Record<string, unknown>;
@@ -1039,7 +1054,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     return null;
   }
 
-  async function recoverActive(scope: EmergencyPackScope): Promise<EmergencyPackStoreState> {
+  async function recoverActiveUnlocked(scope: EmergencyPackScope): Promise<EmergencyPackStoreState> {
     try {
       await reconcileStagingJournals();
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
@@ -1056,7 +1071,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function recoverReadiness(scope: EmergencyPackScope): Promise<EmergencyPackDetailedReadiness> {
+  async function recoverReadinessUnlocked(scope: EmergencyPackScope): Promise<EmergencyPackDetailedReadiness> {
     try {
       await reconcileStagingJournals();
       const manifest = await recoverVerifiedManifest(scope);
@@ -1220,7 +1235,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function commitGeneration(input: EmergencyPackGenerationInput): Promise<
+  async function commitGenerationUnlocked(input: EmergencyPackGenerationInput): Promise<
     { ok: true; packId: string } | { ok: false; reason: string }
   > {
     try {
@@ -1366,7 +1381,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function migrateLifelineGeneration(input: EmergencyPackLifelineMigrationInput): Promise<
+  async function migrateLifelineGenerationUnlocked(input: EmergencyPackLifelineMigrationInput): Promise<
     { ok: true; packId: string } | { ok: false; reason: string }
   > {
     try {
@@ -1531,7 +1546,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     }
   }
 
-  async function prune(input: EmergencyPackPruneInput): Promise<void> {
+  async function pruneUnlocked(input: EmergencyPackPruneInput): Promise<void> {
     if (!validPruneInput(input)) return;
     try {
       await reconcileStagingJournals();
@@ -1542,6 +1557,26 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     const retained = await collectRetainedGenerations(allowedPlaceIds);
     removeUnretainedHeads(allowedPlaceIds);
     await removeUnretainedManifests(allowedPlaceIds, retained);
+  }
+
+  function commitGeneration(input: EmergencyPackGenerationInput) {
+    return withStoreTransaction(() => commitGenerationUnlocked(input));
+  }
+
+  function migrateLifelineGeneration(input: EmergencyPackLifelineMigrationInput) {
+    return withStoreTransaction(() => migrateLifelineGenerationUnlocked(input));
+  }
+
+  function recoverActive(scope: EmergencyPackScope) {
+    return withStoreTransaction(() => recoverActiveUnlocked(scope));
+  }
+
+  function recoverReadiness(scope: EmergencyPackScope) {
+    return withStoreTransaction(() => recoverReadinessUnlocked(scope));
+  }
+
+  function prune(input: EmergencyPackPruneInput) {
+    return withStoreTransaction(() => pruneUnlocked(input));
   }
 
   return {

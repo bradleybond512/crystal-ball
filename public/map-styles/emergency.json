@@ -2,7 +2,7 @@
   "version": 8,
   "name": "Emergency (offline)",
   "sources": {
-    "carto-emergency-base": {
+    "carto-emergency-z0": {
       "type": "raster",
       "tiles": [
         "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
@@ -10,7 +10,80 @@
         "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
       ],
       "tileSize": 256,
-      "maxzoom": 19,
+      "minzoom": 0,
+      "maxzoom": 0,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "carto-emergency-z2": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 2,
+      "maxzoom": 2,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "carto-emergency-z4": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 4,
+      "maxzoom": 4,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "carto-emergency-z6": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 6,
+      "maxzoom": 6,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "carto-emergency-z8": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 8,
+      "maxzoom": 8,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "carto-emergency-z10": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 10,
+      "maxzoom": 10,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "carto-emergency-z12": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 12,
+      "maxzoom": 12,
       "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
     }
   },
@@ -21,9 +94,52 @@
       "paint": { "background-color": "#0b0e12" }
     },
     {
-      "id": "carto-emergency-base-tiles",
+      "id": "carto-emergency-z0-tiles",
       "type": "raster",
-      "source": "carto-emergency-base"
+      "source": "carto-emergency-z0",
+      "minzoom": 0,
+      "maxzoom": 2
+    },
+    {
+      "id": "carto-emergency-z2-tiles",
+      "type": "raster",
+      "source": "carto-emergency-z2",
+      "minzoom": 2,
+      "maxzoom": 4
+    },
+    {
+      "id": "carto-emergency-z4-tiles",
+      "type": "raster",
+      "source": "carto-emergency-z4",
+      "minzoom": 4,
+      "maxzoom": 6
+    },
+    {
+      "id": "carto-emergency-z6-tiles",
+      "type": "raster",
+      "source": "carto-emergency-z6",
+      "minzoom": 6,
+      "maxzoom": 8
+    },
+    {
+      "id": "carto-emergency-z8-tiles",
+      "type": "raster",
+      "source": "carto-emergency-z8",
+      "minzoom": 8,
+      "maxzoom": 10
+    },
+    {
+      "id": "carto-emergency-z10-tiles",
+      "type": "raster",
+      "source": "carto-emergency-z10",
+      "minzoom": 10,
+      "maxzoom": 12
+    },
+    {
+      "id": "carto-emergency-z12-tiles",
+      "type": "raster",
+      "source": "carto-emergency-z12",
+      "minzoom": 12
     }
   ]
 }

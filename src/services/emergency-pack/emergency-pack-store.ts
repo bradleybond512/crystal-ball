@@ -24,6 +24,8 @@ const ARTIFACT_KINDS = new Set<EmergencyPackArtifactKind>([
   ...EMERGENCY_PACK_OPTIONAL_KINDS,
 ]);
 const INVALIDATION_SCHEMA_VERSION = 2;
+const STAGING_SCHEMA_VERSION = 1;
+const MAX_STAGING_JOURNALS = 16;
 
 export interface EmergencyPackMetadataBoundary {
   getItem(key: string): string | null;
@@ -123,6 +125,21 @@ interface StoredArtifactBody {
   sha256?: string;
 }
 
+interface EmergencyPackStagingArtifact {
+  kind: EmergencyPackArtifactKind;
+  cacheKey: string;
+  sha256: string;
+}
+
+interface EmergencyPackStagingJournal {
+  schemaVersion: 1;
+  packId: string;
+  placeId: string;
+  profileFingerprint: string;
+  manifestKey: string;
+  artifacts: EmergencyPackStagingArtifact[];
+}
+
 interface PackHead {
   schemaVersion: 2;
   packId: string;
@@ -180,6 +197,10 @@ function bodyKey(packId: string, kind: string): string {
   return `${KEY_PREFIX}:body:${encodeURIComponent(packId)}:${kind}`;
 }
 
+function stagingKey(packId: string): string {
+  return `${KEY_PREFIX}:staging:${encodeURIComponent(packId)}`;
+}
+
 function invalidationKey(placeId: string, profileFingerprint: string): string {
   return `${KEY_PREFIX}:invalidation:${encodeURIComponent(placeId)}:${encodeURIComponent(profileFingerprint)}`;
 }
@@ -199,6 +220,67 @@ function placeIdFromKey(key: string, kind: 'head' | 'manifest'): string | null {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function parseStagingJournal(value: string | null, key: string): EmergencyPackStagingJournal {
+  if (value === null) throw new Error('missing staging journal');
+  const raw: unknown = JSON.parse(value);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid staging journal');
+  const journal = raw as Record<string, unknown>;
+  const allowed = new Set([
+    'schemaVersion',
+    'packId',
+    'placeId',
+    'profileFingerprint',
+    'manifestKey',
+    'artifacts',
+  ]);
+  if (Object.keys(journal).length !== allowed.size
+    || Object.keys(journal).some((field) => !allowed.has(field))
+    || journal.schemaVersion !== STAGING_SCHEMA_VERSION
+    || !isNonEmptyString(journal.packId)
+    || journal.packId.length > 512
+    || stagingKey(journal.packId) !== key
+    || !isNonEmptyString(journal.placeId)
+    || journal.placeId.length > 512
+    || !isNonEmptyString(journal.profileFingerprint)
+    || journal.profileFingerprint.length > 1024
+    || journal.manifestKey !== manifestKey(journal.placeId, journal.packId)
+    || !Array.isArray(journal.artifacts)
+    || journal.artifacts.length === 0
+    || journal.artifacts.length > ARTIFACT_KINDS.size) {
+    throw new Error('invalid staging journal');
+  }
+  const artifacts: EmergencyPackStagingArtifact[] = [];
+  for (const rawArtifact of journal.artifacts) {
+    if (!rawArtifact || typeof rawArtifact !== 'object' || Array.isArray(rawArtifact)) {
+      throw new Error('invalid staging artifact');
+    }
+    const artifact = rawArtifact as Record<string, unknown>;
+    if (Object.keys(artifact).length !== 3
+      || !ARTIFACT_KINDS.has(artifact.kind as EmergencyPackArtifactKind)
+      || artifact.cacheKey !== bodyKey(journal.packId, String(artifact.kind))
+      || typeof artifact.sha256 !== 'string'
+      || !SHA256_HEX_PATTERN.test(artifact.sha256)) {
+      throw new Error('invalid staging artifact');
+    }
+    artifacts.push({
+      kind: artifact.kind as EmergencyPackArtifactKind,
+      cacheKey: artifact.cacheKey as string,
+      sha256: artifact.sha256,
+    });
+  }
+  if (new Set(artifacts.map(({ kind }) => kind)).size !== artifacts.length) {
+    throw new Error('duplicate staging artifact');
+  }
+  return {
+    schemaVersion: STAGING_SCHEMA_VERSION,
+    packId: journal.packId,
+    placeId: journal.placeId,
+    profileFingerprint: journal.profileFingerprint,
+    manifestKey: journal.manifestKey as string,
+    artifacts,
+  };
 }
 
 function parseInvalidationRecord(value: string | null): EmergencyPackInvalidationRecord | null {
@@ -304,6 +386,22 @@ function parseHead(value: string | null): PackHead | null {
   } catch {
     return null;
   }
+}
+
+function journalOwnsManifest(
+  journal: EmergencyPackStagingJournal,
+  manifest: EmergencyPackManifest,
+): boolean {
+  if (manifest.packId !== journal.packId
+    || manifest.placeId !== journal.placeId
+    || manifest.profileFingerprint !== journal.profileFingerprint
+    || manifestKey(manifest.placeId, manifest.packId) !== journal.manifestKey
+    || manifest.receipts.length !== journal.artifacts.length) return false;
+  const journalArtifacts = new Map(journal.artifacts.map((artifact) => [artifact.kind, artifact]));
+  return manifest.receipts.every((receipt) => {
+    const artifact = journalArtifacts.get(receipt.kind);
+    return artifact?.cacheKey === receipt.cacheKey && artifact.sha256 === receipt.sha256;
+  });
 }
 
 function safeReason(error: unknown): string {
@@ -555,6 +653,118 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       if (!await verifyReceiptBody(parsed.packId, receipt)) return null;
     }
     return parsed;
+  }
+
+  function removeJournal(key: string): void {
+    metadata.removeItem(key);
+    if (metadata.getItem(key) !== null) throw new Error('staging journal removal failed');
+  }
+
+  async function isCommittedJournal(journal: EmergencyPackStagingJournal): Promise<boolean> {
+    const encodedHead = metadata.getItem(headKey(journal.placeId));
+    if (encodedHead === null) return false;
+    const head = parseHead(encodedHead);
+    if (!head) throw new Error('invalid head while reconciling staging journal');
+    const namesJournal = head.packId === journal.packId || head.previousPackId === journal.packId;
+    if (!namesJournal) return false;
+    const active = await loadVerifiedManifest(head.manifestKey, head.manifestSha256);
+    if (active?.packId !== head.packId
+      || active.placeId !== head.placeId
+      || active.profileFingerprint !== head.profileFingerprint) {
+      throw new Error('invalid committed head while reconciling staging journal');
+    }
+    const owned = head.packId === journal.packId
+      ? active
+      : await loadVerifiedManifest(journal.manifestKey);
+    if (!owned || !journalOwnsManifest(journal, owned)) {
+      throw new Error('staging journal ownership mismatch');
+    }
+    return true;
+  }
+
+  async function cleanupUncommittedJournal(
+    key: string,
+    journal: EmergencyPackStagingJournal,
+  ): Promise<void> {
+    const stored = await Promise.all(journal.artifacts.map(async (artifact) => {
+      const body = await bodies.get(artifact.cacheKey);
+      if (body !== null && await digest(body) !== artifact.sha256) {
+        throw new Error('staged body digest mismatch');
+      }
+      return { ...artifact, body };
+    }));
+    for (const artifact of stored) {
+      if (artifact.kind === 'offline-map'
+        && artifact.body !== null
+        && !await releaseBody(artifact.kind, artifact.body)) {
+        throw new Error('staged offline generation release failed');
+      }
+    }
+    for (const artifact of stored) {
+      if (await bodies.delete(artifact.cacheKey) !== true) {
+        throw new Error('staged body deletion unconfirmed');
+      }
+    }
+    metadata.removeItem(journal.manifestKey);
+    if (metadata.getItem(journal.manifestKey) !== null) {
+      throw new Error('unpublished manifest removal failed');
+    }
+    removeJournal(key);
+  }
+
+  async function reconcileStagingJournals(): Promise<void> {
+    const keys = metadata.keys()
+      .filter((key) => key.startsWith(`${KEY_PREFIX}:staging:`))
+      .sort((left, right) => left.localeCompare(right));
+    if (keys.length > MAX_STAGING_JOURNALS) throw new Error('too many staging journals');
+    for (const key of keys) {
+      const journal = parseStagingJournal(metadata.getItem(key), key);
+      if (await isCommittedJournal(journal)) removeJournal(key);
+      else await cleanupUncommittedJournal(key, journal);
+    }
+  }
+
+  async function writeStagingJournal(
+    input: EmergencyPackGenerationInput,
+    packId: string,
+  ): Promise<string> {
+    const key = stagingKey(packId);
+    if (metadata.getItem(key) !== null) throw new Error('staging journal collision');
+    const journal: EmergencyPackStagingJournal = {
+      schemaVersion: STAGING_SCHEMA_VERSION,
+      packId,
+      placeId: input.placeId,
+      profileFingerprint: input.profileFingerprint,
+      manifestKey: manifestKey(input.placeId, packId),
+      artifacts: await Promise.all(input.artifacts.map(async ({ kind, body }) => ({
+        kind,
+        cacheKey: bodyKey(packId, kind),
+        sha256: await digest(body),
+      }))),
+    };
+    const encoded = JSON.stringify(journal);
+    metadata.setItem(key, encoded);
+    const persisted = metadata.getItem(key);
+    if (persisted !== encoded) throw new Error('staging journal readback mismatch');
+    parseStagingJournal(persisted, key);
+    return key;
+  }
+
+  async function stagingReconciliationFailure(): Promise<string | null> {
+    try {
+      await reconcileStagingJournals();
+      return null;
+    } catch (error) {
+      return safeReason(error);
+    }
+  }
+
+  async function retryStagingReconciliation(): Promise<void> {
+    try {
+      await reconcileStagingJournals();
+    } catch {
+      // Durable journal ownership is retained for a later fail-closed retry.
+    }
   }
 
   function readAlertInvalidationBinding(
@@ -831,6 +1041,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
 
   async function recoverActive(scope: EmergencyPackScope): Promise<EmergencyPackStoreState> {
     try {
+      await reconcileStagingJournals();
       const head = parseHead(metadata.getItem(headKey(scope.placeId)));
       if (head && head.placeId !== scope.placeId) {
         return { status: 'not-saved', packId: null, reason: 'place-id-mismatch' };
@@ -847,6 +1058,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
 
   async function recoverReadiness(scope: EmergencyPackScope): Promise<EmergencyPackDetailedReadiness> {
     try {
+      await reconcileStagingJournals();
       const manifest = await recoverVerifiedManifest(scope);
       return manifest
         ? detailedStateForManifest(manifest, scope)
@@ -1017,6 +1229,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       return { ok: false, reason: 'invalid-input' };
     }
 
+    const reconciliationFailure = await stagingReconciliationFailure();
+    if (reconciliationFailure !== null) return { ok: false, reason: reconciliationFailure };
+
     let key: string | null = null;
     const stagedBodies: StoredArtifactBody[] = [];
 
@@ -1032,6 +1247,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       const timestamp = now();
       if (!isTimestamp(timestamp)) return { ok: false, reason: 'invalid-time' };
       const committedAt = new Date(timestamp).toISOString();
+      await writeStagingJournal(input, packId);
       const stagedReceipts = await stageArtifacts(input, packId, timestamp, stagedBodies);
       const alertBinding = bindAlertReceipt(input, stagedReceipts);
 
@@ -1068,6 +1284,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       }
       await adoptStagedBodies(stagedBodies);
       writeHead(activeHeadKey, head, encodedExistingHead);
+      await retryStagingReconciliation();
       try {
         await cleanupOldGenerations(manifest);
       } catch {
@@ -1075,7 +1292,7 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       }
       return { ok: true, packId };
     } catch (error) {
-      if (key !== null) await cleanupGeneration(key, stagedBodies);
+      await retryStagingReconciliation();
       return { ok: false, reason: safeReason(error) };
     }
   }
@@ -1158,6 +1375,9 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
       return { ok: false, reason: 'invalid-input' };
     }
 
+    const reconciliationFailure = await stagingReconciliationFailure();
+    if (reconciliationFailure !== null) return { ok: false, reason: reconciliationFailure };
+
     let key: string | null = null;
     const stagedBodies: StoredArtifactBody[] = [];
     try {
@@ -1199,20 +1419,22 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         return { ok: false, reason: 'invalid-legacy-pack' };
       }
 
-      const stagedReceipts = await stageArtifacts({
+      const generationInput: EmergencyPackGenerationInput = {
         placeId: input.placeId,
         profileFingerprint: input.profileFingerprint,
         requiredKinds: EMERGENCY_PACK_REQUIRED_KINDS,
         optionalKinds: EMERGENCY_PACK_OPTIONAL_KINDS,
         artifacts: [input.artifact],
-      }, packId, timestamp, stagedBodies);
+      };
+      await writeStagingJournal(generationInput, packId);
+      const stagedReceipts = await stageArtifacts(generationInput, packId, timestamp, stagedBodies);
       const receipt = stagedReceipts[0];
       if (receipt?.cacheKey !== cacheKey) throw new Error('migration receipt mismatch');
       const manifest = migrateLifelinePackV1(input.legacyManifest, migrationScope, receipt);
       if (!manifest) throw new Error('migration validation failed');
 
       if (await hasValidActiveHead(input.placeId)) {
-        await cleanupGeneration(key, stagedBodies);
+        await reconcileStagingJournals();
         return { ok: false, reason: 'active-v2-exists' };
       }
       const activeHeadKey = headKey(input.placeId);
@@ -1229,9 +1451,10 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
         committedAt: manifest.committedAt,
       };
       writeHead(activeHeadKey, head, encodedExistingHead);
+      await retryStagingReconciliation();
       return { ok: true, packId };
     } catch (error) {
-      if (key !== null) await cleanupGeneration(key, stagedBodies);
+      await retryStagingReconciliation();
       return { ok: false, reason: safeReason(error) };
     }
   }
@@ -1310,6 +1533,11 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
 
   async function prune(input: EmergencyPackPruneInput): Promise<void> {
     if (!validPruneInput(input)) return;
+    try {
+      await reconcileStagingJournals();
+    } catch {
+      return;
+    }
     const allowedPlaceIds = new Set(input.placeIds.slice(0, input.maxPlaces));
     const retained = await collectRetainedGenerations(allowedPlaceIds);
     removeUnretainedHeads(allowedPlaceIds);

@@ -4,6 +4,8 @@ export type PersistedEmergencyPackBaseMap = 'dark' | 'light' | 'satellite' | 'te
 export type EmergencyPackBaseMap = PersistedEmergencyPackBaseMap | 'emergency';
 export type EmergencyPackMapTheme = 'dark' | 'light';
 
+export const EMERGENCY_PACK_CAPTURE_ZOOM_LEVELS = [0, 2, 4, 6, 8, 10, 12] as const;
+
 const PERSISTED_BASE_MAPS = new Set<PersistedEmergencyPackBaseMap>([
   'dark',
   'light',

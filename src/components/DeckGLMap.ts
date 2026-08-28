@@ -4632,7 +4632,6 @@ export class DeckGLMap {
  { key: 'tradeRoutes', label: 'Trade Routes', icon: '&#9875;' },
  ];
 
- const bm = this.activeBaseMap;
  toggles.innerHTML = `
  <div class="toggle-header">
  <span>${t('components.deckgl.layersTitle')}</span>
@@ -4642,11 +4641,11 @@ export class DeckGLMap {
  <div class="basemap-selector">
  <span class="basemap-label">Base Map</span>
  <div class="basemap-btns">
- <button class="basemap-btn${bm === 'dark' ? ' basemap-active' : ''}" data-basemap="dark">Dark</button>
- <button class="basemap-btn${bm === 'light' ? ' basemap-active' : ''}" data-basemap="light">Light</button>
- <button class="basemap-btn${bm === 'satellite' ? ' basemap-active' : ''}" data-basemap="satellite">&#127759; Satellite</button>
- <button class="basemap-btn${bm === 'terrain' ? ' basemap-active' : ''}" data-basemap="terrain">&#9968; Terrain</button>
- <button class="basemap-btn${bm === 'emergency' ? ' basemap-active' : ''}" data-basemap="emergency">Emergency (offline)</button>
+ <button class="basemap-btn" data-basemap="dark">Dark</button>
+ <button class="basemap-btn" data-basemap="light">Light</button>
+ <button class="basemap-btn" data-basemap="satellite">&#127759; Satellite</button>
+ <button class="basemap-btn" data-basemap="terrain">&#9968; Terrain</button>
+ <button class="basemap-btn" data-basemap="emergency">Emergency (offline)</button>
  </div>
  </div>
  <div class="toggle-list" style="max-height: 32vh; overflow-y: auto; scrollbar-width: thin;">
@@ -4661,6 +4660,7 @@ export class DeckGLMap {
  `;
 
  this.container.append(toggles);
+ this.synchronizeBasemapSelector();
 
  // Bind toggle events
  toggles.querySelectorAll('.layer-toggle input').forEach(input => {
@@ -4680,9 +4680,6 @@ export class DeckGLMap {
  const newBasemap = btn.getAttribute('data-basemap');
  if (isEmergencyPackBaseMap(newBasemap) && newBasemap !== this.activeBaseMap) {
  this.switchBasemap(newBasemap);
- toggles.querySelectorAll('.basemap-btn').forEach(b =>
- b.classList.toggle('basemap-active', b.getAttribute('data-basemap') === newBasemap),
- );
  }
  });
  });
@@ -6264,6 +6261,7 @@ export class DeckGLMap {
   private switchBasemap(basemap: BaseMapStyle): void {
  if (!this.maplibreMap) return;
  this.activeBaseMap = basemap;
+ this.synchronizeBasemapSelector();
  const persistedBaseMap = persistedEmergencyPackBaseMap(basemap);
  if (persistedBaseMap) localStorage.setItem(BASEMAP_STORAGE_KEY, persistedBaseMap);
  this.maplibreMap.setStyle(getStyleUrl(basemap));
@@ -6278,6 +6276,14 @@ export class DeckGLMap {
  // the new MapLibre style to be loaded before they can re-insert.
  this.render();
  this.applyDarkMapEnhancements();
+ });
+  }
+
+  private synchronizeBasemapSelector(): void {
+ this.container.querySelectorAll<HTMLButtonElement>('.basemap-btn').forEach((button) => {
+ const isActive = button.dataset.basemap === this.activeBaseMap;
+ button.classList.toggle('basemap-active', isActive);
+ button.setAttribute('aria-pressed', String(isActive));
  });
   }
 

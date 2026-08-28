@@ -457,7 +457,8 @@ function renderEmergencyPack(pack: EmergencyPackView): string {
   const max = Math.max(1, pack.captureState.total);
   const value = Math.max(0, Math.min(max, pack.captureState.completed));
   const capturing = pack.captureState.status === 'capturing';
-  const disabled = pack.places.length === 0 || capturing;
+  const controlsDisabled = pack.places.length === 0 || capturing;
+  const actionDisabled = pack.places.length === 0;
   return `<section class="emergency-pack emergency-pack--${escapeHtml(pack.status)}" data-emergency-pack="${escapeHtml(pack.status)}" aria-labelledby="emergency-pack-heading" aria-busy="${pack.captureState.status === 'capturing' ? 'true' : 'false'}">
     <div class="emergency-pack__heading">
       <div>
@@ -465,7 +466,7 @@ function renderEmergencyPack(pack: EmergencyPackView): string {
         <p class="emergency-pack__headline">${escapeHtml(pack.headline)}</p>
       </div>
       <label class="emergency-pack__place">Place
-        <select name="emergency-pack-place" ${disabled ? 'disabled' : ''}>
+        <select name="emergency-pack-place" ${controlsDisabled ? 'disabled' : ''}>
           ${pack.places.length === 0 ? '<option value="">No saved places</option>' : pack.places.map((place) => `<option value="${escapeHtml(place.id)}"${place.id === pack.selectedPlaceId ? ' selected' : ''}>${escapeHtml(place.name)}</option>`).join('')}
         </select>
       </label>
@@ -481,7 +482,7 @@ function renderEmergencyPack(pack: EmergencyPackView): string {
       <input type="checkbox" name="emergency-pack-contact-consent"${pack.contactConsent ? ' checked' : ''}${capturing ? ' disabled' : ''}>
       <span>I consent to copy my selected emergency contacts into this pack. Contact details stay private on this local device.</span>
     </label>
-    <button type="button" class="emergency-pack__action" data-pack-action${disabled ? ' disabled' : ''}>${escapeHtml(pack.actionLabel)}</button>
+    <button type="button" class="emergency-pack__action" data-pack-action${actionDisabled ? ' disabled' : ''}${capturing ? ' aria-disabled="true"' : ''}>${escapeHtml(pack.actionLabel)}</button>
     <p class="emergency-pack__live sr-only" aria-live="polite" aria-atomic="true">${escapeHtml(pack.liveMessage)}</p>
   </section>`;
 }

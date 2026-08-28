@@ -5,6 +5,7 @@ import test from 'node:test';
 import type { SiteVariant } from '../../../config/variant.ts';
 
 interface MapStyleApi {
+  EMERGENCY_PACK_CAPTURE_ZOOM_LEVELS?: readonly number[];
   getEmergencyPackBaseMapStyleUrl?: (basemap: string, variant: SiteVariant) => string;
   persistedEmergencyPackBaseMap?: (basemap: string) => string | null;
   resolveEmergencyPackInitialBaseMap?: (saved: string | null, theme: 'dark' | 'light') => string;
@@ -29,24 +30,48 @@ test('Emergency uses one bundled dark_nolabels raster style in every variant', a
     name?: string;
     glyphs?: unknown;
     sprite?: unknown;
-    sources?: Record<string, { type?: string; tiles?: string[]; attribution?: string }>;
-    layers?: Array<{ id?: string; type?: string; source?: string }>;
+    sources?: Record<string, {
+      type?: string;
+      tiles?: string[];
+      attribution?: string;
+      minzoom?: number;
+      maxzoom?: number;
+    }>;
+    layers?: Array<{ id?: string; type?: string; source?: string; minzoom?: number; maxzoom?: number }>;
   };
   assert.equal(style.name, 'Emergency (offline)');
   assert.equal(style.glyphs, undefined);
   assert.equal(style.sprite, undefined);
-  assert.deepEqual(Object.keys(style.sources ?? {}), ['carto-emergency-base']);
-  assert.deepEqual(style.sources?.['carto-emergency-base']?.tiles, [
-    'https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png',
-    'https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png',
-    'https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png',
-  ]);
-  assert.match(style.sources?.['carto-emergency-base']?.attribution ?? '', /CARTO/);
-  assert.match(style.sources?.['carto-emergency-base']?.attribution ?? '', /OpenStreetMap/);
-  assert.deepEqual(style.layers, [
-    { id: 'background', type: 'background', paint: { 'background-color': '#0b0e12' } },
-    { id: 'carto-emergency-base-tiles', type: 'raster', source: 'carto-emergency-base' },
-  ]);
+  const captureZooms = api.EMERGENCY_PACK_CAPTURE_ZOOM_LEVELS;
+  assert.deepEqual(captureZooms, [0, 2, 4, 6, 8, 10, 12]);
+  assert.deepEqual(
+    Object.keys(style.sources ?? {}),
+    captureZooms?.map((zoom) => `carto-emergency-z${zoom}`),
+  );
+  for (const zoom of captureZooms ?? []) {
+    const source = style.sources?.[`carto-emergency-z${zoom}`];
+    assert.deepEqual(source?.tiles, [
+      'https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png',
+      'https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png',
+      'https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png',
+    ]);
+    assert.equal(source?.minzoom, zoom);
+    assert.equal(source?.maxzoom, zoom);
+    assert.match(source?.attribution ?? '', /CARTO/);
+    assert.match(source?.attribution ?? '', /OpenStreetMap/);
+  }
+
+  const rasterLayers = style.layers?.filter(({ type }) => type === 'raster') ?? [];
+  assert.equal(rasterLayers.length, 7);
+  for (const displayZoom of Array.from({ length: 47 }, (_, index) => index / 2)) {
+    const active = rasterLayers.filter((layer) => (
+      displayZoom >= (layer.minzoom ?? 0)
+      && (layer.maxzoom === undefined || displayZoom < layer.maxzoom)
+    ));
+    assert.equal(active.length, 1, `display zoom ${displayZoom} selects one captured parent`);
+    const expectedParent = [...(captureZooms ?? [])].reverse().find((zoom) => zoom <= displayZoom);
+    assert.equal(active[0]?.source, `carto-emergency-z${expectedParent}`);
+  }
 });
 
 test('Emergency is transient while every normal basemap remains persistable', () => {

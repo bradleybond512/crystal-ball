@@ -206,7 +206,7 @@ test('a failed first capture does not claim that a nonexistent last-known-good p
   assert.doesNotMatch(text, /last known good pack was preserved/i);
 });
 
-test('place and consent controls stay locked to the exact scope during capture', async (context) => {
+test('capture keeps its action focused and inert while place and consent stay locked through success', async (context) => {
   const Panel = PanelClass();
   const places = [place('home', 'Home'), place('work', 'Work')];
   const pending = deferred<{ ok: boolean; packId?: string }>();
@@ -235,6 +235,7 @@ test('place and consent controls stay locked to the exact scope during capture',
     deadlineScheduler: { track: () => undefined, destroy: () => undefined },
   });
   context.after(() => panel.destroy());
+  happyWindow.document.body.append(panel.getElement());
   await waitForRender();
 
   let content = panel.getContentElement();
@@ -242,7 +243,10 @@ test('place and consent controls stay locked to the exact scope during capture',
   assert.ok(consent);
   consent.checked = true;
   consent.dispatchEvent(new happyWindow.Event('change', { bubbles: true }));
-  content.querySelector<HTMLButtonElement>('[data-pack-action]')?.click();
+  const initialAction = content.querySelector<HTMLButtonElement>('[data-pack-action]');
+  assert.ok(initialAction);
+  initialAction.focus();
+  initialAction.click();
   await waitForRender();
 
   content = panel.getContentElement();
@@ -252,12 +256,17 @@ test('place and consent controls stay locked to the exact scope during capture',
   assert.ok(lockedPlace && lockedConsent && lockedAction);
   assert.equal(lockedPlace.disabled, true);
   assert.equal(lockedConsent.disabled, true);
-  assert.equal(lockedAction.disabled, true);
+  assert.equal(lockedAction.disabled, false, 'capture action must remain keyboard-focusable');
+  assert.equal(lockedAction.getAttribute('aria-disabled'), 'true');
+  assert.equal(happyWindow.document.activeElement === lockedAction, true, 'capture action should retain focus');
 
   lockedPlace.value = 'work';
   lockedPlace.dispatchEvent(new happyWindow.Event('change', { bubbles: true }));
   lockedConsent.checked = false;
   lockedConsent.dispatchEvent(new happyWindow.Event('change', { bubbles: true }));
+  lockedAction.dispatchEvent(new happyWindow.Event('click', { bubbles: true }));
+  lockedAction.dispatchEvent(new happyWindow.Event('click', { bubbles: true }));
+  assert.equal(captures.length, 1, 'aria-disabled capture action must ignore repeated activation');
   pending.resolve({ ok: true, packId: 'pack-home' });
   await waitForRender();
 
@@ -265,4 +274,122 @@ test('place and consent controls stay locked to the exact scope during capture',
   assert.deepEqual(captures, [{ placeId: 'home', contactConsent: true }]);
   assert.equal(content.querySelector<HTMLSelectElement>('[name="emergency-pack-place"]')?.value, 'home');
   assert.equal(content.querySelector<HTMLInputElement>('[name="emergency-pack-contact-consent"]')?.checked, true);
+  assert.equal(
+    (happyWindow.document.activeElement as HTMLElement | null)?.hasAttribute('data-pack-action'),
+    true,
+    'capture action focus must survive successful completion',
+  );
+});
+
+test('capture keeps its action focused and inert through a deferred failure', async (context) => {
+  const Panel = PanelClass();
+  const home = place('home', 'Home');
+  const pending = deferred<{ ok: boolean; failedKind?: string }>();
+  let captures = 0;
+  const panel = new Panel({
+    getSnapshot: () => null,
+    subscribe: () => () => undefined,
+    getPrimaryPlace: () => home,
+    getPlaces: () => [home],
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeEmergencyPack: () => () => undefined,
+    hydrate: () => Promise.resolve(),
+    getReceipt: () => null,
+    getEmergencyPackState: () => ({
+      status: 'not-saved', packId: null, profileFingerprint: home.id,
+      requiredKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      optionalKinds: ['route-alternate'], receipts: [],
+      missingKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      expiredKinds: [],
+    }),
+    captureEmergencyPack: () => {
+      captures += 1;
+      return pending.promise;
+    },
+    now: () => NOW,
+    deadlineScheduler: { track: () => undefined, destroy: () => undefined },
+  });
+  context.after(() => panel.destroy());
+  happyWindow.document.body.append(panel.getElement());
+  await waitForRender();
+
+  const initialAction = panel.getContentElement().querySelector<HTMLButtonElement>('[data-pack-action]');
+  assert.ok(initialAction);
+  initialAction.focus();
+  initialAction.click();
+  await waitForRender();
+
+  const capturingAction = panel.getContentElement().querySelector<HTMLButtonElement>('[data-pack-action]');
+  assert.ok(capturingAction);
+  assert.equal(capturingAction.disabled, false);
+  assert.equal(capturingAction.getAttribute('aria-disabled'), 'true');
+  assert.equal(happyWindow.document.activeElement === capturingAction, true, 'capture action should retain focus');
+  capturingAction.dispatchEvent(new happyWindow.Event('click', { bubbles: true }));
+  assert.equal(captures, 1, 'repeated activation must stay inert during capture');
+
+  pending.resolve({ ok: false, failedKind: 'offline-map' });
+  await waitForRender();
+
+  assert.match(panel.getContentElement().textContent ?? '', /Capture stopped at offline-map/i);
+  assert.equal(
+    (happyWindow.document.activeElement as HTMLElement | null)?.hasAttribute('data-pack-action'),
+    true,
+    'capture action focus must survive failed completion',
+  );
+});
+
+test('a failed capture-action focus attempt stays pending for the next render', async (context) => {
+  const Panel = PanelClass();
+  const home = place('home', 'Home');
+  const pending = deferred<{ ok: boolean; packId?: string }>();
+  const originalFocus = happyWindow.HTMLElement.prototype.focus;
+  happyWindow.HTMLElement.prototype.focus = function focus(options?: FocusOptions): void {
+    if (this.matches('[data-pack-action][aria-disabled="true"]')) return;
+    originalFocus.call(this, options);
+  };
+  context.after(() => {
+    happyWindow.HTMLElement.prototype.focus = originalFocus;
+  });
+  const panel = new Panel({
+    getSnapshot: () => null,
+    subscribe: () => () => undefined,
+    getPrimaryPlace: () => home,
+    getPlaces: () => [home],
+    subscribeSavedPlaces: () => () => undefined,
+    subscribeEmergencyPack: () => () => undefined,
+    hydrate: () => Promise.resolve(),
+    getReceipt: () => null,
+    getEmergencyPackState: () => ({
+      status: 'not-saved', packId: null, profileFingerprint: home.id,
+      requiredKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      optionalKinds: ['route-alternate'], receipts: [],
+      missingKinds: ['lifelines', 'alerts', 'route-primary', 'offline-map', 'comms-plan', 'contacts'],
+      expiredKinds: [],
+    }),
+    captureEmergencyPack: () => pending.promise,
+    now: () => NOW,
+    deadlineScheduler: { track: () => undefined, destroy: () => undefined },
+  });
+  context.after(() => panel.destroy());
+  happyWindow.document.body.append(panel.getElement());
+  await waitForRender();
+
+  const initialAction = panel.getContentElement().querySelector<HTMLButtonElement>('[data-pack-action]');
+  assert.ok(initialAction);
+  initialAction.focus();
+  initialAction.click();
+  await waitForRender();
+  assert.equal(
+    (happyWindow.document.activeElement as HTMLElement | null)?.hasAttribute('data-pack-action'),
+    false,
+    'the simulated focus failure should leave the replacement action unfocused',
+  );
+
+  pending.resolve({ ok: true, packId: 'pack-home' });
+  await waitForRender();
+  assert.equal(
+    (happyWindow.document.activeElement as HTMLElement | null)?.hasAttribute('data-pack-action'),
+    true,
+    'pending focus must retry after the transient failure',
+  );
 });

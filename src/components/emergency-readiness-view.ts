@@ -292,6 +292,18 @@ function packCaptureMessage(status: EmergencyPackStatus, missing: number): strin
   return 'No verified Emergency Pack is saved.';
 }
 
+function artifactSummary(
+  kind: EmergencyPackArtifactKind,
+  receipt: EmergencyPackReceiptInput | undefined,
+  requirement: EmergencyPackArtifactView['requirement'],
+): string {
+  if (!receipt) return requirement === 'Optional' ? 'Optional — not captured.' : 'Required artifact missing.';
+  if (kind !== 'offline-map') return receipt.summary;
+  let summary = receipt.summary.trimEnd();
+  while (summary.endsWith('.')) summary = summary.slice(0, -1).trimEnd();
+  return `${summary}. Use the Emergency (offline) basemap; map coverage is limited to the saved area.`;
+}
+
 function effectiveCaptureState(
   input: EmergencyPackInput,
   status: EmergencyPackStatus,
@@ -326,8 +338,7 @@ function projectPack(input: EmergencyPackInput, now: number): EmergencyPackView 
       label: ARTIFACT_LABELS[kind],
       requirement,
       status: artifactStatus(Boolean(receipt), isExpired),
-      summary: receipt?.summary
-        ?? (requirement === 'Optional' ? 'Optional — not captured.' : 'Required artifact missing.'),
+      summary: artifactSummary(kind, receipt, requirement),
       capturedAtMs: receipt ? validTimestamp(receipt.capturedAt) : null,
       expiresAtMs,
     };

@@ -18,7 +18,7 @@ interface BrowserApi {
     bodies: {
       put: (key: string, body: string) => Promise<void>;
       get: (key: string) => Promise<string | null>;
-      delete: (key: string) => Promise<void>;
+      delete: (key: string) => Promise<boolean>;
     };
     digest: (body: string) => Promise<string>;
   };
@@ -48,6 +48,7 @@ function requestKey(request: RequestInfo | URL): string {
 class MemoryCache {
   readonly values = new Map<string, Response>();
   matchOverride: ((request: string) => Response | undefined) | null = null;
+  deleteOverride: ((request: string) => boolean | Promise<boolean>) | null = null;
 
   async put(request: RequestInfo | URL, response: Response): Promise<void> {
     this.values.set(requestKey(request), response.clone());
@@ -59,6 +60,7 @@ class MemoryCache {
   }
 
   async delete(request: RequestInfo | URL): Promise<boolean> {
+    if (this.deleteOverride) return this.deleteOverride(requestKey(request));
     return this.values.delete(requestKey(request));
   }
 }
@@ -126,9 +128,66 @@ test('browser adapters preserve exact UTF-8 bodies and expose only their metadat
     'wm-emergency-pack-v2:head:home',
     'wm-emergency-pack-v2:manifest:pack-1',
   ]);
-  await adapters.bodies.delete(CONTACTS_KEY);
+  assert.equal(await adapters.bodies.delete(CONTACTS_KEY), true);
   assert.equal(await adapters.bodies.get(CONTACTS_KEY), null);
+  assert.equal(await adapters.bodies.delete(CONTACTS_KEY), true, 'confirmed absence is idempotent');
   assert.equal(metadataStorage.getItem('unrelated-user-key'), 'preserve me');
+});
+
+test('browser body deletion verifies absence instead of trusting the CacheStorage delete boolean', async () => {
+  const create = requireFunction(api, 'createEmergencyPackBrowserAdapters');
+
+  for (const reportedDeleted of [true, false]) {
+    const cacheStorage = new MemoryCacheStorage();
+    const adapters = create({ cacheStorage, metadataStorage: new MemoryStorage() });
+    const cache = await cacheStorage.open('wm-emergency-pack-v2');
+    let cancelCount = 0;
+    const retained = new Response(new ReadableStream({
+      cancel() {
+        cancelCount += 1;
+      },
+    }), { headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    cache.deleteOverride = () => reportedDeleted;
+    cache.matchOverride = () => retained;
+
+    assert.equal(await adapters.bodies.delete(CONTACTS_KEY), false, String(reportedDeleted));
+    assert.equal(cancelCount, 1, `retained response cancelled after delete=${reportedDeleted}`);
+  }
+
+  const cacheStorage = new MemoryCacheStorage();
+  const adapters = create({ cacheStorage, metadataStorage: new MemoryStorage() });
+  const cache = await cacheStorage.open('wm-emergency-pack-v2');
+  cache.deleteOverride = () => false;
+  cache.matchOverride = () => undefined;
+  assert.equal(await adapters.bodies.delete(CONTACTS_KEY), true, 'false plus confirmed absence succeeds');
+  assert.equal(await adapters.bodies.delete(CONTACTS_KEY), true, 'confirmed absence remains idempotent');
+});
+
+test('browser body deletion rejects cache access, delete, and absence-check failures', async () => {
+  const create = requireFunction(api, 'createEmergencyPackBrowserAdapters');
+
+  const unavailable = new MemoryCacheStorage();
+  unavailable.failOpen = true;
+  await assert.rejects(
+    () => create({ cacheStorage: unavailable, metadataStorage: new MemoryStorage() }).bodies.delete(CONTACTS_KEY),
+    /cache unavailable/,
+  );
+
+  const deleteFailure = new MemoryCacheStorage();
+  const deleteAdapters = create({ cacheStorage: deleteFailure, metadataStorage: new MemoryStorage() });
+  (await deleteFailure.open('wm-emergency-pack-v2')).deleteOverride = () => {
+    throw new Error('cache delete failed');
+  };
+  await assert.rejects(() => deleteAdapters.bodies.delete(CONTACTS_KEY), /cache delete failed/);
+
+  const matchFailure = new MemoryCacheStorage();
+  const matchAdapters = create({ cacheStorage: matchFailure, metadataStorage: new MemoryStorage() });
+  const matchCache = await matchFailure.open('wm-emergency-pack-v2');
+  matchCache.deleteOverride = () => true;
+  matchCache.matchOverride = () => {
+    throw new Error('cache match failed');
+  };
+  await assert.rejects(() => matchAdapters.bodies.delete(CONTACTS_KEY), /cache match failed/);
 });
 
 test('browser digest is exact SHA-256 and storage failures propagate instead of claiming persistence', async () => {

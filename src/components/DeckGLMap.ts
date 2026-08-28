@@ -27,6 +27,14 @@ import {
   registerEmergencyPackMapProtocolOnce,
   transformEmergencyPackMapRequest,
 } from '@/services/emergency-pack/emergency-pack-map-protocol';
+import {
+  getEmergencyPackBaseMapStyleUrl,
+  isEmergencyPackBaseMap,
+  persistedEmergencyPackBaseMap,
+  resolveEmergencyPackInitialBaseMap,
+  resolveEmergencyPackThemeBaseMap,
+  type EmergencyPackBaseMap,
+} from '@/services/emergency-pack/emergency-pack-map-style';
 import Supercluster from 'supercluster';
 import type {
   MapLayers,
@@ -200,22 +208,7 @@ const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; z
 const MAP_INTERACTION_MODE: MapInteractionMode =
   import.meta.env.VITE_MAP_INTERACTION_MODE === 'flat' ? 'flat' : '3d';
 
-// Theme-aware basemap style URLs. Self-hosted JSON references CARTO raster
-// tiles — more reliable in web builds than fetching the CARTO vector gl style
-// cross-origin (which occasionally misbehaves under strict CSP / CORS, and
-// doesn't get picked up by the service worker's carto-tiles runtime cache).
-const DARK_STYLE = SITE_VARIANT === 'happy'
-  ? '/map-styles/happy-dark.json'
-  : '/map-styles/dark.json';
-const LIGHT_STYLE = SITE_VARIANT === 'happy'
-  ? '/map-styles/happy-light.json'
-  : '/map-styles/light.json';
-
-// Raster basemap styles — Esri services, free to use, no API key required
-const SATELLITE_STYLE = '/map-styles/satellite.json';
-const TERRAIN_STYLE = '/map-styles/terrain.json';
-
-type BaseMapStyle = 'dark' | 'light' | 'satellite' | 'terrain';
+type BaseMapStyle = EmergencyPackBaseMap;
 const BASEMAP_STORAGE_KEY = 'wm-basemap';
 
 const emergencyPackMapProtocolHandler = createEmergencyPackMapProtocolHandler({
@@ -266,16 +259,7 @@ function getDominantCladeColorForIso2(data: DiseaseIntelData, iso2: string): [nu
 }
 
 function getStyleUrl(basemap: BaseMapStyle): string {
-  switch (basemap) {
- case 'satellite': { return SATELLITE_STYLE;
- }
- case 'terrain': { return TERRAIN_STYLE;
- }
- case 'light': { return LIGHT_STYLE;
- }
- default: { return DARK_STYLE;
- }
-  }
+  return getEmergencyPackBaseMapStyleUrl(basemap, SITE_VARIANT);
 }
 
 // Zoom thresholds for layer visibility and labels (matches old Map.ts)
@@ -709,9 +693,9 @@ export class DeckGLMap {
  this._themeChangedHandler = (e: Event) => {
  const theme = (e as CustomEvent).detail?.theme as 'dark' | 'light';
  if (theme) {
- // Only auto-switch basemap if not using a custom (satellite/terrain) style
- if (this.activeBaseMap === 'dark' || this.activeBaseMap === 'light') {
- this.switchBasemap(theme);
+ const themeBaseMap = resolveEmergencyPackThemeBaseMap(this.activeBaseMap, theme);
+ if (themeBaseMap !== this.activeBaseMap) {
+ this.switchBasemap(themeBaseMap);
  }
  this.render(); // Rebuilds Deck.GL layers with new theme-aware colors
  }
@@ -846,14 +830,8 @@ export class DeckGLMap {
   private initMapLibre(): void {
  const preset = VIEW_PRESETS[this.state.view];
  const initialTheme = getCurrentTheme();
- // Validate the persisted value — an older build or a hand-edited localStorage
- // could leave a bogus string here, in which case getStyleUrl() silently falls
- // to DARK while the button UI shows nothing as active, and the user reports
- // "the basemap switcher doesn't work".
  const rawSaved = localStorage.getItem(BASEMAP_STORAGE_KEY);
- const validBasemaps: readonly BaseMapStyle[] = ['dark', 'light', 'satellite', 'terrain'];
- const savedBasemap = validBasemaps.includes(rawSaved as BaseMapStyle) ? rawSaved as BaseMapStyle : null;
- this.activeBaseMap = savedBasemap ?? (initialTheme === 'light' ? 'light' : 'dark');
+ this.activeBaseMap = resolveEmergencyPackInitialBaseMap(rawSaved, initialTheme);
 
  registerEmergencyPackMapProtocolOnce(maplibregl.addProtocol, emergencyPackMapProtocolHandler);
 
@@ -4668,6 +4646,7 @@ export class DeckGLMap {
  <button class="basemap-btn${bm === 'light' ? ' basemap-active' : ''}" data-basemap="light">Light</button>
  <button class="basemap-btn${bm === 'satellite' ? ' basemap-active' : ''}" data-basemap="satellite">&#127759; Satellite</button>
  <button class="basemap-btn${bm === 'terrain' ? ' basemap-active' : ''}" data-basemap="terrain">&#9968; Terrain</button>
+ <button class="basemap-btn${bm === 'emergency' ? ' basemap-active' : ''}" data-basemap="emergency">Emergency (offline)</button>
  </div>
  </div>
  <div class="toggle-list" style="max-height: 32vh; overflow-y: auto; scrollbar-width: thin;">
@@ -4698,8 +4677,8 @@ export class DeckGLMap {
  // Basemap selector buttons
  toggles.querySelectorAll('.basemap-btn').forEach(btn => {
  btn.addEventListener('click', () => {
- const newBasemap = btn.getAttribute('data-basemap') as BaseMapStyle;
- if (newBasemap && newBasemap !== this.activeBaseMap) {
+ const newBasemap = btn.getAttribute('data-basemap');
+ if (isEmergencyPackBaseMap(newBasemap) && newBasemap !== this.activeBaseMap) {
  this.switchBasemap(newBasemap);
  toggles.querySelectorAll('.basemap-btn').forEach(b =>
  b.classList.toggle('basemap-active', b.getAttribute('data-basemap') === newBasemap),
@@ -6247,11 +6226,13 @@ export class DeckGLMap {
  overlay.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,14,18,0.92);color:#e5e9f0;font-size:13px;text-align:center;padding:24px;z-index:5;';
  const safeMsg = message.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
  const safeSource = sourceId ? sourceId.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c)) : '';
+ const primaryActionStyle = 'padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.06);color:#e5e9f0;cursor:pointer;font-size:12px;';
  overlay.innerHTML = `
  <div style="font-weight:600;font-size:14px;">Map tiles failed to load</div>
  <div style="opacity:0.75;max-width:420px;">${safeMsg}${safeSource ? ` (source: ${safeSource})` : ''}</div>
  <div style="display:flex;gap:8px;margin-top:6px;">
- <button class="map-error-retry" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.06);color:#e5e9f0;cursor:pointer;font-size:12px;">Retry</button>
+ <button class="map-error-retry" style="${primaryActionStyle}">Retry</button>
+ <button class="map-error-emergency" style="${primaryActionStyle}">Use Emergency map</button>
  <button class="map-error-clear-cache" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:transparent;color:#e5e9f0;cursor:pointer;font-size:12px;">Clear cache &amp; reload</button>
  </div>
  `;
@@ -6259,6 +6240,12 @@ export class DeckGLMap {
  overlay.querySelector('.map-error-retry')?.addEventListener('click', () => {
  overlay.remove();
  if (this.maplibreMap) this.maplibreMap.setStyle(getStyleUrl(this.activeBaseMap));
+ });
+ const emergencyAction = overlay.querySelector<HTMLButtonElement>('.map-error-emergency');
+ emergencyAction?.addEventListener('click', () => {
+ overlay.remove();
+ this.switchBasemap('emergency');
+ this.maplibreMap?.getCanvas().focus();
  });
  overlay.querySelector('.map-error-clear-cache')?.addEventListener('click', () => {
  void (async () => {
@@ -6271,12 +6258,14 @@ export class DeckGLMap {
  location.reload();
  })();
  });
+ emergencyAction?.focus();
   }
 
   private switchBasemap(basemap: BaseMapStyle): void {
  if (!this.maplibreMap) return;
  this.activeBaseMap = basemap;
- localStorage.setItem(BASEMAP_STORAGE_KEY, basemap);
+ const persistedBaseMap = persistedEmergencyPackBaseMap(basemap);
+ if (persistedBaseMap) localStorage.setItem(BASEMAP_STORAGE_KEY, persistedBaseMap);
  this.maplibreMap.setStyle(getStyleUrl(basemap));
  // setStyle() replaces all sources/layers — reset guard so country layers are re-added
  this.countryGeoJsonLoaded = false;

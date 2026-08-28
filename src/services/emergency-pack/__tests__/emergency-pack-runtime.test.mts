@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { createEmergencyPackCoordinator } from '../emergency-pack-coordinator.ts';
 import {
+  captureOfflineMapTilesExact,
   createExactOfflineMapCleanupCoordinator,
   type ExactOfflineMapCache,
 } from '../../offline-map-cache.ts';
@@ -94,6 +95,31 @@ function place(id: string, index = 0): Place {
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function exactMapRequestKey(request: RequestInfo | URL): string {
+  if (typeof request === 'string') return request;
+  if (request instanceof URL) return request.href;
+  return request.url;
+}
+
+class RuntimeExactMapCache implements ExactOfflineMapCache {
+  readonly values = new Map<string, Uint8Array>();
+
+  async put(request: RequestInfo | URL, response: Response): Promise<void> {
+    this.values.set(exactMapRequestKey(request), new Uint8Array(await response.arrayBuffer()));
+  }
+
+  async match(request: RequestInfo | URL): Promise<Response | undefined> {
+    const bytes = this.values.get(exactMapRequestKey(request));
+    return bytes
+      ? new Response(bytes, { status: 200, headers: { 'content-type': 'image/png' } })
+      : undefined;
+  }
+
+  async delete(request: RequestInfo | URL): Promise<boolean> {
+    return this.values.delete(exactMapRequestKey(request));
+  }
 }
 
 interface HarnessOptions {
@@ -563,6 +589,114 @@ test('default offline map capture supplies unique bounded ids and serializes exa
     assert.match(String((payload.tiles as Array<Record<string, unknown>>)[0]?.sha256), /^[a-f0-9]{64}$/);
   }
 });
+
+type CapturedMapMutation = (result: {
+  tiles: Array<Record<string, unknown>>;
+}) => void;
+
+async function assertPostCaptureMapFailureReleasesForRetry(input: {
+  now: () => number;
+  mutateFirstCapture?: CapturedMapMutation;
+}): Promise<void> {
+  const capture = requireFunction('captureEmergencyPackOfflineMap');
+  const cache = new RuntimeExactMapCache();
+  const metadataValues = new Map<string, string>();
+  const cleanup = createExactOfflineMapCleanupCoordinator({
+    metadata: {
+      getItem: (key) => metadataValues.get(key) ?? null,
+      setItem: (key, value) => { metadataValues.set(key, value); },
+      removeItem: (key) => { metadataValues.delete(key); },
+    },
+  });
+  const releaseGeneration = cleanup.releaseGeneration.bind(cleanup);
+  let releases = 0;
+  cleanup.releaseGeneration = async (releaseInput) => {
+    releases += 1;
+    return releaseGeneration(releaseInput);
+  };
+  let captureAttempts = 0;
+  const uuids = ['failed-owner', 'retry-owner'];
+  const dependencies = {
+    now: input.now,
+    randomUUID: () => uuids.shift(),
+    planTileUrls: () => ({
+      ok: true,
+      tileUrls: ['https://a.basemaps.cartocdn.com/dark_all/12/1/95@2x.png'],
+    }),
+    openCache: async () => cache,
+    cleanup,
+    fetchTile: async (url: string) => new Response(`tile:${url}`, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }),
+    captureTiles: async (captureInput: Parameters<typeof captureOfflineMapTilesExact>[0]) => {
+      const result = await captureOfflineMapTilesExact(captureInput);
+      captureAttempts += 1;
+      if (result.ok && captureAttempts === 1) {
+        input.mutateFirstCapture?.(result as unknown as { tiles: Array<Record<string, unknown>> });
+      }
+      return result;
+    },
+  };
+  const home = place('home');
+  const scope = { placeId: home.id, profileFingerprint: 'profile-home', contactConsent: false };
+
+  assert.equal(await capture(home, scope, dependencies), null);
+  assert.equal(releases, 1, 'the failed artifact construction must release exactly once');
+  const retry = await capture(home, scope, dependencies);
+  assert.ok(retry, 'the same cleanup coordinator must permit an immediate retry');
+  assert.equal(releases, 1, 'ownership transfers with the successful retry');
+}
+
+const postCaptureMapFailureCases: Array<{
+  name: string;
+  now: () => number;
+  mutateFirstCapture?: CapturedMapMutation;
+}> = [
+  {
+    name: 'clock throw',
+    now: (() => {
+      let calls = 0;
+      return () => {
+        calls += 1;
+        if (calls === 1) throw new Error('clock unavailable');
+        return NOW;
+      };
+    })(),
+  },
+  {
+    name: 'invalid timestamp',
+    now: (() => {
+      let calls = 0;
+      return () => ++calls === 1 ? 0 : NOW;
+    })(),
+  },
+  {
+    name: 'expiry overflow',
+    now: (() => {
+      let calls = 0;
+      return () => ++calls === 1
+        ? 8_640_000_000_000_000 - (30 * 24 * 60 * 60_000) + 1
+        : NOW;
+    })(),
+  },
+  {
+    name: 'serialization rejection',
+    now: () => NOW,
+    mutateFirstCapture: ({ tiles }) => { tiles[0]!.unsupported = 1n; },
+  },
+  {
+    name: 'evidence rejection',
+    now: () => NOW,
+    mutateFirstCapture: ({ tiles }) => { tiles[0]!.sha256 = 'invalid'; },
+  },
+];
+
+for (const failureCase of postCaptureMapFailureCases) {
+  test(`offline map ${failureCase.name} releases staged ownership before retry`, async () => {
+    await assertPostCaptureMapFailureReleasesForRetry(failureCase);
+  });
+}
 
 test('runtime composes browser adapters, store, coordinator, sources, and orchestrator for a real capture', async () => {
   const harness = createHarness();

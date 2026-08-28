@@ -46,18 +46,28 @@ export interface ExactOfflineMapCache {
   delete(request: RequestInfo | URL): Promise<boolean>;
 }
 
-export interface ExactOfflineMapCaptureResult {
-  ok: boolean;
+interface ExactOfflineMapCaptureResultBase {
   total: number;
   downloaded: number;
   totalBytes: number;
   tiles: ExactOfflineMapTile[];
+}
+
+export interface ExactOfflineMapCaptureSuccess extends ExactOfflineMapCaptureResultBase {
+  ok: true;
+  releaseStagedGeneration(): Promise<{ ok: boolean; reason?: string }>;
+}
+
+export interface ExactOfflineMapCaptureFailure extends ExactOfflineMapCaptureResultBase {
+  ok: false;
   reason?: string;
   cleanupTombstone?: {
     generationId: string;
     cacheKeys: string[];
   };
 }
+
+export type ExactOfflineMapCaptureResult = ExactOfflineMapCaptureSuccess | ExactOfflineMapCaptureFailure;
 
 export interface ExactOfflineMapCleanupMetadata {
   getItem(key: string): string | null;
@@ -690,22 +700,29 @@ export async function captureOfflineMapTilesExact(input: {
     };
   }
   const bounds = validateOfflineMapCaptureBounds(tiles);
-  let cleanup: { ok: boolean; reason?: string } = { ok: true };
   if (!bounds.ok) {
-    cleanup = await releaseStagedGeneration();
+    const cleanup = await releaseStagedGeneration();
+    return {
+      ok: false,
+      total,
+      downloaded: 0,
+      totalBytes: 0,
+      tiles: [],
+      ...(!cleanup.ok
+        ? {
+          reason: cleanup.reason ?? 'generation-cleanup-pending',
+          cleanupTombstone: { generationId, cacheKeys: [...generationCacheKeys] },
+        }
+        : bounds.reason ? { reason: bounds.reason } : {}),
+    };
   }
   return {
-    ok: bounds.ok,
+    ok: true,
     total,
-    downloaded: bounds.ok ? tiles.length : 0,
-    totalBytes: bounds.ok ? totalBytes : 0,
-    tiles: bounds.ok ? tiles : [],
-    ...(!cleanup.ok
-      ? {
-        reason: cleanup.reason ?? 'generation-cleanup-pending',
-        cleanupTombstone: { generationId, cacheKeys: [...generationCacheKeys] },
-      }
-      : bounds.reason ? { reason: bounds.reason } : {}),
+    downloaded: tiles.length,
+    totalBytes,
+    tiles,
+    releaseStagedGeneration,
   };
 }
 

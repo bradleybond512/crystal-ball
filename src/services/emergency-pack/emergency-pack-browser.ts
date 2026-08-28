@@ -220,9 +220,18 @@ function createBodiesBoundary(
       const response = await cache.match(bodyRequestUrl(key));
       return response ? readBoundedBody(response, bodyByteCap(key)) : null;
     },
-    async delete(key: string): Promise<void> {
+    async delete(key: string): Promise<boolean> {
       const cache = await cacheStorage.open(cacheName);
-      await cache.delete(bodyRequestUrl(key));
+      const requestUrl = bodyRequestUrl(key);
+      await cache.delete(requestUrl);
+      const retained = await cache.match(requestUrl);
+      if (!retained) return true;
+      try {
+        await retained.body?.cancel();
+      } catch {
+        // The retained response remains authoritative.
+      }
+      return false;
     },
   };
 }

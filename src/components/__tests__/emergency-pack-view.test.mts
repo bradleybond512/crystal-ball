@@ -120,6 +120,8 @@ test('ready copy is allowed only for all required exact receipts; an absent alte
 
   assertMarkup(html, /Emergency Pack ready/i, 'all current required evidence may claim pack readiness');
   assertMarkup(html, /No scoped alerts at capture; coverage not inferred\./, 'empty alerts must preserve the coverage disclaimer');
+  assertMarkup(html, /Emergency \(offline\) basemap/i, 'the map receipt should name the basemap that consumes it');
+  assertMarkup(html, /coverage is limited to the saved area/i, 'the map receipt should disclose its saved-area limit');
   assertMarkup(html, /Alternate route/, 'alternate route should remain visible');
   assertMarkup(html, /Optional.*not captured|not captured.*Optional/is, 'missing alternate route should stay optional');
   assert.equal((html.match(/data-readiness-card=/g) ?? []).length, 4);

@@ -81,6 +81,18 @@ test('current-location prefill is memory-only, disclosed, and cancel clears it w
 
   active<HTMLButtonElement>('[data-action="close"]').click();
   assert.equal(getSavedPlaces().length, 0);
+  const closedState = modal as unknown as {
+    formState: { lat: string; lon: string };
+    geocodeResults: unknown[];
+    onCurrentLocationConfirmed: unknown;
+  };
+  assert.equal(closedState.formState.lat, '');
+  assert.equal(closedState.formState.lon, '');
+  assert.deepEqual(closedState.geocodeResults, []);
+  assert.equal(closedState.onCurrentLocationConfirmed, null);
+  assert.equal(document.querySelector<HTMLInputElement>('[data-field="lat"]')?.value, '');
+  assert.equal(document.querySelector<HTMLInputElement>('[data-field="lon"]')?.value, '');
+  assert.doesNotMatch(document.body.innerHTML, /-78\.8986/);
   modal.openCreate();
   assert.equal(active<HTMLInputElement>('[data-field="lat"]').value, '');
   assert.equal(active<HTMLInputElement>('[data-field="lon"]').value, '');

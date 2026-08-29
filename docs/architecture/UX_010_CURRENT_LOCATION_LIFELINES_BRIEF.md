@@ -445,6 +445,11 @@ approval design above.
   `test:ux010`, Lifelines, Lifelines map/grid, sidecar, Emergency Pack,
   Emergency Readiness, and Home Shell suites. Full, tech, finance, and happy
   production builds also passed.
+- Exact mutation transcripts, including checksums, confirmed diffs, green/red
+  counts, failing assertions, and restored-clean results, are committed in
+  `docs/validation/UX-010-MUTATION-PROOFS.md`. Live ODIN, deterministic browser
+  success-path, teardown, and packaged-mac evidence are committed in
+  `docs/validation/UX-010-LIVE-RUNTIME-EVIDENCE.md`.
 - The packaged full macOS app built successfully with the stable `Crystal Ball
   Dev` identity and hardened runtime. The exact Location-only `tccutil` reset
   is unsupported on this Mac, so no broader permission reset was substituted
@@ -487,13 +492,19 @@ approval design above.
   - panel teardown: the current-location `snapshot = null` scrub was removed;
     the confirmed diff changed `LocalLogisticsPanel.ts`, and the focused
     teardown test changed from `1 pass / 0 fail` to `0 pass / 1 fail` because
-    the accepted session snapshot survived destruction. The restored checksum
-    was `3d965d4b019f2c78359f85cadf2bcb9983a9c9fd3bf78bbab9a255f77f8951ac`.
+    the accepted session snapshot survived destruction. The current-tip
+    restored checksum is
+    `0460be64bc4b124ea81a852ff8bb8b3f2b4e4c7185b0acd2f0ddd3da77eaab93`.
   - saved-place isolation: ordinary create/edit was forced to use conversion
     radii; the confirmed diff changed `SavedPlaceModal.ts`, and the focused
     test changed from `1 pass / 0 fail` to `0 pass / 1 fail` because `5`, `10`,
-    and `25` appeared outside conversion. The restored checksum was
-    `5b90b55d9ef1180c7e92e5bf92e85c051b8e70016e4fd818e3a7eae181f2d027`.
+    and `25` appeared outside conversion. The current-tip restored checksum is
+    `22b57b7d7d0f85d580a1fd605bf7e62a265531530a84d28fa365c66aa2a00a12`.
+  - cancel-time scrub: the conversion-specific close scrub and hidden-overlay
+    rerender were removed; the confirmed diff changed `SavedPlaceModal.ts`,
+    and the focused test changed from `1 pass / 0 fail` to `0 pass / 1 fail`
+    because `formState.lat` remained `"0"` instead of becoming empty. Restore
+    reproduced the same current-tip checksum as saved-place isolation.
   Every mutation was applied with a visible diff, restored with the original
   checksum, and followed by an empty `git status --short` before the next one.
 - Packaged-mac runtime verification first showed the same behavior with the
@@ -511,19 +522,21 @@ approval design above.
   definitive first-grant prompt observation without privileged locationd state
   repair. The verified product property is that startup never prompted and the
   acquisition occurred only after the explicit action.
-- Browser inspection showed no pre-click geolocation prompt, the complete
-  one-shot/session-only/provider-access-log disclosure, one visible Use Current
-  Location action, and no location or local-logistics console entries before
-  consent. After explicit human approval for the precise-location transmission,
-  the in-app browser's one-shot acquisition reached the fixed 15-second timeout
-  before any Lifelines POST. The panel showed the fixed coordinate-free timeout
-  message, Clear Location restored the consent state, and filtered browser logs
-  contained no location, geolocation, local-logistics, session-lifelines,
-  latitude, or longitude entry. Because the browser runtime did not provide a
-  fix, a successful manual browser POST/no-store observation remains
-  unavailable; exact POST, coordinate-free URL/body handling, response
-  no-store, and teardown are covered by the focused renderer, handler, and
-  sidecar HTTP suites plus the recorded production mutations.
+- Initial in-app browser inspection showed no pre-click geolocation prompt, the
+  complete one-shot/session-only/provider-access-log disclosure, and no
+  location or local-logistics console entries before consent. That runtime did
+  not provide a fix and reached the fixed coordinate-free 15-second timeout.
+  A subsequent deterministic Chromium run used a fresh context, granted
+  geolocation permission, and the synthetic public test coordinate
+  `41.8781, -87.6298`. Before the click it captured zero Lifelines requests.
+  After the explicit action it captured exactly one same-origin POST whose URL
+  contained no coordinates and whose referrer was absent; the real sidecar
+  returned `200` and `cache-control: private, no-store`. The panel reached
+  `SESSION ONLY`; raw coordinates appeared in neither the panel nor console.
+  Clear restored consent, reload did not restore the anchor, and post-clear DOM
+  and browser storage contained no raw coordinate. The exact runtime transcript
+  and test-adapter boundary are recorded in
+  `docs/validation/UX-010-LIVE-RUNTIME-EVIDENCE.md`.
 
 ## Rollback
 

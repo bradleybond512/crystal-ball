@@ -344,7 +344,6 @@ export class SavedPlaceModal {
   private renderOfflineControls(): string {
  if (this.currentLocationConversion) return '';
  const activeClass = this.formState.offlinePinned ? ' spm-offline-btn--active' : '';
- const ariaPressed = this.formState.offlinePinned ? 'true' : 'false';
  const label = this.formState.offlinePinned
    ? '&#x2713; Keep Disaster Lifelines offline'
    : 'Keep Disaster Lifelines offline';
@@ -357,7 +356,7 @@ export class SavedPlaceModal {
  class="spm-offline-btn${activeClass}"
  data-action="toggle-offline"
  type="button"
- aria-pressed="${ariaPressed}"
+ aria-pressed="${this.formState.offlinePinned ? 'true' : 'false'}"
  title="Keep the latest Disaster Lifelines data ready for degraded or offline conditions"
  >
  <span>${label}</span>

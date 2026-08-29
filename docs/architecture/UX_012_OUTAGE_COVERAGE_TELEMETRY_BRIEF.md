@@ -1,6 +1,6 @@
 # UX-012 Outage Coverage and Provider Telemetry Feature Brief
 
-Status: implementation
+Status: complete
 Risk: standard / medium
 Affected variant: full (`local-logistics` is not enabled in tech, finance, or happy)
 Roadmap task: UX-012
@@ -112,6 +112,17 @@ responses retain their existing facility-directory semantics.
 - Per-behavior observed-red or mutation-proof transcripts.
 - Targeted outage/Lifelines tests and the full agentic validation gate.
 - Independent read-only review and an exact-tip Claude verdict before closeout.
+
+## Completion evidence
+
+- Domain projection mutations: 25 killed, 0 survived, including the
+  missing-retrieval fail-closed guard.
+- UI mutations: 30 killed, 0 survived, including a direct aggregation mutant
+  that collapsed two reports into one summed claim.
+- The Lifelines and Lifelines-grid suites, full agentic validation gate,
+  type checks, secret scan, documentation checks, and production build passed.
+- Independent review concluded with zero blocking findings after the two
+  confirmed findings were repaired and revalidated.
 
 ## Rollback
 

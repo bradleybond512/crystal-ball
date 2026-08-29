@@ -462,17 +462,18 @@ test('renders an accessible exact-county outage matrix without summing reports o
   const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 });
   const now = Date.now();
   const snapshot = makeSnapshot(place, 25, {
-    countyFips: '18141',
+    countyFips: '18141<img src=x onerror=bad()>',
     areaConditions: [{
       id: 'ornl-odin:18141:unsafe', type: 'power_outage', coverage: 'reported',
-      countyFips: '18141', county: 'St. Joseph <County>', state: 'Indiana',
-      customersOut: 11, utilityName: 'A <script>bad()</script>', utilityId: 'utility-a',
+      countyFips: '18141<img src=x onerror=bad()>', county: 'St. Joseph <County>', state: 'Indiana',
+      customersOut: 11, utilityName: 'A <script>bad()</script>',
+      utilityId: 'utility-a<img src=x onerror=bad()>',
       observedAt: new Date(now - 4 * 60_000), retrievedAt: new Date(now - 4 * 60_000),
       sourceObservedAt: new Date(now - 5 * 60_000), expiresAt: new Date(now + 20 * 60_000),
       source: 'ornl-odin',
     }, {
       id: 'ornl-odin:18141:unknown', type: 'power_outage', coverage: 'reported',
-      countyFips: '18141', county: 'St. Joseph', state: 'Indiana', customersOut: 17,
+      countyFips: '18141<img src=x onerror=bad()>', county: 'St. Joseph', state: 'Indiana', customersOut: 17,
       observedAt: new Date(now - 40 * 60_000), retrievedAt: new Date(now - 40 * 60_000),
       expiresAt: new Date(now - 10 * 60_000), source: 'ornl-odin',
     }],
@@ -495,7 +496,19 @@ test('renders an accessible exact-county outage matrix without summing reports o
   assert.equal(tables[1]?.querySelector('caption')?.textContent, 'Individual outage reports — never summed');
   assert.ok([...outage.querySelectorAll('th')].every((header) => Boolean(header.getAttribute('scope'))));
   assert.ok([...outage.querySelectorAll('time')].every((time) => Boolean(time.getAttribute('datetime'))));
-  assert.equal(requiredElement<HTMLElement>(outage, '.local-logistics-table-scroll').tabIndex, 0);
+  const scrollRegions = [...outage.querySelectorAll<HTMLElement>('.local-logistics-table-scroll')];
+  assert.equal(scrollRegions.length, 2);
+  assert.deepEqual(
+    scrollRegions.map((region) => ({
+      role: region.getAttribute('role'),
+      label: region.getAttribute('aria-label'),
+      tabIndex: region.tabIndex,
+    })),
+    [
+      { role: 'region', label: 'ORNL ODIN provider telemetry', tabIndex: 0 },
+      { role: 'region', label: 'Individual outage reports', tabIndex: 0 },
+    ],
+  );
 
   const text = outage.textContent ?? '';
   assert.match(text, /exact-county/i);
@@ -505,15 +518,41 @@ test('renders an accessible exact-county outage matrix without summing reports o
   assert.match(text, /Dropped \/ rejected.+3/is);
   assert.match(text, /Contributed.+2/is);
   assert.match(text, /Current unexpired.+1/is);
-  assert.match(text, /18141/);
+  assert.match(text, /18141<img src=x onerror=bad\(\)>/);
   assert.match(text, /St\. Joseph <County>/);
   assert.match(text, /A <script>bad\(\)<\/script>/);
+  assert.match(text, /utility-a<img src=x onerror=bad\(\)>/);
   assert.match(text, /Utility not identified by source/);
   assert.match(text, /Source observation.+Not published/is);
   assert.match(text, /Expired/);
   assert.doesNotMatch(text, /28 customers/i, 'independent outage rows must never be summed');
   assert.equal(outage.querySelectorAll('tbody tr').length, 3, 'one telemetry row plus two independent claims');
   assert.equal(outage.querySelector('script'), null, 'provider text must be escaped rather than interpreted');
+  assert.equal(outage.querySelector('img'), null, 'FIPS and utility IDs must be escaped rather than interpreted');
+
+  const reportRows = tables[1]?.querySelectorAll('tbody tr') ?? [];
+  assert.equal(reportRows.length, 2);
+  const currentCells = reportRows[0]?.children;
+  const expiredCells = reportRows[1]?.children;
+  assert.equal(currentCells?.item(4)?.textContent, '11');
+  assert.equal(expiredCells?.item(4)?.textContent, '17');
+  assert.match(currentCells?.item(3)?.textContent ?? '', /utility-a<img src=x onerror=bad\(\)>/);
+  assert.equal(
+    currentCells?.item(5)?.querySelector('time')?.getAttribute('datetime'),
+    new Date(now - 4 * 60_000).toISOString(),
+  );
+  assert.equal(
+    expiredCells?.item(5)?.querySelector('time')?.getAttribute('datetime'),
+    new Date(now - 40 * 60_000).toISOString(),
+  );
+  assert.equal(
+    currentCells?.item(7)?.querySelector('time')?.getAttribute('datetime'),
+    new Date(now + 20 * 60_000).toISOString(),
+  );
+  assert.equal(
+    expiredCells?.item(7)?.querySelector('time')?.getAttribute('datetime'),
+    new Date(now - 10 * 60_000).toISOString(),
+  );
 
   const providerCards = [...content.querySelectorAll('.local-logistics-provider-row')]
     .map((row) => row.textContent ?? '');
@@ -541,6 +580,7 @@ test('renders outage unknown states explicitly instead of zero or power-on claim
   assert.match(text, /contributed no current accepted outage reports/i);
   assert.match(text, /not zero outages/i);
   assert.match(text, /does not mean power is on/i);
+  assert.doesNotMatch(text, /healthy|current complete/i);
 });
 
 test('failed refresh resolves to an error without removing radius and refresh controls', async () => {

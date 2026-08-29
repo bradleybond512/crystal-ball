@@ -1,243 +1,303 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { chmod, mkdir, open, rename, rm } from 'node:fs/promises';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DEFAULT_OUTPUT = path.join(os.homedir(), 'Library/Application Support/Crystal Ball/little-snitch-traffic.json');
-const HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
-const SUDO = '/usr/bin/sudo';
-const LITTLE_SNITCH_CANDIDATES = [
-  '/Applications/Little Snitch.app/Contents/Components/littlesnitch',
-  '/usr/local/bin/littlesnitch',
-  '/opt/homebrew/bin/littlesnitch',
-];
-const padDatePart = value => String(value).padStart(2, '0');
+export const LITTLE_SNITCH_EXPORT_PATH = path.join(
+  os.userInfo().homedir,
+  'Library/Application Support/Crystal Ball/little-snitch-traffic.json',
+);
+export const LITTLE_SNITCH_HELPER_PATH = '/usr/local/libexec/crystal-ball-little-snitch-log';
+export const MAX_LITTLE_SNITCH_CSV_BYTES = 8 * 1024 * 1024;
+export const MAX_LITTLE_SNITCH_ENTRIES = 500;
+const COLLECTION_TIMEOUT_MS = 35_000;
+const VALID_HEADERS = new Set([
+  'date', 'direction', 'uid', 'ipaddress', 'remotehostname', 'protocol', 'port',
+  'connectcount', 'denycount', 'bytecountin', 'bytecountout',
+  'connectingexecutable', 'parentappexecutable',
+]);
+const REQUIRED_HEADERS = ['date', 'direction', 'remotehostname', 'protocol', 'connectcount', 'denycount'];
+const DOMAIN_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 export function parseLittleSnitchTrafficCsv(csv) {
+  if (typeof csv !== 'string' || Buffer.byteLength(csv) > MAX_LITTLE_SNITCH_CSV_BYTES) {
+    throw new Error('Little Snitch export exceeded the permitted size');
+  }
   const rows = parseCsv(csv);
-  if (rows.length < 2) return [];
+  if (rows.length === 0) throw new Error('Little Snitch export did not contain a CSV header');
   const headers = rows[0].map(header => normalizeHeader(header));
-  return rows.slice(1)
-    .map((row, idx) => rowToEntry(headers, row, idx))
-    .filter(Boolean);
+  validateHeaders(headers);
+
+  const aggregated = new Map();
+  for (const row of rows.slice(1)) {
+    const entry = rowToEntry(headers, row);
+    if (!entry) throw new Error('Little Snitch export contains an invalid traffic row');
+    const key = `${entry.app}\0${entry.remoteHost}\0${entry.decision}\0${entry.direction}\0${entry.protocol}`;
+    const previous = aggregated.get(key);
+    if (!previous) {
+      aggregated.set(key, entry);
+      continue;
+    }
+    previous.bytesIn = addBounded(previous.bytesIn, entry.bytesIn);
+    previous.bytesOut = addBounded(previous.bytesOut, entry.bytesOut);
+    previous.count = addBounded(previous.count, entry.count);
+    if (entry.lastSeen > previous.lastSeen) previous.lastSeen = entry.lastSeen;
+  }
+
+  return [...aggregated.values()]
+    .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen)
+      || a.app.localeCompare(b.app)
+      || a.remoteHost.localeCompare(b.remoteHost))
+    .slice(0, MAX_LITTLE_SNITCH_ENTRIES)
+    .map(entry => ({
+      id: createHash('sha256')
+        .update(`${entry.app}\0${entry.remoteHost}\0${entry.decision}\0${entry.direction}\0${entry.protocol}`)
+        .digest('hex')
+        .slice(0, 24),
+      ...entry,
+    }));
 }
 
-export async function writeLittleSnitchSnapshot(entries, outputPath = DEFAULT_OUTPUT) {
-  const snapshot = {
-    available: entries.length > 0,
-    generatedAt: new Date().toISOString(),
-    entries,
-  };
-  await mkdir(path.dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o644 });
-  await chmod(outputPath, 0o644);
-  return outputPath;
-}
-
-async function main(argv) {
-  const outputPath = readArg(argv, '--output') || DEFAULT_OUTPUT;
-  const beginDate = readArg(argv, '--begin-date') || defaultBeginDate();
-  const inputPath = readArg(argv, '--input');
-  const useSudo = !argv.includes('--no-sudo');
-  const csv = inputPath
-    ? await import('node:fs/promises').then(fs => fs.readFile(inputPath, 'utf8'))
-    : await runLittleSnitchTraffic(beginDate, useSudo);
-  const entries = parseLittleSnitchTrafficCsv(csv);
-  const written = await writeLittleSnitchSnapshot(entries, outputPath);
-  console.log(`Written ${entries.length} Little Snitch entries to ${written}`);
-}
-
-function runLittleSnitchTraffic(beginDate, useSudo) {
+export async function collectLittleSnitchTraffic({
+  command = '/usr/bin/sudo',
+  args = ['-n', LITTLE_SNITCH_HELPER_PATH],
+  timeoutMs = COLLECTION_TIMEOUT_MS,
+  maxBytes = MAX_LITTLE_SNITCH_CSV_BYTES,
+  terminationGraceMs = 1000,
+} = {}) {
   return new Promise((resolve, reject) => {
-    const littleSnitchBin = resolveLittleSnitchBin();
-    const command = useSudo ? SUDO : littleSnitchBin;
-    const args = useSudo
-      ? [littleSnitchBin, 'log-traffic', '--begin-date', beginDate]
-      : ['log-traffic', '--begin-date', beginDate];
-    const child = spawn(command, args, {
-      stdio: ['inherit', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const stdout = [];
+    let stdoutBytes = 0;
+    let failure = null;
+    let finished = false;
+    let forceTimer = null;
+
+    const failAndStop = message => {
+      if (!failure) failure = new Error(message);
+      child.kill('SIGTERM');
+      if (!forceTimer) {
+        forceTimer = setTimeout(() => {
+          if (!finished) child.kill('SIGKILL');
+        }, terminationGraceMs);
+        forceTimer.unref?.();
+      }
+    };
+    const timer = setTimeout(() => failAndStop('Little Snitch collection timed out'), timeoutMs);
+    timer.unref?.();
+
     child.stdout.on('data', chunk => {
-      stdout += chunk.toString('utf8');
+      if (failure) return;
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > maxBytes) {
+        failAndStop('Little Snitch export exceeded the permitted size');
+        return;
+      }
+      stdout.push(chunk);
     });
-    child.stderr.on('data', chunk => {
-      stderr += chunk.toString('utf8');
+    child.stderr.resume();
+    child.once('error', error => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (forceTimer) clearTimeout(forceTimer);
+      reject(new Error(`Little Snitch collector could not start: ${safeProcessError(error)}`));
     });
-    child.on('error', reject);
-    child.on('close', code => {
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.trim() || `littlesnitch log-traffic exited ${code}`));
+    child.once('close', code => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (forceTimer) clearTimeout(forceTimer);
+      if (failure) {
+        reject(failure);
+      } else if (code === 0) {
+        resolve(Buffer.concat(stdout).toString('utf8'));
+      } else {
+        reject(new Error('Little Snitch collection failed'));
+      }
     });
   });
 }
 
-function resolveLittleSnitchBin() {
-  const found = LITTLE_SNITCH_CANDIDATES.find(candidate => existsSync(candidate));
-  if (!found) throw new Error('Could not find Little Snitch CLI in /Applications/Little Snitch.app, /usr/local/bin, or /opt/homebrew/bin');
-  return found;
+export async function writeLittleSnitchSnapshot(entries, outputPath = LITTLE_SNITCH_EXPORT_PATH, now = new Date()) {
+  if (!Array.isArray(entries) || entries.length > MAX_LITTLE_SNITCH_ENTRIES) {
+    throw new Error('Little Snitch snapshot contains too many entries');
+  }
+  const outputDir = path.dirname(outputPath);
+  await mkdir(outputDir, { recursive: true, mode: 0o700 });
+  await chmod(outputDir, 0o700);
+  const snapshot = {
+    schemaVersion: 1,
+    available: true,
+    generatedAt: now.toISOString(),
+    entries,
+  };
+  const temporaryPath = path.join(outputDir, `.little-snitch-traffic.${process.pid}.${Date.now()}.tmp`);
+  let handle;
+  try {
+    handle = await open(temporaryPath, 'wx', 0o600);
+    await handle.writeFile(`${JSON.stringify(snapshot)}\n`, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    await rename(temporaryPath, outputPath);
+  } catch (error) {
+    if (handle) await handle.close().catch(() => {});
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
+  }
+  return outputPath;
 }
 
-function rowToEntry(headers, row, idx) {
-  const value = (...names) => {
-    for (const name of names) {
-      const index = headers.indexOf(name);
-      if (index !== -1 && row[index]) return row[index];
-    }
-    return '';
-  };
-  const remoteHost = normalizeHost(value('remotehostname', 'remotehost', 'host', 'hostname', 'domain', 'remote', 'server', 'ipaddress'));
+async function main() {
+  const csv = await collectLittleSnitchTraffic();
+  const entries = parseLittleSnitchTrafficCsv(csv);
+  await writeLittleSnitchSnapshot(entries);
+  process.stdout.write(`Little Snitch snapshot updated (${entries.length} entries)\n`);
+}
+
+function validateHeaders(headers) {
+  if (headers.some((header, index) => !header || headers.indexOf(header) !== index)) {
+    throw new Error('Little Snitch export contains invalid or duplicate CSV headers');
+  }
+  if (headers.some(header => !VALID_HEADERS.has(header))) {
+    throw new Error('Little Snitch export schema is not supported');
+  }
+  if (REQUIRED_HEADERS.some(header => !headers.includes(header))) {
+    throw new Error('Little Snitch export is missing required CSV headers');
+  }
+}
+
+function rowToEntry(headers, row) {
+  if (row.length !== headers.length) return null;
+  const field = name => row[headers.indexOf(name)] ?? '';
+  const remoteHostname = String(field('remotehostname')).trim();
+  const domainHost = sanitizeDomainHost(remoteHostname);
+  const ipOnly = net.isIP(remoteHostname) !== 0
+    || (!remoteHostname && net.isIP(String(field('ipaddress')).trim()) !== 0);
+  const remoteHost = domainHost || (ipOnly ? 'ip-only.invalid' : null);
   if (!remoteHost) return null;
-  const app = sanitizeApp(value('parentappexecutable', 'connectingexecutable', 'app', 'application', 'process', 'processname', 'process_name'));
+  const parentApp = field('parentappexecutable');
+  const executable = field('connectingexecutable');
+  const app = sanitizeApp(parentApp || executable);
+  const denyCount = sanitizeInteger(field('denycount'));
+  const connectCount = sanitizeInteger(field('connectcount'));
+  const bytesIn = optionalInteger(headers, row, 'bytecountin');
+  const bytesOut = optionalInteger(headers, row, 'bytecountout');
+  const lastSeen = sanitizeTimestamp(field('date'));
+  if (denyCount === null || connectCount === null
+      || bytesIn === null || bytesOut === null || !lastSeen) return null;
+  const count = Math.max(connectCount, denyCount, bytesIn > 0 || bytesOut > 0 ? 1 : 0);
+  if (count < 1) return null;
   return {
-    id: `${app}-${remoteHost}-${idx}`,
     app,
     remoteHost,
-    decision: sanitizeDecision(value('decision', 'action', 'ruleaction', 'rule_action'), value('denycount')),
-    direction: sanitizeDirection(value('direction')),
-    protocol: sanitizeProtocol(value('protocol')),
-    bytesIn: sanitizeNumber(value('bytecountin', 'bytesin', 'bytes_in', 'receivedbytes', 'received')),
-    bytesOut: sanitizeNumber(value('bytecountout', 'bytesout', 'bytes_out', 'sentbytes', 'sent')),
-    lastSeen: sanitizeTimestamp(value('date', 'timestamp', 'time', 'enddate', 'end_date')),
-    count: Math.max(1, sanitizeNumber(value('connectcount', 'count', 'connections', 'connectioncount'))),
-    firstSeen: sanitizeBoolean(value('firstseen', 'first_seen', 'new')),
+    remoteIp: null,
+    decision: denyCount > 0 ? 'block' : 'allow',
+    direction: sanitizeDirection(field('direction')),
+    protocol: sanitizeProtocol(field('protocol')),
+    bytesIn,
+    bytesOut,
+    lastSeen,
+    count,
   };
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function parseCsv(csv) {
   const rows = [];
   let row = [];
   let field = '';
   let quoted = false;
-  for (let i = 0; i < csv.length; i += 1) {
-    const char = csv[i];
-    const next = csv[i + 1];
-    if (isEscapedQuote(char, next, quoted)) {
-      field += char;
-      i += 1;
-    } else if (isQuote(char)) {
+  for (let index = 0; index < csv.length; index += 1) {
+    const char = csv[index];
+    const next = csv[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      field += '"';
+      index += 1;
+    } else if (char === '"') {
       quoted = !quoted;
-    } else if (isDelimiter(char, quoted)) {
+    } else if (char === ',' && !quoted) {
       row.push(field);
       field = '';
-    } else if (isLineBreak(char, quoted)) {
-      if (char === '\r' && next === '\n') i += 1;
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && next === '\n') index += 1;
       row.push(field);
-      if (row.some(cell => cell.trim())) rows.push(row);
+      if (row.some(value => value.trim())) rows.push(row);
       row = [];
       field = '';
     } else {
       field += char;
     }
   }
+  if (quoted) throw new Error('Little Snitch export contains malformed CSV');
   row.push(field);
-  if (row.some(cell => cell.trim())) rows.push(row);
+  if (row.some(value => value.trim())) rows.push(row);
   return rows;
 }
 
-function isEscapedQuote(char, next, quoted) {
-  return char === '"' && quoted && next === '"';
-}
-
-function isQuote(char) {
-  return char === '"';
-}
-
-function isDelimiter(char, quoted) {
-  return char === ',' && !quoted;
-}
-
-function isLineBreak(char, quoted) {
-  return (char === '\n' || char === '\r') && !quoted;
-}
-
 function normalizeHeader(value) {
-  return String(value).toLowerCase().replace(/[^a-z0-9_]/g, '');
-}
-
-function normalizeHost(value) {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`);
-    return normalizeHostLabel(parsed.hostname);
-  } catch {
-    return normalizeHostLabel(trimmed.split(/[/:?#]/, 1)[0] || '');
-  }
-}
-
-function normalizeHostLabel(value) {
-  const host = String(value).toLowerCase().replace(/\.$/, '');
-  return HOST_RE.test(host) ? host : null;
-}
-
-function sanitizeLabel(value, fallback) {
-  return String(value || '').replace(/[<>"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 100) || fallback;
+  return String(value).replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function sanitizeApp(value) {
-  const label = sanitizeLabel(value, 'Unknown App');
-  const parts = label.split('/');
-  return parts.at(-1) || label;
+  const basename = path.basename(String(value || '').trim()).replace(/[^a-zA-Z0-9 ._()+-]/g, '').trim();
+  return basename.slice(0, 100) || 'Unknown App';
 }
 
-function sanitizeDecision(value, denyCount = '') {
-  if (sanitizeNumber(denyCount) > 0) return 'block';
-  const normalized = String(value).toLowerCase();
-  if (normalized === 'allow' || normalized === 'allowed') return 'allow';
-  if (normalized === 'block' || normalized === 'blocked' || normalized === 'deny' || normalized === 'denied') return 'block';
-  return 'unknown';
+function sanitizeDomainHost(value) {
+  const host = String(value || '').trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (host.length > 253 || !DOMAIN_RE.test(host)) return null;
+  return host;
 }
 
 function sanitizeDirection(value) {
-  const normalized = String(value).toLowerCase();
-  if (normalized === 'in' || normalized === 'incoming') return 'inbound';
-  if (normalized === 'out' || normalized === 'outgoing') return 'outbound';
-  if (normalized === 'inbound' || normalized === 'outbound') return normalized;
+  if (value === 'in' || value === 'inbound') return 'inbound';
+  if (value === 'out' || value === 'outbound') return 'outbound';
   return 'unknown';
 }
 
 function sanitizeProtocol(value) {
-  const normalized = String(value || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
-  if (normalized === '6') return 'tcp';
-  if (normalized === '17') return 'udp';
-  return normalized || 'unknown';
+  if (value === '6' || String(value).toLowerCase() === 'tcp') return 'tcp';
+  if (value === '17' || String(value).toLowerCase() === 'udp') return 'udp';
+  return 'unknown';
 }
 
-function sanitizeNumber(value) {
-  const num = Number(String(value || '').replace(/[^0-9.-]/g, ''));
-  if (!Number.isFinite(num) || num < 0) return 0;
-  return Math.min(Math.round(num), Number.MAX_SAFE_INTEGER);
+function sanitizeInteger(value) {
+  if (!/^\d+$/.test(String(value || '').trim())) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function optionalInteger(headers, row, name) {
+  const index = headers.indexOf(name);
+  return index === -1 ? 0 : sanitizeInteger(row[index]);
 }
 
 function sanitizeTimestamp(value) {
-  const ms = Date.parse(String(value || '').replace(' ', 'T'));
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : new Date(0).toISOString();
+  const timestamp = Date.parse(String(value || '').replace(' ', 'T'));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
-function sanitizeBoolean(value) {
-  return ['1', 'true', 'yes', 'new'].includes(String(value).toLowerCase());
+function addBounded(a, b) {
+  return Math.min(Number.MAX_SAFE_INTEGER, a + b);
 }
 
-function defaultBeginDate() {
-  const date = new Date(Date.now() - 60 * 60 * 1000);
-  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
-}
-
-function readArg(argv, name) {
-  const index = argv.indexOf(name);
-  return index === -1 ? undefined : argv[index + 1];
+function safeProcessError(error) {
+  if (error?.code === 'ENOENT') return 'required command not found';
+  if (error?.code === 'EACCES') return 'permission denied';
+  return 'unknown process error';
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    await main(process.argv.slice(2));
+    await main();
   } catch (error) {
-    console.error(error.message);
-    process.exit(1);
+    process.stderr.write(`${error instanceof Error ? error.message : 'Little Snitch export failed'}\n`);
+    process.exitCode = 1;
   }
 }

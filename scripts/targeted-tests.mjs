@@ -51,6 +51,7 @@ export const OVERRIDES = {
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
   'scripts/lint-baseline.mjs': ['test:eslint-runner'],
   'scripts/lint-changed.mjs': ['test:eslint-runner'],
+  'scripts/little-snitch-log-traffic-helper.sh': ['test:little-snitch'],
   'scripts/run-eslint.mjs': ['test:eslint-runner'],
   'scripts/bundle-budget-policy.mjs': ['test:bundle-budget-policy'],
   'tests/main-sync-agent.test.mjs': ['test:data'],

@@ -304,6 +304,15 @@ test('the bundle budget policy override selects its focused behavioral suite', (
   assert.deepEqual(result, { scripts: ['test:bundle-budget-policy'], unmapped: [] });
 });
 
+test('the Little Snitch helper selects its focused behavioral suite', () => {
+  const index = deriveScriptIndex({
+    ...SCRIPTS,
+    'test:little-snitch': 'node --test scripts/little-snitch-log-traffic-helper.test.mjs',
+  });
+  const result = selectScripts(['scripts/little-snitch-log-traffic-helper.sh'], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:little-snitch'], unmapped: [] });
+});
+
 test('weekly evaluation report sources select their focused MCP suite', () => {
   const index = deriveScriptIndex({
     ...SCRIPTS,

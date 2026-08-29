@@ -1126,18 +1126,22 @@ export function createEmergencyPackStore(dependencies: EmergencyPackStoreDepende
     const prefix = `${KEY_PREFIX}:manifest:${encodeURIComponent(active.placeId)}:`;
     for (const key of metadata.keys().filter((item) => item.startsWith(prefix))) {
       if (retained.has(key)) continue;
-      let artifacts: StoredArtifactBody[] = [];
+      let artifacts: StoredArtifactBody[] | null = null;
       try {
         const encoded = metadata.getItem(key);
         const parsed = encoded === null ? null : parseEmergencyPackManifest(JSON.parse(encoded));
-        if (parsed && manifestKey(parsed.placeId, parsed.packId) === key) {
+        if (parsed?.placeId === active.placeId
+          && manifestKey(parsed.placeId, parsed.packId) === key
+          && parsed.receipts.every(
+            (receipt) => receipt.cacheKey === bodyKey(parsed.packId, receipt.kind),
+          )) {
           artifacts = parsed.receipts
-            .filter((receipt) => receipt.cacheKey === bodyKey(parsed.packId, receipt.kind))
             .map(({ kind, cacheKey, sha256 }) => ({ kind, cacheKey, sha256 }));
         }
       } catch {
-        artifacts = [];
+        // Retaining untrusted ownership metadata and bodies permits a safe retry.
       }
+      if (artifacts === null) continue;
       await cleanupGeneration(key, artifacts);
     }
   }

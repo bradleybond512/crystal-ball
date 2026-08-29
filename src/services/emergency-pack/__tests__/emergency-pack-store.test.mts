@@ -2145,6 +2145,104 @@ test('cleanup retry removes retained private contacts before their ownership man
   assert.ok(bodyDelete >= 0 && manifestRemove > bodyDelete, 'private body is gone before ownership metadata');
 });
 
+for (const defect of [
+  {
+    label: 'malformed JSON',
+    corrupt: () => '{',
+  },
+  {
+    label: 'canonical identity mismatch',
+    corrupt: (encoded: string) => {
+      const manifest = JSON.parse(encoded) as { packId: string };
+      manifest.packId = 'pack-impostor';
+      return JSON.stringify(manifest);
+    },
+  },
+  {
+    label: 'noncanonical receipt cache key',
+    corrupt: (encoded: string) => {
+      const manifest = JSON.parse(encoded) as { receipts: ReceiptFixture[] };
+      const contacts = manifest.receipts.find(({ kind }) => kind === 'contacts');
+      assert.ok(contacts);
+      contacts.cacheKey = 'wm-emergency-pack-v2:body:pack-impostor:contacts';
+      return JSON.stringify(manifest);
+    },
+  },
+] as const) {
+  test(`old-generation cleanup retains all ownership for a ${defect.label} and retries after exact restoration`, async () => {
+    const created = harness({
+      releaseArtifactBody: (kind, body) => {
+        if (kind === 'offline-map') {
+          const artifact = JSON.parse(body) as { marker: string };
+          created.operations.push(`body:release:${artifact.marker}:offline-map`);
+        }
+        return Promise.resolve();
+      },
+    });
+    assert.deepEqual(await commit(created.store, 'first'), { ok: true, packId: 'pack-1' });
+    assert.deepEqual(await commit(created.store, 'second'), { ok: true, packId: 'pack-2' });
+    const manifestKey = [...created.metadata.values.keys()]
+      .find((key) => key.includes(':manifest:') && key.endsWith(':pack-1'));
+    assert.ok(manifestKey);
+    const exactManifest = created.metadata.values.get(manifestKey);
+    assert.ok(exactManifest);
+    const packOneBodies = new Map(
+      [...created.bodies.values.entries()].filter(([key]) => key.includes(':body:pack-1:')),
+    );
+    assert.equal(packOneBodies.size, REQUIRED_KINDS.length);
+    assert.ok([...packOneBodies.keys()].some((key) => key.endsWith(':contacts')));
+    assert.ok([...packOneBodies.keys()].some((key) => key.endsWith(':offline-map')));
+
+    created.metadata.values.set(manifestKey, defect.corrupt(exactManifest));
+    const corruptCleanupStart = created.operations.length;
+    assert.deepEqual(await commit(created.store, 'third'), { ok: true, packId: 'pack-3' });
+    assert.deepEqual(
+      await created.store.readActive({ placeId: PLACE_ID, profileFingerprint: PROFILE, now: NOW }),
+      { status: 'ready', packId: 'pack-3' },
+      'retired corruption cannot revoke the new verified publication',
+    );
+    assert.equal(created.metadata.values.has(manifestKey), true, 'corrupt ownership metadata is retained');
+    assert.deepEqual(
+      new Map([...created.bodies.values.entries()].filter(([key]) => key.includes(':body:pack-1:'))),
+      packOneBodies,
+      'every retired body, including private contacts and the external map, remains owned',
+    );
+    const corruptCleanupOperations = created.operations.slice(corruptCleanupStart);
+    assert.equal(
+      corruptCleanupOperations.some((entry) => entry === 'body:release:first:offline-map'),
+      false,
+      'untrusted ownership cannot release the retired external map',
+    );
+    assert.equal(
+      corruptCleanupOperations.some((entry) => entry.startsWith('body:delete:') && entry.includes(':body:pack-1:')),
+      false,
+      'untrusted ownership cannot delete any retired body',
+    );
+
+    created.metadata.values.set(manifestKey, exactManifest);
+    const retryStart = created.operations.length;
+    assert.deepEqual(await commit(created.store, 'fourth'), { ok: true, packId: 'pack-4' });
+    assert.equal(created.metadata.values.has(manifestKey), false);
+    assert.equal(
+      [...created.bodies.values.keys()].some((key) => key.includes(':body:pack-1:')),
+      false,
+      'restoring the exact manifest permits complete cleanup on the next publication',
+    );
+    const retryOperations = created.operations.slice(retryStart);
+    const release = retryOperations.findIndex((entry) => entry === 'body:release:first:offline-map');
+    const bodyDeletes = [...packOneBodies.keys()].map((key) => retryOperations.indexOf(`body:delete:${key}`));
+    assert.ok(release >= 0 && bodyDeletes.every((index) => index > release), 'map release precedes every body deletion');
+    const contactsKey = [...packOneBodies.keys()].find((key) => key.endsWith(':contacts'));
+    assert.ok(contactsKey);
+    assert.ok(retryOperations.includes(`body:delete:${contactsKey}`), 'private contacts are deleted on retry');
+    const manifestRemove = retryOperations.indexOf(`metadata:remove:${manifestKey}`);
+    assert.ok(
+      bodyDeletes.every((index) => index >= 0 && manifestRemove > index),
+      'ownership metadata is removed only after every retired body',
+    );
+  });
+}
+
 test('cleanup treats an already absent offline-map body as an idempotent retry', async () => {
   const created = harness();
   assert.equal((await commit(created.store, 'first')).ok, true);

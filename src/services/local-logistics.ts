@@ -1339,7 +1339,7 @@ export function projectLocalLogisticsOutageCoverage(
   const currentContributedRows = claims.filter((claim) => claim.freshness === 'current').length;
   let state: LocalLogisticsOutageCoverageState;
   if (!snapshot.countyFips) state = 'unknown-geography';
-  else if (!provider || provider.state === 'error') state = 'unknown-unavailable';
+  else if (!provider || provider.state === 'error' || providerRetrievedAt === null) state = 'unknown-unavailable';
   else if (provider.state === 'stale'
     || (providerFreshnessExpiresAt !== null && providerFreshnessExpiresAt.getTime() <= now)
     || (claims.length > 0 && currentContributedRows === 0)) state = 'unknown-expired';

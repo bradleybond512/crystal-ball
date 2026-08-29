@@ -168,6 +168,8 @@ scripts/install-crystalball-mcp.mjs
 scripts/install-git-hooks.mjs
 scripts/install-little-snitch-exporter.mjs
 scripts/install-little-snitch-exporter.test.mjs
+# Transitional until the new OVERRIDES entry in targeted-tests.mjs lands on main's trusted runner.
+scripts/little-snitch-log-traffic-helper.sh
 scripts/lint-changed.mjs
 scripts/lint-colors.mjs
 scripts/lint-conflicts.mjs

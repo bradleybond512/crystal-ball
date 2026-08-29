@@ -22,6 +22,7 @@ const VALID_HEADERS = new Set([
 ]);
 const REQUIRED_HEADERS = ['date', 'direction', 'remotehostname', 'protocol', 'connectcount', 'denycount'];
 const DOMAIN_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const SKIP_IP_ONLY_ROW = Symbol('skip-ip-only-row');
 
 export function parseLittleSnitchTrafficCsv(csv) {
   if (typeof csv !== 'string' || Buffer.byteLength(csv) > MAX_LITTLE_SNITCH_CSV_BYTES) {
@@ -35,6 +36,7 @@ export function parseLittleSnitchTrafficCsv(csv) {
   const aggregated = new Map();
   for (const row of rows.slice(1)) {
     const entry = rowToEntry(headers, row);
+    if (entry === SKIP_IP_ONLY_ROW) continue;
     if (!entry) throw new Error('Little Snitch export contains an invalid traffic row');
     const key = `${entry.app}\0${entry.remoteHost}\0${entry.decision}\0${entry.direction}\0${entry.protocol}`;
     const previous = aggregated.get(key);
@@ -175,8 +177,11 @@ function validateHeaders(headers) {
 function rowToEntry(headers, row) {
   if (row.length !== headers.length) return null;
   const field = name => row[headers.indexOf(name)] ?? '';
-  const remoteHost = sanitizeHost(field('remotehostname'));
-  if (!remoteHost) return null;
+  const remoteHostname = String(field('remotehostname')).trim();
+  const remoteHost = sanitizeDomainHost(remoteHostname);
+  const ipOnly = net.isIP(remoteHostname) !== 0
+    || (!remoteHostname && net.isIP(String(field('ipaddress')).trim()) !== 0);
+  if (!remoteHost && !ipOnly) return null;
   const parentApp = field('parentappexecutable');
   const executable = field('connectingexecutable');
   const app = sanitizeApp(parentApp || executable);
@@ -185,8 +190,9 @@ function rowToEntry(headers, row) {
   const bytesIn = optionalInteger(headers, row, 'bytecountin');
   const bytesOut = optionalInteger(headers, row, 'bytecountout');
   const lastSeen = sanitizeTimestamp(field('date'));
-  if (denyCount === null || connectCount === null || connectCount < 1
+  if (denyCount === null || connectCount === null
       || bytesIn === null || bytesOut === null || !lastSeen) return null;
+  if (ipOnly) return SKIP_IP_ONLY_ROW;
   return {
     app,
     remoteHost,
@@ -197,7 +203,7 @@ function rowToEntry(headers, row) {
     bytesIn,
     bytesOut,
     lastSeen,
-    count: connectCount,
+    count: Math.max(connectCount, denyCount, 1),
   };
 }
 
@@ -243,9 +249,8 @@ function sanitizeApp(value) {
   return basename.slice(0, 100) || 'Unknown App';
 }
 
-function sanitizeHost(value) {
+function sanitizeDomainHost(value) {
   const host = String(value || '').trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-  if (net.isIP(host)) return host;
   if (host.length > 253 || !DOMAIN_RE.test(host)) return null;
   return host;
 }

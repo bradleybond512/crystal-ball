@@ -623,7 +623,7 @@ Update the row in the same PR that does the work.
 | UX-009 | Emergency Pack v2 | DONE | #1678 |
 | UX-010 | Current-location Lifelines | NOT STARTED — HIGH ASSURANCE | — |
 | UX-011 | Hazard/closure exposure | NOT STARTED — HIGH ASSURANCE | — |
-| UX-012 | Outage coverage + telemetry | NOT STARTED | — |
+| UX-012 | Outage coverage + telemetry | IN REVIEW | pending PR |
 | UX-013 | Hotel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |

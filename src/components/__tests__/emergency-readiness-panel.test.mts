@@ -124,9 +124,13 @@ test('hydrates only, renders empty then subscribed state, and fully cleans up', 
   assert.equal(content.querySelectorAll('[data-readiness-card]').length, 4);
   assert.ok(content.querySelector('section[aria-labelledby]'));
   assert.ok(content.querySelector('[aria-live="polite"][aria-atomic="true"]'));
-  assert.equal(content.querySelectorAll('h3').length, 4);
-  assert.equal(content.querySelectorAll('dl').length, 4);
-  assert.equal(content.querySelectorAll('button, a, input, [tabindex]').length, 0, 'read-only content should add no keyboard traps');
+  assert.equal(content.querySelectorAll('[data-readiness-card] h3').length, 4);
+  assert.equal(content.querySelectorAll('[data-readiness-card] dl').length, 4);
+  assert.equal(
+    content.querySelectorAll('[data-readiness-card] button, [data-readiness-card] a, [data-readiness-card] input, [data-readiness-card] select, [data-readiness-card] [tabindex]').length,
+    0,
+    'the four capability cards must remain read-only without keyboard traps',
+  );
   assert.match(content.textContent ?? '', /Home <img src=x onerror=window\.pwned=true>/);
   assert.equal(content.querySelector('img'), null, 'hostile saved-place text must remain text');
   assert.equal(getFetchCalls().length, 0, 'hydrate and subscription renders must remain offline-only');
@@ -363,6 +367,32 @@ test('without a live primary place only Lifelines is unavailable with explicit s
   assert.equal(content.querySelectorAll('[data-readiness-card]').length, 4);
   assert.equal(content.querySelectorAll('.emergency-readiness-card--unavailable').length, 1);
   assert.match(content.textContent ?? '', /Save a primary place to verify an exact Lifelines snapshot receipt/);
+});
+
+test('default panel dependencies use the real Emergency Pack runtime facade', () => {
+  const source = readFileSync(new URL('../EmergencyReadinessPanel.ts', import.meta.url), 'utf8');
+  const runtimeImport = source.match(
+    /import\s*\{(?<bindings>[^}]+)\}\s*from ['"]@\/services\/emergency-pack\/emergency-pack-runtime\.ts['"]/,
+  );
+  assert.ok(runtimeImport?.groups?.bindings);
+  for (const binding of [
+    'captureEmergencyPack',
+    'getEmergencyPackState',
+    'hydrateEmergencyPacks',
+    'subscribeEmergencyPack',
+  ]) {
+    assert.match(runtimeImport.groups.bindings, new RegExp(`\\b${binding}\\b`));
+  }
+
+  const defaultsStart = source.indexOf('const DEFAULT_DEPENDENCIES');
+  const defaultsEnd = source.indexOf('\nfunction captureMessage', defaultsStart);
+  assert.ok(defaultsStart >= 0 && defaultsEnd > defaultsStart);
+  const defaults = source.slice(defaultsStart, defaultsEnd);
+  assert.match(defaults, /\bsubscribeEmergencyPack\s*,/);
+  assert.match(defaults, /\bhydrateEmergencyPacks\(\)/);
+  assert.match(defaults, /await hydrateStormPosture\(\);\s*await hydrateEmergencyPacks\(\);/s);
+  assert.match(defaults, /\bgetEmergencyPackState\(place\)/);
+  assert.match(defaults, /\bcaptureEmergencyPack\s*,/);
 });
 
 test('panel CSS reflows cards as the window or resized panel narrows', () => {

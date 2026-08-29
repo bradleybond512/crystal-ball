@@ -10,6 +10,7 @@ const NOW = Date.parse('2026-08-25T16:00:00.000Z');
 interface ReadinessApi {
   projectEmergencyReadiness?: (...args: unknown[]) => {
     cards: Array<{ id: string; status: string; capturedAtMs: number | null; expiresAtMs: number | null }>;
+    pack: null | { artifacts: Array<{ kind: string; capturedAtMs: number | null }> };
     deadlinesMs: number[];
   };
   renderEmergencyReadiness?: (view: unknown) => string;
@@ -100,6 +101,43 @@ test('empty restored state still renders four truthful unavailable cards', () =>
   assert.equal(view.cards.length, 4);
   assert.ok(view.cards.every((card) => card.status === 'unavailable'));
   assert.equal((render(view).match(/data-readiness-card=/g) ?? []).length, 4);
+});
+
+test('Emergency Pack artifacts expose each receipt evidence age instead of commit time', () => {
+  const project = requireFunction('projectEmergencyReadiness');
+  const evidenceTimes = [NOW - 5 * 60_000, NOW - 45 * 60_000];
+  const view = project(snapshot(), null, {
+    now: NOW,
+    emergencyPack: {
+      places: [{ id: 'home', name: 'Home' }],
+      selectedPlaceId: 'home',
+      readiness: {
+        status: 'partial',
+        packId: 'pack-1',
+        requiredKinds: ['lifelines', 'alerts'],
+        optionalKinds: [],
+        receipts: ['lifelines', 'alerts'].map((kind, index) => ({
+          kind,
+          capturedAt: new Date(evidenceTimes[index]!).toISOString(),
+          expiresAt: new Date(NOW + 60 * 60_000).toISOString(),
+          semanticState: 'verified',
+          summary: `${kind} captured`,
+        })),
+        missingKinds: [],
+        expiredKinds: [],
+      },
+      contactConsent: true,
+      captureState: { status: 'idle', completed: 0, total: 2, message: '' },
+    },
+  });
+
+  assert.deepEqual(
+    view.pack?.artifacts.map(({ kind, capturedAtMs }) => ({ kind, capturedAtMs })),
+    [
+      { kind: 'lifelines', capturedAtMs: evidenceTimes[0] },
+      { kind: 'alerts', capturedAtMs: evidenceTimes[1] },
+    ],
+  );
 });
 
 test('deadline scheduler chooses the nearest expiry, bounds long waits, and ignores stale generations', () => {

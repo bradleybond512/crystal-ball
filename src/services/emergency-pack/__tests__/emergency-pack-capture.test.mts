@@ -1,0 +1,285 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { NOW, PLACE_ID, PROFILE, requireFunction } from './test-support.mts';
+
+interface ValidationResult {
+  ok: boolean;
+  itemCount: number;
+  semanticState: string;
+  reason?: string;
+}
+
+interface CaptureApi {
+  validateEmergencyPackArtifact?: (input: {
+    kind: string;
+    placeId: string;
+    profileFingerprint: string;
+    byteLength: number;
+    capturedAt: number;
+    payload: unknown;
+  }) => ValidationResult;
+}
+
+const api = await import('../emergency-pack-capture.ts').catch(() => ({} as CaptureApi)) as CaptureApi;
+
+function validate(kind: string, payload: unknown, byteLength?: number): ValidationResult {
+  const fn = requireFunction(api, 'validateEmergencyPackArtifact');
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+  const capturedAt = kind === 'alerts' && typeof record?.sourceFetchedAt === 'number'
+    ? record.sourceFetchedAt
+    : (kind === 'route-primary' || kind === 'route-alternate') && typeof record?.cachedAt === 'number'
+      ? record.cachedAt
+      : kind === 'lifelines'
+        && record?.snapshot
+        && typeof record.snapshot === 'object'
+        && !Array.isArray(record.snapshot)
+        && typeof (record.snapshot as Record<string, unknown>).fetchedAt === 'string'
+          ? Date.parse((record.snapshot as Record<string, unknown>).fetchedAt as string)
+          : NOW;
+  const capturedPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? { ...payload, capturedAt }
+    : payload;
+  const exactByteLength = byteLength ?? new TextEncoder().encode(JSON.stringify(capturedPayload)).byteLength;
+  return fn({
+    kind,
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    byteLength: exactByteLength,
+    capturedAt,
+    payload: capturedPayload,
+  });
+}
+
+test('alerts are scoped and bounded, and an exact zero-alert capture does not imply coverage', () => {
+  const empty = validate('alerts', {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    alerts: [],
+    sourceFetchedAt: NOW - 60_000,
+  });
+  assert.deepEqual(empty, {
+    ok: true,
+    itemCount: 0,
+    semanticState: 'verified-empty',
+    reason: 'coverage-not-inferred',
+  });
+  assert.equal(validate('alerts', {
+    placeId: 'other', profileFingerprint: PROFILE, alerts: [], sourceFetchedAt: NOW,
+  }).ok, false);
+  assert.equal(validate('alerts', {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    alerts: Array.from({ length: 101 }, (_, id) => ({ id })),
+    sourceFetchedAt: NOW,
+  }).ok, false);
+  assert.equal(validate('alerts', { alerts: [] }, 256 * 1024 + 1).ok, false);
+});
+
+test('route capture enforces exact endpoints, 5,000 coordinates, 1,000 steps, and 512 KiB', () => {
+  const route = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    from: { lat: 41.6111, lon: -86.7225 },
+    to: { lat: 41.7, lon: -86.8 },
+    geometry: { type: 'LineString', coordinates: [[-86.7225, 41.6111], [-86.8, 41.7]] },
+    steps: [{ instruction: 'Depart', distanceKm: 1, durationMinutes: 2 }],
+    cachedAt: NOW - 60_000,
+  };
+  assert.equal(validate('route-primary', route).ok, true);
+  assert.equal(validate('route-primary', {
+    ...route,
+    geometry: { type: 'LineString', coordinates: Array.from({ length: 5_001 }, () => [-86.7, 41.6]) },
+  }).ok, false);
+  assert.equal(validate('route-primary', {
+    ...route,
+    steps: Array.from({ length: 1_001 }, () => route.steps[0]),
+  }).ok, false);
+  assert.equal(validate('route-primary', route, 512 * 1024 + 1).ok, false);
+});
+
+test('offline map receipts require every successful tile readback within per-tile and pack limits', () => {
+  const generationId = 'generation-home-1';
+  const tiles = [{
+    url: 'https://a.basemaps.cartocdn.com/dark_all/8/66/95@2x.png',
+    cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/0`,
+    sha256: 'a'.repeat(64),
+    generationId,
+    byteLength: 32_000,
+    verified: true,
+  }];
+  assert.equal(validate('offline-map', {
+    placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles, totalBytes: 32_000,
+  }).ok, true);
+  for (const payload of [
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, tiles, totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId: '', tiles, totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], generationId: 'other' }], totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], cacheKey: tiles[0]!.url }], totalBytes: 32_000 },
+    { placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], sha256: 'not-a-digest' }], totalBytes: 32_000 },
+  ]) {
+    assert.equal(validate('offline-map', payload).ok, false);
+  }
+  assert.equal(validate('offline-map', {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    generationId,
+    tiles: Array.from({ length: 513 }, (_, index) => ({
+      url: `https://tiles/${index}`,
+      cacheKey: `https://offline-map.crystalball.invalid/exact/${generationId}/${index}`,
+      sha256: 'a'.repeat(64),
+      generationId,
+      byteLength: 1,
+      verified: true,
+    })),
+    totalBytes: 513,
+  }).ok, false);
+  assert.equal(validate('offline-map', {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    generationId,
+    tiles: [{ ...tiles[0], byteLength: 1024 * 1024 + 1 }],
+    totalBytes: 1024 * 1024 + 1,
+  }).ok, false);
+  assert.equal(validate('offline-map', {
+    placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles: [{ ...tiles[0], verified: false }], totalBytes: 32_000,
+  }).ok, false);
+  assert.equal(validate('offline-map', {
+    placeId: PLACE_ID, profileFingerprint: PROFILE, generationId, tiles, totalBytes: 50 * 1024 * 1024 + 1,
+  }).ok, false);
+});
+
+test('comms and contacts require explicit consent, a selected contact, and bounded private content', () => {
+  const scope = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    consent: true,
+    selectedContactIds: ['contact-1'],
+  };
+  const contactsPayload = {
+    ...scope,
+    contacts: [{ id: 'contact-1', label: 'Family', value: '+15555550100', role: 'check-in' }],
+  };
+  const commsPlanPayload = {
+    ...scope,
+    fallbackSteps: [{ id: 'sms', label: 'SMS', kind: 'sms', instruction: 'Send status', priority: 1 }],
+    checkInWindows: [{ id: 'hourly', label: 'Hourly', cadenceMinutes: 60, note: '' }],
+    notes: '',
+  };
+  assert.equal(validate('contacts', contactsPayload).ok, true);
+  assert.equal(validate('comms-plan', commsPlanPayload).ok, true);
+  assert.equal(validate('contacts', { ...contactsPayload, consent: false }).ok, false);
+  assert.equal(validate('contacts', { ...contactsPayload, selectedContactIds: [] }).ok, false);
+  assert.equal(validate('contacts', {
+    ...contactsPayload,
+    contacts: Array.from({ length: 26 }, (_, id) => ({ id: String(id), label: 'Contact', value: '555', role: '' })),
+  }).ok, false);
+  assert.equal(validate('comms-plan', {
+    ...commsPlanPayload,
+    fallbackSteps: Array.from({ length: 33 }, () => commsPlanPayload.fallbackSteps[0]),
+  }).ok, false);
+  assert.equal(validate('comms-plan', {
+    ...commsPlanPayload,
+    checkInWindows: Array.from({ length: 17 }, () => commsPlanPayload.checkInWindows[0]),
+  }).ok, false);
+  assert.equal(validate('comms-plan', commsPlanPayload, 128 * 1024 + 1).ok, false);
+});
+
+test('source-produced comms and contacts bodies validate when private values stay separate', () => {
+  const scope = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    consent: true,
+    selectedContactIds: ['contact-1'],
+  };
+  const commsPlan = {
+    ...scope,
+    fallbackSteps: [{ id: 'sms', label: 'SMS', kind: 'sms', instruction: 'Send status', priority: 1 }],
+    checkInWindows: [{ id: 'hourly', label: 'Hourly', cadenceMinutes: 60, note: '' }],
+    notes: 'Meet at home',
+  };
+  const contacts = {
+    ...scope,
+    contacts: [{ id: 'contact-1', label: 'Family', value: '+15555550100', role: 'check-in' }],
+  };
+
+  assert.equal(Object.hasOwn(commsPlan, 'contacts'), false);
+  assert.equal(Object.hasOwn(contacts, 'fallbackSteps'), false);
+  assert.deepEqual(
+    [validate('comms-plan', commsPlan).ok, validate('contacts', contacts).ok],
+    [true, true],
+  );
+});
+
+test('split privacy validation rejects private values in comms and unselected contacts', () => {
+  const selected = { id: 'contact-1', label: 'Family', value: '+15555550100', role: 'check-in' };
+  const commsPlan = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    consent: true,
+    selectedContactIds: [selected.id],
+    fallbackSteps: [],
+    checkInWindows: [],
+    notes: '',
+  };
+  const contacts = [
+    selected,
+    { id: 'contact-2', label: 'Work', value: 'work@example.com', role: 'backup' },
+  ];
+  assert.deepEqual([
+    validate('comms-plan', { ...commsPlan, contacts: [selected] }).ok,
+    validate('contacts', {
+      placeId: PLACE_ID,
+      profileFingerprint: PROFILE,
+      consent: true,
+      selectedContactIds: [selected.id],
+      contacts,
+    }).ok,
+    validate('contacts', { ...commsPlan, contacts }).ok,
+  ], [false, false, false]);
+});
+
+test('Lifelines evidence is exact-profile and capped at 1 MiB', () => {
+  const payload = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    snapshot: {
+      schemaVersion: 2,
+      fetchedAt: new Date(NOW - 60_000).toISOString(),
+      sites: [],
+      observations: [],
+      providers: [],
+    },
+  };
+  assert.equal(validate('lifelines', payload).ok, true);
+  assert.equal(validate('lifelines', { ...payload, profileFingerprint: `${PROFILE}:old` }).ok, false);
+  assert.equal(validate('lifelines', payload, 1024 * 1024 + 1).ok, false);
+});
+
+test('Lifelines byte validation counts exact UTF-8 bytes rather than JavaScript string length', () => {
+  const payload = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    snapshot: {
+      schemaVersion: 2,
+      fetchedAt: new Date(NOW - 60_000).toISOString(),
+      sites: [{ label: '避難所 🚨' }],
+      observations: [],
+      providers: [],
+    },
+  };
+  const capturedAt = Date.parse(payload.snapshot.fetchedAt);
+  const body = JSON.stringify({ ...payload, capturedAt });
+  const utf8ByteLength = new TextEncoder().encode(body).byteLength;
+
+  assert.ok(utf8ByteLength > body.length);
+  assert.equal(validate('lifelines', payload, utf8ByteLength).ok, true);
+  assert.deepEqual(validate('lifelines', payload, body.length), {
+    ok: false,
+    itemCount: 0,
+    semanticState: 'invalid',
+    reason: 'artifact-byte-count-mismatch',
+  });
+});

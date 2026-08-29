@@ -1,6 +1,6 @@
 # UX-012 Outage Coverage and Provider Telemetry Feature Brief
 
-Status: discovery
+Status: implementation
 Risk: standard / medium
 Affected variant: full (`local-logistics` is not enabled in tech, finance, or happy)
 Roadmap task: UX-012
@@ -17,8 +17,9 @@ it, and how many provider rows were accepted, dropped, and contributed.
 - Surface an outage coverage matrix from existing normalized ODIN and provider
   health data; do not add another provider or network origin.
 - Identify the exact source behind every displayed outage claim.
-- Show accepted, dropped, and contributed row counts with observation time and
-  expiry or an explicit unknown state.
+- Show final contributed and dropped row counts with observation time and
+  expiry. Label the pre-reconciliation accepted count explicitly unavailable
+  because the current normalized snapshot does not retain it.
 - Distinguish covered geography from unknown geography. Uncovered or empty data
   must never render as zero outages.
 - A provider with zero valid contributed observations must not appear healthy
@@ -49,16 +50,48 @@ it, and how many provider rows were accepted, dropped, and contributed.
 - Reconciling or summing overlapping outage providers.
 - Changing route, map, Emergency Pack, alert, or notification behavior.
 
-## Unknowns for discovery
+## Architecture and control flow
 
-- The exact normalized provider-health fields and where accepted, dropped, and
-  contributed counts currently live.
-- The narrowest existing Lifelines surface for the matrix without duplicating
-  provider logic in the view.
-- Whether observation expiry is already explicit or must be derived from an
-  existing timestamp and TTL contract.
-- Which existing tests and fixtures best exercise empty, dropped, stale, and
-  uncovered ODIN responses.
+The active path remains panel-owned and unchanged through normalization:
+
+```text
+exact saved place
+  -> local-logistics county resolution
+  -> exact-FIPS ORNL ODIN request
+  -> strict schema-v2 normalization and reconciliation
+  -> LocalLogisticsSnapshot
+  -> pure outage coverage projection
+  -> accessible Disaster Lifelines evidence tables
+```
+
+The additive presentation projection consumes only the validated snapshot. It
+preserves each current or expired ODIN report independently, including exact
+FIPS, county and state, optional utility identity, retrieval time, optional
+source-observation time, expiry, and customer count. It never reads provider
+payloads, performs a fetch, or serializes new state.
+
+Provider retrieval telemetry continues to expose the post-reconciliation
+contributed and dropped rows. The upstream accepted count is not reconstructible
+after reconciliation and is therefore displayed as unavailable rather than
+being relabeled from contributed rows. ODIN remains single-source context, not
+corroboration, county-total coverage, or facility power evidence.
+
+Fresh empty ODIN evidence becomes unknown because no valid outage row
+contributed. This rule is ODIN-specific: complete bounded OSM and FEMA empty
+responses retain their existing facility-directory semantics.
+
+## Discovery decisions
+
+- Existing `ProviderStatus` retains final contributed rows in `acceptedRows`
+  and folds reconciliation loss into `droppedRows`; distinct upstream accepted
+  rows are not retained.
+- Existing `AreaCondition` already carries exact geography, fixed source,
+  optional utility identity, retrieval, optional source observation, and exact
+  expiry.
+- The narrow implementation boundary is the pure projection, the Disaster
+  Lifelines renderer, bounded responsive styles, and focused tests.
+- No active ODIN corroboration vote exists, so the UI must state that the
+  evidence is single-source rather than imply a second-source health count.
 
 ## Main risks
 

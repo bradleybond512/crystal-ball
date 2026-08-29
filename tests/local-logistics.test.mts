@@ -23,7 +23,7 @@ import type {
   LifelineProviderCoverage,
   LocalLogisticsRadiusChoiceKm,
 } from '../src/services/local-logistics.ts';
-import type { LogisticsNode } from '../src/services/local-logistics-types.ts';
+import type { AreaCondition, LogisticsNode } from '../src/services/local-logistics-types.ts';
 import type { LocalLogisticsSnapshot, ProviderStatus } from '../src/services/local-logistics-types.ts';
 import type { SavedPlace } from '../src/services/saved-places.ts';
 
@@ -82,6 +82,26 @@ function makeNode(overrides: Partial<LogisticsNode> = {}): LogisticsNode {
  hazardCompatibility: 'general',
  fetchedAt: NOW,
  ...overrides,
+  };
+}
+
+function makeOutageCondition(overrides: Partial<AreaCondition> = {}): AreaCondition {
+  return {
+    id: 'ornl-odin:37183:utility-1',
+    type: 'power_outage',
+    coverage: 'reported',
+    countyFips: '37183',
+    county: 'Wake',
+    state: 'North Carolina',
+    customersOut: 17,
+    utilityName: 'Example Electric',
+    utilityId: 'utility-1',
+    observedAt: NOW,
+    retrievedAt: NOW,
+    sourceObservedAt: new Date(NOW.getTime() - 5 * 60_000),
+    expiresAt: new Date(NOW.getTime() + 30 * 60_000),
+    source: 'ornl-odin',
+    ...overrides,
   };
 }
 
@@ -684,7 +704,7 @@ test('coverage projection exposes provider scope, TTL, and fail-closed completen
   });
   assert.deepEqual(providerById.get('ornl-odin'), {
     providerId: 'ornl-odin',
-    state: 'current-complete',
+    state: 'unavailable',
     facilityCategories: [],
     retrievedAt: NOW,
     projectedExpiresAt: new Date(NOW.getTime() + 30 * 60 * 1000),
@@ -759,6 +779,134 @@ test('dropped provider rows downgrade nominally complete coverage and cannot pro
   assert.equal(coverage.providers[0]?.state, 'current-partial');
   assert.deepEqual(coverage.categories[0], {
     category: 'fuel', state: 'not-proven', requiredProviders: ['osm'], expiresAt: null,
+  });
+});
+
+test('outage coverage projects exact independent reports and post-reconciliation telemetry without summing', () => {
+  const projectLocalLogisticsOutageCoverage = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    now?: number,
+  ) => Record<string, unknown>>('projectLocalLogisticsOutageCoverage');
+  const earlierRetrieval = new Date(NOW.getTime() - 10 * 60_000);
+  const snapshot = buildLocalLogisticsSnapshot(makePlace(), [], {
+    fetchedAt: NOW,
+    countyFips: '37183',
+    areaConditions: [
+      makeOutageCondition(),
+      makeOutageCondition({
+        id: 'ornl-odin:37183:utility-2',
+        customersOut: 23,
+        utilityName: undefined,
+        utilityId: undefined,
+        retrievedAt: earlierRetrieval,
+        observedAt: earlierRetrieval,
+        sourceObservedAt: undefined,
+        expiresAt: new Date(NOW.getTime() + 20 * 60_000),
+      }),
+    ],
+    providers: [{
+      id: 'ornl-odin', state: 'partial', acceptedRows: 2, droppedRows: 3,
+      observedAt: NOW, retrievedAt: NOW, sourceObservedAt: new Date(NOW.getTime() - 60_000),
+    }],
+  });
+
+  assert.deepEqual(projectLocalLogisticsOutageCoverage(snapshot, NOW.getTime()), {
+    sourceId: 'ornl-odin',
+    sourceLabel: 'ORNL ODIN',
+    state: 'reported-current-partial',
+    queryCountyFips: '37183',
+    acceptedRowsBeforeReconciliation: null,
+    acceptedRowsAvailability: 'not-retained',
+    droppedRows: 3,
+    contributedRows: 2,
+    currentContributedRows: 2,
+    providerRetrievedAt: NOW,
+    providerSourceObservedAt: new Date(NOW.getTime() - 60_000),
+    providerFreshnessExpiresAt: new Date(NOW.getTime() + 30 * 60_000),
+    independentlyCorroborated: false,
+    claims: [
+      {
+        sourceId: 'ornl-odin', sourceLabel: 'ORNL ODIN', countyFips: '37183',
+        county: 'Wake', state: 'North Carolina', utilityName: 'Example Electric',
+        utilityId: 'utility-1', customersOut: 17, retrievedAt: NOW,
+        sourceObservedAt: new Date(NOW.getTime() - 5 * 60_000),
+        expiresAt: new Date(NOW.getTime() + 30 * 60_000), freshness: 'current',
+      },
+      {
+        sourceId: 'ornl-odin', sourceLabel: 'ORNL ODIN', countyFips: '37183',
+        county: 'Wake', state: 'North Carolina', utilityName: null,
+        utilityId: null, customersOut: 23, retrievedAt: earlierRetrieval,
+        sourceObservedAt: null, expiresAt: new Date(NOW.getTime() + 20 * 60_000),
+        freshness: 'current',
+      },
+    ],
+  });
+});
+
+test('outage coverage reports exact current, expired, geography, availability, and no-contribution states', () => {
+  const projectLocalLogisticsOutageCoverage = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    now?: number,
+  ) => { state: string; claims: Array<{ freshness: string }>; currentContributedRows: number }>(
+    'projectLocalLogisticsOutageCoverage',
+  );
+  const snapshot = (overrides: Partial<LocalLogisticsSnapshot>): LocalLogisticsSnapshot =>
+    buildLocalLogisticsSnapshot(makePlace(), [], {
+      fetchedAt: NOW,
+      countyFips: '37183',
+      areaConditions: [makeOutageCondition()],
+      providers: [{
+        id: 'ornl-odin', state: 'ok', acceptedRows: 1, droppedRows: 0,
+        observedAt: NOW, retrievedAt: NOW,
+      }],
+      ...overrides,
+    });
+
+  assert.equal(projectLocalLogisticsOutageCoverage(snapshot({}), NOW.getTime()).state, 'reported-current');
+  assert.equal(projectLocalLogisticsOutageCoverage(snapshot({ countyFips: undefined }), NOW.getTime()).state, 'unknown-geography');
+  assert.equal(projectLocalLogisticsOutageCoverage(snapshot({ providers: [] }), NOW.getTime()).state, 'unknown-unavailable');
+  assert.equal(projectLocalLogisticsOutageCoverage(snapshot({
+    providers: [{ id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 4, observedAt: null }],
+  }), NOW.getTime()).state, 'unknown-unavailable');
+  assert.equal(projectLocalLogisticsOutageCoverage(snapshot({
+    areaConditions: [],
+    providers: [{ id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW }],
+  }), NOW.getTime()).state, 'unknown-no-contributions');
+
+  const expired = projectLocalLogisticsOutageCoverage(snapshot({
+    areaConditions: [makeOutageCondition({ expiresAt: NOW })],
+  }), NOW.getTime());
+  assert.equal(expired.state, 'unknown-expired');
+  assert.equal(expired.currentContributedRows, 0);
+  assert.deepEqual(expired.claims.map((claim) => claim.freshness), ['expired']);
+});
+
+test('fresh empty ODIN is unavailable for coverage while bounded empty facility providers remain complete', () => {
+  const projectLocalLogisticsCoverage = requireFeature<(
+    snapshot: LocalLogisticsSnapshot,
+    now?: number,
+  ) => { providers: LifelineProviderCoverage[] }>('projectLocalLogisticsCoverage');
+  const snapshot = buildLocalLogisticsSnapshot(makePlace(), [], {
+    fetchedAt: NOW,
+    countyFips: '37183',
+    categories: ['fuel', 'shelter', 'recovery'],
+    providers: [
+      { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+      { id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+      { id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+      { id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW },
+    ],
+  });
+  const states = Object.fromEntries(
+    projectLocalLogisticsCoverage(snapshot, NOW.getTime()).providers
+      .map((provider) => [provider.providerId, provider.state]),
+  );
+
+  assert.deepEqual(states, {
+    osm: 'current-complete',
+    'fema-open-shelters': 'current-complete',
+    'fema-recovery-centers': 'current-complete',
+    'ornl-odin': 'unavailable',
   });
 });
 

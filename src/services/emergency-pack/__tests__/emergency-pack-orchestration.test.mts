@@ -85,6 +85,16 @@ function artifact(kind: string): Artifact {
   };
 }
 
+function reboundArtifact(kind: string, placeId: string, profileFingerprint: string): Artifact {
+  const candidate = artifact(kind);
+  candidate.body = JSON.stringify({
+    ...(JSON.parse(candidate.body) as Record<string, unknown>),
+    placeId,
+    profileFingerprint,
+  });
+  return candidate;
+}
+
 function sources(overrides: Partial<Record<string, (candidate: Scope) => Promise<Artifact | null>>> = {}) {
   return {
     lifelines: async () => artifact('lifelines'),
@@ -223,6 +233,64 @@ test('one missing or rejected required artifact prevents any generation commit',
     reason: 'artifact-invalid',
   });
   assert.equal(commits, 0);
+});
+
+test('capture rejects otherwise valid artifacts bound to another place or profile', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  for (const [label, candidate] of [
+    ['place', reboundArtifact('lifelines', `${PLACE_ID}:other`, PROFILE)],
+    ['profile', reboundArtifact('lifelines', PLACE_ID, `${PROFILE}:other`)],
+  ] as const) {
+    let commits = 0;
+    const orchestrator = create({
+      sources: sources({ lifelines: async () => candidate }),
+      commitGeneration: async () => { commits += 1; return { ok: true }; },
+    });
+
+    assert.deepEqual(await orchestrator.capture({ ...scope }), {
+      ok: false,
+      failedKind: 'lifelines',
+      reason: 'artifact-invalid',
+    }, label);
+    assert.equal(commits, 0, label);
+  }
+});
+
+test('capture aborts when awaited required or optional sources change either scope identity field', async () => {
+  const create = requireFunction(api, 'createEmergencyPackCaptureOrchestrator');
+  const scenarios = [
+    { kind: 'contacts', identity: 'placeId', changed: `${PLACE_ID}:changed` },
+    { kind: 'contacts', identity: 'profileFingerprint', changed: `${PROFILE}:changed` },
+    { kind: 'route-alternate', identity: 'placeId', changed: `${PLACE_ID}:changed` },
+    { kind: 'route-alternate', identity: 'profileFingerprint', changed: `${PROFILE}:changed` },
+  ] as const;
+
+  for (const scenario of scenarios) {
+    let commits = 0;
+    const released: Artifact[] = [];
+    const orchestrator = create({
+      sources: sources({
+        [scenario.kind]: async (candidate) => {
+          candidate[scenario.identity] = scenario.changed;
+          return reboundArtifact(scenario.kind, candidate.placeId, candidate.profileFingerprint);
+        },
+      }),
+      commitGeneration: async () => { commits += 1; return { ok: true }; },
+      releaseArtifact: async (candidate) => { released.push(candidate); },
+    });
+
+    assert.deepEqual(await orchestrator.capture({ ...scope }), {
+      ok: false,
+      failedKind: scenario.kind,
+      reason: 'scope-changed',
+    }, `${scenario.kind}:${scenario.identity}`);
+    assert.equal(commits, 0, `${scenario.kind}:${scenario.identity}`);
+    assert.deepEqual(
+      released.map(({ kind }) => kind),
+      ['offline-map'],
+      `${scenario.kind}:${scenario.identity}`,
+    );
+  }
 });
 
 test('capture rejects artifacts whose evidence time is missing, inconsistent, or not before expiry', async () => {

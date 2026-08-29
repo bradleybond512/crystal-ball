@@ -16,6 +16,10 @@ interface ProtocolApi {
 }
 
 const ORIGINAL_URL = 'https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png';
+const CANONICAL_TILE_URLS = [
+  ORIGINAL_URL,
+  'https://d.basemaps.cartocdn.com/dark_all/4/1/2@2x.png',
+];
 const MAX_TILE_BYTES = 1024 * 1024;
 const NON_DEFAULT_PORT_URLS = [
   'https://a.basemaps.cartocdn.com:8443/rastertiles/dark_nolabels/4/1/2.png',
@@ -30,12 +34,19 @@ function requireFunction<K extends keyof ProtocolApi>(name: K): NonNullable<Prot
   return value as NonNullable<ProtocolApi[K]>;
 }
 
-test('a Carto raster tile is wrapped without changing unrelated or non-tile requests', () => {
+test('canonical Carto dark_nolabels and dark_all tiles round-trip through the protocol wrapper', () => {
   const transform = requireFunction('transformEmergencyPackMapRequest');
   const unwrap = requireFunction('unwrapEmergencyPackMapUrl');
-  const transformed = transform(ORIGINAL_URL, 'Tile');
-  assert.notEqual(transformed.url, ORIGINAL_URL);
-  assert.equal(unwrap(transformed.url), ORIGINAL_URL);
+
+  for (const url of CANONICAL_TILE_URLS) {
+    const transformed = transform(url, 'Tile');
+    assert.notEqual(transformed.url, url);
+    assert.equal(unwrap(transformed.url), url);
+  }
+});
+
+test('unrelated and non-tile requests are not wrapped', () => {
+  const transform = requireFunction('transformEmergencyPackMapRequest');
   assert.deepEqual(transform(ORIGINAL_URL, 'Source'), { url: ORIGINAL_URL });
   assert.deepEqual(transform('https://example.com/4/1/2.png', 'Tile'), { url: 'https://example.com/4/1/2.png' });
   assert.deepEqual(
@@ -43,6 +54,36 @@ test('a Carto raster tile is wrapped without changing unrelated or non-tile requ
     { url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/4/1/2.png' },
   );
 });
+
+const INELIGIBLE_TILE_URLS = [
+  ['HTTP scheme', 'http://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png'],
+  ['trusted hostname suffix', 'https://a.basemaps.cartocdn.com.evil.example/rastertiles/dark_nolabels/4/1/2.png'],
+  ['untrusted hostname', 'https://evil.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png'],
+  ['username', 'https://user@a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png'],
+  ['password-only credentials', 'https://:secret@a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png'],
+  ['query', 'https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png?token=value'],
+  ['fragment', 'https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/4/1/2.png#tile'],
+] as const;
+
+for (const [boundary, url] of INELIGIBLE_TILE_URLS) {
+  test(`a Carto-shaped tile with ${boundary} is neither wrapped nor handled`, async () => {
+    const transform = requireFunction('transformEmergencyPackMapRequest');
+    const unwrap = requireFunction('unwrapEmergencyPackMapUrl');
+    const create = requireFunction('createEmergencyPackMapProtocolHandler');
+    const wrappedUrl = `wm-emergency-pack-map://tile/${encodeURIComponent(url)}`;
+    const handler = create({
+      resolveTile: async () => { throw new Error('ineligible URL must not reach offline resolution'); },
+      fetchTile: async () => { throw new Error('ineligible URL must not reach network fallback'); },
+    });
+
+    assert.deepEqual(transform(url, 'Tile'), { url });
+    assert.equal(unwrap(wrappedUrl), null);
+    await assert.rejects(
+      handler({ url: wrappedUrl }, new AbortController()),
+      /invalid emergency pack map URL/i,
+    );
+  });
+}
 
 test('Carto tile URLs with explicit non-default ports are never wrapped', () => {
   const transform = requireFunction('transformEmergencyPackMapRequest');

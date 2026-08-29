@@ -257,3 +257,29 @@ test('Lifelines evidence is exact-profile and capped at 1 MiB', () => {
   assert.equal(validate('lifelines', { ...payload, profileFingerprint: `${PROFILE}:old` }).ok, false);
   assert.equal(validate('lifelines', payload, 1024 * 1024 + 1).ok, false);
 });
+
+test('Lifelines byte validation counts exact UTF-8 bytes rather than JavaScript string length', () => {
+  const payload = {
+    placeId: PLACE_ID,
+    profileFingerprint: PROFILE,
+    snapshot: {
+      schemaVersion: 2,
+      fetchedAt: new Date(NOW - 60_000).toISOString(),
+      sites: [{ label: '避難所 🚨' }],
+      observations: [],
+      providers: [],
+    },
+  };
+  const capturedAt = Date.parse(payload.snapshot.fetchedAt);
+  const body = JSON.stringify({ ...payload, capturedAt });
+  const utf8ByteLength = new TextEncoder().encode(body).byteLength;
+
+  assert.ok(utf8ByteLength > body.length);
+  assert.equal(validate('lifelines', payload, utf8ByteLength).ok, true);
+  assert.deepEqual(validate('lifelines', payload, body.length), {
+    ok: false,
+    itemCount: 0,
+    semanticState: 'invalid',
+    reason: 'artifact-byte-count-mismatch',
+  });
+});

@@ -78,6 +78,33 @@ test('v2 receipts preserve mixed evidence ages with strict chronology, hashes, a
   })] })), null);
 });
 
+test('v2 receipt chronology accepts exact inclusive boundaries and rejects exact exclusive boundaries', () => {
+  const parse = requireFunction(api, 'parseEmergencyPackManifest');
+  const expiresAt = NOW + 60 * 60_000;
+
+  function singleReceiptManifest(capturedAt: number, verifiedAt: number) {
+    const committedAt = new Date(verifiedAt).toISOString();
+    return manifest({
+      committedAt,
+      receipts: [receipt('lifelines', {
+        capturedAt: new Date(capturedAt).toISOString(),
+        verifiedAt: committedAt,
+        expiresAt: new Date(expiresAt).toISOString(),
+      })],
+    });
+  }
+
+  const capturedEqualsVerified = singleReceiptManifest(NOW, NOW);
+  assert.deepEqual(parse(capturedEqualsVerified), capturedEqualsVerified);
+
+  assert.equal(parse(singleReceiptManifest(NOW + 1, NOW)), null);
+
+  const verifiedBeforeExpiry = singleReceiptManifest(NOW, expiresAt - 1);
+  assert.deepEqual(parse(verifiedBeforeExpiry), verifiedBeforeExpiry);
+
+  assert.equal(parse(singleReceiptManifest(NOW, expiresAt)), null);
+});
+
 test('v2 receipts bind one strict alert source revision and reject it for every other kind', () => {
   const parse = requireFunction(api, 'parseEmergencyPackManifest');
   const validRevision = 'b'.repeat(64);

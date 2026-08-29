@@ -56,12 +56,26 @@ test('treats a header-only export as a healthy empty collection', () => {
   assert.deepEqual(parseLittleSnitchTrafficCsv(`${HEADER}\n`), []);
 });
 
+test('omits IP-only destinations instead of persisting raw addresses', () => {
+  const csv = [
+    HEADER,
+    '2026-05-04 04:20:00,out,501,93.184.216.34,,6,443,1,0,1,1,/bin/node,/Applications/Terminal',
+    '2026-05-04 04:20:30,out,501,93.184.216.35,93.184.216.35,6,443,1,0,1,1,/bin/node,/Applications/Terminal',
+    '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,0,1,1,/bin/node,/Applications/Terminal',
+  ].join('\n');
+
+  const entries = parseLittleSnitchTrafficCsv(csv);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].remoteHost, 'api.example.org');
+  assert.doesNotMatch(JSON.stringify(entries), /93\.184\.216\.34/);
+});
+
 test('fails closed when an observed traffic row cannot be normalized', () => {
-  const ipOnly = `${HEADER}\n2026-05-04 04:21:00,out,501,93.184.216.34,,6,443,1,0,1,1,/bin/node,/Applications/Terminal`;
   const invalidDate = `${HEADER}\nnot-a-date,out,501,93.184.216.34,api.example.org,6,443,1,0,1,1,/bin/node,/Applications/Terminal`;
   const shortRow = `${HEADER}\n2026-05-04 04:21:00,out`;
+  const malformedIpOnly = `${HEADER}\n2026-05-04 04:21:00,out,501,93.184.216.34,,6,443,1,oops,1,1,/bin/node,/Applications/Terminal`;
 
-  for (const csv of [ipOnly, invalidDate, shortRow]) {
+  for (const csv of [invalidDate, shortRow, malformedIpOnly]) {
     assert.throws(
       () => parseLittleSnitchTrafficCsv(csv),
       /invalid traffic row/,
@@ -74,7 +88,6 @@ test('fails closed instead of coercing malformed traffic counters to allowed tra
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,,1,1,/bin/node,/Applications/Terminal',
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,oops,1,1,/bin/node,/Applications/Terminal',
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,-1,1,1,/bin/node,/Applications/Terminal',
-    '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,0,0,1,1,/bin/node,/Applications/Terminal',
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,0,oops,1,/bin/node,/Applications/Terminal',
   ];
 
@@ -84,6 +97,20 @@ test('fails closed instead of coercing malformed traffic counters to allowed tra
       /invalid traffic row/,
     );
   }
+});
+
+test('accepts live byte-activity rows and deny-only blocked rows', () => {
+  const csv = [
+    HEADER,
+    '2026-05-04 04:20:00,out,501,93.184.216.34,api.example.org,6,443,0,0,50,1200,/bin/node,/Applications/Terminal',
+    '2026-05-04 04:21:00,out,501,93.184.216.35,blocked.example.org,6,443,0,3,0,0,/bin/node,/Applications/Terminal',
+  ].join('\n');
+
+  const entries = parseLittleSnitchTrafficCsv(csv);
+  const allowed = entries.find(entry => entry.decision === 'allow');
+  const blocked = entries.find(entry => entry.decision === 'block');
+  assert.equal(allowed?.count, 1);
+  assert.equal(blocked?.count, 3);
 });
 
 test('fails closed for malformed, unknown, and oversized CSV', () => {

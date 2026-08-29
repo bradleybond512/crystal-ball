@@ -1127,7 +1127,7 @@ export class LocalLogisticsPanel extends Panel {
  ].filter(Boolean);
  const chips = [
  `<span class="watchlist-panel-chip">${escapeHtml(LOCAL_LOGISTICS_CATEGORY_LABELS[node.category])}</span>`,
- `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(expired ? 'unknown' : node.operational))}</span>`,
+ `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.operational))}</span>`,
  `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(expired ? 'unknown' : node.inventory))}</span>`,
  `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(expired ? 'unknown' : node.power))}</span>`,
  `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(expired ? 'unknown' : node.access))}</span>`,

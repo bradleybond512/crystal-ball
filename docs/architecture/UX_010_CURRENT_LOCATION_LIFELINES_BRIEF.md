@@ -1,6 +1,6 @@
 # UX-010 Current-Location Lifelines Feature Brief
 
-Status: implementation approved
+Status: implementation complete; publication in review
 Risk: high assurance / precise-location privacy
 Roadmap task: UX-010
 Affected variants: full browser and full macOS desktop
@@ -461,6 +461,69 @@ approval design above.
   count divergence, duplicate fallback IDs, and anchor-derived response
   distances. Focused regression tests and production mutation proofs cover the
   repaired boundaries.
+- Clean-tip production mutation proofs were rerun against implementation commit
+  `67762328d20aad97021ea476fa7622eda16b844c`:
+  - native deadline: `LOCATION_DEADLINE_MS` changed from `15_000` to `10_000`;
+    the confirmed diff changed `current_location.rs`, and the Rust contract
+    changed from `9 passed / 0 failed` to `8 passed / 1 failed` at
+    `the_native_deadline_is_exactly_fifteen_seconds`. The restored checksum was
+    `595ae275e5f81db0ca6b6996ab8bf779be24c9391adb0e87b8301f6ae71e8ff8`.
+  - browser one-shot policy: `maximumAge` changed from `0` to `1`; the confirmed
+    diff changed `location.ts`, and the focused suite changed from
+    `8 pass / 0 fail` to `7 pass / 1 fail` at `browser acquisition is one-shot,
+    uncached, and uses the fixed platform policy`. The restored checksum was
+    `0ec0394277cc3551a1272566c40d8933eded997b1fadbcb5ea4dcbea9df2871b`.
+  - renderer transport: the ephemeral request method changed from `POST` to
+    `GET`; the confirmed diff changed `local-logistics.ts`, and the focused
+    suite changed from `11 pass / 0 fail` to `9 pass / 2 fail` at the exact POST
+    and HTTP-failure-class assertions. The restored checksum was
+    `ab4a20bf45d2210e65bfc7d4ebc21f3badb0b961c8a5c8f5dfdf307cacae9bd1`.
+  - sidecar streaming enforcement: its route-specific input ceiling changed
+    from `2,048` to `128` bytes; the confirmed diff changed
+    `local-api-server.mjs`, and the focused HTTP route suite changed from
+    `1 pass / 0 fail` to `0 pass / 1 fail` because the valid session body
+    returned `413` instead of `200`. The restored checksum was
+    `03e8dc442029cb54bace9896042163c11dfc08c9e67b02b416e5a7f55e1c8882`.
+  - panel teardown: the current-location `snapshot = null` scrub was removed;
+    the confirmed diff changed `LocalLogisticsPanel.ts`, and the focused
+    teardown test changed from `1 pass / 0 fail` to `0 pass / 1 fail` because
+    the accepted session snapshot survived destruction. The restored checksum
+    was `3d965d4b019f2c78359f85cadf2bcb9983a9c9fd3bf78bbab9a255f77f8951ac`.
+  - saved-place isolation: ordinary create/edit was forced to use conversion
+    radii; the confirmed diff changed `SavedPlaceModal.ts`, and the focused
+    test changed from `1 pass / 0 fail` to `0 pass / 1 fail` because `5`, `10`,
+    and `25` appeared outside conversion. The restored checksum was
+    `5b90b55d9ef1180c7e92e5bf92e85c051b8e70016e4fd818e3a7eae181f2d027`.
+  Every mutation was applied with a visible diff, restored with the original
+  checksum, and followed by an empty `git status --short` before the next one.
+- Packaged-mac runtime verification first showed the same behavior with the
+  existing Location authorization. After explicit human approval, Crystal Ball
+  was quit and `/usr/bin/tccutil reset All com.bradleybond.crystalball`
+  reported a successful bundle-wide reset. Relaunch again showed no startup
+  prompt, and the explicit click produced a real result with
+  `ACCURACY 40 M`, an observed timestamp, and `SESSION ONLY`, responsive panel
+  controls, successful Clear Location back to the saved Home anchor, and no
+  current-location anchor after quit and relaunch. Crystal Ball and sidecar logs
+  contained no current-location coordinates or local-logistics request data.
+  macOS still showed no fresh Location prompt after the successful bundle-wide
+  reset, so the permission-row reset itself cannot be claimed: this host's
+  unsupported Location-only reset and retained Location behavior prevent a
+  definitive first-grant prompt observation without privileged locationd state
+  repair. The verified product property is that startup never prompted and the
+  acquisition occurred only after the explicit action.
+- Browser inspection showed no pre-click geolocation prompt, the complete
+  one-shot/session-only/provider-access-log disclosure, one visible Use Current
+  Location action, and no location or local-logistics console entries before
+  consent. After explicit human approval for the precise-location transmission,
+  the in-app browser's one-shot acquisition reached the fixed 15-second timeout
+  before any Lifelines POST. The panel showed the fixed coordinate-free timeout
+  message, Clear Location restored the consent state, and filtered browser logs
+  contained no location, geolocation, local-logistics, session-lifelines,
+  latitude, or longitude entry. Because the browser runtime did not provide a
+  fix, a successful manual browser POST/no-store observation remains
+  unavailable; exact POST, coordinate-free URL/body handling, response
+  no-store, and teardown are covered by the focused renderer, handler, and
+  sidecar HTTP suites plus the recorded production mutations.
 
 ## Rollback
 

@@ -869,6 +869,12 @@ test('outage coverage reports exact current, expired, geography, availability, a
     providers: [{ id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 4, observedAt: null }],
   }), NOW.getTime()).state, 'unknown-unavailable');
   assert.equal(projectLocalLogisticsOutageCoverage(snapshot({
+    providers: [{
+      id: 'ornl-odin', state: 'ok', acceptedRows: 1, droppedRows: 0,
+      observedAt: null, retrievedAt: null,
+    }],
+  }), NOW.getTime()).state, 'unknown-unavailable');
+  assert.equal(projectLocalLogisticsOutageCoverage(snapshot({
     areaConditions: [],
     providers: [{ id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: NOW, retrievedAt: NOW }],
   }), NOW.getTime()).state, 'unknown-no-contributions');

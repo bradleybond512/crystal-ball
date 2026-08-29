@@ -432,7 +432,7 @@ test('renders representative nodes, provider coverage, truthful category empties
   assert.match(text, /Representative Shelter/,
     'all-results view should retain one representative from each available category');
   assert.match(text, /OSM.+current complete.+Retrieved.+Projected expiry.+13 accepted.+0 dropped/is);
-  assert.match(text, /ODIN.+county outage context; not facility coverage/is);
+  assert.match(text, /ORNL ODIN.+single source.+not independently corroborated/is);
   assert.equal(opened.length, 0, 'rendering action controls must not navigate');
 
   requiredElement<HTMLButtonElement>(content, '[data-logistics-filter="water"]').click();
@@ -456,6 +456,91 @@ test('renders representative nodes, provider coverage, truthful category empties
   requiredElement<HTMLButtonElement>(representativeCard, '[data-logistics-call]').click();
   assert.match(opened[0] ?? '', /^https:\/\/www\.openstreetmap\.org\//);
   assert.equal(opened[1], 'tel:+12195550100');
+});
+
+test('renders an accessible exact-county outage matrix without summing reports or treating ODIN as facility coverage', async () => {
+  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 });
+  const now = Date.now();
+  const snapshot = makeSnapshot(place, 25, {
+    countyFips: '18141',
+    areaConditions: [{
+      id: 'ornl-odin:18141:unsafe', type: 'power_outage', coverage: 'reported',
+      countyFips: '18141', county: 'St. Joseph <County>', state: 'Indiana',
+      customersOut: 11, utilityName: 'A <script>bad()</script>', utilityId: 'utility-a',
+      observedAt: new Date(now - 4 * 60_000), retrievedAt: new Date(now - 4 * 60_000),
+      sourceObservedAt: new Date(now - 5 * 60_000), expiresAt: new Date(now + 20 * 60_000),
+      source: 'ornl-odin',
+    }, {
+      id: 'ornl-odin:18141:unknown', type: 'power_outage', coverage: 'reported',
+      countyFips: '18141', county: 'St. Joseph', state: 'Indiana', customersOut: 17,
+      observedAt: new Date(now - 40 * 60_000), retrievedAt: new Date(now - 40 * 60_000),
+      expiresAt: new Date(now - 10 * 60_000), source: 'ornl-odin',
+    }],
+    providers: [
+      { id: 'osm', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(now), retrievedAt: new Date(now) },
+      { id: 'fema-open-shelters', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(now), retrievedAt: new Date(now) },
+      { id: 'fema-recovery-centers', state: 'empty', acceptedRows: 0, droppedRows: 0, observedAt: new Date(now), retrievedAt: new Date(now) },
+      { id: 'ornl-odin', state: 'partial', acceptedRows: 2, droppedRows: 3, observedAt: new Date(now), retrievedAt: new Date(now) },
+    ],
+  });
+  const panel = mountPanel(async () => snapshot);
+
+  panel.setPlaceId(place.id);
+  await settleRender();
+  const content = panel.getContentElement();
+  const outage = requiredElement<HTMLElement>(content, '[data-outage-coverage-matrix]');
+  const tables = outage.querySelectorAll('table');
+  assert.equal(tables.length, 2);
+  assert.equal(tables[0]?.querySelector('caption')?.textContent, 'ORNL ODIN provider telemetry');
+  assert.equal(tables[1]?.querySelector('caption')?.textContent, 'Individual outage reports — never summed');
+  assert.ok([...outage.querySelectorAll('th')].every((header) => Boolean(header.getAttribute('scope'))));
+  assert.ok([...outage.querySelectorAll('time')].every((time) => Boolean(time.getAttribute('datetime'))));
+  assert.equal(requiredElement<HTMLElement>(outage, '.local-logistics-table-scroll').tabIndex, 0);
+
+  const text = outage.textContent ?? '';
+  assert.match(text, /exact-county/i);
+  assert.match(text, /single source.+not independently corroborated/is);
+  assert.match(text, /not facility power or status/i);
+  assert.match(text, /Accepted before final reconciliation.+Unavailable.+not retained/is);
+  assert.match(text, /Dropped \/ rejected.+3/is);
+  assert.match(text, /Contributed.+2/is);
+  assert.match(text, /Current unexpired.+1/is);
+  assert.match(text, /18141/);
+  assert.match(text, /St\. Joseph <County>/);
+  assert.match(text, /A <script>bad\(\)<\/script>/);
+  assert.match(text, /Utility not identified by source/);
+  assert.match(text, /Source observation.+Not published/is);
+  assert.match(text, /Expired/);
+  assert.doesNotMatch(text, /28 customers/i, 'independent outage rows must never be summed');
+  assert.equal(outage.querySelectorAll('tbody tr').length, 3, 'one telemetry row plus two independent claims');
+  assert.equal(outage.querySelector('script'), null, 'provider text must be escaped rather than interpreted');
+
+  const providerCards = [...content.querySelectorAll('.local-logistics-provider-row')]
+    .map((row) => row.textContent ?? '');
+  assert.ok(providerCards.every((row) => !/ODIN/i.test(row)), 'ODIN is not facility provider coverage');
+});
+
+test('renders outage unknown states explicitly instead of zero or power-on claims', async () => {
+  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 });
+  const now = Date.now();
+  const panel = mountPanel(async () => makeSnapshot(place, 25, {
+    countyFips: '18141',
+    providers: [{
+      id: 'ornl-odin', state: 'empty', acceptedRows: 0, droppedRows: 0,
+      observedAt: new Date(now), retrievedAt: new Date(now),
+    }],
+  }));
+
+  panel.setPlaceId(place.id);
+  await settleRender();
+  const text = requiredElement<HTMLElement>(
+    panel.getContentElement(),
+    '[data-outage-coverage-matrix]',
+  ).textContent ?? '';
+  assert.match(text, /coverage unknown/i);
+  assert.match(text, /contributed no current accepted outage reports/i);
+  assert.match(text, /not zero outages/i);
+  assert.match(text, /does not mean power is on/i);
 });
 
 test('failed refresh resolves to an error without removing radius and refresh controls', async () => {

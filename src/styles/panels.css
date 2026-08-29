@@ -861,6 +861,53 @@
 }
 .local-logistics-provider-row > * { min-width: 0; overflow-wrap: anywhere; }
 .local-logistics-provider-row strong { color: var(--text-primary); }
+.local-logistics-outage-coverage {
+  min-width: 0;
+  margin-bottom: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--overlay-subtle);
+}
+.local-logistics-outage-coverage h3 { margin: 0 0 5px; color: var(--text-primary); font-size: 12px; }
+.local-logistics-outage-summary { margin: 0 0 4px; color: var(--text-secondary); font-size: 11px; }
+.local-logistics-outage-disclosure,
+.local-logistics-outage-empty { margin: 0 0 8px; color: var(--text-muted); font-size: 11px; }
+.local-logistics-table-scroll {
+  max-width: 100%;
+  margin-top: 8px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.local-logistics-table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.local-logistics-outage-table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.local-logistics-outage-report-table { min-width: 820px; }
+.local-logistics-outage-table caption {
+  padding: 0 0 4px;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: left;
+}
+.local-logistics-outage-table th,
+.local-logistics-outage-table td {
+  padding: 5px 7px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.local-logistics-outage-table thead th { color: var(--text-muted); font-weight: 600; }
+.local-logistics-outage-table tbody th { color: var(--text-primary); }
+.local-logistics-outage-table time { font-variant-numeric: tabular-nums; }
 .local-logistics-empty-list { display: grid; gap: 6px; }
 .local-logistics-node-card .watchlist-card-bottom { flex-wrap: wrap; gap: 6px; }
 

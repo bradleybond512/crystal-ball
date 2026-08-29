@@ -138,6 +138,46 @@ export interface LifelineCategoryCoverage {
   expiresAt: Date | null;
 }
 
+export type LocalLogisticsOutageCoverageState =
+  | 'reported-current'
+  | 'reported-current-partial'
+  | 'unknown-geography'
+  | 'unknown-no-contributions'
+  | 'unknown-expired'
+  | 'unknown-unavailable';
+
+export interface LocalLogisticsOutageClaim {
+  sourceId: 'ornl-odin';
+  sourceLabel: 'ORNL ODIN';
+  countyFips: string;
+  county: string;
+  state: string;
+  utilityName: string | null;
+  utilityId: string | null;
+  customersOut: number;
+  retrievedAt: Date;
+  sourceObservedAt: Date | null;
+  expiresAt: Date;
+  freshness: 'current' | 'expired';
+}
+
+export interface LocalLogisticsOutageCoverage {
+  sourceId: 'ornl-odin';
+  sourceLabel: 'ORNL ODIN';
+  state: LocalLogisticsOutageCoverageState;
+  queryCountyFips: string | null;
+  acceptedRowsBeforeReconciliation: null;
+  acceptedRowsAvailability: 'not-retained';
+  droppedRows: number | null;
+  contributedRows: number | null;
+  currentContributedRows: number;
+  providerRetrievedAt: Date | null;
+  providerSourceObservedAt: Date | null;
+  providerFreshnessExpiresAt: Date | null;
+  independentlyCorroborated: false;
+  claims: LocalLogisticsOutageClaim[];
+}
+
 type LocatedResourceSite = ResourceSite & { distanceKm: number };
 
 interface ParsedObservationDates {
@@ -1222,6 +1262,7 @@ function projectProviderCoverage(
     : null;
   let state: LifelineCoverageState;
   if (provider.state === 'error' || !projectedExpiresAt) state = 'unavailable';
+  else if (provider.id === 'ornl-odin' && provider.acceptedRows === 0) state = 'unavailable';
   else if (provider.state === 'stale' || projectedExpiresAt.getTime() <= now) state = 'expired';
   else if (provider.state === 'partial' || provider.droppedRows > 0) state = 'current-partial';
   else state = 'current-complete';
@@ -1261,6 +1302,68 @@ export function projectLocalLogisticsCoverage(
     };
   });
   return { providers, categories };
+}
+
+export function projectLocalLogisticsOutageCoverage(
+  snapshot: LocalLogisticsSnapshot,
+  now = Date.now(),
+): LocalLogisticsOutageCoverage {
+  const provider = snapshot.providers.find((item) => item.id === 'ornl-odin');
+  const retrievedAtValue = provider?.retrievedAt ?? provider?.observedAt;
+  const providerRetrievedAt = retrievedAtValue instanceof Date && Number.isFinite(retrievedAtValue.getTime())
+    ? retrievedAtValue
+    : null;
+  const providerSourceObservedAt = provider?.sourceObservedAt instanceof Date
+    && Number.isFinite(provider.sourceObservedAt.getTime())
+    ? provider.sourceObservedAt
+    : null;
+  const providerFreshnessExpiresAt = providerRetrievedAt
+    ? new Date(providerRetrievedAt.getTime() + ODIN_OBSERVATION_TTL_MS)
+    : null;
+  const claims = snapshot.areaConditions
+    .filter((condition) => condition.source === 'ornl-odin' && condition.coverage === 'reported')
+    .map((condition): LocalLogisticsOutageClaim => ({
+      sourceId: 'ornl-odin',
+      sourceLabel: 'ORNL ODIN',
+      countyFips: condition.countyFips,
+      county: condition.county,
+      state: condition.state,
+      utilityName: condition.utilityName ?? null,
+      utilityId: condition.utilityId ?? null,
+      customersOut: condition.customersOut,
+      retrievedAt: condition.retrievedAt ?? condition.observedAt,
+      sourceObservedAt: condition.sourceObservedAt ?? null,
+      expiresAt: condition.expiresAt,
+      freshness: condition.expiresAt.getTime() > now ? 'current' : 'expired',
+    }));
+  const currentContributedRows = claims.filter((claim) => claim.freshness === 'current').length;
+  let state: LocalLogisticsOutageCoverageState;
+  if (!snapshot.countyFips) state = 'unknown-geography';
+  else if (!provider || provider.state === 'error') state = 'unknown-unavailable';
+  else if (provider.state === 'stale'
+    || (providerFreshnessExpiresAt !== null && providerFreshnessExpiresAt.getTime() <= now)
+    || (claims.length > 0 && currentContributedRows === 0)) state = 'unknown-expired';
+  else if (provider.state === 'empty' || provider.acceptedRows === 0 || currentContributedRows === 0) {
+    state = 'unknown-no-contributions';
+  } else if (provider.state === 'partial' || provider.droppedRows > 0) state = 'reported-current-partial';
+  else state = 'reported-current';
+
+  return {
+    sourceId: 'ornl-odin',
+    sourceLabel: 'ORNL ODIN',
+    state,
+    queryCountyFips: snapshot.countyFips ?? null,
+    acceptedRowsBeforeReconciliation: null,
+    acceptedRowsAvailability: 'not-retained',
+    droppedRows: provider?.droppedRows ?? null,
+    contributedRows: provider?.acceptedRows ?? null,
+    currentContributedRows,
+    providerRetrievedAt,
+    providerSourceObservedAt,
+    providerFreshnessExpiresAt,
+    independentlyCorroborated: false,
+    claims,
+  };
 }
 
 function formatDistance(distanceKm: number): string {

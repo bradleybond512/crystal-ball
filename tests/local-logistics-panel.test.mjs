@@ -16,6 +16,7 @@ const lifelineExpiryPath = resolve(root, 'src/components/lifeline-evidence-expir
 const localLogisticsServicePath = resolve(root, 'src/services/local-logistics.ts');
 const offlineCachePath = resolve(root, 'src/services/offline-alert-cache.ts');
 const localLogisticsRoutePath = resolve(root, 'api/local-logistics.js');
+const panelsCssPath = resolve(root, 'src/styles/panels.css');
 
 const localLogisticsPanelSrc = existsSync(localLogisticsPanelPath)
   ? readFileSync(localLogisticsPanelPath, 'utf8')
@@ -29,6 +30,7 @@ const offlineCacheSrc = existsSync(offlineCachePath)
 const localLogisticsRouteSrc = existsSync(localLogisticsRoutePath)
   ? readFileSync(localLogisticsRoutePath, 'utf8')
   : '';
+const panelsCssSrc = readFileSync(panelsCssPath, 'utf8');
 
 test('registers Disaster Lifelines under the stable local-logistics panel id', () => {
   assert.match(
@@ -79,6 +81,24 @@ test('renders Disaster Lifelines with independent truthful state and accessible 
   assert.match(localLogisticsPanelSrc, /wm:lifeline-situation-updated/);
   assert.match(localLogisticsPanelSrc, /removeEventListener\('wm:lifeline-situation-updated'/);
   assert.doesNotMatch(localLogisticsPanelSrc, /<button[^>]*>[\s\S]*?<a\s/);
+});
+
+test('outage evidence uses semantic tables and bounded responsive overflow', () => {
+  assert.match(localLogisticsPanelSrc, /projectLocalLogisticsOutageCoverage/);
+  assert.match(localLogisticsPanelSrc, /<caption>/);
+  assert.match(localLogisticsPanelSrc, /scope="col"/);
+  assert.match(localLogisticsPanelSrc, /scope="row"/);
+  assert.match(localLogisticsPanelSrc, /Accepted before final reconciliation/);
+  assert.match(localLogisticsServiceSrc, /acceptedRowsAvailability:\s*'not-retained'/);
+  assert.match(localLogisticsPanelSrc, /coverage\.acceptedRowsAvailability/);
+  assert.match(localLogisticsPanelSrc, /Individual outage reports — never summed/);
+  assert.match(panelsCssSrc, /\.local-logistics-table-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(panelsCssSrc, /\.local-logistics-table-scroll\s*\{[^}]*max-width:\s*100%/s);
+  assert.match(panelsCssSrc, /\.local-logistics-outage-table\s*\{[^}]*min-width:/s);
+  assert.match(
+    panelsCssSrc,
+    /\.local-logistics-provider-row\s*>\s*\*\s*\{[^}]*overflow-wrap:\s*anywhere/s,
+  );
 });
 
 test('service uses schema-v2 query fingerprints, coalescing, and outage context', () => {
@@ -139,8 +159,8 @@ test('accepted evidence schedules a bounded exact-place expiry transition and te
   assert.match(localLogisticsPanelSrc, /evidenceExpiryScheduler\.track\(null\)/);
   assert.match(localLogisticsPanelSrc, /evidenceExpiryScheduler\.track\(snapshot\)/);
   assert.match(localLogisticsPanelSrc, /evidenceExpiryScheduler\.destroy\(\)/);
-  assert.match(localLogisticsPanelSrc, /node\.expiresAt\.getTime\(\) <= Date\.now\(\) \? 'unknown'/);
-  assert.match(localLogisticsPanelSrc, /condition\.expiresAt\.getTime\(\) > Date\.now\(\)/);
+  assert.match(localLogisticsPanelSrc, /node\.expiresAt\.getTime\(\) <= now \? 'unknown'/);
+  assert.match(localLogisticsPanelSrc, /projectLocalLogisticsOutageCoverage\(this\.snapshot, now\)/);
   assert.match(
     localLogisticsPanelSrc,
     /transitionExpiredEvidence[\s\S]{0,1500}this\.snapshot === snapshot[\s\S]{0,800}renderAtExpiry:\s*\(\) => this\.render\(\)[\s\S]{0,300}clearExactOverlay:[\s\S]{0,300}requestOverlayClear\(snapshot\)[\s\S]{0,500}'wm:local-logistics-updated'/,

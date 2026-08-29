@@ -17,9 +17,12 @@ import {
   LOCAL_LOGISTICS_CATEGORY_LABELS,
   LOCAL_LOGISTICS_RADIUS_CHOICES_KM,
   projectLocalLogisticsCoverage,
+  projectLocalLogisticsOutageCoverage,
   selectRepresentativeLocalLogisticsNodes,
   type LifelineCategoryCoverage,
   type LifelineProviderCoverage,
+  type LocalLogisticsOutageCoverage,
+  type LocalLogisticsOutageClaim,
   type LocalLogisticsSnapshot,
   type LocalLogisticsRadiusChoiceKm,
   type LogisticsCategory,
@@ -74,14 +77,23 @@ function formatDistance(distanceKm: number): string {
   return `${Math.round(distanceKm)} km`;
 }
 
-function formatStatus(node: LogisticsNode): string {
-  if (node.expiresAt.getTime() <= Date.now()) return 'expired — status unknown';
+function formatStatus(node: LogisticsNode, now: number): string {
+  if (node.expiresAt.getTime() <= now) return 'expired — status unknown';
   if (node.directoryOnly) return 'Directory listing only';
   return node.verification === 'official' ? 'Official report' : 'Status unverified';
 }
 
 function formatState(value: string): string {
-  return value.replace(/_/g, ' ');
+  return value.replace(/[-_]/g, ' ');
+}
+
+function renderEvidenceTime(date: Date | null, unavailable = 'Unknown'): string {
+  if (!date) return escapeHtml(unavailable);
+  return `<time datetime="${escapeHtml(date.toISOString())}">${escapeHtml(formatRetrievedAt(date))}</time>`;
+}
+
+function renderEvidenceCount(value: number | null): string {
+  return value === null ? 'Unknown' : value.toLocaleString();
 }
 
 function formatPackStatus(status: ReturnType<typeof getExactLifelinePackReadinessForPlace>['status']): string {
@@ -424,8 +436,8 @@ export class LocalLogisticsPanel extends Panel {
        && this.snapshotPlaceSignature === buildLifelinesPlaceMatchSignature(place)
        && this.snapshotMatchesPlace(snapshot, place));
    },
-   // renderNode() and renderOutageContext() already fail closed against
-   // Date.now(), so repainting at the deadline removes the accepted claim.
+   // The render pass captures one clock value for nodes and outage coverage,
+   // so repainting at the deadline removes the accepted claim consistently.
    renderAtExpiry: () => this.render(),
    clearExactOverlay: () => this.requestOverlayClear(snapshot),
    // Tactical Comms listens to this existing event and recomputes the exact
@@ -509,6 +521,7 @@ export class LocalLogisticsPanel extends Panel {
  return;
  }
 
+ const now = Date.now();
  const requestedRadiusKm = this.activeRadiusKm ?? initialLocalLogisticsRadiusKm(place.radiusKm);
  const categories = this.displayCategories();
  const nodes = this.displayNodes();
@@ -525,12 +538,14 @@ export class LocalLogisticsPanel extends Panel {
 
  const packHtml = this.renderPackStatus(place, requestedRadiusKm);
 
- const outageHtml = this.snapshot ? this.renderOutageContext() : '';
- const coverage = this.snapshot ? projectLocalLogisticsCoverage(this.snapshot) : null;
- const providerHtml = coverage ? this.renderProviderCoverage(coverage.providers) : '';
+ const outageCoverage = this.snapshot ? projectLocalLogisticsOutageCoverage(this.snapshot, now) : null;
+ const outageHtml = outageCoverage ? this.renderOutageCoverage(outageCoverage) : '';
+ const coverage = this.snapshot ? projectLocalLogisticsCoverage(this.snapshot, now) : null;
+ const facilityProviders = coverage?.providers.filter((provider) => provider.scope === 'facilities') ?? [];
+ const providerHtml = coverage ? this.renderProviderCoverage(facilityProviders) : '';
 
  const filtersHtml = this.renderFilters(categories);
- const listHtml = this.renderNodeList(nodes, coverage?.categories ?? []);
+ const listHtml = this.renderNodeList(nodes, coverage?.categories ?? [], now);
 
  const routeFeedbackHtml = this.routeFeedback
  ? `<div class="panel-empty" style="margin-top:10px;" role="status">${escapeHtml(this.routeFeedback)}</div>`
@@ -681,14 +696,18 @@ export class LocalLogisticsPanel extends Panel {
  `;
   }
 
-  private renderNodeList(nodes: LogisticsNode[], coverage: LifelineCategoryCoverage[]): string {
+  private renderNodeList(
+ nodes: LogisticsNode[],
+ coverage: LifelineCategoryCoverage[],
+ now: number,
+  ): string {
  if (!this.snapshot) return '';
  if (nodes.length === 0) {
    return this.renderCategoryEmptyState(coverage, this.snapshot.effectiveRadiusKm);
  }
  return `
  <div class="watchlist-list">
- ${nodes.map((node) => this.renderNode(node)).join('')}
+ ${nodes.map((node) => this.renderNode(node, now)).join('')}
  </div>
  `;
   }
@@ -767,7 +786,7 @@ export class LocalLogisticsPanel extends Panel {
  </div>`;
   }
 
-  private renderNode(node: LogisticsNode): string {
+  private renderNode(node: LogisticsNode, now: number): string {
  const capabilityLabels = [
  node.capabilities.generatorOnsite ? 'Generator listed' : '',
  node.capabilities.pets ? 'Pets accepted' : '',
@@ -777,13 +796,13 @@ export class LocalLogisticsPanel extends Panel {
  ].filter(Boolean);
  const chips = [
  `<span class="watchlist-panel-chip">${escapeHtml(LOCAL_LOGISTICS_CATEGORY_LABELS[node.category])}</span>`,
- `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(node.expiresAt.getTime() <= Date.now() ? 'unknown' : node.operational))}</span>`,
- `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(node.expiresAt.getTime() <= Date.now() ? 'unknown' : node.inventory))}</span>`,
- `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(node.expiresAt.getTime() <= Date.now() ? 'unknown' : node.power))}</span>`,
- `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(node.expiresAt.getTime() <= Date.now() ? 'unknown' : node.access))}</span>`,
+ `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.operational))}</span>`,
+ `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.inventory))}</span>`,
+ `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.power))}</span>`,
+ `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.access))}</span>`,
  ].filter(Boolean).join('');
 
- const expiry = node.expiresAt.getTime() <= Date.now()
+ const expiry = node.expiresAt.getTime() <= now
  ? `Verification expired ${escapeHtml(formatUpdatedAt(node.expiresAt))}`
  : `Status expires ${escapeHtml(formatUpdatedAt(node.expiresAt))}`;
 
@@ -801,7 +820,7 @@ export class LocalLogisticsPanel extends Panel {
  <div class="watchlist-card-bottom">
  <div class="watchlist-panels">${chips}</div>
  </div>
- <div class="watchlist-scenario">${escapeHtml(formatStatus(node))} • ${expiry} • ${escapeHtml(node.source)}</div>
+ <div class="watchlist-scenario">${escapeHtml(formatStatus(node, now))} • ${expiry} • ${escapeHtml(node.source)}</div>
  <div class="watchlist-card-bottom">
  <button class="sa-refresh-btn" data-logistics-focus="1" data-logistics-node-id="${escapeHtml(node.id)}" type="button" aria-label="Focus ${escapeHtml(node.name)} on map">Show on map</button>
  <button class="sa-refresh-btn" data-logistics-external-map="${escapeHtml(node.id)}" type="button" aria-label="Open ${escapeHtml(node.name)} in external maps">Open in Maps</button>
@@ -856,18 +875,104 @@ export class LocalLogisticsPanel extends Panel {
  }
   }
 
-  private renderOutageContext(): string {
- const provider = this.snapshot?.providers.find((item) => item.id === 'ornl-odin');
- const conditions = (this.snapshot?.areaConditions ?? [])
- .filter((condition) => condition.coverage === 'reported' && condition.expiresAt.getTime() > Date.now());
- if (!provider || provider.state === 'error') {
- return '<div class="panel-empty" style="margin-bottom:10px;">County power-outage coverage unknown. This does not mean power is on.</div>';
- }
- if (conditions.length === 0) {
- return `<div class="panel-empty" style="margin-bottom:10px;">County outage feed: ${escapeHtml(provider.state)}. No current accepted outage rows; local power remains unknown.</div>`;
- }
- const customersOut = conditions.reduce((sum, item) => sum + item.customersOut, 0);
- const first = conditions[0];
- return `<div class="panel-empty" style="margin-bottom:10px;">${escapeHtml(first?.county ?? 'County')} outage context: ${customersOut.toLocaleString()} customers reported out. Facility power must still be verified independently.</div>`;
+  private renderOutageCoverage(coverage: LocalLogisticsOutageCoverage): string {
+ const summaryByState: Record<LocalLogisticsOutageCoverage['state'], string> = {
+   'reported-current': `${coverage.currentContributedRows.toLocaleString()} current exact-county outage report${coverage.currentContributedRows === 1 ? '' : 's'} available.`,
+   'reported-current-partial': `${coverage.currentContributedRows.toLocaleString()} current exact-county outage report${coverage.currentContributedRows === 1 ? '' : 's'} available with partial provider coverage.`,
+   'unknown-geography': 'County outage coverage unknown because exact county FIPS is unavailable.',
+   'unknown-no-contributions': 'County outage coverage unknown. ORNL ODIN contributed no current accepted outage reports.',
+   'unknown-expired': 'County outage coverage unknown. Only expired ORNL ODIN reports are retained as expired evidence.',
+   'unknown-unavailable': 'County outage coverage unknown because ORNL ODIN is unavailable.',
+ };
+ const claimsHtml = coverage.claims.length > 0
+   ? this.renderOutageClaims(coverage.claims)
+   : '<p class="local-logistics-outage-empty">No individual outage reports are available. This is not zero outages.</p>';
+ return `
+ <section
+ class="local-logistics-outage-coverage"
+ data-outage-coverage-matrix="1"
+ aria-labelledby="local-logistics-outage-heading"
+ >
+ <h3 id="local-logistics-outage-heading">County outage evidence</h3>
+ <p class="local-logistics-outage-summary">${escapeHtml(summaryByState[coverage.state])} This is not zero outages and does not mean power is on.</p>
+ <p class="local-logistics-outage-disclosure">${escapeHtml(coverage.sourceLabel)} is a single source and is not independently corroborated. Exact-county context is not facility power or status. Individual reports are never summed.</p>
+ ${this.renderOutageProviderTelemetry(coverage)}
+ ${claimsHtml}
+ </section>
+ `;
+  }
+
+  private renderOutageProviderTelemetry(coverage: LocalLogisticsOutageCoverage): string {
+ return `
+ <div class="local-logistics-table-scroll" role="region" aria-label="ORNL ODIN provider telemetry" tabindex="0">
+ <table class="local-logistics-outage-table">
+ <caption>ORNL ODIN provider telemetry</caption>
+ <thead><tr>
+ <th scope="col">Source</th>
+ <th scope="col">Exact county FIPS</th>
+ <th scope="col">Coverage state</th>
+ <th scope="col">Accepted before final reconciliation</th>
+ <th scope="col">Dropped / rejected</th>
+ <th scope="col">Contributed</th>
+ <th scope="col">Current unexpired</th>
+ <th scope="col">Retrieved</th>
+ <th scope="col">Source observation</th>
+ <th scope="col">Freshness expiry</th>
+ <th scope="col">Independent corroboration</th>
+ </tr></thead>
+ <tbody><tr>
+ <th scope="row">${escapeHtml(coverage.sourceLabel)}</th>
+ <td>${escapeHtml(coverage.queryCountyFips ?? 'Unknown')}</td>
+ <td>${escapeHtml(formatState(coverage.state))}</td>
+ <td>Unavailable — ${escapeHtml(coverage.acceptedRowsAvailability.replace('-', ' '))}</td>
+ <td>${escapeHtml(renderEvidenceCount(coverage.droppedRows))}</td>
+ <td>${escapeHtml(renderEvidenceCount(coverage.contributedRows))}</td>
+ <td>${coverage.currentContributedRows.toLocaleString()}</td>
+ <td>${renderEvidenceTime(coverage.providerRetrievedAt)}</td>
+ <td>${renderEvidenceTime(coverage.providerSourceObservedAt, 'Not published')}</td>
+ <td>${renderEvidenceTime(coverage.providerFreshnessExpiresAt)}</td>
+ <td>No — single source</td>
+ </tr></tbody>
+ </table>
+ </div>
+ `;
+  }
+
+  private renderOutageClaims(claims: LocalLogisticsOutageClaim[]): string {
+ return `
+ <div class="local-logistics-table-scroll" role="region" aria-label="Individual outage reports" tabindex="0">
+ <table class="local-logistics-outage-table local-logistics-outage-report-table">
+ <caption>Individual outage reports — never summed</caption>
+ <thead><tr>
+ <th scope="col">Source</th>
+ <th scope="col">County</th>
+ <th scope="col">FIPS</th>
+ <th scope="col">Utility</th>
+ <th scope="col">Customers reported out</th>
+ <th scope="col">Retrieved</th>
+ <th scope="col">Source observation</th>
+ <th scope="col">Expiry</th>
+ <th scope="col">Freshness</th>
+ </tr></thead>
+ <tbody>
+ ${claims.map((claim) => {
+   const utility = claim.utilityName ?? 'Utility not identified by source';
+   const utilityId = claim.utilityId ? ` (${claim.utilityId})` : '';
+   return `<tr>
+ <th scope="row">${escapeHtml(claim.sourceLabel)}</th>
+ <td>${escapeHtml(`${claim.county}, ${claim.state}`)}</td>
+ <td>${escapeHtml(claim.countyFips)}</td>
+ <td>${escapeHtml(`${utility}${utilityId}`)}</td>
+ <td>${claim.customersOut.toLocaleString()}</td>
+ <td>${renderEvidenceTime(claim.retrievedAt)}</td>
+ <td>${renderEvidenceTime(claim.sourceObservedAt, 'Not published')}</td>
+ <td>${renderEvidenceTime(claim.expiresAt)}</td>
+ <td>${claim.freshness === 'current' ? 'Current' : 'Expired'}</td>
+ </tr>`;
+ }).join('')}
+ </tbody>
+ </table>
+ </div>
+ `;
   }
 }

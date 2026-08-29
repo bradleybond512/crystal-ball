@@ -157,7 +157,7 @@ test('nearest expiry transitions panel, exact map identity, and ODIN comms witho
   assert.deepEqual(clock.pendingDelays(), [1_000], 'the next accepted expiry remains scheduled');
 });
 
-test('provider coverage expiry repaints current-completeness claims without another event', () => {
+test('facility-provider coverage expiry repaints current-completeness claims without another event', () => {
   const clock = new FakeClock();
   const transitions: Array<{ at: number; kind: string | undefined }> = [];
   const scheduler = new LifelineEvidenceExpiryScheduler({
@@ -166,7 +166,16 @@ test('provider coverage expiry repaints current-completeness claims without anot
     clearTimer: clock.clearTimer,
     onExpiry: (_snapshot, _expiresAt, kind?: string) => transitions.push({ at: clock.now(), kind }),
   });
-  scheduler.track(makeSnapshot());
+  const snapshot = makeSnapshot({ includeProvider: false });
+  snapshot.providers = [{
+    id: 'fema-open-shelters',
+    state: 'empty',
+    acceptedRows: 0,
+    droppedRows: 0,
+    observedAt: new Date(NOW),
+    retrievedAt: new Date(NOW),
+  }];
+  scheduler.track(snapshot);
 
   assert.deepEqual(clock.pendingDelays(), [30 * 60_000]);
   clock.advanceBy(30 * 60_000 - 1);

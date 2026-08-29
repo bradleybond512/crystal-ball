@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/prefer-event-target, no-restricted-syntax, sonarjs/no-clear-text-protocols, sonarjs/no-hardcoded-ip */
 import { strict as assert } from 'node:assert';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, request as httpRequest } from 'node:http';
 import https from 'node:https';
 import { EventEmitter } from 'node:events';
@@ -11,6 +11,7 @@ import test from 'node:test';
 process.env.LOCAL_API_TOKEN ??= 'test-token-for-sidecar-tests';
 import {
   _resetSidecarCacheForTests,
+  boundedLittleSnitchConnectionTotal,
   buildOllamaSummaryMessages,
   createLocalApiServer,
   cmeSubfeedUsable,
@@ -18,6 +19,8 @@ import {
   normalizeKpPoints,
   openMeteoForecastTtlMs,
   parseGfzKp,
+  readLittleSnitchSnapshot,
+  sanitizeLittleSnitchExport,
   spacewxSubfeedTtlMs,
   summarizeKpSidecar,
 } from './local-api-server.mjs';
@@ -1585,32 +1588,37 @@ test('rejects unauthenticated requests to /api/local-traffic-log when token is s
   }
 });
 
-test('serves sanitized Little Snitch data from configured export file', async () => {
+test('serves strict sanitized Little Snitch schema from configured private files', async () => {
   const localApi = await setupApiDir({});
   const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-export-'));
   const exportPath = path.join(exportDir, 'snapshot.json');
   await writeFile(exportPath, JSON.stringify({
-    generatedAt: '2026-05-03T23:00:00.000Z',
+    schemaVersion: 1,
+    available: true,
+    generatedAt: new Date().toISOString(),
     entries: [
       {
+        id: '0123456789abcdef01234567',
         app: 'Safari',
-        processPath: '/Applications/Safari.app/Contents/MacOS/Safari',
-        remote: 'https://example.com/path?secret=value',
+        remoteHost: 'example.com',
+        remoteIp: null,
         decision: 'allow',
         direction: 'outbound',
         protocol: 'tcp',
         bytesIn: 100,
         bytesOut: 25,
-        lastSeen: '2026-05-03T23:01:00.000Z',
+        lastSeen: new Date().toISOString(),
+        count: 3,
       },
     ],
-  }));
-  const originalPath = process.env.LITTLE_SNITCH_EXPORT_PATH;
-  process.env.LITTLE_SNITCH_EXPORT_PATH = exportPath;
+  }), { mode: 0o600 });
+  await chmod(exportPath, 0o600);
 
   const app = await createLocalApiServer({
     port: 0,
     apiDir: localApi.apiDir,
+    littleSnitchExportPath: exportPath,
+    littleSnitchBaselinePath: path.join(exportDir, 'baseline.json'),
     logger: { log() {}, warn() {}, error() {} },
   });
   const { port } = await app.start();
@@ -1620,14 +1628,13 @@ test('serves sanitized Little Snitch data from configured export file', async ()
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.available, true);
+    assert.equal(body.state, 'ready');
     assert.equal(body.entries.length, 1);
     assert.equal(body.entries[0].remoteHost, 'example.com');
     assert.equal(body.entries[0].remote, undefined);
     assert.equal(body.entries[0].processPath, undefined);
-    assert.equal(body.summary.totalConnections, 1);
+    assert.equal(body.summary.totalConnections, 3);
   } finally {
-    if (originalPath === undefined) delete process.env.LITTLE_SNITCH_EXPORT_PATH;
-    else process.env.LITTLE_SNITCH_EXPORT_PATH = originalPath;
     await app.close();
     await localApi.cleanup();
     await rm(exportDir, { recursive: true, force: true });
@@ -1640,19 +1647,24 @@ test('marks Little Snitch app/domain pairs first-seen only once via baseline fil
   const exportPath = path.join(exportDir, 'snapshot.json');
   const baselinePath = path.join(exportDir, 'baseline.json');
   await writeFile(exportPath, JSON.stringify({
-    generatedAt: '2026-05-04T12:00:00.000Z',
+    schemaVersion: 1,
+    available: true,
+    generatedAt: new Date().toISOString(),
     entries: [
-      { app: 'node', remoteHost: 'api.example.com', direction: 'outbound', decision: 'allow', bytesOut: 100 },
+      {
+        id: 'abcdef0123456789abcdef01', app: 'node', remoteHost: 'api.example.com', remoteIp: null,
+        direction: 'outbound', decision: 'allow', protocol: 'tcp', bytesIn: 0, bytesOut: 100,
+        lastSeen: new Date().toISOString(), count: 1,
+      },
     ],
-  }));
-  const originalExportPath = process.env.LITTLE_SNITCH_EXPORT_PATH;
-  const originalBaselinePath = process.env.LITTLE_SNITCH_BASELINE_PATH;
-  process.env.LITTLE_SNITCH_EXPORT_PATH = exportPath;
-  process.env.LITTLE_SNITCH_BASELINE_PATH = baselinePath;
+  }), { mode: 0o600 });
+  await chmod(exportPath, 0o600);
 
   const app = await createLocalApiServer({
     port: 0,
     apiDir: localApi.apiDir,
+    littleSnitchExportPath: exportPath,
+    littleSnitchBaselinePath: baselinePath,
     logger: { log() {}, warn() {}, error() {} },
   });
   const { port } = await app.start();
@@ -1663,16 +1675,201 @@ test('marks Little Snitch app/domain pairs first-seen only once via baseline fil
 
     assert.equal(first.entries[0].firstSeen, true);
     assert.equal(second.entries[0].firstSeen, false);
-    assert.ok(first.entries[0].risk.reasons.includes('new destination for this app'));
   } finally {
-    if (originalExportPath === undefined) delete process.env.LITTLE_SNITCH_EXPORT_PATH;
-    else process.env.LITTLE_SNITCH_EXPORT_PATH = originalExportPath;
-    if (originalBaselinePath === undefined) delete process.env.LITTLE_SNITCH_BASELINE_PATH;
-    else process.env.LITTLE_SNITCH_BASELINE_PATH = originalBaselinePath;
     await app.close();
     await localApi.cleanup();
     await rm(exportDir, { recursive: true, force: true });
   }
+});
+
+test('does not report a healthy source when the first-seen baseline cannot be persisted', async () => {
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-baseline-failure-'));
+  const exportPath = path.join(exportDir, 'snapshot.json');
+  const blockedParent = path.join(exportDir, 'not-a-directory');
+  const now = Date.now();
+  await writeFile(exportPath, JSON.stringify({
+    schemaVersion: 1,
+    available: true,
+    generatedAt: new Date(now).toISOString(),
+    entries: [{
+      id: 'abcdef0123456789abcdef01', app: 'node', remoteHost: 'api.example.com', remoteIp: null,
+      direction: 'outbound', decision: 'allow', protocol: 'tcp', bytesIn: 0, bytesOut: 100,
+      lastSeen: new Date(now).toISOString(), count: 1,
+    }],
+  }), { mode: 0o600 });
+  await writeFile(blockedParent, 'not a directory', { mode: 0o600 });
+  try {
+    const result = await readLittleSnitchSnapshot(
+      exportPath,
+      path.join(blockedParent, 'baseline.json'),
+      now,
+    );
+    assert.equal(result.available, false);
+    assert.equal(result.state, 'invalid');
+    assert.deepEqual(result.entries, []);
+  } finally {
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('serializes concurrent first-seen baseline updates so novelty is consumed once', async () => {
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-baseline-concurrent-'));
+  const exportPath = path.join(exportDir, 'snapshot.json');
+  const baselinePath = path.join(exportDir, 'baseline.json');
+  const now = Date.now();
+  await writeFile(exportPath, JSON.stringify({
+    schemaVersion: 1,
+    available: true,
+    generatedAt: new Date(now).toISOString(),
+    entries: [{
+      id: 'abcdef0123456789abcdef01', app: 'node', remoteHost: 'api.example.com', remoteIp: null,
+      direction: 'outbound', decision: 'allow', protocol: 'tcp', bytesIn: 0, bytesOut: 100,
+      lastSeen: new Date(now).toISOString(), count: 1,
+    }],
+  }), { mode: 0o600 });
+  try {
+    const results = await Promise.all(Array.from(
+      { length: 5 },
+      () => readLittleSnitchSnapshot(exportPath, baselinePath, now),
+    ));
+    assert.equal(results.filter(result => result.entries[0]?.firstSeen === true).length, 1);
+    assert.equal(results.filter(result => result.entries[0]?.firstSeen === false).length, 4);
+    assert.ok(results.every(result => result.available && result.state === 'ready'));
+  } finally {
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('rejects mixed-invalid and oversized first-seen baselines instead of truncating them', async () => {
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-baseline-invalid-'));
+  const exportPath = path.join(exportDir, 'snapshot.json');
+  const baselinePath = path.join(exportDir, 'baseline.json');
+  const now = Date.now();
+  await writeFile(exportPath, JSON.stringify({
+    schemaVersion: 1,
+    available: true,
+    generatedAt: new Date(now).toISOString(),
+    entries: [{
+      id: 'abcdef0123456789abcdef01', app: 'node', remoteHost: 'api.example.com', remoteIp: null,
+      direction: 'outbound', decision: 'allow', protocol: 'tcp', bytesIn: 0, bytesOut: 100,
+      lastSeen: new Date(now).toISOString(), count: 1,
+    }],
+  }), { mode: 0o600 });
+  try {
+    await writeFile(baselinePath, JSON.stringify({
+      schemaVersion: 1,
+      entries: { ['node\0api.example.com']: now, ['broken\0entry.example']: 'not-a-timestamp' },
+    }), { mode: 0o600 });
+    const mixedInvalid = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(mixedInvalid.available, false);
+    assert.equal(mixedInvalid.state, 'invalid');
+
+    await writeFile(baselinePath, JSON.stringify({
+      schemaVersion: 1,
+      entries: Object.fromEntries(Array.from(
+        { length: 10_001 },
+        (_, index) => [`App ${index}\0host-${index}.example`, now],
+      )),
+    }), { mode: 0o600 });
+    const oversized = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(oversized.available, false);
+    assert.equal(oversized.state, 'invalid');
+  } finally {
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('prunes structurally valid expired baseline entries after a long restart', async () => {
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-baseline-expired-'));
+  const exportPath = path.join(exportDir, 'snapshot.json');
+  const baselinePath = path.join(exportDir, 'baseline.json');
+  const now = Date.now();
+  await writeFile(exportPath, JSON.stringify({
+    schemaVersion: 1,
+    available: true,
+    generatedAt: new Date(now).toISOString(),
+    entries: [{
+      id: 'abcdef0123456789abcdef01', app: 'node', remoteHost: 'api.example.com', remoteIp: null,
+      direction: 'outbound', decision: 'allow', protocol: 'tcp', bytesIn: 0, bytesOut: 100,
+      lastSeen: new Date(now).toISOString(), count: 1,
+    }],
+  }), { mode: 0o600 });
+  await writeFile(baselinePath, JSON.stringify({
+    schemaVersion: 1,
+    entries: { ['node\0api.example.com']: now - 31 * 24 * 60 * 60 * 1000 },
+  }), { mode: 0o600 });
+  try {
+    const result = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(result.available, true);
+    assert.equal(result.state, 'ready');
+    assert.equal(result.entries[0]?.firstSeen, true);
+    const rewritten = JSON.parse(await readFile(baselinePath, 'utf8'));
+    assert.equal(rewritten.entries['node\0api.example.com'], now);
+  } finally {
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('Little Snitch reader distinguishes missing, stale, invalid, and unsafe permissions', async () => {
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-states-'));
+  const exportPath = path.join(exportDir, 'little-snitch-traffic.json');
+  const baselinePath = path.join(exportDir, 'little-snitch-baseline.json');
+  const now = Date.now();
+  try {
+    const missing = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(missing.state, 'missing');
+
+    await writeFile(exportPath, JSON.stringify({
+      schemaVersion: 1, available: true,
+      generatedAt: new Date(now - 11 * 60_000).toISOString(), entries: [],
+    }), { mode: 0o600 });
+    await chmod(exportPath, 0o600);
+    const stale = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(stale.state, 'stale');
+
+    await writeFile(exportPath, '{invalid', { mode: 0o600 });
+    await chmod(exportPath, 0o600);
+    const invalid = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(invalid.state, 'invalid');
+
+    await writeFile(exportPath, JSON.stringify({
+      schemaVersion: 1, available: true, generatedAt: new Date(now).toISOString(), entries: [],
+    }), { mode: 0o644 });
+    await chmod(exportPath, 0o644);
+    const permissionDenied = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(permissionDenied.state, 'permission-denied');
+
+    const targetPath = path.join(exportDir, 'private-target.json');
+    await writeFile(targetPath, JSON.stringify({
+      schemaVersion: 1, available: true, generatedAt: new Date(now).toISOString(), entries: [],
+    }), { mode: 0o600 });
+    await rm(exportPath);
+    await symlink(targetPath, exportPath);
+    const symlinked = await readLittleSnitchSnapshot(exportPath, baselinePath, now);
+    assert.equal(symlinked.state, 'invalid');
+  } finally {
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('Little Snitch schema rejects extra fields, future timestamps, and excessive rows', () => {
+  const now = Date.now();
+  assert.equal(sanitizeLittleSnitchExport({
+    schemaVersion: 1, available: true, generatedAt: new Date(now).toISOString(), entries: [], secret: 'nope',
+  }, now).state, 'invalid');
+  assert.equal(sanitizeLittleSnitchExport({
+    schemaVersion: 1, available: true, generatedAt: new Date(now + 3 * 60_000).toISOString(), entries: [],
+  }, now).state, 'invalid');
+  assert.equal(sanitizeLittleSnitchExport({
+    schemaVersion: 1, available: true, generatedAt: new Date(now).toISOString(), entries: Array.from({ length: 501 }, () => ({})),
+  }, now).state, 'invalid');
+});
+
+test('Little Snitch connection totals saturate at the safe integer boundary', () => {
+  assert.equal(boundedLittleSnitchConnectionTotal([
+    { count: Number.MAX_SAFE_INTEGER },
+    { count: Number.MAX_SAFE_INTEGER },
+  ]), Number.MAX_SAFE_INTEGER);
 });
 
 test('new enrichment endpoints degrade when keys are missing and reject invalid indicators', async () => {

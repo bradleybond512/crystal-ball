@@ -57,6 +57,7 @@ export interface LittleSnitchRiskFinding {
 
 export interface LittleSnitchSnapshot {
   available: boolean;
+  sourceState: LittleSnitchSourceState;
   generatedAt: string | null;
   sourcePath?: string;
   error?: string;
@@ -64,6 +65,8 @@ export interface LittleSnitchSnapshot {
   entries: LittleSnitchEntry[];
   summary: LittleSnitchSummary;
 }
+
+export type LittleSnitchSourceState = 'ready' | 'empty' | 'missing' | 'stale' | 'invalid' | 'permission-denied';
 
 export type SecurityPostureStatus = 'ok' | 'warn' | 'fail' | 'unknown';
 export type PersistenceRisk = 'low' | 'medium' | 'high';
@@ -156,20 +159,36 @@ export async function fetchLittleSnitchEnrichment(value: string): Promise<Little
   }
 }
 
-export function sanitizeLittleSnitchSnapshot(input: unknown): LittleSnitchSnapshot {
+export function sanitizeLittleSnitchSnapshot(input: unknown, nowMs = Date.now()): LittleSnitchSnapshot {
   const obj = isObject(input) ? input : {};
+  const generatedAt = sanitizeIso(obj.generatedAt);
+  const freshness = getLittleSnitchFreshness(generatedAt, nowMs);
+  const advertisedState = sanitizeLittleSnitchSourceState(obj.state);
+  let sourceState = advertisedState;
+  if (advertisedState === 'ready' || advertisedState === 'empty') {
+    if (freshness.status === 'fresh') sourceState = advertisedState;
+    else if (freshness.status === 'stale') sourceState = 'stale';
+    else sourceState = 'invalid';
+  }
   const rawEntries = Array.isArray(obj.entries) ? obj.entries : [];
-  const entries = rawEntries
-    .slice(0, MAX_ENTRIES)
-    .map((entry, idx) => sanitizeEntry(entry, idx))
-    .filter((entry): entry is LittleSnitchEntry => entry !== null);
+  let entries = sourceState === 'ready'
+    ? rawEntries
+      .slice(0, MAX_ENTRIES)
+      .map((entry, idx) => sanitizeEntry(entry, idx))
+      .filter((entry): entry is LittleSnitchEntry => entry !== null)
+    : [];
+  if (sourceState === 'ready' && entries.length === 0) {
+    sourceState = 'invalid';
+    entries = [];
+  }
 
   return {
-    available: typeof obj.available === 'boolean' ? obj.available : entries.length > 0,
-    generatedAt: sanitizeIso(obj.generatedAt),
+    available: sourceState === 'ready' || sourceState === 'empty',
+    sourceState,
+    generatedAt,
     sourcePath: typeof obj.sourcePath === 'string' ? obj.sourcePath.slice(0, 300) : undefined,
     error: typeof obj.error === 'string' ? obj.error.slice(0, 300) : undefined,
-    freshness: getLittleSnitchFreshness(sanitizeIso(obj.generatedAt)),
+    freshness,
     entries,
     summary: summarizeLittleSnitchSnapshot({ entries } as LittleSnitchSnapshot),
   };
@@ -236,20 +255,22 @@ export function summarizeLittleSnitchSnapshot(snapshot: Pick<LittleSnitchSnapsho
   let newDestinations = 0;
   let outboundBytes = 0;
   let allowlistHits = 0;
+  let totalConnections = 0;
 
   for (const entry of snapshot.entries) {
-    if (entry.decision === 'block') blockedConnections += entry.count;
-    else if (entry.decision === 'allow') allowedConnections += entry.count;
-    if (entry.risk.level === 'high') highRiskConnections += entry.count;
+    totalConnections = addBounded(totalConnections, entry.count);
+    if (entry.decision === 'block') blockedConnections = addBounded(blockedConnections, entry.count);
+    else if (entry.decision === 'allow') allowedConnections = addBounded(allowedConnections, entry.count);
+    if (entry.risk.level === 'high') highRiskConnections = addBounded(highRiskConnections, entry.count);
     if (entry.firstSeen) newDestinations += 1;
-    outboundBytes += entry.bytesOut;
-    if (isKnownGoodHost(entry.remoteHost)) allowlistHits += entry.count;
+    outboundBytes = addBounded(outboundBytes, entry.bytesOut);
+    if (isKnownGoodHost(entry.remoteHost)) allowlistHits = addBounded(allowlistHits, entry.count);
     bump(topApps, entry.app, entry);
     bump(topDomains, entry.remoteHost, entry);
   }
 
   return {
-    totalConnections: snapshot.entries.reduce((sum, entry) => sum + entry.count, 0),
+    totalConnections,
     allowedConnections,
     blockedConnections,
     highRiskConnections,
@@ -275,6 +296,7 @@ export function summarizeLittleSnitchSnapshot(snapshot: Pick<LittleSnitchSnapsho
 export function emptyLittleSnitchSnapshot(error?: string): LittleSnitchSnapshot {
   return {
     available: false,
+    sourceState: 'missing',
     generatedAt: null,
     error,
     freshness: getLittleSnitchFreshness(null),
@@ -292,6 +314,13 @@ export function emptyLittleSnitchSnapshot(error?: string): LittleSnitchSnapshot 
       allowlistHits: 0,
     },
   };
+}
+
+function sanitizeLittleSnitchSourceState(value: unknown): LittleSnitchSourceState {
+  if (value === 'ready' || value === 'empty' || value === 'missing' || value === 'stale' || value === 'invalid' || value === 'permission-denied') {
+    return value;
+  }
+  return 'invalid';
 }
 
 export function emptySecurityPostureSnapshot(error?: string): SecurityPostureSnapshot {
@@ -474,14 +503,19 @@ function isPublicIp(value: string): boolean {
 
 function bump(map: Map<string, LittleSnitchSummaryRow>, name: string, entry: LittleSnitchEntry): void {
   const row = map.get(name) ?? { name, count: 0, bytesIn: 0, bytesOut: 0 };
-  row.count += entry.count;
-  row.bytesIn += entry.bytesIn;
-  row.bytesOut += entry.bytesOut;
+  row.count = addBounded(row.count, entry.count);
+  row.bytesIn = addBounded(row.bytesIn, entry.bytesIn);
+  row.bytesOut = addBounded(row.bytesOut, entry.bytesOut);
   map.set(name, row);
 }
 
 function sortRows(map: Map<string, LittleSnitchSummaryRow>): LittleSnitchSummaryRow[] {
-  return [...map.values()].sort((a, b) => b.count - a.count || (b.bytesIn + b.bytesOut) - (a.bytesIn + a.bytesOut));
+  return [...map.values()].sort((a, b) => b.count - a.count
+    || addBounded(b.bytesIn, b.bytesOut) - addBounded(a.bytesIn, a.bytesOut));
+}
+
+function addBounded(a: number, b: number): number {
+  return Math.min(Number.MAX_SAFE_INTEGER, a + b);
 }
 
 function normalizeHost(value: unknown): string | null {

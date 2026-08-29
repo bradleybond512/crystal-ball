@@ -588,6 +588,31 @@ inapplicable rather than recording a failed or healthy provider vote.
   `npm run test:openaq`, `npm run test:airquality`, `npm run test:providers`,
   `npm run test:sidecar`, and `npm run typecheck:all`.
 
+### UX-023 — Truthful automatic Little Snitch local feed *(High Assurance)*
+
+The Little Snitch panel currently tells the user to write an export file, but
+the packaged sidecar does not receive the documented path and the legacy
+exporter can fail silently after a Homebrew Node upgrade.
+
+- **Change surface:** the Little Snitch exporter/installer, fixed local sidecar
+  path wiring, strict snapshot validation, and the panel's missing/stale/empty
+  states.
+- **Privilege boundary:** no persistent root job may execute Homebrew Node,
+  repository JavaScript, or another user-writable path. Automatic collection
+  must authorize only a fixed root-owned read helper; sanitization and storage
+  stay unprivileged.
+- **Privacy and reliability:** raw traffic CSV remains in a bounded process pipe,
+  snapshots are allowlisted, private, bounded, and atomically replaced, and a
+  failed refresh cannot overwrite the last known-good snapshot.
+- **Done when:** the packaged full desktop app discovers the documented export
+  without shell environment setup, distinguishes ready/empty/missing/stale/
+  invalid/permission states, and a five-minute background refresh survives a
+  Node upgrade without restoring the unsafe legacy daemon.
+- **Verify:** focused exporter/installer/sidecar/frontend tests with mutation
+  proofs, Rust tests, `npm run typecheck:all`, `npm run secrets:scan`, the
+  agentic validation gate, and an installed-app live probe that reports only
+  schema, count, freshness, ownership, and mode.
+
 ---
 
 ## What was NOT verified
@@ -634,3 +659,4 @@ Update the row in the same PR that does the work.
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
 | UX-021 | Optional-feed classification and recovery | NOT STARTED | — |
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
+| UX-023 | Truthful automatic Little Snitch local feed | IN PROGRESS | draft pending |

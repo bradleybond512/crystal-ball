@@ -48,14 +48,8 @@ export class LittleSnitchPanel extends Panel {
   }
 
   private render(): void {
-    if (!this.snapshot.available || this.snapshot.entries.length === 0) {
-      const path = this.snapshot.sourcePath ? `<code>${escapeHtml(this.snapshot.sourcePath)}</code>` : '<code>~/Library/Application Support/Crystal Ball/little-snitch-traffic.json</code>';
-      this.setContent(`
-        <div class="panel-empty">
-          Little Snitch export not available. Write sanitized traffic JSON to ${path}.
-          ${this.snapshot.error ? `<br><span class="ids-time">${escapeHtml(this.snapshot.error)}</span>` : ''}
-        </div>
-      `);
+    if (this.snapshot.sourceState !== 'ready') {
+      this.setContent(renderSourceState(this.snapshot));
       return;
     }
 
@@ -106,6 +100,40 @@ export class LittleSnitchPanel extends Panel {
       </div>
     `);
   }
+}
+
+function renderSourceState(snapshot: LittleSnitchSnapshot): string {
+  if (snapshot.sourceState === 'empty') {
+    return '<div class="panel-empty">Little Snitch exporter is healthy. No connections were recorded in the current window.</div>';
+  }
+
+  if (snapshot.sourceState === 'missing' && snapshot.error === 'Waiting for Little Snitch export...') {
+    return '<div class="panel-empty">Waiting for the Little Snitch exporter...</div>';
+  }
+
+  let message: string;
+  switch (snapshot.sourceState) {
+    case 'missing': {
+      message = 'Little Snitch export is not configured. Run the Crystal Ball Little Snitch setup to start the exporter.';
+      break;
+    }
+    case 'stale': {
+      message = 'Little Snitch export is stale. Check that the Little Snitch exporter is running and producing fresh snapshots.';
+      break;
+    }
+    case 'permission-denied': {
+      message = 'Little Snitch export cannot be read. Check the snapshot ownership and permissions, then restart the exporter.';
+      break;
+    }
+    case 'invalid':
+    case 'ready': {
+      message = 'Little Snitch export is invalid. Run the Little Snitch exporter repair and try again.';
+      break;
+    }
+  }
+
+  const detail = snapshot.error ? `<br><span class="ids-time">${escapeHtml(snapshot.error)}</span>` : '';
+  return `<div class="panel-empty">${message}${detail}</div>`;
 }
 
 function decisionBadge(decision: string): string {

@@ -25,16 +25,29 @@ const ALL_TAGS: { value: SavedPlaceTag; label: string }[] = [
   { value: 'data_center', label: 'Data Center' },
 ];
 
-const RADIUS_PRESETS = [
+const LEGACY_RADIUS_PRESETS = [
   { label: 'City (50 km)', km: 50 },
   { label: 'Region (250 km)', km: 250 },
   { label: 'Country (1000 km)', km: 1000 },
   { label: 'Continent (3000 km)', km: 3000 },
 ];
 
+const CURRENT_LOCATION_RADIUS_PRESETS = [
+  { label: 'Nearby (5 km)', km: 5 },
+  { label: 'Local (10 km)', km: 10 },
+  { label: 'Area (25 km)', km: 25 },
+  ...LEGACY_RADIUS_PRESETS,
+];
+
 export interface SavedPlaceModalOptions {
   onPickLocationMode: (active: boolean, callback: ((lat: number, lon: number) => void) | null) => void;
   onOfflinePinnedSaved?: (place: SavedPlace) => void;
+}
+
+export interface SavedPlaceCurrentLocationPrefill {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
 }
 
 interface FormState {
@@ -58,6 +71,8 @@ export class SavedPlaceModal {
   private formState: FormState = this.defaultFormState();
   private pickModeActive = false;
   private confirmingDelete = false;
+  private currentLocationConversion = false;
+  private onCurrentLocationConfirmed: ((place: SavedPlace) => void) | null = null;
 
   constructor(options: SavedPlaceModalOptions) {
  this.options = options;
@@ -99,6 +114,8 @@ export class SavedPlaceModal {
   }
 
   public openCreate(): void {
+ this.currentLocationConversion = false;
+ this.onCurrentLocationConfirmed = null;
  this.editingPlace = null;
  this.formState = this.defaultFormState();
  this.geocodeResults = [];
@@ -109,7 +126,36 @@ export class SavedPlaceModal {
  this.focusNameField();
   }
 
+  public openCreatePrefilled(
+    prefill: SavedPlaceCurrentLocationPrefill,
+    onConfirmed: (place: SavedPlace) => void,
+  ): void {
+ if (!Number.isFinite(prefill.latitude) || prefill.latitude < -90 || prefill.latitude > 90
+   || !Number.isFinite(prefill.longitude) || prefill.longitude < -180 || prefill.longitude > 180
+   || !CURRENT_LOCATION_RADIUS_PRESETS.some((preset) => preset.km === prefill.radiusKm)) {
+   throw new Error('Invalid current-location place prefill');
+ }
+ this.editingPlace = null;
+ this.currentLocationConversion = true;
+ this.onCurrentLocationConfirmed = onConfirmed;
+ this.formState = {
+   ...this.defaultFormState(),
+   lat: String(prefill.latitude),
+   lon: String(prefill.longitude),
+   radiusKm: prefill.radiusKm,
+ };
+ this.geocodeResults = [];
+ this.confirmingDelete = false;
+ this.render();
+ this.overlay.setAttribute('aria-label', 'Save current location as place');
+ this.overlay.classList.add('active');
+ document.addEventListener('keydown', this.escapeHandler);
+ this.focusNameField();
+  }
+
   public openEdit(place: SavedPlace): void {
+ this.currentLocationConversion = false;
+ this.onCurrentLocationConfirmed = null;
  this.editingPlace = place;
  this.formState = {
  name: place.name,
@@ -133,6 +179,10 @@ export class SavedPlaceModal {
  this.overlay.classList.remove('active');
  document.removeEventListener('keydown', this.escapeHandler);
  if (this.searchDebounce) clearTimeout(this.searchDebounce);
+ this.searchDebounce = null;
+ this.currentLocationConversion = false;
+ this.onCurrentLocationConfirmed = null;
+ this.overlay.setAttribute('aria-label', 'Save Place');
   }
 
   private focusNameField(): void {
@@ -149,6 +199,15 @@ export class SavedPlaceModal {
  }
 
  const isEdit = Boolean(this.editingPlace);
+ const radiusPresets = this.currentLocationConversion
+   ? CURRENT_LOCATION_RADIUS_PRESETS
+   : LEGACY_RADIUS_PRESETS;
+ const conversionDisclosure = this.currentLocationConversion
+   ? `<div class="spm-current-location-disclosure" role="note">
+ Saving permits normal durable and cross-feature use of this location. The first saved place becomes primary;
+ later places stay non-primary unless you choose otherwise. This action does not prepare an Emergency Pack.
+ </div>`
+   : '';
  // All user-controlled values are passed through escapeHtml() before insertion.
  // Static strings (labels, data-action attributes) are hardcoded literals.
  this.overlay.innerHTML = `
@@ -159,6 +218,7 @@ export class SavedPlaceModal {
  </div>
 
  <div class="spm-body">
+ ${conversionDisclosure}
  <div class="spm-field-group">
  <label class="spm-label" for="spm-name">Name</label>
  <input
@@ -215,19 +275,7 @@ export class SavedPlaceModal {
  </div>
  </div>
 
- <div class="spm-field-group">
- <label class="spm-label">Emergency Pack: Lifelines</label>
- <button
- class="spm-offline-btn${this.formState.offlinePinned ? ' spm-offline-btn--active' : ''}"
- data-action="toggle-offline"
- type="button"
- aria-pressed="${this.formState.offlinePinned ? 'true' : 'false'}"
- title="Keep the latest Disaster Lifelines data ready for degraded or offline conditions"
- >
- <span>${this.formState.offlinePinned ? '&#x2713; Keep Disaster Lifelines offline' : 'Keep Disaster Lifelines offline'}</span>
- <small>${this.formState.offlinePinned ? 'Refreshes this place’s exact-location pack before severe weather.' : 'Save an exact-location pack for weak or unavailable service.'}</small>
- </button>
- </div>
+ ${this.renderOfflineControls()}
 
  <div class="spm-field-group">
  <label class="spm-label">Tags</label>
@@ -247,7 +295,7 @@ export class SavedPlaceModal {
  <div class="spm-field-half">
  <label class="spm-label" for="spm-radius">Alert Radius</label>
  <select id="spm-radius" class="spm-input spm-select" data-field="radius">
- ${RADIUS_PRESETS.map((p) => `
+ ${radiusPresets.map((p) => `
  <option value="${p.km}"${p.km === this.formState.radiusKm ? ' selected' : ''}>${escapeHtml(p.label)}</option>
  `).join('')}
  </select>
@@ -291,6 +339,31 @@ export class SavedPlaceModal {
  </div>
  </div>
  `;
+  }
+
+  private renderOfflineControls(): string {
+ if (this.currentLocationConversion) return '';
+ const activeClass = this.formState.offlinePinned ? ' spm-offline-btn--active' : '';
+ const ariaPressed = this.formState.offlinePinned ? 'true' : 'false';
+ const label = this.formState.offlinePinned
+   ? '&#x2713; Keep Disaster Lifelines offline'
+   : 'Keep Disaster Lifelines offline';
+ const detail = this.formState.offlinePinned
+   ? 'Refreshes this place’s exact-location pack before severe weather.'
+   : 'Save an exact-location pack for weak or unavailable service.';
+ return `<div class="spm-field-group">
+ <label class="spm-label">Emergency Pack: Lifelines</label>
+ <button
+ class="spm-offline-btn${activeClass}"
+ data-action="toggle-offline"
+ type="button"
+ aria-pressed="${ariaPressed}"
+ title="Keep the latest Disaster Lifelines data ready for degraded or offline conditions"
+ >
+ <span>${label}</span>
+ <small>${detail}</small>
+ </button>
+ </div>`;
   }
 
   private renderGeocodeResults(): string {
@@ -633,8 +706,11 @@ export class SavedPlaceModal {
 
  const confirmed = saved ? confirmSavedPlacePersistence(saved) : null;
  if (confirmed?.offlinePinned) this.options.onOfflinePinnedSaved?.(confirmed);
-
+ const onCurrentLocationConfirmed = this.currentLocationConversion
+   ? this.onCurrentLocationConfirmed
+   : null;
  this.close();
+ if (confirmed && onCurrentLocationConfirmed) onCurrentLocationConfirmed(confirmed);
   }
 
   private deletePlace(): void {

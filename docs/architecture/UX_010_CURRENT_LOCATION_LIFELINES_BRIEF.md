@@ -1,9 +1,13 @@
 # UX-010 Current-Location Lifelines Feature Brief
 
-Status: design approval required
+Status: implementation approved
 Risk: high assurance / precise-location privacy
 Roadmap task: UX-010
 Affected variants: full browser and full macOS desktop
+
+Approval: on 2026-08-29, the human explicitly approved the full browser and
+macOS design in PR #1684, including its privacy disclosures and necessary
+upstream provider transmission/access-log retention risk.
 
 ## Objective and user value
 
@@ -205,10 +209,13 @@ request:
   `reasonCode: "rows_dropped"`; `error` requires zero conditions, zero
   accepted rows, 0..100 dropped rows, and one of `upstream_unavailable`,
   `upstream_http_error`, `malformed_envelope`, `truncated_page`,
-  `unusable_rows`, or `capacity_exceeded`. `acceptedRows` must equal the number
-  of contributed `areaConditions`; mismatches reject the response rather than
-  being silently reconciled. ODIN `empty` or `error` does not fail otherwise
-  usable Lifelines results.
+  `unusable_rows`, `capacity_exceeded`, or `county_fips_unknown`. The
+  `county_fips_unknown` case is used only when a non-US coordinate or Census
+  failure yields no county, with zero accepted and zero dropped rows because
+  ODIN was not queried. `acceptedRows` must equal the number of contributed
+  `areaConditions`; mismatches reject the response rather than being silently
+  reconciled. ODIN `empty` or `error` does not fail otherwise usable Lifelines
+  results.
 - Every POST error response is exactly `{ error: code }`, never echoes request
   fields, and uses this finite mapping: `invalid_request` (400, including
   malformed JSON/schema/fields/categories), `unauthorized` (401),
@@ -257,8 +264,9 @@ request:
 - `Save as place…` opens the existing create modal with a memory-only prefill.
   It does not call saved-place persistence itself.
 - The modal explains that saving permits normal durable and cross-feature use,
-  requires a name and radius, does not silently set primary, and does not
-  prepare an Emergency Pack.
+  requires a name and radius, and does not prepare an Emergency Pack. It also
+  states the existing saved-place rule: the first saved place becomes primary;
+  later additions do not silently replace the current primary.
 - Cancel or close clears the prefill and writes nothing. Only the existing
   explicit `Add Place` confirmation persists.
 - The panel switches to saved-place mode only after exact persistence readback
@@ -430,6 +438,29 @@ must never traverse the hosted Crystal Ball API.
 Repository analysis, architecture review, Tauri security review, and sidecar
 review are complete. Their blocking findings are incorporated into the proposed
 approval design above.
+
+## Implementation evidence
+
+- The complete agentic validation gate passed on 2026-08-29 with
+  `test:ux010`, Lifelines, Lifelines map/grid, sidecar, Emergency Pack,
+  Emergency Readiness, and Home Shell suites. Full, tech, finance, and happy
+  production builds also passed.
+- The packaged full macOS app built successfully with the stable `Crystal Ball
+  Dev` identity and hardened runtime. The exact Location-only `tccutil` reset
+  is unsupported on this Mac, so no broader permission reset was substituted
+  without separate human approval.
+- A live ORNL ODIN probe on 2026-08-29 selected FIPS `37037` from a 100-row
+  unfiltered response (`total_count: 313`), then queried
+  `where=communitydescriptor="37037"`. The filtered response contained one row,
+  reported `total_count: 1`, and every returned `communitydescriptor` matched
+  `37037`. The response supplied every consumed field:
+  `communitydescriptor`, `metersaffected`, `county`, `state`,
+  `customersrestored`, `name`, and `utility_id`.
+- Independent review found and the implementation corrected accepted-snapshot
+  teardown retention, globally expanded saved-place radius presets, ODIN page
+  count divergence, duplicate fallback IDs, and anchor-derived response
+  distances. Focused regression tests and production mutation proofs cover the
+  repaired boundaries.
 
 ## Rollback
 

@@ -829,6 +829,35 @@
 
 /* Disaster Lifelines panel */
 .local-logistics-content { min-width: 0; }
+.local-logistics-current-location {
+  min-width: 0;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.local-logistics-current-location p {
+  margin: 5px 0 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.local-logistics-current-header .watchlist-card-bottom { flex-wrap: wrap; gap: 6px; }
+.local-logistics-location-warning {
+  margin-bottom: 10px;
+  border-left: 3px solid var(--warning, #d8a62e);
+}
+.spm-current-location-disclosure {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .local-logistics-header { align-items: flex-start; gap: 8px; margin-bottom: 8px; }
 .local-logistics-header > * { min-width: 0; }
 .local-logistics-radius { min-width: 0; margin: 0 0 10px; padding: 0; border: 0; }

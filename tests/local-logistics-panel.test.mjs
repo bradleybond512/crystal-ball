@@ -93,7 +93,12 @@ test('outage evidence uses semantic tables and bounded responsive overflow', () 
   assert.match(localLogisticsPanelSrc, /coverage\.acceptedRowsAvailability/);
   assert.match(localLogisticsPanelSrc, /Individual outage reports — never summed/);
   assert.match(panelsCssSrc, /\.local-logistics-table-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(panelsCssSrc, /\.local-logistics-table-scroll\s*\{[^}]*max-width:\s*100%/s);
   assert.match(panelsCssSrc, /\.local-logistics-outage-table\s*\{[^}]*min-width:/s);
+  assert.match(
+    panelsCssSrc,
+    /\.local-logistics-provider-row\s*>\s*\*\s*\{[^}]*overflow-wrap:\s*anywhere/s,
+  );
 });
 
 test('service uses schema-v2 query fingerprints, coalescing, and outage context', () => {

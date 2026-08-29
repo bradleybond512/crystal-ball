@@ -1,5 +1,6 @@
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 import { readBoundedJson } from './_bounded-json.js';
+import { getGridOutagesForFips } from './grid-outages.js';
 
 export const config = { runtime: 'edge' };
 
@@ -18,6 +19,12 @@ const MAX_CENSUS_RESPONSE_BYTES = 256 * 1024;
 const DIRECTORY_TTL_MS = 24 * 60 * 60 * 1000;
 const FEMA_TTL_MS = 30 * 60 * 1000;
 const DECIMAL_PATTERN = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
+const SESSION_BODY_MAX_BYTES = 2048;
+const SESSION_PURPOSE = 'session-lifelines';
+const SESSION_KEYS = new Set([
+  'schemaVersion', 'purpose', 'latitude', 'longitude', 'radiusKm', 'categories', 'limitPerCategory',
+]);
+const SESSION_RADII = new Set([5, 10, 25, 50]);
 
 const CATEGORY_FILTERS = {
   shelter: ['["amenity"="shelter"]', '["social_facility"="shelter"]', '["emergency"="shelter"]'],
@@ -430,6 +437,64 @@ function parseLocalLogisticsQuery(url) {
   return { lat, lon, radiusKm, limitPerCategory, categories };
 }
 
+function parseSessionBody(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const keys = Object.keys(value);
+  if (keys.length !== SESSION_KEYS.size || keys.some((key) => !SESSION_KEYS.has(key))) return null;
+  const { schemaVersion, purpose, latitude, longitude, radiusKm, categories, limitPerCategory } = value;
+  if (schemaVersion !== 1 || purpose !== SESSION_PURPOSE) return null;
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null;
+  if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+  if (!SESSION_RADII.has(radiusKm)) return null;
+  if (!Array.isArray(categories) || categories.length < 1 || categories.length > RESOURCE_KINDS.length
+    || categories.some((category) => typeof category !== 'string' || !RESOURCE_KINDS.includes(category))
+    || new Set(categories).size !== categories.length) return null;
+  if (!Number.isSafeInteger(limitPerCategory) || limitPerCategory < 1 || limitPerCategory > 5) return null;
+  return { lat: latitude, lon: longitude, radiusKm, categories, limitPerCategory };
+}
+
+function sessionJson(code, status, cors, extra = {}) {
+  return json({ error: code }, status, cors, {
+    'Cache-Control': 'private, no-store',
+    ...extra,
+  });
+}
+
+function countyUnknownProvider(retrievedAt) {
+  return {
+    id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 0,
+    observedAt: retrievedAt, retrievedAt, reasonCode: 'county_fips_unknown',
+  };
+}
+
+function projectAreaConditions(result, countyFips) {
+  if (!result || !result.body || !Array.isArray(result.body.outages)) return [];
+  const coverage = result.body.coverage === 'reported' ? 'reported' : 'unknown';
+  return result.body.outages.slice(0, 100).map((row, index) => ({
+    id: `ornl-odin:${countyFips}:${row.utilityId ?? 'row-' + (index + 1)}`,
+    type: 'power_outage',
+    coverage,
+    countyFips,
+    county: row.county,
+    state: row.state,
+    customersOut: row.customersOut,
+    observedAt: row.observedAt,
+    retrievedAt: row.retrievedAt,
+    expiresAt: row.expiresAt,
+    source: 'ornl-odin',
+    ...(row.customersRestored === undefined ? {} : { customersRestored: row.customersRestored }),
+    ...(row.utilityName === undefined ? {} : { utilityName: row.utilityName }),
+    ...(row.utilityId === undefined ? {} : { utilityId: row.utilityId }),
+  }));
+}
+
+function projectSiteForResponse(site, isSession) {
+  if (!isSession) return site;
+  const projected = { ...site };
+  delete projected.distanceKm;
+  return projected;
+}
+
 function buildProviderJobs(categories, lat, lon, radiusKm, fetchedAt) {
   const osmCategories = categories.filter((category) => CATEGORY_FILTERS[category].length > 0);
   return [
@@ -485,34 +550,26 @@ function reconcileProviderContributions(providers, limited) {
   }
 }
 
-export default async function handler(req) {
-  const cors = getCorsHeaders(req, 'GET, OPTIONS');
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-  if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405, cors, { Allow: 'GET, OPTIONS' });
-  if (isDisallowedOrigin(req)) return json({ error: 'Origin not allowed' }, 403, cors);
+async function parseHandlerRequest(req, cors, isSession) {
+  if (!isSession) {
+    const parsedQuery = parseLocalLogisticsQuery(new URL(req.url));
+    return parsedQuery ?? json({ error: 'Invalid local logistics query' }, 400, cors);
+  }
+  if (new URL(req.url).search) return sessionJson('invalid_request', 400, cors);
+  const mediaType = (req.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+  if (mediaType !== 'application/json') return sessionJson('unsupported_media_type', 415, cors);
+  let raw;
+  try {
+    raw = await readBoundedJson(req, SESSION_BODY_MAX_BYTES);
+  } catch (error) {
+    const oversized = /byte limit/i.test(String(error?.message ?? error));
+    return sessionJson(oversized ? 'body_too_large' : 'invalid_request', oversized ? 413 : 400, cors);
+  }
+  return parseSessionBody(raw) ?? sessionJson('invalid_request', 400, cors);
+}
 
-  const parsedQuery = parseLocalLogisticsQuery(new URL(req.url));
-  if (!parsedQuery) return json({ error: 'Invalid local logistics query' }, 400, cors);
-  const { lat, lon, radiusKm, limitPerCategory, categories } = parsedQuery;
-
-  const fetchedAt = new Date().toISOString();
-  const countyFipsPromise = resolveCountyFips(lat, lon);
-  const jobs = buildProviderJobs(categories, lat, lon, radiusKm, fetchedAt);
-  const settled = await Promise.allSettled(jobs.map((job) => job.fetch()));
-  const countyFips = await countyFipsPromise;
-  const query = { lat, lon, radiusKm, categories, ...(countyFips ? { countyFips } : {}) };
-  const { providers, accepted } = normalizeProviderResults(jobs, settled, fetchedAt);
-
-  const limited = dedupeResources(accepted)
-    .sort((a, b) => a.site.distanceKm - b.site.distanceKm)
-    .filter((row, index, rows) => rows.slice(0, index).filter((prior) => prior.site.kind === row.site.kind).length < limitPerCategory);
-  reconcileProviderContributions(providers, limited);
-  const allFailed = providers.every((provider) => provider.state === 'error');
-  const partial = !allFailed && providers.some((provider) => ['partial', 'stale', 'error'].includes(provider.state));
-  const sites = limited.map((row) => row.site);
-  const siteIds = new Set(sites.map((site) => site.id));
-  const observations = limited.map((row) => row.observation).filter((observation) => siteIds.has(observation.siteId));
-  const nodes = sites.map((site) => ({
+function buildNodes(sites, fetchedAt) {
+  return sites.map((site) => ({
     id: site.id,
     category: site.kind,
     name: site.name,
@@ -524,7 +581,70 @@ export default async function handler(req) {
     fetchedAt,
     deprecated: true,
   }));
-  const body = { schemaVersion: 2, query, sites, observations, providers, fetchedAt, retrievedAt: fetchedAt, partial, nodes };
+}
+
+async function appendAreaConditions(isSession, countyFips, fetchedAt, providers) {
+  if (!isSession) return undefined;
+  if (!countyFips) {
+    providers.push(countyUnknownProvider(fetchedAt));
+    return [];
+  }
+  const outageResult = await getGridOutagesForFips(countyFips, 100);
+  const outageProvider = outageResult?.body?.provider ?? {
+    id: 'ornl-odin', state: 'error', acceptedRows: 0, droppedRows: 0,
+    observedAt: fetchedAt, retrievedAt: fetchedAt, reasonCode: 'upstream_unavailable',
+  };
+  providers.push(outageProvider);
+  return projectAreaConditions(outageResult, countyFips);
+}
+
+function originErrorResponse(isSession, cors) {
+  return isSession
+    ? sessionJson('origin_not_allowed', 403, cors)
+    : json({ error: 'Origin not allowed' }, 403, cors);
+}
+
+export default async function handler(req) {
+  const cors = getCorsHeaders(req, 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return sessionJson('method_not_allowed', 405, cors, { Allow: 'GET, POST, OPTIONS' });
+  }
+  const isSession = req.method === 'POST';
+  if (isDisallowedOrigin(req)) return originErrorResponse(isSession, cors);
+
+  const parsedQuery = await parseHandlerRequest(req, cors, isSession);
+  if (parsedQuery instanceof Response) return parsedQuery;
+  const { lat, lon, radiusKm, limitPerCategory, categories } = parsedQuery;
+
+  const fetchedAt = new Date().toISOString();
+  const countyFipsPromise = resolveCountyFips(lat, lon);
+  const jobs = buildProviderJobs(categories, lat, lon, radiusKm, fetchedAt);
+  const settled = await Promise.allSettled(jobs.map((job) => job.fetch()));
+  const countyFips = await countyFipsPromise;
+  const query = isSession
+    ? { radiusKm, categories }
+    : { lat, lon, radiusKm, categories, ...(countyFips ? { countyFips } : {}) };
+  const { providers, accepted } = normalizeProviderResults(jobs, settled, fetchedAt);
+
+  const limited = dedupeResources(accepted)
+    .sort((a, b) => a.site.distanceKm - b.site.distanceKm)
+    .filter((row, index, rows) => rows.slice(0, index).filter((prior) => prior.site.kind === row.site.kind).length < limitPerCategory);
+  reconcileProviderContributions(providers, limited);
+  const allFailed = providers.every((provider) => provider.state === 'error');
+  if (isSession && allFailed) return sessionJson('upstream_failed', 502, cors);
+  const sites = limited.map((row) => projectSiteForResponse(row.site, isSession));
+  const siteIds = new Set(sites.map((site) => site.id));
+  const observations = limited.map((row) => row.observation).filter((observation) => siteIds.has(observation.siteId));
+  const nodes = buildNodes(sites, fetchedAt);
+  const areaConditions = await appendAreaConditions(isSession, countyFips, fetchedAt, providers);
+  const partial = !allFailed && providers.some((provider) => ['partial', 'stale', 'error'].includes(provider.state));
+  const body = {
+    schemaVersion: 2, query, sites, observations, providers, fetchedAt, retrievedAt: fetchedAt, partial, nodes,
+    ...(isSession ? { areaConditions } : {}),
+  };
   if (allFailed) return json({ ...body, error: 'Local logistics lookup failed' }, 502, cors, { 'Cache-Control': 'no-store' });
-  return json(body, 200, cors, { 'Cache-Control': 'public, max-age=300' });
+  return json(body, 200, cors, {
+    'Cache-Control': isSession ? 'private, no-store' : 'public, max-age=300',
+  });
 }

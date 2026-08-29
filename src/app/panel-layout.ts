@@ -1869,6 +1869,9 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map?.setCenter(lat, lon, 9);
  this.ctx.map?.flashLocation(lat, lon, 3000);
  },
+ openSaveCurrentLocation: (prefill, onConfirmed) => {
+   savedPlaceModal.openCreatePrefilled(prefill, onConfirmed);
+ },
  });
  localLogisticsPanel.setPlaceId(getPrimarySavedPlace()?.id ?? null);
  this.ctx.panels['local-logistics'] = localLogisticsPanel;

@@ -8,6 +8,24 @@ const request = (query = '', init = {}) => new Request(
   { headers: { origin: 'https://crystalball.app' }, ...init },
 );
 
+const sessionRequest = (body, init = {}) => request('', {
+  method: 'POST',
+  headers: { origin: 'https://crystalball.app', 'content-type': 'application/json' },
+  body: typeof body === 'string' ? body : JSON.stringify(body),
+  ...init,
+});
+
+const validSessionBody = (overrides = {}) => ({
+  schemaVersion: 1,
+  purpose: 'session-lifelines',
+  latitude: 41.881832,
+  longitude: -87.623177,
+  radiusKm: 10,
+  categories: ['fuel'],
+  limitPerCategory: 3,
+  ...overrides,
+});
+
 function osmResponse(elements = []) {
   return new Response(JSON.stringify({ elements }), { status: 200, headers: { 'content-type': 'application/json' } });
 }
@@ -16,12 +34,214 @@ function femaResponse(features = []) {
   return new Response(JSON.stringify({ features }), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
-test('local logistics accepts only GET and OPTIONS', async () => {
-  const post = await handler(request('', { method: 'POST' }));
-  assert.equal(post.status, 405);
-  assert.equal(post.headers.get('allow'), 'GET, OPTIONS');
-  assert.equal((await post.json()).error, 'Method not allowed');
+test('local logistics accepts GET, strict session POST, and OPTIONS only', async () => {
+  const put = await handler(request('', { method: 'PUT' }));
+  assert.equal(put.status, 405);
+  assert.equal(put.headers.get('allow'), 'GET, POST, OPTIONS');
+  assert.equal(put.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(await put.json(), { error: 'method_not_allowed' });
   assert.equal((await handler(request('', { method: 'OPTIONS' }))).status, 204);
+});
+
+test('session POST keeps coordinates in its bounded body and returns no-store facility plus outage evidence', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    const value = String(url);
+    calls.push({ value, body: String(options?.body ?? '') });
+    if (value.includes('overpass-api.de')) return osmResponse([
+      { type: 'node', id: 77, lat: 41.88, lon: -87.62, tags: { amenity: 'fuel', name: 'Session Fuel' } },
+    ]);
+    if (value.includes('geocoding.geo.census.gov')) return Response.json({
+      result: { geographies: { Counties: [{ GEOID: '17031' }] } },
+    });
+    if (value.includes('openenergyhub.ornl.gov')) return Response.json({
+      total_count: 1,
+      results: [{ communitydescriptor: '17031', county: 'Cook', state: 'Illinois', metersaffected: 12, name: 'ComEd' }],
+    });
+    throw new Error(`unexpected URL ${url}`);
+  };
+  try {
+    const response = await handler(sessionRequest(validSessionBody()));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    const body = await response.json();
+    assert.deepEqual(body.query, { radiusKm: 10, categories: ['fuel'] });
+    assert.equal(JSON.stringify(body).includes('41.881832'), false);
+    assert.equal(JSON.stringify(body).includes('-87.623177'), false);
+    assert.equal(body.sites[0].name, 'Session Fuel');
+    assert.equal(body.areaConditions.length, 1);
+    assert.equal(body.areaConditions[0].countyFips, '17031');
+    const odin = body.providers.find((provider) => provider.id === 'ornl-odin');
+    assert.deepEqual([odin.state, odin.acceptedRows, odin.droppedRows], ['ok', 1, 0]);
+    assert.ok(calls.every((call) => !call.value.includes('41.881832') || call.value.includes('geocoding.geo.census.gov')));
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('session POST gives ODIN rows without utility IDs deterministic unique bounded IDs and truthful counts', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    if (value.includes('overpass-api.de')) return osmResponse([
+      { type: 'node', id: 78, lat: 41.88, lon: -87.62, tags: { amenity: 'fuel', name: 'Session Fuel' } },
+    ]);
+    if (value.includes('geocoding.geo.census.gov')) return Response.json({
+      result: { geographies: { Counties: [{ GEOID: '17033' }] } },
+    });
+    if (value.includes('openenergyhub.ornl.gov')) return Response.json({
+      total_count: 2,
+      results: [
+        { communitydescriptor: '17033', county: 'Crawford', state: 'Illinois', metersaffected: 12, name: 'Utility North' },
+        { communitydescriptor: '17033', county: 'Crawford', state: 'Illinois', metersaffected: 18, name: 'Utility South' },
+      ],
+    });
+    throw new Error(`unexpected URL ${url}`);
+  };
+  try {
+    const response = await handler(sessionRequest(validSessionBody()));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    const ids = body.areaConditions.map((condition) => condition.id);
+    assert.deepEqual(ids, ['ornl-odin:17033:row-1', 'ornl-odin:17033:row-2']);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(ids.every((id) => id.length <= 120));
+    const odin = body.providers.find((provider) => provider.id === 'ornl-odin');
+    assert.deepEqual([odin.state, odin.acceptedRows, odin.droppedRows], ['ok', 2, 0]);
+    assert.equal(odin.acceptedRows, body.areaConditions.length);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('session POST strips anchor-derived distances from the wire while saved-place GET preserves them', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    if (value.includes('overpass-api.de')) return osmResponse([
+      { type: 'node', id: 89, lat: 35.01, lon: -90.01, tags: { amenity: 'fuel', name: 'Nearby Fuel' } },
+    ]);
+    if (value.includes('geocoding.geo.census.gov')) return Response.json({
+      result: { geographies: { Counties: [] } },
+    });
+    throw new Error(`unexpected URL ${url}`);
+  };
+  try {
+    const sessionResponse = await handler(sessionRequest(validSessionBody({ latitude: 35, longitude: -90 })));
+    assert.equal(sessionResponse.status, 200);
+    const sessionBody = await sessionResponse.json();
+    assert.equal(sessionBody.sites.length, 1);
+    assert.equal(sessionBody.nodes.length, 1);
+    assert.equal(JSON.stringify(sessionBody).includes('"distanceKm"'), false,
+      'session wire body must contain no anchor-derived distance field');
+
+    const savedResponse = await handler(request('?lat=35&lon=-90&radiusKm=10&categories=fuel&limitPerCategory=3'));
+    assert.equal(savedResponse.status, 200);
+    const savedBody = await savedResponse.json();
+    assert.equal(typeof savedBody.sites[0].distanceKm, 'number');
+    assert.equal(savedBody.nodes[0].distanceKm, savedBody.sites[0].distanceKm);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('session POST rejects a disallowed origin with the exact private error envelope', async () => {
+  const response = await handler(new Request('https://crystalball.app/api/local-logistics', {
+    method: 'POST',
+    headers: { origin: 'https://attacker.example', 'content-type': 'application/json' },
+    body: JSON.stringify(validSessionBody()),
+  }));
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(await response.json(), { error: 'origin_not_allowed' });
+});
+
+test('session POST reports ODIN failure as a partial otherwise-usable result', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    if (value.includes('overpass-api.de')) return osmResponse([
+      { type: 'node', id: 79, lat: 41.88, lon: -87.62, tags: { amenity: 'fuel', name: 'Available Fuel' } },
+    ]);
+    if (value.includes('geocoding.geo.census.gov')) return Response.json({
+      result: { geographies: { Counties: [{ GEOID: '01001' }] } },
+    });
+    if (value.includes('openenergyhub.ornl.gov')) return Response.json({ error: 'unavailable' }, { status: 503 });
+    throw new Error(`unexpected URL ${url}`);
+  };
+  try {
+    const response = await handler(sessionRequest(validSessionBody()));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.sites.length, 1);
+    assert.equal(body.partial, true);
+    const odin = body.providers.find((provider) => provider.id === 'ornl-odin');
+    assert.deepEqual([odin.state, odin.acceptedRows, odin.droppedRows], ['error', 0, 0]);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('session POST rejects malformed schemas, duplicate categories, wrong media, and bodies above 2048 bytes without fetching', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; throw new Error('must not fetch'); };
+  try {
+    const invalidBodies = [
+      '{',
+      JSON.stringify(validSessionBody({ categories: [] })),
+      JSON.stringify(validSessionBody({ categories: ['fuel', 'fuel'] })),
+      JSON.stringify(validSessionBody({ extra: true })),
+      JSON.stringify(validSessionBody({ latitude: '41.8' })),
+      JSON.stringify(validSessionBody({ radiusKm: 7 })),
+    ];
+    for (const body of invalidBodies) {
+      const response = await handler(sessionRequest(body));
+      assert.equal(response.status, 400, body);
+      assert.deepEqual(await response.json(), { error: 'invalid_request' });
+      assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    }
+    const wrongMedia = await handler(sessionRequest(validSessionBody(), {
+      headers: { origin: 'https://crystalball.app', 'content-type': 'text/plain' },
+    }));
+    assert.equal(wrongMedia.status, 415);
+    assert.deepEqual(await wrongMedia.json(), { error: 'unsupported_media_type' });
+    assert.equal(wrongMedia.headers.get('cache-control'), 'private, no-store');
+
+    const oversized = await handler(sessionRequest('x'.repeat(2049)));
+    assert.equal(oversized.status, 413);
+    assert.deepEqual(await oversized.json(), { error: 'body_too_large' });
+    assert.equal(oversized.headers.get('cache-control'), 'private, no-store');
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('session POST maps total facility failure to a coordinate-free no-store error', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('provider unavailable at 41.881832'); };
+  try {
+    const response = await handler(sessionRequest(validSessionBody()));
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(await response.json(), { error: 'upstream_failed' });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('session POST reports county_fips_unknown without querying ODIN outside US coverage', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes('overpass-api.de')) return osmResponse([
+      { type: 'node', id: 88, lat: 0, lon: 0, tags: { amenity: 'fuel', name: 'Zero Fuel' } },
+    ]);
+    throw new Error(`unexpected URL ${url}`);
+  };
+  try {
+    const response = await handler(sessionRequest(validSessionBody({ latitude: 0, longitude: 0 })));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(body.areaConditions, []);
+    const odin = body.providers.find((provider) => provider.id === 'ornl-odin');
+    assert.deepEqual(
+      [odin.state, odin.acceptedRows, odin.droppedRows, odin.reasonCode],
+      ['error', 0, 0, 'county_fips_unknown'],
+    );
+    assert.equal(calls.some((url) => url.includes('openenergyhub.ornl.gov')), false);
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test('local logistics validates coordinates, ranges, integer limits, categories, and rejects caller county FIPS', async () => {

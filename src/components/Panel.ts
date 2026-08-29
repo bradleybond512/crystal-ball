@@ -893,6 +893,18 @@ export class Panel {
  }
   }
 
+  protected setAiSummaryEnabled(enabled: boolean): void {
+ if (!this.aiBtnEl) return;
+ this.aiBtnEl.hidden = !enabled;
+ this.aiBtnEl.toggleAttribute('disabled', !enabled);
+ this.aiBtnEl.setAttribute('aria-hidden', enabled ? 'false' : 'true');
+ if (!enabled && this.aiSummaryOverlay) {
+   this.aiSummaryOverlay.remove();
+   this.aiSummaryOverlay = null;
+   this.aiBtnEl.classList.remove('panel-ai-btn--active');
+ }
+  }
+
   public setContent(html: string, onRendered?: () => void): void {
  if (this.baseDestroyed) return;
  // No-op detection uses only cached strings — avoid reading innerHTML, which

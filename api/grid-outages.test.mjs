@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import handler, { parseOdinOutagesV1 } from './grid-outages.js';
+import handler, * as gridOutages from './grid-outages.js';
+
+const { parseOdinOutagesV1 } = gridOutages;
 
 const request = (query = '', init = {}) => new Request(`https://crystalball.app/api/grid-outages${query}`, {
   headers: { origin: 'https://crystalball.app' }, ...init,
@@ -23,6 +25,10 @@ test('ODIN parser accepts real zero outages and drops malformed or nonmatching F
     'reportedstarttime is the outage event start, not an observation timestamp');
   assert.match(outages[0].expiresAt, /Z$/);
   assert.equal(droppedRows, 3);
+});
+
+test('grid outages exports the same bounded operation used by its GET handler', () => {
+  assert.equal(typeof gridOutages.getGridOutagesForFips, 'function');
 });
 
 test('grid outages supports only GET/OPTIONS and strictly validates exact FIPS and limit', async () => {
@@ -84,6 +90,25 @@ test('grid outages rejects incomplete ODIN pages instead of reporting a partial 
     const completeAtLimit = await handler(request('?fips=02020&limit=1'));
     assert.equal(completeAtLimit.status, 200);
     assert.equal((await completeAtLimit.json()).coverage, 'reported');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('grid outages rejects an upstream page larger than the requested limit even with total_count proof', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({
+    total_count: 2,
+    results: [
+      { communitydescriptor: '02230', county: 'Example', state: 'Alaska', metersaffected: 12 },
+      { communitydescriptor: '02230', county: 'Example', state: 'Alaska', metersaffected: 18 },
+    ],
+  });
+  try {
+    const response = await handler(request('?fips=02230&limit=1'));
+    assert.equal(response.status, 502);
+    const body = await response.json();
+    assert.equal(body.provider.reasonCode, 'truncated_page');
+    assert.equal(body.provider.acceptedRows, 0);
+    assert.deepEqual(body.outages, []);
   } finally { globalThis.fetch = originalFetch; }
 });
 

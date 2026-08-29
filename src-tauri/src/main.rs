@@ -22,6 +22,7 @@ use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 mod corelocation;
+mod current_location;
 
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
 const KEYRING_SERVICE: &str = "crystal-ball";
@@ -1481,104 +1482,6 @@ fn open_url(webview: Webview, url: String) -> Result<(), String> {
 fn open_system_prefs_location(webview: Webview) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  open_in_shell("x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
-}
-
-/// Get device location via native CoreLocation (bypasses WKWebView geolocation block).
-/// Gated by `require_trusted_window` so an external-origin window (e.g. the
-/// YouTube login WebView) cannot exfiltrate GPS coordinates even if its
-/// capability config is ever broadened.
-#[tauri::command]
-fn get_native_location(webview: Webview) -> Result<(f64, f64), String> {
- require_trusted_window(webview.label())?;
- get_native_location_impl()
-}
-
-#[cfg(target_os = "macos")]
-fn get_native_location_impl() -> Result<(f64, f64), String> {
- use std::ffi::c_void;
- extern "C" {
- fn objc_getClass(name: *const u8) -> *mut c_void;
- fn sel_registerName(name: *const u8) -> *mut c_void;
- fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
- fn objc_retain(obj: *mut c_void) -> *mut c_void;
- fn objc_release(obj: *mut c_void);
- }
-
- #[repr(C)]
- #[derive(Copy, Clone)]
- struct CLLocationCoordinate2D { latitude: f64, longitude: f64 }
-
- unsafe {
- let cls = objc_getClass(b"CLLocationManager\0".as_ptr());
- if cls.is_null() { return Err("CoreLocation not available".into()); }
- let alloc = sel_registerName(b"alloc\0".as_ptr());
- let init = sel_registerName(b"init\0".as_ptr());
- let mgr = objc_msgSend(objc_msgSend(cls, alloc), init);
- if mgr.is_null() { return Err("Could not create CLLocationManager".into()); }
-
- // Only proceed if the app is ALREADY authorized. Authorization is requested
- // exactly once by the app-retained manager in setup(); calling
- // startUpdatingLocation on an undetermined manager here spawns a SECOND
- // prompt racing that request (the "double prompt on first run"). When not yet
- // authorized, release + return so the caller falls back (IP geolocation)
- // until the single prompt is answered; later calls then succeed silently.
- let auth_sel = sel_registerName(b"authorizationStatus\0".as_ptr());
- let auth_fn: unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32 =
-  std::mem::transmute(objc_msgSend as *const ());
- let status = auth_fn(mgr, auth_sel);
- // CLAuthorizationStatus: 3 = authorizedAlways, 4 = authorizedWhenInUse.
- if status != 3 && status != 4 {
-  let release = sel_registerName(b"release\0".as_ptr());
-  objc_msgSend(mgr, release);
-  return Err("Location not yet authorized — grant Location Services for Crystal Ball in System Settings, then retry".into());
- }
-
- let start = sel_registerName(b"startUpdatingLocation\0".as_ptr());
- objc_msgSend(mgr, start);
-
- // Poll for a location fix (up to 10 seconds)
- let location_sel = sel_registerName(b"location\0".as_ptr());
- let coord_sel = sel_registerName(b"coordinate\0".as_ptr());
- let mut loc: *mut c_void = std::ptr::null_mut();
- for _ in 0..100 {
-  loc = objc_msgSend(mgr, location_sel);
-  if !loc.is_null() { break; }
-  std::thread::sleep(Duration::from_millis(100));
- }
-
- // The manager owns `loc`; retain it before releasing the manager so the
- // coordinate read below is not a use-after-free.
- if !loc.is_null() {
-  objc_retain(loc);
- }
-
- let stop = sel_registerName(b"stopUpdatingLocation\0".as_ptr());
- objc_msgSend(mgr, stop);
- let release = sel_registerName(b"release\0".as_ptr());
- objc_msgSend(mgr, release);
-
- if loc.is_null() {
-  return Err("Location not available — ensure Location Services is enabled for Crystal Ball in System Settings".into());
- }
-
- // On ARM64, CLLocationCoordinate2D (16 bytes) is returned in registers.
- // We hold our own retain on `loc`, so this is safe after the manager release.
- let coord_fn: unsafe extern "C" fn(*mut c_void, *mut c_void) -> CLLocationCoordinate2D =
-  std::mem::transmute(objc_msgSend as *const ());
- let coord = coord_fn(loc, coord_sel);
- objc_release(loc);
-
- if coord.latitude == 0.0 && coord.longitude == 0.0 {
-  return Err("Location returned 0,0 — GPS may not have a fix yet".into());
- }
-
- Ok((coord.latitude, coord.longitude))
- }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn get_native_location_impl() -> Result<(f64, f64), String> {
- Err("Native location only supported on macOS".into())
 }
 
 fn open_logs_folder_impl(app: &AppHandle) -> Result<PathBuf, String> {
@@ -4733,7 +4636,7 @@ fn main() {
  close_settings_window,
  open_url,
  open_system_prefs_location,
- get_native_location,
+ current_location::get_native_location,
  open_youtube_login,
  open_youtube_logout,
  fetch_polymarket,
@@ -5003,42 +4906,6 @@ fn main() {
  }
  });
 
- // Request Location Services authorization so the app appears in
- // System Settings > Privacy & Security > Location Services.
- // The CLLocationManager must be retained for the app's lifetime —
- // if deallocated, macOS revokes the authorization.
- #[cfg(target_os = "macos")]
- {
- use std::ffi::c_void;
- extern "C" {
-  fn objc_getClass(name: *const u8) -> *mut c_void;
-  fn sel_registerName(name: *const u8) -> *mut c_void;
-  fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
-  fn objc_retain(obj: *mut c_void) -> *mut c_void;
- }
- unsafe {
-  let cls = objc_getClass(b"CLLocationManager\0".as_ptr());
-  if !cls.is_null() {
-   let alloc_sel = sel_registerName(b"alloc\0".as_ptr());
-   let init_sel = sel_registerName(b"init\0".as_ptr());
-   let req_sel = sel_registerName(b"requestWhenInUseAuthorization\0".as_ptr());
-   let mgr = objc_msgSend(objc_msgSend(cls, alloc_sel), init_sel);
-   if !mgr.is_null() {
-    objc_msgSend(mgr, req_sel);
-    // Leak the manager intentionally so it lives for the process lifetime.
-    // Without this, deallocation cancels the authorization.
-    //
-    // `objc_retain` is what keeps the object alive — calling
-    // `std::mem::forget(mgr)` on a `*mut c_void` is a no-op because
-    // raw pointers implement Copy (the original goes out of scope
-    // either way). The retain bumped the refcount so the object
-    // already outlives this scope.
-    let _ = objc_retain(mgr);
-   }
-  }
- }
- }
-
  Ok(())
  })
  .build(tauri::generate_context!())
@@ -5080,6 +4947,7 @@ fn main() {
  }
  }
  RunEvent::ExitRequested { code, .. } => {
+ current_location::cleanup_on_exit();
  append_desktop_log(
  app,
  "INFO",
@@ -5094,6 +4962,7 @@ fn main() {
  stop_local_api(app);
  }
  RunEvent::Exit => {
+ current_location::cleanup_on_exit();
  append_desktop_log(
  app,
  "INFO",

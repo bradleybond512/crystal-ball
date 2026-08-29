@@ -94,6 +94,7 @@ function validQuery(searchParams) {
 
 export function odinPageIsComplete(raw, requestedLimit) {
   if (!raw || !Array.isArray(raw.results) || !Number.isSafeInteger(requestedLimit) || requestedLimit < 1) return false;
+  if (raw.results.length > requestedLimit) return false;
   const totalCount = raw.total_count;
   if (totalCount !== undefined && (!Number.isSafeInteger(totalCount) || totalCount < 0)) return false;
   if (Number.isSafeInteger(totalCount) && totalCount > raw.results.length) return false;
@@ -183,6 +184,27 @@ function capacityResult(nowMs) {
   };
 }
 
+export async function getGridOutagesForFips(fips, limit = 100, nowMs = Date.now()) {
+  if (typeof fips !== 'string' || !/^\d{5}$/.test(fips)
+    || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    return null;
+  }
+  const key = `${fips}:${limit}`;
+  const cached = getCachedResult(key, nowMs);
+  if (cached) return cached;
+  let pending = inFlight.get(key);
+  if (!pending) {
+    if (inFlight.size >= MAX_IN_FLIGHT) return capacityResult(nowMs);
+    pending = fetchOdin({ fips, limit }, nowMs)
+      .then((fetchResult) => buildResult(fetchResult, nowMs))
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, pending);
+  }
+  const result = await pending;
+  if (result.status === 200) cacheResult(key, result, nowMs);
+  return result;
+}
+
 function json(body, status, cors, extra = {}) {
   return Response.json(body, { status, headers: { 'Content-Type': 'application/json', ...extra, ...cors } });
 }
@@ -195,26 +217,11 @@ export default async function handler(req) {
   const parsedQuery = validQuery(new URL(req.url).searchParams);
   if (!parsedQuery) return json({ error: 'Invalid grid outage query' }, 400, cors);
 
-  const key = `${parsedQuery.fips ?? 'all'}:${parsedQuery.limit}`;
   const nowMs = Date.now();
-  const cached = getCachedResult(key, nowMs);
-  if (cached) {
-    return json(cached.body, cached.status, cors, { 'Cache-Control': 'public, max-age=900' });
-  }
-  let pending = inFlight.get(key);
-  if (!pending) {
-    if (inFlight.size >= MAX_IN_FLIGHT) {
-      const result = capacityResult(nowMs);
-      return json(result.body, result.status, cors, { 'Cache-Control': 'no-store', 'Retry-After': '1' });
-    }
-    pending = fetchOdin(parsedQuery, nowMs)
-      .then((fetchResult) => buildResult(fetchResult, nowMs))
-      .finally(() => inFlight.delete(key));
-    inFlight.set(key, pending);
-  }
-  const result = await pending;
-  if (result.status === 200) cacheResult(key, result, nowMs);
+  const result = await getGridOutagesForFips(parsedQuery.fips, parsedQuery.limit, nowMs);
+  if (!result) return json({ error: 'Invalid grid outage query' }, 400, cors);
   return json(result.body, result.status, cors, {
     'Cache-Control': result.status === 200 ? 'public, max-age=900' : 'no-store',
+    ...(result.status === 503 ? { 'Retry-After': '1' } : {}),
   });
 }

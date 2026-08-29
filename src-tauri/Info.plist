@@ -17,7 +17,7 @@
 
   <!-- Required for macOS Core Location permission prompt -->
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>Crystal Ball uses your location to center panels and weather data on your home.</string>
+  <string>Crystal Ball accesses your location only when you request a location-based feature, such as nearby Lifelines or location sharing.</string>
 
   <!-- Modern macOS LaunchServices should treat Crystal Ball as a Cocoa app. -->
   <key>LSRequiresCarbon</key>

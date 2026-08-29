@@ -249,7 +249,7 @@ export class UnifiedSettings {
  this._gpsPermissionDenied = false;
  // Show status next to button
  const statusSpan = btn.parentElement?.querySelector('#us-gps-status') as HTMLElement | null;
- if (statusSpan) { statusSpan.textContent = 'Waiting for location (up to 10s)…'; statusSpan.style.color = 'var(--text-tertiary)'; }
+ if (statusSpan) { statusSpan.textContent = 'Waiting for location (up to 15s)…'; statusSpan.style.color = 'var(--text-tertiary)'; }
  setLocationFromGps()
  .then((loc) => {
   this._gpsPermissionDenied = false;

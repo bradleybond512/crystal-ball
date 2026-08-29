@@ -56,7 +56,7 @@ test('treats a header-only export as a healthy empty collection', () => {
   assert.deepEqual(parseLittleSnitchTrafficCsv(`${HEADER}\n`), []);
 });
 
-test('omits IP-only destinations instead of persisting raw addresses', () => {
+test('redacts IP-only destinations without persisting raw addresses', () => {
   const csv = [
     HEADER,
     '2026-05-04 04:20:00,out,501,93.184.216.34,,6,443,1,0,1,1,/bin/node,/Applications/Terminal',
@@ -65,9 +65,18 @@ test('omits IP-only destinations instead of persisting raw addresses', () => {
   ].join('\n');
 
   const entries = parseLittleSnitchTrafficCsv(csv);
-  assert.equal(entries.length, 1);
-  assert.equal(entries[0].remoteHost, 'api.example.org');
+  assert.equal(entries.length, 2);
+  assert.deepEqual(new Set(entries.map(entry => entry.remoteHost)), new Set(['api.example.org', 'ip-only.invalid']));
+  assert.equal(entries.find(entry => entry.remoteHost === 'ip-only.invalid')?.count, 2);
   assert.doesNotMatch(JSON.stringify(entries), /93\.184\.216\.34/);
+});
+
+test('does not misreport an all-IP-only export as healthy empty', () => {
+  const csv = `${HEADER}\n2026-05-04 04:20:00,out,501,93.184.216.34,,6,443,0,0,1,1,/bin/node,/Applications/Terminal`;
+  const entries = parseLittleSnitchTrafficCsv(csv);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].remoteHost, 'ip-only.invalid');
+  assert.equal(entries[0].count, 1);
 });
 
 test('fails closed when an observed traffic row cannot be normalized', () => {
@@ -88,6 +97,7 @@ test('fails closed instead of coercing malformed traffic counters to allowed tra
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,,1,1,/bin/node,/Applications/Terminal',
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,oops,1,1,/bin/node,/Applications/Terminal',
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,-1,1,1,/bin/node,/Applications/Terminal',
+    '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,0,0,0,0,/bin/node,/Applications/Terminal',
     '2026-05-04 04:21:00,out,501,93.184.216.34,api.example.org,6,443,1,0,oops,1,/bin/node,/Applications/Terminal',
   ];
 

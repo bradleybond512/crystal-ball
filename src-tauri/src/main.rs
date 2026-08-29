@@ -3673,6 +3673,26 @@ fn local_api_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
  (sidecar_script, api_dir_root)
 }
 
+fn little_snitch_paths(home_dir: &Path) -> (PathBuf, PathBuf) {
+ let support_dir = home_dir
+  .join("Library")
+  .join("Application Support")
+  .join("Crystal Ball");
+ (
+  support_dir.join("little-snitch-traffic.json"),
+  support_dir.join("little-snitch-baseline.json"),
+ )
+}
+
+fn configure_little_snitch_env(command: &mut Command, home_dir: &Path) {
+ let (export_path, baseline_path) = little_snitch_paths(home_dir);
+ command
+  .env_remove("LITTLE_SNITCH_EXPORT_PATH")
+  .env_remove("LITTLE_SNITCH_BASELINE_PATH")
+  .env("LITTLE_SNITCH_EXPORT_PATH", sanitize_path_for_node(&export_path))
+  .env("LITTLE_SNITCH_BASELINE_PATH", sanitize_path_for_node(&baseline_path));
+}
+
 fn resolve_node_binary(app: &AppHandle) -> Option<PathBuf> {
  // The LOCAL_API_NODE_BIN override is honored in debug builds only. In a
  // release build, an attacker who can set this env var could redirect the
@@ -3937,6 +3957,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  let data_dir = logs_dir_path(app)
  .map(|p| sanitize_path_for_node(&p))
  .unwrap_or_else(|_| resource_for_node.clone());
+ let home_dir = app.path().home_dir().map_err(|_| "Failed to resolve user home directory")?;
  cmd.arg(&script_for_node)
  .env("LOCAL_API_PORT", DEFAULT_LOCAL_API_PORT.to_string())
  .env("LOCAL_API_PORT_FILE", &port_file)
@@ -3947,6 +3968,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  .env("WM_BUILD_TAG", format!("v{}+{}", env!("CARGO_PKG_VERSION"), BUILD_SHA))
  .stdout(Stdio::from(log_file))
  .stderr(Stdio::from(log_file_err));
+ configure_little_snitch_env(&mut cmd, &home_dir);
  if std::env::var("WM_TRACE").ok().as_deref() == Some("1") {
  cmd.env("WM_TRACE", "1");
  }
@@ -5192,5 +5214,59 @@ mod watchdog_log_tests {
   assert_eq!(epoch_to_utc(1_735_689_600), (2025, 1, 1, 0, 0, 0));
   // time-of-day extraction: +1h1m1s
   assert_eq!(epoch_to_utc(1_704_070_861), (2024, 1, 1, 1, 1, 1));
+ }
+}
+
+#[cfg(test)]
+mod little_snitch_path_tests {
+ use super::{configure_little_snitch_env, little_snitch_paths};
+ use std::ffi::OsStr;
+ use std::path::Path;
+ use std::process::Command;
+
+ #[test]
+ fn uses_documented_paths_below_the_resolved_user_home() {
+  let (export, baseline) = little_snitch_paths(Path::new("/Users/example"));
+  assert_eq!(
+   export,
+   Path::new("/Users/example/Library/Application Support/Crystal Ball/little-snitch-traffic.json"),
+  );
+  assert_eq!(
+   baseline,
+   Path::new("/Users/example/Library/Application Support/Crystal Ball/little-snitch-baseline.json"),
+  );
+ }
+
+ #[test]
+ fn does_not_consult_inherited_little_snitch_environment_paths() {
+  let (export, baseline) = little_snitch_paths(Path::new("/Users/example"));
+  assert!(export.starts_with("/Users/example/Library/Application Support/Crystal Ball"));
+  assert!(baseline.starts_with("/Users/example/Library/Application Support/Crystal Ball"));
+ }
+
+ #[test]
+ fn sidecar_command_overrides_inherited_little_snitch_paths() {
+  let mut command = Command::new("node");
+  command
+   .env("LITTLE_SNITCH_EXPORT_PATH", "/tmp/inherited-export.json")
+   .env("LITTLE_SNITCH_BASELINE_PATH", "/tmp/inherited-baseline.json");
+  configure_little_snitch_env(&mut command, Path::new("/Users/example"));
+  let envs: std::collections::HashMap<_, _> = command.get_envs().collect();
+  assert_eq!(
+   envs.get(OsStr::new("LITTLE_SNITCH_EXPORT_PATH")).and_then(|value| *value),
+   Some(OsStr::new("/Users/example/Library/Application Support/Crystal Ball/little-snitch-traffic.json")),
+  );
+  assert_eq!(
+   envs.get(OsStr::new("LITTLE_SNITCH_BASELINE_PATH")).and_then(|value| *value),
+   Some(OsStr::new("/Users/example/Library/Application Support/Crystal Ball/little-snitch-baseline.json")),
+  );
+ }
+
+ #[test]
+ fn start_local_api_applies_the_tested_little_snitch_env_wiring() {
+  let source = include_str!("main.rs");
+  let start = source.find("fn start_local_api").expect("start_local_api");
+  let end = source[start..].find("fn stop_local_api").map(|offset| start + offset).unwrap_or(source.len());
+  assert!(source[start..end].contains("configure_little_snitch_env(&mut cmd, &home_dir);"));
  }
 }

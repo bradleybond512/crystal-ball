@@ -5,8 +5,9 @@ import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
-import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { constants as fsConstants, existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
+import { readdir, readFile, lstat, open, rename, rm } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
 import path from 'node:path';
@@ -1909,6 +1910,260 @@ export function parseWebhookDispatchRequest(raw) {
   return { ok: true, url, body, secret: typeof secret === 'string' ? secret : undefined };
 }
 
+const LITTLE_SNITCH_SCHEMA_VERSION = 1;
+const LITTLE_SNITCH_MAX_FILE_BYTES = 1024 * 1024;
+const LITTLE_SNITCH_MAX_ENTRIES = 500;
+const LITTLE_SNITCH_STALE_MS = 10 * 60 * 1000;
+const LITTLE_SNITCH_FUTURE_TOLERANCE_MS = 2 * 60 * 1000;
+const LITTLE_SNITCH_BASELINE_MAX_ENTRIES = 10_000;
+const LITTLE_SNITCH_BASELINE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const LITTLE_SNITCH_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const LITTLE_SNITCH_ENTRY_KEYS = new Set([
+  'id', 'app', 'remoteHost', 'remoteIp', 'decision', 'direction', 'protocol',
+  'bytesIn', 'bytesOut', 'lastSeen', 'count',
+]);
+const LITTLE_SNITCH_READ_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
+const littleSnitchBaselineQueues = new Map();
+
+export function validateLittleSnitchFileStat(
+  fileStat,
+  currentUid = process.getuid?.(),
+  maxBytes = LITTLE_SNITCH_MAX_FILE_BYTES,
+) {
+  if (!fileStat?.isFile?.() || fileStat.isSymbolicLink?.()) return { ok: false, state: 'invalid' };
+  if (!Number.isSafeInteger(fileStat.size) || fileStat.size < 2 || fileStat.size > maxBytes) {
+    return { ok: false, state: 'invalid' };
+  }
+  if (typeof currentUid === 'number' && fileStat.uid !== currentUid) return { ok: false, state: 'permission-denied' };
+  if ((fileStat.mode & 0o077) !== 0) return { ok: false, state: 'permission-denied' };
+  return { ok: true };
+}
+
+export function sanitizeLittleSnitchExport(raw, now = Date.now()) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, state: 'invalid' };
+  const rootKeys = Object.keys(raw);
+  if (rootKeys.some(key => !['schemaVersion', 'available', 'generatedAt', 'entries'].includes(key))) {
+    return { ok: false, state: 'invalid' };
+  }
+  if (raw.schemaVersion !== LITTLE_SNITCH_SCHEMA_VERSION || raw.available !== true || !Array.isArray(raw.entries)
+      || raw.entries.length > LITTLE_SNITCH_MAX_ENTRIES || typeof raw.generatedAt !== 'string') {
+    return { ok: false, state: 'invalid' };
+  }
+  const generatedAtMs = Date.parse(raw.generatedAt);
+  if (!Number.isFinite(generatedAtMs) || generatedAtMs > now + LITTLE_SNITCH_FUTURE_TOLERANCE_MS) {
+    return { ok: false, state: 'invalid' };
+  }
+  if (now - generatedAtMs > LITTLE_SNITCH_STALE_MS) {
+    return { ok: false, state: 'stale', generatedAt: new Date(generatedAtMs).toISOString() };
+  }
+  const entries = [];
+  for (const rawEntry of raw.entries) {
+    const entry = sanitizeLittleSnitchEntry(rawEntry, now);
+    if (!entry) return { ok: false, state: 'invalid' };
+    entries.push(entry);
+  }
+  return {
+    ok: true,
+    state: entries.length === 0 ? 'empty' : 'ready',
+    generatedAt: new Date(generatedAtMs).toISOString(),
+    entries,
+  };
+}
+
+export function boundedLittleSnitchConnectionTotal(entries) {
+  return entries.reduce(
+    (sum, entry) => Math.min(Number.MAX_SAFE_INTEGER, sum + entry.count),
+    0,
+  );
+}
+
+export async function readLittleSnitchSnapshot(exportPath, baselinePath, now = Date.now()) {
+  if (!exportPath || !baselinePath || !path.isAbsolute(exportPath) || !path.isAbsolute(baselinePath)) {
+    return littleSnitchUnavailable('missing');
+  }
+  let handle;
+  try {
+    const pathStat = await lstat(exportPath);
+    const pathVerdict = validateLittleSnitchFileStat(pathStat);
+    if (!pathVerdict.ok) return littleSnitchUnavailable(pathVerdict.state);
+    handle = await open(exportPath, LITTLE_SNITCH_READ_FLAGS);
+    const fileStat = await handle.stat();
+    const statVerdict = validateLittleSnitchFileStat(fileStat);
+    if (!statVerdict.ok || pathStat.dev !== fileStat.dev || pathStat.ino !== fileStat.ino) {
+      return littleSnitchUnavailable(statVerdict.ok ? 'invalid' : statVerdict.state);
+    }
+    const contents = await handle.readFile('utf8');
+    let raw;
+    try {
+      raw = JSON.parse(contents);
+    } catch {
+      return littleSnitchUnavailable('invalid');
+    }
+    const sanitized = sanitizeLittleSnitchExport(raw, now);
+    if (!sanitized.ok) return littleSnitchUnavailable(sanitized.state, sanitized.generatedAt);
+    const entries = sanitized.entries.length === 0 ? [] : await withLittleSnitchBaselineLock(
+      baselinePath,
+      async () => {
+        const baseline = await loadLittleSnitchBaseline(baselinePath, now);
+        const nextBaseline = { ...baseline };
+        const annotated = sanitized.entries.map(entry => {
+          const key = `${entry.app}\0${entry.remoteHost}`;
+          const firstSeen = !baseline[key];
+          nextBaseline[key] = now;
+          return { ...entry, firstSeen };
+        });
+        await writeLittleSnitchBaseline(baselinePath, nextBaseline, now);
+        return annotated;
+      },
+    );
+    return {
+      available: true,
+      state: sanitized.state,
+      generatedAt: sanitized.generatedAt,
+      entries,
+      summary: { totalConnections: boundedLittleSnitchConnectionTotal(entries) },
+    };
+  } catch (error) {
+    if (error?.code === 'ENOENT') return littleSnitchUnavailable('missing');
+    if (error?.code === 'EACCES' || error?.code === 'EPERM') return littleSnitchUnavailable('permission-denied');
+    return littleSnitchUnavailable('invalid');
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+function sanitizeLittleSnitchEntry(raw, now) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)
+      || Object.keys(raw).some(key => !LITTLE_SNITCH_ENTRY_KEYS.has(key))) return null;
+  const host = typeof raw.remoteHost === 'string' ? raw.remoteHost.toLowerCase() : '';
+  if (host.length > 253 || (!isIP(host) && !LITTLE_SNITCH_HOST_RE.test(host))) return null;
+  if (typeof raw.id !== 'string' || !/^[a-f0-9]{24}$/.test(raw.id)
+      || typeof raw.app !== 'string' || raw.app.length < 1 || raw.app.length > 100
+      || !['allow', 'block'].includes(raw.decision)
+      || !['inbound', 'outbound', 'unknown'].includes(raw.direction)
+      || !['tcp', 'udp', 'unknown'].includes(raw.protocol)
+      || raw.remoteIp !== null) return null;
+  const lastSeenMs = Date.parse(raw.lastSeen);
+  if (!Number.isFinite(lastSeenMs) || lastSeenMs > now + LITTLE_SNITCH_FUTURE_TOLERANCE_MS) return null;
+  for (const value of [raw.bytesIn, raw.bytesOut, raw.count]) {
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+  }
+  if (raw.count < 1) return null;
+  return {
+    id: raw.id,
+    app: raw.app,
+    remoteHost: host,
+    remoteIp: null,
+    decision: raw.decision,
+    direction: raw.direction,
+    protocol: raw.protocol,
+    bytesIn: raw.bytesIn,
+    bytesOut: raw.bytesOut,
+    lastSeen: new Date(lastSeenMs).toISOString(),
+    count: raw.count,
+  };
+}
+
+async function loadLittleSnitchBaseline(baselinePath, now) {
+  let handle;
+  try {
+    const pathStat = await lstat(baselinePath);
+    const pathVerdict = validateLittleSnitchFileStat(pathStat, process.getuid?.(), 6 * 1024 * 1024);
+    if (!pathVerdict.ok) throw littleSnitchBaselineError(pathVerdict.state);
+    handle = await open(baselinePath, LITTLE_SNITCH_READ_FLAGS);
+    const fileStat = await handle.stat();
+    const fileVerdict = validateLittleSnitchFileStat(fileStat, process.getuid?.(), 6 * 1024 * 1024);
+    if (!fileVerdict.ok) throw littleSnitchBaselineError(fileVerdict.state);
+    if (pathStat.dev !== fileStat.dev || pathStat.ino !== fileStat.ino) {
+      throw littleSnitchBaselineError('invalid');
+    }
+    const raw = JSON.parse(await handle.readFile('utf8'));
+    if (raw?.schemaVersion !== 1 || !raw.entries || typeof raw.entries !== 'object' || Array.isArray(raw.entries)
+        || Object.keys(raw).length !== 2 || !Object.hasOwn(raw, 'schemaVersion') || !Object.hasOwn(raw, 'entries')) {
+      throw littleSnitchBaselineError('invalid');
+    }
+    const entries = Object.entries(raw.entries);
+    if (entries.length > LITTLE_SNITCH_BASELINE_MAX_ENTRIES
+        || entries.some(([key, value]) => !validLittleSnitchBaselineEntry(key, value, now))) {
+      throw littleSnitchBaselineError('invalid');
+    }
+    return Object.fromEntries(entries.filter(([, value]) => value >= now - LITTLE_SNITCH_BASELINE_MAX_AGE_MS));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {};
+    throw error;
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function writeLittleSnitchBaseline(baselinePath, baseline, now) {
+  const entries = Object.entries(baseline)
+    .filter(([, value]) => Number.isSafeInteger(value) && value >= now - LITTLE_SNITCH_BASELINE_MAX_AGE_MS && value <= now)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, LITTLE_SNITCH_BASELINE_MAX_ENTRIES);
+  const temporaryPath = `${baselinePath}.${process.pid}.${randomUUID()}.tmp`;
+  let handle;
+  try {
+    handle = await open(temporaryPath, 'wx', 0o600);
+    await handle.writeFile(`${JSON.stringify({ schemaVersion: 1, entries: Object.fromEntries(entries) })}\n`, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    await rename(temporaryPath, baselinePath);
+  } catch (error) {
+    if (handle) await handle.close().catch(() => {});
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+async function withLittleSnitchBaselineLock(baselinePath, task) {
+  const previous = littleSnitchBaselineQueues.get(baselinePath) ?? Promise.resolve();
+  const current = previous.catch(() => {}).then(task);
+  littleSnitchBaselineQueues.set(baselinePath, current);
+  try {
+    return await current;
+  } finally {
+    if (littleSnitchBaselineQueues.get(baselinePath) === current) {
+      littleSnitchBaselineQueues.delete(baselinePath);
+    }
+  }
+}
+
+function littleSnitchBaselineError(state) {
+  const error = new Error('Little Snitch baseline is unsafe');
+  error.code = state === 'permission-denied' ? 'EPERM' : 'EINVAL';
+  return error;
+}
+
+function validLittleSnitchBaselineEntry(key, value, now) {
+  if (typeof key !== 'string' || key.length > 356
+      || !Number.isSafeInteger(value) || value < 0 || value > now) return false;
+  const separator = key.indexOf('\0');
+  if (separator < 1 || separator !== key.lastIndexOf('\0')) return false;
+  const app = key.slice(0, separator);
+  const host = key.slice(separator + 1);
+  return app.length <= 100 && host.length >= 1 && host.length <= 253
+    && (isIP(host) !== 0 || LITTLE_SNITCH_HOST_RE.test(host));
+}
+
+function littleSnitchUnavailable(sourceState, generatedAt = null) {
+  const errors = {
+    missing: 'Little Snitch export is not installed',
+    stale: 'Little Snitch export is stale',
+    invalid: 'Little Snitch export is invalid',
+    'permission-denied': 'Little Snitch export permissions are unsafe',
+  };
+  return {
+    available: false,
+    state: sourceState,
+    generatedAt,
+    entries: [],
+    summary: { totalConnections: 0 },
+    error: errors[sourceState] ?? errors.invalid,
+  };
+}
+
 function json(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
  status,
@@ -2656,6 +2911,12 @@ function resolveConfig(options = {}) {
     ?? path.resolve(os.homedir(), '.crystal-ball', 'monitor', 'state.json'));
   const agentMonitorEventsPath = String(options.agentMonitorEventsPath
     ?? path.resolve(path.dirname(agentMonitorStatePath), 'events.json'));
+  const littleSnitchExportPath = options.littleSnitchExportPath === null
+    ? null
+    : String(options.littleSnitchExportPath ?? process.env.LITTLE_SNITCH_EXPORT_PATH ?? '');
+  const littleSnitchBaselinePath = options.littleSnitchBaselinePath === null
+    ? null
+    : String(options.littleSnitchBaselinePath ?? process.env.LITTLE_SNITCH_BASELINE_PATH ?? '');
 
   return {
  port,
@@ -2668,6 +2929,8 @@ function resolveConfig(options = {}) {
  logger,
  agentMonitorStatePath,
  agentMonitorEventsPath,
+ littleSnitchExportPath,
+ littleSnitchBaselinePath,
   };
 }
 
@@ -15270,40 +15533,10 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   if (requestUrl.pathname === '/api/little-snitch') {
-    const exportPath = process.env.LITTLE_SNITCH_EXPORT_PATH;
-    if (!exportPath) return json({ available: false, entries: [], summary: { totalConnections: 0 } });
-    let raw;
-    try { raw = JSON.parse(await readFile(exportPath, 'utf8')); } catch {
-      return json({ available: false, entries: [], summary: { totalConnections: 0 }, error: 'Export file not readable' });
-    }
-    const entries = Array.isArray(raw?.entries) ? raw.entries : [];
-    const baselinePath = process.env.LITTLE_SNITCH_BASELINE_PATH;
-    let baseline = {};
-    if (baselinePath) {
-      try { baseline = JSON.parse(await readFile(baselinePath, 'utf8')); } catch { /* new baseline */ }
-    }
-    const sanitized = entries.map(entry => {
-      let remoteHost = entry.remoteHost;
-      if (!remoteHost && entry.remote) {
-        try { remoteHost = new URL(entry.remote).hostname; } catch { remoteHost = entry.remote; }
-      }
-      const key = `${entry.app ?? ''}::${remoteHost ?? ''}`;
-      const firstSeen = !baseline[key];
-      if (firstSeen) baseline[key] = true;
-      const riskReasons = [];
-      if (firstSeen) riskReasons.push('new destination for this app');
-      const out = { ...entry };
-      delete out.remote;
-      delete out.processPath;
-      out.remoteHost = remoteHost;
-      out.firstSeen = firstSeen;
-      out.risk = { reasons: riskReasons };
-      return out;
-    });
-    if (baselinePath) {
-      try { writeFileSync(baselinePath, JSON.stringify(baseline)); chmodSync(baselinePath, 0o600); } catch { /* non-fatal */ }
-    }
-    return json({ available: true, generatedAt: raw.generatedAt, entries: sanitized, summary: { totalConnections: sanitized.length } });
+    return json(await readLittleSnitchSnapshot(
+      context.littleSnitchExportPath,
+      context.littleSnitchBaselinePath,
+    ));
   }
 
   if (requestUrl.pathname === '/api/censys-host') {

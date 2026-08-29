@@ -175,14 +175,22 @@ export class SavedPlaceModal {
   }
 
   public close(): void {
+ const closingCurrentLocationConversion = this.currentLocationConversion;
  if (this.pickModeActive) this.exitPickMode();
  this.overlay.classList.remove('active');
  document.removeEventListener('keydown', this.escapeHandler);
  if (this.searchDebounce) clearTimeout(this.searchDebounce);
  this.searchDebounce = null;
+ if (closingCurrentLocationConversion) {
+   this.editingPlace = null;
+   this.formState = this.defaultFormState();
+   this.geocodeResults = [];
+   this.confirmingDelete = false;
+ }
  this.currentLocationConversion = false;
  this.onCurrentLocationConfirmed = null;
  this.overlay.setAttribute('aria-label', 'Save Place');
+ if (closingCurrentLocationConversion) this.render();
   }
 
   private focusNameField(): void {

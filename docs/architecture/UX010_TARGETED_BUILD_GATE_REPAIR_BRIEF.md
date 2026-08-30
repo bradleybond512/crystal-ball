@@ -101,9 +101,102 @@ The resulting trusted UX-010 path contains five directly spawned stages:
 - Revised focused green: `node --test tests/agentic-pipeline.test.mjs` reported
   47 pass / 0 fail. Node syntax, whitespace, and canonical package equality
   checks also passed.
-- New mutation proofs: pending. At minimum, independently prove the exact stage
-  gate, exact definition pin, full-variant override order, direct executable
-  paths, and main-scripts production wiring.
+- Mutation baseline: `git status --short` was empty. SHA-256 was
+  `357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9`
+  for `scripts/targeted-tests.mjs` and
+  `b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea`
+  for `tests/agentic-pipeline.test.mjs`.
+- Mutation 1 bypassed the trusted-definition comparison:
+
+  ```diff
+  -      if (trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
+  +      if (false && trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
+  ```
+
+  The confirmed diff produced:
+
+  ```text
+  ✖ the trusted full-build expansion pins the canonical definition and rejects near matches
+  ℹ tests 47
+  ℹ pass 46
+  ℹ fail 1
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+  ```
+
+- Mutation 2 reversed the environment override order:
+
+  ```diff
+  -      const env = { ...inheritedEnv, VITE_VARIANT: 'full' };
+  +      const env = { VITE_VARIANT: 'full', ...inheritedEnv };
+  ```
+
+  The confirmed diff produced:
+
+  ```text
+  ✖ the canonical UX-010 suite expands its pinned full build into five trusted stages
+  ℹ tests 47
+  ℹ pass 46
+  ℹ fail 1
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + VITE_VARIANT: 'tech'
+  - VITE_VARIANT: 'full'
+  ```
+
+- Mutation 3 broadened the exact stage match:
+
+  ```diff
+  -    if (trimmed === 'npm run build:full') {
+  +    if (trimmed.startsWith('npm run build:full')) {
+  ```
+
+  The confirmed diff produced:
+
+  ```text
+  ✖ the trusted full-build expansion pins the canonical definition and rejects near matches
+  ℹ tests 47
+  ℹ pass 46
+  ℹ fail 1
+  AssertionError [ERR_ASSERTION]: Missing expected exception: npm run build:full -- extra
+  ```
+
+- Mutation 4 removed the trusted-main scripts from the production call:
+
+  ```diff
+  -        mainScripts,
+  +        {},
+  ```
+
+  The confirmed diff produced:
+
+  ```text
+  ✖ the production trusted-main path supplies canonical scripts and inherited environment
+  ℹ tests 47
+  ℹ pass 46
+  ℹ fail 1
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /commandToStages/
+  ```
+
+- Mutation 5 changed the direct TypeScript entry point:
+
+  ```diff
+  -          args: [path.join(nodeModulesDir, 'typescript/bin/tsc')],
+  +          args: [path.join(nodeModulesDir, 'typescript/bin/tsc-missing')],
+  ```
+
+  The confirmed diff produced:
+
+  ```text
+  ✖ the canonical UX-010 suite expands its pinned full build into five trusted stages
+  ℹ tests 47
+  ℹ pass 46
+  ℹ fail 1
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + /repo/node_modules/typescript/bin/tsc-missing
+  - /repo/node_modules/typescript/bin/tsc
+  ```
+
+- After every mutation, the runner and test checksums returned to their
+  baseline values and `git status --short` was empty.
 - Full UX-010 execution and agentic validation: pending.
 - Independent and exact-tip cross-agent reviews: pending.
 

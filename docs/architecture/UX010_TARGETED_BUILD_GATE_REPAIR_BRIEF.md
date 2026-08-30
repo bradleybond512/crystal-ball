@@ -1,7 +1,6 @@
 # UX-010 Targeted Build-Gate Repair Brief
 
-Status: revised implementation, mutation proofs, and validation complete;
-independent review pending
+Status: evidence-only remediation complete; renewed independent review pending
 Risk: standard CI trust-boundary repair
 Blocked consumer: UX-011 PR #1688
 
@@ -102,111 +101,403 @@ The resulting trusted UX-010 path contains five directly spawned stages:
 - Revised focused green: `node --test tests/agentic-pipeline.test.mjs` reported
   47 pass / 0 fail. Node syntax, whitespace, and canonical package equality
   checks also passed.
-- Mutation baseline: `git status --short` was empty. SHA-256 was
-  `357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9`
-  for `scripts/targeted-tests.mjs` and
-  `b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea`
-  for `tests/agentic-pipeline.test.mjs`.
-- Mutation 1 bypassed the trusted-definition comparison:
 
-  ```diff
-  -      if (trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
-  +      if (false && trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
-  ```
+### Exact-tip validation transcript
 
-  The confirmed diff produced:
+All validation and mutation commands below were run at the same code tip:
 
-  ```text
-  ✖ the trusted full-build expansion pins the canonical definition and rejects near matches
-  ℹ tests 47
-  ℹ pass 46
-  ℹ fail 1
-  AssertionError [ERR_ASSERTION]: Missing expected exception.
-  ```
+```text
+$ git rev-parse HEAD
+391654c7d81ad3dd7cf58e7cedfeb636f06f1cb2
+exit 0
+```
 
-- Mutation 2 reversed the environment override order:
+The complete UX-010 contract was rerun directly:
 
-  ```diff
-  -      const env = { ...inheritedEnv, VITE_VARIANT: 'full' };
-  +      const env = { VITE_VARIANT: 'full', ...inheritedEnv };
-  ```
+```text
+$ npm run test:ux010
+> crystal-ball@2.25.147 test:ux010
+> node --test tests/ux010-location-startup.test.mjs && tsx --test src/services/__tests__/location.test.mts tests/ux010-ephemeral-local-logistics.test.mts tests/ux010-current-location-save.test.mts src/components/__tests__/ux010-current-location-panel.test.mts && npm run build:full && node --test tests/ux010-native-gate.test.mjs
 
-  The confirmed diff produced:
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
 
-  ```text
-  ✖ the canonical UX-010 suite expands its pinned full build into five trusted stages
-  ℹ tests 47
-  ℹ pass 46
-  ℹ fail 1
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
-  + VITE_VARIANT: 'tech'
-  - VITE_VARIANT: 'full'
-  ```
+ℹ tests 36
+ℹ pass 36
+ℹ fail 0
 
-- Mutation 3 broadened the exact stage match:
+> crystal-ball@2.25.147 build:full
+> cross-env-shell VITE_VARIANT=full "tsc && vite build"
+vite v8.1.5 building client environment for production...
+✓ 5629 modules transformed.
+✓ built in 36.84s
+PWA v1.3.0
+mode      generateSW
+precache  452 entries (21524.65 KiB)
 
-  ```diff
-  -    if (trimmed === 'npm run build:full') {
-  +    if (trimmed.startsWith('npm run build:full')) {
-  ```
+✔ focused native gate executes the current-location Rust contract (17517.120916ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+exit 0
+```
 
-  The confirmed diff produced:
+The full repository gate was rerun independently rather than inferred from the
+direct command:
 
-  ```text
-  ✖ the trusted full-build expansion pins the canonical definition and rejects near matches
-  ℹ tests 47
-  ℹ pass 46
-  ℹ fail 1
-  AssertionError [ERR_ASSERTION]: Missing expected exception: npm run build:full -- extra
-  ```
+```text
+$ bash scripts/agentic-validate.sh --tests "test:agentic-pipeline test:ux010"
+==> npm run test:agentic-pipeline
+ℹ tests 47
+ℹ pass 47
+ℹ fail 0
 
-- Mutation 4 removed the trusted-main scripts from the production call:
+==> npm run test:ux010
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
+ℹ tests 36
+ℹ pass 36
+ℹ fail 0
+vite v8.1.5 building client environment for production...
+✓ 5629 modules transformed.
+✓ built in 38.49s
+✔ focused native gate executes the current-location Rust contract (14131.750167ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
 
-  ```diff
-  -        mainScripts,
-  +        {},
-  ```
+==> npm run lockfile:check
+[lockfile:check] package-lock.json version fields look valid.
+==> npm run lint:strict
+[lint:conflicts] No merge conflict markers found.
+[lint:json] Parsed 137 tracked JSON file(s).
+[lint:yaml] Parsed 23 tracked YAML file(s).
+[lint:shell] Checked 20 tracked shell file(s).
+[lint:md] Checked 126 Markdown file(s).
+[lint:colors] OK — 453 files with 7735 baselined literals, none exceeded.
+==> npm run typecheck:all
+> tsc --noEmit && tsc --noEmit -p tsconfig.api.json
+==> npm run secrets:scan
+Secret scan passed for 4693 file(s).
+==> npm run cross-agent:check
+Required reviewer: Claude
+==> npm run docs:check -- --changelog-advisory
+[docs:check] Documentation appears fresh.
+==> npm run roadmap:check
+BLOCKED: 1 | DONE: 40 | MONITOR: 1 | TODO: 13 | WAITING: 9
+==> npm run build
+vite v8.1.5 building client environment for production...
+✓ 5629 modules transformed.
+✓ built in 31.51s
 
-  The confirmed diff produced:
+Agentic validation gate passed.
+Tests run: test:agentic-pipeline test:ux010
+exit 0
+```
 
-  ```text
-  ✖ the production trusted-main path supplies canonical scripts and inherited environment
-  ℹ tests 47
-  ℹ pass 46
-  ℹ fail 1
-  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /commandToStages/
-  ```
+### Raw mutation transcripts
 
-- Mutation 5 changed the direct TypeScript entry point:
+The worktree intentionally contains an untracked `node_modules` symlink. Every
+initial and restored full status therefore reports that one entry, while
+`git status --short --untracked-files=no` produces no output. No mutation began
+or ended with a tracked change. The committed baseline was:
 
-  ```diff
-  -          args: [path.join(nodeModulesDir, 'typescript/bin/tsc')],
-  +          args: [path.join(nodeModulesDir, 'typescript/bin/tsc-missing')],
-  ```
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
 
-  The confirmed diff produced:
+#### Mutation 1: trusted-definition comparison
 
-  ```text
-  ✖ the canonical UX-010 suite expands its pinned full build into five trusted stages
-  ℹ tests 47
-  ℹ pass 46
-  ℹ fail 1
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
-  + /repo/node_modules/typescript/bin/tsc-missing
-  - /repo/node_modules/typescript/bin/tsc
-  ```
+Initial status and checksums:
 
-- After every mutation, the runner and test checksums returned to their
-  baseline values and `git status --short` was empty.
-- `npm run test:ux010` passed: startup 5 pass / 0 fail; TypeScript/UI behavior
-  36 pass / 0 fail; full-variant TypeScript/Vite production build succeeded;
-  native Rust contract 1 pass / 0 fail.
-- `bash scripts/agentic-validate.sh --tests "test:agentic-pipeline test:ux010"`
-  passed. Its focused pipeline stage reported 47 pass / 0 fail, and the gate
-  also passed lockfile, strict lint, all TypeScript configs, repository secret
-  scan, cross-agent readiness, documentation, roadmap, and production build.
-- Independent and exact-tip cross-agent reviews: pending.
-- Independent and exact-tip cross-agent reviews: pending.
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+Confirmed applied mutation:
+
+```diff
+-      if (trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
++      if (false && trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
+```
+
+```text
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+7f1204933148c6549f4eed458062d0b67d3eed8c6579dbae63e2d58c6bbc7fe6  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+✖ the trusted full-build expansion pins the canonical definition and rejects near matches
+ℹ tests 47
+ℹ pass 46
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+exit 1
+```
+
+Restored status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+#### Mutation 2: full-variant environment override
+
+Initial status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+Confirmed applied mutation:
+
+```diff
+-      const env = { ...inheritedEnv, VITE_VARIANT: 'full' };
++      const env = { VITE_VARIANT: 'full', ...inheritedEnv };
+```
+
+```text
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+9022fc4d8244c4ac8e050eb4273d398f6295cff08f9cc6508909c1f2f7c8b4ab  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+✖ the canonical UX-010 suite expands its pinned full build into five trusted stages
+ℹ tests 47
+ℹ pass 46
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ VITE_VARIANT: 'tech'
+- VITE_VARIANT: 'full'
+exit 1
+```
+
+Restored status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+#### Mutation 3: exact stage comparison
+
+Initial status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+Confirmed applied mutation:
+
+```diff
+-    if (trimmed === 'npm run build:full') {
++    if (trimmed.startsWith('npm run build:full')) {
+```
+
+```text
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+6006952721b9f6657c84f231b0cb50c87e9fe60dcd111ad41ea4fbe830440b3c  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+✖ the trusted full-build expansion pins the canonical definition and rejects near matches
+ℹ tests 47
+ℹ pass 46
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception: npm run build:full -- extra
+exit 1
+```
+
+Restored status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+#### Mutation 4: canonical main-scripts production wiring
+
+Initial status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+Confirmed applied mutation:
+
+```diff
+-        mainScripts,
++        {},
+```
+
+```text
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+ce05dd4cbf4ef890df22b1d023d3a683ca6f8201fddb4a963823fb836dc8130e  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+✖ the production trusted-main path supplies canonical scripts and inherited environment
+ℹ tests 47
+ℹ pass 46
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /commandToStages/
+exit 1
+```
+
+Restored status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+#### Mutation 5: direct TypeScript executable path
+
+Initial status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+Confirmed applied mutation:
+
+```diff
+-          args: [path.join(nodeModulesDir, 'typescript/bin/tsc')],
++          args: [path.join(nodeModulesDir, 'typescript/bin/tsc-missing')],
+```
+
+```text
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+9c5951503c1704effe6c394561658cf6e9184061fddd7d4810b75ce4b7a3e0dc  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+✖ the canonical UX-010 suite expands its pinned full build into five trusted stages
+ℹ tests 47
+ℹ pass 46
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ /repo/node_modules/typescript/bin/tsc-missing
+- /repo/node_modules/typescript/bin/tsc
+exit 1
+```
+
+Restored status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+#### Mutation 6: representative service selection
+
+This fresh proof mutates the exact directory-coverage behavior observed by
+`a representative service change selects the trusted UX-010 suite`; it does not
+mutate an unrelated helper body.
+
+Initial status and checksums:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+```
+
+Confirmed applied mutation:
+
+```diff
+-      if (m) coveredDirs.add(`${m[1]}/`);
++      if (m && name !== 'test:ux010') coveredDirs.add(`${m[1]}/`);
+```
+
+```text
+$ git status --short
+ M scripts/targeted-tests.mjs
+?? node_modules
+$ git status --short --untracked-files=no
+ M scripts/targeted-tests.mjs
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+ba5eed25e97cac4848b4503578e83b0305f971a9594e3b24579c600ef39c677b  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+✖ a representative service change selects the trusted UX-010 suite
+ℹ tests 47
+ℹ pass 46
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  assert.ok(result.scripts.includes('test:ux010'))
+exit 1
+```
+
+Restored status, checksums, and green confirmation:
+
+```text
+$ git status --short
+?? node_modules
+$ git status --short --untracked-files=no
+$ shasum -a 256 scripts/targeted-tests.mjs tests/agentic-pipeline.test.mjs
+357fb3d774b8d4d76726a71511e046b8a6a989a2d14fe2ebfd419304ee6733f9  scripts/targeted-tests.mjs
+b2dbc11c96a03cc1154d15238bcfccb769c202646b3c0974e93db744a772c9ea  tests/agentic-pipeline.test.mjs
+$ node --test tests/agentic-pipeline.test.mjs
+ℹ tests 47
+ℹ pass 47
+ℹ fail 0
+exit 0
+```
+
+- Independent and exact-tip cross-agent reviews remain pending after this
+  evidence-only remediation.
 
 ## Rollback
 

@@ -1052,3 +1052,166 @@ The mapped runner remains a single trusted `node --test` stage, while its
 focused gate executes and verifies the exact Rust contract command. This keeps
 the selector's command boundary intact and makes native lifecycle regressions
 block the targeted gate.
+
+## 23. Targeted CI pins the Rust toolchain
+
+File: `.github/workflows/targeted-tests.yml`
+
+Baseline and restored SHA-256:
+`10d1c821b7bbba74fcd75fc512fe208484951dc2d59cb9a24efc8a43f1eff033`
+
+Confirmed mutation:
+
+```diff
+-          toolchain: '1.93.1'
++          toolchain: stable
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='targeted CI provisions' tests/agentic-pipeline.test.mjs
+```
+
+Green output:
+
+```text
+✔ targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner (3.619625ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner (3.576291ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+/toolchain: '1\.93\.1'/.
+```
+
+## 24. Targeted CI provisions WebKitGTK headers
+
+File: `.github/workflows/targeted-tests.yml`
+
+Baseline and restored SHA-256:
+`10d1c821b7bbba74fcd75fc512fe208484951dc2d59cb9a24efc8a43f1eff033`
+
+Confirmed mutation:
+
+```diff
+-            libwebkit2gtk-4.1-dev \
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='targeted CI provisions' tests/agentic-pipeline.test.mjs
+```
+
+Green output:
+
+```text
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner (3.590792ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+/libwebkit2gtk-4\.1-dev/.
+```
+
+## 25. Targeted CI retains the pinned Rust cache
+
+File: `.github/workflows/targeted-tests.yml`
+
+Baseline and restored SHA-256:
+`10d1c821b7bbba74fcd75fc512fe208484951dc2d59cb9a24efc8a43f1eff033`
+
+Confirmed mutation:
+
+```diff
+-      - name: Rust cache
+-        uses: swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
+-        with:
+-          workspaces: './src-tauri -> target'
+-          cache-on-failure: true
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='targeted CI provisions' tests/agentic-pipeline.test.mjs
+```
+
+Green output:
+
+```text
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner (2.990958ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: The input did not match the pinned
+swatinem/rust-cache action and workspace configuration.
+```
+
+## 26. Targeted CI pins the Ubuntu runner family
+
+File: `.github/workflows/targeted-tests.yml`
+
+Baseline and restored SHA-256:
+`10d1c821b7bbba74fcd75fc512fe208484951dc2d59cb9a24efc8a43f1eff033`
+
+Confirmed mutation:
+
+```diff
+-    runs-on: ubuntu-24.04
++    runs-on: ubuntu-latest
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='targeted CI provisions' tests/agentic-pipeline.test.mjs
+```
+
+Green output:
+
+```text
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner (3.296583ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+/runs-on: ubuntu-24\.04/.
+```

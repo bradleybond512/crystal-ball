@@ -476,6 +476,12 @@ Review after: 2026-08-25
 - **Verify:** rerun `npm run main-sync:setup`, then `npm run main-sync:run`, and
   confirm the installed commit and successful phase in
   `~/.crystalball-main-sync/status.json`.
+- **Operational verification (2026-08-30):** the Node 22 LaunchAgent installed
+  canonical `main` at `bb702dc592df93ab5eb366c3b4ef7a51cc3ef9b5` through the
+  fail-closed sync path. `status.json` records `phase: idle` with matching
+  target and installed SHAs, required-check evidence from PR #1691, and the
+  canonical app at `~/Applications/Crystal Ball.app`; strict code-signature
+  verification passed.
 
 ### UX-018 — Restore timely, authoritative forecast resolution
 
@@ -719,7 +725,7 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
-| UX-017 | Complete Mac main-sync toolchain repair | WAITING | #1667 |
+| UX-017 | Complete Mac main-sync toolchain repair | DONE | draft PR |
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |

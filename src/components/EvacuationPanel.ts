@@ -92,6 +92,7 @@ export class EvacuationPanel extends Panel {
 
   private renderContent(): void {
  const focused = this.captureFocusedControl();
+ const customRouteSelections = this.captureCustomRouteSelections();
  const parts: string[] = [];
 
  if (this.planningError) {
@@ -110,6 +111,7 @@ export class EvacuationPanel extends Panel {
  }
 
  this.content.innerHTML = parts.join('');
+ this.restoreCustomRouteSelections(customRouteSelections);
  this.restoreFocusedControl(focused);
   }
 
@@ -329,6 +331,19 @@ export class EvacuationPanel extends Panel {
  return;
  }
  }
+  }
+
+  private captureCustomRouteSelections(): { from: string; to: string } {
+ const from = this.content.querySelector<HTMLSelectElement>('[data-evac-field="from"]')?.value ?? '';
+ const to = this.content.querySelector<HTMLSelectElement>('[data-evac-field="to"]')?.value ?? '';
+ return { from, to };
+  }
+
+  private restoreCustomRouteSelections(selections: { from: string; to: string }): void {
+ const from = this.content.querySelector<HTMLSelectElement>('[data-evac-field="from"]');
+ const to = this.content.querySelector<HTMLSelectElement>('[data-evac-field="to"]');
+ if (from) from.value = selections.from;
+ if (to) to.value = selections.to;
   }
 
   // ── Event handling ───────────────────────────────────────────────────────

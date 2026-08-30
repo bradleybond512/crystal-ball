@@ -54,7 +54,7 @@ interface NWSAlert {
  effective?: unknown;
  onset?: unknown;
  expires?: unknown;
- geocode?: { UGC?: unknown; SAME?: unknown };
+ geocode?: unknown;
   };
   geometry?: { type?: unknown; coordinates?: unknown } | null;
 }
@@ -99,6 +99,9 @@ const MAX_NWS_UGC_CODES = 2048;
 const MAX_NWS_POLYGON_AREAS = 128;
 const MAX_NWS_GEOMETRY_RINGS = 512;
 const MAX_NWS_GEOMETRY_VERTICES = 50_000;
+const MAX_NWS_RESPONSE_POLYGON_AREAS = 512;
+const MAX_NWS_RESPONSE_GEOMETRY_RINGS = 2048;
+const MAX_NWS_RESPONSE_GEOMETRY_VERTICES = 250_000;
 
 function optionalDate(value: unknown): Date | undefined {
   if (typeof value !== 'string' || value.trim().length === 0 || value.length > 64) return undefined;
@@ -169,33 +172,65 @@ function normalizeUgcEvidence(value: unknown): {
   return { zones, status: invalid ? 'invalid' : 'complete' };
 }
 
+function normalizeGeocodeEvidence(value: unknown): {
+  zones: string[];
+  status: WeatherEvidenceStatus;
+} {
+  if (value === undefined) return { zones: [], status: 'absent' };
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return { zones: [], status: 'invalid' };
+  }
+  if (!Object.prototype.hasOwnProperty.call(value, 'UGC')) {
+    return { zones: [], status: 'invalid' };
+  }
+  const ugc = (value as Record<string, unknown>).UGC;
+  if (ugc === undefined) return { zones: [], status: 'invalid' };
+  return normalizeUgcEvidence(ugc);
+}
+
 interface GeometryBudget {
+  areas: number;
   rings: number;
   vertices: number;
 }
 
-function normalizePolygonArea(rawArea: unknown, budget: GeometryBudget): WeatherAlertPolygonArea | undefined {
+function normalizePolygonArea(
+  rawArea: unknown,
+  featureBudget: GeometryBudget,
+  responseBudget: GeometryBudget,
+): WeatherAlertPolygonArea | undefined {
   if (!Array.isArray(rawArea) || rawArea.length === 0) return undefined;
-  budget.rings += rawArea.length;
-  if (budget.rings > MAX_NWS_GEOMETRY_RINGS) {
+  featureBudget.rings += rawArea.length;
+  responseBudget.rings += rawArea.length;
+  if (featureBudget.rings > MAX_NWS_GEOMETRY_RINGS) {
     throw new Error('NWS alert feature exceeds geometry ring limit');
+  }
+  if (responseBudget.rings > MAX_NWS_RESPONSE_GEOMETRY_RINGS) {
+    throw new Error('NWS alerts response exceeds geometry ring limit');
   }
 
   const rings: [number, number][][] = [];
   for (const rawRing of rawArea) {
     if (!Array.isArray(rawRing)) return undefined;
-    budget.vertices += rawRing.length;
-    if (budget.vertices > MAX_NWS_GEOMETRY_VERTICES) {
+    featureBudget.vertices += rawRing.length;
+    responseBudget.vertices += rawRing.length;
+    if (featureBudget.vertices > MAX_NWS_GEOMETRY_VERTICES) {
       throw new Error('NWS alert feature exceeds geometry vertex limit');
     }
+    if (responseBudget.vertices > MAX_NWS_RESPONSE_GEOMETRY_VERTICES) {
+      throw new Error('NWS alerts response exceeds geometry vertex limit');
+    }
     const ring = toFiniteRing(rawRing as number[][]);
-    if (ring.length < 3) return undefined;
+    if (!isUsableMatchRing(ring)) return undefined;
     rings.push(ring);
   }
   return { rings };
 }
 
-function normalizePolygonEvidence(geometry: NWSAlert['geometry']): {
+function normalizePolygonEvidence(
+  geometry: NWSAlert['geometry'],
+  responseBudget: GeometryBudget,
+): {
   areas?: WeatherAlertPolygonArea[];
   status: WeatherEvidenceStatus;
 } {
@@ -209,12 +244,16 @@ function normalizePolygonEvidence(geometry: NWSAlert['geometry']): {
   if (rawAreas.length > MAX_NWS_POLYGON_AREAS) {
     throw new Error('NWS alert feature exceeds polygon area limit');
   }
+  responseBudget.areas += rawAreas.length;
+  if (responseBudget.areas > MAX_NWS_RESPONSE_POLYGON_AREAS) {
+    throw new Error('NWS alerts response exceeds polygon area limit');
+  }
   if (rawAreas.length === 0) return { status: 'invalid' };
 
-  const budget: GeometryBudget = { rings: 0, vertices: 0 };
+  const featureBudget: GeometryBudget = { areas: rawAreas.length, rings: 0, vertices: 0 };
   const areas: WeatherAlertPolygonArea[] = [];
   for (const rawArea of rawAreas) {
-    const area = normalizePolygonArea(rawArea, budget);
+    const area = normalizePolygonArea(rawArea, featureBudget, responseBudget);
     if (!area) return { status: 'invalid' };
     areas.push(area);
   }
@@ -244,13 +283,14 @@ export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): 
   const protectedCount = ranked.filter(
     (a) => (SEVERITY_RANK[a.properties.severity as string] ?? 0) >= PROTECTED_SEVERITY_RANK,
   ).length;
+  const responseGeometryBudget: GeometryBudget = { areas: 0, rings: 0, vertices: 0 };
   return ranked
     .slice(0, Math.max(MAX_ACTIVE_ALERTS, protectedCount))
     .map((alert) => {
-      const polygonEvidence = normalizePolygonEvidence(alert.geometry);
-      const rings = extractPolygonRings(alert.geometry);
+      const polygonEvidence = normalizePolygonEvidence(alert.geometry, responseGeometryBudget);
+      const rings = polygonEvidence.areas?.map((area) => area.rings[0]!) ?? [];
       const coords = rings[0] ?? [];
-      const ugcEvidence = normalizeUgcEvidence(alert.properties.geocode?.UGC);
+      const ugcEvidence = normalizeGeocodeEvidence(alert.properties.geocode);
       const effective = optionalDate(alert.properties.effective);
       const reportedOnset = optionalDate(alert.properties.onset);
       return {
@@ -468,8 +508,76 @@ export function isWeatherFeedFresh(
   return age >= 0 && age <= ttlMs;
 }
 
-interface NWSPointZones {
-  properties?: { forecastZone?: string; county?: string };
+interface NwsPointResponse {
+  properties?: unknown;
+}
+
+export const NWS_POINT_JURISDICTION_TTL_MS = 30 * 60 * 1000;
+
+export type NwsPointJurisdictionResult = {
+  status: 'covered';
+  zones: string[];
+  fields: {
+    forecastZone: string;
+    county: string;
+    fireWeatherZone: string;
+  };
+  source: 'nws-points';
+  retrievedAt: number;
+  validUntil: number;
+} | {
+  status: 'outside-jurisdiction';
+  zones: [];
+  source: 'nws-points';
+  retrievedAt: number;
+  validUntil: number;
+};
+
+function parseNwsZoneUrl(value: unknown, kind: 'forecast' | 'county' | 'fire'): string {
+  if (typeof value !== 'string') throw new Error(`NWS /points missing ${kind} zone`);
+  const pattern = new RegExp(String.raw`^https://api\.weather\.gov/zones/${kind}/([A-Z]{2}[CZ]\d{3})$`);
+  const match = pattern.exec(value);
+  if (!match) throw new Error(`NWS /points has invalid ${kind} zone`);
+  return match[1]!;
+}
+
+export async function fetchNwsPointJurisdiction(
+  lat: number,
+  lon: number,
+): Promise<NwsPointJurisdictionResult> {
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+    throw new Error('NWS point coordinates out of range');
+  }
+  const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
+    headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  const retrievedAt = Date.now();
+  const currency = {
+    source: 'nws-points' as const,
+    retrievedAt,
+    validUntil: retrievedAt + NWS_POINT_JURISDICTION_TTL_MS,
+  };
+  if (res.status === 404) return { status: 'outside-jurisdiction', zones: [], ...currency };
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const payload = await res.json() as NwsPointResponse | null;
+  if (!payload || typeof payload !== 'object' || payload.properties === null
+    || typeof payload.properties !== 'object' || Array.isArray(payload.properties)) {
+    throw new Error('NWS /points returned malformed properties');
+  }
+  const properties = payload.properties as Record<string, unknown>;
+  const fields = {
+    forecastZone: parseNwsZoneUrl(properties.forecastZone, 'forecast'),
+    county: parseNwsZoneUrl(properties.county, 'county'),
+    fireWeatherZone: parseNwsZoneUrl(properties.fireWeatherZone, 'fire'),
+  };
+  return {
+    status: 'covered',
+    zones: [...new Set(Object.values(fields))],
+    fields,
+    ...currency,
+  };
 }
 
 /** Derive a location's own UGC codes (forecast zone + county) from NWS
@@ -488,24 +596,8 @@ interface NWSPointZones {
  *  empty (404 = NWS has no point here). Callers that want the old best-effort
  *  behavior wrap this in their own try/catch (the adapter does). */
 export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<string[]> {
-  const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
-    headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
-    signal: AbortSignal.timeout(8000),
-  });
-  // 404 → this coordinate genuinely has no NWS point (e.g. offshore): an honest
-  // empty, not a degradation. Any other non-OK status (5xx, throttling) leaves
-  // the zones UNKNOWN — propagate so the caller marks the batch degraded.
-  if (res.status === 404) return [];
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const payload = await res.json() as NWSPointZones;
-  const zones = [payload.properties?.forecastZone, payload.properties?.county]
-    .map((url) => url?.split('/').pop() ?? '')
-    .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
-  // A 200 with zero parseable codes is anomalous (every real point returns at
-  // least a forecastZone): the zones are UNKNOWN, so throw to mark the batch
-  // degraded rather than authorize an all-clear for a zone-only severe alert.
-  if (zones.length === 0) throw new Error('NWS /points returned no parseable zone codes');
-  return [...new Set(zones)];
+  const jurisdiction = await fetchNwsPointJurisdiction(lat, lon);
+  return jurisdiction.zones;
 }
 
 /**
@@ -539,36 +631,6 @@ function toFiniteRing(ring?: number[][]): [number, number][] {
     out.push([lon, lat]);
   }
   return out;
-}
-
-/**
- * Every OUTER ring of the alert geometry: one ring for a Polygon, one ring per
- * sub-polygon for a MultiPolygon. NWS issues MultiPolygon warnings routinely (a
- * single product covering disjoint areas). The old single-ring extraction kept
- * only `coords[0][0]` — the FIRST sub-polygon — so a warning whose 2nd+
- * sub-polygon covered the user matched nothing and read as clear. Interior
- * holes (rings after index 0 within a polygon) are ignored: a warning applies
- * to its whole outer boundary, and honoring holes would only shrink coverage.
- */
-function extractPolygonRings(geometry?: NWSAlert['geometry']): [number, number][][] {
-  if (!geometry) return [];
-
-  try {
- if (geometry.type === 'Polygon') {
- const coords = geometry.coordinates as unknown as number[][][];
- const ring = toFiniteRing(coords[0]);
- return ring.length > 0 ? [ring] : [];
- }
- if (geometry.type === 'MultiPolygon') {
- const coords = geometry.coordinates as unknown as number[][][][];
- return coords
- .map((poly) => toFiniteRing(poly[0]))
- .filter((ring) => ring.length > 0);
- }
-  } catch {
- return [];
-  }
-  return [];
 }
 
 function calculateCentroid(coords: [number, number][]): [number, number] | undefined {

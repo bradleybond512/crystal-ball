@@ -1,12 +1,15 @@
 import type { EvacRoute } from '../evacuation-router';
 import {
+  NWS_POINT_JURISDICTION_TTL_MS,
   WEATHER_FEED_TTL_MS,
-  fetchUgcZonesForPoint,
+  fetchNwsPointJurisdiction,
   isWeatherFeedFresh,
+  type NwsPointJurisdictionResult,
   type WeatherAlert,
   type WeatherAlertPolygonArea,
   type WeatherFeedState,
 } from '../weather';
+import { isUsableMatchRing } from './ring-geometry';
 
 const MAX_ROUTE_COORDINATES = 100_000;
 const MAX_RELEVANT_ALERTS = 500;
@@ -29,8 +32,20 @@ export type HazardExposureReason =
   | 'route_coverage_unproven';
 
 export type EndpointZoneResolution =
-  | { status: 'covered'; zones: readonly string[] }
-  | { status: 'outside_jurisdiction' }
+  | {
+    status: 'covered';
+    zones: readonly string[];
+    fields: { forecastZone: string; county: string; fireWeatherZone: string };
+    source: 'nws-points';
+    retrievedAt: number;
+    validUntil: number;
+  }
+  | {
+    status: 'outside_jurisdiction';
+    source: 'nws-points';
+    retrievedAt: number;
+    validUntil: number;
+  }
   | { status: 'unknown' };
 
 export interface HazardExposureEvidence {
@@ -107,6 +122,13 @@ interface PreparedAlert {
   zones: readonly string[];
 }
 
+interface PreparedWeather {
+  alerts: PreparedAlert[];
+  incomplete: boolean;
+  limit: boolean;
+  validUntil: number;
+}
+
 type GeometryResult = 'hit' | 'miss' | 'invalid' | 'limit';
 type EvaluationScope = 'route' | 'from' | 'to';
 
@@ -140,10 +162,22 @@ function increment(budget: OperationBudget, scope: EvaluationScope): boolean {
   return budget[scope] <= scopeLimit && budget.total.count <= MAX_REFRESH_GEOMETRY_OPERATIONS;
 }
 
-function prepareRing(raw: readonly [number, number][], counts: { rings: number; vertices: number }): PreparedRing | null {
+function consumePreparation(total: { count: number }, amount = 1): boolean {
+  total.count += amount;
+  return total.count <= MAX_REFRESH_GEOMETRY_OPERATIONS;
+}
+
+function prepareRing(
+  raw: readonly [number, number][],
+  counts: { rings: number; vertices: number },
+  total: { count: number },
+): PreparedRing | null {
   counts.rings += 1;
   counts.vertices += raw.length;
-  if (counts.rings > MAX_RINGS || counts.vertices > MAX_VERTICES || raw.length < 3) return null;
+  if (!consumePreparation(total, raw.length + 1)
+    || counts.rings > MAX_RINGS
+    || counts.vertices > MAX_VERTICES
+    || !isUsableMatchRing(raw)) return null;
 
   const points: [number, number][] = [];
   let previousLon: number | null = null;
@@ -166,21 +200,23 @@ function prepareRing(raw: readonly [number, number][], counts: { rings: number; 
   return { points, minLat, maxLat };
 }
 
-function prepareAreas(alert: WeatherAlert): {
+function prepareAreas(alert: WeatherAlert, total: { count: number }): {
   status: PreparedAlert['geometry'];
   areas: PreparedArea[];
 } {
   if (alert.geometryStatus === 'invalid') return { status: 'invalid', areas: [] };
   if (alert.geometryStatus !== 'complete') return { status: 'absent', areas: [] };
-  if (!Array.isArray(alert.polygonAreas) || alert.polygonAreas.length === 0) {
+  const polygonAreas = alert.polygonAreas;
+  if (!Array.isArray(polygonAreas) || polygonAreas.length === 0) {
     return { status: 'invalid', areas: [] };
   }
-  if (alert.polygonAreas.length > MAX_POLYGON_AREAS) return { status: 'limit', areas: [] };
+  if (!consumePreparation(total, polygonAreas.length)
+    || polygonAreas.length > MAX_POLYGON_AREAS) return { status: 'limit', areas: [] };
 
   const counts = { rings: 0, vertices: 0 };
   const areas: PreparedArea[] = [];
-  for (const area of alert.polygonAreas) {
-    const prepared = prepareArea(area, counts);
+  for (const area of polygonAreas) {
+    const prepared = prepareArea(area, counts, total);
     if (prepared.status !== 'complete') return { status: prepared.status, areas: [] };
     areas.push(prepared.area);
   }
@@ -190,13 +226,16 @@ function prepareAreas(alert: WeatherAlert): {
 function prepareArea(
   area: WeatherAlertPolygonArea,
   counts: { rings: number; vertices: number },
+  total: { count: number },
 ): { status: 'complete'; area: PreparedArea } | { status: 'invalid' | 'limit' } {
   if (!area || !Array.isArray(area.rings) || area.rings.length === 0) return { status: 'invalid' };
   const rings: PreparedRing[] = [];
   for (const rawRing of area.rings) {
-    const ring = prepareRing(rawRing, counts);
+    const ring = prepareRing(rawRing, counts, total);
     if (!ring) {
-      const exceeded = counts.rings > MAX_RINGS || counts.vertices > MAX_VERTICES;
+      const exceeded = total.count > MAX_REFRESH_GEOMETRY_OPERATIONS
+        || counts.rings > MAX_RINGS
+        || counts.vertices > MAX_VERTICES;
       return { status: exceeded ? 'limit' : 'invalid' };
     }
     rings.push(ring);
@@ -204,16 +243,18 @@ function prepareArea(
   return { status: 'complete', area: { rings } };
 }
 
-function prepareUgc(alert: WeatherAlert): {
+function prepareUgc(alert: WeatherAlert, total: { count: number }): {
   status: PreparedAlert['ugc'];
   zones: readonly string[];
 } {
   if (alert.ugcStatus === 'invalid') return { status: 'invalid', zones: [] };
   if (alert.ugcStatus !== 'complete') return { status: 'absent', zones: [] };
-  if (!Array.isArray(alert.ugcZones)) return { status: 'invalid', zones: [] };
-  if (alert.ugcZones.length > MAX_UGC_CODES) return { status: 'limit', zones: [] };
+  const ugcZones = alert.ugcZones;
+  if (!Array.isArray(ugcZones)) return { status: 'invalid', zones: [] };
+  if (!consumePreparation(total, ugcZones.length + 1)
+    || ugcZones.length > MAX_UGC_CODES) return { status: 'limit', zones: [] };
   const zones = new Set<string>();
-  for (const zone of alert.ugcZones) {
+  for (const zone of ugcZones) {
     if (typeof zone !== 'string' || !/^[A-Z]{2}[CZ]\d{3}$/.test(zone)) {
       return { status: 'invalid', zones: [] };
     }
@@ -226,7 +267,9 @@ function prepareCurrentAlert(
   alert: WeatherAlert,
   feedState: WeatherFeedState,
   now: number,
-): { prepared?: PreparedAlert; fingerprint?: string; incomplete: boolean; limit: boolean } {
+  total: { count: number },
+): { prepared?: PreparedAlert; incomplete: boolean; limit: boolean } {
+  if (!consumePreparation(total)) return { incomplete: false, limit: true };
   const sentAt = dateMs(alert.sent);
   const effectiveAt = dateMs(alert.effective);
   const onsetAt = alert.reportedOnset === null || alert.reportedOnset === undefined
@@ -249,25 +292,12 @@ function prepareCurrentAlert(
   if (sentAt > now || effectiveAt > now || (onsetAt !== null && onsetAt > now) || expiresAt <= now) {
     return { incomplete: true, limit: false };
   }
-  const geometry = prepareAreas(alert);
-  const ugc = prepareUgc(alert);
+  const geometry = prepareAreas(alert, total);
+  const ugc = prepareUgc(alert, total);
   if (geometry.status === 'limit' || ugc.status === 'limit') return { incomplete: false, limit: true };
-  const fingerprint = JSON.stringify([
-    alert.event,
-    alert.severity,
-    sentAt,
-    effectiveAt,
-    onsetAt,
-    expiresAt,
-    geometry.status,
-    alert.polygonAreas,
-    ugc.status,
-    ugc.zones,
-  ]);
   return {
     incomplete: false,
     limit: false,
-    fingerprint,
     prepared: {
       evidence: {
         alertId: alert.id,
@@ -288,50 +318,158 @@ function prepareCurrentAlert(
   };
 }
 
-function collectRelevantAlerts(alerts: readonly WeatherAlert[]): WeatherAlert[] | null {
+function collectRelevantAlerts(
+  alerts: readonly WeatherAlert[],
+  now: number,
+  total: { count: number },
+): { alerts: WeatherAlert[]; validUntil: number } | null {
   const relevant: WeatherAlert[] = [];
+  let validUntil = Number.POSITIVE_INFINITY;
   for (const alert of alerts) {
+    if (!consumePreparation(total)) return null;
     if (!isRelevantSeverity(alert.severity)) continue;
     relevant.push(alert);
     if (relevant.length > MAX_RELEVANT_ALERTS) return null;
+    for (const transition of [alert.sent, alert.effective, alert.reportedOnset, alert.expires]) {
+      const timestamp = dateMs(transition);
+      if (timestamp !== null && timestamp > now) validUntil = Math.min(validUntil, timestamp);
+    }
   }
-  return relevant;
+  return { alerts: relevant, validUntil };
 }
 
-function prepareAlerts(alerts: readonly WeatherAlert[], feedState: WeatherFeedState, now: number): {
-  alerts: PreparedAlert[];
-  incomplete: boolean;
-  limit: boolean;
-} {
-  const preparedById = new Map<string, { fingerprint: string; alert: PreparedAlert }>();
+type BoundedComparison = boolean | null;
+
+function sameBoundedValues(
+  left: readonly unknown[],
+  right: readonly unknown[],
+  total: { count: number },
+): BoundedComparison {
+  if (left.length !== right.length) return false;
+  for (const [index, value] of left.entries()) {
+    if (!consumePreparation(total)) return null;
+    if (value !== right[index]) return false;
+  }
+  return true;
+}
+
+function samePreparedRing(left: PreparedRing, right: PreparedRing, total: { count: number }): BoundedComparison {
+  if (left.points.length !== right.points.length) return false;
+  for (const [index, leftPoint] of left.points.entries()) {
+    if (!consumePreparation(total)) return null;
+    const rightPoint = right.points[index]!;
+    if (leftPoint[0] !== rightPoint[0] || leftPoint[1] !== rightPoint[1]) return false;
+  }
+  return true;
+}
+
+function samePreparedArea(left: PreparedArea, right: PreparedArea, total: { count: number }): BoundedComparison {
+  if (left.rings.length !== right.rings.length) return false;
+  for (const [index, ring] of left.rings.entries()) {
+    const comparison = samePreparedRing(ring, right.rings[index]!, total);
+    if (comparison !== true) return comparison;
+  }
+  return true;
+}
+
+function samePreparedAreas(
+  left: readonly PreparedArea[],
+  right: readonly PreparedArea[],
+  total: { count: number },
+): BoundedComparison {
+  if (left.length !== right.length) return false;
+  for (const [index, area] of left.entries()) {
+    const comparison = samePreparedArea(area, right[index]!, total);
+    if (comparison !== true) return comparison;
+  }
+  return true;
+}
+
+function samePreparedAlert(left: PreparedAlert, right: PreparedAlert, total: { count: number }): BoundedComparison {
+  const metadata = sameBoundedValues([
+    left.evidence.alertId,
+    left.evidence.event,
+    left.evidence.severity,
+    left.evidence.sentAt,
+    left.evidence.effectiveAt,
+    left.evidence.onsetAt,
+    left.evidence.retrievedAt,
+    left.evidence.expiresAt,
+    left.geometry,
+    left.ugc,
+  ], [
+    right.evidence.alertId,
+    right.evidence.event,
+    right.evidence.severity,
+    right.evidence.sentAt,
+    right.evidence.effectiveAt,
+    right.evidence.onsetAt,
+    right.evidence.retrievedAt,
+    right.evidence.expiresAt,
+    right.geometry,
+    right.ugc,
+  ], total);
+  if (metadata !== true) return metadata;
+  const zones = sameBoundedValues(left.zones, right.zones, total);
+  return zones === true ? samePreparedAreas(left.areas, right.areas, total) : zones;
+}
+
+function reconcilePreparedAlert(
+  alertId: string,
+  current: PreparedAlert,
+  preparedById: Map<string, PreparedAlert>,
+  conflictedIds: Set<string>,
+  total: { count: number },
+): 'complete' | 'conflict' | 'limit' {
+  if (conflictedIds.has(alertId)) return 'complete';
+  const previous = preparedById.get(alertId);
+  if (!previous) {
+    preparedById.set(alertId, current);
+    return 'complete';
+  }
+  const same = samePreparedAlert(previous, current, total);
+  if (same === null) return 'limit';
+  if (same) return 'complete';
+  preparedById.delete(alertId);
+  conflictedIds.add(alertId);
+  return 'conflict';
+}
+
+function prepareAlerts(
+  alerts: readonly WeatherAlert[],
+  feedState: WeatherFeedState,
+  now: number,
+  total: { count: number },
+): PreparedWeather {
+  const preparedById = new Map<string, PreparedAlert>();
   const conflictedIds = new Set<string>();
   let incomplete = false;
-  const relevantAlerts = collectRelevantAlerts(alerts);
-  if (!relevantAlerts) return { alerts: [], incomplete, limit: true };
+  const relevant = collectRelevantAlerts(alerts, now, total);
+  if (!relevant) return { alerts: [], incomplete, limit: true, validUntil: now };
 
-  for (const alert of relevantAlerts) {
-    const current = prepareCurrentAlert(alert, feedState, now);
-    if (current.limit) return { alerts: [], incomplete, limit: true };
-    if (!current.prepared || current.fingerprint === undefined) {
+  for (const alert of relevant.alerts) {
+    const current = prepareCurrentAlert(alert, feedState, now, total);
+    if (current.limit) return { alerts: [], incomplete, limit: true, validUntil: relevant.validUntil };
+    if (!current.prepared) {
       incomplete = true;
       continue;
     }
-    if (conflictedIds.has(alert.id)) continue;
-    const previous = preparedById.get(alert.id);
-    if (previous) {
-      if (previous.fingerprint !== current.fingerprint) {
-        incomplete = true;
-        preparedById.delete(alert.id);
-        conflictedIds.add(alert.id);
-      }
-      continue;
+    const reconciliation = reconcilePreparedAlert(
+      alert.id,
+      current.prepared,
+      preparedById,
+      conflictedIds,
+      total,
+    );
+    if (reconciliation === 'limit') {
+      return { alerts: [], incomplete, limit: true, validUntil: relevant.validUntil };
     }
-    preparedById.set(alert.id, { fingerprint: current.fingerprint, alert: current.prepared });
+    if (reconciliation === 'conflict') incomplete = true;
   }
   const prepared = [...preparedById.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, entry]) => entry.alert);
-  return { alerts: prepared, incomplete, limit: false };
+    .map(([, entry]) => entry);
+  return { alerts: prepared, incomplete, limit: false, validUntil: relevant.validUntil };
 }
 
 function shiftRing(ring: PreparedRing, referenceLon: number): [number, number][] {
@@ -527,7 +665,6 @@ function endpointTruth(
   zones: EndpointZoneResolution,
   alerts: readonly PreparedAlert[],
   feedFresh: boolean,
-  retrievedAt: number | null,
   incomplete: boolean,
   budget: OperationBudget,
   scope: 'from' | 'to',
@@ -543,8 +680,7 @@ function endpointTruth(
   if (unevaluable) return { status: 'unknown', reason: 'alert_unevaluable' };
   if (zones.status === 'unknown') return { status: 'unknown', reason: 'jurisdiction_unknown' };
   if (zones.status === 'outside_jurisdiction') return { status: 'unknown', reason: 'outside_jurisdiction' };
-  if (retrievedAt === null) return { status: 'unknown', reason: 'feed_not_current' };
-  return { status: 'no_reported_intersection', retrievedAt };
+  return { status: 'no_reported_intersection', retrievedAt: zones.retrievedAt };
 }
 
 export function canonicalEvacRouteFingerprint(route: EvacRoute): string {
@@ -561,8 +697,12 @@ export function canonicalEvacRouteFingerprint(route: EvacRoute): string {
   ]);
 }
 
-export function evaluateEvacuationHazardExposure(input: EvacuationHazardExposureInput): EvacuationHazardExposure {
-  const now = input.now ?? Date.now();
+function evaluatePreparedEvacuationHazardExposure(
+  input: EvacuationHazardExposureInput,
+  prepared: PreparedWeather,
+  now: number,
+  totalBudget: { count: number },
+): EvacuationHazardExposure {
   const fingerprint = canonicalEvacRouteFingerprint(input.route);
   const unknownLimit: HazardExposureTruth = { status: 'unknown', reason: 'evaluation_limit' };
   const base = {
@@ -576,16 +716,15 @@ export function evaluateEvacuationHazardExposure(input: EvacuationHazardExposure
     return { ...base, route: unknownLimit, endpoints: { from: unknownLimit, to: unknownLimit } };
   }
 
-  const feedFresh = isWeatherFeedFresh(input.weather.feedState, now, WEATHER_FEED_TTL_MS);
-  const prepared = prepareAlerts(input.weather.alerts, input.weather.feedState, now);
   if (prepared.limit) {
     return { ...base, route: unknownLimit, endpoints: { from: unknownLimit, to: unknownLimit } };
   }
+  const feedFresh = isWeatherFeedFresh(input.weather.feedState, now, WEATHER_FEED_TTL_MS);
   const budget: OperationBudget = {
     route: 0,
     from: 0,
     to: 0,
-    total: input.totalBudget ?? { count: 0 },
+    total: totalBudget,
   };
   let routeTruth: HazardExposureTruth = { status: 'unknown', reason: 'route_coverage_unproven' };
   if (feedFresh) {
@@ -609,26 +748,31 @@ export function evaluateEvacuationHazardExposure(input: EvacuationHazardExposure
     endpoints: {
       from: endpointTruth(
         [input.route.from.lon, input.route.from.lat],
-        validateZoneResolution(input.endpoints.from),
+        validateZoneResolution(input.endpoints.from, now),
         prepared.alerts,
         feedFresh,
-        input.weather.feedState.timestamp,
         prepared.incomplete,
         budget,
         'from',
       ),
       to: endpointTruth(
         [input.route.to.lon, input.route.to.lat],
-        validateZoneResolution(input.endpoints.to),
+        validateZoneResolution(input.endpoints.to, now),
         prepared.alerts,
         feedFresh,
-        input.weather.feedState.timestamp,
         prepared.incomplete,
         budget,
         'to',
       ),
     },
   };
+}
+
+export function evaluateEvacuationHazardExposure(input: EvacuationHazardExposureInput): EvacuationHazardExposure {
+  const now = input.now ?? Date.now();
+  const totalBudget = input.totalBudget ?? { count: 0 };
+  const prepared = prepareAlerts(input.weather.alerts, input.weather.feedState, now, totalBudget);
+  return evaluatePreparedEvacuationHazardExposure(input, prepared, now, totalBudget);
 }
 
 function deepFreeze<T>(value: T): T {
@@ -643,18 +787,67 @@ function coordinateKey(lat: number, lon: number): string {
   return JSON.stringify([lat, lon]);
 }
 
-function normalizeZoneResolution(zones: readonly string[]): EndpointZoneResolution {
-  if (zones.length === 0) return { status: 'outside_jurisdiction' };
-  if (zones.length > MAX_UGC_CODES || zones.some((zone) => !/^[A-Z]{2}[CZ]\d{3}$/.test(zone))) {
-    return { status: 'unknown' };
-  }
-  return { status: 'covered', zones: [...new Set(zones)].sort((left, right) => left.localeCompare(right)) };
+function validJurisdictionCurrency(retrievedAt: number, validUntil: number, now: number): boolean {
+  return Number.isFinite(retrievedAt)
+    && Number.isFinite(validUntil)
+    && retrievedAt <= now
+    && validUntil >= now
+    && validUntil >= retrievedAt
+    && validUntil - retrievedAt <= NWS_POINT_JURISDICTION_TTL_MS;
 }
 
-function validateZoneResolution(resolution: EndpointZoneResolution): EndpointZoneResolution {
-  if (resolution.status !== 'covered') return resolution;
-  if (resolution.zones.length === 0) return { status: 'unknown' };
-  return normalizeZoneResolution(resolution.zones);
+function normalizeZoneResolution(result: NwsPointJurisdictionResult, now: number): EndpointZoneResolution {
+  if (result?.source !== 'nws-points'
+    || !validJurisdictionCurrency(result.retrievedAt, result.validUntil, now)) {
+    return { status: 'unknown' };
+  }
+  if (result.status === 'outside-jurisdiction') {
+    if (!Array.isArray(result.zones) || result.zones.length !== 0) return { status: 'unknown' };
+    return {
+      status: 'outside_jurisdiction',
+      source: result.source,
+      retrievedAt: result.retrievedAt,
+      validUntil: result.validUntil,
+    };
+  }
+  const fields = result.fields;
+  const fieldZones = fields && [fields.forecastZone, fields.county, fields.fireWeatherZone];
+  if (!Array.isArray(result.zones)
+    || result.zones.length === 0
+    || result.zones.length > MAX_UGC_CODES
+    || !fieldZones
+    || fieldZones.some((zone) => typeof zone !== 'string' || !/^[A-Z]{2}[CZ]\d{3}$/.test(zone))
+    || result.zones.some((zone) => typeof zone !== 'string' || !/^[A-Z]{2}[CZ]\d{3}$/.test(zone))) {
+    return { status: 'unknown' };
+  }
+  const zones = [...new Set(result.zones)].sort((left, right) => left.localeCompare(right));
+  if (fieldZones.some((zone) => !zones.includes(zone))) return { status: 'unknown' };
+  return {
+    status: 'covered',
+    zones,
+    fields: { ...fields },
+    source: result.source,
+    retrievedAt: result.retrievedAt,
+    validUntil: result.validUntil,
+  };
+}
+
+function validateZoneResolution(resolution: EndpointZoneResolution, now: number): EndpointZoneResolution {
+  if (resolution.status === 'unknown') return resolution;
+  if (resolution.status === 'outside_jurisdiction') {
+    return validJurisdictionCurrency(resolution.retrievedAt, resolution.validUntil, now)
+      && resolution.source === 'nws-points'
+      ? resolution
+      : { status: 'unknown' };
+  }
+  return normalizeZoneResolution({
+    status: 'covered',
+    zones: [...resolution.zones],
+    fields: { ...resolution.fields },
+    source: resolution.source,
+    retrievedAt: resolution.retrievedAt,
+    validUntil: resolution.validUntil,
+  }, now);
 }
 
 export interface EvacuationHazardExposureStore {
@@ -666,7 +859,7 @@ export interface EvacuationHazardExposureStore {
 }
 
 export interface EvacuationHazardExposureStoreOptions {
-  resolveZones(lat: number, lon: number): Promise<readonly string[]>;
+  resolveZones(lat: number, lon: number): Promise<NwsPointJurisdictionResult>;
   now?: () => number;
 }
 
@@ -675,7 +868,8 @@ export function createEvacuationHazardExposureStore(
 ): EvacuationHazardExposureStore {
   const now = options.now ?? Date.now;
   const listeners = new Set<(snapshot: EvacuationHazardExposureSnapshot) => void>();
-  const zoneCache = new Map<string, Promise<EndpointZoneResolution>>();
+  const zoneCache = new Map<string, Exclude<EndpointZoneResolution, { status: 'unknown' }>>();
+  const zonePending = new Map<string, Promise<EndpointZoneResolution>>();
   let lifecycleGeneration = 0;
   let weatherGeneration = 0;
   let routeGeneration = 0;
@@ -683,6 +877,12 @@ export function createEvacuationHazardExposureStore(
   let weather: EvacuationWeatherSnapshot = { alerts: [], feedState: { mode: 'unavailable', timestamp: null } };
   let routes: readonly EvacRoute[] = [];
   let fingerprints: readonly string[] = [];
+  let preparedWeatherCache: {
+    generation: number;
+    validUntil: number;
+    prepared: PreparedWeather;
+    workCount: number;
+  } | null = null;
   let snapshot: EvacuationHazardExposureSnapshot = deepFreeze({ generation: 0, results: [] });
   let transitionTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -695,12 +895,28 @@ export function createEvacuationHazardExposureStore(
   function resolveEndpoint(lat: number, lon: number): Promise<EndpointZoneResolution> {
     const key = coordinateKey(lat, lon);
     const cached = zoneCache.get(key);
-    if (cached) return cached;
-    if (zoneCache.size >= MAX_ROUTES * 2) zoneCache.clear();
+    if (cached) {
+      const validated = validateZoneResolution(cached, now());
+      if (validated.status !== 'unknown') return Promise.resolve(validated);
+      zoneCache.delete(key);
+    }
+    const existing = zonePending.get(key);
+    if (existing) return existing;
+    if (zoneCache.size >= MAX_ROUTES * 2) {
+      const oldest = zoneCache.keys().next().value;
+      if (oldest !== undefined) zoneCache.delete(oldest);
+    }
     const pending = Promise.resolve()
       .then(() => options.resolveZones(lat, lon))
-      .then(normalizeZoneResolution, () => ({ status: 'unknown' }) as EndpointZoneResolution);
-    zoneCache.set(key, pending);
+      .then((result) => {
+        const resolution = normalizeZoneResolution(result, now());
+        if (resolution.status !== 'unknown') zoneCache.set(key, resolution);
+        return resolution;
+      }, () => ({ status: 'unknown' }) as EndpointZoneResolution)
+      .finally(() => {
+        if (zonePending.get(key) === pending) zonePending.delete(key);
+      });
+    zonePending.set(key, pending);
     return pending;
   }
 
@@ -718,20 +934,18 @@ export function createEvacuationHazardExposureStore(
     if (weather.feedState.timestamp !== null && Number.isFinite(weather.feedState.timestamp)) {
       candidates.push(weather.feedState.timestamp + WEATHER_FEED_TTL_MS + 1);
     }
-    for (const alert of weather.alerts) {
-      if (!isRelevantSeverity(alert.severity)) continue;
-      for (const transition of [alert.reportedOnset ?? alert.effective, alert.expires]) {
-        const timestamp = dateMs(transition);
-        if (timestamp !== null) candidates.push(timestamp);
-      }
-    }
-    const next = candidates.filter((timestamp) => timestamp > currentTime).sort((a, b) => a - b)[0];
+    if (preparedWeatherCache) candidates.push(preparedWeatherCache.validUntil);
+    for (const resolution of zoneCache.values()) candidates.push(resolution.validUntil + 1);
+    const next = candidates
+      .filter((timestamp) => Number.isFinite(timestamp) && timestamp > currentTime)
+      .sort((a, b) => a - b)[0];
     if (next === undefined) return;
     const delay = Math.max(1, Math.min(next - currentTime, 2_147_483_647));
     transitionTimer = setTimeout(() => {
       transitionTimer = null;
       if (destroyed) return;
       routeGeneration += 1;
+      preparedWeatherCache = null;
       emit([]);
       evaluateCurrent();
       scheduleTransition();
@@ -748,6 +962,7 @@ export function createEvacuationHazardExposureStore(
       coordinateKey(route.to.lat, route.to.lon),
     ] as const);
     const currentRoutes = routes;
+    if (currentRoutes.length === 0) return;
     void Promise.all(currentRoutes.map(async (route) => {
       return Promise.all([
         resolveEndpoint(route.from.lat, route.from.lon),
@@ -770,18 +985,39 @@ export function createEvacuationHazardExposureStore(
           || coordinateKey(route.to.lat, route.to.lon) !== capturedCoordinateKeys[index]![1]
         ) return;
       }
-      const totalBudget = { count: 0 };
-      const results = currentRoutes.map((route, index) => evaluateEvacuationHazardExposure({
-        route,
-        weather,
-        endpoints: {
-          from: endpointResolutions[index]![0],
-          to: endpointResolutions[index]![1],
+      const evaluationNow = now();
+      const reusablePreparedWeather = preparedWeatherCache?.generation === capturedWeather
+        && evaluationNow < preparedWeatherCache.validUntil;
+      if (!reusablePreparedWeather) {
+        const preparationBudget = { count: 0 };
+        const prepared = prepareAlerts(weather.alerts, weather.feedState, evaluationNow, preparationBudget);
+        preparedWeatherCache = {
+          generation: capturedWeather,
+          validUntil: prepared.validUntil,
+          prepared,
+          workCount: preparationBudget.count,
+        };
+      }
+      const currentPreparedWeather = preparedWeatherCache!;
+      const totalBudget = { count: currentPreparedWeather.workCount };
+      const prepared = currentPreparedWeather.prepared;
+      const results = currentRoutes.map((route, index) => evaluatePreparedEvacuationHazardExposure(
+        {
+          route,
+          weather,
+          endpoints: {
+            from: endpointResolutions[index]![0],
+            to: endpointResolutions[index]![1],
+          },
+          now: evaluationNow,
+          totalBudget,
         },
-        now: now(),
+        prepared,
+        evaluationNow,
         totalBudget,
-      }));
+      ));
       emit(results);
+      scheduleTransition();
     });
   }
 
@@ -795,9 +1031,9 @@ export function createEvacuationHazardExposureStore(
       ) return;
       weatherGeneration += 1;
       weather = { alerts: next.alerts, feedState: { ...next.feedState } };
+      preparedWeatherCache = null;
       emit([]);
       evaluateCurrent();
-      scheduleTransition();
     },
     setRoutes(next): void {
       if (destroyed) return;
@@ -812,7 +1048,6 @@ export function createEvacuationHazardExposureStore(
       fingerprints = nextFingerprints;
       emit([]);
       evaluateCurrent();
-      scheduleTransition();
     },
     getSnapshot(): EvacuationHazardExposureSnapshot {
       return snapshot;
@@ -832,6 +1067,8 @@ export function createEvacuationHazardExposureStore(
       clearTransitionTimer();
       listeners.clear();
       zoneCache.clear();
+      zonePending.clear();
+      preparedWeatherCache = null;
       routes = [];
       fingerprints = [];
     },
@@ -839,5 +1076,5 @@ export function createEvacuationHazardExposureStore(
 }
 
 export const evacuationHazardExposureStore = createEvacuationHazardExposureStore({
-  resolveZones: fetchUgcZonesForPoint,
+  resolveZones: fetchNwsPointJurisdiction,
 });

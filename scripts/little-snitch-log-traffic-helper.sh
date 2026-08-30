@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly LITTLE_SNITCH_BIN='/Library/PrivilegedHelperTools/com.crystalball.littlesnitch-cli'
-readonly BEGIN_DATE="$(/bin/date -v-1H '+%Y-%m-%d %H:%M:%S')"
+readonly BEGIN_DATE="$(/bin/date -v-10M '+%Y-%m-%d %H:%M:%S')"
 
 if [[ "$#" -ne 0 ]]; then
   echo 'This helper does not accept arguments' >&2

@@ -25,6 +25,13 @@ test('root helper has a fixed vendor command, no arguments, and an in-process de
   assert.equal(source.includes('watchdog'), false);
 });
 
+test('root helper requests an exact bounded ten-minute traffic window', async () => {
+  const source = await readFile(scriptPath, 'utf8');
+  assert.match(source, /readonly BEGIN_DATE="\$\(\/bin\/date -v-10M '\+%Y-%m-%d %H:%M:%S'\)"/);
+  assert.match(source, /log-traffic --begin-date "\$\{BEGIN_DATE\}"/);
+  assert.doesNotMatch(source, /\/bin\/date -v-1H/);
+});
+
 test('root helper is valid bash', () => {
   const result = spawnSync('/bin/bash', ['-n', scriptPath], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);

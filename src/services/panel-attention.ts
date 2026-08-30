@@ -261,14 +261,10 @@ export function loadReviewLedger(
 
 export function persistReviewLedger(
   reviewed: readonly EvidenceIdentity[],
-  activeEvidence: readonly EvidenceIdentity[],
   storage?: ReviewStorage,
 ): boolean {
   try {
-    const active = new Set(activeEvidence
-      .filter((identity) => isEvidenceIdentity(identity))
-      .map((identity) => identityKey(identity)));
-    const compacted = uniqueBounded(reviewed.filter((identity) => active.has(identityKey(identity))));
+    const compacted = uniqueBounded(reviewed);
     const serialized = JSON.stringify({ version: 1, reviewed: compacted });
     if (serialized.length > MAX_REVIEW_LEDGER_CHARS) return false;
     if (!storage) return safeSetItem(PANEL_REVIEW_STORAGE_KEY, serialized);

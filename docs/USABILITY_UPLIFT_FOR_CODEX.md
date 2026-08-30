@@ -642,6 +642,10 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   accessibility, teardown, and performance tests with mutation proofs;
   `npm run test:renderer`, `npm run typecheck:all`, the agentic validation gate,
   and a manual full-desktop review flow.
+- **Evidence:** PR #1689 records 22/22 focused tests, load-bearing mutation
+  proofs for projection, persistence, promotion, navigation, and lifecycle,
+  zero axe violations at full and compact widths, a passing agentic validation
+  gate, and independent review with zero blocking findings.
 
 ---
 
@@ -690,4 +694,4 @@ Update the row in the same PR that does the work.
 | UX-021 | Optional-feed classification and recovery | NOT STARTED | — |
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
-| UX-024 | Persistent pane review trail | IN PROGRESS | Draft PR |
+| UX-024 | Persistent pane review trail | DONE | #1689 |

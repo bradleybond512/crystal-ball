@@ -60,6 +60,24 @@ test('renders every unreviewed pane with accessible semantic severity text', asy
   navigator.destroy();
 });
 
+test('keeps the polite live region mounted while queue text changes', () => {
+  const { AttentionNavigator } = moduleUnderTest;
+  const navigator = new AttentionNavigator({ onReview: () => {} });
+  navigator.mount(document.body);
+  navigator.update(snapshot());
+  const liveRegion = navigator.getElement().querySelector('[aria-live="polite"]');
+
+  const changed = snapshot();
+  changed.panels = [changed.panels[1]!];
+  changed.severityCounts = { medium: 1 };
+  changed.promotedPanelIds = ['cyber'];
+  navigator.update(changed);
+
+  assert.equal(navigator.getElement().querySelector('[aria-live="polite"]') === liveRegion, true);
+  assert.equal(liveRegion?.textContent, '0 critical · 0 high · 1 emerging · 0 new');
+  navigator.destroy();
+});
+
 test('Next and Open dispatch shell-aware navigation without marking reviewed', async () => {
   const { AttentionNavigator } = moduleUnderTest;
   const reviewed: string[] = [];

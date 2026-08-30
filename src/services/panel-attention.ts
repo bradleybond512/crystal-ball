@@ -126,6 +126,7 @@ function addAlertToPanel(
   reviewed: ReadonlySet<string>,
 ): void {
   const evidence = evidenceFor(alert);
+  const isUnreviewed = !reviewed.has(identityKey(evidence));
   const panel = byPanel.get(panelId) ?? {
     panelId,
     activeCount: 0,
@@ -139,17 +140,19 @@ function addAlertToPanel(
   };
   panel.activeCount++;
   panel.evidence.push(evidence);
-  if (!reviewed.has(identityKey(evidence))) {
+  if (isUnreviewed) {
+    const firstUnreviewed = panel.unreviewedCount === 0;
     panel.unreviewedEvidence.push(evidence);
     panel.unreviewedCount++;
-  }
-  if (alertScore > panel.maxScore) panel.maxScore = alertScore;
-  if (SEVERITY_RANK[alert.severity] > SEVERITY_RANK[panel.maxSeverity]) {
-    panel.maxSeverity = alert.severity;
-  }
-  if (evidence.observedAt !== null
-    && (panel.newestEvidenceAt === null || evidence.observedAt > panel.newestEvidenceAt)) {
-    panel.newestEvidenceAt = evidence.observedAt;
+    if (firstUnreviewed || alertScore > panel.maxScore) panel.maxScore = alertScore;
+    if (firstUnreviewed
+      || SEVERITY_RANK[alert.severity] > SEVERITY_RANK[panel.maxSeverity]) {
+      panel.maxSeverity = alert.severity;
+    }
+    if (evidence.observedAt !== null
+      && (panel.newestEvidenceAt === null || evidence.observedAt > panel.newestEvidenceAt)) {
+      panel.newestEvidenceAt = evidence.observedAt;
+    }
   }
   byPanel.set(panelId, panel);
 }

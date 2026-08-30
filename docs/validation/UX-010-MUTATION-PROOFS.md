@@ -1215,3 +1215,105 @@ Mutated output:
 AssertionError [ERR_ASSERTION]: The input did not match the regular expression
 /runs-on: ubuntu-24\.04/.
 ```
+
+## 27. Native gate generates the ignored Tauri resource before Cargo
+
+File: `tests/ux010-native-gate.test.mjs`
+
+Baseline and restored SHA-256:
+`470c216185ab6bb0b8b4298873ff2a38fe939d6fd8a5728b535c033387ead402`
+
+Confirmed mutation removed the bounded `process.execPath` invocation of
+`scripts/build-sidecar-xmpp.mjs` and its fail-closed result assertions. The
+confirmed diff removed 15 lines before the unchanged Cargo invocation.
+
+Focused pipeline command:
+
+```bash
+npx tsx --test --test-name-pattern='native gate generates' tests/agentic-pipeline.test.mjs
+```
+
+Green output:
+
+```text
+✔ the UX-010 native gate generates its ignored Tauri resource before Cargo
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ the UX-010 native gate generates its ignored Tauri resource before Cargo
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+/spawnSync\(process\.execPath, ... 'scripts\/build-sidecar-xmpp\.mjs'/.
+```
+
+With the ignored generated resource moved out of the worktree, the same
+mutation also made the mapped native suite prove the clean-checkout failure:
+
+```bash
+npm run test:ux010-native
+```
+
+```text
+ℹ tests 6
+ℹ pass 5
+ℹ fail 1
+
+error: failed to run custom build command for `crystalball v2.25.147`
+resource path `sidecar/s2u-xmpp.bundle.mjs` doesn't exist
+```
+
+The ignored resource was restored, the source checksum matched the baseline,
+and the restored native suite returned `6 passed / 0 failed` with the nested
+Rust contract returning `9 passed / 0 failed`.
+
+## 28. Full UX-010 suite cannot bypass the self-contained native gate
+
+File: `package.json`
+
+Baseline and restored SHA-256:
+`a47673d059076f0dfe8f5485d263619536a4a95592a634a34a617a08ff433631`
+
+Confirmed mutation:
+
+```diff
+-    ... && npm run build:full && node --test tests/ux010-native-gate.test.mjs
++    ... && npm run build:full && cargo test --manifest-path src-tauri/Cargo.toml --test current_location_contract
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='native gate generates' tests/agentic-pipeline.test.mjs
+```
+
+Green output:
+
+```text
+✔ the UX-010 native gate generates its ignored Tauri resource before Cargo
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ the UX-010 native gate generates its ignored Tauri resource before Cargo
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+/&& node --test tests\/ux010-native-gate\.test\.mjs$/.
+```
+
+After restoration, the `package.json` checksum matched the baseline and the
+tracked working tree was clean.

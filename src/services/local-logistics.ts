@@ -46,6 +46,18 @@ interface FetchLocalLogisticsOptions {
   shouldCommit?: () => boolean;
 }
 
+export interface EphemeralLocalLogisticsAnchor {
+  latitude: number;
+  longitude: number;
+}
+
+export interface FetchEphemeralLocalLogisticsOptions {
+  radiusKm: LocalLogisticsRadiusChoiceKm;
+  categories?: LogisticsCategory[];
+  limitPerCategory?: number;
+  signal?: AbortSignal;
+}
+
 interface BuildSnapshotOptions {
   fetchedAt?: Date;
   isStale?: boolean;
@@ -836,6 +848,226 @@ export function parseLocalLogisticsApiResponse(
   };
 }
 
+function hasExactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+    && Object.keys(value).every((key) => allowed.has(key));
+}
+
+const EPHEMERAL_ODIN_ERROR_REASONS = new Set([
+  'upstream_unavailable',
+  'upstream_http_error',
+  'malformed_envelope',
+  'truncated_page',
+  'unusable_rows',
+  'capacity_exceeded',
+  'county_fips_unknown',
+]);
+
+function validateEphemeralOdinProvider(raw: unknown, parsed: ProviderStatus | undefined): parsed is ProviderStatus {
+  if (!isRecord(raw) || parsed?.id !== 'ornl-odin') return false;
+  if (!hasExactKeys(
+    raw,
+    ['id', 'state', 'acceptedRows', 'droppedRows', 'observedAt', 'retrievedAt'],
+    ['reasonCode'],
+  )) return false;
+  const acceptedRows = parsed.acceptedRows;
+  const droppedRows = parsed.droppedRows;
+  if (acceptedRows > MAX_AREA_CONDITION_ROWS || droppedRows > MAX_AREA_CONDITION_ROWS) return false;
+  if (parsed.state === 'ok') return acceptedRows >= 1 && droppedRows === 0 && !parsed.reasonCode;
+  if (parsed.state === 'empty') return acceptedRows === 0 && droppedRows === 0 && !parsed.reasonCode;
+  if (parsed.state === 'partial') {
+    return acceptedRows >= 1 && acceptedRows <= 99
+      && droppedRows >= 1 && droppedRows <= 99
+      && acceptedRows + droppedRows <= MAX_AREA_CONDITION_ROWS
+      && parsed.reasonCode === 'rows_dropped';
+  }
+  if (parsed.state === 'error') {
+    return acceptedRows === 0
+      && (parsed.reasonCode !== 'county_fips_unknown' || droppedRows === 0)
+      && EPHEMERAL_ODIN_ERROR_REASONS.has(parsed.reasonCode ?? '');
+  }
+  return false;
+}
+
+function isExactEphemeralString(value: unknown, maxLength = 240): value is string {
+  return typeof value === 'string' && safeString(value, maxLength) === value;
+}
+
+function parseEphemeralAreaCondition(
+  raw: unknown,
+  countyFips: string | undefined,
+  now: number,
+): AreaCondition {
+  if (!isRecord(raw) || !hasExactKeys(
+    raw,
+    ['id', 'type', 'coverage', 'countyFips', 'county', 'state', 'customersOut', 'observedAt', 'retrievedAt', 'expiresAt', 'source'],
+    ['customersRestored', 'utilityName', 'utilityId'],
+  )) throw new Error('malformed Lifelines outage evidence');
+  if (!isExactEphemeralString(raw.id, 160)
+    || !isExactEphemeralString(raw.county)
+    || !isExactEphemeralString(raw.state)
+    || (raw.customersRestored !== undefined
+      && (!isNonNegativeInteger(raw.customersRestored) || raw.customersRestored > MAX_CUSTOMERS_OUT))) {
+    throw new Error('malformed Lifelines outage evidence');
+  }
+  for (const key of ['utilityName', 'utilityId'] as const) {
+    if (raw[key] !== undefined && !isExactEphemeralString(raw[key])) {
+      throw new Error('malformed Lifelines outage evidence');
+    }
+  }
+  const parsed = parseAreaCondition(raw, countyFips, now);
+  if (!parsed) throw new Error('malformed Lifelines outage evidence');
+  return parsed;
+}
+
+function providerStateMatchesContributions(provider: ProviderStatus, contributionCount: number): boolean {
+  const contributed = contributionCount > 0;
+  return (provider.state === 'ok' || provider.state === 'partial') === contributed;
+}
+
+function parseEphemeralAreaConditions(
+  value: unknown,
+  provider: ProviderStatus,
+  now: number,
+): { conditions: AreaCondition[]; countyFips?: string } {
+  if (!Array.isArray(value) || value.length > MAX_AREA_CONDITION_ROWS) {
+    throw new Error('malformed Lifelines outage evidence');
+  }
+  const conditions: AreaCondition[] = [];
+  const ids = new Set<string>();
+  let countyFips: string | undefined;
+  for (const raw of value) {
+    const parsed = parseEphemeralAreaCondition(raw, countyFips, now);
+    if (ids.has(parsed.id)) throw new Error('duplicate Lifelines outage condition');
+    ids.add(parsed.id);
+    countyFips ??= parsed.countyFips;
+    conditions.push(parsed);
+  }
+  if (provider.acceptedRows !== conditions.length) {
+    throw new Error('Lifelines outage contribution mismatch');
+  }
+  if (!providerStateMatchesContributions(provider, conditions.length)) {
+    throw new Error('Lifelines outage state mismatch');
+  }
+  return { conditions, ...(countyFips ? { countyFips } : {}) };
+}
+
+interface EphemeralApiLogisticsEnvelope extends ApiLogisticsEnvelope {
+  areaConditions: unknown[];
+  nodes: unknown[];
+}
+
+function parseEphemeralApiEnvelope(
+  payload: unknown,
+  expectedRadiusKm: LocalLogisticsRadiusChoiceKm,
+): EphemeralApiLogisticsEnvelope {
+  if (!isRecord(payload) || payload.schemaVersion !== LOCAL_LOGISTICS_SCHEMA_VERSION) {
+    throw new Error('unsupported Lifelines schema');
+  }
+  if (!hasExactKeys(
+    payload,
+    ['schemaVersion', 'query', 'sites', 'observations', 'providers', 'areaConditions', 'fetchedAt', 'retrievedAt', 'partial', 'nodes'],
+  ) || typeof payload.partial !== 'boolean') {
+    throw new Error('malformed Lifelines response');
+  }
+  if (!isRecord(payload.query)
+    || !hasExactKeys(payload.query, ['radiusKm', 'categories'])
+    || !Array.isArray(payload.query.categories)
+    || payload.query.radiusKm !== expectedRadiusKm) {
+    throw new Error('malformed Lifelines query');
+  }
+  if (!Array.isArray(payload.sites) || !Array.isArray(payload.observations)
+    || !Array.isArray(payload.providers) || !Array.isArray(payload.areaConditions)
+    || !Array.isArray(payload.nodes)
+    || payload.sites.length > MAX_RESOURCE_ROWS || payload.observations.length > MAX_RESOURCE_ROWS
+    || payload.providers.length > MAX_PROVIDER_ROWS || payload.nodes.length > MAX_RESOURCE_ROWS) {
+    throw new Error('malformed Lifelines response');
+  }
+  if (payload.sites.some((row) => isRecord(row) && Object.prototype.hasOwnProperty.call(row, 'distanceKm'))
+    || payload.nodes.some((row) => isRecord(row) && Object.prototype.hasOwnProperty.call(row, 'distanceKm'))) {
+    throw new Error('anchor-derived Lifelines distance is not allowed');
+  }
+  return {
+    query: payload.query as ApiLogisticsEnvelope['query'],
+    sites: payload.sites,
+    observations: payload.observations,
+    providers: payload.providers,
+    areaConditions: payload.areaConditions,
+    nodes: payload.nodes,
+    fetchedAt: payload.fetchedAt,
+    retrievedAt: payload.retrievedAt,
+  };
+}
+
+function parseEphemeralLocalLogisticsApiResponse(
+  anchor: EphemeralLocalLogisticsAnchor,
+  payload: unknown,
+  now: number,
+  expectedCategories: LogisticsCategory[],
+  expectedRadiusKm: LocalLogisticsRadiusChoiceKm,
+): LocalLogisticsSnapshot {
+  const envelope = parseEphemeralApiEnvelope(payload, expectedRadiusKm);
+  const { fetchedAt, retrievedAt } = parseApiRetrievalTime(envelope, now);
+  const categories = parseCategories(envelope.query.categories);
+  if (!categories || !categoriesMatchExpected(categories, expectedCategories)) {
+    throw new Error('Lifelines categories mismatch');
+  }
+  const providerCollection = parseProviderCollection(envelope.providers, categories, now, true);
+  if (!providerCollection) throw new Error('Lifelines provider coverage mismatch');
+  const rawOdin = envelope.providers.find((provider) => isRecord(provider) && provider.id === 'ornl-odin');
+  const odin = providerCollection.byId.get('ornl-odin');
+  if (!validateEphemeralOdinProvider(rawOdin, odin)) {
+    throw new Error('malformed Lifelines outage provider');
+  }
+  const sites = parseLocatedSites(envelope.sites, anchor.latitude, anchor.longitude);
+  if (envelope.sites.length !== sites.length || sites.some((site) => !categories.includes(site.kind))) {
+    throw new Error('Lifelines sites failed validation');
+  }
+  if (new Set(sites.map((site) => site.id)).size !== sites.length) {
+    throw new Error('duplicate Lifelines site');
+  }
+  const siteById = new Map(sites.map((site) => [site.id, site]));
+  const observations = parseActiveObservations(envelope.observations, siteById, providerCollection.byId, now);
+  if (envelope.observations.length !== observations.length) {
+    throw new Error('Lifelines observations failed validation');
+  }
+  if (new Set(observations.map((observation) => observation.id)).size !== observations.length) {
+    throw new Error('duplicate Lifelines observation');
+  }
+  const nodes = buildLogisticsNodes(sites, observations, fetchedAt, now);
+  if (nodes.length !== sites.length) throw new Error('Lifelines sites have no valid observations');
+  const contributionCounts = countProviderContributions(observations, siteById);
+  const facilityProviders = providerCollection.providers.filter((provider) => provider.id !== 'ornl-odin');
+  for (const provider of facilityProviders) {
+    const contributedRows = contributionCounts.get(provider.id) ?? 0;
+    if (provider.acceptedRows !== contributedRows
+      || ((provider.state === 'ok' || provider.state === 'partial') !== (contributedRows > 0))) {
+      throw new Error('Lifelines provider contribution mismatch');
+    }
+  }
+  const outage = parseEphemeralAreaConditions(envelope.areaConditions, odin, now);
+  return {
+    schemaVersion: 2,
+    queryFingerprint: 'session-lifelines',
+    placeId: 'session-current-location',
+    placeName: 'Current location',
+    effectiveRadiusKm: expectedRadiusKm,
+    categories,
+    sites,
+    observations,
+    nodes: rankLocalLogisticsNodes(nodes, fetchedAt.getTime()),
+    areaConditions: outage.conditions,
+    providers: [...facilityProviders, odin],
+    fetchedAt: retrievedAt,
+    isStale: false,
+    isExpired: false,
+    staleAgeMs: 0,
+    source: 'network',
+    ...(outage.countyFips ? { countyFips: outage.countyFips } : {}),
+  };
+}
+
 function parseAreaCondition(row: unknown, expectedCountyFips?: string, now = Date.now()): AreaCondition | null {
   if (!isRecord(row) || row.type !== 'power_outage' || row.source !== 'ornl-odin') return null;
   const countyFips = safeString(row.countyFips);
@@ -1551,6 +1783,78 @@ export function fetchLocalLogistics(place: SavedPlace, options: FetchLocalLogist
   return request.finally(() => {
  if (inFlight.get(inFlightKey) === request) inFlight.delete(inFlightKey);
   });
+}
+
+function ephemeralErrorMessage(status: number): string {
+  if (status === 400 || status === 413 || status === 415) {
+    return 'Current-location Lifelines request was rejected. Choose a supported radius and try again.';
+  }
+  if (status === 401 || status === 403) {
+    return 'Current-location Lifelines are unavailable in this app session.';
+  }
+  if (status === 429) return 'Current-location Lifelines are temporarily rate limited. Try again later.';
+  return 'Lifelines are temporarily unavailable. Try again.';
+}
+
+export async function fetchEphemeralLocalLogistics(
+  anchor: EphemeralLocalLogisticsAnchor,
+  options: FetchEphemeralLocalLogisticsOptions,
+): Promise<LocalLogisticsSnapshot> {
+  if (!isCoordinate(anchor.latitude, -90, 90) || !isCoordinate(anchor.longitude, -180, 180)
+    || !LOCAL_LOGISTICS_RADIUS_CHOICES_KM.includes(options.radiusKm)) {
+    throw new Error('Invalid current-location Lifelines request.');
+  }
+  const categories = options.categories ?? [...LOCAL_LOGISTICS_CATEGORIES];
+  if (categories.length < 1 || categories.length > LOCAL_LOGISTICS_CATEGORIES.length
+    || new Set(categories).size !== categories.length
+    || categories.some((category) => !LOCAL_LOGISTICS_CATEGORIES.includes(category))) {
+    throw new Error('Invalid current-location Lifelines request.');
+  }
+  const limitPerCategory = options.limitPerCategory ?? DEFAULT_LIMIT_PER_CATEGORY;
+  if (!Number.isSafeInteger(limitPerCategory) || limitPerCategory < 1 || limitPerCategory > 5) {
+    throw new Error('Invalid current-location Lifelines request.');
+  }
+  const timeoutSignal = AbortSignal.timeout(15_000);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal;
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}/api/local-logistics`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        schemaVersion: 1,
+        purpose: 'session-lifelines',
+        latitude: anchor.latitude,
+        longitude: anchor.longitude,
+        radiusKm: options.radiusKm,
+        categories,
+        limitPerCategory,
+      }),
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer',
+      credentials: 'same-origin',
+      signal,
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new Error('Lifelines are temporarily unavailable. Try again.');
+  }
+  if (!response.ok) throw new Error(ephemeralErrorMessage(response.status));
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('Lifelines returned an unusable response. Try again.');
+  }
+  return parseEphemeralLocalLogisticsApiResponse(
+    anchor,
+    payload,
+    Date.now(),
+    categories,
+    options.radiusKm,
+  );
 }
 
 export function selectLifelinePrewarmPlaces(places: SavedPlace[], stormMatchedPlaceId: string | null | undefined): SavedPlace[] {

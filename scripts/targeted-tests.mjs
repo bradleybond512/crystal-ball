@@ -38,6 +38,7 @@ export const OVERRIDES = {
   'api/osrm-route.js': ['test:lifelines-map'],
   'api/ucdp-classifications.js': ['test:ucdp-provider'],
   'api/usgs-water-proxy.js': ['test:lifelines'],
+  'src-tauri/src/current_location.rs': ['test:ux010-native'],
   'src/app/data-loader.ts': ['test:providers'],
   'src/config/panel-metadata.ts': ['test:emergency-readiness'],
   'src/config/panels.ts': ['test:emergency-readiness'],

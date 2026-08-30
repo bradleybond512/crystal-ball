@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -231,6 +231,70 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   const index = deriveScriptIndex(SCRIPTS);
   const { scripts } = selectScripts(['src/app/data-loader.ts'], index, { 'src/app/data-loader.ts': ['test:providers'] });
   assert.deepEqual(scripts, ['test:providers']);
+});
+
+test('the UX-010 native controller selects its focused wiring suite', () => {
+  const index = deriveScriptIndex({
+    'test:ux010-native': 'node --test tests/ux010-location-startup.test.mjs tests/ux010-native-gate.test.mjs',
+  });
+  const result = selectScripts(['src-tauri/src/current_location.rs'], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:ux010-native'], unmapped: [] });
+});
+
+test('the UX-010 native runner keeps trusted selection while executing its Rust contract gate', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const command = scripts['test:ux010-native'];
+  assert.equal(
+    command,
+    'node --test tests/ux010-location-startup.test.mjs tests/ux010-native-gate.test.mjs',
+  );
+  assert.equal(isRunnerAllowlisted(command), true);
+  assert.deepEqual(commandToStages(command, '/repo/node_modules/.bin'), [{
+    bin: process.execPath,
+    args: ['--test', 'tests/ux010-location-startup.test.mjs', 'tests/ux010-native-gate.test.mjs'],
+  }]);
+});
+
+test('the UX-010 native gate generates its ignored Tauri resource before Cargo', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const fullCommand = scripts['test:ux010'];
+  const nativeGate = readFileSync(join(root, 'tests/ux010-native-gate.test.mjs'), 'utf8');
+  const bundleIndex = nativeGate.indexOf("'scripts/build-sidecar-xmpp.mjs'");
+  const cargoIndex = nativeGate.indexOf("spawnSync('cargo'");
+
+  assert.match(fullCommand, /&& node --test tests\/ux010-native-gate\.test\.mjs$/);
+  assert.doesNotMatch(fullCommand, /cargo test/);
+  assert.match(nativeGate, /spawnSync\(process\.execPath, \[\s*'scripts\/build-sidecar-xmpp\.mjs',?\s*\]/);
+  assert.ok(bundleIndex >= 0, 'native gate must invoke the checked-in XMPP bundle generator');
+  assert.ok(cargoIndex > bundleIndex, 'resource generation must happen before Cargo');
+  assert.match(nativeGate, /'--manifest-path',\s*'src-tauri\/Cargo\.toml',\s*'--test',\s*'current_location_contract'/);
+});
+
+test('targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/targeted-tests.yml'), 'utf8');
+  const selectionIndex = workflow.indexOf('- name: Select and run targeted suites');
+  const rustIndex = workflow.indexOf('- name: Install Rust 1.93.1');
+  const cacheIndex = workflow.indexOf('- name: Rust cache');
+  const dependenciesIndex = workflow.indexOf('- name: Install Tauri Linux compile dependencies');
+
+  assert.match(workflow, /^env:\n  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse$/m);
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(
+    workflow,
+    /uses: dtolnay\/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7\n\s+with:\n\s+toolchain: '1\.93\.1'/,
+  );
+  assert.match(
+    workflow,
+    /uses: swatinem\/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db\n\s+with:\n\s+workspaces: '\.\/src-tauri -> target'\n\s+cache-on-failure: true/,
+  );
+  assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
+  assert.match(workflow, /libappindicator3-dev/);
+  assert.match(workflow, /librsvg2-dev/);
+  assert.ok(rustIndex >= 0 && rustIndex < selectionIndex);
+  assert.ok(cacheIndex > rustIndex && cacheIndex < selectionIndex);
+  assert.ok(dependenciesIndex > cacheIndex && dependenciesIndex < selectionIndex);
+  assert.match(workflow, /^permissions:\n  contents: read$/m);
+  assert.doesNotMatch(workflow, /pull_request_target|secrets\./);
 });
 
 test('UCDP source and boundary tests select the focused provider suite', () => {

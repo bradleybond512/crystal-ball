@@ -2382,6 +2382,7 @@ async function buildRouteTable(root) {
 const REQUEST_BODY_CACHE = Symbol('requestBodyCache');
 const REQUEST_BODY_OVERFLOW = Symbol('requestBodyOverflow');
 const MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024; // 16 MB
+const LOCAL_LOGISTICS_REQUEST_BODY_MAX_BYTES = 2048;
 const EVALUATION_REPORT_MAX_BYTES = 32 * 1024;
 const EVALUATION_REPORT_MAX_COUNT = 1_000_000_000;
 const EVALUATION_REPORT_FUTURE_SKEW_MS = 5 * 60_000;
@@ -2655,22 +2656,31 @@ function evaluationTimestamp(value, now) {
     : null;
 }
 
-async function readBody(req) {
+async function readBody(req, maximumBytes = MAX_REQUEST_BODY_BYTES) {
   if (Object.prototype.hasOwnProperty.call(req, REQUEST_BODY_CACHE)) {
-    return req[REQUEST_BODY_CACHE];
+    const cached = req[REQUEST_BODY_CACHE];
+    if ((cached?.length ?? 0) > maximumBytes) throw new RequestBodyTooLargeError(maximumBytes);
+    return cached;
   }
   if (req[REQUEST_BODY_OVERFLOW]) {
-    throw new RequestBodyTooLargeError(MAX_REQUEST_BODY_BYTES);
+    throw new RequestBodyTooLargeError(maximumBytes);
+  }
+
+  const declaredLength = Number(req.headers?.['content-length']);
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+    req[REQUEST_BODY_OVERFLOW] = true;
+    req.resume?.();
+    throw new RequestBodyTooLargeError(maximumBytes);
   }
 
   const chunks = [];
   let total = 0;
   for await (const chunk of req) {
     total += chunk.length;
-    if (total > MAX_REQUEST_BODY_BYTES) {
+    if (total > maximumBytes) {
       req[REQUEST_BODY_OVERFLOW] = true;
-      try { req.destroy?.(); } catch { /* socket already gone */ }
-      throw new RequestBodyTooLargeError(MAX_REQUEST_BODY_BYTES);
+      req.resume?.();
+      throw new RequestBodyTooLargeError(maximumBytes);
     }
     chunks.push(chunk);
   }
@@ -2731,6 +2741,15 @@ const moduleCache = new Map();
 const failedImports = new Set();
 const fallbackCounts = new Map();
 const cloudPreferred = new Set();
+
+function isLocalOnlyApiTarget(pathname) {
+  return pathname.startsWith('/api/local-');
+}
+
+export function _setCloudPreferredForTests(pathname, preferred) {
+  if (preferred) cloudPreferred.add(pathname);
+  else cloudPreferred.delete(pathname);
+}
 
 /**
  * Shape-aware degraded response for unknown sidecar routes.
@@ -19638,16 +19657,21 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
-  if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
+  const localOnly = isLocalOnlyApiTarget(requestUrl.pathname);
+
+  if (context.cloudFallback && !localOnly && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;
   }
 
   const modulePath = pickModule(requestUrl.pathname, routes);
   if (!modulePath || !existsSync(modulePath)) {
- if (context.cloudFallback) {
+ if (context.cloudFallback && !localOnly) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context, 'handler missing');
  if (cloudResponse) return cloudResponse;
+ }
+ if (localOnly) {
+ return json({ error: 'route_unavailable' }, 503, { 'cache-control': 'private, no-store' });
  }
  logOnce(context.logger, requestUrl.pathname, 'no local handler');
  // Graceful degraded fallback: instead of 404 (which causes panels to
@@ -19661,14 +19685,20 @@ async function dispatch(requestUrl, req, routes, context) {
  const mod = await importHandler(modulePath);
  if (typeof mod.default !== 'function') {
  logOnce(context.logger, requestUrl.pathname, 'invalid handler module');
- if (context.cloudFallback) {
+ if (context.cloudFallback && !localOnly) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context, `invalid handler module`);
  if (cloudResponse) return cloudResponse;
+ }
+ if (localOnly) {
+ return json({ error: 'internal_error' }, 500, { 'cache-control': 'private, no-store' });
  }
  return json({ error: 'Invalid handler module', endpoint: requestUrl.pathname }, 500);
  }
 
- const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
+ const bodyLimit = requestUrl.pathname === '/api/local-logistics' && req.method === 'POST'
+ ? LOCAL_LOGISTICS_REQUEST_BODY_MAX_BYTES
+ : MAX_REQUEST_BODY_BYTES;
+ const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req, bodyLimit);
  const request = new Request(requestUrl.toString(), {
  method: req.method,
  headers: toHeaders(req.headers, { stripOrigin: true }),
@@ -19678,25 +19708,34 @@ async function dispatch(requestUrl, req, routes, context) {
  const response = await mod.default(request);
  if (!(response instanceof Response)) {
  logOnce(context.logger, requestUrl.pathname, 'handler returned non-Response');
- if (context.cloudFallback) {
+ if (context.cloudFallback && !localOnly) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context, 'handler returned non-Response');
  if (cloudResponse) return cloudResponse;
+ }
+ if (localOnly) {
+ return json({ error: 'internal_error' }, 500, { 'cache-control': 'private, no-store' });
  }
  return json({ error: 'Handler returned invalid response', endpoint: requestUrl.pathname }, 500);
  }
 
- if (!response.ok && context.cloudFallback) {
+ if (!response.ok && context.cloudFallback && !localOnly) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context, `local status ${response.status}`);
  if (cloudResponse) { cloudPreferred.add(requestUrl.pathname); return cloudResponse; }
  }
 
  return response;
   } catch (error) {
+ if (error instanceof RequestBodyTooLargeError) throw error;
  const reason = error.code === 'ERR_MODULE_NOT_FOUND' ? 'missing dependency' : error.message;
- context.logger.error(`[local-api] ${requestUrl.pathname} → ${reason}`);
- if (context.cloudFallback) {
+ context.logger.error(localOnly
+ ? `[local-api] ${requestUrl.pathname} → handler failed`
+ : `[local-api] ${requestUrl.pathname} → ${reason}`);
+ if (context.cloudFallback && !localOnly) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context, error);
  if (cloudResponse) { cloudPreferred.add(requestUrl.pathname); return cloudResponse; }
+ }
+ if (localOnly) {
+ return json({ error: 'internal_error' }, 500, { 'cache-control': 'private, no-store' });
  }
  return json({ error: 'Local handler error', reason, endpoint: requestUrl.pathname }, 502);
   }
@@ -21481,8 +21520,13 @@ export async function createLocalApiServer(options = {}) {
  if (!PUBLIC_API_ROUTES.has(requestUrl.pathname)
  && !isValidToken(req.headers['authorization'] || '')) {
  warnUnauthorizedOnce(context, requestUrl.pathname);
- res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
- res.end(JSON.stringify({ error: 'Unauthorized' }));
+ const privateSessionRequest = requestUrl.pathname === '/api/local-logistics' && req.method === 'POST';
+ res.writeHead(401, {
+ 'content-type': 'application/json',
+ ...(privateSessionRequest ? { 'cache-control': 'private, no-store' } : {}),
+ ...makeCorsHeaders(req),
+ });
+ res.end(JSON.stringify({ error: privateSessionRequest ? 'unauthorized' : 'Unauthorized' }));
  return;
  }
 
@@ -21968,6 +22012,9 @@ export async function createLocalApiServer(options = {}) {
  const durationMs = Date.now() - start;
  let body = Buffer.from(await response.arrayBuffer());
  const headers = Object.fromEntries(response.headers.entries());
+ if (requestUrl.pathname === '/api/local-logistics' && req.method === 'POST') {
+ headers['cache-control'] = 'private, no-store';
+ }
  const corsOrigin = getSidecarCorsOrigin(req);
  headers['access-control-allow-origin'] = corsOrigin;
  headers['vary'] = appendVary(headers['vary'], 'Origin');
@@ -22006,13 +22053,16 @@ export async function createLocalApiServer(options = {}) {
  }
  } catch (error) {
  const durationMs = Date.now() - start;
+ const localOnly = isLocalOnlyApiTarget(requestUrl.pathname);
+ const privateSessionRequest = requestUrl.pathname === '/api/local-logistics' && req.method === 'POST';
  const errorStatus = Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 600
  ? error.statusCode
  : 500;
  if (errorStatus >= 500) {
- context.logger.error('[local-api] fatal', error);
+ if (localOnly) context.logger.error(`[local-api] ${requestUrl.pathname} → request failed`);
+ else context.logger.error('[local-api] fatal', error);
  const host = (() => { try { return new URL(req.url || '/', `http://x`).host; } catch { return 'unknown'; } })();
- wmRecordHostFailure(host, error?.message || String(error));
+ wmRecordHostFailure(host, localOnly ? 'local request failed' : error?.message || String(error));
  }
 
  if (!skipRecord) {
@@ -22022,16 +22072,24 @@ export async function createLocalApiServer(options = {}) {
  path: requestUrl.pathname,
  status: errorStatus,
  durationMs,
- error: error.message,
+ error: localOnly ? 'request_failed' : error.message,
  });
  }
 
- const errorBody = errorStatus === 413
+ const errorBody = privateSessionRequest && errorStatus === 413
+ ? { error: 'body_too_large' }
+ : localOnly && errorStatus >= 500
+ ? { error: 'internal_error' }
+ : errorStatus === 413
  ? { error: 'Payload too large', limit: error.limit ?? MAX_REQUEST_BODY_BYTES }
  : errorStatus < 500
  ? { error: error.message || 'Bad request' }
  : { error: 'Internal server error' };
- res.writeHead(errorStatus, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.writeHead(errorStatus, {
+ 'content-type': 'application/json',
+ ...(privateSessionRequest ? { 'cache-control': 'private, no-store' } : {}),
+ ...makeCorsHeaders(req),
+ });
  res.end(JSON.stringify(errorBody));
  }
   });

@@ -295,6 +295,133 @@ test('falls back to cloud when cloudFallback is enabled and local handler return
   }
 });
 
+test('local routes never cloud-fallback their body or local bearer when fallback is enabled', async () => {
+  const remote = await setupRemoteServer();
+  const localApi = await setupApiDir({
+    'local-private.js': `
+      export default async function handler() {
+        return Response.json({ error: 'internal_error' }, {
+          status: 500,
+          headers: { 'cache-control': 'private, no-store' },
+        });
+      }
+    `,
+  });
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    remoteBase: remote.remoteBase,
+    cloudFallback: 'true',
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+    const sentinel = JSON.stringify({ latitude: 12.345_678, longitude: -98.765_432 });
+    const response = await authFetch(`http://127.0.0.1:${port}/api/local-private`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: sentinel,
+    });
+    assert.equal(response.status, 500);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.equal(remote.hits.length, 0);
+
+    const missing = await authFetch(`http://127.0.0.1:${port}/api/local-missing`);
+    assert.equal(missing.status, 503);
+    assert.deepEqual(await missing.json(), { error: 'route_unavailable' });
+    assert.equal(missing.headers.get('cache-control'), 'private, no-store');
+    assert.equal(remote.hits.length, 0);
+  } finally {
+    await app.close();
+    await localApi.cleanup();
+    await remote.close();
+  }
+});
+
+test('local-route handler failures stay private, local, and coordinate-free', async () => {
+  const coordinate = '12.345678';
+  const remote = await setupRemoteServer();
+  const localApi = await setupApiDir({
+    'local-throw.js': `
+      export default async function handler() {
+        throw new Error('failure near ${coordinate}');
+      }
+    `,
+    'local-import.js': "import 'ux010-intentionally-missing'; export default async function handler() {}",
+    'local-invalid.js': 'export default async function handler() { return { status: 200 }; }',
+  });
+  const messages = [];
+  const logger = {
+    log(...values) { messages.push(values.join(' ')); },
+    warn(...values) { messages.push(values.join(' ')); },
+    error(...values) { messages.push(values.join(' ')); },
+  };
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    remoteBase: remote.remoteBase,
+    cloudFallback: 'true',
+    logger,
+  });
+  const { port } = await app.start();
+  try {
+    for (const route of ['local-throw', 'local-import', 'local-invalid']) {
+      const response = await authFetch(`http://127.0.0.1:${port}/api/${route}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ latitude: Number(coordinate), longitude: -98.765_432 }),
+      });
+      assert.equal(response.status, 500, route);
+      assert.equal(response.headers.get('cache-control'), 'private, no-store', route);
+      assert.deepEqual(await response.json(), { error: 'internal_error' }, route);
+    }
+
+    const traffic = await authFetch(`http://127.0.0.1:${port}/api/local-traffic-log`);
+    assert.equal(traffic.status, 200);
+    assert.equal(JSON.stringify(await traffic.json()).includes(coordinate), false);
+    assert.equal(messages.join('\n').includes(coordinate), false);
+    assert.equal(remote.hits.length, 0);
+  } finally {
+    await app.close();
+    await localApi.cleanup();
+    await remote.close();
+  }
+});
+
+test('a cached cloud preference cannot bypass a local-only route', async () => {
+  const sidecar = await import('./local-api-server.mjs');
+  assert.equal(typeof sidecar._setCloudPreferredForTests, 'function');
+  const remote = await setupRemoteServer();
+  const localApi = await setupApiDir({
+    'local-preferred.js': `
+      export default async function handler() {
+        return Response.json({ error: 'internal_error' }, {
+          status: 500,
+          headers: { 'cache-control': 'private, no-store' },
+        });
+      }
+    `,
+  });
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    remoteBase: remote.remoteBase,
+    cloudFallback: 'true',
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  sidecar._setCloudPreferredForTests('/api/local-preferred', true);
+  const { port } = await app.start();
+  try {
+    const response = await authFetch(`http://127.0.0.1:${port}/api/local-preferred`);
+    assert.equal(response.status, 500);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.equal(remote.hits.length, 0);
+  } finally {
+    sidecar._setCloudPreferredForTests('/api/local-preferred', false);
+    await app.close();
+    await localApi.cleanup();
+    await remote.close();
+  }
+});
+
 test('FRED sidecar reports live provenance once and cache provenance on reuse', async () => {
   _resetSidecarCacheForTests();
   const priorKey = process.env.FRED_API_KEY;

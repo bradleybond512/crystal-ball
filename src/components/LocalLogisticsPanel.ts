@@ -11,6 +11,7 @@ import {
 } from '@/services/saved-places';
 import {
   buildLocalLogisticsFingerprint,
+  fetchEphemeralLocalLogistics,
   fetchLocalLogistics,
   initialLocalLogisticsRadiusKm,
   LOCAL_LOGISTICS_CATEGORIES,
@@ -28,6 +29,7 @@ import {
   type LogisticsCategory,
   type LogisticsNode,
 } from '@/services/local-logistics';
+import { requestCurrentLocation, type LocationFix } from '@/services/location';
 import {
   buildExternalMapsUrl,
   buildLifelineCallHref,
@@ -52,6 +54,12 @@ import { deleteRoute, getEvacRouteDisclosure, planRoute } from '@/services/evacu
 interface LocalLogisticsPanelOptions {
   focusNode: (lat: number, lon: number) => void;
   fetchSnapshot?: typeof fetchLocalLogistics;
+  fetchEphemeralSnapshot?: typeof fetchEphemeralLocalLogistics;
+  requestLocation?: () => Promise<LocationFix>;
+  openSaveCurrentLocation?: (
+    prefill: { latitude: number; longitude: number; radiusKm: LocalLogisticsRadiusChoiceKm },
+    onConfirmed: (place: SavedPlace) => void,
+  ) => void;
   prewarmCoordinator?: LifelinePrewarmCoordinator;
   getExactPackReadiness?: typeof getExactLifelinePackReadinessForPlace;
 }
@@ -75,6 +83,12 @@ function formatRetrievedAt(date: Date | null): string {
 function formatDistance(distanceKm: number): string {
   if (distanceKm < 10) return `${distanceKm.toFixed(1)} km`;
   return `${Math.round(distanceKm)} km`;
+}
+
+function formatCurrentLocationAccuracy(fix: LocationFix | null): string {
+  if (!fix) return 'awaiting fix';
+  if (fix.accuracy < 1000) return `${Math.round(fix.accuracy).toLocaleString()} m`;
+  return `${(fix.accuracy / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
 }
 
 function formatStatus(node: LogisticsNode, now: number): string {
@@ -114,6 +128,8 @@ function renderStaleSnapshot(snapshot: LocalLogisticsSnapshot): string {
 export class LocalLogisticsPanel extends Panel {
   private readonly options: LocalLogisticsPanelOptions;
   private readonly fetchSnapshot: typeof fetchLocalLogistics;
+  private readonly fetchEphemeralSnapshot: typeof fetchEphemeralLocalLogistics;
+  private readonly requestLocation: () => Promise<LocationFix>;
   private readonly prewarmCoordinator: LifelinePrewarmCoordinator;
   private readonly getExactPackReadiness: typeof getExactLifelinePackReadinessForPlace;
   private activePlaceId: string | null = null;
@@ -135,11 +151,19 @@ export class LocalLogisticsPanel extends Panel {
   private unsubscribeSavedPlaces: (() => void) | null = null;
   private unsubscribeLifelinePrewarm: (() => void) | null = null;
   private prewarmState: LifelinePrewarmState | null = null;
+  private anchorMode: 'saved' | 'ephemeral' = 'saved';
+  private currentLocationState: 'idle' | 'requesting' | 'fetching' | 'ready' | 'error' = 'idle';
+  private currentLocationFix: LocationFix | null = null;
+  private currentLocationError: string | null = null;
+  private currentLocationGeneration = 0;
+  private currentLocationAbort: AbortController | null = null;
+  private pendingCurrentLocationFocus: 'use' | 'update' | 'clear' | null = null;
   private readonly nodeLookup = new Map<string, LogisticsNode>();
   private readonly evidenceExpiryScheduler = new LifelineEvidenceExpiryScheduler({
  onExpiry: (snapshot, expiresAt, kind) => this.transitionExpiredEvidence(snapshot, expiresAt, kind),
   });
   private readonly onLifelineSituationUpdated = (event: Event) => {
+ if (this.anchorMode === 'ephemeral') return;
  const detail = (event as CustomEvent<unknown>).detail;
  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return;
  const value = detail as Record<string, unknown>;
@@ -158,14 +182,17 @@ export class LocalLogisticsPanel extends Panel {
  });
  this.options = options;
  this.fetchSnapshot = options.fetchSnapshot ?? fetchLocalLogistics;
+ this.fetchEphemeralSnapshot = options.fetchEphemeralSnapshot ?? fetchEphemeralLocalLogistics;
+ this.requestLocation = options.requestLocation ?? requestCurrentLocation;
  this.prewarmCoordinator = options.prewarmCoordinator ?? lifelinePrewarmCoordinator;
  this.getExactPackReadiness = options.getExactPackReadiness ?? getExactLifelinePackReadinessForPlace;
- this.showLoading('Loading disaster lifelines…');
+ this.render();
 
  this.content.addEventListener('click', (event) => this.handleContentClick(event));
 
  this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.handleSavedPlacesChanged());
  this.unsubscribeLifelinePrewarm = this.prewarmCoordinator.subscribe((state) => {
+   if (this.anchorMode === 'ephemeral') return;
    if (state.placeId !== this.getActivePlaceId()) return;
    this.prewarmState = state;
    this.render();
@@ -176,6 +203,10 @@ export class LocalLogisticsPanel extends Panel {
   private handleContentClick(event: MouseEvent): void {
  const target = event.target as HTMLElement | null;
  if (!target) return;
+ if (target.closest('[data-logistics-use-current-location]')) { void this.acquireCurrentLocation(); return; }
+ if (target.closest('[data-logistics-update-location]')) { void this.acquireCurrentLocation(); return; }
+ if (target.closest('[data-logistics-clear-location]')) { this.clearCurrentLocation(); return; }
+ if (target.closest('[data-logistics-save-location]')) { this.saveCurrentLocation(); return; }
  if (this.handleRadiusClick(target)) return;
  if (this.handleFilterClick(target)) return;
  if (target.closest('[data-lifeline-prewarm]')) { this.prepareOffline(); return; }
@@ -197,7 +228,8 @@ export class LocalLogisticsPanel extends Panel {
  if (radiusKm === undefined) return true;
  this.activeRadiusKm = radiusKm;
  this.pendingRadiusFocusKm = radiusKm;
- void this.refresh();
+ if (this.anchorMode === 'ephemeral') void this.refreshEphemeral();
+ else void this.refresh();
  return true;
   }
 
@@ -238,12 +270,14 @@ export class LocalLogisticsPanel extends Panel {
   private handleRouteClick(target: HTMLElement): boolean {
  const routeButton = target.closest<HTMLElement>('[data-logistics-route]');
  if (!routeButton) return false;
+ if (this.anchorMode === 'ephemeral') return true;
  const routeNode = this.nodeLookup.get(routeButton.dataset.logisticsRoute ?? '');
  if (routeNode) void this.routeToNode(routeNode);
  return true;
   }
 
   private handleNodeFocusClick(target: HTMLElement): void {
+ if (this.anchorMode === 'ephemeral') return;
  const nodeButton = target.closest<HTMLElement>('[data-logistics-focus]');
  const nodeId = nodeButton?.dataset.logisticsNodeId;
  if (!nodeId) return;
@@ -262,6 +296,9 @@ export class LocalLogisticsPanel extends Panel {
   }
 
   public setPlaceId(placeId: string | null): void {
+ this.resetCurrentLocationOwnership();
+ this.anchorMode = 'saved';
+ this.setAiSummaryEnabled(true);
  const priorSnapshot = this.snapshot;
  this.activePlaceId = placeId;
  this.activePlaceId = this.getActivePlaceId();
@@ -288,11 +325,31 @@ export class LocalLogisticsPanel extends Panel {
 
   /** Selected place context used by adjacent panels to ignore background prewarms. */
   public getActivePlaceId(): string | null {
+ if (this.anchorMode === 'ephemeral') return null;
  const place = this.resolvePlace();
  return place?.id ?? null;
   }
 
   override destroy(): void {
+ const destroyingCurrentLocation = this.anchorMode === 'ephemeral';
+ this.currentLocationGeneration += 1;
+ this.currentLocationAbort?.abort();
+ this.currentLocationAbort = null;
+ this.currentLocationFix = null;
+ if (destroyingCurrentLocation) {
+   this.anchorMode = 'saved';
+   this.activeRadiusKm = null;
+   this.radiusPlaceSignature = null;
+   this.currentLocationState = 'idle';
+   this.currentLocationError = null;
+   this.pendingCurrentLocationFocus = null;
+   this.pendingRadiusFocusKm = null;
+   this.snapshot = null;
+   this.snapshotPlaceSignature = null;
+   this.nodeLookup.clear();
+   this.loading = false;
+   this.error = null;
+ }
  this.refreshGeneration += 1;
  this.placeGeneration += 1;
  this.routeGeneration += 1;
@@ -307,6 +364,10 @@ export class LocalLogisticsPanel extends Panel {
   }
 
   public async refresh(): Promise<void> {
+ if (this.anchorMode === 'ephemeral') {
+   await this.refreshEphemeral();
+   return;
+ }
  const generation = ++this.refreshGeneration;
  const place = this.resolvePlace();
  this.nodeLookup.clear();
@@ -323,7 +384,7 @@ export class LocalLogisticsPanel extends Panel {
  this.error = null;
  this.loading = false;
  this.setCount(0);
- this.setContent('<div class="panel-empty">Save a place to unlock nearby logistics.</div>');
+ this.render();
  return;
  }
 
@@ -389,7 +450,160 @@ export class LocalLogisticsPanel extends Panel {
  this.render();
   }
 
+  private resetCurrentLocationOwnership(): void {
+ this.currentLocationGeneration += 1;
+ this.currentLocationAbort?.abort();
+ this.currentLocationAbort = null;
+ this.currentLocationFix = null;
+ this.currentLocationState = 'idle';
+ this.currentLocationError = null;
+ this.pendingCurrentLocationFocus = null;
+  }
+
+  private async acquireCurrentLocation(): Promise<void> {
+ const priorSavedSnapshot = this.anchorMode === 'saved' ? this.snapshot : null;
+ if (priorSavedSnapshot) this.requestOverlayClear(priorSavedSnapshot);
+ const generation = ++this.currentLocationGeneration;
+ this.currentLocationAbort?.abort();
+ this.currentLocationAbort = null;
+ this.anchorMode = 'ephemeral';
+ this.setAiSummaryEnabled(false);
+ this.currentLocationFix = null;
+ this.currentLocationState = 'requesting';
+ this.pendingCurrentLocationFocus = 'clear';
+ this.currentLocationError = null;
+ this.snapshot = null;
+ this.snapshotPlaceSignature = null;
+ this.evidenceExpiryScheduler.track(null);
+ this.nodeLookup.clear();
+ this.loading = false;
+ this.error = null;
+ this.routeGeneration += 1;
+ this.routingNodeId = null;
+ this.routeFeedback = null;
+ this.render();
+ try {
+   const fix = await this.requestLocation();
+   if (generation !== this.currentLocationGeneration || this.anchorMode !== 'ephemeral') return;
+   this.currentLocationFix = fix;
+   this.activeRadiusKm ??= 10;
+   await this.fetchCurrentLocationSnapshot(fix, generation);
+ } catch (error) {
+   if (generation !== this.currentLocationGeneration || this.anchorMode !== 'ephemeral') return;
+   this.currentLocationState = 'error';
+   this.currentLocationError = this.currentLocationFailureMessage(error);
+   this.pendingCurrentLocationFocus = 'update';
+   this.render();
+ }
+  }
+
+  private async refreshEphemeral(): Promise<void> {
+ const fix = this.currentLocationFix;
+ if (!fix) return;
+ const generation = ++this.currentLocationGeneration;
+ await this.fetchCurrentLocationSnapshot(fix, generation);
+  }
+
+  private async fetchCurrentLocationSnapshot(fix: LocationFix, generation: number): Promise<void> {
+ const radiusKm = this.activeRadiusKm ?? 10;
+ this.activeRadiusKm = radiusKm;
+ this.currentLocationAbort?.abort();
+ const controller = new AbortController();
+ this.currentLocationAbort = controller;
+ this.currentLocationState = 'fetching';
+ this.currentLocationError = null;
+ this.snapshot = null;
+ this.evidenceExpiryScheduler.track(null);
+ this.nodeLookup.clear();
+ this.render();
+ try {
+   const snapshot = await this.fetchEphemeralSnapshot(
+     { latitude: fix.lat, longitude: fix.lon },
+     { radiusKm, signal: controller.signal },
+   );
+   if (controller.signal.aborted || generation !== this.currentLocationGeneration
+     || this.anchorMode !== 'ephemeral' || this.currentLocationFix !== fix
+     || this.activeRadiusKm !== radiusKm) return;
+   if (snapshot.placeId !== 'session-current-location'
+     || snapshot.placeName !== 'Current location'
+     || snapshot.queryFingerprint !== 'session-lifelines'
+     || snapshot.effectiveRadiusKm !== radiusKm
+     || snapshot.source !== 'network') {
+     throw new Error('private Lifelines response mismatch');
+   }
+   this.snapshot = snapshot;
+   this.currentLocationState = 'ready';
+   this.currentLocationError = null;
+   this.pendingCurrentLocationFocus = 'update';
+   this.evidenceExpiryScheduler.track(snapshot);
+ } catch {
+   if (controller.signal.aborted || generation !== this.currentLocationGeneration
+     || this.anchorMode !== 'ephemeral') return;
+   this.snapshot = null;
+   this.currentLocationState = 'error';
+   this.currentLocationError = 'Lifelines are temporarily unavailable. Try again.';
+   this.pendingCurrentLocationFocus = 'update';
+ } finally {
+   if (this.currentLocationAbort === controller) this.currentLocationAbort = null;
+ }
+ this.render();
+  }
+
+  private currentLocationFailureMessage(error: unknown): string {
+ const code = error && typeof error === 'object' && 'code' in error
+   ? String((error as { code: unknown }).code)
+   : 'unavailable';
+ const messages: Record<string, string> = {
+   denied: 'Location permission was denied. Enable location access in system or browser settings, then try again.',
+   restricted: 'Location access is restricted by this device.',
+   disabled: 'Location Services are disabled. Enable them, then try again.',
+   timeout: 'The one-shot location request timed out. Try again where GPS or Wi-Fi is available.',
+   unavailable: 'A current location is unavailable. Check GPS or Wi-Fi and try again.',
+   stale: 'The device returned an old location fix. Try Update Location again.',
+   inaccurate: 'The reported location was too imprecise to use safely.',
+   busy: 'Another location request is already active. Try again shortly.',
+   invalid: 'The device returned an invalid location fix.',
+   unsupported: 'Current location is not supported in this environment.',
+ };
+ return messages[code] ?? messages.unavailable ?? 'A current location is unavailable.';
+  }
+
+  private clearCurrentLocation(): void {
+ if (this.anchorMode !== 'ephemeral') return;
+ this.resetCurrentLocationOwnership();
+ this.anchorMode = 'saved';
+ this.setAiSummaryEnabled(true);
+ this.snapshot = null;
+ this.snapshotPlaceSignature = null;
+ this.nodeLookup.clear();
+ this.evidenceExpiryScheduler.track(null);
+ this.activeRadiusKm = null;
+ this.radiusPlaceSignature = null;
+ this.pendingCurrentLocationFocus = 'use';
+ void this.refresh();
+  }
+
+  private saveCurrentLocation(): void {
+ const fix = this.currentLocationFix;
+ const radiusKm = this.activeRadiusKm;
+ const openSave = this.options.openSaveCurrentLocation;
+ if (this.anchorMode !== 'ephemeral' || !fix || radiusKm === null || !openSave) return;
+ const generation = this.currentLocationGeneration;
+ openSave(
+   { latitude: fix.lat, longitude: fix.lon, radiusKm },
+   (place) => {
+     if (generation !== this.currentLocationGeneration || this.anchorMode !== 'ephemeral'
+       || this.currentLocationFix !== fix) return;
+     const readback = getSavedPlace(place.id);
+     if (readback?.lat !== fix.lat || readback.lon !== fix.lon
+       || readback.radiusKm !== radiusKm) return;
+     this.setPlaceId(readback.id);
+   },
+ );
+  }
+
   private handleSavedPlacesChanged(): void {
+ if (this.anchorMode === 'ephemeral') return;
  const place = this.resolvePlace();
  const nextSignature = place ? buildLifelinesPlaceMatchSignature(place) : null;
  if (nextSignature === this.activePlaceSignature) return;
@@ -427,6 +641,10 @@ export class LocalLogisticsPanel extends Panel {
  _expiresAt: number,
   kind: LifelineExpiryKind,
   ): void {
+ if (this.anchorMode === 'ephemeral') {
+   if (this.snapshot === snapshot) this.render();
+   return;
+ }
  applyLifelineExpiryTransition(snapshot, kind, {
    isCurrent: (identity) => {
      const place = this.resolvePlace();
@@ -488,6 +706,7 @@ export class LocalLogisticsPanel extends Panel {
   }
 
   private resolvePlace() {
+ if (this.anchorMode === 'ephemeral') return null;
  if (this.activePlaceId) {
  const active = getSavedPlace(this.activePlaceId);
  if (active) return active;
@@ -514,10 +733,20 @@ export class LocalLogisticsPanel extends Panel {
   }
 
   private render(): void {
+ if (this.anchorMode === 'ephemeral') {
+   this.renderCurrentLocation();
+   return;
+ }
+ this.setAiSummaryEnabled(true);
  const place = this.resolvePlace();
  if (!place) {
  this.setCount(0);
- this.setContent('<div class="panel-empty">Save a place to unlock nearby logistics.</div>');
+ this.setContent(`
+ <div class="sa-panel-content local-logistics-content" data-local-logistics-content="1" aria-busy="false">
+ ${this.renderCurrentLocationDisclosure()}
+ <div class="panel-empty">Save a place to keep nearby logistics available across sessions.</div>
+ </div>
+ `, () => this.restoreCurrentLocationFocus());
  return;
  }
 
@@ -554,6 +783,7 @@ export class LocalLogisticsPanel extends Panel {
  const html = `
  <div class="sa-panel-content local-logistics-content" data-local-logistics-content="1" aria-busy="${this.loading}">
  ${headerHtml}
+ ${this.renderCurrentLocationDisclosure()}
  ${prewarmHtml}
  ${statusHtml}
  ${staleHtml}
@@ -569,7 +799,107 @@ export class LocalLogisticsPanel extends Panel {
    this.setErrorContent(html, this.error, () => this.restoreRadiusFocus());
    return;
  }
- this.setContent(html, () => this.restoreRadiusFocus());
+ this.setContent(html, () => {
+   this.restoreRadiusFocus();
+   this.restoreCurrentLocationFocus();
+ });
+  }
+
+  private renderCurrentLocationDisclosure(): string {
+ return `
+ <section class="local-logistics-current-location" aria-label="Current-location Lifelines">
+ <div class="watchlist-country">Use current location for this session</div>
+ <p>Crystal Ball requests one location fix only after you choose this action and keeps it only in this Lifelines panel for session-only use.</p>
+ <p>The fix is sent to the Crystal Ball Lifelines endpoint and the necessary Overpass, FEMA, Census, and ODIN paths. Crystal Ball does not persist it, but third-party provider access-log retention cannot be guaranteed. Your OS or browser may remember the permission grant.</p>
+ <button class="sa-refresh-btn" data-logistics-use-current-location="1" type="button">Use current location</button>
+ </section>
+ `;
+  }
+
+  private renderCurrentLocation(): void {
+ this.setAiSummaryEnabled(false);
+ const fix = this.currentLocationFix;
+ const radiusKm = this.activeRadiusKm ?? 10;
+ const nodes = this.displayNodes();
+ this.setCount(nodes.length);
+ this.nodeLookup.clear();
+ for (const node of this.snapshot?.nodes ?? []) this.nodeLookup.set(node.id, node);
+ const busy = this.currentLocationState === 'requesting' || this.currentLocationState === 'fetching';
+ let statusHtml = '';
+ if (this.currentLocationState === 'requesting') {
+   statusHtml = '<div class="panel-empty local-logistics-status" role="status" aria-live="polite">Requesting one current-location fix…</div>';
+ } else if (this.currentLocationState === 'fetching') {
+   statusHtml = '<div class="panel-empty local-logistics-status" role="status" aria-live="polite">Loading session-only Lifelines…</div>';
+ } else if (this.currentLocationState === 'error') {
+   statusHtml = `<div class="panel-empty local-logistics-status" role="alert">${escapeHtml(this.currentLocationError ?? 'Current-location Lifelines are unavailable.')}</div>`;
+ }
+ const uncertaintyWarning = fix && fix.accuracy / 1000 > radiusKm
+   ? `<div class="panel-empty local-logistics-location-warning" role="status">Location uncertainty exceeds the selected ${radiusKm.toLocaleString()} km coverage. Results may not cover your actual position.</div>`
+   : '';
+ const outageCoverage = this.snapshot ? projectLocalLogisticsOutageCoverage(this.snapshot, Date.now()) : null;
+ const coverage = this.snapshot ? projectLocalLogisticsCoverage(this.snapshot, Date.now()) : null;
+ const facilityProviders = coverage?.providers.filter((provider) => provider.scope === 'facilities') ?? [];
+ const html = `
+ <div class="sa-panel-content local-logistics-content local-logistics-content--ephemeral" data-local-logistics-content="1" aria-busy="${busy}">
+ ${this.renderCurrentLocationHeader(fix, busy)}
+ ${statusHtml}
+ ${uncertaintyWarning}
+ ${this.renderRadiusControls(radiusKm)}
+ ${outageCoverage ? this.renderOutageCoverage(outageCoverage) : ''}
+ ${coverage ? this.renderProviderCoverage(facilityProviders) : ''}
+ ${this.renderFilters(this.displayCategories())}
+ ${this.renderNodeList(nodes, coverage?.categories ?? [], Date.now())}
+ </div>
+ `;
+ this.setContent(html, () => {
+   this.restoreRadiusFocus();
+   this.restoreCurrentLocationFocus();
+ });
+  }
+
+ private renderCurrentLocationHeader(
+ fix: LocationFix | null,
+ busy: boolean,
+  ): string {
+ const accuracy = formatCurrentLocationAccuracy(fix);
+ const observed = fix ? formatRetrievedAt(new Date(fix.timestamp)) : 'not available';
+ const disabledAttribute = busy ? 'disabled' : '';
+ const saveButton = fix && this.options.openSaveCurrentLocation
+   ? `<button class="sa-refresh-btn" data-logistics-save-location="1" type="button" ${disabledAttribute}>Save as place…</button>`
+   : '';
+ const refreshButton = fix
+   ? `<button class="sa-refresh-btn" data-logistics-refresh="1" type="button" ${disabledAttribute}>Refresh Lifelines</button>`
+   : '';
+ const updateLabel = fix ? 'Update Location' : 'Try location again';
+ return `
+ <div class="watchlist-card-top local-logistics-header local-logistics-current-header">
+ <div>
+ <div class="watchlist-country">Current location</div>
+ <div class="watchlist-scenario">Accuracy ${escapeHtml(accuracy)} • Observed ${escapeHtml(observed)} • Session only</div>
+ </div>
+ <div class="watchlist-card-bottom">
+ ${refreshButton}
+ <button class="sa-refresh-btn" data-logistics-update-location="1" type="button" ${disabledAttribute}>${updateLabel}</button>
+ <button class="sa-refresh-btn" data-logistics-clear-location="1" type="button">Clear location</button>
+ ${saveButton}
+ </div>
+ </div>
+ `;
+  }
+
+  private restoreCurrentLocationFocus(): void {
+ const target = this.pendingCurrentLocationFocus;
+ if (!target) return;
+ const selectors: Record<NonNullable<typeof target>, string> = {
+   update: '[data-logistics-update-location]',
+   clear: '[data-logistics-clear-location]',
+   use: '[data-logistics-use-current-location]',
+ };
+ const selector = selectors[target];
+ const button = this.content.querySelector<HTMLButtonElement>(selector);
+ if (!button) return;
+ this.pendingCurrentLocationFocus = null;
+ button.focus();
   }
 
   private displayCategories(): LogisticsCategory[] {
@@ -787,6 +1117,7 @@ export class LocalLogisticsPanel extends Panel {
   }
 
   private renderNode(node: LogisticsNode, now: number): string {
+ const expired = node.expiresAt.getTime() <= now;
  const capabilityLabels = [
  node.capabilities.generatorOnsite ? 'Generator listed' : '',
  node.capabilities.pets ? 'Pets accepted' : '',
@@ -797,14 +1128,15 @@ export class LocalLogisticsPanel extends Panel {
  const chips = [
  `<span class="watchlist-panel-chip">${escapeHtml(LOCAL_LOGISTICS_CATEGORY_LABELS[node.category])}</span>`,
  `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.operational))}</span>`,
- `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.inventory))}</span>`,
- `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.power))}</span>`,
- `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.access))}</span>`,
+ `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(expired ? 'unknown' : node.inventory))}</span>`,
+ `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(expired ? 'unknown' : node.power))}</span>`,
+ `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(expired ? 'unknown' : node.access))}</span>`,
  ].filter(Boolean).join('');
 
- const expiry = node.expiresAt.getTime() <= now
+ const expiry = expired
  ? `Verification expired ${escapeHtml(formatUpdatedAt(node.expiresAt))}`
  : `Status expires ${escapeHtml(formatUpdatedAt(node.expiresAt))}`;
+ const savedPlaceActions = this.renderSavedPlaceActions(node);
 
  return `
  <article class="watchlist-card local-logistics-node-card" data-logistics-node-card="${escapeHtml(node.id)}">
@@ -822,16 +1154,23 @@ export class LocalLogisticsPanel extends Panel {
  </div>
  <div class="watchlist-scenario">${escapeHtml(formatStatus(node, now))} • ${expiry} • ${escapeHtml(node.source)}</div>
  <div class="watchlist-card-bottom">
- <button class="sa-refresh-btn" data-logistics-focus="1" data-logistics-node-id="${escapeHtml(node.id)}" type="button" aria-label="Focus ${escapeHtml(node.name)} on map">Show on map</button>
+ ${savedPlaceActions}
  <button class="sa-refresh-btn" data-logistics-external-map="${escapeHtml(node.id)}" type="button" aria-label="Open ${escapeHtml(node.name)} in external maps">Open in Maps</button>
  ${buildLifelineCallHref(node.publicPhone)
    ? `<button class="sa-refresh-btn" data-logistics-call="${escapeHtml(node.id)}" type="button" aria-label="Call ${escapeHtml(node.name)}">Call</button>`
    : ''}
- <button class="sa-refresh-btn" data-logistics-route="${escapeHtml(node.id)}" type="button" aria-label="Plan an unverified road-graph route to ${escapeHtml(node.name)}" ${this.routingNodeId ? 'disabled' : ''}>${this.routingNodeId === node.id ? 'Routing…' : 'Graph route'}</button>
  <button class="sa-refresh-btn" data-logistics-source="${escapeHtml(node.id)}" type="button" aria-label="Open source for ${escapeHtml(node.name)}">Source</button>
  </div>
  </article>
  `;
+  }
+
+  private renderSavedPlaceActions(node: LogisticsNode): string {
+ if (this.anchorMode !== 'saved') return '';
+ const disabledAttribute = this.routingNodeId ? 'disabled' : '';
+ const routeLabel = this.routingNodeId === node.id ? 'Routing…' : 'Graph route';
+ return `<button class="sa-refresh-btn" data-logistics-focus="1" data-logistics-node-id="${escapeHtml(node.id)}" type="button" aria-label="Focus ${escapeHtml(node.name)} on map">Show on map</button>
+ <button class="sa-refresh-btn" data-logistics-route="${escapeHtml(node.id)}" type="button" aria-label="Plan an unverified road-graph route to ${escapeHtml(node.name)}" ${disabledAttribute}>${routeLabel}</button>`;
   }
 
   private async routeToNode(node: LogisticsNode): Promise<void> {

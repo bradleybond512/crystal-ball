@@ -53,7 +53,7 @@ export function showLocationGate(
  void (async () => {
  try {
  gpsBtn.textContent = 'Getting GPS fix\u2026';
- statusEl.textContent = 'Waiting for location (up to 10s)\u2026';
+ statusEl.textContent = 'Waiting for location (up to 15s)\u2026';
  const loc = await getCurrentGpsLocation();
  statusEl.textContent = `Got ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)} \u2014 looking up address\u2026`;
  const label = await reverseGeocode(loc.lat, loc.lon);

@@ -71,5 +71,21 @@ UX-010 suite while preserving its full-variant build and native Rust contract.
 - Repaired UX-010 suite: pending a quiet validation slot; the first local
   wrapper run correctly failed closed when TypeScript exceeded its 300-second
   timeout while the workstation load average exceeded 130.
-- Mutation proof: pending final evidence capture.
+- Baseline checksums before mutation were
+  `922713395b8d5b5e75ae8c063d68dfb8182cf9372e1110e7d6d4b509b3c8ab18`
+  for `package.json`,
+  `4d077e05cb962690a4691e9b5657e7c9fe97c0ea474754e7920b56e331b584cb`
+  for `tests/ux010-build-gate.test.mjs`, and
+  `2ac607b97f73a840a0d1c62c044fc4cf91f93cf7c366d46923804cc27cb32486`
+  for `tests/agentic-pipeline.test.mjs`.
+- Mutation 1 restored `npm run build:full` in the canonical UX-010 command.
+  The confirmed diff produced 45 pass / 1 fail; the stage parser rejected
+  the npm runner. Restoration reproduced the baseline checksum.
+- Mutation 2 changed `VITE_VARIANT` from `full` to `tech`. The confirmed diff
+  produced 45 pass / 1 fail; the full-variant contract assertion failed.
+  Restoration reproduced the baseline checksum.
+- Mutation 3 pointed the TypeScript stage at a nonexistent checked path. The
+  confirmed diff made the wrapper report 0 pass / 1 fail with
+  `MODULE_NOT_FOUND` and status 1. Restoration reproduced the baseline
+  checksum, and `git status --short` was empty.
 - Full validation and reviews: pending publication workflow.

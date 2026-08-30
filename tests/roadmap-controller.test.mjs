@@ -294,6 +294,28 @@ test('candidate PR claims are one-to-one and synchronized with roadmap state', (
   assert.ok(extraCompletion.blocking.some((message) => /UX-002.*evidence PR #42.*does not claim UX-002/.test(message)));
 });
 
+test('an unrelated branch-only claim status mismatch is advisory to the candidate PR', () => {
+  const candidateState = parse(UX.replace(
+    '| UX-001 | Home shell | NOT STARTED | — |',
+    '| UX-001 | Home shell | IN PROGRESS | #50 |',
+  ));
+  const report = reconcileRoadmaps(candidateState, {
+    ...snapshot([
+      pr(10, 'MERGED', 'ACC-001'),
+      pr(20, 'MERGED', 'ACC-501'),
+      pr(40, 'OPEN', 'Roadmap task: ACC-502'),
+      pr(50, 'OPEN', 'Roadmap task: UX-001'),
+      pr(1660, 'MERGED', 'UX-000'),
+    ]),
+    eventType: 'pull_request',
+    candidatePrNumbers: [50],
+  }, { now: '2026-08-24T12:00:00.000Z', baseBranch: 'main' });
+
+  assert.ok(!report.blocking.some((message) => /ACC-502.*#40.*IN_REVIEW/.test(message)), report.blocking.join('\n'));
+  assert.ok(report.advisory.some((message) => /ACC-502.*#40.*IN_REVIEW/.test(message)), report.advisory.join('\n'));
+  assert.ok(!report.blocking.some((message) => /UX-001.*#50/.test(message)), report.blocking.join('\n'));
+});
+
 test('the owning candidate PR may move its task to evidence-backed MONITOR', () => {
   const monitored = parse(UX
     .replace('### UX-001 — Home shell\n\n', '### UX-001 — Home shell\n\nExit condition: Packaged verification passes.\nReview after: 2026-09-04\n\n')

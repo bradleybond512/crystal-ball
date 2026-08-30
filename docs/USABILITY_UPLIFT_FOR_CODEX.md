@@ -647,7 +647,7 @@ Update the row in the same PR that does the work.
 | UX-008 | Observable Lifelines prewarm | DONE | #1676 |
 | UX-009 | Emergency Pack v2 | DONE | #1678 |
 | UX-010 | Current-location Lifelines | DONE | #1684 |
-| UX-011 | Hazard/closure exposure | NOT STARTED — HIGH ASSURANCE | — |
+| UX-011 | Hazard/closure exposure | IN PROGRESS — HIGH ASSURANCE | #1688 |
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
 | UX-013 | Hotel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |

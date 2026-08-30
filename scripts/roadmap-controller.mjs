@@ -419,7 +419,9 @@ export function reconcileRoadmaps(state, snapshot = null, context = {}) {
         const evidenceTransition = EVIDENCE_STATUSES.has(task.status) && task.evidencePrs.includes(pull.number);
         if (task.status !== 'IN_REVIEW' && !evidenceTransition) {
           const prefix = candidatePrNumbers.has(pull.number) ? `candidate PR #${pull.number}` : `open PR #${pull.number}`;
-          blocking.push(`${id} is claimed by ${prefix} but its roadmap status is ${task.status}; expected IN_REVIEW`);
+          const message = `${id} is claimed by ${prefix} but its roadmap status is ${task.status}; expected IN_REVIEW`;
+          if (candidatePrNumbers.has(pull.number)) blocking.push(message);
+          else advisory.push(message);
         }
       }
     }

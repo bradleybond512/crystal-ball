@@ -951,3 +951,49 @@ assertion failed: matches!(controller.run(Duration::from_millis(1)),
 
 test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
+
+## 21. Native-controller targeted-test selection
+
+File: `scripts/targeted-tests.mjs`
+
+Baseline and restored SHA-256:
+`b133d752859d927219275b0ccfd734eefe385d62f1a9353756d1c81087fd694f`
+
+Confirmed mutation:
+
+```diff
+-  'src-tauri/src/current_location.rs': ['test:ux010-native'],
+```
+
+Command:
+
+```bash
+npm run test:agentic-pipeline
+```
+
+Green output:
+
+```text
+✔ the UX-010 native controller selects its focused wiring suite (0.098042ms)
+ℹ tests 40
+ℹ pass 40
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ the UX-010 native controller selects its focused wiring suite (2.113459ms)
+ℹ tests 40
+ℹ pass 39
+ℹ fail 1
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+actual: { scripts: [], unmapped: [ 'src-tauri/src/current_location.rs' ] }
+expected: { scripts: [ 'test:ux010-native' ], unmapped: [] }
+```
+
+The original GitHub failure independently exercised the rollout boundary: the
+trusted `main` selector rejected `src-tauri/src/current_location.rs` as a `NEW
+GAP`. The same commit adds the temporary reviewed baseline bridge required until
+the new override itself lands on `main`.

@@ -87,6 +87,9 @@ export function applyAttentionDecorations(snapshot: AttentionSnapshot): void {
 
 export class AttentionNavigator {
   private readonly element: HTMLElement;
+  private readonly summaryElement: HTMLElement;
+  private readonly listElement: HTMLElement;
+  private readonly nextButton: HTMLButtonElement;
   private readonly onReview: (panelId: string) => string | undefined | void;
   private readonly getPanelName: (panelId: string) => string;
   private snapshot: AttentionSnapshot = { panels: [], severityCounts: {}, promotedPanelIds: [] };
@@ -100,6 +103,20 @@ export class AttentionNavigator {
     this.element.className = 'attention-navigator';
     this.element.setAttribute('aria-label', 'Pane review navigator');
     this.element.addEventListener('click', this.onClick);
+
+    const header = document.createElement('div');
+    header.className = 'attention-navigator-header';
+    const title = document.createElement('strong');
+    title.textContent = 'Review trail';
+    this.summaryElement = document.createElement('span');
+    this.summaryElement.className = 'attention-navigator-summary';
+    this.summaryElement.setAttribute('aria-live', 'polite');
+    this.nextButton = makeButton('Next unreviewed', 'next');
+    header.append(title, this.summaryElement, this.nextButton);
+
+    this.listElement = document.createElement('div');
+    this.listElement.className = 'attention-navigator-list';
+    this.element.append(header, this.listElement);
   }
 
   mount(parent: HTMLElement): void {
@@ -163,32 +180,19 @@ export class AttentionNavigator {
     const focusAction = focusInside ? focused?.dataset.attentionAction : undefined;
     const focusPanel = focusInside ? focused?.dataset.panelId : undefined;
     const panels = unreviewedPanels(this.snapshot);
-    const header = document.createElement('div');
-    header.className = 'attention-navigator-header';
-    const title = document.createElement('strong');
-    title.textContent = 'Review trail';
-    header.append(title);
-
-    const summary = document.createElement('span');
-    summary.className = 'attention-navigator-summary';
-    summary.setAttribute('aria-live', 'polite');
     if (panels.length === 0) {
-      summary.textContent = 'Review queue clear';
+      this.summaryElement.textContent = 'Review queue clear';
     } else {
       const critical = this.snapshot.severityCounts.critical ?? 0;
       const high = this.snapshot.severityCounts.high ?? 0;
       const emerging = this.snapshot.severityCounts.medium ?? 0;
       const fresh = (this.snapshot.severityCounts.low ?? 0) + (this.snapshot.severityCounts.info ?? 0);
-      summary.textContent = `${critical} critical · ${high} high · ${emerging} emerging · ${fresh} new`;
+      this.summaryElement.textContent = `${critical} critical · ${high} high · ${emerging} emerging · ${fresh} new`;
     }
-    if (this.persistenceDegraded) summary.textContent += ' · review history is session-only';
-    header.append(summary);
-    const next = makeButton('Next unreviewed', 'next');
-    next.disabled = panels.length === 0;
-    header.append(next);
+    if (this.persistenceDegraded) this.summaryElement.textContent += ' · review history is session-only';
+    this.nextButton.disabled = panels.length === 0;
 
-    const list = document.createElement('div');
-    list.className = 'attention-navigator-list';
+    this.listElement.replaceChildren();
     for (const panel of panels) {
       const panelName = this.getPanelName(panel.panelId);
       const row = document.createElement('div');
@@ -211,9 +215,8 @@ export class AttentionNavigator {
       const review = makeButton('Mark reviewed', 'review', panel.panelId);
       review.setAttribute('aria-label', `Mark ${panelName} reviewed`);
       row.append(severity, name, count, open, review);
-      list.append(row);
+      this.listElement.append(row);
     }
-    this.element.replaceChildren(header, list);
 
     if (focusAction) {
       const match = [...this.element.querySelectorAll<HTMLElement>('[data-attention-action]')]

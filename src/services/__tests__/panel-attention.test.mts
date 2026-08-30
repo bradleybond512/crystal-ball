@@ -75,6 +75,29 @@ test('exact reviewed evidence stays reviewed while the same ID at a newer timest
   assert.deepEqual(reviewed, [{ id: 'same', observedAt: 1_000 }], 'projection never mutates review state');
 });
 
+test('reviewed critical evidence cannot color or promote lower-severity new work', async () => {
+  const { projectPanelAttention } = await moduleUnderTest();
+  const snapshot = projectPanelAttention(
+    [
+      alert('old-critical', 'weather', 120, 'critical', 1_000),
+      alert('new-info', 'weather', 3, 'info', 2_000),
+    ],
+    {
+      score,
+      route,
+      reviewed: [{ id: 'old-critical', observedAt: 1_000 }],
+      incumbents: [],
+    },
+  );
+
+  assert.equal(snapshot.panels[0]?.unreviewedCount, 1);
+  assert.equal(snapshot.panels[0]?.maxSeverity, 'info');
+  assert.equal(snapshot.panels[0]?.maxScore, 3);
+  assert.equal(snapshot.panels[0]?.newestEvidenceAt, 2_000);
+  assert.deepEqual(snapshot.severityCounts, { info: 1 });
+  assert.deepEqual(snapshot.promotedPanelIds, []);
+});
+
 test('future timestamps are equality tokens rather than pane-wide cutoffs', async () => {
   const { projectPanelAttention } = await moduleUnderTest();
   const future = 9_999_999_999_999;

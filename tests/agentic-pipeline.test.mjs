@@ -255,6 +255,33 @@ test('the UX-010 native runner keeps trusted selection while executing its Rust 
   }]);
 });
 
+test('targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/targeted-tests.yml'), 'utf8');
+  const selectionIndex = workflow.indexOf('- name: Select and run targeted suites');
+  const rustIndex = workflow.indexOf('- name: Install Rust 1.93.1');
+  const cacheIndex = workflow.indexOf('- name: Rust cache');
+  const dependenciesIndex = workflow.indexOf('- name: Install Tauri Linux compile dependencies');
+
+  assert.match(workflow, /^env:\n  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse$/m);
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(
+    workflow,
+    /uses: dtolnay\/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7\n\s+with:\n\s+toolchain: '1\.93\.1'/,
+  );
+  assert.match(
+    workflow,
+    /uses: swatinem\/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db\n\s+with:\n\s+workspaces: '\.\/src-tauri -> target'\n\s+cache-on-failure: true/,
+  );
+  assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
+  assert.match(workflow, /libappindicator3-dev/);
+  assert.match(workflow, /librsvg2-dev/);
+  assert.ok(rustIndex >= 0 && rustIndex < selectionIndex);
+  assert.ok(cacheIndex > rustIndex && cacheIndex < selectionIndex);
+  assert.ok(dependenciesIndex > cacheIndex && dependenciesIndex < selectionIndex);
+  assert.match(workflow, /^permissions:\n  contents: read$/m);
+  assert.doesNotMatch(workflow, /pull_request_target|secrets\./);
+});
+
 test('UCDP source and boundary tests select the focused provider suite', () => {
   const index = deriveScriptIndex({
     'test:ucdp-provider': 'tsx --test src/services/__tests__/ucdp-runtime-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs',

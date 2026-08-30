@@ -1,6 +1,7 @@
 # UX-010 Targeted Build-Gate Repair Brief
 
-Status: revised implementation; mutation, validation, and review pending
+Status: revised implementation, mutation proofs, and validation complete;
+independent review pending
 Risk: standard CI trust-boundary repair
 Blocked consumer: UX-011 PR #1688
 
@@ -197,7 +198,14 @@ The resulting trusted UX-010 path contains five directly spawned stages:
 
 - After every mutation, the runner and test checksums returned to their
   baseline values and `git status --short` was empty.
-- Full UX-010 execution and agentic validation: pending.
+- `npm run test:ux010` passed: startup 5 pass / 0 fail; TypeScript/UI behavior
+  36 pass / 0 fail; full-variant TypeScript/Vite production build succeeded;
+  native Rust contract 1 pass / 0 fail.
+- `bash scripts/agentic-validate.sh --tests "test:agentic-pipeline test:ux010"`
+  passed. Its focused pipeline stage reported 47 pass / 0 fail, and the gate
+  also passed lockfile, strict lint, all TypeScript configs, repository secret
+  scan, cross-agent readiness, documentation, roadmap, and production build.
+- Independent and exact-tip cross-agent reviews: pending.
 - Independent and exact-tip cross-agent reviews: pending.
 
 ## Rollback

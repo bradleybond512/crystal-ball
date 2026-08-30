@@ -255,12 +255,15 @@ test('the UX-010 native runner keeps trusted selection while executing its Rust 
   }]);
 });
 
-test('the UX-010 suite decomposes into exactly four trusted direct-spawn stages', () => {
+test('the canonical UX-010 suite expands its pinned full build into five trusted stages', () => {
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
   const command = scripts['test:ux010'];
+  const inheritedEnv = { SENTINEL: 'kept', VITE_VARIANT: 'tech' };
+  const fullEnv = { ...inheritedEnv, VITE_VARIANT: 'full' };
 
+  assert.match(command, /&& npm run build:full &&/);
   assert.equal(isRunnerAllowlisted(command), true);
-  assert.deepEqual(commandToStages(command, '/repo/node_modules/.bin'), [
+  assert.deepEqual(commandToStages(command, '/repo/node_modules/.bin', scripts, inheritedEnv), [
     {
       bin: process.execPath,
       args: ['--test', 'tests/ux010-location-startup.test.mjs'],
@@ -277,34 +280,80 @@ test('the UX-010 suite decomposes into exactly four trusted direct-spawn stages'
     },
     {
       bin: process.execPath,
-      args: ['--test', 'tests/ux010-build-gate.test.mjs'],
+      args: ['/repo/node_modules/typescript/bin/tsc'],
+      env: fullEnv,
+    },
+    {
+      bin: process.execPath,
+      args: ['/repo/node_modules/vite/bin/vite.js', 'build'],
+      env: fullEnv,
     },
     {
       bin: process.execPath,
       args: ['--test', 'tests/ux010-native-gate.test.mjs'],
     },
   ]);
-  assert.doesNotMatch(command, /(?:^|&&\s*)(?:npm|sh|bash|tsc|vite|cargo)(?:\s|$)/);
 });
 
-test('the UX-010 build gate directly executes the canonical full-variant compiler and bundler', () => {
-  const buildGate = readFileSync(join(root, 'tests/ux010-build-gate.test.mjs'), 'utf8');
-  const typeScriptIndex = buildGate.indexOf("'node_modules/typescript/bin/tsc'");
-  const viteIndex = buildGate.indexOf("'node_modules/vite/bin/vite.js'");
+test('the trusted full-build expansion pins the canonical definition and rejects near matches', () => {
+  const trustedScripts = {
+    'build:full': 'cross-env-shell VITE_VARIANT=full "tsc && vite build"',
+  };
+  const expand = (stage, scripts = trustedScripts) => commandToStages(
+    `node --test a.test.mjs && ${stage}`,
+    '/repo/node_modules/.bin',
+    scripts,
+    {},
+  );
 
-  assert.match(buildGate, /spawnSync\(process\.execPath, \[\s*'node_modules\/typescript\/bin\/tsc'/);
-  assert.match(buildGate, /spawnSync\(process\.execPath, \[\s*'node_modules\/vite\/bin\/vite\.js',\s*'build'/);
-  assert.ok(typeScriptIndex >= 0 && viteIndex > typeScriptIndex);
-  assert.match(buildGate, /cwd: root/);
-  assert.match(buildGate, /encoding: 'utf8'/);
-  assert.match(buildGate, /VITE_VARIANT: 'full'/);
-  assert.match(buildGate, /maxBuffer: 10 \* 1024 \* 1024/);
-  assert.match(buildGate, /timeout: 300_000/);
-  assert.match(buildGate, /TypeScript full-build stage failed/);
-  assert.match(buildGate, /Vite full-build stage failed/);
-  assert.match(buildGate, /assert\.equal\(result\.error, undefined, message\)/);
-  assert.match(buildGate, /assert\.equal\(result\.signal, null, message\)/);
-  assert.match(buildGate, /assert\.equal\(result\.status, 0, message\)/);
+  assert.equal(isRunnerAllowlisted('npm run build:full'), false);
+  assert.throws(() => expand('npm run build:full', {}), /trusted build:full definition mismatch/);
+  for (const definition of [
+    'cross-env-shell VITE_VARIANT=tech "tsc && vite build"',
+    'cross-env-shell VITE_VARIANT=full "tsc && vite build" ',
+    "cross-env-shell VITE_VARIANT=full 'tsc && vite build'",
+    'cross-env-shell VITE_VARIANT=full "tsc && vite build && echo ok"',
+    'npm run build:full',
+  ]) {
+    assert.throws(
+      () => expand('npm run build:full', { 'build:full': definition }),
+      /trusted build:full definition mismatch/,
+      definition,
+    );
+  }
+  for (const stage of [
+    'npm  run build:full',
+    'npm run build:full -- extra',
+    'npm run build:tech',
+    'npm run test:anything',
+    'npm exec vite',
+    'npm --prefix . run build:full',
+    'cross-env-shell VITE_VARIANT=full "tsc && vite build"',
+    'tsc',
+    'vite build',
+    'cargo test',
+    'sh -c true',
+    'bash -c true',
+  ]) {
+    assert.throws(() => expand(stage), /untrusted stage runner/, stage);
+  }
+  assert.throws(
+    () => expand('npm run build:full && rm -rf /'),
+    /untrusted stage runner/,
+  );
+});
+
+test('the production trusted-main path supplies canonical scripts and inherited environment', () => {
+  const targetedRunner = readFileSync(join(root, 'scripts/targeted-tests.mjs'), 'utf8');
+
+  assert.match(
+    targetedRunner,
+    /commandToStages\(\s*mainScripts\[script\],\s*path\.join\(root, 'node_modules\/\.bin'\),\s*mainScripts,\s*process\.env,?\s*\)/,
+  );
+  assert.match(
+    targetedRunner,
+    /spawnSync\(bin, argv, \{ cwd: root, stdio: 'inherit', env: stage\.env \?\? process\.env \}\)/,
+  );
 });
 
 test('a representative service change selects the trusted UX-010 suite', () => {

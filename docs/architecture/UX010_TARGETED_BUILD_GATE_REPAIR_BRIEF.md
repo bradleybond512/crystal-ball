@@ -1,91 +1,114 @@
 # UX-010 Targeted Build-Gate Repair Brief
 
-Status: implemented; validation and review pending
+Status: revised implementation; mutation, validation, and review pending
 Risk: standard CI trust-boundary repair
 Blocked consumer: UX-011 PR #1688
 
 ## Objective
 
 Restore the required targeted-test check for branches that select the merged
-UX-010 suite while preserving its full-variant build and native Rust contract.
+UX-010 suite while preserving its JavaScript, TypeScript, full-variant build,
+resource-generation, and Rust contracts.
 
 ## Acceptance criteria
 
-- Every stage of the canonical `test:ux010` command is directly spawnable by
-  the trusted main copy of `scripts/targeted-tests.mjs`.
-- Preserve the UX-010 JavaScript, TypeScript, full-variant build, resource
-  generation, and Rust contract checks.
-- Keep `RUNNER_ALLOWLIST` and `commandToStages` fail closed; do not allow npm,
-  shells, arbitrary binaries, or PR-controlled replacement commands.
-- Add behavior-focused regression coverage and a confirmed-red mutation proof.
-- Pass the focused pipeline and UX-010 suites from a clean checkout.
+- Keep canonical `package.json` and `test:ux010` unchanged from main.
+- Expand the exact trusted-main `npm run build:full` stage without spawning npm,
+  a shell, a PATH-resolved compiler, or PR-controlled package-script logic.
+- Pin expansion to the exact trusted-main `build:full` definition and fail
+  closed on every missing, changed, or near-match definition or stage.
+- Preserve the existing runner allowlist and generic Node/tsx stage behavior.
+- Pass focused tests, mutation proofs, full validation, independent review, and
+  exact-tip cross-agent review before publication.
 
 ## Constraints
 
-- This prerequisite claims no UX roadmap task and does not change the UX-010
-  or UX-011 production implementation.
-- No workflow permissions, dependencies, secrets, branch protections, or
-  required checks change.
-- Do not remove or bypass the full build or native contract to obtain green.
+- This prerequisite claims no UX roadmap task and changes no UX-010 or UX-011
+  production implementation.
+- No workflow permissions, dependencies, secrets, branch protections, required
+  checks, test selection, or coverage baseline change.
 - Keep the repair isolated from UX-011 PR #1688.
 
 ## Non-goals
 
-- Redesigning the derived test index.
-- Broadening trusted runner syntax.
-- Reclassifying the required targeted-test check as optional.
-- Changing app runtime behavior.
+- Broadening the trusted runner grammar to accept npm or shell commands.
+- Creating a generic package-script resolver.
+- Moving build semantics into a PR-controlled test or helper file.
+- Removing the full build or native contract from UX-010.
+
+## Rejected wrapper design
+
+The first repair changed `test:ux010` to invoke a new
+`tests/ux010-build-gate.test.mjs` wrapper. Independent review rejected that
+design because the trusted-main command would authorize a helper whose contents
+come from the pull-request checkout. A PR could replace that wrapper with an
+allowlisted no-op while the main-owned stage parser continued to report a
+trusted Node stage. The wrapper and package-script change are therefore removed,
+and `package.json` is restored exactly to canonical main.
+
+The earlier wrapper mutation evidence is invalid for this revision. It proved
+properties of the deleted wrapper and altered package command, not the revised
+trusted-main expansion. None of those results may be reused as evidence for the
+new code tip.
 
 ## Final design
 
-- Keep `scripts/targeted-tests.mjs`, its runner allowlist, and its stage parser
+- Keep `RUNNER_ALLOWLIST`, `deriveScriptIndex`, and canonical `test:ux010`
   unchanged.
-- Replace only the nested `npm run build:full` stage in `test:ux010` with the
-  trusted Node test stage `node --test tests/ux010-build-gate.test.mjs`.
-- In that wrapper, directly spawn the pinned local TypeScript and Vite entry
-  points with the current Node executable, the repository root as the working
-  directory, `VITE_VARIANT=full`, UTF-8 capture, a 10 MiB output ceiling, and a
-  300-second timeout. Fail on spawn error, signal, or nonzero status and include
-  captured output in every assertion.
-- Retain the existing JavaScript/TypeScript behavior stages and the final native
-  contract gate. The resulting canonical command has exactly four trusted
-  direct-spawn stages and no npm, shell, compiler, bundler, or Cargo stage at
-  the targeted runner boundary.
+- Extend `commandToStages` with trusted-main scripts and inherited environment.
+- Recognize only the trimmed stage `npm run build:full`.
+- Permit that expansion only when `trustedScripts['build:full']` is exactly
+  `cross-env-shell VITE_VARIANT=full "tsc && vite build"`.
+- Translate the alias into two sequential direct Node executions:
+  `node_modules/typescript/bin/tsc`, then
+  `node_modules/vite/bin/vite.js build`.
+- Copy the inherited environment and apply `VITE_VARIANT=full` last so a caller
+  cannot downgrade the variant.
+- At the production call site, pass `mainScripts` and `process.env`; never use
+  PR package scripts to authorize expansion. Pass the static full-build
+  environment only to the translated stages.
+- Reject every other npm, shell, direct compiler, bundler, Cargo, or malformed
+  alias stage with the existing fail-closed runner error.
 
-## Verification
+The resulting trusted UX-010 path contains five directly spawned stages:
 
-- Reproduce the current `untrusted stage runner "npm"` failure.
-- Prove the repaired canonical command decomposes entirely to trusted Node or
-  tsx stages and still executes the full build contract.
-- Run `test:agentic-pipeline`, the repaired UX-010 suite, strict lint, full type
-  checks, the agentic validation gate, independent review, and the exact-tip
-  Claude verdict workflow.
+1. Node startup tests.
+2. tsx service and component behavior tests.
+3. Node-hosted TypeScript compilation.
+4. Node-hosted Vite full-variant build.
+5. Node native gate, including deterministic resource generation and the Rust
+   current-location contract.
+
+## Test strategy
+
+- Assert exact five-stage decomposition and executable paths.
+- Assert inherited environment preservation and last-write full-variant
+  override.
+- Assert the exact trusted definition pin and rejection of missing, altered,
+  whitespace-changed, differently quoted, appended, and recursive definitions.
+- Reject npm alias and argument near matches, npm exec/prefix forms, shell,
+  direct TypeScript/Vite/Cargo, and a trailing arbitrary stage.
+- Source-pin the production call to `mainScripts` and `process.env`.
+- Preserve representative service selection of `test:ux010` and the focused
+  native override.
 
 ## Evidence
 
-- TDD red: `node --test tests/agentic-pipeline.test.mjs` reported 44 pass / 2
-  fail. The failures reproduced the rejected `npm` stage and the absent build
-  wrapper.
-- Focused pipeline regression: the same command reported 46 pass / 0 fail
-  after implementation.
-- Repaired UX-010 suite: pending a quiet validation slot; the first local
-  wrapper run correctly failed closed when TypeScript exceeded its 300-second
-  timeout while the workstation load average exceeded 130.
-- Baseline checksums before mutation were
-  `922713395b8d5b5e75ae8c063d68dfb8182cf9372e1110e7d6d4b509b3c8ab18`
-  for `package.json`,
-  `4d077e05cb962690a4691e9b5657e7c9fe97c0ea474754e7920b56e331b584cb`
-  for `tests/ux010-build-gate.test.mjs`, and
-  `2ac607b97f73a840a0d1c62c044fc4cf91f93cf7c366d46923804cc27cb32486`
-  for `tests/agentic-pipeline.test.mjs`.
-- Mutation 1 restored `npm run build:full` in the canonical UX-010 command.
-  The confirmed diff produced 45 pass / 1 fail; the stage parser rejected
-  the npm runner. Restoration reproduced the baseline checksum.
-- Mutation 2 changed `VITE_VARIANT` from `full` to `tech`. The confirmed diff
-  produced 45 pass / 1 fail; the full-variant contract assertion failed.
-  Restoration reproduced the baseline checksum.
-- Mutation 3 pointed the TypeScript stage at a nonexistent checked path. The
-  confirmed diff made the wrapper report 0 pass / 1 fail with
-  `MODULE_NOT_FOUND` and status 1. Restoration reproduced the baseline
-  checksum, and `git status --short` was empty.
-- Full validation and reviews: pending publication workflow.
+- Revised TDD red: `node --test tests/agentic-pipeline.test.mjs` reported
+  44 pass / 3 fail before the trusted-main expansion existed. Failures covered
+  canonical five-stage expansion, exact definition handling, and production
+  call-site wiring.
+- Revised focused green: `node --test tests/agentic-pipeline.test.mjs` reported
+  47 pass / 0 fail. Node syntax, whitespace, and canonical package equality
+  checks also passed.
+- New mutation proofs: pending. At minimum, independently prove the exact stage
+  gate, exact definition pin, full-variant override order, direct executable
+  paths, and main-scripts production wiring.
+- Full UX-010 execution and agentic validation: pending.
+- Independent and exact-tip cross-agent reviews: pending.
+
+## Rollback
+
+Revert the runner and focused regression changes together. The pre-repair
+behavior remains fail closed: selected UX-010 suites reject the nested npm stage
+instead of silently skipping the build.

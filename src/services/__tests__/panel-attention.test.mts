@@ -58,34 +58,46 @@ test('projects every positive finite-scoring pane with consistent severity and e
   assert.deepEqual(snapshot.severityCounts, { high: 1, low: 1 });
 });
 
-test('exact reviewed evidence stays reviewed while the same ID at a newer timestamp reopens', async () => {
-  const { projectPanelAttention } = await moduleUnderTest();
-  const reviewed = [{ id: 'same', observedAt: 1_000 }];
-  const original = projectPanelAttention(
-    [alert('same', 'weather', 60, 'high', 1_000)],
-    { score, route, reviewed, incumbents: [] },
+test('timestamp-only refreshes stay reviewed while meaningful changes reopen the same ID', async () => {
+  const { markPanelReviewed, projectPanelAttention } = await moduleUnderTest();
+  const initialAlert = alert('same', 'weather', 60, 'high', 1_000);
+  const initial = projectPanelAttention(
+    [initialAlert],
+    { score, route, reviewed: [], incumbents: [] },
   );
-  const updated = projectPanelAttention(
+  const reviewed = markPanelReviewed([], initial.panels[0]!);
+  const refreshed = projectPanelAttention(
     [alert('same', 'weather', 60, 'high', 2_000)],
     { score, route, reviewed, incumbents: [] },
   );
+  const changedAlert = alert('same', 'weather', 60, 'high', 2_000);
+  changedAlert.body = 'Meaningfully changed evidence';
+  const changed = projectPanelAttention(
+    [changedAlert],
+    { score, route, reviewed, incumbents: [] },
+  );
 
-  assert.equal(original.panels[0]?.unreviewedCount, 0);
-  assert.equal(updated.panels[0]?.unreviewedCount, 1);
-  assert.deepEqual(reviewed, [{ id: 'same', observedAt: 1_000 }], 'projection never mutates review state');
+  assert.equal(refreshed.panels[0]?.unreviewedCount, 0);
+  assert.equal(changed.panels[0]?.unreviewedCount, 1);
 });
 
 test('reviewed critical evidence cannot color or promote lower-severity new work', async () => {
-  const { projectPanelAttention } = await moduleUnderTest();
+  const { markPanelReviewed, projectPanelAttention } = await moduleUnderTest();
+  const oldCritical = alert('old-critical', 'weather', 120, 'critical', 1_000);
+  const initial = projectPanelAttention(
+    [oldCritical],
+    { score, route, reviewed: [], incumbents: [] },
+  );
+  const reviewed = markPanelReviewed([], initial.panels[0]!);
   const snapshot = projectPanelAttention(
     [
-      alert('old-critical', 'weather', 120, 'critical', 1_000),
+      oldCritical,
       alert('new-info', 'weather', 3, 'info', 2_000),
     ],
     {
       score,
       route,
-      reviewed: [{ id: 'old-critical', observedAt: 1_000 }],
+      reviewed,
       incumbents: [],
     },
   );
@@ -99,15 +111,24 @@ test('reviewed critical evidence cannot color or promote lower-severity new work
 });
 
 test('future timestamps are equality tokens rather than pane-wide cutoffs', async () => {
-  const { projectPanelAttention } = await moduleUnderTest();
+  const { markPanelReviewed, projectPanelAttention } = await moduleUnderTest();
   const future = 9_999_999_999_999;
+  const futureAlert = alert('future', 'weather', 60, 'high', future);
+  const initial = projectPanelAttention(
+    [futureAlert],
+    { score, route, reviewed: [], incumbents: [] },
+  );
+  const reviewed = markPanelReviewed([], initial.panels[0]!);
   const snapshot = projectPanelAttention(
-    [alert('future', 'weather', 60, 'high', future), alert('later-id', 'weather', 40, 'medium', 2_000)],
-    { score, route, reviewed: [{ id: 'future', observedAt: future }], incumbents: [] },
+    [futureAlert, alert('later-id', 'weather', 40, 'medium', 2_000)],
+    { score, route, reviewed, incumbents: [] },
   );
 
   assert.equal(snapshot.panels[0]?.unreviewedCount, 1);
-  assert.deepEqual(snapshot.panels[0]?.unreviewedEvidence, [{ id: 'later-id', observedAt: 2_000 }]);
+  assert.deepEqual(
+    snapshot.panels[0]?.unreviewedEvidence.map(({ id, observedAt }) => ({ id, observedAt })),
+    [{ id: 'later-id', observedAt: 2_000 }],
+  );
 });
 
 test('malformed timestamps remain reviewable through a null evidence identity', async () => {
@@ -118,7 +139,10 @@ test('malformed timestamps remain reviewable through a null evidence identity', 
   const reviewed = markPanelReviewed([], before.panels[0]!);
   const after = projectPanelAttention([malformed], { score, route, reviewed, incumbents: [] });
 
-  assert.deepEqual(before.panels[0]?.evidence, [{ id: 'bad-time', observedAt: null }]);
+  assert.deepEqual(
+    before.panels[0]?.evidence.map(({ id, observedAt }) => ({ id, observedAt })),
+    [{ id: 'bad-time', observedAt: null }],
+  );
   assert.equal(after.panels[0]?.unreviewedCount, 0);
 });
 
@@ -143,9 +167,21 @@ test('strict persistence rejects corrupt, duplicate, and oversized ledgers', asy
   const invalid = [
     '{',
     JSON.stringify({ version: 2, reviewed: [] }),
-    JSON.stringify({ version: 1, reviewed: [{ id: 'x', observedAt: 1 }, { id: 'x', observedAt: 1 }] }),
-    JSON.stringify({ version: 1, reviewed: [{ id: 'x'.repeat(2_049), observedAt: 1 }] }),
-    JSON.stringify({ version: 1, reviewed: Array.from({ length: 501 }, (_, i) => ({ id: `a${i}`, observedAt: i })) }),
+    JSON.stringify({ version: 1, reviewed: [
+      { id: 'x', observedAt: 1, revision: '0000000000000001' },
+      { id: 'x', observedAt: 1, revision: '0000000000000001' },
+    ] }),
+    JSON.stringify({ version: 1, reviewed: [
+      { id: 'x'.repeat(2_049), observedAt: 1, revision: '0000000000000001' },
+    ] }),
+    JSON.stringify({ version: 1, reviewed: [
+      { id: 'x', observedAt: 1, revision: 'not-a-revision' },
+    ] }),
+    JSON.stringify({ version: 1, reviewed: Array.from({ length: 501 }, (_, i) => ({
+      id: `a${i}`,
+      observedAt: i,
+      revision: i.toString(16).padStart(16, '0'),
+    })) }),
   ];
 
   for (const raw of invalid) {
@@ -155,16 +191,27 @@ test('strict persistence rejects corrupt, duplicate, and oversized ledgers', asy
 });
 
 test('persistence retains reviewed evidence while it is temporarily inactive', async () => {
-  const { loadReviewLedger, persistReviewLedger, projectPanelAttention } = await moduleUnderTest();
+  const {
+    loadReviewLedger,
+    markPanelReviewed,
+    persistReviewLedger,
+    projectPanelAttention,
+  } = await moduleUnderTest();
   const storage = new MemoryStorage();
-  const reviewed = [{ id: 'snoozed', observedAt: 1 }, { id: 'active', observedAt: 2 }];
+  const snoozed = alert('snoozed', 'weather', 60, 'high', 1);
+  const initial = projectPanelAttention(
+    [snoozed],
+    { score, route, reviewed: [], incumbents: [] },
+  );
+  const reviewed = markPanelReviewed([], initial.panels[0]!);
+  reviewed.push({ id: 'active', observedAt: 2, revision: '0000000000000002' });
 
   assert.equal(persistReviewLedger(reviewed, storage), true);
   const reloaded = loadReviewLedger(storage);
   assert.deepEqual(reloaded, reviewed);
 
   const reactivated = projectPanelAttention(
-    [alert('snoozed', 'weather', 60, 'high', 1)],
+    [snoozed],
     { score, route, reviewed: reloaded, incumbents: [] },
   );
   assert.equal(reactivated.panels[0]?.unreviewedCount, 0);
@@ -192,7 +239,7 @@ test('default persistence uses quota-safe eviction and preserves the session rev
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
 
   try {
-    const identity = { id: 'active', observedAt: 2 };
+    const identity = { id: 'active', observedAt: 2, revision: '0000000000000002' };
     assert.equal(persistReviewLedger([identity]), true);
     assert.deepEqual(loadReviewLedger(), [identity]);
     assert.equal(values.has('wm-unified-alerts-v1'), false, 'disposable cache was evicted for the precious review write');

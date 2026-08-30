@@ -23,14 +23,22 @@ function snapshot(): AttentionSnapshot {
     panels: [
       {
         panelId: 'weather', activeCount: 2, maxSeverity: 'critical', maxScore: 120,
-        newestEvidenceAt: 2, evidence: [{ id: 'w1', observedAt: 1 }, { id: 'w2', observedAt: 2 }],
-        unreviewedEvidence: [{ id: 'w1', observedAt: 1 }, { id: 'w2', observedAt: 2 }],
+        newestEvidenceAt: 2,
+        evidence: [
+          { id: 'w1', observedAt: 1, revision: '0000000000000001' },
+          { id: 'w2', observedAt: 2, revision: '0000000000000002' },
+        ],
+        unreviewedEvidence: [
+          { id: 'w1', observedAt: 1, revision: '0000000000000001' },
+          { id: 'w2', observedAt: 2, revision: '0000000000000002' },
+        ],
         unreviewedCount: 2, promoted: true,
       },
       {
         panelId: 'cyber', activeCount: 1, maxSeverity: 'medium', maxScore: 40,
-        newestEvidenceAt: 3, evidence: [{ id: 'c1', observedAt: 3 }],
-        unreviewedEvidence: [{ id: 'c1', observedAt: 3 }],
+        newestEvidenceAt: 3,
+        evidence: [{ id: 'c1', observedAt: 3, revision: '0000000000000003' }],
+        unreviewedEvidence: [{ id: 'c1', observedAt: 3, revision: '0000000000000003' }],
         unreviewedCount: 1, promoted: true,
       },
     ],
@@ -143,11 +151,14 @@ test('Mark reviewed advances to the next pane returned by the review transaction
   navigator.mount(document.body);
   navigator.update(snapshot());
 
-  click(navigator.getElement().querySelector(
+  const review = navigator.getElement().querySelector<HTMLElement>(
     '[data-attention-action="review"][data-panel-id="weather"]',
-  )!);
+  )!;
+  review.focus();
+  click(review);
 
   assert.deepEqual(opened, ['cyber']);
+  assert.equal((document.activeElement as HTMLElement).dataset.panelId, 'cyber');
   navigator.destroy();
   document.removeEventListener('cb:navigate-panel', onNavigate);
 });

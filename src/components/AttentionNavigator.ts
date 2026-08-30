@@ -163,7 +163,15 @@ export class AttentionNavigator {
     if (action === 'open') this.navigate(panelId);
     else if (action === 'review') {
       const nextPanelId = this.onReview(panelId);
-      if (typeof nextPanelId === 'string' && nextPanelId.length > 0) this.navigate(nextPanelId);
+      if (typeof nextPanelId === 'string' && nextPanelId.length > 0) {
+        this.navigate(nextPanelId);
+        const nextReview = [...this.element.querySelectorAll<HTMLButtonElement>(
+          '[data-attention-action="review"]',
+        )].find((candidate) => candidate.dataset.panelId === nextPanelId);
+        (nextReview ?? this.nextButton).focus();
+      } else {
+        this.nextButton.focus();
+      }
     }
   };
 

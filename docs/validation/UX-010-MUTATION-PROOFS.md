@@ -1223,9 +1223,36 @@ File: `tests/ux010-native-gate.test.mjs`
 Baseline and restored SHA-256:
 `470c216185ab6bb0b8b4298873ff2a38fe939d6fd8a5728b535c033387ead402`
 
-Confirmed mutation removed the bounded `process.execPath` invocation of
-`scripts/build-sidecar-xmpp.mjs` and its fail-closed result assertions. The
-confirmed diff removed 15 lines before the unchanged Cargo invocation.
+Confirmed mutation:
+
+```diff
+diff --git a/tests/ux010-native-gate.test.mjs b/tests/ux010-native-gate.test.mjs
+index c163cf3a..a83cd101 100644
+--- a/tests/ux010-native-gate.test.mjs
++++ b/tests/ux010-native-gate.test.mjs
+@@ -6,21 +6,6 @@ import { fileURLToPath } from 'node:url';
+ const root = fileURLToPath(new URL('..', import.meta.url));
+
+ test('focused native gate executes the current-location Rust contract', () => {
+-  const bundle = spawnSync(process.execPath, [
+-    'scripts/build-sidecar-xmpp.mjs',
+-  ], {
+-    cwd: root,
+-    encoding: 'utf8',
+-    maxBuffer: 10 * 1024 * 1024,
+-    timeout: 60_000,
+-  });
+-  const bundleOutput = `${bundle.stdout ?? ''}\n${bundle.stderr ?? ''}`;
+-
+-  assert.equal(bundle.error, undefined, bundleOutput);
+-  assert.equal(bundle.signal, null, bundleOutput);
+-  assert.equal(bundle.status, 0, bundleOutput);
+-  assert.match(bundleOutput, /build:sidecar-xmpp\s+src-tauri\/sidecar\/s2u-xmpp\.bundle\.mjs/);
+-
+   const result = spawnSync('cargo', [
+     'test',
+     '--manifest-path',
+```
 
 Focused pipeline command:
 
@@ -1251,7 +1278,7 @@ Mutated output:
 ℹ fail 1
 
 AssertionError [ERR_ASSERTION]: The input did not match the regular expression
-/spawnSync\(process\.execPath, ... 'scripts\/build-sidecar-xmpp\.mjs'/.
+/spawnSync\(process\.execPath, \[\s*'scripts\/build-sidecar-xmpp\.mjs',?\s*\]/.
 ```
 
 With the ignored generated resource moved out of the worktree, the same

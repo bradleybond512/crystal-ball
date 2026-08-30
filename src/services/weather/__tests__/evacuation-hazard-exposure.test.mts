@@ -271,24 +271,27 @@ test('store publishes immutable snapshots and maps [] to outside jurisdiction wh
   store.destroy();
 });
 
-test('store rejects stale zone completions after route, weather, fingerprint, or coordinate changes', async () => {
+test('store rejects stale zone completions after route, weather, fingerprint, or coordinate changes', async (context) => {
   const pending: Array<{ key: string; resolve: (zones: string[]) => void }> = [];
   const store = createEvacuationHazardExposureStore({
     resolveZones: (lat, lon) => new Promise((resolve) => pending.push({ key: `${lat},${lon}`, resolve })),
     now: () => NOW,
   });
+  context.after(() => store.destroy());
   store.publishWeatherSnapshot({ alerts: [alert({ ugcZones: ['INC091'] })], feedState: CURRENT_FEED });
   const first = route([[0, 0], [1, 1]]);
   store.setRoutes([first]);
   store.setRoutes([route([[0, 0], [2, 2]])]);
   store.publishWeatherSnapshot({ alerts: [], feedState: CURRENT_FEED });
 
-  for (const lookup of pending.filter((item) => item.key === '1,1')) lookup.resolve(['INC091']);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.notEqual(store.getSnapshot().results[0]?.endpoints.to.status, 'reported_intersection');
+  for (const lookup of pending.filter((item) => item.key === '0,0' || item.key === '1,1')) {
+    lookup.resolve(['INC091']);
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(store.getSnapshot().results, [], 'an older route evaluation must not publish after either input changes');
 
   for (const lookup of pending) lookup.resolve([]);
-  store.destroy();
 });
 
 test('destroy invalidates in-flight work and subscription ownership', async () => {

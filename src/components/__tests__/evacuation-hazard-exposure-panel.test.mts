@@ -115,11 +115,14 @@ afterEach(() => {
   localStorage.clear();
 });
 
-test('renders loading then escaped reported evidence with exact source, times, coverage, and disclosure', () => {
+test('renders loading then escaped reported evidence with exact source, times, coverage, and disclosure', (context) => {
   const savedRoute = route();
   saveRoutes([savedRoute]);
   const store = new FakeExposureStore();
   const panel = mount(store);
+  context.after(() => {
+    if (store.unsubscribeCount === 0) panel.destroy();
+  });
   const content = panel.getContentElement();
 
   assert.equal(store.subscribeCount, 1);

@@ -997,3 +997,58 @@ The original GitHub failure independently exercised the rollout boundary: the
 trusted `main` selector rejected `src-tauri/src/current_location.rs` as a `NEW
 GAP`. The same commit adds the temporary reviewed baseline bridge required until
 the new override itself lands on `main`.
+
+## 22. Mapped native gate executes lifecycle contracts
+
+File: `src-tauri/src/current_location.rs`
+
+Baseline and restored SHA-256:
+`595ae275e5f81db0ca6b6996ab8bf779be24c9391adb0e87b8301f6ae71e8ff8`
+
+Focused gate file SHA-256:
+`80fc41efd5f82934db78b84eed7f9fe892cf62deb545399e25cf5457830d5eda`
+
+Confirmed mutation:
+
+```diff
+-        if !self.backend.cleanup(session) {
+-            in_flight.keep_busy();
+-            return NativeLocationResponse::failure(NativeLocationErrorCode::Unavailable);
+-        }
++        drop(session);
+```
+
+Command selected by the `src-tauri/src/current_location.rs` override:
+
+```bash
+npm run test:ux010-native
+```
+
+Green output:
+
+```text
+✔ focused native gate executes the current-location Rust contract (16088.350708ms)
+ℹ tests 6
+ℹ pass 6
+ℹ fail 0
+```
+
+Mutated output:
+
+```text
+✖ focused native gate executes the current-location Rust contract (15877.907667ms)
+ℹ tests 6
+ℹ pass 5
+ℹ fail 1
+
+test current_location::tests::concurrent_attempts_fail_busy_without_starting_a_second_session ... FAILED
+test current_location::tests::lifecycle_cleans_up_exactly_once_on_success ... FAILED
+test current_location::tests::timeout_cleans_up_and_ignores_a_late_callback ... FAILED
+test current_location::tests::unconfirmed_cleanup_keeps_the_controller_fail_closed ... FAILED
+test result: FAILED. 5 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+The mapped runner remains a single trusted `node --test` stage, while its
+focused gate executes and verifies the exact Rust contract command. This keeps
+the selector's command boundary intact and makes native lifecycle regressions
+block the targeted gate.

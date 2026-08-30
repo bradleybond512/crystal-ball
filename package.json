@@ -67,6 +67,7 @@
     "test:e2e:runtime": "cross-env VITE_VARIANT=full VITE_WS_API_URL=https://crystalball.app playwright test e2e/runtime-fetch.spec.ts",
     "test:e2e": "npm run test:e2e:runtime && npm run test:e2e:full && npm run test:e2e:tech && npm run test:e2e:finance",
     "test:globe-overlay": "tsx --test src/services/globe/__tests__/overlay-helpers.test.mts",
+    "test:review-trail": "tsx --test src/services/__tests__/panel-attention.test.mts src/components/__tests__/attention-navigator.test.mts",
     "test:data": "tsx --test tests/*.test.mjs tests/*.test.mts",
     "test:adapter-provenance": "tsx --test tests/adapter-provenance.test.mts tests/data-loader-cache-provenance.test.mjs",
     "test:gdelt-retry": "tsx --test --test-force-exit tests/panels/gdelt-intel-retry.test.mts",

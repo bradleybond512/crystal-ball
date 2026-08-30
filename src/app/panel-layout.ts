@@ -185,7 +185,7 @@ import { startReasoningDebug } from '@/services/reasoning-debug';
 import { startReasoningMetrics } from '@/services/reasoning-metrics';
 import { AnalystHUD } from '@/components/AnalystHUD';
 import { ReasoningDebugOverlay, ensureReasoningDebugCss } from '@/components/ReasoningDebugOverlay';
-import { startSidebarHeat } from '@/services/sidebar-heat';
+import { startSidebarHeat, type SidebarHeatController } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
 import { startAlertActivityLog } from '@/services/alert-activity-log';
@@ -756,6 +756,7 @@ export class PanelLayoutManager implements AppModule {
   private dcStrip: DataCenterPinnedStrip | null = null;
   private summaryStrip: SummaryStrip | null = null;
   private triageBar: TriageBar | null = null;
+  private sidebarHeat: SidebarHeatController | null = null;
   private stormMode: PersonalStormMode | null = null;
   private stormMount: HTMLElement | null = null;
   private _onStormDecision: ((e: Event) => void) | null = null;
@@ -926,6 +927,8 @@ export class PanelLayoutManager implements AppModule {
  this.eewStatusBar?.destroy();
  this.eewStatusBar = null;
  if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
+ this.sidebarHeat?.destroy();
+ this.sidebarHeat = null;
  if (this._onStormDecision) { document.removeEventListener('cb:storm-decision', this._onStormDecision); this._onStormDecision = null; }
  if (this.stormMode) { this.stormMode.destroy(); this.stormMode = null; }
  if (this.stormMount) { this.stormMount.remove(); this.stormMount = null; }
@@ -1278,7 +1281,7 @@ export class PanelLayoutManager implements AppModule {
  startAlertDebug();
  startAlertActivityLog();
  startAlertReactions();
- startSidebarHeat();
+ this.sidebarHeat = startSidebarHeat(notificationStack.element);
  startAlertCorrelator();
  startSituationAlertBridge();
  startRulesEngineBootstrap();
@@ -3563,6 +3566,7 @@ export class PanelLayoutManager implements AppModule {
  this.makeDraggable(el, key);
  this.insertPanelInOrder(key, el);
  panel.toggle(this.ctx.panelSettings[key]?.enabled ?? true);
+ this.sidebarHeat?.refresh();
  return panel;
  } catch (error) {
  console.warn(`[panel-layout] lazy panel '${key}' failed to load`, error);

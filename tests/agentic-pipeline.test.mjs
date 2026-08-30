@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -235,10 +235,24 @@ test('the data-loader override guards the text-pinned wiring test', () => {
 
 test('the UX-010 native controller selects its focused wiring suite', () => {
   const index = deriveScriptIndex({
-    'test:ux010-native': 'node --test tests/ux010-location-startup.test.mjs',
+    'test:ux010-native': 'node --test tests/ux010-location-startup.test.mjs tests/ux010-native-gate.test.mjs',
   });
   const result = selectScripts(['src-tauri/src/current_location.rs'], index, OVERRIDES);
   assert.deepEqual(result, { scripts: ['test:ux010-native'], unmapped: [] });
+});
+
+test('the UX-010 native runner keeps trusted selection while executing its Rust contract gate', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const command = scripts['test:ux010-native'];
+  assert.equal(
+    command,
+    'node --test tests/ux010-location-startup.test.mjs tests/ux010-native-gate.test.mjs',
+  );
+  assert.equal(isRunnerAllowlisted(command), true);
+  assert.deepEqual(commandToStages(command, '/repo/node_modules/.bin'), [{
+    bin: process.execPath,
+    args: ['--test', 'tests/ux010-location-startup.test.mjs', 'tests/ux010-native-gate.test.mjs'],
+  }]);
 });
 
 test('UCDP source and boundary tests select the focused provider suite', () => {

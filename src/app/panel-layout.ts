@@ -185,7 +185,7 @@ import { startReasoningDebug } from '@/services/reasoning-debug';
 import { startReasoningMetrics } from '@/services/reasoning-metrics';
 import { AnalystHUD } from '@/components/AnalystHUD';
 import { ReasoningDebugOverlay, ensureReasoningDebugCss } from '@/components/ReasoningDebugOverlay';
-import { startSidebarHeat, type SidebarHeatController } from '@/services/sidebar-heat';
+import type { SidebarHeatController } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
 import { startAlertActivityLog } from '@/services/alert-activity-log';
@@ -1281,7 +1281,14 @@ export class PanelLayoutManager implements AppModule {
  startAlertDebug();
  startAlertActivityLog();
  startAlertReactions();
+ void import('@/services/sidebar-heat')
+ .then(({ startSidebarHeat }) => {
+ if (this.destroyed) return;
  this.sidebarHeat = startSidebarHeat(notificationStack.element);
+ })
+ .catch((error) => {
+ console.warn('[panel-layout] sidebar heat failed to load during boot', error);
+ });
  startAlertCorrelator();
  startSituationAlertBridge();
  startRulesEngineBootstrap();

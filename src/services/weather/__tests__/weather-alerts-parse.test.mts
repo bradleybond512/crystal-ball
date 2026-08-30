@@ -299,6 +299,21 @@ test('zero coordinates are valid and malformed geometry is explicitly incomplete
   assert.equal(alert?.polygonAreas, undefined);
 });
 
+test('zero-area outer and hole rings make polygon evidence invalid', () => {
+  for (const coordinates of [
+    [[[0, 0], [1, 1], [2, 2], [0, 0]]],
+    [[[0, 0], [2, 0], [0, 2], [0, 0]], [[1, 1], [1, 1], [1, 1], [1, 1]]],
+  ]) {
+    const feature = featureWith('Severe');
+    feature.geometry = { type: 'Polygon', coordinates } as never;
+
+    const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+    assert.equal(alert?.geometryStatus, 'invalid');
+    assert.equal(alert?.polygonAreas, undefined);
+    assert.deepEqual(alert?.coordinates, []);
+  }
+});
+
 test('UGC values are allowlist-filtered, deduplicated, and marked incomplete when any are rejected', () => {
   const feature = featureWith('Severe');
   feature.properties.geocode = { UGC: ['INC091', 'INC091', 'bad', '', 'INZ103'] };
@@ -316,6 +331,69 @@ test('a genuinely absent UGC field is distinct from malformed UGC evidence', () 
   const invalid = featureWith('Severe');
   invalid.properties.geocode = { UGC: 'INC091' as never };
   assert.equal(normalizeWeatherAlertsResponse({ features: [invalid] } as never)[0]?.ugcStatus, 'invalid');
+});
+
+test('only a truly missing geocode container is absent; present malformed containers are invalid', () => {
+  const missing = featureWith('Severe');
+  delete missing.properties.geocode;
+  assert.equal(normalizeWeatherAlertsResponse({ features: [missing] } as never)[0]?.ugcStatus, 'absent');
+
+  for (const geocode of [null, [], 'INC091', 42, {}, { SAME: ['018091'] }, { UGC: undefined }]) {
+    const feature = featureWith('Severe');
+    feature.properties.geocode = geocode as never;
+    const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+    assert.equal(alert?.ugcStatus, 'invalid');
+    assert.deepEqual(alert?.ugcZones, []);
+  }
+});
+
+test('response-wide polygon-area cap rejects aggregate work below every per-feature limit', () => {
+  const triangle = [[[0, 0], [1, 0], [0, 1], [0, 0]]];
+  const features = Array.from({ length: 5 }, (_, i) => {
+    const feature = featureWith('Severe');
+    feature.id = `nws-area-batch-${i}`;
+    feature.geometry = { type: 'MultiPolygon', coordinates: Array.from({ length: 128 }, () => triangle) } as never;
+    return feature;
+  });
+
+  assert.throws(
+    () => normalizeWeatherAlertsResponse({ features } as never),
+    /response exceeds polygon area limit/,
+  );
+});
+
+test('response-wide ring cap rejects aggregate work below every per-feature limit', () => {
+  const triangle = [[0, 0], [1, 0], [0, 1], [0, 0]];
+  const features = Array.from({ length: 5 }, (_, i) => {
+    const feature = featureWith('Severe');
+    feature.id = `nws-ring-batch-${i}`;
+    feature.geometry = { type: 'Polygon', coordinates: Array.from({ length: 512 }, () => triangle) } as never;
+    return feature;
+  });
+
+  assert.throws(
+    () => normalizeWeatherAlertsResponse({ features } as never),
+    /response exceeds geometry ring limit/,
+  );
+});
+
+test('response-wide vertex cap rejects aggregate work below every per-feature limit', () => {
+  const ring = Array.from({ length: 49_999 }, (_, i) => {
+    const angle = (i / 49_999) * Math.PI * 2;
+    return [Math.cos(angle), Math.sin(angle)];
+  });
+  ring.push(ring[0]!);
+  const features = Array.from({ length: 6 }, (_, i) => {
+    const feature = featureWith('Severe');
+    feature.id = `nws-batch-${i}`;
+    feature.geometry = { type: 'Polygon', coordinates: [ring] } as never;
+    return feature;
+  });
+
+  assert.throws(
+    () => normalizeWeatherAlertsResponse({ features } as never),
+    /response exceeds geometry vertex limit/,
+  );
 });
 
 test('provider geometry and UGC hard bounds fail the whole response closed', () => {

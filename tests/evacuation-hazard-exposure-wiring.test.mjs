@@ -25,10 +25,10 @@ test('the atomic weather pair is published immediately and outer failure revokes
   );
 });
 
-test('one session store uses only the existing NWS point resolver and panel teardown cannot destroy it', () => {
-  assert.match(exposure, /fetchUgcZonesForPoint/);
+test('one session store uses only the complete NWS point-jurisdiction resolver and panel teardown cannot destroy it', () => {
+  assert.match(exposure, /fetchNwsPointJurisdiction/);
   assert.match(exposure, /export const evacuationHazardExposureStore = createEvacuationHazardExposureStore\(/);
-  assert.match(exposure, /resolveZones: fetchUgcZonesForPoint/);
+  assert.match(exposure, /resolveZones: fetchNwsPointJurisdiction/);
   assert.match(panel, /evacuationHazardExposureStore/);
   assert.match(panel, /\.subscribe\(/);
   assert.match(panel, /this\.unsubHazardExposure\?\.\(\)/);

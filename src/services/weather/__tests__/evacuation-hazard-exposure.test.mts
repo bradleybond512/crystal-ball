@@ -12,7 +12,14 @@ import {
 
 const NOW = Date.parse('2026-08-30T02:00:00Z');
 const CURRENT_FEED: WeatherFeedState = { mode: 'live', timestamp: NOW - 60_000 };
-const COVERED: EndpointZoneResolution = { status: 'covered', zones: ['INC091', 'INZ103'] };
+const COVERED: EndpointZoneResolution = {
+  status: 'covered',
+  zones: ['INC091', 'INZ103'],
+  fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+  source: 'nws-points',
+  retrievedAt: NOW - 30_000,
+  validUntil: NOW + 29 * 60_000,
+};
 
 function route(coordinates: [number, number][], overrides: Partial<EvacRoute> = {}): EvacRoute {
   return {
@@ -126,7 +133,7 @@ test('only a current feed plus covered point jurisdiction and complete evidence 
   const noAlerts = evaluate(route([[-86.7, 41.6], [-86.6, 41.7]]), []);
   assert.deepEqual(noAlerts.endpoints.from, {
     status: 'no_reported_intersection',
-    retrievedAt: CURRENT_FEED.timestamp,
+    retrievedAt: COVERED.retrievedAt,
   });
 
   const stale = evaluate(
@@ -138,10 +145,30 @@ test('only a current feed plus covered point jurisdiction and complete evidence 
   assert.deepEqual(stale.endpoints.from, { status: 'unknown', reason: 'feed_not_current' });
 
   const outside = evaluate(route([[-86.7, 41.6], [-86.6, 41.7]]), [], {
-    from: { status: 'outside_jurisdiction' },
+    from: {
+      status: 'outside_jurisdiction', source: 'nws-points',
+      retrievedAt: NOW - 30_000, validUntil: NOW + 29 * 60_000,
+    },
     to: COVERED,
   });
   assert.deepEqual(outside.endpoints.from, { status: 'unknown', reason: 'outside_jurisdiction' });
+});
+
+test('stale point-jurisdiction evidence cannot authorize UGC matches or endpoint negatives', () => {
+  const stale: EndpointZoneResolution = {
+    status: 'covered',
+    zones: ['INC091'],
+    fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+    source: 'nws-points',
+    retrievedAt: NOW - 31 * 60_000,
+    validUntil: NOW - 60_000,
+  };
+  const result = evaluate(
+    route([[-86.7, 41.6], [-86.6, 41.7]]),
+    [alert({ ugcZones: ['INC091'] })],
+    { from: stale, to: COVERED },
+  );
+  assert.deepEqual(result.endpoints.from, { status: 'unknown', reason: 'jurisdiction_unknown' });
 });
 
 test('future, expired, malformed, or incomplete evidence fails endpoint misses closed', () => {
@@ -162,8 +189,14 @@ test('future, expired, malformed, or incomplete evidence fails endpoint misses c
 
 test('an invalid claimed covered-zone resolution cannot authorize an endpoint miss', () => {
   const result = evaluate(route([[0, 0], [1, 1]]), [], {
-    from: { status: 'covered', zones: [] },
-    to: { status: 'covered', zones: ['not-a-zone'] },
+    from: {
+      status: 'covered', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000,
+      fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+    },
+    to: {
+      status: 'covered', zones: ['not-a-zone'], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000,
+      fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+    },
   });
   assert.deepEqual(result.endpoints.from, { status: 'unknown', reason: 'jurisdiction_unknown' });
   assert.deepEqual(result.endpoints.to, { status: 'unknown', reason: 'jurisdiction_unknown' });
@@ -188,6 +221,34 @@ test('conflicting duplicate alert IDs fail closed independent of feed order', ()
   for (const alerts of [[matching, conflicting], [conflicting, matching]]) {
     const result = evaluate(evacRoute, alerts);
     assert.equal(result.route.status, 'unknown');
+    assert.deepEqual(result.endpoints.from, { status: 'unknown', reason: 'alert_unevaluable' });
+  }
+});
+
+test('exact duplicate alerts deduplicate without serializing full provider geometry', () => {
+  const matching = polygonAlert(square(-1, -1, 1, 1));
+  const duplicate = { ...matching, polygonAreas: matching.polygonAreas?.map((area) => ({
+    rings: area.rings.map((ring) => ring.map(([lon, lat]) => [lon, lat] as [number, number])),
+  })) };
+  Object.defineProperty(matching.polygonAreas, 'toJSON', {
+    value: () => { throw new Error('full geometry serialization is forbidden'); },
+  });
+  Object.defineProperty(duplicate.polygonAreas, 'toJSON', {
+    value: () => { throw new Error('full geometry serialization is forbidden'); },
+  });
+  const result = evaluate(route([[0, 0], [2, 0]]), [matching, duplicate]);
+  assert.equal(result.route.status, 'reported_intersection');
+  assert.equal(result.route.evidence?.alertId, matching.id);
+});
+
+test('zero-area identical and collinear rings are independently unevaluable in the evaluator', () => {
+  const degenerateRings: [number, number][][] = [
+    [[1, 1], [1, 1], [1, 1], [1, 1]],
+    [[0, 0], [1, 1], [2, 2], [0, 0]],
+  ];
+  for (const ring of degenerateRings) {
+    const result = evaluate(route([[10, 10], [11, 11]]), [polygonAlert(ring)]);
+    assert.deepEqual(result.route, { status: 'unknown', reason: 'route_coverage_unproven' });
     assert.deepEqual(result.endpoints.from, { status: 'unknown', reason: 'alert_unevaluable' });
   }
 });
@@ -229,6 +290,19 @@ test('the exact-operation budget returns unknown rather than completing an over-
   assert.deepEqual(result.route, { status: 'unknown', reason: 'evaluation_limit' });
 });
 
+test('alert preprocessing consumes the shared bounded work budget before any route scan', () => {
+  const totalBudget = { count: 1_999_997 };
+  const result = evaluateEvacuationHazardExposure({
+    route: route([[10, 10], [11, 11]]),
+    weather: { alerts: [polygonAlert(square(-1, -1, 1, 1))], feedState: CURRENT_FEED },
+    endpoints: { from: COVERED, to: COVERED },
+    now: NOW,
+    totalBudget,
+  });
+  assert.deepEqual(result.route, { status: 'unknown', reason: 'evaluation_limit' });
+  assert.ok(totalBudget.count > 2_000_000);
+});
+
 test('closure evidence is always unknown and carries no inferred road condition', () => {
   const result = evaluate(route([[0, 0], [2, 0]]), [polygonAlert(square(-1, -1, 1, 1))]);
   assert.deepEqual(result.closure, { status: 'unknown', reason: 'no_closure_feed' });
@@ -244,10 +318,10 @@ test('canonical fingerprints change for same-ID geometry or endpoint-coordinate 
   );
 });
 
-test('store publishes immutable snapshots and maps [] to outside jurisdiction while throws stay unknown', async () => {
-  const waiters = new Map<string, (zones: string[]) => void>();
+test('store publishes immutable snapshots and maps explicit outside jurisdiction while throws stay unknown', async () => {
+  const waiters = new Map<string, (resolution: unknown) => void>();
   const store = createEvacuationHazardExposureStore({
-    resolveZones: (lat, lon) => new Promise<string[]>((resolve, reject) => {
+    resolveZones: (lat, lon) => new Promise((resolve, reject) => {
       if (lat === 1) reject(new Error('network'));
       else waiters.set(`${lat},${lon}`, resolve);
     }),
@@ -258,7 +332,9 @@ test('store publishes immutable snapshots and maps [] to outside jurisdiction wh
   store.publishWeatherSnapshot({ alerts: [], feedState: CURRENT_FEED });
   store.setRoutes([route([[0, 0], [1, 1]])]);
   await new Promise((resolve) => setImmediate(resolve));
-  waiters.get('0,0')?.([]);
+  waiters.get('0,0')?.({
+    status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000,
+  });
   await new Promise((resolve) => setImmediate(resolve));
 
   const snapshot = store.getSnapshot();
@@ -272,7 +348,7 @@ test('store publishes immutable snapshots and maps [] to outside jurisdiction wh
 });
 
 test('store rejects stale zone completions after route, weather, fingerprint, or coordinate changes', async (context) => {
-  const pending: Array<{ key: string; resolve: (zones: string[]) => void }> = [];
+  const pending: Array<{ key: string; resolve: (resolution: unknown) => void }> = [];
   const store = createEvacuationHazardExposureStore({
     resolveZones: (lat, lon) => new Promise((resolve) => pending.push({ key: `${lat},${lon}`, resolve })),
     now: () => NOW,
@@ -286,16 +362,108 @@ test('store rejects stale zone completions after route, weather, fingerprint, or
 
   await new Promise((resolve) => setImmediate(resolve));
   for (const lookup of pending.filter((item) => item.key === '0,0' || item.key === '1,1')) {
-    lookup.resolve(['INC091']);
+    lookup.resolve({
+      status: 'covered',
+      zones: ['INC091'],
+      fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+      source: 'nws-points',
+      retrievedAt: NOW,
+      validUntil: NOW + 60_000,
+    });
   }
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(store.getSnapshot().results, [], 'an older route evaluation must not publish after either input changes');
 
-  for (const lookup of pending) lookup.resolve([]);
+  for (const lookup of pending) lookup.resolve({
+    status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000,
+  });
+});
+
+test('store prepares one weather generation once and reuses it across every route', async (context) => {
+  let polygonAreaReads = 0;
+  const warning = polygonAlert(square(-1, -1, 1, 1));
+  const polygonAreas = warning.polygonAreas;
+  Object.defineProperty(warning, 'polygonAreas', {
+    configurable: true,
+    get: () => {
+      polygonAreaReads += 1;
+      return polygonAreas;
+    },
+  });
+  const store = createEvacuationHazardExposureStore({
+    resolveZones: async () => ({
+      status: 'covered',
+      zones: ['INC091', 'INZ103'],
+      fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+      source: 'nws-points',
+      retrievedAt: NOW,
+      validUntil: NOW + 60_000,
+    }),
+    now: () => NOW,
+  });
+  context.after(() => store.destroy());
+  store.publishWeatherSnapshot({ alerts: [warning], feedState: CURRENT_FEED });
+  store.setRoutes([
+    route([[10, 10], [11, 11]], { id: 'route-a' }),
+    route([[12, 12], [13, 13]], { id: 'route-b' }),
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.getSnapshot().results.length, 2);
+  assert.equal(polygonAreaReads, 1, 'weather geometry must be prepared once, not once per route');
+
+  store.setRoutes([route([[14, 14], [15, 15]], { id: 'route-c' })]);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(polygonAreaReads, 1, 'route-only changes reuse the prepared weather generation');
+});
+
+test('store never caches failures and expires successful point-jurisdiction evidence', async (context) => {
+  let currentTime = NOW;
+  let calls = 0;
+  const store = createEvacuationHazardExposureStore({
+    resolveZones: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('transient network failure');
+      return {
+        status: 'covered' as const,
+        zones: ['INC091', 'INZ103'],
+        fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
+        source: 'nws-points' as const,
+        retrievedAt: currentTime,
+        validUntil: currentTime + 100,
+      };
+    },
+    now: () => currentTime,
+  });
+  context.after(() => store.destroy());
+  const sameEndpointRoute = route([[0, 0], [0, 0]]);
+  store.publishWeatherSnapshot({ alerts: [], feedState: CURRENT_FEED });
+  store.setRoutes([sameEndpointRoute]);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+  assert.deepEqual(store.getSnapshot().results[0]?.endpoints.from, {
+    status: 'unknown', reason: 'jurisdiction_unknown',
+  });
+
+  store.publishWeatherSnapshot({ alerts: [], feedState: { ...CURRENT_FEED } });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 2, 'a transient failure must not be cached');
+  assert.deepEqual(store.getSnapshot().results[0]?.endpoints.from, {
+    status: 'no_reported_intersection', retrievedAt: NOW,
+  });
+
+  currentTime += 101;
+  store.publishWeatherSnapshot({ alerts: [], feedState: { ...CURRENT_FEED } });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 3, 'expired jurisdiction evidence must be fetched again');
 });
 
 test('destroy invalidates in-flight work and subscription ownership', async () => {
-  let resolve!: (zones: string[]) => void;
+  let resolve!: (resolution: unknown) => void;
   const store = createEvacuationHazardExposureStore({
     resolveZones: () => new Promise((done) => { resolve = done; }),
     now: () => NOW,
@@ -307,7 +475,7 @@ test('destroy invalidates in-flight work and subscription ownership', async () =
   await new Promise((done) => setImmediate(done));
   const beforeDestroy = notifications;
   store.destroy();
-  resolve([]);
+  resolve({ status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000 });
   await new Promise((done) => setImmediate(done));
   assert.equal(notifications, beforeDestroy);
 });

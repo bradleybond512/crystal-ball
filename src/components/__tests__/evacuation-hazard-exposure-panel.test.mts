@@ -43,6 +43,7 @@ globals.getComputedStyle = happyWindow.getComputedStyle.bind(happyWindow);
 globals.matchMedia = happyWindow.matchMedia.bind(happyWindow);
 
 const { EvacuationPanel } = await import('../EvacuationPanel.ts');
+const { addSavedPlace, removeSavedPlace } = await import('../../services/saved-places.ts');
 
 const NOW = Date.now();
 
@@ -250,6 +251,36 @@ test('renders covered endpoint negatives and bounded unknown reasons without rou
   assert.doesNotMatch(text, /\b(?:safe|clear|open|passable|reachable)\b/i);
 
   panel.destroy();
+});
+
+test('preserves both custom route selections and keyboard focus across asynchronous evidence updates', (context) => {
+  const fromPlace = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7 });
+  const toPlace = addSavedPlace({ name: 'Shelter', lat: 41.7, lon: -86.8 });
+  const savedRoute = route();
+  saveRoutes([savedRoute]);
+  const store = new FakeExposureStore();
+  const panel = mount(store);
+  context.after(() => {
+    panel.destroy();
+    removeSavedPlace(fromPlace.id);
+    removeSavedPlace(toPlace.id);
+  });
+
+  const fromSelect = panel.getContentElement().querySelector<HTMLSelectElement>('[data-evac-field="from"]');
+  const toSelect = panel.getContentElement().querySelector<HTMLSelectElement>('[data-evac-field="to"]');
+  assert.ok(fromSelect);
+  assert.ok(toSelect);
+  fromSelect.value = fromPlace.id;
+  toSelect.value = toPlace.id;
+  toSelect.focus();
+
+  store.emit({ generation: 1, results: [] });
+
+  const refreshedFrom = panel.getContentElement().querySelector<HTMLSelectElement>('[data-evac-field="from"]');
+  const refreshedTo = panel.getContentElement().querySelector<HTMLSelectElement>('[data-evac-field="to"]');
+  assert.equal(refreshedFrom?.value, fromPlace.id, 'the From selection must survive an evidence refresh');
+  assert.equal(refreshedTo?.value, toPlace.id, 'the To selection must survive an evidence refresh');
+  assert.equal(document.activeElement, refreshedTo, 'the focused custom field must retain keyboard focus');
 });
 
 test('does not render a hazard evidence section when no saved route exists', () => {

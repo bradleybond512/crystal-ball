@@ -500,6 +500,12 @@
   outline-offset: 2px;
 }
 
+.attention-navigator-summary:focus-visible {
+  border-radius: var(--r-xs);
+  outline: 2px solid var(--accent-primary, #0a84ff);
+  outline-offset: 2px;
+}
+
 .panel[data-attention-severity],
 #panelsGrid > [data-panel][data-attention-severity] {
   border-inline-start: 3px solid var(--attention-color);

@@ -1851,3 +1851,409 @@ The combined command exited zero; `git diff --check` produced no output. No
 final production behavior changed in this cycle. The only tracked changes are
 this evidence document and the two approved evaluator test-fixture corrections;
 the only untracked path remains the intentional `node_modules` symlink.
+
+## Fresh-review provider-boundary evidence
+
+This additional evidence cycle started at exact branch tip:
+
+```text
+42b73a57e731cacad4873f75f4ee223799502522
+```
+
+The initial production checksum was:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output before the
+first mutation. The untracked `node_modules` symlink was intentionally ignored.
+
+## 45. Exact CAP field mapping retains `sent` independently of `effective`
+
+Confirmed mutation:
+
+```diff
+-        sent: optionalDate(alert.properties.sent),
++      sent: optionalDate(alert.properties.effective),
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='live normalization retains exact CAP lifecycle' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ live normalization retains exact CAP lifecycle and evidence completeness (26.104875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3781.377292
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
++ '2026-07-27T12:00:00.000Z'
+- '2026-07-27T11:55:00.000Z'
+actual: '2026-07-27T12:00:00.000Z'
+expected: '2026-07-27T11:55:00.000Z'
+operator: 'strictEqual'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 46. Missing CAP onset falls back to effective
+
+Confirmed mutation:
+
+```diff
+-        onset: reportedOnset ?? effective ?? new Date(Number.NaN),
++        onset: reportedOnset ?? new Date(Number.NaN),
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='missing onset preserves null reported onset' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ missing onset preserves null reported onset and uses effective for legacy onset (2.547875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 496.175333
+RangeError: Invalid time value
+    at Date.toISOString (<anonymous>)
+    at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux011-hazard-closure-exposure/src/services/weather/__tests__/weather-alerts-parse.test.mts:174:29)
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 47. Out-of-range geometry is invalidated instead of coerced onto Earth
+
+Confirmed mutation:
+
+```diff
+-    const ring = toFiniteRing(rawRing as number[][]);
++    const ring = toFiniteRing((rawRing as number[][]).map(([lon, lat]) => [Math.max(-180, Math.min(180, lon)), Math.max(-90, Math.min(90, lat))]));
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='zero coordinates are valid and malformed geometry is explicitly incomplete' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ zero coordinates are valid and malformed geometry is explicitly incomplete (9.671375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 431.170333
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
++ 'complete'
+- 'invalid'
+actual: 'complete'
+expected: 'invalid'
+operator: 'strictEqual'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 48. A present non-array UGC field is invalid, not absent
+
+Confirmed mutation:
+
+```diff
+-  if (!Array.isArray(value)) return { zones: [], status: 'invalid' };
++  if (!Array.isArray(value)) return { zones: [], status: 'absent' };
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='a genuinely absent UGC field is distinct from malformed UGC evidence' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ a genuinely absent UGC field is distinct from malformed UGC evidence (10.371458ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 435.389458
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
++ 'absent'
+- 'invalid'
+actual: 'absent'
+expected: 'invalid'
+operator: 'strictEqual'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 49. The polygon-area work cap is response-wide
+
+Confirmed mutation:
+
+```diff
+-  responseBudget.areas += rawAreas.length;
++  responseBudget.areas = rawAreas.length;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='response-wide polygon-area cap rejects aggregate work below every per-feature limit' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ response-wide polygon-area cap rejects aggregate work below every per-feature limit (5.2555ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 519.568417
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: /response exceeds polygon area limit/
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 50. The ring work cap is response-wide
+
+Confirmed mutation:
+
+```diff
+-  responseBudget.rings += rawArea.length;
++  responseBudget.rings = rawArea.length;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='response-wide ring cap rejects aggregate work below every per-feature limit' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ response-wide ring cap rejects aggregate work below every per-feature limit (7.462833ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 578.369791
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: /response exceeds geometry ring limit/
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 51. The per-feature polygon-area bound fails the response closed
+
+Confirmed mutation:
+
+```diff
+-const MAX_NWS_POLYGON_AREAS = 128;
++const MAX_NWS_POLYGON_AREAS = 129;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='provider geometry and UGC hard bounds fail the whole response closed' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ provider geometry and UGC hard bounds fail the whole response closed (5.2365ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 769.483042
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero and
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 52. Fresh-review evidence restoration and validation
+
+The final production checksum reproduced the initial value:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git diff --exit-code -- src/services/weather.ts` exited zero.
+
+Restored focused command:
+
+```bash
+npx tsx --test --test-name-pattern='live normalization retains exact CAP lifecycle|missing onset preserves null reported onset|zero coordinates are valid and malformed geometry is explicitly incomplete|a genuinely absent UGC field is distinct from malformed UGC evidence|response-wide polygon-area cap rejects aggregate work below every per-feature limit|response-wide ring cap rejects aggregate work below every per-feature limit|provider geometry and UGC hard bounds fail the whole response closed' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Restored focused output:
+
+```text
+✔ live normalization retains exact CAP lifecycle and evidence completeness (5.488042ms)
+✔ missing onset preserves null reported onset and uses effective for legacy onset (0.240167ms)
+✔ zero coordinates are valid and malformed geometry is explicitly incomplete (0.266084ms)
+✔ a genuinely absent UGC field is distinct from malformed UGC evidence (0.10475ms)
+✔ response-wide polygon-area cap rejects aggregate work below every per-feature limit (2.642292ms)
+✔ response-wide ring cap rejects aggregate work below every per-feature limit (0.820958ms)
+✔ provider geometry and UGC hard bounds fail the whole response closed (0.358583ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 536.2685
+```
+
+Final targeted command:
+
+```bash
+npm run test:ux011
+```
+
+Final targeted output:
+
+```text
+ℹ tests 58
+ℹ suites 0
+ℹ pass 58
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1449.721667
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 131.710166
+```
+
+Final verification commands:
+
+```bash
+npm run typecheck:all
+npm run docs:check
+git diff --check
+```
+
+Actual outcomes:
+
+```text
+> crystal-ball@2.25.147 typecheck:all
+> tsc --noEmit && tsc --noEmit -p tsconfig.api.json
+
+> crystal-ball@2.25.147 docs:check
+> node scripts/check-docs-freshness.mjs
+
+[docs:check] Documentation appears fresh.
+```
+
+The typecheck command exited zero. The documentation and diff checks exited
+zero; `git diff --check` produced no output. No production or test file remains
+modified by this cycle.

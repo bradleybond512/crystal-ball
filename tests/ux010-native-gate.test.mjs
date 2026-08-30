@@ -6,6 +6,21 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 test('focused native gate executes the current-location Rust contract', () => {
+  const bundle = spawnSync(process.execPath, [
+    'scripts/build-sidecar-xmpp.mjs',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: 60_000,
+  });
+  const bundleOutput = `${bundle.stdout ?? ''}\n${bundle.stderr ?? ''}`;
+
+  assert.equal(bundle.error, undefined, bundleOutput);
+  assert.equal(bundle.signal, null, bundleOutput);
+  assert.equal(bundle.status, 0, bundleOutput);
+  assert.match(bundleOutput, /build:sidecar-xmpp\s+src-tauri\/sidecar\/s2u-xmpp\.bundle\.mjs/);
+
   const result = spawnSync('cargo', [
     'test',
     '--manifest-path',

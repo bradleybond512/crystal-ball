@@ -309,9 +309,9 @@ test('closure evidence is always unknown and carries no inferred road condition'
 });
 
 test('canonical fingerprints change for same-ID geometry or endpoint-coordinate changes', () => {
-  const original = route([[0, 0], [1, 1]]);
+  const original = route([[0, 0], [1, 1], [2, 2]]);
   assert.equal(canonicalEvacRouteFingerprint(original), canonicalEvacRouteFingerprint({ ...original }));
-  assert.notEqual(canonicalEvacRouteFingerprint(original), canonicalEvacRouteFingerprint(route([[0, 0], [2, 2]])));
+  assert.notEqual(canonicalEvacRouteFingerprint(original), canonicalEvacRouteFingerprint(route([[0, 0], [1, 2], [2, 2]])));
   assert.notEqual(
     canonicalEvacRouteFingerprint(original),
     canonicalEvacRouteFingerprint({ ...original, from: { ...original.from, lon: 0.1 } }),
@@ -463,9 +463,9 @@ test('store never caches failures and expires successful point-jurisdiction evid
 });
 
 test('destroy invalidates in-flight work and subscription ownership', async () => {
-  let resolve!: (resolution: unknown) => void;
+  const resolvers: Array<(resolution: unknown) => void> = [];
   const store = createEvacuationHazardExposureStore({
-    resolveZones: () => new Promise((done) => { resolve = done; }),
+    resolveZones: () => new Promise((done) => { resolvers.push(done); }),
     now: () => NOW,
   });
   let notifications = 0;
@@ -475,7 +475,9 @@ test('destroy invalidates in-flight work and subscription ownership', async () =
   await new Promise((done) => setImmediate(done));
   const beforeDestroy = notifications;
   store.destroy();
-  resolve({ status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000 });
+  for (const resolve of resolvers) {
+    resolve({ status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000 });
+  }
   await new Promise((done) => setImmediate(done));
   assert.equal(notifications, beforeDestroy);
 });

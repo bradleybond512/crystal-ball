@@ -1034,3 +1034,820 @@ Final output:
 
 `git diff --check` exited zero before that final test run. No production behavior
 was changed during the repair-cycle adversarial verification.
+
+## Final-review evidence-only cycle
+
+This human-approved evidence-only cycle started at exact tip
+`609456f2c008bc9160f8b8a13b6f244543e0c221`. Initial
+`git status --porcelain --untracked-files=no` produced no output; the sole
+untracked path was the intentional `node_modules` symlink. The production
+checksums before mutation were:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+57f5d3c0ac67a4a19bea404870f6323746ce29c6cd495fee6c6e345970e305bf  src/components/EvacuationPanel.ts
+```
+
+Baseline `npm run test:ux011` output:
+
+```text
+ℹ tests 58
+ℹ pass 58
+ℹ fail 0
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+```
+
+For every production mutation below, `git diff -- <file>` produced the shown
+diff before the focused command. After every proof, `apply_patch` restored the
+production file, `shasum -a 256` reproduced the corresponding checksum above,
+and `git diff --exit-code -- <file>` exited zero. Before the two explicitly
+recorded test-fixture corrections, `git status --porcelain --untracked-files=no`
+again produced no output after every restoration.
+
+## 29. Provider rejects missing or unknown CAP status
+
+Confirmed mutation:
+
+```diff
+-  if (!RECOGNIZED_CAP_STATUSES.has(status as string)) {
++  if (false && !RECOGNIZED_CAP_STATUSES.has(status as string)) {
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='missing or unrecognized CAP status' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ missing or unrecognized CAP status rejects the whole batch
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 30. Canonical fingerprint includes route geometry
+
+The first confirmed geometry-only mutation exposed a test-fixture coupling:
+
+```diff
+-    route.geometry.coordinates,
++    [],
+```
+
+Command before test correction:
+
+```bash
+npx tsx --test --test-name-pattern='canonical fingerprints change' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Output before test correction:
+
+```text
+✔ canonical fingerprints change for same-ID geometry or endpoint-coordinate changes
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+The changed-geometry fixture also changed the route endpoint, so endpoint fields
+kept the fingerprint unequal after geometry was removed. Production was restored
+to checksum
+`70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc`,
+and `git status --porcelain --untracked-files=no` again produced no output.
+
+The human-approved fixture-only correction kept both endpoints constant and
+changed only an interior coordinate:
+
+```diff
+-  const original = route([[0, 0], [1, 1]]);
++  const original = route([[0, 0], [1, 1], [2, 2]]);
+   assert.equal(canonicalEvacRouteFingerprint(original), canonicalEvacRouteFingerprint({ ...original }));
+-  assert.notEqual(canonicalEvacRouteFingerprint(original), canonicalEvacRouteFingerprint(route([[0, 0], [2, 2]])));
++  assert.notEqual(canonicalEvacRouteFingerprint(original), canonicalEvacRouteFingerprint(route([[0, 0], [1, 2], [2, 2]])));
+```
+
+With restored production, the two corrected focused fixtures passed:
+
+```text
+✔ canonical fingerprints change for same-ID geometry or endpoint-coordinate changes
+✔ destroy invalidates in-flight work and subscription ownership
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+```
+
+The identical confirmed geometry-only production mutation was then repeated:
+
+```diff
+-    route.geometry.coordinates,
++    [],
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='canonical fingerprints change' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output after fixture correction:
+
+```text
+✖ canonical fingerprints change for same-ID geometry or endpoint-coordinate changes
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to:
+
+'["route-1",[0,0,"A",null,null],[2,2,"B",null,null],10,12,"LineString",[],[],1788055080000]'
+actual: '["route-1",[0,0,"A",null,null],[2,2,"B",null,null],10,12,"LineString",[],[],1788055080000]'
+expected: '["route-1",[0,0,"A",null,null],[2,2,"B",null,null],10,12,"LineString",[],[],1788055080000]'
+operator: 'notStrictEqual'
+```
+
+Restored checksum/status:
+
+```text
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+ M src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+## 31. Store snapshots are deeply immutable
+
+Confirmed mutation:
+
+```diff
+ function deepFreeze<T>(value: T): T {
+-  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+-    Object.freeze(value);
+-    for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+-  }
+   return value;
+ }
+```
+
+The natural focused command printed the intended failed assertion, but the test
+calls `store.destroy()` only after its immutability assertions. Once the
+assertion failed, its transition timer remained live. The run was interrupted
+after 56 seconds and reported:
+
+```text
+✖ store publishes immutable snapshots and maps explicit outside jurisdiction while throws stay unknown
+ℹ tests 2
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 1
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok(Object.isFrozen(snapshot))
+
+actual: false
+expected: true
+operator: '=='
+```
+
+Without changing the test or production mutation, the focused run was repeated
+with forced test-process teardown solely to capture a complete red footer:
+
+```bash
+npx tsx --test --test-force-exit --test-name-pattern='store publishes immutable snapshots' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Complete mutated output:
+
+```text
+✖ store publishes immutable snapshots and maps explicit outside jurisdiction while throws stay unknown
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok(Object.isFrozen(snapshot))
+
+actual: false
+expected: true
+operator: '=='
+```
+
+The force-exit flag was not added to any repository script. Production was
+restored to checksum
+`70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc`;
+`git diff --exit-code -- src/services/weather/evacuation-hazard-exposure.ts`
+exited zero, and `git status --porcelain --untracked-files=no` produced no
+output at that point in the cycle.
+
+## 32. Destroy invalidates every in-flight endpoint completion
+
+Before the test correction, the following confirmed mutation removed the
+destroyed emission guard, stale-completion destroyed guard, generation
+invalidations, listener clearing, and route/fingerprint invalidations:
+
+```diff
+@@ -887,7 +887,6 @@ export function createEvacuationHazardExposureStore(
+   function emit(results: readonly EvacuationHazardExposure[]): void {
+-    if (destroyed) return;
+     snapshot = deepFreeze({ generation: snapshot.generation + 1, results: [...results] });
+@@ -970,8 +969,7 @@ export function createEvacuationHazardExposureStore(
+     })).then((endpointResolutions) => {
+       if (
+-        destroyed
+-        || lifecycleGeneration !== capturedLifecycle
++        lifecycleGeneration !== capturedLifecycle
+         || weatherGeneration !== capturedWeather
+@@ -1061,16 +1059,10 @@ export function createEvacuationHazardExposureStore(
+     destroy(): void {
+       if (destroyed) return;
+       destroyed = true;
+-      lifecycleGeneration += 1;
+-      weatherGeneration += 1;
+-      routeGeneration += 1;
+       clearTransitionTimer();
+-      listeners.clear();
+       zoneCache.clear();
+       zonePending.clear();
+       preparedWeatherCache = null;
+-      routes = [];
+-      fingerprints = [];
+     },
+```
+
+Command before test correction:
+
+```bash
+npx tsx --test --test-name-pattern='destroy invalidates in-flight work' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Output before test correction:
+
+```text
+✔ destroy invalidates in-flight work and subscription ownership
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+The resolver fixture overwrote one `resolve` variable for two distinct endpoint
+promises and resolved only the final promise. `Promise.all` therefore never
+completed, so the stale-completion guard was not exercised. Production was
+restored to checksum
+`70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc`,
+and `git status --porcelain --untracked-files=no` again produced no output.
+
+The human-approved fixture-only correction retained and resolved every endpoint
+resolver without changing the expectation:
+
+```diff
+@@ -463,9 +463,9 @@ test('store never caches failures and expires successful point-jurisdiction evid
+-  let resolve!: (resolution: unknown) => void;
++  const resolvers: Array<(resolution: unknown) => void> = [];
+   const store = createEvacuationHazardExposureStore({
+-    resolveZones: () => new Promise((done) => { resolve = done; }),
++    resolveZones: () => new Promise((done) => { resolvers.push(done); }),
+     now: () => NOW,
+   });
+@@ -475,7 +475,9 @@ test('destroy invalidates in-flight work and subscription ownership', async () =
+   const beforeDestroy = notifications;
+   store.destroy();
+-  resolve({ status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000 });
++  for (const resolve of resolvers) {
++    resolve({ status: 'outside-jurisdiction', zones: [], source: 'nws-points', retrievedAt: NOW, validUntil: NOW + 60_000 });
++  }
+   await new Promise((done) => setImmediate(done));
+```
+
+With restored production, the corrected focused fixture passed as part of the
+`2 pass / 0 fail` command quoted in proof 30. The identical broad production
+mutation above was then repeated.
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='destroy invalidates in-flight work' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output after fixture correction:
+
+```text
+✖ destroy invalidates in-flight work and subscription ownership
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+4 !== 3
+actual: 4
+expected: 3
+operator: 'strictEqual'
+```
+
+Restored checksum/status:
+
+```text
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+ M src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+## 33. Destroy releases subscription ownership
+
+Confirmed mutation notified every listener during destroy before clearing it:
+
+```diff
+       routeGeneration += 1;
+       clearTransitionTimer();
++      for (const listener of listeners) listener(snapshot);
+       listeners.clear();
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='destroy invalidates in-flight work' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ destroy invalidates in-flight work and subscription ownership
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+4 !== 3
+actual: 4
+expected: 3
+operator: 'strictEqual'
+```
+
+Production was restored to checksum
+`70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc`;
+`git diff --exit-code -- src/services/weather/evacuation-hazard-exposure.ts`
+exited zero, and `git status --porcelain --untracked-files=no` showed only the
+approved evaluator test-fixture correction.
+
+## 34. Provider requires bounded event text
+
+Confirmed mutation:
+
+```diff
+-  requiredBoundedString(properties.event, 'event', MAX_NWS_EVENT_LENGTH);
++  if (properties.event !== undefined) requiredBoundedString(properties.event, 'event', MAX_NWS_EVENT_LENGTH);
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='missing, blank, or oversized identifiers and event text' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ missing, blank, or oversized identifiers and event text reject the batch
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 35. Provider preserves Polygon and MultiPolygon areas and holes
+
+Confirmed mutation:
+
+```diff
+-        polygonAreas: polygonEvidence.areas,
++        polygonAreas: undefined,
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='Polygon holes are preserved|MultiPolygon areas and their holes are preserved' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ Polygon holes are preserved for evidence consumers while legacy coordinates retain the outer ring
+✖ MultiPolygon areas and their holes are preserved while legacy polygonRings retain every outer
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+actual: undefined
+expected: [ { rings: [Array] } ]
+operator: 'deepStrictEqual'
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+actual: undefined
+expected: [ { rings: [Array] }, { rings: [Array] } ]
+operator: 'deepStrictEqual'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 36. Provider accepts valid zero longitude and latitude
+
+Confirmed mutation:
+
+```diff
+-      typeof lon !== 'number' || !Number.isFinite(lon) ||
+-      typeof lat !== 'number' || !Number.isFinite(lat) ||
++      !lon || typeof lon !== 'number' || !Number.isFinite(lon) ||
++      !lat || typeof lat !== 'number' || !Number.isFinite(lat) ||
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='zero coordinates are valid' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ zero coordinates are valid and malformed geometry is explicitly incomplete
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
++ 'invalid'
+- 'complete'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 37. Provider UGC allowlist rejects malformed codes
+
+Confirmed mutation:
+
+```diff
+-    if (typeof code !== 'string' || !/^[A-Z]{2}[CZ]\d{3}$/.test(code)) {
++    if (typeof code !== 'string') {
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='UGC values are allowlist-filtered' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ UGC values are allowlist-filtered, deduplicated, and marked incomplete when any are rejected
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  [
+    'INC091',
++   'bad',
++   '',
+    'INZ103'
+  ]
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 38. Provider enforces the UGC hard bound
+
+Confirmed mutation:
+
+```diff
+-const MAX_NWS_UGC_CODES = 2048;
++const MAX_NWS_UGC_CODES = 2049;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='provider geometry and UGC hard bounds' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ provider geometry and UGC hard bounds fail the whole response closed
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 39. Closure truth remains invariantly unknown
+
+Confirmed mutation:
+
+```diff
+-    closure: { status: 'unknown', reason: 'no_closure_feed' } as const,
++    closure: { status: 'unknown', reason: 'route_coverage_unproven' } as const,
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='closure evidence is always unknown' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ closure evidence is always unknown and carries no inferred road condition
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  {
++   reason: 'route_coverage_unproven',
+-   reason: 'no_closure_feed',
+    status: 'unknown'
+  }
+```
+
+Restored checksum/status:
+
+```text
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 40. Provider rejects missing or unknown CAP message type
+
+Confirmed mutation:
+
+```diff
+-  if (!RECOGNIZED_MESSAGE_TYPES.has(messageType as string)) {
++  if (false && !RECOGNIZED_MESSAGE_TYPES.has(messageType as string)) {
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='missing or unrecognized message type' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ missing or unrecognized message type rejects the whole batch
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 41. Provider retains only Actual Alert/Update lifecycle products
+
+Confirmed mutation:
+
+```diff
+-  if (status !== 'Actual' || !RETAINED_MESSAGE_TYPES.has(messageType as string)) return false;
++  if (false && (status !== 'Actual' || !RETAINED_MESSAGE_TYPES.has(messageType as string))) return false;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='only Actual CAP status is retained|only Alert and Update message types are retained' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ only Actual CAP status is retained while recognized non-Actual statuses are dropped
+✖ only Alert and Update message types are retained
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+actual: [ { id: 'nws-x', event: 'Special Weather Statement', severity: 'Severe', headline: 'h', description: 'd', areaDesc: 'Somewhere, US', sent: 2026-07-27T11:55:00.000Z, effective: 2026-07-27T12:00:00.000Z, reportedOnset: 2026-07-27T12:00:00.000Z, onset: 2026-07-27T12:00:00.000Z, expires: 2026-07-27T13:00:00.000Z, status: undefined, messageType: 'Alert', coordinates: [], polygonRings: undefined, polygonAreas: undefined, geometryStatus: 'absent', centroid: undefined, ugcZones: [Array], ugcStatus: 'complete' } ]
+expected: []
+operator: 'deepStrictEqual'
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+actual: [ { id: 'nws-x', event: 'Special Weather Statement', severity: 'Severe', headline: 'h', description: 'd', areaDesc: 'Somewhere, US', sent: 2026-07-27T11:55:00.000Z, effective: 2026-07-27T12:00:00.000Z, reportedOnset: 2026-07-27T12:00:00.000Z, onset: 2026-07-27T12:00:00.000Z, expires: 2026-07-27T13:00:00.000Z, status: 'Actual', messageType: undefined, coordinates: [], polygonRings: undefined, polygonAreas: undefined, geometryStatus: 'absent', centroid: undefined, ugcZones: [Array], ugcStatus: 'complete' } ]
+expected: []
+operator: 'deepStrictEqual'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 42. Provider fails closed on malformed lifecycle dates
+
+Confirmed mutation:
+
+```diff
+ function requiredDate(value: unknown, field: string): Date {
+   const date = optionalDate(value);
+-  if (!date) throw new Error(`NWS alert feature has invalid ${field}`);
++  if (!date) return new Date(0);
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='invalid required lifecycle fields|invalid optional onset' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ invalid required lifecycle fields reject the live response
+✖ an invalid optional onset rejects the live response instead of using effective
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 43. Provider requires a bounded alert identifier
+
+Confirmed mutation:
+
+```diff
+-  requiredBoundedString(feature.id, 'identifier', MAX_NWS_IDENTIFIER_LENGTH);
++  if (feature.id !== undefined) requiredBoundedString(feature.id, 'identifier', MAX_NWS_IDENTIFIER_LENGTH);
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='missing, blank, or oversized identifiers and event text' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ missing, blank, or oversized identifiers and event text reject the batch
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+actual: undefined
+expected: undefined
+operator: 'throws'
+```
+
+Restored checksum/status:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+```
+
+`git status --porcelain --untracked-files=no` produced no output.
+
+## 44. Final-review cycle restoration and validation
+
+Final production checksums reproduced the initial values:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+57f5d3c0ac67a4a19bea404870f6323746ce29c6cd495fee6c6e345970e305bf  src/components/EvacuationPanel.ts
+```
+
+`git diff --exit-code` over all three production files exited zero. The final
+approved evaluator test-fixture checksum was:
+
+```text
+84c2178d7b42fd52a0395c100cbabe64a879f594ea008542b8e8e2da7c390832  src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Final targeted command:
+
+```bash
+npm run test:ux011
+```
+
+Final targeted output:
+
+```text
+ℹ tests 58
+ℹ suites 0
+ℹ pass 58
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2511.752583
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 226.687792
+```
+
+Final verification commands:
+
+```bash
+npm run typecheck:all
+npm run docs:check
+git diff --check
+```
+
+Actual outcomes:
+
+```text
+> crystal-ball@2.25.147 typecheck:all
+> tsc --noEmit && tsc --noEmit -p tsconfig.api.json
+
+> crystal-ball@2.25.147 docs:check
+> node scripts/check-docs-freshness.mjs
+
+[docs:check] Documentation appears fresh.
+```
+
+The combined command exited zero; `git diff --check` produced no output. No
+final production behavior changed in this cycle. The only tracked changes are
+this evidence document and the two approved evaluator test-fixture corrections;
+the only untracked path remains the intentional `node_modules` symlink.

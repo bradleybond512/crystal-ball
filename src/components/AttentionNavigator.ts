@@ -111,6 +111,7 @@ export class AttentionNavigator {
     this.summaryElement = document.createElement('span');
     this.summaryElement.className = 'attention-navigator-summary';
     this.summaryElement.setAttribute('aria-live', 'polite');
+    this.summaryElement.tabIndex = -1;
     this.nextButton = makeButton('Next unreviewed', 'next');
     header.append(title, this.summaryElement, this.nextButton);
 
@@ -170,7 +171,7 @@ export class AttentionNavigator {
         )].find((candidate) => candidate.dataset.panelId === nextPanelId);
         (nextReview ?? this.nextButton).focus();
       } else {
-        this.nextButton.focus();
+        this.summaryElement.focus();
       }
     }
   };

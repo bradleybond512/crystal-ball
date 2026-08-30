@@ -163,6 +163,27 @@ test('Mark reviewed advances to the next pane returned by the review transaction
   document.removeEventListener('cb:navigate-panel', onNavigate);
 });
 
+test('Mark reviewed keeps focus in the trail when the queue becomes empty', () => {
+  const { AttentionNavigator } = moduleUnderTest;
+  let navigator: InstanceType<typeof AttentionNavigator>;
+  navigator = new AttentionNavigator({
+    onReview: () => {
+      navigator.update({ panels: [], severityCounts: {}, promotedPanelIds: [] });
+    },
+  });
+  navigator.mount(document.body);
+  navigator.update(snapshot());
+  const review = navigator.getElement().querySelector<HTMLElement>(
+    '[data-attention-action="review"][data-panel-id="weather"]',
+  )!;
+  review.focus();
+
+  click(review);
+
+  assert.equal(document.activeElement?.classList.contains('attention-navigator-summary'), true);
+  navigator.destroy();
+});
+
 test('renders a truthful clear state when no pane needs review', async () => {
   const { AttentionNavigator } = moduleUnderTest;
   const navigator = new AttentionNavigator({ onReview: () => {} });

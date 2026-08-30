@@ -255,6 +255,21 @@ test('the UX-010 native runner keeps trusted selection while executing its Rust 
   }]);
 });
 
+test('the UX-010 native gate generates its ignored Tauri resource before Cargo', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const fullCommand = scripts['test:ux010'];
+  const nativeGate = readFileSync(join(root, 'tests/ux010-native-gate.test.mjs'), 'utf8');
+  const bundleIndex = nativeGate.indexOf("'scripts/build-sidecar-xmpp.mjs'");
+  const cargoIndex = nativeGate.indexOf("spawnSync('cargo'");
+
+  assert.match(fullCommand, /&& node --test tests\/ux010-native-gate\.test\.mjs$/);
+  assert.doesNotMatch(fullCommand, /cargo test/);
+  assert.match(nativeGate, /spawnSync\(process\.execPath, \[\s*'scripts\/build-sidecar-xmpp\.mjs',?\s*\]/);
+  assert.ok(bundleIndex >= 0, 'native gate must invoke the checked-in XMPP bundle generator');
+  assert.ok(cargoIndex > bundleIndex, 'resource generation must happen before Cargo');
+  assert.match(nativeGate, /'--manifest-path',\s*'src-tauri\/Cargo\.toml',\s*'--test',\s*'current_location_contract'/);
+});
+
 test('targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner', () => {
   const workflow = readFileSync(join(root, '.github/workflows/targeted-tests.yml'), 'utf8');
   const selectionIndex = workflow.indexOf('- name: Select and run targeted suites');

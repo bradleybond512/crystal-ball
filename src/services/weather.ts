@@ -10,8 +10,13 @@ export interface WeatherAlert {
   headline: string;
   description: string;
   areaDesc: string;
+  sent?: Date;
+  effective?: Date;
+  reportedOnset?: Date | null;
   onset: Date;
   expires: Date;
+  status?: 'Actual';
+  messageType?: 'Alert' | 'Update';
   coordinates: [number, number][];
   /** All outer rings of the alert geometry (one per sub-polygon of a
    *  MultiPolygon; a single ring for a Polygon). Present ONLY when the alert
@@ -20,28 +25,38 @@ export interface WeatherAlert {
    *  over every ring or a warning whose 2nd+ sub-polygon covers the user reads
    *  as clear. Consumers that do point-in-polygon prefer this when set. */
   polygonRings?: [number, number][][];
+  polygonAreas?: WeatherAlertPolygonArea[];
+  geometryStatus?: WeatherEvidenceStatus;
   centroid?: [number, number];
   /** UGC zone/county codes the alert applies to (from properties.geocode.UGC).
    *  Used as the geometry-free fallback when an alert has no polygon. */
   ugcZones: string[];
+  ugcStatus?: WeatherEvidenceStatus;
 }
 
+export interface WeatherAlertPolygonArea {
+  rings: [number, number][][];
+}
+
+export type WeatherEvidenceStatus = 'absent' | 'complete' | 'invalid';
+
 interface NWSAlert {
-  id: string;
+  id?: unknown;
   properties: {
- event: string;
- severity: string;
- headline: string;
- description: string;
- areaDesc: string;
- onset: string;
- expires: string;
- geocode?: { UGC?: string[]; SAME?: string[] };
+ status?: unknown;
+ messageType?: unknown;
+ event?: unknown;
+ severity?: unknown;
+ headline?: unknown;
+ description?: unknown;
+ areaDesc?: unknown;
+ sent?: unknown;
+ effective?: unknown;
+ onset?: unknown;
+ expires?: unknown;
+ geocode?: { UGC?: unknown; SAME?: unknown };
   };
-  geometry?: {
- type: string;
- coordinates: number[][][] | number[][];
-  };
+  geometry?: { type?: unknown; coordinates?: unknown } | null;
 }
 
 interface NWSResponse {
@@ -75,6 +90,136 @@ const PROTECTED_SEVERITY_RANK = 3;
  *  single source of truth. A feature whose severity is outside this set cannot
  *  be classified as severe-or-not, so it must not be allowed to prove clear. */
 const RECOGNIZED_SEVERITIES = new Set(Object.keys(SEVERITY_RANK));
+const RECOGNIZED_CAP_STATUSES = new Set(['Actual', 'Draft', 'Exercise', 'System', 'Test']);
+const RECOGNIZED_MESSAGE_TYPES = new Set(['Alert', 'Update', 'Cancel', 'Ack', 'Error']);
+const RETAINED_MESSAGE_TYPES = new Set(['Alert', 'Update']);
+const MAX_NWS_IDENTIFIER_LENGTH = 4096;
+const MAX_NWS_EVENT_LENGTH = 1024;
+const MAX_NWS_UGC_CODES = 2048;
+const MAX_NWS_POLYGON_AREAS = 128;
+const MAX_NWS_GEOMETRY_RINGS = 512;
+const MAX_NWS_GEOMETRY_VERTICES = 50_000;
+
+function optionalDate(value: unknown): Date | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 64) return undefined;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : undefined;
+}
+
+function requiredDate(value: unknown, field: string): Date {
+  const date = optionalDate(value);
+  if (!date) throw new Error(`NWS alert feature has invalid ${field}`);
+  return date;
+}
+
+function requiredBoundedString(value: unknown, field: string, maxLength: number): string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > maxLength) {
+    throw new Error(`NWS alert feature has invalid ${field}`);
+  }
+  return value;
+}
+
+function shouldRetainLiveFeature(feature: NWSAlert): boolean {
+  const properties = feature?.properties;
+  const status = properties?.status;
+  const messageType = properties?.messageType;
+  if (!RECOGNIZED_SEVERITIES.has(properties?.severity as string)) {
+    throw new Error('NWS alert feature has unclassifiable severity');
+  }
+  if (!RECOGNIZED_CAP_STATUSES.has(status as string)) {
+    throw new Error('NWS alert feature has unclassifiable CAP status');
+  }
+  if (!RECOGNIZED_MESSAGE_TYPES.has(messageType as string)) {
+    throw new Error('NWS alert feature has unclassifiable message type');
+  }
+  if (status !== 'Actual' || !RETAINED_MESSAGE_TYPES.has(messageType as string)) return false;
+
+  requiredBoundedString(feature.id, 'identifier', MAX_NWS_IDENTIFIER_LENGTH);
+  requiredBoundedString(properties.event, 'event', MAX_NWS_EVENT_LENGTH);
+  requiredDate(properties.sent, 'sent time');
+  requiredDate(properties.effective, 'effective time');
+  requiredDate(properties.expires, 'expiry time');
+  if (properties.onset !== undefined && properties.onset !== null && properties.onset !== '') {
+    requiredDate(properties.onset, 'onset time');
+  }
+  return true;
+}
+
+function normalizeUgcEvidence(value: unknown): {
+  zones: string[];
+  status: WeatherEvidenceStatus;
+} {
+  if (value === undefined) return { zones: [], status: 'absent' };
+  if (!Array.isArray(value)) return { zones: [], status: 'invalid' };
+  if (value.length > MAX_NWS_UGC_CODES) throw new Error('NWS alert feature exceeds UGC code limit');
+
+  const zones: string[] = [];
+  const seen = new Set<string>();
+  let invalid = false;
+  for (const code of value) {
+    if (typeof code !== 'string' || !/^[A-Z]{2}[CZ]\d{3}$/.test(code)) {
+      invalid = true;
+      continue;
+    }
+    if (!seen.has(code)) {
+      seen.add(code);
+      zones.push(code);
+    }
+  }
+  return { zones, status: invalid ? 'invalid' : 'complete' };
+}
+
+interface GeometryBudget {
+  rings: number;
+  vertices: number;
+}
+
+function normalizePolygonArea(rawArea: unknown, budget: GeometryBudget): WeatherAlertPolygonArea | undefined {
+  if (!Array.isArray(rawArea) || rawArea.length === 0) return undefined;
+  budget.rings += rawArea.length;
+  if (budget.rings > MAX_NWS_GEOMETRY_RINGS) {
+    throw new Error('NWS alert feature exceeds geometry ring limit');
+  }
+
+  const rings: [number, number][][] = [];
+  for (const rawRing of rawArea) {
+    if (!Array.isArray(rawRing)) return undefined;
+    budget.vertices += rawRing.length;
+    if (budget.vertices > MAX_NWS_GEOMETRY_VERTICES) {
+      throw new Error('NWS alert feature exceeds geometry vertex limit');
+    }
+    const ring = toFiniteRing(rawRing as number[][]);
+    if (ring.length < 3) return undefined;
+    rings.push(ring);
+  }
+  return { rings };
+}
+
+function normalizePolygonEvidence(geometry: NWSAlert['geometry']): {
+  areas?: WeatherAlertPolygonArea[];
+  status: WeatherEvidenceStatus;
+} {
+  if (geometry === undefined || geometry === null) return { status: 'absent' };
+  if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') return { status: 'invalid' };
+  if (!Array.isArray(geometry.coordinates)) return { status: 'invalid' };
+
+  const rawAreas = geometry.type === 'Polygon'
+    ? [geometry.coordinates]
+    : geometry.coordinates;
+  if (rawAreas.length > MAX_NWS_POLYGON_AREAS) {
+    throw new Error('NWS alert feature exceeds polygon area limit');
+  }
+  if (rawAreas.length === 0) return { status: 'invalid' };
+
+  const budget: GeometryBudget = { rings: 0, vertices: 0 };
+  const areas: WeatherAlertPolygonArea[] = [];
+  for (const rawArea of rawAreas) {
+    const area = normalizePolygonArea(rawArea, budget);
+    if (!area) return { status: 'invalid' };
+    areas.push(area);
+  }
+  return { areas, status: 'complete' };
+}
 
 /**
  * Filter → prioritize → cap → normalize the raw NWS feature list into
@@ -90,35 +235,51 @@ const RECOGNIZED_SEVERITIES = new Set(Object.keys(SEVERITY_RANK));
 export function selectAndNormalizeWeatherAlerts(features: readonly NWSAlert[]): WeatherAlert[] {
   const ranked = [...features]
     .filter((alert) => alert.properties.severity !== 'Unknown')
-    .sort((a, b) => (SEVERITY_RANK[b.properties.severity] ?? 0) - (SEVERITY_RANK[a.properties.severity] ?? 0));
+    .sort((a, b) => (SEVERITY_RANK[b.properties.severity as string] ?? 0) - (SEVERITY_RANK[a.properties.severity as string] ?? 0));
   // Never shed a Severe/Extreme product — those are the ones that can be over
   // the user, and personalization runs DOWNSTREAM of this cap. Because `ranked`
   // is severe-first, the protected set is a prefix: extend the slice to cover
   // it so the cap only ever trims the Moderate/Minor tail, even in an outbreak
   // with more Severe/Extreme warnings than MAX_ACTIVE_ALERTS.
   const protectedCount = ranked.filter(
-    (a) => (SEVERITY_RANK[a.properties.severity] ?? 0) >= PROTECTED_SEVERITY_RANK,
+    (a) => (SEVERITY_RANK[a.properties.severity as string] ?? 0) >= PROTECTED_SEVERITY_RANK,
   ).length;
   return ranked
     .slice(0, Math.max(MAX_ACTIVE_ALERTS, protectedCount))
     .map((alert) => {
+      const polygonEvidence = normalizePolygonEvidence(alert.geometry);
       const rings = extractPolygonRings(alert.geometry);
       const coords = rings[0] ?? [];
+      const ugcEvidence = normalizeUgcEvidence(alert.properties.geocode?.UGC);
+      const effective = optionalDate(alert.properties.effective);
+      const reportedOnset = optionalDate(alert.properties.onset);
       return {
-        id: alert.id,
-        event: alert.properties.event,
+        id: typeof alert.id === 'string' ? alert.id : '',
+        event: typeof alert.properties.event === 'string' ? alert.properties.event : '',
         severity: alert.properties.severity as WeatherAlert['severity'],
-        headline: alert.properties.headline,
-        description: alert.properties.description?.slice(0, 500) ?? '',
-        areaDesc: alert.properties.areaDesc,
-        onset: new Date(alert.properties.onset),
-        expires: new Date(alert.properties.expires),
+        headline: typeof alert.properties.headline === 'string' ? alert.properties.headline : '',
+        description: typeof alert.properties.description === 'string' ? alert.properties.description.slice(0, 500) : '',
+        areaDesc: typeof alert.properties.areaDesc === 'string' ? alert.properties.areaDesc : '',
+        sent: optionalDate(alert.properties.sent),
+        effective,
+        reportedOnset: alert.properties.onset === undefined || alert.properties.onset === null || alert.properties.onset === ''
+          ? null
+          : reportedOnset,
+        onset: reportedOnset ?? effective ?? new Date(Number.NaN),
+        expires: optionalDate(alert.properties.expires) ?? new Date(Number.NaN),
+        status: alert.properties.status === 'Actual' ? 'Actual' : undefined,
+        messageType: alert.properties.messageType === 'Alert' || alert.properties.messageType === 'Update'
+          ? alert.properties.messageType
+          : undefined,
         coordinates: coords,
         // Only carry the multi-ring array when there is genuinely more than the
         // first ring — single-ring alerts stay lean and read `coordinates`.
         polygonRings: rings.length > 1 ? rings : undefined,
+        polygonAreas: polygonEvidence.areas,
+        geometryStatus: polygonEvidence.status,
         centroid: calculateCentroid(coords),
-        ugcZones: alert.properties.geocode?.UGC ?? [],
+        ugcZones: ugcEvidence.zones,
+        ugcStatus: ugcEvidence.status,
       };
     });
 }
@@ -176,16 +337,26 @@ export function isAlertSpatiallyUnevaluable(alert: WeatherAlert): boolean {
  * value 'Unknown' is recognized (well-formed) and passes; it is merely filtered
  * downstream by `selectAndNormalizeWeatherAlerts`.
  */
-export function normalizeWeatherAlertsResponse(data: NWSResponse | null | undefined): WeatherAlert[] {
+export function normalizeWeatherAlertsResponse(
+  data: NWSResponse | null | undefined,
+  requireCapEvidence = false,
+): WeatherAlert[] {
   if (!data || !Array.isArray(data.features)) {
     throw new Error('NWS alerts response missing features array');
   }
-  for (const feature of data.features) {
-    if (!RECOGNIZED_SEVERITIES.has(feature?.properties?.severity as string)) {
+  const retained = data.features.filter((feature) => {
+    const properties = feature?.properties;
+    const carriesCapEvidence = properties?.status !== undefined
+      || properties?.messageType !== undefined
+      || properties?.sent !== undefined
+      || properties?.effective !== undefined;
+    if (requireCapEvidence || carriesCapEvidence) return shouldRetainLiveFeature(feature);
+    if (!RECOGNIZED_SEVERITIES.has(properties?.severity as string)) {
       throw new Error('NWS alert feature has unclassifiable severity');
     }
-  }
-  return selectAndNormalizeWeatherAlerts(data.features);
+    return true;
+  });
+  return selectAndNormalizeWeatherAlerts(retained);
 }
 
 async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
@@ -195,15 +366,24 @@ async function fetchNwsAlerts(): Promise<WeatherAlert[]> {
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-  return normalizeWeatherAlertsResponse(await response.json() as NWSResponse);
+  return normalizeWeatherAlertsResponse(await response.json() as NWSResponse, true);
 }
 
 function hydrateWeatherAlertDates(alerts: WeatherAlert[]): WeatherAlert[] {
-  return alerts.map(alert => ({
-    ...alert,
-    onset: rehydrateDate(alert.onset),
-    expires: rehydrateDate(alert.expires),
-  }));
+  return alerts.map(alert => {
+    let reportedOnset = alert.reportedOnset;
+    if (reportedOnset !== undefined && reportedOnset !== null) {
+      reportedOnset = rehydrateDate(reportedOnset);
+    }
+    return {
+      ...alert,
+      sent: alert.sent === undefined ? undefined : rehydrateDate(alert.sent),
+      effective: alert.effective === undefined ? undefined : rehydrateDate(alert.effective),
+      reportedOnset,
+      onset: rehydrateDate(alert.onset),
+      expires: rehydrateDate(alert.expires),
+    };
+  });
 }
 
 export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {

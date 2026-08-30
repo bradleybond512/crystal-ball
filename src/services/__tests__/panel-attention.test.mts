@@ -154,13 +154,20 @@ test('strict persistence rejects corrupt, duplicate, and oversized ledgers', asy
   }
 });
 
-test('persistence compacts reviewed identities against active evidence and bounds writes', async () => {
-  const { loadReviewLedger, persistReviewLedger } = await moduleUnderTest();
+test('persistence retains reviewed evidence while it is temporarily inactive', async () => {
+  const { loadReviewLedger, persistReviewLedger, projectPanelAttention } = await moduleUnderTest();
   const storage = new MemoryStorage();
-  const reviewed = [{ id: 'old', observedAt: 1 }, { id: 'active', observedAt: 2 }];
+  const reviewed = [{ id: 'snoozed', observedAt: 1 }, { id: 'active', observedAt: 2 }];
 
-  assert.equal(persistReviewLedger(reviewed, [{ id: 'active', observedAt: 2 }], storage), true);
-  assert.deepEqual(loadReviewLedger(storage), [{ id: 'active', observedAt: 2 }]);
+  assert.equal(persistReviewLedger(reviewed, storage), true);
+  const reloaded = loadReviewLedger(storage);
+  assert.deepEqual(reloaded, reviewed);
+
+  const reactivated = projectPanelAttention(
+    [alert('snoozed', 'weather', 60, 'high', 1)],
+    { score, route, reviewed: reloaded, incumbents: [] },
+  );
+  assert.equal(reactivated.panels[0]?.unreviewedCount, 0);
 });
 
 test('default persistence uses quota-safe eviction and preserves the session review write', async () => {
@@ -186,7 +193,7 @@ test('default persistence uses quota-safe eviction and preserves the session rev
 
   try {
     const identity = { id: 'active', observedAt: 2 };
-    assert.equal(persistReviewLedger([identity], [identity]), true);
+    assert.equal(persistReviewLedger([identity]), true);
     assert.deepEqual(loadReviewLedger(), [identity]);
     assert.equal(values.has('wm-unified-alerts-v1'), false, 'disposable cache was evicted for the precious review write');
   } finally {

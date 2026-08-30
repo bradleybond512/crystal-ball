@@ -476,3 +476,561 @@ Final output:
 ```
 
 `git diff --check` also exited zero. No production behavior was changed during this adversarial verification.
+
+## Independent-review repair cycle
+
+The first independent-review repair cycle was verified at exact commit
+`39f2fba83c90c5c2b35b533421b041e6d6c6c928`. Before the first mutation,
+`git status --porcelain --untracked-files=no` produced no output. The sole
+untracked path was the intentional `node_modules` symlink.
+
+Baseline command:
+
+```bash
+npm run test:ux011
+```
+
+Baseline output:
+
+```text
+ℹ tests 58
+ℹ pass 58
+ℹ fail 0
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+```
+
+Repair-cycle production baseline and restored SHA-256 values:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+57f5d3c0ac67a4a19bea404870f6323746ce29c6cd495fee6c6e345970e305bf  src/components/EvacuationPanel.ts
+```
+
+Each mutation below was applied alone. `git diff -- <file>` confirmed the
+mutation before its focused command ran. The production file was restored
+afterward, its SHA-256 reproduced the value above, and
+`git diff --exit-code -- <file>` exited zero.
+
+## 15. Provider rejects zero-area rings
+
+Confirmed mutation:
+
+```diff
+-    if (!isUsableMatchRing(ring)) return undefined;
++    if (ring.length < 3) return undefined;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='zero-area outer and hole rings' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ zero-area outer and hole rings make polygon evidence invalid
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
++ 'complete'
+- 'invalid'
+```
+
+## 16. Present malformed geocode is invalid, not absent
+
+Confirmed mutation:
+
+```diff
+   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+-    return { zones: [], status: 'invalid' };
++    return { zones: [], status: 'absent' };
+   }
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='only a truly missing geocode container' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ only a truly missing geocode container is absent; present malformed containers are invalid
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
++ 'absent'
+- 'invalid'
+```
+
+## 17. Response-wide vertex cap
+
+Confirmed mutation reset the response budget for every feature:
+
+```diff
+-      const polygonEvidence = normalizePolygonEvidence(alert.geometry, responseGeometryBudget);
++      const polygonEvidence = normalizePolygonEvidence(alert.geometry, { areas: 0, rings: 0, vertices: 0 });
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='response-wide vertex cap' src/services/weather/__tests__/weather-alerts-parse.test.mts
+```
+
+Mutated output:
+
+```text
+✖ response-wide vertex cap rejects aggregate work below every per-feature limit
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected exception.
+expected: /response exceeds geometry vertex limit/
+operator: 'throws'
+```
+
+## 18. `/points` requires fire-weather jurisdiction evidence
+
+Confirmed mutation reused the forecast zone instead of reading and validating
+the required `fireWeatherZone` field:
+
+```diff
+-    fireWeatherZone: parseNwsZoneUrl(properties.fireWeatherZone, 'fire'),
++    fireWeatherZone: parseNwsZoneUrl(properties.forecastZone, 'forecast'),
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='malformed or incomplete 200 point body' src/services/weather/__tests__/weather-ugc-fetch.test.mts
+```
+
+Mutated output:
+
+```text
+✖ a malformed or incomplete 200 point body fails closed
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Missing expected rejection.
+operator: 'rejects'
+```
+
+## 19. Evaluator independently rejects zero-area rings
+
+Confirmed mutation:
+
+```diff
+   if (!consumePreparation(total, raw.length + 1)
+     || counts.rings > MAX_RINGS
+-    || counts.vertices > MAX_VERTICES
+-    || !isUsableMatchRing(raw)) return null;
++    || counts.vertices > MAX_VERTICES) return null;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='zero-area identical and collinear rings' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ zero-area identical and collinear rings are independently unevaluable in the evaluator
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   retrievedAt: 1788055170000,
++   status: 'no_reported_intersection'
+-   reason: 'alert_unevaluable',
+-   status: 'unknown'
+  }
+```
+
+## 20. Preprocessing consumes the shared work budget
+
+Confirmed mutation gave preprocessing a detached budget:
+
+```diff
+-  const prepared = prepareAlerts(input.weather.alerts, input.weather.feedState, now, totalBudget);
++  const prepared = prepareAlerts(input.weather.alerts, input.weather.feedState, now, { count: 0 });
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='alert preprocessing consumes the shared bounded work budget' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ alert preprocessing consumes the shared bounded work budget before any route scan
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   reason: 'route_coverage_unproven',
+-   reason: 'evaluation_limit',
+    status: 'unknown'
+  }
+```
+
+## 21. One preparation per weather generation
+
+Confirmed mutation re-prepared provider geometry inside the per-route map:
+
+```diff
+-        prepared,
++        prepareAlerts(weather.alerts, weather.feedState, evaluationNow, totalBudget),
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='store prepares one weather generation once' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ store prepares one weather generation once and reuses it across every route
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: weather geometry must be prepared once, not once per route
+3 !== 1
+```
+
+## 22. Point-jurisdiction currency gate
+
+The first confirmed mutation exposed a genuine fixture coupling and returned
+`1 pass / 0 fail`: the stale covered fixture listed only `INC091`, while its
+three declared fields also required `INZ103`. It was therefore rejected as
+structurally incomplete before currency was evaluated. Production was restored.
+The test fixture was hardened from:
+
+```diff
+-    zones: ['INC091'],
++    zones: ['INC091', 'INZ103'],
+```
+
+With production restored, the focused test passed:
+
+```text
+✔ stale point-jurisdiction evidence cannot authorize UGC matches or endpoint negatives
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+```
+
+The identical production mutation was then repeated and confirmed:
+
+```diff
+ function validJurisdictionCurrency(retrievedAt: number, validUntil: number, now: number): boolean {
+-  return Number.isFinite(retrievedAt)
+-    && Number.isFinite(validUntil)
+-    && retrievedAt <= now
+-    && validUntil >= now
+-    && validUntil >= retrievedAt
+-    && validUntil - retrievedAt <= NWS_POINT_JURISDICTION_TTL_MS;
++  return Number.isFinite(retrievedAt) && Number.isFinite(validUntil) && Number.isFinite(now);
+ }
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='stale point-jurisdiction evidence' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output after the test repair:
+
+```text
+✖ stale point-jurisdiction evidence cannot authorize UGC matches or endpoint negatives
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   evidence: {
++     alertId: 'alert-1',
++     basis: 'ugc',
++     effectiveAt: 1788054300000,
++     event: 'Tornado Warning',
++     expiresAt: 1788057000000,
++     onsetAt: 1788054600000,
++     retrievedAt: 1788055140000,
++     sentAt: 1788054000000,
++     severity: 'Extreme',
++     source: 'National Weather Service active alerts',
++     ugcZone: 'INC091'
++   },
++   status: 'reported_intersection'
+-   reason: 'jurisdiction_unknown',
+-   status: 'unknown'
+  }
+```
+
+## 23. Endpoint-negative retrieval-time provenance after structured lookup
+
+Confirmed mutation:
+
+```diff
+-  return { status: 'no_reported_intersection', retrievedAt: zones.retrievedAt };
++  return { status: 'no_reported_intersection', retrievedAt: 0 };
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='only a current feed plus covered point jurisdiction' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ only a current feed plus covered point jurisdiction and complete evidence proves an endpoint miss
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   retrievedAt: 0,
+-   retrievedAt: 1788055170000,
+    status: 'no_reported_intersection'
+  }
+```
+
+## 24. Successful jurisdiction-cache expiry
+
+Confirmed mutation returned cached jurisdiction evidence without validating its
+currency or evicting it:
+
+```diff
+     const cached = zoneCache.get(key);
+-    if (cached) {
+-      const validated = validateZoneResolution(cached, now());
+-      if (validated.status !== 'unknown') return Promise.resolve(validated);
+-      zoneCache.delete(key);
+-    }
++    if (cached) return Promise.resolve(cached);
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='store never caches failures and expires successful point-jurisdiction evidence' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ store never caches failures and expires successful point-jurisdiction evidence
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: expired jurisdiction evidence must be fetched again
+2 !== 3
+```
+
+## 25. Transient resolver failures are neither fabricated nor cached
+
+Confirmed mutation converted a rejection into cached outside-jurisdiction
+evidence:
+
+```diff
+-      }, () => ({ status: 'unknown' }) as EndpointZoneResolution)
++      }, () => {
++        const currentTime = now();
++        const resolution: EndpointZoneResolution = {
++          status: 'outside_jurisdiction',
++          source: 'nws-points',
++          retrievedAt: currentTime,
++          validUntil: currentTime + NWS_POINT_JURISDICTION_TTL_MS,
++        };
++        zoneCache.set(key, resolution);
++        return resolution;
++      })
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='store never caches failures and expires successful point-jurisdiction evidence' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ store never caches failures and expires successful point-jurisdiction evidence
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   reason: 'outside_jurisdiction',
+-   reason: 'jurisdiction_unknown',
+    status: 'unknown'
+  }
+```
+
+## 26. Conflicting duplicate IDs fail closed
+
+Confirmed mutation treated every same-ID alert as identical:
+
+```diff
+-  const same = samePreparedAlert(previous, current, total);
++  const same = true;
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='conflicting duplicate alert IDs fail closed' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ conflicting duplicate alert IDs fail closed independent of feed order
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'reported_intersection'
+- 'unknown'
+```
+
+## 27. Duplicate handling does not serialize full provider geometry
+
+Confirmed mutation:
+
+```diff
+   for (const alert of relevant.alerts) {
++    JSON.stringify(alert.polygonAreas);
+     const current = prepareCurrentAlert(alert, feedState, now, total);
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='exact duplicate alerts deduplicate without serializing full provider geometry' src/services/weather/__tests__/evacuation-hazard-exposure.test.mts
+```
+
+Mutated output:
+
+```text
+✖ exact duplicate alerts deduplicate without serializing full provider geometry
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+Error: full geometry serialization is forbidden
+    at JSON.stringify (<anonymous>)
+    at prepareAlerts (src/services/weather/evacuation-hazard-exposure.ts:451:10)
+```
+
+## 28. Custom From/To values survive asynchronous rerender
+
+Confirmed mutation:
+
+```diff
+   this.content.innerHTML = parts.join('');
+-  this.restoreCustomRouteSelections(customRouteSelections);
+   this.restoreFocusedControl(focused);
+```
+
+Command:
+
+```bash
+npx tsx --test --test-name-pattern='preserves both custom route selections' src/components/__tests__/evacuation-hazard-exposure-panel.test.mts
+```
+
+Mutated output:
+
+```text
+✖ preserves both custom route selections and keyboard focus across asynchronous evidence updates
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+AssertionError [ERR_ASSERTION]: the From selection must survive an evidence refresh
++ actual - expected
+
++ ''
+- '4e2996c1-0c0a-4e06-8ef5-dfef205a173e'
+```
+
+The expected value above is the UUID produced by the test's saved-place fixture
+on that exact run.
+
+## Repair-cycle restoration and validation
+
+The three production files reproduced their pre-mutation SHA-256 values:
+
+```text
+3d515d7048419e247ce76175e265397b980dbc2e21fede5ca3ab93f107e1a7bc  src/services/weather.ts
+70b1191153597004251152f50e555c4d54e4c9cd7575c0e810519fcff22dd7dc  src/services/weather/evacuation-hazard-exposure.ts
+57f5d3c0ac67a4a19bea404870f6323746ce29c6cd495fee6c6e345970e305bf  src/components/EvacuationPanel.ts
+```
+
+`git diff --exit-code` over those three production files exited zero. The
+hardened evaluator test has SHA-256
+`23a7481422be9bf9e1b670529c88cba960ec1cbf899b579468bee2e22b009c19`.
+`git status --short` showed only this evidence document, that one test fixture
+hardening edit, and the intentional untracked `node_modules` symlink.
+
+Final command:
+
+```bash
+npm run test:ux011
+```
+
+Final output:
+
+```text
+ℹ tests 58
+ℹ suites 0
+ℹ pass 58
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1294.367583
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 133.732917
+```
+
+`git diff --check` exited zero before that final test run. No production behavior
+was changed during the repair-cycle adversarial verification.

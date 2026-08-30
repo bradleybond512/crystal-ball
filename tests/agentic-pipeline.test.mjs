@@ -255,6 +255,67 @@ test('the UX-010 native runner keeps trusted selection while executing its Rust 
   }]);
 });
 
+test('the UX-010 suite decomposes into exactly four trusted direct-spawn stages', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const command = scripts['test:ux010'];
+
+  assert.equal(isRunnerAllowlisted(command), true);
+  assert.deepEqual(commandToStages(command, '/repo/node_modules/.bin'), [
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/ux010-location-startup.test.mjs'],
+    },
+    {
+      bin: '/repo/node_modules/.bin/tsx',
+      args: [
+        '--test',
+        'src/services/__tests__/location.test.mts',
+        'tests/ux010-ephemeral-local-logistics.test.mts',
+        'tests/ux010-current-location-save.test.mts',
+        'src/components/__tests__/ux010-current-location-panel.test.mts',
+      ],
+    },
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/ux010-build-gate.test.mjs'],
+    },
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/ux010-native-gate.test.mjs'],
+    },
+  ]);
+  assert.doesNotMatch(command, /(?:^|&&\s*)(?:npm|sh|bash|tsc|vite|cargo)(?:\s|$)/);
+});
+
+test('the UX-010 build gate directly executes the canonical full-variant compiler and bundler', () => {
+  const buildGate = readFileSync(join(root, 'tests/ux010-build-gate.test.mjs'), 'utf8');
+  const typeScriptIndex = buildGate.indexOf("'node_modules/typescript/bin/tsc'");
+  const viteIndex = buildGate.indexOf("'node_modules/vite/bin/vite.js'");
+
+  assert.match(buildGate, /spawnSync\(process\.execPath, \[\s*'node_modules\/typescript\/bin\/tsc'/);
+  assert.match(buildGate, /spawnSync\(process\.execPath, \[\s*'node_modules\/vite\/bin\/vite\.js',\s*'build'/);
+  assert.ok(typeScriptIndex >= 0 && viteIndex > typeScriptIndex);
+  assert.match(buildGate, /cwd: root/);
+  assert.match(buildGate, /encoding: 'utf8'/);
+  assert.match(buildGate, /VITE_VARIANT: 'full'/);
+  assert.match(buildGate, /maxBuffer: 10 \* 1024 \* 1024/);
+  assert.match(buildGate, /timeout: 300_000/);
+  assert.match(buildGate, /TypeScript full-build stage failed/);
+  assert.match(buildGate, /Vite full-build stage failed/);
+  assert.match(buildGate, /assert\.equal\(result\.error, undefined, message\)/);
+  assert.match(buildGate, /assert\.equal\(result\.signal, null, message\)/);
+  assert.match(buildGate, /assert\.equal\(result\.status, 0, message\)/);
+});
+
+test('a representative service change selects the trusted UX-010 suite', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const index = deriveScriptIndex(scripts);
+  const result = selectScripts(['src/services/location.ts'], index, OVERRIDES);
+
+  assert.equal(result.unmapped.length, 0);
+  assert.ok(result.scripts.includes('test:ux010'));
+});
+
 test('the UX-010 native gate generates its ignored Tauri resource before Cargo', () => {
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
   const fullCommand = scripts['test:ux010'];

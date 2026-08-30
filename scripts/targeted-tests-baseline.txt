@@ -651,3 +651,6 @@ src/config/panels.ts
 # UCDP provider rollout bridge: main's trusted runner cannot see this PR's
 # OVERRIDES. Remove this entry after the mapping lands on main.
 api/ucdp-classifications.js
+# UX-010 native-controller rollout bridge: main's trusted runner cannot see
+# this PR's OVERRIDES. Remove this entry after the mapping lands on main.
+src-tauri/src/current_location.rs

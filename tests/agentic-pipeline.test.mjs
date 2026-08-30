@@ -233,6 +233,14 @@ test('the data-loader override guards the text-pinned wiring test', () => {
   assert.deepEqual(scripts, ['test:providers']);
 });
 
+test('the UX-010 native controller selects its focused wiring suite', () => {
+  const index = deriveScriptIndex({
+    'test:ux010-native': 'node --test tests/ux010-location-startup.test.mjs',
+  });
+  const result = selectScripts(['src-tauri/src/current_location.rs'], index, OVERRIDES);
+  assert.deepEqual(result, { scripts: ['test:ux010-native'], unmapped: [] });
+});
+
 test('UCDP source and boundary tests select the focused provider suite', () => {
   const index = deriveScriptIndex({
     'test:ucdp-provider': 'tsx --test src/services/__tests__/ucdp-runtime-boundary.test.mts api/__tests__/ucdp-classifications.test.mjs tests/ucdp-local-boundary.test.mjs tests/ucdp-loader-freshness.test.mjs',

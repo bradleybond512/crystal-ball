@@ -1,6 +1,7 @@
 import type { EvacRoute } from '../evacuation-router';
 import {
   WEATHER_FEED_TTL_MS,
+  fetchUgcZonesForPoint,
   isWeatherFeedFresh,
   type WeatherAlert,
   type WeatherAlertPolygonArea,
@@ -48,7 +49,7 @@ export interface HazardExposureEvidence {
 
 export type HazardExposureTruth =
   | { status: 'reported_intersection'; evidence: HazardExposureEvidence }
-  | { status: 'no_reported_intersection' }
+  | { status: 'no_reported_intersection'; retrievedAt: number }
   | { status: 'unknown'; reason: HazardExposureReason };
 
 export interface EvacuationHazardExposure {
@@ -526,6 +527,7 @@ function endpointTruth(
   zones: EndpointZoneResolution,
   alerts: readonly PreparedAlert[],
   feedFresh: boolean,
+  retrievedAt: number | null,
   incomplete: boolean,
   budget: OperationBudget,
   scope: 'from' | 'to',
@@ -541,7 +543,8 @@ function endpointTruth(
   if (unevaluable) return { status: 'unknown', reason: 'alert_unevaluable' };
   if (zones.status === 'unknown') return { status: 'unknown', reason: 'jurisdiction_unknown' };
   if (zones.status === 'outside_jurisdiction') return { status: 'unknown', reason: 'outside_jurisdiction' };
-  return { status: 'no_reported_intersection' };
+  if (retrievedAt === null) return { status: 'unknown', reason: 'feed_not_current' };
+  return { status: 'no_reported_intersection', retrievedAt };
 }
 
 export function canonicalEvacRouteFingerprint(route: EvacRoute): string {
@@ -609,6 +612,7 @@ export function evaluateEvacuationHazardExposure(input: EvacuationHazardExposure
         validateZoneResolution(input.endpoints.from),
         prepared.alerts,
         feedFresh,
+        input.weather.feedState.timestamp,
         prepared.incomplete,
         budget,
         'from',
@@ -618,6 +622,7 @@ export function evaluateEvacuationHazardExposure(input: EvacuationHazardExposure
         validateZoneResolution(input.endpoints.to),
         prepared.alerts,
         feedFresh,
+        input.weather.feedState.timestamp,
         prepared.incomplete,
         budget,
         'to',
@@ -832,3 +837,7 @@ export function createEvacuationHazardExposureStore(
     },
   };
 }
+
+export const evacuationHazardExposureStore = createEvacuationHazardExposureStore({
+  resolveZones: fetchUgcZonesForPoint,
+});

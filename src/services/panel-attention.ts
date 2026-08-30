@@ -6,6 +6,7 @@ export const PANEL_REVIEW_STORAGE_KEY = 'cb-panel-review-ledger-v1';
 const MAX_REVIEW_IDENTITIES = 500;
 const MAX_REVIEW_LEDGER_CHARS = 256 * 1024;
 const MAX_EVIDENCE_ID_CHARS = 2048;
+const EVIDENCE_REVISION_PATTERN = /^[0-9a-f]{16}$/;
 const STANDARD_PROMOTION_SCORE = 30;
 const URGENT_PROMOTION_SCORE = 100;
 const MAX_PROMOTED_PANELS = 3;
@@ -25,6 +26,7 @@ const VALID_SEVERITIES = new Set<AlertSeverity>(
 export interface EvidenceIdentity {
   id: string;
   observedAt: number | null;
+  revision: string;
 }
 
 export interface PanelAttention {
@@ -68,25 +70,45 @@ function isSafeObservedAt(value: unknown): value is number {
 }
 
 function evidenceFor(alert: UnifiedAlert): EvidenceIdentity {
+  const content = JSON.stringify([
+    alert.source,
+    alert.severity,
+    alert.title,
+    alert.body,
+    alert.location?.lat ?? null,
+    alert.location?.lon ?? null,
+    alert.location?.label ?? null,
+  ]);
+  let revision = 0xCB_F2_9C_E4_84_22_23_25n;
+  for (const character of content) {
+    revision ^= BigInt(character.codePointAt(0) ?? 0);
+    revision = BigInt.asUintN(64, revision * 0x01_00_00_00_01_B3n);
+  }
   return {
     id: alert.id,
     observedAt: isSafeObservedAt(alert.timestamp) ? alert.timestamp : null,
+    revision: revision.toString(16).padStart(16, '0'),
   };
 }
 
 function identityKey(identity: EvidenceIdentity): string {
-  return JSON.stringify([identity.id, identity.observedAt]);
+  return JSON.stringify([identity.id, identity.revision]);
 }
 
 function isEvidenceIdentity(value: unknown): value is EvidenceIdentity {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   const keys = Object.keys(candidate);
-  if (keys.length !== 2 || !keys.includes('id') || !keys.includes('observedAt')) return false;
+  if (keys.length !== 3
+    || !keys.includes('id')
+    || !keys.includes('observedAt')
+    || !keys.includes('revision')) return false;
   return typeof candidate.id === 'string'
     && candidate.id.length > 0
     && candidate.id.length <= MAX_EVIDENCE_ID_CHARS
-    && (candidate.observedAt === null || isSafeObservedAt(candidate.observedAt));
+    && (candidate.observedAt === null || isSafeObservedAt(candidate.observedAt))
+    && typeof candidate.revision === 'string'
+    && EVIDENCE_REVISION_PATTERN.test(candidate.revision);
 }
 
 function uniqueBounded(identities: readonly EvidenceIdentity[]): EvidenceIdentity[] {

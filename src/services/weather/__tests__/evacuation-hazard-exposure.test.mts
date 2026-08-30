@@ -157,7 +157,7 @@ test('only a current feed plus covered point jurisdiction and complete evidence 
 test('stale point-jurisdiction evidence cannot authorize UGC matches or endpoint negatives', () => {
   const stale: EndpointZoneResolution = {
     status: 'covered',
-    zones: ['INC091'],
+    zones: ['INC091', 'INZ103'],
     fields: { forecastZone: 'INZ103', county: 'INC091', fireWeatherZone: 'INZ103' },
     source: 'nws-points',
     retrievedAt: NOW - 31 * 60_000,

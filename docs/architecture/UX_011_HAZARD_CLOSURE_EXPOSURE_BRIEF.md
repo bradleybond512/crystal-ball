@@ -1,7 +1,7 @@
 # UX-011 Hazard and Closure Exposure Feature Brief
 
-Status: discovery and architecture complete; production implementation awaits
-task-specific human approval
+Status: task-specific design approved by the human on 2026-08-29; production
+implementation in progress
 Risk: high assurance / safety-critical reasoning and provider boundaries
 Roadmap task: UX-011
 Affected variants: full; exact route and panel surfaces to confirm in discovery
@@ -257,8 +257,8 @@ current route-only disclosure without cleanup.
 
 ## Approval boundary
 
-This brief claims UX-011 for discovery and design only. Production code remains
-unchanged until the human explicitly approves this specific first slice:
+The human approved this specific first slice in direct response to the approval
+request on 2026-08-29:
 
 > I approve production implementation of the UX-011 first slice exactly as
 > designed: session-only Actual Severe/Extreme NWS hazard exposure for accepted

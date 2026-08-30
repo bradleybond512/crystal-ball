@@ -255,6 +255,116 @@ test('the UX-010 native runner keeps trusted selection while executing its Rust 
   }]);
 });
 
+test('the canonical UX-010 suite expands its pinned full build into five trusted stages', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const command = scripts['test:ux010'];
+  const inheritedEnv = { SENTINEL: 'kept', VITE_VARIANT: 'tech' };
+  const fullEnv = { ...inheritedEnv, VITE_VARIANT: 'full' };
+
+  assert.match(command, /&& npm run build:full &&/);
+  assert.equal(isRunnerAllowlisted(command), true);
+  assert.deepEqual(commandToStages(command, '/repo/node_modules/.bin', scripts, inheritedEnv), [
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/ux010-location-startup.test.mjs'],
+    },
+    {
+      bin: '/repo/node_modules/.bin/tsx',
+      args: [
+        '--test',
+        'src/services/__tests__/location.test.mts',
+        'tests/ux010-ephemeral-local-logistics.test.mts',
+        'tests/ux010-current-location-save.test.mts',
+        'src/components/__tests__/ux010-current-location-panel.test.mts',
+      ],
+    },
+    {
+      bin: process.execPath,
+      args: ['/repo/node_modules/typescript/bin/tsc'],
+      env: fullEnv,
+    },
+    {
+      bin: process.execPath,
+      args: ['/repo/node_modules/vite/bin/vite.js', 'build'],
+      env: fullEnv,
+    },
+    {
+      bin: process.execPath,
+      args: ['--test', 'tests/ux010-native-gate.test.mjs'],
+    },
+  ]);
+});
+
+test('the trusted full-build expansion pins the canonical definition and rejects near matches', () => {
+  const trustedScripts = {
+    'build:full': 'cross-env-shell VITE_VARIANT=full "tsc && vite build"',
+  };
+  const expand = (stage, scripts = trustedScripts) => commandToStages(
+    `node --test a.test.mjs && ${stage}`,
+    '/repo/node_modules/.bin',
+    scripts,
+    {},
+  );
+
+  assert.equal(isRunnerAllowlisted('npm run build:full'), false);
+  assert.throws(() => expand('npm run build:full', {}), /trusted build:full definition mismatch/);
+  for (const definition of [
+    'cross-env-shell VITE_VARIANT=tech "tsc && vite build"',
+    'cross-env-shell VITE_VARIANT=full "tsc && vite build" ',
+    "cross-env-shell VITE_VARIANT=full 'tsc && vite build'",
+    'cross-env-shell VITE_VARIANT=full "tsc && vite build && echo ok"',
+    'npm run build:full',
+  ]) {
+    assert.throws(
+      () => expand('npm run build:full', { 'build:full': definition }),
+      /trusted build:full definition mismatch/,
+      definition,
+    );
+  }
+  for (const stage of [
+    'npm  run build:full',
+    'npm run build:full -- extra',
+    'npm run build:tech',
+    'npm run test:anything',
+    'npm exec vite',
+    'npm --prefix . run build:full',
+    'cross-env-shell VITE_VARIANT=full "tsc && vite build"',
+    'tsc',
+    'vite build',
+    'cargo test',
+    'sh -c true',
+    'bash -c true',
+  ]) {
+    assert.throws(() => expand(stage), /untrusted stage runner/, stage);
+  }
+  assert.throws(
+    () => expand('npm run build:full && rm -rf /'),
+    /untrusted stage runner/,
+  );
+});
+
+test('the production trusted-main path supplies canonical scripts and inherited environment', () => {
+  const targetedRunner = readFileSync(join(root, 'scripts/targeted-tests.mjs'), 'utf8');
+
+  assert.match(
+    targetedRunner,
+    /commandToStages\(\s*mainScripts\[script\],\s*path\.join\(root, 'node_modules\/\.bin'\),\s*mainScripts,\s*process\.env,?\s*\)/,
+  );
+  assert.match(
+    targetedRunner,
+    /spawnSync\(bin, argv, \{ cwd: root, stdio: 'inherit', env: stage\.env \?\? process\.env \}\)/,
+  );
+});
+
+test('a representative service change selects the trusted UX-010 suite', () => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  const index = deriveScriptIndex(scripts);
+  const result = selectScripts(['src/services/location.ts'], index, OVERRIDES);
+
+  assert.equal(result.unmapped.length, 0);
+  assert.ok(result.scripts.includes('test:ux010'));
+});
+
 test('the UX-010 native gate generates its ignored Tauri resource before Cargo', () => {
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
   const fullCommand = scripts['test:ux010'];

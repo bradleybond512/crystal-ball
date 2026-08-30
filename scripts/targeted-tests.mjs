@@ -13,8 +13,9 @@
 // test files explicitly, and a test file at src/<area>/__tests__/x.test.mts
 // covers src/<area>/. Hand-maintained mappings drift; derived ones cannot.
 // Only plain node/tsx --test runners are eligible (allowlist, never a
-// denylist): playwright, composite npm-run chains, and bespoke harnesses are
-// never auto-selected.
+// denylist): playwright and bespoke harnesses are never auto-selected. During
+// execution, one exact main-owned full-build alias is translated to fixed Node
+// entry points without allowing npm or a shell to run.
 //
 // CI runs the copy of this script from origin/main (a PR must not control its
 // own gate), so paths resolve from the working directory, not this file.
@@ -133,13 +134,42 @@ export function isRunnerAllowlisted(command) {
 // so a main-selected suite executes MAIN's definition even if the PR rewrote
 // its package.json entry to another allowlisted-but-inert command. Commands
 // may chain runners with `&&` (e.g. test:feed-health); each stage must itself
-// be a plain tsx/node invocation or the whole command is refused.
-export function commandToStages(command, binDir = 'node_modules/.bin') {
-  return command.split('&&').map((stage) => {
-    const tokens = stage.trim().split(/\s+/).filter(Boolean);
+// be a plain tsx/node invocation or the whole command is refused. The sole
+// alias expansion is pinned to main's exact full-build definition and never
+// executes npm, a shell, or a PR-controlled package script.
+const TRUSTED_FULL_BUILD = 'cross-env-shell VITE_VARIANT=full "tsc && vite build"';
+
+export function commandToStages(
+  command,
+  binDir = 'node_modules/.bin',
+  trustedScripts = {},
+  inheritedEnv = process.env,
+) {
+  return command.split('&&').flatMap((stage) => {
+    const trimmed = stage.trim();
+    if (trimmed === 'npm run build:full') {
+      if (trustedScripts['build:full'] !== TRUSTED_FULL_BUILD) {
+        throw new Error('trusted build:full definition mismatch; refusing alias expansion');
+      }
+      const nodeModulesDir = path.dirname(binDir);
+      const env = { ...inheritedEnv, VITE_VARIANT: 'full' };
+      return [
+        {
+          bin: process.execPath,
+          args: [path.join(nodeModulesDir, 'typescript/bin/tsc')],
+          env,
+        },
+        {
+          bin: process.execPath,
+          args: [path.join(nodeModulesDir, 'vite/bin/vite.js'), 'build'],
+          env,
+        },
+      ];
+    }
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
     const [runner, ...rest] = tokens;
-    if (runner === 'node') return { bin: process.execPath, args: rest };
-    if (runner === 'tsx') return { bin: path.join(binDir, 'tsx'), args: rest };
+    if (runner === 'node') return [{ bin: process.execPath, args: rest }];
+    if (runner === 'tsx') return [{ bin: path.join(binDir, 'tsx'), args: rest }];
     throw new Error(`untrusted stage runner "${runner}" in: ${command}`);
   });
 }
@@ -262,8 +292,14 @@ function main() {
     // PR-only (new) suites run via the PR's npm.
     if (mainSel.scripts.includes(script)) {
       console.log(`\n==> [trusted:main] ${script}: ${mainScripts[script]}`);
-      for (const { bin, args: argv } of commandToStages(mainScripts[script], path.join(root, 'node_modules/.bin'))) {
-        const r = spawnSync(bin, argv, { cwd: root, stdio: 'inherit' });
+      for (const stage of commandToStages(
+        mainScripts[script],
+        path.join(root, 'node_modules/.bin'),
+        mainScripts,
+        process.env,
+      )) {
+        const { bin, args: argv } = stage;
+        const r = spawnSync(bin, argv, { cwd: root, stdio: 'inherit', env: stage.env ?? process.env });
         if (r.status !== 0) {
           failures.push(`${script} (exit ${r.status})`);
           break;

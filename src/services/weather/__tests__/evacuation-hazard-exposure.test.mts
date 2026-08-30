@@ -124,7 +124,10 @@ test('a current matching UGC zone reports endpoint exposure but never route expo
 
 test('only a current feed plus covered point jurisdiction and complete evidence proves an endpoint miss', () => {
   const noAlerts = evaluate(route([[-86.7, 41.6], [-86.6, 41.7]]), []);
-  assert.equal(noAlerts.endpoints.from.status, 'no_reported_intersection');
+  assert.deepEqual(noAlerts.endpoints.from, {
+    status: 'no_reported_intersection',
+    retrievedAt: CURRENT_FEED.timestamp,
+  });
 
   const stale = evaluate(
     route([[-86.7, 41.6], [-86.6, 41.7]]),

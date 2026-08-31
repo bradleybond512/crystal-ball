@@ -476,13 +476,15 @@ Review after: 2026-08-25
 - **Verify:** rerun `npm run main-sync:setup`, then `npm run main-sync:run`, and
   confirm the installed commit and successful phase in
   `~/.crystalball-main-sync/status.json`.
-- **Operational verification (2026-08-30):** the Node 22 LaunchAgent installed
-  canonical `main` at `ace938183462b50ef9ce871ab931e297a3e49942` through the
-  fail-closed sync path. `status.json` records `phase: idle` with matching
-  target and installed SHAs, required-check evidence from PR #1689, and the
-  canonical app at `~/Applications/Crystal Ball.app`; strict code-signature
-  verification passed. The LaunchAgent runs the persistent repair worktree with
-  `/Users/bradleybond/.cargo/bin` first in `PATH`.
+- **Operational verification (2026-08-30):** the isolated fail-closed run
+  installed canonical `main` at
+  `ace938183462b50ef9ce871ab931e297a3e49942`, recorded `phase: installed`,
+  preserved required-check evidence from PR #1689, and passed strict signature
+  verification. It also proved the repair is incomplete: the Node 22
+  coordinator's Cargo-first `PATH` resolves npm and nested package scripts
+  through Node 26. See `docs/validation/UX-017-MAIN-SYNC-EVIDENCE.md` and the
+  approval-pending design in
+  `docs/architecture/UX_017_PINNED_NODE_TOOLCHAIN_BRIEF.md`.
 
 ### UX-018 — Restore timely, authoritative forecast resolution
 
@@ -726,7 +728,7 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
-| UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
+| UX-017 | Complete Mac main-sync toolchain repair | IN PROGRESS — HIGH ASSURANCE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |

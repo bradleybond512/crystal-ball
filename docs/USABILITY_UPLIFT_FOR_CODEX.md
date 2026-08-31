@@ -642,10 +642,16 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   accessibility, teardown, and performance tests with mutation proofs;
   `npm run test:renderer`, `npm run typecheck:all`, the agentic validation gate,
   and a manual full-desktop review flow.
-- **Evidence:** PR #1689 records 22/22 focused tests, load-bearing mutation
-  proofs for projection, persistence, promotion, navigation, and lifecycle,
-  zero axe violations at full and compact widths, a passing agentic validation
-  gate, and independent review with zero blocking findings.
+- **Evidence:** PR #1689 records 24/24 focused tests, 14,637/14,637 renderer
+  tests, zero axe violations at full and compact widths, a 457.6 KiB gzip main
+  entry plus a separate 3.6 KiB review chunk, and a passing agentic validation
+  gate. Clean-tree mutation proofs confirmed each edit in `git diff` and restored
+  the recorded SHA-256: `panel-attention.ts` `eb36aea2...` (score floor: 22/24,
+  timestamp identity: 23/24, persistence bound: 23/24, promotion cap: 22/24,
+  active-cap retention: 23/24 with pane A reopening at 250 instead of 0),
+  `AttentionNavigator.ts` `5974f4c1...` (shell navigation: 23/24, review-focus
+  handoff: 22/24), and `panel-layout.ts` `5ab7a05d...` (destroy-before-load:
+  23/24). Each restored tree returned to 24/24 with no working-tree diff.
 
 ---
 

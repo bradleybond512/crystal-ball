@@ -185,3 +185,41 @@
      can keep using --hs-fg/--text-primary directly. */
   --text-on-selection: #f2f3f5;
 }
+
+/* UX-025 Smoked Liquid Glass. The opaque values are intentionally the default;
+ * supported Full dark desktop renderers opt into translucency below. */
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos {
+  --ux025-canvas: #05070b;
+  --ux025-solid-1: #0b0e13;
+  --ux025-solid-2: #11151b;
+  --ux025-solid-3: #181d25;
+
+  --ux025-chrome-fallback: #0d1117;
+  --ux025-raised-fallback: #121821;
+  --ux025-root-bg: var(--ux025-canvas);
+  --ux025-chrome-bg: var(--ux025-chrome-fallback);
+  --ux025-raised-bg: var(--ux025-raised-fallback);
+  --ux025-blur-chrome: none;
+  --ux025-blur-raised: none;
+
+  --ux025-edge-specular:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 1px 0 0 rgba(255, 255, 255, 0.035);
+  --ux025-edge-perimeter:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.62),
+    inset -1px 0 0 rgba(0, 0, 0, 0.32);
+  --ux025-edge-contrast-specular: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+  --ux025-edge-contrast-perimeter: inset 0 0 0 1px rgba(0, 0, 0, 0.8);
+
+  --ux025-control-press-scale: 0.98;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos {
+    --ux025-root-bg: rgba(5, 7, 11, 0.62);
+    --ux025-chrome-bg: rgba(8, 11, 16, 0.78);
+    --ux025-raised-bg: rgba(10, 14, 20, 0.84);
+    --ux025-blur-chrome: blur(28px) saturate(1.12);
+    --ux025-blur-raised: blur(34px) saturate(1.1);
+  }
+}

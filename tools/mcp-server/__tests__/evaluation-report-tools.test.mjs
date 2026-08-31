@@ -16,11 +16,20 @@ const REPORT = Object.freeze({
 
 test('get returns the exact latest or selected compiler report', () => {
   const calls = [];
+  const providerStatus = {
+    schemaVersion: 1,
+    weekStart: MONDAY,
+    providers: [{ provider: 'acled', lastStatus: 'not_configured' }],
+  };
   const tools = makeEvaluationReportTools({
     storage: { marker: 'storage' },
     readWeeklyEvaluationReport(storage, options) {
       calls.push({ storage, options });
       return REPORT;
+    },
+    readWeeklyProviderStatus(storage, weekStart) {
+      calls.push({ storage, weekStart });
+      return providerStatus;
     },
   });
 
@@ -28,15 +37,19 @@ test('get returns the exact latest or selected compiler report', () => {
     available: true,
     reasonCode: null,
     report: REPORT,
+    providerStatus,
   });
   assert.deepEqual(tools.get_weekly_evaluation_report({ week: '2026-07-27' }), {
     available: true,
     reasonCode: null,
     report: REPORT,
+    providerStatus,
   });
   assert.deepEqual(calls, [
     { storage: { marker: 'storage' }, options: undefined },
+    { storage: { marker: 'storage' }, weekStart: MONDAY },
     { storage: { marker: 'storage' }, options: { weekStart: MONDAY } },
+    { storage: { marker: 'storage' }, weekStart: MONDAY },
   ]);
 });
 

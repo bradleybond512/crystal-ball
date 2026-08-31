@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   generateWeeklyEvaluationReports as generateWeeklyEvaluationReportsDefault,
   readWeeklyEvaluationReport as readWeeklyEvaluationReportDefault,
+  readWeeklyProviderStatus as readWeeklyProviderStatusDefault,
 } from '../weekly-evaluation-report.mjs';
 
 const WEEK = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,6 +49,7 @@ export function makeEvaluationReportTools({
   storage,
   now = Date.now,
   readWeeklyEvaluationReport = readWeeklyEvaluationReportDefault,
+  readWeeklyProviderStatus = readWeeklyProviderStatusDefault,
   generateWeeklyEvaluationReports = generateWeeklyEvaluationReportsDefault,
 } = {}) {
   function get_weekly_evaluation_report(args = {}) {
@@ -55,13 +57,20 @@ export function makeEvaluationReportTools({
     const report = weekStart === undefined
       ? readWeeklyEvaluationReport(storage)
       : readWeeklyEvaluationReport(storage, { weekStart });
-    return report === null
-      ? {
+    if (report === null) {
+      return {
           available: false,
           reasonCode: weekStart === undefined ? 'no_weekly_report' : 'weekly_report_not_found',
           report: null,
-        }
-      : { available: true, reasonCode: null, report };
+      };
+    }
+    const providerStatus = readWeeklyProviderStatus(storage, report.period.weekStart);
+    return {
+      available: true,
+      reasonCode: null,
+      report,
+      ...(providerStatus === null ? {} : { providerStatus }),
+    };
   }
 
   function generate_weekly_evaluation_report() {

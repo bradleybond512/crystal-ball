@@ -12,15 +12,15 @@ test('get_capabilities reports domain readiness and credential coverage', async 
         keys_missing_count: 33,
       },
       feeds: [
-        { route: '/api/acled-events', status: 'error', error: 'credentials required' },
+        { route: '/api/acled-events', status: 'not_configured', reasonCode: 'credential_missing', action: 'Configure ACLED credentials.' },
         { route: '/api/market-quotes', status: 'ok', error: null },
         { route: '/api/fear-greed', status: 'ok', error: null },
         { route: '/api/nws-alerts', status: 'ok', error: null },
         { route: '/api/owm-current', status: 'error', error: 'upstream timeout' },
-        { route: '/api/threatfox-iocs', status: 'error', error: 'credentials required' },
+        { route: '/api/threatfox-iocs', status: 'not_configured', reasonCode: 'credential_missing', action: 'Configure ThreatFox credentials.' },
         { route: '/api/cisa-kev', status: 'ok', error: null },
         { route: '/api/adsb-military', status: 'ok', error: null },
-        { route: '/api/ais-snapshot', status: 'error', error: 'credentials required' },
+        { route: '/api/ais-snapshot', status: 'not_configured', reasonCode: 'credential_missing', action: 'Configure AIS credentials.' },
         { route: '/api/isw-reports', status: 'error', error: 'upstream 403' },
       ],
     },
@@ -35,6 +35,13 @@ test('get_capabilities reports domain readiness and credential coverage', async 
   assert.equal(result.data.domains.weather.status, 'partial');
   assert.equal(result.data.domains.cyber.status, 'partial');
   assert.equal(result.data.domains.military.status, 'partial');
+  assert.deepEqual(result.data.domains.conflicts.unavailable, [{
+    route: '/api/acled-events',
+    status: 'not_configured',
+    reason: 'not configured',
+    reasonCode: 'credential_missing',
+    action: 'Configure ACLED credentials.',
+  }]);
   assert.deepEqual(result.data.credentials, {
     configured: 5,
     total: 38,

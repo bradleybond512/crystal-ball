@@ -182,20 +182,20 @@ function captureSnapshot(feedHealth, algorithmResult, at) {
   const evaluation = forecast.evaluation ?? {};
   const exclusions = evaluation.overall?.exclusions ?? {};
   const sidecar = feedHealth?.data?.sidecar;
-  const feedRows = Array.isArray(feedHealth?.data?.feeds)
-    ? feedHealth.data.feeds
-    : [];
+  const feedRows = feedHealth?.data?.feeds;
+  const feedHealthValid = validFeedRows(feedRows);
   return {
     at,
     sidecarAvailable: sidecar !== null
       && typeof sidecar === 'object'
       && !sidecar.error
       && Number.isFinite(sidecar.pid),
-    feedHealthValid: Array.isArray(feedHealth?.data?.feeds),
+    feedHealthValid,
     algorithmDiagnosticsAvailable: algorithmResult?.available === true,
     algorithmDiagnosticsStale: algorithmResult?.stale === true,
-    feeds: Object.fromEntries(feedRows
-      .map((feed) => [feed.route, feed.status])),
+    feeds: feedHealthValid
+      ? Object.fromEntries(feedRows.map((feed) => [feed.route, feed.status]))
+      : {},
     brier: metricValue(evaluation.overall?.brier),
     resolutionCoverage: finiteOrNull(
       forecast.resolutionQuality?.summary?.resolutionCoverage),
@@ -207,6 +207,26 @@ function captureSnapshot(feedHealth, algorithmResult, at) {
       .map((row) => [row.key, finiteOrNull(row.shareOfBrierLoss) ?? 0])),
     quarantinedAlgorithms: quarantinedAlgorithmIds(diagnostics.health),
   };
+}
+
+function validFeedRows(value) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 128) return false;
+  const routes = new Set();
+  for (const feed of value) {
+    if (
+      feed === null
+      || typeof feed !== 'object'
+      || Array.isArray(feed)
+      || typeof feed.route !== 'string'
+      || feed.route.length < 1
+      || feed.route.length > 128
+      || !feed.route.startsWith('/api/')
+      || !['ok', 'not_configured', 'error'].includes(feed.status)
+      || routes.has(feed.route)
+    ) return false;
+    routes.add(feed.route);
+  }
+  return true;
 }
 
 function detectFindings(previous, current) {
@@ -250,7 +270,17 @@ function detectFindings(previous, current) {
     nextAction: 'Replay recent direct-outcome evidence and require manual review before restoring output.',
   })));
   for (const [route, status] of Object.entries(current.feeds)) {
-    if (status !== 'ok') {
+    if (status === 'not_configured') {
+      const changed = previous?.feeds?.[route] === 'ok';
+      findings.push({
+        id: `configuration.feed.${route}`,
+        severity: 'yellow',
+        summary: changed
+          ? `${route} changed from ready to not configured.`
+          : `${route} is not configured.`,
+        nextAction: 'Configure the optional provider credential in Crystal Ball Settings.',
+      });
+    } else if (status === 'error') {
       const changed = previous?.feeds?.[route] === 'ok';
       findings.push({
         id: `drift.feed.${route}`,

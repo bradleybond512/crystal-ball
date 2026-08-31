@@ -393,6 +393,12 @@ import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/se
 import { fewsNetToObservations, hdxHapiToObservations, type FEWSNETResponse, type HDXHAPIResponse } from '@/services/intelligence/adapters/food-security-adapter';
 import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
 import {
+  isWeatherNotificationLadderSeverity,
+  weatherEvaluationTerminalEvent,
+  weatherIngestionTerminalEvent,
+  weatherOccurrenceTraceIds,
+} from '@/services/diagnostics/weather-pipeline-terminal';
+import {
   airstrikesToObservations,
   conflictEventsToObservations,
   createConflictObservationDeduper,
@@ -1940,6 +1946,8 @@ export class DataLoaderManager implements AppModule {
  }
  }
 
+ const weatherTraceIds = weatherOccurrenceTraceIds(alerts.map((alert) => alert.id));
+
  // Wire weather alerts into the insights state singleton so Command
  // Center, Personal Impact, and Action Briefs all reflect the same
  // data view.
@@ -1953,8 +1961,11 @@ export class DataLoaderManager implements AppModule {
  try {
    const { getPipelineTraceRegistry: getPTR } = await import('@/services/diagnostics/diagnostics-state');
    const ptr = getPTR();
-   for (const evt of bridgeResult.events) {
-     ptr.record(evt.eventId, 'weather', { stage: 'ingested' });
+   for (const [index, evt] of bridgeResult.events.entries()) {
+     const traceId = weatherTraceIds[index] ?? evt.eventId;
+     ptr.record(traceId, 'weather', { stage: 'ingested' });
+     const terminal = weatherIngestionTerminalEvent(alerts[index]?.severity);
+     if (terminal) ptr.record(traceId, 'weather', terminal);
    }
  } catch { /* trace unavailable */ }
  } catch (error) {
@@ -2009,9 +2020,10 @@ export class DataLoaderManager implements AppModule {
  const weatherQuietHoursBypass = notifPrefs
  .getPreferences()
  .domains.find((d) => d.domain === 'weather')?.quietHoursOverride ?? false;
- const severeAlerts = alerts.filter(
- (a) => a.severity === 'Extreme' || a.severity === 'Severe',
- );
+ const severeAlertEntries = alerts
+ .map((alert, index) => ({ alert, traceId: weatherTraceIds[index] ?? alert.id }))
+ .filter(({ alert }) => isWeatherNotificationLadderSeverity(alert.severity));
+ const severeAlerts = severeAlertEntries.map(({ alert }) => alert);
  // Personal exposure: match each alert's polygon (or UGC zones, for
  // geometry-free alerts) against the user's saved places so an official
  // warning sitting over the user clears the Big Event Detector's
@@ -2056,7 +2068,7 @@ export class DataLoaderManager implements AppModule {
  // Treat any match failure as a reason to withhold "all clear" (fail closed),
  // the same way an unresolved UGC zone (zonesDegraded) does.
  let matchingDegraded = false;
- for (const alert of severeAlerts) {
+ for (const { alert, traceId } of severeAlertEntries) {
  const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
  // With no saved place, exposure is genuinely unknown — keep the
  // conservative default rather than fabricating a location match.
@@ -2145,10 +2157,12 @@ export class DataLoaderManager implements AppModule {
    annotateWeatherOutput(alert.id, 'alert', { observations: getRecentObservations(50).filter(o => o.domain === 'weather') }, { algorithmId: 'big-event-detector', domain: 'weather' });
  } catch { /* assumption instrumentation is non-critical */ }
  if (!bigEventResult.isBigEvent) {
-   pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: false, tier: bigEventResult.tier } });
+   pipelineTrace.record(traceId, 'weather', { stage: 'evaluated', detail: { isBigEvent: false, tier: bigEventResult.tier } });
+   const terminal = weatherEvaluationTerminalEvent(bigEventResult.isBigEvent);
+   if (terminal) pipelineTrace.record(traceId, 'weather', terminal);
    continue;
  }
- pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: true, tier: bigEventResult.tier } });
+ pipelineTrace.record(traceId, 'weather', { stage: 'evaluated', detail: { isBigEvent: true, tier: bigEventResult.tier } });
  // Dedupe: a stable per-alert key lets us detect a warning we already
  // notified for. The trace candidateId stays unique per occurrence (the
  // registry rejects duplicate ids), while situationId groups occurrences
@@ -2172,7 +2186,7 @@ export class DataLoaderManager implements AppModule {
  quietHoursBypassEnabled: weatherQuietHoursBypass,
  dedupeMatch,
  });
- pipelineTrace.record(alert.id, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });
+ pipelineTrace.record(traceId, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });
  const action = RUNG_ACTION[decision.rung] ?? null;
  if (decision.dispatched && action) {
  notificationDispatcher.dispatchNotification(

@@ -613,6 +613,42 @@ exporter can fail silently after a Homebrew Node upgrade.
   agentic validation gate, and an installed-app live probe that reports only
   schema, count, freshness, ownership, and mode.
 
+### UX-024 — Persistent pane review trail *(High Assurance)*
+
+Turn the existing alert-backed pane promotion into a finite, persistent review
+workflow without changing alert scores, thresholds, or acknowledgement state.
+
+- **Show:** every active unreviewed alert-backed pane in a fixed navigator with
+  severity counts, Next unreviewed, Open, and Mark reviewed actions. Decorate
+  mounted panes and sidebar entries with matching labeled severity accents so
+  lower-ranked issues remain discoverable while scrolling.
+- **Review semantics:** reviewing records the exact active evidence identities
+  for that pane; it never acknowledges, dismisses, pins, or snoozes an alert.
+  Newer evidence for the same alert ID reopens the pane.
+- **Promotion:** retain at most three eligible panes using the existing score
+  bands. Preserve incumbents while eligible; only an urgent-band newcomer may
+  replace a standard-band incumbent. Use CSS order only and never mutate the
+  user's saved DOM order.
+- **Constraints:** reuse `unifiedAlertStore`, `alert-routing`, the current
+  sidebar-heat subscription, and its single decay timer. Strictly validate and
+  bound persisted review state, navigate through the existing Home Shell-aware
+  resolver, use text/icons in addition to color, and respect reduced motion.
+- **Non-goals:** pane-native signals that do not emit `UnifiedAlert`, alert
+  scoring or calibration changes, provider/Tauri work, and mobile redesign.
+- **Done when:** an analyst can review every active alert-backed pane, clear the
+  queue without mutating alert truth, and see the pane reopen on new evidence;
+  no more than three panes are promoted and saved pane order remains unchanged.
+- **Verify:** focused projection, persistence, promotion, component, navigation,
+  accessibility, teardown, and performance tests with mutation proofs;
+  `npm run test:renderer`, `npm run typecheck:all`, the agentic validation gate,
+  and a manual full-desktop review flow.
+- **Evidence:** PR #1689 records 24/24 focused tests, 14,690/14,690 renderer
+  tests, zero axe violations at full and compact widths, a 457.6 KiB gzip main
+  entry plus a separate 3.7 KiB review chunk, and a passing agentic validation
+  gate. The complete clean-tree mutation transcript, confirmed diffs, exact
+  failing assertions, full restored SHA-256 values, and quoted validation output
+  are recorded in `docs/validation/UX-024-MUTATION-PROOFS.md`.
+
 ---
 
 ## What was NOT verified
@@ -660,3 +696,4 @@ Update the row in the same PR that does the work.
 | UX-021 | Optional-feed classification and recovery | NOT STARTED | — |
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
+| UX-024 | Persistent pane review trail | DONE | #1689 |

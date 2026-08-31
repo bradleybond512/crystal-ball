@@ -377,6 +377,181 @@
   text-align: center;
 }
 
+/* Persistent pane review trail */
+.attention-navigator {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-height: min(38dvh, 300px);
+  box-sizing: border-box;
+  padding: 6px 12px;
+  overflow: hidden;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
+  background: color-mix(in srgb, var(--mac-surface, #1e1e20) 94%, transparent);
+  color: var(--text-primary, #f5f5f7);
+  font: var(--text-xs)/1.25 var(--font-ui);
+  pointer-events: auto;
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+.attention-navigator-header,
+.attention-navigator-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.attention-navigator-header strong {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+}
+
+.attention-navigator-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: rgba(245, 245, 247, 0.78);
+  font-variant-numeric: tabular-nums;
+}
+
+.attention-navigator-list {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+}
+
+.attention-navigator-item {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 6px 4px 8px;
+  border-inline-start: 3px solid var(--attention-color, var(--accent-primary));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--attention-color, var(--accent-primary)) 10%, transparent);
+}
+
+[data-attention-severity='critical'] { --attention-color: var(--mac-red, #ff453a); }
+[data-attention-severity='high'] { --attention-color: #ff9f0a; }
+[data-attention-severity='medium'] { --attention-color: #ffd60a; }
+[data-attention-severity='low'],
+[data-attention-severity='info'] { --attention-color: #64d2ff; }
+
+.attention-navigator-severity,
+.panel-attention-chip,
+.panel-attention-sidebar-label {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 20px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--attention-color) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--attention-color) 14%, transparent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.attention-navigator-name {
+  max-width: 180px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-navigator-count {
+  color: rgba(245, 245, 247, 0.78);
+  white-space: nowrap;
+}
+
+.attention-navigator-button {
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 16%, transparent);
+  border-radius: var(--r-xs);
+  background: var(--mat-thin);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.attention-navigator-button:hover {
+  background: var(--accent-selection);
+}
+
+.attention-navigator-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.attention-navigator-button:focus-visible {
+  outline: 2px solid var(--accent-primary, #0a84ff);
+  outline-offset: 2px;
+}
+
+.attention-navigator-summary:focus-visible {
+  border-radius: var(--r-xs);
+  outline: 2px solid var(--accent-primary, #0a84ff);
+  outline-offset: 2px;
+}
+
+.panel[data-attention-severity],
+#panelsGrid > [data-panel][data-attention-severity] {
+  border-inline-start: 3px solid var(--attention-color);
+}
+
+.panel-attention-chip {
+  margin-inline-start: auto;
+}
+
+.mac-sidebar-panel-item[data-attention-severity] {
+  border-inline-start: 3px solid var(--attention-color);
+  background: color-mix(in srgb, var(--attention-color) 9%, transparent);
+}
+
+.panel-attention-sidebar-label {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 720px) {
+  .attention-navigator {
+    padding-inline: 8px;
+  }
+
+  .attention-navigator-header {
+    flex-wrap: wrap;
+  }
+
+  .attention-navigator-summary {
+    flex-basis: calc(100% - 96px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mac-sidebar-heat-badge,
+  .panel-alert-flash,
+  .window-alert-flash {
+    animation: none !important;
+  }
+
+  .attention-navigator *,
+  [data-attention-severity] {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Today view overlay */
 .today-view {
   position: fixed;

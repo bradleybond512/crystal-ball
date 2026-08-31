@@ -1,87 +1,110 @@
 /**
- * Sidebar heat — auto-promote panels with hot unacked alerts.
- *
- * Subscribes to the unified store and:
- *   - Adds a `.is-hot` class + count badge to sidebar items whose panel
- *     currently has scoring alerts.
- *   - Bumps the matching panel grid tile to the front via CSS `order`.
+ * Sidebar heat owns the alert-backed pane review trail. One projection refresh
+ * updates the fixed navigator, mounted pane/sidebar accents, and the three
+ * stable CSS promotion slots without changing panel DOM order.
  */
 
-import { unifiedAlertStore } from './unified-alerts';
-import { panelHeatMap, panelForAlert, scoreAlert } from './alert-routing';
+import { AttentionNavigator, applyAttentionDecorations } from '@/components/AttentionNavigator';
+import { DEFAULT_PANELS } from '@/config/panels';
 import { isAppActive } from '@/services/app-activity';
+import { panelForAlert, scoreAlert } from '@/services/alert-routing';
+import {
+  loadReviewLedger,
+  markPanelReviewed,
+  persistReviewLedger,
+  projectPanelAttention,
+  type AttentionSnapshot,
+  type EvidenceIdentity,
+} from '@/services/panel-attention';
+import { unifiedAlertStore } from '@/services/unified-alerts';
 
-const HEAT_BADGE_CLASS = 'mac-sidebar-heat-badge';
+const REFRESH_INTERVAL_MS = 30_000;
 
-function countByPanel(): Map<string, number> {
-  const counts = new Map<string, number>();
-  const now = Date.now();
-  for (const a of unifiedAlertStore.getAll()) {
-    if (scoreAlert(a, now) <= 0) continue;
-    const pid = panelForAlert(a);
-    counts.set(pid, (counts.get(pid) ?? 0) + 1);
-  }
-  return counts;
+export interface SidebarHeatController {
+  refresh(): void;
+  destroy(): void;
 }
 
-const SEV_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-function maxSeverityByPanel(): Map<string, string> {
-  const out = new Map<string, string>();
-  const now = Date.now();
-  for (const a of unifiedAlertStore.getAll()) {
-    if (a.acknowledged) continue;
-    if (scoreAlert(a, now) <= 0) continue;
-    const pid = panelForAlert(a);
-    const cur = out.get(pid);
-    if (!cur || (SEV_RANK[a.severity] ?? 0) > (SEV_RANK[cur] ?? 0)) out.set(pid, a.severity);
-  }
-  return out;
+let activeController: SidebarHeatController | null = null;
+
+function clearLegacyHeat(): void {
+  document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach((item) => {
+    item.classList.remove('is-hot', 'heat-critical', 'heat-high', 'heat-medium', 'heat-low');
+    item.querySelector('.mac-sidebar-heat-badge')?.remove();
+  });
 }
 
-function applyHeat(): void {
-  const heat = panelHeatMap(unifiedAlertStore.getAll());
-  const counts = countByPanel();
-  const maxSev = maxSeverityByPanel();
+function applyPromotions(snapshot: AttentionSnapshot): void {
+  const promoted = new Set(snapshot.promotedPanelIds);
+  document.querySelectorAll<HTMLElement>('#panelsGrid > [data-panel]').forEach((panel) => {
+    panel.style.order = promoted.has(panel.dataset.panel ?? '') ? '-1' : '';
+  });
+}
 
-  // Sidebar items
-  document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
-    const key = item.dataset.panelKey!;
-    const score = heat.get(key) ?? 0;
-    const count = counts.get(key) ?? 0;
-    const sev = maxSev.get(key);
-    item.classList.toggle('is-hot', score > 0);
-    item.classList.remove('heat-critical', 'heat-high', 'heat-medium', 'heat-low');
-    if (sev) item.classList.add(`heat-${sev}`);
-    let badge = item.querySelector<HTMLElement>(`.${HEAT_BADGE_CLASS}`);
-    if (count > 0) {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = HEAT_BADGE_CLASS;
-        item.append(badge);
+function clearPromotions(): void {
+  document.querySelectorAll<HTMLElement>('#panelsGrid > [data-panel]').forEach((panel) => {
+    panel.style.order = '';
+  });
+}
+
+export function startSidebarHeat(
+  navigatorParent: HTMLElement = document.body,
+): SidebarHeatController {
+  if (activeController) return activeController;
+
+  let reviewed: EvidenceIdentity[] = loadReviewLedger();
+  let snapshot: AttentionSnapshot = { panels: [], severityCounts: {}, promotedPanelIds: [] };
+  let destroyed = false;
+  const navigator = new AttentionNavigator({
+    getPanelName: (panelId) => DEFAULT_PANELS[panelId]?.name ?? panelId,
+    onReview: (panelId) => {
+      const panel = snapshot.panels.find((candidate) => candidate.panelId === panelId);
+      if (!panel) return;
+      reviewed = markPanelReviewed(
+        reviewed,
+        panel,
+        snapshot.panels.flatMap((candidate) => candidate.evidence),
+      );
+      if (!persistReviewLedger(reviewed)) {
+        navigator.setPersistenceDegraded(true);
       }
-      badge.textContent = String(count);
-      if (sev) badge.dataset.sev = sev;
-    } else if (badge) {
-      badge.remove();
-    }
+      controller.refresh();
+      return snapshot.panels.find((candidate) => candidate.unreviewedCount > 0)?.panelId;
+    },
   });
+  navigator.mount(navigatorParent);
 
-  // Panel grid tile order
-  document.querySelectorAll<HTMLElement>('#panelsGrid [data-panel]').forEach(tile => {
-    const key = tile.dataset.panel!;
-    const score = heat.get(key) ?? 0;
-    if (score >= 100) tile.style.order = '-2';
-    else if (score >= 30) tile.style.order = '-1';
-    else tile.style.order = '';
-  });
-}
+  const controller: SidebarHeatController = {
+    refresh(): void {
+      if (destroyed) return;
+      snapshot = projectPanelAttention(unifiedAlertStore.getAll(), {
+        score: scoreAlert,
+        route: panelForAlert,
+        reviewed,
+        incumbents: snapshot.promotedPanelIds,
+      });
+      clearLegacyHeat();
+      navigator.update(snapshot);
+      applyAttentionDecorations(snapshot);
+      applyPromotions(snapshot);
+    },
+    destroy(): void {
+      if (destroyed) return;
+      destroyed = true;
+      unsubscribe();
+      window.clearInterval(intervalId);
+      navigator.destroy();
+      clearPromotions();
+      clearLegacyHeat();
+      if (activeController === controller) activeController = null;
+    },
+  };
 
-let started = false;
-export function startSidebarHeat(): void {
-  if (started) return;
-  started = true;
-  unifiedAlertStore.subscribe(applyHeat);
-  // Periodic refresh so recency decay updates the heat even without ingest events.
-  window.setInterval(() => { if (isAppActive()) applyHeat(); }, 30_000);
-  applyHeat();
+  const unsubscribe = unifiedAlertStore.subscribe(() => controller.refresh());
+  const intervalId = window.setInterval(() => {
+    if (isAppActive()) controller.refresh();
+  }, REFRESH_INTERVAL_MS);
+  activeController = controller;
+  controller.refresh();
+  return controller;
 }

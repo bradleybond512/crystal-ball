@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/no-unused-vars, sonarjs/cognitive-complexity, sonarjs/no-os-command-from-path, sonarjs/no-nested-template-literals, unicorn/prefer-top-level-await */
-import { open, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { access, open, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,56 @@ const DEFAULT_REMOTE_URL = 'https://github.com/bradleybond512/crystal-ball.git';
 const DEFAULT_REPO_SLUG = 'bradleybond512/crystal-ball';
 const DEFAULT_BRANCH = 'main';
 const DEFAULT_INSTALL_PATH = path.join(os.homedir(), 'Applications', 'Crystal Ball.app');
+const SYSTEM_EXECUTABLE_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+
+export const NPM_VERIFICATION_COMMANDS = [
+  ['run', 'lockfile:check'],
+  ['ci'],
+  ['run', 'version:check'],
+  ['run', 'typecheck:all'],
+  ['run', 'build'],
+  ['run', 'desktop:build:app:full'],
+];
+
+export function assertSupportedMainSyncNode(version = process.versions.node) {
+  const major = Number.parseInt(String(version).split('.')[0], 10);
+  if (major !== 22) {
+ throw new Error(`Node 22 is required for main sync; running Node ${version}`);
+  }
+}
+
+export function buildLaunchAgentEnvironmentPath(homeDir = os.homedir()) {
+  return `${path.join(homeDir, '.cargo', 'bin')}:${SYSTEM_EXECUTABLE_PATH}`;
+}
+
+export function buildMainSyncToolchain(nodePath = process.execPath, env = process.env) {
+  if (typeof nodePath !== 'string' || !path.isAbsolute(nodePath)) {
+ throw new Error('Main sync requires an absolute Node executable path');
+  }
+  if (!env || typeof env.PATH !== 'string' || env.PATH.length === 0) {
+ throw new Error('Main sync requires a non-empty PATH for subprocesses');
+  }
+  const nodeDir = path.dirname(nodePath);
+  return {
+ nodePath,
+ npmPath: path.join(nodeDir, 'npm'),
+ env: {
+ ...env,
+ PATH: `${nodeDir}:${env.PATH}`,
+ },
+  };
+}
+
+export async function validatePinnedNodeToolchain(nodePath = process.execPath, env = process.env) {
+  assertSupportedMainSyncNode();
+  const toolchain = buildMainSyncToolchain(nodePath, env);
+  try {
+ await access(toolchain.npmPath, fsConstants.X_OK);
+  } catch {
+ throw new Error(`Selected Node toolchain has no executable npm sibling at ${toolchain.npmPath}`);
+  }
+  return toolchain;
+}
 
 export function buildSyncPaths(syncRoot = DEFAULT_SYNC_ROOT) {
   return {
@@ -356,18 +407,9 @@ async function isInstalledCommitHealthy(state, installPath) {
   }
 }
 
-async function runVerificationAndBuild(repoDir) {
-  const commands = [
- ['npm', ['run', 'lockfile:check']],
- ['npm', ['ci']],
- ['npm', ['run', 'version:check']],
- ['npm', ['run', 'typecheck:all']],
- ['npm', ['run', 'build']],
- ['npm', ['run', 'desktop:build:app:full']],
-  ];
-
-  for (const [command, args] of commands) {
- runLoggedCommand(command, args, { cwd: repoDir, env: process.env });
+async function runVerificationAndBuild(repoDir, toolchain) {
+  for (const args of NPM_VERIFICATION_COMMANDS) {
+ runLoggedCommand(toolchain.npmPath, args, { cwd: repoDir, env: toolchain.env });
   }
 }
 
@@ -400,6 +442,7 @@ async function main() {
   });
 
   try {
+ const toolchain = await validatePinnedNodeToolchain();
  await mkdir(options.logDir, { recursive: true });
  const state = await readJson(options.stateFile);
  const targetSha = await fetchTargetSha(options);
@@ -467,7 +510,7 @@ async function main() {
  requiredChecks,
  });
 
- await runVerificationAndBuild(options.repoDir);
+ await runVerificationAndBuild(options.repoDir, toolchain);
  const installResult = await installBuiltApp(options.repoDir, options.installPath);
  const finishedAt = new Date().toISOString();
 

@@ -5,18 +5,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { buildSyncPaths } from './sync-main-to-mac.mjs';
+import {
+  assertSupportedMainSyncNode,
+  buildLaunchAgentEnvironmentPath,
+  buildSyncPaths,
+} from './sync-main-to-mac.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const DEFAULT_LABEL = 'com.bradleybond.crystalball.main-sync';
 const LAUNCHCTL_PATH = '/bin/launchctl';
-const SYSTEM_EXECUTABLE_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 export const DEFAULT_INTERVAL_SECONDS = 300;
 
-export function buildLaunchAgentEnvironmentPath(homeDir = os.homedir()) {
-  return `${path.join(homeDir, '.cargo', 'bin')}:${SYSTEM_EXECUTABLE_PATH}`;
-}
+export { buildLaunchAgentEnvironmentPath } from './sync-main-to-mac.mjs';
 
 export function buildLaunchAgentPlist({ label, nodePath, syncScriptPath, syncRoot, logDir, intervalSeconds, envPath = buildLaunchAgentEnvironmentPath() }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -143,6 +144,7 @@ function reloadLaunchAgent(launchAgentPath, label) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  assertSupportedMainSyncNode();
   await installLaunchAgent(options);
   if (options.start) {
  reloadLaunchAgent(options.launchAgentPath, options.label);

@@ -432,7 +432,6 @@ async function installBuiltApp(repoDir, installPath) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const toolchain = await validatePinnedNodeToolchain();
   const startedAt = new Date().toISOString();
   await clearStaleLock(options.lockFile);
   const lockHandle = await acquireLock(options.lockFile).catch((error) => {
@@ -443,6 +442,7 @@ async function main() {
   });
 
   try {
+ const toolchain = await validatePinnedNodeToolchain();
  await mkdir(options.logDir, { recursive: true });
  const state = await readJson(options.stateFile);
  const targetSha = await fetchTargetSha(options);

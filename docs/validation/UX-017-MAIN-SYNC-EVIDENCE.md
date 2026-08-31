@@ -297,6 +297,7 @@ $ shasum -a 256 '/Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS
 exit status: 0
 ```
 
-UX-017 is complete: the coordinator, npm, nested Node commands, and installer
-now share the supported Node 22 trust root while Cargo and every existing
-fail-closed gate remain available.
+The controlled run verifies that the coordinator, npm, nested Node commands,
+and installer share the supported Node 22 trust root while Cargo and every
+existing fail-closed gate remain available. Final completion remains subject
+to exact-tip validation and independent review.

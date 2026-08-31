@@ -9,6 +9,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -194,16 +195,22 @@ test('main sync rejects a selected Node toolchain without an executable sibling 
   );
 });
 
-test('main sync CLI validates the pinned toolchain before creating sync state', () => {
+test('main sync CLI records failure before touching the repository when the pinned toolchain is invalid', () => {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'crystalball-main-sync-toolchain-'));
   const fakeBin = path.join(fixtureRoot, 'bin');
   const fakeLib = path.join(fixtureRoot, 'lib');
   const fakeNode = path.join(fakeBin, 'node');
   const syncRoot = path.join(fixtureRoot, 'sync-state');
+  const repoDir = path.join(syncRoot, 'repo');
+  const repoMarker = path.join(repoDir, 'unchanged.txt');
+  const statusFile = path.join(syncRoot, 'status.json');
   mkdirSync(fakeBin);
   mkdirSync(fakeLib);
+  mkdirSync(repoDir, { recursive: true });
   copyFileSync(process.execPath, fakeNode);
   chmodSync(fakeNode, 0o755);
+  writeFileSync(repoMarker, 'unchanged\n');
+  writeFileSync(statusFile, `${JSON.stringify({ phase: 'installed', targetSha: 'prior-success' }, null, 2)}\n`);
   const sourceLib = path.resolve(path.dirname(process.execPath), '..', 'lib');
   for (const name of readdirSync(sourceLib).filter((entry) => /^libnode.*\.dylib$/.test(entry))) {
     copyFileSync(path.join(sourceLib, name), path.join(fakeLib, name));
@@ -217,7 +224,11 @@ test('main sync CLI validates the pinned toolchain before creating sync state', 
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, /no executable npm sibling/);
-    assert.equal(existsSync(syncRoot), false, 'invalid toolchains must fail before sync state is created');
+    const status = JSON.parse(readFileSync(statusFile, 'utf8'));
+    assert.equal(status.phase, 'failed', 'invalid toolchains must replace stale success with a failed status');
+    assert.match(status.error, /no executable npm sibling/);
+    assert.equal(readFileSync(repoMarker, 'utf8'), 'unchanged\n');
+    assert.deepEqual(readdirSync(repoDir), ['unchanged.txt'], 'validation failure must not mutate the repository');
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

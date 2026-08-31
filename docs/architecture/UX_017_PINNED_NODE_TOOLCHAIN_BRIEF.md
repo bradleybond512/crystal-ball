@@ -1,6 +1,6 @@
 # UX-017 pinned Node toolchain brief
 
-Status: implemented and operationally verified; final review pending.
+Status: implementation repaired; exact-tip validation and final review pending.
 
 ## Goal
 
@@ -13,6 +13,8 @@ build and preserving every existing fail-closed verification and install gate.
 - Setup refuses to replace the LaunchAgent when its own runtime is not Node 22.
 - Sync refuses before clone mutation, build, or install when its runtime is not
   Node 22 or the selected Node directory has no executable npm sibling.
+- A sync toolchain failure replaces any stale successful status with
+  `phase: failed` while leaving the repository and installed app untouched.
 - Every npm command uses the absolute sibling npm path and a subprocess `PATH`
   beginning with the selected Node directory while retaining
   `/Users/bradleybond/.cargo/bin` and the existing system paths.
@@ -63,8 +65,8 @@ No CLI, plist, state, or status schema changes are required.
 ## Failure behavior
 
 - Unsupported setup runtime: fail before replacing the existing LaunchAgent.
-- Unsupported sync runtime or missing sibling npm: fail before creating or
-  changing sync state and leave the installed app untouched.
+- Unsupported sync runtime or missing sibling npm: acquire the sync lock,
+  record `phase: failed`, and leave the repository and installed app untouched.
 - Any existing check, build, signing, or install failure remains fail closed.
 - A removed versioned Node keg is repaired by rerunning setup with a valid Node
   22 executable; automatic toolchain installation is out of scope.
@@ -78,7 +80,7 @@ Focused tests must prove:
 - npm subprocess `PATH` starts with the selected Node directory and retains the
   Cargo and system paths.
 - missing sibling npm fails before command execution.
-- CLI toolchain validation fails before lock or sync-state creation.
+- CLI toolchain validation records a failed status before repository mutation.
 - setup calls the Node guard before plist installation.
 - every existing npm verification/build command behaviorally receives the
   pinned executable and environment.

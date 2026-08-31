@@ -102,8 +102,64 @@ $ codesign --verify --deep --strict --verbose=4 ~/Applications/Crystal Ball.app
 
 ## Conclusion
 
-The fail-closed build and installer completed and produced auditable installed
-state, but UX-017 is not complete: npm and nested package scripts used Node 26.
-The tracker must remain in progress until the pinned-toolchain design is
-approved, implemented, mutation-proven, reviewed, and verified by a fresh run
-without the engine warning.
+The first fail-closed build exposed the mixed-runtime defect. The remediation
+below closes it with a fresh controlled run against the then-current canonical
+`main`.
+
+## Remediation verification
+
+Captured 2026-08-31 after reinstalling the LaunchAgent from the persistent
+`codex/ux017-main-sync-verification` worktree with Node 22.
+
+The candidate derived and executed this toolchain:
+
+```json
+{
+  "nodePath": "/opt/homebrew/Cellar/node@22/22.23.1/bin/node",
+  "npmPath": "/opt/homebrew/Cellar/node@22/22.23.1/bin/npm",
+  "launchAgentPath": "/Users/bradleybond/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+  "childPath": "/opt/homebrew/Cellar/node@22/22.23.1/bin:/Users/bradleybond/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+  "nodeVersion": "v22.23.1",
+  "npmVersion": "10.9.8",
+  "cargoVersion": "cargo 1.93.1 (083ac5135 2025-12-15)"
+}
+```
+
+The LaunchAgent retained the Cargo-first path, used the absolute Node 22
+program, pointed at the persistent UX-017 worktree, and exited with status 0.
+Only npm/package-script children received the Node-first path above.
+
+The fresh canonical-main run recorded:
+
+```json
+{
+  "phase": "installed",
+  "installedAt": "2026-08-31T07:30:28.865Z",
+  "targetSha": "702dc5b0521f49542d1c6cb73238841006b9a793",
+  "installPath": "/Users/bradleybond/Applications/Crystal Ball.app",
+  "appSha256": "b3330916dd567381a1b1a4bfa72ff90093f20d4bf851e1a3b96d3cbf7bf7f063",
+  "verificationSource": "pull_request",
+  "verifiedPrNumber": 1692
+}
+```
+
+`state.json` recorded the same SHA, time, app hash, and all seven required
+checks. The candidate-run stderr window beginning at byte 24,096,523 contained
+zero `EBADENGINE` occurrences. The concluding stdout included:
+
+```text
+[install-built-app] Installed /Users/bradleybond/Applications/Crystal Ball.app
+[sync-main-to-mac] Installed 702dc5b0521f49542d1c6cb73238841006b9a793 to /Users/bradleybond/Applications/Crystal Ball.app
+```
+
+Strict signature verification returned `valid on disk` and `satisfies its
+Designated Requirement`. The installed and build-source executables both had
+SHA-256:
+
+```text
+87a5470c546f3a31fbcc8afd09ab7a3514cfbb10a558e83920efd68ce441e116
+```
+
+UX-017 is complete: the coordinator, npm, nested Node commands, and installer
+now share the supported Node 22 trust root while Cargo and every existing
+fail-closed gate remain available.

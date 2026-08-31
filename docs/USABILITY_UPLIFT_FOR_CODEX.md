@@ -455,9 +455,9 @@ two independent writers cannot fight over marker alpha.
 
 ### UX-017 — Complete fail-closed Mac main-sync toolchain repair
 
-Implementation merged through PR #1667. Post-merge operational verification is
-still required: when this task was added, the local sync agent was in its build
-phase and had not yet recorded a successful installation of current `main`.
+Implementation merged through PRs #1667 and #1693. Post-merge operational
+verification completed on 2026-08-31 from a separate, SHA-pinned controller
+checkout.
 
 Dependencies: none
 
@@ -497,6 +497,13 @@ Review after: 2026-08-25
   executable hashes matched, and strict signature verification passed. The
   exact transcript and required-check provenance are in
   `docs/validation/UX-017-MAIN-SYNC-EVIDENCE.md`.
+- **Post-merge relocation (2026-08-31):** PR #1693 merged at
+  `6357dfa582146155c2f4cd01df52737a3000b61a`. The loaded LaunchAgent now runs
+  Node 22.23.1 from the separate detached `controller` checkout while only the
+  sibling `repo` is disposable. It installed the merged target with all
+  required-check provenance, zero `EBADENGINE` warnings in a fail-closed log
+  window, matching executable hashes, a valid strict signature, and launchd
+  exit code 0. The exit condition is satisfied.
 
 ### UX-018 — Restore timely, authoritative forecast resolution
 
@@ -740,7 +747,7 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
-| UX-017 | Complete Mac main-sync toolchain repair | IN PROGRESS — HIGH ASSURANCE | #1693 |
+| UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |

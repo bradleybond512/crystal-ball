@@ -220,6 +220,8 @@ export class HomeShellOverlay {
 
     this.readinessEl = el('div', 'home-shell-readiness-slot');
     this.briefingEl = el('div', 'home-shell-briefing');
+    const intelligenceIsland = el('div', 'home-shell-intel-island');
+    intelligenceIsland.append(this.readinessEl, this.briefingEl);
     // The map backdrop now owns wheel/drag (scroll-zoom + pan), so wheeling
     // over empty areas zooms the map instead of scrolling to the deck — make
     // the hint an explicit scroll-to-deck button.
@@ -230,7 +232,7 @@ export class HomeShellOverlay {
         : this.deckEl;
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    viewport.append(this.readinessEl, this.briefingEl, deckHint);
+    viewport.append(intelligenceIsland, deckHint);
 
     this.deckEl = el('section', 'home-shell-deck');
     this.contextualEl = el('section', 'home-shell-contextual');

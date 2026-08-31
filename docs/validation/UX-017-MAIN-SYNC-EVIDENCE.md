@@ -297,6 +297,83 @@ $ shasum -a 256 '/Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS
 exit status: 0
 ```
 
+## Exact-tip validation
+
+The repair and mutation-evidence parent was validated in the clean detached
+worktree at this exact SHA:
+
+```text
+$ git rev-parse HEAD
+624a3e0390d86db8ce7733604e267fd71f6ada75
+exit status: 0
+```
+
+Standalone broad-suite command and raw TAP footer:
+
+```text
+$ PATH=/opt/homebrew/opt/node@22/bin:$PATH npm run test:data
+1..624
+# tests 1063
+# suites 91
+# pass 1063
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19680.591333
+exit status: 0
+```
+
+Agentic validation command:
+
+```text
+$ PATH=/opt/homebrew/opt/node@22/bin:$PATH bash scripts/agentic-validate.sh --tests "test:data"
+```
+
+Raw stage output and conclusion:
+
+```text
+==> npm run test:data
+# tests 1063
+# pass 1063
+# fail 0
+==> npm run lockfile:check
+[lockfile:check] package-lock.json version fields look valid.
+==> npm run lint:strict
+[lint:conflicts] No merge conflict markers found.
+[lint:json] Parsed 137 tracked JSON file(s).
+[lint:yaml] Parsed 23 tracked YAML file(s).
+[lint:shell] Checked 20 tracked shell file(s).
+[lint:md] Checked 133 Markdown file(s).
+[lint:colors] OK — 453 files with 7741 baselined literals, none exceeded. 4 file(s) improved — consider --update to ratchet the baseline down.
+==> npm run typecheck:all
+==> npm run secrets:scan
+Secret scan passed for 4719 file(s).
+==> npm run cross-agent:check
+==> npm run docs:check -- --changelog-advisory
+[docs:check] Documentation appears fresh.
+==> npm run roadmap:check
+BLOCKED: 1 | DONE: 42 | IN_REVIEW: 2 | MONITOR: 1 | TODO: 11 | WAITING: 8
+==> npm run build
+✓ built in 14.09s
+Agentic validation gate passed.
+Tests run: test:data
+exit status: 0
+```
+
+The full local transcripts were retained for review with these identities:
+
+```text
+$ shasum -a 256 /private/tmp/ux017-test-data-624a3e03.log /private/tmp/ux017-agentic-624a3e03.log
+2407a66ca0d1115b96b5ec174b02692a372713e56c12e0fb543f2a0195fe252c  /private/tmp/ux017-test-data-624a3e03.log
+888f7e97d221c2fccb38cf0b723b996904bd0e62ad3eeeae553dce2ef8ae98a5  /private/tmp/ux017-agentic-624a3e03.log
+$ wc -l /private/tmp/ux017-test-data-624a3e03.log /private/tmp/ux017-agentic-624a3e03.log
+    7053 /private/tmp/ux017-test-data-624a3e03.log
+    7350 /private/tmp/ux017-agentic-624a3e03.log
+   14403 total
+exit status: 0
+```
+
 The controlled run verifies that the coordinator, npm, nested Node commands,
 and installer share the supported Node 22 trust root while Cargo and every
 existing fail-closed gate remain available. Final completion remains subject

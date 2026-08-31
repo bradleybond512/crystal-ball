@@ -473,9 +473,30 @@ Review after: 2026-08-25
 - **Preserve:** the canonical `~/Applications/Crystal Ball.app` target and every
   fail-closed lockfile, typecheck, build, packaging, signing, and required-check
   gate. Do not substitute manual app copying for the installer.
-- **Verify:** rerun `npm run main-sync:setup`, then `npm run main-sync:run`, and
-  confirm the installed commit and successful phase in
-  `~/.crystalball-main-sync/status.json`.
+- **Verify:** after merge, stop the worktree-backed job and install from a
+  separate controller checkout detached at the exact reviewed, merged SHA.
+  Keep the moving `~/.crystalball-main-sync/repo` build clone separate. Use
+  absolute Node 22 and `--no-start`, then inspect both the plist and loaded
+  launchd state before removing the worktree. Require the canonical target and
+  successful phase in `~/.crystalball-main-sync/status.json`, required-check
+  provenance, matching installed/build hashes, and a valid strict signature.
+- **Operational verification (2026-08-30):** the isolated fail-closed run
+  installed canonical `main` at
+  `ace938183462b50ef9ce871ab931e297a3e49942`, recorded `phase: installed`,
+  preserved required-check evidence from PR #1689, and passed strict signature
+  verification. It also proved the repair is incomplete: the Node 22
+  coordinator's Cargo-first `PATH` resolves npm and nested package scripts
+  through Node 26. See `docs/validation/UX-017-MAIN-SYNC-EVIDENCE.md` and the
+  approval-pending design in
+  `docs/architecture/UX_017_PINNED_NODE_TOOLCHAIN_BRIEF.md`.
+- **Remediation verification (2026-08-31):** the approved pinned-toolchain
+  change installed canonical `main` at
+  `702dc5b0521f49542d1c6cb73238841006b9a793` with Node 22.23.1, npm 10.9.8,
+  and Cargo 1.93.1. The candidate log window contained zero `EBADENGINE`
+  warnings, `status.json` recorded `phase: installed`, installed/build
+  executable hashes matched, and strict signature verification passed. The
+  exact transcript and required-check provenance are in
+  `docs/validation/UX-017-MAIN-SYNC-EVIDENCE.md`.
 
 ### UX-018 — Restore timely, authoritative forecast resolution
 
@@ -719,7 +740,7 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
-| UX-017 | Complete Mac main-sync toolchain repair | WAITING | #1667 |
+| UX-017 | Complete Mac main-sync toolchain repair | IN PROGRESS — HIGH ASSURANCE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |

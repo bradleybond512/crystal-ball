@@ -1,9 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import * as mainSyncAgent from '../scripts/setup-main-sync-agent.mjs';
+import * as syncMainToMac from '../scripts/sync-main-to-mac.mjs';
 import {
   buildSyncPaths,
   collectCheckStates,
@@ -131,6 +144,148 @@ test('main sync launch agent PATH includes the current user Cargo bin directory'
   );
 });
 
+test('main sync accepts only the supported Node 22 major', () => {
+  assert.equal(typeof syncMainToMac.assertSupportedMainSyncNode, 'function');
+  assert.doesNotThrow(() => syncMainToMac.assertSupportedMainSyncNode('22.23.1'));
+  for (const version of ['21.7.3', '23.0.0', '26.3.0']) {
+    assert.throws(
+      () => syncMainToMac.assertSupportedMainSyncNode(version),
+      /Node 22 is required/,
+    );
+  }
+});
+
+test('main sync pins npm and subprocess PATH to the selected Node toolchain', () => {
+  assert.equal(typeof syncMainToMac.buildMainSyncToolchain, 'function');
+  const toolchain = syncMainToMac.buildMainSyncToolchain(
+    '/opt/homebrew/Cellar/node@22/22.23.1/bin/node',
+    {
+      TOKEN: 'preserved',
+      PATH: '/Users/example/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+    },
+  );
+
+  assert.equal(
+    toolchain.npmPath,
+    '/opt/homebrew/Cellar/node@22/22.23.1/bin/npm',
+  );
+  assert.equal(
+    toolchain.env.PATH,
+    '/opt/homebrew/Cellar/node@22/22.23.1/bin:/Users/example/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+  );
+  assert.equal(toolchain.env.TOKEN, 'preserved');
+});
+
+test('main sync rejects ambiguous toolchain paths and empty subprocess PATH values', () => {
+  assert.throws(
+    () => syncMainToMac.buildMainSyncToolchain('node', { PATH: '/usr/bin:/bin' }),
+    /absolute Node executable path/,
+  );
+  assert.throws(
+    () => syncMainToMac.buildMainSyncToolchain('/opt/node/bin/node', {}),
+    /non-empty PATH/,
+  );
+});
+
+test('main sync rejects a selected Node toolchain without an executable sibling npm', async () => {
+  assert.equal(typeof syncMainToMac.validatePinnedNodeToolchain, 'function');
+  await assert.rejects(
+    syncMainToMac.validatePinnedNodeToolchain('/tmp/ux017-missing-node/bin/node'),
+    /executable npm sibling/,
+  );
+});
+
+test('main sync CLI records failure before touching the repository when the pinned toolchain is invalid', () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'crystalball-main-sync-toolchain-'));
+  const fakeBin = path.join(fixtureRoot, 'bin');
+  const fakeLib = path.join(fixtureRoot, 'lib');
+  const fakeNode = path.join(fakeBin, 'node');
+  const syncRoot = path.join(fixtureRoot, 'sync-state');
+  const repoDir = path.join(syncRoot, 'repo');
+  const repoMarker = path.join(repoDir, 'unchanged.txt');
+  const statusFile = path.join(syncRoot, 'status.json');
+  mkdirSync(fakeBin);
+  mkdirSync(fakeLib);
+  mkdirSync(repoDir, { recursive: true });
+  copyFileSync(process.execPath, fakeNode);
+  chmodSync(fakeNode, 0o755);
+  writeFileSync(repoMarker, 'unchanged\n');
+  writeFileSync(statusFile, `${JSON.stringify({ phase: 'installed', targetSha: 'prior-success' }, null, 2)}\n`);
+  const sourceLib = path.resolve(path.dirname(process.execPath), '..', 'lib');
+  for (const name of readdirSync(sourceLib).filter((entry) => /^libnode.*\.dylib$/.test(entry))) {
+    copyFileSync(path.join(sourceLib, name), path.join(fakeLib, name));
+  }
+
+  try {
+    const result = spawnSync(fakeNode, [syncScriptPath, '--sync-root', syncRoot], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /no executable npm sibling/);
+    const status = JSON.parse(readFileSync(statusFile, 'utf8'));
+    assert.equal(status.phase, 'failed', 'invalid toolchains must replace stale success with a failed status');
+    assert.match(status.error, /no executable npm sibling/);
+    assert.equal(readFileSync(repoMarker, 'utf8'), 'unchanged\n');
+    assert.deepEqual(readdirSync(repoDir), ['unchanged.txt'], 'validation failure must not mutate the repository');
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('all main sync verification commands use the pinned npm path and environment', () => {
+  const calls = [];
+  const toolchain = syncMainToMac.buildMainSyncToolchain(
+    '/opt/homebrew/Cellar/node@22/22.23.1/bin/node',
+    { PATH: '/Users/example/.cargo/bin:/usr/bin:/bin' },
+  );
+
+  syncMainToMac.runVerificationAndBuild('/tmp/main-sync-repo', toolchain, (...args) => calls.push(args));
+
+  assert.equal(calls.length, syncMainToMac.NPM_VERIFICATION_COMMANDS.length);
+  for (const [index, [command, args, options]] of calls.entries()) {
+    assert.equal(command, '/opt/homebrew/Cellar/node@22/22.23.1/bin/npm');
+    assert.deepEqual(args, syncMainToMac.NPM_VERIFICATION_COMMANDS[index]);
+    assert.equal(options.cwd, '/tmp/main-sync-repo');
+    assert.match(options.env.PATH, /^\/opt\/homebrew\/Cellar\/node@22\/22\.23\.1\/bin:/);
+    assert.match(options.env.PATH, /\/Users\/example\/\.cargo\/bin/);
+  }
+});
+
+test('main sync setup validates Node before replacing the LaunchAgent plist', () => {
+  const setupScript = readFileSync(setupScriptPath, 'utf8');
+  const mainIndex = setupScript.indexOf('async function main()');
+  const guardIndex = setupScript.indexOf('assertSupportedMainSyncNode(', mainIndex);
+  const installIndex = setupScript.indexOf('await installLaunchAgent(options)', mainIndex);
+
+  assert.ok(guardIndex > mainIndex, 'setup should validate its Node runtime in main');
+  assert.ok(installIndex > guardIndex, 'setup should validate Node before writing the plist');
+  assert.doesNotMatch(
+    setupScript,
+    /envPath:\s*toolchain\.env\.PATH/,
+    'the LaunchAgent PATH should remain Cargo-first; only npm subprocesses are Node-first',
+  );
+});
+
+test('all main sync npm verification and build commands use the pinned toolchain', () => {
+  assert.deepEqual(syncMainToMac.NPM_VERIFICATION_COMMANDS, [
+    ['run', 'lockfile:check'],
+    ['ci'],
+    ['run', 'version:check'],
+    ['run', 'typecheck:all'],
+    ['run', 'build'],
+    ['run', 'desktop:build:app:full'],
+  ]);
+
+  const syncScript = readFileSync(syncScriptPath, 'utf8');
+  assert.match(
+    syncScript,
+    /run\(toolchain\.npmPath, args, \{ cwd: repoDir, env: toolchain\.env \}\)/,
+    'every npm stage should execute through the pinned npm path and environment',
+  );
+});
+
 test('unchanged healthy installs take the idle path before checks and workspace cleanup', () => {
   assert.equal(determineSyncAction({
     installedSha: 'abc123',
@@ -180,7 +335,7 @@ test('main-to-mac sync uses a local clean clone instead of a GitHub self-hosted 
   );
   assert.match(
  syncScript,
- /\['npm', \['run', 'lockfile:check'\]\][\s\S]*\['npm', \['ci'\]\][\s\S]*\['npm', \['run', 'version:check'\]\][\s\S]*\['npm', \['run', 'typecheck:all'\]\][\s\S]*\['npm', \['run', 'build'\]\][\s\S]*\['npm', \['run', 'desktop:build:app:full'\]\]/,
+ /\['run', 'lockfile:check'\][\s\S]*\['ci'\][\s\S]*\['run', 'version:check'\][\s\S]*\['run', 'typecheck:all'\][\s\S]*\['run', 'build'\][\s\S]*\['run', 'desktop:build:app:full'\]/,
  'sync-main-to-mac should rerun the hard verification stack and build a local app bundle before install',
   );
   assert.match(

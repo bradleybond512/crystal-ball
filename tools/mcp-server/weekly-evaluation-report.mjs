@@ -29,6 +29,7 @@ const MAX_PROJECTION_AGE_MS = 30 * 60_000;
 const MAX_PROJECTION_FUTURE_SKEW_MS = 5 * 60_000;
 const MAX_COMPLETE_OBSERVATION_GAP_MS = 30 * 60_000;
 const ACCUMULATOR_PATH = 'monitor/weekly-accumulator.json';
+const PROVIDER_STATUS_PATH = 'monitor/weekly-provider-status.json';
 const REPORT_DIRECTORY = 'monitor/evaluation-reports';
 const REPORT_LOCK_PATH = 'monitor/report.lock';
 const REPORT_FILE = /^weekly-(\d{4})-(\d{2})-(\d{2})\.json$/;
@@ -121,6 +122,8 @@ export function recordWeeklyEvaluation({
     const currentWeekStart = utcWeekStart(observedAt);
     let accumulator = readAccumulator(storage);
     if (accumulator === null) accumulator = emptyAccumulator(currentWeekStart);
+    let providerStatus = readProviderStatusAccumulator(storage);
+    if (providerStatus === null) providerStatus = emptyProviderStatusAccumulator();
     if (currentWeekStart < accumulator.initializedWeekStart) {
       throw new Error('Weekly evaluation cannot move backward before initialization.');
     }
@@ -133,15 +136,24 @@ export function recordWeeklyEvaluation({
       diagnosticsStale: diagnosticsStale === true,
       projection: sanitizeProjection(evaluationProjection),
     });
+    providerStatus = appendProviderStatus(
+      providerStatus,
+      currentWeekStart,
+      observedAt,
+      monitorState.snapshot.feeds,
+    );
     assertBoundedJSON(accumulator, 'Weekly evaluation accumulator');
+    assertBoundedJSON(providerStatus, 'Weekly provider-status companion');
 
     for (const pending of finalization.pendingReports) {
       writeJSONAtomic(storage, pending.path, pending.report);
     }
+    writeJSONAtomic(storage, PROVIDER_STATUS_PATH, providerStatus);
     writeJSONAtomic(storage, ACCUMULATOR_PATH, accumulator);
     pruneReports(storage);
     return {
       accumulator,
+      providerStatus: providerStatusForWeek(providerStatus, currentWeekStart),
       finalizedReports: finalization.pendingReports.map((entry) => entry.report),
     };
   } finally {
@@ -224,6 +236,15 @@ export function readWeeklyEvaluationReports(storage) {
       expectedWeekStart: weekStartFromReportFile(file),
     }).report)
     .sort((left, right) => left.period.weekStart - right.period.weekStart);
+}
+
+export function readWeeklyProviderStatus(storage, weekStart) {
+  assertStorage(storage);
+  if (!validWeekStart(weekStart)) {
+    throw new Error('Weekly provider status requires a valid numeric UTC week start.');
+  }
+  const accumulator = readProviderStatusAccumulator(storage);
+  return accumulator === null ? null : providerStatusForWeek(accumulator, weekStart);
 }
 
 export function validateWeeklyEvaluationReport(value) {
@@ -405,7 +426,7 @@ function compileReport(aggregate, generatedAt, catchupTruncated) {
         : 'partial';
   const brierDelta = difference(lastForecast?.brier, firstForecast?.brier);
   const providerDrift = providerRows.some((row) => (
-    row.degradedObservations > 0 || row.transitionCount > 0 || row.lastStatus === 'error'
+    row.degradedObservations > 0 || row.firstStatus === 'error' || row.lastStatus === 'error'
   ));
   const limitations = reportLimitations(aggregate, overallAvailability, catchupTruncated);
   const recommendation = recommendationCode({
@@ -536,6 +557,65 @@ function emptyAccumulator(initializedWeekStart) {
     lastFinalizedWeekStart: null,
     omittedCatchupWeeks: 0,
     weeks: [],
+  };
+}
+
+function emptyProviderStatusAccumulator() {
+  return { schemaVersion: 1, weeks: [] };
+}
+
+function emptyProviderStatusWeek(weekStart) {
+  return {
+    weekStart,
+    lastObservedAt: null,
+    providers: Object.fromEntries(KNOWN_PROVIDERS.map((provider) => [provider, {
+      firstStatus: null,
+      lastStatus: null,
+      observations: 0,
+      notConfiguredObservations: 0,
+      transitionCount: 0,
+    }])),
+  };
+}
+
+function appendProviderStatus(accumulator, weekStart, observedAt, feeds) {
+  const result = structuredClone(accumulator);
+  let week = result.weeks.find((entry) => entry.weekStart === weekStart);
+  if (!week) {
+    week = emptyProviderStatusWeek(weekStart);
+    result.weeks.push(week);
+    result.weeks.sort((left, right) => left.weekStart - right.weekStart);
+    result.weeks = result.weeks.slice(-MAX_AGGREGATE_WEEKS);
+  }
+  if (week.lastObservedAt === observedAt) return result;
+  if (week.lastObservedAt !== null && observedAt < week.lastObservedAt) {
+    throw new Error('Weekly provider-status observations must remain chronological.');
+  }
+  week.lastObservedAt = observedAt;
+  if (!recordOf(feeds)) return result;
+  for (const provider of KNOWN_PROVIDERS) {
+    const status = providerStatusOf(feeds[PROVIDER_ROUTES[provider]]);
+    if (status === null) continue;
+    const row = week.providers[provider];
+    row.firstStatus ??= status;
+    if (row.lastStatus !== null && row.lastStatus !== status) row.transitionCount += 1;
+    row.lastStatus = status;
+    row.observations += 1;
+    if (status === 'not_configured') row.notConfiguredObservations += 1;
+  }
+  return result;
+}
+
+function providerStatusForWeek(accumulator, weekStart) {
+  const week = accumulator.weeks.find((entry) => entry.weekStart === weekStart);
+  if (!week) return null;
+  return {
+    schemaVersion: 1,
+    weekStart,
+    providers: KNOWN_PROVIDERS.flatMap((provider) => {
+      const row = week.providers[provider];
+      return row.observations === 0 ? [] : [{ provider, ...row }];
+    }),
   };
 }
 
@@ -774,6 +854,68 @@ function readAccumulator(storage) {
   try { parsed = JSON.parse(raw); } catch { throw new Error('Existing weekly evaluation accumulator is malformed.'); }
   if (!validAccumulator(parsed)) throw new Error('Existing weekly evaluation accumulator is malformed.');
   return parsed;
+}
+
+function readProviderStatusAccumulator(storage) {
+  const path = storage.resolve(PROVIDER_STATUS_PATH);
+  if (!existsSync(path)) return null;
+  const raw = readBoundedFile(path, 'Weekly provider-status companion');
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch {
+    throw new Error('Existing weekly provider-status companion is malformed.');
+  }
+  if (!validProviderStatusAccumulator(parsed)) {
+    throw new Error('Existing weekly provider-status companion is malformed.');
+  }
+  return parsed;
+}
+
+function validProviderStatusAccumulator(value) {
+  if (
+    !exactRecord(value, ['schemaVersion', 'weeks'])
+    || value.schemaVersion !== 1
+    || !Array.isArray(value.weeks)
+    || value.weeks.length > MAX_AGGREGATE_WEEKS
+    || !value.weeks.every(validProviderStatusWeek)
+  ) return false;
+  return value.weeks.every((week, index) => (
+    index === 0 || value.weeks[index - 1].weekStart < week.weekStart
+  ));
+}
+
+function validProviderStatusWeek(value) {
+  if (!exactRecord(value, ['weekStart', 'lastObservedAt', 'providers'])) return false;
+  if (
+    !validWeekStart(value.weekStart)
+    || epochOf(value.lastObservedAt) === null
+    || value.lastObservedAt < value.weekStart
+    || value.lastObservedAt >= value.weekStart + WEEK_MS
+  ) return false;
+  if (!exactRecord(value.providers, KNOWN_PROVIDERS)) return false;
+  return KNOWN_PROVIDERS.every((provider) => {
+    const row = value.providers[provider];
+    if (!exactRecord(row, [
+      'firstStatus', 'lastStatus', 'observations', 'notConfiguredObservations', 'transitionCount',
+    ])) return false;
+    const observations = countOf(row.observations);
+    const notConfiguredObservations = countOf(row.notConfiguredObservations);
+    const transitionCount = countOf(row.transitionCount);
+    if (
+      observations === null
+      || notConfiguredObservations === null
+      || transitionCount === null
+      || notConfiguredObservations > observations
+      || transitionCount > Math.max(0, observations - 1)
+    ) return false;
+    if (observations === 0) {
+      return row.firstStatus === null
+        && row.lastStatus === null
+        && notConfiguredObservations === 0
+        && transitionCount === 0;
+    }
+    return providerStatusOf(row.firstStatus) !== null
+      && providerStatusOf(row.lastStatus) !== null;
+  });
 }
 
 function validAccumulator(value) {
@@ -1150,6 +1292,10 @@ function nullableEpoch(value) {
 
 function statusOf(value) {
   return value === 'ok' || value === 'error' ? value : null;
+}
+
+function providerStatusOf(value) {
+  return value === 'ok' || value === 'not_configured' || value === 'error' ? value : null;
 }
 
 function availabilityOf(value) {

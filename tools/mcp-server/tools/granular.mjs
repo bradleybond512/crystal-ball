@@ -9,6 +9,21 @@ function makeResponse(summary, data, sources, warnings = [], healthy = sources.l
   };
 }
 
+const OPTIONAL_FEED_REQUIREMENTS = Object.freeze({
+  '/api/acled-events': Object.freeze({
+    keys: Object.freeze(['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL']),
+    action: 'Configure ACLED_ACCESS_TOKEN and ACLED_EMAIL in Crystal Ball Settings.',
+  }),
+  '/api/threatfox-iocs': Object.freeze({
+    keys: Object.freeze(['THREATFOX_API_KEY']),
+    action: 'Configure THREATFOX_API_KEY in Crystal Ball Settings.',
+  }),
+  '/api/ais-snapshot': Object.freeze({
+    keys: Object.freeze(['AISSTREAM_API_KEY']),
+    action: 'Configure AISSTREAM_API_KEY in Crystal Ball Settings.',
+  }),
+});
+
 export function makeGranularTools(client) {
   async function search_conflicts({ region, country, date_from, date_to, event_type } = {}) {
     const params = {};
@@ -214,8 +229,11 @@ export function makeGranularTools(client) {
   }
 
   async function check_feed_health() {
-    const health = await client.get('/api/health');
-    const status = await client.get('/api/service-status');
+    const [health, status, diagnostics] = await Promise.all([
+      client.get('/api/health'),
+      client.get('/api/service-status'),
+      client.get('/api/diag'),
+    ]);
 
     const probeRoutes = [
       '/api/acled-events',
@@ -229,27 +247,45 @@ export function makeGranularTools(client) {
       '/api/owm-current',
       '/api/fear-greed',
     ];
-    const results = await client.getAll(probeRoutes);
+    const missingKeys = diagnosticMissingKeys(diagnostics);
+    const routesToProbe = probeRoutes.filter((route) => {
+      const requirement = OPTIONAL_FEED_REQUIREMENTS[route];
+      return !requirement || missingKeys === null
+        || !requirement.keys.some((key) => missingKeys.has(key));
+    });
+    const results = await client.getAll(routesToProbe);
 
     const feeds = [];
     let healthy = 0;
+    let notConfigured = 0;
     let degraded = 0;
     for (const route of probeRoutes) {
+      const requirement = OPTIONAL_FEED_REQUIREMENTS[route];
+      if (
+        requirement
+        && missingKeys !== null
+        && requirement.keys.some((key) => missingKeys.has(key))
+      ) {
+        feeds.push({
+          route,
+          status: 'not_configured',
+          reasonCode: 'credential_missing',
+          action: requirement.action,
+        });
+        notConfigured++;
+        continue;
+      }
       const data = results.get(route);
-      const ok = validFeedPayload(data);
-      feeds.push({
-        route,
-        status: ok ? 'ok' : 'error',
-        error: ok ? null : data?.error || 'invalid response',
-      });
-      if (ok) healthy++; else degraded++;
+      const failure = feedFailure(route, data);
+      feeds.push(failure ?? { route, status: 'ok' });
+      if (failure === null) healthy++; else degraded++;
     }
 
     const sidecarOk = health?.ok === true;
     const keyInfo = sidecarOk ? `${health.keys_configured}/${health.keys_total} API keys configured` : 'unknown';
     const missingKeyCount = sidecarOk && health.keys_missing_count ? health.keys_missing_count : 0;
 
-    const summary = `Sidecar ${sidecarOk ? 'up' : 'DOWN'}. Feeds: ${healthy} healthy, ${degraded} degraded out of ${probeRoutes.length}. Keys: ${keyInfo}.${missingKeyCount ? ` Missing keys: ${missingKeyCount}.` : ''}`;
+    const summary = `Sidecar ${sidecarOk ? 'up' : 'DOWN'}. Feeds: ${healthy} healthy, ${notConfigured} not configured, ${degraded} degraded out of ${probeRoutes.length}. Keys: ${keyInfo}.${missingKeyCount ? ` Missing keys: ${missingKeyCount}.` : ''}`;
 
     return makeResponse(summary, {
       sidecar: sidecarOk ? {
@@ -262,13 +298,14 @@ export function makeGranularTools(client) {
         keys_total: health.keys_total,
         keys_missing_count: missingKeyCount,
       } : { error: health?.error || 'invalid health response' },
-      serviceStatus: validFeedPayload(status) ? status : { error: status?.error || 'invalid response' },
+      serviceStatus: validFeedPayload(status) ? status : { error: 'invalid response' },
       feeds,
     }, [
       ...(sidecarOk ? ['/api/health'] : []),
+      ...(missingKeys !== null ? ['/api/diag'] : []),
       ...(validFeedPayload(status) ? ['/api/service-status'] : []),
       ...feeds.filter((feed) => feed.status === 'ok').map((feed) => feed.route),
-    ], [], sidecarOk && degraded === 0);
+    ], [], sidecarOk && degraded === 0 && notConfigured === 0);
   }
 
   return {
@@ -297,4 +334,130 @@ function validFeedPayload(value) {
     && value.healthy !== false
     && value.available !== false
     && Object.keys(value).length > 0;
+}
+
+function diagnosticMissingKeys(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const missing = value.missing_keys;
+  if (!Array.isArray(missing) || missing.length > 128) return null;
+  if (!missing.every((key) => (
+    typeof key === 'string'
+    && key.length >= 1
+    && key.length <= 64
+    && /^[A-Z][A-Z0-9_]*$/.test(key)
+  ))) return null;
+  return new Set(missing);
+}
+
+function feedFailure(route, value) {
+  if (value?.status === 429 || (Number.isInteger(value?.status) && value.status >= 400)) {
+    return failedFeed(route, value);
+  }
+  if (route === '/api/acled-events') {
+    if (value?.error) return upstreamFeed(route);
+    if (!Array.isArray(value?.events)) return failedFeed(route, value);
+    if (!value.events.some(validAcledObservation)) return emptyFeed(route);
+    return null;
+  }
+  if (route === '/api/threatfox-iocs') {
+    if (!Array.isArray(value)) return failedFeed(route, value);
+    if (!value.some(validThreatFoxObservation)) return emptyFeed(route);
+    return null;
+  }
+  if (route === '/api/ais-snapshot') {
+    if (value?.error) return failedFeed(route, value);
+    if (value?.status?.connected === false) return upstreamFeed(route);
+    if (
+      value?.status?.connected !== true
+      || !Number.isFinite(value.status.vessels)
+      || !Array.isArray(value.disruptions)
+      || !Array.isArray(value.density)
+      || !Array.isArray(value.candidateReports)
+    ) return failedFeed(route, value);
+    if (value.status.vessels <= 0) return emptyFeed(route);
+    return null;
+  }
+  return validFeedPayload(value) ? null : failedFeed(route, value);
+}
+
+function validAcledObservation(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const latitude = finiteNumber(value.latitude);
+  const longitude = finiteNumber(value.longitude);
+  return typeof value.event_id_cnty === 'string'
+    && value.event_id_cnty.length > 0
+    && latitude !== null
+    && latitude >= -90
+    && latitude <= 90
+    && longitude !== null
+    && longitude >= -180
+    && longitude <= 180;
+}
+
+function validThreatFoxObservation(value) {
+  return value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && typeof value.id === 'string'
+    && value.id.length > 0
+    && value.source === 'threatfox'
+    && typeof value.indicator === 'string'
+    && value.indicator.length > 0
+    && ['ip', 'domain', 'url'].includes(value.indicatorType)
+    && ['low', 'medium', 'high', 'critical'].includes(value.severity);
+}
+
+function finiteNumber(value) {
+  const numeric = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim() !== ''
+      ? Number(value)
+      : Number.NaN;
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function emptyFeed(route) {
+  return {
+    route,
+    status: 'error',
+    reasonCode: 'no_observations',
+    action: 'Check provider availability and retry after fresh observations are available.',
+  };
+}
+
+function upstreamFeed(route) {
+  return {
+    route,
+    status: 'error',
+    reasonCode: 'upstream',
+    action: 'Check provider availability and retry after the provider recovers.',
+  };
+}
+
+function failedFeed(route, value) {
+  if (value?.status === 429) {
+    return {
+      route,
+      status: 'error',
+      reasonCode: 'rate_limited',
+      action: 'Wait for the provider cooldown before retrying.',
+    };
+  }
+  if (Number.isInteger(value?.status) && value.status >= 400) {
+    return upstreamFeed(route);
+  }
+  if (value?.error) {
+    return {
+      route,
+      status: 'error',
+      reasonCode: 'local_adapter',
+      action: 'Inspect the authenticated local sidecar and retry the feed probe.',
+    };
+  }
+  return {
+    route,
+    status: 'error',
+    reasonCode: 'schema',
+    action: 'Inspect the local adapter response schema before retrying.',
+  };
 }

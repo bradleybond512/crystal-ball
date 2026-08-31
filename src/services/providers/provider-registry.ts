@@ -124,7 +124,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // pipeline. They MUST NOT count as 3 independent votes in corroboration.
   // Sidecar routes: /api/cyber-c2 · /api/cyber-iocs · /api/malware-urls
   { id: 'feodo-abuse-ch', domain: 'cyber_threat', displayName: 'Feodo Tracker (C2)', authType: 'none', baseUrl: 'https://feodotracker.abuse.ch', rateLimitNote: 'bulk JSON, no key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'abuse-ch' },
-  { id: 'threatfox-abuse-ch', domain: 'cyber_threat', displayName: 'ThreatFox IOCs', authType: 'none', baseUrl: 'https://threatfox.abuse.ch', rateLimitNote: 'CSV export, no key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 2, independenceGroup: 'abuse-ch' },
+  { id: 'threatfox-abuse-ch', domain: 'cyber_threat', displayName: 'ThreatFox IOCs', authType: 'free_key', requiredSecret: 'THREATFOX_API_KEY', baseUrl: 'https://threatfox.abuse.ch', rateLimitNote: 'authenticated API key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 2, independenceGroup: 'abuse-ch' },
   { id: 'urlhaus-abuse-ch', domain: 'cyber_threat', displayName: 'URLhaus Malware URLs', authType: 'none', baseUrl: 'https://urlhaus.abuse.ch', rateLimitNote: 'CSV export, no key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 3, independenceGroup: 'abuse-ch' },
   // ── Intel Expansion Cluster 1: Frankfurter FX ────────────────────────────
   // ECB-sourced FX rates via Frankfurter API. New 'fx' domain.

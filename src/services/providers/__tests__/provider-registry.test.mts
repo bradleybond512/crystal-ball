@@ -80,10 +80,13 @@ test('Intel Cluster 1: abuse.ch trio are all cyber_threat domain', () => {
   for (const id of trio) {
     const def = getProviderDefinition(id)!;
     assert.equal(def.domain, 'cyber_threat', `${id} must be domain cyber_threat`);
-    assert.equal(def.authType, 'none', `${id} must be keyless`);
     assert.equal(def.freshnessTtlMs, 10 * 60 * 1000, `${id} TTL must be 10 min`);
     assert.ok(def.reliabilityWeight >= 0.7 && def.reliabilityWeight <= 1.0);
   }
+  assert.equal(getProviderDefinition('feodo-abuse-ch')!.authType, 'none');
+  assert.equal(getProviderDefinition('urlhaus-abuse-ch')!.authType, 'none');
+  assert.equal(getProviderDefinition('threatfox-abuse-ch')!.authType, 'free_key');
+  assert.equal(getProviderDefinition('threatfox-abuse-ch')!.requiredSecret, 'THREATFOX_API_KEY');
 });
 
 test('Intel Cluster 1: frankfurter-fx is fx domain with ecb-fx independence group', () => {

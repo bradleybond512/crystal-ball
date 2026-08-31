@@ -25,7 +25,13 @@ function classifyDomain(routes, feedByRoute) {
     total: routes.length,
     unavailable: feeds
       .filter((feed) => feed.status !== 'ok')
-      .map((feed) => ({ route: feed.route, reason: feed.error || 'unavailable' })),
+      .map((feed) => ({
+        route: feed.route,
+        status: feed.status === 'not_configured' ? 'not_configured' : 'error',
+        reason: feed.status === 'not_configured' ? 'not configured' : 'unavailable',
+        reasonCode: feed.reasonCode || 'local_adapter',
+        action: feed.action || 'Inspect the authenticated local sidecar and retry the feed probe.',
+      })),
   };
 }
 

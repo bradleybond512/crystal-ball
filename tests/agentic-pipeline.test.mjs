@@ -401,8 +401,13 @@ test('the Home Shell browser harness scopes the exact-zero disclaimer to each so
   );
   assert.match(browserHarness, /expect\(isExactZeroWorkingStatus\('Working now · 0 items in latest update'\)\)\.toBe\(true\);/);
   assert.match(browserHarness, /expect\(isExactZeroWorkingStatus\('Working now · 10 items in latest update'\)\)\.toBe\(false\);/);
-  assert.match(browserHarness, /source\.locator\('\.hs-source-status'\)\.innerText\(\)/);
+  assert.match(
+    browserHarness,
+    /const \{ status, text \} = await source\.evaluate\(\(node\) => \{\s*const statusElement = node\.querySelector<HTMLElement>\('\.hs-source-status'\);\s*if \(!statusElement\) throw new Error\('Home Shell source row is missing \.hs-source-status'\);\s*return \{ status: statusElement\.innerText, text: \(node as HTMLElement\)\.innerText \};\s*\}\);/,
+  );
   assert.match(browserHarness, /if \(isExactZeroWorkingStatus\(status\)\) expect\(text\)\.toMatch\(\/not an all-clear signal\/i\);/);
+  assert.doesNotMatch(browserHarness, /source\.locator\('\.hs-source-status'\)\.innerText\(\)/);
+  assert.doesNotMatch(browserHarness, /await source\.innerText\(\)/);
   assert.doesNotMatch(browserHarness, /\/working now\.\*0 items\/i\.test\(text\)/);
 });
 

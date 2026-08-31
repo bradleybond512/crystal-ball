@@ -9,6 +9,8 @@
  * Pure: no DOM, no fetch, no Date.now() default deep inside logic.
  * Invariants:
  *  - record() auto-creates an entry on first call (createdAt = first event's at).
+ *  - A new `ingested` event starts a fresh lifecycle, but a consecutive
+ *    nonterminal retry retains the failure streak's original createdAt.
  *  - FIFO eviction at cap (default 500) so memory is bounded.
  *  - snapshot() is JSON-round-trippable (all values are primitives).
  */
@@ -89,7 +91,20 @@ export function createPipelineTraceRegistry(
 
       const existing = entries.get(traceId);
       if (existing) {
-        entries.set(traceId, { ...existing, events: [...existing.events, traceEvent] });
+        if (event.stage === 'ingested') {
+          const priorLifecycleComplete = existing.events.some(
+            (priorEvent) => priorEvent.stage === 'routed' || priorEvent.stage === 'dropped',
+          );
+          entries.delete(traceId);
+          entries.set(traceId, {
+            traceId,
+            domain,
+            createdAt: priorLifecycleComplete ? at : existing.createdAt,
+            events: [traceEvent],
+          });
+        } else {
+          entries.set(traceId, { ...existing, events: [...existing.events, traceEvent] });
+        }
       } else {
         evictIfNeeded();
         entries.set(traceId, { traceId, domain, createdAt: at, events: [traceEvent] });

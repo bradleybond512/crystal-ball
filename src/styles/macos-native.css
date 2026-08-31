@@ -2282,3 +2282,128 @@ body.is-desktop-macos .cb-storm-mode__guide { color: var(--aid-blue); }
     transform: none !important;
   }
 }
+
+/* ── UX-025 Smoked Liquid Glass: Full dark desktop classic shell ──────── */
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar {
+  background: var(--ux025-chrome-bg);
+  backdrop-filter: var(--ux025-blur-chrome);
+  -webkit-backdrop-filter: var(--ux025-blur-chrome);
+  box-shadow: var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-content-toolbar {
+  background: var(--ux025-chrome-bg);
+  backdrop-filter: var(--ux025-blur-chrome);
+  -webkit-backdrop-filter: var(--ux025-blur-chrome);
+  box-shadow: var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-content,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-content-body,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .main-content,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid {
+  background: var(--ux025-canvas);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid > *,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid .panel {
+  background: var(--ux025-solid-1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: var(--e-1), var(--ux025-edge-specular);
+  transition: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid > *:hover {
+  box-shadow: var(--e-1), var(--ux025-edge-specular);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid .panel-header,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .map-section .panel-header,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panel[data-panel-id="command-center"] .panel-header,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-header,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panel[data-panel-id="algorithm-diagnostic"] .panel-header,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-header {
+  background: var(--ux025-solid-2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid .panel-content,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .panels-grid .panel-body {
+  background: var(--ux025-solid-1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar-item,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar-panel-item,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-mode-btn,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-alert-family-btn,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-ghost-mode-btn,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar-footer-btn,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar-collapse-btn,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar-toggle-btn,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-content-toolbar .region-select,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-content-toolbar .search-btn {
+  border-radius: var(--r-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .mac-sidebar-collapse-tab {
+  background: var(--ux025-solid-2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .setup-wizard-overlay {
+  background: color-mix(in srgb, var(--ux025-canvas) 72%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .setup-wizard-modal {
+  background: var(--ux025-raised-bg);
+  backdrop-filter: var(--ux025-blur-raised);
+  -webkit-backdrop-filter: var(--ux025-blur-raised);
+  border-color: var(--mac-separator);
+  border-radius: var(--r-xl);
+  box-shadow: var(--e-4), var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .setup-wizard-modal > * {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Preserve the existing app-mode signal without turning content into glass. */
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="war"] .mac-sidebar {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--mac-red) 18%, transparent), transparent 55%), var(--ux025-chrome-bg);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="war"] .mac-content-toolbar {
+  background: linear-gradient(to right, color-mix(in srgb, var(--mac-red) 10%, transparent), transparent 50%), var(--ux025-chrome-bg);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="finance"] .mac-sidebar {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--mac-green) 16%, transparent), transparent 55%), var(--ux025-chrome-bg);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="finance"] .mac-content-toolbar {
+  background: linear-gradient(to right, color-mix(in srgb, var(--mac-green) 8%, transparent), transparent 50%), var(--ux025-chrome-bg);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="disaster"] .mac-sidebar {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--mac-orange) 16%, transparent), transparent 55%), var(--ux025-chrome-bg);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="disaster"] .mac-content-toolbar {
+  background: linear-gradient(to right, color-mix(in srgb, var(--mac-orange) 8%, transparent), transparent 50%), var(--ux025-chrome-bg);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos[data-app-mode="ghost"] .mac-sidebar {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--mac-purple) 18%, transparent), transparent 60%), var(--ux025-chrome-bg);
+}

@@ -1,7 +1,7 @@
 # UX-017 pinned Node toolchain brief
 
-Status: design complete; production implementation requires explicit human
-approval.
+Status: implementation approved; first independent-review repair cycle is
+pending validation and rollout.
 
 ## Goal
 
@@ -64,8 +64,8 @@ No CLI, plist, state, or status schema changes are required.
 ## Failure behavior
 
 - Unsupported setup runtime: fail before replacing the existing LaunchAgent.
-- Unsupported sync runtime or missing sibling npm: write the existing failed
-  status and leave the installed app untouched.
+- Unsupported sync runtime or missing sibling npm: fail before creating or
+  changing sync state and leave the installed app untouched.
 - Any existing check, build, signing, or install failure remains fail closed.
 - A removed versioned Node keg is repaired by rerunning setup with a valid Node
   22 executable; automatic toolchain installation is out of scope.
@@ -79,9 +79,10 @@ Focused tests must prove:
 - npm subprocess `PATH` starts with the selected Node directory and retains the
   Cargo and system paths.
 - missing sibling npm fails before command execution.
+- CLI toolchain validation fails before lock or sync-state creation.
 - setup calls the Node guard before plist installation.
-- every existing npm verification/build command uses the pinned executable and
-  environment.
+- every existing npm verification/build command behaviorally receives the
+  pinned executable and environment.
 
 Mutation proofs must remove, one at a time, the Node-major rejection, absolute
 npm selection, Node-first subprocess path, Cargo preservation, missing-npm

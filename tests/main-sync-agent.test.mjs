@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import * as mainSyncAgent from '../scripts/setup-main-sync-agent.mjs';
 import * as syncMainToMac from '../scripts/sync-main-to-mac.mjs';
@@ -183,6 +194,54 @@ test('main sync rejects a selected Node toolchain without an executable sibling 
   );
 });
 
+test('main sync CLI validates the pinned toolchain before creating sync state', () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'crystalball-main-sync-toolchain-'));
+  const fakeBin = path.join(fixtureRoot, 'bin');
+  const fakeLib = path.join(fixtureRoot, 'lib');
+  const fakeNode = path.join(fakeBin, 'node');
+  const syncRoot = path.join(fixtureRoot, 'sync-state');
+  mkdirSync(fakeBin);
+  mkdirSync(fakeLib);
+  copyFileSync(process.execPath, fakeNode);
+  chmodSync(fakeNode, 0o755);
+  const sourceLib = path.resolve(path.dirname(process.execPath), '..', 'lib');
+  for (const name of readdirSync(sourceLib).filter((entry) => /^libnode.*\.dylib$/.test(entry))) {
+    copyFileSync(path.join(sourceLib, name), path.join(fakeLib, name));
+  }
+
+  try {
+    const result = spawnSync(fakeNode, [syncScriptPath, '--sync-root', syncRoot], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /no executable npm sibling/);
+    assert.equal(existsSync(syncRoot), false, 'invalid toolchains must fail before sync state is created');
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('all main sync verification commands use the pinned npm path and environment', () => {
+  const calls = [];
+  const toolchain = syncMainToMac.buildMainSyncToolchain(
+    '/opt/homebrew/Cellar/node@22/22.23.1/bin/node',
+    { PATH: '/Users/example/.cargo/bin:/usr/bin:/bin' },
+  );
+
+  syncMainToMac.runVerificationAndBuild('/tmp/main-sync-repo', toolchain, (...args) => calls.push(args));
+
+  assert.equal(calls.length, syncMainToMac.NPM_VERIFICATION_COMMANDS.length);
+  for (const [index, [command, args, options]] of calls.entries()) {
+    assert.equal(command, '/opt/homebrew/Cellar/node@22/22.23.1/bin/npm');
+    assert.deepEqual(args, syncMainToMac.NPM_VERIFICATION_COMMANDS[index]);
+    assert.equal(options.cwd, '/tmp/main-sync-repo');
+    assert.match(options.env.PATH, /^\/opt\/homebrew\/Cellar\/node@22\/22\.23\.1\/bin:/);
+    assert.match(options.env.PATH, /\/Users\/example\/\.cargo\/bin/);
+  }
+});
+
 test('main sync setup validates Node before replacing the LaunchAgent plist', () => {
   const setupScript = readFileSync(setupScriptPath, 'utf8');
   const mainIndex = setupScript.indexOf('async function main()');
@@ -211,7 +270,7 @@ test('all main sync npm verification and build commands use the pinned toolchain
   const syncScript = readFileSync(syncScriptPath, 'utf8');
   assert.match(
     syncScript,
-    /runLoggedCommand\(toolchain\.npmPath, args, \{ cwd: repoDir, env: toolchain\.env \}\)/,
+    /run\(toolchain\.npmPath, args, \{ cwd: repoDir, env: toolchain\.env \}\)/,
     'every npm stage should execute through the pinned npm path and environment',
   );
 });

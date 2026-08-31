@@ -104,29 +104,36 @@ PATH=/opt/homebrew/opt/node@22/bin:$PATH \
 The candidate LaunchAgent may remain bound to the UX-017 worktree only until
 the PR merges. Do not remove that worktree while launchd references it. After
 merge, stop the loaded job and relocate its controller to the agent-owned clean
-clone at `~/.crystalball-main-sync/repo`:
+checkout at `~/.crystalball-main-sync/controller`. This standalone checkout is
+separate from the disposable target/build clone at
+`~/.crystalball-main-sync/repo`; the sync job must never reset, clean, or update
+its own controller:
 
 1. Require PR #1693 to be merged. Record the installed app signature and the
    checksums of `state.json` and `status.json` without moving any of them.
 2. Boot out `com.bradleybond.crystalball.main-sync` and require `launchctl
    print` to report that it is absent. An already-absent job is acceptable; any
    other bootout failure blocks relocation.
-3. Verify `~/.crystalball-main-sync/repo` has the canonical remote, then update
-   only that disposable, agent-owned clone to canonical `main`. Require a clean
-   tree, `HEAD` equal to the remote `main`, and the PR merge commit to be an
-   ancestor of `HEAD`. Before setup, require the reviewed blobs for
+3. Create or update `~/.crystalball-main-sync/controller` manually from the
+   canonical remote, then detach it at the exact reviewed and merged canonical
+   SHA. Require a clean tree, exact SHA identity, and the PR merge commit to be
+   an ancestor of that SHA. Do not make this checkout track moving `main`.
+   Before setup, require the reviewed blobs for
    `sync-main-to-mac.mjs`, `setup-main-sync-agent.mjs`, and
    `main-sync-agent.test.mjs` to be `2d2bd5bfa08242ab42f8638eb02efd42ef4831e7`,
    `26810200336006ee407e3c9b70cc8ba00807021e`, and
    `a685833560faea5dc369f84832d2536306625f0e`, respectively; blob identities
    remain stable when a rebase merge rewrites commit SHAs.
-4. Run the focused main-sync suite there with absolute Node 22. Then run
+4. Run the focused main-sync suite in the controller checkout with absolute
+   Node 22. Then run
    `/opt/homebrew/opt/node@22/bin/node scripts/setup-main-sync-agent.mjs
    --no-start` so the new plist can be inspected before launchd loads it.
 5. Fail closed unless the plist selects an executable Node 22 and sibling npm,
    points its script and working directory into
-   `~/.crystalball-main-sync/repo`, retains Cargo and system paths, uses the
-   expected sync root, and contains no `.worktrees` path.
+   `~/.crystalball-main-sync/controller`, retains Cargo and system paths, uses
+   `~/.crystalball-main-sync` as the sync root, and contains neither a
+   `.worktrees` path nor `repo` as its controller path. The sibling `repo`
+   remains the only checkout the sync process may force-reset and clean.
 6. Bootstrap, enable, and kickstart the plist. Verify launchd's loaded program,
    arguments, working directory, and runtime rather than trusting the plist
    alone. Require a terminal result for canonical `main`, required-check
@@ -135,10 +142,12 @@ clone at `~/.crystalball-main-sync/repo`:
 
 Rollback is operational, never a revert to the pre-pinning implementation. If
 any relocation or verification gate fails, boot out the agent and leave it
-stopped. Preserve `~/Applications/Crystal Ball.app`, the sync clone,
+stopped. Preserve `~/Applications/Crystal Ball.app`, both sync checkouts,
 `state.json`, `status.json`, and the UX-017 worktree for diagnosis. Resume only
-from reviewed, merged code that retains the Node 22 and sibling-npm guards; do
-not restore the old worktree plist or reinstall pre-pinning bytes. The existing
+by detaching the controller checkout at the recorded last-known-good reviewed
+SHA and repeating the blob, focused-test, `--no-start`, plist, and loaded-state
+gates. Never reset the controller to moving `main`, restore the old worktree
+plist, revert the Node/npm pinning, or reinstall pre-pinning bytes. The existing
 app remains usable while automatic sync is disabled, and only the verified
 installer may replace it after every normal gate succeeds.
 

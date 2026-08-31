@@ -473,10 +473,11 @@ Review after: 2026-08-25
 - **Preserve:** the canonical `~/Applications/Crystal Ball.app` target and every
   fail-closed lockfile, typecheck, build, packaging, signing, and required-check
   gate. Do not substitute manual app copying for the installer.
-- **Verify:** after merge, stop the worktree-backed job, update the agent-owned
-  clean clone to canonical `main`, install the plist there with absolute Node
-  22 and `--no-start`, and inspect both the plist and loaded launchd state
-  before removing the worktree. Then require the canonical target and
+- **Verify:** after merge, stop the worktree-backed job and install from a
+  separate controller checkout detached at the exact reviewed, merged SHA.
+  Keep the moving `~/.crystalball-main-sync/repo` build clone separate. Use
+  absolute Node 22 and `--no-start`, then inspect both the plist and loaded
+  launchd state before removing the worktree. Require the canonical target and
   successful phase in `~/.crystalball-main-sync/status.json`, required-check
   provenance, matching installed/build hashes, and a valid strict signature.
 - **Operational verification (2026-08-30):** the isolated fail-closed run

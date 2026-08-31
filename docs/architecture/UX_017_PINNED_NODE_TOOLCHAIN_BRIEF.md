@@ -101,12 +101,46 @@ PATH=/opt/homebrew/opt/node@22/bin:$PATH \
   bash scripts/agentic-validate.sh --tests "test:data"
 ```
 
-After review, reinstall the LaunchAgent from the persistent repair worktree
-with Node 22 and perform one controlled canonical-main sync. Capture exact
-output proving the pinned Node/npm versions, Cargo visibility, successful
-installed phase, hashes, and signature. Roll back by reverting the
-implementation commit and rerunning setup from the last known-good script; the
-installed app remains untouched unless the full verified build succeeds.
+The candidate LaunchAgent may remain bound to the UX-017 worktree only until
+the PR merges. Do not remove that worktree while launchd references it. After
+merge, stop the loaded job and relocate its controller to the agent-owned clean
+clone at `~/.crystalball-main-sync/repo`:
+
+1. Require PR #1693 to be merged. Record the installed app signature and the
+   checksums of `state.json` and `status.json` without moving any of them.
+2. Boot out `com.bradleybond.crystalball.main-sync` and require `launchctl
+   print` to report that it is absent. An already-absent job is acceptable; any
+   other bootout failure blocks relocation.
+3. Verify `~/.crystalball-main-sync/repo` has the canonical remote, then update
+   only that disposable, agent-owned clone to canonical `main`. Require a clean
+   tree, `HEAD` equal to the remote `main`, and the PR merge commit to be an
+   ancestor of `HEAD`. Before setup, require the reviewed blobs for
+   `sync-main-to-mac.mjs`, `setup-main-sync-agent.mjs`, and
+   `main-sync-agent.test.mjs` to be `2d2bd5bfa08242ab42f8638eb02efd42ef4831e7`,
+   `26810200336006ee407e3c9b70cc8ba00807021e`, and
+   `a685833560faea5dc369f84832d2536306625f0e`, respectively; blob identities
+   remain stable when a rebase merge rewrites commit SHAs.
+4. Run the focused main-sync suite there with absolute Node 22. Then run
+   `/opt/homebrew/opt/node@22/bin/node scripts/setup-main-sync-agent.mjs
+   --no-start` so the new plist can be inspected before launchd loads it.
+5. Fail closed unless the plist selects an executable Node 22 and sibling npm,
+   points its script and working directory into
+   `~/.crystalball-main-sync/repo`, retains Cargo and system paths, uses the
+   expected sync root, and contains no `.worktrees` path.
+6. Bootstrap, enable, and kickstart the plist. Verify launchd's loaded program,
+   arguments, working directory, and runtime rather than trusting the plist
+   alone. Require a terminal result for canonical `main`, required-check
+   provenance, matching installed/build executable hashes, and a valid strict
+   code signature before removing the UX-017 worktree.
+
+Rollback is operational, never a revert to the pre-pinning implementation. If
+any relocation or verification gate fails, boot out the agent and leave it
+stopped. Preserve `~/Applications/Crystal Ball.app`, the sync clone,
+`state.json`, `status.json`, and the UX-017 worktree for diagnosis. Resume only
+from reviewed, merged code that retains the Node 22 and sibling-npm guards; do
+not restore the old worktree plist or reinstall pre-pinning bytes. The existing
+app remains usable while automatic sync is disabled, and only the verified
+installer may replace it after every normal gate succeeds.
 
 The controlled candidate run completed on 2026-08-31 against canonical main
 `702dc5b0521f49542d1c6cb73238841006b9a793`: it recorded `phase: installed`,

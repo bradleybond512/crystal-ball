@@ -473,9 +473,12 @@ Review after: 2026-08-25
 - **Preserve:** the canonical `~/Applications/Crystal Ball.app` target and every
   fail-closed lockfile, typecheck, build, packaging, signing, and required-check
   gate. Do not substitute manual app copying for the installer.
-- **Verify:** rerun `npm run main-sync:setup`, then `npm run main-sync:run`, and
-  confirm the installed commit and successful phase in
-  `~/.crystalball-main-sync/status.json`.
+- **Verify:** after merge, stop the worktree-backed job, update the agent-owned
+  clean clone to canonical `main`, install the plist there with absolute Node
+  22 and `--no-start`, and inspect both the plist and loaded launchd state
+  before removing the worktree. Then require the canonical target and
+  successful phase in `~/.crystalball-main-sync/status.json`, required-check
+  provenance, matching installed/build hashes, and a valid strict signature.
 - **Operational verification (2026-08-30):** the isolated fail-closed run
   installed canonical `main` at
   `ace938183462b50ef9ce871ab931e297a3e49942`, recorded `phase: installed`,

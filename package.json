@@ -226,6 +226,11 @@
     "test:agentic-gate": "tsx --test tests/agentic-gate.test.mjs",
     "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs",
     "test:roadmap-controller": "node --test tests/roadmap-controller.test.mjs",
+    "test:smoked-glass": "tsx --test tests/smoked-liquid-glass-contract.test.mts tests/scripts/check-ux025-css-budget.test.mjs tests/scripts/measure-ux025-browser.test.mjs tests/scripts/measure-ux025-packaged.test.mjs",
+    "test:e2e:smoked-glass": "cross-env VITE_VARIANT=full playwright test e2e/smoked-liquid-glass.spec.ts",
+    "measure:ux025:browser": "node scripts/measure-ux025-browser.mjs",
+    "measure:ux025:packaged": "node scripts/measure-ux025-packaged.mjs",
+    "check:ux025:css": "node scripts/check-ux025-css-budget.mjs",
     "roadmap:check": "node scripts/roadmap-controller.mjs",
     "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs"
   },

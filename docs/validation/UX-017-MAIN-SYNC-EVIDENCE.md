@@ -348,7 +348,7 @@ worktree at this exact SHA:
 
 ```text
 $ git rev-parse HEAD
-dd609ea320fb38ee25772338ca04c3b557ec2a1a
+8bad4b94380b5af2388dfe60e374c06e1e8cdf7b
 exit status: 0
 ```
 
@@ -364,7 +364,7 @@ $ PATH=/opt/homebrew/opt/node@22/bin:$PATH npm run test:data
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 26781.745166
+# duration_ms 14817.623125
 exit status: 0
 ```
 
@@ -399,7 +399,7 @@ Secret scan passed for 4724 file(s).
 ==> npm run roadmap:check
 BLOCKED: 1 | DONE: 42 | IN_REVIEW: 1 | MONITOR: 1 | TODO: 11 | WAITING: 9
 ==> npm run build
-✓ built in 15.60s
+✓ built in 18.84s
 Agentic validation gate passed.
 Tests run: test:data
 exit status: 0
@@ -408,13 +408,13 @@ exit status: 0
 The full local transcripts were retained for review with these identities:
 
 ```text
-$ shasum -a 256 /private/tmp/ux017-test-data-dd609ea3.log /private/tmp/ux017-agentic-dd609ea3.log
-68ac2cc379fe862ef9aecfacda0a50064c4425f2f8351754b144d01be1b40dd9  /private/tmp/ux017-test-data-dd609ea3.log
-580b0db1e1c13809b78f1e3bbae9292f7aafc33edc067f74948b0b5d2e5cf170  /private/tmp/ux017-agentic-dd609ea3.log
-$ wc -l /private/tmp/ux017-test-data-dd609ea3.log /private/tmp/ux017-agentic-dd609ea3.log
-    7060 /private/tmp/ux017-test-data-dd609ea3.log
-    7356 /private/tmp/ux017-agentic-dd609ea3.log
-   14416 total
+$ shasum -a 256 /private/tmp/ux017-test-data-8bad4b94.log /private/tmp/ux017-agentic-8bad4b94.log
+1c7e76ba62fcb6c0a9a6f2838c5ba71d6b29cf0f7670bdfc5a5742fe9db8467f  /private/tmp/ux017-test-data-8bad4b94.log
+15551b9bd37bf805781d561d8c5a490da6022b0687fd79f255cfff35661b84db  /private/tmp/ux017-agentic-8bad4b94.log
+$ wc -l /private/tmp/ux017-test-data-8bad4b94.log /private/tmp/ux017-agentic-8bad4b94.log
+    7059 /private/tmp/ux017-test-data-8bad4b94.log
+    7359 /private/tmp/ux017-agentic-8bad4b94.log
+   14418 total
 exit status: 0
 ```
 

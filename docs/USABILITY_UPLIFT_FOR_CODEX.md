@@ -485,6 +485,14 @@ Review after: 2026-08-25
   through Node 26. See `docs/validation/UX-017-MAIN-SYNC-EVIDENCE.md` and the
   approval-pending design in
   `docs/architecture/UX_017_PINNED_NODE_TOOLCHAIN_BRIEF.md`.
+- **Remediation verification (2026-08-31):** the approved pinned-toolchain
+  change installed canonical `main` at
+  `702dc5b0521f49542d1c6cb73238841006b9a793` with Node 22.23.1, npm 10.9.8,
+  and Cargo 1.93.1. The candidate log window contained zero `EBADENGINE`
+  warnings, `status.json` recorded `phase: installed`, installed/build
+  executable hashes matched, and strict signature verification passed. The
+  exact transcript and required-check provenance are in
+  `docs/validation/UX-017-MAIN-SYNC-EVIDENCE.md`.
 
 ### UX-018 — Restore timely, authoritative forecast resolution
 
@@ -728,7 +736,7 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
-| UX-017 | Complete Mac main-sync toolchain repair | IN PROGRESS — HIGH ASSURANCE | #1693 |
+| UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |

@@ -2,132 +2,274 @@
 
 Date: 2026-08-31
 
-## Baseline
+## Clean baseline
 
-The intended implementation and test files started with these SHA-256 checksums:
+The proof ran in a detached worktree at implementation commit `63bd412c` after
+`npm ci`. `git status --short` was empty before the first mutation and after
+every restoration.
+
+Command:
+
+```bash
+/opt/homebrew/opt/node@22/bin/node --test tests/main-sync-agent.test.mjs
+```
+
+Baseline checksums and TAP footer:
 
 ```text
+f8fc7cb889c0e5d637170b9897619d3fa05cd10605c8c1ad5e3f0e51a7e3a761  scripts/sync-main-to-mac.mjs
 7c8a670104c2b81a89fe763c270e85d06b59b6c1eb8c8e8e261e1b42bac2860d  scripts/setup-main-sync-agent.mjs
-befebc9aa0acd1108f27556bfe9c99ba298f9781318780a2af0317fb63e53372  scripts/sync-main-to-mac.mjs
-f6fc5cf9ece6c0724d22bb6fdd1b034ca59ba3fcc65764ee5c226b98dbbe2821  tests/main-sync-agent.test.mjs
+ae60505e7f5508f39b86521ea2fe82bab9fd25f5ff786cf925fe93dc9139788d  tests/main-sync-agent.test.mjs
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
 ```
 
-Baseline command:
+## Proof 1: unsupported Node majors are rejected
 
-```bash
-/opt/homebrew/opt/node@22/bin/node --test tests/main-sync-agent.test.mjs
+Confirmed-applied diff:
+
+```diff
+@@ -29,9 +29,7 @@ export const NPM_VERIFICATION_COMMANDS = [
+ export function assertSupportedMainSyncNode(version = process.versions.node) {
+   const major = Number.parseInt(String(version).split('.')[0], 10);
+-  if (major !== 22) {
+- throw new Error(`Node 22 is required for main sync; running Node ${version}`);
+-  }
++  return major;
+ }
 ```
 
-Result: `16 pass / 0 fail`.
+Raw checksum and TAP failure:
 
-## Proofs
-
-Each mutation was temporary and sequential. After applying it, the named
-`git diff` command showed the changed production line, and the focused command
-above was run unchanged. The production file was restored before the next
-mutation.
-
-### 1. Unsupported Node majors are rejected
-
-- Mutation: replaced the `major !== 22` rejection with `return major` in
-  `assertSupportedMainSyncNode`.
-- Mutated checksum:
-  `09f47cabe418f8476d53653c036535a972a573e46da2f31d302ee3bcfbf2535d`.
-- Diff confirmation:
-  `git diff -- scripts/sync-main-to-mac.mjs | sed -n '1,115p'` showed the
-  rejection removed and `return major` present.
-- Result: `15 pass / 1 fail`.
-- Failing subtest: `main sync accepts only the supported Node 22 major`.
-- Failing assertion: `Missing expected exception.` (`ERR_ASSERTION`,
-  `assert.throws`).
-
-### 2. npm is invoked by its pinned absolute path
-
-- Mutation: replaced `toolchain.npmPath` with bare `'npm'` in
-  `runVerificationAndBuild`.
-- Mutated checksum:
-  `c04132376df04da0f92c9a6f9c3e220fd1cdb345789510660d13effc8dca66c4`.
-- Diff confirmation:
-  `git diff -- scripts/sync-main-to-mac.mjs | sed -n '80,145p'` showed
-  `runLoggedCommand('npm', ...)`.
-- Result: `15 pass / 1 fail`.
-- Failing subtest:
-  `all main sync npm verification and build commands use the pinned toolchain`.
-- Failing assertion:
-  `every npm stage should execute through the pinned npm path and environment`
-  (`ERR_ASSERTION`, `assert.match`).
-
-### 3. The selected Node directory leads subprocess PATH
-
-- Mutation: replaced `` `${nodeDir}:${env.PATH}` `` with `env.PATH`.
-- Mutated checksum:
-  `f0c4247af65458b90a82290f571e06b0684214e887e8bb528d16b3a5a5ecd82c`.
-- Diff confirmation:
-  `git diff -- scripts/sync-main-to-mac.mjs | sed -n '40,78p'` showed
-  `PATH: env.PATH`.
-- Result: `15 pass / 1 fail`.
-- Failing subtest:
-  `main sync pins npm and subprocess PATH to the selected Node toolchain`.
-- Failing assertion: strict equality expected the selected Node directory
-  before the inherited PATH, but the actual value began with
-  `/Users/example/.cargo/bin`.
-
-### 4. Cargo and the inherited system PATH are preserved
-
-- Mutation: replaced `` `${nodeDir}:${env.PATH}` `` with `nodeDir`.
-- Mutated checksum:
-  `d4b81a8ef1deabfe3083e6fd1c0920daa59f18ebd17e7dfc7d57ab01cd28f6ba`.
-- Diff confirmation:
-  `git diff -- scripts/sync-main-to-mac.mjs | sed -n '46,66p'` showed
-  `PATH: nodeDir`.
-- Result: `15 pass / 1 fail`.
-- Failing subtest:
-  `main sync pins npm and subprocess PATH to the selected Node toolchain`.
-- Failing assertion: strict equality expected Node, Cargo, and system paths,
-  but the actual value contained only
-  `/opt/homebrew/Cellar/node@22/22.23.1/bin`.
-
-### 5. A missing or non-executable sibling npm fails closed
-
-- Mutation: removed the `access(toolchain.npmPath, fsConstants.X_OK)` check and
-  its error translation.
-- Mutated checksum:
-  `b67f3ae549d664b490ee7eb04700963fa570af9ac903402d70bf976f052411bb`.
-- Diff confirmation:
-  `git diff -- scripts/sync-main-to-mac.mjs | sed -n '54,82p'` showed
-  `validatePinnedNodeToolchain` returning without the executable check.
-- Result: `15 pass / 1 fail`.
-- Failing subtest:
-  `main sync rejects a selected Node toolchain without an executable sibling npm`.
-- Failing assertion: `Missing expected rejection.` (`ERR_ASSERTION`,
-  `assert.rejects`).
-
-### 6. Setup validates Node before replacing the LaunchAgent plist
-
-- Mutation: removed `assertSupportedMainSyncNode()` from setup `main`.
-- Mutated checksum:
-  `d27768e7fda2cc6ea01b390873bac5a10fa83b1d99cf0c44116d073b94e5da85`.
-- Diff confirmation:
-  `git diff -- scripts/setup-main-sync-agent.mjs | sed -n '1,90p'` showed the
-  setup guard absent.
-- Result: `15 pass / 1 fail`.
-- Failing subtest:
-  `main sync setup validates Node before replacing the LaunchAgent plist`.
-- Failing assertion: `setup should validate its Node runtime in main`
-  (`ERR_ASSERTION`, `assert.ok`).
-
-## Restoration and final green run
-
-Restoration and verification command:
-
-```bash
-shasum -a 256 scripts/setup-main-sync-agent.mjs scripts/sync-main-to-mac.mjs tests/main-sync-agent.test.mjs
-/opt/homebrew/opt/node@22/bin/node --test tests/main-sync-agent.test.mjs
-shasum -a 256 scripts/setup-main-sync-agent.mjs scripts/sync-main-to-mac.mjs tests/main-sync-agent.test.mjs
-git status --short
+```text
+0b2b78f5590e7188ae46a43f855bd25808a31c4646209827f227101a8c2c2a99  scripts/sync-main-to-mac.mjs
+not ok 7 - main sync accepts only the supported Node 22 major
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  operator: 'throws'
+# pass 17
+# fail 1
 ```
 
-The pre-run and post-run checksums exactly matched the baseline values above.
-The focused suite reported `16 pass / 0 fail`. Final status contained only the
-intended implementation/test modifications and the pre-existing untracked
-`node_modules` entry; this evidence file was added afterward.
+## Proof 2: every npm stage uses the pinned absolute path
+
+Confirmed-applied diff:
+
+```diff
+@@ -409,7 +409,7 @@ async function isInstalledCommitHealthy(state, installPath) {
+ export function runVerificationAndBuild(repoDir, toolchain, run = runLoggedCommand) {
+   for (const args of NPM_VERIFICATION_COMMANDS) {
+- run(toolchain.npmPath, args, { cwd: repoDir, env: toolchain.env });
++ run('npm', args, { cwd: repoDir, env: toolchain.env });
+   }
+ }
+```
+
+Raw checksum and TAP failures:
+
+```text
+47e34f146375936c4191e2f1188793c987d370d394f7d89f85a188dd63e54b31  scripts/sync-main-to-mac.mjs
+not ok 12 - all main sync verification commands use the pinned npm path and environment
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    + 'npm'
+    - '/opt/homebrew/Cellar/node@22/22.23.1/bin/npm'
+  code: 'ERR_ASSERTION'
+  operator: 'strictEqual'
+not ok 14 - all main sync npm verification and build commands use the pinned toolchain
+  error: 'every npm stage should execute through the pinned npm path and environment'
+  code: 'ERR_ASSERTION'
+  operator: 'match'
+# pass 16
+# fail 2
+```
+
+## Proof 3: the selected Node directory leads subprocess PATH
+
+Confirmed-applied diff:
+
+```diff
+@@ -51,7 +51,7 @@ export function buildMainSyncToolchain(nodePath = process.execPath, env = proces
+  env: {
+  ...env,
+- PATH: `${nodeDir}:${env.PATH}`,
++ PATH: env.PATH,
+  },
+```
+
+Raw checksum and TAP failures:
+
+```text
+5b8b405e2c2f3d42800d3005adcb6286b9e5d23fff0c5fb6897406daa3beaf4e  scripts/sync-main-to-mac.mjs
+not ok 8 - main sync pins npm and subprocess PATH to the selected Node toolchain
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    + '/Users/example/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+    - '/opt/homebrew/Cellar/node@22/22.23.1/bin:/Users/example/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+  code: 'ERR_ASSERTION'
+  operator: 'strictEqual'
+not ok 12 - all main sync verification commands use the pinned npm path and environment
+  error: |-
+    The input did not match the expected Node-first PATH regular expression.
+  code: 'ERR_ASSERTION'
+  operator: 'match'
+# pass 16
+# fail 2
+```
+
+## Proof 4: Cargo and the inherited PATH are retained
+
+Confirmed-applied diff:
+
+```diff
+@@ -51,7 +51,7 @@ export function buildMainSyncToolchain(nodePath = process.execPath, env = proces
+  env: {
+  ...env,
+- PATH: `${nodeDir}:${env.PATH}`,
++ PATH: nodeDir,
+  },
+```
+
+Raw checksum and TAP failures:
+
+```text
+603691f9418e56b17f7bd190b98439100214a6599dad30f53515b2b4d16fb7a5  scripts/sync-main-to-mac.mjs
+not ok 8 - main sync pins npm and subprocess PATH to the selected Node toolchain
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    + '/opt/homebrew/Cellar/node@22/22.23.1/bin'
+    - '/opt/homebrew/Cellar/node@22/22.23.1/bin:/Users/example/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+  code: 'ERR_ASSERTION'
+  operator: 'strictEqual'
+not ok 12 - all main sync verification commands use the pinned npm path and environment
+  error: |-
+    The input did not match the expected Node-first PATH regular expression.
+  actual: '/opt/homebrew/Cellar/node@22/22.23.1/bin'
+  code: 'ERR_ASSERTION'
+  operator: 'match'
+# pass 16
+# fail 2
+```
+
+## Proof 5: a missing sibling npm fails closed
+
+Confirmed-applied diff:
+
+```diff
+@@ -59,11 +59,6 @@ export function buildMainSyncToolchain(nodePath = process.execPath, env = proces
+ export async function validatePinnedNodeToolchain(nodePath = process.execPath, env = process.env) {
+   assertSupportedMainSyncNode();
+   const toolchain = buildMainSyncToolchain(nodePath, env);
+-  try {
+- await access(toolchain.npmPath, fsConstants.X_OK);
+-  } catch {
+- throw new Error(`Selected Node toolchain has no executable npm sibling at ${toolchain.npmPath}`);
+-  }
+   return toolchain;
+ }
+```
+
+Raw checksum and TAP failures:
+
+```text
+7d35a0dae4cb7f15be7584356bff24740a10f27677b5796d398f2242fb9a2d1f  scripts/sync-main-to-mac.mjs
+not ok 10 - main sync rejects a selected Node toolchain without an executable sibling npm
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  operator: 'rejects'
+not ok 11 - main sync CLI validates the pinned toolchain before creating sync state
+  error: |-
+    The input did not match the regular expression /no executable npm sibling/.
+  code: 'ERR_ASSERTION'
+  operator: 'match'
+# pass 16
+# fail 2
+```
+
+## Proof 6: setup validates Node before replacing the plist
+
+Confirmed-applied diff:
+
+```diff
+@@ -144,7 +144,6 @@ function reloadLaunchAgent(launchAgentPath, label) {
+ async function main() {
+   const options = parseArgs(process.argv.slice(2));
+-  assertSupportedMainSyncNode();
+   await installLaunchAgent(options);
+```
+
+Raw checksum and TAP failure:
+
+```text
+d27768e7fda2cc6ea01b390873bac5a10fa83b1d99cf0c44116d073b94e5da85  scripts/setup-main-sync-agent.mjs
+not ok 13 - main sync setup validates Node before replacing the LaunchAgent plist
+  error: 'setup should validate its Node runtime in main'
+  code: 'ERR_ASSERTION'
+  operator: '=='
+# pass 17
+# fail 1
+```
+
+## Proof 7: CLI validation precedes sync-state creation
+
+Confirmed-applied diff:
+
+```diff
+@@ -432,7 +432,6 @@ async function installBuiltApp(repoDir, installPath) {
+ async function main() {
+   const options = parseArgs(process.argv.slice(2));
+-  const toolchain = await validatePinnedNodeToolchain();
+   const startedAt = new Date().toISOString();
+@@ -441,6 +440,7 @@ async function main() {
+  }
+  throw error;
+   });
++  const toolchain = await validatePinnedNodeToolchain();
+```
+
+Raw checksum and TAP failure:
+
+```text
+966e196e469a7b0d199dc17ebc4a20232a16e866a010e6030e2a3efe12a8aeed  scripts/sync-main-to-mac.mjs
+not ok 11 - main sync CLI validates the pinned toolchain before creating sync state
+  error: |-
+    invalid toolchains must fail before sync state is created
+    true !== false
+  code: 'ERR_ASSERTION'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+# pass 17
+# fail 1
+```
+
+## Exact restoration and final green
+
+After reversing proof 7 with `apply_patch`, the checksums exactly matched the
+clean baseline. `git status --short` was empty before and after the final run.
+
+```text
+f8fc7cb889c0e5d637170b9897619d3fa05cd10605c8c1ad5e3f0e51a7e3a761  scripts/sync-main-to-mac.mjs
+7c8a670104c2b81a89fe763c270e85d06b59b6c1eb8c8e8e261e1b42bac2860d  scripts/setup-main-sync-agent.mjs
+ae60505e7f5508f39b86521ea2fe82bab9fd25f5ff786cf925fe93dc9139788d  tests/main-sync-agent.test.mjs
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+f8fc7cb889c0e5d637170b9897619d3fa05cd10605c8c1ad5e3f0e51a7e3a761  scripts/sync-main-to-mac.mjs
+7c8a670104c2b81a89fe763c270e85d06b59b6c1eb8c8e8e261e1b42bac2860d  scripts/setup-main-sync-agent.mjs
+ae60505e7f5508f39b86521ea2fe82bab9fd25f5ff786cf925fe93dc9139788d  tests/main-sync-agent.test.mjs
+```

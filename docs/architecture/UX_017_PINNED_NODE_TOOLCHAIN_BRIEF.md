@@ -1,7 +1,6 @@
 # UX-017 pinned Node toolchain brief
 
-Status: implementation approved; first independent-review repair cycle is
-pending validation and rollout.
+Status: implemented and operationally verified; final review pending.
 
 ## Goal
 
@@ -21,7 +20,7 @@ build and preserving every existing fail-closed verification and install gate.
   typechecks, web build, desktop packaging, signing, installer verification,
   and the canonical `~/Applications/Crystal Ball.app` destination remain
   unchanged.
-- A controlled post-merge run records `phase: installed`, the exact canonical
+- A controlled candidate run records `phase: installed`, the exact canonical
   commit, required-check provenance, matching app hashes, and a valid strict
   code signature without an `EBADENGINE` warning.
 
@@ -106,3 +105,9 @@ output proving the pinned Node/npm versions, Cargo visibility, successful
 installed phase, hashes, and signature. Roll back by reverting the
 implementation commit and rerunning setup from the last known-good script; the
 installed app remains untouched unless the full verified build succeeds.
+
+The controlled candidate run completed on 2026-08-31 against canonical main
+`702dc5b0521f49542d1c6cb73238841006b9a793`: it recorded `phase: installed`,
+used Node 22.23.1 with npm 10.9.8 and Cargo 1.93.1, emitted no `EBADENGINE`,
+installed through the verified installer, matched installed/build executable
+hashes, and passed strict code-signature verification.

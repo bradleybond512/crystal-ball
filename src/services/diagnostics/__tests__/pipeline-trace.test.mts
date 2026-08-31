@@ -33,6 +33,37 @@ test('record: defaults at to registry now when omitted', () => {
   assert.equal(entry?.events[0]?.at, 5000);
 });
 
+test('record: a repeated ingestion starts a fresh lifecycle for a stable trace id', () => {
+  const reg = createPipelineTraceRegistry();
+  reg.record('stable-alert', 'weather', { stage: 'ingested', at: 1000 });
+  reg.record('stable-alert', 'weather', { stage: 'routed', at: 1010 });
+
+  reg.record('stable-alert', 'weather', { stage: 'ingested', at: 2000 });
+
+  assert.deepEqual(reg.get('stable-alert'), {
+    traceId: 'stable-alert',
+    domain: 'weather',
+    createdAt: 2000,
+    events: [{ stage: 'ingested', at: 2000 }],
+  });
+});
+
+test('record: consecutive nonterminal ingestions preserve the failure-streak start', () => {
+  const reg = createPipelineTraceRegistry();
+  reg.record('failing-alert', 'weather', { stage: 'ingested', at: 1000 });
+  reg.record('failing-alert', 'weather', { stage: 'evaluated', at: 1010 });
+
+  reg.record('failing-alert', 'weather', { stage: 'ingested', at: 5000 });
+
+  assert.deepEqual(reg.get('failing-alert'), {
+    traceId: 'failing-alert',
+    domain: 'weather',
+    createdAt: 1000,
+    events: [{ stage: 'ingested', at: 5000 }],
+  });
+  assert.deepEqual(reg.stalled(7000, 5000).map((entry) => entry.traceId), ['failing-alert']);
+});
+
 test('get: returns undefined for unknown traceId', () => {
   const reg = createPipelineTraceRegistry();
   assert.equal(reg.get('nonexistent'), undefined);
@@ -71,6 +102,16 @@ test('stalled: dropped entries are not stalled', () => {
   reg.record('dropped-1', 'weather', { stage: 'dropped', at: 1001, reason: 'low priority' });
   const stalled = reg.stalled(60_000, 5000);
   assert.ok(!stalled.some(e => e.traceId === 'dropped-1'), 'dropped entry must not be stalled');
+});
+
+test('stalled: a routing failure after an earlier successful lifecycle is visible', () => {
+  const reg = createPipelineTraceRegistry();
+  reg.record('stable-alert', 'weather', { stage: 'ingested', at: 1000 });
+  reg.record('stable-alert', 'weather', { stage: 'routed', at: 1010 });
+  reg.record('stable-alert', 'weather', { stage: 'ingested', at: 2000 });
+
+  const stalled = reg.stalled(10_000, 5000);
+  assert.deepEqual(stalled.map((entry) => entry.traceId), ['stable-alert']);
 });
 
 test('stalled: fresh entries are not stalled', () => {

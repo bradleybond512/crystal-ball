@@ -552,7 +552,7 @@ AirNow intermittently impaired. A red feed is not automatically a code defect:
 the runtime must distinguish absent user-owned credentials, upstream outage,
 rate limiting, schema drift, and local adapter failure.
 
-Progress evidence (draft PR #1692): the MCP candidate reads only the
+Merged evidence (PR #1692): the MCP implementation reads only the
 authenticated, allowlisted missing-key projection and classifies ACLED,
 ThreatFox, and AIS as `not_configured` without probing them when required
 credentials are explicitly absent. A 2026-08-30 candidate run against the
@@ -571,10 +571,18 @@ declares its required key. Focused MCP tests passed 74/74; the full MCP suite
 passed 232/232; provider tests passed 157/157; diagnostics passed 418/418 plus
 28/28 Node tests; both TypeScript configurations passed.
 Repository smoke remained YELLOW because the live `usgs-surface-water` feed
-was erroring, so the tracker remains in progress pending compliant mutation
-proof, review, and merged packaged-runtime confirmation.
+was erroring. PR #1692 merged the completed optional-key and degraded-feed
+classification work; the tracker is waiting for a separately approved
+High Assurance provider-contract design and credentialed live probe before
+implementing truthful HTTP-429 classification.
 
 Dependencies: UX-017
+
+Exit condition: A concrete provider-contract design preserves upstream HTTP-429
+evidence for ACLED and ThreatFox, a credentialed live probe confirms the actual
+response shape, and the user explicitly approves that High Assurance design.
+
+Review after: 2026-09-01
 
 - **Change surface:** the affected provider adapters and the shared feed health,
   resilience, latency, diagnostics, and dashboard paths. Add provider code only
@@ -715,7 +723,7 @@ Update the row in the same PR that does the work.
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
-| UX-021 | Optional-feed classification and recovery | IN PROGRESS | #1692 |
+| UX-021 | Optional-feed classification and recovery | WAITING | #1692 |
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |

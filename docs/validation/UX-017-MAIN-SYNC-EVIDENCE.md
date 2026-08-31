@@ -196,10 +196,12 @@ exit status: 0
 
 The LaunchAgent retained the Cargo-first path, used the absolute Node 22
 program, and exited with status 0. Its UX-017 worktree binding is temporary,
-not a durable rollout state: launchd must be relocated to the agent-owned clean
-clone after PR #1693 merges, and the worktree must remain present until the
-loaded replacement passes the post-merge gates below. Only npm/package-script
-children received the Node-first path above.
+not a durable rollout state: launchd must be relocated to the separate,
+manually updated controller checkout at `~/.crystalball-main-sync/controller`
+after PR #1693 merges. The disposable sibling `repo` remains only the moving
+target/build clone. The worktree must remain present until the loaded
+replacement passes the post-merge gates below. Only npm/package-script children
+received the Node-first path above.
 
 ### Fresh canonical-main installation
 
@@ -295,13 +297,17 @@ failure, or missing target marker makes the probe invalid, never clean.
 The relocation transcript must also record:
 
 - PR #1693 merged and its merge commit is an ancestor of canonical `main`;
-- the controller clone is clean and exactly canonical `main`;
+- the controller checkout is a standalone canonical clone, clean, detached at
+  the exact reviewed and merged SHA, and recorded as last known good;
+- the controller and disposable `repo` paths are distinct, and the sync job
+  never resets, cleans, or updates the controller checkout;
 - the reviewed sync, setup, and focused-test blobs match the identities in the
   architecture brief;
 - focused main-sync tests pass under absolute Node 22 before setup;
 - the stopped job is absent before the plist is replaced;
-- plist and loaded launchd state both use Node 22, the agent-owned clone, the
-  expected sync root, Cargo/system paths, and no `.worktrees` path;
+- plist and loaded launchd state both use Node 22, the dedicated `controller`
+  checkout, the expected sync root, Cargo/system paths, and neither a
+  `.worktrees` nor disposable-`repo` controller path;
 - required-check provenance, terminal state, strict signature verification,
   and matching installed/build executable hashes; and
 - the UX-017 worktree is retained until every preceding gate passes.

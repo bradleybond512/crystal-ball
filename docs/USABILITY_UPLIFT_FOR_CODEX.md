@@ -751,4 +751,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-025 | Smoked Liquid Glass desktop visual system | IN PROGRESS | draft |
+| UX-025 | Smoked Liquid Glass desktop visual system | IN PROGRESS | #1695 |

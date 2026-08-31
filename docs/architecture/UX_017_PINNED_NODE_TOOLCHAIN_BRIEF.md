@@ -1,6 +1,6 @@
 # UX-017 pinned Node toolchain brief
 
-Status: implementation repaired; exact-tip validation and final review pending.
+Status: implementation and exact-tip validation complete; final review pending.
 
 ## Goal
 

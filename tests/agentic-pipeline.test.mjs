@@ -365,19 +365,50 @@ test('a representative service change selects the trusted UX-010 suite', () => {
   assert.ok(result.scripts.includes('test:ux010'));
 });
 
-test('the UX-010 native gate generates its ignored Tauri resource before Cargo', () => {
+test('the UX-010 native gate gives Cargo an owned temporary frontend resource and cleans it', () => {
   const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
   const fullCommand = scripts['test:ux010'];
   const nativeGate = readFileSync(join(root, 'tests/ux010-native-gate.test.mjs'), 'utf8');
+  const tempIndex = nativeGate.indexOf("mkdtempSync(join(tmpdir(), 'crystalball-tauri-test-'))");
   const bundleIndex = nativeGate.indexOf("'scripts/build-sidecar-xmpp.mjs'");
   const cargoIndex = nativeGate.indexOf("spawnSync('cargo'");
+  const cleanupIndex = nativeGate.indexOf('rmSync(tauriFrontendDist');
 
   assert.match(fullCommand, /&& node --test tests\/ux010-native-gate\.test\.mjs$/);
   assert.doesNotMatch(fullCommand, /cargo test/);
+  assert.match(nativeGate, /mkdtempSync\(join\(tmpdir\(\), 'crystalball-tauri-test-'\)\)/);
   assert.match(nativeGate, /spawnSync\(process\.execPath, \[\s*'scripts\/build-sidecar-xmpp\.mjs',?\s*\]/);
+  assert.ok(tempIndex >= 0, 'native gate must own a unique temporary frontend resource');
   assert.ok(bundleIndex >= 0, 'native gate must invoke the checked-in XMPP bundle generator');
-  assert.ok(cargoIndex > bundleIndex, 'resource generation must happen before Cargo');
+  assert.ok(bundleIndex > tempIndex, 'temporary frontend resource must exist before sidecar bundling');
+  assert.ok(cargoIndex > bundleIndex, 'sidecar bundling must happen before Cargo');
+  assert.ok(cleanupIndex > cargoIndex, 'owned temporary resource must be cleaned after Cargo');
+  assert.match(
+    nativeGate,
+    /env:\s*\{\s*\.\.\.process\.env,\s*CARGO_TERM_COLOR:\s*'never',\s*TAURI_CONFIG:\s*JSON\.stringify\(\{\s*build:\s*\{\s*frontendDist:\s*tauriFrontendDist\s*\},?\s*\}\),?\s*\}/,
+  );
+  assert.match(nativeGate, /finally\s*\{\s*rmSync\(tauriFrontendDist,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\);?\s*\}/);
+  assert.doesNotMatch(nativeGate, /process\.env\.TAURI_CONFIG\s*=/);
   assert.match(nativeGate, /'--manifest-path',\s*'src-tauri\/Cargo\.toml',\s*'--test',\s*'current_location_contract'/);
+});
+
+test('the Home Shell browser harness scopes the exact-zero disclaimer to each source row', () => {
+  const browserHarness = readFileSync(join(root, 'e2e/home-shell-boot.spec.ts'), 'utf8');
+
+  assert.match(
+    browserHarness,
+    /const isExactZeroWorkingStatus = \(text: string\): boolean => \/\^working now\\s\*·\\s\*0 items\\b\/i\.test\(text\);/,
+  );
+  assert.match(browserHarness, /expect\(isExactZeroWorkingStatus\('Working now · 0 items in latest update'\)\)\.toBe\(true\);/);
+  assert.match(browserHarness, /expect\(isExactZeroWorkingStatus\('Working now · 10 items in latest update'\)\)\.toBe\(false\);/);
+  assert.match(
+    browserHarness,
+    /const \{ status, text \} = await source\.evaluate\(\(node\) => \{\s*const statusElement = node\.querySelector<HTMLElement>\('\.hs-source-status'\);\s*if \(!statusElement\) throw new Error\('Home Shell source row is missing \.hs-source-status'\);\s*return \{ status: statusElement\.innerText, text: \(node as HTMLElement\)\.innerText \};\s*\}\);/,
+  );
+  assert.match(browserHarness, /if \(isExactZeroWorkingStatus\(status\)\) expect\(text\)\.toMatch\(\/not an all-clear signal\/i\);/);
+  assert.doesNotMatch(browserHarness, /source\.locator\('\.hs-source-status'\)\.innerText\(\)/);
+  assert.doesNotMatch(browserHarness, /await source\.innerText\(\)/);
+  assert.doesNotMatch(browserHarness, /\/working now\.\*0 items\/i\.test\(text\)/);
 });
 
 test('targeted CI provisions a pinned least-privilege Ubuntu Rust contract runner', () => {

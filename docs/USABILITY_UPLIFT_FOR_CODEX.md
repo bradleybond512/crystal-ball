@@ -644,7 +644,7 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   and a manual full-desktop review flow.
 - **Evidence:** PR #1689 records 24/24 focused tests, 14,637/14,637 renderer
   tests, zero axe violations at full and compact widths, a 457.6 KiB gzip main
-  entry plus a separate 3.6 KiB review chunk, and a passing agentic validation
+  entry plus a separate 3.7 KiB review chunk, and a passing agentic validation
   gate. Clean-tree mutation proofs confirmed each edit in `git diff` and restored
   the recorded SHA-256: `panel-attention.ts` `eb36aea2...` (score floor: 22/24,
   timestamp identity: 23/24, persistence bound: 23/24, promotion cap: 22/24,

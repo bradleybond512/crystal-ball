@@ -95,8 +95,11 @@ test.describe('home shell default boot', () => {
     expect(isExactZeroWorkingStatus('Working now · 0 items in latest update')).toBe(true);
     expect(isExactZeroWorkingStatus('Working now · 10 items in latest update')).toBe(false);
     for (const source of await sources.all()) {
-      const status = await source.locator('.hs-source-status').innerText();
-      const text = await source.innerText();
+      const { status, text } = await source.evaluate((node) => {
+        const statusElement = node.querySelector<HTMLElement>('.hs-source-status');
+        if (!statusElement) throw new Error('Home Shell source row is missing .hs-source-status');
+        return { status: statusElement.innerText, text: (node as HTMLElement).innerText };
+      });
       expect(text).not.toMatch(/still loading|waiting for a successful fresh update/i);
       expect(text).toMatch(/working now|degraded|unknown|saved place/i);
       expect(text).not.toMatch(/provider (?:is )?(?:available|live|healthy)/i);

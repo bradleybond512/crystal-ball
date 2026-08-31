@@ -252,9 +252,65 @@ not ok 11 - main sync CLI validates the pinned toolchain before creating sync st
 # fail 1
 ```
 
+## Proof 8: the selected Node path must be absolute
+
+Confirmed-applied diff:
+
+```diff
+@@ -40,9 +40,6 @@ export function buildLaunchAgentEnvironmentPath(homeDir = os.homedir()) {
+ }
+
+ export function buildMainSyncToolchain(nodePath = process.execPath, env = process.env) {
+-  if (typeof nodePath !== 'string' || !path.isAbsolute(nodePath)) {
+- throw new Error('Main sync requires an absolute Node executable path');
+-  }
+   if (!env || typeof env.PATH !== 'string' || env.PATH.length === 0) {
+  throw new Error('Main sync requires a non-empty PATH for subprocesses');
+   }
+```
+
+Raw checksum and TAP failure:
+
+```text
+4a3056dc55b468057050920481b4ae090f90f9321e2e7503d18932f50d3d5e5f  scripts/sync-main-to-mac.mjs
+not ok 9 - main sync rejects ambiguous toolchain paths and empty subprocess PATH values
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  operator: 'throws'
+# pass 17
+# fail 1
+```
+
+## Proof 9: subprocess PATH must be non-empty
+
+Confirmed-applied diff:
+
+```diff
+@@ -43,9 +43,6 @@ export function buildMainSyncToolchain(nodePath = process.execPath, env = process.env) {
+  if (typeof nodePath !== 'string' || !path.isAbsolute(nodePath)) {
+  throw new Error('Main sync requires an absolute Node executable path');
+   }
+-  if (!env || typeof env.PATH !== 'string' || env.PATH.length === 0) {
+- throw new Error('Main sync requires a non-empty PATH for subprocesses');
+-  }
+   const nodeDir = path.dirname(nodePath);
+```
+
+Raw checksum and TAP failure:
+
+```text
+d6942ebb923252cae8cd4fb14bc658031527a9bd2a7f3617849756ff05390d4d  scripts/sync-main-to-mac.mjs
+not ok 9 - main sync rejects ambiguous toolchain paths and empty subprocess PATH values
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  operator: 'throws'
+# pass 17
+# fail 1
+```
+
 ## Exact restoration and final green
 
-After reversing proof 7 with `apply_patch`, the checksums exactly matched the
+After reversing each of the nine mutations with `apply_patch`, the checksums exactly matched the
 clean baseline. `git status --short` was empty before and after the final run.
 
 ```text

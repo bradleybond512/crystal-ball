@@ -111,7 +111,31 @@ below closes it with a fresh controlled run against the then-current canonical
 Captured 2026-08-31 after reinstalling the LaunchAgent from the persistent
 `codex/ux017-main-sync-verification` worktree with Node 22.
 
-The candidate derived and executed this toolchain:
+### LaunchAgent installation
+
+Command and exit status:
+
+```text
+$ /opt/homebrew/opt/node@22/bin/node scripts/setup-main-sync-agent.mjs
+{
+  "label": "com.bradleybond.crystalball.main-sync",
+  "launchAgentPath": "/Users/bradleybond/Library/LaunchAgents/com.bradleybond.crystalball.main-sync.plist",
+  "syncRoot": "/Users/bradleybond/.crystalball-main-sync",
+  "intervalSeconds": 300,
+  "started": true
+}
+exit status: 0
+```
+
+### Derived toolchain
+
+Command:
+
+```bash
+/opt/homebrew/opt/node@22/bin/node --input-type=module -e "import {spawnSync} from 'node:child_process'; import {buildLaunchAgentEnvironmentPath,buildMainSyncToolchain} from './scripts/sync-main-to-mac.mjs'; const launchPath=buildLaunchAgentEnvironmentPath(); const toolchain=buildMainSyncToolchain(process.execPath,{PATH:launchPath}); const run=(c,a)=>spawnSync(c,a,{env:toolchain.env,encoding:'utf8'}).stdout.trim(); console.log(JSON.stringify({nodePath:toolchain.nodePath,npmPath:toolchain.npmPath,launchAgentPath:launchPath,childPath:toolchain.env.PATH,nodeVersion:run('node',['--version']),npmVersion:run(toolchain.npmPath,['--version']),cargoVersion:run('cargo',['--version'])},null,2));"
+```
+
+Raw output and exit status:
 
 ```json
 {
@@ -125,11 +149,59 @@ The candidate derived and executed this toolchain:
 }
 ```
 
+```text
+exit status: 0
+```
+
+### Loaded LaunchAgent
+
+Command:
+
+```text
+$ /bin/launchctl print gui/501/com.bradleybond.crystalball.main-sync | sed -n '1,45p'
+```
+
+Raw output excerpt and exit status:
+
+```text
+gui/501/com.bradleybond.crystalball.main-sync = {
+  active count = 0
+  path = /Users/bradleybond/Library/LaunchAgents/com.bradleybond.crystalball.main-sync.plist
+  type = LaunchAgent
+  state = not running
+
+  program = /opt/homebrew/Cellar/node@22/22.23.1/bin/node
+  arguments = {
+    /opt/homebrew/Cellar/node@22/22.23.1/bin/node
+    /Users/bradleybond/Developer/crystalball/.worktrees/codex-ux017-main-sync-verification/scripts/sync-main-to-mac.mjs
+    --sync-root
+    /Users/bradleybond/.crystalball-main-sync
+  }
+
+  working directory = /Users/bradleybond/Developer/crystalball/.worktrees/codex-ux017-main-sync-verification
+
+  stdout path = /Users/bradleybond/.crystalball-main-sync/logs/main-sync.stdout.log
+  stderr path = /Users/bradleybond/.crystalball-main-sync/logs/main-sync.stderr.log
+
+  environment = {
+    OSLogRateLimit => 64
+    PATH => /Users/bradleybond/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+    XPC_SERVICE_NAME => com.bradleybond.crystalball.main-sync
+  }
+
+  runs = 2
+  last exit code = 0
+exit status: 0
+```
+
 The LaunchAgent retained the Cargo-first path, used the absolute Node 22
 program, pointed at the persistent UX-017 worktree, and exited with status 0.
 Only npm/package-script children received the Node-first path above.
 
-The fresh canonical-main run recorded:
+### Fresh canonical-main installation
+
+The fresh canonical-main run first recorded this installed status before the
+next polling cycle changed the status phase to `idle`:
 
 ```json
 {
@@ -143,21 +215,86 @@ The fresh canonical-main run recorded:
 }
 ```
 
-`state.json` recorded the same SHA, time, app hash, and all seven required
-checks. The candidate-run stderr window beginning at byte 24,096,523 contained
-zero `EBADENGINE` occurrences. The concluding stdout included:
+The exact state/status inspection command, raw output, and exit status were:
 
 ```text
-[install-built-app] Installed /Users/bradleybond/Applications/Crystal Ball.app
-[sync-main-to-mac] Installed 702dc5b0521f49542d1c6cb73238841006b9a793 to /Users/bradleybond/Applications/Crystal Ball.app
+$ sed -n '1,180p' /Users/bradleybond/.crystalball-main-sync/state.json; sed -n '1,160p' /Users/bradleybond/.crystalball-main-sync/status.json
+{
+  "installedAt": "2026-08-31T07:30:28.865Z",
+  "installedSha": "702dc5b0521f49542d1c6cb73238841006b9a793",
+  "installPath": "/Users/bradleybond/Applications/Crystal Ball.app",
+  "appPath": "/Users/bradleybond/.crystalball-main-sync/repo/src-tauri/target/release/bundle/macos/Crystal Ball.app",
+  "appSha256": "b3330916dd567381a1b1a4bfa72ff90093f20d4bf851e1a3b96d3cbf7bf7f063",
+  "repoSlug": "bradleybond512/crystal-ball",
+  "branch": "main",
+  "requiredChecks": [
+    "typecheck",
+    "secret-scan",
+    "actionlint",
+    "integrity-checks",
+    "release-doctor",
+    "cross-agent-review",
+    "targeted-tests"
+  ],
+  "verificationSource": "pull_request",
+  "verifiedPrNumber": 1692
+}
+{
+  "phase": "idle",
+  "checkedAt": "2026-08-31T07:47:20.758Z",
+  "targetSha": "702dc5b0521f49542d1c6cb73238841006b9a793",
+  "installedSha": "702dc5b0521f49542d1c6cb73238841006b9a793",
+  "requiredChecks": [
+    "typecheck",
+    "secret-scan",
+    "actionlint",
+    "integrity-checks",
+    "release-doctor",
+    "cross-agent-review",
+    "targeted-tests"
+  ],
+  "verificationSource": "pull_request",
+  "verifiedPrNumber": 1692
+}
+exit status: 0
 ```
 
-Strict signature verification returned `valid on disk` and `satisfies its
-Designated Requirement`. The installed and build-source executables both had
-SHA-256:
+The candidate-run stderr window beginning at byte 24,096,523 contained zero
+`EBADENGINE` occurrences:
 
 ```text
-87a5470c546f3a31fbcc8afd09ab7a3514cfbb10a558e83920efd68ce441e116
+$ if tail -c +24096523 /Users/bradleybond/.crystalball-main-sync/logs/main-sync.stderr.log | rg -q 'EBADENGINE'; then echo 'EBADENGINE present'; else echo 'EBADENGINE count: 0'; fi
+EBADENGINE count: 0
+exit status: 0
+```
+
+The exact stdout lookup and result were:
+
+```text
+$ rg -n 'Installed 702dc5b0521f49542d1c6cb73238841006b9a793|\[install-built-app\] Installed' /Users/bradleybond/.crystalball-main-sync/logs/main-sync.stdout.log | tail -n 2
+653467:[install-built-app] Installed /Users/bradleybond/Applications/Crystal Ball.app
+653468:[sync-main-to-mac] Installed 702dc5b0521f49542d1c6cb73238841006b9a793 to /Users/bradleybond/Applications/Crystal Ball.app
+exit status: 0
+```
+
+### Installed artifact verification
+
+Signature command, raw output, and exit status:
+
+```text
+$ codesign --verify --deep --strict --verbose=4 '/Users/bradleybond/Applications/Crystal Ball.app'
+/Users/bradleybond/Applications/Crystal Ball.app: valid on disk
+/Users/bradleybond/Applications/Crystal Ball.app: satisfies its Designated Requirement
+exit status: 0
+```
+
+Installed/build-source identity command, raw output, and exit status:
+
+```text
+$ shasum -a 256 '/Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS/crystalball' '/Users/bradleybond/.crystalball-main-sync/repo/src-tauri/target/release/bundle/macos/Crystal Ball.app/Contents/MacOS/crystalball'
+87a5470c546f3a31fbcc8afd09ab7a3514cfbb10a558e83920efd68ce441e116  /Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS/crystalball
+87a5470c546f3a31fbcc8afd09ab7a3514cfbb10a558e83920efd68ce441e116  /Users/bradleybond/.crystalball-main-sync/repo/src-tauri/target/release/bundle/macos/Crystal Ball.app/Contents/MacOS/crystalball
+exit status: 0
 ```
 
 UX-017 is complete: the coordinator, npm, nested Node commands, and installer

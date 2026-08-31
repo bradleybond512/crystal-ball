@@ -477,11 +477,12 @@ Review after: 2026-08-25
   confirm the installed commit and successful phase in
   `~/.crystalball-main-sync/status.json`.
 - **Operational verification (2026-08-30):** the Node 22 LaunchAgent installed
-  canonical `main` at `bb702dc592df93ab5eb366c3b4ef7a51cc3ef9b5` through the
+  canonical `main` at `ace938183462b50ef9ce871ab931e297a3e49942` through the
   fail-closed sync path. `status.json` records `phase: idle` with matching
-  target and installed SHAs, required-check evidence from PR #1691, and the
+  target and installed SHAs, required-check evidence from PR #1689, and the
   canonical app at `~/Applications/Crystal Ball.app`; strict code-signature
-  verification passed.
+  verification passed. The LaunchAgent runs the persistent repair worktree with
+  `/Users/bradleybond/.cargo/bin` first in `PATH`.
 
 ### UX-018 — Restore timely, authoritative forecast resolution
 

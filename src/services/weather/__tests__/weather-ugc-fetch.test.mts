@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { fetchUgcZonesForPoint } from '../../weather.ts';
+import {
+  fetchNwsPointJurisdiction,
+  fetchUgcZonesForPoint,
+  NWS_POINT_JURISDICTION_TTL_MS,
+} from '../../weather.ts';
 
 // ── fetchUgcZonesForPoint: honest failure signal (P0 #3) ─────────────────
 // This resolver is the DEFAULT `fetchZones` behind resolveSavedPlaceZonesWithHealth,
@@ -46,6 +50,21 @@ test('throws on a 5xx response (server failure is not an honest empty)', async (
   );
 });
 
+test('throws on rate limiting and timeout (neither is jurisdiction evidence)', async () => {
+  await withFetch(
+    (async () => response({ ok: false, status: 429, json: async () => ({}) })) as unknown as typeof globalThis.fetch,
+    async () => {
+      await assert.rejects(() => fetchNwsPointJurisdiction(41.61, -86.72), /HTTP 429/);
+    },
+  );
+  await withFetch(
+    (async () => { throw new DOMException('timed out', 'TimeoutError'); }) as unknown as typeof globalThis.fetch,
+    async () => {
+      await assert.rejects(() => fetchNwsPointJurisdiction(41.61, -86.72));
+    },
+  );
+});
+
 test('returns [] on a 404 (NWS has no point here — a truthful empty)', async () => {
   await withFetch(
     (async () => response({ ok: false, status: 404, json: async () => ({}) })) as unknown as typeof globalThis.fetch,
@@ -55,7 +74,23 @@ test('returns [] on a 404 (NWS has no point here — a truthful empty)', async (
   );
 });
 
-test('returns the forecast-zone + county UGC codes on a 200', async () => {
+test('structured point evidence marks a 404 as explicit, time-bounded outside jurisdiction', async () => {
+  await withFetch(
+    (async () => response({ ok: false, status: 404, json: async () => ({}) })) as unknown as typeof globalThis.fetch,
+    async () => {
+      const before = Date.now();
+      const result = await fetchNwsPointJurisdiction(0, 0);
+      const after = Date.now();
+      assert.equal(result.status, 'outside-jurisdiction');
+      assert.deepEqual(result.zones, []);
+      assert.equal(result.source, 'nws-points');
+      assert.ok(result.retrievedAt >= before && result.retrievedAt <= after);
+      assert.equal(result.validUntil, result.retrievedAt + NWS_POINT_JURISDICTION_TTL_MS);
+    },
+  );
+});
+
+test('returns complete forecast-zone + county + fire-weather-zone evidence on a 200', async () => {
   await withFetch(
     (async () => response({
       ok: true,
@@ -64,11 +99,86 @@ test('returns the forecast-zone + county UGC codes on a 200', async () => {
         properties: {
           forecastZone: 'https://api.weather.gov/zones/forecast/INZ001',
           county: 'https://api.weather.gov/zones/county/INC091',
+          fireWeatherZone: 'https://api.weather.gov/zones/fire/INZ001',
         },
       }),
     })) as unknown as typeof globalThis.fetch,
     async () => {
       assert.deepEqual(await fetchUgcZonesForPoint(41.61, -86.72), ['INZ001', 'INC091']);
+    },
+  );
+});
+
+test('structured point evidence proves all three jurisdiction fields and bounds its currency', async () => {
+  await withFetch(
+    (async () => response({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        properties: {
+          forecastZone: 'https://api.weather.gov/zones/forecast/INZ103',
+          county: 'https://api.weather.gov/zones/county/INC091',
+          fireWeatherZone: 'https://api.weather.gov/zones/fire/INZ103',
+        },
+      }),
+    })) as unknown as typeof globalThis.fetch,
+    async () => {
+      const result = await fetchNwsPointJurisdiction(41.61, -86.72);
+      assert.equal(result.status, 'covered');
+      assert.deepEqual(result.zones, ['INZ103', 'INC091']);
+      assert.deepEqual(result.fields, {
+        forecastZone: 'INZ103',
+        county: 'INC091',
+        fireWeatherZone: 'INZ103',
+      });
+      assert.equal(result.validUntil, result.retrievedAt + NWS_POINT_JURISDICTION_TTL_MS);
+    },
+  );
+});
+
+test('a malformed or incomplete 200 point body fails closed', async () => {
+  for (const payload of [
+    null,
+    {},
+    { properties: null },
+    { properties: { forecastZone: 'https://api.weather.gov/zones/forecast/INZ103', county: 'https://api.weather.gov/zones/county/INC091' } },
+    { properties: { forecastZone: 'INZ103', county: 'https://api.weather.gov/zones/county/INC091', fireWeatherZone: 'https://api.weather.gov/zones/fire/INZ103' } },
+    { properties: { forecastZone: 'https://evil.example/zones/forecast/INZ103', county: 'https://api.weather.gov/zones/county/INC091', fireWeatherZone: 'https://api.weather.gov/zones/fire/INZ103' } },
+  ]) {
+    await withFetch(
+      (async () => response({ ok: true, status: 200, json: async () => payload })) as unknown as typeof globalThis.fetch,
+      async () => {
+        await assert.rejects(() => fetchNwsPointJurisdiction(41.61, -86.72));
+      },
+    );
+  }
+});
+
+test('invalid coordinates fail before fetch and a failed request is not cached', async () => {
+  let calls = 0;
+  await withFetch(
+    (async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError('temporary failure');
+      return response({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          properties: {
+            forecastZone: 'https://api.weather.gov/zones/forecast/INZ103',
+            county: 'https://api.weather.gov/zones/county/INC091',
+            fireWeatherZone: 'https://api.weather.gov/zones/fire/INZ103',
+          },
+        }),
+      });
+    }) as unknown as typeof globalThis.fetch,
+    async () => {
+      await assert.rejects(() => fetchNwsPointJurisdiction(41.61, -86.72));
+      assert.equal((await fetchNwsPointJurisdiction(41.61, -86.72)).status, 'covered');
+      await assert.rejects(() => fetchNwsPointJurisdiction(Number.NaN, -86.72), /coordinates out of range/);
+      await assert.rejects(() => fetchNwsPointJurisdiction(91, -86.72), /coordinates out of range/);
+      await assert.rejects(() => fetchNwsPointJurisdiction(41.61, 181), /coordinates out of range/);
+      assert.equal(calls, 2);
     },
   );
 });

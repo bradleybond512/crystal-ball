@@ -182,6 +182,7 @@ import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
 import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
 import type { WeatherThreatCandidate } from '@/services/weather/personal-weather-status';
 import { recordWarningPredictions } from '@/services/weather/warning-verification-bridge';
+import { evacuationHazardExposureStore } from '@/services/weather/evacuation-hazard-exposure';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { fetchAdsbSnapshot } from '@/services/adsb';
@@ -1805,6 +1806,7 @@ export class DataLoaderManager implements AppModule {
  // freshness to the exact dataset it describes.
  const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlertsWithFeedState(), 1 * 60 * 60 * 1000);
  const { alerts, feedState: weatherFeedState } = snapshot.data;
+ evacuationHazardExposureStore.publishWeatherSnapshot({ alerts, feedState: weatherFeedState });
  const weatherFeedFresh = isWeatherFeedFresh(weatherFeedState);
  // Contain the NON-safety map render + freshness bookkeeping. A throw here
  // (e.g. setWeatherAlerts choking on a malformed geometry) must NOT abort the
@@ -2389,6 +2391,10 @@ export class DataLoaderManager implements AppModule {
  }
 
  } catch (error) {
+ evacuationHazardExposureStore.publishWeatherSnapshot({
+ alerts: [],
+ feedState: { mode: 'unavailable', timestamp: null },
+ });
  this.ctx.map?.setLayerReady('weather', false);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
  dataFreshness.recordError('weather', String(error));

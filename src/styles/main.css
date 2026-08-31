@@ -20954,6 +20954,57 @@ body.is-desktop-macos .mac-sidebar-panel-item {
   pointer-events: none;
 }
 
+.evac-hazard-evidence {
+  min-width: 0;
+  margin: 8px 0;
+  padding: 9px;
+  border: 1px solid var(--surface-border, var(--border));
+  border-radius: var(--r-xs);
+  background: var(--surface-2, var(--bg));
+  color: var(--text-secondary, var(--text));
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.evac-hazard-title,
+.evac-hazard-item-title {
+  color: var(--text-primary, var(--text));
+  font-weight: 700;
+}
+
+.evac-hazard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.evac-hazard-item {
+  min-width: 0;
+  padding: 7px;
+  border-left: 3px solid var(--semantic-info);
+  background: color-mix(in srgb, var(--surface-3, var(--border)) 72%, transparent);
+}
+
+.evac-hazard-reported { border-left-color: var(--semantic-critical); }
+.evac-hazard-covered-negative { border-left-color: var(--semantic-normal); }
+.evac-hazard-unknown { border-left-color: var(--semantic-elevated); }
+
+.evac-hazard-details {
+  display: grid;
+  gap: 2px;
+  margin-top: 5px;
+  color: var(--text-muted, var(--text-secondary));
+}
+
+.evac-hazard-disclosure {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--surface-border, var(--border));
+  font-weight: 700;
+}
+
 .mission-map-overlay-row {
   display: flex;
   align-items: flex-start;

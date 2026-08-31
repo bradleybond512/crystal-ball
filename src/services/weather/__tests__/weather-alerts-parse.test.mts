@@ -84,13 +84,18 @@ function featureWith(severity: unknown) {
     id: 'nws-x',
     geometry: null,
     properties: {
+      status: 'Actual',
+      messageType: 'Alert',
       event: 'Special Weather Statement',
       severity,
       headline: 'h',
       description: 'd',
       areaDesc: 'Somewhere, US',
+      sent: '2026-07-27T11:55:00Z',
+      effective: '2026-07-27T12:00:00Z',
       onset: '2026-07-27T12:00:00Z',
       expires: '2026-07-27T13:00:00Z',
+      geocode: { UGC: ['INC091'] },
     },
   };
 }
@@ -127,11 +132,15 @@ test('a valid non-empty feed normalizes and retains a Severe alert', () => {
       id: 'nws-severe-1',
       geometry: null,
       properties: {
+        status: 'Actual',
+        messageType: 'Alert',
         event: 'Severe Thunderstorm Warning',
         severity: 'Severe',
         headline: 'h',
         description: 'd',
         areaDesc: 'Somewhere, US',
+        sent: '2026-07-27T11:55:00Z',
+        effective: '2026-07-27T12:00:00Z',
         onset: '2026-07-27T12:00:00Z',
         expires: '2026-07-27T13:00:00Z',
         geocode: { UGC: ['INC091'] },
@@ -140,4 +149,265 @@ test('a valid non-empty feed normalizes and retains a Severe alert', () => {
   } as never);
   assert.equal(out.length, 1);
   assert.equal(out[0]?.severity, 'Severe');
+});
+
+test('live normalization retains exact CAP lifecycle and evidence completeness', () => {
+  const [alert] = normalizeWeatherAlertsResponse({ features: [featureWith('Severe')] } as never);
+
+  assert.equal(alert?.status, 'Actual');
+  assert.equal(alert?.messageType, 'Alert');
+  assert.equal(alert?.sent?.toISOString(), '2026-07-27T11:55:00.000Z');
+  assert.equal(alert?.effective?.toISOString(), '2026-07-27T12:00:00.000Z');
+  assert.equal(alert?.reportedOnset?.toISOString(), '2026-07-27T12:00:00.000Z');
+  assert.equal(alert?.onset.toISOString(), '2026-07-27T12:00:00.000Z');
+  assert.equal(alert?.expires.toISOString(), '2026-07-27T13:00:00.000Z');
+  assert.equal(alert?.geometryStatus, 'absent');
+  assert.equal(alert?.ugcStatus, 'complete');
+});
+
+test('missing onset preserves null reported onset and uses effective for legacy onset', () => {
+  const feature = featureWith('Severe');
+  delete (feature.properties as { onset?: unknown }).onset;
+
+  const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+  assert.equal(alert?.reportedOnset, null);
+  assert.equal(alert?.onset.toISOString(), '2026-07-27T12:00:00.000Z');
+});
+
+test('only Actual CAP status is retained while recognized non-Actual statuses are dropped', () => {
+  for (const status of ['Draft', 'Exercise', 'System', 'Test']) {
+    const feature = featureWith('Severe');
+    feature.properties.status = status;
+    assert.deepEqual(normalizeWeatherAlertsResponse({ features: [feature] } as never), []);
+  }
+});
+
+test('missing or unrecognized CAP status rejects the whole batch', () => {
+  const missing = featureWith('Severe');
+  delete (missing.properties as { status?: unknown }).status;
+  const unknown = featureWith('Severe');
+  unknown.properties.status = 'Production';
+
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [missing] } as never));
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [unknown] } as never));
+});
+
+test('only Alert and Update message types are retained', () => {
+  const update = featureWith('Severe');
+  update.properties.messageType = 'Update';
+  assert.equal(normalizeWeatherAlertsResponse({ features: [update] } as never)[0]?.messageType, 'Update');
+
+  for (const messageType of ['Cancel', 'Ack', 'Error']) {
+    const feature = featureWith('Severe');
+    feature.properties.messageType = messageType;
+    assert.deepEqual(normalizeWeatherAlertsResponse({ features: [feature] } as never), []);
+  }
+});
+
+test('missing or unrecognized message type rejects the whole batch', () => {
+  const missing = featureWith('Severe');
+  delete (missing.properties as { messageType?: unknown }).messageType;
+  const unknown = featureWith('Severe');
+  unknown.properties.messageType = 'Supersede';
+
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [missing] } as never));
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [unknown] } as never));
+});
+
+test('invalid required lifecycle fields reject the live response', () => {
+  for (const field of ['sent', 'effective', 'expires'] as const) {
+    const missing = featureWith('Severe');
+    delete (missing.properties as Record<string, unknown>)[field];
+    assert.throws(() => normalizeWeatherAlertsResponse({ features: [missing] } as never));
+
+    const invalid = featureWith('Severe');
+    invalid.properties[field] = 'not-a-date';
+    assert.throws(() => normalizeWeatherAlertsResponse({ features: [invalid] } as never));
+  }
+});
+
+test('an invalid optional onset rejects the live response instead of using effective', () => {
+  const feature = featureWith('Severe');
+  feature.properties.onset = 'not-a-date';
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [feature] } as never));
+});
+
+test('missing, blank, or oversized identifiers and event text reject the batch', () => {
+  for (const field of ['id', 'event'] as const) {
+    const missing = featureWith('Severe') as Record<string, unknown>;
+    if (field === 'id') delete missing.id;
+    else delete ((missing.properties as Record<string, unknown>)[field]);
+    assert.throws(() => normalizeWeatherAlertsResponse({ features: [missing] } as never));
+
+    const blank = featureWith('Severe');
+    if (field === 'id') blank.id = '   ';
+    else blank.properties.event = '   ';
+    assert.throws(() => normalizeWeatherAlertsResponse({ features: [blank] } as never));
+
+    const oversized = featureWith('Severe');
+    if (field === 'id') oversized.id = 'x'.repeat(4_097);
+    else oversized.properties.event = 'x'.repeat(1_025);
+    assert.throws(() => normalizeWeatherAlertsResponse({ features: [oversized] } as never));
+  }
+});
+
+test('Polygon holes are preserved for evidence consumers while legacy coordinates retain the outer ring', () => {
+  const feature = featureWith('Severe');
+  const outer = [[-1, 0], [1, 0], [1, 2], [-1, 2], [-1, 0]];
+  const hole = [[-0.5, 0.5], [0.5, 0.5], [0.5, 1.5], [-0.5, 1.5], [-0.5, 0.5]];
+  feature.geometry = { type: 'Polygon', coordinates: [outer, hole] } as never;
+
+  const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+  assert.equal(alert?.geometryStatus, 'complete');
+  assert.deepEqual(alert?.coordinates, outer);
+  assert.equal(alert?.polygonRings, undefined);
+  assert.deepEqual(alert?.polygonAreas, [{ rings: [outer, hole] }]);
+});
+
+test('MultiPolygon areas and their holes are preserved while legacy polygonRings retain every outer', () => {
+  const feature = featureWith('Severe');
+  const outerA = [[-2, 0], [-1, 0], [-1, 1], [-2, 1], [-2, 0]];
+  const holeA = [[-1.8, 0.2], [-1.2, 0.2], [-1.2, 0.8], [-1.8, 0.8], [-1.8, 0.2]];
+  const outerB = [[1, 0], [2, 0], [2, 1], [1, 1], [1, 0]];
+  feature.geometry = { type: 'MultiPolygon', coordinates: [[outerA, holeA], [outerB]] } as never;
+
+  const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+  assert.equal(alert?.geometryStatus, 'complete');
+  assert.deepEqual(alert?.coordinates, outerA);
+  assert.deepEqual(alert?.polygonRings, [outerA, outerB]);
+  assert.deepEqual(alert?.polygonAreas, [{ rings: [outerA, holeA] }, { rings: [outerB] }]);
+});
+
+test('zero coordinates are valid and malformed geometry is explicitly incomplete', () => {
+  const valid = featureWith('Severe');
+  valid.geometry = {
+    type: 'Polygon',
+    coordinates: [[[0, 0], [1, 0], [0, 1], [0, 0]]],
+  } as never;
+  assert.equal(
+    normalizeWeatherAlertsResponse({ features: [valid] } as never)[0]?.geometryStatus,
+    'complete',
+  );
+
+  const malformed = featureWith('Severe');
+  malformed.geometry = {
+    type: 'Polygon',
+    coordinates: [[[0, 0], [181, 0], [0, 1], [0, 0]]],
+  } as never;
+  const [alert] = normalizeWeatherAlertsResponse({ features: [malformed] } as never);
+  assert.equal(alert?.geometryStatus, 'invalid');
+  assert.equal(alert?.polygonAreas, undefined);
+});
+
+test('zero-area outer and hole rings make polygon evidence invalid', () => {
+  for (const coordinates of [
+    [[[0, 0], [1, 1], [2, 2], [0, 0]]],
+    [[[0, 0], [2, 0], [0, 2], [0, 0]], [[1, 1], [1, 1], [1, 1], [1, 1]]],
+  ]) {
+    const feature = featureWith('Severe');
+    feature.geometry = { type: 'Polygon', coordinates } as never;
+
+    const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+    assert.equal(alert?.geometryStatus, 'invalid');
+    assert.equal(alert?.polygonAreas, undefined);
+    assert.deepEqual(alert?.coordinates, []);
+  }
+});
+
+test('UGC values are allowlist-filtered, deduplicated, and marked incomplete when any are rejected', () => {
+  const feature = featureWith('Severe');
+  feature.properties.geocode = { UGC: ['INC091', 'INC091', 'bad', '', 'INZ103'] };
+
+  const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+  assert.deepEqual(alert?.ugcZones, ['INC091', 'INZ103']);
+  assert.equal(alert?.ugcStatus, 'invalid');
+});
+
+test('a genuinely absent UGC field is distinct from malformed UGC evidence', () => {
+  const absent = featureWith('Severe');
+  delete absent.properties.geocode;
+  assert.equal(normalizeWeatherAlertsResponse({ features: [absent] } as never)[0]?.ugcStatus, 'absent');
+
+  const invalid = featureWith('Severe');
+  invalid.properties.geocode = { UGC: 'INC091' as never };
+  assert.equal(normalizeWeatherAlertsResponse({ features: [invalid] } as never)[0]?.ugcStatus, 'invalid');
+});
+
+test('only a truly missing geocode container is absent; present malformed containers are invalid', () => {
+  const missing = featureWith('Severe');
+  delete missing.properties.geocode;
+  assert.equal(normalizeWeatherAlertsResponse({ features: [missing] } as never)[0]?.ugcStatus, 'absent');
+
+  for (const geocode of [null, [], 'INC091', 42, {}, { SAME: ['018091'] }, { UGC: undefined }]) {
+    const feature = featureWith('Severe');
+    feature.properties.geocode = geocode as never;
+    const [alert] = normalizeWeatherAlertsResponse({ features: [feature] } as never);
+    assert.equal(alert?.ugcStatus, 'invalid');
+    assert.deepEqual(alert?.ugcZones, []);
+  }
+});
+
+test('response-wide polygon-area cap rejects aggregate work below every per-feature limit', () => {
+  const triangle = [[[0, 0], [1, 0], [0, 1], [0, 0]]];
+  const features = Array.from({ length: 5 }, (_, i) => {
+    const feature = featureWith('Severe');
+    feature.id = `nws-area-batch-${i}`;
+    feature.geometry = { type: 'MultiPolygon', coordinates: Array.from({ length: 128 }, () => triangle) } as never;
+    return feature;
+  });
+
+  assert.throws(
+    () => normalizeWeatherAlertsResponse({ features } as never),
+    /response exceeds polygon area limit/,
+  );
+});
+
+test('response-wide ring cap rejects aggregate work below every per-feature limit', () => {
+  const triangle = [[0, 0], [1, 0], [0, 1], [0, 0]];
+  const features = Array.from({ length: 5 }, (_, i) => {
+    const feature = featureWith('Severe');
+    feature.id = `nws-ring-batch-${i}`;
+    feature.geometry = { type: 'Polygon', coordinates: Array.from({ length: 512 }, () => triangle) } as never;
+    return feature;
+  });
+
+  assert.throws(
+    () => normalizeWeatherAlertsResponse({ features } as never),
+    /response exceeds geometry ring limit/,
+  );
+});
+
+test('response-wide vertex cap rejects aggregate work below every per-feature limit', () => {
+  const ring = Array.from({ length: 49_999 }, (_, i) => {
+    const angle = (i / 49_999) * Math.PI * 2;
+    return [Math.cos(angle), Math.sin(angle)];
+  });
+  ring.push(ring[0]!);
+  const features = Array.from({ length: 6 }, (_, i) => {
+    const feature = featureWith('Severe');
+    feature.id = `nws-batch-${i}`;
+    feature.geometry = { type: 'Polygon', coordinates: [ring] } as never;
+    return feature;
+  });
+
+  assert.throws(
+    () => normalizeWeatherAlertsResponse({ features } as never),
+    /response exceeds geometry vertex limit/,
+  );
+});
+
+test('provider geometry and UGC hard bounds fail the whole response closed', () => {
+  const tooManyAreas = featureWith('Severe');
+  const triangle = [[[0, 0], [1, 0], [0, 1], [0, 0]]];
+  tooManyAreas.geometry = {
+    type: 'MultiPolygon',
+    coordinates: Array.from({ length: 129 }, () => triangle),
+  } as never;
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [tooManyAreas] } as never));
+
+  const tooManyZones = featureWith('Severe');
+  tooManyZones.properties.geocode = {
+    UGC: Array.from({ length: 2_049 }, (_, i) => `INZ${String(i % 1_000).padStart(3, '0')}`),
+  };
+  assert.throws(() => normalizeWeatherAlertsResponse({ features: [tooManyZones] } as never));
 });

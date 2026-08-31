@@ -552,6 +552,28 @@ AirNow intermittently impaired. A red feed is not automatically a code defect:
 the runtime must distinguish absent user-owned credentials, upstream outage,
 rate limiting, schema drift, and local adapter failure.
 
+Progress evidence (draft PR #1692): the MCP candidate reads only the
+authenticated, allowlisted missing-key projection and classifies ACLED,
+ThreatFox, and AIS as `not_configured` without probing them when required
+credentials are explicitly absent. A 2026-08-30 candidate run against the
+running desktop sidecar reported 7 healthy, 3 not configured, and 0 degraded
+representative feeds. Configured optional feeds now fail closed when ThreatFox
+contributes zero observations, AIS is disconnected, or ACLED reports an
+upstream failure; malformed feed envelopes cannot disappear from monitoring.
+The current ACLED and ThreatFox sidecar adapters erase upstream HTTP 429 status,
+so truthful named-feed rate-limit classification remains unresolved pending a
+credentialed live probe and a separately approved provider-contract change.
+Weekly persistence remains schema v1 and ignores configuration-only
+states instead of recording a rollback-incompatible provider outage, while a
+separate schema-v1 companion preserves the three-state weekly provider history
+for additive MCP output and safe rollback. The ThreatFox registry now truthfully
+declares its required key. Focused MCP tests passed 74/74; the full MCP suite
+passed 232/232; provider tests passed 157/157; diagnostics passed 418/418 plus
+28/28 Node tests; both TypeScript configurations passed.
+Repository smoke remained YELLOW because the live `usgs-surface-water` feed
+was erroring, so the tracker remains in progress pending compliant mutation
+proof, review, and merged packaged-runtime confirmation.
+
 Dependencies: UX-017
 
 - **Change surface:** the affected provider adapters and the shared feed health,
@@ -693,7 +715,7 @@ Update the row in the same PR that does the work.
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |
-| UX-021 | Optional-feed classification and recovery | NOT STARTED | — |
+| UX-021 | Optional-feed classification and recovery | IN PROGRESS | #1692 |
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |

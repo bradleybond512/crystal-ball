@@ -19,6 +19,7 @@ import {
   MAX_WEEKLY_OBSERVATIONS,
   readWeeklyEvaluationReport,
   readWeeklyEvaluationReports,
+  readWeeklyProviderStatus,
   recordWeeklyEvaluation,
   utcWeekStart,
   validateWeeklyEvaluationReport,
@@ -490,6 +491,110 @@ test('reports bookend prediction/model deltas and allowlisted provider transitio
   assert.equal(JSON.stringify(report).includes('private-token-route'), false);
   assert.equal(report.nextRecommendedTask.code, 'investigate_model_drift');
 }));
+
+test('weekly v1 persistence ignores configuration-only states without counting an outage', () => withStorage((storage) => {
+  const feeds = {
+    ...committedMonitor(MONDAY).state.snapshot.feeds,
+    '/api/acled-events': 'not_configured',
+  };
+  record(storage, MONDAY + 60_000, { monitor: { feeds } });
+  record(storage, MONDAY + 2 * 60_000, { monitor: { feeds } });
+  completeCadenceCoverage(storage);
+
+  const report = record(storage, MONDAY + WEEK_MS).finalizedReports[0];
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.drift.providers.rows.some((row) => row.provider === 'acled'), false);
+  assert.notEqual(report.nextRecommendedTask.code, 'investigate_provider_drift');
+  assert.deepEqual(
+    readWeeklyProviderStatus(storage, MONDAY).providers.find((row) => row.provider === 'acled'),
+    {
+      provider: 'acled',
+      firstStatus: 'not_configured',
+      lastStatus: 'not_configured',
+      observations: 2,
+      notConfiguredObservations: 2,
+      transitionCount: 0,
+    },
+  );
+}));
+
+test('weekly v1 persistence leaves the last valid provider state unchanged by configuration transitions', () => withStorage((storage) => {
+  record(storage, MONDAY + 60_000);
+  record(storage, MONDAY + 2 * 60_000, {
+    monitor: {
+      feeds: {
+        ...committedMonitor(MONDAY).state.snapshot.feeds,
+        '/api/acled-events': 'not_configured',
+      },
+    },
+  });
+  completeCadenceCoverage(storage);
+
+  const report = record(storage, MONDAY + WEEK_MS).finalizedReports[0];
+  assert.deepEqual(report.drift.providers.rows.find((row) => row.provider === 'acled'), {
+    provider: 'acled',
+    firstStatus: 'ok',
+    lastStatus: 'ok',
+    degradedObservations: 0,
+    transitionCount: 0,
+  });
+  assert.notEqual(report.nextRecommendedTask.code, 'investigate_provider_drift');
+  assert.deepEqual(
+    readWeeklyProviderStatus(storage, MONDAY).providers.find((row) => row.provider === 'acled'),
+    {
+      provider: 'acled',
+      firstStatus: 'ok',
+      lastStatus: 'not_configured',
+      observations: 2,
+      notConfiguredObservations: 1,
+      transitionCount: 1,
+    },
+  );
+}));
+
+test('weekly provider-status companion rejects impossible semantic and temporal state', () => {
+  const mutations = [
+    (value) => {
+      value.weeks[0].providers.acled.firstStatus = null;
+      value.weeks[0].providers.acled.lastStatus = null;
+    },
+    (value) => {
+      Object.assign(value.weeks[0].providers.acled, {
+        firstStatus: 'ok',
+        lastStatus: 'ok',
+        observations: 0,
+      });
+    },
+    (value) => {
+      value.weeks[0].providers.acled.transitionCount = 2;
+    },
+    (value) => {
+      value.weeks.push(structuredClone(value.weeks[0]));
+    },
+    (value) => {
+      const later = structuredClone(value.weeks[0]);
+      later.weekStart += WEEK_MS;
+      later.lastObservedAt += WEEK_MS;
+      value.weeks.unshift(later);
+    },
+    (value) => {
+      value.weeks[0].lastObservedAt = value.weeks[0].weekStart + WEEK_MS;
+    },
+  ];
+
+  for (const mutate of mutations) {
+    withStorage((storage) => {
+      record(storage, MONDAY + 60_000);
+      const value = storage.readJSON('monitor/weekly-provider-status.json');
+      mutate(value);
+      storage.writeJSON('monitor/weekly-provider-status.json', value);
+      assert.throws(
+        () => readWeeklyProviderStatus(storage, MONDAY),
+        /provider-status companion is malformed/i,
+      );
+    });
+  }
+});
 
 test('marks mixed fresh/stale coverage partial and prioritizes provider drift after freshness recovers', () => withStorage((storage) => {
   record(storage, MONDAY + 60_000);

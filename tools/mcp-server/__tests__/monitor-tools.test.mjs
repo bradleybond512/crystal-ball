@@ -214,6 +214,76 @@ test('monitor reports impaired feeds on the first cycle', async () => {
   rmSync(dir, { recursive: true });
 });
 
+test('monitor fails closed on unknown, malformed, or duplicate feed rows', async () => {
+  for (const feeds of [
+    [{ route: '/api/nws-alerts', status: 'schema_drift' }],
+    [{ route: 42, status: 'ok' }],
+    [
+      { route: '/api/nws-alerts', status: 'ok' },
+      { route: '/api/nws-alerts', status: 'error' },
+    ],
+  ]) {
+    const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+    const current = { value: fixture({ unsafe: false }) };
+    current.value.feedHealth.data.feeds = feeds;
+    const tools = createTools(dir, current);
+
+    const result = await tools.run_monitor_cycle();
+
+    assert.equal(result.status, 'red');
+    assert.ok(result.findings.some((finding) => (
+      finding.id === 'collection.feed-health-invalid'
+    )));
+    assert.deepEqual(result.snapshot.feeds, {});
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test('monitor classifies missing optional credentials as configuration, not provider outage', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false, feed: 'not_configured' }) };
+  const tools = createTools(dir, current);
+
+  const first = await tools.run_monitor_cycle();
+  const second = await tools.run_monitor_cycle();
+
+  assert.ok(first.findings.some((finding) => (
+    finding.id === 'configuration.feed./api/nws-alerts'
+    && finding.severity === 'yellow'
+  )));
+  assert.equal(first.findings.some((finding) => finding.id === 'drift.feed./api/nws-alerts'), false);
+  assert.deepEqual(second.newlyTriggered, []);
+  assert.equal(second.events.filter((event) => (
+    event.subject === 'configuration.feed./api/nws-alerts'
+    && event.type === 'opened'
+  )).length, 1);
+  rmSync(dir, { recursive: true });
+});
+
+test('monitor records healthy to not-configured as configuration drift and only recovers after ok', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
+  const current = { value: fixture({ unsafe: false }) };
+  const tools = createTools(dir, current);
+  await tools.run_monitor_cycle();
+
+  current.value = fixture({ unsafe: false, feed: 'not_configured' });
+  const unconfigured = await tools.run_monitor_cycle();
+  assert.match(
+    unconfigured.findings.find((finding) => finding.id === 'configuration.feed./api/nws-alerts').summary,
+    /changed from ready to not configured/i,
+  );
+
+  current.value = fixture({ unsafe: false, feed: 'error' });
+  const failed = await tools.run_monitor_cycle();
+  assert.ok(failed.findings.some((finding) => finding.id === 'drift.feed./api/nws-alerts'));
+  assert.equal(failed.recovered.includes('configuration.feed./api/nws-alerts'), true);
+
+  current.value = fixture({ unsafe: false, feed: 'ok' });
+  const recovered = await tools.run_monitor_cycle();
+  assert.equal(recovered.recovered.includes('drift.feed./api/nws-alerts'), true);
+  rmSync(dir, { recursive: true });
+});
+
 test('monitor fails closed on malformed feed-health output', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'cb-monitor-'));
   const current = {
@@ -542,7 +612,12 @@ test('monitor emits a materially escalated transition for a persistent finding s
   });
   const current = {
     value: {
-      feedHealth: { data: { sidecar: { error: 'unreachable' }, feeds: [] } },
+      feedHealth: {
+        data: {
+          sidecar: { error: 'unreachable' },
+          feeds: [{ route: '/api/nws-alerts', status: 'ok' }],
+        },
+      },
       algorithmDiagnostics: { available: true, diagnostics: { health: { algorithms: [] } } },
     },
   };

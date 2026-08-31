@@ -60,7 +60,11 @@ export function startSidebarHeat(
     onReview: (panelId) => {
       const panel = snapshot.panels.find((candidate) => candidate.panelId === panelId);
       if (!panel) return;
-      reviewed = markPanelReviewed(reviewed, panel);
+      reviewed = markPanelReviewed(
+        reviewed,
+        panel,
+        snapshot.panels.flatMap((candidate) => candidate.evidence),
+      );
       if (!persistReviewLedger(reviewed)) {
         navigator.setPersistenceDegraded(true);
       }

@@ -111,14 +111,18 @@ function isEvidenceIdentity(value: unknown): value is EvidenceIdentity {
     && EVIDENCE_REVISION_PATTERN.test(candidate.revision);
 }
 
-function uniqueBounded(identities: readonly EvidenceIdentity[]): EvidenceIdentity[] {
+function uniqueValid(identities: readonly EvidenceIdentity[]): EvidenceIdentity[] {
   const unique = new Map<string, EvidenceIdentity>();
   for (const identity of identities) {
     if (!isEvidenceIdentity(identity)) continue;
     const key = identityKey(identity);
     if (!unique.has(key)) unique.set(key, { ...identity });
   }
-  const values = [...unique.values()];
+  return [...unique.values()];
+}
+
+function uniqueBounded(identities: readonly EvidenceIdentity[]): EvidenceIdentity[] {
+  const values = uniqueValid(identities);
   return values.length <= MAX_REVIEW_IDENTITIES
     ? values
     : values.slice(values.length - MAX_REVIEW_IDENTITIES);
@@ -253,8 +257,25 @@ export function projectPanelAttention(
 export function markPanelReviewed(
   reviewed: readonly EvidenceIdentity[],
   panel: Pick<PanelAttention, 'evidence'>,
+  activeEvidence: readonly EvidenceIdentity[],
 ): EvidenceIdentity[] {
-  return uniqueBounded([...reviewed, ...panel.evidence]);
+  const candidates = uniqueValid([...reviewed, ...panel.evidence]);
+  const activeKeys = new Set(
+    uniqueValid(activeEvidence).map((identity) => identityKey(identity)),
+  );
+  const activeReviewed = candidates.filter((identity) => activeKeys.has(identityKey(identity)));
+  const retainedActive = activeReviewed.length <= MAX_REVIEW_IDENTITIES
+    ? activeReviewed
+    : activeReviewed.slice(activeReviewed.length - MAX_REVIEW_IDENTITIES);
+  const remainingCapacity = MAX_REVIEW_IDENTITIES - retainedActive.length;
+  const inactiveHistory = candidates.filter((identity) => !activeKeys.has(identityKey(identity)));
+  const retainedInactive = inactiveHistory.length <= remainingCapacity
+    ? inactiveHistory
+    : inactiveHistory.slice(inactiveHistory.length - remainingCapacity);
+  const retainedKeys = new Set(
+    [...retainedActive, ...retainedInactive].map((identity) => identityKey(identity)),
+  );
+  return candidates.filter((identity) => retainedKeys.has(identityKey(identity)));
 }
 
 export function loadReviewLedger(

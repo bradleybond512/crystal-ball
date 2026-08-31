@@ -65,7 +65,7 @@ test('timestamp-only refreshes stay reviewed while meaningful changes reopen the
     [initialAlert],
     { score, route, reviewed: [], incumbents: [] },
   );
-  const reviewed = markPanelReviewed([], initial.panels[0]!);
+  const reviewed = markPanelReviewed([], initial.panels[0]!, initial.panels.flatMap((panel) => panel.evidence));
   const refreshed = projectPanelAttention(
     [alert('same', 'weather', 60, 'high', 2_000)],
     { score, route, reviewed, incumbents: [] },
@@ -88,7 +88,7 @@ test('reviewed critical evidence cannot color or promote lower-severity new work
     [oldCritical],
     { score, route, reviewed: [], incumbents: [] },
   );
-  const reviewed = markPanelReviewed([], initial.panels[0]!);
+  const reviewed = markPanelReviewed([], initial.panels[0]!, initial.panels.flatMap((panel) => panel.evidence));
   const snapshot = projectPanelAttention(
     [
       oldCritical,
@@ -118,7 +118,7 @@ test('future timestamps are equality tokens rather than pane-wide cutoffs', asyn
     [futureAlert],
     { score, route, reviewed: [], incumbents: [] },
   );
-  const reviewed = markPanelReviewed([], initial.panels[0]!);
+  const reviewed = markPanelReviewed([], initial.panels[0]!, initial.panels.flatMap((panel) => panel.evidence));
   const snapshot = projectPanelAttention(
     [futureAlert, alert('later-id', 'weather', 40, 'medium', 2_000)],
     { score, route, reviewed, incumbents: [] },
@@ -136,7 +136,7 @@ test('malformed timestamps remain reviewable through a null evidence identity', 
   const malformed = alert('bad-time', 'weather', 60);
   malformed.timestamp = Number.NaN;
   const before = projectPanelAttention([malformed], { score, route, reviewed: [], incumbents: [] });
-  const reviewed = markPanelReviewed([], before.panels[0]!);
+  const reviewed = markPanelReviewed([], before.panels[0]!, before.panels.flatMap((panel) => panel.evidence));
   const after = projectPanelAttention([malformed], { score, route, reviewed, incumbents: [] });
 
   assert.deepEqual(
@@ -203,7 +203,7 @@ test('persistence retains reviewed evidence while it is temporarily inactive', a
     [snoozed],
     { score, route, reviewed: [], incumbents: [] },
   );
-  const reviewed = markPanelReviewed([], initial.panels[0]!);
+  const reviewed = markPanelReviewed([], initial.panels[0]!, initial.panels.flatMap((panel) => panel.evidence));
   reviewed.push({ id: 'active', observedAt: 2, revision: '0000000000000002' });
 
   assert.equal(persistReviewLedger(reviewed, storage), true);
@@ -215,6 +215,44 @@ test('persistence retains reviewed evidence while it is temporarily inactive', a
     { score, route, reviewed: reloaded, incumbents: [] },
   );
   assert.equal(reactivated.panels[0]?.unreviewedCount, 0);
+});
+
+test('reviewing a second pane preserves all 500 active reviewed identities at the ledger cap', async () => {
+  const { markPanelReviewed, projectPanelAttention } = await moduleUnderTest();
+  const alerts = [
+    ...Array.from({ length: 250 }, (_, index) => alert(`a-${index}`, 'a', 60, 'high', index)),
+    ...Array.from({ length: 250 }, (_, index) => alert(`b-${index}`, 'b', 60, 'high', index + 250)),
+  ];
+  const initial = projectPanelAttention(alerts, {
+    score,
+    route,
+    reviewed: [],
+    incumbents: [],
+  });
+  const activeEvidence = initial.panels.flatMap((panel) => panel.evidence);
+  const panelA = initial.panels.find((panel) => panel.panelId === 'a')!;
+  const panelB = initial.panels.find((panel) => panel.panelId === 'b')!;
+  const reviewedA = markPanelReviewed([], panelA, activeEvidence);
+  const inactiveHistory = Array.from({ length: 250 }, (_, index) => ({
+    id: `inactive-${index}`,
+    observedAt: index,
+    revision: index.toString(16).padStart(16, '0'),
+  }));
+  const reviewedAtCapacity = [...reviewedA, ...inactiveHistory];
+  const reviewedBoth = markPanelReviewed(reviewedAtCapacity, panelB, activeEvidence);
+  const projected = projectPanelAttention(alerts, {
+    score,
+    route,
+    reviewed: reviewedBoth,
+    incumbents: [],
+  });
+
+  assert.equal(reviewedAtCapacity.length, 500);
+  assert.equal(reviewedBoth.length, 500);
+  assert.deepEqual(
+    projected.panels.map((panel) => [panel.panelId, panel.unreviewedCount]),
+    [['a', 0], ['b', 0]],
+  );
 });
 
 test('default persistence uses quota-safe eviction and preserves the session review write', async () => {

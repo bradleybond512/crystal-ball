@@ -407,9 +407,9 @@ async function isInstalledCommitHealthy(state, installPath) {
   }
 }
 
-async function runVerificationAndBuild(repoDir, toolchain) {
+export function runVerificationAndBuild(repoDir, toolchain, run = runLoggedCommand) {
   for (const args of NPM_VERIFICATION_COMMANDS) {
- runLoggedCommand(toolchain.npmPath, args, { cwd: repoDir, env: toolchain.env });
+ run(toolchain.npmPath, args, { cwd: repoDir, env: toolchain.env });
   }
 }
 
@@ -432,6 +432,7 @@ async function installBuiltApp(repoDir, installPath) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  const toolchain = await validatePinnedNodeToolchain();
   const startedAt = new Date().toISOString();
   await clearStaleLock(options.lockFile);
   const lockHandle = await acquireLock(options.lockFile).catch((error) => {
@@ -442,7 +443,6 @@ async function main() {
   });
 
   try {
- const toolchain = await validatePinnedNodeToolchain();
  await mkdir(options.logDir, { recursive: true });
  const state = await readJson(options.stateFile);
  const targetSha = await fetchTargetSha(options);

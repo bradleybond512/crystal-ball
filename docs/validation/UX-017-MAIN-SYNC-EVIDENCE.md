@@ -342,7 +342,7 @@ worktree at this exact SHA:
 
 ```text
 $ git rev-parse HEAD
-624a3e0390d86db8ce7733604e267fd71f6ada75
+dd609ea320fb38ee25772338ca04c3b557ec2a1a
 exit status: 0
 ```
 
@@ -350,15 +350,15 @@ Standalone broad-suite command and raw TAP footer:
 
 ```text
 $ PATH=/opt/homebrew/opt/node@22/bin:$PATH npm run test:data
-1..624
-# tests 1063
+1..625
+# tests 1064
 # suites 91
-# pass 1063
+# pass 1064
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 19680.591333
+# duration_ms 26781.745166
 exit status: 0
 ```
 
@@ -372,8 +372,8 @@ Raw stage output and conclusion:
 
 ```text
 ==> npm run test:data
-# tests 1063
-# pass 1063
+# tests 1064
+# pass 1064
 # fail 0
 ==> npm run lockfile:check
 [lockfile:check] package-lock.json version fields look valid.
@@ -382,18 +382,18 @@ Raw stage output and conclusion:
 [lint:json] Parsed 137 tracked JSON file(s).
 [lint:yaml] Parsed 23 tracked YAML file(s).
 [lint:shell] Checked 20 tracked shell file(s).
-[lint:md] Checked 133 Markdown file(s).
+[lint:md] Checked 135 Markdown file(s).
 [lint:colors] OK — 453 files with 7741 baselined literals, none exceeded. 4 file(s) improved — consider --update to ratchet the baseline down.
 ==> npm run typecheck:all
 ==> npm run secrets:scan
-Secret scan passed for 4719 file(s).
+Secret scan passed for 4724 file(s).
 ==> npm run cross-agent:check
 ==> npm run docs:check -- --changelog-advisory
 [docs:check] Documentation appears fresh.
 ==> npm run roadmap:check
-BLOCKED: 1 | DONE: 42 | IN_REVIEW: 2 | MONITOR: 1 | TODO: 11 | WAITING: 8
+BLOCKED: 1 | DONE: 42 | IN_REVIEW: 1 | MONITOR: 1 | TODO: 11 | WAITING: 9
 ==> npm run build
-✓ built in 14.09s
+✓ built in 15.60s
 Agentic validation gate passed.
 Tests run: test:data
 exit status: 0
@@ -402,13 +402,13 @@ exit status: 0
 The full local transcripts were retained for review with these identities:
 
 ```text
-$ shasum -a 256 /private/tmp/ux017-test-data-624a3e03.log /private/tmp/ux017-agentic-624a3e03.log
-2407a66ca0d1115b96b5ec174b02692a372713e56c12e0fb543f2a0195fe252c  /private/tmp/ux017-test-data-624a3e03.log
-888f7e97d221c2fccb38cf0b723b996904bd0e62ad3eeeae553dce2ef8ae98a5  /private/tmp/ux017-agentic-624a3e03.log
-$ wc -l /private/tmp/ux017-test-data-624a3e03.log /private/tmp/ux017-agentic-624a3e03.log
-    7053 /private/tmp/ux017-test-data-624a3e03.log
-    7350 /private/tmp/ux017-agentic-624a3e03.log
-   14403 total
+$ shasum -a 256 /private/tmp/ux017-test-data-dd609ea3.log /private/tmp/ux017-agentic-dd609ea3.log
+68ac2cc379fe862ef9aecfacda0a50064c4425f2f8351754b144d01be1b40dd9  /private/tmp/ux017-test-data-dd609ea3.log
+580b0db1e1c13809b78f1e3bbae9292f7aafc33edc067f74948b0b5d2e5cf170  /private/tmp/ux017-agentic-dd609ea3.log
+$ wc -l /private/tmp/ux017-test-data-dd609ea3.log /private/tmp/ux017-agentic-dd609ea3.log
+    7060 /private/tmp/ux017-test-data-dd609ea3.log
+    7356 /private/tmp/ux017-agentic-dd609ea3.log
+   14416 total
 exit status: 0
 ```
 

@@ -725,7 +725,7 @@ Update the row in the same PR that does the work.
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |
-| UX-017 | Complete Mac main-sync toolchain repair | DONE | draft PR |
+| UX-017 | Complete Mac main-sync toolchain repair | DONE | #1693 |
 | UX-018 | Timely authoritative forecast resolution | NOT STARTED | — |
 | UX-019 | Safe forecast algorithm recalibration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-020 | Entity and analog evidence growth | NOT STARTED | — |

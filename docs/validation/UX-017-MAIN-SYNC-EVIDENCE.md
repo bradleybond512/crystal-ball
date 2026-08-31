@@ -195,8 +195,11 @@ exit status: 0
 ```
 
 The LaunchAgent retained the Cargo-first path, used the absolute Node 22
-program, pointed at the persistent UX-017 worktree, and exited with status 0.
-Only npm/package-script children received the Node-first path above.
+program, and exited with status 0. Its UX-017 worktree binding is temporary,
+not a durable rollout state: launchd must be relocated to the agent-owned clean
+clone after PR #1693 merges, and the worktree must remain present until the
+loaded replacement passes the post-merge gates below. Only npm/package-script
+children received the Node-first path above.
 
 ### Fresh canonical-main installation
 
@@ -259,14 +262,49 @@ $ sed -n '1,180p' /Users/bradleybond/.crystalball-main-sync/state.json; sed -n '
 exit status: 0
 ```
 
-The candidate-run stderr window beginning at byte 24,096,523 contained zero
-`EBADENGINE` occurrences:
+The candidate-run stderr check originally reported zero `EBADENGINE`
+occurrences:
 
 ```text
 $ if tail -c +24096523 /Users/bradleybond/.crystalball-main-sync/logs/main-sync.stderr.log | rg -q 'EBADENGINE'; then echo 'EBADENGINE present'; else echo 'EBADENGINE count: 0'; fi
 EBADENGINE count: 0
 exit status: 0
 ```
+
+That pipeline is retained as historical raw output, but it is not accepted as
+standalone zero-error proof: a failed `tail`, unreadable file, or rotated log
+would take the same `else` branch. The derived runtime output, installed target
+marker, terminal state, and artifact checks independently corroborate this
+candidate run. The post-merge run must use the fail-closed procedure below.
+
+### Required post-merge relocation evidence
+
+Before kickstart, record the stderr log's inode and byte size. After the job
+reaches a terminal state, require the same inode and an end size at least as
+large as the starting size. Extract the new byte range with a separately
+checked `tail` command into a temporary file, then count with:
+
+```bash
+awk '/EBADENGINE/ { count++ } END { print count + 0 }' "$stderr_window"
+```
+
+Zero is valid only with the new canonical-main target's terminal status and
+install marker. A missing log, read failure, inode change, shrink, extraction
+failure, or missing target marker makes the probe invalid, never clean.
+
+The relocation transcript must also record:
+
+- PR #1693 merged and its merge commit is an ancestor of canonical `main`;
+- the controller clone is clean and exactly canonical `main`;
+- the reviewed sync, setup, and focused-test blobs match the identities in the
+  architecture brief;
+- focused main-sync tests pass under absolute Node 22 before setup;
+- the stopped job is absent before the plist is replaced;
+- plist and loaded launchd state both use Node 22, the agent-owned clone, the
+  expected sync root, Cargo/system paths, and no `.worktrees` path;
+- required-check provenance, terminal state, strict signature verification,
+  and matching installed/build executable hashes; and
+- the UX-017 worktree is retained until every preceding gate passes.
 
 The exact stdout lookup and result were:
 

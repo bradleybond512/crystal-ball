@@ -91,12 +91,16 @@ test.describe('home shell default boot', () => {
       }
     }
 
-    const sourceText = await sources.allTextContents();
-    for (const text of sourceText) {
+    const isExactZeroWorkingStatus = (text: string): boolean => /^working now\s*·\s*0 items\b/i.test(text);
+    expect(isExactZeroWorkingStatus('Working now · 0 items in latest update')).toBe(true);
+    expect(isExactZeroWorkingStatus('Working now · 10 items in latest update')).toBe(false);
+    for (const source of await sources.all()) {
+      const status = await source.locator('.hs-source-status').innerText();
+      const text = await source.innerText();
       expect(text).not.toMatch(/still loading|waiting for a successful fresh update/i);
       expect(text).toMatch(/working now|degraded|unknown|saved place/i);
       expect(text).not.toMatch(/provider (?:is )?(?:available|live|healthy)/i);
-      if (/working now.*0 items/i.test(text)) expect(text).toMatch(/not an all-clear signal/i);
+      if (isExactZeroWorkingStatus(status)) expect(text).toMatch(/not an all-clear signal/i);
     }
   });
 

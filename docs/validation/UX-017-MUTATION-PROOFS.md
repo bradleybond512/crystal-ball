@@ -4,8 +4,9 @@ Date: 2026-08-31
 
 ## Clean baseline
 
-The proof ran in a detached worktree at implementation commit `63bd412c` after
-`npm ci`. `git status --short` was empty before the first mutation and after
+Proofs 1-6 and 8-9 ran in a detached worktree at implementation commit
+`63bd412c` after `npm ci`. Proof 7 was superseded and rerun at repair commit
+`697ff1ef`. `git status --short` was empty before every mutation and after
 every restoration.
 
 Command:
@@ -219,34 +220,44 @@ not ok 13 - main sync setup validates Node before replacing the LaunchAgent plis
 # fail 1
 ```
 
-## Proof 7: CLI validation precedes sync-state creation
+## Proof 7: CLI validation records failure before repository mutation
+
+Repair baseline checksums at `697ff1ef`:
+
+```text
+69b571219799e2a7aa9ff7a038815cd17093773c75b49bce231629d99bccc696  scripts/sync-main-to-mac.mjs
+58e28bc4227d9ee746033aa64188768cce91d22393c15d36289421481294f856  tests/main-sync-agent.test.mjs
+```
 
 Confirmed-applied diff:
 
 ```diff
-@@ -432,7 +432,6 @@ async function installBuiltApp(repoDir, installPath) {
+@@ -432,6 +432,7 @@ async function installBuiltApp(repoDir, installPath) {
  async function main() {
    const options = parseArgs(process.argv.slice(2));
--  const toolchain = await validatePinnedNodeToolchain();
-   const startedAt = new Date().toISOString();
-@@ -441,6 +440,7 @@ async function main() {
-  }
-  throw error;
-   });
 +  const toolchain = await validatePinnedNodeToolchain();
+   const startedAt = new Date().toISOString();
+@@ -442,7 +443,6 @@ async function main() {
+   });
+
+   try {
+- const toolchain = await validatePinnedNodeToolchain();
+  await mkdir(options.logDir, { recursive: true });
 ```
 
 Raw checksum and TAP failure:
 
 ```text
-966e196e469a7b0d199dc17ebc4a20232a16e866a010e6030e2a3efe12a8aeed  scripts/sync-main-to-mac.mjs
-not ok 11 - main sync CLI validates the pinned toolchain before creating sync state
+f8fc7cb889c0e5d637170b9897619d3fa05cd10605c8c1ad5e3f0e51a7e3a761  scripts/sync-main-to-mac.mjs
+not ok 11 - main sync CLI records failure before touching the repository when the pinned toolchain is invalid
   error: |-
-    invalid toolchains must fail before sync state is created
-    true !== false
+    invalid toolchains must replace stale success with a failed status
+    + actual - expected
+    + 'installed'
+    - 'failed'
   code: 'ERR_ASSERTION'
-  expected: false
-  actual: true
+  expected: 'failed'
+  actual: 'installed'
   operator: 'strictEqual'
 # pass 17
 # fail 1
@@ -310,13 +321,14 @@ not ok 9 - main sync rejects ambiguous toolchain paths and empty subprocess PATH
 
 ## Exact restoration and final green
 
-After reversing each of the nine mutations with `apply_patch`, the checksums exactly matched the
-clean baseline. `git status --short` was empty before and after the final run.
+After reversing each mutation with `apply_patch`, the historical proofs matched
+their original baseline and the repair proof exactly matched `697ff1ef`.
+`git status --short` was empty before and after the final repair run.
 
 ```text
-f8fc7cb889c0e5d637170b9897619d3fa05cd10605c8c1ad5e3f0e51a7e3a761  scripts/sync-main-to-mac.mjs
+69b571219799e2a7aa9ff7a038815cd17093773c75b49bce231629d99bccc696  scripts/sync-main-to-mac.mjs
 7c8a670104c2b81a89fe763c270e85d06b59b6c1eb8c8e8e261e1b42bac2860d  scripts/setup-main-sync-agent.mjs
-ae60505e7f5508f39b86521ea2fe82bab9fd25f5ff786cf925fe93dc9139788d  tests/main-sync-agent.test.mjs
+58e28bc4227d9ee746033aa64188768cce91d22393c15d36289421481294f856  tests/main-sync-agent.test.mjs
 1..18
 # tests 18
 # suites 0
@@ -325,7 +337,7 @@ ae60505e7f5508f39b86521ea2fe82bab9fd25f5ff786cf925fe93dc9139788d  tests/main-syn
 # cancelled 0
 # skipped 0
 # todo 0
-f8fc7cb889c0e5d637170b9897619d3fa05cd10605c8c1ad5e3f0e51a7e3a761  scripts/sync-main-to-mac.mjs
+69b571219799e2a7aa9ff7a038815cd17093773c75b49bce231629d99bccc696  scripts/sync-main-to-mac.mjs
 7c8a670104c2b81a89fe763c270e85d06b59b6c1eb8c8e8e261e1b42bac2860d  scripts/setup-main-sync-agent.mjs
-ae60505e7f5508f39b86521ea2fe82bab9fd25f5ff786cf925fe93dc9139788d  tests/main-sync-agent.test.mjs
+58e28bc4227d9ee746033aa64188768cce91d22393c15d36289421481294f856  tests/main-sync-agent.test.mjs
 ```

@@ -9,9 +9,18 @@ export interface LifelineMarkerPresentation {
   categoryLabel: string;
   glyph: string;
   evidenceLabel: string;
+  isHotelDirectory: boolean;
+  status: {
+    operational: string;
+    inventory: string;
+    power: string;
+    access: string;
+  };
   fillColor: [number, number, number, number];
   strokeColor: [number, number, number, number];
 }
+
+export const HOTEL_DIRECTORY_DISCLOSURE = 'Directory listing only. Vacancy, current operation, power, and access are unknown. Confirm directly with the property before relying on it.';
 
 export interface LifelinesOverlayExactContext {
   getPlace(placeId: string): SavedPlace | null;
@@ -480,14 +489,22 @@ export function createMapAsyncInitGuard(): {
 }
 
 export function getLifelineMarkerPresentation(
-  node: Pick<LogisticsNode, 'category' | 'verification' | 'directoryOnly' | 'operational' | 'access' | 'expiresAt'>,
+  node: Pick<LogisticsNode, 'category' | 'verification' | 'directoryOnly' | 'operational' | 'inventory' | 'power' | 'access' | 'expiresAt'>,
   now = Date.now(),
 ): LifelineMarkerPresentation {
+  const expired = node.expiresAt.getTime() <= now;
+  const isHotelDirectory = node.category === 'hotel'
+    && (node.directoryOnly || node.verification === 'directory');
   let state: LifelineMarkerState;
   let evidenceLabel: string;
-  if (node.expiresAt.getTime() <= now) {
+  if (expired) {
     state = 'expired';
-    evidenceLabel = 'Verification expired — status unknown';
+    evidenceLabel = isHotelDirectory
+      ? `Verification expired — status unknown. ${HOTEL_DIRECTORY_DISCLOSURE}`
+      : 'Verification expired — status unknown';
+  } else if (isHotelDirectory) {
+    state = 'directory';
+    evidenceLabel = HOTEL_DIRECTORY_DISCLOSURE;
   } else if (node.directoryOnly || node.verification === 'directory') {
     state = 'directory';
     evidenceLabel = 'Directory listing — availability unknown';
@@ -503,11 +520,21 @@ export function getLifelineMarkerPresentation(
   }
   const category = CATEGORY_PRESENTATION[String(node.category)] ?? { label: 'Lifeline', glyph: 'L' };
   const style = STATE_PRESENTATION[state];
+  const failClosed = expired || isHotelDirectory;
   return {
     state,
     categoryLabel: category.label,
     glyph: category.glyph,
     evidenceLabel,
+    isHotelDirectory,
+    status: failClosed
+      ? { operational: 'unknown', inventory: 'unknown', power: 'unknown', access: 'unknown' }
+      : {
+          operational: node.operational,
+          inventory: node.inventory,
+          power: node.power,
+          access: node.access,
+        },
     fillColor: style.fill,
     strokeColor: style.stroke,
   };

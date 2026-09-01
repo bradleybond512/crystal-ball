@@ -417,6 +417,7 @@ test('a retargeted pull_request event is excluded using its current REST base', 
   const current = workflowPr(88, { base: 'release' });
   const { snapshot: result, getCalls } = await runValidateSnapshotScript({
     referenced: [88],
+    open: [workflowPr(88)],
     eventPull: workflowPr(88),
     currentByNumber: new Map([[88, current]]),
   });

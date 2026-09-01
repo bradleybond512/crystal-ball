@@ -75,6 +75,7 @@ jobs:
                 pull_number: context.payload.pull_request.number,
               });
               eventPull = data;
+              byNumber.delete(eventPull.number);
               if (eventPull.base.ref === base) byNumber.set(eventPull.number, eventPull);
             }
             for (const number of referenced) {

@@ -66,8 +66,21 @@ jobs:
             }
             if (open.length > limit) throw new Error('open main PRs exceed the 256-PR snapshot bound');
             const byNumber = new Map(open.map((pull) => [pull.number, pull]));
+            const eventType = context.eventName;
+            let eventPull = null;
+            if (eventType === 'pull_request') {
+              const { data } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+              });
+              eventPull = data;
+              byNumber.delete(eventPull.number);
+              if (eventPull.base.ref === base) byNumber.set(eventPull.number, eventPull);
+            }
             for (const number of referenced) {
               if (byNumber.has(number)) continue;
+              if (eventPull?.number === number) continue;
               const { data } = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -75,10 +88,11 @@ jobs:
               });
               if (data.base.ref === base) byNumber.set(number, data);
             }
-            const eventType = context.eventName;
             const candidatePrNumbers = [];
             if (eventType === 'pull_request') {
-              candidatePrNumbers.push(context.payload.pull_request.number);
+              if (eventPull.base.ref === base && eventPull.state === 'open') {
+                candidatePrNumbers.push(eventPull.number);
+              }
             } else if (eventType === 'merge_group') {
               const mergeHead = context.payload.merge_group.head_sha;
               for (const pull of open) {

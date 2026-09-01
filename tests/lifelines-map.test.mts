@@ -100,6 +100,63 @@ test('marker styling follows evidence instead of treating every directory result
   );
 });
 
+test('hotel presentation selects the shared directory disclosure and fails closed', () => {
+  const presentation = getLifelineMarkerPresentation(node({
+    kind: 'hotel',
+    category: 'hotel',
+    directoryOnly: false,
+    verification: 'directory',
+    operational: 'open',
+    inventory: 'available',
+    power: 'grid',
+    access: 'reachable',
+  }), NOW);
+
+  assert.equal(presentation.isHotelDirectory, true);
+  assert.equal(
+    presentation.evidenceLabel,
+    'Directory listing only. Vacancy, current operation, power, and access are unknown. Confirm directly with the property before relying on it.',
+  );
+  assert.deepEqual(presentation.status, {
+    operational: 'unknown', inventory: 'unknown', power: 'unknown', access: 'unknown',
+  });
+});
+
+test('expired hotel presentation composes expiry and projects all states to unknown', () => {
+  const presentation = getLifelineMarkerPresentation(node({
+    kind: 'hotel',
+    category: 'hotel',
+    directoryOnly: true,
+    verification: 'directory',
+    operational: 'open',
+    inventory: 'available',
+    power: 'grid',
+    access: 'reachable',
+    expiresAt: new Date(NOW - 1),
+  }), NOW);
+
+  assert.equal(presentation.state, 'expired');
+  assert.equal(
+    presentation.evidenceLabel,
+    'Verification expired — status unknown. Directory listing only. Vacancy, current operation, power, and access are unknown. Confirm directly with the property before relying on it.',
+  );
+  assert.deepEqual(presentation.status, {
+    operational: 'unknown', inventory: 'unknown', power: 'unknown', access: 'unknown',
+  });
+});
+
+test('non-hotel presentation preserves official state values and generic evidence', () => {
+  const presentation = getLifelineMarkerPresentation(node({
+    operational: 'open', inventory: 'available', power: 'grid', access: 'reachable',
+  }), NOW);
+
+  assert.equal(presentation.isHotelDirectory, false);
+  assert.equal(presentation.evidenceLabel, 'Official report: open');
+  assert.deepEqual(presentation.status, {
+    operational: 'open', inventory: 'available', power: 'grid', access: 'reachable',
+  });
+});
+
 test('recovery centers have a distinct neutral category and are never labeled as lodging', () => {
   const presentation = getLifelineMarkerPresentation(node({ kind: 'recovery', category: 'recovery' }), NOW);
   assert.equal(presentation.categoryLabel, 'Recovery center');

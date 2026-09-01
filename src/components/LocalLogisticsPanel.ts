@@ -34,6 +34,7 @@ import {
   buildExternalMapsUrl,
   buildLifelineCallHref,
   buildLifelinesPlaceMatchSignature,
+  getLifelineMarkerPresentation,
 } from './disaster-lifelines-map-helpers';
 import {
   applyLifelineExpiryTransition,
@@ -95,6 +96,55 @@ function formatStatus(node: LogisticsNode, now: number): string {
   if (node.expiresAt.getTime() <= now) return 'expired — status unknown';
   if (node.directoryOnly) return 'Directory listing only';
   return node.verification === 'official' ? 'Official report' : 'Status unverified';
+}
+
+function renderNodeCapabilities(node: LogisticsNode): string {
+  const labels: string[] = [];
+  if (node.capabilities.generatorOnsite) labels.push('Generator listed');
+  if (node.capabilities.pets) labels.push('Pets accepted');
+  if (node.capabilities.ada) labels.push('ADA');
+  if (node.capabilities.wheelchairAccessible) labels.push('Wheelchair accessible');
+  if (Number.isFinite(node.capabilities.postImpactCapacity)) {
+    labels.push(`Capacity ${node.capabilities.postImpactCapacity}`);
+  }
+  if (labels.length === 0) return '';
+  return `<div class="watchlist-scenario">${escapeHtml(labels.join(' • '))}</div>`;
+}
+
+function renderNodePhone(
+  node: LogisticsNode,
+  requiresHotelConfirmation: boolean,
+  callHref: string | null,
+): string {
+  if (requiresHotelConfirmation) {
+    if (!callHref) return '<div class="watchlist-scenario">No callable public phone published.</div>';
+    return `<div class="watchlist-scenario">Public phone: ${escapeHtml(node.publicPhone ?? '')}</div>`;
+  }
+  if (!node.publicPhone) return '';
+  return `<div class="watchlist-scenario">Public phone: ${escapeHtml(node.publicPhone)}</div>`;
+}
+
+function renderNodeRetrieval(node: LogisticsNode, requiresHotelConfirmation: boolean): string {
+  if (!requiresHotelConfirmation) return '';
+  return `<div class="watchlist-scenario">Retrieved ${renderEvidenceTime(node.retrievedAt ?? node.observedAt, 'Unknown')}</div>`;
+}
+
+function renderNodeCallAction(
+  node: LogisticsNode,
+  requiresHotelConfirmation: boolean,
+  callHref: string | null,
+): string {
+  if (!callHref) return '';
+  const escapedId = escapeHtml(node.id);
+  const escapedName = escapeHtml(node.name);
+  if (requiresHotelConfirmation) {
+    return `<button class="sa-refresh-btn" data-logistics-call="${escapedId}" type="button" aria-label="Call ${escapedName} to confirm vacancy, current operation, power, and access">Call to confirm</button>`;
+  }
+  return `<button class="sa-refresh-btn" data-logistics-call="${escapedId}" type="button" aria-label="Call ${escapedName}">Call</button>`;
+}
+
+function formatNodeOperational(node: LogisticsNode, now: number): string {
+  return node.expiresAt.getTime() <= now ? 'unknown' : node.operational;
 }
 
 function formatState(value: string): string {
@@ -1118,19 +1168,22 @@ export class LocalLogisticsPanel extends Panel {
 
   private renderNode(node: LogisticsNode, now: number): string {
  const expired = node.expiresAt.getTime() <= now;
- const capabilityLabels = [
- node.capabilities.generatorOnsite ? 'Generator listed' : '',
- node.capabilities.pets ? 'Pets accepted' : '',
- node.capabilities.ada ? 'ADA' : '',
- node.capabilities.wheelchairAccessible ? 'Wheelchair accessible' : '',
- Number.isFinite(node.capabilities.postImpactCapacity) ? `Capacity ${node.capabilities.postImpactCapacity}` : '',
- ].filter(Boolean);
+ const presentation = getLifelineMarkerPresentation(node, now);
+ const requiresHotelConfirmation = presentation.isHotelDirectory;
+ const callHref = buildLifelineCallHref(node.publicPhone);
+ const operational = formatNodeOperational(node, now);
+ const capabilities = renderNodeCapabilities(node);
+ const phone = renderNodePhone(node, requiresHotelConfirmation, callHref);
+ const retrieval = renderNodeRetrieval(node, requiresHotelConfirmation);
+ const callAction = renderNodeCallAction(node, requiresHotelConfirmation, callHref);
  const chips = [
  `<span class="watchlist-panel-chip">${escapeHtml(LOCAL_LOGISTICS_CATEGORY_LABELS[node.category])}</span>`,
- `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(node.expiresAt.getTime() <= now ? 'unknown' : node.operational))}</span>`,
- `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(expired ? 'unknown' : node.inventory))}</span>`,
- `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(expired ? 'unknown' : node.power))}</span>`,
- `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(expired ? 'unknown' : node.access))}</span>`,
+ `<span class="watchlist-panel-chip">Operational: ${escapeHtml(formatState(
+   presentation.isHotelDirectory ? presentation.status.operational : operational,
+ ))}</span>`,
+ `<span class="watchlist-panel-chip">Inventory: ${escapeHtml(formatState(presentation.status.inventory))}</span>`,
+ `<span class="watchlist-panel-chip">Power: ${escapeHtml(formatState(presentation.status.power))}</span>`,
+ `<span class="watchlist-panel-chip">Access: ${escapeHtml(formatState(presentation.status.access))}</span>`,
  ].filter(Boolean).join('');
 
  const expiry = expired
@@ -1147,18 +1200,17 @@ export class LocalLogisticsPanel extends Panel {
  </div>
  </div>
  <div class="watchlist-summary">${escapeHtml(node.address ?? 'No street address published')}</div>
- ${capabilityLabels.length > 0 ? `<div class="watchlist-scenario">${escapeHtml(capabilityLabels.join(' • '))}</div>` : ''}
- ${node.publicPhone ? `<div class="watchlist-scenario">Public phone: ${escapeHtml(node.publicPhone)}</div>` : ''}
+ ${capabilities}
+ ${phone}
  <div class="watchlist-card-bottom">
  <div class="watchlist-panels">${chips}</div>
  </div>
- <div class="watchlist-scenario">${escapeHtml(formatStatus(node, now))} • ${expiry} • ${escapeHtml(node.source)}</div>
+ <div class="watchlist-scenario">${escapeHtml(requiresHotelConfirmation ? presentation.evidenceLabel : formatStatus(node, now))} • ${expiry} • ${escapeHtml(node.source)}</div>
+ ${retrieval}
  <div class="watchlist-card-bottom">
  ${savedPlaceActions}
  <button class="sa-refresh-btn" data-logistics-external-map="${escapeHtml(node.id)}" type="button" aria-label="Open ${escapeHtml(node.name)} in external maps">Open in Maps</button>
- ${buildLifelineCallHref(node.publicPhone)
-   ? `<button class="sa-refresh-btn" data-logistics-call="${escapeHtml(node.id)}" type="button" aria-label="Call ${escapeHtml(node.name)}">Call</button>`
-   : ''}
+ ${callAction}
  <button class="sa-refresh-btn" data-logistics-source="${escapeHtml(node.id)}" type="button" aria-label="Open source for ${escapeHtml(node.name)}">Source</button>
  </div>
  </article>

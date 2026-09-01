@@ -374,6 +374,52 @@ diagnostic, security, 12,732 renderer tests, strict/full lint, TypeScript,
 production build, bundle budgets, offline smoke, lockfile, dependency audit,
 and secret-scan gates passed.
 
+### ACC-106 — Durable forecast retention and resolver lifecycle
+
+Status: `IN PROGRESS`
+
+Owner: Codex
+
+Branch: `codex/acc-106-retention-resolution`
+
+Dependencies: ACC-101 through ACC-105
+
+Preserve the measurement spine under sustained production volume and resolve
+outcomes against explicit evidence-availability deadlines instead of renderer
+visibility or a best-effort timer.
+
+Deliver:
+
+- versioned, integrity-checked persistence that never evicts pending forecasts;
+- bounded terminal-record retention that preserves the active ACC-703 evidence
+  window and exposes migration, compaction, rejection, and integrity counters;
+- one resolver coordinator shared by startup, successful evidence ingestion,
+  visibility resume, and the periodic backstop;
+- separate forecast horizon, evidence availability, expiry, and overdue timing;
+- positive warning resolution as soon as valid in-window evidence arrives, and
+  negative resolution only after complete coverage through the horizon;
+- no probability, warning-delivery, or historical provenance changes.
+
+Acceptance:
+
+- capacity pressure rejects new non-safety forecasts before discarding pending
+  records;
+- failed migration preserves the prior store and cannot partially commit;
+- missing evidence expires as unavailable and never becomes a negative label;
+- expected post-horizon negative processing is not reported as late evidence;
+- the ACC-703 production clock starts no earlier than the first integrity-known
+  retained record because previously evicted history cannot be reconstructed.
+
+Verify:
+
+- persistence migration, restart, capacity, and mutation fixtures;
+- startup, ingestion, visibility-resume, and no-lookahead resolver fixtures;
+- `npm run test:intelligence`;
+- `npm run test:algorithms`;
+- `npm run test:diagnostics`;
+- `npm run bench:forecast`;
+- `npm run typecheck:all`.
+
 ## Phase 2 — Build the forecast evaluation workbench
 
 Purpose: make error analysis and model comparison fast enough that tuning is

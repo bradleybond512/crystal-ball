@@ -610,12 +610,71 @@ Command: `npm run build`
 ```text
 > crystal-ball@2.25.147 build
 > tsc && vite build
+
+vite v8.1.5 building client environment for production...
+transforming...✓ 5633 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin builtin:vite-reporter]
+✓ built in 20.00s
 ```
 
-The fresh command exited `0`. The full agentic gate was not rerun during this
-evidence-only remediation. Its previously recorded pass remains historical;
-the focused tests, type checks, lint, documentation, roadmap, secret scan, and
-production build above are the fresh evidence for this cycle.
+### Fresh full agentic gate after human-authorized remediation
+
+Exact command:
+
+```sh
+PATH=/opt/homebrew/opt/node@22/bin:$PATH bash scripts/agentic-validate.sh --tests "test:lifelines test:lifelines-map"
+```
+
+The command ran from clean tip
+`c4b95e90990fd3be508ab79e6e3d47dd7312f313`. These are the raw bounded output
+lines retained from the successful run; no value was normalized:
+
+```text
+==> npm run test:lifelines
+# tests 155
+# pass 155
+# fail 0
+# tests 183
+# pass 183
+# fail 0
+==> npm run test:lifelines-map
+# tests 33
+# pass 33
+# fail 0
+# tests 13
+# pass 13
+# fail 0
+==> npm run lockfile:check
+[lockfile:check] package-lock.json version fields look valid.
+==> npm run lint:strict
+[lint:conflicts] No merge conflict markers found.
+[lint:json] Parsed 138 tracked JSON file(s).
+[lint:yaml] Parsed 23 tracked YAML file(s).
+[lint:shell] Checked 20 tracked shell file(s).
+[lint:md] Checked 137 Markdown file(s).
+[lint:colors] OK — 453 files with 7741 baselined literals, none exceeded. 4 file(s) improved — consider --update to ratchet the baseline down.
+==> npm run typecheck:all
+==> npm run secrets:scan
+Secret scan passed for 4727 file(s).
+==> npm run cross-agent:check
+==> npm run docs:check -- --changelog-advisory
+[docs:check] Documentation appears fresh.
+==> npm run roadmap:check
+# Roadmap controller
+**Next eligible task:** UX-014 — Fuel operational evidence
+==> npm run build
+vite v8.1.5 building client environment for production...
+transforming...✓ 5633 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin builtin:vite-reporter]
+✓ built in 20.00s
+Agentic validation gate passed.
+Tests run: test:lifelines test:lifelines-map
+This gate does NOT prove a new test fails without its fix — attach a mutation proof (AGENTS.md).
+```
 
 ## Manual verification
 

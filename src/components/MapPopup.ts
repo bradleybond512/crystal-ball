@@ -534,13 +534,16 @@ export class MapPopup {
   private renderLifelinePopup(node: LogisticsNode): string {
  const presentation = getLifelineMarkerPresentation(node);
  const expired = presentation.state === 'expired';
- const stateValue = (value: string) => escapeHtml(expired ? 'unknown' : value.replace(/_/g, ' '));
+ const stateValue = (value: string) => escapeHtml(value.replace(/_/g, ' '));
+ const requiresHotelConfirmation = presentation.isHotelDirectory;
  const retrieved = (node.retrievedAt ?? node.observedAt).toLocaleString();
  const sourceReported = node.sourceObservedAt?.toLocaleString();
  const expires = node.expiresAt.toLocaleString();
  const callHref = buildLifelineCallHref(node.publicPhone);
  const callAction = callHref
- ? `<a class="lifeline-popup-action" data-lifeline-call href="${escapeHtml(callHref)}" aria-label="Call ${escapeHtml(node.name)}">Call</a>`
+ ? `<a class="lifeline-popup-action" data-lifeline-call href="${escapeHtml(callHref)}" aria-label="${requiresHotelConfirmation
+     ? `Call ${escapeHtml(node.name)} to confirm vacancy, current operation, power, and access`
+     : `Call ${escapeHtml(node.name)}`}">${requiresHotelConfirmation ? 'Call to confirm' : 'Call'}</a>`
  : '';
  const addressAction = node.address
  ? `<button class="lifeline-popup-action" data-lifeline-copy="address" type="button">Copy address</button>`
@@ -555,13 +558,17 @@ export class MapPopup {
  <div class="popup-body lifeline-popup-body">
  <p class="popup-description lifeline-evidence">${escapeHtml(presentation.evidenceLabel)}</p>
  <div class="popup-stats">
- <div class="popup-stat"><span class="stat-label">Operational</span><span class="stat-value">${stateValue(node.operational)}</span></div>
- <div class="popup-stat"><span class="stat-label">Inventory</span><span class="stat-value">${stateValue(node.inventory)}</span></div>
- <div class="popup-stat"><span class="stat-label">Power</span><span class="stat-value">${stateValue(node.power)}</span></div>
- <div class="popup-stat"><span class="stat-label">Access</span><span class="stat-value">${stateValue(node.access)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Operational</span><span class="stat-value">${stateValue(presentation.status.operational)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Inventory</span><span class="stat-value">${stateValue(presentation.status.inventory)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Power</span><span class="stat-value">${stateValue(presentation.status.power)}</span></div>
+ <div class="popup-stat"><span class="stat-label">Access</span><span class="stat-value">${stateValue(presentation.status.access)}</span></div>
  </div>
  <div class="popup-subtitle">${escapeHtml(node.address ?? 'No street address published')}</div>
- ${node.publicPhone ? `<div class="popup-location">Public phone: ${escapeHtml(node.publicPhone)}</div>` : ''}
+ ${requiresHotelConfirmation
+   ? (callHref
+       ? `<div class="popup-location">Public phone: ${escapeHtml(node.publicPhone ?? '')}</div>`
+       : '<div class="popup-location">No callable public phone published.</div>')
+   : (node.publicPhone ? `<div class="popup-location">Public phone: ${escapeHtml(node.publicPhone)}</div>` : '')}
  <div class="popup-location">${escapeHtml(node.distanceKm.toFixed(1))} km · ${escapeHtml(node.source)}</div>
  <div class="popup-location">Retrieved ${escapeHtml(retrieved)} · ${expired ? 'Expired' : 'Expires'} ${escapeHtml(expires)}</div>
  ${sourceReported ? `<div class="popup-location">Source reported ${escapeHtml(sourceReported)}</div>` : ''}

@@ -452,10 +452,101 @@ test('renders representative nodes, provider coverage, truthful category empties
   requiredElement<HTMLButtonElement>(content, '[data-logistics-filter="all"]').click();
   await settleRender();
   const representativeCard = requiredElement<HTMLElement>(content, '[data-logistics-node-card="representative"]');
+  assert.doesNotMatch(representativeCard.textContent ?? '', /Retrieved/,
+    'non-directory cards preserve their existing presentation');
   requiredElement<HTMLButtonElement>(representativeCard, '[data-logistics-external-map]').click();
   requiredElement<HTMLButtonElement>(representativeCard, '[data-logistics-call]').click();
   assert.match(opened[0] ?? '', /^https:\/\/www\.openstreetmap\.org\//);
   assert.equal(opened[1], 'tel:+12195550100');
+  assert.equal(
+    requiredElement<HTMLButtonElement>(representativeCard, '[data-logistics-call]').textContent,
+    'Call',
+    'non-hotels keep the generic action label',
+  );
+});
+
+test('official hotel card preserves generic call presentation and does not add directory retrieval copy', async () => {
+  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 });
+  const hotel = makeNode('official-hotel', 'hotel', {
+    name: 'Official Hotel',
+    directoryOnly: false,
+    verification: 'official',
+    operational: 'open',
+  });
+  const panel = mountPanel(async () => makeSnapshot(place, 25, { nodes: [hotel] }));
+
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  const card = requiredElement<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="official-hotel"]');
+  assert.equal(requiredElement<HTMLButtonElement>(card, '[data-logistics-call]').textContent, 'Call');
+  assert.doesNotMatch(card.textContent ?? '', /Directory listing only|Retrieved/);
+});
+
+test('hotel card fails closed, discloses evidence, and labels a valid call as confirmation', async () => {
+  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 });
+  const retrievedAt = new Date('2026-08-14T13:40:00.000Z');
+  const observedAt = new Date('2026-08-14T12:00:00.000Z');
+  const hotel = makeNode('hotel-valid-phone', 'hotel', {
+    name: 'Directory Hotel',
+    directoryOnly: false,
+    verification: 'directory',
+    operational: 'open',
+    inventory: 'available',
+    power: 'grid',
+    access: 'reachable',
+    observedAt,
+    retrievedAt,
+  });
+  const panel = mountPanel(async () => makeSnapshot(place, 25, { nodes: [hotel] }));
+
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  const card = requiredElement<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="hotel-valid-phone"]');
+  const text = card.textContent ?? '';
+  assert.match(text, /Directory listing only\. Vacancy, current operation, power, and access are unknown\. Confirm directly with the property before relying on it\./);
+  assert.match(text, /Operational: unknown/);
+  assert.match(text, /Inventory: unknown/);
+  assert.match(text, /Power: unknown/);
+  assert.match(text, /Access: unknown/);
+  assert.equal(card.querySelector('time')?.getAttribute('datetime'), retrievedAt.toISOString());
+  assert.match(text, /Retrieved/);
+  const call = requiredElement<HTMLButtonElement>(card, '[data-logistics-call]');
+  assert.deepEqual(
+    { label: call.textContent, accessibleName: call.getAttribute('aria-label') },
+    {
+      label: 'Call to confirm',
+      accessibleName: 'Call Directory Hotel to confirm vacancy, current operation, power, and access',
+    },
+  );
+});
+
+test('expired hotel card composes expiry and omits missing or malformed call controls', async () => {
+  const place = addSavedPlace({ name: 'Home', lat: 41.6, lon: -86.7, radiusKm: 25 });
+  const hotel = makeNode('hotel-no-phone', 'hotel', {
+    publicPhone: undefined,
+    directoryOnly: true,
+    operational: 'open',
+    inventory: 'available',
+    power: 'grid',
+    access: 'reachable',
+    expiresAt: new Date(Date.now() - 1),
+  });
+  const panel = mountPanel(async () => makeSnapshot(place, 25, { nodes: [hotel] }));
+
+  panel.setPlaceId(place.id);
+  await settleRender();
+
+  const card = requiredElement<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="hotel-no-phone"]');
+  const text = card.textContent ?? '';
+  assert.match(text, /Verification expired/);
+  assert.match(text, /Directory listing only/);
+  assert.match(text, /No callable public phone published\./);
+  assert.equal(card.querySelector('[data-logistics-call]'), null);
+  assert.ok(card.querySelector('[data-logistics-external-map]'));
+  assert.ok(card.querySelector('[data-logistics-source]'));
+  assert.doesNotMatch(text, /Operational: open|Inventory: available|Power: grid|Access: reachable/);
 });
 
 test('renders an accessible exact-county outage matrix without summing reports or treating ODIN as facility coverage', async () => {

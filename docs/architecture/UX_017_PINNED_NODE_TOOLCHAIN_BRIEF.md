@@ -1,6 +1,7 @@
 # UX-017 pinned Node toolchain brief
 
-Status: implementation and exact-tip validation complete; final review pending.
+Status: complete; PR #1693 merged and post-merge operational verification
+passed on 2026-08-31.
 
 ## Goal
 

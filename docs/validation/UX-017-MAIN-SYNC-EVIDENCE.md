@@ -341,6 +341,124 @@ $ shasum -a 256 '/Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS
 exit status: 0
 ```
 
+## Post-merge durable-controller relocation
+
+PR #1693 merged through the required rebase path, and canonical `main` resolved
+to the resulting verdict commit:
+
+```text
+state: MERGED
+mergedAt: 2026-08-31T16:10:00Z
+canonical main: 6357dfa582146155c2f4cd01df52737a3000b61a
+```
+
+The prior LaunchAgent was booted out before controller setup. A standalone
+canonical clone was created at
+`/Users/bradleybond/.crystalball-main-sync/controller`, detached at that exact
+SHA, and remained clean. Its reviewed blobs were:
+
+```text
+2d2bd5bfa08242ab42f8638eb02efd42ef4831e7  scripts/sync-main-to-mac.mjs
+26810200336006ee407e3c9b70cc8ba00807021e  scripts/setup-main-sync-agent.mjs
+a685833560faea5dc369f84832d2536306625f0e  tests/main-sync-agent.test.mjs
+```
+
+The focused suite ran from the controller under absolute Node 22 before setup:
+
+```text
+1..18
+# tests 18
+# pass 18
+# fail 0
+# duration_ms 1412.688667
+exit status: 0
+```
+
+Setup ran with `--no-start`. Plist preflight recorded Node 22.23.1, its
+executable sibling npm, the controller script and working directory, the
+unchanged sync root, and the Cargo/system path. No `.worktrees` or disposable
+`repo` controller path was present:
+
+```text
+node=/opt/homebrew/Cellar/node@22/22.23.1/bin/node
+node_version=v22.23.1
+npm=/opt/homebrew/Cellar/node@22/22.23.1/bin/npm
+script=/Users/bradleybond/.crystalball-main-sync/controller/scripts/sync-main-to-mac.mjs
+working_directory=/Users/bradleybond/.crystalball-main-sync/controller
+sync_root=/Users/bradleybond/.crystalball-main-sync
+PATH=/Users/bradleybond/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+```
+
+The first kickstart correctly refused an orphaned lock left when the running
+worktree-backed job was booted out:
+
+```text
+[sync-main-to-mac] Failed: A main sync run is already in progress
+```
+
+`lsof` confirmed the zero-byte lock had no live owner. It was moved, not
+deleted, to `/private/tmp/ux017-orphaned-sync.lock-20260831T1620Z`, and the
+retry then completed. The installed status and durable state agreed on the
+merged target and PR provenance; the state retained all required checks:
+
+```json
+{
+  "statusPhase": "installed",
+  "targetSha": "6357dfa582146155c2f4cd01df52737a3000b61a",
+  "installedSha": "6357dfa582146155c2f4cd01df52737a3000b61a",
+  "verificationSource": "pull_request",
+  "verifiedPrNumber": 1693,
+  "requiredChecks": [
+    "typecheck",
+    "secret-scan",
+    "actionlint",
+    "integrity-checks",
+    "release-doctor",
+    "cross-agent-review",
+    "targeted-tests"
+  ],
+  "appSha256": "cea0b68db60582ea1437baf8a5b93816d55a90622a2a5ed455ab5043f9a0ca55"
+}
+```
+
+The loaded launchd record, not only the plist, used the durable controller and
+reported a clean terminal exit:
+
+```text
+state = not running
+program = /opt/homebrew/Cellar/node@22/22.23.1/bin/node
+/Users/bradleybond/.crystalball-main-sync/controller/scripts/sync-main-to-mac.mjs
+working directory = /Users/bradleybond/.crystalball-main-sync/controller
+PATH => /Users/bradleybond/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+last exit code = 0
+```
+
+The fail-closed log window preserved both log inodes, grew monotonically, and
+contained the exact install markers with no `EBADENGINE` occurrence:
+
+```text
+[install-built-app] Installed /Users/bradleybond/Applications/Crystal Ball.app
+[sync-main-to-mac] Installed 6357dfa582146155c2f4cd01df52737a3000b61a to /Users/bradleybond/Applications/Crystal Ball.app
+stderr_inode=234625641 stderr_size=24214569..24238013 EBADENGINE=0
+stdout_inode=234625640 stdout_size=40474471..40498232
+41c6053d5168ac8b4391725d646dde8804faba3fdeb79cce9961c0a89e987b7a  ux017-relocation-stderr-window.log
+090007fd6493cf61a9dec94234df40aa584d9a9dcead119e503e484efe0fd8e3  ux017-relocation-stdout-window.log
+```
+
+Strict signature verification passed, and the installed and build-source
+executables matched:
+
+```text
+/Users/bradleybond/Applications/Crystal Ball.app: valid on disk
+/Users/bradleybond/Applications/Crystal Ball.app: satisfies its Designated Requirement
+af9cc19759554c9bbf80833f9150884f069bd39f7251d03be218f47726d0690b  installed executable
+af9cc19759554c9bbf80833f9150884f069bd39f7251d03be218f47726d0690b  build executable
+```
+
+The UX-017 worktree is no longer referenced by launchd. It remains on disk
+only because it contains a pre-existing untracked `node_modules` directory;
+retaining it does not affect the verified controller or periodic sync.
+
 ## Exact-tip validation
 
 The repair and mutation-evidence parent was validated in the clean detached

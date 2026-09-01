@@ -51,10 +51,23 @@ const NODE = {
   observedAt: new Date(NOW - 60_000),
   retrievedAt: new Date(NOW - 60_000),
   sourceObservedAt: new Date(NOW - 5 * 60_000),
-  expiresAt: new Date(NOW + 60_000),
+  expiresAt: new Date(Date.now() + 60 * 60_000),
   confidence: 'high',
   sourceUrl: 'https://gis.fema.gov/arcgis/rest/services/NSS/OpenShelters/FeatureServer',
   directoryOnly: false,
+};
+
+const HOTEL_NODE = {
+  ...NODE,
+  id: 'osm:hotel:42',
+  kind: 'hotel',
+  category: 'hotel',
+  name: 'Directory Hotel',
+  sourceRefs: [{ provider: 'osm', recordId: '42' }],
+  source: 'OpenStreetMap directory',
+  sourceUrl: 'https://www.openstreetmap.org/node/42',
+  verification: 'directory',
+  directoryOnly: true,
 };
 
 function mountPopup(): InstanceType<typeof MapPopup> {
@@ -126,5 +139,85 @@ test('lifeline popup distinguishes retrieval time from an upstream report time',
   assert.match(text, /Retrieved/);
   assert.match(text, /Source reported/);
   assert.doesNotMatch(text, /\bObserved\b/);
+  popup.hide();
+});
+
+test('hotel popup fails closed and gives a valid phone a confirmation-specific label', () => {
+  const popup = mountPopup();
+  popup.show({
+    type: 'lifeline',
+    data: {
+      ...HOTEL_NODE,
+      directoryOnly: false,
+      operational: 'open', inventory: 'available', power: 'grid', access: 'reachable',
+    },
+    x: 100,
+    y: 100,
+  });
+
+  const text = document.querySelector('.map-popup')?.textContent ?? '';
+  assert.match(text, /Directory listing only\. Vacancy, current operation, power, and access are unknown\. Confirm directly with the property before relying on it\./);
+  assert.doesNotMatch(text, /stat-value">(?:open|available|grid|reachable)/);
+  const values = [...document.querySelectorAll('.popup-stat .stat-value')].map((item) => item.textContent);
+  assert.deepEqual(values, ['unknown', 'unknown', 'unknown', 'unknown']);
+  const call = document.querySelector<HTMLAnchorElement>('[data-lifeline-call]');
+  assert.equal(call?.textContent, 'Call to confirm');
+  assert.equal(
+    call?.getAttribute('aria-label'),
+    'Call Directory Hotel to confirm vacancy, current operation, power, and access',
+  );
+  popup.hide();
+});
+
+test('expired hotel popup composes expiry disclosure and omits malformed call controls', () => {
+  const popup = mountPopup();
+  popup.show({
+    type: 'lifeline',
+    data: {
+      ...HOTEL_NODE,
+      publicPhone: '555-CALL',
+      operational: 'open', inventory: 'available', power: 'grid', access: 'reachable',
+      expiresAt: new Date(Date.now() - 1),
+    },
+    x: 100,
+    y: 100,
+  });
+
+  const text = document.querySelector('.map-popup')?.textContent ?? '';
+  assert.match(text, /Verification expired — status unknown\. Directory listing only\./);
+  assert.match(text, /No callable public phone published\./);
+  assert.equal(document.querySelector('[data-lifeline-call]'), null);
+  assert.ok(document.querySelector('[data-lifeline-open-maps]'));
+  assert.match(text, /No route or current road status is inferred/);
+  popup.hide();
+});
+
+test('non-hotel popup preserves the generic call label and official status', () => {
+  const popup = mountPopup();
+  popup.show({ type: 'lifeline', data: NODE, x: 100, y: 100 });
+
+  const text = document.querySelector('.map-popup')?.textContent ?? '';
+  assert.match(text, /Official report: open/);
+  assert.equal(document.querySelector<HTMLAnchorElement>('[data-lifeline-call]')?.textContent, 'Call');
+  assert.doesNotMatch(text, /No callable public phone published/);
+  popup.hide();
+});
+
+test('official hotel popup is not forced into directory confirmation presentation', () => {
+  const popup = mountPopup();
+  const officialHotel = {
+    ...HOTEL_NODE,
+    verification: 'official',
+    directoryOnly: false,
+    operational: 'open',
+  };
+  popup.show({ type: 'lifeline', data: officialHotel, x: 100, y: 100 });
+
+  assert.equal(document.querySelector<HTMLAnchorElement>('[data-lifeline-call]')?.textContent, 'Call');
+  assert.doesNotMatch(document.querySelector('.map-popup')?.textContent ?? '', /Directory listing only/);
+  popup.hide();
+
+  popup.show({ type: 'lifeline', data: { ...officialHotel, publicPhone: undefined }, x: 100, y: 100 });
+  assert.doesNotMatch(document.querySelector('.map-popup')?.textContent ?? '', /No callable public phone published/);
   popup.hide();
 });

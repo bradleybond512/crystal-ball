@@ -743,7 +743,7 @@ Update the row in the same PR that does the work.
 | UX-010 | Current-location Lifelines | DONE | #1684 |
 | UX-011 | Hazard/closure exposure | DONE | #1688 |
 | UX-012 | Outage coverage + telemetry | DONE | #1683 |
-| UX-013 | Hotel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
+| UX-013 | Hotel operational evidence | IN PROGRESS — HIGH ASSURANCE | — |
 | UX-014 | Fuel operational evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-015 | New outage provider integration | NOT STARTED — HIGH ASSURANCE | — |
 | UX-016 | Timeline controller + cursor wiring | NOT STARTED — HIGH ASSURANCE | — |

@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 import {
   compareRoadmaps,
@@ -111,6 +112,108 @@ function pr(number, state, text, extra = {}) {
     updatedAt: '2026-08-24T11:00:00.000Z',
     mergedAt: state === 'MERGED' ? '2026-08-24T11:00:00.000Z' : null,
     ...extra,
+  };
+}
+
+function workflowPr(number, {
+  state = 'open',
+  base = 'main',
+  mergedAt = null,
+  title = `PR ${number}`,
+  body = '',
+} = {}) {
+  return {
+    number,
+    state,
+    merged_at: mergedAt,
+    base: { ref: base },
+    head: { sha: `head-${number}` },
+    draft: state === 'open',
+    title,
+    body,
+    updated_at: '2026-08-24T11:00:00.000Z',
+  };
+}
+
+function validateSnapshotScript() {
+  const workflow = readFileSync(join(root, '.github/workflows/roadmap-controller.yml'), 'utf8');
+  const validateJob = workflow.slice(0, workflow.indexOf('\n  watchdog:'));
+  const match = validateJob.match(
+    /      - name: Build bounded PR snapshot[\s\S]*?          script: \|\n([\s\S]*?)(?=\n      - name:)/,
+  );
+  assert.ok(match, 'validate-job snapshot script was not found');
+  return match[1].split('\n').map((line) => line.slice(12)).join('\n');
+}
+
+async function runValidateSnapshotScript({
+  referenced = [],
+  open = [],
+  currentByNumber = new Map(),
+  eventName = 'pull_request',
+  eventPull = workflowPr(1),
+  writes = [],
+} = {}) {
+  let written;
+  const getCalls = [];
+  const fs = {
+    readFileSync(path) {
+      assert.equal(path, '/tmp/roadmap-references.json');
+      return JSON.stringify(referenced);
+    },
+    writeFileSync(path, contents) {
+      assert.equal(path, '/tmp/roadmap-snapshot.json');
+      writes.push(path);
+      written = contents;
+    },
+  };
+  const github = {
+    rest: {
+      pulls: {
+        async list() {
+          return { data: open };
+        },
+        async get({ pull_number: number }) {
+          getCalls.push(number);
+          const value = currentByNumber.get(number);
+          if (value instanceof Error) throw value;
+          assert.ok(value, `missing mocked current PR #${number}`);
+          return { data: value };
+        },
+      },
+      repos: {
+        async compareCommits() {
+          throw new Error('compareCommits was not expected');
+        },
+      },
+    },
+  };
+  const context = {
+    eventName,
+    repo: { owner: 'owner', repo: 'repo' },
+    payload: eventName === 'pull_request'
+      ? { pull_request: eventPull }
+      : { merge_group: { head_sha: 'merge-head' } },
+  };
+
+  await runInNewContext(`(async () => {\n${validateSnapshotScript()}\n})()`, {
+    require(name) {
+      assert.equal(name, 'fs');
+      return fs;
+    },
+    process: {
+      env: {
+        ROADMAP_REFERENCES_PATH: '/tmp/roadmap-references.json',
+        SNAPSHOT_PATH: '/tmp/roadmap-snapshot.json',
+      },
+    },
+    github,
+    context,
+  });
+
+  return {
+    snapshot: written === undefined ? undefined : JSON.parse(written),
+    getCalls,
+    writes,
   };
 }
 
@@ -260,6 +363,77 @@ test('the candidate PR may provisionally supply terminal evidence, but an unrela
     now: '2026-08-24T12:00:00.000Z', baseBranch: 'main',
   });
   assert.ok(unrelated.blocking.some((message) => /ACC-001.*not merged/.test(message)));
+});
+
+test('post-merge pull_request reruns snapshot current state without provisional candidacy', async () => {
+  const current = workflowPr(77, {
+    state: 'closed',
+    mergedAt: '2026-08-24T11:30:00.000Z',
+  });
+  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+    eventPull: workflowPr(77),
+    currentByNumber: new Map([[77, current]]),
+  });
+
+  assert.deepEqual(getCalls, [77]);
+  assert.deepEqual(result.candidatePrNumbers, []);
+  assert.deepEqual(result.pullRequests.map(({ number, state }) => ({ number, state })), [
+    { number: 77, state: 'MERGED' },
+  ]);
+});
+
+test('an open pull_request event remains a current main candidate', async () => {
+  const current = workflowPr(76);
+  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+    eventPull: workflowPr(76, { state: 'closed', base: 'release' }),
+    currentByNumber: new Map([[76, current]]),
+  });
+
+  assert.deepEqual(getCalls, [76]);
+  assert.deepEqual(result.candidatePrNumbers, [76]);
+  assert.deepEqual(result.pullRequests.map(({ number, state, base }) => ({ number, state, base })), [
+    { number: 76, state: 'OPEN', base: 'main' },
+  ]);
+});
+
+test('a referenced closed-unmerged event PR is evidence but is not provisional evidence', async () => {
+  const current = workflowPr(10, { state: 'closed' });
+  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+    referenced: [10],
+    eventPull: workflowPr(10),
+    currentByNumber: new Map([[10, current]]),
+  });
+
+  assert.deepEqual(getCalls, [10]);
+  assert.deepEqual(result.candidatePrNumbers, []);
+  assert.equal(result.pullRequests.find(({ number }) => number === 10)?.state, 'CLOSED');
+  const report = reconcileRoadmaps(parse(), result, {
+    now: '2026-08-24T12:00:00.000Z', baseBranch: 'main',
+  });
+  assert.ok(report.blocking.some((message) => /ACC-001.*evidence PR #10.*not merged/.test(message)));
+});
+
+test('a retargeted pull_request event is excluded using its current REST base', async () => {
+  const current = workflowPr(88, { base: 'release' });
+  const { snapshot: result, getCalls } = await runValidateSnapshotScript({
+    referenced: [88],
+    eventPull: workflowPr(88),
+    currentByNumber: new Map([[88, current]]),
+  });
+
+  assert.deepEqual(getCalls, [88]);
+  assert.deepEqual(result.candidatePrNumbers, []);
+  assert.deepEqual(result.pullRequests, []);
+});
+
+test('a pull_request REST lookup failure writes no partial snapshot', async () => {
+  const writes = [];
+  await assert.rejects(runValidateSnapshotScript({
+    eventPull: workflowPr(89),
+    currentByNumber: new Map([[89, new Error('current PR lookup failed')]]),
+    writes,
+  }), /current PR lookup failed/);
+  assert.deepEqual(writes, []);
 });
 
 test('candidate PR claims are one-to-one and synchronized with roadmap state', () => {

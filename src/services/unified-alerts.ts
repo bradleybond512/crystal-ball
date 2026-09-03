@@ -39,6 +39,12 @@ export type AlertSource =
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
+export type AlertSpatialScope =
+  | { kind: 'point'; basis: 'reported-event' | 'centroid' | 'regional-centroid' }
+  | { kind: 'area'; basis: 'nws-geometry' }
+  | { kind: 'global'; basis: 'producer' }
+  | { kind: 'members' };
+
 export interface UnifiedAlert {
   id: string;
   source: AlertSource;
@@ -47,6 +53,8 @@ export interface UnifiedAlert {
   body: string;
   timestamp: number;
   location?: { lat: number; lon: number; label?: string };
+  /** How `location` may be interpreted; absent means impact cannot be inferred. */
+  spatialScope?: AlertSpatialScope;
   distanceKm?: number;
   relevanceScore: number;
   acknowledged: boolean;
@@ -66,13 +74,34 @@ export interface UnifiedAlert {
 
 const VALID_SEVERITIES = new Set<string>(['critical', 'high', 'medium', 'low', 'info']);
 
+function isValidAlertSpatialScope(value: unknown): value is AlertSpatialScope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const scope = value as Record<string, unknown>;
+  switch (scope['kind']) {
+    case 'point':
+      return scope['basis'] === 'reported-event'
+        || scope['basis'] === 'centroid'
+        || scope['basis'] === 'regional-centroid';
+    case 'area':
+      return scope['basis'] === 'nws-geometry';
+    case 'global':
+      return scope['basis'] === 'producer';
+    case 'members':
+      return scope['basis'] === undefined;
+    default:
+      return false;
+  }
+}
+
+type HydratableUnifiedAlert = Omit<UnifiedAlert, 'spatialScope'> & { spatialScope?: unknown };
+
 /**
  * Runtime structural guard for localStorage-hydrated alert entries.
  * Rejects anything that doesn't have the minimum required shape so a
  * corrupted or tampered store can't populate the live alert registry
  * with untyped objects.
  */
-function isValidUnifiedAlertEntry(e: unknown): e is UnifiedAlert {
+function isValidUnifiedAlertEntry(e: unknown): e is HydratableUnifiedAlert {
   if (!e || typeof e !== 'object' || Array.isArray(e)) return false;
   const a = e as Record<string, unknown>;
   return (
@@ -83,6 +112,14 @@ function isValidUnifiedAlertEntry(e: unknown): e is UnifiedAlert {
     typeof a['body'] === 'string' &&
     typeof a['timestamp'] === 'number'
   );
+}
+
+function sanitizeHydratedAlert(entry: HydratableUnifiedAlert): UnifiedAlert {
+  if (entry.spatialScope === undefined || isValidAlertSpatialScope(entry.spatialScope)) {
+    return entry as UnifiedAlert;
+  }
+  const { spatialScope: _invalidScope, ...alert } = entry;
+  return alert;
 }
 
 const STORAGE_KEY = 'wm-unified-alerts-v1';
@@ -476,9 +513,10 @@ class UnifiedAlertStore {
       const loaded: UnifiedAlert[] = [];
       for (const entry of parsed) {
         if (!isValidUnifiedAlertEntry(entry)) continue; // skip malformed entries
-        if (entry.pinned || now - entry.timestamp <= PRUNE_AGE_MS) {
-          this.alerts.set(entry.id, entry);
-          loaded.push(entry);
+        const alert = sanitizeHydratedAlert(entry);
+        if (alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS) {
+          this.alerts.set(alert.id, alert);
+          loaded.push(alert);
         }
       }
       // Re-compute distances with current user location

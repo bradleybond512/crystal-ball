@@ -66,6 +66,9 @@ export function normalizeBreakingAlert(alert: BreakingAlert): UnifiedAlert {
  location: alert.lat != null && alert.lon != null
  ? { lat: alert.lat, lon: alert.lon, label: alert.placeSummary }
  : undefined,
+ spatialScope: alert.lat != null && alert.lon != null
+ ? { kind: 'point', basis: 'reported-event' }
+ : undefined,
  relevanceScore: 0,
  acknowledged: false,
  pinned: false,
@@ -95,6 +98,7 @@ export function normalizeCorrelationSignal(signal: CorrelationSignal): UnifiedAl
  body: signal.description,
  timestamp: signal.timestamp.getTime(),
  location: geo ? { lat: geo.lat, lon: geo.lon, label: signal.data.placeSummary } : undefined,
+ spatialScope: geo ? { kind: 'point', basis: 'centroid' } : undefined,
  relevanceScore: 0,
  acknowledged: false,
  pinned: false,
@@ -124,6 +128,7 @@ export function normalizeNWSAlert(alert: NWSAlert): UnifiedAlert {
  location: alert.centroid
  ? { lat: alert.centroid[1], lon: alert.centroid[0], label: alert.areaDesc }
  : undefined,
+ spatialScope: { kind: 'area', basis: 'nws-geometry' },
  relevanceScore: 0,
  acknowledged: false,
  pinned: false,
@@ -162,6 +167,7 @@ export function normalizeGDACSEvent(event: GDACSEvent): UnifiedAlert {
  location: event.coordinates
  ? { lat: event.coordinates[1], lon: event.coordinates[0], label: event.country }
  : undefined,
+ spatialScope: event.coordinates ? { kind: 'point', basis: 'reported-event' } : undefined,
  relevanceScore: 0,
  acknowledged: false,
  pinned: false,
@@ -192,6 +198,7 @@ export function normalizeTsunamiAlert(alert: TsunamiAlert): UnifiedAlert {
  location: regionCentroid
  ? { lat: regionCentroid.lat, lon: regionCentroid.lon, label: `${alert.region} Basin` }
  : undefined,
+ spatialScope: regionCentroid ? { kind: 'point', basis: 'regional-centroid' } : undefined,
  relevanceScore: 0,
  acknowledged: false,
  pinned: false,

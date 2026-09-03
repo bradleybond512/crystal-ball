@@ -490,7 +490,7 @@ export function markDigestShown(): void {
 const MAX_DIGEST_CANDIDATES = 20;
 const MAX_DIGEST_STORIES = 5;
 const MAX_MODEL_TOKENS_PER_STORY = 3;
-const MAX_MODEL_NARRATIVE_LENGTH = 600;
+const MAX_DIGEST_NARRATIVE_LENGTH = 600;
 
 function digestFact(value: string, maxLength: number): string {
   return value.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
@@ -517,7 +517,7 @@ function fallbackSeed(alert: UnifiedAlert): DigestStorySeed {
     id: digestStoryId([alert.id]),
     alertIds: [alert.id],
     headline: digestFact(alert.title, 200),
-    narrative: digestFact(alert.body, MAX_MODEL_NARRATIVE_LENGTH),
+    narrative: digestFact(alert.body, MAX_DIGEST_NARRATIVE_LENGTH),
   };
 }
 
@@ -535,16 +535,14 @@ export function buildDigestPrompt(alerts?: readonly UnifiedAlert[]): string {
       source: alert.source,
       title: digestFact(alert.title, 160),
       summary: digestFact(alert.body, 320),
-      region: alert.location?.label ? digestFact(alert.location.label, 120) : undefined,
     });
   }).join('\n');
   return [
-    'Select and summarize up to five ranked alert stories.',
-    'Return only a JSON array. Every item must have exactly these keys:',
-    '{"alertTokens":["A1"],"why":"one concise factual narrative"}',
+    'Select and group up to five ranked alert stories.',
+    'Return only a JSON array. Every item must have exactly this key:',
+    '{"alertTokens":["A1"]}',
     `Use one to ${MAX_MODEL_TOKENS_PER_STORY} unique opaque alert tokens per story.`,
-    'Use only the supplied public facts. Do not add location or saved-place impact fields.',
-    `Keep each why value at or below ${MAX_MODEL_NARRATIVE_LENGTH} characters.`,
+    'Do not write prose or add any other fields.',
     'Prefer cross-domain convergence when the supplied facts support it.',
     '',
     `Ranked alert facts:\n${facts || '(none)'}`,
@@ -553,7 +551,6 @@ export function buildDigestPrompt(alerts?: readonly UnifiedAlert[]): string {
 
 interface ModelDigestStory {
   alertTokens: string[];
-  why: string;
 }
 
 function parseModelDigestStories(response: string | null): ModelDigestStory[] {
@@ -566,15 +563,13 @@ function parseModelDigestStories(response: string | null): ModelDigestStory[] {
       if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
       const item = value as Record<string, unknown>;
       const keys = Object.keys(item).sort();
-      if (keys.length !== 2 || keys[0] !== 'alertTokens' || keys[1] !== 'why') continue;
+      if (keys.length !== 1 || keys[0] !== 'alertTokens') continue;
       if (!Array.isArray(item['alertTokens']) || item['alertTokens'].length === 0
         || item['alertTokens'].length > MAX_MODEL_TOKENS_PER_STORY
         || !item['alertTokens'].every((token) => typeof token === 'string')) continue;
       const tokens = item['alertTokens'] as string[];
       if (new Set(tokens).size !== tokens.length) continue;
-      if (typeof item['why'] !== 'string' || item['why'].trim().length === 0
-        || item['why'].length > MAX_MODEL_NARRATIVE_LENGTH) continue;
-      stories.push({ alertTokens: tokens, why: digestFact(item['why'], MAX_MODEL_NARRATIVE_LENGTH) });
+      stories.push({ alertTokens: tokens });
     }
     return stories;
   } catch {
@@ -607,7 +602,7 @@ export function buildDigestStorySeeds(
         id: digestStoryId(alertIds),
         alertIds,
         headline: digestFact(ranked[0]?.alert.title ?? '', 200),
-        narrative: story.why,
+        narrative: digestFact(ranked[0]?.alert.body ?? '', MAX_DIGEST_NARRATIVE_LENGTH),
       },
     });
   }

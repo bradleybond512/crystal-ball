@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { beforeEach } from 'node:test';
+import test, { afterEach, beforeEach } from 'node:test';
 import { Window } from 'happy-dom';
 
 const happyWindow = new Window({ url: 'http://127.0.0.1/' });
@@ -17,6 +17,7 @@ Object.assign(globalThis as unknown as Record<string, unknown>, {
 });
 
 const { DigestOverlay } = await import('../DigestOverlay.ts');
+const mountedOverlays: InstanceType<typeof DigestOverlay>[] = [];
 
 interface DigestStoryCard {
   id: string;
@@ -46,6 +47,7 @@ function card(overrides: Partial<DigestStoryCard> = {}): DigestStoryCard {
 function mount(): InstanceType<typeof DigestOverlay> {
   const overlay = new DigestOverlay();
   overlay.mount(document.body);
+  mountedOverlays.push(overlay);
   return overlay;
 }
 
@@ -64,6 +66,10 @@ function showCards(overlay: InstanceType<typeof DigestOverlay>, cards: DigestSto
 
 beforeEach(() => {
   document.body.replaceChildren();
+});
+
+afterEach(() => {
+  for (const overlay of mountedOverlays.splice(0)) overlay.destroy();
 });
 
 test('overlay is a labeled modal dialog with an accessible close control', () => {
@@ -134,6 +140,35 @@ test('hide restores the element focused before the dialog opened', () => {
   overlay.hide();
 
   assert.equal(document.activeElement, opener);
+});
+
+test('user dismissal notifies the owner after hiding the overlay', () => {
+  let dismissals = 0;
+  const OverlayWithDismiss = DigestOverlay as unknown as new (
+    options: { onDismiss: () => void },
+  ) => InstanceType<typeof DigestOverlay>;
+  const overlay = new OverlayWithDismiss({ onDismiss: () => { dismissals += 1; } });
+  overlay.mount(document.body);
+  mountedOverlays.push(overlay);
+  showCards(overlay, [card()]);
+
+  root().querySelector<HTMLButtonElement>('.digest-close')?.click();
+
+  assert.equal(root().hidden, true, 'dismissal must hide before notifying the owner');
+  assert.equal(dismissals, 1, 'one user dismissal must invalidate one pending request');
+});
+
+test('destroying a visible overlay tears down without reporting a user dismissal', () => {
+  let dismissals = 0;
+  const overlay = new DigestOverlay({ onDismiss: () => { dismissals += 1; } });
+  overlay.mount(document.body);
+  mountedOverlays.push(overlay);
+  showCards(overlay, [card()]);
+
+  overlay.destroy();
+
+  assert.equal(dismissals, 0);
+  assert.equal(document.querySelector('.digest-overlay'), null);
 });
 
 test('Escape, close, and backdrop retain dismissal behavior', async (t) => {

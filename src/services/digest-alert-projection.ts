@@ -39,6 +39,24 @@ interface GeometryParseState {
   polygons: number;
 }
 
+interface GeometryWorkBudget {
+  remaining: number;
+}
+
+interface GeometryEvaluationContext {
+  work: GeometryWorkBudget;
+  cache: WeakMap<object, ParsedNwsGeometry>;
+}
+
+interface ParsedNwsGeometry {
+  polygons: Polygon[];
+  vertices: number;
+}
+
+interface GeometryPreflight {
+  vertices: number;
+}
+
 interface ExpandedAlerts {
   alerts: UnifiedAlert[];
   incomplete: boolean;
@@ -60,7 +78,18 @@ const MAX_MEMBER_DEPTH = 4;
 const MAX_GEOMETRY_VERTICES = 50_000;
 const MAX_GEOMETRY_RINGS = 1024;
 const MAX_GEOMETRY_POLYGONS = 256;
+const MAX_GEOMETRY_WORK = 250_000;
+const NWS_RETRIEVAL_MAX_AGE_MS = 30 * 60_000;
 const KM_PER_DEGREE = 111.195;
+
+function consumeGeometryWork(work: GeometryWorkBudget, amount = 1): boolean {
+  if (!Number.isSafeInteger(amount) || amount < 0 || amount > work.remaining) {
+    work.remaining = 0;
+    return false;
+  }
+  work.remaining -= amount;
+  return true;
+}
 
 function isCoordinate(lat: number, lon: number): boolean {
   return Number.isFinite(lat) && Number.isFinite(lon)
@@ -242,30 +271,99 @@ function parsePolygon(value: unknown, state: GeometryParseState): Polygon | null
   return polygon;
 }
 
-function parseNwsGeometry(alert: UnifiedAlert, now: number): Polygon[] | null {
-  if (alert.source !== 'nws' || alert.spatialScope?.kind !== 'area'
-    || !alert.raw || typeof alert.raw !== 'object' || Array.isArray(alert.raw)) return null;
-  const raw = alert.raw as Record<string, unknown>;
-  const expires = typeof raw.expires === 'string' ? Date.parse(raw.expires) : Number.NaN;
-  if (!Number.isFinite(expires) || expires <= now) return null;
-  const geometry = raw.geometry;
-  if (!geometry || typeof geometry !== 'object' || Array.isArray(geometry)) return null;
-  const value = geometry as Record<string, unknown>;
+function parseTimestamp(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function hasCurrentNwsLifecycle(raw: Record<string, unknown>, now: number): boolean {
+  const sent = parseTimestamp(raw.sent);
+  const onset = parseTimestamp(raw.onset);
+  const expires = parseTimestamp(raw.expires);
+  const retrievedAt = raw.retrievedAt;
+  return raw.status === 'Actual'
+    && (raw.messageType === 'Alert' || raw.messageType === 'Update')
+    && sent !== null && sent <= now
+    && onset !== null && onset <= now
+    && expires !== null && expires > now
+    && sent < expires && onset < expires
+    && typeof retrievedAt === 'number' && Number.isFinite(retrievedAt)
+    && retrievedAt >= sent && retrievedAt <= now
+    && now - retrievedAt <= NWS_RETRIEVAL_MAX_AGE_MS;
+}
+
+function preflightPolygon(value: unknown, state: GeometryParseState): boolean {
+  if (!Array.isArray(value) || value.length === 0) return false;
+  state.polygons += 1;
+  if (state.polygons > MAX_GEOMETRY_POLYGONS) return false;
+  for (const rawRing of value) {
+    if (!Array.isArray(rawRing) || rawRing.length < 4) return false;
+    state.rings += 1;
+    state.vertices += rawRing.length;
+    if (state.rings > MAX_GEOMETRY_RINGS || state.vertices > MAX_GEOMETRY_VERTICES) return false;
+  }
+  return true;
+}
+
+function preflightGeometry(value: Record<string, unknown>): GeometryPreflight | null {
   const state: GeometryParseState = { vertices: 0, rings: 0, polygons: 0 };
+  if (value.type === 'Polygon') {
+    if (!preflightPolygon(value.coordinates, state)) return null;
+  } else if (value.type === 'MultiPolygon' && Array.isArray(value.coordinates)
+    && value.coordinates.length > 0) {
+    for (const rawPolygon of value.coordinates) {
+      if (!preflightPolygon(rawPolygon, state)) return null;
+    }
+  } else {
+    return null;
+  }
+  return { vertices: state.vertices };
+}
+
+function parseGeometryValue(value: Record<string, unknown>, state: GeometryParseState): Polygon[] | null {
   if (value.type === 'Polygon') {
     const polygon = parsePolygon(value.coordinates, state);
     return polygon ? [polygon] : null;
   }
-  if (value.type === 'MultiPolygon' && Array.isArray(value.coordinates) && value.coordinates.length > 0) {
-    const polygons: Polygon[] = [];
-    for (const rawPolygon of value.coordinates) {
-      const polygon = parsePolygon(rawPolygon, state);
-      if (!polygon) return null;
-      polygons.push(polygon);
-    }
-    return polygons;
+  if (value.type !== 'MultiPolygon' || !Array.isArray(value.coordinates) || value.coordinates.length === 0) {
+    return null;
   }
-  return null;
+  const polygons: Polygon[] = [];
+  for (const rawPolygon of value.coordinates) {
+    const polygon = parsePolygon(rawPolygon, state);
+    if (!polygon) return null;
+    polygons.push(polygon);
+  }
+  return polygons;
+}
+
+function parseNwsGeometry(
+  alert: UnifiedAlert,
+  now: number,
+  context: GeometryEvaluationContext,
+  placeCount: number,
+): ParsedNwsGeometry | null {
+  if (alert.source !== 'nws' || alert.spatialScope?.kind !== 'area'
+    || !alert.raw || typeof alert.raw !== 'object' || Array.isArray(alert.raw)) return null;
+  const raw = alert.raw as Record<string, unknown>;
+  if (!hasCurrentNwsLifecycle(raw, now)) return null;
+  const geometry = raw.geometry;
+  if (!geometry || typeof geometry !== 'object' || Array.isArray(geometry)) return null;
+  const value = geometry as Record<string, unknown>;
+  const preflight = preflightGeometry(value);
+  if (!preflight) return null;
+  const cached = context.cache.get(geometry);
+  const parseWork = cached ? 0 : preflight.vertices;
+  const evaluationWork = preflight.vertices * placeCount * 4;
+  if (!consumeGeometryWork(context.work, parseWork + evaluationWork)) return null;
+  if (cached) return cached;
+  const state: GeometryParseState = { vertices: 0, rings: 0, polygons: 0 };
+  const polygons = parseGeometryValue(value, state);
+  if (!polygons || state.vertices !== preflight.vertices) return null;
+  const parsed = { polygons, vertices: state.vertices };
+  context.cache.set(geometry, parsed);
+  return parsed;
 }
 
 function unwrapRing(ring: Ring): Ring {
@@ -354,9 +452,15 @@ function distanceToPolygonsKm(place: SavedPlace, polygons: readonly Polygon[]): 
   return nearest;
 }
 
-function evaluateArea(alert: UnifiedAlert, places: readonly SavedPlace[], now: number): ImpactEvidence {
-  const polygons = parseNwsGeometry(alert, now);
-  if (!polygons) return { status: 'unknown' };
+function evaluateArea(
+  alert: UnifiedAlert,
+  places: readonly SavedPlace[],
+  now: number,
+  context: GeometryEvaluationContext,
+): ImpactEvidence {
+  const geometry = parseNwsGeometry(alert, now, context, places.length);
+  if (!geometry) return { status: 'unknown' };
+  const { polygons } = geometry;
   const impacted: { place: SavedPlace; inside: boolean }[] = [];
   for (const place of places) {
     if (!isCoordinate(place.lat, place.lon)
@@ -386,11 +490,16 @@ function pointDistanceKm(place: SavedPlace, lat: number, lon: number): number {
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-function evaluateAlert(alert: UnifiedAlert, places: readonly SavedPlace[], now: number): ImpactEvidence {
+function evaluateAlert(
+  alert: UnifiedAlert,
+  places: readonly SavedPlace[],
+  now: number,
+  context: GeometryEvaluationContext,
+): ImpactEvidence {
   const scope = alert.spatialScope;
   if (!scope) return { status: 'unknown' };
   if (scope.kind === 'global') return { status: 'possible', kind: 'global' };
-  if (scope.kind === 'area') return evaluateArea(alert, places, now);
+  if (scope.kind === 'area') return evaluateArea(alert, places, now, context);
   if (scope.kind !== 'point' || scope.basis !== 'reported-event' || !alert.location
     || !isCoordinate(alert.location.lat, alert.location.lon)) return { status: 'unknown' };
   for (const place of places) {
@@ -449,6 +558,7 @@ function impactProjection(
   savedPlaces: readonly SavedPlace[],
   now: number,
   incomplete: boolean,
+  context: GeometryEvaluationContext,
 ): Pick<DigestStoryCard, 'impactStatus' | 'impactText'> {
   if (savedPlaces.length === 0) {
     return {
@@ -457,7 +567,7 @@ function impactProjection(
     };
   }
   const places = savedPlaces.slice(0, MAX_SAVED_PLACES);
-  const evidence = alerts.map((alert) => evaluateAlert(alert, places, now));
+  const evidence = alerts.map((alert) => evaluateAlert(alert, places, now, context));
   const likely = evidence.find((item) => item.status === 'likely');
   const possible = evidence.find((item) => item.status === 'possible');
   const positive = likely ?? possible;
@@ -481,10 +591,20 @@ function impactProjection(
 
 export function projectDigestStories(input: ProjectDigestStoriesInput): DigestStoryCard[] {
   const { index, truncated } = alertIndex(input.alerts);
+  const geometryContext: GeometryEvaluationContext = {
+    work: { remaining: MAX_GEOMETRY_WORK },
+    cache: new WeakMap(),
+  };
   return input.seeds.slice(0, MAX_STORIES).map((seed) => {
     const expanded = expandAlerts(seed, index);
     const alerts = leafAlerts(expanded.alerts);
-    const impact = impactProjection(alerts, input.savedPlaces, input.now, expanded.incomplete || truncated);
+    const impact = impactProjection(
+      alerts,
+      input.savedPlaces,
+      input.now,
+      expanded.incomplete || truncated,
+      geometryContext,
+    );
     return {
       id: seed.id,
       alertIds: seed.alertIds.slice(0, MAX_ALERT_REFS),

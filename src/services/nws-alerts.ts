@@ -19,13 +19,61 @@ export interface NWSAlert {
   expires: string;
   status: string;
   messageType?: string | null;
+  retrievedAt?: number;
   centroid: [number, number] | null;
   geometry?: { type: string; coordinates: unknown } | null;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const SEVERITIES = new Set<NWSAlert['severity']>(['Extreme', 'Severe', 'Moderate', 'Minor', 'Unknown']);
+const URGENCIES = new Set<NWSAlert['urgency']>(['Immediate', 'Expected', 'Future', 'Past', 'Unknown']);
 let cache: { data: NWSAlert[]; ts: number } | null = null;
 let inflight: Promise<NWSAlert[]> | null = null;
+
+function isTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
+function isCentroid(value: unknown): value is [number, number] | null {
+  if (value === null) return true;
+  if (!Array.isArray(value) || value.length !== 2) return false;
+  const lon: unknown = value[0];
+  const lat: unknown = value[1];
+  return typeof lon === 'number' && Number.isFinite(lon) && lon >= -180 && lon <= 180
+    && typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90;
+}
+
+function isGeometry(value: unknown): value is NWSAlert['geometry'] {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== 'object' || Array.isArray(value)) return false;
+  const geometry = value as Record<string, unknown>;
+  return typeof geometry.type === 'string' && geometry.type.length > 0
+    && 'coordinates' in geometry;
+}
+
+function isNwsAlert(value: unknown): value is NWSAlert {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const alert = value as Record<string, unknown>;
+  return typeof alert.id === 'string' && alert.id.length > 0
+    && typeof alert.event === 'string'
+    && typeof alert.headline === 'string'
+    && typeof alert.description === 'string'
+    && SEVERITIES.has(alert.severity as NWSAlert['severity'])
+    && URGENCIES.has(alert.urgency as NWSAlert['urgency'])
+    && typeof alert.areaDesc === 'string'
+    && (alert.sent === undefined || isTimestamp(alert.sent))
+    && isTimestamp(alert.onset)
+    && isTimestamp(alert.expires)
+    && typeof alert.status === 'string' && alert.status.length > 0
+    && (alert.messageType === undefined || alert.messageType === null || typeof alert.messageType === 'string')
+    && isCentroid(alert.centroid)
+    && isGeometry(alert.geometry);
+}
+
+export function _resetNwsAlertsForTest(): void {
+  cache = null;
+  inflight = null;
+}
 
 export async function fetchNWSAlerts(): Promise<NWSAlert[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
@@ -43,8 +91,13 @@ async function doFetchNWSAlerts(): Promise<NWSAlert[]> {
       dataFreshness.recordError('nws-alerts', `HTTP ${res.status}`);
       return cache?.data ?? [];
     }
-    const data = (await res.json()) as NWSAlert[];
-    cache = { data, ts: Date.now() };
+    const body: unknown = await res.json();
+    if (!Array.isArray(body) || !body.every((item) => isNwsAlert(item))) {
+      throw new Error('NWS alerts response was malformed');
+    }
+    const retrievedAt = Date.now();
+    const data = body.map((item) => ({ ...(item as NWSAlert), retrievedAt }));
+    cache = { data, ts: retrievedAt };
     dataFreshness.recordUpdate('nws-alerts', data.length);
     return data;
   } catch (error) {

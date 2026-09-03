@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Window } from 'happy-dom';
 
+import { normalizeBreakingAlert } from '../alert-normalizer.ts';
+import { tagBreakingAlertPlaces, type BreakingAlert } from '../breaking-news-alerts.ts';
 import type { UnifiedAlert } from '../unified-alerts.ts';
 
 const happyWindow = new Window({ url: 'http://127.0.0.1/' });
@@ -73,17 +75,31 @@ function storySeedBuilder(): BuildDigestStorySeeds {
   return chat.buildDigestStorySeeds;
 }
 
-test('digest prompt uses opaque tokens and never includes saved-place data', () => {
+test('digest prompt keeps alert locations local while retaining public facts and opaque tokens', () => {
   const alerts = [makeAlert('private-raw-alert-id', {
     title: 'Public Red Flag Warning',
     body: 'Public dry fuels and wind report.',
-    location: { lat: 41.6, lon: -86.7, label: 'Public region' },
+    location: { lat: 41.6, lon: -86.7, label: 'PUBLIC_REGION_LABEL_ba218' },
+  }), makeAlert('breaking-private-location', {
+    source: 'breaking-news',
+    title: 'Public earthquake bulletin',
+    body: 'Public shaking report.',
+    location: { lat: 12.3, lon: -45.6, label: 'PRIVATE_SAVED_PLACE_LABEL_ba218' },
   })];
   const prompt = (chat.buildDigestPrompt as BuildDigestPrompt)(alerts);
 
   assert.match(prompt, /\bA1\b/, 'the model should receive an opaque token');
-  assert.match(prompt, /Public region/, 'public event location may be sent');
+  assert.match(prompt, /\bA2\b/, 'breaking-news candidate must remain available by opaque token');
+  assert.match(prompt, /Public Red Flag Warning/);
+  assert.match(prompt, /Public dry fuels and wind report/);
+  assert.match(prompt, /Public earthquake bulletin/);
+  assert.match(prompt, /Public shaking report/);
+  assert.doesNotMatch(prompt, /PRIVATE_SAVED_PLACE_LABEL_ba218/,
+    'a breaking-news label derived from a saved-place name must stay local');
+  assert.doesNotMatch(prompt, /PUBLIC_REGION_LABEL_ba218/,
+    'all alert location labels stay local regardless of source');
   assert.doesNotMatch(prompt, /private-raw-alert-id/i);
+  assert.doesNotMatch(prompt, /breaking-private-location/i);
   for (const privateValue of [
     PRIVATE_PLACE.id,
     PRIVATE_PLACE.name,
@@ -96,6 +112,27 @@ test('digest prompt uses opaque tokens and never includes saved-place data', () 
   ]) {
     assert.equal(prompt.includes(privateValue), false, `prompt leaked saved-place field: ${privateValue}`);
   }
+});
+
+test('saved-place enrichment stays local through breaking-alert normalization and prompt construction', () => {
+  const breakingAlert: BreakingAlert = {
+    id: 'public-breaking-id',
+    headline: 'Public earthquake bulletin',
+    source: 'Public wire service',
+    lat: PRIVATE_PLACE.lat,
+    lon: PRIVATE_PLACE.lon,
+    threatLevel: 'high',
+    timestamp: new Date('2026-09-03T12:00:00.000Z'),
+    origin: 'rss_alert',
+  };
+  const enriched = tagBreakingAlertPlaces(breakingAlert, [PRIVATE_PLACE]);
+  const normalized = normalizeBreakingAlert(enriched);
+  assert.match(normalized.location?.label ?? '', new RegExp(PRIVATE_PLACE.name),
+    'the test must exercise a location label derived from the real saved-place enrichment path');
+
+  const prompt = (chat.buildDigestPrompt as BuildDigestPrompt)([normalized]);
+  assert.doesNotMatch(prompt, new RegExp(PRIVATE_PLACE.name));
+  assert.doesNotMatch(prompt, new RegExp(PRIVATE_PLACE.id));
 });
 
 test('digest prompt keeps local-only alert candidates opaque and excludes their user-local facts', () => {
@@ -123,7 +160,8 @@ test('digest prompt keeps local-only alert candidates opaque and excludes their 
   assert.match(prompt, /\bA3\b/, 'local-ids alert must remain selectable by opaque token');
   assert.match(prompt, /PUBLIC_ALERT_TITLE_69c41/);
   assert.match(prompt, /PUBLIC_ALERT_BODY_69c41/);
-  assert.match(prompt, /PUBLIC_ALERT_LOCATION_69c41/);
+  assert.doesNotMatch(prompt, /PUBLIC_ALERT_LOCATION_69c41/,
+    'public-looking location labels also stay local because label provenance is not trustworthy');
   for (const localSentinel of [
     'RESOURCE_LOCAL_TITLE_69c41',
     'RESOURCE_LOCAL_BODY_69c41',
@@ -157,6 +195,18 @@ test('model-authored location and impact keys are rejected and cannot become can
   assert.equal(seeds[0]!.narrative, alerts[0]!.body, 'unknown model keys must force deterministic fallback');
 });
 
+test('model narrative containing reserved canonical location or impact claims falls back deterministically', () => {
+  const alerts = [makeAlert('alert-1', { body: 'Deterministic public fallback.' })];
+  for (const why of [
+    'Location: PRIVATE_SAVED_PLACE_LABEL_ba218. Conditions may worsen.',
+    'Saved-place impact: No reported overlap. Continue monitoring.',
+  ]) {
+    const [result] = storySeedBuilder()(alerts, JSON.stringify([{ alertTokens: ['A1'], why }]));
+    assert.equal(result?.narrative, alerts[0]!.body, `reserved narrative must be rejected: ${why}`);
+    assert.doesNotMatch(result?.narrative ?? '', /Location:|Saved-place impact:/i);
+  }
+});
+
 test('malformed output falls back deterministically to at most five ranked alerts', () => {
   const alerts = Array.from({ length: 7 }, (_, index) => makeAlert(`alert-${index + 1}`, {
     title: `Rank ${index + 1}`,
@@ -174,15 +224,16 @@ test('malformed output falls back deterministically to at most five ranked alert
 test('unknown or repeated tokens are discarded, unused alerts fill gaps, and rank controls final order', () => {
   const alerts = [makeAlert('rank-1'), makeAlert('rank-2'), makeAlert('rank-3')];
   const response = JSON.stringify([
-    { alertTokens: ['A2'], why: 'Second-ranked model narrative.' },
-    { alertTokens: ['A2'], why: 'Duplicate token must be rejected.' },
-    { alertTokens: ['A404'], why: 'Unknown token must be rejected.' },
+    { alertTokens: ['A2'] },
+    { alertTokens: ['A2'] },
+    { alertTokens: ['A404'] },
   ]);
   const seeds = storySeedBuilder()(alerts, response);
 
   assert.deepEqual(seeds.map((item) => item.alertIds), [['rank-1'], ['rank-2'], ['rank-3']]);
   assert.equal(seeds[0]!.narrative, alerts[0]!.body);
-  assert.equal(seeds[1]!.narrative, 'Second-ranked model narrative.');
+  assert.equal(seeds[1]!.narrative, alerts[1]!.body,
+    'model grouping must not supply displayed prose');
   assert.equal(seeds[2]!.narrative, alerts[2]!.body);
 });
 

@@ -3,6 +3,10 @@ import type { DigestStoryCard } from '@/services/digest-alert-projection';
 
 export type DigestOverlayStatus = 'loading' | 'empty' | 'degraded' | 'error';
 
+export interface DigestOverlayOptions {
+  onDismiss?: () => void;
+}
+
 const TITLE_ID = 'digest-dialog-title';
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -19,6 +23,7 @@ export class DigestOverlay {
   private readonly bodyEl: HTMLElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly liveEl: HTMLElement;
+  private readonly onDismiss: (() => void) | null;
   private previouslyFocused: HTMLElement | null = null;
   private destroyed = false;
 
@@ -57,7 +62,8 @@ export class DigestOverlay {
     }
   };
 
-  constructor() {
+  constructor(options: DigestOverlayOptions = {}) {
+    this.onDismiss = options.onDismiss ?? null;
     this.overlay = document.createElement('div');
     this.overlay.className = 'digest-overlay';
     this.overlay.hidden = true;
@@ -136,21 +142,26 @@ export class DigestOverlay {
   }
 
   hide(): void {
-    if (!this.isVisible()) return;
-    this.overlay.hidden = true;
-    const restoreTarget = this.previouslyFocused;
-    this.previouslyFocused = null;
-    if (restoreTarget?.isConnected) restoreTarget.focus();
+    this.close(true);
   }
 
   destroy(): void {
     if (this.destroyed) return;
-    if (this.isVisible()) this.hide();
+    this.close(false);
     this.destroyed = true;
     document.removeEventListener('keydown', this.onDocumentKeyDown);
     this.overlay.removeEventListener('click', this.onBackdropClick);
     this.closeButton.removeEventListener('click', this.onCloseClick);
     this.overlay.remove();
+  }
+
+  private close(notifyOwner: boolean): void {
+    if (!this.isVisible()) return;
+    this.overlay.hidden = true;
+    const restoreTarget = this.previouslyFocused;
+    this.previouslyFocused = null;
+    if (restoreTarget?.isConnected) restoreTarget.focus();
+    if (notifyOwner) this.onDismiss?.();
   }
 
   private open(): void {

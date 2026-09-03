@@ -1464,7 +1464,13 @@ export class PanelLayoutManager implements AppModule {
  };
  document.addEventListener('keydown', this._onStatusOverlayKey);
  startBlackoutSignature();
- this.digestOverlay = new DigestOverlay();
+ this.digestOverlay = new DigestOverlay({
+ onDismiss: () => {
+ this.digestGeneration += 1;
+ this.digestAbortController?.abort();
+ this.digestAbortController = null;
+ },
+ });
  this.digestOverlay.mount(document.body);
  const reprojectDigest = (): void => {
  if (!this.digestOverlay?.isVisible() || this.digestSeeds.length === 0) return;
@@ -1495,6 +1501,7 @@ export class PanelLayoutManager implements AppModule {
 
  void generateDigest(controller.signal).then((generatedCards) => {
  if (this.destroyed || controller.signal.aborted || generation !== this.digestGeneration) return;
+ if (onDemand && !this.digestOverlay?.isVisible()) return;
  this.digestAbortController = null;
  if (generatedCards.length === 0) {
  if (onDemand) this.digestOverlay?.showStatus('No recent activity to summarize.', 'empty');

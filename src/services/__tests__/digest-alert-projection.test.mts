@@ -97,24 +97,34 @@ function projectOne(
   return cards[0]!;
 }
 
+function nwsAreaRaw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    areaDesc: 'Test County',
+    status: 'Actual',
+    messageType: 'Alert',
+    sent: new Date(NOW - 5 * 60_000).toISOString(),
+    onset: new Date(NOW - 60_000).toISOString(),
+    expires: new Date(NOW + 60 * 60_000).toISOString(),
+    retrievedAt: NOW - 2 * 60_000,
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-0.1, -0.1],
+        [0.1, -0.1],
+        [0.1, 0.1],
+        [-0.1, 0.1],
+        [-0.1, -0.1],
+      ]],
+    },
+    ...overrides,
+  };
+}
+
 function areaAlert(overrides: Partial<UnifiedAlert> = {}): UnifiedAlert {
   return alert({
     location: { lat: 0, lon: 0, label: 'Test County' },
     spatialScope: { kind: 'area', basis: 'nws-geometry' },
-    raw: {
-      areaDesc: 'Test County',
-      expires: new Date(NOW + 60 * 60_000).toISOString(),
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[
-          [-0.1, -0.1],
-          [0.1, -0.1],
-          [0.1, 0.1],
-          [-0.1, 0.1],
-          [-0.1, -0.1],
-        ]],
-      },
-    },
+    raw: nwsAreaRaw(),
     ...overrides,
   } as Partial<UnifiedAlert>);
 }
@@ -191,6 +201,63 @@ test('complete NWS coverage names three impacted places in saved-place order and
   assert.match(first.impactText, /and 2 more/i);
 });
 
+test('NWS geometry handles holes, multipolygons, boundaries, the antimeridian, and high latitudes', async (t) => {
+  await t.test('a saved place in a polygon hole is not treated as inside', () => {
+    const raw = nwsAreaRaw({
+      geometry: { type: 'Polygon', coordinates: [
+        [[-2, -2], [2, -2], [2, 2], [-2, 2], [-2, -2]],
+        [[-0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0.5, -0.5], [-0.5, -0.5]],
+      ] },
+    });
+    const card = projectOne([areaAlert({ raw })], [place({ radiusKm: 0 })]);
+    assert.equal(card.impactStatus, 'no_reported_overlap');
+  });
+
+  await t.test('a matching member of a multipolygon is recognized', () => {
+    const raw = nwsAreaRaw({
+      geometry: { type: 'MultiPolygon', coordinates: [
+        [[[-20, -20], [-19, -20], [-19, -19], [-20, -20]]],
+        [[[-1, -1], [1, -1], [1, 1], [-1, -1]]],
+      ] },
+    });
+    assert.equal(projectOne([areaAlert({ raw })]).impactStatus, 'likely');
+  });
+
+  await t.test('a point on the outer boundary remains in the alert area', () => {
+    const card = projectOne([areaAlert()], [place({ lat: 0, lon: 0.1, radiusKm: 0 })]);
+    assert.equal(card.impactStatus, 'likely');
+  });
+
+  await t.test('an antimeridian-spanning polygon contains longitude 180', () => {
+    const raw = nwsAreaRaw({
+      geometry: { type: 'Polygon', coordinates: [[
+        [179, -1], [-179, -1], [-179, 1], [179, 1], [179, -1],
+      ]] },
+    });
+    const card = projectOne([areaAlert({ raw })], [place({ lat: 0, lon: 180, radiusKm: 0 })]);
+    assert.equal(card.impactStatus, 'likely');
+  });
+
+  await t.test('watch-radius distance remains usable at high latitude', () => {
+    const raw = nwsAreaRaw({
+      geometry: { type: 'Polygon', coordinates: [[
+        [-0.1, 79.9], [0.1, 79.9], [0.1, 80.1], [-0.1, 80.1], [-0.1, 79.9],
+      ]] },
+    });
+    const card = projectOne([areaAlert({ raw })], [place({ lat: 80, lon: 0.2, radiusKm: 3 })]);
+    assert.equal(card.impactStatus, 'possible');
+  });
+
+  await t.test('malformed nested multipolygon data fails closed', () => {
+    const raw = nwsAreaRaw({
+      geometry: { type: 'MultiPolygon', coordinates: [[null]] },
+    });
+    const card = projectOne([areaAlert({ raw })], [place({ lat: 40, lon: 40 })]);
+    assert.equal(card.impactStatus, 'unknown');
+    assert.doesNotMatch(card.impactText, /No reported overlap/i);
+  });
+});
+
 test('centroid-only and incomplete area evidence fail closed to unknown', async (t) => {
   const cases: Array<{ name: string; value: UnifiedAlert }> = [
     {
@@ -207,21 +274,19 @@ test('centroid-only and incomplete area evidence fail closed to unknown', async 
     {
       name: 'expired geometry',
       value: areaAlert({
-        raw: {
-          areaDesc: 'Test County',
+        raw: nwsAreaRaw({
           expires: new Date(NOW - 1).toISOString(),
           geometry: { type: 'Polygon', coordinates: [[[-1, -1], [1, -1], [1, 1], [-1, -1]]] },
-        },
+        }),
       }),
     },
     {
       name: 'malformed geometry',
       value: areaAlert({
-        raw: {
-          areaDesc: 'Test County',
+        raw: nwsAreaRaw({
           expires: new Date(NOW + 60_000).toISOString(),
           geometry: { type: 'Polygon', coordinates: [[[0, 0], [181, 0], [0, 1], [0, 0]]] },
-        },
+        }),
       }),
     },
   ];
@@ -231,6 +296,30 @@ test('centroid-only and incomplete area evidence fail closed to unknown', async 
       const card = projectOne([item.value], [place({ lat: 50, lon: 50 })]);
       assert.equal(card.impactStatus, 'unknown');
       assert.match(card.impactText, /Unknown — .*no complete usable impact area\./);
+      assert.doesNotMatch(card.impactText, /No reported overlap/i);
+    });
+  }
+});
+
+test('complete-negative NWS conclusions require a current live alert and fresh retrieval evidence', async (t) => {
+  const farPlace = place({ lat: 40, lon: 40, radiusKm: 5 });
+  await t.test('Update message remains eligible', () => {
+    const card = projectOne([areaAlert({ raw: nwsAreaRaw({ messageType: 'Update' }) })], [farPlace]);
+    assert.equal(card.impactStatus, 'no_reported_overlap');
+  });
+
+  const cases: Array<{ name: string; raw: Record<string, unknown> }> = [
+    { name: 'Test status', raw: nwsAreaRaw({ status: 'Test' }) },
+    { name: 'Cancel message', raw: nwsAreaRaw({ messageType: 'Cancel' }) },
+    { name: 'future sent time', raw: nwsAreaRaw({ sent: new Date(NOW + 1).toISOString() }) },
+    { name: 'future onset time', raw: nwsAreaRaw({ onset: new Date(NOW + 1).toISOString() }) },
+    { name: 'stale retrieval', raw: nwsAreaRaw({ retrievedAt: NOW - 30 * 60_000 - 1 }) },
+    { name: 'missing retrieval', raw: nwsAreaRaw({ retrievedAt: undefined }) },
+  ];
+  for (const item of cases) {
+    await t.test(item.name, () => {
+      const card = projectOne([areaAlert({ raw: item.raw })], [farPlace]);
+      assert.equal(card.impactStatus, 'unknown', `${item.name} cannot support a negative`);
       assert.doesNotMatch(card.impactText, /No reported overlap/i);
     });
   }
@@ -347,14 +436,40 @@ test('oversized geometry exhausts the bounded evaluator as unknown instead of tr
   });
   vertices.push(vertices[0]!);
   const inputAlert = areaAlert({
-    raw: {
+    raw: nwsAreaRaw({
       areaDesc: 'Oversized County',
       expires: new Date(NOW + 60_000).toISOString(),
       geometry: { type: 'Polygon', coordinates: [vertices] },
-    },
+    }),
   });
   const card = projectOne([inputAlert], [place({ lat: 20, lon: 20 })]);
 
   assert.equal(card.impactStatus, 'unknown');
   assert.doesNotMatch(card.impactText, /No reported overlap/i);
+});
+
+test('at-cap geometry across fifty saved places exhausts global work as unknown deterministically', () => {
+  const vertices = Array.from({ length: 49_999 }, (_, index) => {
+    const angle = (index / 49_999) * Math.PI * 2;
+    return [Math.cos(angle), Math.sin(angle)];
+  });
+  vertices.push(vertices[0]!);
+  const inputAlert = areaAlert({
+    raw: nwsAreaRaw({ geometry: { type: 'Polygon', coordinates: [vertices] } }),
+  });
+  const savedPlaces = Array.from({ length: 50 }, (_, index) => place({
+    id: `place-${index}`,
+    name: `Place ${index}`,
+    lat: 20 + index / 100,
+    lon: 20 + index / 100,
+    radiusKm: 1,
+    primary: index === 0,
+  }));
+
+  const first = projectOne([inputAlert], savedPlaces);
+  const second = projectOne([inputAlert], savedPlaces);
+  assert.equal(first.impactStatus, 'unknown');
+  assert.equal(second.impactStatus, 'unknown');
+  assert.equal(first.impactText, second.impactText);
+  assert.doesNotMatch(first.impactText, /No reported overlap/i);
 });

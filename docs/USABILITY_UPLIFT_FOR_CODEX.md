@@ -786,4 +786,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS — HIGH ASSURANCE | — |
+| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS — HIGH ASSURANCE | #1704 |

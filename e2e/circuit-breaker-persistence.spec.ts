@@ -94,7 +94,7 @@ test.describe('circuit breaker persistent cache', () => {
 
  const result = await page.evaluate(async () => {
  const { CircuitBreaker } = await import('/src/utils/circuit-breaker.ts');
- const { deletePersistentCache } = await import('/src/services/persistent-cache.ts');
+ const { getPersistentCache, deletePersistentCache } = await import('/src/services/persistent-cache.ts');
 
  const name = `test-ttl-${Date.now()}`;
  const cacheKey = `breaker:${name}`;
@@ -127,6 +127,10 @@ test.describe('circuit breaker persistent cache', () => {
  });
 
  let fetchCalled = false;
+ let releaseRefresh: (() => void) | null = null;
+ const refreshGate = new Promise<void>((resolve) => {
+ releaseRefresh = resolve;
+ });
  const breaker = new CircuitBreaker<{ value: number }>({
  name,
  cacheTtlMs: 5_000, // 5 second TTL — the persistent entry (2min old) is expired
@@ -136,26 +140,36 @@ test.describe('circuit breaker persistent cache', () => {
  try {
  const result = await breaker.execute(async () => {
  fetchCalled = true;
+ await refreshGate;
  return { value: 222 };
  }, { value: 0 });
 
+ const initialDataState = breaker.getDataState().mode;
+ releaseRefresh?.();
+
  // Wait for fire-and-forget write
  await new Promise((r) => setTimeout(r, 200));
+ const refreshed = await getPersistentCache<{ value: number }>(cacheKey);
 
  return {
  result: result.value,
  fetchCalled,
- dataState: breaker.getDataState().mode,
+ initialDataState,
+ refreshedValue: refreshed?.data.value ?? null,
+ refreshedDataState: breaker.getDataState().mode,
  };
  } finally {
  await deletePersistentCache(cacheKey);
  }
  });
 
- // Persistent entry was expired, so fetch MUST have been called
+ // Expired-but-usable data is returned immediately while a refresh runs in
+ // the background; the refreshed value then replaces it.
  expect(result.fetchCalled).toBe(true);
- expect(result.result).toBe(222);
- expect(result.dataState).toBe('live');
+ expect(result.result).toBe(111);
+ expect(result.initialDataState).toBe('cached');
+ expect(result.refreshedValue).toBe(222);
+ expect(result.refreshedDataState).toBe('live');
   });
 
   test('persistent entry older than 24h stale ceiling is not hydrated', async ({ page }) => {
@@ -339,12 +353,15 @@ test.describe('circuit breaker persistent cache', () => {
 
  try {
  // Fetch fails — should fall back to stale persistent data via getCachedOrDefault
+ let fetchCalled = false;
  const result = await breaker.execute(async () => {
+ fetchCalled = true;
  throw new Error('Network failure');
  }, { value: 0 });
 
  return {
  result: result.value,
+ fetchCalled,
  dataState: breaker.getDataState().mode,
  };
  } finally {
@@ -354,6 +371,7 @@ test.describe('circuit breaker persistent cache', () => {
 
  // Stale persistent data (777) is better than default (0)
  expect(result.result).toBe(777);
- expect(result.dataState).toBe('unavailable');
+ expect(result.fetchCalled).toBe(true);
+ expect(result.dataState).toBe('cached');
   });
 });

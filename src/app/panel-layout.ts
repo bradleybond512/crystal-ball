@@ -163,6 +163,10 @@ import { StatusOverlay } from '@/components/StatusOverlay';
 import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
+import {
+  projectDigestStories,
+  type DigestStorySeed,
+} from '@/services/digest-alert-projection';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
 import { startModeForecast, subscribeModeAdvisory } from '@/services/mode-forecast';
@@ -786,6 +790,14 @@ export class PanelLayoutManager implements AppModule {
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
+  private digestOverlay: DigestOverlay | null = null;
+  private digestSeeds: readonly DigestStorySeed[] = [];
+  private digestAbortController: AbortController | null = null;
+  private digestGeneration = 0;
+  private cancelScheduledDigest: (() => void) | null = null;
+  private unsubDigestAlerts: (() => void) | null = null;
+  private unsubDigestPlaces: (() => void) | null = null;
+  private _onShowDigest: (() => void) | null = null;
   private _lastViewedObserver: IntersectionObserver | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
@@ -917,6 +929,19 @@ export class PanelLayoutManager implements AppModule {
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
+ this.cancelScheduledDigest?.();
+ this.cancelScheduledDigest = null;
+ this.digestGeneration += 1;
+ this.digestAbortController?.abort();
+ this.digestAbortController = null;
+ this.unsubDigestAlerts?.();
+ this.unsubDigestAlerts = null;
+ this.unsubDigestPlaces?.();
+ this.unsubDigestPlaces = null;
+ if (this._onShowDigest) { document.removeEventListener('cb:show-digest', this._onShowDigest); this._onShowDigest = null; }
+ this.digestOverlay?.destroy();
+ this.digestOverlay = null;
+ this.digestSeeds = [];
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.unsubWeatherClearOnPlaces) { this.unsubWeatherClearOnPlaces(); this.unsubWeatherClearOnPlaces = null; }
@@ -1439,37 +1464,94 @@ export class PanelLayoutManager implements AppModule {
  };
  document.addEventListener('keydown', this._onStatusOverlayKey);
  startBlackoutSignature();
- const digestOverlay = new DigestOverlay();
- digestOverlay.mount(document.body);
+ this.digestOverlay = new DigestOverlay();
+ this.digestOverlay.mount(document.body);
+ const reprojectDigest = (): void => {
+ if (!this.digestOverlay?.isVisible() || this.digestSeeds.length === 0) return;
+ const cards = projectDigestStories({
+ seeds: this.digestSeeds,
+ alerts: unifiedAlertStore.getAll(),
+ savedPlaces: getSavedPlaces(),
+ now: Date.now(),
+ });
+ if (cards.length > 0) this.digestOverlay.update(cards);
+ else this.digestOverlay.showStatus('No recent activity to summarize.', 'empty');
+ };
+ this.unsubDigestAlerts = unifiedAlertStore.subscribe(reprojectDigest);
+ this.unsubDigestPlaces = subscribeSavedPlaces(reprojectDigest);
+
+ const requestDigest = (onDemand: boolean): void => {
+ if (onDemand) {
+ this.cancelScheduledDigest?.();
+ this.cancelScheduledDigest = null;
+ }
+ this.digestGeneration += 1;
+ const generation = this.digestGeneration;
+ this.digestAbortController?.abort();
+ const controller = new AbortController();
+ this.digestAbortController = controller;
+ this.digestSeeds = [];
+ if (onDemand) this.digestOverlay?.showStatus('Generating brief…', 'loading');
+
+ void generateDigest(controller.signal).then((generatedCards) => {
+ if (this.destroyed || controller.signal.aborted || generation !== this.digestGeneration) return;
+ this.digestAbortController = null;
+ if (generatedCards.length === 0) {
+ if (onDemand) this.digestOverlay?.showStatus('No recent activity to summarize.', 'empty');
+ return;
+ }
+ this.digestSeeds = generatedCards.map(({ id, alertIds, headline, narrative }) => ({
+ id,
+ alertIds: [...alertIds],
+ headline,
+ narrative,
+ }));
+ const cards = projectDigestStories({
+ seeds: this.digestSeeds,
+ alerts: unifiedAlertStore.getAll(),
+ savedPlaces: getSavedPlaces(),
+ now: Date.now(),
+ });
+ if (cards.length === 0) {
+ if (onDemand) this.digestOverlay?.showStatus('No recent activity to summarize.', 'empty');
+ return;
+ }
+ const overlay = this.digestOverlay;
+ if (!overlay) return;
+ overlay.show(cards);
+ markDigestShown();
+ }).catch((error: unknown) => {
+ if (this.destroyed || controller.signal.aborted || generation !== this.digestGeneration) return;
+ this.digestAbortController = null;
+ console.warn(`[digest] ${onDemand ? 'on-demand' : 'proactive'} brief generation failed:`, error);
+ this.digestOverlay?.showStatus(onDemand
+ ? 'Brief unavailable — try again shortly.'
+ : 'Brief unavailable.', 'error');
+ });
+ };
  // Proactive digest — once per 8h. Dashboard is interactive first: defer to an
  // idle callback (setTimeout fallback) so digest generation never competes with
  // boot, and it simply appears when ready.
  if (shouldShowDigest()) {
  const runDigest = (): void => {
- void generateDigest().then(text => {
- if (!text) return;
- markDigestShown();
- digestOverlay.show(text);
- }).catch((error: unknown) => {
- console.warn('[digest] proactive brief generation failed:', error);  
- digestOverlay.show('Brief unavailable.');
- });
+ this.cancelScheduledDigest = null;
+ if (!this.destroyed) requestDigest(false);
  };
- const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
- if (typeof ric === 'function') ric(runDigest, { timeout: 60_000 });
- else window.setTimeout(runDigest, 30_000);
+ const idleWindow = window as unknown as {
+ requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+ cancelIdleCallback?: (id: number) => void;
+ };
+ if (typeof idleWindow.requestIdleCallback === 'function') {
+ const idleId = idleWindow.requestIdleCallback(runDigest, { timeout: 60_000 });
+ this.cancelScheduledDigest = () => idleWindow.cancelIdleCallback?.(idleId);
+ } else {
+ const timeoutId = window.setTimeout(runDigest, 30_000);
+ this.cancelScheduledDigest = () => window.clearTimeout(timeoutId);
+ }
  }
  // On-demand digest (triggered from Cmd+K "brief").
- document.addEventListener('cb:show-digest', () => {
-   digestOverlay.show('Generating brief…');
-   void generateDigest().then(text => {
-     if (text) { markDigestShown(); digestOverlay.show(text); }
-     else digestOverlay.show('No recent activity to summarize.');
-   }).catch((error: unknown) => {
-     console.warn('[digest] on-demand brief generation failed:', error);  
-     digestOverlay.show('Brief unavailable — try again shortly.');
-   });
- });
+ this._onShowDigest = () => requestDigest(true);
+ document.addEventListener('cb:show-digest', this._onShowDigest);
 
  // Mount Today view + wire ⌘⇧T toggle
  const todayView = new TodayView();

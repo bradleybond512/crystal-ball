@@ -70,6 +70,12 @@ export interface MapContainerState {
   timeRange: TimeRange;
 }
 
+interface PendingMapCenter {
+  lat: number;
+  lon: number;
+  zoom?: number;
+}
+
 interface TechEventMarker {
   id: string;
   title: string;
@@ -91,6 +97,7 @@ export class MapContainer {
   private container: HTMLElement;
   private isMobile: boolean;
   private deckGLMap: DeckGLMapType | null = null;
+  private pendingCenter: PendingMapCenter | null = null;
   private pendingFireworkForecast: import('@/services/firework-smoke').SmokeForecastState | null = null;
   private activeLifelinesOverlay: LocalLogisticsSnapshot | null = null;
   private activeEvacRoute: EvacRoute | null = null;
@@ -148,6 +155,7 @@ export class MapContainer {
  // clear partial deck.gl nodes before creating the SVG fallback.
  this.container.innerHTML = '';
  this.svgMap = new MapComponent(this.container, this.initialState);
+ this.replayPendingCenter();
  if (this.activeLifelinesOverlay) this.svgMap.setLifelinesOverlay(this.activeLifelinesOverlay);
  if (this.activeEvacRoute) this.svgMap.setEvacRoute(this.activeEvacRoute);
  this.renderMissionOverlayStatus();
@@ -175,6 +183,7 @@ export class MapContainer {
  ...this.initialState,
  view: this.initialState.view as DeckMapView,
  });
+ this.replayPendingCenter();
  if (this.pendingFireworkForecast) {
  this.deckGLMap.setFireworkForecast(this.pendingFireworkForecast);
  this.pendingFireworkForecast = null;
@@ -224,11 +233,47 @@ export class MapContainer {
 
   public setCenter(lat: number, lon: number, zoom?: number): void {
  if (this.useDeckGL) {
- this.deckGLMap?.setCenter(lat, lon, zoom);
- } else {
- this.svgMap?.setCenter(lat, lon);
- if (zoom != undefined) this.svgMap?.setZoom(zoom);
+ if (this.deckGLMap) {
+ this.deckGLMap.setCenter(lat, lon, zoom);
+ } else if (this.isValidCenter(lat, lon)) {
+ this.pendingCenter = {
+ lat,
+ lon,
+ ...(zoom !== undefined && Number.isFinite(zoom) && { zoom }),
+ };
  }
+ } else {
+ if (this.svgMap) {
+ this.svgMap.setCenter(lat, lon);
+ if (zoom != undefined) this.svgMap.setZoom(zoom);
+ } else if (this.isValidCenter(lat, lon)) {
+ this.pendingCenter = {
+ lat,
+ lon,
+ ...(zoom !== undefined && Number.isFinite(zoom) && { zoom }),
+ };
+ }
+ }
+  }
+
+  private isValidCenter(lat: number, lon: number): boolean {
+ return Number.isFinite(lat) && lat >= -90 && lat <= 90
+   && Number.isFinite(lon) && lon >= -180 && lon <= 180;
+  }
+
+  private replayPendingCenter(): void {
+ const pending = this.pendingCenter;
+ if (!pending) return;
+ if (this.useDeckGL) {
+ if (!this.deckGLMap) return;
+ this.deckGLMap.setCenter(pending.lat, pending.lon, pending.zoom);
+ this.pendingCenter = null;
+ return;
+ }
+ if (!this.svgMap) return;
+ this.svgMap.setCenter(pending.lat, pending.lon);
+ if (pending.zoom !== undefined) this.svgMap.setZoom(pending.zoom);
+ this.pendingCenter = null;
   }
 
   /** Replace the transient Lifelines map layer with one explicitly selected place. */
@@ -317,6 +362,9 @@ export class MapContainer {
   }
 
   public getCenter(): { lat: number; lon: number } | null {
+ if (this.pendingCenter) {
+ return { lat: this.pendingCenter.lat, lon: this.pendingCenter.lon };
+ }
  if (this.useDeckGL) {
  return this.deckGLMap?.getCenter() ?? null;
  }
@@ -347,11 +395,18 @@ export class MapContainer {
   }
 
   public getState(): MapContainerState {
+ let state: MapContainerState;
  if (this.useDeckGL) {
- const state = this.deckGLMap?.getState();
- return state ? { ...state, view: state.view as MapView } : this.initialState;
+ const deckState = this.deckGLMap?.getState();
+ state = deckState ? { ...deckState, view: deckState.view as MapView } : this.initialState;
+ } else {
+ state = this.svgMap?.getState() ?? this.initialState;
  }
- return this.svgMap?.getState() ?? this.initialState;
+ if (!this.pendingCenter) return state;
+ return {
+ ...state,
+ ...(this.pendingCenter.zoom !== undefined && { zoom: this.pendingCenter.zoom }),
+ };
   }
 
   // Data setters
@@ -914,6 +969,7 @@ export class MapContainer {
  this.missionOverlayStatus = null;
  this.deckGLMap?.destroy();
  this.svgMap?.destroy();
+ this.pendingCenter = null;
  this.deckGLMap = null;
  this.svgMap = null;
   }

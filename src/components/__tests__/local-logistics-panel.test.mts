@@ -239,6 +239,19 @@ function requiredElement<T extends Element>(root: ParentNode, selector: string):
   return element;
 }
 
+async function requiredElementEventually<T extends Element>(
+  root: ParentNode,
+  selector: string,
+): Promise<T> {
+  const deadline = Date.now() + 2_000;
+  do {
+    const element = root.querySelector<T>(selector);
+    if (element) return element;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  } while (Date.now() < deadline);
+  return requiredElement<T>(root, selector);
+}
+
 async function settleRender(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 180));
 }
@@ -538,7 +551,7 @@ test('expired hotel card composes expiry and omits missing or malformed call con
   panel.setPlaceId(place.id);
   await settleRender();
 
-  const card = requiredElement<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="hotel-no-phone"]');
+  const card = await requiredElementEventually<HTMLElement>(panel.getContentElement(), '[data-logistics-node-card="hotel-no-phone"]');
   const text = card.textContent ?? '';
   assert.match(text, /Verification expired/);
   assert.match(text, /Directory listing only/);

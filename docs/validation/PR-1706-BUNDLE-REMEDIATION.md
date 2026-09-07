@@ -227,3 +227,75 @@ code is unchanged in this PR.
 The actual Claude conclusion must be recorded in a new SHA-pinned verdict-only
 commit after final review. Required GitHub checks and closeout remain necessary;
 local results do not establish that CI passed or that the PR merged.
+
+## CI suite registration repair
+
+The first fresh GitHub run at `a11384aefe65bbe7edfa76cbc7af0ee9f18d2283`
+passed `bundle-size`, `npm-audit`, ESLint, and the cross-agent verdict check.
+`targeted-tests` run `34089791292` failed before running suites because the new
+config test was absent from an explicitly listed npm suite:
+
+```text
+  - src/config/__tests__/story-renderer-chunk.test.mts (NEW GAP)
+```
+
+The existing `test:renderer` glob runs this test locally but does not give the
+CI selector an exact file mapping. Commit
+`e97b7e03a04339edef763a3ab0a04499a51f4aa8` adds only:
+
+```json
+"test:story-renderer-chunk": "tsx --test src/config/__tests__/story-renderer-chunk.test.mts"
+```
+
+No selector, coverage baseline, test assertion, or production code changed.
+`npm run test:story-renderer-chunk` exited 0 with actual output:
+
+```text
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+```
+
+`bash scripts/agentic-validate.sh --tests 'test:story-renderer-chunk'` then
+exited 0, rerunning the registered suite, both type checks, strict lint, secret
+scan, documentation/roadmap checks, and build. Raw conclusion:
+
+```text
+Agentic validation gate passed.
+Tests run: test:story-renderer-chunk
+```
+
+Registration mutation proof began on that clean commit. The inspected diff
+removed only this script entry:
+
+```diff
+-    "test:story-renderer-chunk": "tsx --test src/config/__tests__/story-renderer-chunk.test.mts",
+```
+
+The mutated selector's raw failure excerpt:
+
+```text
+  - src/config/__tests__/story-renderer-chunk.test.mts (NEW GAP)
+  - tests/bundle-size.test.mjs (baselined)
+[targeted-tests] FAIL: changed source file(s) have no targeted suite and are not in the coverage baseline: src/config/__tests__/story-renderer-chunk.test.mts — add a suite, an OVERRIDES entry, or a reviewed baseline line (scripts/targeted-tests-baseline.txt).
+```
+
+`node scripts/targeted-tests.mjs --list` changed
+from exit 0 / 26 selected scripts to exit 1 / 25 selected scripts and reported
+the same `NEW GAP`. Restoration returned exit 0 / 26 selected scripts, including
+`test:story-renderer-chunk`. These are selection counts, not claims that 26
+suites executed locally. The sole remaining unmapped warning is the previously
+baselined `tests/bundle-size.test.mjs`.
+
+The package file's SHA-256 matched before and after restoration:
+`e64d84d37742744bb25a432efed745ff8dd0ca7bdf3da40f4a5747d14567019b`.
+Git status was empty after restoring. Raw evidence is in
+`/tmp/pr1706-registration-mutation.diff`,
+`/tmp/pr1706-registration-mutation-red.log`,
+`/tmp/pr1706-registration-restored-selector.log`, and
+`/tmp/pr1706-registration-restored.json`.
+
+Auto-merge was disabled during this repair. The previous verdict cannot cover
+the registration commit; repeat independent and actual Claude review, record a
+new verdict, and rerun closeout and required CI before merging.

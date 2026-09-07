@@ -245,7 +245,7 @@
     "cross-env": "^10.1.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.3.0",
-    "eslint-plugin-sonarjs": "^4.0.3",
+    "eslint-plugin-sonarjs": "^4.2.0",
     "eslint-plugin-unicorn": "^63.0.0",
     "happy-dom": "^20.10.4",
     "lint-staged": "^17.3.0",

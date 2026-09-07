@@ -226,3 +226,21 @@ Tests run: test:renderer test:e2e:runtime test:e2e:full test:e2e:happy
 ```
 
 The gate then passed lockfile validation, strict lint, both TypeScript projects, secret scanning, cross-agent readiness, documentation freshness, roadmap integrity, and the production build. The Full-variant run recovered one initial map-harness readiness miss on its configured retry; the retry and all remaining tests passed.
+
+After human authorization for one additional evidence-only cycle, the exact same required gate was rerun from clean tip `931282f42`, with its complete terminal transcript retained. The Full-variant portion produced this verbatim final summary:
+
+```text
+Running 89 tests using 1 worker
+
+  9 skipped
+  80 passed (13.8m)
+```
+
+No Full-variant test failed or retried in this run. The remaining Happy-variant tests and the aggregate gate then concluded with these verbatim lines:
+
+```text
+  8 passed (27.8s)
+
+Agentic validation gate passed.
+Tests run: test:renderer test:e2e:runtime test:e2e:full test:e2e:happy
+```

@@ -26,6 +26,60 @@ body.is-desktop-macos[data-theme="light"] .app-root {
   background: rgba(242, 242, 247, 0.55);
 }
 
+/* Native vibrancy supplies the target window material. Remove only the
+ * redundant viewport-sized CSS blur while preserving a dark root tint. */
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .app-root {
+  background: var(--ux025-root-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos {
+    --ux025-root-bg: var(--ux025-canvas);
+    --ux025-chrome-bg: var(--ux025-chrome-fallback);
+    --ux025-raised-bg: var(--ux025-raised-fallback);
+    --ux025-blur-chrome: none;
+    --ux025-blur-raised: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos {
+    --ux025-root-bg: var(--ux025-canvas);
+    --ux025-chrome-bg: var(--ux025-chrome-fallback);
+    --ux025-raised-bg: var(--ux025-raised-fallback);
+    --ux025-blur-chrome: none;
+    --ux025-blur-raised: none;
+    --ux025-edge-specular: var(--ux025-edge-contrast-specular);
+    --ux025-edge-perimeter: var(--ux025-edge-contrast-perimeter);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos {
+    --ux025-control-press-scale: 1;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos {
+    --ux025-canvas: Canvas;
+    --ux025-solid-1: Canvas;
+    --ux025-solid-2: Canvas;
+    --ux025-solid-3: Canvas;
+    --ux025-chrome-fallback: Canvas;
+    --ux025-raised-fallback: Canvas;
+    --ux025-root-bg: Canvas;
+    --ux025-chrome-bg: Canvas;
+    --ux025-raised-bg: Canvas;
+    --ux025-blur-chrome: none;
+    --ux025-blur-raised: none;
+    --ux025-edge-specular: none;
+    --ux025-edge-perimeter: none;
+  }
+}
+
 /* Title-bar drag region — leaves an 80px safe zone for the macOS
  * traffic-light buttons at the top-left. Tauri's `data-tauri-drag-region`
  * attribute is the official drag mechanism in Tauri 2; the

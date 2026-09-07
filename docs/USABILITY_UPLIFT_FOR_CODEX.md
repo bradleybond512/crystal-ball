@@ -707,6 +707,38 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   failing assertions, full restored SHA-256 values, and quoted validation output
   are recorded in `docs/validation/UX-024-MUTATION-PROOFS.md`.
 
+### UX-025 — Smoked Liquid Glass desktop visual system
+
+Give the Full dark macOS desktop shell a darker, calmer, Liquid
+Glass-inspired hierarchy without changing intelligence content, semantic color,
+map behavior, light mode, or non-Full variants.
+
+- **Change surface:** scoped `--ux025-*` material tokens, the Full dark desktop
+  root/chrome gate, one Home readiness-and-briefing island, classic sidebar and
+  toolbar chrome, grouped map controls, and reachable foreground sheets.
+- **Material boundary:** glass belongs only to declared navigation and grouped
+  chrome containers. Cards, bands, panels, tables, charts, alert prose, and
+  individual controls remain solid. Shared `--mat-*`, `--hs-*`, semantic, and
+  variant tokens remain unchanged so EEW and other excluded modes do not drift.
+- **Accessibility and performance:** solid fail-closed fallbacks cover Reduce
+  Transparency, Increase Contrast, Reduce Motion, forced colors, and unsupported
+  filters. Home has three persistent target blur nodes, no declared state exceeds
+  eight, and no target blur is nested.
+- **Non-goals:** native AppKit/SwiftUI reconstruction, specialist modes, light,
+  Tech, Finance, Happy, mobile, semantic/map colors, data behavior, and wholesale
+  panel-interior restyling.
+- **Done when:** deterministic offline tests prove material scoping, protected
+  solid content, contrast, focus, target sizes, variant isolation, and blur
+  budgets; a SHA-pinned packaged comparison is accepted before propagation; the
+  candidate meets locked CSS/JS, CPU, frame, and memory non-regression gates.
+- **Verify:** `npm run test:smoked-glass`, deterministic Playwright coverage,
+  `npm run test:homeshell`, `npm run test:renderer`, `npm run test:settings`,
+  `npm run typecheck:all`, all variant builds, bundle/CSS budgets, mutation
+  proofs, the agentic validation gate, packaged macOS evidence, independent
+  review, and the required Claude SHA-pinned verdict.
+- **Plan:**
+  `docs/superpowers/plans/2026-08-31-ux-025-smoked-liquid-glass.md`.
+
 ---
 
 ## What was NOT verified
@@ -755,3 +787,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
+| UX-025 | Smoked Liquid Glass desktop visual system | IN PROGRESS | #1695 |

@@ -1,8 +1,7 @@
-/* Home Shell — Apple design language (Cupertino Glass + Graphite).
-   Palette + DL tokens live in tokens.css. Glass is scoped to
-   body.is-desktop-macos and capped to the spec's six-surface budget:
-   bands, ribbon, dossier, focus frame (+ Library, ⌘K elsewhere).
-   Deck cards are deliberately SOLID (dozens alive at once). */
+/* Home Shell — Apple design language (Smoked Liquid Glass + Graphite).
+   Palette + material tokens live in tokens.css. UX-025 glass is scoped to
+   Full dark desktop and capped to three persistent surfaces: topbar,
+   intelligence island, and ribbon. Inner wells and cards stay solid. */
 
 .home-shell {
   position: fixed;
@@ -109,6 +108,14 @@ body.is-desktop-macos .home-shell-topbar {
   padding-left: 80px;
 }
 
+.home-shell-intel-island {
+  width: min(680px, calc(100% - 36px));
+  margin: 8px 18px;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: var(--r-xl);
+}
+
 .home-shell-brand {
   font-size: var(--text-base);
   font-weight: 600;
@@ -147,8 +154,7 @@ body.is-desktop-macos .home-shell-topbar {
 .home-shell-library:hover { color: var(--hs-fg); background: var(--accent-selection); }
 
 .home-shell-readiness-slot {
-  width: min(680px, calc(100% - 36px));
-  margin: 8px 18px 0;
+  width: 100%;
 }
 
 .home-shell-readiness {
@@ -220,7 +226,7 @@ body.is-desktop-macos .home-shell-topbar {
 
 .home-shell-briefing {
   width: 300px;
-  margin: 8px 18px;
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -234,21 +240,10 @@ body.is-desktop-macos .home-shell-topbar {
   box-shadow: var(--e-1), var(--edge-highlight);
 }
 
-body.is-desktop-macos .hs-band {
-  background: var(--mat-chrome-bg);
-  -webkit-backdrop-filter: var(--mat-blur-chrome);
-  backdrop-filter: var(--mat-blur-chrome);
-  box-shadow: var(--e-1), var(--edge-hairline);
-}
-
 /* Tone = soft wash over the surface, not a colored outline. */
 .hs-tone-critical { background: linear-gradient(180deg, rgba(var(--hs-bad-rgb), 0.14), rgba(var(--hs-bad-rgb), 0.05)), var(--mat-solid-1); }
 .hs-tone-elevated { background: linear-gradient(180deg, rgba(var(--hs-warn-rgb), 0.12), rgba(var(--hs-warn-rgb), 0.04)), var(--mat-solid-1); }
 .hs-tone-clear { background: linear-gradient(180deg, rgba(var(--hs-ok-rgb), 0.08), rgba(var(--hs-ok-rgb), 0.02)), var(--mat-solid-1); }
-
-body.is-desktop-macos .hs-tone-critical { background: linear-gradient(180deg, rgba(var(--hs-bad-rgb), 0.14), rgba(var(--hs-bad-rgb), 0.05)), var(--mat-chrome-bg); }
-body.is-desktop-macos .hs-tone-elevated { background: linear-gradient(180deg, rgba(var(--hs-warn-rgb), 0.12), rgba(var(--hs-warn-rgb), 0.04)), var(--mat-chrome-bg); }
-body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(var(--hs-ok-rgb), 0.08), rgba(var(--hs-ok-rgb), 0.02)), var(--mat-chrome-bg); }
 
 .hs-band-label {
   font-size: var(--text-xs);
@@ -499,12 +494,6 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
   pointer-events: auto; /* re-enable inside the pointer-events:none scroll */
 }
 
-body.is-desktop-macos .home-shell-ribbon {
-  background: var(--mat-chrome-bg);
-  -webkit-backdrop-filter: var(--mat-blur-chrome);
-  backdrop-filter: var(--mat-blur-chrome);
-}
-
 .hs-ribbon-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .hs-ribbon-ok { background: var(--hs-ok); }
 .hs-ribbon-warn { background: var(--hs-warn); }
@@ -549,13 +538,6 @@ body.is-desktop-macos .home-shell-ribbon {
   flex-direction: column;
   font-family: var(--font-ui);
   overflow: hidden;
-}
-
-body.is-desktop-macos .hs-dossier {
-  background: var(--mat-raised-bg);
-  -webkit-backdrop-filter: var(--mat-blur-raised);
-  backdrop-filter: var(--mat-blur-raised);
-  box-shadow: var(--e-4), var(--edge-hairline);
 }
 
 .hs-dossier--open { transform: translateX(0); opacity: 1; pointer-events: auto; }
@@ -714,13 +696,6 @@ body.is-desktop-macos .hs-dossier {
   overflow: hidden;
 }
 
-body.is-desktop-macos .hs-focus {
-  background: var(--mat-raised-bg);
-  -webkit-backdrop-filter: var(--mat-blur-raised);
-  backdrop-filter: var(--mat-blur-raised);
-  box-shadow: var(--e-4), var(--edge-hairline);
-}
-
 .hs-focus--open { transform: translateY(0); opacity: 1; pointer-events: auto; }
 
 .hs-focus-header {
@@ -767,6 +742,118 @@ body.is-desktop-macos .hs-focus {
   --surface: var(--hs-bg-card);
   --border: rgba(var(--hs-white-rgb), 0.12);
   --text: var(--hs-fg);
+}
+
+/* UX-025 is intentionally isolated from light mode and specialist variants.
+   Only the three shell-level planes blur; every nested information surface is
+   opaque so loading, empty, degraded, and error copy remains self-contained. */
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell {
+  background: var(--ux025-canvas);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-topbar,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-intel-island,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-ribbon {
+  background: var(--ux025-chrome-bg);
+  -webkit-backdrop-filter: var(--ux025-blur-chrome);
+  backdrop-filter: var(--ux025-blur-chrome);
+  box-shadow: var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-readiness,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-band,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-contextual,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-deck {
+  background: var(--ux025-solid-1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-readiness,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-band {
+  border-radius: var(--r-md);
+  box-shadow: var(--e-1), var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-contextual-card,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-card {
+  background: var(--ux025-solid-2);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--e-2), var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-readiness-loading {
+  background: linear-gradient(180deg, rgba(var(--hs-warn-rgb), 0.08), rgba(var(--hs-warn-rgb), 0.02)), var(--ux025-solid-1);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-readiness-attention {
+  background: linear-gradient(180deg, rgba(var(--hs-bad-rgb), 0.1), rgba(var(--hs-bad-rgb), 0.03)), var(--ux025-solid-1);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-tone-critical {
+  background: linear-gradient(180deg, rgba(var(--hs-bad-rgb), 0.14), rgba(var(--hs-bad-rgb), 0.05)), var(--ux025-solid-1);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-tone-elevated {
+  background: linear-gradient(180deg, rgba(var(--hs-warn-rgb), 0.12), rgba(var(--hs-warn-rgb), 0.04)), var(--ux025-solid-1);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-tone-clear {
+  background: linear-gradient(180deg, rgba(var(--hs-ok-rgb), 0.08), rgba(var(--hs-ok-rgb), 0.02)), var(--ux025-solid-1);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-card-error {
+  background: linear-gradient(180deg, rgba(var(--hs-bad-rgb), 0.12), rgba(var(--hs-bad-rgb), 0.04)), var(--ux025-solid-2);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-card-stale {
+  background: linear-gradient(180deg, rgba(var(--hs-warn-rgb), 0.1), rgba(var(--hs-warn-rgb), 0.03)), var(--ux025-solid-2);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier.hs-dossier--open,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-focus.hs-focus--open {
+  background: var(--ux025-raised-bg);
+  -webkit-backdrop-filter: var(--ux025-blur-raised);
+  backdrop-filter: var(--ux025-blur-raised);
+  box-shadow: var(--e-4), var(--ux025-edge-specular), var(--ux025-edge-perimeter);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-focus-body .panel {
+  --surface: var(--ux025-solid-2);
+  background: var(--ux025-solid-2);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-cmdk,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-library,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-exit,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-deck-hint,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-readiness-actions button,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-band-link,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-contextual-open,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-card-actions button,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier-actions button,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier-more,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier-followups button,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-focus-actions button {
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-cmdk:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-library:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-exit:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .home-shell-deck-hint:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-readiness-actions button:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-band-link:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-contextual-open:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-card-actions button:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier-actions button:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier-more:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-dossier-followups button:active,
+:root[data-theme="dark"]:not([data-variant="tech"]):not([data-variant="finance"]):not([data-variant="happy"]) body.is-desktop-macos .hs-focus-actions button:active {
+  transform: scale(var(--ux025-control-press-scale));
 }
 
 /* Reduced motion: designed alternates — near-instant, opacity only,

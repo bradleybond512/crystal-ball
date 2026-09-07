@@ -64,7 +64,7 @@ chunks: 108
 ✓ All bundle-size policies satisfied.
 ```
 
-The main limit remains 460.0 KB; no budget or baseline was changed. Derived targeted-test selection against canonical `macos/main` includes the new dedicated suite and reports `unmapped: []` (34 selected scripts). This is mapping evidence, not a claim that all 34 aliases were separately executed locally.
+The main limit remains 460.0 KB; no budget or baseline was changed. Derived targeted-test selection against canonical `macos/main` includes the new dedicated suite and reports no unmapped source paths. This is mapping evidence, not a claim that every selected alias was separately executed locally.
 
 ## Mutation proofs
 
@@ -86,6 +86,33 @@ Restored SHA256 values:
 DOM tests were first run after implementation; the removed-note red below supplies the required regression proof rather than claiming an earlier DOM red.
 
 ### wording mutation
+
+First raw failing assertion:
+
+```text
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+        'No saved places for a local assessment.',
+        'Change digest unavailable',
+    +   'Nothing critical worldwide.'
+    -   'No critical items in available reports.'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'No saved places for a local assessment.'
+    1: 'Change digest unavailable'
+    2: 'No critical items in available reports.'
+  actual:
+    0: 'No saved places for a local assessment.'
+    1: 'Change digest unavailable'
+    2: 'Nothing critical worldwide.'
+  operator: 'deepStrictEqual'
+```
 
 ```diff
 diff --git a/src/services/home-shell/briefing-view.ts b/src/services/home-shell/briefing-view.ts
@@ -139,6 +166,32 @@ not ok 23 - critical impact with zero exposures is not counted as personal
 
 ### notes mutation
 
+First raw failing assertion:
+
+```text
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+    +   undefined,
+    +   undefined,
+    +   undefined
+    -   'Available reports only · coverage unverified · evidence age unknown.',
+    -   'Recorded changes only · source coverage and evidence age unverified. Review source status before relying on this summary.',
+    -   'Available reports only · coverage unverified · evidence age unknown. Review source status before relying on this summary.'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'Available reports only · coverage unverified · evidence age unknown.'
+    1: 'Recorded changes only · source coverage and evidence age unverified. Review source status before relying on this summary.'
+    2: 'Available reports only · coverage unverified · evidence age unknown. Review source status before relying on this summary.'
+  actual:
+  operator: 'deepStrictEqual'
+```
+
 ```diff
 diff --git a/src/components/HomeShellOverlay.ts b/src/components/HomeShellOverlay.ts
 index 1188c4e36..293fa1fc4 100644
@@ -169,6 +222,35 @@ not ok 6 - removing a saved place invalidates its previous personal match while 
 ```
 
 ### age mutation
+
+First raw failing assertion:
+
+```text
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+    +   'Last good: 1788782400000',
+    +   'Last good: 1788782400000',
+    +   'Last good: 1788782400000'
+    -   'Available reports only · coverage unverified · evidence age unknown.',
+    -   'Recorded changes only · source coverage and evidence age unverified. Review source status before relying on this summary.',
+    -   'Available reports only · coverage unverified · evidence age unknown. Review source status before relying on this summary.'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'Available reports only · coverage unverified · evidence age unknown.'
+    1: 'Recorded changes only · source coverage and evidence age unverified. Review source status before relying on this summary.'
+    2: 'Available reports only · coverage unverified · evidence age unknown. Review source status before relying on this summary.'
+  actual:
+    0: 'Last good: 1788782400000'
+    1: 'Last good: 1788782400000'
+    2: 'Last good: 1788782400000'
+  operator: 'deepStrictEqual'
+```
 
 ```diff
 diff --git a/src/services/home-shell/briefing-view.ts b/src/services/home-shell/briefing-view.ts
@@ -212,6 +294,33 @@ not ok 27 - critical threshold, descending event order, deduplication and four-e
 ```
 
 ### places mutation
+
+First raw failing assertion:
+
+```text
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+    +   'No personal impacts identified in available reports.',
+    -   'No saved places for a local assessment.',
+        'Change digest unavailable',
+        'No critical items in available reports.'
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'No saved places for a local assessment.'
+    1: 'Change digest unavailable'
+    2: 'No critical items in available reports.'
+  actual:
+    0: 'No personal impacts identified in available reports.'
+    1: 'Change digest unavailable'
+    2: 'No critical items in available reports.'
+  operator: 'deepStrictEqual'
+```
 
 ```diff
 diff --git a/src/services/home-shell/briefing-view.ts b/src/services/home-shell/briefing-view.ts
@@ -281,3 +390,63 @@ Rollback involves no migration. Repair or revert a faulty rendering change while
 
 Implementation commit: `Keep Home reassurance within available evidence`.
 Draft PR description: Home previously treated empty matched reports and successful recalculation as reassurance. This change keeps three evidence-scoped bands visible, distinguishes no saved places from unavailable/empty reports, and preserves detected threats. Automated, mutation, browser and build checks pass; packaged-runtime acceptance remains pending.
+
+## Targeted-test mapping transcript
+
+Executed with `node --input-type=module` from the worktree:
+
+```javascript
+import {execFileSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {deriveScriptIndex,selectScripts} from './scripts/targeted-tests.mjs';
+const files=execFileSync('git',['diff','--name-only','macos/main...HEAD'],{encoding:'utf8'}).trim().split('\n');
+const main=JSON.parse(execFileSync('git',['show','macos/main:package.json'],{encoding:'utf8'}));
+const pr=JSON.parse(readFileSync('package.json','utf8'));
+const a=selectScripts(files,deriveScriptIndex(main.scripts));
+const b=selectScripts(files,deriveScriptIndex(pr.scripts));
+console.log(JSON.stringify({scripts:[...new Set([...a.scripts,...b.scripts])].sort(),unmapped:a.unmapped.filter(x=>b.unmapped.includes(x))},null,2));
+```
+
+Actual output:
+
+```json
+{
+  "scripts": [
+    "test:algorithms",
+    "test:components",
+    "test:emergency-pack",
+    "test:emergency-readiness",
+    "test:event-store",
+    "test:feed-health",
+    "test:feed-health-dashboard",
+    "test:firms",
+    "test:home-reassurance",
+    "test:insights",
+    "test:lifelines",
+    "test:lifelines-grid",
+    "test:lifelines-map",
+    "test:little-snitch",
+    "test:maritime",
+    "test:notification-history",
+    "test:notifications",
+    "test:openaq",
+    "test:reasoning",
+    "test:review-trail",
+    "test:roadmap-controller",
+    "test:rules-engine",
+    "test:satellite",
+    "test:security",
+    "test:settings",
+    "test:situations",
+    "test:survival",
+    "test:ucdp-provider",
+    "test:ux010",
+    "test:ux011",
+    "test:watchboard",
+    "test:weather",
+    "test:webcams",
+    "test:wildfire"
+  ],
+  "unmapped": []
+}
+```

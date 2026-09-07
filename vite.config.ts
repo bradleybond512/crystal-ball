@@ -1066,6 +1066,7 @@ export default defineConfig({
  return 'cesium';
  }
  }
+ if (id.endsWith('/src/services/story-renderer.ts')) return 'story-renderer';
  // Panel chunk split — per
  // docs/CLAUDE_FUNCTIONALITY_DIAGNOSTICS_PERFORMANCE_ROADMAP_2026-04-29.md
  // Priority 7. The single 'panels' chunk used to hold every

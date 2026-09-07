@@ -86,35 +86,46 @@ test.describe('desktop runtime routing guardrails', () => {
  const globalWindow = window as unknown as Record<string, unknown>;
  const originalFetch = window.fetch.bind(window);
 
- const calls: string[] = [];
+	const calls: Array<{
+	  pathname: string;
+	  search: string;
+	  isLocal: boolean;
+	  cloudApiKey: string | null;
+	}> = [];
  const responseJson = (body: unknown, status = 200) =>
  new Response(JSON.stringify(body), {
  status,
  headers: { 'content-type': 'application/json' },
  });
 
- window.fetch = (async (input: RequestInfo | URL) => {
- const url =
- typeof input === 'string'
- ? input
- : input instanceof URL
- ? input.toString()
- : input.url;
+	window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+	  const rawUrl =
+		typeof input === 'string'
+		  ? input
+		  : input instanceof URL
+			? input.toString()
+			: input.url;
+	  const url = new URL(rawUrl, location.origin);
+	  const isLocal = url.hostname === '127.0.0.1' && url.port === '46123';
+	  calls.push({
+		pathname: url.pathname,
+		search: url.search,
+		isLocal,
+		cloudApiKey: new Headers(init?.headers).get('X-CrystalBall-Key'),
+	  });
 
- calls.push(url);
+	  if (isLocal && url.pathname === '/api/fred-data') {
+		return responseJson({ error: 'missing local api key' }, 500);
+	  }
+	  if (!isLocal && url.pathname === '/api/fred-data') {
+		return responseJson({ observations: [{ value: '321.5' }] }, 200);
+	  }
 
- if (url.includes('127.0.0.1:46123/api/fred-data')) {
- return responseJson({ error: 'missing local api key' }, 500);
- }
- if (url.includes('crystalball.app/api/fred-data')) {
- return responseJson({ observations: [{ value: '321.5' }] }, 200);
- }
-
- if (url.includes('127.0.0.1:46123/api/stablecoin-markets')) {
- throw new Error('ECONNREFUSED');
- }
- if (url.includes('crystalball.app/api/stablecoin-markets')) {
- return responseJson({ stablecoins: [{ symbol: 'USDT' }] }, 200);
+	  if (isLocal && url.pathname === '/api/stablecoin-markets') {
+		return responseJson({ error: 'local sidecar unavailable' }, 503);
+	  }
+	  if (!isLocal && url.pathname === '/api/stablecoin-markets') {
+		return responseJson({ stablecoins: [{ symbol: 'USDT' }] }, 200);
  }
 
  return responseJson({ ok: true }, 200);
@@ -124,9 +135,9 @@ test.describe('desktop runtime routing guardrails', () => {
  globalWindow.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
  delete globalWindow.__wmFetchPatched;
 
- // Set a valid WM API key so cloud fallback is allowed
- await webSecretStore.createVault('runtime-e2e-vault-passphrase');
- await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, 'wm_test_key_1234567890abcdef');
+	const testKey = 'wm_test_key_1234567890abcdef';
+	await webSecretStore.createVault('runtime-e2e-vault-passphrase');
+	await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, testKey);
 
  try {
  runtime.installRuntimeFetchPatch();
@@ -162,10 +173,16 @@ test.describe('desktop runtime routing guardrails', () => {
  expect(result.stableStatus).toBe(200);
  expect(result.stableSymbol).toBe('USDT');
 
- expect(result.calls.some((url) => url.includes('127.0.0.1:46123/api/fred-data'))).toBe(true);
- expect(result.calls.some((url) => url.includes('crystalball.app/api/fred-data'))).toBe(true);
- expect(result.calls.some((url) => url.includes('127.0.0.1:46123/api/stablecoin-markets'))).toBe(true);
- expect(result.calls.some((url) => url.includes('crystalball.app/api/stablecoin-markets'))).toBe(true);
+	const fredCalls = result.calls.filter((call) => call.pathname === '/api/fred-data');
+	expect(fredCalls.filter((call) => call.isLocal)).toHaveLength(1);
+	expect(fredCalls.filter((call) => !call.isLocal)).toHaveLength(1);
+	expect(fredCalls[0]?.search).toBe('?series_id=CPIAUCSL');
+	expect(fredCalls.find((call) => !call.isLocal)?.cloudApiKey).toBe('wm_test_key_1234567890abcdef');
+
+	const stableCalls = result.calls.filter((call) => call.pathname === '/api/stablecoin-markets');
+	expect(stableCalls.filter((call) => call.isLocal)).toHaveLength(1);
+	expect(stableCalls.filter((call) => !call.isLocal)).toHaveLength(1);
+	expect(stableCalls.find((call) => !call.isLocal)?.cloudApiKey).toBe('wm_test_key_1234567890abcdef');
   });
 
   test('runtime fetch patch never sends local-only endpoints to cloud', async ({ page }) => {
@@ -176,7 +193,7 @@ test.describe('desktop runtime routing guardrails', () => {
  const globalWindow = window as unknown as Record<string, unknown>;
  const originalFetch = window.fetch.bind(window);
 
- const calls: string[] = [];
+ const calls: Array<{ pathname: string; isLocal: boolean }> = [];
  const responseJson = (body: unknown, status = 200) =>
  new Response(JSON.stringify(body), {
  status,
@@ -184,26 +201,28 @@ test.describe('desktop runtime routing guardrails', () => {
  });
 
  window.fetch = (async (input: RequestInfo | URL) => {
- const url =
- typeof input === 'string'
- ? input
- : input instanceof URL
- ? input.toString()
- : input.url;
- calls.push(url);
+	  const rawUrl =
+		typeof input === 'string'
+		  ? input
+		  : input instanceof URL
+			? input.toString()
+			: input.url;
+	  const url = new URL(rawUrl, location.origin);
+	  const isLocal = url.hostname === '127.0.0.1' && url.port === '46123';
+	  calls.push({ pathname: url.pathname, isLocal });
 
- if (url.includes('127.0.0.1:46123/api/local-env-update')) {
- return responseJson({ error: 'Unauthorized' }, 401);
- }
- if (url.includes('127.0.0.1:46123/api/local-validate-secret')) {
- throw new Error('ECONNREFUSED');
- }
+	  if (isLocal && url.pathname === '/api/local-env-update') {
+		return responseJson({ error: 'Unauthorized' }, 401);
+	  }
+	  if (isLocal && url.pathname === '/api/local-validate-secret') {
+		throw new Error('ECONNREFUSED');
+	  }
 
- if (url.includes('crystalball.app/api/local-env-update')) {
- return responseJson({ leaked: true }, 200);
- }
- if (url.includes('crystalball.app/api/local-validate-secret')) {
- return responseJson({ leaked: true }, 200);
+	  if (!isLocal && url.pathname === '/api/local-env-update') {
+		return responseJson({ leaked: true }, 200);
+	  }
+	  if (!isLocal && url.pathname === '/api/local-validate-secret') {
+		return responseJson({ leaked: true }, 200);
  }
 
  return responseJson({ ok: true }, 200);
@@ -252,10 +271,10 @@ test.describe('desktop runtime routing guardrails', () => {
  expect(result.envUpdateStatus).toBe(401);
  expect(result.validateError).toContain('ECONNREFUSED');
 
- expect(result.calls.some((url) => url.includes('127.0.0.1:46123/api/local-env-update'))).toBe(true);
- expect(result.calls.some((url) => url.includes('127.0.0.1:46123/api/local-validate-secret'))).toBe(true);
- expect(result.calls.some((url) => url.includes('crystalball.app/api/local-env-update'))).toBe(false);
- expect(result.calls.some((url) => url.includes('crystalball.app/api/local-validate-secret'))).toBe(false);
+	expect(result.calls.some((call) => call.isLocal && call.pathname === '/api/local-env-update')).toBe(true);
+	expect(result.calls.some((call) => call.isLocal && call.pathname === '/api/local-validate-secret')).toBe(true);
+	expect(result.calls.some((call) => !call.isLocal && call.pathname === '/api/local-env-update')).toBe(false);
+	expect(result.calls.some((call) => !call.isLocal && call.pathname === '/api/local-validate-secret')).toBe(false);
   });
 
   test('chunk preload reload guard is one-shot until app boot clears it', async ({ page }) => {
@@ -701,7 +720,7 @@ test.describe('desktop runtime routing guardrails', () => {
  const globalWindow = window as unknown as Record<string, unknown>;
  const originalFetch = window.fetch.bind(window);
 
- const calls: string[] = [];
+ const calls: Array<{ pathname: string; isLocal: boolean }> = [];
  const responseJson = (body: unknown, status = 200) =>
  new Response(JSON.stringify(body), {
  status,
@@ -709,20 +728,21 @@ test.describe('desktop runtime routing guardrails', () => {
  });
 
  window.fetch = (async (input: RequestInfo | URL) => {
- const url =
- typeof input === 'string'
- ? input
- : input instanceof URL
- ? input.toString()
- : input.url;
+	  const rawUrl =
+		typeof input === 'string'
+		  ? input
+		  : input instanceof URL
+			? input.toString()
+			: input.url;
+	  const url = new URL(rawUrl, location.origin);
+	  const isLocal = url.hostname === '127.0.0.1' && url.port === '46123';
+	  calls.push({ pathname: url.pathname, isLocal });
 
- calls.push(url);
-
- if (url.includes('127.0.0.1:46123/api/fred-data')) {
- throw new Error('ECONNREFUSED');
- }
- if (url.includes('crystalball.app/api/fred-data')) {
- return responseJson({ observations: [{ value: '999' }] }, 200);
+	  if (isLocal && url.pathname === '/api/fred-data') {
+		throw new Error('ECONNREFUSED');
+	  }
+	  if (!isLocal && url.pathname === '/api/fred-data') {
+		return responseJson({ observations: [{ value: '999' }] }, 200);
  }
  return responseJson({ ok: true }, 200);
  }) as typeof window.fetch;
@@ -737,13 +757,13 @@ test.describe('desktop runtime routing guardrails', () => {
  const response = await window.fetch('/api/fred-data?series_id=CPIAUCSL');
  const body = await response.json() as { error?: string };
 
- const cloudCalls = calls.filter(u => u.includes('crystalball.app'));
+	  const cloudCalls = calls.filter((call) => !call.isLocal && call.pathname === '/api/fred-data');
 
  return {
  status: response.status,
  error: body.error ?? null,
  cloudCalls: cloudCalls.length,
- localCalls: calls.filter(u => u.includes('127.0.0.1')).length,
+		localCalls: calls.filter((call) => call.isLocal && call.pathname === '/api/fred-data').length,
  };
  } finally {
  window.fetch = originalFetch;
@@ -772,8 +792,11 @@ test.describe('desktop runtime routing guardrails', () => {
  const globalWindow = window as unknown as Record<string, unknown>;
  const originalFetch = window.fetch.bind(window);
 
- const calls: string[] = [];
- const capturedHeaders: Record<string, string> = {};
+	const calls: Array<{
+	  pathname: string;
+	  isLocal: boolean;
+	  cloudApiKey: string | null;
+	}> = [];
  const responseJson = (body: unknown, status = 200) =>
  new Response(JSON.stringify(body), {
  status,
@@ -781,26 +804,25 @@ test.describe('desktop runtime routing guardrails', () => {
  });
 
  window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
- const url =
- typeof input === 'string'
- ? input
- : input instanceof URL
- ? input.toString()
- : input.url;
+	  const rawUrl =
+		typeof input === 'string'
+		  ? input
+		  : input instanceof URL
+			? input.toString()
+			: input.url;
+	  const url = new URL(rawUrl, location.origin);
+	  const isLocal = url.hostname === '127.0.0.1' && url.port === '46123';
+	  calls.push({
+		pathname: url.pathname,
+		isLocal,
+		cloudApiKey: new Headers(init?.headers).get('X-CrystalBall-Key'),
+	  });
 
- calls.push(url);
-
- if (url.includes('crystalball.app') && init?.headers) {
- const h = new Headers(init.headers);
- const wmKey = h.get('X-CrystalBall-Key');
- if (wmKey) capturedHeaders['X-CrystalBall-Key'] = wmKey;
- }
-
- if (url.includes('127.0.0.1:46123/api/market/v1/test')) {
- throw new Error('ECONNREFUSED');
- }
- if (url.includes('crystalball.app/api/market/v1/test')) {
- return responseJson({ quotes: [] }, 200);
+	  if (isLocal && url.pathname === '/api/market/v1/test') {
+		return responseJson({ error: 'local sidecar unavailable' }, 503);
+	  }
+	  if (!isLocal && url.pathname === '/api/market/v1/test') {
+		return responseJson({ quotes: [] }, 200);
  }
  return responseJson({ ok: true }, 200);
  }) as typeof window.fetch;
@@ -819,11 +841,12 @@ test.describe('desktop runtime routing guardrails', () => {
  const response = await window.fetch('/api/market/v1/test');
  const body = await response.json() as { quotes?: unknown[] };
 
- return {
- status: response.status,
- hasQuotes: Array.isArray(body.quotes),
- cloudCalls: calls.filter(u => u.includes('crystalball.app')).length,
- wmKeyHeader: capturedHeaders['X-CrystalBall-Key'] || null,
+	  return {
+		status: response.status,
+		hasQuotes: Array.isArray(body.quotes),
+		localCalls: calls.filter((call) => call.isLocal && call.pathname === '/api/market/v1/test').length,
+		cloudCalls: calls.filter((call) => !call.isLocal && call.pathname === '/api/market/v1/test').length,
+		wmKeyHeader: calls.find((call) => !call.isLocal && call.pathname === '/api/market/v1/test')?.cloudApiKey ?? null,
  };
  } finally {
  window.fetch = originalFetch;
@@ -838,9 +861,10 @@ test.describe('desktop runtime routing guardrails', () => {
  }
  });
 
- expect(result.status).toBe(200);
- expect(result.hasQuotes).toBe(true);
- expect(result.cloudCalls).toBe(1);
+	expect(result.status).toBe(200);
+	expect(result.hasQuotes).toBe(true);
+	expect(result.localCalls).toBe(1);
+	expect(result.cloudCalls).toBe(1);
  expect(result.wmKeyHeader).toBe('wm_test_key_1234567890abcdef');
   });
 

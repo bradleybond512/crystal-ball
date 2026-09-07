@@ -779,4 +779,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-027 | Evidence-scoped Home reassurance | IN PROGRESS | — |
+| UX-027 | Evidence-scoped Home reassurance | IN PROGRESS | #1707 |

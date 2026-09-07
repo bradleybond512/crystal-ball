@@ -87,7 +87,143 @@ No data migration is needed; preserve the startup camera fix and merged security
 dependency. Reverting may exceed the bundle budget again, so rollback still
 requires the repository's checks and a reviewed resolution.
 
-## Candidate validation
+## Final implementation validation
 
-Pending completion of the fresh implementation and review cycle. Historical
-PR validation is documented separately in `E2E-BASELINE-REPAIR-EVIDENCE.md`.
+Source commit: `59b29e5ffeb37abae1c5f24b718b0a86009c94b0`.
+All commands below used Node 22.23.1. Historical PR validation is documented
+separately in `E2E-BASELINE-REPAIR-EVIDENCE.md`.
+
+`bash scripts/agentic-validate.sh --tests 'test:renderer'` exited 0:
+
+```text
+# tests 14713
+# pass 14713
+# fail 0
+Agentic validation gate passed.
+Tests run: test:renderer
+```
+
+That gate executed lockfile checks, strict lint, both TypeScript configurations,
+secret scanning, cross-agent tooling checks, documentation/roadmap checks, and
+the generic build. Its build output is not the full-variant size measurement.
+Scoped raw ESLint on `vite.config.ts`, the new config test, and the modified
+artifact test exited 0 with no diagnostics. Commit hooks also passed.
+
+`CRYSTALBALL_SKIP_VAULT_TEXTURES=1 npm run build:full` was run separately after
+restoring the mutation. Both compared builds below use the same source commit,
+runtime, lockfile, and full variant; only the ownership rule differs.
+
+| Measurement | Rule removed | Rule restored |
+|---|---:|---:|
+| Main gzip bytes | 469245 | 465863 |
+| Renderer gzip bytes | inline | 3515 |
+| Total JS gzip bytes | 5146260 | 5146402 |
+| JS chunks | 107 | 108 |
+
+Main shrank by 3382 bytes and has 5177 bytes of headroom under 460 KiB.
+Total compressed JS increased by 142 bytes: this is partitioning, not a total
+payload reduction. `npm run bundle:check` exited 0:
+
+```text
+main-DrMhZvlT.js  raw=1.60 MB  gzip=454.9 KB
+✓ All bundle-size policies satisfied.
+```
+
+`node --test tests/bundle-size.test.mjs` after restoration exited 0:
+
+```text
+# tests 18
+# pass 18
+# fail 0
+```
+
+The full manifest identifies `assets/story-renderer-D0HRWf5T.js`, statically
+reachable from main, importing the existing `panels-cOn_mD5b.js` shared chunk.
+Its existing translation functions remain in that shared chunk; no new cycle
+returns to the renderer. The generated service worker precaches the renderer.
+A production-browser invocation of its actual exported renderer returned:
+
+```json
+{
+  "renderer": "assets/story-renderer-D0HRWf5T.js",
+  "result": {
+    "width": 1080,
+    "height": 1920,
+    "pngPrefix": "data:image/png;base64,",
+    "pngLength": 122462
+  },
+  "pageErrors": []
+}
+```
+
+This exercises the built canvas renderer, not a full manual click-through of both
+unchanged consumers. A separate generic-build app startup smoke had no page
+errors with external requests blocked. Runtime E2E rerun: `12 passed (14.7s)`.
+No desktop installation or release was performed.
+
+## Clean-tree mutation proof
+
+Started at the source commit above with empty `git status --short`.
+File: `vite.config.ts`; SHA-256 before and after restoration:
+`4dd943ed5d6566d56d8bc642375fc0003eca689718735eeeac0c75c7385766e6`.
+The inspected applied diff removed exactly:
+
+```diff
+- if (id.endsWith('/src/services/story-renderer.ts')) return 'story-renderer';
+```
+
+`npx tsx --test src/config/__tests__/story-renderer-chunk.test.mts` changed from
+3 pass / 0 fail to 2 pass / 1 fail (`undefined` instead of `story-renderer`), then
+returned to 3 pass / 0 fail after restoration.
+
+Raw config-test failure excerpt:
+
+```text
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'story-renderer'
+```
+
+Raw config-test mutation totals:
+
+```text
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+```
+
+Rebuilt the full variant with the rule removed. Running
+`node --test --test-name-pattern='story renderer' tests/bundle-size.test.mjs`
+changed from 1 pass / 0 fail to:
+
+```text
+error: 'Expected exactly one manifest chunk named "story-renderer"; found 0'
+# tests 1
+# pass 0
+# fail 1
+```
+
+After restoring, checksum equality and empty Git status were verified before
+the full rebuild. All 18 artifact tests passed on the restored output. The
+mutation's local size still passes the budget, so the named-artifact assertion
+is the relevant red proof; size alone would not prove this test catches removal.
+
+Raw local logs use `/tmp/pr1706-static-` prefixes: `gate.log`,
+`mutation-config.log`, `mutation-build.log`, `mutation-artifact.log`,
+`mutation-restored.json`, `restored-build.log`, `restored-artifacts.log`,
+`restored-policy.log`, and `restored-bundle.json`.
+
+## Review and remaining limits
+
+The independent reviewer checked the entire original PR and new packaging
+change, finding no production blocker. A nonblocking follow-up is to strengthen
+the existing runtime E2E fallback mock: compare the configured cloud origin and
+query explicitly, rather than accepting any nonlocal origin. Runtime production
+code is unchanged in this PR.
+
+The actual Claude conclusion must be recorded in a new SHA-pinned verdict-only
+commit after final review. Required GitHub checks and closeout remain necessary;
+local results do not establish that CI passed or that the PR merged.

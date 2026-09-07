@@ -707,6 +707,37 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   failing assertions, full restored SHA-256 values, and quoted validation output
   are recorded in `docs/validation/UX-024-MUTATION-PROOFS.md`.
 
+### UX-026 — Location and saved-place impact in alert digests *(High Assurance)*
+
+Make every "Since you last looked" story immediately answer where the event is
+and whether current evidence indicates impact to any saved place.
+
+- **Show:** a deterministic location row and saved-place impact row on every
+  story. Impact states are `likely`, `possible`, `no reported overlap`,
+  `unknown`, or `not evaluated`; never say safe, unaffected, or all clear.
+- **Fail closed:** `no reported overlap` requires complete, current affected-area
+  evidence evaluated against every saved place. Missing, stale, malformed,
+  centroid-only, cold-rehydrated, partial-member, or over-budget evidence is
+  `unknown`. A global alert is only `possible` at saved places unless direct
+  evidence supports a stronger conclusion.
+- **Privacy:** saved-place names, IDs, coordinates, radii, tags, notes, and
+  priority stay local. Model output may summarize why a story matters but cannot
+  supply or override location, impact state, place names, or evidence wording.
+- **Scope:** add a shared pure alert-presentation projection, but wire only the
+  digest overlay in this task. Preserve alert ranking, thresholds, cadence,
+  acknowledgement, snooze/pin state, dismissal behavior, providers, and polling.
+- **Accessibility:** expose the overlay as a labeled modal dialog, render stories
+  as semantic articles, trap and restore focus, retain Escape/backdrop/close
+  dismissal, and provide bounded scrolling at compact sizes.
+- **Done when:** no rendered story can omit either required row; model failure
+  falls back to deterministic ranked-alert cards; saved-place or member changes
+  reproject locally without another model call; complete negative weather
+  coverage is explicitly labeled as not an all-clear.
+- **Verify:** focused projection, prompt/privacy, fallback, component,
+  accessibility, lifecycle, performance, and mutation tests; `npm run
+  test:weather`, `npm run test:renderer`, `npm run typecheck:all`, and the
+  agentic validation gate.
+
 ---
 
 ## What was NOT verified
@@ -755,3 +786,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
+| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS — HIGH ASSURANCE | #1704 |

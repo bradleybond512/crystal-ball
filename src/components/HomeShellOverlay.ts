@@ -140,8 +140,6 @@ export class HomeShellOverlay {
   private loop: LoopHandle | null = null;
   private pins: string[] = [];
   private visible = false;
-  private lastGoodPersonalAt: number | undefined;
-  private lastGoodChangedAt: number | undefined;
   private dossier: SituationDossier | null = null;
   private focusHost: PanelFocusHost | null = null;
   private _onOpenDossier: ((e: Event) => void) | null = null;
@@ -397,7 +395,6 @@ export class HomeShellOverlay {
     let personal;
     try {
       personal = getPersonalImpactReport();
-      this.lastGoodPersonalAt = now;
     } catch {
       personal = undefined;
     }
@@ -405,12 +402,11 @@ export class HomeShellOverlay {
     // getWhatChanged returns [] when the shared store holds fewer than 2
     // snapshots (cold boot, or the single writer — CommandCenterPanel — not
     // recording yet). That is "can't answer", not "nothing changed": leave
-    // the digest undefined so the band renders its honest staleness line.
+    // the digest undefined so the band renders its unavailable state.
     let changed: WhatChangedEvent[] | undefined;
     try {
       if (getSnapshotCount() >= 2) {
         changed = getWhatChanged(now - CHANGED_WINDOW_MS);
-        this.lastGoodChangedAt = now;
       }
     } catch {
       changed = undefined;
@@ -419,10 +415,8 @@ export class HomeShellOverlay {
     const briefing = buildBriefingView(
       {
         personal,
-        lastGoodPersonalAt: this.lastGoodPersonalAt,
-        monitoredPlacesCount: getPersonalProfile().savedPlaces.length,
+        savedPlacesCount: getPersonalProfile().savedPlaces.length,
         changed,
-        lastGoodChangedAt: this.lastGoodChangedAt,
         situation: getActiveSituation(),
         recentEvents: getRecentEvents().map((e) => ({
           eventId: e.eventId,
@@ -468,12 +462,6 @@ export class HomeShellOverlay {
 
   private renderBriefing(view: BriefingView): void {
     if (!this.briefingEl) return;
-    if (view.allClear) {
-      const band = el('div', 'hs-band hs-tone-clear');
-      band.append(el('div', 'hs-band-headline', view.allClearText));
-      this.briefingEl.replaceChildren(band);
-      return;
-    }
     this.briefingEl.replaceChildren(...view.bands.map((b) => renderBand(b)));
   }
 
@@ -900,7 +888,7 @@ function renderBand(b: BriefingBandView): HTMLElement {
       band.append(el('div', 'hs-band-line', entry.text));
     }
   }
-  if (b.staleness) band.append(el('div', 'hs-band-stale', b.staleness));
+  band.append(el('div', 'hs-band-stale', b.evidenceNote));
   return band;
 }
 

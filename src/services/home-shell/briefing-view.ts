@@ -13,7 +13,7 @@ import { formatDelta } from '../command-center/what-changed.ts';
 import type { WhatChangedEvent } from '../command-center/what-changed.ts';
 import type { SituationDescriptor } from '../insights/action-briefs.ts';
 
-export type BandTone = 'clear' | 'info' | 'elevated' | 'critical';
+export type BandTone = 'info' | 'elevated' | 'critical';
 
 export interface BriefingLineView {
   text: string;
@@ -28,8 +28,8 @@ export interface BriefingBandView {
   headline: string;
   /** ≤ 4 short entries below the headline. */
   entries: readonly BriefingLineView[];
-  /** Honest-staleness line, e.g. "unavailable · last good 14:20". */
-  staleness?: string;
+  /** Scope and limits of the evidence behind this band. */
+  evidenceNote: string;
 }
 
 export interface HighSeverityEvent {
@@ -41,20 +41,16 @@ export interface HighSeverityEvent {
 }
 
 export interface BriefingInput {
-  /** undefined = personal impact could not be computed (stale). */
+  /** undefined = personal impact could not be computed. */
   personal?: PersonalImpactReport;
-  lastGoodPersonalAt?: number;
-  monitoredPlacesCount?: number;
+  savedPlacesCount?: number;
   /** undefined = digest unavailable; [] = nothing changed. */
   changed?: readonly WhatChangedEvent[];
-  lastGoodChangedAt?: number;
   situation?: SituationDescriptor;
   recentEvents?: readonly HighSeverityEvent[];
 }
 
 export interface BriefingView {
-  allClear: boolean;
-  allClearText: string;
   bands: readonly BriefingBandView[];
   generatedAt: number;
 }
@@ -64,6 +60,9 @@ export const CRITICAL_EVENT_FLOOR = 70;
 /** At or above this severity the critical band turns 'critical'. */
 export const CRITICAL_TONE_FLOOR = 85;
 const MAX_LINES = 4;
+const COVERAGE_NOTE = 'Available reports only · coverage unverified · evidence age unknown.';
+const DIGEST_NOTE = 'Recorded changes only · source coverage and evidence age unverified.';
+const SOURCE_NEXT_STEP = 'Review source status before relying on this summary.';
 
 type ActiveSeverity = Exclude<ImpactSeverity, 'low' | 'none'>;
 type ActiveImpact = PersonalImpact & { severity: ActiveSeverity };
@@ -80,10 +79,7 @@ export function buildBriefingView(input: BriefingInput, now: number): BriefingVi
     buildChangedBand(input),
     buildCriticalBand(input),
   ];
-  const allClear = bands.every((b) => b.tone === 'clear');
-  const places = input.monitoredPlacesCount ?? 0;
-  const allClearText = `All clear · ${places} place${places === 1 ? '' : 's'} monitored · nothing critical worldwide`;
-  return { allClear, allClearText, bands, generatedAt: now };
+  return { bands, generatedAt: now };
 }
 
 function buildPersonalBand(input: BriefingInput): BriefingBandView {
@@ -93,21 +89,31 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
       kind: 'personal',
       label: 'Personal',
       tone: 'info',
-      headline: 'Personal status unavailable',
+      headline: 'Personal status unavailable.',
       entries: [],
-      staleness: staleLine(input.lastGoodPersonalAt),
+      evidenceNote: `${COVERAGE_NOTE} ${SOURCE_NEXT_STEP}`,
     };
   }
   const active = personal.impacts.filter((i): i is ActiveImpact => isActiveImpact(i));
+  if (active.length === 0 && input.savedPlacesCount === 0) {
+    return {
+      kind: 'personal',
+      label: 'Personal',
+      tone: 'info',
+      headline: 'No saved places for a local assessment.',
+      entries: [{ text: 'Add a place in Settings.' }],
+      evidenceNote: COVERAGE_NOTE,
+    };
+  }
   const tone = personalTone(active);
   const impactWord = active.length === 1 ? 'impact' : 'impacts';
   const headline = active.length === 0
-    ? 'All clear near your places'
+    ? 'No personal impacts identified in available reports.'
     : `${active.length} personal ${impactWord} near you`;
   const entries = active
     .slice(0, MAX_LINES)
     .map((i) => ({ text: `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}`, situationId: i.eventId }));
-  return { kind: 'personal', label: 'Personal', tone, headline, entries };
+  return { kind: 'personal', label: 'Personal', tone, headline, entries, evidenceNote: `${COVERAGE_NOTE} ${SOURCE_NEXT_STEP}` };
 }
 
 /** Personally-relevant: meaningful severity AND at least one real
@@ -121,8 +127,7 @@ function isActiveImpact(i: PersonalImpact): i is ActiveImpact {
 function personalTone(active: readonly ActiveImpact[]): BandTone {
   if (active.some((i) => i.severity === 'critical')) return 'critical';
   if (active.some((i) => i.severity === 'elevated')) return 'elevated';
-  if (active.length > 0) return 'info';
-  return 'clear';
+  return 'info';
 }
 
 function buildChangedBand(input: BriefingInput): BriefingBandView {
@@ -134,16 +139,17 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
       tone: 'info',
       headline: 'Change digest unavailable',
       entries: [],
-      staleness: staleLine(input.lastGoodChangedAt),
+      evidenceNote: `${DIGEST_NOTE} ${SOURCE_NEXT_STEP}`,
     };
   }
   if (changed.length === 0) {
     return {
       kind: 'changed',
       label: 'What changed',
-      tone: 'clear',
-      headline: 'Nothing changed recently',
+      tone: 'info',
+      headline: 'No changes recorded in the available digest.',
       entries: [],
+      evidenceNote: `${DIGEST_NOTE} ${SOURCE_NEXT_STEP}`,
     };
   }
   const tone: BandTone = changed.some((e) => e.type === 'escalated' || e.type === 'feed-degraded')
@@ -151,7 +157,7 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
     : 'info';
   const headline = `${changed.length} change${changed.length === 1 ? '' : 's'} since last check`;
   const entries = changed.slice(0, MAX_LINES).map((e) => ({ text: formatDelta(e) }));
-  return { kind: 'changed', label: 'What changed', tone, headline, entries };
+  return { kind: 'changed', label: 'What changed', tone, headline, entries, evidenceNote: `${DIGEST_NOTE} ${SOURCE_NEXT_STEP}` };
 }
 
 function buildCriticalBand(input: BriefingInput): BriefingBandView {
@@ -177,21 +183,18 @@ function buildCriticalBand(input: BriefingInput): BriefingBandView {
   const tone = criticalTone(entries.length > 0, worst);
   const count = (input.situation ? 1 : 0) + events.length;
   const situationWord = count === 1 ? 'situation' : 'situations';
-  const headline = count === 0 ? 'Nothing critical worldwide' : `${count} ${situationWord} worldwide`;
-  return { kind: 'critical', label: 'Critical worldwide', tone, headline, entries };
+  let headline = input.recentEvents === undefined
+    ? 'Critical reports unavailable.'
+    : 'No critical items in available reports.';
+  if (count > 0) headline = `${count} ${situationWord} worldwide`;
+  const missingReports = input.recentEvents === undefined && count > 0
+    ? ' Other critical reports unavailable.'
+    : '';
+  const evidenceNote = `${COVERAGE_NOTE}${missingReports} ${SOURCE_NEXT_STEP}`;
+  return { kind: 'critical', label: 'Critical worldwide', tone, headline, entries, evidenceNote };
 }
 
 function criticalTone(hasLines: boolean, worstSeverity: number): BandTone {
-  if (!hasLines) return 'clear';
+  if (!hasLines) return 'info';
   return worstSeverity >= CRITICAL_TONE_FLOOR ? 'critical' : 'elevated';
-}
-
-function staleLine(lastGoodAt: number | undefined): string {
-  if (lastGoodAt === undefined) return 'unavailable · no successful update yet';
-  return `unavailable · last good ${formatClock(lastGoodAt)}`;
-}
-
-function formatClock(ms: number): string {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }

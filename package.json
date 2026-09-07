@@ -108,6 +108,7 @@
     "test:algorithms": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
     "test:renderer": "tsx --test src/*/__tests__/*.test.mts src/*/*/__tests__/*.test.mts src/*/*/*/__tests__/*.test.mts",
     "test:story-renderer-chunk": "tsx --test src/config/__tests__/story-renderer-chunk.test.mts",
+    "test:home-reassurance": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",
     "test:little-snitch": "node --test scripts/export-little-snitch-traffic.test.mjs scripts/install-little-snitch-exporter.test.mjs scripts/little-snitch-log-traffic-helper.test.mjs src-tauri/sidecar/local-api-server.test.mjs && tsx --test src/services/__tests__/little-snitch.test.mts src/components/__tests__/little-snitch-panel-source-state.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
     "test:self-improvement": "tsx --test tests/intelligence/self-improvement-scheduler.test.mts",

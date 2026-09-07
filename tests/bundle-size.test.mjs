@@ -119,3 +119,29 @@ test('bundle-size: total JS gz under 6 MB', (t) => {
     `Major regression — investigate before bumping.`,
   );
 });
+
+test('bundle-size: story renderer is a named chunk statically reachable from main', (t) => {
+  if (!haveAssets) {
+    t.skip('dist/assets missing — run `npm run build` first');
+    return;
+  }
+  if (!manifest) {
+    t.skip('dist/.vite/manifest.json missing — manifest assertion reports the build defect');
+    return;
+  }
+  const rendererFile = resolveManifestChunkFile(manifest, 'story-renderer');
+  assert.ok(existsSync(path.join(projectRoot, 'dist', rendererFile)), 'named renderer chunk must exist on disk');
+  const mainFile = resolveManifestChunkFile(manifest, 'main');
+  const mainKey = Object.keys(manifest).find((key) => manifest[key].file === mainFile);
+  const pending = [mainKey];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const key = pending.pop();
+    if (visited.has(key)) continue;
+    visited.add(key);
+    assert.ok(manifest[key], `static import ${key} must resolve in the manifest`);
+    if (manifest[key].file === rendererFile) return;
+    pending.push(...(manifest[key].imports ?? []));
+  }
+  assert.fail('main must statically import the story renderer chunk; dynamic-only reachability changes loading behavior');
+});

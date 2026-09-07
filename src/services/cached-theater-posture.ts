@@ -5,6 +5,7 @@
  * Persists to localStorage so data shows instantly on reload.
  */
 
+import { createAbortError, withCallerAbort } from './caller-abort';
 import type { TheaterPostureSummary } from './military-surge';
 import {
   MilitaryServiceClient,
@@ -126,35 +127,6 @@ let lastErrorAt = 0;
 const REFETCH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes - reduce upstream API pressure
 const ERROR_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes between failure retries
 
-function createAbortError(): DOMException {
-  return new DOMException('The operation was aborted.', 'AbortError');
-}
-
-function withCallerAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(createAbortError());
-
-  return new Promise<T>((resolve, reject) => {
- const onAbort = () => {
- signal.removeEventListener('abort', onAbort);
- reject(createAbortError());
- };
- signal.addEventListener('abort', onAbort, { once: true });
-
- promise.then(
- (value) => {
- signal.removeEventListener('abort', onAbort);
- resolve(value);
- },
- (error) => {
- signal.removeEventListener('abort', onAbort);
- // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
- reject(error);
- },
- );
-  });
-}
-
 function loadFromStorage(): CachedTheaterPosture | null {
   try {
  const raw = localStorage.getItem(LS_KEY);
@@ -218,7 +190,11 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  console.info(`[CachedTheaterPosture] OK — ${data.postures.length} theaters, ${data.totalFlights} active flights`);
  return cachedPosture;
  } catch (error) {
- if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ // Every failure takes the cache fallback, including the runtime's own 15s
+ // fetch timeout. This body is shared by every deduplicated caller, so it must
+ // not decide anything on one caller's behalf: rethrowing here would hand an
+ // AbortError to callers that never cancelled, and skip the backoff below.
+ // Per-caller cancellation is withCallerAbort's job at the return sites.
  const msg = error instanceof Error ? error.message : String(error);
  // eslint-disable-next-line no-console
  console.error(`[CachedTheaterPosture] Fetch error: ${msg}`);
@@ -229,8 +205,12 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  }
   })();
 
-  // If we have stale data, return it now — the fetch updates in background
+  // If we have stale data, return it now — the fetch updates in background.
+  // Nothing awaits fetchPromise on this path, so it keeps its own handler: an
+  // unhandled rejection is reported as a renderer ERROR even though the caller
+  // was served fine from cache.
   if (hasStaleData) {
+ void fetchPromise.catch(() => { /* background refresh; the catch above already logged */ });
  return cachedPosture;
   }
 

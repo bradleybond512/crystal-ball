@@ -30,6 +30,12 @@ const CLOUD_SYNC_MARKERS = [
 
 const MIN_FREE_BYTES = 200 * 1024 * 1024;
 
+// Leftover scratch files are the ONLY thing `--fix` may delete, so the rule
+// that decides removability lives here, under test, rather than in the CLI.
+// `.claude.json.backup` is deliberately excluded: it is a recovery path, and
+// the config-empty finding above tells you to restore from it.
+const STRAY_FILE_PATTERN = /^\.claude\.json\.(tmp[\w.-]*|lock|swp)$/;
+
 export function buildClaudeAuthReport(probe) {
   const findings = [];
 
@@ -64,6 +70,12 @@ export function statusFromFindings(findings) {
 // scratch file we already own is reversible and touches no credential.
 export function autoFixableFindings(report) {
   return report.findings.filter((f) => f.autoFix === true);
+}
+
+// Name-only check: callers must still confirm the entry is a plain file that
+// sits directly in $HOME before removing it.
+export function isRemovableStrayFile(name) {
+  return typeof name === 'string' && STRAY_FILE_PATTERN.test(name);
 }
 
 function inspectConfig(probe, findings) {

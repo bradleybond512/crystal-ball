@@ -18,7 +18,11 @@ import {
 } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import path from 'node:path';
-import { autoFixableFindings, buildClaudeAuthReport } from './claude-auth-core.mjs';
+import {
+  autoFixableFindings,
+  buildClaudeAuthReport,
+  isRemovableStrayFile,
+} from './claude-auth-core.mjs';
 
 const options = parseArgs(process.argv.slice(2));
 
@@ -41,7 +45,6 @@ const HOME = homedir();
 const CONFIG_PATH = path.join(HOME, '.claude.json');
 const CLAUDE_DIR = path.join(HOME, '.claude');
 const CREDENTIALS_PATH = path.join(CLAUDE_DIR, '.credentials.json');
-const STRAY_PATTERN = /^\.claude\.json\.(tmp[\w.-]*|lock|swp)$/;
 
 const report = buildClaudeAuthReport(collectProbe());
 
@@ -111,7 +114,7 @@ function inspectPath(target, { parseJson = false } = {}) {
 
 function findStrayFiles() {
   try {
-    return readdirSync(HOME).filter((name) => STRAY_PATTERN.test(name));
+    return readdirSync(HOME).filter(isRemovableStrayFile);
   } catch {
     return [];
   }
@@ -182,7 +185,7 @@ function applyFixes(current) {
     for (const name of item.paths ?? []) {
       // Re-validate independently of the finding: only ever delete a plain
       // scratch file that sits directly in $HOME and matches the pattern.
-      if (!STRAY_PATTERN.test(name)) continue;
+      if (!isRemovableStrayFile(name)) continue;
       const target = path.join(HOME, name);
       if (path.dirname(target) !== HOME) continue;
       let stat;

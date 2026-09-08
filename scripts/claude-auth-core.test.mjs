@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { autoFixableFindings, buildClaudeAuthReport, statusFromFindings } from './claude-auth-core.mjs';
+import {
+  autoFixableFindings,
+  buildClaudeAuthReport,
+  isRemovableStrayFile,
+  statusFromFindings,
+} from './claude-auth-core.mjs';
 
 function healthyProbe(overrides = {}) {
   return {
@@ -187,4 +192,37 @@ test('statusFromFindings collapses an empty ledger to ok', () => {
   assert.equal(statusFromFindings([]), 'ok');
   assert.equal(statusFromFindings([{ severity: 'yellow' }]), 'yellow');
   assert.equal(statusFromFindings([{ severity: 'yellow' }, { severity: 'red' }]), 'red');
+});
+
+test('only leftover scratch files are removable', () => {
+  for (const name of ['.claude.json.tmp1234', '.claude.json.tmp-a.b', '.claude.json.lock', '.claude.json.swp']) {
+    assert.equal(isRemovableStrayFile(name), true, name);
+  }
+});
+
+test('the live config and the credential store are never removable', () => {
+  for (const name of ['.claude.json', '.credentials.json', '.claude', 'claude.json.tmp1']) {
+    assert.equal(isRemovableStrayFile(name), false, name);
+  }
+});
+
+test('a backup is never removable — it is the documented recovery path', () => {
+  assert.equal(isRemovableStrayFile('.claude.json.backup'), false);
+});
+
+test('no path separator can ride through the removable check', () => {
+  for (const name of [
+    '.claude.json.tmp/../../../etc/passwd',
+    '../.claude.json.tmp1',
+    '/root/.claude.json.lock',
+    '.claude.json.tmp/nested',
+  ]) {
+    assert.equal(isRemovableStrayFile(name), false, name);
+  }
+});
+
+test('a non-string name is never removable', () => {
+  for (const value of [undefined, null, 42, {}, ['.claude.json.lock']]) {
+    assert.equal(isRemovableStrayFile(value), false);
+  }
 });

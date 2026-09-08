@@ -104,9 +104,9 @@ function inspectPath(target, { parseJson = false } = {}) {
     try {
       const parsed = JSON.parse(readFileSync(target, 'utf8'));
       result.hasOAuthAccount = Boolean(parsed?.oauthAccount);
-    } catch (err) {
+    } catch (error) {
       // A zero-byte file is reported as empty, not as a parse failure.
-      if (result.size > 0) result.parseError = err.message;
+      if (result.size > 0) result.parseError = error.message;
     }
   }
   return result;
@@ -114,7 +114,7 @@ function inspectPath(target, { parseJson = false } = {}) {
 
 function findStrayFiles() {
   try {
-    return readdirSync(HOME).filter(isRemovableStrayFile);
+    return readdirSync(HOME).filter((name) => isRemovableStrayFile(name));
   } catch {
     return [];
   }
@@ -147,10 +147,10 @@ function findEnvSources() {
     } catch {
       continue;
     }
-    lines.forEach((line, index) => {
+    for (const [index, line] of lines.entries()) {
       const match = pattern.exec(line);
       if (match) sources.push({ file: rel, line: index + 1, variable: match[1] });
-    });
+    }
   }
   return sources;
 }
@@ -183,22 +183,21 @@ function applyFixes(current) {
   }
   for (const item of fixable) {
     for (const name of item.paths ?? []) {
-      // Re-validate independently of the finding: only ever delete a plain
-      // scratch file that sits directly in $HOME and matches the pattern.
-      if (!isRemovableStrayFile(name)) continue;
-      const target = path.join(HOME, name);
-      if (path.dirname(target) !== HOME) continue;
-      let stat;
-      try {
-        stat = lstatSync(target);
-      } catch {
-        continue;
-      }
-      if (!stat.isFile()) continue;
+      const target = resolveStrayTarget(name);
+      if (!target) continue;
       rmSync(target);
       console.log(`Removed leftover ${name}`);
     }
   }
+}
+
+// Re-validate independently of the finding: only ever a plain scratch file
+// sitting directly in $HOME. Returns null for anything else.
+function resolveStrayTarget(name) {
+  if (!isRemovableStrayFile(name)) return null;
+  const target = path.join(HOME, name);
+  if (path.dirname(target) !== HOME) return null;
+  return safeLstat(target)?.isFile() ? target : null;
 }
 
 function printReport(current) {
@@ -244,6 +243,14 @@ function safeRealpath(target) {
     return realpathSync(target);
   } catch {
     return target;
+  }
+}
+
+function safeLstat(target) {
+  try {
+    return lstatSync(target);
+  } catch {
+    return null;
   }
 }
 

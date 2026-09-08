@@ -7,6 +7,12 @@ import {
   statusFromFindings,
 } from './claude-auth-core.mjs';
 
+// Full stat modes as lstat returns them: file-type bits plus permissions.
+const FILE_600 = 0o10_0600;
+const FILE_640 = 0o10_0640;
+const FILE_644 = 0o10_0644;
+const DIR_700 = 0o4_0700;
+
 function healthyProbe(overrides = {}) {
   return {
     platform: 'linux',
@@ -19,7 +25,7 @@ function healthyProbe(overrides = {}) {
       path: '/home/ada/.claude.json',
       realPath: '/home/ada/.claude.json',
       uid: 501,
-      mode: 0o100600,
+      mode: FILE_600,
       size: 4096,
       writable: true,
       hasOAuthAccount: true,
@@ -29,9 +35,9 @@ function healthyProbe(overrides = {}) {
       path: '/home/ada/.claude',
       realPath: '/home/ada/.claude',
       uid: 501,
-      mode: 0o40700,
+      mode: DIR_700,
     },
-    credentialsFile: { exists: true, uid: 501, mode: 0o100600, size: 512 },
+    credentialsFile: { exists: true, uid: 501, mode: FILE_600, size: 512 },
     strayFiles: [],
     diskFreeBytes: 50 * 1024 * 1024 * 1024,
     env: {},
@@ -104,7 +110,7 @@ test('a missing account block warns without blocking', () => {
 
 test('group-readable credentials are a blocker', () => {
   const probe = healthyProbe();
-  probe.credentialsFile.mode = 0o100640;
+  probe.credentialsFile.mode = FILE_640;
   const report = buildClaudeAuthReport(probe);
   assert.equal(report.status, 'red');
   assert.ok(ids(report).includes('credentials-permissive'));
@@ -170,7 +176,7 @@ test('no finding outside the stray-file rule is ever auto-fixable', () => {
   const probe = healthyProbe();
   probe.config.uid = 0;
   probe.config.writable = false;
-  probe.credentialsFile.mode = 0o100644;
+  probe.credentialsFile.mode = FILE_644;
   assert.deepEqual(autoFixableFindings(buildClaudeAuthReport(probe)), []);
 });
 

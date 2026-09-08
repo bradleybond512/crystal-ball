@@ -49,7 +49,7 @@ export function buildClaudeAuthReport(probe) {
 
   findings.sort((a, b) => {
     const bySeverity = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
-    return bySeverity !== 0 ? bySeverity : a.priority - b.priority;
+    return bySeverity === 0 ? a.priority - b.priority : bySeverity;
   });
 
   return {
@@ -211,15 +211,21 @@ function inspectEnv(probe, findings) {
   for (const [name, why] of AUTH_ENV_VARS) {
     if (!env[name]) continue;
     const sources = (probe.envSources ?? []).filter((s) => s.variable === name);
-    const where = sources.length > 0
-      ? ` Exported from ${sources.map((s) => `${s.file}:${s.line}`).join(', ')}.`
-      : ' Source not found in your shell rc files — check your terminal profile or launchd environment.';
+    const where = describeEnvSources(sources);
     findings.push(finding(`env-${name}`, 'yellow', 23, {
       title: `${name} is set in the environment`,
       detail: `It ${why}.${where}`,
       fix: `Unset it for interactive shells (remove the export, then \`unset ${name}\`) and log in again.`,
     }));
   }
+}
+
+function describeEnvSources(sources) {
+  if (sources.length === 0) {
+    return ' Source not found in your shell rc files — check your terminal profile or launchd environment.';
+  }
+  const locations = sources.map((s) => `${s.file}:${s.line}`).join(', ');
+  return ` Exported from ${locations}.`;
 }
 
 function inspectInstalls(probe, findings) {

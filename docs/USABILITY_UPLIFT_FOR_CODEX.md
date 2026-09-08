@@ -730,6 +730,7 @@ on 2026-09-07.
 - **Verify:** Home, survival, renderer, actual targeted-suite selection, type
   checks, unchanged bundle budget, mutation proofs, independent review, and
   manual packaged evidence with an identified build.
+- **Evidence:** [validation report](validation/UX-027-EVIDENCE-SCOPED-HOME.md) records automated and mutation checks, six native scenarios, restoration, and independent acceptance review.
 
 ---
 
@@ -779,4 +780,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-027 | Evidence-scoped Home reassurance | IN PROGRESS | #1707 |
+| UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |

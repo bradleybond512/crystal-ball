@@ -709,6 +709,31 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
 
 ---
 
+### UX-027 — Evidence-scoped Home reassurance *(High Assurance)*
+
+Replace unsupported Home all-clear claims with the limits of available reports,
+while preserving detected threats and their actions. Bradley approved the
+[implementation design](plans/2026-09-07-ux027-evidence-scoped-home-design.md)
+on 2026-09-07.
+
+- **Scope:** briefing projection, Home rendering, focused behavioral tests.
+- **Coverage contract:** report generation is not source freshness. No current
+  production input establishes complete per-place coverage; empty, unavailable,
+  offline, or freshly recomputed reports cannot produce an all-clear state.
+- **Show:** three persistent bands with evidence limitations; distinguish zero
+  saved places, missing reports, and empty available reports. Preserve positive
+  impacts, worldwide context, severity, action text, and dossier links.
+- **Non-goals:** providers, spatial matching, forecasting, posture/planned
+  benefit, notifications, storage, and UX-025/UX-026 ownership.
+- **Done when:** degraded/empty states never imply clearance; calculation time
+  cannot refresh evidence age; positive threats remain visible.
+- **Verify:** Home, survival, renderer, actual targeted-suite selection, type
+  checks, unchanged bundle budget, mutation proofs, independent review, and
+  manual packaged evidence with an identified build.
+- **Evidence:** [validation report](validation/UX-027-EVIDENCE-SCOPED-HOME.md) records automated and mutation checks, six native scenarios, restoration, and independent acceptance review.
+
+---
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -755,3 +780,4 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
+| UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |

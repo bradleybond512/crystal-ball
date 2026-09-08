@@ -1,6 +1,6 @@
 # UX-027 implementation evidence — 2026-09-07
 
-Status: implementation validated; packaged-runtime acceptance pending. Draft PR #1707 remains IN PROGRESS.
+Status: implementation and six packaged-runtime scenarios validated; independent acceptance review passed. Exact-tip opposite-agent verdict and required CI govern PR closeout.
 
 ## Outcome and scope
 
@@ -358,7 +358,7 @@ Additional browser fixture command: `node /tmp/ux027-browser-verify.cjs` (exit 0
 
 Compact empty and positive screenshots were visually inspected; notes wrap and links remain readable. Evidence is at `/tmp/ux027-browser-evidence.json`, `/tmp/ux027-home-playwright.log`, and `/tmp/ux027-{1280,390}-{zero-place,saved-place-empty,offline-reopen,positive,failed-personal}.png`. These are browser fixtures, not packaged-native or cold offline restart evidence.
 
-## Native build and outstanding acceptance
+## Native build and packaged acceptance
 
 Build-only command: `npm run desktop:build:app:full` (exit 0). Version: `2.25.147`.
 Artifact: `src-tauri/target/release/bundle/macos/Crystal Ball.app` under the UX027 worktree. Executable SHA256: `bb03d5a050ddf6b302ada286f90f8a79ffc45b2a1a56ac935dbe1ddd008df5b1`.
@@ -376,20 +376,72 @@ src-tauri/target/release/bundle/macos/Crystal Ball.app: valid on disk
 src-tauri/target/release/bundle/macos/Crystal Ball.app: satisfies its Designated Requirement
 ```
 
-No install or native launch occurred. The approved design requires packaged zero-place startup, saved-place, offline restart, failed refresh, nearby positive and unrelated worldwide scenarios before acceptance. These remain NOT RUN.
+Bradley explicitly authorized the temporary native test arrangement on 2026-09-07 ("yes"): pause automatic updates, install the reviewed build, restart for testing, then restore the current installation. The main-sync LaunchAgent was paused; the original app was backed up and the three WebKit, Application Support, and Caches profile directories were preserved by rename. The official installer installed the build above with `--relaunch`. Testing used a fresh profile and public test locations, without requesting location permission or exporting/editing keychain secrets.
 
-A second native instance is not isolated by changing its bundle identifier: native code uses the fixed `crystal-ball` keychain service and legacy migration, and startup can terminate other listeners on sidecar port 46123. No isolated running VM was available (`vmrun list`: `Total running VMs: 0`). Do not claim a browser fixture satisfies this native gate. No weaker native path was implemented.
+| Packaged scenario | Observed result |
+|---|---|
+| Zero-place startup | “No saved places for a local assessment.” and “Add a place in Settings.”; unknown coverage remains visible. |
+| Saved place | Public Reykjavik test location yields “No personal impacts identified in available reports.” |
+| Unrelated worldwide context | 53 worldwide situations remain visible beside the empty Reykjavik personal band. A worldwide warning opens its matching dossier. |
+| Nearby positive | Adding public Honolulu yields 7 personal impacts; the first four entries retain Tropical Storm Warning titles and protective action. These are app-reported warnings, not independently verified weather claims. |
+| Offline restart | After fully quitting app and sidecar and applying verified connection denial, restart retains 7 cached personal impacts and 53 worldwide situations; all four keyless sources report degraded/latest refresh failed; evidence age remains unknown. |
+| Failed refresh | “Retry all data” under the same verified denial leaves degraded sources and cached threats visible, with no all-clear or last-good freshness claim. A personal warning opens its matching dossier while offline. |
+
+Native AX text and screenshots are retained locally in `/tmp/ux027-native-evidence/`: `zero-place`, `saved-place`, `positive`, `offline-restart`, `offline-failed-refresh`, `worldwide-dossier`, and `personal-dossier-offline` (`.txt`/`.png`). Initial offline attempts were ineffective because existing allowances took precedence; those attempts are excluded from offline evidence. The final attempt temporarily disabled the two overriding app/node allowances, then cold-restarted both processes. Little Snitch Network Monitor reported the Crystal Ball application group “connections are denied” with a current denial. Actual socket inspection of that sidecar recorded:
+
+```json
+{
+  "sidecarPid": 49859,
+  "establishedTcp": 8,
+  "nonLoopbackEstablishedTcp": 0
+}
+```
+
+The process socket result, application-group denial, and degraded native source statuses corroborate the offline condition; a shell-launched node probe was not treated as proof about the app.
+
+Verbatim native accessibility lines after the failed refresh (leading indentation removed):
+
+```text
+300 text USGS Earthquakes degraded · latest refresh failed Retry all data or open Earthquakes.
+302 text GDACS Disasters degraded · latest refresh failed Retry all data or open GDACS Disaster Alerts.
+304 text Open-Meteo Weather degraded · latest refresh failed Add a saved place or retry all data.
+306 text GDELT News degraded · latest refresh failed Retry all data or open Live Intelligence.
+310 text Personal 7 personal impacts near you
+315 text Available reports only · coverage unverified · evidence age unknown. Review source status before relying on this summary. What changed Change digest unavailable Recorded changes only · source coverage and evidence age unverified. Review source status before relying on this summary. Critical worldwide 53 situations worldwide
+```
+
+### Restoration evidence and limits
+
+All original connection allowances were restored and temporary denial rules removed. Network Monitor then reported Crystal Ball “connections are allowed”. One existing rule's editor review marker changed from unapproved to approved; its original access scope and action were restored. Firewall metadata is therefore not claimed byte-identical.
+
+The three original profile directories were restored before relaunch, with recursive filename/content fingerprints matching their backups: WebKit 39 files, Application Support 3 files, Caches 1774 files. Test profiles were retained separately under the private `/tmp/crystalball-ux027-native-restore` backup. Diagnostic/event logs are append-only and retain test-session entries; no claim is made that those logs were unchanged.
+
+The official installer restored the original app. Actual executable verification:
+
+```json
+{
+  "originalExecutableSha256": "6151f2b84425838b807a90d34ad9cf3f27052fdf75e9fe6e5f1d26eaa94a3066",
+  "restoredExecutableSha256": "6151f2b84425838b807a90d34ad9cf3f27052fdf75e9fe6e5f1d26eaa94a3066",
+  "match": true
+}
+```
+
+The original app was relaunched. The same main-sync LaunchAgent was bootstrapped again; its subsequent status was `idle`, with target and installed SHA both `39b82aea5b89e96fa8406b22f3c903c715956f9f`. Private profile backups and full network inventory are not published.
+
+### Separate usability observations
+
+Native testing also exposed follow-up candidates outside these two production files: a map-load overlay requires “Use Emergency map” to reach Home, and fallback tiles display “API KEY REQUIRED”; stacked alert/setup banners obscure navigation; classic-view accessibility calls twice took approximately 95 seconds, which is tool-call duration rather than a measured UI latency benchmark. Saved Places was reachable through Settings → Places, while command-palette navigation did not visibly open the panel in this session. Record and reproduce these as separate roadmap tasks before implementation; none invalidates the observed Home wording, retained threats, or dossier links.
 
 ## Review, manual closeout, and rollback
 
-Independent reviewer inspected the source commit, tests, applied mutation diffs, raw results and compact positive screenshot: **no blocking code findings**. One acceptance finding remains: execute packaged scenarios in an isolated environment or obtain an explicit acceptance-requirement revision. Actual opposite-agent Claude review and a SHA-pinned verdict remain required before merge; tool-availability checks do not replace them.
+Independent and actual Claude reviews of the prior tip found no blocking code findings; their remaining acceptance blocker was the six unrun native scenarios. Those scenarios are now recorded above. The independent reviewer inspected all six native AX captures, offline/retry screenshots, application-group denial, socket results, restoration records, and restored executable/main-sync status. Its conclusion: “Native acceptance blocker is resolved for UX027.” and “No new evidence blocker.” An exact-tip Claude verdict remains required before merge.
 
-To complete native acceptance, use an approved isolated macOS environment or an explicitly authorized native test arrangement. Record the exact build, verify the six scenarios above, redact personal coordinates, and preserve the existing installed app/profile. Keep the PR draft until acceptance and required review/CI gates are satisfied.
+Manual reproduction: use an authorized temporary profile, compare zero places and public Reykjavik/Honolulu locations, inspect both dossier paths, then verify actual app/sidecar connection denial before cold restart and retry. Restore original installation, profile, connection allowances and update agent afterward.
 
 Rollback involves no migration. Repair or revert a faulty rendering change while retaining conservative empty wording and evidence notes; do not reintroduce unsupported all-clear messaging.
 
 Implementation commit: `Keep Home reassurance within available evidence`.
-Draft PR description: Home previously treated empty matched reports and successful recalculation as reassurance. This change keeps three evidence-scoped bands visible, distinguishes no saved places from unavailable/empty reports, and preserves detected threats. Automated, mutation, browser and build checks pass; packaged-runtime acceptance remains pending.
+Draft PR description: Home previously treated empty matched reports and successful recalculation as reassurance. This change keeps three evidence-scoped bands visible, distinguishes no saved places from unavailable/empty reports, and preserves detected threats. Automated, mutation, browser, build and six packaged-runtime checks pass; independent acceptance review passed.
 
 ## Targeted-test mapping transcript
 

@@ -81,7 +81,7 @@ Require independent review and the actual opposite-agent SHA-pinned verdict.
 Before acceptance, record a packaged build SHA/version and verify zero-place
 startup, a saved place, offline restart, failed refresh, a nearby positive threat,
 and unrelated worldwide context. Redact personal coordinates. No package install
-or release is authorized by this design alone.
+or release is authorized by this design alone. Bradley subsequently authorized the temporary native install, restart, test, and restoration arrangement on 2026-09-07 ("yes"); the six scenarios and restoration evidence are recorded in `docs/validation/UX-027-EVIDENCE-SCOPED-HOME.md`.
 
 Implementation owner: UI specialist. Testing owner: test specialist with separate
 scope. Independent reviewer must not implement. Claim UX-027 through its own

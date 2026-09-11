@@ -16,10 +16,15 @@ and actively changed.
 
 ## 0. TL;DR
 
-The codebase is in **strong** shape. All project gates pass. Code-quality
-metrics are unusually good for this scale. There is **one concentrated
-performance problem** (eager startup module graph) worth real effort, one
-moderate battery issue, and a handful of small guardrail gaps.
+The codebase is in **strong** shape. Code-quality metrics are unusually good
+for this scale, and every gate passed at the reviewed commit. There is **one
+concentrated performance problem** (eager startup module graph) worth real
+effort, one moderate battery issue, and a handful of small guardrail gaps.
+
+**Read §2.4.1 first.** A MapLibre advisory published after the reviewed commit
+has since turned the `npm-audit` CI gate red repo-wide — no code change
+involved. It blocks every PR until resolved, and the remedy is already open as
+PR #1713. That is the only item here that is time-sensitive.
 
 **Do not rewrite this codebase.** The architecture is sound and the fixes below
 are incremental and mechanical. Most of the work is applying patterns that
@@ -30,7 +35,7 @@ are incremental and mechanical. Most of the work is applying patterns that
 | 1 | 9.83 MB JS eagerly parsed at startup (400 static panel imports) | **P1** | L | Med |
 | 2 | Lazy panels are still eagerly mounted at boot | **P1** | S | Low |
 | 3 | ~25 services bypass `RefreshScheduler` (battery) | **P2** | M | Low |
-| 4 | MapLibre critical CVE present but **not reachable** | **P2** | S | Med |
+| 4 | MapLibre critical CVE — not reachable, but **red-gating all CI** | **P0** | S | Med |
 | 5 | Lint baseline not ratcheted (48 findings of silent headroom) | **P3** | XS | None |
 | 6 | Bundle budget measures total, not startup path | **P3** | S | None |
 | 7 | `escapeHtml` falsy-input edge case | **P4** | XS | None |
@@ -117,7 +122,14 @@ One mild exception worth a look (low priority, **not** a security hole):
   bounded RSS title, so impact is minimal. Bound the quantifier (e.g. `{1,80}`)
   if you want it airtight.
 
-### 2.4 Dependency audit — one CRITICAL, but NOT reachable
+### 2.4 Dependency audit — one CRITICAL, not reachable, but NOW BLOCKING CI
+
+> **⚠️ Status change since first draft — this is the most time-sensitive item
+> in this document.** The `npm-audit` CI gate
+> (`.github/workflows/security-audit.yml`, `npm audit --audit-level=high`) is
+> now **RED repo-wide**, and the remedy is already staged in an open PR. Detail
+> in §2.4.1 below. The reachability analysis is unchanged — this is a CI and
+> supply-chain-hygiene emergency, not an active exploit.
 
 ```bash
 npm audit --omit=dev
@@ -150,6 +162,54 @@ reachability), but **do not treat it as an emergency** and do not run
 `GHSA-2jg2-4ch7-h545`) reached via `@xenova/transformers`. This is on the
 local ML path. Same guidance: planned upgrade, verify the transformers/ONNX
 pipeline still works after.
+
+#### 2.4.1 The advisory is new, and it has turned the CI gate red
+
+Evidence that this landed between 2026-09-08 and 2026-09-11, with **no code
+change involved**:
+
+| Fact | Source |
+|---|---|
+| Security Audit **passed** on `main` at `54a9b92` | Actions run `34182565071`, 2026-09-08, conclusion `success` |
+| Security Audit **fails** on a docs-only PR off that same commit | PR #1714, check run `103294281170` |
+| That PR's diff | 1 file, `+684`, one Markdown doc — no `package.json`, no lockfile |
+| Local `npm audit` on the unchanged `54a9b92` lockfile | reproduces the critical |
+
+Same lockfile, opposite results three days apart. `npm audit` queries the live
+advisory database, so a newly published advisory flips the gate with no commit.
+**Consequence: `npm-audit` is now red on every PR in the repo until MapLibre is
+upgraded**, including PRs that touch nothing related.
+
+**There is no patched 5.x.** `npm view 'maplibre-gl@^5' version` → `5.24.0` is
+the newest 5.x. The only remedy is the 6.x major.
+
+**The upgrade is already staged:**
+[#1713 — `build(deps): bump maplibre-gl from 5.24.0 to 6.9.0`](https://github.com/bradleybond512/crystal-ball/pull/1713)
+(Dependabot, opened 2026-09-10, based on `54a9b92`, 2 files, `+14830/-14871` —
+`package.json` + lockfile only). The 6.9.0 changelog contains the actual fix:
+*"Fix DOM sanitization for iframe and srcdoc"* (upstream
+[#8396](https://github.com/maplibre/maplibre-gl-js/pull/8396), commit
+`b51d10a` "improve sanitization").
+
+**Before merging #1713, verify these breaking-change surfaces by hand** — this
+is the core map engine and the repo has no automated map regression test:
+
+- **`setRTLTextPlugin` / `getRTLTextPluginStatus` are deprecated in 6.9.0**
+  (upstream #8343 replaced them with built-in bidi). Check whether the app
+  calls either; right-to-left label rendering is the risk.
+- `src/components/DeckGLMap.ts` — the deck.gl ↔ MapLibre overlay integration
+  (`addControl(this.deckOverlay as unknown as maplibregl.IControl)`, line ~883)
+  is the most likely breakage point across a major.
+- `src/components/NavigationPanel.ts` — `NavigationControl`, `ScaleControl`.
+- `src/services/emergency-pack/emergency-pack-map-protocol.ts` — uses
+  `AddProtocolAction`; custom protocol signatures are a common major-version
+  break.
+- All four basemaps (`dark` / `light` / `satellite` / `terrain`) still render,
+  and the `wm-basemap` switcher works.
+- `deck.gl` / `@deck.gl/mapbox` peer-dependency compatibility with MapLibre 6.
+
+Do **not** reach for `npm audit fix --force` as a shortcut: it also downgrades
+`@xenova/transformers` to 1.4.2, which is an unrelated and unwanted change.
 
 ### 2.5 Rust — CLEAN
 
@@ -576,7 +636,14 @@ incident before.
 
 ## 9. Recommended execution order
 
-**Phase 0 — Guardrails (minutes, zero risk, do first)**
+**Phase 0a — Unblock CI (do before anything else)**
+
+0. Verify the breaking-change surfaces in §2.4.1 by hand, then land
+   [#1713](https://github.com/bradleybond512/crystal-ball/pull/1713)
+   (maplibre-gl 5.24.0 → 6.9.0). Until this merges, `npm-audit` is red on
+   every PR in the repo and nothing else can cleanly go green. [§2.4.1]
+
+**Phase 0b — Guardrails (minutes, zero risk)**
 
 1. `npm run lint:baseline:update` → commit. [§6.1]
 2. Add `eagerPreloadGzipBytes` to `check-bundle-size.mjs`, seeded at 2.8 MB. [§6.2]
@@ -601,9 +668,11 @@ incident before.
 
 **Phase 4 — Maintenance**
 
-9. Planned MapLibre v6 + `sharp`/transformers upgrades, with manual map and ML
-   regression testing. **Not** via `npm audit fix --force`. [§2.4]
-10. Dependency pinning + Renovate. [§7.3]
+9. `sharp` / `@xenova/transformers` upgrade, verifying the ML pipeline after.
+   **Not** via `npm audit fix --force`. (MapLibre is handled in Phase 0a.) [§2.4]
+10. Dependency pinning + Renovate. [§7.3] — note that §2.4.1 is a live example
+    of why this matters: a floating `^5.24.0` went from clean to critical with
+    no commit, and the repo had no patched minor to fall back to.
 
 ---
 
@@ -669,7 +738,8 @@ So you don't spend budget re-auditing:
 - ✅ XSS sanitizer correct, incl. IPv4-mapped-IPv6 SSRF handling
 - ✅ Only `srcdoc` sink is double-protected (sandbox + escaping)
 - ✅ MapLibre CVE **not reachable** (no `setHTML`/`setDOMContent`/Popup,
-  attribution disabled, self-hosted styles)
+  attribution disabled, self-hosted styles) — but it red-gates CI regardless,
+  see §2.4.1; "not reachable" is not "no action needed"
 - ✅ Rust `unsafe` confined to CoreLocation FFI in one file
 - ✅ Interval singletons are idempotent — not leaks
 - ✅ `GodsVisionView` (Cesium, 4.02 MB) correctly lazy-loaded

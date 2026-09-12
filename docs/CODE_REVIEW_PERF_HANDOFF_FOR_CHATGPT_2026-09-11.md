@@ -23,12 +23,12 @@ Update this table in the same commit as the work. Status values: `TODO`,
 |---|---|---|---|
 | 4 | MapLibre 6.9.0 upgrade (#1713) | **BLOCKED** — needs human map verification | §2.4.1 checklist; `npm-audit` red repo-wide until merged |
 | 5 | Lint baseline ratcheted | **DONE** 2026-09-12 | `npm run lint:baseline:update`; 48 findings of headroom closed |
-| 6 | Startup-path bundle budget | **DONE** 2026-09-12 | `eagerPreloadGzipBytes` in `check-bundle-size.mjs`; reports `2.73 MB / 2.85 MB (36 chunks)`; failure path verified (exit 1) |
+| 6 | Startup-path bundle budget | **DONE** 2026-09-12 | `eagerPreloadGzipBytes` in `check-bundle-size.mjs`. Local `2.73 MB / 2.85 MB (36 chunks)`; **CI confirms `2.74 MB (36 chunks, 9.88 MB raw)`** — measured, not skipped. Failure path verified (exit 1) |
 | 7 | `escapeHtml` falsy guard | **REVERTED** — has a prerequisite | Touching `sanitize.ts` trips 4 pre-existing lint errors in **untested** SSRF code; needs tests first. Full plan in §7.1 |
 | 7a | Add `sanitize.test.ts` (**new, from item 7**) | **TODO** — high value | The file behind all 271 `innerHTML` sinks has zero tests |
 | 2.3 | `food-insecurity` regex bounded | **DONE** 2026-09-12 | `{0,79}?` replaces unbounded lazy `+?` |
 | 8 | ESLint caching | **PARTIAL** 2026-09-12 | Covers changed-file lint (16.5s→1.5s), **not** the 9-min baseline scan — scope limit and reasoning in §7.2 |
-| 1 | Eager startup graph (400 static imports) | **TODO** — the main body of work | Baseline locked at 2.73 MB gz by item 6 |
+| 1 | Eager startup graph (400 static imports) | **TODO** — the main body of work | Baseline locked at 2.73 MB gz local / 2.74 MB CI by item 6. **Read §3.4a first** — 14 existing dynamic imports are already inert because something still statically imports them |
 | 2 | Lazy panels eagerly mounted at boot | **TODO** — do before item 1 | `panel-layout.ts:1979` |
 | 3 | ~25 services bypass `RefreshScheduler` | **TODO** | Inventory in §5 |
 | 9 | Dependency pinning + Renovate | **TODO** | §7.3 |
@@ -379,6 +379,58 @@ Suggested order (lowest → highest risk):
 `panels-diagnostic` → `panels-wisdom` → `panels-webcams` → `panels-transit` →
 `panels-markets` → `panels-military` → `panels-hazards` → `panels-feeds` →
 `panels-security` → `panels-alerts` → `panels-analysis` → `panels` (catch-all).
+
+### 3.4a The trap that will waste your time: `INEFFECTIVE_DYNAMIC_IMPORT`
+
+**Read this before converting a single panel.** A `lazyFactories` entry does
+nothing if *any other module still statically imports the same file.* Rolldown
+keeps the module in the boot graph, the dynamic import resolves to the chunk
+it is already in, and the eager number does not move. Convert 30 panels this
+way and you will measure zero improvement with no obvious cause.
+
+This is not hypothetical — it is already happening in the current build, and
+**the build tells you so.** `vite build` prints one warning per instance:
+
+```
+[INEFFECTIVE_DYNAMIC_IMPORT] src/components/NotificationStack.ts is dynamically
+imported by src/main.ts but also statically imported by src/app/panel-layout.ts,
+dynamic import will not move module into another chunk.
+```
+
+Fourteen such warnings are in the current build, and `panel-layout.ts` is the
+static importer defeating several of them:
+
+| Module dynamically imported | Defeated by a static import in |
+|---|---|
+| `components/NotificationStack.ts` | `app/panel-layout.ts` |
+| `services/spc-outlook.ts` | `services/index.ts`, `intel-channels-bridge.ts`, `sidecar-pusher.ts` |
+| `services/intelligence/assumption-producers.ts` | `app/panel-layout.ts` |
+| `services/weather/personal-weather-status.ts` | `app/panel-layout.ts` |
+| `services/weather/saved-place-adapter.ts` | `app/panel-layout.ts` |
+| `services/insights/big-event-detector.ts` | `services/algorithms/tuning-safety-fixtures.ts` |
+| `services/always-on.ts` | `app/refresh-scheduler.ts`, `components/UnifiedSettings.ts` |
+| `services/runtime-config.ts` | `App.ts`, `data-loader.ts`, + many panels |
+| `services/data-freshness.ts` | `App.ts`, `data-loader.ts`, + others |
+| `services/persistent-cache.ts` | `data-loader.ts`, `rss.ts`, + others |
+| `services/reasoning-memory.ts` | `action-memory.ts`, + others |
+| `services/power-grid-alerts.ts` | `data-loader.ts`, `services/index.ts`, + others |
+| `services/cognition/shadow-rollout.ts` | `champion-status-runtime.ts`, + others |
+| `services/weather/weather-exposure.ts` | `app/data-loader.ts` (self) |
+
+**Working method for each conversion batch:**
+
+1. Convert the batch to `lazyFactories`.
+2. `npx vite build` and grep the output for `INEFFECTIVE_DYNAMIC_IMPORT`. Any
+   new warning naming a panel you just converted means a static importer
+   survives — find and remove it, or the conversion is inert.
+3. `npm run bundle:check` and confirm the `eager:` figure actually dropped.
+4. Lower `eagerPreloadGzipBytes` to just above the new figure, same PR.
+
+A batch where step 3 shows no movement is not done, however clean the diff
+looks. Note that some of the rows above are shared services (`runtime-config`,
+`persistent-cache`, `data-freshness`) imported by dozens of files — those are
+not worth chasing individually; they will fall out naturally as panels stop
+being statically imported.
 
 ### 3.5 Known hazard when converting
 

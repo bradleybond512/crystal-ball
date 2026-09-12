@@ -14,6 +14,31 @@ and actively changed.
 
 ---
 
+## Progress Tracker
+
+Update this table in the same commit as the work. Status values: `TODO`,
+`IN PROGRESS`, `DONE`, `BLOCKED (reason)`.
+
+| # | Item | Status | Evidence |
+|---|---|---|---|
+| 4 | MapLibre 6.9.0 upgrade (#1713) | **BLOCKED** — needs human map verification | §2.4.1 checklist; `npm-audit` red repo-wide until merged |
+| 5 | Lint baseline ratcheted | **DONE** 2026-09-12 | `npm run lint:baseline:update`; 48 findings of headroom closed |
+| 6 | Startup-path bundle budget | **DONE** 2026-09-12 | `eagerPreloadGzipBytes` in `check-bundle-size.mjs`; reports `2.73 MB / 2.85 MB (36 chunks)`; failure path verified (exit 1) |
+| 7 | `escapeHtml` falsy guard | **REVERTED** — has a prerequisite | Touching `sanitize.ts` trips 4 pre-existing lint errors in **untested** SSRF code; needs tests first. Full plan in §7.1 |
+| 7a | Add `sanitize.test.ts` (**new, from item 7**) | **TODO** — high value | The file behind all 271 `innerHTML` sinks has zero tests |
+| 2.3 | `food-insecurity` regex bounded | **DONE** 2026-09-12 | `{0,79}?` replaces unbounded lazy `+?` |
+| 8 | ESLint caching | **PARTIAL** 2026-09-12 | Covers changed-file lint (16.5s→1.5s), **not** the 9-min baseline scan — scope limit and reasoning in §7.2 |
+| 1 | Eager startup graph (400 static imports) | **TODO** — the main body of work | Baseline locked at 2.73 MB gz by item 6 |
+| 2 | Lazy panels eagerly mounted at boot | **TODO** — do before item 1 | `panel-layout.ts:1979` |
+| 3 | ~25 services bypass `RefreshScheduler` | **TODO** | Inventory in §5 |
+| 9 | Dependency pinning + Renovate | **TODO** | §7.3 |
+
+**Suggested model per item** (the analysis is already written down, so execution
+is mechanical — see §9): items 1, 2, 3 are pattern-application work well suited
+to Sonnet/Haiku; item 4 wants a stronger model for the breaking-change audit.
+
+---
+
 ## 0. TL;DR
 
 The codebase is in **strong** shape. Code-quality metrics are unusually good
@@ -115,12 +140,13 @@ and each carries a justification comment (e.g. `ofac-parser.ts:190`,
 
 One mild exception worth a look (low priority, **not** a security hole):
 
-- `src/services/food-insecurity.ts:81` —
-  `/^([A-Z][a-zA-Z\s]+?)(?:\s*[-–:|]|\s+Food)/`
-  The lazy `[a-zA-Z\s]+?` followed by an alternation is **polynomial (O(n²))**,
-  not exponential, on a title that never matches the delimiter. Input is a
-  bounded RSS title, so impact is minimal. Bound the quantifier (e.g. `{1,80}`)
-  if you want it airtight.
+- `src/services/food-insecurity.ts` — ✅ **DONE 2026-09-12.** Was
+  `/^([A-Z][a-zA-Z\s]+?)(?:\s*[-–:|]|\s+Food)/`; the lazy `[a-zA-Z\s]+?`
+  followed by an alternation is **polynomial (O(n²))**, not exponential, on a
+  title that never reaches the delimiter. Now bounded as `{0,79}?` (80 chars
+  total with the leading `[A-Z]`), far beyond any real country name, so only
+  pathological input is capped. Matching behaviour is unchanged for every
+  realistic title.
 
 ### 2.4 Dependency audit — one CRITICAL, not reachable, but NOW BLOCKING CI
 
@@ -522,7 +548,7 @@ Keep the `started` guards — they're correct.
 
 ## 6. P3 — Two gaps in the project's own guardrails
 
-### 6.1 Lint baseline not ratcheted (1 command, do this first)
+### 6.1 Lint baseline not ratcheted — ✅ DONE 2026-09-12
 
 `npm run lint:ci` output:
 
@@ -539,7 +565,27 @@ that much lint debt and CI stays green.
 npm run lint:baseline:update   # then commit the updated baseline
 ```
 
-### 6.2 Bundle budget measures total, not startup path
+**Done.** Ran after the source edits so the recorded state is the true
+post-change one. The 48 findings of silent headroom are closed — a regression
+of that size now fails CI instead of passing quietly.
+
+Worth knowing for anyone working on this repo: **the ratchet refuses to raise
+the baseline.** The first update run rejected its own input —
+
+```
+[lint:baseline] ESLint debt increased:
+  scripts/check-bundle-size.mjs error:sonarjs/cognitive-complexity: 1 (baseline 0)
+  src/services/food-insecurity.ts warning:eslint-unused-disable: 1 (baseline 0)
+[lint:baseline] Refusing to raise the baseline.
+```
+
+— catching two regressions introduced by this very batch (the §6.2 helper
+pushed `main()` over the complexity limit, and bounding the §2.3 regex made its
+`eslint-disable` unused). Both were fixed and the update re-run. So
+`lint:baseline:update` is safe to run: it will not launder new debt into the
+baseline, and `--force` is the only way past it.
+
+### 6.2 Bundle budget measures total, not startup path — ✅ DONE 2026-09-12
 
 `scripts/check-bundle-size.mjs` (115 lines) enforces three limits (line 43):
 
@@ -557,44 +603,123 @@ gzip of Cesium — this one is done right, `App.ts:600` dynamically imports it)
 consumes budget while costing nothing at startup, and the 2.73 MB gzip eager
 path is entirely unbudgeted.
 
-**Recommended:** add a fourth limit that parses `dist/index.html` for
-`modulepreload` + entry `<script>` tags and sums only those:
+**Done.** `check-bundle-size.mjs` gained a fourth limit that parses
+`dist/index.html` for the entry `<script>` plus every `modulepreload` link and
+sums only those:
 
 ```js
-eagerPreloadGzipBytes: 2.8 * 1024 * 1024,   // start at current 2.73 MB, ratchet DOWN
+eagerPreloadGzipBytes: 2.85 * 1024 * 1024,   // measured 2.73 MB; RATCHET DOWN
 ```
 
-Do this **before** §3 — it makes the P1 work measurable, prevents regression,
-and would have caught this class of bloat automatically.
+Report line now reads:
+
+```
+total:  4.91 MB / 6.00 MB
+eager:  2.73 MB / 2.85 MB  (36 chunks, 9.83 MB raw) — parsed before first paint
+```
+
+Both paths were verified: it passes at the seeded limit, and temporarily
+lowering the limit to 2.00 MB produced exit 1 with
+`Eager startup JS (entry + modulepreload) gzipped is 2.73 MB > 2.00 MB budget
+across 36 chunk(s)`. A budget that cannot fail is decoration — this one trips.
+
+**This is now the meter for §3 and §4.** Each batch of panels converted to
+`lazyFactories` should drop the eager number; lower `eagerPreloadGzipBytes` to
+just above the new figure in the same PR so the gain is locked in. If the
+number does not move after a conversion batch, the imports are still reachable
+from the boot graph somewhere else — investigate before continuing.
+
+Note for whoever edits this file: the limit is deliberately seeded only ~4%
+above the measured value. That is tight by design. Do not raise it to make a
+red build green; a rise means something re-entered the startup path.
 
 ---
 
 ## 7. P4 — Minor items
 
-### 7.1 `escapeHtml` falsy-input edge case
+### 7.1 `escapeHtml` falsy-input edge case — ⛔ ATTEMPTED, REVERTED 2026-09-12
 
-`src/utils/sanitize.ts:10`:
+**This item is not the one-liner it looks like. Read this before picking it up.**
 
-```ts
-export function escapeHtml(str: string): string {
-  if (!str) return '';        // ← numeric 0 or false → '' instead of '0' / 'false'
-```
+The fix itself is trivial and correct: `src/utils/sanitize.ts` guards on
+falsiness, so a `0` arriving through an `any` boundary renders as empty rather
+than `"0"`. `if (!str)` → `if (str == null)`. Callers were verified first — they
+already wrap in `String(...)` (`escapeHtml(String(metric.changePct))`,
+`escapeHtml(String(awards.length))`), so nothing depends on
+`escapeHtml(0) === ''`.
 
-A `0` arriving through an `any` boundary renders as empty rather than `"0"`.
-The signature says `string`, so impact is low. Tighter guard:
+**The blocker is the pre-commit gate, not the change.** `lint-staged` runs
+`eslint --fix --quiet` over every staged file and fails on *any* error. Touching
+`sanitize.ts` at all therefore surfaces four findings that already exist in it:
 
-```ts
-if (str == null) return '';
-```
+| Line | Rule | Nature |
+|---|---|---|
+| ~15 | `@typescript-eslint/prefer-nullish-coalescing` | `HTML_ESCAPE_MAP[char] \|\| char` — trivial |
+| ~22 | `sonarjs/cognitive-complexity` | `isPrivateHostname` at **28** vs 15 allowed |
+| ~23 | `sonarjs/slow-regex` | inside `isPrivateHostname` |
+| ~75 | `unicorn/consistent-function-scoping` | `isAllowedProtocol` arrow — trivial |
 
-Check for callers relying on the current behavior before changing it.
+Two are trivial. The other two sit in `isPrivateHostname` — the SSRF guard this
+review praised in §2.1 for correctly decoding IPv4-mapped IPv6 — and clearing
+them means restructuring it. **There is no test file for `sanitize.ts`**
+(checked: no `*sanitize*.test.ts`, no test references `sanitizeUrl` or
+`isPrivateHostname`). Refactoring untested XSS/SSRF-critical code to satisfy a
+linter, as a drive-by inside a batch of unrelated quick wins, is a bad trade —
+so the change was reverted rather than forced through.
 
-### 7.2 `lint:ci` takes 9+ minutes
+**Do it as its own small PR, in this order:**
 
-`scripts/lint-baseline.mjs` scans the full repo; observed ~570 s wall clock
-(progress logged every 30 s). Worth ESLint caching (`--cache
---cache-location`) or restricting the full scan to `main` pushes while PRs lint
-only changed files.
+1. Add `src/utils/sanitize.test.ts` covering `escapeHtml` (all five escaped
+   chars, `null`/`undefined`, and the `0` / `false` cases this fix is about) and
+   `sanitizeUrl` (protocol allowlist, loopback, RFC1918, link-local, multicast,
+   and **both** IPv4-mapped IPv6 spellings — `::ffff:127.0.0.1` and
+   `::ffff:7f00:1`).
+2. With tests green, fix the two trivial findings, then extract a helper from
+   `isPrivateHostname` to bring complexity under 15. Keep every range check.
+3. Apply the one-line `escapeHtml` guard.
+
+The tests are worth more than the fix that prompted them: this is the file every
+one of the app's 271 `innerHTML` sinks depends on, and it currently has none.
+
+### 7.2 `lint:ci` takes 9+ minutes — ⚠️ PARTIALLY DONE 2026-09-12
+
+**Read the scope limit before assuming this is fixed.** `lint:ci` is
+`npm run lint && node scripts/lint-changed.mjs`:
+
+| Half | Entry point | Cached? |
+|---|---|---|
+| `lint` (the ~9 min full-repo scan) | `scripts/lint-baseline.mjs` — spawns `eslint.js` **directly** at line 109 | **No** |
+| `lint-changed.mjs` (changed files) | imports `runEslint` from `run-eslint.mjs` | **Yes** |
+
+So the caching added below speeds up changed-file linting and
+`lint:eslint:strict`, **not** the 9-minute baseline scan that motivated this
+item. The headline number is unchanged in CI.
+
+That was a deliberate stop, not an oversight. Extending `--cache` to
+`lint-baseline.mjs` would buy nothing where it hurts — **CI runs from a fresh
+clone, so the cache is always cold there** — while putting the exactness of the
+§6.1 baseline counts at risk (ESLint's cache interacts with `--format json
+--output-file` in ways that can change which clean files appear in output, and
+those counts are the ratchet). Speed is not worth an unreliable guardrail.
+
+**Still open, and the real fix for CI wall-clock:** run the full-repo scan only
+on `main` pushes and let PRs lint changed files only.
+
+`scripts/run-eslint.mjs` now passes `--cache --cache-location`. Measured on one
+file: **16.5 s cold → 1.5 s warm.**
+
+The cache path is fingerprinted with a SHA-256 of `eslint.config.mjs` plus the
+installed ESLint version, because **ESLint's file cache does not invalidate
+itself when config changes** — a plain `--cache` can serve results computed
+under different rules, which would quietly corrupt the §6.1 baseline counts the
+ratchet depends on. Verified: editing the config produces a second cache file
+rather than reusing the first. `CB_ESLINT_NO_CACHE=1` bypasses caching, and any
+failure to read the config falls back to no caching (correctness over speed).
+
+Cache files are gitignored as `.eslintcache-*`.
+
+Still open if more speed is wanted: restrict the full-repo scan to `main`
+pushes while PRs lint only changed files.
 
 ### 7.3 Dependency pinning
 
@@ -643,28 +768,40 @@ incident before.
    (maplibre-gl 5.24.0 → 6.9.0). Until this merges, `npm-audit` is red on
    every PR in the repo and nothing else can cleanly go green. [§2.4.1]
 
-**Phase 0b — Guardrails (minutes, zero risk)**
+**Phase 0b — Guardrails — ✅ COMPLETE 2026-09-12**
 
-1. `npm run lint:baseline:update` → commit. [§6.1]
-2. Add `eagerPreloadGzipBytes` to `check-bundle-size.mjs`, seeded at 2.8 MB. [§6.2]
+1. ~~`npm run lint:baseline:update` → commit.~~ [§6.1]
+2. ~~Add `eagerPreloadGzipBytes` to `check-bundle-size.mjs`.~~ Seeded at
+   2.85 MB against a measured 2.73 MB; failure path verified. [§6.2]
 
-**Phase 1 — Quick wins (hours)**
+**Phase 1 — Quick wins — 2 of 3 landed 2026-09-12**
 
-3. Fix `escapeHtml` falsy guard. [§7.1]
-4. Bound the `food-insecurity.ts:81` quantifier. [§2.3]
-5. Add ESLint caching. [§7.2]
+3. `escapeHtml` falsy guard — **attempted, reverted.** Blocked behind adding
+   tests for `sanitize.ts` and clearing 4 pre-existing findings in it. Promoted
+   to its own PR; see §7.1 for the ordered plan. [§7.1]
+4. ~~Bound the `food-insecurity` quantifier.~~ [§2.3]
+5. ~~Add ESLint caching.~~ 16.5 s → 1.5 s, config-fingerprinted — but scoped
+   to changed-file lint only; the 9-min scan is untouched and deliberately so.
+   [§7.2]
 
 **Phase 2 — Battery (days)**
 
 6. Route the 25 services through `RefreshScheduler`, or add visibility guards.
    One PR per 5–6 services. [§5]
 
-**Phase 3 — The big one (weeks, incremental)**
+**Phase 3 — The big one (weeks, incremental)** ← **START HERE**
 
 7. Defer `priority: 2`/`3` panels off the boot-mount loop. [§4] ← *do this
    before §3; it's smaller and unlocks most of the benefit*
 8. Convert static panel imports to `lazyFactories`, one chunk category per PR,
    recording the eager-payload delta in each PR body. [§3]
+
+The meter is now live: `npm run bundle:check` prints the eager figure, starting
+from **2.73 MB gz / 9.83 MB raw across 36 chunks**. Lower
+`eagerPreloadGzipBytes` in the same PR as each batch so gains cannot silently
+erode. Both steps are mechanical pattern-application against a documented
+example (`registerOsintPanels()`), which makes them good candidates for a
+cheaper model — the judgment is already captured in §3 and §4.
 
 **Phase 4 — Maintenance**
 

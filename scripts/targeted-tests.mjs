@@ -51,6 +51,7 @@ export const OVERRIDES = {
   'scripts/cross-agent-check.mjs': ['test:agentic-pipeline'],
   'scripts/targeted-tests.mjs': ['test:agentic-pipeline'],
   'scripts/ci-codex-review.mjs': ['test:agentic-pipeline'],
+  'scripts/install-mcp-deps.mjs': ['test:mcp-deps'],
   'scripts/lint-baseline.mjs': ['test:eslint-runner'],
   'scripts/lint-changed.mjs': ['test:eslint-runner'],
   'scripts/little-snitch-log-traffic-helper.sh': ['test:little-snitch'],

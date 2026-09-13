@@ -25,8 +25,20 @@ describe('escapeHtml', () => {
     assert.equal(escapeHtml('&amp;'), '&amp;amp;');
   });
 
-  it('returns empty string for falsy inputs', () => {
+  it('returns empty string for null and undefined', () => {
     assert.equal(escapeHtml(''), '');
+    assert.equal(escapeHtml(null as unknown as string), '');
+    assert.equal(escapeHtml(undefined as unknown as string), '');
+  });
+
+  // Regression guard. The function used to bail on `!str`, so a falsy
+  // non-nullish value arriving through an `any` boundary rendered as an empty
+  // string and the content vanished silently. Only null/undefined short-circuit
+  // now. Most callers wrap in String(...), so this is the unwrapped path.
+  it('renders falsy non-nullish values instead of dropping them', () => {
+    assert.equal(escapeHtml(0 as unknown as string), '0');
+    assert.equal(escapeHtml(false as unknown as string), 'false');
+    assert.equal(escapeHtml(Number.NaN as unknown as string), 'NaN');
   });
 
   it('passes through plain text unchanged', () => {
@@ -67,6 +79,41 @@ describe('sanitizeUrl — SSRF / private IP rejection', () => {
 
   it('rejects link-local addresses', () => {
     assert.equal(sanitizeUrl('http://169.254.169.254/latest/meta-data/'), '');
+  });
+
+  // The branch most hand-rolled SSRF filters miss. Both spellings reach the
+  // same address, and the hex form contains no dots at all, so a naive
+  // dotted-quad check waves it straight through to the metadata endpoint.
+  it('rejects IPv4-mapped IPv6 in dotted form', () => {
+    assert.equal(sanitizeUrl('http://[::ffff:127.0.0.1]/'), '');
+    assert.equal(sanitizeUrl('http://[::ffff:169.254.169.254]/latest/meta-data/'), '');
+    assert.equal(sanitizeUrl('http://[::ffff:10.0.0.1]/'), '');
+  });
+
+  it('rejects IPv4-mapped IPv6 in hex form', () => {
+    assert.equal(sanitizeUrl('http://[::ffff:7f00:1]/'), '');       // 127.0.0.1
+    assert.equal(sanitizeUrl('http://[::ffff:a9fe:a9fe]/'), '');    // 169.254.169.254
+    assert.equal(sanitizeUrl('http://[::ffff:c0a8:1]/'), '');       // 192.168.0.1
+  });
+
+  it('rejects IPv6 loopback, unique-local and link-local literals', () => {
+    assert.equal(sanitizeUrl('http://[::1]/'), '');
+    assert.equal(sanitizeUrl('http://[fc00::1]/'), '');
+    assert.equal(sanitizeUrl('http://[fd12:3456::1]/'), '');
+    assert.equal(sanitizeUrl('http://[fe80::1]/'), '');
+  });
+
+  it('rejects 0.0.0.0/8 and multicast', () => {
+    assert.equal(sanitizeUrl('http://0.0.0.0/'), '');
+    assert.equal(sanitizeUrl('http://224.0.0.1/'), '');
+    assert.equal(sanitizeUrl('http://239.255.255.250/'), '');
+  });
+
+  // Trailing dots are equivalent to no trailing dot in DNS, so they must not
+  // be usable to slip a blocked host past the check.
+  it('rejects blocked hosts written with trailing dots', () => {
+    assert.equal(sanitizeUrl('http://localhost./'), '');
+    assert.equal(sanitizeUrl('http://localhost.../'), '');
   });
 });
 

@@ -11,7 +11,7 @@
     "doctor": "node scripts/doctor.mjs",
     "pwa:budget": "node scripts/check-precache-budget.mjs",
     "checkup:schedule": "node scripts/install-checkup-schedule.mjs",
-    "prepare": "node scripts/install-git-hooks.mjs",
+    "prepare": "node scripts/install-git-hooks.mjs && node scripts/install-mcp-deps.mjs",
     "lint:md": "node scripts/lint-markdown.mjs",
     "lint:json": "node scripts/lint-json.mjs",
     "lint:yaml": "node scripts/lint-yaml.mjs",
@@ -64,9 +64,9 @@
     "test:e2e:full": "cross-env VITE_VARIANT=full playwright test",
     "test:e2e:tech": "cross-env VITE_VARIANT=tech playwright test",
     "test:e2e:finance": "cross-env VITE_VARIANT=finance playwright test",
-	"test:e2e:happy": "cross-env VITE_VARIANT=happy playwright test e2e/theme-toggle.spec.ts",
+    "test:e2e:happy": "cross-env VITE_VARIANT=happy playwright test e2e/theme-toggle.spec.ts",
     "test:e2e:runtime": "cross-env VITE_VARIANT=full VITE_WS_API_URL=https://crystalball.app playwright test e2e/runtime-fetch.spec.ts",
-	"test:e2e": "npm run test:e2e:runtime && npm run test:e2e:full && npm run test:e2e:tech && npm run test:e2e:finance && npm run test:e2e:happy",
+    "test:e2e": "npm run test:e2e:runtime && npm run test:e2e:full && npm run test:e2e:tech && npm run test:e2e:finance && npm run test:e2e:happy",
     "test:globe-overlay": "tsx --test src/services/globe/__tests__/overlay-helpers.test.mts",
     "test:review-trail": "tsx --test src/services/__tests__/panel-attention.test.mts src/services/__tests__/sidebar-heat.test.mts src/components/__tests__/attention-navigator.test.mts src/app/__tests__/panel-attention-wiring.test.mts",
     "test:data": "tsx --test tests/*.test.mjs tests/*.test.mts",
@@ -230,7 +230,9 @@
     "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs",
     "test:roadmap-controller": "node --test tests/roadmap-controller.test.mjs",
     "roadmap:check": "node scripts/roadmap-controller.mjs",
-    "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs"
+    "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs",
+    "mcp:install": "npm ci --prefix tools/mcp-server",
+    "test:mcp-deps": "node --test tests/install-mcp-deps.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

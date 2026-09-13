@@ -29,9 +29,9 @@ Update this table in the same commit as the work. Status values: `TODO`,
 | 10 | `crystalball` MCP server dead on fresh clone | **DONE** 2026-09-13 | `tools/mcp-server` is a nested package the root `npm ci` never installed → `ERR_MODULE_NOT_FOUND` → `CONNECTION_CLOSED`. Now installed by `prepare`. §11 |
 | 2.3 | `food-insecurity` regex bounded | **DONE** 2026-09-12 | `{0,79}?` replaces unbounded lazy `+?` |
 | 8 | ESLint caching | **PARTIAL** 2026-09-12 | Covers changed-file lint (16.5s→1.5s), **not** the 9-min baseline scan — scope limit and reasoning in §7.2 |
-| 1 | Eager startup graph (400 static imports) | **TODO** — the main body of work | Baseline locked at 2.73 MB gz local / 2.74 MB CI by item 6. **Read §3.4a first** — 14 existing dynamic imports are already inert because something still statically imports them |
+| 1 | Eager startup graph (400 static imports) | **IN PROGRESS** — batch 1 of 12 converted, 0 MB gained | **Read §3.4b before continuing.** Batch 1 (`panels-diagnostic`, 5 panels) is converted and safe, but the eager figure did not move: the chunk stays eager because non-panel modules co-located into it are still statically reachable. Each batch needs a second step the original estimate missed |
 | 2 | Lazy panels eagerly mounted at boot | **TODO** — do before item 1 | `panel-layout.ts:1979` |
-| 3 | ~25 services bypass `RefreshScheduler` | **TODO** | Inventory in §5 |
+| 3 | ~25 services bypass `RefreshScheduler` | **RESCOPED — do not start as written** | The hidden×10 benefit **does not exist by default** (always-on defaults ON and disables it). Remaining win is jitter only, and the change is architectural not mechanical. Correction + revised recommendation in §5 |
 | 9 | Dependency pinning + Renovate | **TODO** | §7.3 |
 
 **Suggested model per item** (the analysis is already written down, so execution
@@ -60,7 +60,7 @@ are incremental and mechanical. Most of the work is applying patterns that
 |---|---|---|---|---|
 | 1 | 9.83 MB JS eagerly parsed at startup (400 static panel imports) | **P1** | L | Med |
 | 2 | Lazy panels are still eagerly mounted at boot | **P1** | S | Low |
-| 3 | ~25 services bypass `RefreshScheduler` (battery) | **P2** | M | Low |
+| 3 | ~25 services bypass `RefreshScheduler` (battery) | ~~P2~~ **P4** | M | Low |
 | 4 | MapLibre critical CVE — not reachable, but **red-gating all CI** | **P0** | S | Med |
 | 5 | Lint baseline not ratcheted (48 findings of silent headroom) | **P3** | XS | None |
 | 6 | Bundle budget measures total, not startup path | **P3** | S | None |
@@ -433,6 +433,65 @@ looks. Note that some of the rows above are shared services (`runtime-config`,
 not worth chasing individually; they will fall out naturally as panels stop
 being statically imported.
 
+### 3.4b The unit of eagerness is the CHUNK, not the module — proven 2026-09-13
+
+**This is the single most important thing to understand before doing the panel
+conversion. It was found by actually running batch 1 and measuring.**
+
+The `panels-diagnostic` batch was converted exactly as §3.4 prescribes: five
+panels (`ApiDiagnostic`, `SystemDiagnostic`, `DiagnosticSelfTest`,
+`CommandCenter`, `AlgorithmDiagnostic`) moved from static imports to
+`lazyFactories` via a new `registerDiagnosticPanels()`. Verified afterwards:
+
+- typecheck clean, build clean, no new `INEFFECTIVE_DYNAMIC_IMPORT`
+- **zero** remaining static importers of any of the five
+
+**The eager figure did not move. At all.** Before and after:
+`2.73 MB / 36 chunks / 9.83 MB raw`.
+
+**Why.** `manualChunks` assigns those panels to a named chunk. Rolldown then
+co-locates *other* modules that share code with them into the same chunk. The
+chunk is preloaded if **anything** in it is statically reachable from the
+entry — so converting every panel in the group is necessary but **not
+sufficient**. `dist/.vite/manifest.json` shows the chunk still marked
+`isDynamicEntry: false`, statically imported by `index.html`.
+
+**The diagnostic — use this, not guesswork.** After a build:
+
+```bash
+node -e "
+const m=require('./dist/.vite/manifest.json');
+const target=Object.values(m).map(v=>v.file).find(f=>/panels-diagnostic/.test(f||''));
+for(const [k,v] of Object.entries(m)){
+  if((v.imports||[]).includes('_'+target)) console.log('STATIC  <- '+k);
+  if((v.dynamicImports||[]).includes('_'+target)) console.log('dynamic <- '+k);
+}"
+```
+
+For `panels-diagnostic` this printed `index.html`,
+`src/components/OfflineStalenessBanner.ts`, and
+`src/services/diagnostics/frontend-export-composer.ts` — **none of which are
+panels.** Until the chunk has no static importer, the panels inside it stay on
+the startup path no matter how they are imported.
+
+**What this means for the remaining 11 batches.** Budget for two steps per
+chunk, not one:
+
+1. Convert every panel in the group to `lazyFactories` (necessary).
+2. Run the manifest query above. For each non-panel module still statically
+   importing the chunk, either make it dynamically imported too, or adjust
+   `manualChunks` so it does not land in a panel chunk. Only then does the
+   `eager:` figure move.
+
+Step 2 is the real work and the original §3 estimate did not account for it.
+Do **not** measure success by the diff looking clean — measure it with
+`npm run bundle:check`, exactly as §6.2 says.
+
+**Status of batch 1:** the conversion is committed because it is a genuine
+prerequisite and is verified safe, but it delivered **no measured improvement
+on its own**. Whoever picks this up finishes it with step 2 rather than
+starting over.
+
 ### 3.5 Known hazard when converting
 
 `panel-layout.ts:1967` documents a bug already hit once with this pattern:
@@ -584,16 +643,63 @@ at full rate with the window hidden.
 > freight-stress, acled, ais) **with no visibility guard**, which otherwise ran
 > invisibly forever and double-fetched /api/freight-stress."
 
-### Fix
+### ⚠️ Correction 2026-09-13 — the headline benefit does not exist by default
 
-Route these through `RefreshScheduler.scheduleRefresh(name, fn, intervalMs)`.
-They inherit jitter, hidden-window ×10, Ghost multiplier, and `destroy()`
-cleanup for free. Where a service genuinely has no `AppContext` access, the
-minimum acceptable fix is a visibility guard:
+**The framing above overstates what routing these through `RefreshScheduler`
+would buy. Read this before starting the work.**
+
+`isAlwaysOn()` (`src/services/always-on.ts`) **defaults to ON** — a missing or
+blank setting means always-on, and it returns `true` even when `localStorage`
+throws. That is a deliberate, specced product decision:
+
+> "24/7 always-on operation: keep the reasoning + refresh loops running at full
+> cadence even when the window is hidden"
+> — `src/services/always-on.ts`, see `docs/superpowers/specs/2026-06-02-always-on-reasoning-design.md`
+
+And the scheduler honours it (`refresh-scheduler.ts:7`):
+
+```ts
+export function hiddenMultiplier(isHidden: boolean, alwaysOn: boolean): number {
+  if (!isHidden || alwaysOn) return 1;   // ← always-on ⇒ NO slowdown
+  return 10;
+}
+```
+
+So **the hidden-window ×10 backoff is already disabled by default for
+everything that goes through the scheduler.** Routing these 25 services in
+would not give them hidden-window backoff either, unless the user has
+explicitly turned always-on off. The "they don't respect hidden×10" phrasing
+above is true but misleading — nothing does, by default.
+
+**What routing would still genuinely buy:**
+
+| Benefit | Real? |
+|---|---|
+| **Jitter** (±10%) | ✅ Yes — the main remaining win. ~25 fixed-cadence timers at 60 s / 90 s / 2 min / 3 min drift into alignment and fire in bursts; jitter spreads them so the CPU can coalesce and idle |
+| Ghost Mode multiplier (×5) | ✅ Yes — these are CPU-only, but Ghost is a stated privacy posture and consistency is worth something |
+| Adaptive cadence | ✅ Yes |
+| `destroy()` cleanup | ✅ Yes — matters for tests and teardown, not for a long-running app |
+| Hidden-window ×10 | ❌ **No** — disabled by default via always-on |
+
+**Revised recommendation.** This is no longer the straightforward win the
+original entry implied, and it is **not mechanical**: these are module-level
+singletons started by `startX()` with no `AppContext`, while `RefreshScheduler`
+is an instance on `ctx`. Wiring 25 of them in needs either a global accessor or
+threading `ctx` through — an architectural change, for a jitter-shaped benefit.
+
+Do **not** add a bare `document.visibilityState === 'hidden'` guard. That would
+directly contradict the always-on design: these are intelligence and alerting
+services deliberately kept running while hidden. If you add a guard at all it
+must be the always-on-aware form:
 
 ```ts
 if (document.visibilityState === 'hidden' && !isAlwaysOn()) return;
 ```
+
+**The higher-leverage question** is a product one, not a code one: should
+always-on default to ON? It disables the hidden-window backoff app-wide, which
+is a far larger battery lever than jittering 25 timers. That is the user's call
+— raise it rather than quietly changing a documented default.
 
 Keep the `started` guards — they're correct.
 

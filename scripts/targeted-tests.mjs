@@ -30,6 +30,9 @@ const root = process.cwd();
 // rewritten, scripts deleted) — refuse to certify instead of passing vacuously.
 const INDEX_FLOOR = 40;
 
+// Read from the working tree so a branch can declare coverage for files it adds.
+const PR_OVERRIDES_FILE = 'scripts/targeted-tests-overrides.json';
+
 // Cross-file guards the derived map cannot see: tests that assert against the
 // TEXT of another file, and scripts exercised by a suite that does not live
 // beside them.
@@ -76,6 +79,57 @@ const SOURCE_EXT = /\.(ts|mts|tsx|mjs|js|rs|sh)$/;
 
 function isPathToken(token) {
   return token.includes('/') && /\.(mjs|mts|ts|js)$/.test(token) && !token.startsWith('--');
+}
+
+/**
+ * Coverage mappings a PR may declare for itself, read from the working tree
+ * (NOT from this script, which CI takes from origin/main).
+ *
+ * Why this exists: OVERRIDES above lives inside this file, so a branch adding a
+ * new source file plus its suite could not tell the gate they belong together —
+ * CI evaluates main's copy, which has never heard of either. The only
+ * branch-readable escape was scripts/targeted-tests-baseline.txt, whose own
+ * header defines an entry as "a reviewed declaration that the file is
+ * deliberately untested". Baselining a file that *is* tested records something
+ * false, so the gate pushed correct work toward a misleading declaration.
+ *
+ * This is strictly weaker than it looks, and strictly safer than the baseline:
+ *   - merging is ADDITIVE (mergeOverrides), so a PR can add suites to a file's
+ *     mapping but can never remove or replace one main requires;
+ *   - it feeds only the `prSel` pass, so main's mapping still decides what MUST
+ *     run;
+ *   - a declared script must exist in the PR's index, and naming it *runs* it
+ *     (it joins `prOnly` → `selected`). A baseline line, by contrast, runs
+ *     nothing at all.
+ *
+ * Shape: { "<repo-relative source path>": ["test:script", ...] }. Malformed
+ * entries are ignored rather than throwing — a broken file must not take the
+ * gate down.
+ */
+export function prDeclaredOverrides(readFile = () => readFileSync(path.join(root, PR_OVERRIDES_FILE), 'utf8')) {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFile());
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const clean = {};
+  for (const [file, scripts] of Object.entries(parsed)) {
+    if (typeof file !== 'string' || !Array.isArray(scripts)) continue;
+    const names = scripts.filter((n) => typeof n === 'string' && n.startsWith('test:'));
+    if (names.length > 0) clean[file] = names;
+  }
+  return clean;
+}
+
+/** Union the two maps per file. Never drops a script the base already required. */
+export function mergeOverrides(base, extra) {
+  const merged = { ...base };
+  for (const [file, scripts] of Object.entries(extra)) {
+    merged[file] = [...new Set([...(merged[file] ?? []), ...scripts])];
+  }
+  return merged;
 }
 
 export function deriveScriptIndex(scripts) {
@@ -253,7 +307,7 @@ function main() {
   const changed = changedFilesFromGit();
 
   const mainSel = selectScripts(changed, mainIndex);
-  const prSel = selectScripts(changed, prIndex);
+  const prSel = selectScripts(changed, prIndex, mergeOverrides(OVERRIDES, prDeclaredOverrides()));
   // Main's mapping decides what MUST run; the PR's copy may only add suites
   // (new tests shipped alongside new code).
   const prOnly = prSel.scripts.filter((s) => !mainSel.scripts.includes(s));

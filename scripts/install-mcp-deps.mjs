@@ -20,32 +20,42 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const serverDir = path.join(repoRoot, 'tools', 'mcp-server');
+const DEFAULT_SERVER_DIR = path.join(repoRoot, 'tools', 'mcp-server');
 
-function installMcpDeps() {
-  if (process.env.CB_SKIP_MCP_INSTALL === '1') return;
+/**
+ * Decide what to do without doing it. Split out so the skip logic is testable
+ * without shelling out to npm.
+ *
+ * @returns {'skip:disabled'|'skip:no-package'|'skip:installed'|'skip:no-npm'|'ci'|'install'}
+ */
+export function decideAction({ serverDir = DEFAULT_SERVER_DIR, env = process.env } = {}) {
+  if (env.CB_SKIP_MCP_INSTALL === '1') return 'skip:disabled';
   // Not a full checkout (e.g. a published tarball) — nothing to install.
-  if (!existsSync(path.join(serverDir, 'package.json'))) return;
+  if (!existsSync(path.join(serverDir, 'package.json'))) return 'skip:no-package';
   // Already installed. The common case; keep it free.
-  if (existsSync(path.join(serverDir, 'node_modules'))) return;
+  if (existsSync(path.join(serverDir, 'node_modules'))) return 'skip:installed';
+  // npm sets npm_execpath for lifecycle scripts; without it we will not guess.
+  if (!env.npm_execpath || !existsSync(env.npm_execpath)) return 'skip:no-npm';
+  return existsSync(path.join(serverDir, 'package-lock.json')) ? 'ci' : 'install';
+}
 
-  // Invoke npm's CLI through the running node binary rather than resolving
-  // "npm" from PATH. npm sets npm_execpath for lifecycle scripts, so this is
-  // the same npm that started us — no PATH lookup, no hijack surface.
-  const npmCli = process.env.npm_execpath;
-  if (!npmCli || !existsSync(npmCli)) {
+export function installMcpDeps({ serverDir = DEFAULT_SERVER_DIR, env = process.env } = {}) {
+  const action = decideAction({ serverDir, env });
+  if (action === 'skip:no-npm') {
     console.warn('[mcp-deps] Not running under npm (no npm_execpath); skipping.');
     console.warn('[mcp-deps] Install manually with: npm run mcp:install');
-    return;
+    return action;
   }
+  if (action.startsWith('skip:')) return action;
 
-  const command = existsSync(path.join(serverDir, 'package-lock.json')) ? 'ci' : 'install';
-  console.log(`[mcp-deps] Installing tools/mcp-server dependencies (npm ${command})…`);
+  // Invoke npm's CLI through the running node binary rather than resolving
+  // "npm" from PATH — no PATH lookup, no hijack surface.
+  console.log(`[mcp-deps] Installing tools/mcp-server dependencies (npm ${action})…`);
   try {
-    execFileSync(process.execPath, [npmCli, command, '--no-audit', '--no-fund'], {
+    execFileSync(process.execPath, [env.npm_execpath, action, '--no-audit', '--no-fund'], {
       cwd: serverDir,
       stdio: 'inherit',
     });
@@ -57,6 +67,11 @@ function installMcpDeps() {
     console.warn('[mcp-deps] The crystalball MCP server will not start until this succeeds.');
     console.warn('[mcp-deps] Retry with: npm run mcp:install');
   }
+  return action;
 }
 
-installMcpDeps();
+// Only run when executed directly, so importing this module (tests) is free of
+// side effects.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  installMcpDeps();
+}

@@ -231,7 +231,8 @@
     "test:roadmap-controller": "node --test tests/roadmap-controller.test.mjs",
     "roadmap:check": "node scripts/roadmap-controller.mjs",
     "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs",
-    "mcp:install": "npm ci --prefix tools/mcp-server"
+    "mcp:install": "npm ci --prefix tools/mcp-server",
+    "test:mcp-deps": "node --test tests/install-mcp-deps.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

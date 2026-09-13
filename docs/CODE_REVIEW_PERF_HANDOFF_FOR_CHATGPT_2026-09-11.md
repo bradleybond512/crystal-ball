@@ -1143,3 +1143,34 @@ After the fix: `node tools/mcp-server/index.mjs` prints
 **If it breaks again**, run the server directly rather than trusting the
 client's error — `node tools/mcp-server/index.mjs < /dev/null` prints the real
 cause in one line. `CONNECTION_CLOSED` is never the actual error.
+
+### 11.1 The `targeted-tests` coverage gate — know about it before adding files
+
+The first MCP fix passed every local gate and still failed CI:
+
+```
+[targeted-tests] FAIL: changed source file(s) have no targeted suite and are not
+in the coverage baseline: scripts/install-mcp-deps.mjs — add a suite, an
+OVERRIDES entry, or a reviewed baseline line
+```
+
+`scripts/targeted-tests.mjs` maps each changed file to the test suites that
+cover it and **fails when a changed source file maps to nothing**. It is not
+reproduced by `typecheck` / `smoke` / `lint`, so a new script sails through
+local checks and dies in CI. It offers three outs — a real suite, an
+`OVERRIDES` entry, or a baseline line — and only the first is worth taking; the
+other two are how a codebase quietly accumulates untested files.
+
+Resolved by making the script importable without side effects (auto-run guarded
+by `import.meta.url === pathToFileURL(process.argv[1]).href`, the same pattern
+`scripts/run-eslint.mjs` uses), splitting the skip logic into a pure
+`decideAction()`, then adding `tests/install-mcp-deps.test.mjs` (8 tests),
+`test:mcp-deps`, and the `OVERRIDES` entry.
+
+The tests pin the skip paths deliberately — a regression there either
+reintroduces the original `CONNECTION_CLOSED` bug or slows every `npm install`
+— plus one asserting `prepare` still calls the script at all, since the script
+is useless if nothing invokes it.
+
+**When you add any new file under `scripts/` or `src/`, add its suite in the
+same commit.** The gate will find you otherwise, one CI round later.

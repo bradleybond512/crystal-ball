@@ -84,6 +84,22 @@ npx vite build && npm run bundle:check   # → passes, 4.91 MB / 6.00 MB gzip
 
 **All four pass at `54a9b92`.** Any change you make must keep all four green.
 
+### Two suites cannot pass in a Linux container — don't chase them
+
+`npm run targeted-tests` (the CI coverage gate) selects suites by changed file.
+Two of them fail for environment reasons that look alarming and are not:
+
+| Suite | Failure | Why |
+|---|---|---|
+| `test:little-snitch` | `Install the LaunchAgent as the signed-in user, not root` | macOS LaunchAgent installer; refuses to run as root, and containers usually are |
+| `test:ux010` | `failed to run custom build command for gdk-sys v0.18.2` | Compiles the Rust/Tauri native layer; needs GTK dev headers (`libgtk-3-dev` and friends) that a plain Linux image lacks |
+
+Both pass on CI's non-root macOS/Linux runners with the toolchain installed.
+If you are working in a container, expect `targeted-tests` to exit 1 on these
+two and check the *other* suites — grep the output for
+`[targeted-tests] FAILED:` and confirm the named suites are only these.
+Anything else is real.
+
 ### Code-quality metrics (verified, whole repo)
 
 | Metric | Count | Notes |

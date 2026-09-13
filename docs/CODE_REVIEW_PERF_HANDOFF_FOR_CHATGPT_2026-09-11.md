@@ -24,8 +24,9 @@ Update this table in the same commit as the work. Status values: `TODO`,
 | 4 | MapLibre 6.9.0 upgrade (#1713) | **BLOCKED** — needs human map verification | §2.4.1 checklist; `npm-audit` red repo-wide until merged |
 | 5 | Lint baseline ratcheted | **DONE** 2026-09-12 | `npm run lint:baseline:update`; 48 findings of headroom closed |
 | 6 | Startup-path bundle budget | **DONE** 2026-09-12 | `eagerPreloadGzipBytes` in `check-bundle-size.mjs`. Local `2.73 MB / 2.85 MB (36 chunks)`; **CI confirms `2.74 MB (36 chunks, 9.88 MB raw)`** — measured, not skipped. Failure path verified (exit 1) |
-| 7 | `escapeHtml` falsy guard | **REVERTED** — has a prerequisite | Touching `sanitize.ts` trips 4 pre-existing lint errors in **untested** SSRF code; needs tests first. Full plan in §7.1 |
-| 7a | Add `sanitize.test.ts` (**new, from item 7**) | **TODO** — high value | The file behind all 271 `innerHTML` sinks has zero tests |
+| 7 | `escapeHtml` falsy guard + 4 pre-existing `sanitize.ts` findings | **DONE** 2026-09-13 | All 4 cleared; `isPrivateHostname` split into 4 helpers; `/\.+$/` replaced with a linear loop. §7.1 |
+| 7a | `sanitize.ts` test coverage | **DONE** 2026-09-13 | Suite existed (my earlier "no tests" claim was **wrong** — see §7.1 correction). Extended 17→23 tests; added IPv4-mapped IPv6 both spellings, IPv6 literals, multicast, trailing-dot evasion. Mutation-checked |
+| 10 | `crystalball` MCP server dead on fresh clone | **DONE** 2026-09-13 | `tools/mcp-server` is a nested package the root `npm ci` never installed → `ERR_MODULE_NOT_FOUND` → `CONNECTION_CLOSED`. Now installed by `prepare`. §11 |
 | 2.3 | `food-insecurity` regex bounded | **DONE** 2026-09-12 | `{0,79}?` replaces unbounded lazy `+?` |
 | 8 | ESLint caching | **PARTIAL** 2026-09-12 | Covers changed-file lint (16.5s→1.5s), **not** the 9-min baseline scan — scope limit and reasoning in §7.2 |
 | 1 | Eager startup graph (400 static imports) | **TODO** — the main body of work | Baseline locked at 2.73 MB gz local / 2.74 MB CI by item 6. **Read §3.4a first** — 14 existing dynamic imports are already inert because something still statically imports them |
@@ -689,7 +690,52 @@ red build green; a rise means something re-entered the startup path.
 
 ## 7. P4 — Minor items
 
-### 7.1 `escapeHtml` falsy-input edge case — ⛔ ATTEMPTED, REVERTED 2026-09-12
+### 7.1 `escapeHtml` falsy-input edge case — ✅ DONE 2026-09-13
+
+> **Correction to the 2026-09-12 entry below.** That entry claimed
+> "**There is no test file for `sanitize.ts`**". **That was wrong.**
+> `src/utils/__tests__/sanitize.test.mts` exists and had 17 tests, run by
+> `npm run test:sanitize`. The check that produced the claim searched for
+> `*.test.ts` / `*.spec.ts` and missed this repo's actual convention —
+> `__tests__/*.test.mts`. When auditing coverage here, search for `.mts` and
+> check `package.json` for a `test:*` script before concluding anything is
+> untested.
+>
+> The finding that mattered survives: `lint-staged` does fail on the four
+> pre-existing findings, so the one-liner really was blocked. But with a real
+> test suite as a safety net, clearing them was a reasonable job rather than a
+> reckless one — so it is now done rather than deferred.
+
+**What landed 2026-09-13:**
+
+| Finding | Fix |
+|---|---|
+| `prefer-nullish-coalescing` | `HTML_ESCAPE_MAP[char] \|\| char` → `?? char` |
+| `cognitive-complexity` 28 in `isPrivateHostname` | Split into `stripTrailingDots`, `normalizeIpv4Mapped`, `isPrivateIpv4`, `isPrivateIpv6` |
+| `slow-regex` | `/\.+$/` backtracks quadratically on a dot-heavy hostname (attacker-influenced). Replaced with a linear loop; `\d+` bounded to `\d{1,3}`. Suppression no longer needed |
+| `consistent-function-scoping` | `isAllowedProtocol` moved to module scope |
+
+Plus the original one-liner: `if (!str)` → `if (str == null)`.
+
+**Tests went 17 → 23** (suite 32 → 38 assertions, all passing). The additions
+cover what had no coverage at all:
+
+- `escapeHtml(0)` / `false` / `NaN` — the regression this fix is about
+- **IPv4-mapped IPv6 in both spellings** — `[::ffff:127.0.0.1]` and the hex
+  form `[::ffff:7f00:1]`, including the AWS metadata address `169.254.169.254`
+  as `[::ffff:a9fe:a9fe]`. The hex form contains no dots, so a naive
+  dotted-quad filter waves it straight through
+- IPv6 loopback / `fc00::/7` / `fe80::/10` literals
+- `0.0.0.0/8` and multicast
+- Trailing-dot evasion (`http://localhost./`)
+
+**The new tests were mutation-checked, not just run.** Breaking the hex-form
+branch (`const hex = null`) made 2 tests fail, confirming they exercise the
+path rather than passing vacuously. Re-verify that way if you refactor this
+file again — a green suite proves nothing on its own.
+
+<details>
+<summary>Original 2026-09-12 entry (kept for the reasoning; its "no tests" claim is wrong)</summary>
 
 **This item is not the one-liner it looks like. Read this before picking it up.**
 
@@ -732,6 +778,8 @@ so the change was reverted rather than forced through.
 
 The tests are worth more than the fix that prompted them: this is the file every
 one of the app's 271 `innerHTML` sinks depends on, and it currently has none.
+
+</details>
 
 ### 7.2 `lint:ci` takes 9+ minutes — ⚠️ PARTIALLY DONE 2026-09-12
 
@@ -941,3 +989,51 @@ So you don't spend budget re-auditing:
 was executed, not estimated. Where an initial hypothesis was disproven by
 verification (the `military-flights` fetch, the MapLibre reachability), the
 corrected finding is recorded above rather than the original suspicion.*
+
+---
+
+## 11. `crystalball` MCP server dead on every fresh clone — ✅ FIXED 2026-09-13
+
+Not in the original review; found while the container was rebuilt and the
+server reported `crystalball (CONNECTION_CLOSED)`.
+
+**Root cause.** `tools/mcp-server/` is its own npm package with its own
+`package.json` and `package-lock.json`, declaring `@modelcontextprotocol/sdk`
+and `zod`. The root project has **no workspaces and no postinstall**, so
+`npm ci` at the repo root never installs them. The server then dies instantly:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@modelcontextprotocol/sdk'
+imported from /…/tools/mcp-server/index.mjs
+```
+
+The client surfaces that only as `CONNECTION_CLOSED`, which looks like a
+transport or config problem and sends you hunting in the wrong place. CI never
+caught it because `.github/workflows/smoke.yml:103` runs its own
+`cd tools/mcp-server && npm ci`; developers had no equivalent step, so the
+server worked only for people who had happened to run the nested install by
+hand at some point.
+
+**Fix.** `scripts/install-mcp-deps.mjs`, wired into the root `prepare`:
+
+```json
+"prepare": "node scripts/install-git-hooks.mjs && node scripts/install-mcp-deps.mjs",
+"mcp:install": "npm ci --prefix tools/mcp-server"
+```
+
+Deliberate properties, all verified:
+
+| Property | Why | Verified |
+|---|---|---|
+| No-op when `node_modules` exists | The common case must stay free | 0.06 s, silent |
+| Non-fatal on failure | A broken MCP server must never break `npm install` for someone working on the app | warn-only path |
+| `CB_SKIP_MCP_INSTALL=1` escape hatch | CI jobs that do their own install | confirmed skips |
+| Prefers `npm ci`, falls back to `install` | Respects the nested lockfile when present | — |
+
+After the fix: `node tools/mcp-server/index.mjs` prints
+`[crystalball-mcp] Server running on stdio`, and `npm run mcp:test` passes
+**232 tests, 0 failures**.
+
+**If it breaks again**, run the server directly rather than trusting the
+client's error — `node tools/mcp-server/index.mjs < /dev/null` prints the real
+cause in one line. `CONNECTION_CLOSED` is never the actual error.

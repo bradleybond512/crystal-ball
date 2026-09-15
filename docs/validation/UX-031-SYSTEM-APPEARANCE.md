@@ -1,6 +1,7 @@
 # UX-031 — System appearance repair evidence
 
-Status: implementation/validation in progress. Draft PR #1720.
+Status: implementation and automated validation complete; final review in progress.
+Draft PR #1720. Packaged native acceptance remains open.
 Risk: Standard frontend repair; medium QA risk. No installation or release.
 
 ## Intended behavior and boundaries
@@ -19,9 +20,8 @@ experiment or initial-paint guarantee is included.
 
 Local logs and native probe artifacts are retained under
 `~/.crystalball-diagnostics/ux031-system-appearance-20260915/`.
-Final command outputs, hashes, mutation counts and source-tip reviews will be
-recorded here after validation completes. Proposed checks in the design brief
-are not results.
+Final command outputs and mutation proofs are recorded below. Proposed checks
+in the design brief are not results.
 
 ## Known external release blockers
 
@@ -116,3 +116,79 @@ The final manager SHA-256 after this repair is
 Earlier native and browser results above identify their earlier source revision;
 final-source verification and review remain required. This is the first repair
 cycle, not a waiver of the finding or a completed review verdict.
+
+## Final repaired-source verification
+
+Final production source: `4da0d51417e51a9d5a585994fb7bae0b46736310`.
+The earlier results above are historical; the following checks cover the final
+subscription-capability repair. Node 22 was used throughout.
+
+```text
+bash scripts/agentic-validate.sh --tests 'test:system-theme'
+# pass 20
+# fail 0
+[lint:conflicts] No merge conflict markers found.
+[lint:json] Parsed 137 tracked JSON file(s).
+[lint:yaml] Parsed 23 tracked YAML file(s).
+[lint:shell] Checked 20 tracked shell file(s).
+[lint:md] Checked 144 Markdown file(s).
+Secret scan passed for 4746 file(s).
+✓ built in 20.55s
+Agentic validation gate passed.
+Tests run: test:system-theme
+
+npm run bundle:check
+✓ All bundle-size policies satisfied.
+```
+
+Both exited 0. The gate includes all type checks and the full web build.
+Logs: `agentic-gate-review1.log` and `bundle-check-review1.log` under the evidence
+root. Main gzip is 442.8 KB against the unchanged 460 KB cap; total gzip is
+4.90 MB against 6.00 MB. Build warnings about existing mixed static/dynamic
+imports remain; no native build, installation or performance benchmark is claimed.
+
+Final-source browser baselines in the separate clean mutation worktree report
+5 passed / 0 failed for full and 5 passed / 0 failed for happy. Exact commands
+and selected-case mutation results are in
+[the mutation report](UX-031-MUTATION-PROOFS.md). All 16 deliberate regressions
+failed their relevant assertions; 0 survived. Every applied diff was inspected,
+every restored checksum matched, and the mutation worktree finished clean.
+
+The final isolated WKWebView probe used manager SHA-256
+`2fad21df8d2bfb8337612581921c91b8d12c106b2780e045bbd97592ef076e0d`
+and reports `"failed" : 0, "passed" : 8` on macOS 27.0 / 26A428.
+It received actual native media events through per-window appearance overrides.
+
+```bash
+python3 /Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/native/run.py /Users/bradleybond/Developer/crystalball/.worktrees/ux031-system-appearance-20260915 candidate-review1
+```
+
+The runner exited 0; assertion counts come from its JSON, not that exit status.
+Copied source and results are in `native/candidate-review1`; exact harness commands
+and scope are in `native/README.md`. This remains module/engine evidence only.
+
+## Changed architecture and review status
+
+- `src/utils/theme-manager.ts`: separates automatic application from manual
+  persistence, preserves a session choice, and installs one supported listener.
+- `src/config/variant.ts`, `src/main.ts`, `src/settings-main.ts`: shared variant
+  resolution before theme bootstrap and subscriptions in both entries.
+- `src/styles/window-chrome.css`, `src/styles/macos-native.css`: five light
+  selector groups now match the html-owned theme; existing materials remain.
+- `src/utils/__tests__/theme-manager.test.mts`, `e2e/system-theme.spec.ts`,
+  `package.json`: focused behavioral coverage and its test command.
+
+Independent source review found one P2, repaired in the first automatic cycle.
+The second source assessment reports no blocking source findings and independently
+ran 20 passing module tests. Final independent evidence review concluded: “No blocking findings in the source
+and automated evidence reviewed for `4da0d51417e51a9d5a585994fb7bae0b46736310`.”
+It verified all 16 mutation diffs, assertions/counts, restored checksums and clean
+records against retained artifacts. The separate real Claude review remains
+pending; its conclusion must pin the final committed tip. The PR remains draft while packaged acceptance is outstanding.
+
+Proposed final documentation commit: `Preserve reproducible appearance evidence`.
+Draft PR description: Restore repeated system appearance changes in main and
+Settings while respecting manual choices, storage failures and happy's light
+default. Repair affected Mac light styles. Automated, mutation and isolated
+WKWebView checks pass; packaged Tauri acceptance and inherited dependency audit
+issues remain open. No migration or installation is included.

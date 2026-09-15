@@ -783,6 +783,22 @@ on 2026-09-07.
 
 ---
 
+### UX-031 — Reliable system appearance lifecycle
+
+**Status:** IN PROGRESS — draft claim; Standard frontend repair.
+
+Follow repeated system light/dark changes in main and Settings when no manual
+choice exists. Preserve explicit choices (including session choices when storage
+fails), happy's light default, html-owned theme, and existing theme events.
+Correct the affected native light selector groups using the production cascade.
+No native bridge, new materials, UX-025 experiment or initial-paint claim.
+
+Acceptance: focused behavioral and real-bootstrap browser tests, applied-diff
+mutation proof, packaged appearance verification and independent/Claude review.
+Design: [UX-031 appearance brief](plans/2026-09-15-ux031-system-appearance.md).
+
+---
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -831,3 +847,4 @@ Update the row in the same PR that does the work.
 | UX-024 | Persistent pane review trail | DONE | #1689 |
 | UX-026 | Location + saved-place impact in alert digests | IN PROGRESS | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
+| UX-031 | Reliable system appearance lifecycle | IN PROGRESS | #1720 |

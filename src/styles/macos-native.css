@@ -934,7 +934,7 @@ body.is-desktop-macos .mac-content {
   /* Note: no -webkit-app-region here — JS startDragging() handles drag (see _setupToolbarDrag) */
 }
 
-body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
+[data-theme="light"] body.is-desktop-macos .mac-content-toolbar {
   background: rgba(242, 242, 247, 0.85);
 }
 
@@ -1085,7 +1085,7 @@ body.is-desktop-macos .map-section .panel-header {
   font-family: var(--mac-font);
 }
 
-body.is-desktop-macos[data-theme="light"] .map-section .panel-header {
+[data-theme="light"] body.is-desktop-macos .map-section .panel-header {
   background: rgba(242, 242, 247, 0.6);
 }
 
@@ -1193,12 +1193,10 @@ body.is-desktop-macos ::-webkit-scrollbar-corner {
 }
 
 /* Light-mode thumb — darker against light backgrounds */
-body.is-desktop-macos[data-theme="light"] ::-webkit-scrollbar-thumb,
-body.is-desktop-macos [data-theme="light"] ::-webkit-scrollbar-thumb {
+[data-theme="light"] body.is-desktop-macos ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.28);
 }
-body.is-desktop-macos[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
-body.is-desktop-macos [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+[data-theme="light"] body.is-desktop-macos ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.50);
 }
 

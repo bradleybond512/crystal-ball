@@ -96,6 +96,9 @@ function evictOldestPipelineIfNeeded(): void {
  if (oldest !== undefined) {
  loadedPipelines.delete(oldest);
  console.log(`[MLWorker] Evicted model ${oldest} to stay within memory limit`);
+ // The manager budgets each request on whether its model is resident, so it
+ // has to hear about a departure it did not ask for (no id = unsolicited).
+ self.postMessage({ type: 'model-evicted', modelId: oldest });
  }
   }
 }

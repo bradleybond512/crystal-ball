@@ -54,7 +54,10 @@ export class FAAWeatherCamsPanel extends Panel {
  if (raw.status === 'fulfilled' && (!this.cameraUnavailable || raw.value.cameras.length > 0)) {
  this.cameras = scoreCamerasAgainstAlerts(raw.value.cameras,
  nws.status === 'fulfilled' ? nws.value : [],
- gdacs.status === 'fulfilled' && gdacs.value.dataState.mode === 'live' ? gdacs.value.events : []);
+ gdacs.status === 'fulfilled' && (gdacs.value.dataState.mode === 'live' || gdacs.value.dataState.mode === 'cached')
+ ? gdacs.value.events : []).map(cam => this.gdacsCached && cam.alertLabel?.startsWith('GDACS ')
+ ? { ...cam, alertLabel: `${cam.alertLabel} (cached context)` }
+ : cam);
  if (this.selectedCam) this.selectedCam = this.cameras.find(cam => cam.id === this.selectedCam?.id) ?? null;
  }
  } catch {

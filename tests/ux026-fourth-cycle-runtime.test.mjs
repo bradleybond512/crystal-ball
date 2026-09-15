@@ -8,6 +8,8 @@ import { DigestOverlay } from '../src/components/DigestOverlay.ts';
 
 const layout = readFileSync(new URL('../src/app/panel-layout.ts', import.meta.url), 'utf8');
 const faaService = readFileSync(new URL('../src/services/faa-cameras.ts', import.meta.url), 'utf8');
+const gdacsService = readFileSync(new URL('../src/services/gdacs.ts', import.meta.url), 'utf8');
+const breakerService = readFileSync(new URL('../src/utils/circuit-breaker.ts', import.meta.url), 'utf8');
 const faa = readFileSync(new URL('../src/components/FAAWeatherCamsPanel.ts', import.meta.url), 'utf8');
 const NOW = Date.parse('2026-09-14T12:00:00Z');
 const settle = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
@@ -207,11 +209,11 @@ test('document resume refreshes evidence after a suspended timer', async () => {
   h.destroy();
 });
 
-function faaHarness(actualCameraService = false) {
+function faaHarness(actualCameraService = false, trackedGdacsFetch = null) {
   const win = environment();
   const content = win.document.createElement('div');
   win.document.body.append(content);
-  const camera = { id: 'cam', name: 'Working camera', state: 'IL', category: 'weather', imageUrl: '/image', lastUpdated: new Date(NOW).toISOString() };
+  const camera = { id: 'cam', lat: 0, lon: 0, name: 'Working camera', state: 'IL', category: 'weather', imageUrl: '/image', lastUpdated: new Date(NOW).toISOString() };
   let sources = [[camera], [], []];
   let now = NOW;
   let httpFailure = false;
@@ -243,8 +245,8 @@ function faaHarness(actualCameraService = false) {
     fetchFAACameras: realCameraService?.fetchFAACameras ?? (() => sources[0] instanceof Error ? Promise.reject(sources[0]) : Promise.resolve(sources[0])),
     dataFreshness,
     fetchNWSAlerts: () => sources[1] instanceof Error ? Promise.reject(sources[1]) : Promise.resolve(sources[1]),
-    fetchGDACSEventsTracked: () => sources[2] instanceof Error ? Promise.reject(sources[2])
-      : Promise.resolve(Array.isArray(sources[2]) ? { events: sources[2], dataState: { mode: 'live' } } : sources[2]),
+    fetchGDACSEventsTracked: trackedGdacsFetch ?? (() => sources[2] instanceof Error ? Promise.reject(sources[2])
+      : Promise.resolve(Array.isArray(sources[2]) ? { events: sources[2], dataState: { mode: 'live' } } : sources[2])),
     scoreCamerasAgainstAlerts: realCameraService?.scoreCamerasAgainstAlerts ?? ((raw, nwsAlerts, gdacs) => {
       scored.push({ raw, nwsAlerts, gdacs });
       return raw.map(c => ({ ...c, alertProximityMi: gdacs.length ? 1 : null, alertLabel: gdacs.length ? 'Flood' : null, relevanceScore: 1 }));
@@ -375,19 +377,21 @@ test('actual first-load FAA empty failure is unavailable, not a successful empty
 
 test('GDACS tracked unavailable and cached results qualify the alert-only view', async () => {
   const h = faaHarness();
-  h.setSources([[h.camera], [], { events: [], dataState: { mode: 'unavailable' } }]);
+  h.setSources([[h.camera], [], { events: [{ id: 'unavailable-flood' }], dataState: { mode: 'unavailable' } }]);
   const panel = h.create();
   await settle();
   assert.match(h.content.textContent, /GDACS alert evidence unavailable/);
+  assert.deepEqual(h.scored.at(-1).gdacs, []);
   h.setSources([[h.camera], [], { events: [{ id: 'old-flood' }], dataState: { mode: 'cached' } }]);
   panel.refresh();
   await settle();
   assert.match(h.content.textContent, /GDACS alert evidence is cached/);
-  assert.deepEqual(h.scored.at(-1).gdacs, []);
+  assert.deepEqual(h.scored.at(-1).gdacs, [{ id: 'old-flood' }]);
   const toggle = h.content.querySelector('input');
   toggle.checked = true;
   toggle.dispatchEvent(new window.Event('change'));
-  assert.match(h.content.textContent, /available alert evidence/);
+  assert.match(h.content.textContent, /Working camera/);
+  assert.equal(h.content.querySelectorAll('tbody tr').length, 1);
   panel.destroy();
 });
 
@@ -417,5 +421,99 @@ test('actual malformed camera rows preserve the existing load rejection boundary
   await assert.doesNotReject(() => panel.load());
   assert.match(h.content.textContent, /Working camera/);
   assert.match(h.content.textContent, /Camera refresh unavailable.*stale/);
+  panel.destroy();
+});
+
+
+function actualGdacsHarness() {
+  let now = NOW;
+  let failed = false;
+  let calls = 0;
+  let breaker;
+  const Clock = class extends Date { static now() { return now; } };
+  const CircuitBreaker = execute(`${breakerService.replaceAll('export ', '').replaceAll('import.meta.env.DEV', 'false')}\nreturn CircuitBreaker;`, {
+    Date: Clock, console: { warn() {}, error() {} },
+  });
+  const fetchTracked = execute(`${gdacsService.replace(/^import .*?;\n/gms, '').replaceAll('export ', '')}\nreturn fetchGDACSEventsTracked;`, {
+    Date: Clock, AbortSignal,
+    createCircuitBreaker: options => { breaker = new CircuitBreaker({ ...options, persistCache: false }); return breaker; },
+    rehydrateDate: value => new Date(value),
+    fetchWithContext: async () => {
+      calls += 1;
+      if (failed) throw new Error('GDACS unavailable');
+      return { ok: true, json: async () => ({ features: [{
+        geometry: { type: 'Point', coordinates: [0, 0] },
+        properties: { eventtype: 'FL', eventid: 'flood-1', name: 'Nearby flood', country: 'Test', alertlevel: 'Red', fromdate: new Date(NOW).toISOString() },
+      }] }) };
+    },
+  });
+  return {
+    fetchTracked, advance(ms) { now += ms; }, fail(value) { failed = value; },
+    clearCache() { breaker.clearCache(); }, get calls() { return calls; },
+  };
+}
+
+test('actual healthy GDACS TTL cache retains the flood camera and qualifies row and viewer context', async () => {
+  const gdacs = actualGdacsHarness();
+  const first = await gdacs.fetchTracked();
+  assert.equal(first.dataState.mode, 'live');
+  const cached = await gdacs.fetchTracked();
+  assert.equal(cached.dataState.mode, 'cached');
+  assert.equal(cached.dataState.timestamp, NOW);
+  assert.equal(gdacs.calls, 1);
+  const h = faaHarness(true, gdacs.fetchTracked);
+  const panel = h.create();
+  await settle();
+  const toggle = h.content.querySelector('input');
+  toggle.checked = true;
+  toggle.dispatchEvent(new window.Event('change'));
+  const row = h.content.querySelector('tbody tr');
+  assert.ok(row, 'a healthy TTL-cached flood must retain its alert-proximate camera');
+  assert.match(row.textContent, /GDACS FL — Nearby flood.*cached context/);
+  assert.match(h.content.textContent, /GDACS alert evidence is cached/);
+  row.dispatchEvent(new window.Event('click'));
+  assert.match(h.content.querySelector('.faa-cam-viewer').textContent, /Nearby flood.*cached context/);
+  assert.equal(gdacs.calls, 1, 'displaying cached context must not trigger a new GDACS request');
+  panel.destroy();
+});
+
+test('actual stale GDACS fallback retains qualified context and live recovery clears qualification', async () => {
+  const gdacs = actualGdacsHarness();
+  await gdacs.fetchTracked();
+  gdacs.advance(11 * 60_000);
+  gdacs.fail(true);
+  const h = faaHarness(true, gdacs.fetchTracked);
+  const panel = h.create();
+  await settle();
+  const toggle = h.content.querySelector('input');
+  toggle.checked = true;
+  toggle.dispatchEvent(new window.Event('change'));
+  assert.equal(h.content.querySelectorAll('tbody tr').length, 1);
+  assert.match(h.content.querySelector('tbody tr').textContent, /Nearby flood.*cached context/);
+  assert.match(h.content.textContent, /GDACS alert evidence is cached/);
+  gdacs.fail(false);
+  gdacs.clearCache();
+  panel.refresh();
+  await settle();
+  assert.equal(h.content.querySelectorAll('tbody tr').length, 1);
+  assert.match(h.content.querySelector('tbody tr').textContent, /Nearby flood/);
+  assert.doesNotMatch(h.content.textContent, /cached context|GDACS alert evidence is cached/);
+  panel.destroy();
+});
+
+
+test('cached GDACS qualification does not relabel a closer NWS match or change scoring', async () => {
+  const gdacs = actualGdacsHarness();
+  await gdacs.fetchTracked();
+  const h = faaHarness(true, gdacs.fetchTracked);
+  h.setSources([[h.camera], [{ centroid: [0, 0], event: 'Tornado Warning' }], []]);
+  const panel = h.create();
+  await settle();
+  const row = h.content.querySelector('tbody tr');
+  assert.ok(row);
+  assert.match(row.textContent, /NWS Tornado Warning/);
+  assert.doesNotMatch(row.textContent, /cached context/);
+  assert.equal(row.querySelectorAll('td')[3].textContent, '50');
+  assert.match(h.content.textContent, /GDACS alert evidence is cached/);
   panel.destroy();
 });

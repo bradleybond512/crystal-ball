@@ -1,9 +1,9 @@
 # macOS UI adoption — system appearance repair brief
 
 Status: historical September 14 design, reconciled September 15, 2026.
-UX-031 is claimed and implemented in [PR #1720](https://github.com/bradleybond512/crystal-ball/pull/1720);
-a second review/repair cycle is restoring the full variant’s attribute-free
-identity before merge. Packaged acceptance remains open. Companion to
+UX-031 source merged through [PR #1720](https://github.com/bradleybond512/crystal-ball/pull/1720),
+including the full variant’s attribute-free identity repair. Packaged acceptance
+remains open. Companion to
 [the macOS 27 adoption plan](2026-09-14-macos27-adoption.md).
 
 ## Objective and classification

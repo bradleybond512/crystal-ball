@@ -97,3 +97,22 @@ Native evidence, copied source and exact commands are under the local diagnostic
 Browser hover coverage checks actual stylesheet rule applicability; it does not
 prove native pointer rendering. Existing initial-paint tests are legacy toggle
 regressions and do not establish flash-free pre-module rendering.
+
+## Independent review repair 1
+
+The first source review found one blocking P2: a MediaQueryList with only legacy
+subscription methods caused the newly connected watcher to throw during
+bootstrap. The repair checks subscription capability before installing the
+listener. Unsupported hosts retain initial appearance and manual toggles; no
+particular older OS version is claimed tested.
+
+```text
+Focused regression before repair: # pass 19 / # fail 1
+Focused suite after repair: # pass 20 / # fail 0
+```
+
+The final manager SHA-256 after this repair is
+`2fad21df8d2bfb8337612581921c91b8d12c106b2780e045bbd97592ef076e0d`.
+Earlier native and browser results above identify their earlier source revision;
+final-source verification and review remain required. This is the first repair
+cycle, not a waiver of the finding or a completed review verdict.

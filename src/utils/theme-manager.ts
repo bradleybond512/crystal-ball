@@ -104,7 +104,7 @@ export function applyStoredTheme(): void {
 export function watchSystemTheme(): void {
   if (watchingSystemTheme) return;
   const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-  if (!mq) return;
+  if (!mq || typeof mq.addEventListener !== 'function') return;
   watchingSystemTheme = true;
 
   mq.addEventListener('change', (e) => {

@@ -17,6 +17,7 @@ function fixture(options: {
   dark?: boolean;
   storageMode?: 'normal' | 'throws' | 'drops';
   media?: boolean;
+  mediaEvents?: boolean;
   store?: Map<string, string>;
 } = {}) {
   const store = options.store ?? new Map<string, string>();
@@ -30,7 +31,7 @@ function fixture(options: {
   let writes = 0;
   const mq = {
     matches: options.dark ?? false,
-    addEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => listeners.add(listener),
+    addEventListener: options.mediaEvents === false ? undefined : (_type: string, listener: (event: { matches: boolean }) => void) => listeners.add(listener),
     removeEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => listeners.delete(listener),
   };
   const exports = {} as ThemeModule;
@@ -233,4 +234,17 @@ test('a stored manual choice survives storage becoming unreadable after startup'
   assert.equal(f.root.dataset.theme, 'dark');
   assert.deepEqual(f.events, []);
   assert.equal(f.writes, 0);
+});
+
+
+test('missing media change-listener API preserves startup and manual appearance', () => {
+  const f = fixture({ mediaEvents: false });
+  f.theme.applyStoredTheme();
+  assert.equal(f.root.dataset.theme, 'light');
+  assert.doesNotThrow(() => f.theme.watchSystemTheme());
+  assert.equal(f.listeners.size, 0);
+  f.theme.setTheme('dark');
+  assert.equal(f.root.dataset.theme, 'dark');
+  assert.equal(f.store.get('crystalball-theme'), 'dark');
+  assert.deepEqual(f.events, ['dark']);
 });

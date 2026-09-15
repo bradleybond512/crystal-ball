@@ -88,9 +88,9 @@ not ok 1 - full follows repeated OS changes without persisting a choice
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     'dark' !== 'light'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 'light'
@@ -126,9 +126,9 @@ not ok 7 - manual choice remains authoritative when storage throws
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     'light' !== 'dark'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 'dark'
@@ -164,9 +164,9 @@ not ok 19 - a stored manual choice survives storage becoming unreadable after st
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     'light' !== 'dark'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 'dark'
@@ -202,9 +202,9 @@ not ok 12 - repeated watcher setup installs only one media listener
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     2 !== 1
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 1
@@ -240,9 +240,9 @@ not ok 13 - tech build selection wins before theme bootstrap
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     'full' !== 'tech'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 'tech'
@@ -653,9 +653,9 @@ not ok 16 - full build retains stored variant before hostname
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     'full' !== 'happy'
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 'happy'
@@ -682,7 +682,7 @@ index 2ed8145d9..c9ad81f63 100644
 --- a/src/utils/theme-manager.ts
 +++ b/src/utils/theme-manager.ts
 @@ -115,7 +115,7 @@ export function watchSystemTheme(): void {
- 
+
   // Only follow OS if no explicit user preference and not the happy variant
   if (!sessionChoice && !hasExplicitPreference && variant !== 'happy') {
 - applyTheme(e.matches ? 'dark' : 'light');
@@ -700,7 +700,7 @@ index 2ed8145d9..b2fc6d264 100644
 --- a/src/utils/theme-manager.ts
 +++ b/src/utils/theme-manager.ts
 @@ -48,7 +48,6 @@ function applyTheme(theme: Theme): void {
- 
+
  /** Apply and persist an explicit choice, retaining it if storage is unavailable. */
  export function setTheme(theme: Theme): void {
 -  sessionChoice = theme;
@@ -751,7 +751,7 @@ index 77978ea65..38cccf51e 100644
 --- a/src/config/variant.ts
 +++ b/src/config/variant.ts
 @@ -9,7 +9,7 @@ export const SITE_VARIANT: SiteVariant = requestedVariant && SITE_VARIANTS.has(r
- 
+
  export function initializeVariant(): void {
    let variant = SITE_VARIANT;
 -  if (variant === 'full') {
@@ -773,7 +773,7 @@ index 167bebe52..476b93c5b 100644
  initializeVariant();
  applyStoredTheme();
 -watchSystemTheme();
- 
+
  // is-desktop-macos drives a macOS-specific design system that hides
  // .header and replaces it with a sidebar+toolbar shell. Only Tauri builds
 ```
@@ -791,7 +791,7 @@ index f559fa026..338b160fe 100644
    applyStoredTheme();
 -  watchSystemTheme();
    await initI18n();
- 
+
    try { await resolveLocalApiPort(); } catch { /* use default */ }
 ```
 
@@ -804,13 +804,13 @@ index 167bebe52..45b1fabcc 100644
 +++ b/src/main.ts
 @@ -282,8 +282,8 @@ loadDesktopSecretsWhenReady().then(async () => {
  void import('@/services/always-on').then(({ applyAlwaysOn }) => applyAlwaysOn()).catch(() => {});
- 
+
  // Resolve the variant before choosing its default appearance.
 -initializeVariant();
  applyStoredTheme();
 +initializeVariant();
  watchSystemTheme();
- 
+
  // is-desktop-macos drives a macOS-specific design system that hides
 ```
 
@@ -823,7 +823,7 @@ index f559fa026..73a19dd1b 100644
 +++ b/src/settings-main.ts
 @@ -752,8 +752,8 @@ function handleSearch(query: string): void {
  // ── Init ──
- 
+
  async function initSettingsWindow(): Promise<void> {
 -  initializeVariant();
    applyStoredTheme();
@@ -842,7 +842,7 @@ index bb3394b6c..41b1788a5 100644
 @@ -22,7 +22,7 @@ body.is-desktop-macos .app-root {
    -webkit-backdrop-filter: blur(20px) saturate(180%);
  }
- 
+
 -[data-theme="light"] body.is-desktop-macos .app-root {
 +body.is-desktop-macos[data-theme="light"] .app-root {
    background: rgba(242, 242, 247, 0.55);
@@ -859,7 +859,7 @@ index 1d5d10f94..3a794b763 100644
 @@ -934,7 +934,7 @@ body.is-desktop-macos .mac-content {
    /* Note: no -webkit-app-region here — JS startDragging() handles drag (see _setupToolbarDrag) */
  }
- 
+
 -[data-theme="light"] body.is-desktop-macos .mac-content-toolbar {
 +body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
    background: rgba(242, 242, 247, 0.85);
@@ -876,7 +876,7 @@ index 1d5d10f94..7f4c09997 100644
 @@ -1085,7 +1085,7 @@ body.is-desktop-macos .map-section .panel-header {
    font-family: var(--mac-font);
  }
- 
+
 -[data-theme="light"] body.is-desktop-macos .map-section .panel-header {
 +body.is-desktop-macos[data-theme="light"] .map-section .panel-header {
    background: rgba(242, 242, 247, 0.6);
@@ -892,7 +892,7 @@ index 1d5d10f94..399553ce9 100644
 +++ b/src/styles/macos-native.css
 @@ -1193,7 +1193,7 @@ body.is-desktop-macos ::-webkit-scrollbar-corner {
  }
- 
+
  /* Light-mode thumb — darker against light backgrounds */
 -[data-theme="light"] body.is-desktop-macos ::-webkit-scrollbar-thumb {
 +body.is-desktop-macos[data-theme="light"] ::-webkit-scrollbar-thumb {
@@ -932,7 +932,7 @@ index 2ed8145d9..fcd2e2d93 100644
 -  if (!mq || typeof mq.addEventListener !== 'function') return;
 +  if (!mq) return;
    watchingSystemTheme = true;
- 
+
    mq.addEventListener('change', (e) => {
 ```
 
@@ -953,3 +953,251 @@ index 77978ea65..3ea355971 100644
        const prefix = location.hostname.split('.')[0];
        if (prefix && SITE_VARIANTS.has(prefix as SiteVariant)) variant = prefix as SiteVariant;
 ```
+
+---
+
+## UX-031 repair 2 configuration mutation proof
+
+Source: `1bccc6b7f585c768e59b09dfa49e42d5bc032cf7`.
+
+This is the bounded configuration follow-up. Earlier mutation evidence remains in the separate `mutations/` directory.
+
+All commands ran `npm run test:system-theme` with `/opt/homebrew/opt/node@22/bin` prepended to PATH. The unchanged baseline printed `# pass 22` and `# fail 0` (exit 0). Each mutant began clean; its actual diff was inspected before testing. Every original file was restored byte-for-byte and verified with `shasum -a 256` and an empty `git status --short`.
+
+| Mutant | Baseline | Mutated result |
+|---|---|---|
+| 01-full-identity | 22 pass / 0 fail | 18 pass / 4 fail |
+| 02-build-precedence | 22 pass / 0 fail | 19 pass / 3 fail |
+| 03-stored-precedence | 22 pass / 0 fail | 21 pass / 1 fail |
+
+Three mutants run, three killed, zero survivors and zero harness failures. All failures are actual behavior assertions. Final working tree is clean.
+
+## 01-full-identity
+
+Before and restored SHA256: `7fd7eaf8742b552e37f2299e0bfb4cf4015511dc4e625031a9313dfd03c18055`.
+
+Confirmed applied diff:
+
+```diff
+diff --git a/src/config/variant.ts b/src/config/variant.ts
+index 1741ecc37..77978ea65 100644
+--- a/src/config/variant.ts
++++ b/src/config/variant.ts
+@@ -19,6 +19,5 @@ export function initializeVariant(): void {
+       if (prefix && SITE_VARIANTS.has(prefix as SiteVariant)) variant = prefix as SiteVariant;
+     }
+   }
+-  if (variant === 'full') delete document.documentElement.dataset.variant;
+-  else document.documentElement.dataset.variant = variant;
++  document.documentElement.dataset.variant = variant;
+ }
+```
+
+Actual test assertion excerpts:
+
+```text
+not ok 16 - full build retains stored variant before hostname
+  ---
+  duration_ms: 9.83825
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6445'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'full'
+    - undefined
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'full'
+  operator: 'strictEqual'
+
+not ok 17 - default full identity has no variant attribute
+  ---
+  duration_ms: 5.430333
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6674'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'full'
+    - undefined
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'full'
+  operator: 'strictEqual'
+
+not ok 18 - stored full selection clears a stale non-full attribute
+  ---
+  duration_ms: 3.292542
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6773'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'full'
+    - undefined
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'full'
+  operator: 'strictEqual'
+
+not ok 20 - unknown build, hostname and stored variants clear an invalid stale attribute
+  ---
+  duration_ms: 2.32325
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:7281'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + 'full'
+    - undefined
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual: 'full'
+  operator: 'strictEqual'
+```
+
+Full log: `/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/repair2-mutations/01-full-identity.log`.
+
+## 02-build-precedence
+
+Before and restored SHA256: `7fd7eaf8742b552e37f2299e0bfb4cf4015511dc4e625031a9313dfd03c18055`.
+
+Confirmed applied diff:
+
+```diff
+diff --git a/src/config/variant.ts b/src/config/variant.ts
+index 1741ecc37..7a988c1c1 100644
+--- a/src/config/variant.ts
++++ b/src/config/variant.ts
+@@ -9,7 +9,7 @@ export const SITE_VARIANT: SiteVariant = requestedVariant && SITE_VARIANTS.has(r
+
+ export function initializeVariant(): void {
+   let variant = SITE_VARIANT;
+-  if (variant === 'full') {
++  {
+     let stored: string | null = null;
+     try { stored = localStorage.getItem('crystalball-variant'); } catch { /* storage unavailable */ }
+     if (stored && SITE_VARIANTS.has(stored as SiteVariant)) {
+```
+
+Actual test assertion excerpts:
+
+```text
+not ok 13 - tech build selection wins before theme bootstrap
+  ---
+  duration_ms: 6.402584
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6289'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'tech'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'tech'
+  operator: 'strictEqual'
+
+not ok 14 - finance build selection wins before theme bootstrap
+  ---
+  duration_ms: 3.778125
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6289'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'finance'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'finance'
+  operator: 'strictEqual'
+
+not ok 15 - happy build selection wins before theme bootstrap
+  ---
+  duration_ms: 3.028792
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6289'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'happy'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'happy'
+  operator: 'strictEqual'
+```
+
+Full log: `/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/repair2-mutations/02-build-precedence.log`.
+
+## 03-stored-precedence
+
+Before and restored SHA256: `7fd7eaf8742b552e37f2299e0bfb4cf4015511dc4e625031a9313dfd03c18055`.
+
+Confirmed applied diff:
+
+```diff
+diff --git a/src/config/variant.ts b/src/config/variant.ts
+index 1741ecc37..3ae73833f 100644
+--- a/src/config/variant.ts
++++ b/src/config/variant.ts
+@@ -13,7 +13,7 @@ export function initializeVariant(): void {
+     let stored: string | null = null;
+     try { stored = localStorage.getItem('crystalball-variant'); } catch { /* storage unavailable */ }
+     if (stored && SITE_VARIANTS.has(stored as SiteVariant)) {
+-      variant = stored as SiteVariant;
++      variant = SITE_VARIANT;
+     } else {
+       const prefix = location.hostname.split('.')[0];
+       if (prefix && SITE_VARIANTS.has(prefix as SiteVariant)) variant = prefix as SiteVariant;
+```
+
+Actual test assertion excerpts:
+
+```text
+not ok 16 - full build retains stored variant before hostname
+  ---
+  duration_ms: 5.339583
+  type: 'test'
+  location: '/Users/bradleybond/Developer/crystalball/.worktrees/ux031-mutation-proof-20260915/src/utils/__tests__/theme-manager.test.mts:1:6445'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'happy'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'happy'
+  operator: 'strictEqual'
+```
+
+Full log: `/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/repair2-mutations/03-stored-precedence.log`.
+
+Quoted blank lines have whitespace-only normalization for repository lint; raw
+retained logs and diffs preserve every byte.

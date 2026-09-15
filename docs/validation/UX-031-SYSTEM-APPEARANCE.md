@@ -23,17 +23,19 @@ Local logs and native probe artifacts are retained under
 Final command outputs and mutation proofs are recorded below. Proposed checks
 in the design brief are not results.
 
-## Known external release blockers
+## Historical dependency audit blocker
 
-The unchanged main dependency lockfile produced this audit baseline:
+Before integrating merged prerequisite PR #1721, the old main lockfile produced
+this audit baseline:
 
 ```text
 {"info":0,"low":0,"moderate":6,"high":2,"critical":1,"total":9}
 ```
 
 The package advisories include the existing map/loader dependency chain and
-other existing dependencies. `npm audit --audit-level=high` cannot be claimed
-clean for this branch until the separately owned prerequisite repairs land.
+other existing dependencies. That baseline blocked an audit-clean claim at the time. PR #1721 subsequently
+landed; the integrated dependency installation reports zero vulnerabilities.
+Final integrated audit evidence is recorded during merge closeout.
 No audit rule, dependency version or bundle limit is weakened in UX-031.
 
 ## Native acceptance and manual verification
@@ -184,7 +186,8 @@ ran 20 passing module tests. Final independent evidence review concluded: “No 
 and automated evidence reviewed for `4da0d51417e51a9d5a585994fb7bae0b46736310`.”
 It verified all 16 mutation diffs, assertions/counts, restored checksums and clean
 records against retained artifacts. The separate real Claude review remains
-pending; its conclusion must pin the final committed tip. The PR remains draft while packaged acceptance is outstanding.
+pending; its conclusion must pin the final committed tip. The user subsequently authorized source merge; packaged acceptance remains
+tracked separately and is not claimed by source delivery.
 
 Proposed final documentation commit: `Preserve reproducible appearance evidence`.
 Draft PR description: Restore repeated system appearance changes in main and
@@ -251,10 +254,10 @@ Both commands exited 0. Main remains 442.8 KB and total 4.90 MB with unchanged
 limits. Sequential browser results from the same repair:
 
 ```text
-Full identity + system-theme: 6 passed (54.8s)
-Happy identity + system-theme: 6 passed (1.1m)
-Tech identity: 1 passed (23.5s)
-Finance identity: 1 passed (27.5s)
+6 passed (54.8s)
+6 passed (1.1m)
+1 passed (23.5s)
+1 passed (27.5s)
 ```
 
 The per-run logs are `identity-repair-{full,happy,tech,finance}.log`; final gate
@@ -265,3 +268,96 @@ Exact browser commands use `E2E_PORT=4301 VITE_VARIANT=full` and
 tech and finance use ports 4303/4304 and only `e2e/variant-identity.spec.ts`.
 Each run has its own evidence output directory. Final variant source SHA-256:
 `7fd7eaf8742b552e37f2299e0bfb4cf4015511dc4e625031a9313dfd03c18055`.
+
+Repair 2 clean-tree proof is appended to
+[the mutation report](UX-031-MUTATION-PROOFS.md). Baseline 22 pass / 0 fail;
+full-attribute regression 18 pass / 4 fail; build precedence 19 pass / 3 fail;
+stored precedence 21 pass / 1 fail. All three applied diffs were inspected and
+restored with matching SHA-256 and clean status. These proofs pin pre-integration
+source `1bccc6b7f585c768e59b09dfa49e42d5bc032cf7`; rebase onto dependency main
+`7bbb43b35ae150dbb32d91eec298fd26eecf2a42` changed none of the appearance source
+bytes. Integrated validation is recorded separately.
+
+## Integrated main-baseline verification
+
+Appearance source bytes are unchanged after rebase onto merged PR #1721.
+The resulting source tip is `fb494773e7e258549d9d147439ad6e7d4edc4ab5`.
+Fresh Node 22 dependency installation and validation exited 0:
+
+```text
+npm ci
+added 949 packages, and audited 951 packages in 39s
+found 0 vulnerabilities
+
+bash scripts/agentic-validate.sh --tests 'test:system-theme'
+# pass 22
+# fail 0
+Secret scan passed for 4754 file(s).
+✓ built in 19.47s
+Agentic validation gate passed.
+Tests run: test:system-theme
+
+npm run bundle:check
+✓ All bundle-size policies satisfied.
+
+npm audit --json
+{"info":0,"low":0,"moderate":0,"high":0,"critical":0,"total":0}
+```
+
+The integrated enforcement report measures main 442.7 KB / 460 KB and total
+5.10 MB / 6.00 MB. Vite's decimal output uses different size presentation;
+these are the unchanged policy tool's measurements. Logs are `merge-npm-ci.log`,
+`merge-agentic-gate.log`, `merge-bundle-check.log` and `merge-audit.json`.
+
+Repair 2 full browser command (before dependency integration):
+
+```bash
+E2E_PORT=4301 VITE_VARIANT=full npx playwright test e2e/variant-identity.spec.ts e2e/system-theme.spec.ts --output=/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/identity-repair-full-artifacts
+```
+
+Repair 2 happy browser command (before dependency integration):
+
+```bash
+E2E_PORT=4302 VITE_VARIANT=happy npx playwright test e2e/variant-identity.spec.ts e2e/system-theme.spec.ts --output=/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/identity-repair-happy-artifacts
+```
+
+Repair 2 tech browser command (before dependency integration):
+
+```bash
+E2E_PORT=4303 VITE_VARIANT=tech npx playwright test e2e/variant-identity.spec.ts --output=/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/identity-repair-tech-artifacts
+```
+
+Repair 2 finance browser command (before dependency integration):
+
+```bash
+E2E_PORT=4304 VITE_VARIANT=finance npx playwright test e2e/variant-identity.spec.ts --output=/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/identity-repair-finance-artifacts
+```
+
+Integrated browser reruns, sequential and both exit 0:
+
+```bash
+E2E_PORT=4311 VITE_VARIANT=full npx playwright test e2e/variant-identity.spec.ts e2e/system-theme.spec.ts --output=/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/merge-full-artifacts
+```
+
+```text
+6 passed (43.8s)
+```
+
+```bash
+E2E_PORT=4312 VITE_VARIANT=happy npx playwright test e2e/variant-identity.spec.ts e2e/system-theme.spec.ts --output=/Users/bradleybond/.crystalball-diagnostics/ux031-system-appearance-20260915/merge-happy-artifacts
+```
+
+```text
+6 passed (41.3s)
+```
+
+Independent second-cycle source assessment found no blocking findings and
+independently reran 22 passing module tests. Final evidence and opposite-agent
+review must pin the final documentation tip before closeout. Native acceptance
+remains an open tracker item, not a claim made by source merge.
+
+Final independent evidence audit verified the integrated gate, audit, bundle
+and browser results against raw logs; all three configuration mutation diffs,
+assertions, counts, checksums and clean restores matched. It found no blocking
+correctness or evidence findings. Quoted blank-line whitespace was normalized
+for repository lint while raw artifacts remain unchanged.

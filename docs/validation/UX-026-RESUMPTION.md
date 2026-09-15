@@ -1,7 +1,7 @@
 # UX-026 resumption evidence
 
-Status: third-cycle candidate blocked in review; fourth cycle subsequently
-approved and in progress. No publication or acceptance claimed.
+Status: fourth-cycle source blocked on cached GDACS context; renewed repair
+cycle approval is pending. No publication or acceptance claimed.
 
 ## Scope and authorization
 
@@ -236,3 +236,55 @@ identity failures use concise boolean diagnostics. The overlay suite reports
 12 pass / 0 fail. Historical indeterminate focus proofs remain retained; they
 are not relabeled as kills. Clean fourth-candidate mutation proofs, broad gate
 and independent review still follow this checkpoint.
+
+## Fourth-cycle review and gate result
+
+Source `a3c3c3c0c611107bac0d2a601e2823cbfe2df2ce` passed the targeted
+suites in the full gate:
+
+```text
+# pass 112
+# fail 0
+# pass 411
+# fail 0
+# pass 8
+# fail 0
+# pass 14816
+# fail 0
+Secret scan passed for 4752 file(s).
+```
+
+The gate exited 1 at the roadmap status check, before build:
+
+```text
+- UX-026 has unrecognized status IN PROGRESS — APPROVED FOURTH REPAIR CYCLE
+```
+
+The tracker now uses the supported `BLOCKED` status. This correction does not
+turn the failed gate into a pass. Type checks, lint and document checks had
+passed; a fresh final gate remains required.
+
+Independent runtime review confirmed that the earlier digest-time and
+NWS-camera-loss defects are addressed, but found a P2 regression: ordinary
+GDACS cache hits discard known hazard context. Its actual reproduction was:
+
+```text
+Live result: 1 matched camera, label "GDACS FL — Nearby flood", score 50.
+Immediate healthy cache hit, age 0 ms: 0 matched cameras, label null.
+```
+
+The view explicitly warns of incomplete evidence, so this is information loss,
+not false reassurance. The proposed next repair retains cached GDACS matches
+with explicit cached wording, excludes unavailable results, and preserves
+existing scoring and provider contracts. Approval is pending before production
+edits resume. Map dependency remediation proceeds independently.
+
+Independent evidence audit verified 132 artifact hashes, 57 applied diffs and
+logs, source checksums and a clean fourth proof worktree. The
+[fourth proof report](UX-026-FOURTH-MUTATION-PROOFS.md) records 55 killed,
+2 survived and 0 indeterminate mutations. Baseline and restored suites both
+reported 119 pass / 0 fail. Focus entry, Tab trapping and focus restoration
+now fail under mutation at 10/2, 10/2 and 11/1 respectively. The two surviving
+scheduling guards remain explicitly unclaimed. For repository whitespace
+compliance only whitespace-only lines are normalized; private raw logs retain
+every byte. This evidence does not clear the GDACS blocker.

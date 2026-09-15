@@ -22,7 +22,7 @@ body.is-desktop-macos .app-root {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
-body.is-desktop-macos[data-theme="light"] .app-root {
+[data-theme="light"] body.is-desktop-macos .app-root {
   background: rgba(242, 242, 247, 0.55);
 }
 

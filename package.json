@@ -106,6 +106,7 @@
     "test:replay": "tsx --test src/services/ops/__tests__/replay-harness.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts src/services/ops/__tests__/replay-baseline.test.mts",
     "test:ops": "tsx --test src/services/ops/__tests__/mission-ledger.test.mts src/services/ops/__tests__/mission-ledger-persistence.test.mts src/services/ops/__tests__/time-to-warn.test.mts src/services/ops/__tests__/closed-loop-batch.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts src/services/ops/__tests__/replay-harness.test.mts src/services/ops/__tests__/replay-baseline.test.mts",
     "test:algorithms": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
+    "test:system-theme": "tsx --test src/utils/__tests__/theme-manager.test.mts",
     "test:renderer": "tsx --test src/*/__tests__/*.test.mts src/*/*/__tests__/*.test.mts src/*/*/*/__tests__/*.test.mts",
     "test:story-renderer-chunk": "tsx --test src/config/__tests__/story-renderer-chunk.test.mts",
     "test:home-reassurance": "tsx --test src/services/home-shell/__tests__/briefing-view.test.mts src/components/__tests__/home-shell-reassurance.test.mts",

@@ -709,6 +709,13 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
 
 ### UX-026 — Location and saved-place impact in alert digests *(High Assurance)*
 
+Status: MONITOR
+Evidence: #1704 — reviewed source candidate; local and CI evidence in the PR.
+Exit condition: Complete packaged digest expiry, keyboard/focus, cached-camera and partial-source acceptance; resolve or explicitly retain the two conservative NWS data limitations documented by review.
+Review after: 2026-09-22
+
+This is manual acceptance tracking, not a recurring task or monitoring automation.
+
 Make every "Since you last looked" story immediately answer where the event is
 and whether current evidence indicates impact to any saved place.
 
@@ -785,7 +792,13 @@ on 2026-09-07.
 
 ### UX-031 — Reliable system appearance lifecycle
 
-**Status:** IN PROGRESS — draft claim; Standard frontend repair.
+Status: MONITOR
+Evidence: #1720 — source merged with clean audit, tests and review.
+Exit condition: Verify system appearance switching in the packaged main window and its unified Settings dialog; retain initial-paint and full native visual acceptance as explicitly scoped follow-ups.
+Review after: 2026-09-22
+
+Source is delivered; packaged acceptance remains open. This status does not start
+an automation or claim native acceptance.
 
 Follow repeated system light/dark changes in main and Settings when no manual
 choice exists. Preserve explicit choices (including session choices when storage
@@ -845,6 +858,6 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS | #1704 |
+| UX-026 | Location + saved-place impact in alert digests | MONITOR | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
-| UX-031 | Reliable system appearance lifecycle | IN PROGRESS | #1720 |
+| UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |

@@ -747,8 +747,11 @@ and whether current evidence indicates impact to any saved place.
   review found that ordinary healthy GDACS cache hits lose camera hazard context.
   Bradley approved the bounded [cached-context repair](plans/2026-09-14-ux026-cached-gdacs-repair.md);
   source `f977aee1f` passed 15,350 tests and independent source review.
-  Fresh Claude review and dependency integration remain open.
-  A refreshed dependency audit is also a publication blocker. See
+  On September 15 the approved map dependency prerequisite merged to main;
+  UX-026 rebased without behavioral changes and passed 15,342 tests in the
+  integration gate plus the separate 8-test storm-source suite. The fresh audit
+  reports zero vulnerabilities; the 444.4 KB main bundle passes the unchanged
+  460 KB limit. Fresh Claude review and publication closeout remain open. See
   [resumption evidence](validation/UX-026-RESUMPTION.md) and
   [literal proofs](validation/UX-026-MUTATION-PROOFS.md). No merge or installation
   occurred; the recurring controller remains deleted.

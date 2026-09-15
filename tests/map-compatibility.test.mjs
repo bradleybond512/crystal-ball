@@ -190,3 +190,11 @@ test('development prebundles the installed MapLibre adapter rather than resolvin
   assert.match(optimize, /'@deck.gl\/maplibre'/);
   assert.doesNotMatch(optimize, /'@deck.gl\/mapbox'/);
 });
+
+test('development keeps map extensions and mesh layers in the same optimized graphics graph', () => {
+  const config = source('vite.config.ts');
+  const optimize = config.slice(config.indexOf('  optimizeDeps:'));
+  for (const name of ['@deck.gl/extensions', '@deck.gl/mesh-layers']) {
+    assert.ok(optimize.includes(`'${name}'`), `${name} must be prebundled with deck core`);
+  }
+});

@@ -27,6 +27,7 @@ export class FAAWeatherCamsPanel extends Panel {
   }
 
   private async load(): Promise<void> {
+ try {
  const [raw, nws, gdacs] = await Promise.all([
  fetchFAACameras(),
  fetchNWSAlerts(),
@@ -34,6 +35,9 @@ export class FAAWeatherCamsPanel extends Panel {
  ]);
  this.cameras = scoreCamerasAgainstAlerts(raw, nws, gdacs);
  this.render();
+ } catch {
+ return;
+ }
   }
 
   public refresh(): void {

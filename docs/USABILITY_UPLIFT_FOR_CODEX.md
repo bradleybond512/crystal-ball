@@ -707,6 +707,62 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   failing assertions, full restored SHA-256 values, and quoted validation output
   are recorded in `docs/validation/UX-024-MUTATION-PROOFS.md`.
 
+### UX-026 — Location and saved-place impact in alert digests *(High Assurance)*
+
+Status: MONITOR
+Evidence: #1704 — reviewed source candidate; local and CI evidence in the PR.
+Exit condition: Complete packaged digest expiry, keyboard/focus, cached-camera and partial-source acceptance; resolve or explicitly retain the two conservative NWS data limitations documented by review.
+Review after: 2026-09-22
+
+This is manual acceptance tracking, not a recurring task or monitoring automation.
+
+Make every "Since you last looked" story immediately answer where the event is
+and whether current evidence indicates impact to any saved place.
+
+- **Show:** a deterministic location row and saved-place impact row on every
+  story. Impact states are `likely`, `possible`, `no reported overlap`,
+  `unknown`, or `not evaluated`; never say safe, unaffected, or all clear.
+- **Fail closed:** `no reported overlap` requires complete, current affected-area
+  evidence evaluated against every saved place. Missing, stale, malformed,
+  centroid-only, cold-rehydrated, partial-member, or over-budget evidence is
+  `unknown`. A global alert is only `possible` at saved places unless direct
+  evidence supports a stronger conclusion.
+- **Privacy:** saved-place names, IDs, coordinates, radii, tags, notes, and
+  priority stay local. Model output may summarize why a story matters but cannot
+  supply or override location, impact state, place names, or evidence wording.
+- **Scope:** add a shared pure alert-presentation projection, but wire only the
+  digest overlay in this task. Preserve alert ranking, thresholds, cadence,
+  acknowledgement, snooze/pin state, dismissal behavior, providers, and polling.
+- **Accessibility:** expose the overlay as a labeled modal dialog, render stories
+  as semantic articles, trap and restore focus, retain Escape/backdrop/close
+  dismissal, and provide bounded scrolling at compact sizes.
+- **Done when:** no rendered story can omit either required row; model failure
+  falls back to deterministic ranked-alert cards; saved-place or member changes
+  reproject locally without another model call; complete negative weather
+  coverage is explicitly labeled as not an all-clear.
+- **Verify:** focused projection, prompt/privacy, fallback, component,
+  accessibility, lifecycle, performance, and mutation tests; `npm run
+  test:weather`, `npm run test:renderer`, `npm run typecheck:all`, and the
+  agentic validation gate.
+- **September 14 resumption:** the approved third repair cycle completed the
+  malformed-response, optional-onset and bounded-validation repairs. Candidate
+  `b81d9dc28` passed the 15,327-test agentic gate; 25 literal mutation proofs
+  were rebuilt on a clean isolated copy. Independent review still blocks
+  acceptance on open-digest expiry invalidation and FAA partial-source loading.
+  Bradley approved the [fourth-cycle repair](plans/2026-09-14-ux026-fourth-cycle-proposal.md)
+  after these findings. Fourth source `a3c3c3c0c` fixes both, but independent
+  review found that ordinary healthy GDACS cache hits lose camera hazard context.
+  Bradley approved the bounded [cached-context repair](plans/2026-09-14-ux026-cached-gdacs-repair.md);
+  source `f977aee1f` passed 15,350 tests and independent source review.
+  On September 15 the approved map dependency prerequisite merged to main;
+  UX-026 rebased without behavioral changes and passed 15,342 tests in the
+  integration gate plus the separate 8-test storm-source suite. The fresh audit
+  reports zero vulnerabilities; the 444.4 KB main bundle passes the unchanged
+  460 KB limit. Fresh Claude review and publication closeout remain open. See
+  [resumption evidence](validation/UX-026-RESUMPTION.md) and
+  [literal proofs](validation/UX-026-MUTATION-PROOFS.md). No merge or installation
+  occurred; the recurring controller remains deleted.
+
 ---
 
 ### UX-027 — Evidence-scoped Home reassurance *(High Assurance)*
@@ -736,7 +792,13 @@ on 2026-09-07.
 
 ### UX-031 — Reliable system appearance lifecycle
 
-**Status:** IN PROGRESS — draft claim; Standard frontend repair.
+Status: MONITOR
+Evidence: #1720 — source merged with clean audit, tests and review.
+Exit condition: Verify system appearance switching in the packaged main window and its unified Settings dialog; retain initial-paint and full native visual acceptance as explicitly scoped follow-ups.
+Review after: 2026-09-22
+
+Source is delivered; packaged acceptance remains open. This status does not start
+an automation or claim native acceptance.
 
 Follow repeated system light/dark changes in main and Settings when no manual
 choice exists. Preserve explicit choices (including session choices when storage
@@ -796,5 +858,6 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
+| UX-026 | Location + saved-place impact in alert digests | MONITOR | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
-| UX-031 | Reliable system appearance lifecycle | IN PROGRESS | #1720 |
+| UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |

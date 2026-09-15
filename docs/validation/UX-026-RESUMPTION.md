@@ -1,7 +1,7 @@
 # UX-026 resumption evidence
 
-Status: fourth-cycle source blocked on cached GDACS context; renewed repair
-cycle approval is pending. No publication or acceptance claimed.
+Status: bounded fifth cached-context repair approved and in progress.
+No publication or acceptance claimed.
 
 ## Scope and authorization
 
@@ -288,3 +288,12 @@ now fail under mutation at 10/2, 10/2 and 11/1 respectively. The two surviving
 scheduling guards remain explicitly unclaimed. For repository whitespace
 compliance only whitespace-only lines are normalized; private raw logs retain
 every byte. This evidence does not clear the GDACS blocker.
+
+## Cached-context cycle approval
+
+Bradley answered the pending cycle request with “Lets continue.” The
+[approved bounded plan](../plans/2026-09-14-ux026-cached-gdacs-repair.md)
+retains GDACS context with explicit cached labels. Earlier failed checks and
+review findings remain historical evidence; new verification must establish
+the correction. macOS 27 discovery is a parallel roadmap addition, not a
+reason to weaken UX-026 or reopen UX-025's diagnostics.

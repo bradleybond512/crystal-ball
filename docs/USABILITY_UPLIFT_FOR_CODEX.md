@@ -745,7 +745,8 @@ and whether current evidence indicates impact to any saved place.
   Bradley approved the [fourth-cycle repair](plans/2026-09-14-ux026-fourth-cycle-proposal.md)
   after these findings. Fourth source `a3c3c3c0c` fixes both, but independent
   review found that ordinary healthy GDACS cache hits lose camera hazard context.
-  A bounded cached-context repair proposal is awaiting renewed cycle approval.
+  Bradley approved the bounded [cached-context repair](plans/2026-09-14-ux026-cached-gdacs-repair.md);
+  implementation and new verification are in progress.
   A refreshed dependency audit is also a publication blocker. See
   [resumption evidence](validation/UX-026-RESUMPTION.md) and
   [literal proofs](validation/UX-026-MUTATION-PROOFS.md). No merge or installation
@@ -840,6 +841,6 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-026 | Location + saved-place impact in alert digests | BLOCKED | #1704 |
+| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | IN PROGRESS | #1720 |

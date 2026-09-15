@@ -1319,6 +1319,8 @@ export default defineConfig({
  '@deck.gl/geo-layers',
  '@deck.gl/aggregation-layers',
  '@deck.gl/maplibre',
+ '@deck.gl/extensions',
+ '@deck.gl/mesh-layers',
  'papaparse',
  'posthog-js',
  'fast-xml-parser',

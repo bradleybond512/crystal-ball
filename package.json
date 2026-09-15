@@ -230,7 +230,8 @@
     "test:agentic-pipeline": "tsx --test tests/agentic-pipeline.test.mjs",
     "test:roadmap-controller": "node --test tests/roadmap-controller.test.mjs",
     "roadmap:check": "node scripts/roadmap-controller.mjs",
-    "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs"
+    "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs",
+    "test:map-compatibility": "node --test tests/map-compatibility.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
@@ -239,6 +240,7 @@
     "@types/canvas-confetti": "^1.9.0",
     "@types/d3": "^7.4.3",
     "@types/maplibre-gl": "^1.14.0",
+    "@types/supercluster": "^7.1.3",
     "@types/papaparse": "^5.5.2",
     "@types/three": "^0.184.0",
     "@types/topojson-client": "^3.1.5",
@@ -259,18 +261,18 @@
     "vite-plugin-static-copy": "^4.1.1"
   },
   "dependencies": {
-    "@deck.gl/aggregation-layers": "^9.3.4",
-    "@deck.gl/core": "^9.3.4",
-    "@deck.gl/extensions": "^9.3.3",
-    "@deck.gl/geo-layers": "^9.3.2",
-    "@deck.gl/layers": "^9.3.3",
-    "@deck.gl/mapbox": "^9.3.2",
-    "@deck.gl/mesh-layers": "^9.3.7",
-    "@luma.gl/core": "^9.3.6",
-    "@luma.gl/engine": "^9.3.6",
-    "@luma.gl/gltf": "^9.3.6",
-    "@luma.gl/shadertools": "^9.3.6",
-    "@luma.gl/webgl": "^9.3.6",
+    "@deck.gl/aggregation-layers": "^9.4.0",
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/extensions": "^9.4.0",
+    "@deck.gl/geo-layers": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/maplibre": "^9.4.0",
+    "@deck.gl/mesh-layers": "^9.4.0",
+    "@luma.gl/core": "^9.4.0",
+    "@luma.gl/engine": "^9.4.0",
+    "@luma.gl/gltf": "^9.4.0",
+    "@luma.gl/shadertools": "^9.4.0",
+    "@luma.gl/webgl": "^9.4.0",
     "@sentry/browser": "^10.39.0",
     "@types/three": "^0.184.0",
     "@upstash/ratelimit": "^2.0.8",
@@ -288,11 +290,12 @@
     "i18next-browser-languagedetector": "^8.2.1",
     "jspdf": "^4.2.1",
     "lz-string": "^1.5.0",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.9.0",
     "onnxruntime-web": "^1.26.0",
     "papaparse": "^5.5.4",
     "posthog-js": "^1.373.2",
     "satellite.js": "7.0.0",
+    "supercluster": "^8.0.1",
     "telegram": "2.26.22",
     "texture-compressor": "file:vendor/texture-compressor-safe",
     "three": "^0.185.1",
@@ -313,7 +316,10 @@
     "esbuild": "^0.28.1",
     "@babel/core": "^7.29.7",
     "texture-compressor": "$texture-compressor",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "@loaders.gl/compression": {
+      "fflate": "0.7.5"
+    }
   },
   "engines": {
     "node": ">=22.0.0 <23.0.0"

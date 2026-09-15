@@ -3,7 +3,7 @@
  * Uses deck.gl for high-performance rendering of large datasets
  * Mobile devices gracefully degrade to the D3/SVG-based Map component
  */
-import { MapboxOverlay } from '@deck.gl/mapbox';
+import { MapLibreOverlay } from '@deck.gl/maplibre';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
 import { getSmokeSnapshots, subscribeSmoke } from '@/services/smoke/smoke-state';
@@ -20,7 +20,8 @@ const AQI_MAP_COLOR: Record<AqiCategory, [number, number, number, number]> = {
   hazardous: [126, 0, 35, 230],
   unknown: [139, 148, 158, 150],
 };
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import { configureMapLibreWorker } from './maplibre-worker';
 import { resolveEmergencyPackOfflineMapTile } from '@/services/emergency-pack/emergency-pack-runtime';
 import {
   createEmergencyPackMapProtocolHandler,
@@ -498,7 +499,7 @@ export class DeckGLMap {
   private static readonly MAX_CLUSTER_LEAVES = 200;
 
   private container: HTMLElement;
-  private deckOverlay: MapboxOverlay | null = null;
+  private deckOverlay: MapLibreOverlay | null = null;
   private maplibreMap: maplibregl.Map | null = null;
   private activeBaseMap: BaseMapStyle = 'dark';
   private state: DeckMapState;
@@ -665,7 +666,7 @@ export class DeckGLMap {
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private _themeChangedHandler: ((e: Event) => void) | null = null;
   private _visibilityHandler: (() => void) | null = null;
-  private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
+  private mapEventHandlers: Array<{ event: keyof maplibregl.MapEventType; handler: (...args: unknown[]) => void }> = [];
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
  this.container = container;
@@ -812,7 +813,7 @@ export class DeckGLMap {
  wrapper.id = 'deckglMapWrapper';
  wrapper.style.cssText = 'position: relative; width: 100%; height: 100%; overflow: hidden;';
 
- // MapLibre container - deck.gl renders directly into MapLibre via MapboxOverlay
+ // MapLibre container - deck.gl renders directly into MapLibre via MapLibreOverlay
  const mapContainer = document.createElement('div');
  mapContainer.id = 'deckgl-basemap';
  mapContainer.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%;';
@@ -835,6 +836,7 @@ export class DeckGLMap {
 
  registerEmergencyPackMapProtocolOnce(maplibregl.addProtocol, emergencyPackMapProtocolHandler);
 
+ configureMapLibreWorker();
  this.maplibreMap = new maplibregl.Map({
  container: 'deckgl-basemap',
  style: getStyleUrl(this.activeBaseMap),
@@ -870,7 +872,7 @@ export class DeckGLMap {
   private initDeck(): void {
  if (!this.maplibreMap) return;
 
- this.deckOverlay = new MapboxOverlay({
+ this.deckOverlay = new MapLibreOverlay({
  interleaved: true,
  layers: this.buildLayers(),
  getTooltip: (info: PickingInfo) => this.getTooltip(info),
@@ -880,7 +882,7 @@ export class DeckGLMap {
  onError: (error: Error) => console.warn('[DeckGLMap] Render error (non-fatal):', error.message),
  });
 
- this.maplibreMap.addControl(this.deckOverlay as unknown as maplibregl.IControl);
+ this.maplibreMap.addControl(this.deckOverlay);
 
  // Store map event handlers for cleanup in destroy()
  const onMoveStart = () => {

@@ -22,7 +22,8 @@ function fixture(options: {
 } = {}) {
   const store = options.store ?? new Map<string, string>();
   if (options.stored !== undefined) store.set('crystalball-theme', options.stored);
-  const root = { dataset: { theme: '', variant: options.variant ?? 'full' } };
+  const root = { dataset: { theme: '' } as { theme: string; variant?: string } };
+  if (options.variant && options.variant !== 'full') root.dataset.variant = options.variant;
   const meta = { content: '' };
   const listeners = new Set<(event: { matches: boolean }) => void>();
   const events: Theme[] = [];
@@ -183,9 +184,10 @@ test('repeated watcher setup installs only one media listener', () => {
 });
 
 const variantSource = readFileSync(new URL('../../config/variant.ts', import.meta.url), 'utf8');
-function resolveVariant(options: { build?: string; stored?: string; host?: string; storageThrows?: boolean } = {}) {
+function resolveVariant(options: { build?: string; stored?: string; host?: string; storageThrows?: boolean; initialVariant?: string } = {}) {
   const exports = {} as typeof import('../../config/variant.ts');
-  const root = { dataset: { variant: 'invalid-inline-value' } };
+  const root = { dataset: {} as Record<string, string> };
+  if (options.initialVariant !== undefined) root.dataset.variant = options.initialVariant;
   const compiledVariant = ts.transpileModule(
     variantSource.replace('import.meta.env?.VITE_VARIANT', JSON.stringify(options.build ?? 'full')),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
@@ -211,7 +213,15 @@ for (const build of ['tech', 'finance', 'happy']) {
 
 test('full build retains stored variant before hostname', () => {
   assert.equal(resolveVariant({ stored: 'happy', host: 'tech.crystalball.app' }), 'happy');
-  assert.equal(resolveVariant({ stored: 'full', host: 'happy.crystalball.app' }), 'full');
+  assert.equal(resolveVariant({ stored: 'full', host: 'happy.crystalball.app' }), undefined);
+});
+
+test('default full identity has no variant attribute', () => {
+  assert.equal(resolveVariant(), undefined);
+});
+
+test('stored full selection clears a stale non-full attribute', () => {
+  assert.equal(resolveVariant({ stored: 'full', host: 'happy.crystalball.app', initialVariant: 'happy' }), undefined);
 });
 
 test('hostname selects a variant when storage is absent, invalid or unavailable', () => {
@@ -220,8 +230,8 @@ test('hostname selects a variant when storage is absent, invalid or unavailable'
   assert.equal(resolveVariant({ storageThrows: true, host: 'finance.crystalball.app' }), 'finance');
 });
 
-test('unknown build, hostname and stored variants fall back to full', () => {
-  assert.equal(resolveVariant({ build: 'invalid', stored: 'invalid', host: 'other.crystalball.app' }), 'full');
+test('unknown build, hostname and stored variants clear an invalid stale attribute', () => {
+  assert.equal(resolveVariant({ build: 'invalid', stored: 'invalid', host: 'other.crystalball.app', initialVariant: 'invalid-inline-value' }), undefined);
 });
 
 

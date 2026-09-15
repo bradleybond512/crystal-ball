@@ -19,5 +19,6 @@ export function initializeVariant(): void {
       if (prefix && SITE_VARIANTS.has(prefix as SiteVariant)) variant = prefix as SiteVariant;
     }
   }
-  document.documentElement.dataset.variant = variant;
+  if (variant === 'full') delete document.documentElement.dataset.variant;
+  else document.documentElement.dataset.variant = variant;
 }

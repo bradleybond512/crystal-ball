@@ -746,7 +746,8 @@ and whether current evidence indicates impact to any saved place.
   after these findings. Fourth source `a3c3c3c0c` fixes both, but independent
   review found that ordinary healthy GDACS cache hits lose camera hazard context.
   Bradley approved the bounded [cached-context repair](plans/2026-09-14-ux026-cached-gdacs-repair.md);
-  implementation and new verification are in progress.
+  source `f977aee1f` passed 15,350 tests and independent source review.
+  Fresh Claude review and dependency integration remain open.
   A refreshed dependency audit is also a publication blocker. See
   [resumption evidence](validation/UX-026-RESUMPTION.md) and
   [literal proofs](validation/UX-026-MUTATION-PROOFS.md). No merge or installation

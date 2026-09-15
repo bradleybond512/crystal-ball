@@ -1,7 +1,8 @@
 # UX-026 resumption evidence
 
-Status: bounded fifth cached-context repair approved and in progress.
-No publication or acceptance claimed.
+Status: fifth cached-context correction passes local validation and source
+review. Final Claude review and dependency integration remain open. No
+publication or packaged acceptance claimed.
 
 ## Scope and authorization
 
@@ -297,3 +298,59 @@ retains GDACS context with explicit cached labels. Earlier failed checks and
 review findings remain historical evidence; new verification must establish
 the correction. macOS 27 discovery is a parallel roadmap addition, not a
 reason to weaken UX-026 or reopen UX-025's diagnostics.
+
+## Fifth correction results
+
+Source `f977aee1f289014746442d6cf4c7973014ad7747` retains cached GDACS
+context and labels it explicitly. Independent source review found no blocking
+findings and confirmed that the earlier expiry and partial-source fixes remain
+intact. Scoring and NWS precedence are unchanged.
+
+The full named-test gate exited 0 on macOS 27.0. Literal totals:
+
+```text
+# pass 115
+# fail 0
+# skipped 0
+# pass 411
+# fail 0
+# skipped 0
+# pass 8
+# fail 0
+# skipped 0
+# pass 14816
+# fail 0
+# skipped 0
+Secret scan passed for 4754 file(s).
+✓ built in 15.39s
+Agentic validation gate passed.
+```
+
+This is 15,350 passing tests. Type checks and lint passed inside the gate.
+The logged config-load error belongs to the passing unknown-variant rejection
+test; it is not a failed production build.
+
+The [fifth literal proof report](UX-026-FIFTH-MUTATION-PROOFS.md) records
+21/0 baseline/restored and three real assertion failures: retention18/3,
+qualification19/2, NWS-label preservation20/1. The fourth cached-exclusion
+proof is historical and superseded by the corrected requirement; it is not
+current proof of desirable behavior. Source checksums restore exactly and
+the isolated proof tree is clean. Whitespace-only lines are normalized in
+this repository presentation; raw logs retain every byte.
+
+Final opposite-agent review remains necessary. A separate real Claude review
+attempt on the map prerequisite hit the session usage limit without a verdict.
+No stale or self-review verdict was recorded for this correction. The map
+prerequisite clears dependency advisories in its own candidate; UX-026 must
+be integrated after that prerequisite and revalidated before publication.
+
+Manual packaged checks still include time expiry while the digest stays open,
+cache-hit camera visibility, keyboard traversal and source-failure recovery.
+Rollback is a focused revert restoring the known cached-context information
+loss; there is no data migration or installed-app change.
+
+Draft PR update: retain cached GDACS hazard matches in camera rows and viewers
+with explicit cached wording, while excluding unavailable evidence and
+preserving NWS scoring. Attach actual service/cache regression tests, literal
+mutation proofs, independent review and macOS 27 gate evidence. Keep #1704
+open until dependency integration and fresh Claude review are complete.

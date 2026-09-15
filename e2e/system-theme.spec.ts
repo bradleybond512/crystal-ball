@@ -44,7 +44,8 @@ for (const entry of ['main', 'settings'] as const) {
   test(`${entry} bootstrap follows repeated system changes without storing a choice`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
     await openEntry(page, entry);
-    await expect(page.locator('html')).toHaveAttribute('data-variant', happyBuild ? 'happy' : 'full', { timeout: 5000 });
+    if (happyBuild) await expect(page.locator('html')).toHaveAttribute('data-variant', 'happy', { timeout: 5000 });
+    else await expect(page.locator('html')).not.toHaveAttribute('data-variant', { timeout: 5000 });
     await expectTheme(page, happyBuild ? 'light' : 'dark');
     for (const colorScheme of ['light', 'dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme });
@@ -94,7 +95,7 @@ test('native light styles win with html-owned theme and production CSS layers', 
   expect(styleImports).toContain('/src/styles/window-chrome.css');
   await page.route('**/system-theme-fixture.html', (route) => route.fulfill({
     contentType: 'text/html',
-    body: `<!doctype html><html data-theme="dark" data-variant="full"><head>${styleImports}<script>window.addEventListener('load',()=>document.documentElement.dataset.stylesReady='true');</script></head><body class="is-desktop-macos"><div class="app-root"><div class="mac-content-toolbar">Toolbar</div><section class="map-section"><div class="panel-header">Map</div></section><div id="scroll" style="width:200px;height:100px;overflow:scroll"><div style="height:1000px">Scrollable content</div></div></div></body></html>`,
+    body: `<!doctype html><html data-theme="dark"><head>${styleImports}<script>window.addEventListener('load',()=>document.documentElement.dataset.stylesReady='true');</script></head><body class="is-desktop-macos"><div class="app-root"><div class="mac-content-toolbar">Toolbar</div><section class="map-section"><div class="panel-header">Map</div></section><div id="scroll" style="width:200px;height:100px;overflow:scroll"><div style="height:1000px">Scrollable content</div></div></div></body></html>`,
   }));
   await page.goto('/system-theme-fixture.html');
   await expect(page.locator('html')).toHaveAttribute('data-styles-ready', 'true');

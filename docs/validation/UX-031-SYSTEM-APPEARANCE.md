@@ -192,3 +192,76 @@ Settings while respecting manual choices, storage failures and happy's light
 default. Repair affected Mac light styles. Automated, mutation and isolated
 WKWebView checks pass; packaged Tauri acceptance and inherited dependency audit
 issues remain open. No migration or installation is included.
+
+## Merge closeout repair 2 — full variant identity
+
+After all seven required checks passed on the first reviewed tip, the broader
+CI matrix exposed an additional real regression in `identity (full)`:
+
+```text
+Expected: not have attribute
+Received: have attribute
+1 failed
+```
+
+The shared resolver published `data-variant="full"`, conflicting with the
+established full identity contract. The second bounded repair deletes the
+attribute for full and preserves named attributes for other variants. Deletion
+also clears stale or invalid values; merely skipping assignment is insufficient.
+The existing `e2e/variant-identity.spec.ts` assertion is unchanged. Updated UX-031
+fixtures now model the actual attribute-free full document.
+
+Focused red/green evidence:
+
+```text
+# pass 18
+# fail 4
+# pass 22
+# fail 0
+```
+
+Final gate, mutation and review evidence for this repair is recorded during
+closeout. Earlier SHA-pinned reviews and mutation proofs remain historical;
+they do not approve the changed resolver. This is the second automatic repair
+cycle. A surviving blocker after this cycle requires escalation under AGENTS.md.
+
+Native path clarification: the packaged Settings command opens the unified
+Settings dialog in main; it does not create a separate `settings.html` window.
+Packaged acceptance must cover main and that actual dialog. Standalone Settings
+remains independently covered through its browser entry. The user authorized
+source delivery to main on September 15; packaged native acceptance, initial
+paint and complete macOS visual acceptance remain explicitly unfinished.
+
+Repair 2 final gate (Node 22), before dependency-prerequisite integration:
+
+```text
+bash scripts/agentic-validate.sh --tests 'test:system-theme'
+# pass 22
+# fail 0
+Secret scan passed for 4748 file(s).
+✓ built in 17.17s
+Agentic validation gate passed.
+Tests run: test:system-theme
+
+npm run bundle:check
+✓ All bundle-size policies satisfied.
+```
+
+Both commands exited 0. Main remains 442.8 KB and total 4.90 MB with unchanged
+limits. Sequential browser results from the same repair:
+
+```text
+Full identity + system-theme: 6 passed (54.8s)
+Happy identity + system-theme: 6 passed (1.1m)
+Tech identity: 1 passed (23.5s)
+Finance identity: 1 passed (27.5s)
+```
+
+The per-run logs are `identity-repair-{full,happy,tech,finance}.log`; final gate
+log is `identity-repair-agentic-gate.log` in the retained evidence root.
+Exact browser commands use `E2E_PORT=4301 VITE_VARIANT=full` and
+`E2E_PORT=4302 VITE_VARIANT=happy` with
+`npx playwright test e2e/variant-identity.spec.ts e2e/system-theme.spec.ts`;
+tech and finance use ports 4303/4304 and only `e2e/variant-identity.spec.ts`.
+Each run has its own evidence output directory. Final variant source SHA-256:
+`7fd7eaf8742b552e37f2299e0bfb4cf4015511dc4e625031a9313dfd03c18055`.

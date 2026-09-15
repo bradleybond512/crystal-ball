@@ -106,7 +106,7 @@ window dimensions, accent policy or animation performance in this task.
 6. Native root, toolbar, map header and scrollbar light rules match html-owned
    theme. Preserve existing correct ancestor-aware selectors and non-Mac styles.
 7. Existing happy toggle behavior remains passing. Packaged OS appearance and
-   Settings-window checks remain required before native acceptance; browser
+   unified Settings dialog checks remain required before native acceptance; browser
    emulation cannot establish system preference delivery through WKWebView.
 
 Proposed new focused module test:

@@ -194,3 +194,18 @@ Mapbox integration with supported MapLibreOverlay, emitted worker bundling and
 aligned development dependencies. Preserve offline protocol, interleaving,
 picking and navigation; attach focused/runtime/native evidence and disclosed
 flaky observations. Publication remains blocked on fresh Claude review.
+
+## Final independent audit and scope clarification
+
+Independent audit found no blocking source/evidence findings. It verified
+three native source hashes, three production chunk hashes and three snapshot
+hashes, ten passing assertions and the three declared offline fixture errors.
+
+The native harness uses source `index.html` CSP. Built HTML removes localhost
+`frame-src` entries; the exercised worker/map policies match. This test is
+therefore not exact packaged-CSP acceptance. It also does not instantiate the
+complete DeckGLMap/Tauri application or establish VoiceOver, native keyboard,
+persisted offline restart, provider behavior or a performance improvement.
+
+The final audit does not replace Claude's required opposite-agent verdict.
+No further code repair was requested by the independent audit.

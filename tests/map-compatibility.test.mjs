@@ -183,3 +183,10 @@ test('navigation preserves style-provider precedence and the keyless raster fall
   assert.equal(fallback.sources.osm.tiles[0], 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
   assert.equal(fallback.layers[0].source, 'osm');
 });
+
+test('development prebundles the installed MapLibre adapter rather than resolving the removed adapter', () => {
+  const config = source('vite.config.ts');
+  const optimize = config.slice(config.indexOf('  optimizeDeps:'));
+  assert.match(optimize, /'@deck.gl\/maplibre'/);
+  assert.doesNotMatch(optimize, /'@deck.gl\/mapbox'/);
+});

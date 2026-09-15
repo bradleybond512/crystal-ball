@@ -123,7 +123,8 @@ npm run typecheck:all
 bash scripts/agentic-validate.sh --tests 'test:renderer'
 ```
 
-The new files do not yet exist and these proposed commands are not test results.
+The new files are implemented. This section preserves the design protocol;
+actual results are recorded in [the validation report](../validation/UX-031-SYSTEM-APPEARANCE.md).
 Use the all-variant cases in the module suite; add entry-point/browser coverage
 where build-dependent behavior requires it. Existing `test:renderer` includes
 `src/utils/__tests__/*.test.mts` once added.
@@ -183,7 +184,7 @@ documentation/design reviewed.” This is design acceptance only. It is not
 Claude's source review, native visual acceptance, or an implementation verdict.
 The reviewer did not independently verify live Apple pages or installed-app
 observations. Initial-paint parity and real packaged appearance switching remain
-open. A canonical draft task claim is required before production implementation.
+open. Draft PR #1720 established the canonical UX-031 claim before implementation.
 
 Proposed commit for implementation: `Keep system appearance changes automatic`.
 Draft PR summary: “Restore repeated system appearance changes in main and Settings

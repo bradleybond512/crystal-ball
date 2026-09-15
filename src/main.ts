@@ -157,9 +157,9 @@ import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
 import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
 import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
-import { applyStoredTheme } from '@/utils/theme-manager';
+import { applyStoredTheme, watchSystemTheme } from '@/utils/theme-manager';
 import { installLocalStoragePatch } from '@/utils/safe-storage';
-import { SITE_VARIANT } from '@/config/variant';
+import { SITE_VARIANT, initializeVariant } from '@/config/variant';
 import { clearChunkReloadGuard, installChunkReloadGuard } from '@/bootstrap/chunk-reload';
 
 // Auto-reload on stale chunk 404s after deployment (Vite fires this for modulepreload failures).
@@ -281,8 +281,10 @@ loadDesktopSecretsWhenReady().then(async () => {
 // Honor the 24/7 always-on setting once the bridge is ready (no-op off-desktop).
 void import('@/services/always-on').then(({ applyAlwaysOn }) => applyAlwaysOn()).catch(() => {});
 
-// Apply stored theme preference before app initialization (safety net for inline script)
+// Resolve the variant before choosing its default appearance.
+initializeVariant();
 applyStoredTheme();
+watchSystemTheme();
 
 // is-desktop-macos drives a macOS-specific design system that hides
 // .header and replaces it with a sidebar+toolbar shell. Only Tauri builds
@@ -290,12 +292,6 @@ applyStoredTheme();
 // builds should set the class. Web browsers keep their own header layout.
 if (isDesktopRuntime() || FORCE_DESKTOP_GATE) {
   document.body.classList.add('is-desktop-macos');
-}
-
-// Set data-variant on <html> so CSS theme overrides activate (inline script handles hostname/localStorage,
-// this catches the VITE_VARIANT env var path used during local dev and Vercel deployments)
-if (SITE_VARIANT && SITE_VARIANT !== 'full') {
-  document.documentElement.dataset.variant = SITE_VARIANT;
 }
 
 // Remove no-transition class after first paint to enable smooth theme transitions

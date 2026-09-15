@@ -1,7 +1,9 @@
 # macOS UI adoption — system appearance repair brief
 
-Status: discovery and design; production implementation and canonical task claim
-pending. September 14, 2026. Companion to
+Status: historical September 14 design, reconciled September 15, 2026.
+UX-031 is claimed and implemented in [PR #1720](https://github.com/bradleybond512/crystal-ball/pull/1720);
+a second review/repair cycle is restoring the full variant’s attribute-free
+identity before merge. Packaged acceptance remains open. Companion to
 [the macOS 27 adoption plan](2026-09-14-macos27-adoption.md).
 
 ## Objective and classification
@@ -106,7 +108,7 @@ window dimensions, accent policy or animation performance in this task.
 6. Native root, toolbar, map header and scrollbar light rules match html-owned
    theme. Preserve existing correct ancestor-aware selectors and non-Mac styles.
 7. Existing happy toggle behavior remains passing. Packaged OS appearance and
-   Settings-window checks remain required before native acceptance; browser
+   unified Settings dialog checks remain required before native acceptance; browser
    emulation cannot establish system preference delivery through WKWebView.
 
 Proposed new focused module test:
@@ -123,7 +125,10 @@ npm run typecheck:all
 bash scripts/agentic-validate.sh --tests 'test:renderer'
 ```
 
-The new files do not yet exist and these proposed commands are not test results.
+The proposed files now exist in PR #1720. Commands above remain the historical
+design protocol, not final test results. The canonical implementation brief is
+`docs/plans/2026-09-15-ux031-system-appearance.md`; final results belong in
+`docs/validation/UX-031-SYSTEM-APPEARANCE.md` on that PR.
 Use the all-variant cases in the module suite; add entry-point/browser coverage
 where build-dependent behavior requires it. Existing `test:renderer` includes
 `src/utils/__tests__/*.test.mts` once added.
@@ -145,10 +150,9 @@ have come from the old watcher: they are indistinguishable from manual choices.
 
 ## Claim, review and rollback
 
-No existing canonical UX task covers this scope. Propose one appearance-lifecycle
-task in the live usability tracker; allocate an available ID when claiming its
-draft PR. Do not reuse UX-025 or assign this repair to journey acceptance.
-The current document is a reviewable brief, not a task claim or completion row.
+UX-031 claimed this scope through draft PR #1720 before implementation. The
+live usability tracker remains authoritative; this historical design does not
+create another task or claim completion. UX-025 remains deferred.
 
 Repository analyst discovery and architect design precede production edits.
 Implementation owner: UI/map specialist. Test owner: test specialist.
@@ -184,10 +188,17 @@ documentation/design reviewed.” This is design acceptance only. It is not
 Claude's source review, native visual acceptance, or an implementation verdict.
 The reviewer did not independently verify live Apple pages or installed-app
 observations. Initial-paint parity and real packaged appearance switching remain
-open. A canonical draft task claim is required before production implementation.
+open. The canonical draft task claim was subsequently established in PR #1720.
 
 Proposed commit for implementation: `Keep system appearance changes automatic`.
 Draft PR summary: “Restore repeated system appearance changes in main and Settings
 while preserving manual choices and happy's default. Correct affected Mac light
 styles to use the app's html-owned theme. Validation and mutation results will
 be added after implementation; native acceptance remains separately recorded.”
+
+## Native Settings clarification
+
+September 15 source discovery confirms the native Settings command opens the
+unified dialog in the main window. The separate `settings.html` entry remains
+browser-covered, but is not a currently reachable separate native Settings
+window. Packaged acceptance must exercise main and its actual Settings dialog.

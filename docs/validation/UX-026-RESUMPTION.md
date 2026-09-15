@@ -1,8 +1,9 @@
 # UX-026 resumption evidence
 
-Status: fifth cached-context correction passes local validation and source
-review. Final Claude review and dependency integration remain open. No
-publication or packaged acceptance claimed.
+Status: fifth cached-context correction and dependency integration pass local
+validation. Fresh Claude review and publication closeout remain open. No
+publication or packaged acceptance claimed. The latest results are recorded in
+the September 15 integration section below; earlier failures remain historical.
 
 ## Scope and authorization
 
@@ -354,3 +355,143 @@ with explicit cached wording, while excluding unavailable evidence and
 preserving NWS scoring. Attach actual service/cache regression tests, literal
 mutation proofs, independent review and macOS 27 gate evidence. Keep #1704
 open until dependency integration and fresh Claude review are complete.
+
+## September 15 integration onto canonical main
+
+Bradley authorized getting the completed task work to main. The separately
+reviewed map dependency prerequisite merged first as canonical main
+`7bbb43b35`. UX-026's pre-integration tip
+`528a104f3cd0499be4bfbc0b4b1f69751e0e27bf` was preserved through the local
+backup branch `codex/ux026-pre-main-integration-20260915`. The backup branch,
+rather than an abbreviated historical reference, is the restoration source.
+
+The ten UX-026 commits rebased without conflicts to
+`97c021b51161f2a4274077d05dbb3435e963e739`. `git range-diff` reports `=` for
+all ten commits. No UX-026 production or test behavior changed during this
+integration. The merged map dependencies and `test:map-compatibility` script
+remain intact alongside `test:ux026`; the lockfile exactly matches canonical
+main with SHA-256
+`2c6dac07eb70897461db5a9bac188f71512732dab4607aa449505fb44e07b69c`.
+
+Commands used Node 22 through `/opt/homebrew/opt/node@22/bin`. `npm ci`
+exited 0 and reported:
+
+```text
+added 949 packages, and audited 951 packages in 43s
+found 0 vulnerabilities
+```
+
+The focused commands ran sequentially before the full gate:
+
+```text
+npm run test:ux026
+# tests 115
+# pass 115
+# fail 0
+npm run test:weather
+# tests 411
+# pass 411
+# fail 0
+```
+
+The final integration gate command was:
+
+```text
+bash scripts/agentic-validate.sh --tests 'test:ux026 test:weather test:renderer'
+```
+
+It exited 0. Literal suite totals in command order:
+
+```text
+# tests 115
+# pass 115
+# fail 0
+# skipped 0
+# tests 411
+# pass 411
+# fail 0
+# skipped 0
+# tests 14816
+# pass 14816
+# fail 0
+# skipped 0
+Secret scan passed for 4761 file(s).
+✓ built in 14.04s
+Agentic validation gate passed.
+Tests run: test:ux026 test:weather test:renderer
+```
+
+Lockfile validation, strict lint, all type checks, secret scanning, cross-agent
+planning checks, documentation checks and roadmap checks passed inside that
+gate. This is 15,342 passing tests in the named gate. Unlike the historical
+15,350-test invocation above, this command does not name the separate
+`test:storm-alert-source-revision` script. That script ran afterward and
+exited 0:
+
+```text
+npm run test:storm-alert-source-revision
+# tests 8
+# pass 8
+# fail 0
+# skipped 0
+```
+
+Thus the same four named suites report 15,350 passes across the gate and the
+separate storm-source run; the eight additional tests were not inside this
+gate. The renderer's logged config-load failure is still the passing
+unknown-variant rejection case, not a failed build.
+
+`npm run bundle:check` exited 0 against the built integrated source:
+
+```text
+Bundle-size report (gzipped):
+  chunks: 109
+  total:  5.10 MB / 6.00 MB
+    main-M74WyHcY.js  raw=1.55 MB  gzip=444.4 KB
+✓ All bundle-size policies satisfied.
+```
+
+The main limit remains 460 KB. `npm audit --json` exited 0 and reported:
+
+```json
+{"info":0,"low":0,"moderate":0,"high":0,"critical":0,"total":0}
+```
+
+This fresh integrated audit clears the inherited dependency publication blocker
+for this lockfile. The earlier nine-advisory result above remains historical
+evidence; it was not accepted as risk or relabeled as a pass.
+
+The existing literal mutation reports remain source-applicable: integration
+did not change their production targets. Current SHA-256 values are:
+
+| Target | SHA-256 |
+| --- | --- |
+| `src/services/digest-alert-projection.ts` | `b6a6c29dcacf289a539f7218bf7546346845b2fa6e43d5ec6ff4935082f6c0dd` |
+| `src/components/DigestOverlay.ts` | `2aca00c7215e3dea86d9ae1b23f6734745bbd980d8d7e88a0c789ed848734b92` |
+| `src/app/panel-layout.ts` | `9c89c3ece4056ce8d782ebcd8d844e3ba4fec4d6a496397b20112e389b1a8b79` |
+| `src/components/FAAWeatherCamsPanel.ts` | `d7ac9d985c5ced22f32061b6e33016eb67323aee1f83bab0291847098a054f47` |
+| `src/services/nws-alerts.ts` | `7fb96963d81390596eacf7dae6c0ec4ba74267aa55bdaae2d56ff0dc8455a994` |
+
+No new mutation runs are claimed for the mechanical rebase. The two surviving
+historical scheduling mutants remain unclaimed. The previously reported
+independent source review applies to unchanged UX-026 behavior; fresh opposite
+agent review against the final integrated tip remains required for publication.
+
+Raw command logs, the fresh audit JSON, source hashes and the ten-commit
+range-diff are retained under
+`~/.crystalball-diagnostics/ux026-main-integration-20260915/`.
+
+Packaged checks remain separate: hold the digest open across evidence expiry,
+exercise keyboard trapping and focus restoration, check cached GDACS camera
+visibility, and recover from one failed weather source. This integration ran
+no packaged acceptance or installation. No data migration is involved. Before
+publication, the backup branch preserves the prior candidate; after merge,
+rollback should use a focused reviewed revert preserving the security dependency
+prerequisite.
+
+Proposed evidence commit: `Record alert validation on repaired map dependencies`.
+Draft PR description: show deterministic location and saved-place impact in
+digest stories, expire stale negative evidence while the dialog stays open,
+and preserve qualified cached camera context under partial source failure.
+Attach the integrated test, audit, bundle and mutation evidence above; keep
+native acceptance claims separate from source review and CI.

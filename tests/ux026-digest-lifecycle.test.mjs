@@ -61,15 +61,14 @@ test('panel teardown cancels digest work and removes every owned subscription', 
   assert.match(cleanup, /this\.digestOverlay\?\.destroy\(\)/);
 });
 
-test('FAA weather-cam fire-and-forget loading handles rejection without clearing existing cameras', () => {
+test('FAA weather-cam load settles sources independently and preserves cameras on failure', () => {
   const loadStart = faaWeatherCamsPanel.indexOf('private async load()');
   const loadEnd = faaWeatherCamsPanel.indexOf('public refresh()', loadStart);
   assert.ok(loadStart >= 0 && loadEnd > loadStart, 'FAA weather-cam load method must remain discoverable');
   const load = faaWeatherCamsPanel.slice(loadStart, loadEnd);
 
-  assert.match(load, /try\s*\{[\s\S]*?await Promise\.all\([\s\S]*?\}\s*catch(?:\s*\([^)]*\))?\s*\{/,
-    'the fire-and-forget load method must contain its own rejection boundary');
-  const catchBody = load.match(/catch(?:\s*\([^)]*\))?\s*\{([\s\S]*?)\}/)?.[1] ?? '';
-  assert.doesNotMatch(catchBody, /this\.cameras\s*=/,
-    'a failed refresh must preserve the last successfully loaded camera data');
+  assert.match(load, /await Promise\.allSettled\(/,
+    'one unavailable enrichment must not discard other successful sources');
+  assert.match(load, /if \(raw\.status === 'fulfilled'[^\n]*\) \{\s*this\.cameras =/,
+    'camera replacement requires a successful camera response');
 });

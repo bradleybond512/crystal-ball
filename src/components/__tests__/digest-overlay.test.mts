@@ -64,6 +64,22 @@ function showCards(overlay: InstanceType<typeof DigestOverlay>, cards: DigestSto
   );
 }
 
+function pressTab(tabOrder: HTMLElement[], shiftKey = false): KeyboardEvent {
+  const active = document.activeElement;
+  assert.ok(active instanceof HTMLElement);
+  const index = tabOrder.indexOf(active);
+  assert.ok(index >= 0, 'the focused control must be in the fixture tab order');
+  const event = new happyWindow.KeyboardEvent('keydown', {
+    key: 'Tab', shiftKey, bubbles: true, cancelable: true,
+  });
+  active.dispatchEvent(event);
+  // Happy DOM does not perform the browser's default keyboard traversal.
+  if (!event.defaultPrevented) {
+    tabOrder[(index + (shiftKey ? -1 : 1) + tabOrder.length) % tabOrder.length]!.focus();
+  }
+  return event as unknown as KeyboardEvent;
+}
+
 beforeEach(() => {
   document.body.replaceChildren();
 });
@@ -123,12 +139,46 @@ test('show moves focus into the dialog and Tab remains trapped', () => {
   const overlay = mount();
   showCards(overlay, [card()]);
   const close = root().querySelector<HTMLButtonElement>('.digest-close');
+  assert.ok(close);
+  const after = document.createElement('button');
+  document.body.append(after);
+  const tabOrder = [opener, close, after];
 
-  assert.equal(document.activeElement, close, 'focus should enter at the close control');
-  close?.dispatchEvent(new happyWindow.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
-  assert.equal(document.activeElement, close, 'Shift+Tab may not escape a one-control dialog');
-  close?.dispatchEvent(new happyWindow.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
-  assert.equal(document.activeElement, close, 'Tab may not escape a one-control dialog');
+  assert.equal(document.activeElement === close, true, 'focus should enter at the close control');
+  assert.equal(pressTab(tabOrder, true).defaultPrevented, true, 'Shift+Tab must cancel traversal out of the dialog');
+  assert.equal(document.activeElement === close, true, 'Shift+Tab may not escape a one-control dialog');
+  assert.equal(pressTab(tabOrder).defaultPrevented, true, 'Tab must cancel traversal out of the dialog');
+  assert.equal(document.activeElement === close, true, 'Tab may not escape a one-control dialog');
+});
+
+test('Tab permits internal traversal and wraps both edges of a multi-control dialog', () => {
+  const before = document.createElement('button');
+  document.body.append(before);
+  const overlay = mount();
+  showCards(overlay, [card()]);
+  const first = root().querySelector<HTMLButtonElement>('.digest-close');
+  assert.ok(first);
+  const last = document.createElement('button');
+  root().querySelector('.digest-body')!.append(last);
+  const after = document.createElement('button');
+  document.body.append(after);
+  const tabOrder = [before, first, last, after];
+
+  assert.equal(pressTab(tabOrder).defaultPrevented, false, 'internal traversal uses the browser default');
+  assert.equal(document.activeElement === last, true);
+  assert.equal(pressTab(tabOrder).defaultPrevented, true, 'the last control must wrap to the first');
+  assert.equal(document.activeElement === first, true);
+  assert.equal(pressTab(tabOrder, true).defaultPrevented, true, 'the first control must wrap to the last');
+  assert.equal(document.activeElement === last, true);
+  assert.equal(pressTab(tabOrder, true).defaultPrevented, false, 'reverse internal traversal uses the browser default');
+  assert.equal(document.activeElement === first, true);
+
+  after.focus();
+  assert.equal(pressTab(tabOrder).defaultPrevented, true, 'focus outside an open modal must return inside');
+  assert.equal(document.activeElement === first, true);
+  before.focus();
+  assert.equal(pressTab(tabOrder, true).defaultPrevented, true);
+  assert.equal(document.activeElement === last, true);
 });
 
 test('hide restores the element focused before the dialog opened', () => {
@@ -139,7 +189,7 @@ test('hide restores the element focused before the dialog opened', () => {
   showCards(overlay, [card()]);
   overlay.hide();
 
-  assert.equal(document.activeElement, opener);
+  assert.equal(document.activeElement === opener, true, 'dismissal must restore the exact previously focused control');
 });
 
 test('user dismissal notifies the owner after hiding the overlay', () => {

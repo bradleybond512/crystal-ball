@@ -797,6 +797,8 @@ export class PanelLayoutManager implements AppModule {
   private cancelScheduledDigest: (() => void) | null = null;
   private unsubDigestAlerts: (() => void) | null = null;
   private unsubDigestPlaces: (() => void) | null = null;
+  private cancelDigestRecheck: (() => void) | null = null;
+  private onDigestVisibility: (() => void) | null = null;
   private _onShowDigest: (() => void) | null = null;
   private _lastViewedObserver: IntersectionObserver | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
@@ -938,6 +940,10 @@ export class PanelLayoutManager implements AppModule {
  this.unsubDigestAlerts = null;
  this.unsubDigestPlaces?.();
  this.unsubDigestPlaces = null;
+ this.cancelDigestRecheck?.();
+ this.cancelDigestRecheck = null;
+ if (this.onDigestVisibility) document.removeEventListener('visibilitychange', this.onDigestVisibility);
+ this.onDigestVisibility = null;
  if (this._onShowDigest) { document.removeEventListener('cb:show-digest', this._onShowDigest); this._onShowDigest = null; }
  this.digestOverlay?.destroy();
  this.digestOverlay = null;
@@ -1466,6 +1472,8 @@ export class PanelLayoutManager implements AppModule {
  startBlackoutSignature();
  this.digestOverlay = new DigestOverlay({
  onDismiss: () => {
+ this.cancelDigestRecheck?.();
+ this.cancelDigestRecheck = null;
  this.digestGeneration += 1;
  this.digestAbortController?.abort();
  this.digestAbortController = null;
@@ -1473,20 +1481,42 @@ export class PanelLayoutManager implements AppModule {
  });
  this.digestOverlay.mount(document.body);
  const reprojectDigest = (): void => {
- if (!this.digestOverlay?.isVisible() || this.digestSeeds.length === 0) return;
+ this.cancelDigestRecheck?.();
+ this.cancelDigestRecheck = null;
+ if (this.destroyed || !this.digestOverlay?.isVisible() || this.digestSeeds.length === 0) return;
  const cards = projectDigestStories({
  seeds: this.digestSeeds,
  alerts: unifiedAlertStore.getAll(),
  savedPlaces: getSavedPlaces(),
  now: Date.now(),
  });
- if (cards.length > 0) this.digestOverlay.update(cards);
- else this.digestOverlay.showStatus('No recent activity to summarize.', 'empty');
+ if (cards.length > 0) {
+ this.digestOverlay.update(cards);
+ armDigestRecheck(cards);
+ } else this.digestOverlay.showStatus('No recent activity to summarize.', 'empty');
  };
+ const armDigestRecheck = (cards: ReturnType<typeof projectDigestStories>): void => {
+ this.cancelDigestRecheck?.();
+ this.cancelDigestRecheck = null;
+ const now = Date.now();
+ let next: number | null = null;
+ for (const card of cards) {
+ if (card.recheckAt !== null && (next === null || card.recheckAt < next)) next = card.recheckAt;
+ }
+ if (next === null) return;
+ const timer = window.setTimeout(reprojectDigest, Math.max(0, next - now));
+ this.cancelDigestRecheck = () => window.clearTimeout(timer);
+ };
+ this.onDigestVisibility = () => {
+ if (document.visibilityState === 'visible') reprojectDigest();
+ };
+ document.addEventListener('visibilitychange', this.onDigestVisibility);
  this.unsubDigestAlerts = unifiedAlertStore.subscribe(reprojectDigest);
  this.unsubDigestPlaces = subscribeSavedPlaces(reprojectDigest);
 
  const requestDigest = (onDemand: boolean): void => {
+ this.cancelDigestRecheck?.();
+ this.cancelDigestRecheck = null;
  if (onDemand) {
  this.cancelScheduledDigest?.();
  this.cancelScheduledDigest = null;
@@ -1526,6 +1556,7 @@ export class PanelLayoutManager implements AppModule {
  const overlay = this.digestOverlay;
  if (!overlay) return;
  overlay.show(cards);
+ armDigestRecheck(cards);
  markDigestShown();
  }).catch((error: unknown) => {
  if (this.destroyed || controller.signal.aborted || generation !== this.digestGeneration) return;

@@ -1,7 +1,8 @@
 # Crystal Ball — macOS 27 adoption
 
-Status: refined platform adoption plan requested by Bradley. Revision 2,
-September 14, 2026; broadens capability coverage and makes delivery decisions explicit. Native feature
+Status: refined platform adoption plan requested by Bradley. Revision 3,
+September 14, 2026; adds an explicit native visual-fidelity contract alongside
+capability coverage and delivery decisions. Native feature
 implementation designs remain subject to their existing approval and review
 gates. This document does not claim task completion or create duplicate UX IDs.
 
@@ -85,6 +86,75 @@ provides app-managed indexing; lifecycle and deletion remain our responsibility.
 Apple's [Mac thermal guidance](https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/RespondToThermalStateChanges.html)
 describes established thermal-state APIs, not a new macOS 27 feature.
 
+## Native macOS visual-fidelity contract
+
+Bradley's requirement is that Crystal Ball closely match the current Mac in both
+appearance and interaction. Treat this as a core UI acceptance requirement.
+Start UI discovery with `docs/USABILITY_UPLIFT_FOR_CODEX.md` and map each resulting
+change to its owning task. The following are proposed Crystal Ball requirements,
+not claims that the installed app already meets them.
+
+Use Apple's [macOS design guidance](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos)
+and the platform design updates linked above, then compare against native apps
+on the actual target build. Record the reference app, OS/build, appearance and
+relevant control; do not copy dimensions from an older screenshot or use a web
+preview as the native reference. Match platform conventions while keeping
+Crystal Ball's evidence hierarchy and identity recognizable.
+
+| Surface | Required result | Concrete acceptance |
+|---|---|---|
+| Window and toolbar | Native traffic lights, coherent titlebar/toolbar alignment, appropriate window edges and visible active/inactive distinction | Drag, double-click, resize, full-screen and tiling follow system behavior; controls remain clickable and clear of traffic lights at supported sizes and display scales |
+| Sidebar and navigation | Current Mac sidebar hierarchy, selection, icon alignment and accent treatment; consistent toolbar grouping | Compare Home, map, brief and Settings against identified native references; selection, focus and hover remain distinct and labels remain legible |
+| Materials and content | Current native material where supported; readable, restrained content surfaces with appropriate scroll boundaries | Check bright/dark desktop backgrounds and scrolling; maps, numbers, warning text and evidence age remain readable; document which surfaces are native and which are CSS |
+| Typography, spacing and symbols | System font metrics, consistent control sizing and spacing, familiar symbols with text or accessible names | Review dense data, long labels and text zoom; no clipping or ambiguous icon-only critical actions; verify symbol availability/licensing before packaging Apple assets and retain suitable web assets |
+| Menus and controls | Familiar menu placement, shortcuts, context menus, search, pickers, buttons and dialogs; complete interaction states | Exercise keyboard navigation, Return/Escape, default/cancel behavior, disabled/pressed/selected/inactive states and focus restoration; use actual native controls where feasible and semantic HTML where appropriate |
+| System personalization | Appearance and accent choices respected, with explicit app overrides distinguishable from system-following behavior | Change settings while the app is running; verify light/dark, accent, reduced transparency/motion, increased contrast and show borders where supported; severity colors retain their meaning independently of accent |
+| App identity | Consistent, legible Dock, menu-bar and app-switcher identity | Check supported sizes/appearances and badge contrast; evaluate Icon Composer as a bounded asset/packaging task after core chrome and controls |
+
+### Starting discrepancies to investigate
+
+The inspected `src/styles/window-chrome.css` applies a root CSS blur and a fixed
+80px traffic-light safe area. `src/styles/macos-native.css` supplies system font
+stacks but also a fixed blue accent and fixed toolbar/sidebar dimensions. These
+are source observations, not proof of a visible defect: trace effective tokens,
+overrides and runtime preferences before proposing changes. Native HudWindow
+vibrancy plus CSS blur does not establish use of the current Liquid Glass API.
+
+Create a surface inventory for `src/app/layout/html.ts`, these two style files,
+shared design tokens and `src-tauri/src/main.rs`. For each surface record current
+implementation, native reference, discrepancy, accessibility effect and the
+smallest repair. Prefer existing native shell facilities. Any additional native
+bridge needs public API/availability and packaging design; a framework rewrite
+is not a prerequisite for this visual review.
+
+### Visual delivery and sign-off
+
+1. Capture an identified packaged baseline and native reference for Home,
+   sidebar/toolbar, map, brief, Settings and emergency/offline views. Include
+   fresh, stale and unknown evidence states. Retain baseline images unchanged.
+2. Prepare a bounded chrome/control design with shared tokens, preference
+   ownership, screenshots or mockups, exact file scope and acceptance checks.
+   Resolve core shell alignment before propagating changes across screens.
+3. Implement one approved canonical task at a time. Feature-detect web controls;
+   availability-check native APIs. Record any approximation and unsupported
+   setting rather than describing it as automatic OS adoption.
+4. Compare before/after screenshots from the same build environment, fixture,
+   window size and settings. Manually verify native behavior and VoiceOver in
+   the packaged app. Review intentional differences before updating visual
+   goldens; screenshots alone do not prove keyboard or accessibility behavior.
+5. Require no unresolved clipping, unreadable critical text, inaccessible primary
+   actions, broken window controls or unexplained platform mismatches on these
+   surfaces. Bradley's visual acceptance completes the review; record remaining
+   deliberate deviations and their reasons.
+
+This establishes a new design requirement while preserving the UX-025 deferral.
+It does not authorize another materials/performance experiment. Any such work
+must first define its separately approved bounded protocol and keep existing
+CPU, memory and bundle limits. Recheck Apple release notes and native references
+at implementation kickoff and before release; record newly relevant features
+and a reasoned adopt/defer decision instead of assuming the OS upgrade updates
+custom DOM styling.
+
 ## Delivery order and dependencies
 
 These are work packets, not new UX identifiers or a second completion tracker.
@@ -93,6 +163,7 @@ These are work packets, not new UX identifiers or a second completion tracker.
 |---|---|---|---|
 | Compatibility and capability inventory | Native/test specialists establish the real supported host | `src-tauri/tauri.conf.json`, `Cargo.toml`, `Info.plist`, packaging scripts; read artifacts first | Identify binary architecture/deployment target, SDK/toolchain, Tauri/Wry versions and public API availability; packaged journey remains open after isolated smoke |
 | Trustworthy native status and accessible navigation | UI/native specialists make Home and emergency actions discoverable | `src/services/native/menubar-status.ts`, keyboard registry/bootstrap, `src-tauri/src/main.rs`, chrome styles, existing Home/settings | Shared existing projections; distinguish absent high alerts from verified coverage; keyboard/VoiceOver and display matrix; supports goals 1–3 |
+| Native visual alignment | UI/native specialists bring shell and shared controls into the macOS 27 visual contract | `src/app/layout/html.ts`, chrome styles, shared tokens; `main.rs` only after native design | Capability inventory and packaged visual baseline first; system preferences, native reference comparisons and Bradley's visual acceptance; supports goals 2, 3 and 6 |
 | Efficient desktop lifecycle | Native/UI specialists reduce discretionary work | `src/services/always-on.ts`, `src/app/refresh-scheduler.ts`, existing renderer/model lifecycle and native lifecycle handlers | Follow explicit always-on choice; no second scheduler; preserve monitoring freshness and resume correctness; supports goals 2, 5 and 6 |
 | Actionable native notifications | Native specialist with notification owner replaces delivery boundary only | `main.rs`, notification push adapter and ledger, capabilities/packaging only if required | Preserve thresholds and cooldowns; permission/receipt/action contracts and real packaged permission tests; supports workflow and honest outcome evidence |
 | System entry points and optional glanceable state | Native/UI specialists reuse navigation and status contracts | App Intents/Spotlight/WidgetKit targets only after separate design; existing command routing and menu-bar projection | Status/navigation packets first; export consent, deletion and signing verified; start with menu-bar detail and navigation intents, then justify a widget/index |
@@ -120,9 +191,13 @@ needs a separate approved design and visible user choice.
 1. **Native status and navigation:** define the displayed meaning, stale/unknown
    states and three exact navigation actions; trace them to existing controllers.
    Verify that the same state appears inside Home and outside the window.
-2. **Accessible desktop controls:** inspect current packaged preferences and
-   focus behavior, then fix demonstrated contrast, titlebar and keyboard gaps.
+2. **Native visual alignment and accessible controls:** create the surface
+   inventory and packaged/reference comparisons above; design shared chrome,
+   typography, controls and system-preference behavior together. Fix demonstrated
+   visual and interaction gaps in bounded tasks, including keyboard and contrast.
    Evaluate one semantic select enhancement before broad styling changes.
+   The first bounded candidate is the [system appearance repair brief](2026-09-14-macos-theme-lifecycle.md),
+   with a reproduced watcher failure and a separate canonical claim still needed.
 3. **Notification delivery contract:** specify requested/OS-accepted/suppressed/
    failed outcomes and a bounded open-evidence action. Record actual user action
    separately; permission or scheduling success never establishes that a person
@@ -250,6 +325,7 @@ latency and peak memory on fixed tasks before adopting an adapter.
 | Dimension | Required scenarios | Record/pass condition |
 |---|---|---|
 | Native operation | Cold/warm launch, hidden/active, full-screen/tiling, display removal, sleep/wake and network recovery | Action routes once, window remains reachable, no lost focus, duplicate work or falsely refreshed evidence |
+| Visual fidelity | Identified native macOS 27 references; Home, map, brief, Settings and emergency views; active/inactive, light/dark, accent and display scales | Paired screenshots reviewed; primary controls and window behavior match the visual contract; intentional deviations recorded and Bradley's acceptance obtained |
 | Accessibility | Keyboard-only and VoiceOver, text zoom, light/dark, inactive window, reduced motion/transparency, increased contrast/show borders where exposed | Every critical action operable and named; visual and reading order agree; status understandable without color |
 | Data and privacy | Fresh, stale, partial, missing, changed/deleted saved target, revoked indexing consent and Ghost Mode | Same truthful projection across surfaces; removed personal data absent from exports and indexes |
 | Notifications and intents | Denied/revoked permission, duplicate/late action, app closed, unsupported API and absent target | Accurate receipts, safe fallback, no unintended state mutation or duplicate execution |
@@ -292,7 +368,9 @@ measured bottleneck or newly verified framework support changes the decision.
 
 ## Refinement status
 
-Revision 2 expands the original plan with energy/lifecycle, delivery receipts,
+Revision 3 makes native visual alignment a core UI requirement, adds a surface
+inventory and reference-based visual sign-off, and retains Revision 2 coverage
+of energy/lifecycle, delivery receipts,
 Spotlight/index lifecycle, optional widgets, selected-document OCR, custom
 on-device inference and document workflows. It adds explicit adoption/defer
 choices and measurable acceptance. The September 14 host and smoke results above

@@ -1,4 +1,5 @@
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import { configureMapLibreWorker } from './maplibre-worker';
 import type { RouteResult, RouteCoord } from '@/services/routing-engine';
 import type { GpsPosition } from '@/services/gps-tracker';
 import { getRuntimeConfigSnapshot } from '@/services/runtime-config';
@@ -15,19 +16,19 @@ function formatDuration(seconds: number): string {
   return `${minutes} min`;
 }
 
-function getMapStyle(): string | maplibregl.StyleSpecification {
+function getMapStyleOptions(): Pick<maplibregl.MapOptions, 'style'> {
   const cfg = getRuntimeConfigSnapshot();
-  const mapboxKey = cfg.secrets['MAPBOX_API_KEY']?.value;
-  const maptilerKey = cfg.secrets['MAPTILER_API_KEY']?.value;
+  const mapboxKey = cfg.secrets.MAPBOX_API_KEY?.value;
+  const maptilerKey = cfg.secrets.MAPTILER_API_KEY?.value;
 
   if (mapboxKey) {
-    return `https://api.mapbox.com/styles/v1/mapbox/dark-v11?access_token=${mapboxKey}`;
+    return { style: `https://api.mapbox.com/styles/v1/mapbox/dark-v11?access_token=${mapboxKey}` };
   }
   if (maptilerKey) {
-    return `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${maptilerKey}`;
+    return { style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${maptilerKey}` };
   }
 
-  return {
+  return { style: {
     version: 8 as const,
     sources: {
       osm: {
@@ -44,7 +45,7 @@ function getMapStyle(): string | maplibregl.StyleSpecification {
         source: 'osm',
       },
     ],
-  };
+  } };
 }
 
 export class NavigationPanel {
@@ -118,10 +119,10 @@ export class NavigationPanel {
       boxSizing: 'border-box',
     });
 
-    this.root.appendChild(closeBtn);
-    this.root.appendChild(this.mapContainer);
-    this.root.appendChild(this.directionsContainer);
-    this.container.appendChild(this.root);
+    this.root.append(closeBtn);
+    this.root.append(this.mapContainer);
+    this.root.append(this.directionsContainer);
+    this.container.append(this.root);
   }
 
   show(center?: RouteCoord): void {
@@ -129,9 +130,10 @@ export class NavigationPanel {
     this._visible = true;
 
     if (!this.map) {
+      configureMapLibreWorker();
       this.map = new maplibregl.Map({
         container: this.mapContainer,
-        style: getMapStyle(),
+        ...getMapStyleOptions(),
         center: center ? [center.lon, center.lat] : [0, 20],
         zoom: center ? 13 : 2,
       });
@@ -155,7 +157,9 @@ export class NavigationPanel {
   updateGpsPosition(pos: GpsPosition): void {
     if (!this.map) return;
 
-    if (!this.gpsMarker) {
+    if (this.gpsMarker) {
+      this.gpsMarker.setLngLat([pos.lon, pos.lat]);
+    } else {
       const el = document.createElement('div');
       Object.assign(el.style, {
         width: '16px',
@@ -169,8 +173,6 @@ export class NavigationPanel {
       this.gpsMarker = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
         .setLngLat([pos.lon, pos.lat])
         .addTo(this.map);
-    } else {
-      this.gpsMarker.setLngLat([pos.lon, pos.lat]);
     }
 
     if (pos.heading !== null) {
@@ -233,7 +235,7 @@ export class NavigationPanel {
 
   private renderDirectionsList(route: RouteResult): void {
     while (this.directionsContainer.firstChild) {
-      this.directionsContainer.removeChild(this.directionsContainer.firstChild);
+      this.directionsContainer.firstChild.remove();
     }
 
     // Header
@@ -268,10 +270,10 @@ export class NavigationPanel {
       marginTop: '4px',
     });
 
-    header.appendChild(distanceEl);
-    header.appendChild(durationEl);
-    header.appendChild(providerEl);
-    this.directionsContainer.appendChild(header);
+    header.append(distanceEl);
+    header.append(durationEl);
+    header.append(providerEl);
+    this.directionsContainer.append(header);
 
     // Steps
     route.steps.forEach((step, idx) => {
@@ -305,7 +307,7 @@ export class NavigationPanel {
         lineHeight: '1.4',
       });
 
-      textWrap.appendChild(instrEl);
+      textWrap.append(instrEl);
 
       if (step.name) {
         const nameEl = document.createElement('div');
@@ -315,7 +317,7 @@ export class NavigationPanel {
           color: '#888',
           marginTop: '2px',
         });
-        textWrap.appendChild(nameEl);
+        textWrap.append(nameEl);
       }
 
       const distEl = document.createElement('div');
@@ -325,11 +327,11 @@ export class NavigationPanel {
         color: '#555',
         marginTop: '4px',
       });
-      textWrap.appendChild(distEl);
+      textWrap.append(distEl);
 
-      stepEl.appendChild(numEl);
-      stepEl.appendChild(textWrap);
-      this.directionsContainer.appendChild(stepEl);
+      stepEl.append(numEl);
+      stepEl.append(textWrap);
+      this.directionsContainer.append(stepEl);
     });
   }
 
@@ -343,7 +345,7 @@ export class NavigationPanel {
       this.map = null;
     }
     if (this.root.parentNode) {
-      this.root.parentNode.removeChild(this.root);
+      this.root.remove();
     }
   }
 }

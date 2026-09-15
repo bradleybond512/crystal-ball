@@ -737,6 +737,17 @@ and whether current evidence indicates impact to any saved place.
   accessibility, lifecycle, performance, and mutation tests; `npm run
   test:weather`, `npm run test:renderer`, `npm run typecheck:all`, and the
   agentic validation gate.
+- **September 14 resumption:** the approved third repair cycle completed the
+  malformed-response, optional-onset and bounded-validation repairs. Candidate
+  `b81d9dc28` passed the 15,327-test agentic gate; 25 literal mutation proofs
+  were rebuilt on a clean isolated copy. Independent review still blocks
+  acceptance on open-digest expiry invalidation and FAA partial-source loading.
+  Bradley approved the [fourth-cycle repair](plans/2026-09-14-ux026-fourth-cycle-proposal.md)
+  after these findings; implementation and fresh validation are in progress.
+  A refreshed dependency audit is also a publication blocker. See
+  [resumption evidence](validation/UX-026-RESUMPTION.md) and
+  [literal proofs](validation/UX-026-MUTATION-PROOFS.md). No merge or installation
+  occurred; the recurring controller remains deleted.
 
 ---
 
@@ -827,6 +838,6 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
-| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS — HIGH ASSURANCE | #1704 |
+| UX-026 | Location + saved-place impact in alert digests | IN PROGRESS — approved fourth repair cycle | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | IN PROGRESS | #1720 |

@@ -20,6 +20,7 @@ export interface DigestStoryCard extends DigestStorySeed {
   impactText: string;
   impactStatus: DigestImpactStatus;
   evaluatedAt: number;
+  recheckAt: number | null;
 }
 
 export interface ProjectDigestStoriesInput {
@@ -589,6 +590,19 @@ function impactProjection(
   };
 }
 
+function nextEvidenceBoundary(alerts: readonly UnifiedAlert[], now: number): number | null {
+  let boundary: number | null = null;
+  for (const alert of alerts) {
+    if (alert.source !== 'nws' || alert.spatialScope?.kind !== 'area'
+      || !alert.raw || typeof alert.raw !== 'object' || Array.isArray(alert.raw)) continue;
+    const raw = alert.raw as Record<string, unknown>;
+    if (!hasCurrentNwsLifecycle(raw, now)) continue;
+    const next = Math.min(parseTimestamp(raw.expires)!, (raw.retrievedAt as number) + NWS_RETRIEVAL_MAX_AGE_MS + 1);
+    if (next > now && (boundary === null || next < boundary)) boundary = next;
+  }
+  return boundary;
+}
+
 export function projectDigestStories(input: ProjectDigestStoriesInput): DigestStoryCard[] {
   const { index, truncated } = alertIndex(input.alerts);
   const geometryContext: GeometryEvaluationContext = {
@@ -613,6 +627,7 @@ export function projectDigestStories(input: ProjectDigestStoriesInput): DigestSt
       locationText: locationText(alerts),
       ...impact,
       evaluatedAt: input.now,
+      recheckAt: input.savedPlaces.length > 0 ? nextEvidenceBoundary(alerts, input.now) : null,
     };
   });
 }

@@ -174,6 +174,7 @@ export class SavedPlaceModal {
  this.render();
  this.overlay.classList.add('active');
  window.addEventListener('keydown', this.escapeHandler, true);
+ this.focusNameField();
   }
 
   public close(): void {

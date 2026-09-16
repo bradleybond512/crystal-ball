@@ -14,7 +14,20 @@ async function mount(page: import('@playwright/test').Page) {
     const { UnifiedSettings } = await import('/src/components/UnifiedSettings.ts');
     const { SavedPlaceModal } = await import('/src/components/SavedPlaceModal.ts');
     const { getSavedPlace } = await import('/src/services/saved-places.ts');
-    const state = window as unknown as { settings: InstanceType<typeof UnifiedSettings>; escaped: number };
+    const { CommandPalettePanel } = await import('/src/components/CommandPalettePanel.ts');
+    const { createCommandRegistry } = await import('/src/services/command-palette/command-registry.ts');
+    const { paletteCaptureNet } = await import('/src/services/keyboard/shortcut-bootstrap.ts');
+    const registry = createCommandRegistry();
+    registry.register({ id: 'keyboard-fixture', title: 'Keyboard fixture command', category: 'action', keywords: [], action: () => {} });
+    const palette = new CommandPalettePanel({ registry });
+    palette.mount(document.body);
+    window.addEventListener('keydown', paletteCaptureNet, true);
+    document.addEventListener('cb:toggle-cmdk', () => palette.toggle());
+    const state = window as unknown as { settings: InstanceType<typeof UnifiedSettings>; escaped: number; underlyingHomeEscapes: number };
+    state.underlyingHomeEscapes = 0;
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !event.defaultPrevented) state.underlyingHomeEscapes++;
+    });
     state.escaped = 0;
     document.addEventListener('keydown', event => { if (event.key === 'Escape') state.escaped++; }, true);
     const place = new SavedPlaceModal({ onPickLocationMode: () => {} });
@@ -138,4 +151,65 @@ test('unusable controls at either boundary are excluded from keyboard wrapping',
     await page.keyboard.press('Shift+Tab');
     await expect(page.locator('#last')).toBeFocused();
   }
+});
+
+
+async function openPaletteWithImmediateEscape(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const target = document.activeElement!;
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    target.dispatchEvent(escape);
+    return {
+      prevented: escape.defaultPrevented,
+      settingsOpen: document.querySelector('#unifiedSettingsModal')!.classList.contains('active'),
+      placeOpen: document.querySelector('#savedPlaceModal')!.classList.contains('active'),
+      picking: Boolean(document.querySelector('.spm-pick-banner')),
+      paletteOpen: Boolean(document.querySelector('.cmdk-v2-overlay:not([hidden])')),
+      underlyingHomeEscapes: (window as unknown as { underlyingHomeEscapes: number }).underlyingHomeEscapes,
+    };
+  });
+}
+
+test('real command palette owns keyboard above Settings and returns Tab ownership after hiding', async ({ page }) => {
+  await page.locator('#unifiedSettingsBtn').click();
+  const immediate = await openPaletteWithImmediateEscape(page);
+  expect(immediate).toMatchObject({ prevented: true, settingsOpen: true, paletteOpen: true, underlyingHomeEscapes: 0 });
+  await expect(page.locator('.cmdk-v2-input')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.cmdk-v2-row')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('.cmdk-v2-input')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.cmdk-v2-overlay')).toBeHidden();
+  await expect(page.locator('#unifiedSettingsModal')).toHaveClass(/active/);
+  expect(await page.evaluate(() => (window as unknown as { underlyingHomeEscapes: number }).underlyingHomeEscapes)).toBe(0);
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.unified-settings-close')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#unifiedSettingsModal')).not.toHaveClass(/active/);
+});
+
+test('real command palette preserves saved-place draft and map picking', async ({ page }) => {
+  await page.locator('#unifiedSettingsBtn').click();
+  await page.locator('[data-tab="places"]').click();
+  await page.locator('[data-places-action="add"]').click();
+  await page.locator('#savedPlaceModal [data-field="name"]').fill('Unsaved palette draft');
+  await page.locator('[data-action="pick-map"]').click();
+  await page.locator('[data-action="pick-cancel"]').focus();
+  const immediate = await openPaletteWithImmediateEscape(page);
+  expect(immediate).toMatchObject({ prevented: true, placeOpen: true, picking: true, paletteOpen: true, underlyingHomeEscapes: 0 });
+  await expect(page.locator('.cmdk-v2-input')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.cmdk-v2-overlay')).toBeHidden();
+  await expect(page.locator('#savedPlaceModal')).toHaveClass(/active/);
+  await expect(page.locator('.spm-pick-banner')).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { underlyingHomeEscapes: number }).underlyingHomeEscapes)).toBe(0);
+  await page.locator('[data-action="pick-cancel"]').focus();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.spm-pick-banner')).toHaveCount(0);
+  await expect(page.locator('#savedPlaceModal [data-field="name"]')).toHaveValue('Unsaved palette draft');
+  await expect(page.locator('#savedPlaceModal')).toHaveClass(/active/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#savedPlaceModal')).not.toHaveClass(/active/);
 });

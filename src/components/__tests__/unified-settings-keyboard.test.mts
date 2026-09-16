@@ -54,6 +54,8 @@ new Function('require', 'exports', compiled)((id: string) => {
 }, exports);
 const UnifiedSettings = exports.UnifiedSettings as typeof import('../UnifiedSettings.ts').UnifiedSettings;
 const { SavedPlaceModal } = await import('../SavedPlaceModal.ts');
+const { CommandPalettePanel } = await import('../CommandPalettePanel.ts');
+const { paletteCaptureNet } = await import('../../services/keyboard/shortcut-bootstrap.ts');
 const { default: i18next } = await import('i18next');
 await i18next.init({ lng: 'en', resources: { en: { translation: JSON.parse(readFileSync(new URL('../../locales/en.json', import.meta.url), 'utf8')) } } });
 after(() => browser.happyDOM.abort());
@@ -254,4 +256,105 @@ test('Saved Place Escape precedes document capture and exits picking before clos
     key('Escape');
     assert.equal(escaped, 1);
   } finally { modal.close(); document.removeEventListener('keydown', listener, true); }
+});
+
+
+function mountPalette() {
+  const panel = new CommandPalettePanel();
+  panel.mount(document.body);
+  const toggle = () => panel.toggle();
+  window.addEventListener('keydown', paletteCaptureNet, true);
+  document.addEventListener('cb:toggle-cmdk', toggle);
+  return {
+    panel,
+    open() {
+      document.activeElement!.dispatchEvent(new browser.KeyboardEvent('keydown', {
+        key: 'k', metaKey: true, bubbles: true, cancelable: true,
+      }));
+      assert.equal(panel.isVisible(), true, 'real capture net must dispatch the palette toggle');
+    },
+    destroy() {
+      window.removeEventListener('keydown', paletteCaptureNet, true);
+      document.removeEventListener('cb:toggle-cmdk', toggle);
+      panel.unmount();
+    },
+  };
+}
+
+test('foreground palette owns Escape and Tab above Settings, including its delayed-focus interval', async () => {
+  const palette = mountPalette();
+  const { settings, overlay } = mount();
+  let underlyingEscapes = 0;
+  const underlying = (event: Event) => {
+    const keyEvent = event as KeyboardEvent;
+    if (keyEvent.key === 'Escape' && !keyEvent.defaultPrevented) underlyingEscapes++;
+  };
+  document.addEventListener('keydown', underlying);
+  try {
+    settings.open();
+    palette.open();
+    assert.equal(key('Escape').defaultPrevented, true, 'pre-focus Escape must protect the underlying Home handler');
+    assert.equal(overlay.classList.contains('active'), true);
+    assert.equal(palette.panel.isVisible(), true, 'pre-focus Escape is deferred until palette input receives focus');
+    assert.equal(underlyingEscapes, 0);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(document.activeElement?.classList.contains('cmdk-v2-input'), true);
+    assert.equal(key('Tab').defaultPrevented, false, 'Settings must not hijack palette Tab');
+    assert.equal(document.activeElement?.classList.contains('cmdk-v2-input'), true);
+    key('Escape');
+    assert.equal(palette.panel.isVisible(), false);
+    assert.equal(overlay.classList.contains('active'), true);
+    assert.equal(underlyingEscapes, 0);
+    assert.equal(key('Tab').defaultPrevented, true, 'Settings recaptures Tab from a now-hidden palette input');
+    assert.equal(document.activeElement === overlay.querySelector('.unified-settings-close'), true);
+    key('Escape');
+    assert.equal(overlay.classList.contains('active'), false);
+    assert.equal(underlyingEscapes, 0);
+  } finally {
+    document.removeEventListener('keydown', underlying);
+    palette.destroy();
+  }
+});
+
+test('foreground palette preserves a saved-place draft and map-pick state until the editor owns Escape again', async () => {
+  const palette = mountPalette();
+  const modes: boolean[] = [];
+  const editor = new SavedPlaceModal({ onPickLocationMode: active => modes.push(active) });
+  let underlyingEscapes = 0;
+  const underlying = (event: Event) => {
+    const keyEvent = event as KeyboardEvent;
+    if (keyEvent.key === 'Escape' && !keyEvent.defaultPrevented) underlyingEscapes++;
+  };
+  document.addEventListener('keydown', underlying);
+  try {
+    editor.openCreate();
+    const overlay = document.getElementById('savedPlaceModal')!;
+    const name = overlay.querySelector<HTMLInputElement>('[data-field="name"]')!;
+    name.value = 'Unsaved draft';
+    name.dispatchEvent(new browser.Event('input', { bubbles: true }));
+    overlay.querySelector<HTMLElement>('[data-action="pick-map"]')!.click();
+    overlay.querySelector<HTMLElement>('[data-action="pick-cancel"]')!.focus();
+    palette.open();
+    assert.equal(key('Escape').defaultPrevented, true);
+    assert.equal(overlay.classList.contains('active'), true);
+    assert.deepEqual(modes, [true]);
+    assert.equal(underlyingEscapes, 0);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    key('Escape');
+    assert.equal(palette.panel.isVisible(), false);
+    assert.equal(overlay.classList.contains('active'), true);
+    assert.deepEqual(modes, [true]);
+    assert.equal(underlyingEscapes, 0);
+    overlay.querySelector<HTMLElement>('[data-action="pick-cancel"]')!.focus();
+    key('Escape');
+    assert.deepEqual(modes, [true, false]);
+    assert.equal(overlay.querySelector<HTMLInputElement>('[data-field="name"]')!.value, 'Unsaved draft');
+    assert.equal(overlay.classList.contains('active'), true);
+    key('Escape');
+    assert.equal(overlay.classList.contains('active'), false);
+  } finally {
+    editor.close();
+    palette.destroy();
+    document.removeEventListener('keydown', underlying);
+  }
 });

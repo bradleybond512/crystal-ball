@@ -84,6 +84,11 @@ export class SavedPlaceModal {
  this.overlay.setAttribute('aria-label', 'Save Place');
 
  this.escapeHandler = (e: KeyboardEvent) => {
+ if (!this.overlay.classList.contains('active')) return;
+ if (e.key === 'Escape' && document.querySelector('.cmdk-v2-overlay:not([hidden])')) {
+ e.preventDefault();
+ return;
+ }
  if (e.key === 'Escape') {
  e.preventDefault();
  e.stopImmediatePropagation();

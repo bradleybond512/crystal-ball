@@ -881,5 +881,4 @@ Update the row in the same PR that does the work.
 | UX-026 | Location + saved-place impact in alert digests | MONITOR | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
-
-| UX-032 | Settings keyboard containment | IN PROGRESS | Draft claim pending |
+| UX-032 | Settings keyboard containment | IN PROGRESS | #1723 |

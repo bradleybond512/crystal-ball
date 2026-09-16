@@ -812,6 +812,26 @@ Design: [UX-031 appearance brief](plans/2026-09-15-ux031-system-appearance.md).
 
 ---
 
+### UX-032 — Settings keyboard containment
+
+Status: IN PROGRESS
+
+Packaged main `ee2a7aaac9be` on macOS 27.0 (26A428), September 15:
+native menu Settings opens the unified dialog without moving focus inside.
+Tab focuses the background Safety review banner. Escape dismisses Settings and
+also switches Home to Classic. Reproduced through native UI automation; no
+settings values were changed, and Home was restored afterward.
+
+Acceptance: entering Settings moves focus inside; Tab and Shift-Tab remain in
+visible enabled controls; Escape dismisses only Settings; closing restores a
+connected invoking control; repeated opens and tab changes remain usable.
+Keep native appearance acceptance separate. No native bridge or preference
+migration is included.
+
+Design: [UX-032 brief](plans/2026-09-15-ux032-settings-keyboard.md).
+
+---
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -861,3 +881,5 @@ Update the row in the same PR that does the work.
 | UX-026 | Location + saved-place impact in alert digests | MONITOR | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
+
+| UX-032 | Settings keyboard containment | IN PROGRESS | Draft claim pending |

@@ -84,7 +84,14 @@ export class SavedPlaceModal {
  this.overlay.setAttribute('aria-label', 'Save Place');
 
  this.escapeHandler = (e: KeyboardEvent) => {
+ if (!this.overlay.classList.contains('active')) return;
+ if (e.key === 'Escape' && document.querySelector('.cmdk-v2-overlay:not([hidden])')) {
+ e.preventDefault();
+ return;
+ }
  if (e.key === 'Escape') {
+ e.preventDefault();
+ e.stopImmediatePropagation();
  if (this.pickModeActive) {
  this.exitPickMode();
  } else {
@@ -122,7 +129,7 @@ export class SavedPlaceModal {
  this.confirmingDelete = false;
  this.render();
  this.overlay.classList.add('active');
- document.addEventListener('keydown', this.escapeHandler);
+ window.addEventListener('keydown', this.escapeHandler, true);
  this.focusNameField();
   }
 
@@ -149,7 +156,7 @@ export class SavedPlaceModal {
  this.render();
  this.overlay.setAttribute('aria-label', 'Save current location as place');
  this.overlay.classList.add('active');
- document.addEventListener('keydown', this.escapeHandler);
+ window.addEventListener('keydown', this.escapeHandler, true);
  this.focusNameField();
   }
 
@@ -171,14 +178,15 @@ export class SavedPlaceModal {
  this.confirmingDelete = false;
  this.render();
  this.overlay.classList.add('active');
- document.addEventListener('keydown', this.escapeHandler);
+ window.addEventListener('keydown', this.escapeHandler, true);
+ this.focusNameField();
   }
 
   public close(): void {
  const closingCurrentLocationConversion = this.currentLocationConversion;
  if (this.pickModeActive) this.exitPickMode();
  this.overlay.classList.remove('active');
- document.removeEventListener('keydown', this.escapeHandler);
+ window.removeEventListener('keydown', this.escapeHandler, true);
  if (this.searchDebounce) clearTimeout(this.searchDebounce);
  this.searchDebounce = null;
  if (closingCurrentLocationConversion) {

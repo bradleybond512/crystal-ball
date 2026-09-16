@@ -168,7 +168,7 @@ These are work packets, not new UX identifiers or a second completion tracker.
 | Actionable native notifications | Native specialist with notification owner replaces delivery boundary only | `main.rs`, notification push adapter and ledger, capabilities/packaging only if required | Preserve thresholds and cooldowns; permission/receipt/action contracts and real packaged permission tests; supports workflow and honest outcome evidence |
 | System entry points and optional glanceable state | Native/UI specialists reuse navigation and status contracts | App Intents/Spotlight/WidgetKit targets only after separate design; existing command routing and menu-bar projection | Status/navigation packets first; export consent, deletion and signing verified; start with menu-bar detail and navigation intents, then justify a widget/index |
 | Optional document/language assistance | Native/provider specialists use the existing AI and emergency document boundaries | `src/services/llm-adapter.ts`, existing emergency-pack import/export paths; narrowly scoped native adapter | Semantic prerequisites and evaluated availability; selected-file OCR may be independently scoped; no score/forecast/outcome authority |
-| Packaged user acceptance | Test/UX owners exercise the six-goal journey | Reuse UX-028/029/030 protocols and their owning claims | Real app launch, brief, evidence, explicit action, offline reopen and after-action review; critical misunderstanding blocks acceptance |
+| Packaged user acceptance | Test/UX owners exercise the six-goal journey | Define missing journey protocols through canonical claims; UX-028/029/030 were referenced but are not defined in the live tracker | Real app launch, brief, evidence, explicit action, offline reopen and after-action review; critical misunderstanding blocks acceptance |
 
 ### Two repository findings that change the priority
 
@@ -197,7 +197,9 @@ needs a separate approved design and visible user choice.
    visual and interaction gaps in bounded tasks, including keyboard and contrast.
    Evaluate one semantic select enhancement before broad styling changes.
    The first bounded candidate is the [system appearance repair brief](2026-09-14-macos-theme-lifecycle.md),
-   with a reproduced watcher failure and a separate canonical claim still needed.
+   now delivered as UX-031/#1720 with packaged appearance acceptance open.
+   UX-032/#1723 subsequently repaired Settings keyboard ownership; its packaged
+   acceptance remains separately tracked.
 3. **Notification delivery contract:** specify requested/OS-accepted/suppressed/
    failed outcomes and a bounded open-evidence action. Record actual user action
    separately; permission or scheduling success never establishes that a person
@@ -265,9 +267,30 @@ No app installation, model data access, new permissions or system indexing is
 authorized by this roadmap alone. Prepare those concrete designs for approval.
 Any later authorized install must use the mandated installer.
 
-Immediate dependencies remain the map security repair and UX-026 cached-context
-closeout, their complete evidence and real cross-agent review. The macOS plan
-adds targeted platform work to the six goals instead of replacing them.
+Source prerequisites #1721 (map security), #1720 (appearance), #1704 (alert
+location impact), #1722 (this plan) and #1723 (Settings keyboard ownership) are
+merged. Native acceptance remains distinct from those source merges. The next
+Home prerequisite is UX-000's [packaged zero-key protocol](2026-09-15-ux000-packaged-acceptance.md).
+Its isolated account and maintenance window require a specific decision before
+execution; the user's live profile is not a disposable test environment.
+
+### Six-goal completion map
+
+This is a dependency map, not a second task tracker. Status comes from the live
+usability and prediction roadmaps; each remaining implementation gets one
+canonical claim and its own evidence.
+
+| Goal | Existing work and next gate | Evidence required to call the goal complete |
+|---|---|---|
+| Trustworthy meaning | UX-027 source/evidence delivered; retain source-age, coverage and observed-versus-modeled distinctions across surfaces | Identified packaged fresh/stale/unknown cases; no unsupported safety or confidence claims |
+| One personal workflow | UX-026 source delivered with packaged cases open; UX-005 identity remains blocked on its approved design | A saved place connects an actual alert to evidence and a deliberate action, preserving identity and privacy |
+| Useful Home | UX-000 packaged acceptance first; then UX-001 posture and UX-002 best-move interaction | No-navigation Home shows honest posture, evidence limits and the exact actionable recommendation without a second state writer |
+| Attributable outcomes | UX-018 resolver timeliness and UX-019 safe recalibration, with canonical ACC ownership where prediction behavior changes | Action receipt distinguished from actual outcome; resolvable targets, time-ordered scoring and documented promotion/rollback evidence |
+| Offline drills | UX-003/UX-009 delivered capabilities; a packaged drill protocol remains to be claimed | Identified cached artifacts, age/expiry, offline reopen and failure behavior; no blanket ready label from a partial receipt |
+| Uncoached acceptance | Journey protocols previously called UX-028/029/030 are missing from the live tracker | Define those protocols and canonical owners before testing; record a user completing the evidence-to-action journey without coaching and address critical misunderstandings |
+
+No missing protocol is marked complete or silently assigned an invented UX ID.
+The six goals remain ongoing even when all currently prepared source PRs merge.
 
 ## First compatibility evidence
 

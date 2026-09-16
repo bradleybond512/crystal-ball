@@ -14,6 +14,8 @@ import {
   ciVerdict,
   isRunnerAllowlisted,
   commandToStages,
+  prDeclaredOverrides,
+  mergeOverrides,
 } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 import { expectedReviewer, verdictAdvice } from '../scripts/cross-agent-check.mjs';
@@ -717,4 +719,68 @@ test('changing cross-agent-check selects a suite that actually covers it', () =>
   const { scripts, unmapped } = selectScripts(['scripts/cross-agent-check.mjs'], index);
   assert.deepEqual(scripts, ['test:agentic-pipeline']);
   assert.deepEqual(unmapped, []);
+});
+
+// ── PR-declared coverage overrides ──────────────────────────────────────────
+// CI runs main's copy of targeted-tests.mjs, so a branch adding a new source
+// file plus its suite previously had no way to say they belong together: the
+// OVERRIDES map is code in a file the branch does not control. The only
+// branch-readable option was the baseline, whose header defines an entry as a
+// declaration that the file is DELIBERATELY UNTESTED — false for a tested file.
+// These tests pin the additive mechanism that closes that gap, and the security
+// property that makes it safe.
+
+test('PR overrides parse a well-formed declaration', () => {
+  const parsed = prDeclaredOverrides(() => JSON.stringify({
+    'scripts/install-mcp-deps.mjs': ['test:mcp-deps'],
+  }));
+  assert.deepEqual(parsed, { 'scripts/install-mcp-deps.mjs': ['test:mcp-deps'] });
+});
+
+test('PR overrides never take the gate down on bad input', () => {
+  // A malformed or missing file must degrade to "no declarations", never throw:
+  // the gate failing open on a syntax error would be worse than the gap.
+  assert.deepEqual(prDeclaredOverrides(() => { throw new Error('ENOENT'); }), {});
+  assert.deepEqual(prDeclaredOverrides(() => 'not json at all'), {});
+  assert.deepEqual(prDeclaredOverrides(() => '[]'), {});
+  assert.deepEqual(prDeclaredOverrides(() => 'null'), {});
+});
+
+test('PR overrides drop entries that are not script-name arrays', () => {
+  const parsed = prDeclaredOverrides(() => JSON.stringify({
+    'a.mjs': 'test:not-an-array',
+    'b.mjs': ['npm run something'],        // not a test: script
+    'c.mjs': ['test:real', 42],            // non-strings filtered out
+    'd.mjs': [],
+  }));
+  assert.deepEqual(parsed, { 'c.mjs': ['test:real'] });
+});
+
+test('merging is additive — a PR cannot remove or replace a mapping main requires', () => {
+  // The security property. If this ever becomes a replace, a PR could point a
+  // file at a trivial suite and silently drop the one main insists on.
+  const base = { 'src/app/data-loader.ts': ['test:providers'] };
+  const merged = mergeOverrides(base, { 'src/app/data-loader.ts': ['test:mine'] });
+  assert.deepEqual(merged['src/app/data-loader.ts'], ['test:providers', 'test:mine']);
+  assert.deepEqual(base['src/app/data-loader.ts'], ['test:providers'], 'base must not be mutated');
+});
+
+test('a declared mapping covers the file AND runs the suite it names', () => {
+  // Unlike a baseline line — which runs nothing — declaring coverage here means
+  // the named suite actually executes.
+  const index = deriveScriptIndex({ 'test:mcp-deps': 'node --test tests/install-mcp-deps.test.mjs' }, root);
+  const overrides = mergeOverrides(OVERRIDES, { 'scripts/install-mcp-deps.mjs': ['test:mcp-deps'] });
+  const { scripts, unmapped } = selectScripts(['scripts/install-mcp-deps.mjs'], index, overrides);
+  assert.deepEqual(scripts, ['test:mcp-deps'], 'the declared suite must be selected to run');
+  assert.deepEqual(unmapped, [], 'the file must no longer count as a coverage gap');
+});
+
+test('declaring a suite that does not exist does not launder coverage', () => {
+  // Naming a script absent from the index leaves the file unmapped, so the gate
+  // still fails. Otherwise a PR could claim coverage from a nonexistent suite.
+  const index = deriveScriptIndex({ 'test:real': 'node --test tests/real.test.mjs' }, root);
+  const overrides = mergeOverrides(OVERRIDES, { 'scripts/whatever.mjs': ['test:does-not-exist'] });
+  const { scripts, unmapped } = selectScripts(['scripts/whatever.mjs'], index, overrides);
+  assert.deepEqual(scripts, []);
+  assert.deepEqual(unmapped, ['scripts/whatever.mjs']);
 });

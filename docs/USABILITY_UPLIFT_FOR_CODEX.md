@@ -814,7 +814,12 @@ Design: [UX-031 appearance brief](plans/2026-09-15-ux031-system-appearance.md).
 
 ### UX-032 — Settings keyboard containment
 
-Status: IN PROGRESS
+Status: MONITOR
+Evidence: #1723 — reviewed source candidate and automated/mutation evidence.
+Exit condition: Verify Settings focus, Tab, Escape, Places Edit handoff and foreground command palette in the identified packaged main build; retain full VoiceOver and appearance acceptance separately.
+Review after: 2026-09-22
+
+This is manual acceptance tracking, not a new scheduled automation.
 
 Packaged main `ee2a7aaac9be` on macOS 27.0 (26A428), September 15:
 native menu Settings opens the unified dialog without moving focus inside.
@@ -829,6 +834,8 @@ Keep native appearance acceptance separate. No native bridge or preference
 migration is included.
 
 Design: [UX-032 brief](plans/2026-09-15-ux032-settings-keyboard.md).
+Evidence: [validation and review](validation/UX-032-SETTINGS-KEYBOARD.md),
+[literal mutation proofs](validation/UX-032-MUTATION-PROOFS.md).
 
 ---
 
@@ -881,4 +888,4 @@ Update the row in the same PR that does the work.
 | UX-026 | Location + saved-place impact in alert digests | MONITOR | #1704 |
 | UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
-| UX-032 | Settings keyboard containment | IN PROGRESS | #1723 |
+| UX-032 | Settings keyboard containment | MONITOR | #1723 |

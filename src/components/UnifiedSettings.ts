@@ -143,6 +143,10 @@ export class UnifiedSettings {
 
  this.escapeHandler = (e: KeyboardEvent) => {
  if (!this.overlay.classList.contains('active')) return;
+ if ((e.key === 'Escape' || e.key === 'Tab') && document.querySelector('.cmdk-v2-overlay:not([hidden])')) {
+ if (e.key === 'Escape') e.preventDefault();
+ return;
+ }
  if (e.key === 'Escape') {
  e.preventDefault();
  e.stopImmediatePropagation();

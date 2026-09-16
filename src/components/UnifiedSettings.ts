@@ -121,6 +121,9 @@ export class UnifiedSettings {
   private activePanelCategory = 'all';
   private panelFilter = '';
   private escapeHandler: (e: KeyboardEvent) => void;
+  private previousFocus: HTMLElement | null = null;
+  private focusedControl: HTMLElement | null = null;
+  private focusObserver: MutationObserver;
   private apiConfigPanel: RuntimeConfigPanel | null = null;
   private _diagToken: string | null = null;
   private _diagRefreshInterval: ReturnType<typeof setInterval> | null = null;
@@ -134,11 +137,31 @@ export class UnifiedSettings {
  this.overlay.className = 'modal-overlay';
  this.overlay.id = 'unifiedSettingsModal';
  this.overlay.setAttribute('role', 'dialog');
+ this.overlay.setAttribute('aria-modal', 'true');
+ this.overlay.tabIndex = -1;
  this.overlay.setAttribute('aria-label', t('header.settings'));
 
  this.escapeHandler = (e: KeyboardEvent) => {
- if (e.key === 'Escape') this.close();
+ if (!this.overlay.classList.contains('active')) return;
+ if (e.key === 'Escape') {
+ e.preventDefault();
+ e.stopImmediatePropagation();
+ this.close();
+ } else if (e.key === 'Tab') {
+ this.containTab(e);
+ }
  };
+
+ this.overlay.addEventListener('focusin', (event) => {
+ this.focusedControl = event.target instanceof HTMLElement ? event.target : null;
+ });
+ this.focusObserver = new MutationObserver(() => {
+ if (!this.focusedControl || this.isUsableFocusTarget(this.focusedControl)) return;
+ const active = document.activeElement;
+ if (active === document.body || active === this.overlay || active === this.focusedControl) {
+ this.focusFirstControl();
+ }
+ });
 
  // Event delegation on stable overlay element
  // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -363,11 +386,17 @@ export class UnifiedSettings {
  if (placesAction) {
  const placeId = target.closest<HTMLElement>('[data-place-id]')?.dataset.placeId;
  if (placesAction === 'add') {
- this.config.openCreatePlace?.();
+ if (this.config.openCreatePlace) {
+ this.close();
+ this.config.openCreatePlace();
+ }
  return;
  }
  if (placesAction === 'edit' && placeId) {
- this.config.openEditPlace?.(placeId);
+ if (this.config.openEditPlace) {
+ this.close();
+ this.config.openEditPlace(placeId);
+ }
  return;
  }
  if (placesAction === 'delete' && placeId) {
@@ -519,18 +548,73 @@ export class UnifiedSettings {
   }
 
   public open(tab?: TabId): void {
+ if (!this.overlay.classList.contains('active')) {
+ this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+ }
+ this.focusObserver.disconnect();
  if (tab) this.activeTab = tab;
  this.render();
  this.overlay.classList.add('active');
  localStorage.setItem('wm-settings-open', '1');
- document.addEventListener('keydown', this.escapeHandler);
+ window.addEventListener('keydown', this.escapeHandler, true);
+ this.focusFirstControl();
+ this.focusObserver.observe(this.overlay, {
+ childList: true, subtree: true, attributes: true,
+ attributeFilter: ['hidden', 'disabled', 'tabindex', 'class', 'style', 'inert'],
+ });
   }
 
   public close(): void {
+ const wasOpen = this.overlay.classList.contains('active');
  this._stopDebugAutoRefresh();
+ this.focusObserver.disconnect();
  this.overlay.classList.remove('active');
  localStorage.removeItem('wm-settings-open');
- document.removeEventListener('keydown', this.escapeHandler);
+ window.removeEventListener('keydown', this.escapeHandler, true);
+ if (wasOpen) {
+ const target = this.isUsableFocusTarget(this.previousFocus)
+ ? this.previousFocus
+ : document.getElementById('unifiedSettingsBtn');
+ if (this.isUsableFocusTarget(target)) target.focus();
+ }
+ this.previousFocus = null;
+ this.focusedControl = null;
+  }
+
+  private isUsableFocusTarget(element: HTMLElement | null): element is HTMLElement {
+ if (!element?.isConnected || element.tabIndex < 0 || element.matches(':disabled')
+ || element.closest('[hidden], [inert]') || element.getClientRects().length === 0) return false;
+ const visibility = getComputedStyle(element).visibility;
+ return visibility !== 'hidden' && visibility !== 'collapse';
+  }
+
+  private focusableControls(): HTMLElement[] {
+ return [...this.overlay.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex], summary, [contenteditable="true"]')]
+ .filter((element) => this.isUsableFocusTarget(element));
+  }
+
+  private focusFirstControl(): void {
+ (this.focusableControls()[0] ?? this.overlay).focus();
+  }
+
+  private containTab(event: KeyboardEvent): void {
+ const controls = this.focusableControls();
+ const first = controls[0];
+ const last = controls[controls.length - 1];
+ const active = document.activeElement;
+ if (!first || !last) {
+ event.preventDefault();
+ this.overlay.focus();
+ } else if (!controls.includes(active as HTMLElement)) {
+ event.preventDefault();
+ (event.shiftKey ? last : first).focus();
+ } else if (event.shiftKey && active === first) {
+ event.preventDefault();
+ last.focus();
+ } else if (!event.shiftKey && active === last) {
+ event.preventDefault();
+ first.focus();
+ }
   }
 
   public refreshPanelToggles(): void {
@@ -554,8 +638,7 @@ export class UnifiedSettings {
   }
 
   public destroy(): void {
- this._stopDebugAutoRefresh();
- document.removeEventListener('keydown', this.escapeHandler);
+ this.close();
  this.apiConfigPanel?.destroy();
  this.apiConfigPanel = null;
  this.overlay.remove();
@@ -573,7 +656,7 @@ export class UnifiedSettings {
  <div class="modal unified-settings-modal">
  <div class="modal-header">
  <span class="modal-title">${t('header.settings')}</span>
- <button class="modal-close unified-settings-close">×</button>
+ <button class="modal-close unified-settings-close" aria-label="${escapeHtml(t('common.close'))}">×</button>
  </div>
  <div class="unified-settings-tabs">
  <button class="${this.tabClass('general')}" data-tab="general">${t('header.tabGeneral')}</button>

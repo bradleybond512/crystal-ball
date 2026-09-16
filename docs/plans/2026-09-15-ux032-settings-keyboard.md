@@ -48,3 +48,28 @@ not open it, which remains an unconfirmed separate observation.
    before normal PR closeout. No direct merge or gate bypass.
 
 Rollback: revert the bounded frontend change; no stored-data migration.
+
+## Approved bounded design
+
+Independent architecture review selected local Settings keyboard ownership at
+window capture, with fresh visible/enabled focus targets, initial focus on a
+named close button, connected-invoker restoration, idempotent lifecycle and
+bounded repair when dynamic content removes the focused control. Modal semantics
+and the existing translated Settings name are retained.
+
+Places add/edit becomes a sequential handoff: close Settings before invoking a
+configured place editor callback, retaining the selected Places tab for reopening.
+Absent callbacks leave Settings open. SavedPlaceModal consumes Escape in window
+capture so it cannot reach Home; its existing map-pick cancellation branch stays
+intact. No global modal framework is introduced.
+
+Production owner: UI specialist; allowed files UnifiedSettings.ts and narrow
+SavedPlaceModal.ts Escape lifecycle. Focused DOM/browser tests and a named test
+script are owned by that specialist. Parent owns tracker/evidence, full validation,
+mutation proof and publication. Independent review follows implementation.
+
+Mutation targets: focus entry, Escape capture/consumption, Tab wrapping, hidden
+control filtering, invoker restoration, lifecycle cleanup and Places handoff.
+Browser evidence is required for real CSS and Tab traversal. Packaged verification
+is separate from browser proof; do not claim the old installed package contains
+the new repair before a verified main-sync install.

@@ -95,7 +95,11 @@ test('Escape beats earlier document capture handlers and restores the original i
   const listener = (event: Event) => { if ((event as KeyboardEvent).key === 'Escape') escaped++; };
   document.addEventListener('keydown', listener, true);
   try {
-    const { settings, trigger, overlay } = mount();
+    const { settings, overlay } = mount();
+    const trigger = document.createElement('button');
+    trigger.textContent = 'Independent Settings invoker';
+    document.body.append(trigger);
+    trigger.focus();
     settings.open();
     settings.open('places');
     assert.equal(key('Escape').defaultPrevented, true);
@@ -129,14 +133,37 @@ test('Tab wraps current usable controls, including outside focus and an empty di
   assert.equal(document.activeElement === overlay, true);
 });
 
+// Inherited fieldset :disabled is covered in Chromium; Happy DOM does not model it.
+for (const [reason, skipped] of [
+  ['hidden ancestor', '<div hidden><button>Hidden descendant</button></div>'],
+  ['inert ancestor', '<div inert><button>Inert descendant</button></div>'],
+  ['disabled control', '<button disabled>Disabled</button>'],
+  ['negative tab index', '<button tabindex="-1">Programmatic only</button>'],
+]) {
+  test(`Tab wrap ignores a ${reason} at both boundaries`, () => {
+    const { settings, overlay } = mount();
+    settings.open();
+    overlay.innerHTML = `${skipped}<button id="first">First</button><button id="last">Last</button>${skipped}`;
+    const first = overlay.querySelector<HTMLElement>('#first')!;
+    const last = overlay.querySelector<HTMLElement>('#last')!;
+    last.focus();
+    assert.equal(key('Tab').defaultPrevented, true);
+    assert.equal(document.activeElement === first, true);
+    first.focus();
+    assert.equal(key('Tab', true).defaultPrevented, true);
+    assert.equal(document.activeElement === last, true);
+  });
+}
+
 test('a removed focused control recovers inside Settings without stealing focus on unrelated updates', async () => {
   const { settings, overlay, trigger } = mount();
   settings.open();
   overlay.querySelector<HTMLElement>('.unified-settings-close')!.remove();
   await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(overlay.contains(document.activeElement), true);
+  const lastFocused = document.activeElement!;
   trigger.focus();
-  overlay.append(document.createElement('span'));
+  lastFocused.remove();
   await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(document.activeElement === trigger, true);
 });
@@ -168,6 +195,28 @@ test('place callbacks run after Settings closes and preserve the Places tab', ()
   edit.dataset.placesAction = 'edit'; edit.dataset.placeId = 'place-1';
   overlay.append(edit); edit.click();
   assert.deepEqual(seen, [false, false]);
+});
+
+test('editing a saved place transfers focus to the real editor after Settings closes', () => {
+  const place = savedPlaces.addSavedPlace({ name: 'Keyboard edit fixture', lat: 0, lon: 0 });
+  const editor = new SavedPlaceModal({ onPickLocationMode: () => {} });
+  try {
+    const { settings, overlay } = mount({ openEditPlace: (id: string) => {
+      const selected = savedPlaces.getSavedPlace(id);
+      assert.ok(selected);
+      editor.openEdit(selected);
+    } });
+    settings.open('places');
+    overlay.querySelector<HTMLElement>(`[data-place-id="${place.id}"] [data-places-action="edit"]`)!.click();
+    const dialog = document.getElementById('savedPlaceModal')!;
+    assert.equal(overlay.classList.contains('active'), false);
+    assert.equal(dialog.classList.contains('active'), true);
+    assert.equal(document.activeElement === dialog.querySelector('[data-field="name"]'), true,
+      'Edit must focus its name field after Settings restores the invoker');
+  } finally {
+    editor.close();
+    savedPlaces.removeSavedPlace(place.id);
+  }
 });
 
 test('missing place callbacks leave Settings open', () => {

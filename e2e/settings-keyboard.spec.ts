@@ -13,6 +13,7 @@ async function mount(page: import('@playwright/test').Page) {
     await initI18n();
     const { UnifiedSettings } = await import('/src/components/UnifiedSettings.ts');
     const { SavedPlaceModal } = await import('/src/components/SavedPlaceModal.ts');
+    const { getSavedPlace } = await import('/src/services/saved-places.ts');
     const state = window as unknown as { settings: InstanceType<typeof UnifiedSettings>; escaped: number };
     state.escaped = 0;
     document.addEventListener('keydown', event => { if (event.key === 'Escape') state.escaped++; }, true);
@@ -22,6 +23,7 @@ async function mount(page: import('@playwright/test').Page) {
       getDisabledSources: () => new Set(), toggleSource: () => {}, setSourcesEnabled: () => {},
       getAllSourceNames: () => [], getLocalizedPanelName: (_key: string, fallback: string) => fallback,
       isDesktopApp: false, openCreatePlace: () => place.openCreate(),
+      openEditPlace: (id: string) => { const selected = getSavedPlace(id); if (selected) place.openEdit(selected); },
     });
     document.body.append(state.settings.getButton());
   });
@@ -94,7 +96,46 @@ test('dynamic replacement restores focus while unrelated updates leave it alone'
   await page.locator('#unifiedSettingsBtn').click();
   await page.evaluate(() => document.querySelector('.unified-settings-close')!.remove());
   await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('#unifiedSettingsModal')))).toBe(true);
+  await page.evaluate(() => document.activeElement!.setAttribute('data-previous-focus', 'true'));
   await page.locator('#outside').focus();
-  await page.evaluate(() => document.querySelector('#unifiedSettingsModal')!.append(document.createElement('span')));
+  await page.evaluate(() => document.querySelector('[data-previous-focus]')!.remove());
   await expect(page.locator('#outside')).toBeFocused();
+});
+
+
+test('Edit handoff focuses the real saved-place editor', async ({ page }) => {
+  await page.evaluate(async () => {
+    const { addSavedPlace } = await import('/src/services/saved-places.ts');
+    addSavedPlace({ name: 'Keyboard edit fixture', lat: 0, lon: 0 });
+  });
+  await page.locator('#unifiedSettingsBtn').click();
+  await page.locator('[data-tab="places"]').click();
+  await page.locator('[data-places-action="edit"]').click();
+  await expect(page.locator('#unifiedSettingsModal')).not.toHaveClass(/active/);
+  await expect(page.locator('#savedPlaceModal [data-field="name"]')).toBeFocused();
+  await expect(page.locator('#savedPlaceModal [data-field="name"]')).toHaveValue('Keyboard edit fixture');
+  await expect(page.locator('.modal-overlay.active')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => (window as unknown as { escaped: number }).escaped)).toBe(0);
+});
+
+
+test('unusable controls at either boundary are excluded from keyboard wrapping', async ({ page }) => {
+  await page.locator('#unifiedSettingsBtn').click();
+  for (const skipped of [
+    '<div hidden><button>Hidden descendant</button></div>',
+    '<div inert><button>Inert descendant</button></div>',
+    '<button disabled>Disabled</button>',
+    '<fieldset disabled><button>Disabled descendant</button></fieldset>',
+    '<button tabindex="-1">Programmatic only</button>',
+  ]) {
+    await page.evaluate(markup => {
+      document.querySelector('#unifiedSettingsModal')!.innerHTML = `${markup}<button id="first">First</button><button id="last">Last</button>${markup}`;
+    }, skipped);
+    await page.locator('#last').focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#first')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.locator('#last')).toBeFocused();
+  }
 });

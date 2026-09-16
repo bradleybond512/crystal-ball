@@ -230,7 +230,8 @@ console.log({ providers: PROVIDER_DEFINITIONS.length, noAuth,
 NODE
 ```
 
-The first visible state is still misleading and not decision-useful:
+Historical findings before merged PR #1660 (retained as the rationale for the
+implemented contract; not new findings against current main):
 
 - `WelcomeFlow` says listed sources work with "no key" while naming NewsAPI and
   OpenWeatherMap; both require configured keys in repository wiring.
@@ -246,6 +247,11 @@ The first visible state is still misleading and not decision-useful:
   then proceed to posture surfacing.
 - **Done when:** a clean zero-key run tells the user what works now, what is still
   loading, and exactly what an optional key would unlock.
+
+Packaged protocol: [isolated zero-key acceptance](plans/2026-09-15-ux000-packaged-acceptance.md).
+The existing source implementation is delivered. A clean GUI test account and an
+explicitly approved maintenance window are pending; no zero-key packaged pass
+is claimed. This prerequisite continues to block UX-001.
 
 ### UX-001 — Posture band on the Home Shell
 

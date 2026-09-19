@@ -255,8 +255,10 @@ The existing source implementation is delivered. The isolated account test compl
 with zero loaded credentials, but Home showed zero useful cards and twelve needing
 attention on both launches. Timing captures and useful coverage remain incomplete;
 no packaged pass is claimed. The test profile is now a used reproduction profile.
-[Follow-up discovery](plans/2026-09-18-ux000-test-followup.md) owns bounded repairs;
-UX-001 remains blocked.
+[Follow-up discovery](plans/2026-09-18-ux000-test-followup.md) owns bounded repairs.
+Home contributor readiness merged in PR #1726;
+[request-error preservation](plans/2026-09-19-ux000-request-error-preservation.md)
+is claimed in PR #1728. UX-001 remains blocked until packaged acceptance passes.
 
 ### UX-001 — Posture band on the Home Shell
 
@@ -871,7 +873,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | MONITOR | #1660; [failed packaged test](https://github.com/bradleybond512/crystal-ball/issues/1725); repair #1726 |
+| UX-000 | Zero-key first-run contract | MONITOR | #1660; [failed packaged test](https://github.com/bradleybond512/crystal-ball/issues/1725); Home #1726; request errors #1728 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | DONE | #1670 |

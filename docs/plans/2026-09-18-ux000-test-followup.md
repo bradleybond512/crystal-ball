@@ -1,8 +1,8 @@
 # UX-000 packaged-test follow-up
 
-Status: Home-only implementation in draft PR #1726; final browser acceptance
-blocked after two unsuccessful interaction repairs. Further remediation awaits
-user authorization.
+Status: Home-only implementation in PR #1726; user-authorized follow-up resolved
+the browser blocker with all assertions retained and a green/red/restored-green
+mutation proof. Final review and required PR checks remain before merge.
 Packaged acceptance remains open.
 Evidence: https://github.com/bradleybond512/crystal-ball/issues/1725
 Base: 0634bff417c22f8f04540d3a9944e275b19dcac0.
@@ -89,4 +89,8 @@ browser fixture failed its resized Open-button focus assertion. An open return
 brief is visible in the failure capture; verify which modal owns focus before
 changing production behavior. Two attempted interaction repairs were insufficient,
 so do not remove assertions, mark this accepted, or start a third automatic repair.
-The PR remains draft; the next cycle requires explicit user authorization.
+The user authorized the next cycle on 2026-09-19. The fixture now explicitly
+opens/dismisses the real digest, cancelling scheduled and pending generation.
+All six browser tests passed; pinned baseline 1 pass / 0 fail, applied mutation
+0 pass / 1 fail, restored 1 pass / 0 fail. See the linked validation report and
+browser mutation evidence. Packaged acceptance remains open.

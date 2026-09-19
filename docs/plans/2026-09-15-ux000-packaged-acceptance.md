@@ -1,7 +1,11 @@
 # UX-000 — Packaged zero-key acceptance
 
-Status: design for an explicitly approved isolated test session. No account,
-profile, keychain, system setting, monitoring or installation changes performed.
+Status: the approved isolated test ran on 2026-09-18; useful zero-key coverage
+was not demonstrated. See [handoff #1725](https://github.com/bradleybond512/crystal-ball/issues/1725)
+and the [repair follow-up](2026-09-18-ux000-test-followup.md). Timing captures
+were incomplete, so this is not a full protocol pass. The retained test account
+is now a used reproduction profile. The protocol below defines future acceptance
+requirements; no account reset or new maintenance window is implied.
 Risk: High Assurance operational isolation; no production implementation proposed.
 Canonical prerequisite: UX-000 must pass before UX-001 Home posture.
 

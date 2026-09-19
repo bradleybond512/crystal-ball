@@ -1,6 +1,7 @@
 # UX-000 Home contributor readiness repair
 
-Status: BLOCKED — final pinned browser baseline failed; PR #1726 stays draft.
+Status: browser blocker resolved in the user-authorized cycle; final cross-agent
+review and required PR checks remain before merge. Packaged acceptance stays open.
 
 ## Scope and outcome
 
@@ -61,7 +62,7 @@ actual hidden-grid CSS, absence of a render report, resized keyboard opening and
 Escape return. A fixed three-earthquake response stabilizes the specific source
 request; this is controlled browser evidence, not live provider or native proof.
 
-The later pinned unmutated baseline at source commit
+The previously blocked pinned unmutated baseline at source commit
 `8d4b350b8241e7301335ba74a96d197078b73053` failed:
 
 ```text
@@ -84,11 +85,9 @@ Two attempted interaction repairs did not establish reliability:
 2. Remove redundant explicit scrolling, retaining resize/focus/Enter/open/Escape
    assertions: a run passed, but the pinned baseline later failed the focus assertion.
 
-Automatic repair stopped under the repository two-cycle limit. A fresh cycle
-requires user authorization; it must establish modal focus ownership and retain
-all acceptance assertions, then capture green, applied-mutation red and restored
-green against the final fixture. No production focus repair is proposed without
-that diagnosis.
+Automatic repair stopped under the repository two-cycle limit. The user then
+authorized a fresh bounded cycle on 2026-09-19; its results follow below. The
+failed attempts remain recorded here rather than being counted as acceptance.
 
 Initial browser attempts are retained and excluded from pass claims: an incorrect
 visibility matcher for content-visibility, a live response replacing three fixture
@@ -115,6 +114,42 @@ exited 0:
 
 The main limit remains 460 KB. No baseline, security or bundle policy was changed.
 
+## Authorized cycle and final browser evidence
+
+Code and fixture commit: `35f0dc7bb2431b9807db2021103def0cd9e8c11b`.
+Read-only diagnosis confirmed the asynchronous digest explicitly focuses its Close
+button. The fixture now opens the existing on-demand digest and dismisses it via
+that button. Opening cancels scheduled generation; dismissal invalidates pending
+generation. All resize, focus, Enter, panel-opening and Escape assertions remain.
+This establishes deterministic test setup, not a production modal-behavior repair.
+
+Actual new results:
+
+```text
+Focused browser: 1 passed (27.1s)
+Full browser file: 6 passed (2.3m)
+Pinned baseline: 1 passed (45.3s)
+Applied first-render-gate mutation: 1 failed
+Restored browser: 1 passed (35.2s)
+Agentic validation gate passed.
+Tests run: test:homeshell
+```
+
+The fresh gate again reports Home tests 140 pass / 0 fail plus 2 pass / 0 fail;
+types, lint, secret scans, documentation and build all passed. Bundle check:
+`total: 5.11 MB / 6.00 MB`, main `gzip=445.4 KB`, and
+`✓ All bundle-size policies satisfied.` Direct fixture ESLint exited 0.
+
+[Browser mutation proof](UX-000-HOME-BROWSER-MUTATION.md) includes the applied
+diff, actual useful-versus-loading failure, matching source/fixture checksums and
+clean restored worktree: **1 pass / 0 fail → 0 pass / 1 fail → 1 pass / 0 fail**.
+It closes the browser blocker above; native useful coverage remains unproven.
+
+CI also exposed an issue reference in the roadmap's PR column: it fetched
+`pulls/1725` and received 404. The evidence is now a descriptive issue link;
+PR references retain 1660 and 1726. The unchanged roadmap controller excludes
+1725, retains 1726, and reports no blocking findings locally.
+
 ## Remaining acceptance and rollback
 
 The isolated native profile in #1725 is no longer pristine. Useful packaged
@@ -134,7 +169,7 @@ migration or credential changes.
 18 applied regressions, numerical red counts, assertions, restored checksums and
 clean trees. All 18 were caught; restored focused suite: 43 pass / 0 fail.
 
-Independent review found no additional contributor-derivation defect, audited
-all 18 proofs, and blocked completion on the final browser baseline and its
-previously omitted failure disclosure. This report now retains that failure.
-No clean cross-agent approval or merge verdict is claimed.
+Independent review audited all 18 unit/component proofs and the new fixture: no
+new code blocker and no weakened assertions. Its earlier browser/reporting
+blockers are retained above with their resolution evidence. Final evidence review
+and Claude exact-tip review are required before recording a merge verdict.

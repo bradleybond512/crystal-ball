@@ -38,8 +38,13 @@ test('parseDeckPins round-trips valid pins', () => {
 });
 
 test('default Deck contributor mapping is explicit and leaves unmapped cards unverified', () => {
-  assert.deepEqual(DECK_CONTRIBUTOR_SOURCE_IDS.earthquakes, ['usgs']);
-  assert.deepEqual(DECK_CONTRIBUTOR_SOURCE_IDS['live-news'], ['rss']);
+  assert.deepEqual(DECK_CONTRIBUTOR_SOURCE_IDS, {
+    'air-quality': ['air-quality'],
+    'cyber-threats': ['cyber_threats'],
+    'space-weather': ['space-weather'],
+    earthquakes: ['usgs'],
+    economic: ['economic'],
+  });
   for (const panelId of ['markets', 'shortage-radar', 'crypto', 'command-center', 'watchlist']) {
     assert.equal(DECK_CONTRIBUTOR_SOURCE_IDS[panelId], undefined);
   }
@@ -224,4 +229,74 @@ test('formatAge buckets seconds, minutes, hours', () => {
   assert.equal(formatAge(6 * 60_000), '6m');
   assert.equal(formatAge(3 * 3_600_000), '3h');
   assert.equal(formatAge(-50), '0s');
+});
+
+
+test('fresh contributors establish useful data independently of absent or deferred panel rendering', () => {
+  for (const report of [undefined, health({ status: 'blind', lastRenderAt: undefined }),
+    health({ status: 'unknown', lastRenderAt: undefined }), health({ status: 'unknown' }),
+    health({ status: 'stale' })]) {
+    for (const startupAge of [0, DECK_STARTUP_BUDGET_MS]) {
+      const [card] = buildDeckCards(['markets'], {
+        names: {}, health: report ? [report] : [], narratives: {},
+        contributors: { markets: [contributor()] },
+      }, NOW, NOW - startupAge);
+      assert.equal(card!.readiness, 'useful', JSON.stringify(report));
+      assert.equal(card!.hasRenderReport, report?.lastRenderAt !== undefined);
+      assert.equal(card!.statusLabel, 'data contributor working now · Market quotes · 12 items in latest update');
+      assert.equal(card!.canRetryAllData, false);
+    }
+  }
+});
+
+test('hidden explicit panel errors and disabled panels dominate positive data evidence', () => {
+  for (const lastRenderAt of [undefined, NOW - 32_000]) {
+    for (const blocker of [
+      { status: 'unknown', lastError: 'render failed while hidden' },
+      { status: 'failing' }, { status: 'unsafe' }, { status: 'unknown', enabled: false },
+    ]) {
+      const [card] = buildDeckCards(['markets'], {
+        names: {}, health: [health({ ...blocker, lastRenderAt })], narratives: {},
+        contributors: { markets: [contributor()] },
+      }, NOW, NOW - DECK_STARTUP_BUDGET_MS);
+      assert.equal(card!.readiness, 'attention', JSON.stringify(blocker));
+      assert.equal(card!.hasRenderReport, lastRenderAt !== undefined);
+      assert.doesNotMatch(card!.statusLabel, /working now|panel rendered/);
+      assert.match(card!.statusLabel, /panel-reported error|panel disabled/);
+      assert.equal(card!.canRetryAllData, false);
+    }
+  }
+});
+
+test('unrendered contributor empty, stale, future and error evidence never reports useful data or a render', () => {
+  for (const invalid of [
+    { latestItemCount: 0 }, { latestItemCount: -1 }, { latestItemCount: Number.NaN },
+    { latestItemCount: Number.POSITIVE_INFINITY },
+    { status: 'stale' as const }, { status: 'disabled' as const }, { status: 'no_data' as const },
+    { lastUpdateAt: null }, { lastUpdateAt: NOW + 1 }, { lastUpdateAt: NOW - 15 * 60_000 },
+    { status: 'error' as const, lastError: 'source failed' }, { lastError: 'source failed' },
+  ]) {
+    const [card] = buildDeckCards(['markets'], {
+      names: {}, health: [], narratives: {}, contributors: { markets: [contributor(invalid)] },
+    }, NOW, NOW - DECK_STARTUP_BUDGET_MS);
+    assert.equal(card!.readiness, 'attention', JSON.stringify(invalid));
+    assert.equal(card!.hasRenderReport, false);
+    assert.doesNotMatch(card!.statusLabel, /working now|panel rendered|all clear/);
+    assert.match(card!.statusLabel, /open panel/);
+    if (invalid.latestItemCount === 0) assert.match(card!.statusLabel, /latest update returned 0 items/);
+    if (invalid.status === 'error' || invalid.status === 'stale') assert.equal(card!.canRetryAllData, true);
+  }
+});
+
+test('unrendered pending contributor evidence retains the 30-second bound without claiming a render', () => {
+  for (const age of [DECK_STARTUP_BUDGET_MS - 1, DECK_STARTUP_BUDGET_MS]) {
+    const [card] = buildDeckCards(['markets'], {
+      names: {}, health: [], narratives: {},
+      contributors: { markets: [contributor({ status: 'no_data', lastUpdateAt: null, latestItemCount: 0 })] },
+    }, NOW, NOW - age);
+    assert.equal(card!.readiness, age < DECK_STARTUP_BUDGET_MS ? 'loading' : 'attention');
+    assert.equal(card!.hasRenderReport, false);
+    assert.doesNotMatch(card!.statusLabel, /panel rendered/);
+    assert.match(card!.statusLabel, age < DECK_STARTUP_BUDGET_MS ? /checking data contributors/ : /unverified.*open panel/);
+  }
 });

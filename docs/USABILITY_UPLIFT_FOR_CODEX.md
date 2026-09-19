@@ -207,7 +207,9 @@ first-run contract on the installed app.
 
 Review after: 2026-08-31
 
-The packaged zero-key runtime is still unmeasured. Static wiring shows only that
+The packaged zero-key runtime was tested on 2026-09-18; useful Home coverage
+was not demonstrated ([handoff #1725](https://github.com/bradleybond512/crystal-ball/issues/1725)).
+Static wiring shows only that
 credentials are not universally required; it does not establish network,
 upstream, provider, or data availability: 50 of 58 definitions in
 `src/services/providers/provider-registry.ts` use no authentication, 66 of 78
@@ -249,9 +251,12 @@ implemented contract; not new findings against current main):
   loading, and exactly what an optional key would unlock.
 
 Packaged protocol: [isolated zero-key acceptance](plans/2026-09-15-ux000-packaged-acceptance.md).
-The existing source implementation is delivered. A clean GUI test account and an
-explicitly approved maintenance window are pending; no zero-key packaged pass
-is claimed. This prerequisite continues to block UX-001.
+The existing source implementation is delivered. The isolated account test completed
+with zero loaded credentials, but Home showed zero useful cards and twelve needing
+attention on both launches. Timing captures and useful coverage remain incomplete;
+no packaged pass is claimed. The test profile is now a used reproduction profile.
+[Follow-up discovery](plans/2026-09-18-ux000-test-followup.md) owns bounded repairs;
+UX-001 remains blocked.
 
 ### UX-001 — Posture band on the Home Shell
 
@@ -866,7 +871,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | MONITOR | #1660 |
+| UX-000 | Zero-key first-run contract | MONITOR | #1660; failed packaged test #1725; repair #1726 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | DONE | #1670 |

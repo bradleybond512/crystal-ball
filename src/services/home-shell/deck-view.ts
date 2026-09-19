@@ -28,8 +28,6 @@ export const DECK_STARTUP_BUDGET_MS = 30_000;
 
 /** Explicit data contributors for default Deck cards; unmapped cards never infer usefulness. */
 export const DECK_CONTRIBUTOR_SOURCE_IDS: Readonly<Record<string, readonly string[]>> = {
-  'live-news': ['rss'],
-  'nws-alerts': ['weather'],
   'air-quality': ['air-quality'],
   'cyber-threats': ['cyber_threats'],
   'space-weather': ['space-weather'],
@@ -77,7 +75,7 @@ export interface DeckCardView {
   panelId: string;
   title: string;
   tone: DeckCardTone;
-  /** Evidence from the panel registry only; never provider or data usability. */
+  /** Data-contributor readiness, constrained by explicit panel failures. */
   readiness: 'loading' | 'useful' | 'attention';
   hasRenderReport: boolean;
   /** True only when the existing global loadAllData wave could plausibly help. */
@@ -93,6 +91,7 @@ export interface DeckCardView {
 export interface PanelHealthLike {
   panelId: string;
   status: string;
+  enabled?: boolean;
   lastRenderAt?: number;
   lastError?: string;
 }
@@ -120,22 +119,24 @@ function isFreshContributor(source: ContributorEvidenceLike, now: number): boole
   return age >= 0 && age < READINESS_FRESH_UPDATE_MS;
 }
 
-function buildHealthyDeckCard(
+function buildContributorDeckCard(
   panelId: string,
   title: string,
   narrative: string | undefined,
   contributors: readonly ContributorEvidenceLike[],
   now: number,
   startupStartedAt: number,
+  hasRenderReport: boolean,
 ): DeckCardView {
+  const renderPrefix = hasRenderReport ? 'panel rendered; ' : '';
   const positive = contributors.find((source) => (
-    isFreshContributor(source, now) && source.latestItemCount > 0
+    isFreshContributor(source, now) && Number.isFinite(source.latestItemCount) && source.latestItemCount > 0
   ));
   if (positive) {
     const itemWord = positive.latestItemCount === 1 ? 'item' : 'items';
     return {
       panelId, title, tone: 'ok', readiness: 'useful',
-      hasRenderReport: true, canRetryAllData: false,
+      hasRenderReport, canRetryAllData: false,
       statusLabel: `data contributor working now · ${positive.name} · ${positive.latestItemCount} ${itemWord} in latest update`,
       narrative,
     };
@@ -146,8 +147,8 @@ function buildHealthyDeckCard(
   if (empty) {
     return {
       panelId, title, tone: 'stale', readiness: 'attention',
-      hasRenderReport: true, canRetryAllData: false,
-      statusLabel: `panel rendered; ${empty.name} latest update returned 0 items · open panel`,
+      hasRenderReport, canRetryAllData: false,
+      statusLabel: `${renderPrefix}${empty.name} latest update returned 0 items · open panel`,
       narrative,
     };
   }
@@ -155,8 +156,8 @@ function buildHealthyDeckCard(
   if (startupAge < DECK_STARTUP_BUDGET_MS) {
     return {
       panelId, title, tone: 'unknown', readiness: 'loading',
-      hasRenderReport: true, canRetryAllData: false,
-      statusLabel: `panel rendered; checking data contributors · ${formatAge(startupAge)} of ${formatAge(DECK_STARTUP_BUDGET_MS)}`,
+      hasRenderReport, canRetryAllData: false,
+      statusLabel: `${renderPrefix}checking data contributors · ${formatAge(startupAge)} of ${formatAge(DECK_STARTUP_BUDGET_MS)}`,
       narrative,
     };
   }
@@ -165,10 +166,10 @@ function buildHealthyDeckCard(
   ));
   return {
     panelId, title, tone: canRetryAllData ? 'stale' : 'unknown',
-    readiness: 'attention', hasRenderReport: true, canRetryAllData,
+    readiness: 'attention', hasRenderReport, canRetryAllData,
     statusLabel: canRetryAllData
-      ? 'panel rendered; contributor data unavailable · open panel'
-      : 'panel rendered; data usefulness unverified · open panel',
+      ? `${renderPrefix}contributor data unavailable · open panel`
+      : `${renderPrefix}data usefulness unverified · open panel`,
     narrative,
   };
 }
@@ -184,6 +185,26 @@ export function buildDeckCards(
     const title = inputs.names[panelId]?.name ?? panelId;
     const narrative = inputs.narratives[panelId] ?? undefined;
     const h = healthById.get(panelId);
+    const hasRenderReport = h?.lastRenderAt !== undefined;
+    if (h?.lastError || h?.status === 'failing' || h?.status === 'unsafe') {
+      let detail = 'panel-reported error · open panel';
+      if (h.lastError) detail = `panel-reported error · ${h.lastError}`;
+      else if (h.lastRenderAt !== undefined) detail = `panel-reported error · ${formatAge(now - h.lastRenderAt)} ago`;
+      return {
+        panelId, title, tone: 'error' as const, readiness: 'attention' as const,
+        hasRenderReport, canRetryAllData: false, statusLabel: detail, narrative,
+      };
+    }
+    if (h?.enabled === false) {
+      return {
+        panelId, title, tone: 'unknown' as const, readiness: 'attention' as const,
+        hasRenderReport, canRetryAllData: false, statusLabel: 'panel disabled · open panel', narrative,
+      };
+    }
+    const contributors = inputs.contributors?.[panelId] ?? [];
+    if (contributors.length > 0) {
+      return buildContributorDeckCard(panelId, title, narrative, contributors, now, startupStartedAt, hasRenderReport);
+    }
     if (h?.lastRenderAt === undefined) {
       const startupAge = Math.max(0, now - startupStartedAt);
       if (startupAge < DECK_STARTUP_BUDGET_MS) {
@@ -210,16 +231,8 @@ export function buildDeckCards(
       };
     }
     const age = formatAge(now - h.lastRenderAt);
-    if (h.status === 'failing' || h.status === 'unsafe') {
-      const detail = h.lastError ? `panel-reported error · ${h.lastError}` : `panel-reported error · ${age} ago`;
-      return {
-        panelId, title, tone: 'error' as const, readiness: 'attention' as const,
-        hasRenderReport: true, canRetryAllData: false, statusLabel: detail, narrative,
-      };
-    }
     if (h.status === 'healthy') {
-      const contributors = inputs.contributors?.[panelId] ?? [];
-      return buildHealthyDeckCard(panelId, title, narrative, contributors, now, startupStartedAt);
+      return buildContributorDeckCard(panelId, title, narrative, contributors, now, startupStartedAt, hasRenderReport);
     }
     return {
       panelId, title, tone: 'stale' as const, readiness: 'attention' as const,

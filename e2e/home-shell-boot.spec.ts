@@ -107,6 +107,58 @@ test.describe('home shell default boot', () => {
     }
   });
 
+  test('fresh audited data makes a Deck card useful while the classic grid remains unrendered', async ({ page }) => {
+    await page.route('**/api/seismology/v1/list-earthquakes**', (route) => route.fulfill({
+      json: {
+        earthquakes: [1, 2, 3].map((id) => ({
+          id: `home-readiness-${id}`, place: 'Synthetic readiness fixture', magnitude: 2,
+          depthKm: 10, location: { latitude: 0, longitude: id }, occurredAt: Date.now(), sourceUrl: '',
+        })),
+      },
+    }));
+    await skipFirstRunDialogs(page);
+    await page.goto('/');
+    const shell = page.locator('.home-shell');
+    await expect(shell).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('#panelsGrid')).toHaveCSS('content-visibility', 'hidden');
+    // Fixture the existing observation boundary, not a provider request or a
+    // panel render. This proves UI derivation only, not live/keyless coverage.
+    const before = await page.evaluate(async () => {
+      const { dataFreshness } = await import('/src/services/data-freshness.ts');
+      const { getPanelHealthRegistry } = await import('/src/services/diagnostics/diagnostics-state.ts');
+      const report = getPanelHealthRegistry().get('earthquakes');
+      dataFreshness.recordUpdate('usgs', 3);
+      return { lastRenderAt: report?.lastRenderAt, enabled: report?.enabled, lastError: report?.lastError };
+    });
+    expect(before.lastRenderAt).toBeUndefined();
+    expect(before.enabled).not.toBe(false);
+    expect(before.lastError).toBeUndefined();
+    const card = shell.locator('.hs-deck-grid .hs-card[data-panel-key="earthquakes"]');
+    await expect(card).toHaveClass(/hs-card-readiness-useful/, { timeout: 15_000 });
+    await expect(card.locator('.hs-card-status')).toHaveText(/data contributor working now.*3 items in latest update/);
+    await expect(page.locator('#panelsGrid')).toHaveCSS('content-visibility', 'hidden');
+    const after = await page.evaluate(async () => {
+      const { getPanelHealthRegistry } = await import('/src/services/diagnostics/diagnostics-state.ts');
+      const { dataFreshness } = await import('/src/services/data-freshness.ts');
+      const source = dataFreshness.getSource('usgs');
+      return {
+        lastRenderAt: getPanelHealthRegistry().get('earthquakes')?.lastRenderAt,
+        status: source?.status, count: source?.lastBatchItemCount, error: source?.lastError,
+      };
+    });
+    expect(after).toEqual({ lastRenderAt: undefined, status: 'fresh', count: 3, error: null });
+    await page.setViewportSize({ width: 800, height: 600 });
+    const open = card.getByRole('button', { name: /^Open / });
+    await open.focus();
+    await expect(open).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.hs-focus')).toHaveClass(/hs-focus--open/);
+    await expect(page.locator('.hs-focus-body [data-panel="earthquakes"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(shell).toBeVisible();
+    await expect(page.locator('#panelsGrid')).toHaveCSS('content-visibility', 'hidden');
+  });
+
   test('boots into the shell and Escape returns to classic', async ({ page }) => {
     await skipFirstRunDialogs(page);
     await page.goto('/');

@@ -871,7 +871,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | MONITOR | #1660 |
+| UX-000 | Zero-key first-run contract | MONITOR | #1660; failed packaged test #1725; repair #1726 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | DONE | #1670 |

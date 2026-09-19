@@ -901,3 +901,48 @@ test('a runtime-disabled contextual panel uses the existing classic fallback', a
   assert.equal(shell.isVisible(), false);
   shell.destroy();
 });
+
+
+test('Home renders fresh audited contributor evidence without mounting or rendering its hidden panel', async () => {
+  const happyWindow = installDom();
+  const { HomeShellOverlay } = await import('../HomeShellOverlay.ts');
+  const { dataFreshness } = await import('../../services/data-freshness.ts');
+  const { getPanelHealthRegistry } = await import('../../services/diagnostics/diagnostics-state.ts');
+  const registry = getPanelHealthRegistry();
+  registry.clear();
+  registry.register({ panelId: 'earthquakes' });
+  dataFreshness.recordUpdate('usgs', 3);
+  dataFreshness.recordUpdate('rss', 3);
+  dataFreshness.recordUpdate('weather', 3);
+  const parent = happyWindow.document.createElement('main');
+  happyWindow.document.body.append(parent);
+  const mounted: string[] = [];
+  const shell = new HomeShellOverlay({
+    getPanel: () => undefined,
+    ensurePanel: async (id) => { mounted.push(id); return undefined; },
+    contextualProjection: READY_CONTEXTUAL_PROJECTION,
+    contextualSnapshotSource: { get: () => null, subscribe: () => () => {}, hydrate: async () => {} },
+  });
+  try {
+    shell.mount(parent);
+    shell.show();
+    const card = parent.querySelector('[data-panel-key="earthquakes"].hs-card');
+    assert.equal(card?.classList.contains('hs-card-readiness-useful'), true);
+    assert.match(card?.querySelector('.hs-card-status')?.textContent ?? '', /data contributor working now.*3 items/);
+    assert.equal(registry.get('earthquakes')?.lastRenderAt, undefined);
+    assert.deepEqual(mounted, []);
+    for (const unrelated of ['live-news', 'nws-alerts']) {
+      assert.equal(parent.querySelector(`[data-panel-key="${unrelated}"].hs-card`)?.classList.contains('hs-card-readiness-useful'), false);
+    }
+    const open = card?.querySelector<HTMLButtonElement>('[data-action="open"]');
+    open?.focus();
+    assert.equal(happyWindow.document.activeElement, open);
+    open?.click();
+    await flushAsync();
+    assert.deepEqual(mounted, ['earthquakes']);
+  } finally {
+    shell.destroy();
+    registry.clear();
+    for (const source of ['usgs', 'rss', 'weather'] as const) dataFreshness.recordUnknown(source, 'test cleanup');
+  }
+});

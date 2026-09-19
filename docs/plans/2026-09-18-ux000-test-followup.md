@@ -1,6 +1,8 @@
 # UX-000 packaged-test follow-up
 
-Status: Home-only implementation in PR #1726; validation/review in progress.
+Status: Home-only implementation in draft PR #1726; final browser acceptance
+blocked after two unsuccessful interaction repairs. Further remediation awaits
+user authorization.
 Packaged acceptance remains open.
 Evidence: https://github.com/bradleybond512/crystal-ball/issues/1725
 Base: 0634bff417c22f8f04540d3a9944e275b19dcac0.
@@ -78,3 +80,13 @@ claimed until those relevant runtime cases are retested.
   a replay of the recorded tornado/flood inputs or a complete scoring-impact
   assessment. Claim an accuracy task and obtain High Assurance design approval
   before changing this behavior.
+
+## Review stop and next bounded cycle
+
+See [validation and escalation](../validation/UX-000-HOME-CONTRIBUTOR-READINESS.md).
+All 18 focused mutation checks caught their regressions, but the pinned unmutated
+browser fixture failed its resized Open-button focus assertion. An open return
+brief is visible in the failure capture; verify which modal owns focus before
+changing production behavior. Two attempted interaction repairs were insufficient,
+so do not remove assertions, mark this accepted, or start a third automatic repair.
+The PR remains draft; the next cycle requires explicit user authorization.

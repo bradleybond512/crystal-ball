@@ -349,7 +349,7 @@ export function installRuntimeFetchPatch(): void {
  if (debug) console.log(`[fetch] intercept → ${target}`);
  const allowCloudFallback = !isLocalOnlyApiTarget(target);
 
- const cloudFallback = async () => {
+ const cloudFallback = async (onUnavailable: () => Response) => {
  if (!allowCloudFallback) {
  throw new Error(`Cloud fallback blocked for ${target}`);
  }
@@ -358,10 +358,7 @@ export function installRuntimeFetchPatch(): void {
  const cloudHeaders = new Headers(init?.headers);
  const cloudApiKey = await getCrystalBallCloudApiKey();
  if (!cloudApiKey) {
- return Response.json({ error: 'CRYSTALBALL_API_KEY not configured' }, {
- status: 503,
- headers: { 'Content-Type': 'application/json' },
- });
+ return onUnavailable();
  }
  cloudHeaders.set('X-CrystalBall-Key', cloudApiKey);
  return nativeFetch(cloudUrl, withTimeout({ ...init, headers: cloudHeaders }));
@@ -393,7 +390,7 @@ export function installRuntimeFetchPatch(): void {
  return response;
  }
  if (debug) console.log(`[fetch] local ${response.status}, falling back to cloud`);
- return cloudFallback();
+ return cloudFallback(() => response);
  }
  return response;
  } catch (error) {
@@ -401,7 +398,7 @@ export function installRuntimeFetchPatch(): void {
  if (!allowCloudFallback) {
  throw error;
  }
- return cloudFallback();
+ return cloudFallback(() => { throw error; });
  }
   };
 

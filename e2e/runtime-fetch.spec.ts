@@ -712,75 +712,137 @@ test.describe('desktop runtime routing guardrails', () => {
  expect(result.hasIso3Field).toBe(false);
   });
 
-  test('cloud fallback blocked without CrystalBall API key', async ({ page }) => {
- await page.goto('/tests/runtime-harness.html');
+  const preservationCases = [
+    { name: 'successful local response without a cloud key', key: '', mode: 'http', status: 200, localCalls: 1 },
+    { name: 'rate-limited response without a cloud key', key: '', mode: 'http', status: 429, localCalls: 1 },
+    { name: 'rate-limited response with a whitespace cloud key', key: '   ', mode: 'http', status: 429, localCalls: 1 },
+    { name: 'final unauthorized response after token refresh', key: '', mode: 'http', status: 401, localCalls: 2 },
+    { name: 'final connection error after four local attempts', key: '', mode: 'connection', status: 0, localCalls: 4 },
+    { name: 'caller abort after one local attempt', key: '', mode: 'abort', status: 0, localCalls: 1 },
+    { name: 'keyed local-only prefix response', key: 'wm_test_key_1234567890abcdef', mode: 'http', status: 429, localCalls: 1, target: '/api/local-env-update' },
+    { name: 'keyed local-only exact-path error', key: 'wm_test_key_1234567890abcdef', mode: 'connection', status: 0, localCalls: 4, target: '/api/conflict/v1/list-ucdp-events?limit=1' },
+    { name: 'keyed cloud response after local failure', key: 'wm_test_key_1234567890abcdef', mode: 'cloud-response', status: 502, localCalls: 1 },
+    { name: 'keyed cloud rejection after local HTTP failure', key: 'wm_test_key_1234567890abcdef', mode: 'cloud-error', status: 0, localCalls: 1 },
+    { name: 'keyed cloud rejection after local connection failure', key: 'wm_test_key_1234567890abcdef', mode: 'cloud-error-after-connection', status: 0, localCalls: 4 },
+  ];
 
- const result = await page.evaluate(async () => {
- const runtime = await import('/src/services/runtime.ts');
- const globalWindow = window as unknown as Record<string, unknown>;
- const originalFetch = window.fetch.bind(window);
+  for (const scenario of preservationCases) {
+    test(`runtime preserves ${scenario.name}`, async ({ page }) => {
+      await page.goto('/tests/runtime-harness.html');
+      const result = await page.evaluate(async (scenario) => {
+        const runtime = await import('/src/services/runtime.ts');
+        const runtimeConfig = await import('/src/services/runtime-config.ts');
+        const webSecretStore = await import('/src/services/web-secret-store.ts');
+        const globalWindow = window as unknown as Record<string, unknown>;
+        const originalFetch = window.fetch;
+        const previousTauri = globalWindow.__TAURI__;
+        const calls: Array<{ local: boolean; authorization: string | null; cloudKey: string | null; sameCallerSignal: boolean }> = [];
+        const responses: Response[] = [];
+        const connectionErrors: Error[] = [];
+        const controller = new AbortController();
+        const abortError = new DOMException('Synthetic caller cancellation', 'AbortError');
+        const cloudError = new Error('Synthetic cloud failure');
+        const cloudResponse = new Response('original cloud body', { status: 502, headers: { 'Retry-After': '120' } });
+        let tokenReads = 0;
+        let localAttempts = 0;
 
- const calls: Array<{ pathname: string; isLocal: boolean }> = [];
- const responseJson = (body: unknown, status = 200) =>
- new Response(JSON.stringify(body), {
- status,
- headers: { 'content-type': 'application/json' },
- });
+        // Configure only synthetic browser secrets before installing the desktop bridge.
+        await webSecretStore.createVault('runtime-e2e-vault-passphrase');
+        await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, scenario.key);
+        globalWindow.__TAURI__ = { core: { invoke: async (command: string) => {
+          if (command === 'get_local_api_port') return 46123;
+          if (command === 'get_local_api_token') return `synthetic-local-token-${++tokenReads}`;
+          return null;
+        } } };
+        delete globalWindow.__wmFetchPatched;
+        window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+          const url = new URL(raw, location.origin);
+          const local = url.hostname === '127.0.0.1' && url.port === '46123';
+          const headers = new Headers(init?.headers);
+          calls.push({ local, authorization: headers.get('Authorization'), cloudKey: headers.get('X-CrystalBall-Key'), sameCallerSignal: init?.signal === controller.signal });
+          if (!local) {
+            if (scenario.mode === 'cloud-response') return cloudResponse;
+            throw cloudError;
+          }
+          localAttempts++;
+          if (scenario.mode === 'abort') {
+            controller.abort(abortError);
+            throw abortError;
+          }
+          if (scenario.mode === 'connection' || scenario.mode === 'cloud-error-after-connection') {
+            const error = new Error(`Synthetic connection failure ${localAttempts}`);
+            connectionErrors.push(error);
+            throw error;
+          }
+          const response = new Response(`original local body ${localAttempts}`, {
+            status: scenario.mode.startsWith('cloud-') ? 429 : scenario.status,
+            headers: { 'Retry-After': '60', 'X-Local-Evidence': 'retained' },
+          });
+          responses.push(response);
+          return response;
+        }) as typeof window.fetch;
 
- window.fetch = (async (input: RequestInfo | URL) => {
-	  const rawUrl =
-		typeof input === 'string'
-		  ? input
-		  : input instanceof URL
-			? input.toString()
-			: input.url;
-	  const url = new URL(rawUrl, location.origin);
-	  const isLocal = url.hostname === '127.0.0.1' && url.port === '46123';
-	  calls.push({ pathname: url.pathname, isLocal });
+        try {
+          runtime.installRuntimeFetchPatch();
+          let response: Response | undefined;
+          let error: unknown;
+          try {
+            response = await window.fetch(scenario.target ?? '/api/fred-data?series_id=CPIAUCSL', {
+              headers: { 'X-Request-Evidence': 'retained' },
+              ...(scenario.mode === 'abort' ? { signal: controller.signal } : {}),
+            });
+          } catch (caught) {
+            error = caught;
+          }
+          return {
+            responseIdentity: response !== undefined && response === (scenario.mode === 'cloud-response' ? cloudResponse : responses.at(-1)),
+            status: response?.status ?? 0,
+            body: response ? await response.text() : null,
+            retryAfter: response?.headers.get('Retry-After') ?? null,
+            evidenceHeader: response?.headers.get('X-Local-Evidence') ?? null,
+            errorIdentity: error !== undefined && error === (scenario.mode.startsWith('cloud-error') ? cloudError : scenario.mode === 'abort' ? abortError : connectionErrors.at(-1)),
+            errorName: error instanceof Error ? error.name : null,
+            tokenReads,
+            calls,
+          };
+        } finally {
+          window.fetch = originalFetch;
+          delete globalWindow.__wmFetchPatched;
+          if (previousTauri === undefined) delete globalWindow.__TAURI__;
+          else globalWindow.__TAURI__ = previousTauri;
+          await runtimeConfig.setSecretValue('CRYSTALBALL_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
+          await webSecretStore.destroyVault();
+        }
+      }, scenario);
 
-	  if (isLocal && url.pathname === '/api/fred-data') {
-		throw new Error('ECONNREFUSED');
-	  }
-	  if (!isLocal && url.pathname === '/api/fred-data') {
-		return responseJson({ observations: [{ value: '999' }] }, 200);
- }
- return responseJson({ ok: true }, 200);
- }) as typeof window.fetch;
-
- const previousTauri = globalWindow.__TAURI__;
- globalWindow.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
- delete globalWindow.__wmFetchPatched;
-
- try {
- runtime.installRuntimeFetchPatch();
-
- const response = await window.fetch('/api/fred-data?series_id=CPIAUCSL');
- const body = await response.json() as { error?: string };
-
-	  const cloudCalls = calls.filter((call) => !call.isLocal && call.pathname === '/api/fred-data');
-
- return {
- status: response.status,
- error: body.error ?? null,
- cloudCalls: cloudCalls.length,
-		localCalls: calls.filter((call) => call.isLocal && call.pathname === '/api/fred-data').length,
- };
- } finally {
- window.fetch = originalFetch;
- delete globalWindow.__wmFetchPatched;
- if (previousTauri === undefined) {
- delete globalWindow.__TAURI__;
- } else {
- globalWindow.__TAURI__ = previousTauri;
- }
- }
- });
-
- expect(result.status).toBe(503);
- expect(result.error).toBe('CRYSTALBALL_API_KEY not configured');
- expect(result.cloudCalls).toBe(0);
- expect(result.localCalls).toBeGreaterThan(0);
-  });
+      const local = result.calls.filter((call) => call.local);
+      const cloud = result.calls.filter((call) => !call.local);
+      expect(local).toHaveLength(scenario.localCalls);
+      expect(cloud).toHaveLength(scenario.mode.startsWith('cloud-') ? 1 : 0);
+      expect(result.status).toBe(scenario.status);
+      expect(result.tokenReads).toBe(scenario.status === 401 ? 2 : 1);
+      expect(local[0]?.authorization).toBe('Bearer synthetic-local-token-1');
+      expect(local.every((call) => call.cloudKey === null)).toBe(true);
+      if (scenario.status === 401) expect(local[1]?.authorization).toBe('Bearer synthetic-local-token-2');
+      if (cloud.length) {
+        expect(cloud[0]?.authorization).toBeNull();
+        expect(cloud[0]?.cloudKey).toBe('wm_test_key_1234567890abcdef');
+      }
+      if (scenario.status) {
+        expect(result.responseIdentity).toBe(true);
+        expect(result.body).toBe(scenario.mode === 'cloud-response' ? 'original cloud body' : `original local body ${scenario.localCalls}`);
+        expect(result.retryAfter).toBe(scenario.mode === 'cloud-response' ? '120' : '60');
+        if (scenario.mode === 'http') expect(result.evidenceHeader).toBe('retained');
+      } else {
+        expect(result.errorIdentity).toBe(true);
+      }
+      if (scenario.mode === 'abort') {
+        expect(result.errorName).toBe('AbortError');
+        expect(local[0]?.sameCallerSignal).toBe(true);
+      }
+    });
+  }
 
   test('cloud fallback allowed with valid CrystalBall API key', async ({ page }) => {
  await page.goto('/tests/runtime-harness.html');

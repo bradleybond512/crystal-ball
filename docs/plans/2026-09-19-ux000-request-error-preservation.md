@@ -1,7 +1,9 @@
 # UX-000 request-error preservation
 
-Status: bounded High Assurance follow-up to issue 1725; user directed continuation
-of the previously presented design after Home repair PR 1726 merged.
+Status: implemented in PR #1728;22 browser tests and five mutation proofs pass.
+Final review and required checks precede merge. Native acceptance remains open.
+The user directed continuation of the previously presented bounded High Assurance
+design after Home repair PR1726 merged.
 Base: 0a8fb40e7f2acf1eb5c0851c9262089252025fb6.
 
 ## Goal and acceptance
@@ -50,3 +52,5 @@ identity, headers, retry count and cloud-call absence. Keyed behavior must not
 change. Retain native failures as open until packaged retesting.
 Rollback is a reviewed revert of the callback change and matching tests, with
 no storage migration or credential change. Stop after two failed repair cycles.
+
+Evidence: [validation and limitations](../validation/UX-000-REQUEST-ERROR-PRESERVATION.md).

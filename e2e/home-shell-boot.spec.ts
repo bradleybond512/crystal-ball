@@ -147,6 +147,14 @@ test.describe('home shell default boot', () => {
       };
     });
     expect(after).toEqual({ lastRenderAt: undefined, status: 'fresh', count: 3, error: null });
+    // On-demand opening cancels the scheduled proactive brief; dismissal also
+    // aborts its pending generation so it cannot take focus during this check.
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('cb:show-digest')));
+    const digest = page.getByRole('dialog', { name: 'Crystal Ball — Since you last looked' });
+    await expect(digest).toBeVisible();
+    await digest.getByRole('button', { name: 'Close since-you-last-looked brief' }).click();
+    await expect(digest).toBeHidden();
+    await expect(shell).toBeVisible();
     await page.setViewportSize({ width: 800, height: 600 });
     const open = card.getByRole('button', { name: /^Open / });
     await open.focus();

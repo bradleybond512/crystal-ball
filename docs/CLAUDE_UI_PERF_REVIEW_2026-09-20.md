@@ -26,6 +26,9 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | H4 | High | 248 of 463 `fetch()` sites have no timeout or abort signal | Async |
 | M4 | Medium | 1020 of 2214 catch blocks swallow the error; only 170 log anything | Async |
 | M5 | Medium | 57 `localStorage.setItem` calls unguarded, despite quota helpers existing | Data |
+| M6 | Medium | Boot preloads ~2.4 MB gz of JS and constructs 428 panels synchronously | Startup |
+| M7 | Medium | Alert fan-out is throttled in frequency but costs O(subscribers x alerts) | Perf |
+| L3 | Low | The critical posture banner is never announced to a screen reader | A11y |
 
 Two issues of this family are already fixed in PR #1730 and are not re-listed: the summary strip's double sticky offset, and the critical posture banner living outside the stack.
 
@@ -300,8 +303,92 @@ The `JSON.parse` surface is in good shape: 352 of 360 sites are guarded. More im
 | UX-040 | Observable isolation: per-panel failure counters and breadcrumbs behind an `isolate()` helper | M4 |
 | UX-041 | `safeSetItem()` in `storage-quota.ts`; convert the 57 unguarded writes; lint direct `setItem` | M5 |
 
+---
+
+## Round 3 — startup, store fan-out, accessibility
+
+### M6 — Boot preloads ~2.4 MB gzipped of JS, then constructs 428 panels synchronously
+
+Measured from the build this branch produced:
+
+```
+modulepreloaded chunks in index.html:  35        total 2409 KB gz
+  panels-*.js                        1093 KB gz  (3958 KB raw)
+  deck-stack-*.js                     323 KB gz  (1172 KB raw)
+  maplibre-*.js                       267 KB gz  (1008 KB raw)
+  panels-analysis-*.js                201 KB gz  ( 760 KB raw)
+  + 31 more
+GodsVisionView-*.js (1088 KB gz)     NOT preloaded — correctly lazy
+```
+
+Then `createPanels()` (`src/app/panel-layout.ts:1245`) registers 428 panels in one synchronous pass, and `panel-layout.ts` statically imports 400 panel modules, which is why the panels chunk is preloaded rather than deferred.
+
+So the cold-start path parses roughly 8.5 MB of raw JavaScript and builds several hundred component instances before the first alert can be read. The `Panel` base class then does the right thing — off-screen panels skip rendering — but that gate only applies *after* construction.
+
+Budget headroom is effectively gone. `scripts/check-bundle-size.mjs` sets `mainEntryGzipBytes: 460 * 1024`; the main entry is **457 KB gz**, 0.7% under the limit. The panels chunk is 1095 KB gz against a 1200 KB per-chunk limit (91%). The gate is real and passing, but the next feature of any size fails CI, and the usual response to that pressure — raising the limit, as the comment at `check-bundle-size.mjs:21` records happening once already — spends startup time that is not being measured.
+
+**Suggested fix:** split panel construction from panel registration — register a factory per panel id and construct on first reveal, so boot pays for the visible grid only. That also lets `panel-layout.ts` dynamic-import panel modules by group, which is what would let the panels chunk stop being preloaded.
+
+**Caveat:** this is a structural argument, not a measured one. Before acting, record a boot profile (`performance.mark` around `createPanels()`, plus a DevTools trace of the preload/parse phase). If construction turns out cheap and parse dominates, the import split alone is the fix. Promote to High if a profile confirms either.
+
+### M7 — Alert fan-out is throttled in frequency, not in cost
+
+`src/services/unified-alerts.ts:130-136` documents the problem it solved: ~26 subscribers re-running on every notify, several of them re-ingesting from their own callback, driving an ingest-burst stall. The fix was a leading+trailing throttle at 100 ms (`notifyThrottleMs`), plus rAF-coalesced persist+notify (`:221`). That is sound work and it bounds how *often* the fan-out runs.
+
+What it does not bound is what each fan-out costs. `notify()` (`:444`) calls every listener with **no payload**:
+
+```ts
+private notify(): void {
+  for (const fn of this.listeners) {
+    try { fn(); } catch { /* noop */ }
+  }
+}
+```
+
+With no payload and no selector API, a subscriber cannot know what changed, so it re-derives. Measured: **26 subscribe sites, 13 of whose callbacks re-scan the full set** (`getAll()`, `.filter()`, `.sort()`) — `panel-layout.ts:3423`, `AlertTimeline.ts:35`, `TodayView.ts:97`, `JustInRail.ts:34`, `alert-fatigue.ts:91`, `relevance-learner.ts:235`, and others.
+
+At the 500-alert cap that is ~6,500 alert visits per fan-out, up to ten times a second during exactly the ingest bursts the throttle exists to survive. The throttle turned an unbounded loop into a bounded one; the per-cycle cost is still O(subscribers x alerts).
+
+Two smaller things in the same function: subscriber errors are swallowed with `catch { /* noop */ }` (the M4 pattern, in the highest-traffic path in the app), and the store has no selector or diff API at all.
+
+**Suggested fix:** pass a payload — changed ids, or at minimum a monotonic revision — so subscribers can skip work when nothing they care about moved. A `subscribeWhere(predicate, cb)` selector would let the 13 full-scan subscribers become incremental. Count one failure per subscriber instead of discarding it.
+
+### L3 — The critical posture banner is never announced to a screen reader
+
+The severe-weather surfaces are mostly well covered:
+
+```
+PersonalStormMode        role="alert"   aria-live ✓
+StalenessBanner          role="status"  aria-live ✓
+EEWStatusBar             role="region"  aria-live ✓
+DataCenterPinnedStrip    role="status"  aria-live ✓
+SummaryStrip             role="region"  no aria-live
+critical posture banner  no role        no aria-live
+```
+
+The banner created at `src/app/panel-layout.ts:1153-1161` carries no ARIA at all, and its content is the most urgent text the app produces — the headline, aircraft count, and a `STRIKE CAPABLE` flag. A screen-reader user is told nothing when it appears. It is worth noting that this is the same element that was mispositioned in PR #1730: it was added outside both the layout contract and the accessibility one.
+
+`SummaryStrip` is a lesser case of the same thing — `role="region"` means a user can navigate to it, but its counts changing (0 → 99+ critical) is silent.
+
+Overlay semantics are patchier than the banners: 61 components carry overlay/modal classes, 10 set `role="dialog"`, 7 set `aria-modal`. 32 Escape-key handlers exist across them. Worth a pass, though the `axe` CI job covers static violations and is green.
+
+**Suggested fix:** `role="alert"` plus `aria-live="assertive"` on the posture banner (it is already interrupting by design), and `aria-live="polite"` on the summary strip's counts.
+
+### Clean — module-scope side effects and reduced motion
+
+- Exactly **2** module-scope timers or listeners run at import time across the whole `src/` tree (one in `main.ts`, one in `settings-main.ts`). Importing a module does not start work; everything is behind an explicit `start*()`. That is unusual discipline at this size and it is why the startup cost in M6 is parse and construction, not hidden side effects.
+- Motion is globally handled: a `@media (prefers-reduced-motion: reduce)` rule targeting `*, *::before, *::after` exists in `main.css`, so all 98 animation names are covered without per-animation opt-in.
+
+### Proposed tracker entries, round 3
+
+| ID | Task | From |
+|----|------|------|
+| UX-042 | Lazy panel construction (factory per id, build on first reveal) + grouped dynamic imports | M6 |
+| UX-043 | Alert store: notify payload / revision + `subscribeWhere` selector; count subscriber failures | M7 |
+| UX-044 | ARIA on the posture banner and summary strip counts; overlay dialog-semantics pass | L3 |
+
 ## Method and limits
 
-Two rounds of static analysis, at the reviewed SHA, plus one behavioral check: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on.
+Three rounds of static analysis, at the reviewed SHA, plus two measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

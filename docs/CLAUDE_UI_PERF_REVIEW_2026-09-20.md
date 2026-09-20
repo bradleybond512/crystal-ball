@@ -23,6 +23,9 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | M3 | Medium | The battery/context cadence multiplier has no panel consumers | Perf |
 | L1 | Low | `channel.handle` is interpolated into an `href` without escaping | Security |
 | L2 | Low | Six interval callbacks write to `localStorage` on every tick | Perf |
+| H4 | High | 248 of 463 `fetch()` sites have no timeout or abort signal | Async |
+| M4 | Medium | 1020 of 2214 catch blocks swallow the error; only 170 log anything | Async |
+| M5 | Medium | 57 `localStorage.setItem` calls unguarded, despite quota helpers existing | Data |
 
 Two issues of this family are already fixed in PR #1730 and are not re-listed: the summary strip's double sticky offset, and the critical posture banner living outside the stack.
 
@@ -223,8 +226,82 @@ For `docs/USABILITY_UPLIFT_FOR_CODEX.md` (highest existing ID is UX-032). One ta
 | UX-037 | `lint:layers` ratchet for hardcoded z-index, mirroring `lint:colors` | M2 |
 | UX-038 | Escape/sanitize the YouTube handle URL; move timer-driven persists to change-driven | L1, L2 |
 
+---
+
+## Round 2 — three further scans
+
+Run after the findings above, covering lifecycle/leak hygiene, async correctness, and data integrity. One of the three came back clean; that result is recorded here too, because a negative result is worth as much as a finding when deciding where to spend effort.
+
+### H4 — 248 of 463 `fetch()` sites have no timeout or abort signal
+
+**Measured at the reviewed SHA:**
+
+```
+fetch() call sites:                      463
+… with no AbortSignal / AbortController: 248  (across 160 files)
+… of those, inside Panel subclasses:      54
+```
+
+Examples: `FeedHealthPanel.ts:104`, `OpenaqMonitorPanel.ts:289`, `SupplyChainDisruptionPanel.ts:93`, `ETFFlowsPanel.ts:57`, `StablecoinPanel.ts:45`.
+
+A `fetch` with no timeout does not fail — it hangs. The panel's refresh promise never settles, so the panel keeps showing its last value with no error state, and the next timer tick starts another request behind the first. For an app whose entire proposition is knowing whether what you are looking at is current, a silent stall is worse than a visible failure: the operator cannot distinguish "nothing has changed" from "nothing is arriving". It also compounds H3 and M1 — ungated panels keep firing requests while off-screen, and 58 of them do it on the same 30-second boundary.
+
+The correct pattern already exists in the codebase: `AbortSignal.timeout(10_000)` at `src/app/desktop-updater.ts:124`, `AbortSignal.timeout(1500)` at `src/app/data-loader.ts:652`, an explicit `AbortController` at `src/utils/geocode.ts:31`.
+
+**Suggested fix:** one `fetchWithTimeout()` helper in `src/utils/`, then a ratcheted lint (like `lint:colors`) on bare `fetch(` so the count can only fall. Panels first — a stalled panel is the visible symptom.
+
+**Evidence:** count sites, then count those whose next 400 characters contain no `signal`:
+
+    grep -rho "fetch(" src --include=*.ts | wc -l
+
+### M4 — Half of all catch blocks swallow the error, and almost none report it
+
+```
+catch blocks:                     2214
+… that log or report anything:     170   (7.7%)
+… empty or comment-only:          1020   (46%)
+… doing something else:           1024
+```
+
+Many of the silent ones are deliberate and correct — the `catch { /* isolate */ }` around a single panel's render, so one bad feed cannot take down the grid. That pattern is right. The problem is that at this scale it is indistinguishable from a genuine failure being discarded: there is no counter, no breadcrumb, no "this panel has failed N times" signal. `src/services/log-bridge.ts` provides `recordBreadcrumb()` and a boot trace, but 170 call sites out of 2214 means the great majority of failures leave no trace.
+
+This is the mechanism behind a symptom already visible in the UI: a panel reporting "no active alerts" or a stale timestamp when the truth is that its fetch threw and was swallowed. A panel that failed and a panel with nothing to report look identical.
+
+**Suggested fix:** keep isolating, but make isolation observable. A small `isolate(panelId, fn)` helper that catches, increments a per-panel failure counter and records one breadcrumb would let the Communications Health and Feed Health panels tell the truth without changing control flow. The panel health registry referenced at `Panel.ts:1071` is the natural home.
+
+### M5 — 57 `localStorage.setItem` calls are unguarded, though quota helpers exist
+
+`src/utils/storage-quota.ts` exports `isQuotaError()`, `markStorageQuotaExceeded()` and friends, and 148 of 206 `setItem` sites sit inside a `try`. The remaining 57 do not, concentrated in `App.ts` (8), `event-handlers.ts` (5), `sound-manager.ts` (5), `main.ts` (3).
+
+`setItem` throws `QuotaExceededError` synchronously when storage is full. An unguarded call therefore aborts whatever function it is in — mid-render, mid-boot, mid-handler — in exactly the state where storage is already under pressure. The module that detects quota exhaustion exists; what is missing is a single write path that uses it.
+
+**Suggested fix:** add `safeSetItem(key, value)` to `storage-quota.ts` — try/catch, call `markStorageQuotaExceeded()` on a quota error, return a boolean. Convert the 57, then lint direct `localStorage.setItem` outside that module.
+
+### Clean — lifecycle and leak hygiene
+
+No finding. Recorded because it rules out a whole family of suspects for long-session slowdown:
+
+- 91 net `document`/`window` listeners are added and never removed, but **every** owning class is instantiated exactly once (`PanelLayoutManager`, `EventHandlerManager`, `DataLoaderManager`, `DesktopUpdater`, …). App-lifetime singletons, not leaks.
+- Only 5 listeners are added inside a re-callable method with an inline (therefore unremovable) handler — `ShiftHandoffCard`, `AlertReplayScrubber`, `RelatedStrip` (x2), `CrystalBallSays` — and all five are in `mount()`, called once at boot.
+- Zero panels with a `setInterval` lack a matching `clearInterval`.
+- Only 6 places read geometry inside a timer or observer callback, so layout thrash is not a contributor.
+
+If the app slows over a long session, the cause is steady-state work (H3, M1, H4), not accumulating handlers.
+
+### Also clean — snapshot and cache deserialization
+
+The `JSON.parse` surface is in good shape: 352 of 360 sites are guarded. More importantly the paths that matter most are deliberately fail-closed. `src/services/survival/snapshot-integrity.ts:5-18` documents exactly why a blind `JSON.parse(...) as WorldSnapshot` is unacceptable for a grid-down save file, and `world-snapshot.ts:62` validates version and structure before trusting a snapshot. `correlation-store.ts:124` revives `detectedAt` into a real `Date` on hydrate — the bug class from PR #1636 is handled correctly here.
+
+### Proposed tracker entries, round 2
+
+| ID | Task | From |
+|----|------|------|
+| UX-039 | `fetchWithTimeout()` helper + ratcheted lint on bare `fetch(`; convert panel fetches first | H4 |
+| UX-040 | Observable isolation: per-panel failure counters and breadcrumbs behind an `isolate()` helper | M4 |
+| UX-041 | `safeSetItem()` in `storage-quota.ts`; convert the 57 unguarded writes; lint direct `setItem` | M5 |
+
 ## Method and limits
 
-Static analysis only, at the reviewed SHA, plus one behavioral check: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on.
+Two rounds of static analysis, at the reviewed SHA, plus one behavioral check: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on.
 
-Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.
+Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

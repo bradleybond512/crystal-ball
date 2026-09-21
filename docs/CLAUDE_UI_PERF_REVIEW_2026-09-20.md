@@ -15,7 +15,7 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
-| H15 | **High** | Alert-loop echoes become sticky critical notifications that bypass quiet hours and rate limits | Notifications |
+| H15 | **High** | Alert-loop echoes become sticky critical notifications that bypass quiet hours and rate limits — **confirmed by operator** | Notifications |
 | H14 | **High** | NWS warnings on triage/inbox/strip are a boot snapshot: no scheduled ingest, no freshness record — 76 alerts behind live | Detection |
 | H12 | **High** | 80% of displayed NWS warnings are stale — 52 of 65 expired, cancelled or superseded, incl. 2 tornado warnings | Correctness |
 | H13 | **High** | Future-onset warnings (up to +90 h) render as "now" and outlive their expiry | Display |
@@ -955,7 +955,9 @@ The one miss is a magnitude-*type* mismatch (body-wave `mb` against local `ml`),
 
 Put together with H10: a single flood warning re-emitted 71 times at a median gap of 0 s is, on this code path, 71 critical notifications that ignore quiet hours and rate limits, each sticky, each under the wrong preference, each describing weather as civil unrest.
 
-**What I could not confirm:** whether they were actually displayed. It depends on the app's notification permission, and delivery traces are kept in memory, not written to `desktop.log`. The path is open under default settings; the operator is the best witness to whether it fired.
+**Confirmed by the operator (2026-09-20):** bursts of Crystal Ball notifications about floods and civil unrest that stay on screen until dismissed have been appearing. H15 is observed behaviour, not only a code-path argument. (Delivery traces are in-memory only, so the log could not show it.)
+
+**Interim mitigation, no code change:** Settings → Notifications → turn the **Cyber** domain off. `evaluateNotificationPreference()` (`notification-settings-service.ts:194`) rejects a disabled domain before the quiet-hours and rate-limit checks, so echoes stop. Cost: `cyber` also carries `cyber`, `local-ids`, `radiation` and `air-quality` sources (`alertSourceToDomain`), so those notifications stop too until the fix lands. Their panels and the triage bar are unaffected.
 
 **Also noted:** the `visual` alerting preset this installation uses sets `sound: false`, but `notification-dispatcher.ts` never reads `alerting-prefs`. It does not matter today only because the web-notification path ignores `_withSound` entirely. If a native path is ever wired up, the preset will not be honoured.
 

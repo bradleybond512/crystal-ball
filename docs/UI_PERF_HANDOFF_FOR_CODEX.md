@@ -62,7 +62,11 @@ main-CUywjLvG.js     1.60 MB   parse+compile:  38 / 38 / 37 ms
 
 Found in round 7, after the rest of this document was written. Both are small, both are verified against the live app, and both affect what the user sees during exactly the events the app exists for. **Do these before P0.**
 
-### H10 — Break the alert feedback loop (the cause of the original "99+ critical" bug)
+### H10 — Break the alert feedback loop — ✅ DONE in PR #1732 (verified live; do not redo)
+
+Implemented and verified on the operator's installation. What remains from this area is the boot-time burst described in the review's status update, which H14/H12 below address. The original notes follow for context.
+
+#### Original notes
 
 The live alert store held 500 alerts (the cap), 289 of them critical — and **286 of those were `correlation` echoes, not source alerts.** A single "Flood Warning" was re-emitted 71 times with 71 fresh ids, each body reading *"correlated civil unrest signal detected."* NWS itself had rated the underlying warnings medium/high.
 
@@ -80,7 +84,7 @@ The only writer of NWS warnings into the alert store, `loadNWSAlerts()` (`data-l
 
 **Architecture note for H14/H12/H13:** there are two NWS pipelines. The personal/site path (`weather-posture.ts` → `matchAlertToPlace()`, 10-min `weather` refresh, runtime UGC-zone resolution, fail-closed zone lookup) was verified correct against live NWS. Feed the unified store from that pipeline; do not build a second lifecycle implementation.
 
-**H15 rides on H10 — confirmed by the operator, who has been receiving the sticky notification bursts.** Interim: the Cyber notification domain is disabled until the fix lands; re-enable it as part of verifying the fix. each echo is dispatched as a critical notification (`unified-alerts.ts:371-374`), mapped to the `cyber` domain, bypassing quiet hours and the per-source rate limit, delivered with `requireInteraction: true`. Closing H10 stops the flood; separately, derived `correlation` alerts should not bypass quiet hours/rate limits, and same-title bursts should coalesce.
+**H15 — fixed with H10 in PR #1732** (confirmed by the operator before the fix; critical correlation alerts 281 → 4 after). Still worth doing separately: derived `correlation` alerts should not bypass quiet hours/rate limits, and same-title bursts should coalesce. each echo is dispatched as a critical notification (`unified-alerts.ts:371-374`), mapped to the `cyber` domain, bypassing quiet hours and the per-source rate limit, delivered with `requireInteraction: true`. Closing H10 stops the flood; separately, derived `correlation` alerts should not bypass quiet hours/rate limits, and same-title bursts should coalesce.
 
 ### H12 + H13 — Make the NWS path respect warning lifecycle (land with H10)
 

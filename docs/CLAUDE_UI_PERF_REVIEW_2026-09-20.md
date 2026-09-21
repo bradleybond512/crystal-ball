@@ -15,6 +15,8 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
+| H16 | **High** | Eviction churn re-seeds the engine: evicted storm reports return as "new" every poll (blocks #1732 merge) | Correctness |
+| M13 | Medium | Every news keyword spike is labelled civil unrest (`situation-types.ts:209`) | Correctness |
 | H15 | **High** — **fix in PR #1732** | Alert-loop echoes become sticky critical notifications that bypass quiet hours and rate limits — **confirmed by operator** | Notifications |
 | H14 | **High** | NWS warnings on triage/inbox/strip are a boot snapshot: no scheduled ingest, no freshness record — 76 alerts behind live | Detection |
 | H12 | **High** | 80% of displayed NWS warnings are stale — 52 of 65 expired, cancelled or superseded, incl. 2 tornado warnings | Correctness |
@@ -983,6 +985,26 @@ Beyond the plan in round 7, verification exposed two gaps that are also fixed: t
 **Residual for Codex:** the boot-time seed still produces ~92 derived alerts in one burst — one situation per 1–3 NWS alerts, amplified by H12's duplicate CAP messages, with evicted situations leaving their alerts behind. That is not the loop; H14 + H12 (event-keyed, scheduled NWS ingest) is what shrinks it.
 
 **Interim mitigation can be reverted:** with the loop closed, the Cyber notification domain can be re-enabled.
+
+---
+
+## Round 10 — morning re-check (2026-09-21, ~10:45), and the rewritten handoff
+
+Three checks on the installation running build `18301b45` (#1730 + #1732), after about ten hours with no restart.
+
+**The #1732 loop fix holds, but it is incomplete — H16.** No alert was produced by the engine reading its own output. A second path produces the same symptom: the store evicts oldest-by-timestamp at its 500 cap; local storm reports keep their *report* time (`intel-channels-bridge.ts:127`) so they are evicted first; they are re-polled every 15 min (`:21`) and re-ingested as new (re-notifying, `unified-alerts.ts:373`); and `situation-feed.ts:30` treats anything not currently in the store as new, seeding a fresh situation and a fresh `correlation` alert each time. Measured: 126 `correlation` alerts created 01:00–03:00 with no restart; "FLOODING — Vinton, OH" 28 correlation alerts vs 17 source reports, in batches at 00:20:37 / 00:50:38 / 01:20:39; "Clermont, OH" 14 vs 0. Rate decayed to 2 per 30 min by 10:45. Fix: a TTL'd set of ids already fed to the engine instead of a diff against store contents. #1732 should not merge without it.
+
+**H14 re-confirmed with a longer window.** NWS issued 224 alerts after the 00:20 boot; none are in the store ten hours later. (A stored NWS alert looked "8 min old" only because it was stored at boot with a future onset — H13.)
+
+**H12 worse with time.** 16 of 133 stored NWS alerts (12%) are still active; 16 are future-dated.
+
+**H11 unchanged.** `/MAP` 400, `/SEARCH` 200.
+
+**M13 (new).** 19 of 20 persisted situations were `civil_unrest`, built from genuine news keyword spikes ("care: 6 mentions across 3 sources"), because `situation-types.ts:209` maps every `keyword_spike` to civil unrest. #1732's `domainHint` covers alert-derived signals only.
+
+**Documents.** Every `file:line` pointer in both documents was checked against `main` @ `7230cef6`: 145 of 145 resolve; one (`log-bridge.ts:55` → `:54`) pointed one line off and is corrected. `UI_PERF_HANDOFF_FOR_CODEX.md` has been rewritten as a single current document — state of play, open work in priority order, done, retracted, verified clean — and all 39 of its pointers were re-validated against the code they cite. This file remains the evidence log.
+
+**PRs.** #1730, #1731, #1732 open; each blocked only by `cross-agent-review`, plus `axe` on docs-only #1731, which a docs diff cannot cause.
 
 ## Method and limits
 

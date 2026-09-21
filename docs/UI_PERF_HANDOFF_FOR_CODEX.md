@@ -80,7 +80,7 @@ The only writer of NWS warnings into the alert store, `loadNWSAlerts()` (`data-l
 
 **Architecture note for H14/H12/H13:** there are two NWS pipelines. The personal/site path (`weather-posture.ts` → `matchAlertToPlace()`, 10-min `weather` refresh, runtime UGC-zone resolution, fail-closed zone lookup) was verified correct against live NWS. Feed the unified store from that pipeline; do not build a second lifecycle implementation.
 
-**H15 rides on H10:** each echo is dispatched as a critical notification (`unified-alerts.ts:371-374`), mapped to the `cyber` domain, bypassing quiet hours and the per-source rate limit, delivered with `requireInteraction: true`. Closing H10 stops the flood; separately, derived `correlation` alerts should not bypass quiet hours/rate limits, and same-title bursts should coalesce.
+**H15 rides on H10 — confirmed by the operator, who has been receiving the sticky notification bursts.** Interim: the Cyber notification domain is disabled until the fix lands; re-enable it as part of verifying the fix. each echo is dispatched as a critical notification (`unified-alerts.ts:371-374`), mapped to the `cyber` domain, bypassing quiet hours and the per-source rate limit, delivered with `requireInteraction: true`. Closing H10 stops the flood; separately, derived `correlation` alerts should not bypass quiet hours/rate limits, and same-title bursts should coalesce.
 
 ### H12 + H13 — Make the NWS path respect warning lifecycle (land with H10)
 

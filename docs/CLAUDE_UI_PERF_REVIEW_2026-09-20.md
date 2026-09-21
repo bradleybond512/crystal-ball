@@ -26,8 +26,9 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | H4 | High | 248 of 463 `fetch()` sites have no timeout or abort signal | Async |
 | M4 | Medium | 1020 of 2214 catch blocks swallow the error; only 170 log anything | Async |
 | M5 | Medium | 57 `localStorage.setItem` calls unguarded, despite quota helpers existing | Data |
-| M6 | Medium | Boot preloads ~2.4 MB gz of JS and constructs 428 panels synchronously | Startup |
+| M6 | Medium | 582–669 ms constructing 428 panels at boot (measured); parse is ~100 ms | Startup |
 | M7 | Medium | Alert fan-out is throttled in frequency but costs O(subscribers x alerts) | Perf |
+| P0 | High | First data wave takes 70–78 s behind one boot-path `Promise.all` (measured) | Startup |
 | L3 | Low | The critical posture banner is never announced to a screen reader | A11y |
 
 Two issues of this family are already fixed in PR #1730 and are not re-listed: the summary strip's double sticky offset, and the critical posture banner living outside the stack.
@@ -309,6 +310,15 @@ The `JSON.parse` surface is in good shape: 352 of 360 sites are guarded. More im
 
 ### M6 — Boot preloads ~2.4 MB gzipped of JS, then constructs 428 panels synchronously
 
+> **Measured 2026-09-20, after this section was written.** Two boot traces from the
+> installed build give `panelLayout.init` = **582 ms / 669 ms**, while V8 parse+compile
+> of the 3.86 MB panels chunk is **~85–100 ms**. Construction dominates parse by roughly
+> 6×, so the fix is lazy panel construction, not the import split suggested below.
+> The measurement also exposed a larger problem — the first data wave takes 70–78 s
+> behind a single boot-path `Promise.all` — recorded as P0 in
+> [`UI_PERF_HANDOFF_FOR_CODEX.md`](UI_PERF_HANDOFF_FOR_CODEX.md), which supersedes this
+> section's suggested fix.
+
 Measured from the build this branch produced:
 
 ```
@@ -389,6 +399,6 @@ Overlay semantics are patchier than the banners: 61 components carry overlay/mod
 
 ## Method and limits
 
-Three rounds of static analysis, at the reviewed SHA, plus two measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated.
+Three rounds of static analysis, at the reviewed SHA, plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

@@ -74,6 +74,10 @@ The loop: `situation-feed.ts:28-32` feeds every new-id alert, including the engi
 
 **Acceptance:** during a flood event, correlation alerts do not outnumber their source alerts, no body names an unrelated domain, and the strip's critical count tracks the source feeds. Full trace in the review doc, round 7.
 
+### H14 — Put NWS ingest on a schedule (do this first; H12/H13 depend on it)
+
+The only writer of NWS warnings into the alert store, `loadNWSAlerts()` (`data-loader.ts:3292`), runs only at boot, on any panel's Retry, or on leaving playback — never on a schedule — and records no freshness. Measured live: the store's newest NWS alert was 89 min old and 76 newer alerts (incl. 5 Flash Flood and 3 Severe Thunderstorm Warnings) had never arrived. Register it with the refresh scheduler at the `weather` cadence (or fold it into `loadWeatherAlerts()`, which already fetches NWS on a 10-min loop), record `nws-alerts` freshness, and make the summary strip report sources overdue against their own cadence. Full trace: review doc, round 9.
+
 ### H12 + H13 — Make the NWS path respect warning lifecycle (land with H10)
 
 Measured during a live event: of 65 NWS alerts in the store, **13 were still active at NWS; 21 superseded; 31 expired or cancelled** — including 2 Tornado and 5 Severe Thunderstorm warnings shown as live. 21 of the 65 carried timestamps up to 90 h in the future, which the triage bar renders as "now".

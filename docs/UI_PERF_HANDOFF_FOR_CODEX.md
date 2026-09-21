@@ -58,6 +58,32 @@ main-CUywjLvG.js     1.60 MB   parse+compile:  38 / 38 / 37 ms
 
 ---
 
+## Start here — two fixes that matter more than anything below
+
+Found in round 7, after the rest of this document was written. Both are small, both are verified against the live app, and both affect what the user sees during exactly the events the app exists for. **Do these before P0.**
+
+### H10 — Break the alert feedback loop (the cause of the original "99+ critical" bug)
+
+The live alert store held 500 alerts (the cap), 289 of them critical — and **286 of those were `correlation` echoes, not source alerts.** A single "Flood Warning" was re-emitted 71 times with 71 fresh ids, each body reading *"correlated civil unrest signal detected."* NWS itself had rated the underlying warnings medium/high.
+
+The loop: `situation-feed.ts:28-32` feeds every new-id alert, including the engine's own output, back into `situationEngine.observeAlerts()` → `alertSourceToSignalType()` maps `nws → keyword_spike` and everything else → `convergence` → `SIGNAL_DOMAIN_MAP` maps both to `civil_unrest` → a new situation (new id) per signal → the bridge promotes it back as `critical` → repeat.
+
+1. **Exclude derived sources (`correlation` etc.) in `situation-feed.ts`.** This alone breaks the loop.
+2. Map weather sources to a natural-hazard signal type in `alertSourceToSignalType()`.
+3. Merge situations for the same underlying event instead of minting one per signal.
+
+**Acceptance:** during a flood event, correlation alerts do not outnumber their source alerts, no body names an unrelated domain, and the strip's critical count tracks the source feeds. Full trace in the review doc, round 7.
+
+### H11 — Fix GDACS (one word)
+
+`gdacs.ts:92` calls `…/geteventlist/MAP`, which now returns `HTTP 400 {"message":"Eventtype is required."}` in every form tried. `…/geteventlist/SEARCH` returns HTTP 200 with the same GeoJSON schema — every field the parser reads is present. Change `MAP` → `SEARCH` (optionally `?eventlist=EQ;TC;FL;VO;DR;WF&alertlevel=Orange;Red`), update the matching probe at `api-diagnostic.ts:94`, and add a contract test asserting a FeatureCollection comes back. The global disaster feed has been serving a persisted cache or nothing for as long as this has been broken.
+
+### Then M12 — align RSS timeouts
+
+Renderer aborts at 15 s; the sidecar allows 20 s for Google News (233 of 431 feeds) and 12 s otherwise, **per redirect hop**. Make the sidecar's budget a total and set it below the renderer's, so slow feeds return a classifiable `504` instead of an anonymous abort. Evidence: all 323 logged proxy failures are aborts, none is a sidecar 504.
+
+---
+
 ## P0 — The first data wave takes 70–78 seconds, and boot waits for all of it
 
 **This was not in the original review. It came out of the measurement.**

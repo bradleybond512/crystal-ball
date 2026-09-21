@@ -23,9 +23,9 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | M3 | Medium | The battery/context cadence multiplier has no panel consumers | Perf |
 | L1 | Low | `channel.handle` is interpolated into an `href` without escaping | Security |
 | L2 | Low | Six interval callbacks write to `localStorage` on every tick | Perf |
-| H4 | High | 248 of 463 `fetch()` sites have no timeout or abort signal | Async |
+| H4 | ~~High~~ **Low** | 248 `fetch()` sites lack their own signal — but the desktop fetch patch adds a 15 s default (see round 6) | Async |
 | M4 | Medium | 1020 of 2214 catch blocks swallow the error; only 170 log anything | Async |
-| M5 | Medium | 57 `localStorage.setItem` calls unguarded, despite quota helpers existing | Data |
+| M5 | ~~Medium~~ **Low** | 57 unguarded `setItem` calls — but a global patch catches quota errors and never rethrows (round 6) | Data |
 | M6 | Medium | 582–669 ms constructing 428 panels at boot (measured); parse is ~100 ms | Startup |
 | M7 | Medium | Alert fan-out is throttled in frequency but costs O(subscribers x alerts) | Perf |
 | P0 | High | First data wave takes 70–78 s behind one boot-path `Promise.all` (measured) | Startup |
@@ -33,7 +33,9 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | H8 | High | ~48k failed sidecar fetches (9,593 burst episodes); IPC degrades to postMessage 6x/boot | Runtime |
 | M8 | Medium | Chronic feed failure is warning-only: 19,812 WARN vs 91 ERROR | Observability |
 | M9 | Medium | localStorage at 6.1 MB ceiling; 292 MB IndexedDB; 64 MB orphaned WAL | Data |
-| H9 | High | 20 relative `/api/…` fetches never reach the sidecar in the desktop build | Correctness |
+| M10 | Medium | Three subproject lockfiles are outside every audit gate (9 open Dependabot alerts) | Supply chain |
+| M11 | Medium | 6 of 38 API keys are invalid, incl. boot-critical `NEWSAPI_KEY`; nothing re-validates | Config |
+| H9 | ~~High~~ **RETRACTED** | Relative `/api/…` fetches DO reach the sidecar via the runtime fetch patch (round 6) | Correctness |
 | L3 | Low | The critical posture banner is never announced to a screen reader | A11y |
 
 Two issues of this family are already fixed in PR #1730 and are not re-listed: the summary strip's double sticky offset, and the critical posture banner living outside the stack.
@@ -590,8 +592,111 @@ The ~48,000 failed fetches in the `localhost` bucket are **consistent** with H9 
 
 **Next step, cheap and decisive:** add the pathname to the burst alarm (`log-bridge.ts:452-455` currently logs `host` only). One field turns ~48,000 anonymous failures into a named list, and would confirm or refute H9 in a single session.
 
+---
+
+## Round 6 — corrections: three findings retracted or downgraded
+
+This round started as three new scans (dependencies, the Tauri IPC surface, configuration completeness) and ended by invalidating earlier work. `src/main.ts:271-274` installs two global patches I had not accounted for, and they change what several source-level counts mean at runtime:
+
+```ts
+installLocalStoragePatch();   // src/utils/safe-storage.ts:169
+installRuntimeFetchPatch();   // src/services/runtime.ts:263
+```
+
+Anything below that contradicts an earlier round supersedes it. Codex should not work from the retracted versions.
+
+### RETRACTED — H9 was wrong. Relative `/api/…` fetches do reach the sidecar
+
+H9 claimed that 20 call sites using `fetch('/api/…')` skip `toRuntimeUrl()` and therefore resolve to `tauri://localhost/api/…`, leaving maritime, SMS, disease and supply-chain features unable to reach their data.
+
+That is false. `installRuntimeFetchPatch()` replaces `window.fetch` in desktop builds. `getApiTargetFromRequestInput()` (`runtime.ts:166-188`) returns the path for **any string input starting with `/`**, and for any URL on the app origin. The patched fetch then rewrites it to `${getApiBaseUrl()}${target}`, attaches the `Authorization: Bearer` token, retries on a cold-start 401, and can fall back to the cloud API. The relative call sites work.
+
+What survives is much smaller: those 20 sites are inconsistent with the 21st and rely on a global monkey-patch rather than the explicit helper. Worth a tidy-up and a lint rule for consistency; **not** a broken-feature bug. My apologies — I asserted a user-visible outage that does not exist.
+
+### DOWNGRADED — H4 does not describe desktop runtime
+
+H4 counted 248 of 463 `fetch()` sites with no `AbortSignal` and called a hung request unbounded. The patched fetch supplies one for every call that lacks its own:
+
+```ts
+const withTimeout = (base?: RequestInit): RequestInit =>
+  callerSignal ? { ...base } : { ...base, signal: AbortSignal.timeout(15_000) };
+```
+
+The comment above it names the exact situation I "found": *"~100 data feeds route through this patched fetch with no timeout of their own, so a hung connection would otherwise stall forever."* It was already solved. On desktop every fetch has a 15 s deadline per attempt.
+
+**This also closes the open question from round 5.** The 2,483 `Fetch is aborted` lines that had no confirmed cause are this timeout firing. Not the watchdog, not sidecar stalls — the app's own 15 s abort, working as designed.
+
+H4 survives only as: (a) web builds get no such default, since the patch is desktop-only; (b) relying on a global patch means a caller that constructs its own `Request` off the app origin bypasses it. Severity drops from High to Low.
+
+### DOWNGRADED — M5's unguarded `setItem` calls cannot throw
+
+M5 flagged 57 `localStorage.setItem` calls outside a `try`. `installLocalStoragePatch()` wraps `setItem` globally: on a quota error it evicts the largest disposable cache entries, retries once, calls `markStorageQuotaExceeded()`, and — explicitly — never rethrows to the caller (`safe-storage.ts:180-198`). The callers cannot see a `QuotaExceededError`.
+
+M9's measurement (6.1 MB across 318 keys, at the ceiling) still stands, and the eviction path being exercised is itself a symptom. But "57 unguarded writes can abort a render mid-flight" was wrong. Low, as a style point.
+
+### What the timeout finding means for P0
+
+P0 listed two mechanisms: both waves awaited on the boot path, and no task deadline. The second was wrong — every fetch attempt is bounded at 15 s. The first still stands, and the arithmetic now works better: a task can chain a local attempt (15 s), a startup retry loop (`fetchLocalWithStartupRetry`, up to 4 attempts), and a cloud fallback (another 15 s). A `news` refresh landing at ~40 s is a few bounded attempts in sequence, not one unbounded hang. **Fix the awaiting, not the deadlines.**
+
+### M10 — the dependency audit gate has a blind spot
+
+Dependabot reports 9 open alerts (4 high, 5 medium) while `npm audit` at the repo root reports **zero**. Both are correct; they look at different manifests:
+
+```
+root package-lock.json      fast-uri 3.1.7   dev: true
+tools/mcp-server/           fast-uri 3.1.5   production   <- 4 high SSRF alerts
+tools/mcp-server/           hono 4.13.1      production   <- 3 medium
+tools/mcp-server/           qs 6.15.2        production   <- 2 medium
+src-tauri/sidecar           (zero dependencies)
+```
+
+`.github/workflows/security-audit.yml:22` runs `npm audit --audit-level=high` at the root only, plus `cargo audit`/`cargo deny` in `src-tauri`. Nothing audits `tools/mcp-server`, `tools/cb-control` or `scripts/`, each of which has its own lockfile. And `--audit-level=high` means a medium never fails CI anywhere.
+
+**The good news:** none of this ships. The desktop sidecar has zero dependencies and the vulnerable packages live in developer tooling. **The gap:** `tools/mcp-server` is an HTTP server (hono) run locally and driven by an agent, and the fast-uri advisories are SSRF and host-confusion — exactly the class that matters for a local server that fetches URLs on request.
+
+**Suggested fix:** add the subproject lockfiles to the audit job (a matrix over the four directories), and decide deliberately whether medium should gate.
+
+### M11 — Six of 38 API keys are invalid, and nothing re-checks them
+
+From the installed app's own key-status records:
+
+```
+invalid  NEWSAPI_KEY           last checked 2026-11-23
+invalid  GOOGLE_MAPS_API_KEY   last checked 2026-11-23
+invalid  FINNHUB_API_KEY       last checked 2026-04-25
+invalid  FMP_API_KEY           last checked 2026-04-25
+invalid  VULNERS_API_KEY       last checked 2026-04-25
+invalid  BITCOINABUSE_API_KEY  last checked 2026-04-25
+valid    (32 others)
+```
+
+`NEWSAPI_KEY` is invalid, and `news` is in the boot-critical wave — the same source with 329 slow-refresh breaches. Four of the six were last validated in April; nothing re-validates on a schedule, so a key that lapsed months ago sits in the same silent state as M4 and M8 describe. The Settings surface shows status when opened; nothing surfaces it otherwise.
+
+### Secrets timing at startup — real, but already mitigated
+
+Worth recording because it looks alarming in the log and is not:
+
+```
+injected 0 keychain secrets into sidecar env        (at spawn)
+injected 14/18 keychain secrets via IPC             (+4 s)
+```
+
+The sidecar starts with no provider keys and receives them about four seconds later, while `loadDesktopSecretsWhenReady()` (`main.ts:276`) is deliberately fire-and-forget so a slow Touch ID never blocks the window. The bearer-token path is defended — `fetchLocalWithStartupRetry` retries up to four times and a cold-start 401 triggers a token refresh and one retry. The residual is narrow: an upstream provider call made inside that ~4 s window can run without its API key and fail for a reason unrelated to the provider. Given the boot wave starts at ~1.5 s, the window overlaps the first seconds of feed loading. Low, and worth a single ordering assertion rather than a redesign.
+
+### Clean — the Tauri IPC surface is well defended
+
+35 `#[tauri::command]` handlers. Every one I inspected calls `require_trusted_window(webview.label())` first, and the sensitive ones are properly constrained:
+
+- `open_url` rejects any scheme but `https`, then blocks `localhost`, `127.0.0.0/8`, `0.0.0.0`, `::1`, RFC-1918 ranges, `169.254.0.0/16` and `.local` — with a comment naming the exact threat (a compromised webview reaching the sidecar through the system browser).
+- `send_imessage` rate-limits, truncates recipient to 64 and body to 512 bytes, and strips quotes, backslashes, newlines and control characters before AppleScript interpolation.
+- `write_cache_entry` caps key at 256 bytes and value at 5 MB, parses the payload as JSON, and keys an in-memory map — no filesystem path derived from caller input.
+- `save_brief` whitelists filename characters and rejects `.`, `..` and NUL.
+- `get_local_api_token` is gated the same way; the token never leaves a trusted window.
+
+One design note deserves credit: `runtime-config.ts:1388-1394` deliberately skips the JS→sidecar secret push at boot because a foreign process squatting port 46123 would otherwise receive every secret and the bearer token. That is precisely the attack my round-4 port hypothesis implied, already considered and defended.
+
 ## Method and limits
 
-Five rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar directly — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
+Six rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, and one that re-read the runtime patches and retracted or downgraded three earlier findings — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

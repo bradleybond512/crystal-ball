@@ -29,6 +29,10 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | M6 | Medium | 582–669 ms constructing 428 panels at boot (measured); parse is ~100 ms | Startup |
 | M7 | Medium | Alert fan-out is throttled in frequency but costs O(subscribers x alerts) | Perf |
 | P0 | High | First data wave takes 70–78 s behind one boot-path `Promise.all` (measured) | Startup |
+| H7 | High | `panelLayout.init` p50 666 ms / p90 883 ms across 278 logged boots | Startup |
+| H8 | High | Sidecar fetch bursts 9,578x; Tauri IPC repeatedly degrades to postMessage | Runtime |
+| M8 | Medium | Chronic feed failure is warning-only: 19,812 WARN vs 91 ERROR | Observability |
+| M9 | Medium | localStorage at 6.1 MB ceiling; 292 MB IndexedDB; 64 MB orphaned WAL | Data |
 | L3 | Low | The critical posture banner is never announced to a screen reader | A11y |
 
 Two issues of this family are already fixed in PR #1730 and are not re-listed: the summary strip's double sticky offset, and the critical posture banner living outside the stack.
@@ -397,8 +401,108 @@ Overlay semantics are patchier than the banners: 61 components carry overlay/mod
 | UX-043 | Alert store: notify payload / revision + `subscribeWhere` selector; count subscriber failures | M7 |
 | UX-044 | ARIA on the posture banner and summary strip counts; overlay dialog-semantics pass | L3 |
 
+---
+
+## Round 4 — evidence from the running app
+
+Rounds 1–3 read the code. This round reads what the installed build actually did, from its own log (`~/Library/Logs/com.bradleybond.crystalball/desktop.log` plus rotations, ~20 k lines live, 4 rotated files) and its own storage. Several earlier findings move from inference to measurement, and one of my own corrections was itself corrected.
+
+### H7 — `panelLayout.init` measured across 278 boots
+
+The app logs `[BOOT-TIMING] preload+routing gated boot for <n>ms; panelLayout.init took <n>ms` on every boot. Across all retained logs:
+
+| Boot metric | n | min | p50 | p90 | max |
+|---|---|---|---|---|---|
+| `panelLayout.init` | 278 | 424 ms | **666 ms** | 883 ms | 2209 ms |
+| preload+routing gate | 278 | 12 ms | 367 ms | 573 ms | 1249 ms |
+| `preloadIdbBackedStores` | 279 | 10 ms | 266 ms | 415 ms | 996 ms |
+
+M6 is no longer an argument: **666 ms at p50, 883 ms at p90**, every boot, constructing 428 panels. The two traces quoted in the handoff (582 / 669 ms) sit right on the median.
+
+### H8 — The sidecar fails constantly, and IPC has been falling back to the slow path
+
+Across all retained logs:
+
+```
+fetch failure burst: localhost            9578
+fetch failure burst: 127.0.0.1:46123       301
+fetch failure burst: droughtmonitor.unl.edu 1926
+"IPC custom protocol failed, Tauri will now use
+ the postMessage interface instead"         438  (live log alone)
+```
+
+`127.0.0.1:46123` is the sidecar, explicitly allowed in the CSP `connect-src`. Whatever the cause, the app's own burst detector fired on localhost nearly ten thousand times. The IPC line is separate and worse for latency: Tauri's custom-protocol IPC is the fast path, and the app has been repeatedly degrading to `postMessage` — every IPC payload then pays serialization through the webview bridge.
+
+Neither surfaces in the UI. Both are `console.warn`.
+
+### M8 — Chronic feed failure is invisible: 19,812 warnings, 91 errors
+
+The live log is 20,911 lines, of which **19,812 match WARN and only 91 ERROR**. Top failing feeds across all retained logs:
+
+```
+1324  Atlantic Council   (HTTP 403 — looks permanently blocked, not flaky)
+ 686  Lawfare
+ 683  Japan Today
+ 676  GDELT Tensions
+ 654  GDACS              (HTTP 400 — a malformed request is a bug, not an outage)
+ 638  War on the Rocks
+ 633  ThisDay
+ 632  Financial Times
+ 489  News Summarization
+```
+
+Cooldowns entered: GDACS 416, News Summarization 319, UCDP Events 185, Chokepoint Status 173, ADS-B 146. One more line worth reading twice: `[IntelProvider] Circuit breaker open after 405 failures`.
+
+The cooldown and circuit-breaker machinery is doing its job — the app stays up. But M4 predicted exactly this: a feed that has been 403-ing 1,324 times and a feed returning HTTP 400 (which no amount of retrying will fix) are indistinguishable, from the UI, from a quiet day. A panel showing nothing looks the same either way.
+
+**Suggested fix:** promote a feed that has exhausted its cooldowns to a visible state — the Feed Health and Communications Health panels already exist and are the natural surface. HTTP 400 and 403 in particular should be classified as "broken, stop retrying, tell someone" rather than "temporarily unavailable".
+
+### M9 — Storage: 6.1 MB of localStorage at the ceiling, 292 MB of IndexedDB, 64 MB orphaned
+
+Read directly from the installed build's WebKit storage:
+
+```
+localStorage (live):      318 keys, 6.1 MB
+  crystalball-cognition-embed-cache-v1    1525 KB
+  crystalball-forecast-calibration-v1      923 KB
+  wm-correlation-store                     588 KB
+  wm_offline_weather-alerts                514 KB
+  crystalball-cognition-episodic-v1        339 KB
+localstorage.sqlite3 + WAL:  7.4 MB + 16.2 MB (WAL was 74 MB before checkpoint)
+LocalStorage.backup.1783443073/:  5.9 MB + 63.8 MB WAL   (orphaned since 2026-07-07)
+IndexedDB total:           292.3 MB
+IDB→memory mirror at boot:  19.0 MB  (p50 266 ms, per H7 table)
+```
+
+Three separate problems:
+
+1. **localStorage is at its practical ceiling.** ~6 MB across 318 keys, and the largest consumers are an ML embedding cache and calibration history — data that belongs in IndexedDB, which the app already uses. This is the mechanism behind the quota incidents the code comments reference, and it makes M5's 57 unguarded `setItem` calls a live risk rather than a theoretical one.
+2. **The WAL churns to 74 MB between checkpoints**, which is a lot of write traffic for a 6 MB store — consistent with L2 (timer-driven persists).
+3. **A 64 MB orphaned backup WAL** has been sitting since July. Whatever created `LocalStorage.backup.*` never reclaims it.
+
+### Input latency — strong signal, contaminated measurement
+
+The app logs `[INPUT-LATENCY]` when event delivery is slow: **6,703 samples, p50 1,360 ms, 4,312 of them over 1 second**, many with `handlers 0ms` — meaning the delay is in delivery, not in the handler.
+
+I am not filing this as a finding, because the maximum is 7,214,088 ms, which is not a real input delay — it is the app being suspended and waking. Sleep/wake contamination inflates an unknown share of the distribution, and the same caveat applies to the `Slow refresh` figures below. A controlled run (launch, interact for five minutes, no sleep) would separate real main-thread blocking from suspend artifacts. Given H3, M1 and H7, I expect a real signal underneath, but expectation is not measurement.
+
+### Refresh durations, for context
+
+`SLOW_REFRESH_THRESHOLD_MS` is 15 s (`src/app/refresh-scheduler.ts:21`), so every line below is already past the app's own "this is slow" bar:
+
+```
+domain            n    p50        max
+stablecoins      240   40,139 ms   981,494 ms
+intelligence     262   31,079 ms   933,758 ms
+news             329   40,060 ms   849,251 ms
+etf-flows        264   40,138 ms   747,645 ms
+geo-intel        144   15,006 ms   622,597 ms
+```
+
+Same sleep/wake caveat on the maxima. The medians are harder to dismiss: a 40-second median refresh for `news`, which is in the boot-critical set, is the P0 story repeating on every cycle.
+
 ## Method and limits
 
-Three rounds of static analysis, at the reviewed SHA, plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
+Four rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

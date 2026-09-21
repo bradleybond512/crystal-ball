@@ -5,6 +5,7 @@
 - **Reviewed SHA:** `bradleybond512/main` @ `7230cef6942871fb9eea04ebed4dffdb258ca6b7`
 - **Companion:** [`docs/CLAUDE_UI_PERF_REVIEW_2026-09-20.md`](CLAUDE_UI_PERF_REVIEW_2026-09-20.md) — the full 14-finding review this distills
 - **Status:** ready to pick up. Nothing here is claimed. No code in this handoff.
+- **Round 4 evidence** (installed build's own log and storage: 278 logged boots, feed-failure counts, storage sizes) is in the review doc; H7/H8/M8/M9 there supersede the inferred versions of the same points.
 - **Audience:** Codex / ChatGPT sessions working this repo
 
 This document exists because one finding (M6) was a structural argument until it was measured. It is now measured, and the measurement **changed the fix** and **found a larger problem**. Everything below separates what was measured from what is still inferred, so you do not inherit my guesses as facts.
@@ -57,7 +58,7 @@ main-CUywjLvG.js     1.60 MB   parse+compile:  38 / 38 / 37 ms
 
 ---
 
-## P0 — The first data wave takes 70–78 seconds behind a single `Promise.all`
+## P0 — The first data wave takes 70–78 seconds, and boot waits for all of it
 
 **This was not in the original review. It came out of the measurement.**
 
@@ -67,17 +68,21 @@ main-CUywjLvG.js     1.60 MB   parse+compile:  38 / 38 / 37 ms
 await Promise.all([preloadCountryGeometry(), this.dataLoader.loadAllData()]);
 ```
 
-`Promise.all` settles on the **slowest** member. `loadAllData()` fans out across the feed set, and in `src/app/data-loader.ts` **10 of 12 `fetch` sites carry no `AbortSignal`** — a fetch with no timeout does not fail, it hangs. So the whole first wave, and the `bootTrace('phase6:data-load:done')` mark behind it, waits on whichever source is slowest or stuck.
+**Correction, after reading `loadAllData()` properly (lines 700–905):** the load is *not* a naive fan-out. It builds 116 tasks, splits them into 11 critical and ~105 deferred, and runs each wave through `createConcurrencyLimiter(12).mapSettled(...)`. Failures are already settled, not thrown, and the two-wave split is deliberate. My first draft of this section implied the fix was `allSettled`; it is already `allSettled`. Do not "fix" that.
 
-Measured: **69.8 s and 77.6 s** on two boots. That is the gap between "the window is up" (~1.5 s) and "the first wave has landed."
+The real mechanism is two things the structure does not bound:
 
-What is *not* established: what the user actually sees during those 70 seconds. Panels render their own state and many load independently, so this is probably not a 70-second blank screen — but it is 70 seconds before the code after `await` runs, which includes `startLearning()` and the layer-visibility fixups at `App.ts:528-540`. **Establish this first**, with a screen recording or by marking first-paint-of-alert-content. The fix differs depending on the answer.
+1. **Both waves are fully awaited before `loadAllData()` resolves**, and the boot path awaits that. So boot completion waits for the slowest of ~105 deferred tasks, none of which any user is waiting on.
+2. **No task has a deadline.** `SLOW_REFRESH_THRESHOLD_MS` (`refresh-scheduler.ts:21`) is 15 s, but it only *warns*. In `data-loader.ts`, 10 of 12 `fetch` sites carry no `AbortSignal`, and none of `loadNews`, `loadMarkets`, `loadIntelligenceSignals`, `loadWeatherAlerts` — four of the eleven critical tasks — pass one.
+
+Measured consequence, from the app's own log across all retained runs: median refresh duration is **40.1 s for `news`** (n=329), 31.1 s for `intelligence` (n=262), 40.1 s for `stablecoins` (n=240). `news` and `intelligence` are both in the critical set, so wave 1 alone can plausibly account for 40 s of the 70–78 s. (Maxima in that data run to hundreds of seconds, but they are contaminated by sleep/wake — treat medians as the reliable figure.)
 
 **Direction, not a prescription:**
 
-1. Give every fetch in `data-loader.ts` a timeout. Per-source, generous (15–30 s), but finite.
-2. Replace the boot `Promise.all` with `Promise.allSettled`, or drop the await entirely and let each source report into the existing freshness/staleness machinery as it lands. The data-loader already uses `allSettled` in 17 places and `Promise.all` in 20 — the pattern exists, it just is not used on the boot path.
-3. Whatever runs after the await (`startLearning`, layer fixups) should not be gated on the slowest feed.
+1. Give every fetch in `data-loader.ts` a deadline — per-source, generous (15–30 s), but finite. This is the H4 fix applied to the boot path first.
+2. Do not await wave 2 on the boot path at all. Let deferred sources land into the existing freshness/staleness machinery as they arrive.
+3. Consider a boot-completion deadline for wave 1 too: mark `phase6:data-load:done` when the critical set finishes *or* a budget expires, whichever comes first, and let stragglers report themselves stale.
+4. Whatever runs after the await (`startLearning()`, the layer fixups at `App.ts:528-540`) should not be gated on any feed.
 
 **Acceptance:** `phase6:data-load:done` lands within a bounded, documented budget on a cold boot with a deliberately stalled source; no boot-path `Promise.all` over network work; a stalled feed shows as stale in the UI rather than delaying boot completion.
 

@@ -15,6 +15,8 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
+| H12 | **High** | 80% of displayed NWS warnings are stale — 52 of 65 expired, cancelled or superseded, incl. 2 tornado warnings | Correctness |
+| H13 | **High** | Future-onset warnings (up to +90 h) render as "now" and outlive their expiry | Display |
 | H10 | **High** | Alert feedback loop: 286 of 289 "critical" alerts are correlation echoes of weather warnings, labelled civil unrest | Correctness |
 | H11 | **High** | GDACS silently down: `/MAP` now returns HTTP 400; `/SEARCH` works with the same schema | Correctness |
 | M12 | Medium | Renderer aborts RSS at 15 s; sidecar allows 12–20 s *per hop* — 323 of 323 proxy failures are aborts | Perf |
@@ -795,8 +797,69 @@ This is the "654 failures on HTTP 400" from M8, root-caused. GDACS is the global
 
 `src/config/feeds.ts:6` builds RSS URLs as absolute `http://127.0.0.1:46123/api/rss-proxy?…`. An absolute URL takes the fetch patch's passthrough branch unless it is recognised as app-origin, and the passthrough branch attaches the timeout but **not** the `Authorization` header — which would have meant every news feed receiving the same 401 my unauthenticated curl got. It does not happen: `127.0.0.1` is in `APP_HOSTS` (`runtime.ts:145-153`), so the URL is intercepted and the token is attached. Recorded so nobody re-derives it.
 
+---
+
+## Round 8 — detection and display under live load
+
+Run while the app was busy with a real multi-state flood, gale and severe-thunderstorm event. Three questions: is H10 live, does the NWS path handle warning lifecycle, and does the screen match the truth. Every figure below is from the running app's live alert store or the live NWS API, taken the same evening.
+
+### H12 — 80% of the NWS warnings the app is showing are no longer current
+
+The live store held 65 NWS alerts. Compared against `https://api.weather.gov/alerts/active` at the same moment (333 active nationally):
+
+```
+stored NWS alerts                                   65
+  still active at NWS                               13   (20%)
+  superseded — an active alert references it        21   (32%)
+  no longer active at all (expired or cancelled)    31   (48%)
+```
+
+Superseded or gone, by event: Flood Warning 19, Special Weather Statement 10, Beach Hazards Statement 9, **Severe Thunderstorm Warning 5**, Special Marine Warning 3, **Flash Flood Warning 3**, **Tornado Warning 2**, Gale Warning 1.
+
+**The app is displaying two tornado warnings that NWS has already expired or cancelled**, as live and unacknowledged. The same mechanism produces the 20 surplus copies measured in the same store — 65 alerts for 45 distinct (event, area) pairs: Beach Hazards Statement ×10, Gale Warning ×8, and pairs of Flood Warnings including **La Porte, IN / St. Joseph, IN / Starke, IN**.
+
+**Mechanism** — four gaps, each confirmed in code:
+
+1. `normalizeNWSAlert()` (`src/services/alert-normalizer.ts:120-137`) keys each alert on `nws-${alert.id}`, the id of one CAP *message*. NWS issues a new message id for every update, so each update becomes a new alert rather than replacing its predecessor. `references` and `messageType` are never read on this path.
+2. Nothing on the path to the unified store reads `expires`. The NWS lifecycle *is* handled correctly elsewhere — `nws-polygon-match.ts:72-74` and `evacuation-hazard-exposure.ts:278-281` both treat `messageType` and `expires` properly — but not in the pipeline that feeds triage, the inbox and the summary strip.
+3. `unifiedAlertStore` has no removal operation (`unified-alerts.ts`: `ingest`, `acknowledge*`, `snooze`, `togglePin` only). An alert that leaves the source feed can only leave the store by age (48 h after its timestamp) or by cap eviction.
+4. `raw` is shed before persistence (`unified-alerts.ts:323-326`), so after any reload the app can no longer tell when a warning expires, even in principle. `TriageBar`, `SummaryStrip`, `UnifiedAlertInboxPanel` and `unified-alerts.ts` contain zero references to `expires`.
+
+**Suggested fix:** (a) key NWS alerts on the *event*, not the message — collapse via `references` so an update replaces its predecessor and a `Cancel` removes it; (b) carry `expiresAt` as a first-class field on `UnifiedAlert` so it survives persistence; (c) add a source-scoped reconcile to the store — "these are the currently active NWS ids; drop the rest"; (d) filter `expiresAt < now` at render time as a backstop.
+
+**Acceptance:** after an NWS refresh, every NWS alert in the store is present in `/alerts/active`; no superseded version coexists with its replacement; a cancelled warning disappears within one refresh.
+
+### H13 — Future-dated warnings are shown as "now" and never age out
+
+`alert-normalizer.ts:127` sets `timestamp: new Date(alert.onset ?? alert.sent)`. River flood warnings routinely carry an onset days out, so **21 of the 65 stored NWS alerts are timestamped in the future — up to 90 hours ahead**. Then:
+
+- `TriageBar.ts:295-296` computes `Math.max(0, now - timestamp)` and labels anything under a minute `now`. A future timestamp clamps to zero: **a warning whose onset is 90 hours away renders as "now".** Visible in the live screenshot: *"NWS Hazardous Seas Warning — now"*, stored with an onset about 18 hours in the future.
+- Newest-first ordering puts these at the top of the triage bar indefinitely.
+- Pruning is 48 h after `timestamp`, so a warning dated 90 h out survives roughly six days from ingest — well past its own expiry.
+
+**Suggested fix:** use `sent` (or `effective`) as the event time, and carry `onset`/`ends` as separate fields a display can present honestly ("begins in 3 d"). Never clamp a negative age to zero silently.
+
+### Display versus truth — one frame
+
+Screenshot of the running app, compared field by field with the store and the NWS feed at the same moment:
+
+| On screen | What it actually is |
+|---|---|
+| `SEVERE WEATHER · 99+ crit` | 285 correlation echoes (H10) + 2 NWS criticals (+1 comms-health) |
+| `Situation Awareness · 429 unreviewed` | exactly the 429 correlation alerts in the store — every one an echo candidate |
+| `Alert Inbox · 65 unreviewed` | the 65 stored NWS alerts, of which **13** are still active (H12) |
+| `NWS Hazardous Seas Warning · now` | onset ~18 h in the future (H13) |
+| Inbox AI summary: *"…civil unrest signals, and severe weather warnings…"* | H10's mislabel, now propagated into generated narrative |
+| `data 48m median · 2h 45m worst` | not root-caused in this round — recorded as observed |
+
+**The generated summary line is worth a second look.** H10 no longer only miscounts; the "civil unrest" label is being read back by the narrative layer and presented to the user as analysis. Any fix to H10 should include purging existing echoes from the store, or the summary will keep citing them after the loop is closed.
+
+### Priority, restated
+
+For an operator relying on this app during a real event, these three together mean the triage surface is dominated by echoes (H10), a majority of the genuine weather warnings shown are stale or superseded (H12), and some are labelled as happening now when they begin days later (H13). All three are in the same small area of code — `alert-normalizer.ts`, `situation-feed.ts`, `unified-alerts.ts` — and all three have measurable acceptance criteria against live NWS data. They should land together, ahead of any performance work.
+
 ## Method and limits
 
-Seven rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, one that re-read the runtime patches and retracted or downgraded three earlier findings, and one aimed at high-value targets using the live alert store and the live GDACS API — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
+Seven rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, one that re-read the runtime patches and retracted or downgraded three earlier findings, one aimed at high-value targets using the live alert store and the live GDACS API, and one run during a live severe-weather event against the live NWS feed and a screenshot of the running app — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

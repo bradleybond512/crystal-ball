@@ -58,7 +58,7 @@ main-CUywjLvG.js     1.60 MB   parse+compile:  38 / 38 / 37 ms
 
 ---
 
-## Start here — two fixes that matter more than anything below
+## Start here — the fixes that matter more than anything below
 
 Found in round 7, after the rest of this document was written. Both are small, both are verified against the live app, and both affect what the user sees during exactly the events the app exists for. **Do these before P0.**
 
@@ -73,6 +73,17 @@ The loop: `situation-feed.ts:28-32` feeds every new-id alert, including the engi
 3. Merge situations for the same underlying event instead of minting one per signal.
 
 **Acceptance:** during a flood event, correlation alerts do not outnumber their source alerts, no body names an unrelated domain, and the strip's critical count tracks the source feeds. Full trace in the review doc, round 7.
+
+### H12 + H13 — Make the NWS path respect warning lifecycle (land with H10)
+
+Measured during a live event: of 65 NWS alerts in the store, **13 were still active at NWS; 21 superseded; 31 expired or cancelled** — including 2 Tornado and 5 Severe Thunderstorm warnings shown as live. 21 of the 65 carried timestamps up to 90 h in the future, which the triage bar renders as "now".
+
+1. `alert-normalizer.ts:120-137` — key on the event, not the CAP message: collapse via `references`, honour `messageType: Cancel`.
+2. Carry `expiresAt` (and `onset`/`ends`) as first-class `UnifiedAlert` fields so they survive persistence — `raw` is shed on persist.
+3. Add a source-scoped reconcile to `unifiedAlertStore` (it has no removal operation today).
+4. `alert-normalizer.ts:127` — use `sent`/`effective` as event time, not `onset`; `TriageBar.ts:295` — stop clamping negative age to "now".
+
+**Acceptance:** after a refresh, every stored NWS alert is in `/alerts/active`; no superseded version coexists with its replacement; a future-onset warning is labelled with its start time. The correct lifecycle logic already exists in `nws-polygon-match.ts:72-74` — reuse it.
 
 ### H11 — Fix GDACS (one word)
 

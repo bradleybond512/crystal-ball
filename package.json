@@ -168,6 +168,7 @@
     "test:emergency-readiness": "tsx --import ./tests/panels/register-hook.mjs --test src/services/survival/__tests__/snapshot-store.test.mts src/services/lifelines/__tests__/lifeline-runtime.test.mts src/components/__tests__/emergency-readiness-view.test.mts src/components/__tests__/emergency-readiness-panel.test.mts tests/emergency-readiness-panel-wiring.test.mjs",
     "test:components": "tsx --test src/components/__tests__/disease-outbreak-tabs.test.mts src/components/__tests__/space-weather-panel.test.mts",
     "test:alerts": "tsx --test src/services/alerts/__tests__/ipaws-monitor.test.mts",
+    "test:alert-loop": "tsx --test src/services/__tests__/alert-loop.test.mts",
     "test:crypto": "tsx --test src/services/crypto/__tests__/bitcoin-abuse-service.test.mts src/services/market/__tests__/crypto-fusion-observations.test.mts",
     "test:fx": "tsx --test src/services/market/__tests__/fx-fusion.test.mts",
     "test:netwatch": "tsx --test src/services/netwatch/__tests__/outage-fusion-observations.test.mts",

@@ -74,6 +74,33 @@ function refreshDomainLevels(): void {
   }
 }
 
+/** A compound absent for longer than this ends its episode; a recurrence gets a new alert. */
+const EPISODE_GAP_MS = 3 * SCAN_MS;
+const compoundEpisodes = new Map<string, { start: number; lastSeen: number }>();
+
+/**
+ * Stable alert id for one continuous episode of a compound threat.
+ *
+ * The previous id embedded a 5-minute time bucket, so a compound that
+ * persisted for hours minted a new alert — and a new critical notification —
+ * on every scan (measured: 47 "Cascading Infrastructure Failure" alerts in
+ * 246 minutes). Reusing the episode's start time keeps one alert that updates
+ * in place (ingest() preserves ack/pin state), while a compound that clears
+ * for longer than EPISODE_GAP_MS and then recurs is surfaced as new rather
+ * than silently inheriting an old acknowledgement.
+ */
+export function compoundEpisodeId(
+  domainsKey: string,
+  now: number,
+  registry: Map<string, { start: number; lastSeen: number }> = compoundEpisodes,
+  gapMs: number = EPISODE_GAP_MS,
+): string {
+  const prev = registry.get(domainsKey);
+  const start = prev && now - prev.lastSeen <= gapMs ? prev.start : now;
+  registry.set(domainsKey, { start, lastSeen: now });
+  return `compound-${domainsKey}-${start}`;
+}
+
 function ingestCompoundAlerts(): void {
   refreshDomainLevels();
   const compounds = detectCompoundThreats();
@@ -84,7 +111,7 @@ function ingestCompoundAlerts(): void {
       const sortedDomains = [...c.domains].sort((a, b) => a.localeCompare(b));
       const recLines = c.recommendations.map(r => `• ${r}`).join('\n');
       return {
-        id: `compound-${sortedDomains.join('-')}-${Math.floor(c.detectedAt / 300_000)}`,
+        id: compoundEpisodeId(sortedDomains.join('-'), Date.now()),
         source: 'correlation' as const,
         severity: RISK_TO_SEVERITY[c.escalationRisk],
         title: c.title,

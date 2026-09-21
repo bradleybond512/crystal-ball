@@ -33,6 +33,25 @@ export function classifyDomain(signalType: string): SituationDomain {
   return SIGNAL_DOMAIN_MAP[signalType] ?? 'compound';
 }
 
+const SITUATION_DOMAINS: ReadonlySet<string> = new Set<SituationDomain>([
+  'military', 'economic', 'natural_hazard', 'cyber',
+  'infrastructure', 'health', 'civil_unrest', 'compound',
+]);
+
+/**
+ * The domain a signal belongs to. Prefers an explicit, valid `domainHint`
+ * (set for signals synthesised from unified alerts, whose true domain the
+ * SignalType vocabulary cannot express) and otherwise classifies by type.
+ * Every place the correlator decides a signal's domain must go through here,
+ * or a hinted signal is labelled one way when clustered and another when
+ * summarised.
+ */
+export function signalDomainOf(signal: CorrelationSignalCore): SituationDomain {
+  const hint = signal.data?.domainHint;
+  if (hint && SITUATION_DOMAINS.has(hint)) return hint as SituationDomain;
+  return classifyDomain(signal.type);
+}
+
 // ── Signal → Geo ─────────────────────────────────────────────────────────────
 
 interface SignalGeo {
@@ -92,14 +111,10 @@ function computeAffinity(
   score += temporalProximity * 0.25;
 
   // 3. Domain affinity
-  const signalDomain = classifyDomain(signal.type);
+  const signalDomain = signalDomainOf(signal);
   const domainMatch = signalDomain === situation.domain || signalDomain === 'compound';
-  if (domainMatch) {
- score += 0.2;
-  } else {
- // Cross-domain signals are weaker match but more significant if they match
- score += 0.05;
-  }
+  // Cross-domain signals are a weaker match but more significant if they match.
+  score += domainMatch ? 0.2 : 0.05;
 
   // 4. Entity/keyword overlap
   const signalEntities = new Set([
@@ -142,7 +157,11 @@ function generateTitle(domain: SituationDomain, geo: SituationGeo, signals: Situ
   const domainLabel = DOMAIN_LABELS[domain];
 
   // Use the highest-confidence signal's title as a hint
-  const top = signals.sort((a, b) => b.confidence - a.confidence)[0];
+  // Rank a copy: sorting `signals` in place reordered the caller's array
+  // (the situation's own signal list) as a side effect of building a title.
+  const ranked = [...signals];
+  ranked.sort((a, b) => b.confidence - a.confidence);
+  const top = ranked[0];
   if (top && top.title.length < 80) {
  return top.title;
   }
@@ -152,7 +171,9 @@ function generateTitle(domain: SituationDomain, geo: SituationGeo, signals: Situ
 function generateSummary(signals: SituationSignalSnapshot[], domain: SituationDomain): string {
   const types = [...new Set(signals.map(s => s.type))];
   const count = signals.length;
-  return `${count} correlated ${DOMAIN_LABELS[domain].toLowerCase()} signal${count === 1 ? '' : 's'} detected: ${types.slice(0, 3).join(', ')}${types.length > 3 ? ` (+${types.length - 3} more)` : ''}.`;
+  const more = types.length > 3 ? ` (+${types.length - 3} more)` : '';
+  const plural = count === 1 ? '' : 's';
+  return `${count} correlated ${DOMAIN_LABELS[domain].toLowerCase()} signal${plural} detected: ${types.slice(0, 3).join(', ')}${more}.`;
 }
 
 // ── Situation Phase Logic ────────────────────────────────────────────────────
@@ -218,7 +239,9 @@ export function matchCausalChain(signals: SituationSignalSnapshot[]): CausalTemp
   // Majority domain of the signal set — used to penalise cross-domain template matches.
   const domainCounts: Partial<Record<SituationDomain, number>> = {};
   for (const s of signals) {
-    const d = classifyDomain(s.type);
+    // Snapshots carry the domain decided at ingest (signalDomainOf), which
+    // honours domainHint; re-deriving from `type` here would undo it.
+    const d = s.domain ?? classifyDomain(s.type);
     domainCounts[d] = (domainCounts[d] ?? 0) + 1;
   }
   let majorityDomain: SituationDomain = 'compound';
@@ -248,6 +271,7 @@ export function matchCausalChain(signals: SituationSignalSnapshot[]): CausalTemp
 
 // ── Main Correlator API ──────────────────────────────────────────────────────
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (identical on main @ 7230cef6); this fix only swaps one classifyDomain call for signalDomainOf. Refactor tracked separately.
 export function correlateSignalToSituation(
   signal: CorrelationSignalCore,
   existingSituations: Situation[],
@@ -255,7 +279,7 @@ export function correlateSignalToSituation(
 ): { situationId: string; isNew: boolean } {
   const now = Date.now();
   const signalTs = signal.timestamp instanceof Date ? signal.timestamp.getTime() : Number(signal.timestamp);
-  const signalDomain = classifyDomain(signal.type);
+  const signalDomain = signalDomainOf(signal);
   const signalGeo = extractSignalGeo(signal);
 
   // Find best matching active situation
@@ -354,7 +378,7 @@ export function correlateSignalToSituation(
  const toPrune = prunable[0];
  if (toPrune) {
  const idx = existingSituations.indexOf(toPrune);
- if (idx >= 0) existingSituations.splice(idx, 1);
+ if (idx !== -1) existingSituations.splice(idx, 1);
  }
   }
 

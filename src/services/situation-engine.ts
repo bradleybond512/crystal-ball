@@ -17,6 +17,7 @@ import type { EvidencePack } from './evidence-pack';
 import type { UnifiedAlert } from './unified-alerts';
 import type {
   Situation,
+  SituationDomain,
   SituationEngineConfig,
   SituationSignalSnapshot,
   VerificationVerdict,
@@ -34,6 +35,47 @@ import { personalizeSituation } from './situation-personalizer';
 type SituationListener = (situations: Situation[]) => void;
 
 // ── Engine ────────────────────────────────────────────────────────────────────
+
+/**
+ * The situation domain an alert source actually belongs to. Used as the
+ * pseudo-signal's `domainHint` so the correlator does not classify a weather
+ * or seismic alert by the placeholder signal type it is carried on
+ * (nws -> keyword_spike -> civil_unrest, gdacs -> geo_convergence -> military).
+ * Sources with no clear single domain return undefined and fall back to the
+ * type mapping, preserving previous behaviour for them.
+ */
+export function domainHintForAlertSource(source: string): SituationDomain | undefined {
+  switch (source) {
+    case 'nws':
+    case 'spc':
+    case 'cyclone':
+    case 'gdacs':
+    case 'tsunami':
+    case 'volcano':
+    case 'earthquake':
+    case 'fire':
+    case 'hazard':
+    case 'space-weather': { return 'natural_hazard';
+    }
+    case 'cyber':
+    case 'local-ids': { return 'cyber';
+    }
+    case 'power-grid':
+    case 'comms-health':
+    case 'resource':
+    case 'aviation-hazard':
+    case 'maritime': { return 'infrastructure';
+    }
+    case 'disease':
+    case 'air-quality':
+    case 'radiation': { return 'health';
+    }
+    case 'oref': { return 'military';
+    }
+    default: { return undefined;
+    }
+  }
+}
 
 export class SituationEngine {
   private situations: Situation[] = [];
@@ -94,6 +136,7 @@ export class SituationEngine {
  explanation: alert.title,
  placeIds: alert.location ? [alert.location.label ?? ''] : [],
  placeSummary: alert.location?.label ?? undefined,
+ domainHint: domainHintForAlertSource(alert.source),
  },
  };
   }

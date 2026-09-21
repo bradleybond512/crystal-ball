@@ -143,6 +143,14 @@ export interface CorrelationSignalCore {
  correlatedEntities?: string[];
  correlatedNews?: string[];
  explanation?: string;
+ /**
+  * Authoritative situation domain for signals synthesised from unified
+  * alerts. The engine's SignalType vocabulary has no weather or seismic
+  * types, so without this a Flood Warning is classified by its pseudo
+  * signal type (keyword_spike -> civil_unrest). When present and valid,
+  * the correlator uses it instead of classifyDomain(type).
+  */
+ domainHint?: string;
  term?: string;
  baseline?: number;
  multiplier?: number;

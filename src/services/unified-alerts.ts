@@ -123,6 +123,23 @@ function sanitizeHydratedAlert(entry: HydratableUnifiedAlert): UnifiedAlert {
 }
 
 const STORAGE_KEY = 'wm-unified-alerts-v1';
+/**
+ * One-time migration flag: drop situation-engine echoes persisted before the
+ * feedback-loop fix (see situation-feed.ts isEngineInput). Versioned so it
+ * runs exactly once per installation.
+ */
+const LOOP_ECHO_PURGE_KEY = 'cb-alert-loop-echo-purge-v1';
+
+/**
+ * Hydrated alerts dropped by the one-time purge. Every `correlation` alert is
+ * derived — situations, compounds, synthesis — and a store saved before the
+ * fix is dominated by echoes of it. Legitimate derived alerts are regenerated
+ * from real signals within minutes, so dropping all of them is safe; pinned
+ * alerts are kept because pinning is an explicit operator decision.
+ */
+export function isPrePurgeLoopEcho(alert: Pick<UnifiedAlert, 'source' | 'pinned'>): boolean {
+  return alert.source === 'correlation' && !alert.pinned;
+}
 const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
 const PRUNE_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours
@@ -511,9 +528,13 @@ class UnifiedAlertStore {
       if (!Array.isArray(parsed)) return; // corrupted — start fresh
       const now = Date.now();
       const loaded: UnifiedAlert[] = [];
+      let purgeEchoes = false;
+      try { purgeEchoes = localStorage.getItem(LOOP_ECHO_PURGE_KEY) !== '1'; } catch { /* storage unavailable — skip purge */ }
+      let purged = 0;
       for (const entry of parsed) {
         if (!isValidUnifiedAlertEntry(entry)) continue; // skip malformed entries
         const alert = sanitizeHydratedAlert(entry);
+        if (purgeEchoes && isPrePurgeLoopEcho(alert)) { purged++; continue; }
         if (alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS) {
           this.alerts.set(alert.id, alert);
           loaded.push(alert);
@@ -521,6 +542,12 @@ class UnifiedAlertStore {
       }
       // Re-compute distances with current user location
       stampDistances(loaded);
+      if (purgeEchoes) {
+        try { localStorage.setItem(LOOP_ECHO_PURGE_KEY, '1'); } catch { /* best-effort */ }
+        // Persist the cleaned store so a crash before the next ingest cannot
+        // resurrect the purged echoes (the flag is already set).
+        if (purged > 0) this.scheduleFlush();
+      }
     } catch { /* corrupted — start fresh */ }
   }
 }

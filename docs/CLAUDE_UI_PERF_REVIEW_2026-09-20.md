@@ -15,6 +15,9 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
+| H10 | **High** | Alert feedback loop: 286 of 289 "critical" alerts are correlation echoes of weather warnings, labelled civil unrest | Correctness |
+| H11 | **High** | GDACS silently down: `/MAP` now returns HTTP 400; `/SEARCH` works with the same schema | Correctness |
+| M12 | Medium | Renderer aborts RSS at 15 s; sidecar allows 12–20 s *per hop* — 323 of 323 proxy failures are aborts | Perf |
 | H1 | High | Notification stack can consume the whole viewport and push all content off-screen | Layout |
 | H2 | High | Six fixed surfaces pin to `--below-banners` but nothing reserves space for them | Layout |
 | H3 | High | 110 of 285 timer-bearing panels bypass the visibility gate; 29 fetch while off-screen | Perf |
@@ -695,8 +698,105 @@ The sidecar starts with no provider keys and receives them about four seconds la
 
 One design note deserves credit: `runtime-config.ts:1388-1394` deliberately skips the JS→sidecar secret push at boot because a foreign process squatting port 46123 would otherwise receive every secret and the bearer token. That is precisely the attack my round-4 port hypothesis implied, already considered and defended.
 
+---
+
+## Round 7 — high-value targets
+
+Chosen by expected payoff rather than coverage, and checked against the global runtime patches before anything was filed (the round-6 lesson). One candidate finding was dropped during that check and is recorded at the end.
+
+### H10 — A feedback loop turns weather warnings into "critical civil unrest" and floods the alert store
+
+**This is the direct cause of the symptom that started this review.** The original screenshot showed `SEVERE WEATHER · 99+ crit · 99+ high`, `Situation Awareness 277 unreviewed`, and the line *"11 correlated civil unrest signals detected: keyword_spike, convergence."* — during a flood and gale event.
+
+**Measured, from the installed app's live alert store** (`wm-unified-alerts-v1`):
+
+```
+alerts stored                 500   (the MAX_ALERTS cap — full)
+  critical                    289
+    from source 'correlation' 286
+    from source 'nws'           2
+  all 500 unacknowledged
+alerts from 'correlation'     429   (86% of the store)
+alerts from 'nws'              65   (NWS itself rated them: 30 medium, 33 high, 2 critical)
+```
+
+And the duplication:
+
+```
+"Flood Warning"                    71 alerts, 71 distinct ids, median gap 0 s
+   ids: sit-sit-muaheaov-33, -34, -35 …   (one timestamp, a counter climbing)
+   body: "1 correlated civil unrest signal detected: keyword_spike."
+"FLOODING — Dubuque, IA"           31 alerts in 5 minutes, median gap 0 s
+   body: "1 correlated civil unrest signal detected: convergence."
+"Cascading Infrastructure Failure" 47 alerts, sequential ids …5966456, 457, 458
+```
+
+**The loop, traced through the code:**
+
+1. `src/services/situation-feed.ts:28-32` subscribes to the unified alert store and passes **every alert with a new id** to `situationEngine.observeAlerts()`. There is no source filter.
+2. `situation-engine.ts:~68-76` turns each critical/high alert into a pseudo-signal. `alertSourceToSignalType()` (`:102-107`) maps `nws → 'keyword_spike'` and **everything else — including `'correlation'` — to `'convergence'`**.
+3. `situation-types.ts` `SIGNAL_DOMAIN_MAP` hardcodes `keyword_spike → 'civil_unrest'` and `convergence → 'civil_unrest'`. So a Flood Warning becomes a civil-unrest signal, and the situation's summary is generated from that domain (`situation-correlator.ts:155`), which is where *"civil unrest signal detected"* comes from.
+4. The situation engine mints a **new** situation per signal via `nextSituationId()` (`situation-store.ts:37-40`) rather than merging into the existing one for the same event.
+5. `situation-alert-bridge.ts` promotes active situations to alerts with `severity: 'critical'` when confidence ≥ 0.75. The pseudo-signal for a critical alert carries confidence 0.85. So the output is `critical`, `source: 'correlation'`, with a **new** id.
+6. That new id is "new" to step 1. **The engine consumes its own output.**
+
+The bridge's comment says ids are stable "so updates replace, not duplicate" — and the bridge is correct. The id instability comes from step 4, one level up, and it is what lets the loop run: a stable id would stop at step 1.
+
+**Consequences:**
+
+- The triage signal is meaningless during precisely the events it exists for. "99+ critical" was ~2 real critical alerts and ~286 echoes.
+- **It crowds out real alerts.** The store holds 500 and evicts by age; 86% of it is echoes, so genuine NWS alerts are the ones being pushed out.
+- **It mislabels severe weather as civil unrest** in a tool built for crisis awareness.
+- It is the loop that `unified-alerts.ts:130-136` describes ("several re-ingest from their callback — a feedback loop"). The 100 ms throttle added there paces the loop; it does not stop it. M7's fan-out cost is this loop's cost.
+
+**Suggested fix, in order of leverage:**
+
+1. `situation-feed.ts`: exclude derived sources (`correlation`, and any other bridge output) from `observeAlerts`. This alone breaks the loop.
+2. `alertSourceToSignalType`: map weather sources to a natural-hazard signal type, not `keyword_spike`; stop defaulting unknown sources to a civil-unrest type.
+3. Merge situations for the same underlying event (source alert id, or title + geo cell) instead of minting one per signal.
+
+**Acceptance:** during a flood event, `correlation`-sourced alerts do not outnumber their source alerts; no alert body names a domain unrelated to its title; the critical count in the summary strip matches the critical count in the source feeds to within the situations genuinely synthesized.
+
+### H11 — GDACS has been silently down: the API now rejects the request the app sends
+
+`src/services/gdacs.ts:92` calls `https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP` with no parameters. Reproduced against the live API:
+
+```
+GET …/geteventlist/MAP                             HTTP 400  {"message":"Eventtype is required."}
+GET …/geteventlist/MAP?eventtypes=&alertlevel=…    HTTP 400  (same)
+GET …/geteventlist/MAP?eventtypes=EQ,TC,FL,VO,DR,WF HTTP 400  (same)
+GET …/geteventlist/MAP?eventlist=EQ;TC;FL;VO;DR;WF HTTP 400  (same)
+GET …/geteventlist/SEARCH                          HTTP 200  137 KB GeoJSON FeatureCollection
+GET …/geteventlist/SEARCH?eventlist=…&alertlevel=Orange;Red  HTTP 200  96 features
+```
+
+GDACS changed its API contract; `/MAP` fails in every form tried. `/SEARCH` returns the same GeoJSON shape, and every field `parseGDACSResponse` reads is present — `eventid`, `eventtype`, `alertlevel`, `name`, `fromdate`, `severitydata`, `url`, `country` — across all six event types (DR, EQ, FL, TC, VO, WF).
+
+This is the "654 failures on HTTP 400" from M8, root-caused. GDACS is the global disaster feed — earthquakes, cyclones, floods, volcanoes — and `gdacsAlerts` is in the boot-critical wave. Its circuit breaker is configured with `persistCache: true`, so for as long as this has been broken the app has been serving a cached snapshot or nothing, with no user-visible signal that the source is dead. `src/services/api-diagnostic.ts:94` probes the same broken URL, so the diagnostic has been reporting the failure correctly the whole time; nothing acted on it.
+
+**Fix:** change `MAP` to `SEARCH` at `gdacs.ts:92`, optionally with `?eventlist=EQ;TC;FL;VO;DR;WF&alertlevel=Orange;Red` (the code already drops Green client-side). Update `api-diagnostic.ts:94` to match. A contract test that asserts the endpoint returns a FeatureCollection would have caught this on day one.
+
+### M12 — Timeout budgets are inverted between the renderer and the RSS proxy
+
+- The renderer's news fetch (`rss.ts` → `fetchWithProxy(url)`) passes no signal, so the runtime patch applies its **15 s** default.
+- The sidecar's `/api/rss-proxy` (`local-api-server.mjs:15729`) allows **20 s** for `news.google.com` and 12 s otherwise — **per redirect hop**, because `fetchWithTimeout` is called fresh inside the manual-redirect loop, which allows up to 3 redirects. Worst case at the sidecar is 4 × 20 s = 80 s.
+
+233 of the 431 RSS feeds in `src/config/feeds.ts` go through Google News. The renderer therefore always gives up before the sidecar does: the sidecar keeps fetching for a caller that has already left, and a slow feed never returns a clean `504 Feed timeout` — it becomes an anonymous abort. The log agrees exactly: **all 323 logged rss-proxy failures are aborts, and none is the sidecar's own 504.** 136 of them (42%) name Google News.
+
+**Fix:** make the sidecar's budget a total across hops, and set it below the renderer's (e.g. 12 s total, renderer 15 s), so the sidecar always answers first with a classifiable error. This also gives M4 a real signal to surface: "feed timed out" instead of "aborted".
+
+**Related, lower severity:** the proxy reads the upstream body with `await response.text()` and no size cap. Behind the bearer token and with URLs from the app's own feed list this is a robustness issue rather than an exploit, but one oversized or broken feed is buffered whole into sidecar memory. A byte cap on the read would close it.
+
+### Checked and cleared — the proxy's SSRF defense is solid
+
+`/api/rss-proxy` validates every URL with `isSafeUrl()` (private ranges plus DNS-rebinding resolution), pins the resolved IPv4 address for the first hop, follows redirects manually, re-validates each hop's target, and caps redirects at three. For an endpoint that fetches arbitrary URLs by design, that is the right shape.
+
+### Dropped during verification — "the news feeds get no bearer token"
+
+`src/config/feeds.ts:6` builds RSS URLs as absolute `http://127.0.0.1:46123/api/rss-proxy?…`. An absolute URL takes the fetch patch's passthrough branch unless it is recognised as app-origin, and the passthrough branch attaches the timeout but **not** the `Authorization` header — which would have meant every news feed receiving the same 401 my unauthenticated curl got. It does not happen: `127.0.0.1` is in `APP_HOSTS` (`runtime.ts:145-153`), so the URL is intercepted and the token is attached. Recorded so nobody re-derives it.
+
 ## Method and limits
 
-Six rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, and one that re-read the runtime patches and retracted or downgraded three earlier findings — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
+Seven rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, one that re-read the runtime patches and retracted or downgraded three earlier findings, and one aimed at high-value targets using the live alert store and the live GDACS API — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

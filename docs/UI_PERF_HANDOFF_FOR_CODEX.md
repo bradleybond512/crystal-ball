@@ -81,7 +81,9 @@ Measured consequence, from the app's own log across all retained runs: `news` ha
 
 **The port hypothesis was tested and is dead.** An earlier draft suggested a default-port-vs-fallback-port mismatch behind the sidecar failures. Checked against the running app: the sidecar listens on `127.0.0.1:46123`, exactly what the renderer targets, and answers `/api/health` in 3.5 ms. Sidecar stalls and renderer-watchdog reloads were also eliminated (see "Round 5 — the sidecar investigation" in the review doc). Do not re-chase any of the three.
 
-**What the investigation did find — H9, and it is a separate task from P0.** Twenty call sites call `fetch('/api/…')` with a relative path, skipping `proxyUrl()`/`toRuntimeUrl()`. Under Tauri those resolve to `tauri://localhost/api/…`, the app's asset origin, never the sidecar. Fifteen of them target real sidecar routes, so maritime vessels, dark vessels, freight stress, ACLED events, CDC ARI, supply-chain BDI, the SMS settings panel and the local agent monitor cannot reach their data in the desktop build at all. Mechanical fix, plus a lint rule banning a literal `/api/` first argument to `fetch(` outside `src/utils/proxy.ts`.
+**H9 is retracted — do not work on it.** An earlier round claimed 20 relative `fetch('/api/…')` calls never reach the sidecar. They do: `installRuntimeFetchPatch()` (`runtime.ts:263`) rewrites any `/api/*` target to the sidecar base URL and attaches the bearer token. Those call sites are a consistency wart, not a broken feature.
+
+**Deadlines are already handled.** The same patch gives every fetch without a caller signal `AbortSignal.timeout(15_000)`. So P0's second mechanism as first written was wrong: the fix is the awaiting, not the deadlines. A 40 s `news` refresh is a few bounded attempts in sequence (local attempt, `fetchLocalWithStartupRetry` up to 4 tries, cloud fallback), which is what you are actually unwinding.
 
 **Direction, not a prescription:**
 
@@ -118,7 +120,7 @@ Full evidence for each is in the review doc; these are the one-line versions wit
 | H1 | Notification stack can grow to full viewport height and push all content off-screen | `NotificationStack.ts:34`, `main.css:908` |
 | H2 | Six fixed surfaces pin to `--below-banners`; nothing reserves space for them | `main.css:15439, 19123, 19251, 19679, 19318` |
 | H3 | 110 of 285 timer-bearing panels bypass the visibility gate; 29 also fetch off-screen | `Panel.ts:1114` |
-| H4 | 248 of 463 `fetch()` sites have no timeout (the P0 root cause) | `data-loader.ts`, then panels |
+| ~~H4~~ | RETRACTED as a High: the desktop fetch patch supplies a 15 s default to every call | `runtime.ts:311-325` |
 | M7 | Alert fan-out throttled in frequency, not cost: 13 of 26 subscribers re-derive from 500 alerts | `unified-alerts.ts:444` |
 | M1 | 58 panels share an identical 30 s cadence with no jitter | `REFRESH_MS` constants |
 | M4 | 1020 of 2214 catch blocks silent; 170 log anything | repo-wide |
@@ -127,7 +129,9 @@ Full evidence for each is in the review doc; these are the one-line versions wit
 | M3 | Battery cadence multiplier reaches no panels | `adaptive-cadence.ts:41` |
 | L1 | `channel.handle` unescaped into an `href` | `LiveNewsPanel.ts:936` |
 | L2 | Six interval callbacks persist on every tick | listed in review |
-| H9 | 20 relative `/api/…` fetches never reach the sidecar in desktop; 15 hit real routes | `MaritimeIntelPanel.ts:220`, `SmsSettingsPanel.ts:60` |
+| ~~H9~~ | RETRACTED: the fetch patch routes them correctly | — |
+| M11 | 6 of 38 API keys invalid incl. boot-critical `NEWSAPI_KEY`; nothing re-validates | Settings key-status |
+| M10 | `tools/mcp-server` and two other lockfiles are outside every audit gate | `security-audit.yml:22` |
 | L3 | Critical posture banner has no `role`/`aria-live` | `panel-layout.ts:1153` |
 
 **One more observation from the measurement, not yet a finding:** the installed app's localStorage WAL is **74 MB** (`localstorage.sqlite3-wal`), with an 8 MB main database and an older 61 MB WAL in a `LocalStorage.backup.*` directory. Given the documented history of quota exhaustion, someone should establish what is writing that much and whether the backup directories are ever reclaimed. I did not investigate; treat it as a lead, not a conclusion.

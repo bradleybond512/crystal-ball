@@ -15,11 +15,11 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
-| H15 | **High** | Alert-loop echoes become sticky critical notifications that bypass quiet hours and rate limits — **confirmed by operator** | Notifications |
+| H15 | **High** — **fix in PR #1732** | Alert-loop echoes become sticky critical notifications that bypass quiet hours and rate limits — **confirmed by operator** | Notifications |
 | H14 | **High** | NWS warnings on triage/inbox/strip are a boot snapshot: no scheduled ingest, no freshness record — 76 alerts behind live | Detection |
 | H12 | **High** | 80% of displayed NWS warnings are stale — 52 of 65 expired, cancelled or superseded, incl. 2 tornado warnings | Correctness |
 | H13 | **High** | Future-onset warnings (up to +90 h) render as "now" and outlive their expiry | Display |
-| H10 | **High** | Alert feedback loop: 286 of 289 "critical" alerts are correlation echoes of weather warnings, labelled civil unrest | Correctness |
+| H10 | **High** — **fix in PR #1732** | Alert feedback loop: 286 of 289 "critical" alerts are correlation echoes of weather warnings, labelled civil unrest | Correctness |
 | H11 | **High** | GDACS silently down: `/MAP` now returns HTTP 400; `/SEARCH` works with the same schema | Correctness |
 | M12 | Medium | Renderer aborts RSS at 15 s; sidecar allows 12–20 s *per hop* — 323 of 323 proxy failures are aborts | Perf |
 | H1 | High | Notification stack can consume the whole viewport and push all content off-screen | Layout |
@@ -967,6 +967,22 @@ Put together with H10: a single flood warning re-emitted 71 times at a median ga
 
 - **"A single global 30-second native limiter lets echoes suppress real warnings."** `src-tauri/src/main.rs:1556-1570` does have one global 30 s window in `send_notification`, which silently returns `Ok(())` when suppressed. But `sendTauriNotification()` never calls that command — it falls through to `sendWebNotification()` (`notification-dispatcher.ts:398-401`). The limiter is not on this path.
 - **"The site has no UGC zones, so zone-only warnings are missed."** True of the persisted record, false at runtime (see above).
+
+---
+
+## Status update — H10 and H15 fixed in PR #1732
+
+Implemented the same night at the operator's request, because H15 was actively producing sticky critical notifications. Verified on the operator's installation during the live event (full numbers in the PR comment):
+
+- critical `correlation` alerts **281 → 4**, all four legitimate (real military-surge signals, two Tornado Warnings)
+- "civil unrest" bodies **405 → 0**; persisted situations now 18 `natural_hazard`, 1 `military`, 1 `health`
+- **no correlation alert created after boot** across a 22-minute window — the loop does not run
+
+Beyond the plan in round 7, verification exposed two gaps that are also fixed: the situation engine persists open situations and re-promoted a pre-fix one after the alert purge (now purged too), and both purges recorded their migration flag after an early return (would have purged legitimate data on a later boot).
+
+**Residual for Codex:** the boot-time seed still produces ~92 derived alerts in one burst — one situation per 1–3 NWS alerts, amplified by H12's duplicate CAP messages, with evicted situations leaving their alerts behind. That is not the loop; H14 + H12 (event-keyed, scheduled NWS ingest) is what shrinks it.
+
+**Interim mitigation can be reverted:** with the loop closed, the Cyber notification domain can be re-enabled.
 
 ## Method and limits
 

@@ -79,7 +79,9 @@ Measured consequence, from the app's own log across all retained runs: `news` ha
 
 **Read that figure precisely.** `Slow refresh` is logged only above a 15 s threshold (`refresh-scheduler.ts:115`), so these are breach episodes and their median, not the median refresh. An earlier draft of this section called it "median refresh duration", which was wrong. What the data supports is that a boot-critical source breaches 15 s hundreds of times and runs to 40 s when it does; what it cannot tell you is how often `news` is fast, because fast refreshes are never logged. Maxima run to hundreds of seconds but are contaminated by sleep/wake.
 
-**Likely upstream, worth checking first:** the failing sidecar calls in the log include `http://127.0.0.1:46123/api/rss-proxy?url=…`, which is the RSS proxy behind `news`. `runtime-config.ts:1392-1394` notes that callers build URLs from the default port 46123 while the sidecar may listen on an OS-assigned fallback port. If that mismatch is real, it would explain the sidecar burst alarms, the slow `news` refreshes and part of the boot wave together — check it before designing anything larger.
+**The port hypothesis was tested and is dead.** An earlier draft suggested a default-port-vs-fallback-port mismatch behind the sidecar failures. Checked against the running app: the sidecar listens on `127.0.0.1:46123`, exactly what the renderer targets, and answers `/api/health` in 3.5 ms. Sidecar stalls and renderer-watchdog reloads were also eliminated (see "Round 5 — the sidecar investigation" in the review doc). Do not re-chase any of the three.
+
+**What the investigation did find — H9, and it is a separate task from P0.** Twenty call sites call `fetch('/api/…')` with a relative path, skipping `proxyUrl()`/`toRuntimeUrl()`. Under Tauri those resolve to `tauri://localhost/api/…`, the app's asset origin, never the sidecar. Fifteen of them target real sidecar routes, so maritime vessels, dark vessels, freight stress, ACLED events, CDC ARI, supply-chain BDI, the SMS settings panel and the local agent monitor cannot reach their data in the desktop build at all. Mechanical fix, plus a lint rule banning a literal `/api/` first argument to `fetch(` outside `src/utils/proxy.ts`.
 
 **Direction, not a prescription:**
 
@@ -125,6 +127,7 @@ Full evidence for each is in the review doc; these are the one-line versions wit
 | M3 | Battery cadence multiplier reaches no panels | `adaptive-cadence.ts:41` |
 | L1 | `channel.handle` unescaped into an `href` | `LiveNewsPanel.ts:936` |
 | L2 | Six interval callbacks persist on every tick | listed in review |
+| H9 | 20 relative `/api/…` fetches never reach the sidecar in desktop; 15 hit real routes | `MaritimeIntelPanel.ts:220`, `SmsSettingsPanel.ts:60` |
 | L3 | Critical posture banner has no `role`/`aria-live` | `panel-layout.ts:1153` |
 
 **One more observation from the measurement, not yet a finding:** the installed app's localStorage WAL is **74 MB** (`localstorage.sqlite3-wal`), with an 8 MB main database and an older 61 MB WAL in a `LocalStorage.backup.*` directory. Given the documented history of quota exhaustion, someone should establish what is writing that much and whether the backup directories are ever reclaimed. I did not investigate; treat it as a lead, not a conclusion.

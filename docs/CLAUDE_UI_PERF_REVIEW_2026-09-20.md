@@ -33,6 +33,7 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | H8 | High | ~48k failed sidecar fetches (9,593 burst episodes); IPC degrades to postMessage 6x/boot | Runtime |
 | M8 | Medium | Chronic feed failure is warning-only: 19,812 WARN vs 91 ERROR | Observability |
 | M9 | Medium | localStorage at 6.1 MB ceiling; 292 MB IndexedDB; 64 MB orphaned WAL | Data |
+| H9 | High | 20 relative `/api/…` fetches never reach the sidecar in the desktop build | Correctness |
 | L3 | Low | The critical posture banner is never announced to a screen reader | A11y |
 
 Two issues of this family are already fixed in PR #1730 and are not re-listed: the summary strip's double sticky offset, and the critical posture banner living outside the stack.
@@ -528,8 +529,69 @@ So: `news` has breached 15 s **329 times**, and when it does, the median is 40 s
 
 **New lead tying H8 to P0.** The failing sidecar calls include `http://127.0.0.1:46123/api/rss-proxy?url=…` — the RSS proxy behind the `news` pipeline, and `news` is in the boot-critical wave. There is also a comment at `src/services/runtime-config.ts:1392-1394` noting that callers build URLs from a default port 46123 while the sidecar may be listening on an OS-assigned fallback port. If that mismatch is happening in practice it would explain the localhost bursts, the slow `news` refreshes and part of the 70–78 s first wave in one stroke. **This is a hypothesis, not a finding** — confirm by checking the sidecar's actual listening port against what the renderer requests during a session where bursts appear.
 
+---
+
+## Round 5 — the sidecar investigation
+
+The round-4 verification ended with a hypothesis: a default-port-vs-fallback-port mismatch explaining the sidecar failures, the slow `news` refreshes and part of the boot wave. That hypothesis is **wrong**. Chasing it turned up a different, concrete bug.
+
+### Disproved — there is no port mismatch
+
+With the app running:
+
+```
+lsof: node (pid 38117)  TCP 127.0.0.1:46123 (LISTEN)
+curl http://127.0.0.1:46123/api/health   ->  HTTP 200 in 3.5 ms
+curl .../api/rss-proxy?url=…             ->  HTTP 401 {"error":"Unauthorized"}
+```
+
+The sidecar is listening on exactly the port the renderer targets, and it answers its health check in single-digit milliseconds. The 401 is correct behaviour, not a fault: every route below `local-api-server.mjs:487` requires a `LOCAL_API_TOKEN` bearer, and my curl has no token. `getApiBaseUrl()` (`src/services/runtime.ts:100-111`) returns `http://127.0.0.1:${getLocalApiPort()}` in desktop and can never be empty, so the guarded call path resolves correctly too. **The port hypothesis is dead — do not spend time on it.**
+
+### Disproved — the sidecar is not wedging, and the renderer watchdog is not reloading
+
+Two more candidate explanations, both eliminated:
+
+- `sidecar heartbeat stale` appears **252 times** with 252 matching `heartbeat recovered` lines, which looks alarming until you measure the gaps: p50 **5 s**, p90 938 s, max 500,278 s (5.8 days). A 5.8-day "stall" is the app not running, not a hang. These are mostly sleep/close artifacts.
+- More decisively, they do not correlate with the failures. Of 2,483 aborted-fetch lines, **1% fall within ±60 s of a stale episode — exactly the 1% baseline** you would expect by chance given how much of the timeline sits near one. For the localhost bursts it is 0% against a 3% baseline.
+- The Rust renderer watchdog (`src-tauri/src/main.rs:4704`, reloads a webview with no heartbeat) fired **once** in ~23 days of logs. So H7's 278 boots are genuine launches, not watchdog reload loops — which also confirms the H7 sample is what it claims to be.
+
+### H9 — 20 relative `/api/…` fetches can never reach the sidecar in the desktop build
+
+This is what the investigation actually found.
+
+`proxyUrl()` / `toRuntimeUrl()` exist to turn `/api/x` into `http://127.0.0.1:46123/api/x` when running under Tauri. **20 call sites skip them and call `fetch('/api/…')` directly.** In the desktop webview `location.href` is `tauri://localhost/`, so a relative fetch resolves against the app's own asset origin — `tauri://localhost/api/…` — which is not the sidecar and never will be.
+
+**15 of those 20 target routes that genuinely exist on the sidecar:**
+
+```
+MaritimeIntelPanel.ts:220   /api/dark-vessels
+MaritimeIntelPanel.ts:233   /api/freight-stress
+MaritimeIntelPanel.ts:251   /api/acled-events
+MaritimeIntelPanel.ts:264   /api/maritime/vessels
+GlobeDataManager.ts:2129    /api/maritime/vessels
+MaritimeSuperpowerPanel.ts:180  /api/freight-stress
+DiseaseOutbreakPanel.ts:112 /api/cdc-ari
+SupplyChainDisruptionPanel.ts:93  /api/supplychain/bdi
+SmsSettingsPanel.ts:60/95/102/119  /api/sms/{config,status,command}
+S2UndergroundPanel.ts:131   /api/patreon/authorize-url
+s2-underground-media.ts:116 /api/patreon/audio-rss
+agent-monitor-projection.ts:122  /api/local-agent-monitor
+```
+
+The other five (`/api/floods/gauges`, `/api/floods/warnings`, `/api/intelligence/prioritized`, `/api/bootstrap`, `/api/ucdp-classifications`) have no matching sidecar route at all, so they fail for two reasons at once.
+
+Read plainly: **maritime vessel tracking, dark-vessel detection, freight stress, ACLED events, CDC respiratory-illness data, supply-chain BDI, the SMS settings panel and its command path, and the local agent monitor cannot reach their data in the installed desktop app.** Each failure is caught and rendered as an empty or stale panel — M4 again: a dead feature and a quiet day look identical.
+
+**The fix is mechanical:** route these through `fetchWithProxy()` or wrap the path in `toRuntimeUrl()`. The guard that would prevent regression is a lint rule banning a string literal starting `/api/` as the first argument to `fetch(` outside `src/utils/proxy.ts`.
+
+### What is still unexplained
+
+The ~48,000 failed fetches in the `localhost` bucket are **consistent** with H9 — that bucket is precisely the tauri origin — but not proven to be it. The burst line records only the host, never the path, and none of the fifteen paths above appears anywhere in the logs, so the attribution cannot be closed from existing evidence. Likewise the 2,483 aborted fetches now have no confirmed cause: not the watchdog, not sidecar stalls, and `fetchWithProxy` passes no `AbortSignal` of its own.
+
+**Next step, cheap and decisive:** add the pathname to the burst alarm (`log-bridge.ts:452-455` currently logs `host` only). One field turns ~48,000 anonymous failures into a named list, and would confirm or refute H9 in a single session.
+
 ## Method and limits
 
-Four rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
+Five rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar directly — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

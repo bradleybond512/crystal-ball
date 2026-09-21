@@ -30,7 +30,7 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 | M7 | Medium | Alert fan-out is throttled in frequency but costs O(subscribers x alerts) | Perf |
 | P0 | High | First data wave takes 70–78 s behind one boot-path `Promise.all` (measured) | Startup |
 | H7 | High | `panelLayout.init` p50 666 ms / p90 883 ms across 278 logged boots | Startup |
-| H8 | High | Sidecar fetch bursts 9,578x; Tauri IPC repeatedly degrades to postMessage | Runtime |
+| H8 | High | ~48k failed sidecar fetches (9,593 burst episodes); IPC degrades to postMessage 6x/boot | Runtime |
 | M8 | Medium | Chronic feed failure is warning-only: 19,812 WARN vs 91 ERROR | Observability |
 | M9 | Medium | localStorage at 6.1 MB ceiling; 292 MB IndexedDB; 64 MB orphaned WAL | Data |
 | L3 | Low | The critical posture banner is never announced to a screen reader | A11y |
@@ -424,7 +424,7 @@ M6 is no longer an argument: **666 ms at p50, 883 ms at p90**, every boot, const
 Across all retained logs:
 
 ```
-fetch failure burst: localhost            9578
+fetch failure burst: localhost            9593   (each line = >=5 failures in 5 min)
 fetch failure burst: 127.0.0.1:46123       301
 fetch failure burst: droughtmonitor.unl.edu 1926
 "IPC custom protocol failed, Tauri will now use
@@ -488,18 +488,45 @@ I am not filing this as a finding, because the maximum is 7,214,088 ms, which is
 
 ### Refresh durations, for context
 
-`SLOW_REFRESH_THRESHOLD_MS` is 15 s (`src/app/refresh-scheduler.ts:21`), so every line below is already past the app's own "this is slow" bar:
+`SLOW_REFRESH_THRESHOLD_MS` is 15 s (`src/app/refresh-scheduler.ts:21`) and the line is logged **only when a refresh breaches it**, so what follows counts breach episodes, not typical refreshes (see the verification pass below, which corrects an earlier misreading of exactly this):
 
 ```
-domain            n    p50        max
-stablecoins      240   40,139 ms   981,494 ms
-intelligence     262   31,079 ms   933,758 ms
-news             329   40,060 ms   849,251 ms
-etf-flows        264   40,138 ms   747,645 ms
-geo-intel        144   15,006 ms   622,597 ms
+domain        episodes >=15s   median of those   worst
+news                     329          40,060 ms   849,251 ms
+etf-flows                264          40,165 ms   747,645 ms
+intelligence             262          31,087 ms   933,758 ms
+stablecoins              240          40,158 ms   981,494 ms
+markets                  203          40,698 ms   487,250 ms
 ```
 
-Same sleep/wake caveat on the maxima. The medians are harder to dismiss: a 40-second median refresh for `news`, which is in the boot-critical set, is the P0 story repeating on every cycle.
+`news` and `intelligence` are both in the boot-critical wave. Maxima carry the sleep/wake caveat; the episode counts do not.
+
+### Round 4 verification pass
+
+Every round-4 number was re-checked against the emitters that produce it, because a log line that is only written when something is slow cannot be used to describe the typical case. One of my own figures failed that test.
+
+**Confirmed — H7 is sound.** `[BOOT-TIMING]` is emitted unconditionally on every non-E2E boot (`src/App.ts:441`, guarded only by `bootLayoutT > 0`), so it is not a slow-boot-only sample. Checking for rotation double-counting: of 122,144 distinct log lines across the live log and its three rotations, **zero appear in more than one file**. The 278 BOOT-TIMING lines are 278 distinct boots (73 + 89 + 49 + 67). `panelLayout.init` p50 **666 ms**, p90 883 ms, max 2209 ms stands as written.
+
+**Corrected — the "40 second median refresh" figure was wrong.** `Slow refresh` is logged only when `elapsed >= SLOW_REFRESH_THRESHOLD_MS` (15 s, `refresh-scheduler.ts:115`). The sample therefore contains only refreshes that already breached the threshold, and a median computed over it is the median *of slow refreshes*, not of refreshes. The correct statement:
+
+```
+domain        episodes >=15s   median of those   worst
+news                     329          40,060 ms   849,251 ms
+etf-flows                264          40,165 ms   747,645 ms
+intelligence             262          31,087 ms   933,758 ms
+stablecoins              240          40,158 ms   981,494 ms
+markets                  203          40,698 ms   487,250 ms
+```
+
+So: `news` has breached 15 s **329 times**, and when it does, the median is 40 s. What share of all `news` refreshes that represents is not recoverable from the log, because fast refreshes are never written. It remains strong evidence for the P0 direction — a boot-critical source routinely running 40 s with no deadline — but it is not a typical-case measurement, and the handoff has been corrected in place. The same selection bias applies to `[INPUT-LATENCY]`, which only fires above 500 ms (`log-bridge.ts:181`), which is why it was not filed as a finding.
+
+**Sharpened — H8 is worse and more specific than first stated.** Three details from the emitter (`log-bridge.ts:436-457`):
+
+1. The burst line fires only when a host reaches **exactly 5 failures inside a rolling 5-minute window**, and only after a 20 s startup grace that exists specifically to suppress panel-init races. So each line is one burst episode of at least five failures — 9,593 localhost lines means **at least ~48,000 failed fetches**, not 9,593.
+2. `host` comes from `new URL(url, location.href).host`. In the desktop webview `location.href` is `tauri://localhost`, so every **relative** fetch buckets as `localhost`. The app makes many (`/api/sms/config`, `/api/maritime/vessels`, `/api/freight-stress`, `/api/supplychain/bdi`, …) — these are sidecar API calls. The separate `127.0.0.1:46123` bucket (301 lines) is the absolute-URL path to the same sidecar.
+3. The IPC fallback is **not** a startup transient. Across the live log's 73 boots, 438 fallback lines is 6.0 per boot, and **330 of them occur more than 10 minutes into a session** (median 2,894 s after boot). The fast custom-protocol IPC path is degrading during steady-state operation.
+
+**New lead tying H8 to P0.** The failing sidecar calls include `http://127.0.0.1:46123/api/rss-proxy?url=…` — the RSS proxy behind the `news` pipeline, and `news` is in the boot-critical wave. There is also a comment at `src/services/runtime-config.ts:1392-1394` noting that callers build URLs from a default port 46123 while the sidecar may be listening on an OS-assigned fallback port. If that mismatch is happening in practice it would explain the localhost bursts, the slow `news` refreshes and part of the 70–78 s first wave in one stroke. **This is a hypothesis, not a finding** — confirm by checking the sidecar's actual listening port against what the renderer requests during a session where bursts appear.
 
 ## Method and limits
 

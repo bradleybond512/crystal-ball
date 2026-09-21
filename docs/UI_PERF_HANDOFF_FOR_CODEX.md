@@ -75,7 +75,11 @@ The real mechanism is two things the structure does not bound:
 1. **Both waves are fully awaited before `loadAllData()` resolves**, and the boot path awaits that. So boot completion waits for the slowest of ~105 deferred tasks, none of which any user is waiting on.
 2. **No task has a deadline.** `SLOW_REFRESH_THRESHOLD_MS` (`refresh-scheduler.ts:21`) is 15 s, but it only *warns*. In `data-loader.ts`, 10 of 12 `fetch` sites carry no `AbortSignal`, and none of `loadNews`, `loadMarkets`, `loadIntelligenceSignals`, `loadWeatherAlerts` — four of the eleven critical tasks — pass one.
 
-Measured consequence, from the app's own log across all retained runs: median refresh duration is **40.1 s for `news`** (n=329), 31.1 s for `intelligence` (n=262), 40.1 s for `stablecoins` (n=240). `news` and `intelligence` are both in the critical set, so wave 1 alone can plausibly account for 40 s of the 70–78 s. (Maxima in that data run to hundreds of seconds, but they are contaminated by sleep/wake — treat medians as the reliable figure.)
+Measured consequence, from the app's own log across all retained runs: `news` has exceeded 15 s on **329 separate refreshes**, `intelligence` on 262, `stablecoins` on 240 — and when they breach, the median is 40.1 s, 31.1 s and 40.2 s respectively. `news` and `intelligence` are both in the critical set, so wave 1 alone can plausibly account for 40 s of the 70–78 s.
+
+**Read that figure precisely.** `Slow refresh` is logged only above a 15 s threshold (`refresh-scheduler.ts:115`), so these are breach episodes and their median, not the median refresh. An earlier draft of this section called it "median refresh duration", which was wrong. What the data supports is that a boot-critical source breaches 15 s hundreds of times and runs to 40 s when it does; what it cannot tell you is how often `news` is fast, because fast refreshes are never logged. Maxima run to hundreds of seconds but are contaminated by sleep/wake.
+
+**Likely upstream, worth checking first:** the failing sidecar calls in the log include `http://127.0.0.1:46123/api/rss-proxy?url=…`, which is the RSS proxy behind `news`. `runtime-config.ts:1392-1394` notes that callers build URLs from the default port 46123 while the sidecar may listen on an OS-assigned fallback port. If that mismatch is real, it would explain the sidecar burst alarms, the slow `news` refreshes and part of the boot wave together — check it before designing anything larger.
 
 **Direction, not a prescription:**
 

@@ -15,6 +15,7 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
+| H15 | **High** | Alert-loop echoes become sticky critical notifications that bypass quiet hours and rate limits | Notifications |
 | H14 | **High** | NWS warnings on triage/inbox/strip are a boot snapshot: no scheduled ingest, no freshness record — 76 alerts behind live | Detection |
 | H12 | **High** | 80% of displayed NWS warnings are stale — 52 of 65 expired, cancelled or superseded, incl. 2 tornado warnings | Correctness |
 | H13 | **High** | Future-onset warnings (up to +90 h) render as "now" and outlive their expiry | Display |
@@ -911,6 +912,59 @@ A side effect worth knowing: because the only way to re-run `loadNWSAlerts()` is
 ### Detection latency, for the record
 
 Even the scheduled path polls NWS every 10 minutes ±10%. Tornado warnings commonly give lead times on the order of ten minutes, so a warning can be issued and much of its lead time used up before the next poll. The storm-mode path should poll considerably faster during active weather (the refresh scheduler already supports per-source intervals), or subscribe to a push source.
+
+### Round 9 scans — own site, earthquakes, notifications
+
+Three scans aimed at impact on the operator personally, run during the same live event.
+
+#### Clean — the site and saved-place weather posture is correct, and that matters
+
+The data-center strip read *"New Carlisle AWS · Watch · rising rivers + extended-duration flooding"*. Against the live NWS API at the same moment: nothing is active at the site's point or at the Home point, and there is **one** active warning nearby — a **Severe** river Flood Warning whose polygon lies **30.7 km** from the site and whose affected zones include the site's own county. "Watch" is a defensible tier for a river flood 30 km away.
+
+The path behind it is sound in the ways the triage path is not:
+
+- It uses `matchAlertToPlace()` (`nws-polygon-match.ts`), which honours `messageType`, `references`, cancellation and `expires`.
+- It resolves the site's UGC zones at runtime (`data-loader.ts:1861-1876`) so zone-only products (winter storm, heat, high wind, and many flood products) can match. A persisted saved-place record carries no zones, which briefly looked like a gap; the runtime resolution closes it.
+- `fetchUgcZonesForPoint()` (`weather.ts:589-600`) deliberately **throws** on ambiguous failures and returns `[]` only on a genuine 404, specifically so a failed lookup is never cached as "no zones". Saved places (Home, Parents) resolve through an adapter that reports an explicit `degraded` flag.
+- It runs on the 10-minute `weather` refresh and never backs off.
+
+**The consequence for H12/H14 is architectural:** there are two NWS pipelines. The personal/site pipeline is correct. The unified-store pipeline behind triage, the inbox and the summary strip is boot-only, lifecycle-blind and untracked. **The fix should feed the unified store from the correct pipeline rather than repair the second one in parallel.**
+
+#### Clean, with one edge case — cross-agency earthquake deduplication
+
+USGS, EMSC and GEOFON are each polled every 8 minutes and deduplicated in `seismic-normalizer.ts` (90 s / 50 km / 0.5 magnitude, plus id grouping for revisions). Replayed against the last 24 hours of live data (USGS 47 events M2.5+, EMSC 210):
+
+```
+pairs that are clearly the same quake (<= 20 s, <= 30 km)   43
+  merged by the app's thresholds                            42   (98%)
+  split into duplicates                                      1
+    USGS M4.6 mb vs EMSC M4.0 ml, 1.2 s and 19.9 km apart
+```
+
+The one miss is a magnitude-*type* mismatch (body-wave `mb` against local `ml`), which routinely differ by more than 0.5 for the same event. **Low:** when time and distance agree tightly (for example ≤ 10 s and ≤ 30 km), treat the magnitude delta as advisory, or compare only like-for-like magnitude types.
+
+#### H15 — The alert loop's echoes are delivered as sticky critical notifications, at any hour
+
+`unifiedAlertStore.ingest()` dispatches a notification for every alert with a new id (`unified-alerts.ts:371-374`), with the action chosen by `actionForSeverity()` — `critical` → `sound+banner`. In `notification-dispatcher.ts`:
+
+1. `correlation` maps to the **`cyber`** notification domain (`alertSourceToDomain`). So an echo titled "Flood Warning" is governed by the operator's *cyber* preference, not their weather preference.
+2. Default settings enable every domain at threshold `medium` (`notification-settings-service.ts:68-73`), and this installation has no saved overrides.
+3. **Critical alerts bypass quiet hours** (`if (isQuietHoursActive() && alert.severity !== 'critical')`).
+4. **Critical alerts bypass the per-source rate limit** (`if (alert.severity !== 'critical' && …)`).
+5. Delivery goes through the Web Notifications API with `tag: wm-${source}-${id}` (unique per echo, so nothing coalesces) and **`requireInteraction: alert.severity === 'critical'`** — each one stays on screen until dismissed.
+
+Put together with H10: a single flood warning re-emitted 71 times at a median gap of 0 s is, on this code path, 71 critical notifications that ignore quiet hours and rate limits, each sticky, each under the wrong preference, each describing weather as civil unrest.
+
+**What I could not confirm:** whether they were actually displayed. It depends on the app's notification permission, and delivery traces are kept in memory, not written to `desktop.log`. The path is open under default settings; the operator is the best witness to whether it fired.
+
+**Also noted:** the `visual` alerting preset this installation uses sets `sound: false`, but `notification-dispatcher.ts` never reads `alerting-prefs`. It does not matter today only because the web-notification path ignores `_withSound` entirely. If a native path is ever wired up, the preset will not be honoured.
+
+**Suggested fix:** closing H10 removes the flood. Independently, the dispatcher should not let derived `correlation` alerts bypass quiet hours or rate limits, `correlation` should not share a domain with `cyber`, and a burst of alerts with the same title inside a short window should coalesce into one notification.
+
+#### Dropped during verification
+
+- **"A single global 30-second native limiter lets echoes suppress real warnings."** `src-tauri/src/main.rs:1556-1570` does have one global 30 s window in `send_notification`, which silently returns `Ok(())` when suppressed. But `sendTauriNotification()` never calls that command — it falls through to `sendWebNotification()` (`notification-dispatcher.ts:398-401`). The limiter is not on this path.
+- **"The site has no UGC zones, so zone-only warnings are missed."** True of the persisted record, false at runtime (see above).
 
 ## Method and limits
 

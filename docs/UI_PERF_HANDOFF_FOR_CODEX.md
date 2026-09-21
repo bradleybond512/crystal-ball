@@ -78,6 +78,10 @@ The loop: `situation-feed.ts:28-32` feeds every new-id alert, including the engi
 
 The only writer of NWS warnings into the alert store, `loadNWSAlerts()` (`data-loader.ts:3292`), runs only at boot, on any panel's Retry, or on leaving playback — never on a schedule — and records no freshness. Measured live: the store's newest NWS alert was 89 min old and 76 newer alerts (incl. 5 Flash Flood and 3 Severe Thunderstorm Warnings) had never arrived. Register it with the refresh scheduler at the `weather` cadence (or fold it into `loadWeatherAlerts()`, which already fetches NWS on a 10-min loop), record `nws-alerts` freshness, and make the summary strip report sources overdue against their own cadence. Full trace: review doc, round 9.
 
+**Architecture note for H14/H12/H13:** there are two NWS pipelines. The personal/site path (`weather-posture.ts` → `matchAlertToPlace()`, 10-min `weather` refresh, runtime UGC-zone resolution, fail-closed zone lookup) was verified correct against live NWS. Feed the unified store from that pipeline; do not build a second lifecycle implementation.
+
+**H15 rides on H10:** each echo is dispatched as a critical notification (`unified-alerts.ts:371-374`), mapped to the `cyber` domain, bypassing quiet hours and the per-source rate limit, delivered with `requireInteraction: true`. Closing H10 stops the flood; separately, derived `correlation` alerts should not bypass quiet hours/rate limits, and same-title bursts should coalesce.
+
 ### H12 + H13 — Make the NWS path respect warning lifecycle (land with H10)
 
 Measured during a live event: of 65 NWS alerts in the store, **13 were still active at NWS; 21 superseded; 31 expired or cancelled** — including 2 Tornado and 5 Severe Thunderstorm warnings shown as live. 21 of the 65 carried timestamps up to 90 h in the future, which the triage bar renders as "now".

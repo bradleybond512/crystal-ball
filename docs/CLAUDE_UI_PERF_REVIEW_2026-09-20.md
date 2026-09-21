@@ -15,6 +15,7 @@ Every finding carries either a re-runnable command or exact file:line paths at t
 
 | # | Sev | Finding | Area |
 |---|-----|---------|------|
+| H14 | **High** | NWS warnings on triage/inbox/strip are a boot snapshot: no scheduled ingest, no freshness record — 76 alerts behind live | Detection |
 | H12 | **High** | 80% of displayed NWS warnings are stale — 52 of 65 expired, cancelled or superseded, incl. 2 tornado warnings | Correctness |
 | H13 | **High** | Future-onset warnings (up to +90 h) render as "now" and outlive their expiry | Display |
 | H10 | **High** | Alert feedback loop: 286 of 289 "critical" alerts are correlation echoes of weather warnings, labelled civil unrest | Correctness |
@@ -857,6 +858,59 @@ Screenshot of the running app, compared field by field with the store and the NW
 ### Priority, restated
 
 For an operator relying on this app during a real event, these three together mean the triage surface is dominated by echoes (H10), a majority of the genuine weather warnings shown are stale or superseded (H12), and some are labelled as happening now when they begin days later (H13). All three are in the same small area of code — `alert-normalizer.ts`, `situation-feed.ts`, `unified-alerts.ts` — and all three have measurable acceptance criteria against live NWS data. They should land together, ahead of any performance work.
+
+---
+
+## Round 9 — trace: "data 48m median · 2h 45m worst"
+
+Round 8 recorded this figure from the summary strip during a live event without explaining it. Traced end to end; it turned out to hide the root cause of H12.
+
+### What the number is
+
+`SummaryStrip.freshnessSegHtml()` (`src/components/SummaryStrip.ts:220-236`) takes every freshness source that is enabled **and has a non-null `lastUpdate`**, computes raw `now - lastUpdate`, and shows the median and maximum. It reads neither the registry's own `status`, nor `lastError`, nor any per-source expected cadence.
+
+### Why the median is 48 minutes — mostly by design
+
+The 41 scheduled refreshes (`src/App.ts`, `registerAll`) have a **median designed interval of 30 minutes** (7 at ≤5 min, 9 at 5–15 min, 18 at 15–60 min, 4 at 1–6 h, 3 dynamic). On top of that, `refresh-scheduler.ts:58-100` computes each delay as:
+
+```
+base × ghost multiplier × battery/context multiplier × hidden (10×) × backoff (1–4×) ± 10% jitter
+```
+
+Backoff doubles, up to 4×, whenever a refresh returns `false` ("nothing changed"). A 30-minute source that has had two quiet cycles runs every two hours. Given those mechanics a median age near 48 minutes is expected, and **the number does not by itself mean data is 48 minutes behind**. As a health signal it mixes sources whose correct age ranges from seconds to hours.
+
+Two things it gets actively wrong:
+
+1. **It hides sources that have never succeeded.** The `lastUpdate !== null` filter drops them. GDACS (H11) only ever calls `recordError` on its failure paths (`data-loader.ts:3160-3173`), so the most broken feed in the app is invisible to the figure, and "worst" understates reality.
+2. **It measures fetches, not what the user is looking at.** That is where the real problem was.
+
+### The real finding — H14: the NWS warnings on the triage surfaces are a boot-time snapshot
+
+- The **only** code path that writes NWS warnings into the unified alert store is `loadNWSAlerts()` → `unifiedAlertStore.ingest(alerts.map(normalizeNWSAlert))` (`data-loader.ts:3292`; `normalizeNWSAlert` has no other caller).
+- `loadNWSAlerts()` has **no scheduled refresh.** It runs only inside `loadAllData()`, which runs at boot (`App.ts:524`), when a user clicks **Retry** on any panel (`Panel.ts:861` → `App.ts:503`), and on leaving playback mode (`event-handlers.ts:865`). It also fetches through `withOfflineCache('nws-alerts', …, 1 h)`.
+- `loadNWSAlerts()` records **no freshness at all**, so its age is invisible to every freshness surface.
+- Meanwhile the *scheduled* weather refresh, `loadWeatherAlerts()` (every 10 min, and it returns `void` so it never backs off), records `weather` as fresh. It drives the personal storm banner and notifications, **not** the unified store.
+
+So the strip reports weather data as current, while the NWS warnings in the triage bar, the Alert Inbox and the `SEVERE WEATHER` counts are frozen at the last boot or retry.
+
+**Measured against the live NWS API at the same moment:** the newest NWS alert in the store was sent 89 minutes earlier. Since then NWS had issued **76 alerts the store never received** — 20 Small Craft Advisories, 15 Flood Warnings, 10 Beach Hazards Statements, 7 Flood Watches, 6 Flood Advisories, **5 Flash Flood Warnings**, 4 Special Weather Statements, **3 Severe Thunderstorm Warnings**.
+
+This **is the mechanism behind H12.** Round 8 measured 80% of stored NWS warnings as expired or superseded and attributed it to the normalizer ignoring lifecycle fields. That is true, but it is the smaller half: even a perfect normalizer cannot keep a snapshot current if it only ever runs at boot. The two need fixing together.
+
+A side effect worth knowing: because the only way to re-run `loadNWSAlerts()` is `loadAllData()`, **clicking Retry on any single panel reloads all 116 data sources**.
+
+**Suggested fix:**
+
+1. Register `nwsAlerts` with the refresh scheduler at the same cadence as `weather` (or fold the unified-store ingest into `loadWeatherAlerts()`, which already fetches NWS), returning `void` so it is never backed off.
+2. Record freshness for it (`nws-alerts`), so a stalled ingest shows up.
+3. Make `SummaryStrip` report *overdue sources against their own cadence* (for example "3 sources overdue") instead of a raw median, and include never-succeeded sources.
+4. Make panel Retry re-run that panel's source, not `loadAllData()`.
+
+**Acceptance:** during a session, a warning newly issued at `/alerts/active` appears in the triage bar within one refresh interval without any user action, and the strip flags the NWS ingest as overdue if it stops.
+
+### Detection latency, for the record
+
+Even the scheduled path polls NWS every 10 minutes ±10%. Tornado warnings commonly give lead times on the order of ten minutes, so a warning can be issued and much of its lead time used up before the next poll. The storm-mode path should poll considerably faster during active weather (the refresh scheduler already supports per-source intervals), or subscribe to a push source.
 
 ## Method and limits
 

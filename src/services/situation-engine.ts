@@ -77,6 +77,22 @@ export function domainHintForAlertSource(source: string): SituationDomain | unde
   }
 }
 
+const SITUATION_LOOP_PURGE_KEY = 'cb-situation-loop-purge-v1';
+
+/**
+ * Situations persisted before the feedback-loop fix that were built from
+ * unified-alert pseudo-signals (`ua-` ids). Their domains came from the
+ * pre-fix mapping (floods as civil_unrest, GDACS as military) and some were
+ * assembled from the engine's own echoes. Dropping them once is safe: the
+ * situation feed re-seeds from current source alerts on start, and those
+ * rebuild correctly labelled situations. Situations built purely from real
+ * correlation signals carry no `ua-` ids and are kept.
+ */
+export function isPreFixAlertDerivedSituation(s: Pick<Situation, 'signalIds' | 'signals'>): boolean {
+  return (s.signalIds ?? []).some((id) => id.startsWith('ua-'))
+    || (s.signals ?? []).some((sig) => sig.id.startsWith('ua-'));
+}
+
 export class SituationEngine {
   private situations: Situation[] = [];
   private listeners = new Set<SituationListener>();
@@ -452,6 +468,14 @@ export class SituationEngine {
   }
 
   private restore(): void {
+ // Decide and record the one-time purge BEFORE any early return, so an
+ // installation with nothing persisted yet still marks the migration done
+ // and never purges post-fix situations on a later boot.
+ let purge = false;
+ try {
+ purge = localStorage.getItem(SITUATION_LOOP_PURGE_KEY) !== '1';
+ if (purge) localStorage.setItem(SITUATION_LOOP_PURGE_KEY, '1');
+ } catch { /* storage unavailable — skip purge */ }
  try {
  const raw = localStorage.getItem('wm-situations-v1');
  if (!raw) return;
@@ -459,9 +483,11 @@ export class SituationEngine {
  if (Array.isArray(parsed)) {
  // Rehydrate — filter out stale situations (>24h old)
  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
- this.situations = (parsed as Situation[]).filter(
+ const kept = (parsed as Situation[]).filter(
  (s: Situation) => s.lastUpdated > cutoff && s.phase !== 'resolved',
  );
+ this.situations = purge ? kept.filter((s) => !isPreFixAlertDerivedSituation(s)) : kept;
+ if (this.situations.length !== kept.length) this.persist();
  }
  } catch { /* corrupt data */ }
   }

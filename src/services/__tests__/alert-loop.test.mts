@@ -20,7 +20,7 @@ const store = new Map<string, string>();
 };
 
 const { isEngineInput } = await import('../situation-feed.ts');
-const { domainHintForAlertSource } = await import('../situation-engine.ts');
+const { domainHintForAlertSource, isPreFixAlertDerivedSituation, SituationEngine } = await import('../situation-engine.ts');
 const { signalDomainOf, classifyDomain } = await import('../situation-correlator.ts');
 const { compoundEpisodeId } = await import('../compound-alert-bridge.ts');
 const { UnifiedAlertStore, isPrePurgeLoopEcho } = await import('../unified-alerts.ts');
@@ -124,10 +124,58 @@ test('hydration drops pre-fix echoes once, keeping source and pinned alerts', ()
   ]));
   const s1 = new UnifiedAlertStore();
   assert.deepEqual(s1.getAll().map((a) => a.id).sort(), ['nws-urn-1', 'pinned-sit']);
-  assert.equal(store.get('cb-alert-loop-echo-purge-v1'), '1');
+  assert.equal(store.get('cb-alert-loop-echo-purge-v2'), '1');
 
   // A second load must NOT purge again: post-fix correlation alerts are legitimate.
   store.set('wm-unified-alerts-v1', JSON.stringify([alert('sit-legit', 'correlation'), alert('nws-urn-2', 'nws')]));
   const s2 = new UnifiedAlertStore();
   assert.deepEqual(s2.getAll().map((a) => a.id).sort(), ['nws-urn-2', 'sit-legit']);
+});
+
+test('a fresh install records the purge flag, so a later load does not purge', () => {
+  store.clear();
+  new UnifiedAlertStore(); // nothing persisted yet
+  assert.equal(store.get('cb-alert-loop-echo-purge-v2'), '1');
+  store.set('wm-unified-alerts-v1', JSON.stringify([alert('sit-post-fix', 'correlation')]));
+  const later = new UnifiedAlertStore();
+  assert.deepEqual(later.getAll().map((a) => a.id), ['sit-post-fix']);
+});
+
+// ── Link 5: situations persisted before the fix are purged exactly once ────
+
+function situation(id: string, signalIds: string[]) {
+  return {
+    id, title: id, summary: 's', phase: 'active', domain: 'civil_unrest', confidence: 0.9,
+    geo: { lat: 0, lon: 0, countries: [], label: '' }, signalIds,
+    signals: signalIds.map((sid) => ({ id: sid, type: 'keyword_spike', title: 't', confidence: 0.9, timestamp: Date.now(), domain: 'civil_unrest' })),
+    domainDiversity: 1, evidence: null, scenarios: [], actions: [], causalChainId: null,
+    firstSeen: Date.now(), lastUpdated: Date.now(),
+  };
+}
+
+test('isPreFixAlertDerivedSituation targets situations built from alert pseudo-signals', () => {
+  assert.equal(isPreFixAlertDerivedSituation({ signalIds: ['ua-sit-sit-a-33'], signals: [] }), true);
+  assert.equal(isPreFixAlertDerivedSituation({ signalIds: ['corr-123'], signals: [] }), false);
+});
+
+test('engine restore drops pre-fix alert-derived situations once and keeps signal-built ones', () => {
+  store.clear();
+  store.set('wm-situations-v1', JSON.stringify([
+    situation('echo', ['ua-sit-sit-muaheaor-u']),
+    situation('real', ['corr-velocity-1']),
+  ]));
+  const e1 = new SituationEngine();
+  assert.deepEqual(e1.getSituations().map((s) => s.id), ['real']);
+  assert.equal(store.get('cb-situation-loop-purge-v1'), '1');
+
+  // Post-fix alert-derived situations are legitimate and must survive later boots.
+  store.set('wm-situations-v1', JSON.stringify([situation('post-fix', ['ua-nws-urn-9'])]));
+  const e2 = new SituationEngine();
+  assert.deepEqual(e2.getSituations().map((s) => s.id), ['post-fix']);
+});
+
+test('engine records the situation purge flag even when nothing was persisted', () => {
+  store.clear();
+  new SituationEngine();
+  assert.equal(store.get('cb-situation-loop-purge-v1'), '1');
 });

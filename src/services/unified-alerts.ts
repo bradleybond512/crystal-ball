@@ -126,9 +126,11 @@ const STORAGE_KEY = 'wm-unified-alerts-v1';
 /**
  * One-time migration flag: drop situation-engine echoes persisted before the
  * feedback-loop fix (see situation-feed.ts isEngineInput). Versioned so it
- * runs exactly once per installation.
+ * runs exactly once per installation. v2: v1 reached one local build before
+ * the matching situation-store purge existed, which let a restored pre-fix
+ * situation re-promote an echo after the alert purge had already run.
  */
-const LOOP_ECHO_PURGE_KEY = 'cb-alert-loop-echo-purge-v1';
+const LOOP_ECHO_PURGE_KEY = 'cb-alert-loop-echo-purge-v2';
 
 /**
  * Hydrated alerts dropped by the one-time purge. Every `correlation` alert is
@@ -521,6 +523,14 @@ class UnifiedAlertStore {
   }
 
   private loadFromStorage(): void {
+    // Decide and record the one-time echo purge BEFORE any early return, so a
+    // fresh installation marks the migration done and never purges legitimate
+    // post-fix correlation alerts on a later boot.
+    let purgeEchoes = false;
+    try {
+      purgeEchoes = localStorage.getItem(LOOP_ECHO_PURGE_KEY) !== '1';
+      if (purgeEchoes) localStorage.setItem(LOOP_ECHO_PURGE_KEY, '1');
+    } catch { /* storage unavailable — skip purge */ }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
@@ -528,8 +538,6 @@ class UnifiedAlertStore {
       if (!Array.isArray(parsed)) return; // corrupted — start fresh
       const now = Date.now();
       const loaded: UnifiedAlert[] = [];
-      let purgeEchoes = false;
-      try { purgeEchoes = localStorage.getItem(LOOP_ECHO_PURGE_KEY) !== '1'; } catch { /* storage unavailable — skip purge */ }
       let purged = 0;
       for (const entry of parsed) {
         if (!isValidUnifiedAlertEntry(entry)) continue; // skip malformed entries
@@ -542,12 +550,9 @@ class UnifiedAlertStore {
       }
       // Re-compute distances with current user location
       stampDistances(loaded);
-      if (purgeEchoes) {
-        try { localStorage.setItem(LOOP_ECHO_PURGE_KEY, '1'); } catch { /* best-effort */ }
-        // Persist the cleaned store so a crash before the next ingest cannot
-        // resurrect the purged echoes (the flag is already set).
-        if (purged > 0) this.scheduleFlush();
-      }
+      // Persist the cleaned store so a crash before the next ingest cannot
+      // resurrect the purged echoes (the flag is already set).
+      if (purged > 0) this.scheduleFlush();
     } catch { /* corrupted — start fresh */ }
   }
 }

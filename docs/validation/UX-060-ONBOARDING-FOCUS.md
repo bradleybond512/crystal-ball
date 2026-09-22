@@ -95,6 +95,8 @@ Actual results from `mutation-results.json`; corresponding `mutation-<name>.diff
 | async-success | 36 pass / 0 fail | 34 pass / 2 fail |
 | async-failure | 36 pass / 0 fail | 34 pass / 2 fail |
 
+Additional clean-tree proofs at `eece64336be99f41325dc8c12e3e0412deba95d1` cover the coexistence-order and dismissal cases. Removing all three keyboard ownership guards produced `# pass 31` / `# fail 5`; both Welcome listener-order cases failed `internal Welcome Tab must reach native traversal`. Removing only the dismissal abort produced `# pass 35` / `# fail 1`, failing the signal-aborted assertion. Applied diffs, raw logs and clean restoration snapshots are `mutation-coexistence.*`, `mutation-dismiss-abort.*` and their snapshot/restored text files. Both restored hashes match those above; the final restored run (`additional-mutations-restored-green.log`) reported `# pass 36` / `# fail 0` with a clean tree.
+
 ## Manual verification and rollback
 
 Use an isolated empty browser profile. Tab internally and across both ends of Welcome; Escape completes only Welcome. Complete onboarding, open the brief explicitly, then verify Escape restores its opener. At 800×600 the existing Home focus-host interaction must remain operable. Native macOS acceptance was not run and is not implied by browser evidence.
@@ -103,4 +105,4 @@ Rollback is a reviewed revert of these UI guards and tests. No migration or oper
 
 ## Draft PR summary
 
-Prevent the since-last-looked digest from taking keyboard focus during Welcome, including delayed successful and failed requests. Skip proactive generation on first-run boots and preserve explicit post-onboarding opening, modal key ownership, normal dismissal and opener restoration. Validation: focused 36/0, existing digest 115/0, Home browser 6/0, unit/domain named gate, both types, lint, bundle and ten applied guard mutations. Earlier intermittent Home readiness timeouts remain documented; independent and cross-agent reviews are separate delivery gates.
+Prevent the since-last-looked digest from taking keyboard focus during Welcome, including delayed successful and failed requests. Skip proactive generation on first-run boots and preserve explicit post-onboarding opening, modal key ownership, normal dismissal and opener restoration. Validation: focused 36/0, existing digest 115/0, Home browser 6/0, unit/domain named gate, both types, lint, bundle and twelve applied mutation runs. Earlier intermittent Home readiness timeouts remain documented; independent and cross-agent reviews are separate delivery gates.

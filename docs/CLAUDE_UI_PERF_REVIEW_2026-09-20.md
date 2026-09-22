@@ -1006,8 +1006,68 @@ Three checks on the installation running build `18301b45` (#1730 + #1732), after
 
 **PRs.** #1730, #1731, #1732 open; each blocked only by `cross-agent-review`, plus `axe` on docs-only #1731, which a docs diff cannot cause.
 
+## Round 11 — 2026-09-22 — the notification and retention paths, end to end
+
+Scope: every producer that writes to the unified alert store (33 call sites), every caller of the notification dispatcher including the seven that bypass the store, the store's own retention logic, and the "nothing is happening" surfaces. Four findings are reproduced by a runnable test rather than argued; two are read from the live installation.
+
+### Repro harness
+
+Saved outside the tree as `.codex/scratch-repros/`; paste into `src/services/__tests__/` and run with `npx tsx --test <file>` (globals stubbed the way `unified-alerts-batching.test.mts` does it: `globalThis.window = globalThis` plus an in-memory `localStorage`).
+
+```ts
+// R1 — age prune + report-time timestamp => re-notify every poll
+const s = new UnifiedAlertStore();
+const calls: string[] = [];
+notificationDispatcher.dispatchNotification = ((a) => { calls.push(a.id); });
+const drought = { id: 'gdacs-DR-1', source: 'gdacs', severity: 'critical',
+  timestamp: Date.now() - 10 * 24 * 3600_000, /* …rest… */ };
+for (let poll = 0; poll < 3; poll++) { s.ingest([drought]); await flush(); }
+// => calls.length 3, s.getAll().length 0
+
+// R2 — cap prune drops pinned + unacked before acked
+const batch = [{ id: 'PINNED', pinned: true, …}, { id: 'UNACKED', …}];
+for (let i = 0; i < 500; i++) batch.push({ id: `acked-${i}`, acknowledged: true, …});
+s.ingest(batch); await flush();
+// => size 500, PINNED kept? false, UNACKED kept? false
+
+// R3 — medium badge consumes the source rate slot; the high warning is dropped
+notificationDispatcher.dispatchNotification({ source: 'nws', severity: 'medium', …}, 'badge');
+notificationDispatcher.dispatchNotification({ source: 'nws', severity: 'high',
+  title: 'Flash Flood Warning', …}, 'banner');
+// => badges 1, banners 0
+
+// R4 — identical signals older than clusterWindowMs never cluster
+const mk = (id, ageH) => ({ id: `ua-${id}`, type: 'convergence', confidence: 0.6,
+  timestamp: Date.now() - ageH * 3600_000,
+  data: { explanation: 'FLOODING  — Vinton, OH', domainHint: 'natural_hazard' } });
+const stale = []; for (let i = 0; i < 12; i++) correlateSignalToSituation(mk(`lsr-${i}`, 14.9), stale);
+const fresh = []; for (let i = 0; i < 12; i++) correlateSignalToSituation(mk(`lsr-${i}`, 0.3), fresh);
+// => stale.length 12, fresh.length 1
+```
+
+### Live readings (installed build `18301b45` = #1730 + #1732, WebKit localStorage)
+
+- `wm-unified-alerts-v1`: **500 / 500** — at the cap. By source: `correlation` 416, `spc` 46, `nws` 30, `air-quality` 5, `comms-health` 1, `hazard` 1, `space-weather` 1. Pinned 0, acknowledged 0. Oldest 35.4 h; **11 alerts carry future timestamps**.
+- Of the 416 `correlation` alerts, **361 are titled `FLOODING — …`**: Vinton OH 51, Flood Warning 36, Meigs OH 23, Hocking OH 21, Mason WV 19, Jackson WV 17. Severity mix: 345 medium, 48 high, 9 critical.
+- `wm-situations-v1` (17 persisted): `sit-mubobeat-af` and `sit-mubobeat-ag` — same creation millisecond (2026-09-21T20:04:10Z), both "FLOODING — Greene, OH", one LSR signal each (`ua-lsr-lsr-67-39.680--83.930`, `ua-lsr-lsr-69-39.630--84.060`), both signal timestamps 2026-09-21T05:10–05:20Z, i.e. **14.9 h old at correlation time**, both `geo: {lat: 0, lon: 0, label: "Global"}`. That is R4 happening in production.
+- `wm-app-mode` = `'ghost'` → H20: every notification path is currently suppressed on this install, critical included, and every poll interval is 5× longer.
+- `wm-notification-settings-v1` is unset, so the defaults apply: every domain enabled at threshold `medium` — which is what makes H19's badge-eats-the-slot path reachable.
+
+### Findings
+
+- **H19 (High, life-safety)** — severity-blind per-source rate limit; a `badge`-level advisory permanently drops the warning behind it. `notification-dispatcher.ts:298-312`.
+- **H17 (High)** — `prune()` deletes by source timestamp at 48 h, so long-running events are deleted on arrival and re-notified every poll. `unified-alerts.ts:128, 282, 450-456`; producers at `alert-normalizer.ts:127, 166`, `intel-channels-bridge.ts:152, 186, 211`, `infrastructure-alert-bridge.ts:55`. Also the likely mechanism behind H14's "none in the store".
+- **H22 (High)** — stale-timestamped signals cannot pass the 0.30 affinity threshold, so each one mints its own situation; alert-derived signals also carry no geography. `situation-correlator.ts:45-57, 88-92, 268`; `situation-types.ts:237`.
+- **H18 (Medium-High)** — cap prune's comparators are inverted against its own comment: pinned evicted first, acknowledged kept longest. `unified-alerts.ts:458-468`. The correct partition already exists at `:503-514`.
+- **H21 (Medium-High)** — the Threat Dashboard's "checked" time is the render clock (`threat-aggregator.ts:186` and ten sibling sites stamp `lastUpdatedMs: nowMs`), and a no-data domain is levelled `NONE`, so "All sensors quiet · checked just now · 11 sensors" is true by construction. `ThreatDashboard.ts:158-175`.
+- **H20 (Medium-High, policy)** — Ghost Mode suppresses critical alerts with no standing indicator; currently on. `notification-dispatcher.ts:107-113, 280-283`; `mode-manager.ts:74`.
+
+### Checked and clean, this round
+
+`pressure-history.ts:87-111` (edge-triggered by a persisted `aboveCritical` flag, not per sample) · `predictive-crisis-index.ts:200-205` (per-level cooldown) · `hypothesis-notifier.ts:45-68` (signature map with a notify window; records signatures during Ghost Mode so they do not re-fire later) · `escalation-lifecycle.ts:113` (severity-keyed id) · `blackout-signature.ts`, `silence-detector.ts`, `watchlist-proximity.ts`, `compound-alert-bridge.ts` (all bucketed, content-stable ids) · `withOfflineCache` re-throws when there is no cache, so a failed fetch cannot render an empty feed as "no alerts" — but every `data-loader.ts` caller discards the `isStale`/`staleDurationMs`/`source` fields it returns, so cached rows are displayed as current.
+
 ## Method and limits
 
-Seven rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, one that re-read the runtime patches and retracted or downgraded three earlier findings, one aimed at high-value targets using the live alert store and the live GDACS API, and one run during a live severe-weather event against the live NWS feed and a screenshot of the running app — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
+Eleven rounds — three of static analysis at the reviewed SHA, one reading the installed build's own log and storage, one probing the running sidecar, one that re-read the runtime patches and retracted or downgraded three earlier findings, one aimed at high-value targets using the live alert store and the live GDACS API, and one run during a live severe-weather event against the live NWS feed and a screenshot of the running app — plus three measured checks: sticky offset resolution inside a padded scroll container was verified in a headless Chromium run (`top:0` pins at the padding edge; `top:<stack height>` pins a further stack-height down), which is what PR #1730 rests on; and round 3's bundle figures are measured from a real `desktop:build:full` output (raw and gzipped chunk sizes, modulepreload list), not estimated; and the boot path was measured directly from the app's own `bootTrace` marks recovered from the installed build's WebKit localStorage (two independent boots), which confirmed M6 and surfaced P0. See `UI_PERF_HANDOFF_FOR_CODEX.md`.
 
 Round 2 shares these limits: the counts are real, but the severity of H4 and M4 is argued from what the code cannot do (report a stall, report a swallowed error), not from an observed incident. Not covered: no profiler run, no memory snapshot, no measurement of actual frame cost during a severe-weather surge. H3 and M1 are structural arguments backed by counts, not by a recorded flame graph. Before investing in the H3 refactor, a 60-second profile with the window backgrounded would confirm the size of the prize. The Rust side was checked only for its security surface, not reviewed for correctness.

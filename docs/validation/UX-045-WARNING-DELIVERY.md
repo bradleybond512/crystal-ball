@@ -64,10 +64,91 @@ The initial typecheck attempt used incomplete dependencies and failed with
 TS2307 for `@deck.gl/maplibre`. Reusing the complete matching dependency tree
 resolved that environment failure; `npm run typecheck:all` then exited0.
 
-## Remaining work and limits
+## Implementation and executed validation
 
-Implementation, focused tests, mutation proof, final gate and final independent
-and Claude review are pending. This document does not claim completion.
+The only production edit relocates the existing eight-line badge branch in
+`src/services/notification-dispatcher.ts`. Existing dispatcher trace tests are
+extended; a new real-store integration test covers batch delivery and repoll.
+`package.json` adds `test:warning-delivery` for repeatable targeted checks.
+
+`npm run test:warning-delivery` before the fix:
+
+```text
+# tests 20
+# pass 15
+# fail 5
+```
+
+After the fix, independently repeated by the reviewer:
+
+```text
+# tests 20
+# pass 20
+# fail 0
+```
+
+Existing settings and batching suites, executed with `tsx --test
+src/services/notifications/__tests__/notification-settings-service.test.mts
+src/services/__tests__/unified-alerts-batching.test.mts`:
+
+```text
+# tests 28
+# pass 28
+# fail 0
+```
+
+`npm run typecheck:all`, targeted ESLint and `git diff --check`: exit0.
+`bash scripts/agentic-validate.sh --tests 'test:warning-delivery'`: exit0,
+including lockfile, strict lint, type checks, secrets, docs, roadmap and build:
+
+```text
+Agentic validation gate passed.
+Tests run: test:warning-delivery
+```
+
+`npm run bundle:check`: exit0:
+
+```text
+    main-BCbwACLn.js  raw=1.55 MB  gzip=445.4 KB
+✓ All bundle-size policies satisfied.
+```
+
+## Clean-tree mutation proof
+
+Snapshot: `756a69572b6ab98cbf705e4849d7ab3e2c6f5d8a` in a separate detached
+worktree. Each run began with empty `git status --short`; each applied
+`git diff` was printed and retained before running the named suite. The changed
+file was always `src/services/notification-dispatcher.ts`, starting and restored
+SHA256 `223829e757f12c59b003ba4e46b9f1e3a67e1f7ab71f57f2629539c4516dab82`.
+
+| Applied change | Actual red result | Caught assertion |
+|---|---|---|
+| Move badge block back below `rateLimitMap.set` | 15 pass / 5 fail | Advisory then warning yields no banner |
+| Add `this.rateLimitMap.set(alert.source, Date.now())` inside badge branch | 16 pass / 4 fail | Badges consume or extend banner opportunity |
+| Move badge block above Ghost/preference/quiet gates | 14 pass / 6 fail | Ghost Mode badge dispatched: `1 !== 0` |
+
+The first confirmed diff is exactly the inverse of the production block move.
+The second adds one timestamp reservation inside the allowed badge branch.
+The third moves the same branch before the existing Ghost Mode gate. Complete
+applied diffs and literal failing assertions are retained as `original-order`,
+`badge-reservation` and `badge-before-policy` `.diff`/`.log` pairs alongside
+`mutations.py` and `mutation-results.json` in the evidence directory above.
+All three returned nonzero with the actual fail counts shown. After each restore,
+the checksum matched and worktree status was empty. Final restored run:
+
+```text
+# tests 20
+# pass 20
+# fail 0
+```
+
+## Review and remaining limits
+
+Independent source review found no production blocker, independently ran the
+focused suite and audited all three applied mutation diffs, restored checksums
+and successful gate/bundle logs. Outcome: no blocking findings. Exact-tip Claude
+review remains required before PR closeout; do not equate this source candidate
+with packaged acceptance.
 No packaged native acceptance or installation was performed. The unchanged
 dispatcher can still suppress a second distinct high warning during its source
 cooldown, and the store does not dispatch severity updates to existing IDs.

@@ -2,7 +2,7 @@
  * SummaryStrip — slim one-line "at a glance" row docked above the panels
  * grid (below the banner stack; the scroll container's
  * --notification-stack-h padding keeps it clear of fixed banners, and
- * position:sticky pins it while the grid scrolls).
+ * position:sticky; top:0 pins it at that padding edge while the grid scrolls).
  *
  * Content comes from EXISTING stores only:
  *   - composite status chip — the EEW status bar's derived state

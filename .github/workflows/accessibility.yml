@@ -22,6 +22,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Summary and notification stack layout regression
+        run: npm run test:summary-strip-layout
       - run: npx playwright test e2e/a11y-baseline.spec.ts
         env:
           VITE_VARIANT: full

@@ -1153,8 +1153,10 @@ export class PanelLayoutManager implements AppModule {
  if (!this.criticalBannerEl) {
  this.criticalBannerEl = document.createElement('div');
  this.criticalBannerEl.className = 'critical-posture-banner';
- const header = document.querySelector('.header');
- if (header) header.insertAdjacentElement('afterend', this.criticalBannerEl);
+ // Highest-priority row of the notification stack: the stack's
+ // ResizeObserver then publishes its height as --notification-stack-h,
+ // so content shifts instead of being occluded.
+ notificationStack.element.prepend(this.criticalBannerEl);
  }
 
  document.body.classList.add('has-critical-banner');

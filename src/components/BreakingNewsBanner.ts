@@ -96,13 +96,12 @@ export class BreakingNewsBanner {
 
   private updatePosition(): void {
     const stack = document.getElementById('cb-notification-stack');
-    let top = stack ? stack.getBoundingClientRect().bottom : 44;
+    // The critical posture banner is now a row INSIDE the stack, so the
+    // stack's own bottom already includes it — adding its height here would
+    // double-count and push this container a banner-height too low.
+    const top = stack ? stack.getBoundingClientRect().bottom : 44;
     if (document.body.classList.contains('has-critical-banner')) {
-      this.attachResizeObserverIfNeeded();
-      const postureBanner = document.querySelector('.critical-posture-banner');
-      if (postureBanner) {
-        top += postureBanner.getBoundingClientRect().height;
-      }
+      this.attachResizeObserverIfNeeded(); // reposition when that row resizes
     }
     this.container.style.top = `${top}px`;
  this.updateOffset();

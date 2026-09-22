@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "a8cad5c3ee585042f0b3a854e2b2972495786d2d",
+  "reviewer": "codex",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-09-22T21:24:47.208Z",
+  "evidence": "PR1715 — a8cad5c3ee585042f0b3a854e2b2972495786d2d: No blocking findings in the reviewed change.\n\nThe prior CLI coverage blocker is resolved. Independent execution returned:\n# tests 57\n# pass 57\n# fail 0\n# cancelled 0\n\nThe tests execute the real selector, verify actual command execution, reject nonexistent suites and preserve main-owned commands. Audited mutation results: 57/0 → 56/1, 55/2, 55/2 → restored 57/0, with applied diffs and matching checksums.\n\nSupplied typecheck and full-gate logs passed. My additional typecheck in the closeout worktree failed on dependency resolution outside this diff:\nsrc/components/DeckGLMap.ts(6,33): error TS2307: Cannot find module '@deck.gl/maplibre' or its corresponding type declarations.\nThat local rerun must not be reported as passing. No provider, native-runtime or installed-app validation was performed."
+}

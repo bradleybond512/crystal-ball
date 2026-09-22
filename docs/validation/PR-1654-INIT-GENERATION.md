@@ -76,6 +76,26 @@ before running `npm run test:ml-budget`; every mutation exited 1:
 | Delete generation check from ready-timeout callback | 31 pass / 0 fail → 30 pass / 1 fail | Obsolete callback terminates current worker |
 | Delete post-factory generation check and late-worker termination | 31 pass / 0 fail → 29 pass / 2 fail | Factory completion after termination/timeout attaches obsolete worker |
 
+Additional validation of the five new baseline-preservation cases started clean
+at `84deacaf7372ee7019144d665ef121f966a92ff5`, using the same source and test
+checksums. No production or test changes were retained. Applied diffs were
+inspected before each full suite run:
+
+| Additional mutation | Baseline → red counts | New test demonstrated red |
+| --- | --- | --- |
+| Remove pending initialization reuse | 31/0 → 28/3 | Concurrent initial callers |
+| Remove worker identity guards from message/error callbacks | 31/0 → 30/1 | Stale ready/model/error callbacks |
+| Allow obsolete factory rejection to clean up unconditionally | 31/0 → 30/1 | Rejected obsolete factory leaves replacement intact |
+| Resolve unsuccessful initialization as true during cleanup | 31/0 → 25/6 | Current factory failure returns false and permits retry |
+| Remove unsupported-capability return | 31/0 → 30/1 | Unsupported capabilities create no worker |
+
+Every added mutation had zero cancelled tests, restored the source checksum and
+empty status, and the final restored run returned `# pass 31` / `# fail 0`.
+`mutation-extra-*.{diff,log,json}`, `extra-mutations-summary.json` and
+`extra-mutations-restored.log` contain the literal additional evidence in the
+same external directory. This completes validation of the existing repair;
+there was no further production repair.
+
 Every restore verified this same SHA-256 and empty working-tree status:
 
 ```text

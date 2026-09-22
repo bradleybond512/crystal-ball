@@ -109,5 +109,7 @@ traces exist, so operator-facing accounting/retry is the gap.
 Remaining limitations after the approved repair: a second distinct high warning
 inside a high-warning cooldown can still be suppressed, same-ID severity updates
 are not dispatched by the store, and the preference evaluator does not currently
-enforce DomainSettings.channel. These require separate policy/lifecycle work;
+enforce DomainSettings.channel. These require separate policy/lifecycle work in UX-058;
 this task must not claim every warning reaches the OS.
+
+Evidence: [UX-045 validation record](../validation/UX-045-WARNING-DELIVERY.md).

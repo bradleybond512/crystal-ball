@@ -207,7 +207,9 @@ first-run contract on the installed app.
 
 Review after: 2026-08-31
 
-The packaged zero-key runtime is still unmeasured. Static wiring shows only that
+The packaged zero-key runtime was tested on 2026-09-18; useful Home coverage
+was not demonstrated ([handoff #1725](https://github.com/bradleybond512/crystal-ball/issues/1725)).
+Static wiring shows only that
 credentials are not universally required; it does not establish network,
 upstream, provider, or data availability: 50 of 58 definitions in
 `src/services/providers/provider-registry.ts` use no authentication, 66 of 78
@@ -230,7 +232,8 @@ console.log({ providers: PROVIDER_DEFINITIONS.length, noAuth,
 NODE
 ```
 
-The first visible state is still misleading and not decision-useful:
+Historical findings before merged PR #1660 (retained as the rationale for the
+implemented contract; not new findings against current main):
 
 - `WelcomeFlow` says listed sources work with "no key" while naming NewsAPI and
   OpenWeatherMap; both require configured keys in repository wiring.
@@ -246,6 +249,16 @@ The first visible state is still misleading and not decision-useful:
   then proceed to posture surfacing.
 - **Done when:** a clean zero-key run tells the user what works now, what is still
   loading, and exactly what an optional key would unlock.
+
+Packaged protocol: [isolated zero-key acceptance](plans/2026-09-15-ux000-packaged-acceptance.md).
+The existing source implementation is delivered. The isolated account test completed
+with zero loaded credentials, but Home showed zero useful cards and twelve needing
+attention on both launches. Timing captures and useful coverage remain incomplete;
+no packaged pass is claimed. The test profile is now a used reproduction profile.
+[Follow-up discovery](plans/2026-09-18-ux000-test-followup.md) owns bounded repairs.
+Home contributor readiness merged in PR #1726;
+[request-error preservation](plans/2026-09-19-ux000-request-error-preservation.md)
+is claimed in PR #1728. UX-001 remains blocked until packaged acceptance passes.
 
 ### UX-001 — Posture band on the Home Shell
 
@@ -707,6 +720,337 @@ workflow without changing alert scores, thresholds, or acknowledgement state.
   failing assertions, full restored SHA-256 values, and quoted validation output
   are recorded in `docs/validation/UX-024-MUTATION-PROOFS.md`.
 
+### UX-026 — Location and saved-place impact in alert digests *(High Assurance)*
+
+Status: MONITOR
+Evidence: #1704 — reviewed source candidate; local and CI evidence in the PR.
+Exit condition: Complete packaged digest expiry, keyboard/focus, cached-camera and partial-source acceptance; resolve or explicitly retain the two conservative NWS data limitations documented by review.
+Review after: 2026-09-22
+
+This is manual acceptance tracking, not a recurring task or monitoring automation.
+
+Make every "Since you last looked" story immediately answer where the event is
+and whether current evidence indicates impact to any saved place.
+
+- **Show:** a deterministic location row and saved-place impact row on every
+  story. Impact states are `likely`, `possible`, `no reported overlap`,
+  `unknown`, or `not evaluated`; never say safe, unaffected, or all clear.
+- **Fail closed:** `no reported overlap` requires complete, current affected-area
+  evidence evaluated against every saved place. Missing, stale, malformed,
+  centroid-only, cold-rehydrated, partial-member, or over-budget evidence is
+  `unknown`. A global alert is only `possible` at saved places unless direct
+  evidence supports a stronger conclusion.
+- **Privacy:** saved-place names, IDs, coordinates, radii, tags, notes, and
+  priority stay local. Model output may summarize why a story matters but cannot
+  supply or override location, impact state, place names, or evidence wording.
+- **Scope:** add a shared pure alert-presentation projection, but wire only the
+  digest overlay in this task. Preserve alert ranking, thresholds, cadence,
+  acknowledgement, snooze/pin state, dismissal behavior, providers, and polling.
+- **Accessibility:** expose the overlay as a labeled modal dialog, render stories
+  as semantic articles, trap and restore focus, retain Escape/backdrop/close
+  dismissal, and provide bounded scrolling at compact sizes.
+- **Done when:** no rendered story can omit either required row; model failure
+  falls back to deterministic ranked-alert cards; saved-place or member changes
+  reproject locally without another model call; complete negative weather
+  coverage is explicitly labeled as not an all-clear.
+- **Verify:** focused projection, prompt/privacy, fallback, component,
+  accessibility, lifecycle, performance, and mutation tests; `npm run
+  test:weather`, `npm run test:renderer`, `npm run typecheck:all`, and the
+  agentic validation gate.
+- **September 14 resumption:** the approved third repair cycle completed the
+  malformed-response, optional-onset and bounded-validation repairs. Candidate
+  `b81d9dc28` passed the 15,327-test agentic gate; 25 literal mutation proofs
+  were rebuilt on a clean isolated copy. Independent review still blocks
+  acceptance on open-digest expiry invalidation and FAA partial-source loading.
+  Bradley approved the [fourth-cycle repair](plans/2026-09-14-ux026-fourth-cycle-proposal.md)
+  after these findings. Fourth source `a3c3c3c0c` fixes both, but independent
+  review found that ordinary healthy GDACS cache hits lose camera hazard context.
+  Bradley approved the bounded [cached-context repair](plans/2026-09-14-ux026-cached-gdacs-repair.md);
+  source `f977aee1f` passed 15,350 tests and independent source review.
+  On September 15 the approved map dependency prerequisite merged to main;
+  UX-026 rebased without behavioral changes and passed 15,342 tests in the
+  integration gate plus the separate 8-test storm-source suite. The fresh audit
+  reports zero vulnerabilities; the 444.4 KB main bundle passes the unchanged
+  460 KB limit. Fresh Claude review and publication closeout remain open. See
+  [resumption evidence](validation/UX-026-RESUMPTION.md) and
+  [literal proofs](validation/UX-026-MUTATION-PROOFS.md). No merge or installation
+  occurred; the recurring controller remains deleted.
+
+---
+
+### UX-027 — Evidence-scoped Home reassurance *(High Assurance)*
+
+Replace unsupported Home all-clear claims with the limits of available reports,
+while preserving detected threats and their actions. Bradley approved the
+[implementation design](plans/2026-09-07-ux027-evidence-scoped-home-design.md)
+on 2026-09-07.
+
+- **Scope:** briefing projection, Home rendering, focused behavioral tests.
+- **Coverage contract:** report generation is not source freshness. No current
+  production input establishes complete per-place coverage; empty, unavailable,
+  offline, or freshly recomputed reports cannot produce an all-clear state.
+- **Show:** three persistent bands with evidence limitations; distinguish zero
+  saved places, missing reports, and empty available reports. Preserve positive
+  impacts, worldwide context, severity, action text, and dossier links.
+- **Non-goals:** providers, spatial matching, forecasting, posture/planned
+  benefit, notifications, storage, and UX-025/UX-026 ownership.
+- **Done when:** degraded/empty states never imply clearance; calculation time
+  cannot refresh evidence age; positive threats remain visible.
+- **Verify:** Home, survival, renderer, actual targeted-suite selection, type
+  checks, unchanged bundle budget, mutation proofs, independent review, and
+  manual packaged evidence with an identified build.
+- **Evidence:** [validation report](validation/UX-027-EVIDENCE-SCOPED-HOME.md) records automated and mutation checks, six native scenarios, restoration, and independent acceptance review.
+
+---
+
+### UX-031 — Reliable system appearance lifecycle
+
+Status: MONITOR
+Evidence: #1720 — source merged with clean audit, tests and review.
+Exit condition: Verify system appearance switching in the packaged main window and its unified Settings dialog; retain initial-paint and full native visual acceptance as explicitly scoped follow-ups.
+Review after: 2026-09-22
+
+Source is delivered; packaged acceptance remains open. This status does not start
+an automation or claim native acceptance.
+
+Follow repeated system light/dark changes in main and Settings when no manual
+choice exists. Preserve explicit choices (including session choices when storage
+fails), happy's light default, html-owned theme, and existing theme events.
+Correct the affected native light selector groups using the production cascade.
+No native bridge, new materials, UX-025 experiment or initial-paint claim.
+
+Acceptance: focused behavioral and real-bootstrap browser tests, applied-diff
+mutation proof, packaged appearance verification and independent/Claude review.
+Design: [UX-031 appearance brief](plans/2026-09-15-ux031-system-appearance.md).
+
+---
+
+### UX-032 — Settings keyboard containment
+
+Status: MONITOR
+Evidence: #1723 — reviewed source candidate and automated/mutation evidence.
+Exit condition: Verify Settings focus, Tab, Escape, Places Edit handoff and foreground command palette in the identified packaged main build; retain full VoiceOver and appearance acceptance separately.
+Review after: 2026-09-22
+
+This is manual acceptance tracking, not a new scheduled automation.
+
+Packaged main `ee2a7aaac9be` on macOS 27.0 (26A428), September 15:
+native menu Settings opens the unified dialog without moving focus inside.
+Tab focuses the background Safety review banner. Escape dismisses Settings and
+also switches Home to Classic. Reproduced through native UI automation; no
+settings values were changed, and Home was restored afterward.
+
+Acceptance: entering Settings moves focus inside; Tab and Shift-Tab remain in
+visible enabled controls; Escape dismisses only Settings; closing restores a
+connected invoking control; repeated opens and tab changes remain usable.
+Keep native appearance acceptance separate. No native bridge or preference
+migration is included.
+
+Design: [UX-032 brief](plans/2026-09-15-ux032-settings-keyboard.md).
+Evidence: [validation and review](validation/UX-032-SETTINGS-KEYBOARD.md),
+[literal mutation proofs](validation/UX-032-MUTATION-PROOFS.md).
+
+---
+
+## September 22 reliability intake from PR 1731
+
+The [reviewed handoff](https://github.com/bradleybond512/crystal-ball/blob/ac70c0f6a0db3cfb3ff9d46b0f2bad129eb2e94a/docs/UI_PERF_HANDOFF_FOR_CODEX.md)
+adds a warning-reliability priority lane. The
+[integration brief](plans/2026-09-22-pr1731-integration.md) records corrections,
+ownership and approval boundaries. UX-045 is the first design task, followed by
+retention, situation identity, authoritative warning lifecycle and truthful
+coverage before further reassuring Home surfaces. Existing tasks remain active.
+
+These are accepted investigation/repair tasks, not claims that every historical
+count or proposed remedy has been independently verified. PRs1730 and1732 remain
+open; a locally installed build is not a merge. H19 was independently reproduced
+against current main without real notifications. Correlation work belongs to
+ACC-509 and ACC-510 in the prediction tracker, coordinated with PR1732.
+
+The original report's proposed UX-039/UX-041 are intentionally not allocated:
+blanket timeout/storage wrappers were undermined by its own later corrections.
+UX-038 covers URL handling only; its unrelated persistence work is UX-057.
+Do not turn H9 or the disproved sidecar-port/auth theories into tasks.
+The seismic magnitude-type mismatch remains a discovery item under the existing
+source-fusion program, requiring domain evidence before tolerance changes.
+
+### UX-033 — Keep content reachable during stacked warnings
+
+Status: NOT STARTED
+Source findings: PR1731 H1.
+
+Acceptance: Cap the measured notification stack and its reserved space together. At small window sizes, stacked warnings remain scrollable while content and navigation remain reachable.
+
+### UX-034 — Assign ownership of top-of-window surfaces
+
+Status: NOT STARTED
+Source findings: PR1731 H2.
+
+Acceptance: Inventory each rail as measured content or an intentional overlay; verify no overlap with summary, controls or navigation. Coordinate with open PR1730; do not repeat its changes.
+
+### UX-035 — Gate background panel work by actual need
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H3.
+
+Acceptance: Profile foreground/background behavior before selecting panels. Reduce invisible presentation work while preserving safety monitoring and data dependencies; do not blanket-disable off-screen acquisition.
+
+### UX-036 — Spread refresh work and honor battery policy
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M1/M3.
+
+Acceptance: Measure synchronized refresh cost and introduce bounded staggering through existing scheduling conventions; preserve maximum warning-detection latency and foreground recovery.
+
+### UX-037 — Prevent new unowned stacking levels
+
+Status: NOT STARTED
+Source findings: PR1731 M2.
+
+Acceptance: Inventory intentional stacking contexts and introduce a reviewed ratchet without changing current modal, focus or critical-banner behavior.
+
+### UX-038 — Constrain video-channel link construction
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 L1.
+
+Acceptance: Verify configured and external handle paths, encode safe URL components and reject unsafe destinations with behavioral tests. Keep storage optimizations separate.
+
+### UX-040 — Expose unavailable and stale feed outcomes
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M4/M8.
+
+Acceptance: Distinguish denied, malformed, unavailable and stale-cache outcomes from a verified empty result. Start with measured failures; never log credentials or treat every isolated catch as a defect.
+
+### UX-042 — Construct panels when needed without losing coverage
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M6/H7.
+
+Acceptance: Measure construction time independently from parsing; defer selected presentation objects while preserving service startup, Home contributors, restored layouts and on-demand navigation.
+
+### UX-043 — Reduce repeated alert subscriber scans
+
+Status: NOT STARTED
+Source findings: PR1731 M7.
+
+Acceptance: Measure fan-out cost and update subscriber contracts without losing updates, ack/pin changes or failure isolation. Demonstrate behavior and cost under a full store.
+
+### UX-044 — Announce critical UI changes accessibly
+
+Status: NOT STARTED
+Source findings: PR1731 L3.
+
+Acceptance: Review PR1730 and add missing live-region semantics without repeated announcements or focus theft. Verify screen-reader and keyboard behavior on identified surfaces.
+
+### UX-045 — Keep advisories from suppressing warnings
+
+Status: DONE
+Evidence: #1733 — approved badge-only source repair, focused regression tests and three applied mutation proofs.
+Approval: September 22, operator approved the badge-only correction; broader notification policy remains separate.
+Source findings: PR1731 H19.
+
+Acceptance: Allowed badge-only alerts must not consume the interruptive notification cooldown. Retain duplicate limits, critical bypass and user policies. Queue/coalescing is a separate lifecycle decision, not an implicit expansion of this repair.
+
+### UX-046 — Retain active alerts and preserve cap priorities
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H17/H18.
+
+Acceptance: Separate source event time from retention time, preserve active multi-day events without repeated notification, and evict acknowledged unpinned items before actionable ones. Define bounded all-pinned capacity behavior. Coordinate store edits with PR1732 and ACC-509.
+
+### UX-047 — Keep national weather warnings current
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H12/H13/H14.
+
+Acceptance: Schedule authoritative NWS refresh and reconcile updates, cancellations and expiry across restart; display issued and future-onset times honestly. Preserve national coverage, distinguish partial/failed fetches from an authoritative empty result, and reuse only helpers whose semantics match.
+
+### UX-048 — Restore verified GDACS ingestion
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H11.
+
+Acceptance: Probe current response bodies and required parameters before choosing an endpoint; retain request, row count and consumed fields. Contract-test successful, malformed and empty responses without caching malformed bodies.
+
+### UX-049 — Distinguish quiet sensors from missing observations
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H21.
+
+Acceptance: Carry real observation/fetch age and coverage into threat summaries. A failed or stale domain cannot become a freshly checked quiet sensor because aggregation ran. Check all-domain reassurance and partial coverage.
+
+### UX-050 — Make Ghost Mode suppression unmistakable
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H20.
+
+Acceptance: Approve explicit policy for critical alerts versus privacy/silence preferences; show persistent mode and suppression accounting. Do not silently bypass an existing user-selected privacy mode.
+
+### UX-051 — Align RSS request budgets across boundaries
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M12.
+
+Acceptance: Bound total sidecar redirect/request time below the renderer budget while preserving SSRF, authorization and cancellation checks. Test slow redirects and timely error delivery.
+
+### UX-052 — Restrain derived alert interruptions
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H15 remainder.
+
+Acceptance: Separate derived-notification policy from authoritative warnings; define domain, cooldown, quiet-hour and burst accounting rules. Coordinate with ACC-509; do not change inference severity to mask delivery defects.
+
+### UX-053 — Finish boot without awaiting all data sources
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 P0.
+
+Acceptance: Define usable first-screen readiness separately from background acquisition; preserve initialization dependencies and failure visibility. Measure cold/warm boot and warning readiness, not only completion of one promise.
+
+### UX-054 — Cover subproject dependencies in security checks
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M10.
+
+Acceptance: Inventory all maintained lockfiles and exposed tools; add appropriately scoped audit coverage and resolve confirmed reachable issues without weakening thresholds.
+
+### UX-055 — Surface stale credential validation honestly
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M11.
+
+Acceptance: Show validation age and distinguish unavailable validation from an invalid key. Re-check only with explicit bounded provider behavior; do not rotate credentials or expose values.
+
+### UX-056 — Bound retained storage without losing user evidence
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 M9.
+
+Acceptance: Measure live storage and classify owned cache versus user evidence before proposing retention or cleanup. Backup, migration, deletion and installed profile changes require a separate approved design.
+
+### UX-057 — Persist panel state only when it changes
+
+Status: NOT STARTED
+Source findings: PR1731 L2.
+
+Acceptance: Inspect the six reported timer writers; remove redundant writes while preserving state across reload, failed storage and teardown. Verify each actual writer before changing it. Any cognition or self-tuning writer requires high-assurance design approval before implementation.
+
+---
+
+### UX-058 — Account for deferred and updated warnings
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H19 follow-up and UX-045 scope limits.
+
+Acceptance: design bounded handling of distinct warnings suppressed during an
+interruptive cooldown, same-ID severity escalation, explicit channel preferences
+and operator-visible suppression accounting. Define event identity, expiry,
+cancellation, acknowledgement, mode changes, capacity, restart and teardown before
+introducing a queue or digest. Preserve user privacy/silence choices and prevent
+burst replay. UX-045 does not claim these behaviors are repaired.
+
 ---
 
 ## What was NOT verified
@@ -730,7 +1074,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | MONITOR | #1660 |
+| UX-000 | Zero-key first-run contract | MONITOR | #1660; [failed packaged test](https://github.com/bradleybond512/crystal-ball/issues/1725); Home #1726; request errors #1728 |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | DONE | #1670 |
@@ -755,3 +1099,31 @@ Update the row in the same PR that does the work.
 | UX-022 | Truthful desktop-local OpenAQ sampling | DONE | #1677 |
 | UX-023 | Truthful automatic Little Snitch local feed | DONE | #1685 |
 | UX-024 | Persistent pane review trail | DONE | #1689 |
+| UX-026 | Location + saved-place impact in alert digests | MONITOR | #1704 |
+| UX-027 | Evidence-scoped Home reassurance | DONE | #1707 |
+| UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
+| UX-032 | Settings keyboard containment | MONITOR | #1723 |
+| UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
+| UX-034 | Assign ownership of top-of-window surfaces | NOT STARTED | — |
+| UX-035 | Gate background panel work by actual need | NOT STARTED — HIGH ASSURANCE | — |
+| UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
+| UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
+| UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |
+| UX-040 | Expose unavailable and stale feed outcomes | NOT STARTED — HIGH ASSURANCE | — |
+| UX-042 | Construct panels when needed without losing coverage | NOT STARTED — HIGH ASSURANCE | — |
+| UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
+| UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
+| UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
+| UX-046 | Retain active alerts and preserve cap priorities | NOT STARTED — HIGH ASSURANCE | — |
+| UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
+| UX-048 | Restore verified GDACS ingestion | NOT STARTED — HIGH ASSURANCE | — |
+| UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
+| UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
+| UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |
+| UX-052 | Restrain derived alert interruptions | NOT STARTED — HIGH ASSURANCE | — |
+| UX-053 | Finish boot without awaiting all data sources | NOT STARTED — HIGH ASSURANCE | — |
+| UX-054 | Cover subproject dependencies in security checks | NOT STARTED — HIGH ASSURANCE | — |
+| UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
+| UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
+| UX-057 | Persist panel state only when it changes | NOT STARTED | — |
+| UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |

@@ -4,6 +4,7 @@
  * Eliminates 15-minute learning mode for users.
  */
 
+import { createAbortError, withCallerAbort } from './caller-abort';
 import type { CountryScore, ComponentScores } from './country-instability';
 import { setHasCachedScores } from './country-instability';
 import { getPersistentCache, setPersistentCache } from './persistent-cache';
@@ -142,35 +143,6 @@ let fetchPromise: Promise<CachedRiskScores | null> | null = null;
 let lastFetchTime = 0;
 const REFETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-function createAbortError(): DOMException {
-  return new DOMException('The operation was aborted.', 'AbortError');
-}
-
-function withCallerAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(createAbortError()) as Promise<T>;
-
-  return new Promise<T>((resolve, reject) => {
- const onAbort = () => {
- signal.removeEventListener('abort', onAbort);
- reject(createAbortError());
- };
- signal.addEventListener('abort', onAbort, { once: true });
-
- promise.then(
- (value) => {
- signal.removeEventListener('abort', onAbort);
- resolve(value);
- },
- (error: unknown) => {
- signal.removeEventListener('abort', onAbort);
- // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejecting the original error
- reject(error);
- },
- );
-  });
-}
-
 async function loadPersistentRiskScores(): Promise<CachedRiskScores | null> {
   const entry = await getPersistentCache<CachedRiskScores>(RISK_CACHE_KEY);
   return entry?.data ?? null;
@@ -199,7 +171,11 @@ export async function fetchCachedRiskScores(signal?: AbortSignal): Promise<Cache
  void setPersistentCache(RISK_CACHE_KEY, data);
  return cachedScores;
  } catch (error) {
- if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ // Every failure takes the cache fallback, including the runtime's own 15s
+ // fetch timeout. This body is shared by every deduplicated caller, so it must
+ // not decide anything on one caller's behalf: rethrowing here would hand an
+ // AbortError to callers that never cancelled, and skip the throttle below.
+ // Per-caller cancellation is withCallerAbort's job at the return sites.
  // eslint-disable-next-line no-console -- intentional: debug logging for cached risk score fetch failures
  console.error('[CachedRiskScores] Fetch error:', error);
  lastFetchTime = now; // prevent unlimited retries on sustained failure

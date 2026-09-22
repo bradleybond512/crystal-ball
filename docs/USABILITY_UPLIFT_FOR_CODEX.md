@@ -1127,3 +1127,5 @@ Update the row in the same PR that does the work.
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
+
+| UX-060 | Preserve onboarding keyboard ownership against proactive digest | IN PROGRESS | — |

@@ -295,6 +295,14 @@ class NotificationDispatcher {
  return;
  }
 
+ // ── Badge-only — no visible notification ──
+ if (action === 'badge') {
+ dispatchTrace(trace, action, false);
+ recordNativeResult(trace, { delivered: true, surface: 'in_app' });
+ this.incrementBadge();
+ return;
+ }
+
  // ── Rate limiting — max 1 per source per RATE_LIMIT_MS ──
  const now = Date.now();
  const lastTime = this.rateLimitMap.get(alert.source);
@@ -303,14 +311,6 @@ class NotificationDispatcher {
  return;
  }
  this.rateLimitMap.set(alert.source, now);
-
- // ── Badge-only — no visible notification ──
- if (action === 'badge') {
- dispatchTrace(trace, action, false);
- recordNativeResult(trace, { delivered: true, surface: 'in_app' });
- this.incrementBadge();
- return;
- }
 
  // ── Send notification (sound+banner or banner) ──
  const withSound = action === 'sound+banner';

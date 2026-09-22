@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -50,11 +53,40 @@ export function runCommandWithProgress(command, args, {
   });
 }
 
+/**
+ * Cache location, fingerprinted by config + ESLint version.
+ *
+ * ESLint's file cache does NOT invalidate itself when the config changes, so a
+ * plain --cache can serve results computed under different rules. That would
+ * quietly corrupt the lint baseline counts (scripts/lint-baseline.mjs), which
+ * the ratchet depends on being exact. Hashing eslint.config.mjs and the ESLint
+ * version into the filename means any change to either starts a cold cache
+ * instead of trusting stale entries.
+ *
+ * Set CB_ESLINT_NO_CACHE=1 to bypass caching entirely.
+ */
+function cacheArgs() {
+  if (process.env.CB_ESLINT_NO_CACHE === '1') return [];
+  try {
+    const configPath = path.join(repoRoot, 'eslint.config.mjs');
+    const fingerprint = createHash('sha256')
+      .update(readFileSync(configPath))
+      .update(createRequire(import.meta.url)('eslint/package.json').version)
+      .digest('hex')
+      .slice(0, 12);
+    return ['--cache', '--cache-location', path.join(repoRoot, `.eslintcache-${fingerprint}`)];
+  } catch {
+    // Missing config or unreadable package.json — correctness beats speed.
+    return [];
+  }
+}
+
 export function runEslint(files, options = {}) {
   const eslintBin = path.join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js');
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  console.log(`[lint] Starting ESLint for ${files.length} target(s); timeout ${Math.round(timeoutMs / 1000)}s`);
-  return runCommandWithProgress(process.execPath, [eslintBin, ...files], {
+  const cache = cacheArgs();
+  console.log(`[lint] Starting ESLint for ${files.length} target(s); timeout ${Math.round(timeoutMs / 1000)}s${cache.length > 0 ? ' (cached)' : ''}`);
+  return runCommandWithProgress(process.execPath, [eslintBin, ...cache, ...files], {
     label: 'ESLint',
     ...options,
     timeoutMs,

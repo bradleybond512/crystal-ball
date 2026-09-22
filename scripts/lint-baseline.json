@@ -93,11 +93,6 @@
       "error:unicorn/import-style": 1,
       "error:unicorn/prefer-top-level-await": 1
     },
-    "scripts/setup-main-sync-agent.mjs": {
-      "error:sonarjs/cognitive-complexity": 1,
-      "error:sonarjs/no-os-command-from-path": 1,
-      "error:unicorn/prefer-top-level-await": 1
-    },
     "scripts/sync-desktop-version.mjs": {
       "error:sonarjs/cognitive-complexity": 1,
       "error:unicorn/prefer-top-level-await": 1
@@ -515,9 +510,6 @@
     "src/components/TrustBudgetPanel.ts": {
       "warning:eslint-unused-disable": 1
     },
-    "src/components/UcdpEventsPanel.ts": {
-      "error:sonarjs/no-nested-conditional": 1
-    },
     "src/components/VirtualList.ts": {
       "error:sonarjs/cognitive-complexity": 1,
       "error:unicorn/prefer-ternary": 1
@@ -750,10 +742,6 @@
     "src/services/cognition/regime-detection.ts": {
       "error:unicorn/numeric-separators-style": 1
     },
-    "src/services/conflict/index.ts": {
-      "error:@typescript-eslint/prefer-nullish-coalescing": 2,
-      "error:unicorn/no-array-callback-reference": 2
-    },
     "src/services/congress-defense.ts": {
       "error:sonarjs/slow-regex": 1,
       "error:sonarjs/use-type-alias": 1,
@@ -792,16 +780,6 @@
     "src/services/ecdc-surveillance.ts": {
       "error:unicorn/prefer-code-point": 1,
       "error:unicorn/prefer-math-trunc": 1
-    },
-    "src/services/economic/index.ts": {
-      "error:@typescript-eslint/prefer-nullish-coalescing": 6,
-      "error:@typescript-eslint/require-await": 1,
-      "error:sonarjs/cognitive-complexity": 2,
-      "error:sonarjs/different-types-comparison": 1,
-      "error:sonarjs/no-nested-conditional": 1,
-      "error:unicorn/consistent-function-scoping": 1,
-      "error:unicorn/no-array-callback-reference": 1,
-      "error:unicorn/prefer-number-properties": 1
     },
     "src/services/emergency-brief.ts": {
       "error:@typescript-eslint/prefer-find": 1,
@@ -860,9 +838,6 @@
     "src/services/intelligence/briefing-scheduler.ts": {
       "error:unicorn/prefer-spread": 1,
       "error:unicorn/prefer-ternary": 1
-    },
-    "src/services/intelligence/epistemic-bridge.ts": {
-      "error:unicorn/consistent-function-scoping": 1
     },
     "src/services/intelligence/mission-bridges/weather-bridges.ts": {
       "error:@typescript-eslint/dot-notation": 18,
@@ -938,14 +913,6 @@
       "error:@typescript-eslint/no-unsafe-argument": 2,
       "error:@typescript-eslint/no-unsafe-assignment": 14,
       "error:@typescript-eslint/no-unsafe-member-access": 25
-    },
-    "src/services/rss.ts": {
-      "error:@typescript-eslint/no-empty-function": 1,
-      "error:@typescript-eslint/prefer-nullish-coalescing": 16,
-      "error:no-console": 3,
-      "error:sonarjs/cognitive-complexity": 2,
-      "error:sonarjs/no-clear-text-protocols": 1,
-      "error:unicorn/no-array-callback-reference": 2
     },
     "src/services/security-advisories.ts": {
       "error:@typescript-eslint/prefer-nullish-coalescing": 7,

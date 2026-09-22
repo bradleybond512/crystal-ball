@@ -72,3 +72,6 @@ data/attack-cache.json
 events.db
 events.db-wal
 events.db-shm
+
+# ESLint cache (fingerprinted by config + version — see scripts/run-eslint.mjs)
+.eslintcache-*

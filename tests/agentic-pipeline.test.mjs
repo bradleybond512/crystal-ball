@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
@@ -14,6 +14,8 @@ import {
   ciVerdict,
   isRunnerAllowlisted,
   commandToStages,
+  prDeclaredOverrides,
+  mergeOverrides,
 } from '../scripts/targeted-tests.mjs';
 import { parseVerdictLine } from '../scripts/ci-codex-review.mjs';
 import { expectedReviewer, verdictAdvice } from '../scripts/cross-agent-check.mjs';
@@ -717,4 +719,163 @@ test('changing cross-agent-check selects a suite that actually covers it', () =>
   const { scripts, unmapped } = selectScripts(['scripts/cross-agent-check.mjs'], index);
   assert.deepEqual(scripts, ['test:agentic-pipeline']);
   assert.deepEqual(unmapped, []);
+});
+
+// ── PR-declared coverage overrides ──────────────────────────────────────────
+// CI runs main's copy of targeted-tests.mjs, so a branch adding a new source
+// file plus its suite previously had no way to say they belong together: the
+// OVERRIDES map is code in a file the branch does not control. The only
+// branch-readable option was the baseline, whose header defines an entry as a
+// declaration that the file is DELIBERATELY UNTESTED — false for a tested file.
+// These tests pin the additive mechanism that closes that gap, and the security
+// property that makes it safe.
+
+test('PR overrides parse a well-formed declaration', () => {
+  const parsed = prDeclaredOverrides(() => JSON.stringify({
+    'scripts/install-mcp-deps.mjs': ['test:mcp-deps'],
+  }));
+  assert.deepEqual(parsed, { 'scripts/install-mcp-deps.mjs': ['test:mcp-deps'] });
+});
+
+test('PR overrides never take the gate down on bad input', () => {
+  // A malformed or missing file must degrade to "no declarations", never throw:
+  // the gate failing open on a syntax error would be worse than the gap.
+  assert.deepEqual(prDeclaredOverrides(() => { throw new Error('ENOENT'); }), {});
+  assert.deepEqual(prDeclaredOverrides(() => 'not json at all'), {});
+  assert.deepEqual(prDeclaredOverrides(() => '[]'), {});
+  assert.deepEqual(prDeclaredOverrides(() => 'null'), {});
+});
+
+test('PR overrides drop entries that are not script-name arrays', () => {
+  const parsed = prDeclaredOverrides(() => JSON.stringify({
+    'a.mjs': 'test:not-an-array',
+    'b.mjs': ['npm run something'],        // not a test: script
+    'c.mjs': ['test:real', 42],            // non-strings filtered out
+    'd.mjs': [],
+  }));
+  assert.deepEqual(parsed, { 'c.mjs': ['test:real'] });
+});
+
+test('merging is additive — a PR cannot remove or replace a mapping main requires', () => {
+  // The security property. If this ever becomes a replace, a PR could point a
+  // file at a trivial suite and silently drop the one main insists on.
+  const base = { 'src/app/data-loader.ts': ['test:providers'] };
+  const merged = mergeOverrides(base, { 'src/app/data-loader.ts': ['test:mine'] });
+  assert.deepEqual(merged['src/app/data-loader.ts'], ['test:providers', 'test:mine']);
+  assert.deepEqual(base['src/app/data-loader.ts'], ['test:providers'], 'base must not be mutated');
+});
+
+test('a declared mapping covers the file AND runs the suite it names', () => {
+  // Unlike a baseline line — which runs nothing — declaring coverage here means
+  // the named suite actually executes.
+  const index = deriveScriptIndex({ 'test:mcp-deps': 'node --test tests/install-mcp-deps.test.mjs' }, root);
+  const overrides = mergeOverrides(OVERRIDES, { 'scripts/install-mcp-deps.mjs': ['test:mcp-deps'] });
+  const { scripts, unmapped } = selectScripts(['scripts/install-mcp-deps.mjs'], index, overrides);
+  assert.deepEqual(scripts, ['test:mcp-deps'], 'the declared suite must be selected to run');
+  assert.deepEqual(unmapped, [], 'the file must no longer count as a coverage gap');
+});
+
+test('declaring a suite that does not exist does not launder coverage', () => {
+  // Naming a script absent from the index leaves the file unmapped, so the gate
+  // still fails. Otherwise a PR could claim coverage from a nonexistent suite.
+  const index = deriveScriptIndex({ 'test:real': 'node --test tests/real.test.mjs' }, root);
+  const overrides = mergeOverrides(OVERRIDES, { 'scripts/whatever.mjs': ['test:does-not-exist'] });
+  const { scripts, unmapped } = selectScripts(['scripts/whatever.mjs'], index, overrides);
+  assert.deepEqual(scripts, []);
+  assert.deepEqual(unmapped, ['scripts/whatever.mjs']);
+});
+
+function targetedCliFixture(t) {
+  const { dir, git } = fixtureRepo('codex/targeted-fixture');
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const scripts = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [
+    `test:padding-${i}`, `node --test tests/padding-${i}.test.mjs`,
+  ]));
+  scripts['test:providers'] = 'node --test tests/trusted.test.mjs';
+  const write = (file, contents) => {
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), contents);
+  };
+  const packageJson = (commands) => JSON.stringify({ private: true, scripts: commands });
+  const markerTest = (marker) => `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'executed');\n`;
+  write('package.json', packageJson(scripts));
+  write('tests/trusted.test.mjs', markerTest('trusted-ran.txt'));
+  git('add', 'package.json', 'tests/trusted.test.mjs');
+  git('commit', '-q', '-m', 'fixture: trusted main commands');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  return {
+    dir, scripts, write, packageJson, markerTest,
+    run(files) {
+      git('add', ...files);
+      git('commit', '-q', '-m', 'fixture: PR changes');
+      const env = { ...process.env };
+      delete env.GITHUB_BASE_REF;
+      delete env.GITHUB_STEP_SUMMARY;
+      delete env.NODE_TEST_CONTEXT;
+      return spawnSync(process.execPath, [join(root, 'scripts/targeted-tests.mjs')], {
+        cwd: dir, encoding: 'utf8', env, timeout: 30_000,
+      });
+    },
+  };
+}
+
+test('PR overrides CLI: the declaration file causes the new suite to execute', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('scripts/new-engine.mjs', 'export const value = 1;\n');
+  f.write('tests/declared.test.mjs', f.markerTest('declared-ran.txt'));
+  f.write('package.json', f.packageJson({
+    ...f.scripts, 'test:declared': 'node --test tests/declared.test.mjs',
+  }));
+  f.write('scripts/targeted-tests-overrides.json', JSON.stringify({
+    'scripts/new-engine.mjs': ['test:declared'],
+  }));
+
+  const result = f.run([
+    'scripts/new-engine.mjs', 'tests/declared.test.mjs', 'package.json',
+    'scripts/targeted-tests-overrides.json',
+  ]);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(readFileSync(join(f.dir, 'declared-ran.txt'), 'utf8'), 'executed');
+  assert.match(result.stdout, /1 script\(s\) passed/);
+  assert.doesNotMatch(result.stdout, /NEW GAP/);
+});
+
+test('PR overrides CLI: a nonexistent declared suite leaves a new source uncovered', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('scripts/new-engine.mjs', 'export const value = 1;\n');
+  f.write('scripts/targeted-tests-overrides.json', JSON.stringify({
+    'scripts/new-engine.mjs': ['test:does-not-exist'],
+  }));
+
+  const result = f.run(['scripts/new-engine.mjs', 'scripts/targeted-tests-overrides.json']);
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /scripts\/new-engine\.mjs \(NEW GAP\)/);
+  assert.match(result.stdout, /FAIL: changed source file\(s\) have no targeted suite/);
+  assert.equal(existsSync(join(f.dir, 'trusted-ran.txt')), false);
+});
+
+test('PR overrides CLI: a declaration and package rewrite cannot replace a main-owned command', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('src/app/data-loader.ts', 'export const value = 1;\n');
+  f.write('tests/replacement.test.mjs', f.markerTest('replacement-ran.txt'));
+  f.write('tests/declared.test.mjs', f.markerTest('declared-ran.txt'));
+  f.write('package.json', f.packageJson({
+    ...f.scripts,
+    'test:providers': 'node --test tests/replacement.test.mjs',
+    'test:declared': 'node --test tests/declared.test.mjs',
+  }));
+  f.write('scripts/targeted-tests-overrides.json', JSON.stringify({
+    'src/app/data-loader.ts': ['test:declared'],
+  }));
+
+  const result = f.run([
+    'src/app/data-loader.ts', 'tests/replacement.test.mjs', 'tests/declared.test.mjs',
+    'package.json', 'scripts/targeted-tests-overrides.json',
+  ]);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(readFileSync(join(f.dir, 'trusted-ran.txt'), 'utf8'), 'executed');
+  assert.equal(readFileSync(join(f.dir, 'declared-ran.txt'), 'utf8'), 'executed');
+  assert.equal(existsSync(join(f.dir, 'replacement-ran.txt')), false);
+  assert.match(result.stdout, /\[trusted:main\] test:providers: node --test tests\/trusted\.test\.mjs/);
+  assert.match(result.stdout, /2 script\(s\) passed/);
 });

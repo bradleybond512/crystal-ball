@@ -53,3 +53,8 @@ self-record a verdict.
 Rollback: reviewed revert of this runtime correction. No data migration. A
 rollback reopens initialization resurrection/ownership races but does not change
 inference results or budgets.
+
+Execution: the corrected suite passes 31/31, the named agentic gate passes, and
+five applied mutations fail with clean checksum restoration. See
+[recorded validation](../validation/PR-1654-INIT-GENERATION.md). Fresh independent
+review remains pending; this is not completion of the PR's delivery gates.

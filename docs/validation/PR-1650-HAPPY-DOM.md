@@ -1,6 +1,6 @@
 # PR1650 happy-dom refresh — validation evidence
 
-Status: local validation complete with the unchanged smoke route-audit limitation documented below; independent review and publication remain pending. Existing PR1650 is the delivery target.
+Status: local validation complete with the unchanged smoke route-audit limitation documented below. Claude independently approved the complete four-file candidate at `6613595150cc00e67314c0d544ab6e67261e8b2a`; final main integration is reviewed separately before publication through existing PR1650.
 
 ## Change and provenance
 
@@ -61,7 +61,7 @@ The old20.10.4 same382fff focused Welcome control **passed1/0**, while the candi
 
 The smoke wrapper passes on both versions but its inner route-audit assertion fails identically: seven sidecar-only routes are unclassified (`/api/acled/token-status`, `/api/epa-sdwis-proxy`, and webcams caltrans/geonet/singapore/tfl/usfs). No route allowance or baseline was changed. The wrapper contract explicitly judges panel reports; this is not a clean inner test suite. Preserve this unresolved audit finding rather than claiming all smoke assertions passed.
 
-No independent review or final publication completed yet. No native app was installed. Manual acceptance should include the real app's Welcome keyboard flow and diagnostic panels; browser checks do not certify WKWebView/native behavior.
+At the initial validation checkpoint, independent review and publication were still pending. No native app was installed. Manual acceptance should include the real app's Welcome keyboard flow and diagnostic panels; browser checks do not certify WKWebView/native behavior.
 
 ## Final integration acceptance at 97faf76e
 
@@ -88,4 +88,14 @@ bash scripts/agentic-validate.sh --tests "test:ux060 test:homeshell test:ux026"
 
 Actual final output: `Agentic validation gate passed.` and `Tests run: test:ux060 test:homeshell test:ux026`. Secret scan output: `Secret scan passed for 4821 file(s).` The gate reran these targeted suites, strict lint, both typechecks, lockfile checks, docs/roadmap checks, and the default build. The explicit full build/bundle measurement above was captured separately before this default build.
 
-A fresh fetch before the first commit confirmed canonical main still matched the final integration base. Independent review remains the next delivery step; no push or native installation was performed by this implementation task.
+A fresh fetch before the first commit confirmed canonical main still matched this integration base. Independent review followed the implementation checkpoint; no native installation was performed.
+
+## Subsequent layout and capacity integration
+
+The unchanged dependency patch was replayed onto main `83815ac1ab48594948c1395431c3e11386fbc214`, preserving the separately reviewed summary-stack layout and alert-capacity updates. Fresh commands and actual outputs:
+
+- `npm run typecheck:all`: exit 0; `tsc --noEmit && tsc --noEmit -p tsconfig.api.json`.
+- `npm run test:summary-strip-layout`: `RESULT 8 pass / 0 fail`.
+- `npm run test:alert-capacity`: `# pass 11`, `# fail 0`.
+
+Raw logs are `final-main-types.log`, `final-main-layout.log`, and `final-main-capacity.log` in the external evidence directory. Later dependency-only main integrations retain these exact source/test changes; final-tip validation and independent integration conclusions are recorded externally rather than misattributing these earlier runs to a later SHA.

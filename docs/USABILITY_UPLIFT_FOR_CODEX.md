@@ -1034,7 +1034,21 @@ Acceptance: Measure live storage and classify owned cache versus user evidence b
 Status: NOT STARTED
 Source findings: PR1731 L2.
 
-Acceptance: Inspect the six reported timer writers; remove redundant writes while preserving state across reload, failed storage and teardown. Verify each actual writer before changing it.
+Acceptance: Inspect the six reported timer writers; remove redundant writes while preserving state across reload, failed storage and teardown. Verify each actual writer before changing it. Any cognition or self-tuning writer requires high-assurance design approval before implementation.
+
+---
+
+### UX-058 — Account for deferred and updated warnings
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H19 follow-up and UX-045 scope limits.
+
+Acceptance: design bounded handling of distinct warnings suppressed during an
+interruptive cooldown, same-ID severity escalation, explicit channel preferences
+and operator-visible suppression accounting. Define event identity, expiry,
+cancellation, acknowledgement, mode changes, capacity, restart and teardown before
+introducing a queue or digest. Preserve user privacy/silence choices and prevent
+burst replay. UX-045 does not claim these behaviors are repaired.
 
 ---
 
@@ -1098,7 +1112,7 @@ Update the row in the same PR that does the work.
 | UX-042 | Construct panels when needed without losing coverage | NOT STARTED — HIGH ASSURANCE | — |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
-| UX-045 | Keep advisories from suppressing warnings | IN PROGRESS — HIGH ASSURANCE | — |
+| UX-045 | Keep advisories from suppressing warnings | IN PROGRESS — HIGH ASSURANCE | #1733 |
 | UX-046 | Retain active alerts and preserve cap priorities | NOT STARTED — HIGH ASSURANCE | — |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
 | UX-048 | Restore verified GDACS ingestion | NOT STARTED — HIGH ASSURANCE | — |
@@ -1111,3 +1125,4 @@ Update the row in the same PR that does the work.
 | UX-055 | Surface stale credential validation honestly | NOT STARTED — HIGH ASSURANCE | — |
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
+| UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |

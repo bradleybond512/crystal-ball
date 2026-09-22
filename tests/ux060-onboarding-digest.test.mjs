@@ -176,7 +176,7 @@ for (const success of [true, false]) {
     await h.settle(success);
     assert.equal(h.owner.digestOverlay.isVisible(), false);
     assert.equal(document.activeElement === first, true); assert.equal(h.marked, 0);
-    assert.equal(document.querySelector('.digest-status'), null, 'blocked completion must not render or announce an error behind Welcome');
+    assert.equal(document.querySelector('.digest-status') === null, true, 'blocked completion must not render or announce an error behind Welcome');
   });
 }
 for (const success of [true, false]) {
@@ -204,5 +204,5 @@ test('dismissed generation stays aborted and teardown prevents async reopen', as
   assert.equal(h.pending[0].signal.aborted, true);
   await h.settle(); assert.equal(h.marked, 0); assert.equal(h.owner.digestOverlay.isVisible(), false);
   h.open(); h.owner.destroyed = true; h.owner.digestOverlay.destroy();
-  await h.settle(false); assert.equal(document.querySelector('.digest-overlay'), null);
+  await h.settle(false); assert.equal(document.querySelector('.digest-overlay') === null, true);
 });

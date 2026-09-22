@@ -4,7 +4,7 @@
 // instead of dying in WebInspector. Also maintains an in-memory breadcrumb
 // ring buffer that is dumped alongside crash reports and Cmd+Shift+D diagnostics.
 import { invokeTauri } from '@/services/tauri-bridge';
-import { isDesktopRuntime } from '@/services/runtime';
+import { fetchTargetHost, isDesktopRuntime } from '@/services/runtime';
 
 let installed = false;
 
@@ -456,24 +456,26 @@ function bumpFetchStat(host: string, ok: boolean): void {
   }
 }
 
-function installFetchInstrumentation(): void {
+// Exported for tests: binds attribution to the wrapper as installed, not just to
+// the helper it calls.
+export function installFetchInstrumentation(): void {
   // Idempotent — installLogBridge is idempotent so this is fine.
   const origFetch = window.fetch.bind(window);
   window.fetch = async function instrumentedFetch(input, init) {
- let host = 'unknown';
- try {
- let url: string;
- if (typeof input === 'string') url = input;
- else if (input instanceof Request) url = input.url;
- else url = String(input);
- host = new URL(url, location.href).host;
- } catch { /* unparseable; keep 'unknown' */ }
+ // This wrapper is installed from App.ts, i.e. OUTSIDE the routing wrappers in
+ // runtime.ts, so it observes app-origin URLs before they are rewritten.
+ // fetchTargetHost reuses the routers' own predicate to name the real host.
+ //
+ // Named after the call settles, not before: the sidecar router resolves its
+ // port lazily, on the first /api/ request it handles. Asking beforehand would
+ // name the default port for that first request even when the sidecar came up
+ // on a fallback one — reintroducing the two-buckets-per-backend split.
  try {
  const resp = await origFetch(input, init);
- bumpFetchStat(host, resp.ok);
+ bumpFetchStat(fetchTargetHost(input), resp.ok);
  return resp;
  } catch (error) {
- bumpFetchStat(host, false);
+ bumpFetchStat(fetchTargetHost(input), false);
  throw error;
  }
   };

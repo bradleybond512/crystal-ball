@@ -1053,6 +1053,13 @@ burst replay. UX-045 does not claim these behaviors are repaired.
 
 ---
 
+### UX-060 — Preserve onboarding keyboard ownership against proactive digest
+
+Status: DONE
+Evidence: #1735 — [focus regression and mutation results](validation/UX-060-ONBOARDING-FOCUS.md).
+Acceptance: first-run Welcome retains keyboard focus against digest handlers and late results. Skip proactive digest on the onboarding boot; preserve explicit post-onboarding opening, focus restoration and cancellation. No automatic resume queue.
+Validation: focused 36/0, existing digest 115/0, final Home browser 6/0, twelve applied mutation runs, types and named gate. Earlier browser readiness failures remain documented; native acceptance is not claimed. Independent and substantive Claude review found no blocking findings; final integration verdict and required CI govern merge.
+
 ## What was NOT verified
 
 State these as open questions rather than treating them as settled:
@@ -1127,5 +1134,4 @@ Update the row in the same PR that does the work.
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
-
-| UX-060 | Preserve onboarding keyboard ownership against proactive digest | IN PROGRESS | #1735 |
+| UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |

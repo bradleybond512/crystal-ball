@@ -583,6 +583,10 @@ export class DeckGLMap {
 
   // Country highlight state
   private countryGeoJsonLoaded = false;
+  private mapStyleGeneration = 0;
+  private styleReadyGeneration = -1;
+  private baselineStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  private countryLoadGeneration: number | null = null;
   private countryHoverSetup = false;
   private highlightedCountryCode: string | null = null;
 
@@ -819,12 +823,18 @@ export class DeckGLMap {
  mapContainer.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%;';
  wrapper.append(mapContainer);
 
- // Map attribution (CARTO basemap + OpenStreetMap data)
+ // Attribution is set after resolving the saved basemap.
  const attribution = document.createElement('div');
  attribution.className = 'map-attribution';
- attribution.innerHTML = '© <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
- wrapper.append(attribution);
 
+ wrapper.append(attribution);
+ const baselineStatus = document.createElement('div');
+ baselineStatus.className = 'map-baseline-status';
+ baselineStatus.setAttribute('role', 'status');
+ baselineStatus.setAttribute('aria-live', 'polite');
+ baselineStatus.setAttribute('aria-atomic', 'true');
+ baselineStatus.style.cssText = 'position:absolute;box-sizing:border-box;padding:4px 7px;border-radius:4px;font-size:11px;line-height:1.4;z-index:4;pointer-events:none;';
+ wrapper.append(baselineStatus);
  this.container.append(wrapper);
   }
 
@@ -833,6 +843,7 @@ export class DeckGLMap {
  const initialTheme = getCurrentTheme();
  const rawSaved = localStorage.getItem(BASEMAP_STORAGE_KEY);
  this.activeBaseMap = resolveEmergencyPackInitialBaseMap(rawSaved, initialTheme);
+ this.updateAttribution(this.activeBaseMap);
 
  registerEmergencyPackMapProtocolOnce(maplibregl.addProtocol, emergencyPackMapProtocolHandler);
 
@@ -856,6 +867,13 @@ export class DeckGLMap {
  : {}),
  });
 
+ const map = this.maplibreMap;
+ const generation = this.mapStyleGeneration;
+ map.once('style.load', () => {
+ if (this.maplibreMap === map && this.mapStyleGeneration === generation) this.styleReadyGeneration = generation;
+ });
+ this.setupMapErrorHandling();
+ this.beginBaselineLoad();
  const canvas = this.maplibreMap.getCanvas();
  canvas.addEventListener('webglcontextlost', (e) => {
  e.preventDefault();
@@ -918,6 +936,22 @@ export class DeckGLMap {
  this.onStateChange?.(this.state);
  };
 
+ this.maplibreMap.on('movestart', onMoveStart);
+ this.maplibreMap.on('moveend', onMoveEnd);
+ this.maplibreMap.on('move', onMoveOrZoom);
+ this.maplibreMap.on('zoom', onMoveOrZoom);
+ this.maplibreMap.on('zoomend', onZoomEnd);
+ this.mapEventHandlers.push(
+ { event: 'movestart', handler: onMoveStart as (...args: unknown[]) => void },
+ { event: 'moveend', handler: onMoveEnd as (...args: unknown[]) => void },
+ { event: 'move', handler: onMoveOrZoom as (...args: unknown[]) => void },
+ { event: 'zoom', handler: onMoveOrZoom as (...args: unknown[]) => void },
+ { event: 'zoomend', handler: onZoomEnd as (...args: unknown[]) => void },
+ );
+  }
+
+  private setupMapErrorHandling(): void {
+ if (!this.maplibreMap) return;
  // MapLibre 'error' events fire when a style JSON or tile fails to load
  // (CORS block, 404, network). Log them; if we get many in a short
  // window, surface a visible overlay so a black map produces actionable
@@ -926,7 +960,7 @@ export class DeckGLMap {
  const mapErrorWindowMs = 5000;
  const mapErrorThreshold = 3;
  setTimeout(() => { mapErrorCount = 0; }, mapErrorWindowMs);
- this.maplibreMap.on('error', (e: unknown) => {
+ const onError = (e: unknown): void => {
  const err = (e as { error?: unknown }).error;
  const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
  const sourceId = (e as { sourceId?: string }).sourceId;
@@ -939,24 +973,19 @@ export class DeckGLMap {
  return;
  }
  console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
+ const initialStyleFailure = !sourceId && this.styleReadyGeneration !== this.mapStyleGeneration && msg.includes(getStyleUrl(this.activeBaseMap));
+ if (this.isBasicBasemap() && (sourceId === 'country-boundaries' || initialStyleFailure)) {
+ this.updateBaselineStatus('unavailable');
+ return;
+ }
  mapErrorCount += 1;
  if (mapErrorCount === mapErrorThreshold) {
  this.showMapErrorOverlay(msg, sourceId);
  }
- });
+ };
+ this.maplibreMap.on('error', onError);
+ this.mapEventHandlers.push({ event: 'error', handler: onError });
 
- this.maplibreMap.on('movestart', onMoveStart);
- this.maplibreMap.on('moveend', onMoveEnd);
- this.maplibreMap.on('move', onMoveOrZoom);
- this.maplibreMap.on('zoom', onMoveOrZoom);
- this.maplibreMap.on('zoomend', onZoomEnd);
- this.mapEventHandlers = [
- { event: 'movestart', handler: onMoveStart as (...args: unknown[]) => void },
- { event: 'moveend', handler: onMoveEnd as (...args: unknown[]) => void },
- { event: 'move', handler: onMoveOrZoom as (...args: unknown[]) => void },
- { event: 'zoom', handler: onMoveOrZoom as (...args: unknown[]) => void },
- { event: 'zoomend', handler: onZoomEnd as (...args: unknown[]) => void },
- ];
   }
 
   private setupResizeObserver(): void {
@@ -6043,24 +6072,47 @@ export class DeckGLMap {
   }
 
   private loadCountryBoundaries(): void {
- if (!this.maplibreMap || this.countryGeoJsonLoaded) return;
- this.countryGeoJsonLoaded = true;
-
+ const map = this.maplibreMap;
+ const generation = this.mapStyleGeneration;
+ const basemap = this.activeBaseMap;
+ if (!map || this.countryGeoJsonLoaded || this.countryLoadGeneration === generation) return;
+ this.countryLoadGeneration = generation;
+ const isCurrent = (): boolean => this.maplibreMap === map && this.mapStyleGeneration === generation && this.activeBaseMap === basemap;
  getCountriesGeoJson()
  .then((geojson) => {
- if (!this.maplibreMap || !geojson) return;
+ if (!isCurrent()) return;
+ this.countryLoadGeneration = null;
+ const hasPolygon = geojson?.features.some(({ geometry }) => {
+ if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return false;
+ const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+ return polygons.some(([ring]) => ring && ring.length >= 4 && ring.every(([lon, lat]) =>
+ typeof lon === 'number' && typeof lat === 'number' && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90));
+ });
+ if (!geojson || !hasPolygon) {
+ this.updateBaselineStatus('unavailable');
+ return;
+ }
  this.countriesGeoJsonData = geojson;
- // Guard each add: rapid basemap switches reset countryGeoJsonLoaded
- // synchronously, so two loads can race past the entry guard and both
- // reach here after the await — re-adding throws "already a source/layer".
- if (!this.maplibreMap.getSource('country-boundaries')) {
- this.maplibreMap.addSource('country-boundaries', {
+ if (!map.getSource('country-boundaries')) {
+ map.addSource('country-boundaries', {
  type: 'geojson',
  data: geojson,
  });
  }
- if (!this.maplibreMap.getLayer('country-interactive')) {
- this.maplibreMap.addLayer({
+ if (this.isBasicBasemap()) {
+ const firstOverlayId = map.getStyle().layers.find((layer) => layer.type !== 'background')?.id;
+ const palette = map.getStyle().metadata as { basicLandColor: string; basicBorderColor: string };
+ if (!map.getLayer('country-baseline-land')) {
+ map.addLayer({ id: 'country-baseline-land', type: 'fill', source: 'country-boundaries',
+ paint: { 'fill-color': palette.basicLandColor, 'fill-opacity': 1 } }, firstOverlayId);
+ }
+ if (!map.getLayer('country-baseline-border')) {
+ map.addLayer({ id: 'country-baseline-border', type: 'line', source: 'country-boundaries',
+ paint: { 'line-color': palette.basicBorderColor, 'line-width': 0.7, 'line-opacity': 0.9 } }, firstOverlayId);
+ }
+ }
+ if (!map.getLayer('country-interactive')) {
+ map.addLayer({
  id: 'country-interactive',
  type: 'fill',
  source: 'country-boundaries',
@@ -6070,8 +6122,8 @@ export class DeckGLMap {
  },
  });
  }
- if (!this.maplibreMap.getLayer('country-hover-fill')) {
- this.maplibreMap.addLayer({
+ if (!map.getLayer('country-hover-fill')) {
+ map.addLayer({
  id: 'country-hover-fill',
  type: 'fill',
  source: 'country-boundaries',
@@ -6082,8 +6134,8 @@ export class DeckGLMap {
  filter: ['==', ['get', 'name'], ''],
  });
  }
- if (!this.maplibreMap.getLayer('country-highlight-fill')) {
- this.maplibreMap.addLayer({
+ if (!map.getLayer('country-highlight-fill')) {
+ map.addLayer({
  id: 'country-highlight-fill',
  type: 'fill',
  source: 'country-boundaries',
@@ -6094,8 +6146,8 @@ export class DeckGLMap {
  filter: ['==', ['get', 'ISO3166-1-Alpha-2'], ''],
  });
  }
- if (!this.maplibreMap.getLayer('country-highlight-border')) {
- this.maplibreMap.addLayer({
+ if (!map.getLayer('country-highlight-border')) {
+ map.addLayer({
  id: 'country-highlight-border',
  type: 'line',
  source: 'country-boundaries',
@@ -6108,11 +6160,19 @@ export class DeckGLMap {
  });
  }
 
+ this.countryGeoJsonLoaded = true;
+ this.updateBaselineStatus('basic');
  if (!this.countryHoverSetup) this.setupCountryHover();
  this.updateCountryLayerPaint(getCurrentTheme());
  if (this.highlightedCountryCode) this.highlightCountry(this.highlightedCountryCode);
  })
- .catch((error) => console.warn('[DeckGLMap] Failed to load country boundaries:', error));
+ .catch((error) => {
+ if (!isCurrent()) return;
+ this.countryLoadGeneration = null;
+ this.countryGeoJsonLoaded = false;
+ this.updateBaselineStatus('unavailable');
+ console.warn('[DeckGLMap] Failed to load country boundaries:', error);
+ });
   }
 
   private setupCountryHover(): void {
@@ -6171,7 +6231,7 @@ export class DeckGLMap {
   }
 
   private applyDarkMapEnhancements(): void {
- if (!this.maplibreMap || this.activeBaseMap !== 'dark') return;
+ if (!this.maplibreMap || this.activeBaseMap !== 'dark' || this.isBasicBasemap()) return;
  // The hillshade DEM expects a vector style with symbol layers underneath
  // for the hillshade to overlay through. Our self-hosted dark.json is a
  // raster-only style (single CARTO tile layer), so adding a hillshade on
@@ -6238,7 +6298,7 @@ export class DeckGLMap {
  wrapper.append(overlay);
  overlay.querySelector('.map-error-retry')?.addEventListener('click', () => {
  overlay.remove();
- if (this.maplibreMap) this.maplibreMap.setStyle(getStyleUrl(this.activeBaseMap));
+ this.switchBasemap(this.activeBaseMap);
  });
  const emergencyAction = overlay.querySelector<HTMLButtonElement>('.map-error-emergency');
  emergencyAction?.addEventListener('click', () => {
@@ -6260,25 +6320,64 @@ export class DeckGLMap {
  emergencyAction?.focus();
   }
 
+  private isBasicBasemap(): boolean {
+ return SITE_VARIANT !== 'happy' && (this.activeBaseMap === 'dark' || this.activeBaseMap === 'light');
+  }
+
+  private beginBaselineLoad(): void {
+ this.clearBaselineTimer();
+ this.updateBaselineStatus('loading');
+ if (!this.isBasicBasemap()) return;
+ const generation = this.mapStyleGeneration;
+ const map = this.maplibreMap;
+ this.baselineStatusTimer = setTimeout(() => {
+ if (this.maplibreMap !== map || this.mapStyleGeneration !== generation || !this.isBasicBasemap()) return;
+ this.updateBaselineStatus('unavailable');
+ }, 30_000);
+  }
+
+  private clearBaselineTimer(): void {
+ if (this.baselineStatusTimer != null) clearTimeout(this.baselineStatusTimer);
+ this.baselineStatusTimer = null;
+  }
+
+  private updateBaselineStatus(state: 'loading' | 'basic' | 'unavailable'): void {
+ if (state !== 'loading') this.clearBaselineTimer();
+ const status = this.container.querySelector<HTMLElement>('.map-baseline-status');
+ if (!status) return;
+ status.hidden = !this.isBasicBasemap();
+ status.dataset.state = state;
+ const text = {
+ loading: 'Loading local geography…',
+ basic: 'Basic map · Country outlines only; no streets or terrain.',
+ unavailable: 'Local geography unavailable. Reload the app to try again.',
+ }[state];
+ if (status.textContent !== text) status.textContent = text;
+ status.style.color = 'var(--text-primary)';
+ status.style.background = 'var(--surface-3)';
+  }
+
   private switchBasemap(basemap: BaseMapStyle): void {
- if (!this.maplibreMap) return;
+ const map = this.maplibreMap;
+ if (!map) return;
  this.activeBaseMap = basemap;
+ const generation = ++this.mapStyleGeneration;
+ this.countryGeoJsonLoaded = false;
+ this.countryLoadGeneration = null;
  this.synchronizeBasemapSelector();
+ this.updateAttribution(basemap);
+ this.beginBaselineLoad();
  const persistedBaseMap = persistedEmergencyPackBaseMap(basemap);
  if (persistedBaseMap) localStorage.setItem(BASEMAP_STORAGE_KEY, persistedBaseMap);
- this.maplibreMap.setStyle(getStyleUrl(basemap));
- // setStyle() replaces all sources/layers — reset guard so country layers are re-added
- this.countryGeoJsonLoaded = false;
- const themeForPaint: 'dark' | 'light' = basemap === 'light' ? 'light' : 'dark';
- this.maplibreMap.once('style.load', () => {
+ map.once('style.load', () => {
+ if (this.maplibreMap !== map || this.mapStyleGeneration !== generation || this.activeBaseMap !== basemap) return;
+ this.styleReadyGeneration = generation;
  this.loadCountryBoundaries();
- this.updateCountryLayerPaint(themeForPaint);
- this.updateAttribution(basemap);
- // Re-render deck.gl overlay after style swap — interleaved layers need
- // the new MapLibre style to be loaded before they can re-insert.
+ this.updateCountryLayerPaint(getCurrentTheme());
  this.render();
  this.applyDarkMapEnhancements();
  });
+ map.setStyle(getStyleUrl(basemap));
   }
 
   private synchronizeBasemapSelector(): void {
@@ -6292,7 +6391,9 @@ export class DeckGLMap {
   private updateAttribution(basemap: BaseMapStyle): void {
  const el = this.container.querySelector('.map-attribution');
  if (!el) return;
- if (basemap === 'satellite') {
+ if (SITE_VARIANT !== 'happy' && (basemap === 'dark' || basemap === 'light')) {
+ el.innerHTML = '<a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> · <a href="https://github.com/datasets/geo-countries" target="_blank" rel="noopener">datasets/geo-countries</a>';
+ } else if (basemap === 'satellite') {
  el.innerHTML = '&copy; <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a> &mdash; Source: Esri, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN';
  } else if (basemap === 'terrain') {
  el.innerHTML = '&copy; <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a> &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO';
@@ -6314,6 +6415,7 @@ export class DeckGLMap {
   }
 
   public destroy(): void {
+ this.clearBaselineTimer();
  this.smokeOverlayUnsub?.();
  this.smokeOverlayUnsub = null;
  this.smokeScrubberEl?.remove();

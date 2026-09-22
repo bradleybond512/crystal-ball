@@ -14202,6 +14202,19 @@ a.prediction-link:hover {
   display: none;
 }
 
+.map-baseline-status {
+  top: 52px;
+  right: 54px;
+  max-width: calc(100% - 334px);
+}
+
+@media (max-width: 768px) {
+  .map-baseline-status {
+    top: 72px;
+    max-width: calc(100% - 72px);
+  }
+}
+
 /* Map tile attribution */
 .map-attribution {
   position: absolute;
@@ -14243,6 +14256,10 @@ a.prediction-link:hover {
 
 /* Responsive adjustments for deck.gl on smaller desktops */
 @media (max-width: 1200px) {
+  .deckgl-legend:not(.sigint-legend) {
+    bottom: 28px;
+  }
+
   .deckgl-layer-toggles {
  max-width: 180px;
   }

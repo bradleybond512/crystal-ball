@@ -258,7 +258,8 @@ no packaged pass is claimed. The test profile is now a used reproduction profile
 [Follow-up discovery](plans/2026-09-18-ux000-test-followup.md) owns bounded repairs.
 Home contributor readiness merged in PR #1726;
 [request-error preservation](plans/2026-09-19-ux000-request-error-preservation.md)
-is claimed in PR #1728. UX-001 remains blocked until packaged acceptance passes.
+merged in PR #1728. [Local basic maps](plans/2026-09-20-ux000-local-map.md)
+are claimed in PR #1729. UX-001 remains blocked until packaged acceptance passes.
 
 ### UX-001 — Posture band on the Home Shell
 
@@ -1115,7 +1116,7 @@ Update the row in the same PR that does the work.
 
 | Task | Title | Status | PR |
 |---|---|---|---|
-| UX-000 | Zero-key first-run contract | MONITOR | #1660; [failed packaged test](https://github.com/bradleybond512/crystal-ball/issues/1725); Home #1726; request errors #1728 |
+| UX-000 | Zero-key first-run contract | MONITOR | #1660; [failed packaged test](https://github.com/bradleybond512/crystal-ball/issues/1725); Home #1726; request errors #1728; basic map #1729; [validation](validation/PR-1729-LOCAL-BASEMAP.md) |
 | UX-001 | Posture band on Home Shell | NOT STARTED | — |
 | UX-002 | Best move + commit on band | NOT STARTED | — |
 | UX-003 | Emergency readiness surface | DONE | #1670 |

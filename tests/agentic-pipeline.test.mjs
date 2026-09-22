@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { validateVerdict, requiredReviewers } from '../scripts/verify-review-verdict.mjs';
@@ -783,4 +783,99 @@ test('declaring a suite that does not exist does not launder coverage', () => {
   const { scripts, unmapped } = selectScripts(['scripts/whatever.mjs'], index, overrides);
   assert.deepEqual(scripts, []);
   assert.deepEqual(unmapped, ['scripts/whatever.mjs']);
+});
+
+function targetedCliFixture(t) {
+  const { dir, git } = fixtureRepo('codex/targeted-fixture');
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const scripts = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [
+    `test:padding-${i}`, `node --test tests/padding-${i}.test.mjs`,
+  ]));
+  scripts['test:providers'] = 'node --test tests/trusted.test.mjs';
+  const write = (file, contents) => {
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), contents);
+  };
+  const packageJson = (commands) => JSON.stringify({ private: true, scripts: commands });
+  const markerTest = (marker) => `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'executed');\n`;
+  write('package.json', packageJson(scripts));
+  write('tests/trusted.test.mjs', markerTest('trusted-ran.txt'));
+  git('add', 'package.json', 'tests/trusted.test.mjs');
+  git('commit', '-q', '-m', 'fixture: trusted main commands');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  return {
+    dir, scripts, write, packageJson, markerTest,
+    run(files) {
+      git('add', ...files);
+      git('commit', '-q', '-m', 'fixture: PR changes');
+      const env = { ...process.env };
+      delete env.GITHUB_BASE_REF;
+      delete env.GITHUB_STEP_SUMMARY;
+      delete env.NODE_TEST_CONTEXT;
+      return spawnSync(process.execPath, [join(root, 'scripts/targeted-tests.mjs')], {
+        cwd: dir, encoding: 'utf8', env, timeout: 30_000,
+      });
+    },
+  };
+}
+
+test('PR overrides CLI: the declaration file causes the new suite to execute', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('scripts/new-engine.mjs', 'export const value = 1;\n');
+  f.write('tests/declared.test.mjs', f.markerTest('declared-ran.txt'));
+  f.write('package.json', f.packageJson({
+    ...f.scripts, 'test:declared': 'node --test tests/declared.test.mjs',
+  }));
+  f.write('scripts/targeted-tests-overrides.json', JSON.stringify({
+    'scripts/new-engine.mjs': ['test:declared'],
+  }));
+
+  const result = f.run([
+    'scripts/new-engine.mjs', 'tests/declared.test.mjs', 'package.json',
+    'scripts/targeted-tests-overrides.json',
+  ]);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(readFileSync(join(f.dir, 'declared-ran.txt'), 'utf8'), 'executed');
+  assert.match(result.stdout, /1 script\(s\) passed/);
+  assert.doesNotMatch(result.stdout, /NEW GAP/);
+});
+
+test('PR overrides CLI: a nonexistent declared suite leaves a new source uncovered', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('scripts/new-engine.mjs', 'export const value = 1;\n');
+  f.write('scripts/targeted-tests-overrides.json', JSON.stringify({
+    'scripts/new-engine.mjs': ['test:does-not-exist'],
+  }));
+
+  const result = f.run(['scripts/new-engine.mjs', 'scripts/targeted-tests-overrides.json']);
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /scripts\/new-engine\.mjs \(NEW GAP\)/);
+  assert.match(result.stdout, /FAIL: changed source file\(s\) have no targeted suite/);
+  assert.equal(existsSync(join(f.dir, 'trusted-ran.txt')), false);
+});
+
+test('PR overrides CLI: a declaration and package rewrite cannot replace a main-owned command', (t) => {
+  const f = targetedCliFixture(t);
+  f.write('src/app/data-loader.ts', 'export const value = 1;\n');
+  f.write('tests/replacement.test.mjs', f.markerTest('replacement-ran.txt'));
+  f.write('tests/declared.test.mjs', f.markerTest('declared-ran.txt'));
+  f.write('package.json', f.packageJson({
+    ...f.scripts,
+    'test:providers': 'node --test tests/replacement.test.mjs',
+    'test:declared': 'node --test tests/declared.test.mjs',
+  }));
+  f.write('scripts/targeted-tests-overrides.json', JSON.stringify({
+    'src/app/data-loader.ts': ['test:declared'],
+  }));
+
+  const result = f.run([
+    'src/app/data-loader.ts', 'tests/replacement.test.mjs', 'tests/declared.test.mjs',
+    'package.json', 'scripts/targeted-tests-overrides.json',
+  ]);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(readFileSync(join(f.dir, 'trusted-ran.txt'), 'utf8'), 'executed');
+  assert.equal(readFileSync(join(f.dir, 'declared-ran.txt'), 'utf8'), 'executed');
+  assert.equal(existsSync(join(f.dir, 'replacement-ran.txt')), false);
+  assert.match(result.stdout, /\[trusted:main\] test:providers: node --test tests\/trusted\.test\.mjs/);
+  assert.match(result.stdout, /2 script\(s\) passed/);
 });

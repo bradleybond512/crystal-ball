@@ -30,7 +30,8 @@ import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { escapeHtml } from '@/utils/sanitize';
 import { openExternalSafe } from '@/utils/safe-open';
 import { initI18n, t } from '@/services/i18n';
-import { applyStoredTheme } from '@/utils/theme-manager';
+import { applyStoredTheme, watchSystemTheme } from '@/utils/theme-manager';
+import { initializeVariant } from '@/config/variant';
 import { trackFeatureToggle } from '@/services/analytics';
 
 let activeSection = 'overview';
@@ -751,8 +752,10 @@ function handleSearch(query: string): void {
 // ── Init ──
 
 async function initSettingsWindow(): Promise<void> {
-  await initI18n();
+  initializeVariant();
   applyStoredTheme();
+  watchSystemTheme();
+  await initI18n();
 
   try { await resolveLocalApiPort(); } catch { /* use default */ }
 

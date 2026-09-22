@@ -14,17 +14,21 @@ export interface GeoJsonGeometry {
   coordinates: unknown;
 }
 
-export interface LiveAlertInput {
+interface LiveAlertFields {
   id: string;
   event: string;
   severity?: string;
-  onset: string;
   expires: string;
   headline?: string;
   messageType?: string | null;
   centroid?: [number, number] | null;
   geometry?: GeoJsonGeometry | null;
 }
+
+export type LiveAlertInput = LiveAlertFields & (
+  | { onset: string; sent?: string }
+  | { onset?: never; sent: string }
+);
 
 const SYNTHETIC_RADIUS_KM = 20;
 const SYNTHETIC_POINTS = 12;
@@ -99,7 +103,7 @@ export function adaptLiveAlert(raw: LiveAlertInput): NwsAlertMinimal {
     id: raw.id,
     event: raw.event,
     polygon,
-    sent: raw.onset,
+    sent: raw.onset ?? raw.sent!,
     expires: raw.expires,
     severity: normalizeSeverity(raw.severity),
     headline: raw.headline,

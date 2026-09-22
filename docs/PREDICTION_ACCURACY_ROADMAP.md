@@ -911,6 +911,8 @@ These tasks retain their detailed designs in
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
+| ACC-509 | TODO | Stable situation identity under delayed and repeated input | PR1732 coordination |
+| ACC-510 | TODO | Evidence-based domain for news-derived situations | ACC-509 |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
 change operational scores, confidence, posture, alerts, or delivery rungs.
@@ -1922,6 +1924,37 @@ Deliverables:
   Calibrate and assert against the realised margin recomputed from the run, and
   fail the gate if the margin moves outside a recorded tolerance in either
   direction — too far inside means the fixture has stopped testing the boundary.
+
+### ACC-509 — Stable situation identity under delayed and repeated input
+
+Status: `TODO`
+
+Source: PR1731 H10/H16/H22; existing implementation PR1732 remains open.
+High assurance: obtain design approval before modifying inference or persistence.
+Coordinate with the existing PR owner; do not start a competing loop repair.
+
+Separate event time from processing time and preserve bounded source identity
+across store eviction/re-ingest. Repeated delayed reports for one event must not
+mint repeated situations or derived notifications. Retain real geography and
+reject spurious Global/0,0 defaults; never merge distinct events merely because
+their titles match. Include old/fresh reports, same-title different localities,
+zero coordinates, delayed updates, cap churn, restart and bounded retention.
+Compare false merges, duplicate situations and notification counts on a frozen
+replay; document rollback and any migration independently. H17 retention work
+in UX-046 must coordinate with this store path. No accuracy-gate weakening.
+
+### ACC-510 — Evidence-based domain for news-derived situations
+
+Status: `TODO`
+
+Dependencies: ACC-509
+
+Source: PR1731 M13. High assurance; a keyword spike alone is insufficient to
+classify civil unrest. Design topic-supported or neutral classification with
+provenance and uncertainty; do not replace one unconditional mapping with
+another. Replay generic news spikes and actual unrest examples, report false
+positives and missed cases, retain rollback and obtain approval before changing
+production inference. Keep its claim separate from ACC-509.
 
 ## Phase 6 — Evaluate better statistical models
 

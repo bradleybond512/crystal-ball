@@ -3,7 +3,8 @@ import { Panel } from './Panel';
 import { fetchFAACameras, scoreCamerasAgainstAlerts } from '@/services/faa-cameras';
 import type { ScoredFAACamera } from '@/services/faa-cameras';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
-import { fetchGDACSEvents } from '@/services/gdacs';
+import { fetchGDACSEventsTracked } from '@/services/gdacs';
+import { dataFreshness } from '@/services/data-freshness';
 import { getApiBaseUrl } from '@/services/runtime';
 import { flightRuleColor } from '@/services/webcams/flight-rule';
 import type { MetarData } from '@/services/webcams/metar-types';
@@ -13,6 +14,10 @@ export class FAAWeatherCamsPanel extends Panel {
   private alertOnly = false;
   private selectedCam: ScoredFAACamera | null = null;
   private digestText: string | null = null;
+  private unavailableSources: string[] = [];
+  private cameraUnavailable = false;
+  private gdacsCached = false;
+  private loadGeneration = 0;
   // Timelapse / "video" playback state — frames pulled lazily when
   // user clicks Play loop on the selected camera. Frames are
   // ordered oldest → newest so we can step forward through them.
@@ -27,12 +32,39 @@ export class FAAWeatherCamsPanel extends Panel {
   }
 
   private async load(): Promise<void> {
- const [raw, nws, gdacs] = await Promise.all([
- fetchFAACameras(),
+ const generation = ++this.loadGeneration;
+ if (this.cameras.length === 0) this.showLoading('Loading cameras…');
+ const [raw, nws, gdacs] = await Promise.allSettled([
+ fetchFAACameras().then(cameras => {
+ const source = dataFreshness.getSource('faa-cameras');
+ return { cameras, status: source?.status, lastError: source?.lastError, lastUpdate: source?.lastUpdate?.getTime() };
+ }),
  fetchNWSAlerts(),
- fetchGDACSEvents(),
+ fetchGDACSEventsTracked(),
  ]);
- this.cameras = scoreCamerasAgainstAlerts(raw, nws, gdacs);
+ if (generation !== this.loadGeneration) return;
+ this.unavailableSources = [
+ ...(nws.status === 'rejected' ? ['NWS'] : []),
+ ...(gdacs.status === 'rejected' || gdacs.value.dataState.mode === 'unavailable' ? ['GDACS'] : []),
+ ];
+ this.gdacsCached = gdacs.status === 'fulfilled' && gdacs.value.dataState.mode === 'cached';
+ this.cameraUnavailable = raw.status === 'rejected' || raw.value.lastUpdate === undefined || !Number.isFinite(raw.value.lastUpdate)
+ || !!raw.value.lastError || !raw.value.status || ['error', 'no_data', 'disabled'].includes(raw.value.status);
+ try {
+ if (raw.status === 'fulfilled' && (!this.cameraUnavailable || raw.value.cameras.length > 0)) {
+ this.cameras = scoreCamerasAgainstAlerts(raw.value.cameras,
+ nws.status === 'fulfilled' ? nws.value : [],
+ gdacs.status === 'fulfilled' && (gdacs.value.dataState.mode === 'live' || gdacs.value.dataState.mode === 'cached')
+ ? gdacs.value.events : []).map(cam => this.gdacsCached && cam.alertLabel?.startsWith('GDACS ')
+ ? { ...cam, alertLabel: `${cam.alertLabel} (cached context)` }
+ : cam);
+ if (this.selectedCam) this.selectedCam = this.cameras.find(cam => cam.id === this.selectedCam?.id) ?? null;
+ }
+ } catch {
+ this.cameraUnavailable = true;
+ }
+ this.setDataBadge(this.cameraUnavailable && this.cameras.length === 0 ? 'unavailable' : 'cached',
+ this.cameraUnavailable ? 'Camera refresh unavailable' : 'Latest available camera data');
  this.render();
   }
 
@@ -50,6 +82,19 @@ export class FAAWeatherCamsPanel extends Panel {
  const el = this.getContentElement();
  while (el.firstChild) el.firstChild.remove();
  el.className = 'panel-content faa-cams-content';
+ if (this.cameraUnavailable || this.unavailableSources.length > 0 || this.gdacsCached) {
+ const status = document.createElement('p');
+ status.className = 'faa-source-status';
+ status.setAttribute('role', 'status');
+ const messages: string[] = [];
+ if (this.cameraUnavailable) messages.push(this.cameras.length > 0
+ ? 'Camera refresh unavailable — showing stale camera data and alert context.'
+ : 'Camera data unavailable — try refreshing shortly.');
+ if (this.unavailableSources.length > 0) messages.push(`${this.unavailableSources.join(' and ')} alert evidence unavailable; alert proximity is incomplete.`);
+ if (this.gdacsCached) messages.push('GDACS alert evidence is cached; current alert proximity is incomplete.');
+ status.textContent = messages.join(' ');
+ el.append(status);
+ }
 
  const alertCams = this.cameras.filter(c => c.alertProximityMi !== null);
  if (alertCams.length >= 2 && this.digestText) {
@@ -186,9 +231,12 @@ export class FAAWeatherCamsPanel extends Panel {
  if (this.displayed.length === 0) {
  const empty = document.createElement('p');
  empty.className = 'faa-empty';
- empty.textContent = this.alertOnly
- ? 'No cameras near active alerts.'
- : 'No camera data available.';
+ empty.textContent = 'No camera data available.';
+ if (this.alertOnly) {
+ empty.textContent = this.cameraUnavailable || this.unavailableSources.length > 0 || this.gdacsCached
+ ? 'No cameras matched the available alert evidence; other alerts may be missing.'
+ : 'No cameras near active alerts.';
+ }
  el.append(empty);
  }
   }
@@ -334,6 +382,7 @@ export class FAAWeatherCamsPanel extends Panel {
   }
 
   public destroy(): void {
+    this.loadGeneration += 1;
     super.destroy();
     this._pauseLoop();
   }

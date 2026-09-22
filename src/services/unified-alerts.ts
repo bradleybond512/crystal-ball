@@ -455,11 +455,12 @@ class UnifiedAlertStore {
         this.alerts.delete(id);
       }
     }
-    // Cap size — remove oldest acknowledged first, then oldest unacknowledged
+    // Cap size — evict unpinned acknowledged, then unpinned unacknowledged, then pinned.
+    // Oldest source timestamp first within each group; ties keep Map insertion order.
     if (this.alerts.size > MAX_ALERTS) {
       const sorted = [...this.alerts.values()].sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        if (a.acknowledged !== b.acknowledged) return a.acknowledged ? 1 : -1;
+        if (a.pinned !== b.pinned) return a.pinned ? 1 : -1;
+        if (!a.pinned && a.acknowledged !== b.acknowledged) return a.acknowledged ? -1 : 1;
         return a.timestamp - b.timestamp;
       });
       const toDrop = sorted.slice(0, sorted.length - MAX_ALERTS);

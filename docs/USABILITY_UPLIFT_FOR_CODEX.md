@@ -953,12 +953,21 @@ Source findings: PR1731 H19.
 
 Acceptance: Allowed badge-only alerts must not consume the interruptive notification cooldown. Retain duplicate limits, critical bypass and user policies. Queue/coalescing is a separate lifecycle decision, not an implicit expansion of this repair.
 
-### UX-046 — Retain active alerts and preserve cap priorities
+### UX-046 — Preserve alert priorities at capacity
 
-Status: NOT STARTED — HIGH ASSURANCE
-Source findings: PR1731 H17/H18.
+Status: DONE — HIGH ASSURANCE
+Claim: #1734. The operator approved the bounded capacity policy on September 22, 2026.
+Source findings: PR1731 H18. Source-age retention is tracked separately in UX-059.
 
-Acceptance: Separate source event time from retention time, preserve active multi-day events without repeated notification, and evict acknowledged unpinned items before actionable ones. Define bounded all-pinned capacity behavior. Coordinate store edits with PR1732 and ACC-509.
+Acceptance: after the existing capacity-enforcement flush, retain at most 500
+alerts, evicting unpinned acknowledged entries before unpinned unacknowledged
+entries and pinned entries last. Define all-pinned overflow and exact timestamp
+ties explicitly. Preserve existing age, hydration, archive and notification
+behavior; this task does not resolve the repeated pruning of old active alerts.
+Coordinate with open PR1732 without modifying its hydration purge.
+Design: [bounded cap repair](plans/2026-09-22-ux046-alert-cap.md).
+Evidence: #1734 — [capacity regression and mutation results](validation/UX-046-ALERT-CAPACITY.md).
+Implementation, local gates and independent substantive review pass. Final integration verdict and required CI govern merge.
 
 ### UX-047 — Keep national weather warnings current
 
@@ -1053,6 +1062,21 @@ burst replay. UX-045 does not claim these behaviors are repaired.
 
 ---
 
+### UX-059 — Retain active alerts using authoritative lifecycle evidence
+
+Status: NOT STARTED — HIGH ASSURANCE
+Source findings: PR1731 H17; separated from UX-046's capacity-only correction.
+
+Acceptance: separate event time from verified observation/retention time and
+retain active multi-day alerts without notifying on every repoll. Cached replay,
+failed fetches and old storm context must not manufacture freshness. Preserve
+source chronology, ack/pin state and archive semantics. Define legacy metadata,
+expiry, restart and migration behavior in an approved design; coordinate with
+UX-047, ACC-509 and PR1732's hydration purge. Do not replace source timestamps
+with the current clock or claim capacity ordering alone repairs retention.
+
+---
+
 ### UX-060 — Preserve onboarding keyboard ownership against proactive digest
 
 Status: DONE
@@ -1121,7 +1145,7 @@ Update the row in the same PR that does the work.
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
-| UX-046 | Retain active alerts and preserve cap priorities | NOT STARTED — HIGH ASSURANCE | — |
+| UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
 | UX-048 | Restore verified GDACS ingestion | NOT STARTED — HIGH ASSURANCE | — |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
@@ -1134,4 +1158,5 @@ Update the row in the same PR that does the work.
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
+| UX-059 | Retain active alerts using authoritative lifecycle evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |

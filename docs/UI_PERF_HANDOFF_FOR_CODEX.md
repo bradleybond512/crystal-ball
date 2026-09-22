@@ -3,12 +3,12 @@
 - **Current as of:** 2026-09-22 (supersedes every earlier version of this file)
 - **Reviewed code:** `bradleybond512/main` @ `7230cef6` — all line numbers below are on that SHA
 - **Author:** Claude (Opus 5), with the operator present for live verification
-- **Evidence log:** [`CLAUDE_UI_PERF_REVIEW_2026-09-20.md`](CLAUDE_UI_PERF_REVIEW_2026-09-20.md) — eleven rounds, every measurement, every retraction. This file is the action list; that one is the proof.
+- **Evidence log:** [`CLAUDE_UI_PERF_REVIEW_2026-09-20.md`](CLAUDE_UI_PERF_REVIEW_2026-09-20.md) — eleven rounds, every measurement, every retraction. This file preserves the review handoff; the live task lists are `USABILITY_UPLIFT_FOR_CODEX.md` and `PREDICTION_ACCURACY_ROADMAP.md`. The evidence log distinguishes author-reported observations from independently rerun checks.
 
 ## How to use this document
 
 1. Read **State of play** so you know what is already in flight.
-2. Take work from **Open work, in order**. The order is deliberate: the first five items decide whether a warning that matters actually reaches the operator during a real weather event.
+2. Claim work through the live roadmap, using the findings below as context. The ordering below is the original review priority, not a replacement tracker or approval to change alert policy.
 3. Before touching anything, read **Retracted** — each entry is a plausible-looking lead that has already been disproved.
 4. **Coverage map** states what this review did and did not examine. Nothing outside it should be assumed clean.
 5. Follow **Working rules**; they are this repo's, condensed from `AGENTS.md`.
@@ -19,11 +19,13 @@
 
 | PR | What | State |
 |---|---|---|
-| #1730 | Summary strip pinned correctly (sticky double-offset); critical posture banner moved into the notification stack; `DataCenterPinnedStrip` styled | Open. Only failing check: `cross-agent-review` |
-| #1731 | This handoff and the evidence log (docs only) | Open. Failing: `cross-agent-review`, and `axe` — cannot be caused by a docs-only diff; re-run it |
-| #1732 | H10/H15 — situation-engine feedback loop broken; weather no longer labelled civil unrest; one-time purges | Open. **Incomplete — do not merge before H16 and H22 land on it.** Failing: `cross-agent-review` |
+| #1730 | Summary strip, posture-banner placement, data-center strip styles | Open; current-head review and validation still required |
+| #1731 | This handoff and evidence log | Docs only; corrected after independent review; do not infer CI success from an empty check list |
+| #1732 | Feedback-loop exclusion, weather domain hint, one-time purges | Open. Owner's September 22 hold requires H16, H17 and H22 before merge |
+| #1733 | UX-045 badge-only dispatch before banner cooldown | Merged to main `928696b02`; focused tests and mutation evidence in `validation/UX-045-WARNING-DELIVERY.md` |
+| #1734 | UX-046 bounded capacity priorities | Approved and in progress; age/lifecycle work is separate UX-059 |
 
-**The operator's Mac runs a local build (`18301b45`) = #1730 + #1732, not `main`.** It was installed with `desktop:build:full`, which records the local SHA so the main-sync agent does not overwrite it. The Cyber notification category was switched off as an interim mitigation for H15 and can be switched back on.
+**Historical installation observation:** the author reported local build `18301b45` (#1730 + #1732), with Cyber notifications disabled as an interim mitigation. This is not evidence of the current installed build or current preferences, nor an instruction to change them. Recheck live PR checks and installation state when needed.
 
 ---
 
@@ -35,9 +37,9 @@
 
 The next NWS alert in the same ingest batch — a Flash Flood Warning or Severe Thunderstorm Warning (`Severe` → `high` → `banner`) — is dropped. Not deferred: **dropped permanently**, because the store notifies once per id (`unified-alerts.ts:371-374`) and never retries a suppressed alert. Only `Extreme` (`critical`) bypasses the limit.
 
-Reproduced (`R3` in the evidence log, round 11): badge 1, banners 0.
+The author reported badge 1, banners 0 (`R3`, round 11); that abbreviated snippet is not runnable proof. UX-045 independently reproduced the bug with complete committed tests and recorded mutation failures.
 
-**Fix:** key the limit on `source + severity`, or let `high` pre-empt a slot taken by a lower severity; never let a `badge`/`silent` dispatch consume it; queue rather than discard, and coalesce a burst into one digest notification instead of dropping its tail.
+**Delivered:** UX-045 moves badge-only handling before source cooldown while preserving existing policy gates. Severity escalation, queueing, retry and burst coalescing remain UX-058 design work; they are not part of the merged repair.
 **Acceptance:** an advisory arriving immediately before a warning from the same source cannot suppress the warning.
 
 ### 2. H17 — The 48 h prune deletes still-active alerts, then every poll re-notifies them
@@ -46,27 +48,23 @@ Reproduced (`R3` in the evidence log, round 11): badge 1, banners 0.
 
 A long-running event — a GDACS drought, a river Flood Warning issued five days ago and still in force — is therefore ingested, notified, and deleted in the same flush. On the next poll it is new again: notified again, deleted again, forever. Nothing about the event changed.
 
-Reproduced (`R1`): one unchanged GDACS event, three polls → **3 notifications, 0 alerts in the store**. This is also the simplest explanation for H14's "224 NWS alerts issued since boot, none in the store" — an onset older than 48 h is deleted on arrival.
+Author-reported, not independently rerun here (`R1`): one unchanged GDACS event, three polls → **3 notifications, 0 alerts in the store**. This is also the simplest explanation for H14's "224 NWS alerts issued since boot, none in the store" — an onset older than 48 h is deleted on arrival.
 
-**Fix:** prune on an `ingestedAt`/`lastSeenAt` field (or `expiresAt` where the source provides one), never on source time; keep source time for display and ordering only. Pairs with H12/H13, which adds `expiresAt`.
+**Design required (UX-059):** separate source event time from authoritative lifecycle/observation evidence. Do not refresh retention merely because cached or stale rows are ingested again. Define provider expiry, complete versus partial snapshots, failed refreshes, legacy-record migration, bounded retention and notification identity before changing pruning. Coordinate with H12/H13.
 **Acceptance:** an active multi-day warning stays in the store and notifies exactly once.
 
 ### 3. H22 — One flood produces dozens of "situations" because stale signals can never cluster
 
 `computeAffinity()` scores temporal proximity as `1 - |signal.timestamp - situation.lastUpdated| / clusterWindowMs` (`situation-correlator.ts:88-92`), comparing the signal's **source timestamp** against the situation's **wall-clock last update**. `clusterWindowMs` is 6 h (`situation-types.ts:237`). A signal whose source timestamp is older than 6 h scores 0 there; with no `placeIds` it also scores 0 for geography (`extractSignalGeo()` returns `null` unless `placeIds` holds ISO-3 codes, `:45-57`), leaving only the domain match at 0.20 — under the 0.30 merge threshold (`:268`). **Every such signal mints a brand-new situation, even against an identical one created a millisecond earlier.**
 
-Reproduced (`R4`): 12 identical "FLOODING — Vinton, OH" signals timestamped 14.9 h ago → **12 situations**; the same 12 timestamped 18 min ago → 1 situation.
+Author-reported, not independently rerun here (`R4`): 12 identical "FLOODING — Vinton, OH" signals timestamped 14.9 h ago → **12 situations**; the same 12 timestamped 18 min ago → 1 situation.
 
 Live, on the current build (which already contains #1732): the store holds 500 alerts, **416 of them `correlation`** — 361 titled `FLOODING — …`, including 51 for Vinton OH and 23 for Meigs OH alone — against 30 `nws` alerts. The persisted situation store shows the mechanism directly: `sit-mubobeat-af` and `-ag`, created in the same millisecond, are both "FLOODING — Greene, OH", each holding one LSR signal (`ua-lsr-lsr-67-…`, `ua-lsr-lsr-69-…`) timestamped 14.9 h before creation, each with `geo: {lat: 0, lon: 0, label: "Global"}`.
 
 Each of those situations is promoted to a `correlation` alert by the bridge, which is where the operator's flood-notification bursts come from, and what crowds authoritative NWS alerts out of a 500-slot store.
 
-**Fix (three parts, all needed):**
-
-- Clamp temporal affinity to `min(|signalTs - lastUpdated|, |signalTs - situation newest signal ts|)`, or score against ingest time; a report being old must not make it uncorrelatable.
-- Give alert-derived pseudo-signals real geography: alerts carry `location` (lat/lon); `extractSignalGeo()` should use it with `clusterRadiusKm`, instead of only ISO-3 `placeIds`, so same-county reports converge and situations stop being stamped "Global" at 0,0.
-- Add a same-title/same-locality guard on creation, so an identical situation is merged rather than duplicated regardless of affinity scoring.
-**Acceptance:** one county-level flood event produces one situation and one derived alert, whatever the report lag.
+**Design required (ACC-509):** use bounded source-event identity and separate event time from processing time. Geographic evidence must come from validated source locations; absence of geography is not proof of co-location. Do not merge on title/locality alone or promise merging regardless of report lag. Define temporal/geographic bounds, revision identity, memory limits and replay cases before implementation.
+**Acceptance:** delayed duplicate reports for one identified event converge, while distinct recurring events with the same title/locality remain separate; unknown geography must not inflate corroboration. Replay both cases and test bounded state.
 
 ### 4. H16 — Finish #1732: stop eviction churn from re-seeding the engine
 
@@ -92,7 +90,7 @@ Each of those situations is promoted to a `correlation` alert by the bridge, whi
 **Re-measured this morning:** NWS has issued **224 alerts since the 00:20 boot; none of them are in the store** after more than ten hours.
 
 **Fix:** register it with the refresh scheduler at the `weather` cadence (return `void` so it never backs off), record `nws-alerts` freshness, and have the summary strip report sources *overdue against their own cadence* rather than a raw median age. Also make a panel's Retry re-run that panel's source — today any Retry reloads all 116 sources.
-**Architecture:** there are two NWS pipelines. The personal/site one (`weather-posture.ts:28` → `matchAlertToPlace()`) was verified correct against live NWS. Feed the unified store from it; do not build a second lifecycle implementation.
+**Architecture:** personal/site matching and national unified-store ingestion have different coverage. `matchAlertToPlace()` supplies matching and lifecycle-related flags, not complete snapshot reconciliation or cancellation application. Reuse validated primitives, but do not substitute place-filtered or capped weather output for national coverage. The national adapter must establish snapshot completeness and freshness before absence can remove stored warnings.
 **Acceptance:** a warning newly issued at `/alerts/active` appears in the triage bar within one refresh interval with no user action.
 
 ### 7. H12 + H13 — Warning lifecycle and honest timestamps (land with H14)
@@ -102,23 +100,23 @@ Each of those situations is promoted to a `correlation` alert by the bridge, whi
 
 **Re-measured this morning:** only **16 of 133** stored NWS alerts (12%) are still active at NWS; 16 carry future timestamps. Last night it was 13 of 65, including two expired Tornado Warnings shown as live.
 
-**Fix:** key on the event (collapse via `references`, honour Cancel); carry `expiresAt`/`onset`/`ends` as first-class fields; add a source-scoped reconcile to the store; timestamp with `sent`/`effective`; never clamp a negative age silently. `nws-polygon-match.ts:73` already implements the lifecycle rules correctly — reuse it.
-**Acceptance:** after a refresh every stored NWS alert is in `/alerts/active`; no superseded version coexists with its replacement; a future-onset warning shows its start time.
+**Fix:** key on the event (collapse via `references`, honour Cancel); carry `expiresAt`/`onset`/`ends` as first-class fields; add a source-scoped reconcile to the store; timestamp with `sent`/`effective`; never clamp a negative age silently. Reuse matching/expiry primitives where applicable; `nws-polygon-match.ts` is not a complete lifecycle reconciler. Destructive reconciliation requires validated complete national coverage; partial, capped, cached, malformed or failed responses must not clear authoritative warnings.
+**Acceptance:** after a validated complete fresh national snapshot, apply authoritative expiry/cancellation/supersession without duplicate current versions. Partial or failed refreshes retain prior evidence with honest staleness. A future-onset warning shows its start time.
 
 ### 8. H11 — GDACS has been down (one-word fix)
 
-`gdacs.ts:92` calls `…/geteventlist/MAP`; the API now returns `HTTP 400 {"message":"Eventtype is required."}` in every form. `…/geteventlist/SEARCH` returns HTTP 200 with the same GeoJSON schema, and every field the parser reads is present. **Re-checked this morning: still 400 / 200.** Change `MAP` → `SEARCH`, update the probe at `api-diagnostic.ts:94`, add a contract test asserting a FeatureCollection.
+`gdacs.ts:92` calls `…/geteventlist/MAP`; the API now returns `HTTP 400 {"message":"Eventtype is required."}` in every form. `…/geteventlist/SEARCH` returns HTTP 200 with the same GeoJSON schema, and every field the parser reads is present. **Historical author report: 400 / 200.** Before implementing UX-048, probe fresh response bodies and validate required parameters, row counts, consumed fields and completeness. A 200 or FeatureCollection alone does not prove equivalent coverage. Only then choose the supported endpoint, update diagnostics and add contract tests; record the live probe with the change.
 
 ### 5. H18 — The size cap evicts pinned and unacknowledged alerts first
 
 `prune()`'s cap sort is inverted against its own comment (`unified-alerts.ts:458-468`). It sorts pinned first (`a.pinned ? -1 : 1`) and unacknowledged first (`a.acknowledged ? 1 : -1`), then drops from the **front** (`sorted.slice(0, sorted.length - MAX_ALERTS)`). Drop order is therefore: pinned → unacknowledged → acknowledged. A pinned alert is the first thing thrown away, and an alert the operator has already dealt with outlives one they have not.
 
-Reproduced (`R2`): with 500 acknowledged alerts plus one pinned and one unacknowledged, both the pinned and the unacknowledged alert are evicted and all 500 acknowledged ones are kept. The persist-time backstop (`entriesForPersist()`, `:484-495`) has the intended behaviour, which is why this survived: the correct logic sits one function away from the broken one.
+Author-reported (`R2`; complete capacity regression evidence is tracked in #1734): with 500 acknowledged alerts plus one pinned and one unacknowledged, both the pinned and the unacknowledged alert are evicted and all 500 acknowledged ones are kept. The persist-time backstop (`entriesForPersist()`, `:484-495`) partitions priorities differently but can keep more than 500 protected entries; it is not a reusable hard-cap implementation.
 
 The store is **at its cap right now** on the live build (500/500), so this is live, not theoretical — currently masked only because nothing is pinned or acknowledged.
 
-**Fix:** invert both comparators (`a.pinned ? 1 : -1`, `a.acknowledged ? -1 : 1`), or reuse `entriesForPersist()`'s partition. Consider evicting derived `correlation` alerts before source alerts (see H16/H22).
-**Acceptance:** a unit test asserting that at the cap, pinned alerts are never evicted and acknowledged ones go first.
+**Approved bounded fix (UX-046 / #1734):** when existing pruning enforces 500 entries, evict unpinned acknowledged entries first, then unpinned unacknowledged entries, then pinned entries regardless of acknowledgment. Within each group, oldest source timestamp goes first; ties retain stable insertion order. Pinning grants priority, not unlimited retention.
+**Acceptance:** verify mixed priorities, exact capacity, deferred 501 and immediate 1001 enforcement, timestamp ties, persistence parity and more than 500 pinned entries. Hydration, age retention and source-versus-derived preferences are unchanged; do not claim a global storage cap.
 
 ### 9. H21 — "All sensors quiet · checked just now" cannot be falsified
 
@@ -184,7 +182,7 @@ PR #1732 stopped the flood; the policy that let it through is unchanged. `correl
 
 ---
 
-## Done — do not redo
+## Implemented in open PRs — not yet on main
 
 - **Summary strip, posture banner, data-center strip** — #1730.
 - **H10 feedback loop and H15 notification flood** — #1732 (+ H16 still required). Verified live: critical `correlation` alerts 281 → 4; "civil unrest" alert bodies 405 → 0; no correlation alert created by the engine reading its own output. Includes one-time purges of pre-fix echoes from both the alert store and the situation store, with migration flags recorded before any early return.
@@ -205,7 +203,7 @@ Each was stated with confidence at some point and then disproved against code or
 - "The work site has no UGC zones" — true of the saved record only; zones are resolved at runtime.
 - "Median refresh time is 40 s" — `Slow refresh` logs only above 15 s; 40 s is the median *of slow refreshes*.
 
-## Verified clean
+## Author-reported targeted checks — not a current whole-system sign-off
 
 Tauri IPC surface (35 commands, all trusted-window gated; `open_url` https-only with a private-range block list) · CSP · HTML escaping · the RSS proxy's SSRF defence · the personal/site weather-posture pipeline · cross-agency seismic dedup · listener and timer lifecycle · snapshot deserialisation.
 
@@ -225,7 +223,7 @@ Stated plainly, because "we have them all" is not a claim any review can make. E
 
 1. **Source time used as system time** — H17, H22, H12/H13 are the same mistake in three subsystems: a feed's report/onset timestamp is used for retention, clustering or freshness. Grep every `timestamp:` assignment that takes a value from a payload.
 2. **"No data" rendered as "nothing is happening"** — H21, plus the offline-cache panels that show hours-old cached rows with no staleness marker (`withOfflineCache` returns `isStale`/`staleDurationMs`/`source`; almost every caller in `data-loader.ts` destructures `{ data }` and discards them). Every empty state should be able to distinguish "clear" from "blind".
-3. **Suppression without accounting** — H19, H20, H15: alerts are dropped by rate limit, mode or policy with no user-visible record and no retry. Every suppression path should be counted and surfaceable.
+3. **Suppression without operator-facing accounting** — H19, H20, H15: diagnostic suppression traces already exist, but durable operator-facing accounting and retry are separate gaps. Preserve policy while designing those surfaces.
 
 ---
 
@@ -239,9 +237,9 @@ Stated plainly, because "we have them all" is not a claim any review can make. E
 ## Working rules (from `AGENTS.md`)
 
 - Branch `codex/*` from canonical `main`; resolve the remote name rather than assuming it.
-- One task per PR. H16 is the exception: it belongs on #1732, which must not merge without it.
+- One roadmap task per PR; #1732 remains held pending its owner-stated H16/H17/H22 requirements. Coordinate dependent PRs without silently weakening that acceptance.
 - Claim a `UX-NNN` row in `docs/USABILITY_UPLIFT_FOR_CODEX.md` in the same PR.
-- Behaviour changes need behaviour tests with a mutation proof. #1732's `test:alert-loop` (15 tests, 12 of 12 mutations killed) is a template.
+- Behaviour changes need runnable behavior tests and actual applied mutation diffs, failing counts, restored checksums and clean-tree evidence. Historical reported counts alone are not proof for the current head.
 - `codex/*` branches are reviewed by Claude: record the verdict with `scripts/verify-review-verdict.mjs --record`, then `bash scripts/pr-closeout.sh`.
 - The pre-commit hook lints every touched file **in full**; pre-existing errors in a file you touch must be fixed or explicitly justified.
 - Items 1–3 and P0 touch situation/alerting logic and the boot path — "high assurance" under `AGENTS.md`: stop for human approval after design, before implementation.

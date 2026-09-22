@@ -7,7 +7,19 @@
 - **Trigger:** the summary strip floated mid-screen during severe weather (fixed in PR #1730). This review asks: what else in the codebase can fail the same way?
 - **Status:** findings only — no `UX-NNN` claimed. Proposed IDs below are suggestions for `docs/USABILITY_UPLIFT_FOR_CODEX.md`.
 
-Every finding carries either a re-runnable command or exact file:line paths at the reviewed SHA. Line numbers move; re-derive with the commands before acting.
+## Evidence qualification and corrections (2026-09-22)
+
+This is a historical author-reported review of the SHA above and, where stated, local build `18301b45`. Live counts, installation state and old CI statuses are not current verification. File/line references and abbreviated examples are investigation leads; round 11 R1–R4 are **illustrative, not runnable tests**. Their omitted imports, fixtures and flush helper prevent reproduction as pasted. The scratch files were not committed with this PR and must not be treated as independently verified artifacts. R3's old scratch assertion checked zero banners without establishing badge delivery, so unrelated total suppression could satisfy it.
+
+The current handoff and live roadmaps supersede these historical fix proposals:
+
+- H12/H14: personal/place-filtered output is not a complete national NWS snapshot. Matching flags and expiry arithmetic do not implement cancellation, supersession or source-scoped reconciliation. Require validated fresh completeness; partial/cached/failed data cannot justify removing warnings.
+- H22: title/locality alone cannot identify an event. Use bounded source-event identity, separate event/processing clocks, validated geography and replays of delayed duplicates versus distinct recurring events; do not merge regardless of lag.
+- H18: pins have priority within a bounded store, not immunity. Approved UX-046 evicts unpinned acknowledged, unpinned unacknowledged, then all pinned by oldest timestamp and stable insertion ties. More than 500 pinned entries must evict pins when pruning runs. The persist backstop is not a hard cap.
+- H17: repeated ingestion of cached rows is not authoritative new observation. Lifecycle/retention design is UX-059.
+- H19: UX-045 / #1733 is merged with complete committed tests and mutation evidence in `validation/UX-045-WARNING-DELIVERY.md`. It repairs badge ordering only. Broader delivery changes remain UX-058.
+
+Earlier headings saying “clean” or “fixed” describe the author's bounded observation at that time, not a current release approval. #1732 remains held for H16/H17/H22. Line numbers move; re-derive before acting.
 
 ---
 
@@ -825,7 +837,7 @@ Superseded or gone, by event: Flood Warning 19, Special Weather Statement 10, Be
 **Mechanism** — four gaps, each confirmed in code:
 
 1. `normalizeNWSAlert()` (`src/services/alert-normalizer.ts:120-137`) keys each alert on `nws-${alert.id}`, the id of one CAP *message*. NWS issues a new message id for every update, so each update becomes a new alert rather than replacing its predecessor. `references` and `messageType` are never read on this path.
-2. Nothing on the path to the unified store reads `expires`. The NWS lifecycle *is* handled correctly elsewhere — `nws-polygon-match.ts:72-74` and `evacuation-hazard-exposure.ts:278-281` both treat `messageType` and `expires` properly — but not in the pipeline that feeds triage, the inbox and the summary strip.
+2. Nothing on the path to the unified store reads `expires`. Other paths inspect lifecycle-related fields — `nws-polygon-match.ts:72-74` and `evacuation-hazard-exposure.ts:278-281` — but these checks do not establish complete event reconciliation for the unified store.
 3. `unifiedAlertStore` has no removal operation (`unified-alerts.ts`: `ingest`, `acknowledge*`, `snooze`, `togglePin` only). An alert that leaves the source feed can only leave the store by age (48 h after its timestamp) or by cap eviction.
 4. `raw` is shed before persistence (`unified-alerts.ts:323-326`), so after any reload the app can no longer tell when a warning expires, even in principle. `TriageBar`, `SummaryStrip`, `UnifiedAlertInboxPanel` and `unified-alerts.ts` contain zero references to `expires`.
 
@@ -925,12 +937,12 @@ The data-center strip read *"New Carlisle AWS · Watch · rising rivers + extend
 
 The path behind it is sound in the ways the triage path is not:
 
-- It uses `matchAlertToPlace()` (`nws-polygon-match.ts`), which honours `messageType`, `references`, cancellation and `expires`.
+- It uses `matchAlertToPlace()` (`nws-polygon-match.ts`) for place matching and lifecycle-related flags. This helper does not apply cancellations/supersession or reconcile a complete national snapshot.
 - It resolves the site's UGC zones at runtime (`data-loader.ts:1861-1876`) so zone-only products (winter storm, heat, high wind, and many flood products) can match. A persisted saved-place record carries no zones, which briefly looked like a gap; the runtime resolution closes it.
 - `fetchUgcZonesForPoint()` (`weather.ts:589-600`) deliberately **throws** on ambiguous failures and returns `[]` only on a genuine 404, specifically so a failed lookup is never cached as "no zones". Saved places (Home, Parents) resolve through an adapter that reports an explicit `degraded` flag.
 - It runs on the 10-minute `weather` refresh and never backs off.
 
-**The consequence for H12/H14 is architectural:** there are two NWS pipelines. The personal/site pipeline is correct. The unified-store pipeline behind triage, the inbox and the summary strip is boot-only, lifecycle-blind and untracked. **The fix should feed the unified store from the correct pipeline rather than repair the second one in parallel.**
+**Corrected architectural consequence for H12/H14:** reuse validated matching and expiry primitives, but preserve national coverage in unified ingestion. Personal/place-filtered or capped output cannot stand in for a complete national snapshot. Explicit freshness/completeness and source-scoped lifecycle reconciliation still need design.
 
 #### Clean, with one edge case — cross-agency earthquake deduplication
 
@@ -1008,11 +1020,11 @@ Three checks on the installation running build `18301b45` (#1730 + #1732), after
 
 ## Round 11 — 2026-09-22 — the notification and retention paths, end to end
 
-Scope: every producer that writes to the unified alert store (33 call sites), every caller of the notification dispatcher including the seven that bypass the store, the store's own retention logic, and the "nothing is happening" surfaces. Four findings are reproduced by a runnable test rather than argued; two are read from the live installation.
+Scope: every producer that writes to the unified alert store (33 call sites), every caller of the notification dispatcher including the seven that bypass the store, the store's own retention logic, and the "nothing is happening" surfaces. The author reported four harness observations and two live-installation findings. The snippets below omit executable prerequisites and are not independently runnable evidence.
 
 ### Repro harness
 
-Saved outside the tree as `.codex/scratch-repros/`; paste into `src/services/__tests__/` and run with `npx tsx --test <file>` (globals stubbed the way `unified-alerts-batching.test.mts` does it: `globalThis.window = globalThis` plus an in-memory `localStorage`).
+Illustrative excerpts from author-reported scratch work, not committed test artifacts. Do not paste/run these as a complete harness: imports, full fixtures and flush behavior are omitted. R1/R4 reported counts remain unverified here. Use the committed UX-045 regression/mutation evidence for R3; UX-046 tracks complete capacity tests for R2.
 
 ```ts
 // R1 — age prune + report-time timestamp => re-notify every poll
@@ -1058,7 +1070,7 @@ const fresh = []; for (let i = 0; i < 12; i++) correlateSignalToSituation(mk(`ls
 - **H19 (High, life-safety)** — severity-blind per-source rate limit; a `badge`-level advisory permanently drops the warning behind it. `notification-dispatcher.ts:298-312`.
 - **H17 (High)** — `prune()` deletes by source timestamp at 48 h, so long-running events are deleted on arrival and re-notified every poll. `unified-alerts.ts:128, 282, 450-456`; producers at `alert-normalizer.ts:127, 166`, `intel-channels-bridge.ts:152, 186, 211`, `infrastructure-alert-bridge.ts:55`. Also the likely mechanism behind H14's "none in the store".
 - **H22 (High)** — stale-timestamped signals cannot pass the 0.30 affinity threshold, so each one mints its own situation; alert-derived signals also carry no geography. `situation-correlator.ts:45-57, 88-92, 268`; `situation-types.ts:237`.
-- **H18 (Medium-High)** — cap prune's comparators are inverted against its own comment: pinned evicted first, acknowledged kept longest. `unified-alerts.ts:458-468`. The correct partition already exists at `:503-514`.
+- **H18 (Medium-High)** — cap prune's comparators are inverted against its own comment: pinned evicted first, acknowledged kept longest. `unified-alerts.ts:458-468`. The persist partition at `:503-514` is permissive and is not a complete hard-cap solution.
 - **H21 (Medium-High)** — the Threat Dashboard's "checked" time is the render clock (`threat-aggregator.ts:186` and ten sibling sites stamp `lastUpdatedMs: nowMs`), and a no-data domain is levelled `NONE`, so "All sensors quiet · checked just now · 11 sensors" is true by construction. `ThreatDashboard.ts:158-175`.
 - **H20 (Medium-High, policy)** — Ghost Mode suppresses critical alerts with no standing indicator; currently on. `notification-dispatcher.ts:107-113, 280-283`; `mode-manager.ts:74`.
 

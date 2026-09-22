@@ -946,7 +946,8 @@ Acceptance: Review PR1730 and add missing live-region semantics without repeated
 
 ### UX-045 — Keep advisories from suppressing warnings
 
-Status: IN PROGRESS — HIGH ASSURANCE
+Status: DONE
+Evidence: #1733 — approved badge-only source repair, focused regression tests and three applied mutation proofs.
 Approval: September 22, operator approved the badge-only correction; broader notification policy remains separate.
 Source findings: PR1731 H19.
 
@@ -1112,7 +1113,7 @@ Update the row in the same PR that does the work.
 | UX-042 | Construct panels when needed without losing coverage | NOT STARTED — HIGH ASSURANCE | — |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
-| UX-045 | Keep advisories from suppressing warnings | IN PROGRESS — HIGH ASSURANCE | #1733 |
+| UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Retain active alerts and preserve cap priorities | NOT STARTED — HIGH ASSURANCE | — |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
 | UX-048 | Restore verified GDACS ingestion | NOT STARTED — HIGH ASSURANCE | — |

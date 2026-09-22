@@ -84,10 +84,13 @@ export class MLWorkerManager {
  if (this.isReady) return true;
  if (this.initPromise) return this.initPromise;
 
+ const generation = this.initGeneration;
  const promise = (async () => {
- this.capabilities = await detectMLCapabilities();
- if (!this.capabilities.isSupported) return false;
- return this.initWorker();
+ const capabilities = await detectMLCapabilities();
+ if (generation !== this.initGeneration) return false;
+ this.capabilities = capabilities;
+ if (!capabilities.isSupported) return false;
+ return this.initWorker(generation);
  })();
 
  this.initPromise = promise;
@@ -98,20 +101,14 @@ export class MLWorkerManager {
  }
   }
 
-  private initWorker(): Promise<boolean> {
+  private initWorker(generation: number): Promise<boolean> {
  if (this.worker) return Promise.resolve(this.isReady);
-
- // The factory is awaited before there is a worker to hold onto, so a
- // terminate() or the ready timeout can invalidate this attempt while it's
- // still in flight. The generation lets a worker that resolves late — after
- // its attempt was already given up on — get discarded instead of
- // resurrecting a manager the caller believes is gone.
- const generation = this.initGeneration;
 
  return new Promise((resolve) => {
  this.pendingInitResolve = resolve;
 
  this.pendingInitTimeout = setTimeout(() => {
+ if (generation !== this.initGeneration) return;
  if (!this.isReady) {
  console.error('[MLWorker] Worker failed to become ready');
  this.cleanup();
@@ -200,6 +197,7 @@ export class MLWorkerManager {
 
   private cleanup(): void {
  this.initGeneration++;
+ this.initPromise = null;
  if (this.pendingInitTimeout) {
  clearTimeout(this.pendingInitTimeout);
  this.pendingInitTimeout = null;

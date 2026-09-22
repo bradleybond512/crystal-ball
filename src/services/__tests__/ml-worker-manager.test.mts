@@ -17,6 +17,7 @@ Object.assign(globalThis, {
 
 const { ML_THRESHOLDS } = await import('../../config/ml-config.js');
 const { MLWorkerManager } = await import('../ml-worker.js');
+const { clearCapabilitiesCache } = await import('../ml-capabilities.js');
 
 const COLD = ML_THRESHOLDS.modelLoadTimeoutMs + ML_THRESHOLDS.inferenceTimeoutMs;
 const WARM = ML_THRESHOLDS.inferenceTimeoutMs;
@@ -258,4 +259,283 @@ test('a late id-bearing model-loaded reply does not undo an eviction', async () 
   fake.emit({ type: 'model-loaded', id, modelId: 'embeddings' }); // this request's own late reply
   assert.equal(await loaded, true, 'the caller still sees its own request succeed');
   assert.equal(manager.isModelLoaded('embeddings'), false, 'the eviction must not be undone');
+});
+
+
+function deferredGpuDetection(): { probes: Array<(adapter: unknown) => void>; restore: () => void } {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, 'gpu');
+  const probes: Array<(adapter: unknown) => void> = [];
+  clearCapabilitiesCache();
+  Object.defineProperty(navigator, 'gpu', {
+    configurable: true,
+    value: { requestAdapter: () => new Promise(resolve => { probes.push(resolve); }) },
+  });
+  return {
+    probes,
+    restore: () => {
+      if (descriptor) Object.defineProperty(navigator, 'gpu', descriptor);
+      else Reflect.deleteProperty(navigator, 'gpu');
+      clearCapabilitiesCache();
+    },
+  };
+}
+
+test('terminate during capability detection cannot create a worker or revive availability', async () => {
+  timers = [];
+  const detection = deferredGpuDetection();
+  const fake = new FakeWorker();
+  let factoryCalls = 0;
+  const manager = new MLWorkerManager(() => { factoryCalls++; return fake as unknown as Worker; });
+  try {
+    const started = manager.init();
+    await flush();
+    assert.equal(detection.probes.length, 1);
+    manager.terminate();
+    detection.probes[0]!(null);
+    await flush();
+    fake.emit({ type: 'worker-ready' });
+    assert.equal(factoryCalls, 0, 'a terminated detector must not reach worker creation');
+    assert.equal(manager.isAvailable, false, 'a late handshake must not revive a terminated attempt');
+    assert.equal(manager.mlCapabilities, null, 'a terminated detector must not publish manager capabilities');
+    assert.equal(await started, false);
+    assert.deepEqual(armed(), []);
+  } finally {
+    manager.terminate();
+    detection.restore();
+  }
+});
+
+for (const oldResolvesFirst of [true, false]) {
+  test(`a fresh init owns capabilities and its promise when the old detector resolves ${oldResolvesFirst ? 'first' : 'last'}`, async () => {
+    timers = [];
+    const detection = deferredGpuDetection();
+    const fake = new FakeWorker();
+    let factoryCalls = 0;
+    const manager = new MLWorkerManager(() => { factoryCalls++; return fake as unknown as Worker; });
+    try {
+      const old = manager.init();
+      await flush();
+      manager.terminate();
+      const fresh = manager.init();
+      await flush();
+      assert.equal(detection.probes.length, 2, 'termination must release the old init promise immediately');
+      if (oldResolvesFirst) {
+        detection.probes[0]!(null);
+        await flush();
+        assert.equal(factoryCalls, 0);
+        assert.equal(manager.mlCapabilities, null);
+        assert.equal(await old, false);
+      }
+      const joined = manager.init();
+      await flush();
+      assert.equal(detection.probes.length, 2, 'another caller joins the current detection');
+      assert.equal(factoryCalls, 0, 'the old finally must not release the new pending init');
+      detection.probes[1]!({});
+      await flush();
+      assert.equal(factoryCalls, 1);
+      assert.ok(fake.onmessage, 'the current worker is attached before awaiting readiness');
+      fake.emit({ type: 'worker-ready' });
+      assert.equal(await fresh, true);
+      assert.equal(await joined, true);
+      assert.equal(manager.mlCapabilities?.hasWebGPU, true);
+      if (!oldResolvesFirst) {
+        detection.probes[0]!(null);
+        await flush();
+        assert.equal(await old, false);
+      }
+      assert.equal(factoryCalls, 1);
+      assert.equal(manager.mlCapabilities?.hasWebGPU, true, 'stale detector cannot overwrite current capabilities');
+      assert.equal(manager.isAvailable, true);
+      assert.equal(fake.terminated, 0);
+    } finally {
+      manager.terminate();
+      detection.restore();
+    }
+  });
+}
+
+test('a cleared ready timeout callback cannot clean up a newer initialization', async () => {
+  timers = [];
+  const workers: FakeWorker[] = [];
+  const manager = new MLWorkerManager(() => {
+    const worker = new FakeWorker();
+    workers.push(worker);
+    return worker as unknown as Worker;
+  });
+  try {
+    const old = manager.init();
+    await flush();
+    const oldTimeout = lastTimer();
+    manager.terminate();
+    assert.equal(await old, false);
+    const fresh = manager.init();
+    await flush();
+    assert.equal(workers.length, 2);
+    assert.equal(oldTimeout.cleared, true);
+    oldTimeout.fn();
+    assert.equal(workers[1]!.terminated, 0, 'an already queued old callback cannot terminate the new worker');
+    assert.equal(armed().length, 1, 'the current ready deadline remains active');
+    workers[1]!.emit({ type: 'worker-ready' });
+    assert.equal(await fresh, true);
+    assert.equal(manager.isAvailable, true);
+  } finally {
+    manager.terminate();
+  }
+});
+
+test('a timed-out factory is discarded after a replacement becomes ready', async () => {
+  timers = [];
+  let resolveOld!: (worker: Worker) => void;
+  const oldFactory = new Promise<Worker>(resolve => { resolveOld = resolve; });
+  const current = new FakeWorker();
+  let calls = 0;
+  const manager = new MLWorkerManager(() => ++calls === 1 ? oldFactory : current as unknown as Worker);
+  try {
+    const old = manager.init();
+    await flush();
+    lastTimer().fn();
+    assert.equal(await old, false);
+    const fresh = manager.init();
+    await flush();
+    assert.ok(current.onmessage);
+    current.emit({ type: 'worker-ready' });
+    assert.equal(await fresh, true);
+    const late = new FakeWorker();
+    resolveOld(late as unknown as Worker);
+    await flush();
+    assert.equal(late.terminated, 1);
+    assert.equal(late.onmessage, null);
+    assert.equal(manager.isAvailable, true);
+    assert.equal(current.terminated, 0);
+  } finally {
+    manager.terminate();
+  }
+});
+
+test('concurrent initial callers share one worker-creation attempt', async () => {
+  timers = [];
+  const fake = new FakeWorker();
+  let calls = 0;
+  const manager = new MLWorkerManager(() => { calls++; return fake as unknown as Worker; });
+  try {
+    const first = manager.init();
+    const second = manager.init();
+    await flush();
+    assert.equal(calls, 1);
+    assert.ok(fake.onmessage);
+    fake.emit({ type: 'worker-ready' });
+    assert.equal(await first, true);
+    assert.equal(await second, true);
+  } finally {
+    manager.terminate();
+  }
+});
+
+test('stale worker ready, model and error callbacks cannot affect the current attempt', async () => {
+  timers = [];
+  const workers: FakeWorker[] = [];
+  const manager = new MLWorkerManager(() => {
+    const worker = new FakeWorker();
+    workers.push(worker);
+    return worker as unknown as Worker;
+  });
+  try {
+    const old = manager.init();
+    await flush();
+    manager.terminate();
+    assert.equal(await old, false);
+    const fresh = manager.init();
+    await flush();
+    assert.equal(workers.length, 2);
+    workers[0]!.emit({ type: 'worker-ready' });
+    workers[0]!.emit({ type: 'model-loaded', modelId: 'embeddings' });
+    workers[0]!.onerror?.({ message: 'stale worker error' });
+    assert.equal(manager.isAvailable, false);
+    assert.equal(manager.isModelLoaded('embeddings'), false);
+    assert.equal(workers[1]!.terminated, 0);
+    workers[1]!.emit({ type: 'worker-ready' });
+    assert.equal(await fresh, true);
+    const request = manager.embedTexts(['x']);
+    workers[0]!.onerror?.({ message: 'stale error during a current request' });
+    workers[1]!.emit({ type: 'embed-result', id: workers[1]!.lastRequestId(), embeddings: [[1]] });
+    assert.deepEqual(await request, [[1]]);
+  } finally {
+    manager.terminate();
+  }
+});
+
+test('a rejected obsolete factory cannot fail its replacement initialization', async () => {
+  timers = [];
+  let rejectOld!: (error: Error) => void;
+  const oldFactory = new Promise<Worker>((_resolve, reject) => { rejectOld = reject; });
+  const current = new FakeWorker();
+  let calls = 0;
+  const manager = new MLWorkerManager(() => ++calls === 1 ? oldFactory : current as unknown as Worker);
+  try {
+    const old = manager.init();
+    await flush();
+    manager.terminate();
+    assert.equal(await old, false);
+    const fresh = manager.init();
+    await flush();
+    assert.equal(calls, 2);
+    rejectOld(new Error('obsolete factory failed'));
+    await flush();
+    assert.equal(current.terminated, 0);
+    assert.equal(armed().length, 1);
+    assert.ok(current.onmessage);
+    current.emit({ type: 'worker-ready' });
+    assert.equal(await fresh, true);
+  } finally {
+    manager.terminate();
+  }
+});
+
+test('a current factory failure returns false and permits a successful retry', async () => {
+  timers = [];
+  const current = new FakeWorker();
+  let calls = 0;
+  const manager = new MLWorkerManager(() => {
+    if (++calls === 1) throw new Error('current factory failed');
+    return current as unknown as Worker;
+  });
+  try {
+    assert.equal(await manager.init(), false);
+    assert.equal(manager.isAvailable, false);
+    assert.deepEqual(armed(), []);
+    const retry = manager.init();
+    await flush();
+    assert.equal(calls, 2);
+    assert.ok(current.onmessage);
+    current.emit({ type: 'worker-ready' });
+    assert.equal(await retry, true);
+    assert.equal(manager.isAvailable, true);
+  } finally {
+    manager.terminate();
+  }
+});
+
+test('current unsupported capabilities return false without creating a worker', async () => {
+  timers = [];
+  const detection = deferredGpuDetection();
+  const originalDocument = globalThis.document;
+  Object.assign(globalThis, { document: { createElement: () => ({ getContext: () => null }) } });
+  let calls = 0;
+  const manager = new MLWorkerManager(() => { calls++; return new FakeWorker() as unknown as Worker; });
+  try {
+    const started = manager.init();
+    await flush();
+    assert.equal(detection.probes.length, 1);
+    detection.probes[0]!(null);
+    await flush();
+    assert.equal(calls, 0);
+    assert.equal(manager.mlCapabilities?.isSupported, false);
+    assert.equal(await started, false);
+    assert.equal(manager.isAvailable, false);
+    assert.deepEqual(armed(), []);
+  } finally {
+    manager.terminate();
+    Object.assign(globalThis, { document: originalDocument });
+    detection.restore();
+  }
 });

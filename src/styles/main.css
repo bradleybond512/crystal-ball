@@ -915,11 +915,15 @@ body:not(.is-desktop-macos) .main-content {
 /* ── At-a-glance summary strip (Wave 5b) ─────────────────────────────────
    One slim row docked above the panels grid, inside the .main-content
    scroll container (so at rest it sits below the container's
-   --notification-stack-h padding, exactly like the grid). Sticky at the
-   stack height so scrolling pins it just below the fixed banners. */
+   --notification-stack-h padding, exactly like the grid).
+   Sticky at top:0 — NOT top:var(--notification-stack-h). WebKit/Blink
+   measure a sticky offset from the scroll container's padding edge, and
+   .main-content already carries padding-top: var(--notification-stack-h).
+   Adding the stack height again double-counted it, pinning the strip a
+   full banner-stack height below the banners (floating mid-panel). */
 .cb-summary-strip {
   position: sticky;
-  top: var(--notification-stack-h, 0px);
+  top: 0;
   z-index: 40; /* over panel cards, under the fixed banner stack */
   display: flex;
   align-items: stretch;
@@ -932,10 +936,6 @@ body:not(.is-desktop-macos) .main-content {
   background: var(--bg);
   font-size: 11px;
   color: var(--text-secondary);
-}
-
-body:not(.is-desktop-macos) .cb-summary-strip {
-  top: 0;
 }
 
 .cb-summary-strip-segs {
@@ -1005,6 +1005,74 @@ body:not(.is-desktop-macos) .cb-summary-strip {
 
 .cb-summary-strip.is-collapsed .cb-summary-strip-chevron .cb-icon {
   transform: rotate(-90deg);
+}
+
+/* ── Data center pinned strip (DataCenterPinnedStrip.ts) ──────────────────
+   Sits directly under the summary strip, above the panels grid, and uses the
+   same slim-row treatment so the two read as one docked header instead of a
+   bare line of text. Scrolls with the content (not sticky) so only one row
+   stays pinned. The dot colour is set inline from levelColor(). */
+.dc-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;
+  background: var(--bg);
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dc-strip:hover {
+  background: var(--overlay-subtle);
+}
+
+.dc-strip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dc-strip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-strip--cta .dc-strip-text {
+  opacity: 0.7;
+}
+
+.dc-strip--advisory { border-left-color: var(--sev-moderate, #facc15); }
+.dc-strip--warning { border-left-color: var(--sev-elevated, #fb923c); }
+.dc-strip--critical { border-left-color: var(--sev-critical, #ff453a); }
+
+.dc-strip--warning .dc-strip-text,
+.dc-strip--critical .dc-strip-text {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.dc-strip--degraded .dc-strip-text {
+  font-style: italic;
+}
+
+.dc-strip--pulse .dc-strip-dot {
+  animation: dc-strip-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dc-strip-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-strip--pulse .dc-strip-dot { animation: none; }
 }
 
 /* ── Shared stat-pair line (statLine.ts) ───────────────────────────────── */
@@ -15193,12 +15261,15 @@ a.prediction-link:hover {
 
 /* ============ Critical Posture Banner ============ */
 
+/* Flows as a row inside #cb-notification-stack (NotificationStack), so its
+   height is published in --notification-stack-h and .main-content reserves
+   space for it. It must NOT be position:fixed at --below-banners: that layer
+   is not measured by anything, so the banner overlaid the map, the panels and
+   the summary strip instead of pushing them down. */
 .critical-posture-banner {
-  position: fixed;
-  top: var(--below-banners);
-  left: 0;
-  right: 0;
-  z-index: 999;
+  width: 100%;
+  box-sizing: border-box;
+  pointer-events: auto; /* the stack itself is pointer-events: none */
   padding: 10px 20px;
   display: flex;
   align-items: center;

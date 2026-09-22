@@ -883,10 +883,13 @@ Acceptance: Cap the measured notification stack and its reserved space together.
 
 ### UX-034 — Assign ownership of top-of-window surfaces
 
-Status: NOT STARTED
+Status: MONITOR — partial layout prerequisite in #1730
+Evidence: #1730 — measured posture row, corrected offsets and data-center strip styling.
+Exit condition: Complete the top-of-window rail inventory and verify remaining overlap and native macOS/WebKit acceptance; keep UX-033 stack-height capping separate.
+Review after: 2026-09-23
 Source findings: PR1731 H2.
 
-Acceptance: Inventory each rail as measured content or an intentional overlay; verify no overlap with summary, controls or navigation. Coordinate with open PR1730; do not repeat its changes.
+Acceptance: Inventory each rail as measured content or an intentional overlay; verify no overlap with summary, controls or navigation. PR #1730 moves the posture banner into the measured stack, corrects summary/breaking offsets and styles the data-center strip. Chromium regression and mutation evidence: [PR-1730-SUMMARY-STACK-LAYOUT.md](validation/PR-1730-SUMMARY-STACK-LAYOUT.md). Full rail inventory, remaining overlap acceptance and native verification are unfinished. UX-033 stack-height capping remains separate; this PR does not complete it.
 
 ### UX-035 — Gate background panel work by actual need
 
@@ -1135,7 +1138,7 @@ Update the row in the same PR that does the work.
 | UX-031 | Reliable system appearance lifecycle | MONITOR | #1720 |
 | UX-032 | Settings keyboard containment | MONITOR | #1723 |
 | UX-033 | Keep content reachable during stacked warnings | NOT STARTED | — |
-| UX-034 | Assign ownership of top-of-window surfaces | NOT STARTED | — |
+| UX-034 | Assign ownership of top-of-window surfaces | MONITOR | #1730 |
 | UX-035 | Gate background panel work by actual need | NOT STARTED — HIGH ASSURANCE | — |
 | UX-036 | Spread refresh work and honor battery policy | NOT STARTED — HIGH ASSURANCE | — |
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |

@@ -341,14 +341,12 @@ import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
 import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { CorrelationMapPanel } from '@/components/CorrelationMapPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
-import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { FeedHealthDashboardPanel } from '@/components/FeedHealthDashboardPanel';
 import { FeedWatchdogPanel } from '@/components/FeedWatchdogPanel';
 import { SourceCredibilityTrackerPanel } from '@/components/SourceCredibilityTrackerPanel';
 import { CveTrackerPanel } from '@/components/CveTrackerPanel';
 import { VulnersCvePanel } from '@/components/VulnersCvePanel';
-import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { AssumptionPanel } from '@/components/AssumptionPanel';
 import { AssumptionTrackerPanel } from '@/components/AssumptionTrackerPanel';
 import { DomainScorecardPanel } from '@/components/DomainScorecardPanel';
@@ -363,12 +361,10 @@ import { WorldNarrativePanel } from '@/components/WorldNarrativePanel';
 import { QualityDebtPanel } from '@/components/QualityDebtPanel';
 import { FailurePredictionPanel } from '@/components/FailurePredictionPanel';
 import { OperationalPlaybookPanel } from '@/components/OperationalPlaybookPanel';
-import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { GlobalRiskHeatmapPanel } from '@/components/GlobalRiskHeatmapPanel';
 import { OperatorShiftReportPanel } from '@/components/OperatorShiftReportPanel';
-import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { RepairRecommendationsPanel } from '@/components/RepairRecommendationsPanel';
 import { MissionLedgerBridgePanel } from '@/components/MissionLedgerBridgePanel';
 import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-bridge';
@@ -386,7 +382,6 @@ import { PredictiveCrisisIndexPanel } from '@/components/PredictiveCrisisIndexPa
 import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
-import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { SourceConfidencePanel } from '@/components/SourceConfidencePanel';
 import { EventStorePanel } from '@/components/EventStorePanel';
 import { BeliefCalibrationPanel } from '@/components/BeliefCalibrationPanel';
@@ -2096,6 +2091,7 @@ export class PanelLayoutManager implements AppModule {
  // dynamic import, and mountLazyPanel inserts them at their canonical grid
  // position once resolved (fixing the prior orphaned-off-DOM bug).
  this.registerOsintPanels();
+ this.registerDiagnosticPanels();
  // 'maritime-intel' is retired (superseded by 'maritime-superpower', which now
  // owns the freight-stress section). Register it lazily like the OSINT panels
  // so it is never constructed while it ships disabled: a constructed
@@ -2314,12 +2310,10 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
  this.ctx.panels['correlation-map'] = new CorrelationMapPanel();
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
- this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['feed-health-dashboard'] = new FeedHealthDashboardPanel();
  this.ctx.panels['feed-watchdog'] = new FeedWatchdogPanel();
  this.ctx.panels['source-credibility-tracker'] = new SourceCredibilityTrackerPanel();
- this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
  this.ctx.panels['assumption-tracker-v2'] = new AssumptionTrackerPanel();
  this.ctx.panels['domain-scorecard'] = new DomainScorecardPanel();
@@ -2334,17 +2328,14 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['quality-debt'] = new QualityDebtPanel();
  this.ctx.panels['failure-prediction'] = new FailurePredictionPanel();
  this.ctx.panels['operational-playbook'] = new OperationalPlaybookPanel();
- this.ctx.panels['self-test'] = new DiagnosticSelfTestPanel();
  this.ctx.panels['self-test-runner'] = new SelfTestRunnerPanel();
  this.ctx.panels['operator-mode'] = new OperatorModePanel();
  this.ctx.panels['operator-shift-report'] = new OperatorShiftReportPanel();
  this.ctx.panels['global-risk-heatmap'] = new GlobalRiskHeatmapPanel();
- this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
  this.ctx.panels['competitive-hypothesis-engine'] = new CompetitiveHypothesisEnginePanel();
  this.ctx.panels['meta-confidence'] = new MetaConfidencePanel();
  this.ctx.panels['meta-confidence-calibration'] = new MetaConfidenceCalibrationPanel();
- this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['source-confidence'] = new SourceConfidencePanel();
  this.ctx.panels['event-store'] = new EventStorePanel();
  this.ctx.panels['belief-calibration'] = new BeliefCalibrationPanel();
@@ -3722,6 +3713,27 @@ export class PanelLayoutManager implements AppModule {
    * routing them through mountLazyPanel both fixes placement and skips
    * constructing them at boot when disabled.
    */
+  /**
+   * Diagnostic / admin panels, registered lazily.
+   *
+   * These are the `panels-diagnostic` manualChunks group (vite.config.ts): they
+   * carry heavyweight transitive imports and are only opened from the
+   * diagnostic surfaces, so they have no business in the boot module graph.
+   * Static imports here kept the whole group eagerly modulepreloaded; as
+   * lazyFactories the chunk leaves the startup path. Measure with
+   * `npm run bundle:check` -- the `eager:` line is the meter.
+   */
+  private registerDiagnosticPanels(): void {
+ const slots: Array<[string, () => Promise<Panel>]> = [
+ ['api-diagnostic',       () => import('@/components/ApiDiagnosticPanel').then((m) => new m.ApiDiagnosticPanel())],
+ ['system-diagnostic',    () => import('@/components/SystemDiagnosticPanel').then((m) => new m.SystemDiagnosticPanel())],
+ ['self-test',            () => import('@/components/DiagnosticSelfTestPanel').then((m) => new m.DiagnosticSelfTestPanel())],
+ ['command-center',       () => import('@/components/CommandCenterPanel').then((m) => new m.CommandCenterPanel())],
+ ['algorithm-diagnostic', () => import('@/components/AlgorithmDiagnosticPanel').then((m) => new m.AlgorithmDiagnosticPanel())],
+ ];
+ for (const [id, factory] of slots) this.lazyFactories.set(id, factory);
+  }
+
   private registerOsintPanels(): void {
  const slots: Array<[string, () => Promise<Panel>]> = [
  ['hibp-breaches',   () => import('@/components/HibpBreachesPanel').then((m) => new m.HibpBreachesPanel())],

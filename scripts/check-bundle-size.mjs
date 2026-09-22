@@ -10,6 +10,24 @@
  *   - Main entry (index-*.js, main-*.js): 460 KB
  *   - Any single non-entry chunk: 1.2 MB
  *   - Total JS (all chunks): 6 MB
+ *   - Eager startup path (entry + modulepreload): 2.85 MB
+ *
+ * Why a startup-path budget (added 2026-09-12). The three caps above are all
+ * blind to the same regression: they treat a correctly-lazy chunk and an
+ * eagerly-preloaded one identically. GodsVisionView (Cesium, ~1.07 MB gz) is
+ * dynamically imported and costs nothing at boot, yet it consumes as much of
+ * the total budget as a chunk in the critical path. Meanwhile index.html
+ * modulepreloads 36 chunks totalling 2.73 MB gz / 9.83 MB raw — 56% of all JS,
+ * parsed before first paint — and nothing measured it. The main-entry budget
+ * did not either: it scopes to main-*.js alone (see the budget history below),
+ * which is why its analysis found only ~40 KB of headroom while the real
+ * opportunity was an order of magnitude larger and one level up.
+ *
+ * The dominant cause is panel-layout.ts holding ~400 static Panel imports, so
+ * every panel and its transitive services land in the boot graph. Converting
+ * them to the lazyFactories pattern already used by registerOsintPanels() is
+ * what this budget measures; ratchet eagerPreloadGzipBytes down after each
+ * batch. Full analysis: docs/CODE_REVIEW_PERF_HANDOFF_FOR_CHATGPT_2026-09-11.md
  *
  * The per-chunk cap is generous because Cesium (GodsVisionView chunk) is
  * around 1.06 MB gzipped on its own and is an intentional large-chunk split
@@ -44,12 +62,81 @@ const LIMITS = {
   mainEntryGzipBytes: 460 * 1024,
   singleChunkGzipBytes: 1200 * 1024,
   totalJsGzipBytes: 6 * 1024 * 1024,
+  // Startup path: entry <script> + every <link rel="modulepreload"> in
+  // index.html. See the "Why a startup-path budget" note above. Measured at
+  // 2.73 MB on the full variant (2026-09-12); seeded at 2.85 MB for ~4%
+  // headroom. RATCHET THIS DOWN as panels move to lazyFactories — that is the
+  // point of the budget, not a formality.
+  eagerPreloadGzipBytes: 2.85 * 1024 * 1024,
 };
+
+/**
+ * Chunks the browser fetches and PARSES before first paint: the entry script
+ * plus every modulepreload link in index.html. Returns null when index.html is
+ * absent or names no JS, so the caller can skip rather than fail.
+ */
+function eagerChunkNames(html) {
+  const names = new Set();
+  for (const m of html.matchAll(/(?:src|href)="([^"]*\/assets\/[^"]*\.js)"/g)) {
+    names.add(path.basename(m[1]));
+  }
+  return names.size > 0 ? names : null;
+}
 
 function fmt(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+/**
+ * Totals the chunks on the startup path. Returns null when index.html is
+ * absent or names no JS — a missing entry point is not a size regression, so
+ * the caller skips the check rather than failing the build.
+ */
+async function measureEagerPath(chunks) {
+  let names;
+  try {
+    names = eagerChunkNames(await readFile(path.resolve(root, 'dist', 'index.html'), 'utf8'));
+  } catch {
+    console.log('  (no dist/index.html — skipping startup-path check)');
+    return null;
+  }
+  if (!names) return null;
+  const eagerChunks = chunks.filter((c) => names.has(c.name));
+  return {
+    count: eagerChunks.length,
+    gzip: eagerChunks.reduce((s, c) => s + c.gzip, 0),
+    raw: eagerChunks.reduce((s, c) => s + c.raw, 0),
+  };
+}
+
+/** Every limit in LIMITS, evaluated against one build. Returns failure lines. */
+function collectFailures({ chunks, totalGz, mainEntry, eager }) {
+  const failures = [];
+
+  if (mainEntry && mainEntry.gzip > LIMITS.mainEntryGzipBytes) {
+    failures.push(`Main entry ${mainEntry.name} gzipped is ${fmt(mainEntry.gzip)} > ${fmt(LIMITS.mainEntryGzipBytes)} limit`);
+  }
+
+  for (const c of chunks) {
+    if (c !== mainEntry && c.gzip > LIMITS.singleChunkGzipBytes) {
+      failures.push(`Chunk ${c.name} gzipped is ${fmt(c.gzip)} > ${fmt(LIMITS.singleChunkGzipBytes)} per-chunk limit`);
+    }
+  }
+
+  if (totalGz > LIMITS.totalJsGzipBytes) {
+    failures.push(`Total JS gzipped is ${fmt(totalGz)} > ${fmt(LIMITS.totalJsGzipBytes)} budget`);
+  }
+
+  if (eager && eager.gzip > LIMITS.eagerPreloadGzipBytes) {
+    failures.push(
+      `Eager startup JS (entry + modulepreload) gzipped is ${fmt(eager.gzip)} > ${fmt(LIMITS.eagerPreloadGzipBytes)} budget`
+      + ` across ${eager.count} chunk(s). This is parsed before first paint.`
+    );
+  }
+
+  return failures;
 }
 
 async function main() {
@@ -76,28 +163,20 @@ async function main() {
   }
   chunks.sort((a, b) => b.gzip - a.gzip);
 
-  const failures = [];
   const totalGz = chunks.reduce((s, c) => s + c.gzip, 0);
-
   const mainEntry = chunks.find((c) => /^(index|main)-[A-Za-z0-9_-]+\.js$/.test(c.name));
-  if (mainEntry && mainEntry.gzip > LIMITS.mainEntryGzipBytes) {
-    failures.push(`Main entry ${mainEntry.name} gzipped is ${fmt(mainEntry.gzip)} > ${fmt(LIMITS.mainEntryGzipBytes)} limit`);
-  }
-
-  for (const c of chunks) {
-    if (c === mainEntry) continue;
-    if (c.gzip > LIMITS.singleChunkGzipBytes) {
-      failures.push(`Chunk ${c.name} gzipped is ${fmt(c.gzip)} > ${fmt(LIMITS.singleChunkGzipBytes)} per-chunk limit`);
-    }
-  }
-
-  if (totalGz > LIMITS.totalJsGzipBytes) {
-    failures.push(`Total JS gzipped is ${fmt(totalGz)} > ${fmt(LIMITS.totalJsGzipBytes)} budget`);
-  }
+  // Startup path. Distinct from the total, which counts correctly-lazy chunks
+  // (GodsVisionView/Cesium) the same as eagerly-preloaded ones and so cannot
+  // see this class of regression.
+  const eager = await measureEagerPath(chunks);
+  const failures = collectFailures({ chunks, totalGz, mainEntry, eager });
 
   console.log('Bundle-size report (gzipped):');
   console.log(`  chunks: ${chunks.length}`);
   console.log(`  total:  ${fmt(totalGz)} / ${fmt(LIMITS.totalJsGzipBytes)}`);
+  if (eager) {
+    console.log(`  eager:  ${fmt(eager.gzip)} / ${fmt(LIMITS.eagerPreloadGzipBytes)}  (${eager.count} chunks, ${fmt(eager.raw)} raw) — parsed before first paint`);
+  }
   console.log('  top 10:');
   for (const c of chunks.slice(0, 10)) {
     console.log(`    ${c.name}  raw=${fmt(c.raw)}  gzip=${fmt(c.gzip)}`);

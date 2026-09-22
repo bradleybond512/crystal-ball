@@ -17,8 +17,20 @@ Unknowns: exact lifecycle signal for onboarding completion and async digest race
 ## Owners and sequence
 
 Repository discovery: repository_analyst (completed read-only reproduction).
-Design: architect (in progress).
-Implementation: ui_map_engineer after bounded design, limited to Welcome/Digest/panel-layout interaction and regression tests.
+Design: architect (completed, bounded Standard UI design approved).
+Implementation: ui_map_engineer; DigestOverlay, digest setup/request block in panel-layout, focused coexistence tests, and the existing post-onboarding digest fixture. PR #1735.
 Validation: focused coexistence tests, full first-run browser harness, typecheck and named agentic gate; independent reviewer and Claude exact-tip verdict before closeout.
 
 No installation or real user profile manipulation. Rollback is a reviewed code revert; no data migration.
+
+## Approved behavior
+
+An onboarding-incomplete boot does not schedule a proactive digest or mark it shown, including the asynchronous Welcome import gap. There is no deferred resume queue. Scheduled execution and both successful and failed generation recheck the existing completion key and Welcome backdrop. Explicit digest opening remains available after Welcome completes and closes.
+
+Digest yields already-consumed keys and keys targeted at or focused within another modal. Hidden-to-visible opening captures focus once; subsequent loading, empty, degraded, error and card updates retain foreground focus. Closing or destroying a background digest does not restore over another modal. Normal digest Escape, Tab wrapping, opener restoration, cancellation and teardown remain unchanged.
+
+No styles or responsive layout change. The existing 800×600 Home interaction acceptance remains the resized-window check. The shared first-run browser assertions remain unchanged. No provider, alert delivery or persisted schema change.
+
+## Validation
+
+See `docs/validation/UX-060-ONBOARDING-FOCUS.md` for actual test results and guard mutation evidence. Independent and exact-tip cross-agent review remain delivery gates owned by the parent agent.

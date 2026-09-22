@@ -5,6 +5,7 @@ export type DigestOverlayStatus = 'loading' | 'empty' | 'degraded' | 'error';
 
 export interface DigestOverlayOptions {
   onDismiss?: () => void;
+  canOpen?: () => boolean;
 }
 
 const TITLE_ID = 'digest-dialog-title';
@@ -24,6 +25,7 @@ export class DigestOverlay {
   private readonly closeButton: HTMLButtonElement;
   private readonly liveEl: HTMLElement;
   private readonly onDismiss: (() => void) | null;
+  private readonly canOpen: () => boolean;
   private previouslyFocused: HTMLElement | null = null;
   private destroyed = false;
 
@@ -34,7 +36,8 @@ export class DigestOverlay {
   private readonly onCloseClick = (): void => this.hide();
 
   private readonly onDocumentKeyDown = (event: KeyboardEvent): void => {
-    if (!this.isVisible()) return;
+    if (!this.isVisible() || event.defaultPrevented) return;
+    if (this.isOtherModal(event.target) || this.isOtherModal(document.activeElement)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       this.hide();
@@ -64,6 +67,7 @@ export class DigestOverlay {
 
   constructor(options: DigestOverlayOptions = {}) {
     this.onDismiss = options.onDismiss ?? null;
+    this.canOpen = options.canOpen ?? (() => true);
     this.overlay = document.createElement('div');
     this.overlay.className = 'digest-overlay';
     this.overlay.hidden = true;
@@ -160,18 +164,21 @@ export class DigestOverlay {
     this.overlay.hidden = true;
     const restoreTarget = this.previouslyFocused;
     this.previouslyFocused = null;
-    if (restoreTarget?.isConnected) restoreTarget.focus();
+    if (restoreTarget?.isConnected && !this.isOtherModal(document.activeElement)) restoreTarget.focus();
     if (notifyOwner) this.onDismiss?.();
   }
 
   private open(): void {
-    if (this.destroyed) return;
-    if (this.overlay.hidden) {
-      const active = document.activeElement;
-      this.previouslyFocused = active instanceof HTMLElement ? active : null;
-    }
+    if (this.destroyed || !this.canOpen() || !this.overlay.hidden) return;
+    const active = document.activeElement;
+    this.previouslyFocused = active instanceof HTMLElement ? active : null;
     this.overlay.hidden = false;
     this.closeButton.focus();
+  }
+
+  private isOtherModal(target: EventTarget | null): boolean {
+    const modal = target instanceof Element ? target.closest('[role="dialog"][aria-modal="true"]') : null;
+    return modal !== null && modal !== this.overlay;
   }
 
   private renderCards(cards: readonly DigestStoryCard[]): void {

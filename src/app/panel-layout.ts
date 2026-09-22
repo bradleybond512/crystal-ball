@@ -1471,6 +1471,7 @@ export class PanelLayoutManager implements AppModule {
  document.addEventListener('keydown', this._onStatusOverlayKey);
  startBlackoutSignature();
  this.digestOverlay = new DigestOverlay({
+ canOpen: () => canPresentDigest(),
  onDismiss: () => {
  this.cancelDigestRecheck?.();
  this.cancelDigestRecheck = null;
@@ -1480,6 +1481,9 @@ export class PanelLayoutManager implements AppModule {
  },
  });
  this.digestOverlay.mount(document.body);
+ const onboardingCompleteAtBoot = window.localStorage.getItem('cb:onboarding-complete') === 'true';
+ const canPresentDigest = (): boolean => window.localStorage.getItem('cb:onboarding-complete') === 'true'
+ && !document.querySelector('.cb-backdrop');
  const reprojectDigest = (): void => {
  this.cancelDigestRecheck?.();
  this.cancelDigestRecheck = null;
@@ -1515,6 +1519,7 @@ export class PanelLayoutManager implements AppModule {
  this.unsubDigestPlaces = subscribeSavedPlaces(reprojectDigest);
 
  const requestDigest = (onDemand: boolean): void => {
+ if (!canPresentDigest()) return;
  this.cancelDigestRecheck?.();
  this.cancelDigestRecheck = null;
  if (onDemand) {
@@ -1533,6 +1538,7 @@ export class PanelLayoutManager implements AppModule {
  if (this.destroyed || controller.signal.aborted || generation !== this.digestGeneration) return;
  if (onDemand && !this.digestOverlay?.isVisible()) return;
  this.digestAbortController = null;
+ if (!canPresentDigest()) return;
  if (generatedCards.length === 0) {
  if (onDemand) this.digestOverlay?.showStatus('No recent activity to summarize.', 'empty');
  return;
@@ -1561,6 +1567,7 @@ export class PanelLayoutManager implements AppModule {
  }).catch((error: unknown) => {
  if (this.destroyed || controller.signal.aborted || generation !== this.digestGeneration) return;
  this.digestAbortController = null;
+ if (!canPresentDigest()) return;
  console.warn(`[digest] ${onDemand ? 'on-demand' : 'proactive'} brief generation failed:`, error);
  this.digestOverlay?.showStatus(onDemand
  ? 'Brief unavailable — try again shortly.'
@@ -1570,7 +1577,7 @@ export class PanelLayoutManager implements AppModule {
  // Proactive digest — once per 8h. Dashboard is interactive first: defer to an
  // idle callback (setTimeout fallback) so digest generation never competes with
  // boot, and it simply appears when ready.
- if (shouldShowDigest()) {
+ if (onboardingCompleteAtBoot && shouldShowDigest()) {
  const runDigest = (): void => {
  this.cancelScheduledDigest = null;
  if (!this.destroyed) requestDigest(false);

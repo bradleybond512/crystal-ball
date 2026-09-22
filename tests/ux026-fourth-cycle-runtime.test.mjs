@@ -33,6 +33,7 @@ function nws(id = 'nws', expires = NOW + 1000, retrievedAt = NOW) {
 }
 function digestHarness(alerts = [nws()]) {
   const win = environment();
+  win.localStorage.setItem('cb:onboarding-complete', 'true');
   let now = NOW;
   let nextId = 0;
   const timers = new Map();

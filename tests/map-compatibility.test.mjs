@@ -30,6 +30,7 @@ function mapFixture() {
       events.push('map');
     }
     getCanvas() { return { addEventListener: (name, handler) => listeners.set(name, handler) }; }
+    once(name, handler) { listeners.set(name, handler); }
     addControl() {}
     setCenter(center) { this.center = center; }
     triggerRepaint() { events.push('repaint'); }
@@ -75,8 +76,26 @@ test('main map initializes its worker before construction and preserves context 
     getStyleUrl: () => 'style.json', transformEmergencyPackMapRequest: transformRequest,
     MAP_INTERACTION_MODE: 'flat',
   });
-  const instance = { state: { view: 'world' } };
+  const setupCalls = [];
+  const instance = {
+    state: { view: 'world' }, mapStyleGeneration: 0, styleReadyGeneration: -1,
+    updateAttribution(basemap) { setupCalls.push(`attribution:${basemap}`); },
+    setupMapErrorHandling() {
+      assert.ok(this.maplibreMap, 'error handling is registered immediately after map construction');
+      assert.equal(this.styleReadyGeneration, -1, 'initial errors must be observed before the style loads');
+      setupCalls.push('errors');
+    },
+    beginBaselineLoad() { setupCalls.push('baseline-loading'); },
+  };
   method.call(instance);
+  assert.deepEqual(setupCalls, ['attribution:dark', 'errors', 'baseline-loading']);
+  assert.equal(instance.styleReadyGeneration, -1);
+  fixture.listeners.get('style.load')();
+  assert.equal(instance.styleReadyGeneration, 0);
+  instance.mapStyleGeneration = 1;
+  instance.styleReadyGeneration = 1;
+  fixture.listeners.get('style.load')();
+  assert.equal(instance.styleReadyGeneration, 1, 'an old style event cannot overwrite a newer ready generation');
   assert.deepEqual(fixture.events, ['worker', 'map']);
   assert.equal(instance.maplibreMap.options.transformRequest, transformRequest);
   assert.equal(instance.maplibreMap.options.maxPitch, 0);

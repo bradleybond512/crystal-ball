@@ -245,7 +245,8 @@
     "test:bundle-budget-policy": "node --test tests/bundle-budget-policy.test.mjs",
     "mcp:install": "npm ci --prefix tools/mcp-server",
     "test:mcp-deps": "node --test tests/install-mcp-deps.test.mjs",
-    "test:map-compatibility": "node --test tests/map-compatibility.test.mjs"
+    "test:map-compatibility": "node --test tests/map-compatibility.test.mjs",
+    "test:local-basemap": "node --import tsx --test src/components/__tests__/deckgl-local-basemap.test.mts tests/countries-geojson.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

@@ -91,6 +91,16 @@ interface VisualScenarioSummary {
   variant: 'both' | HarnessVariant;
 }
 
+interface BaselineSnapshot {
+  layers: string[];
+  sources: string[];
+  renderedCountries: string[];
+  landColor: unknown;
+  landOpacity: unknown;
+  camera: CameraState;
+  countryClicks: { code?: string; name?: string }[];
+}
+
 interface MapHarness {
   ready: boolean;
   variant: HarnessVariant;
@@ -117,6 +127,9 @@ interface MapHarness {
   getProtestClusterCount: () => number;
   getOverlaySnapshot: () => OverlaySnapshot;
   getCyberTooltipHtml: (indicator: string) => string;
+  getBaselineSnapshot: () => BaselineSnapshot | null;
+  projectCoordinate: (lon: number, lat: number) => { x: number; y: number } | null;
+  pickLayerAtCoordinate: (lon: number, lat: number) => string | null;
   destroy: () => void;
 }
 
@@ -126,13 +139,17 @@ declare global {
   }
 }
 
+const localBaselineMode = new URLSearchParams(location.search).has('local-basemap');
+if (localBaselineMode) await import('../styles/home-shell.css');
+
 const app = document.getElementById('app');
 if (!app) {
   throw new Error('Missing #app container for map harness');
 }
 
-app.style.width = '1280px';
-app.style.height = '720px';
+app.style.width = localBaselineMode ? '100vw' : '1280px';
+app.style.height = localBaselineMode ? '100vh' : '720px';
+if (localBaselineMode) app.style.top = '0';
 app.style.position = 'relative';
 app.style.margin = '0 auto';
 
@@ -310,20 +327,25 @@ const SEEDED_NEWS_LOCATIONS: {
   },
 ];
 
+const countryClicks: { code?: string; name?: string }[] = [];
+
 const map = new DeckGLMap(app, {
   zoom: 5,
   pan: { x: 0, y: 0 },
   view: 'global',
-  layers: allLayersEnabled,
+  layers: localBaselineMode ? allLayersDisabled : allLayersEnabled,
   // Keep harness deterministic regardless of wall-clock date.
   timeRange: 'all',
 });
+
+if (localBaselineMode) map.setOnCountryClick((country) => countryClicks.push(country));
 
 const DETERMINISTIC_BODY_CLASS = 'e2e-deterministic';
 
 const internals = map as unknown as {
   buildLayers?: () => { id: string; props?: { data?: unknown } }[];
   maplibreMap?: MapLibreMap;
+  deckOverlay?: { pickObject: (params: { x: number; y: number; radius: number }) => { layer?: { id: string } } | null };
   getTooltip?: (info: { object?: unknown; layer?: { id?: string } }) => { html?: string } | null;
   newsLocationFirstSeen?: Map<string, number>;
   aptGroups?: typeof APT_GROUPS;
@@ -1110,7 +1132,7 @@ const seedAllDynamicData = (): void => {
   internals.aptGroupsLoaded = true;
   internals.serverBases = [...MILITARY_BASES];
   internals.serverBasesLoaded = true;
-  map.setLayers(allLayersEnabled);
+  map.setLayers(localBaselineMode ? allLayersDisabled : allLayersEnabled);
   map.setZoom(5);
   map.setEarthquakes(earthquakes);
   map.setWeatherAlerts(weather);
@@ -1235,6 +1257,7 @@ const ensureDeterministicStyles = (): void => {
  body.${DETERMINISTIC_BODY_CLASS} .deckgl-legend,
  body.${DETERMINISTIC_BODY_CLASS} .deckgl-timestamp,
  body.${DETERMINISTIC_BODY_CLASS} .map-attribution,
+ body.${DETERMINISTIC_BODY_CLASS} .map-baseline-status,
  body.${DETERMINISTIC_BODY_CLASS} .maplibregl-ctrl-bottom-right,
  body.${DETERMINISTIC_BODY_CLASS} .maplibregl-ctrl-bottom-left {
  display: none !important;
@@ -1335,7 +1358,7 @@ const pollReady = (): void => {
  Date.now() - readyStartedAt >= STYLE_READY_FALLBACK_MS;
 
   if ((hasCanvas && styleLoaded) || allowStyleFallback) {
- if (!deterministicVisualModeEnabled) {
+ if (!localBaselineMode && !deterministicVisualModeEnabled) {
  enableDeterministicVisualMode();
  }
  ready = true;
@@ -1396,6 +1419,38 @@ window.__mapHarness = {
   getProtestClusterCount,
   getOverlaySnapshot,
   getCyberTooltipHtml,
+  getBaselineSnapshot: (): BaselineSnapshot | null => {
+    const nativeMap = internals.maplibreMap;
+    if (!nativeMap) return null;
+    const style = nativeMap.getStyle();
+    const hasLand = Boolean(nativeMap.getLayer('country-baseline-land'));
+    const center = nativeMap.getCenter();
+    return {
+      layers: (style?.layers ?? []).map((layer) => layer.id),
+      sources: Object.keys(style?.sources ?? {}),
+      renderedCountries: hasLand
+        ? [...new Set(nativeMap.queryRenderedFeatures(undefined, { layers: ['country-baseline-land'] })
+          .map((feature) => String(feature.properties?.name ?? '')))].filter(Boolean)
+        : [],
+      landColor: hasLand ? nativeMap.getPaintProperty('country-baseline-land', 'fill-color') : null,
+      landOpacity: hasLand ? nativeMap.getPaintProperty('country-baseline-land', 'fill-opacity') : null,
+      camera: { lon: center.lng, lat: center.lat, zoom: nativeMap.getZoom() },
+      countryClicks: [...countryClicks],
+    };
+  },
+  pickLayerAtCoordinate: (lon: number, lat: number): string | null => {
+    const nativeMap = internals.maplibreMap;
+    if (!nativeMap || !internals.deckOverlay) return null;
+    const point = nativeMap.project([lon, lat]);
+    return internals.deckOverlay.pickObject({ x: point.x, y: point.y, radius: 3 })?.layer?.id ?? null;
+  },
+  projectCoordinate: (lon: number, lat: number): { x: number; y: number } | null => {
+    const nativeMap = internals.maplibreMap;
+    if (!nativeMap) return null;
+    const point = nativeMap.project([lon, lat]);
+    const rect = nativeMap.getCanvas().getBoundingClientRect();
+    return { x: rect.left + point.x, y: rect.top + point.y };
+  },
   destroy: (): void => {
  map.destroy();
   },

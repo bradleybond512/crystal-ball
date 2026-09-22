@@ -55,6 +55,14 @@ body.home-shell-active #panelsGrid {
   display: none;
 }
 
+.home-shell-map .map-baseline-status {
+  top: auto;
+  right: auto;
+  bottom: 20px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+}
+
 .home-shell-scroll {
   position: absolute;
   inset: 0;

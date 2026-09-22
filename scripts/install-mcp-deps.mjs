@@ -13,7 +13,7 @@
  * `cd tools/mcp-server && npm ci`; developers had no equivalent step.
  *
  * Runs from the root `prepare` script. Deliberately:
- *   - a fast no-op when node_modules is already present,
+ *   - a no-op when the local server entrypoints are present,
  *   - non-fatal on failure (a broken MCP server must not break `npm install`),
  *   - skippable with CB_SKIP_MCP_INSTALL=1 for CI jobs that do their own.
  */
@@ -25,6 +25,42 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_SERVER_DIR = path.join(repoRoot, 'tools', 'mcp-server');
 
+const ENTRYPOINT_PROBE = `
+  import { realpathSync, statSync } from 'node:fs';
+  import path from 'node:path';
+  import { fileURLToPath } from 'node:url';
+
+  try {
+    const modulesDir = path.join(realpathSync(process.cwd()), 'node_modules');
+    for (const specifier of [
+      '@modelcontextprotocol/sdk/server/mcp.js',
+      '@modelcontextprotocol/sdk/server/stdio.js',
+      'zod',
+    ]) {
+      const entry = realpathSync(fileURLToPath(import.meta.resolve(specifier)));
+      const relative = path.relative(modulesDir, entry);
+      if (!relative || relative === '..' || relative.startsWith('..' + path.sep)
+          || path.isAbsolute(relative) || !statSync(entry).isFile()) process.exit(1);
+    }
+  } catch {
+    process.exit(1);
+  }
+`;
+
+function hasLocalEntrypoints(serverDir) {
+  try {
+    execFileSync(process.execPath, ['--input-type=module', '--eval', ENTRYPOINT_PROBE], {
+      cwd: serverDir,
+      timeout: 2000,
+      maxBuffer: 1024,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Decide what to do without doing it. Split out so the skip logic is testable
  * without shelling out to npm.
@@ -35,8 +71,8 @@ export function decideAction({ serverDir = DEFAULT_SERVER_DIR, env = process.env
   if (env.CB_SKIP_MCP_INSTALL === '1') return 'skip:disabled';
   // Not a full checkout (e.g. a published tarball) — nothing to install.
   if (!existsSync(path.join(serverDir, 'package.json'))) return 'skip:no-package';
-  // Already installed. The common case; keep it free.
-  if (existsSync(path.join(serverDir, 'node_modules'))) return 'skip:installed';
+  // Resolve ESM exports without loading dependency code or accepting hoisted packages.
+  if (hasLocalEntrypoints(serverDir)) return 'skip:installed';
   // npm sets npm_execpath for lifecycle scripts; without it we will not guess.
   if (!env.npm_execpath || !existsSync(env.npm_execpath)) return 'skip:no-npm';
   return existsSync(path.join(serverDir, 'package-lock.json')) ? 'ci' : 'install';

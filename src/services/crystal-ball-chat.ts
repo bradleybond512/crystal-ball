@@ -24,6 +24,12 @@ import { markDismissed } from './analyst-command-listener';
 import { thumbsUp } from './hypothesis-feedback';
 import { getWatchlist, saveWatchlist } from './watchlist';
 import type { WatchlistEntry } from './watchlist';
+import { getSavedPlaces } from './saved-places';
+import {
+  projectDigestStories,
+  type DigestStoryCard,
+  type DigestStorySeed,
+} from './digest-alert-projection';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -481,49 +487,152 @@ export function markDigestShown(): void {
   try { localStorage.setItem(DIGEST_LAST_KEY, String(Date.now())); } catch { /* noop */ }
 }
 
-/**
- * Build a "since you last looked" prompt for the chat agent. The agent
- * generates a 3-bullet digest using the same context the chat does.
- */
-export function buildDigestPrompt(): string {
-  const ranked = rankAlerts(unifiedAlertStore.getAll()).slice(0, 20);
-  const recent = getActivity().slice(0, 15);
-  // Group by domain so the model sees cross-channel spread.
-  const byDomain = new Map<string, string[]>();
-  for (const a of ranked) {
-    const d = a.source;
-    const arr = byDomain.get(d) ?? [];
-    arr.push(`[${a.severity}] ${a.title}`);
-    byDomain.set(d, arr);
+const MAX_DIGEST_CANDIDATES = 20;
+const MAX_DIGEST_STORIES = 5;
+const MAX_MODEL_TOKENS_PER_STORY = 3;
+const MAX_DIGEST_NARRATIVE_LENGTH = 600;
+
+function digestFact(value: string, maxLength: number): string {
+  return value.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+function digestCandidates(alerts?: readonly UnifiedAlert[]): UnifiedAlert[] {
+  const source = alerts ?? rankAlerts(unifiedAlertStore.getAll());
+  return source.slice(0, MAX_DIGEST_CANDIDATES);
+}
+
+function digestStoryId(alertIds: readonly string[]): string {
+  let hash = 2_166_136_261;
+  for (const value of alertIds) {
+    for (const character of value) {
+      hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16_777_619) >>> 0;
+    }
+    hash = Math.imul(hash, 16_777_619) >>> 0;
   }
-  const domainSummary = [...byDomain.entries()]
-    .map(([d, lines]) => `${d} (${lines.length}): ${lines.slice(0, 2).join(' | ')}`)
-    .join('\n');
-  const top = ranked.slice(0, 10).map(a => `- [${a.severity}] (${a.source}) ${a.title}`).join('\n');
-  const activity = recent.map(e => `- ${e.kind}: ${e.title}`).join('\n');
+  return `digest-${(hash >>> 0).toString(36)}`;
+}
+
+function fallbackSeed(alert: UnifiedAlert): DigestStorySeed {
+  return {
+    id: digestStoryId([alert.id]),
+    alertIds: [alert.id],
+    headline: digestFact(alert.title, 200),
+    narrative: digestFact(alert.body, MAX_DIGEST_NARRATIVE_LENGTH),
+  };
+}
+
+/** Build a bounded narrative-only prompt from public alert facts and opaque tokens. */
+export function buildDigestPrompt(alerts?: readonly UnifiedAlert[]): string {
+  const candidates = digestCandidates(alerts);
+  const facts = candidates.map((alert, index) => {
+    const token = `A${index + 1}`;
+    if (alert.source === 'resource' || alert.source === 'local-ids') {
+      return JSON.stringify({ token, source: alert.source, descriptor: 'Local-only alert; details withheld.' });
+    }
+    return JSON.stringify({
+      token,
+      severity: alert.severity,
+      source: alert.source,
+      title: digestFact(alert.title, 160),
+      summary: digestFact(alert.body, 320),
+    });
+  }).join('\n');
   return [
-    'You are the Crystal Ball intelligence analyst. Generate a 5-bullet daily brief for the operator.',
-    'Each bullet = ONE story. Lead with the fact, then WHY it matters (1 short clause), then implication for the operator.',
-    'Prioritize cross-domain stories (e.g. space weather + grid, quake + tsunami). Call out if multiple sources converge.',
-    'Be terse and factual. No headers, no preamble — exactly five bullets starting with "•".',
+    'Select and group up to five ranked alert stories.',
+    'Return only a JSON array. Every item must have exactly this key:',
+    '{"alertTokens":["A1"]}',
+    `Use one to ${MAX_MODEL_TOKENS_PER_STORY} unique opaque alert tokens per story.`,
+    'Do not write prose or add any other fields.',
+    'Prefer cross-domain convergence when the supplied facts support it.',
     '',
-    `Top active alerts (ranked by hotness):\n${top || '(none)'}`,
-    '',
-    `Cross-domain spread:\n${domainSummary || '(none)'}`,
-    '',
-    `Recent activity:\n${activity || '(none)'}`,
+    `Ranked alert facts:\n${facts || '(none)'}`,
   ].join('\n');
 }
 
-/** Run the digest prompt through Claude and return the assistant text. */
-export async function generateDigest(signal?: AbortSignal): Promise<string> {
-  const prompt = buildDigestPrompt();
+interface ModelDigestStory {
+  alertTokens: string[];
+}
+
+function parseModelDigestStories(response: string | null): ModelDigestStory[] {
+  if (!response) return [];
   try {
-    const { response } = await runIntel(prompt, { signal, maxTokens: 300 });
-    return response;
+    const parsed: unknown = JSON.parse(response);
+    if (!Array.isArray(parsed) || parsed.length > MAX_DIGEST_STORIES) return [];
+    const stories: ModelDigestStory[] = [];
+    for (const value of parsed) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const item = value as Record<string, unknown>;
+      const keys = Object.keys(item).sort();
+      if (keys.length !== 1 || keys[0] !== 'alertTokens') continue;
+      if (!Array.isArray(item['alertTokens']) || item['alertTokens'].length === 0
+        || item['alertTokens'].length > MAX_MODEL_TOKENS_PER_STORY
+        || !item['alertTokens'].every((token) => typeof token === 'string')) continue;
+      const tokens = item['alertTokens'] as string[];
+      if (new Set(tokens).size !== tokens.length) continue;
+      stories.push({ alertTokens: tokens });
+    }
+    return stories;
   } catch {
-    return '';
+    return [];
   }
+}
+
+/** Resolve model token selections, then fill omissions with deterministic ranked stories. */
+export function buildDigestStorySeeds(
+  alerts: readonly UnifiedAlert[],
+  modelResponse: string | null,
+): DigestStorySeed[] {
+  const candidates = digestCandidates(alerts);
+  if (candidates.length === 0) return [];
+  const tokenIndex = new Map(candidates.map((alert, index) => [`A${index + 1}`, { alert, index }]));
+  const used = new Set<string>();
+  const selected: Array<{ seed: DigestStorySeed; rank: number }> = [];
+
+  for (const story of parseModelDigestStories(modelResponse)) {
+    const matches = story.alertTokens.map((token) => tokenIndex.get(token));
+    if (matches.some((match) => !match) || story.alertTokens.some((token) => used.has(token))) continue;
+    const resolved = matches.flatMap((match) => match ? [match] : []);
+    if (resolved.length !== story.alertTokens.length) continue;
+    for (const token of story.alertTokens) used.add(token);
+    const ranked = [...resolved].sort((a, b) => a.index - b.index);
+    const alertIds = ranked.map((match) => match.alert.id);
+    selected.push({
+      rank: ranked[0]?.index ?? Number.MAX_SAFE_INTEGER,
+      seed: {
+        id: digestStoryId(alertIds),
+        alertIds,
+        headline: digestFact(ranked[0]?.alert.title ?? '', 200),
+        narrative: digestFact(ranked[0]?.alert.body ?? '', MAX_DIGEST_NARRATIVE_LENGTH),
+      },
+    });
+  }
+
+  for (let index = 0; index < candidates.length && selected.length < MAX_DIGEST_STORIES; index += 1) {
+    const token = `A${index + 1}`;
+    const alert = candidates[index];
+    if (!alert || used.has(token)) continue;
+    used.add(token);
+    selected.push({ rank: index, seed: fallbackSeed(alert) });
+  }
+  return selected.sort((a, b) => a.rank - b.rank).map((item) => item.seed);
+}
+
+/** Generate model-assisted narratives, then derive location and saved-place impact locally. */
+export async function generateDigest(signal?: AbortSignal): Promise<DigestStoryCard[]> {
+  const alerts = unifiedAlertStore.getAll();
+  const ranked = rankAlerts(alerts).slice(0, MAX_DIGEST_CANDIDATES);
+  if (ranked.length === 0) return [];
+  let modelResponse: string | null = null;
+  try {
+    const result = await runIntel(buildDigestPrompt(ranked), { signal, maxTokens: 500 });
+    modelResponse = result.response;
+  } catch { /* deterministic fallback below */ }
+  return projectDigestStories({
+    seeds: buildDigestStorySeeds(ranked, modelResponse),
+    alerts,
+    savedPlaces: getSavedPlaces(),
+    now: Date.now(),
+  });
 }
 
 /** Attempt Ollama fallback after Claude fails; returns accumulated response text. */

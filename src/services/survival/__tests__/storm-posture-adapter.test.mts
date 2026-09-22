@@ -54,3 +54,21 @@ test('adaptLiveAlert threads + normalizes messageType for isCancellation detecti
   assert.equal(adaptLiveAlert({ ...base, messageType: null }).messageType, 'unknown');
   assert.equal(adaptLiveAlert(base).messageType, 'unknown');
 });
+
+
+test('adaptLiveAlert preserves onset when sent is also present', () => {
+  const onset = '2026-06-14T10:00:00Z';
+  const adapted = adaptLiveAlert({
+    id: 'onset-precedence', event: 'Tornado Warning', onset,
+    sent: '2026-06-14T09:55:00Z', expires: '2026-06-14T11:00:00Z',
+  });
+  assert.equal(adapted.sent, onset);
+});
+
+test('adaptLiveAlert falls back to sent only when onset is absent', () => {
+  const sent = '2026-06-14T09:55:00Z';
+  const adapted = adaptLiveAlert({
+    id: 'sent-fallback', event: 'Tornado Warning', sent, expires: '2026-06-14T11:00:00Z',
+  });
+  assert.equal(adapted.sent, sent);
+});

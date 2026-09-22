@@ -4,6 +4,8 @@ export type Theme = 'dark' | 'light';
 
 const STORAGE_KEY = 'crystalball-theme';
 const DEFAULT_THEME: Theme = 'dark';
+let sessionChoice: Theme | null = null;
+let watchingSystemTheme = false;
 
 const THEME_META_COLORS: Record<Theme, Record<'happy' | 'default', string>> = {
   dark:  { happy: '#1A2332', default: '#0a0f0a' },
@@ -33,24 +35,26 @@ export function getCurrentTheme(): Theme {
   return DEFAULT_THEME;
 }
 
-/**
- * Set the active theme: update DOM attribute, invalidate color cache,
- * persist to localStorage, update meta theme-color, and dispatch event.
- */
-export function setTheme(theme: Theme): void {
+function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
   invalidateColorCache();
-  try {
- localStorage.setItem(STORAGE_KEY, theme);
-  } catch {
- // localStorage unavailable
-  }
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta) {
- const variant = document.documentElement.dataset.variant;
- meta.content = THEME_META_COLORS[theme][variant === 'happy' ? 'happy' : 'default'];
+    const variant = document.documentElement.dataset.variant;
+    meta.content = THEME_META_COLORS[theme][variant === 'happy' ? 'happy' : 'default'];
   }
   window.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme } }));
+}
+
+/** Apply and persist an explicit choice, retaining it if storage is unavailable. */
+export function setTheme(theme: Theme): void {
+  sessionChoice = theme;
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // The session choice remains authoritative when persistence fails.
+  }
+  applyTheme(theme);
 }
 
 /**
@@ -70,9 +74,12 @@ export function applyStoredTheme(): void {
   const hasExplicitPreference = raw === 'dark' || raw === 'light';
 
   let effective: Theme;
-  if (hasExplicitPreference) {
+  if (sessionChoice) {
+    effective = sessionChoice;
+  } else if (hasExplicitPreference) {
  // User made an explicit choice — respect it regardless of variant
  effective = raw as Theme;
+ sessionChoice = effective;
   } else if (variant === 'happy') {
  // happy variant defaults to light
  effective = 'light';
@@ -95,8 +102,10 @@ export function applyStoredTheme(): void {
  * Call once after applyStoredTheme() during app bootstrap.
  */
 export function watchSystemTheme(): void {
+  if (watchingSystemTheme) return;
   const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-  if (!mq) return;
+  if (!mq || typeof mq.addEventListener !== 'function') return;
+  watchingSystemTheme = true;
 
   mq.addEventListener('change', (e) => {
  let raw: string | null = null;
@@ -105,8 +114,8 @@ export function watchSystemTheme(): void {
  const variant = document.documentElement.dataset.variant;
 
  // Only follow OS if no explicit user preference and not the happy variant
- if (!hasExplicitPreference && variant !== 'happy') {
- setTheme(e.matches ? 'dark' : 'light');
+ if (!sessionChoice && !hasExplicitPreference && variant !== 'happy') {
+ applyTheme(e.matches ? 'dark' : 'light');
  }
   });
 }

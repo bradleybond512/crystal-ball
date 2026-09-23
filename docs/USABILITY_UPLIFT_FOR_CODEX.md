@@ -928,10 +928,17 @@ Acceptance: Distinguish denied, malformed, unavailable and stale-cache outcomes 
 
 ### UX-042 — Construct panels when needed without losing coverage
 
-Status: NOT STARTED — HIGH ASSURANCE
+Status: MONITOR — HIGH ASSURANCE; partial prerequisite in #1714
+Evidence: #1714 — five diagnostic factories use asynchronous construction, with browser lifecycle and last-viewed regression evidence. No measured startup savings established; the diagnostic chunk remains reachable from the startup graph.
+Exit condition: Complete separately designed and approved construction profiling and any further lifecycle changes; verify service startup, Home contributors, restored layouts and on-demand navigation before declaring this task complete.
+Review after: 2026-09-23
 Source findings: PR1731 M6/H7.
 
 Acceptance: Measure construction time independently from parsing; defer selected presentation objects while preserving service startup, Home contributors, restored layouts and on-demand navigation.
+
+The broader construction program remains unimplemented. This partial evidence
+and tracking update do not authorize it. Current bounded evidence and limits:
+[PR-1714-INTEGRATION.md](validation/PR-1714-INTEGRATION.md).
 
 ### UX-043 — Reduce repeated alert subscriber scans
 
@@ -1144,7 +1151,7 @@ Update the row in the same PR that does the work.
 | UX-037 | Prevent new unowned stacking levels | NOT STARTED | — |
 | UX-038 | Constrain video-channel link construction | NOT STARTED — HIGH ASSURANCE | — |
 | UX-040 | Expose unavailable and stale feed outcomes | NOT STARTED — HIGH ASSURANCE | — |
-| UX-042 | Construct panels when needed without losing coverage | NOT STARTED — HIGH ASSURANCE | — |
+| UX-042 | Construct panels when needed without losing coverage | MONITOR | #1714 |
 | UX-043 | Reduce repeated alert subscriber scans | NOT STARTED | — |
 | UX-044 | Announce critical UI changes accessibly | NOT STARTED | — |
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |

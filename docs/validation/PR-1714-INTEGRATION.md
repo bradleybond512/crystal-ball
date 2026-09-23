@@ -1,6 +1,6 @@
 # PR 1714 integration evidence — 2026-09-22
 
-Status: **DRAFT; aggregate PR acceptance remains incomplete.** The user-approved nested installer repair is implemented and tested in the latest section below. The earlier integration evidence is retained with its original base. This does not certify the unrelated feed/parser or lazy-panel changes, and no full-PR merge approval is claimed.
+Status: **DRAFT; final aggregate review pending.** The installer, delayed-panel tracking and typed-lint repairs have scoped acceptance. The proposed FEWS NET parser change has been withdrawn by restoring the file exactly to main; the existing provider defects remain documented for separate work. Earlier evidence below is retained with its original base and scope. No full-PR merge approval is claimed.
 
 ## Scope
 
@@ -196,3 +196,23 @@ freshness policy was repaired in this follow-up.
 Remaining whole-PR blockers include provider compatibility and the missing
 complete mutation records for original sanitizer, prepare-wiring and eager
 budget changes. Neither scoped repair authorizes merging this aggregate PR.
+
+## Final scope withdrawal and original evidence closeout
+
+The previous section records findings at the earlier reviewed tip. The
+FEWS NET optimization is now withdrawn: `src/services/food-insecurity.ts`
+matches canonical main `c41122898ad0dc2143943766304ac26599e4959b` byte for byte,
+with no net provider-file diff. This removes the proposed parser change from
+this PR; it does not fix or certify the existing provider. Historical commits
+and the raw live-probe evidence remain available.
+
+Separate FEWS NET repair must establish a supported response shape and
+country attribution from actual provider fields, retain unknown values when
+unsupported, and validate failure/freshness behavior before changing the
+configured endpoint. Replacing the URL alone is insufficient. No endpoint,
+normalization, provider-health or security policy is changed here.
+
+The existing 2.85 MiB eager-JavaScript limit is a product policy, not a
+statistically calibrated tolerance. It is unchanged. New fixture measurements
+isolate that policy from the other bundle caps; they do not establish a
+production performance distribution or first-paint timing.

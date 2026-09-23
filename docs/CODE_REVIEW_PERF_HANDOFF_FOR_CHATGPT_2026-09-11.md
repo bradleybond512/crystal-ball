@@ -6,6 +6,14 @@
 **Repo:** `bradleybond512/crystal-ball` (canonical local path `~/developer/crystalball`)
 **Scale:** 2,145 TypeScript files · 558,348 lines · ~408 panels
 
+**2026-09-22 integration note:** this is a historical review. Current PR #1714
+scope, validation and unresolved limitations are recorded in
+[PR-1714-INTEGRATION.md](validation/PR-1714-INTEGRATION.md). The proposed ESLint
+cache was withdrawn because imported type changes could leave stale results.
+The FEWS NET regex optimization was also withdrawn; the provider file matches
+main, and its feed URL/country attribution require separate repair. These
+withdrawals supersede the corresponding implementation claims below.
+
 This document is a self-contained handoff. It assumes the reader has **no prior
 context** and **may not be able to run the repo**. Every claim below was
 verified by executing the command shown. Line numbers are from commit `54a9b92`
@@ -27,8 +35,8 @@ Update this table in the same commit as the work. Status values: `TODO`,
 | 7 | `escapeHtml` falsy guard + 4 pre-existing `sanitize.ts` findings | **DONE** 2026-09-13 | All 4 cleared; `isPrivateHostname` split into 4 helpers; `/\.+$/` replaced with a linear loop. §7.1 |
 | 7a | `sanitize.ts` test coverage | **DONE** 2026-09-13 | Suite existed (my earlier "no tests" claim was **wrong** — see §7.1 correction). Extended 17→23 tests; added IPv4-mapped IPv6 both spellings, IPv6 literals, multicast, trailing-dot evasion. Mutation-checked |
 | 10 | `crystalball` MCP server dead on fresh clone | **DONE** 2026-09-13 | `tools/mcp-server` is a nested package the root `npm ci` never installed → `ERR_MODULE_NOT_FOUND` → `CONNECTION_CLOSED`. Now installed by `prepare`. §11 |
-| 2.3 | `food-insecurity` regex bounded | **DONE** 2026-09-12 | `{0,79}?` replaces unbounded lazy `+?` |
-| 8 | ESLint caching | **PARTIAL** 2026-09-12 | Covers changed-file lint (16.5s→1.5s), **not** the 9-min baseline scan — scope limit and reasoning in §7.2 |
+| 2.3 | `food-insecurity` regex bounded | **BLOCKED** — withdrawn from #1714 | Exact main implementation restored; invalid feed URL and country attribution need separate provider repair. Current evidence: PR-1714-INTEGRATION.md |
+| 8 | ESLint caching | **BLOCKED** — optimization withdrawn | Imported type changes bypassed cached caller lint. Uncached runner restored; real typed-lint regression and mutation proof recorded in PR-1714-INTEGRATION.md |
 | 1 | Eager startup graph (400 static imports) | **IN PROGRESS** — batch 1 of 12 converted, 0 MB gained | **Read §3.4b before continuing.** Batch 1 (`panels-diagnostic`, 5 panels) is converted and safe, but the eager figure did not move: the chunk stays eager because non-panel modules co-located into it are still statically reachable. Each batch needs a second step the original estimate missed |
 | 2 | Lazy panels eagerly mounted at boot | **TODO** — do before item 1 | `panel-layout.ts:1979` |
 | 3 | ~25 services bypass `RefreshScheduler` | **RESCOPED — do not start as written** | The hidden×10 benefit **does not exist by default** (always-on defaults ON and disables it). Remaining win is jitter only, and the change is architectural not mechanical. Correction + revised recommendation in §5 |

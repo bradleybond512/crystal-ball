@@ -100,3 +100,99 @@ These are not waived by the installer tests. Entrypoint readiness also does not
 prove every transitive file is intact or installed versions match the lockfile.
 Rollback of the bounded repair is a reviewed reversal of its installer/test
 commit; that restores the documented incomplete-directory risk.
+
+## Follow-up acceptance: delayed panels and typed lint
+
+Whole-PR independent review of `d1061df82882` against `c41122898ad0` found
+additional blockers. No passing whole-PR verdict was recorded. The approved
+installer repair remains valid; it does not certify these other changes.
+
+The five newly asynchronous diagnostic panels missed the existing last-viewed
+observer's initial scan. The bounded repair enrolls an element after successful
+canonical insertion, preserving the missing-grid return, optional observer,
+mount deduplication and late-destruction guard. It also removes an unsupported
+comment claiming startup bundle savings. This repairs persistence; it does not
+complete or expand the high-assurance UX-042 construction/performance plan.
+
+Code commit: `9bf7deec4`; assertion-safety follow-up: `78ce83861`.
+Changed files: `src/app/panel-layout.ts`, `tests/lazy-panel-tracker.test.mjs`,
+and the focused package script. Evidence is under
+`~/.crystalball-diagnostics/pr1714-acceptance-20260922/`.
+
+- Before the repair, the new tracker tests reported `# pass 6`, `# fail 2`.
+- `npm run test:lazy-panel-tracker` restored result: `# pass 14`, `# fail 0`.
+- `bash scripts/agentic-validate.sh --tests "test:lazy-panel-tracker"`:
+  `Agentic validation gate passed.` and `Tests run: test:lazy-panel-tracker`.
+  Types, build, lint and secret checks ran within that gate; normal commit
+  hooks reran both TypeScript configurations after the assertion-only change.
+- Clean-tree mutations, each confirmed with an applied diff: enrollment
+  `12 pass / 2 fail`; initial scan, destruction, deduplication, enabled state
+  and missing-grid guard each `13 pass / 1 fail`; pending-map cleanup
+  `11 pass / 3 fail`; missing-observer handling `12 pass / 2 fail`.
+  Each began from `14 pass / 0 fail`; the final restored suite returned
+  `14 pass / 0 fail`. Source restoration SHA256:
+  `fa370937c7d8d387cca6a62c030feed48f2b488e5eeffa5725830e29f986ba64`.
+- Chromium loaded all five real factories through the runtime harness, with
+  one mounted element per factory and identical objects for concurrent calls.
+  The same visibility-transition probe left storage at `sentinel` with the
+  enrollment mutation and wrote `api-diagnostic` after restoration. This is
+  browser renderer evidence, not native diagnostic/service acceptance.
+
+The attempted full-app `?e2e=ui-only` probe timed out: that route intentionally
+restricts construction to three webcam panels. Its failed log is preserved;
+it is not counted as acceptance. Use the ordinary app for manual verification:
+open a diagnostic panel, bring it substantially into view, then reopen the app
+and confirm the last-viewed location. Native acceptance remains unperformed.
+Rollback of the observer repair requires no migration; reverting it restores
+the documented persistence defect.
+
+The same review identified unsound type-aware lint caching. An isolated copy
+of the real runner reported exit 0 after an imported function changed from
+`void` to `Promise<void>` while its caller stayed unchanged. The identical
+uncached invocation returned exit 1 with
+`@typescript-eslint/no-floating-promises` and
+`1 problem (1 error, 0 warnings)`. The separate lint-baseline path remains
+uncached. The cache optimization was removed in `ae80c2be4`, preserving lint
+rules, progress, timeouts and exit handling. The runner now matches main's
+uncached implementation. No cache-file deletion or compatibility shim was
+introduced; repeated runs may cost more time but retain the existing timeout.
+
+`tests/eslint-runner.test.mjs` now exercises the real runner and real typed
+ESLint in an isolated temporary project. The caller stays byte-identical;
+only the imported return type changes. Actual results:
+
+- Before repair: `# pass 9`, `# fail 1`; after repair:
+  `# pass 10`, `# fail 0` for `npm run test:eslint-runner`.
+- `bash scripts/agentic-validate.sh --tests "test:eslint-runner"`:
+  `Agentic validation gate passed.` Types, lint, secrets and build passed.
+- Clean-tree mutation restored only the original cache implementation:
+  `10 pass / 0 fail` → `9 pass / 1 fail` (cached caller incorrectly exits 0
+  instead of 1) → `10 pass / 0 fail`. Applied diff, raw assertions and empty
+  restored status are under `cache-repair/`. Restored runner SHA256:
+  `5ad371267457e851335694f222fd05f49af2924687ca71b04e90e66c6f98b5f6`.
+
+Rollback would reintroduce stale typed-lint results and is not recommended;
+there is no user-data migration. Manual verification is the same isolated
+imported-signature scenario, with the second run reporting an unhandled
+promise. The two bounded repairs require scoped independent review and do
+not remove the remaining aggregate blockers below.
+
+### FEWS NET discovery and remaining scope
+
+The [official feed directory](https://fews.net/feeds) links to working RSS
+alternatives: `https://fews.net/taxonomy/term/44/feed` and
+`https://fews.net/taxonomy/term/5/feed`. Both returned ten item rows. Consumed
+fields available were `title`, `description`, `link` and `pubDate`, with
+`dc:creator` and `guid` also present. Raw bodies, headers and shape evidence
+are retained as `fews-*` in the acceptance directory.
+
+On these twenty sampled entries, the exact old and new title expressions
+produced zero differences, nineteen `Unknown` countries and one erroneous
+`Venezuela Acute` value. Titles were multilingual and generally headlines,
+not country-prefixed labels. These alternative feeds do not validate the
+app's unchanged failing `/rss/all` endpoint. No provider URL, parser or
+freshness policy was repaired in this follow-up.
+
+Remaining whole-PR blockers include provider compatibility and the missing
+complete mutation records for original sanitizer, prepare-wiring and eager
+budget changes. Neither scoped repair authorizes merging this aggregate PR.

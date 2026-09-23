@@ -127,7 +127,7 @@ test('a pending factory completion after destruction never mounts or enrolls', a
   const mounting = h.owner.mountLazyPanel('api-diagnostic');
   h.owner.destroyed = true;
   resolve(late);
-  assert.equal(await mounting, null);
+  assert.equal(await mounting === null, true);
   assert.equal(late.destroyed, true);
   assert.equal(late.el.isConnected, false);
   assert.equal(h.owner._lastViewedObserver.targets.size, 0);

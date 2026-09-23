@@ -3665,6 +3665,7 @@ export class PanelLayoutManager implements AppModule {
  : null;
  if (ref) ref.before(el);
  else grid.append(el);
+ this._lastViewedObserver?.observe(el);
   }
 
   /**
@@ -3716,12 +3717,9 @@ export class PanelLayoutManager implements AppModule {
   /**
    * Diagnostic / admin panels, registered lazily.
    *
-   * These are the `panels-diagnostic` manualChunks group (vite.config.ts): they
-   * carry heavyweight transitive imports and are only opened from the
-   * diagnostic surfaces, so they have no business in the boot module graph.
-   * Static imports here kept the whole group eagerly modulepreloaded; as
-   * lazyFactories the chunk leaves the startup path. Measure with
-   * `npm run bundle:check` -- the `eager:` line is the meter.
+   * Factories defer construction until enabled. Other static import paths still
+   * reach the shared diagnostic chunk, so registration alone does not remove
+   * it from the startup graph. Measure the graph with `npm run bundle:check`.
    */
   private registerDiagnosticPanels(): void {
  const slots: Array<[string, () => Promise<Panel>]> = [

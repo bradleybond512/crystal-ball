@@ -77,12 +77,8 @@ async function fetchFewsNet(): Promise<FoodInsecurityAlert[]> {
  const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
 
  // FEWS NET titles often start with country name; bounded input.
- // The quantifier is bounded: an unbounded lazy [a-zA-Z\s]+? before an
- // alternation is polynomial (O(n^2)) on a title that never reaches the
- // delimiter. 80 chars is far beyond any real country name, so this only caps
- // pathological input. Bounding it also retired this line's slow-regex
- // suppression — the rule no longer fires.
- const countryMatch = /^([A-Z][a-zA-Z\s]{0,79}?)(?:\s*[-–:|]|\s+Food)/.exec(title);
+ /* eslint-disable-next-line sonarjs/slow-regex */
+ const countryMatch = /^([A-Z][a-zA-Z\s]+?)(?:\s*[-–:|]|\s+Food)/.exec(title);
  const country = countryMatch?.[1]?.trim() ?? 'Unknown';
 
  return {

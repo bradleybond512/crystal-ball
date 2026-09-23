@@ -216,3 +216,74 @@ The existing 2.85 MiB eager-JavaScript limit is a product policy, not a
 statistically calibrated tolerance. It is unchanged. New fixture measurements
 isolate that policy from the other bundle caps; they do not establish a
 production performance distribution or first-paint timing.
+
+### Original mutation records completed
+
+Verification-only work at `508a0e668` completed the missing original evidence;
+production bytes were restored after every mutation. Raw commands, assertion
+failures, inspected applied diffs, before/after hashes and clean-tree records
+are under `~/.crystalball-diagnostics/pr1714-final-evidence-20260922/original-proofs/`.
+
+`npm run test:sanitize` baseline and final output: `# pass 38`, `# fail 0`.
+The mapped-IPv4 call-site bypass produced `# pass 36`, `# fail 2`; each of the
+following eight independent mutations produced `# pass 37`, `# fail 1`:
+falsy guard, nullish guard, IPv6 classifier call, zero/multicast classifier,
+trailing-dot normalization, multicast only, IPv6 unique-local only and IPv6
+link-local only. Every restored run returned `38 pass / 0 fail`.
+Sanitizer SHA256 restored after each:
+`739dc902bd0348d6c1c47b71a46b6b85656b5db9fbfd6ab51f53cd8a1c393f8d`.
+The supplemental independent mutations avoid claiming multicast or IPv6
+subclass proof from a grouped assertion that failed earlier at loopback/zero.
+These are behavioral proofs, not a timing benchmark or exhaustive security
+certification.
+
+The source-scoped command
+`node --test --test-name-pattern="the repo really does wire this into prepare" tests/install-mcp-deps.test.mjs`
+was run for two separate `package.json` mutations: remove only the installer
+suffix from `prepare`, and replace the `mcp:install` recovery command. Each
+reported `# pass 1`, `# fail 0` → `# pass 0`, `# fail 1` →
+`# pass 1`, `# fail 0`. No package lifecycle was executed.
+Restored package SHA256:
+`c14555347644a91d7a807f75db662f7717efe390dad6b230cf83060a4157834d`.
+
+The new test in `tests/bundle-budget-policy.test.mjs` executes the actual
+checker copied into an isolated fixture. Four deterministic JS assets each
+gzip to about 808 KiB; the main entry is 47 bytes gzip. Three preloads pass,
+while adding only the fourth preload fails exactly the 2.85 MiB eager limit.
+All asset hashes stay identical and the main, individual and total caps pass.
+`npm run test:bundle-budget-policy` reported `# pass 3`, `# fail 0`.
+Removing only the eager failure branch gave `# pass 2`, `# fail 1`, with the
+assertion detecting incorrect exit 0 above the cap; restoration returned
+`3 pass / 0 fail`. Checker SHA256 restored:
+`b0d56e198b24dcf1b0ce5d1fde9fbe35ae299828685e81d5de2bb8f1348294aa`.
+The named gate passed; detailed evidence is in
+`~/.crystalball-diagnostics/pr1714-final-evidence-20260922/budget/`.
+Integrated test commit: `4a57562e1`.
+
+UX-042 now records this limited prerequisite as MONITOR, with a review date
+and exit condition for separately approved broader work. The real roadmap
+parser and reconciliation functions passed focused candidate-OPEN and
+post-merge-MERGED transition checks: `# pass 2`, `# fail 0`. This is a scoped
+ownership check, not a synthetic claim that the PR has already merged.
+
+The original test-evidence gaps are now supplied for final independent
+assessment. The provider optimization is withdrawn rather than certified.
+The final whole-PR verdict and GitHub checks still determine merge readiness.
+
+### Final integrated local validation
+
+The combined command
+`bash scripts/agentic-validate.sh --tests "test:sanitize test:sec-hardening test:mcp-deps test:eslint-runner test:agentic-pipeline test:bundle-budget-policy test:lazy-panel-tracker"`
+reported `Agentic validation gate passed.` Actual suite summaries, in that
+order: `# pass 38 / # fail 0`, `# pass 69 / # fail 0`,
+`# pass 19 / # fail 0`, `# pass 10 / # fail 0`,
+`# pass 57 / # fail 0`, `# pass 3 / # fail 0`, and
+`# pass 14 / # fail 0`. The gate also ran types, lint, secrets, roadmap and
+build. Raw log: `pr1714-final-evidence-20260922/final-gate.log`.
+
+Subsequent `npm run bundle:check` returned exit 0 and
+`All bundle-size policies satisfied.` Actual report: 110 chunks,
+`total: 5.11 MB / 6.00 MB`, `eager: 2.80 MB / 2.85 MB`,
+and main `gzip=445.7 KB`. No threshold was increased, and these measurements
+are not a controlled before/after performance comparison. Native acceptance
+and broad construction profiling remain outstanding.

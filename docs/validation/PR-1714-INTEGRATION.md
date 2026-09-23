@@ -1,6 +1,6 @@
 # PR 1714 integration evidence — 2026-09-22
 
-Status: **BLOCKED; draft only.** The mechanical integration passes the checks below, but the nested MCP installer has a confirmed failure-recovery defect. No semantic fix, install, push, merge approval, or independent review verdict is claimed.
+Status: **DRAFT; aggregate PR acceptance remains incomplete.** The user-approved nested installer repair is implemented and tested in the latest section below. The earlier integration evidence is retained with its original base. This does not certify the unrelated feed/parser or lazy-panel changes, and no full-PR merge approval is claimed.
 
 ## Scope
 
@@ -28,7 +28,7 @@ External logs and runnable probes: `~/.crystalball-diagnostics/pr1714-20260922/`
 - `node scripts/targeted-tests.mjs` against current origin/main `95d6e1560`: `[targeted-tests] 20 script(s) passed.`, exit 0; summed TAP summaries `2211 pass / 0 fail`. This includes the full build and current-location native contract. Existing baselined coverage gap: `scripts/check-bundle-size.mjs`.
 - Mapping mutation proof at clean commit `078d2531b`: external `mapping.test.mjs` asserts that the real JSON file selects `test:mcp-deps` with no unmapped source. Replace only the JSON mapping with `{}`, confirm applied `git diff`, run: `1 pass / 0 fail` → `0 pass / 1 fail` (missing expected suite, installer reported unmapped). Restore bytes, checksum and empty status; rerun `1 pass / 0 fail`. Full logs/diff in `mapping-mutation.txt`. No script is removed from main's required selection.
 
-## Confirmed blocking finding: partial MCP install treated as installed
+## Original blocking finding: partial MCP install treated as installed
 
 `scripts/install-mcp-deps.mjs` decides `skip:installed` solely from existence of `tools/mcp-server/node_modules`. A failed `npm ci` can create that directory before dependencies are installed. Subsequent prepare runs then skip repair, leaving the original MCP `CONNECTION_CLOSED` failure unresolved.
 
@@ -54,3 +54,49 @@ Existing handoff production mutation claims were not independently reproduced in
 The existing FEWS NET parser URL `https://fews.net/rss/all` was probed directly with a 20-second timeout and HTTPS-only redirects. It returned `HTTP/2 404`, `content-type: text/html; charset=UTF-8`, 57,900 bytes, title `Page Not Found | FEWS NET`, and zero RSS `<item>` elements. XML parsing failed. Consumed fields would be `title`, `description`, `link`, and `pubDate`, but there are no valid live rows to verify the bounded country regex against. See `fews-headers.txt`, `fews-body.xml`, and `fews-probe.json` externally. The URL is unchanged by this PR; no endpoint repair or claim that the live feed works is included. Provider repair requires its own discovery/design.
 
 Rollback for this integration is to revert its JSON mapping/conflict-resolution commit; the underlying existing PR changes remain subject to review. The installer repair must preserve explicit skip behavior, no shell interpolation, pinned npm-ci preference, safe offline failure reporting, and current root-install policy unless separately approved.
+
+## Approved installer repair and current-main integration
+
+On 2026-09-22 the user approved the bounded readiness/retry repair. The existing
+PR was applied without conflicts to main `c41122898ad0dc2143943766304ac26599e4959b`,
+preserving its merged layout, alert, focus and dependency updates. Installer
+code and tests are committed at `632c2b602c4728849921441c43e3742d9a7be073`.
+
+The new check resolves the actual ESM SDK and Zod entrypoints in a bounded
+read-only Node subprocess, without importing dependency code. Each target must
+be a regular file inside the nested node_modules directory. Missing files,
+hoisted packages, symlink escapes and malformed metadata select the existing
+installer. Disabled/absent-package/no-npm behavior, no-shell invocation and
+nonfatal failure reporting remain intact. No real install or user-profile
+operation was used in testing.
+
+Actual repair evidence: initial tests `10 pass / 9 fail`; restored suite
+`19 pass / 0 fail`; named gate `Agentic validation gate passed.` and
+`Tests run: test:mcp-deps`. Normal commit hooks reran both TypeScript
+configurations and staged secret/lint checks after the final test-safety edit.
+Clean-tree mutation diffs, real failure counts, restoration hashes and limits
+are recorded in [the approved repair brief](../plans/2026-09-22-pr1714-installer-repair.md)
+and `~/.crystalball-diagnostics/pr1714-installer-repair-20260922/`.
+
+Parent checks against the freshly integrated existing PR also passed:
+
+- `npm run test:sanitize`: `# pass 38`, `# fail 0`.
+- `npm run test:sec-hardening`: `# pass 69`, `# fail 0`.
+- `npm run test:eslint-runner`: `# pass 9`, `# fail 0`.
+- `npm run test:agentic-pipeline`: `# pass 57`, `# fail 0`.
+- Explicit `npm run build:full` and `npm run bundle:check`: exit 0;
+  `total: 5.12 MB / 6.00 MB`, `eager: 2.81 MB / 2.85 MB`,
+  main `gzip=457.9 KB`, `All bundle-size policies satisfied.`
+
+These parent checks ran at the integrated baseline before the installer-only
+repair; their production frontend inputs are unchanged by that repair. Raw
+logs are `repair-*` under the earlier PR1714 evidence directory, with
+`parent-integration-checks.json` in the repair directory.
+
+The approved installer defect is addressed; remaining aggregate acceptance
+includes genuine full-PR review, lazy-diagnostic browser behavior, and the
+unverified changed FEWS NET parser against its currently failing live URL.
+These are not waived by the installer tests. Entrypoint readiness also does not
+prove every transitive file is intact or installed versions match the lockfile.
+Rollback of the bounded repair is a reviewed reversal of its installer/test
+commit; that restores the documented incomplete-directory risk.

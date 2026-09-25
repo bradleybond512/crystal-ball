@@ -43,3 +43,29 @@ test('existing vendor and panel chunk assignments remain intact', () => {
     assert.equal(chunkFor(id!), name, id);
   }
 });
+
+
+test('panel configuration ownership includes its exact closed dependency group', () => {
+  for (const file of ['panels.ts', 'panel-metadata.ts', 'variant.ts']) {
+    assert.equal(chunkFor(`/repo/src/config/${file}`), 'panel-config', file);
+  }
+});
+
+test('panel configuration ownership excludes similarly named modules', () => {
+  for (const id of [
+    '/repo/src/config/panels-helper.ts',
+    '/repo/src/config/panel-metadata.ts.backup',
+    '/repo/src/config/variant.ts.backup',
+    '/repo/src/config/variants.ts',
+    '/repo/src/components/panels.ts',
+    '/repo/src/app/variant.ts',
+    '/repo/src/config/tech-geo.ts',
+  ]) {
+    assert.equal(chunkFor(id), undefined, id);
+  }
+});
+
+test('panel configuration ownership preserves established vendor precedence', () => {
+  assert.equal(chunkFor('/repo/node_modules/i18next/src/config/panels.ts'), 'i18n');
+  assert.equal(chunkFor('/repo/node_modules/maplibre-gl/src/config/variant.ts'), 'maplibre');
+});

@@ -1066,6 +1066,11 @@ export default defineConfig({
  return 'cesium';
  }
  }
+ if (
+ id.endsWith('/src/config/panels.ts')
+ || id.endsWith('/src/config/panel-metadata.ts')
+ || id.endsWith('/src/config/variant.ts')
+ ) return 'panel-config';
  if (id.endsWith('/src/services/story-renderer.ts')) return 'story-renderer';
  // Panel chunk split — per
  // docs/CLAUDE_FUNCTIONALITY_DIAGNOSTICS_PERFORMANCE_ROADMAP_2026-04-29.md

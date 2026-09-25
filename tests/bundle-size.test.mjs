@@ -145,3 +145,58 @@ test('bundle-size: story renderer is a named chunk statically reachable from mai
   }
   assert.fail('main must statically import the story renderer chunk; dynamic-only reachability changes loading behavior');
 });
+
+
+test('bundle-size: panel config stays statically reachable without importing an HTML entry', (t) => {
+  if (!haveAssets) {
+    t.skip('dist/assets missing — run `npm run build` first');
+    return;
+  }
+  if (!manifest) {
+    t.skip('dist/.vite/manifest.json missing — manifest assertion reports the build defect');
+    return;
+  }
+  const configFile = resolveManifestChunkFile(manifest, 'panel-config');
+  const configKey = Object.keys(manifest).find((key) => manifest[key].file === configFile);
+  const mainFile = resolveManifestChunkFile(manifest, 'main');
+  const mainKey = Object.keys(manifest).find((key) => manifest[key].file === mainFile);
+  const closure = (start) => {
+    const visited = new Set();
+    const pending = [start];
+    while (pending.length > 0) {
+      const key = pending.pop();
+      if (visited.has(key)) continue;
+      visited.add(key);
+      assert.ok(manifest[key], `static import ${key} must resolve in the manifest`);
+      pending.push(...(manifest[key].imports ?? []));
+    }
+    return visited;
+  };
+  assert.ok(closure(mainKey).has(configKey), 'main must statically import panel-config');
+  for (const key of closure(configKey)) {
+    assert.ok(!key.endsWith('.html'), `panel-config must not import HTML entry ${key}`);
+  }
+});
+
+test('bundle-size: static module graphs remain acyclic', (t) => {
+  if (!haveAssets) {
+    t.skip('dist/assets missing — run `npm run build` first');
+    return;
+  }
+  if (!manifest) {
+    t.skip('dist/.vite/manifest.json missing — manifest assertion reports the build defect');
+    return;
+  }
+  const visited = new Set();
+  const active = new Set();
+  const visit = (key) => {
+    assert.ok(!active.has(key), `static chunk cycle reaches ${key}`);
+    if (visited.has(key)) return;
+    assert.ok(manifest[key], `static import ${key} must resolve in the manifest`);
+    active.add(key);
+    for (const dependency of manifest[key].imports ?? []) visit(dependency);
+    active.delete(key);
+    visited.add(key);
+  };
+  for (const key of Object.keys(manifest)) visit(key);
+});

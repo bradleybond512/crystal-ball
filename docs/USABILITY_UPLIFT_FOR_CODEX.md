@@ -1076,7 +1076,7 @@ burst replay. UX-045 does not claim these behaviors are repaired.
 ### UX-059 — Retain active alerts using authoritative lifecycle evidence
 
 Status: IN REVIEW — HIGH ASSURANCE
-Claim: current-main dependent draft; approved [implementation brief](plans/2026-09-25-ux059-warning-retention.md). Integration hold depends on ACC-509 #1738.
+Claim: dependent draft #1739; approved [implementation brief](plans/2026-09-25-ux059-warning-retention.md). Integration hold depends on ACC-509 #1738.
 Source findings: PR1731 H17; separated from UX-046's capacity-only correction.
 
 Acceptance: separate event time from verified observation/retention time and
@@ -1170,5 +1170,5 @@ Update the row in the same PR that does the work.
 | UX-056 | Bound retained storage without losing user evidence | NOT STARTED — HIGH ASSURANCE | — |
 | UX-057 | Persist panel state only when it changes | NOT STARTED | — |
 | UX-058 | Account for deferred and updated warnings | NOT STARTED — HIGH ASSURANCE | — |
-| UX-059 | Retain active alerts using authoritative lifecycle evidence | IN REVIEW — HIGH ASSURANCE | Dependent draft; approved [brief](plans/2026-09-25-ux059-warning-retention.md); ACC-509 #1738 integration hold |
+| UX-059 | Retain active alerts using authoritative lifecycle evidence | IN REVIEW — HIGH ASSURANCE | #1739; approved [brief](plans/2026-09-25-ux059-warning-retention.md); ACC-509 #1738 integration hold |
 | UX-060 | Preserve onboarding keyboard ownership against proactive digest | DONE | #1735 |

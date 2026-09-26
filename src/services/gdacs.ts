@@ -12,6 +12,7 @@ export interface GDACSEvent {
   country: string;
   coordinates: [number, number];
   fromDate: Date;
+  retrievedAt?: number;
   severity: string;
   url: string;
 }

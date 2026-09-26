@@ -1,3 +1,5 @@
 {
-  "scripts/install-mcp-deps.mjs": ["test:mcp-deps"]
+  "scripts/install-mcp-deps.mjs": ["test:mcp-deps"],
+  "scripts/claude-auth-core.mjs": ["test:diagnostics"],
+  "scripts/claude-auth-doctor.mjs": ["test:diagnostics"]
 }

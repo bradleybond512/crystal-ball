@@ -146,6 +146,8 @@ scripts/check-scenario-coverage.mts
 scripts/check-sidecar-bundle.mjs
 scripts/checkup-log-audit.mjs
 scripts/checkup.mjs
+scripts/claude-auth-core.mjs
+scripts/claude-auth-doctor.mjs
 scripts/cognition-benchmark.mts
 scripts/cognition-shadow-report.mjs
 scripts/correlation-benchmark.mts

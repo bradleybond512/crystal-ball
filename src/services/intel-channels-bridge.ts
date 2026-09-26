@@ -8,7 +8,8 @@
 
 import { unifiedAlertStore, type UnifiedAlert, type AlertSeverity } from './unified-alerts';
 import { fetchSpaceWeather } from './space-weather';
-import { fetchSpcSummary } from './spc-outlook';
+import { fetchSpcSummary, type StormReport } from './spc-outlook';
+import { canonicalStormReportId } from './alert-identity';
 import { fetchDiseaseOutbreaks } from './disease-outbreak';
 import { fetchMaritimeWarnings } from './maritime-safety';
 import { fetchGovWarningConvergence } from './travel-warnings';
@@ -96,6 +97,27 @@ export async function pollSpaceWeather(): Promise<void> {
 }
 
 // ── SPC convective outlooks + storm reports ───────────────────────────────
+const STORM_ALERT_SEVERITIES = new Set<string>(['critical', 'high', 'medium']);
+
+export function stormReportToAlert(report: StormReport): UnifiedAlert | null {
+  if (!STORM_ALERT_SEVERITIES.has(report.severity)) return null;
+  const id = canonicalStormReportId(report);
+  if (id === null) return null;
+  return {
+    id,
+    source: 'spc',
+    severity: report.severity,
+    title: `${report.type.toUpperCase()} ${report.magnitude} — ${report.county}, ${report.state}`,
+    body: report.remarks.slice(0, 300) || report.location,
+    timestamp: report.reportedAt.getTime(),
+    location: { lat: report.lat, lon: report.lon },
+    spatialScope: { kind: 'point', basis: 'reported-event' },
+    relevanceScore: report.severity === 'critical' ? 85 : 60,
+    acknowledged: false,
+    pinned: false,
+  };
+}
+
 async function pollSpc(): Promise<void> {
   try {
     const sum = await fetchSpcSummary();
@@ -117,19 +139,8 @@ async function pollSpc(): Promise<void> {
       });
     }
     for (const r of sum.reports.slice(0, 40)) {
-      if (r.severity === 'low') continue;
-      out.push({
-        id: `lsr-${r.id}`,
-        source: 'spc',
-        severity: r.severity,
-        title: `${r.type.toUpperCase()} ${r.magnitude} — ${r.county}, ${r.state}`,
-        body: r.remarks.slice(0, 300) || r.location,
-        timestamp: r.reportedAt.getTime(),
-        location: { lat: r.lat, lon: r.lon },
-        relevanceScore: r.severity === 'critical' ? 85 : 60,
-        acknowledged: false,
-        pinned: false,
-      });
+      const alert = stormReportToAlert(r);
+      if (alert) out.push(alert);
     }
     if (out.length > 0) unifiedAlertStore.ingest(out);
   } catch { /* noop */ }

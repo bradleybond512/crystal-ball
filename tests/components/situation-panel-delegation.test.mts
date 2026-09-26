@@ -80,7 +80,7 @@ function makeSituation(id: string): Situation {
     phase: 'active',
     domain: 'compound',
     confidence: 0.72,
-    geo: { lat: 41.6, lon: -86.7, label: 'La Porte, IN', countries: ['US'], radiusKm: 50 },
+    geo: { kind: 'point', basis: 'reported-event', lat: 41.6, lon: -86.7, label: 'La Porte, IN', countries: ['US'], radiusKm: 50 },
     signalIds: ['sig-1'],
     signals: [
       { id: 'sig-1', type: 'weather_alert', title: 'Signal', confidence: 0.7, timestamp: 1_700_000_000_000, domain: 'natural_hazard' },
@@ -98,6 +98,7 @@ function makeSituation(id: string): Situation {
     causalChainId: null,
     firstSeen: 1_700_000_000_000,
     lastUpdated: 1_700_000_000_000,
+    latestEventAt: 1_700_000_000_000,
     reassessmentCount: 0,
   };
 }
@@ -294,4 +295,49 @@ test('map / verif / dismiss controls stop propagation; the header toggle bubbles
   assert.equal(ancestorClicks, 1, 'header toggle click bubbles past the content root to the ancestor');
 
   internals.destroy();
+});
+
+test('map focus preserves reported zero coordinates and explicit area display centers', () => {
+  const geographies: Situation['geo'][] = [
+    { kind: 'point', basis: 'reported-event', lat: 0, lon: 0, label: 'Zero', countries: [], radiusKm: 50 },
+    { kind: 'area', basis: 'nws-geometry', centroid: { lat: 0, lon: 0 }, label: 'Area', countries: [], radiusKm: 50 },
+  ];
+  for (const geo of geographies) {
+    const sit = { ...makeSituation(`display-${geo.kind}`), geo };
+    const { internals, content } = mountPanel([sit]);
+    const details: { situationId: string; center: { lat: number; lon: number } }[] = [];
+    const onFocus = (event: Event): void => { details.push((event as CustomEvent).detail); };
+    happyWindow.document.addEventListener('wm:focus-situation', onFocus);
+    try {
+      const button = content.querySelector('.sit-map-btn');
+      assert.ok(button);
+      dispatchBubblingClick(button);
+      assert.equal(details.length, 1);
+      assert.equal(details[0]?.situationId, sit.id);
+      assert.deepEqual(details[0]?.center, { lat: 0, lon: 0 });
+    } finally {
+      happyWindow.document.removeEventListener('wm:focus-situation', onFocus);
+      internals.destroy();
+    }
+  }
+});
+
+test('unknown map location hides its action and blocks stale-button focus', () => {
+  const sit = makeSituation('unknown-focus');
+  const { internals, content } = mountPanel([sit]);
+  let events = 0;
+  const onFocus = (): void => { events++; };
+  happyWindow.document.addEventListener('wm:focus-situation', onFocus);
+  try {
+    const staleButton = content.querySelector('.sit-map-btn');
+    assert.ok(staleButton);
+    sit.geo = { kind: 'unknown', label: 'Unknown', countries: [], radiusKm: 0 };
+    dispatchBubblingClick(staleButton);
+    assert.equal(events, 0);
+    internals.render();
+    assert.equal(content.querySelector('.sit-map-btn'), null);
+  } finally {
+    happyWindow.document.removeEventListener('wm:focus-situation', onFocus);
+    internals.destroy();
+  }
 });

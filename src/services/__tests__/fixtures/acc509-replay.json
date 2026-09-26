@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "frozenAt": "2026-09-25",
+  "now": 1790337600000,
+  "oldAgeMs": 86400000,
+  "repeatDelaysMs": [
+    60000,
+    3600000,
+    86400000
+  ],
+  "capacityCount": 503,
+  "limits": {
+    "identities": 4096,
+    "bytes": 2097152,
+    "ageMs": 604800000
+  },
+  "base": {
+    "id": "nws-report-alpha",
+    "source": "nws",
+    "severity": "high",
+    "title": "Flood warning",
+    "body": "River Alpha at surveyed point",
+    "timestamp": 1790337540000,
+    "location": {
+      "lat": 0,
+      "lon": 12,
+      "label": "Same locality"
+    },
+    "spatialScope": {
+      "kind": "point",
+      "basis": "reported-event"
+    },
+    "relevanceScore": 90,
+    "acknowledged": false,
+    "pinned": false
+  },
+  "distinct": [
+    {
+      "id": "nws-report-beta",
+      "body": "River Beta at independently surveyed point"
+    },
+    {
+      "id": "nws-report-gamma",
+      "body": "River Gamma at independently surveyed point"
+    }
+  ],
+  "revision": {
+    "body": "River Alpha crest revised upward",
+    "severity": "critical",
+    "timestamp": 1790337600000
+  },
+  "zeroPoints": [
+    {
+      "lat": 0,
+      "lon": 12
+    },
+    {
+      "lat": 51.5,
+      "lon": 0
+    },
+    {
+      "lat": 0,
+      "lon": 0
+    }
+  ],
+  "invalidPoints": [
+    {
+      "lat": 91,
+      "lon": 0
+    },
+    {
+      "lat": 0,
+      "lon": 181
+    }
+  ],
+  "oversizedIdBytes": 8193
+}

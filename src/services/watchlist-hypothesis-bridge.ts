@@ -16,6 +16,7 @@
 import { getWatchlist, type WatchlistEntry } from './watchlist';
 import { unifiedAlertStore, type UnifiedAlert, computeDistanceKm } from './unified-alerts';
 import { situationEngine } from './situation-engine';
+import { situationReportedPoint } from './situation-types';
 import { scoreAlert } from './alert-routing';
 
 // These types must match analyst-loop exactly, but we redeclare them here
@@ -110,7 +111,7 @@ function collectMatchingSituations(entry: WatchlistEntry): ReturnType<typeof sit
     if (s.phase === 'resolved') return false;
     const text = `${s.title} ${s.summary}`;
     if (textMatchesEntry(text, entry)) return true;
-    if (locationNearEntry({ lat: s.geo.lat, lon: s.geo.lon }, entry)) return true;
+    if (locationNearEntry(situationReportedPoint(s.geo) ?? undefined, entry)) return true;
     return false;
   });
 }

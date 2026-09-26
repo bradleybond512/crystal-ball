@@ -12,7 +12,7 @@
 
 import { situationEngine } from './situation-engine';
 import { unifiedAlertStore, type UnifiedAlert, type AlertSeverity } from './unified-alerts';
-import type { Situation } from './situation-types';
+import { situationDisplayCenter, type Situation } from './situation-types';
 
 function severityFromSituation(s: Situation): AlertSeverity {
   // Combine phase + confidence into a severity bucket.
@@ -24,6 +24,10 @@ function severityFromSituation(s: Situation): AlertSeverity {
 }
 
 function toAlert(s: Situation): UnifiedAlert {
+  const center = situationDisplayCenter(s.geo);
+  let spatialScope: UnifiedAlert['spatialScope'];
+  if (s.geo.kind === 'point') spatialScope = { kind: 'point', basis: s.geo.basis };
+  if (s.geo.kind === 'area') spatialScope = { kind: 'area', basis: s.geo.basis };
   return {
     id: `sit-${s.id}`,
     source: 'correlation',
@@ -31,9 +35,8 @@ function toAlert(s: Situation): UnifiedAlert {
     title: s.title,
     body: s.summary,
     timestamp: s.lastUpdated,
-    location: s.geo.lat !== 0 || s.geo.lon !== 0
-      ? { lat: s.geo.lat, lon: s.geo.lon }
-      : undefined,
+    location: center ?? undefined,
+    spatialScope,
     relevanceScore: Math.round(s.confidence * 100),
     acknowledged: false,
     pinned: false,
@@ -49,7 +52,7 @@ export function startSituationAlertBridge(): void {
   // when something meaningful changed (phase flip, or confidence moved ≥0.1).
   const lastSeen = new Map<string, { phase: string; confidence: number }>();
   const sync = (): void => {
-    const actionable = situationEngine.getActionableSituations();
+    const actionable = situationEngine.getActionableSituations().filter(s => !s.legacyUnverified);
     if (actionable.length === 0) return;
     const changed = actionable.filter(s => {
       const prev = lastSeen.get(s.id);

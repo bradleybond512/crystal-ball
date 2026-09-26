@@ -1,5 +1,59 @@
 {
-  "scripts/install-mcp-deps.mjs": ["test:mcp-deps"],
-  "scripts/claude-auth-core.mjs": ["test:diagnostics"],
-  "scripts/claude-auth-doctor.mjs": ["test:diagnostics"]
+  "scripts/install-mcp-deps.mjs": [
+    "test:mcp-deps"
+  ],
+  "scripts/claude-auth-core.mjs": [
+    "test:diagnostics"
+  ],
+  "scripts/claude-auth-doctor.mjs": [
+    "test:diagnostics"
+  ],
+  "src/services/alert-identity.ts": [
+    "test:acc509"
+  ],
+  "src/services/unified-alerts.ts": [
+    "test:acc509"
+  ],
+  "src/services/intel-channels-bridge.ts": [
+    "test:acc509"
+  ],
+  "src/services/analysis-core.ts": [
+    "test:acc509"
+  ],
+  "src/services/situation-types.ts": [
+    "test:acc509"
+  ],
+  "src/services/situation-engine.ts": [
+    "test:acc509"
+  ],
+  "src/services/situation-feed.ts": [
+    "test:acc509"
+  ],
+  "src/services/situation-correlator.ts": [
+    "test:acc509"
+  ],
+  "src/services/situation-alert-bridge.ts": [
+    "test:acc509"
+  ],
+  "src/services/compound-alert-bridge.ts": [
+    "test:acc509"
+  ],
+  "src/services/situation-personalizer.ts": [
+    "test:acc509"
+  ],
+  "src/services/forecast-overlay.ts": [
+    "test:acc509"
+  ],
+  "src/services/threat-synthesis.ts": [
+    "test:acc509"
+  ],
+  "src/services/watchlist-hypothesis-bridge.ts": [
+    "test:acc509"
+  ],
+  "src/services/escalation-lifecycle.ts": [
+    "test:acc509"
+  ],
+  "src/components/SituationPanel.ts": [
+    "test:acc509"
+  ]
 }

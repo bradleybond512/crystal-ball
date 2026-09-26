@@ -9,6 +9,7 @@
  */
 
 import type { EvidencePack } from './evidence-pack';
+import type { ObservationIdentity } from './alert-identity';
 
 // ── Situation Lifecycle ──────────────────────────────────────────────────────
 
@@ -31,17 +32,35 @@ export type SituationDomain =
 
 // ── Situation ────────────────────────────────────────────────────────────────
 
-export interface SituationGeo {
-  /** Primary latitude */
-  lat: number;
-  /** Primary longitude */
-  lon: number;
-  /** Human label: country, region, or specific location */
+interface SituationGeoContext {
   label: string;
-  /** ISO 3166-1 alpha-3 codes involved */
   countries: string[];
-  /** Radius of effect in km */
   radiusKm: number;
+}
+
+export type SituationGeo = SituationGeoContext & (
+  | { kind: 'point'; lat: number; lon: number; basis: 'reported-event' | 'centroid' | 'regional-centroid' }
+  | { kind: 'area'; centroid?: { lat: number; lon: number }; basis: 'nws-geometry' }
+  | { kind: 'country' }
+  | { kind: 'global' }
+  | { kind: 'unknown' }
+);
+
+export function validSituationPoint(value: unknown): value is { lat: number; lon: number } {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as { lat?: unknown; lon?: unknown };
+  return typeof point.lat === 'number' && Number.isFinite(point.lat) && Math.abs(point.lat) <= 90
+    && typeof point.lon === 'number' && Number.isFinite(point.lon) && Math.abs(point.lon) <= 180;
+}
+
+export function situationDisplayCenter(geo: SituationGeo): { lat: number; lon: number } | null {
+  if (geo.kind === 'point' && validSituationPoint(geo)) return { lat: geo.lat, lon: geo.lon };
+  if (geo.kind === 'area' && validSituationPoint(geo.centroid)) return geo.centroid;
+  return null;
+}
+
+export function situationReportedPoint(geo: SituationGeo): { lat: number; lon: number } | null {
+  return geo.kind === 'point' && geo.basis === 'reported-event' ? situationDisplayCenter(geo) : null;
 }
 
 export type VerificationVerdict = 'verified' | 'likely' | 'unverified' | 'contradicted';
@@ -93,11 +112,17 @@ export interface Situation {
   firstSeen: number;
   /** Last signal ingested */
   lastUpdated: number;
+  latestEventAt: number | null;
+  legacyUnverified?: boolean;
   /** How many reassessment cycles this situation has survived */
   reassessmentCount: number;
 }
 
 export interface SituationSignalSnapshot {
+  identity?: ObservationIdentity;
+  geo?: SituationGeo;
+  source?: string;
+  entities?: string[];
   id: string;
   type: string;
   title: string;

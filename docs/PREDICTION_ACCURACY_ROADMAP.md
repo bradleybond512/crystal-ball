@@ -911,7 +911,7 @@ These tasks retain their detailed designs in
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
-| ACC-509 | TODO | Stable situation identity under delayed and repeated input | PR1732 coordination |
+| ACC-509 | IN REVIEW | Stable situation identity under delayed and repeated input | PR1732 coordination |
 | ACC-510 | TODO | Evidence-based domain for news-derived situations | ACC-509 |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
@@ -1927,10 +1927,12 @@ Deliverables:
 
 ### ACC-509 — Stable situation identity under delayed and repeated input
 
-Status: `TODO`
+Status: `IN REVIEW`
 
-Source: PR1731 H10/H16/H22; existing implementation PR1732 remains open.
-High assurance: obtain design approval before modifying inference or persistence.
+Source: PR1731 H10/H16/H22. Codex is taking over PR1732 via a current-main
+replacement draft on `codex/acc509-identity-20260925`; original PR1732 remains
+held. Approved design: [implementation brief](plans/2026-09-25-acc509-stable-identity.md).
+High assurance: Bradley approved the design on 2026-09-25 before implementation.
 Coordinate with the existing PR owner; do not start a competing loop repair.
 
 Separate event time from processing time and preserve bounded source identity
@@ -1941,7 +1943,7 @@ their titles match. Include old/fresh reports, same-title different localities,
 zero coordinates, delayed updates, cap churn, restart and bounded retention.
 Compare false merges, duplicate situations and notification counts on a frozen
 replay; document rollback and any migration independently. H17 retention work
-in UX-046 must coordinate with this store path. No accuracy-gate weakening.
+in UX-059 must coordinate with this store path. No accuracy-gate weakening.
 
 ### ACC-510 — Evidence-based domain for news-derived situations
 

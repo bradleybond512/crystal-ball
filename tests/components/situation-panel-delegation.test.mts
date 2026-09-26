@@ -335,7 +335,7 @@ test('unknown map location hides its action and blocks stale-button focus', () =
     dispatchBubblingClick(staleButton);
     assert.equal(events, 0);
     internals.render();
-    assert.equal(content.querySelector('.sit-map-btn'), null);
+    assert.equal(content.querySelector('.sit-map-btn') === null, true);
   } finally {
     happyWindow.document.removeEventListener('wm:focus-situation', onFocus);
     internals.destroy();

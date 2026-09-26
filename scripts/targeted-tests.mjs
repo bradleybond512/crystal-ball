@@ -49,6 +49,8 @@ export const OVERRIDES = {
   'scripts/agentic-validate.sh': ['test:agentic-gate'],
   'scripts/roadmap-controller.mjs': ['test:roadmap-controller'],
   'scripts/check-docs-freshness.mjs': ['test:agentic-gate'],
+  'scripts/claude-auth-core.mjs': ['test:diagnostics'],
+  'scripts/claude-auth-doctor.mjs': ['test:diagnostics'],
   'scripts/setup-main-sync-agent.mjs': ['test:data'],
   'scripts/verify-review-verdict.mjs': ['test:agentic-pipeline'],
   'scripts/cross-agent-check.mjs': ['test:agentic-pipeline'],

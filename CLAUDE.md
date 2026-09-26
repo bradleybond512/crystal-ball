@@ -99,6 +99,8 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 
 ### Diagnostic scripts
 
+- `npm run doctor:claude-auth` inspects Claude Code configuration metadata, ownership, permissions, available disk space, authentication environment-variable presence, shell assignment locations, and executable paths. It is strictly read-only: `--json` emits a sanitized report, and repair or unknown arguments are rejected before inspection. It never invokes Claude, shell startup files, or Keychain tools; results do not verify authentication. Both core and disposable-profile CLI tests run under `npm run test:diagnostics`.
+
 - `npm run docs:check` runs `scripts/check-docs-freshness.mjs` to flag README/docs that are out of step with the source (panel counts, secret-key counts, etc.).
 - `npm run cross-check` (alias `cross-agent:check`) runs `scripts/cross-agent-check.mjs` to identify the required cross-agent reviewer for the current branch (Claude → Codex, Codex → Claude). The `.github/workflows/cross-agent-review.yml` workflow blocks merge of `claude/*` / `codex/*` / `copilot/*` branches without a recorded cross-agent review.
 - `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.

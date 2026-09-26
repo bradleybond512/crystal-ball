@@ -13,7 +13,7 @@
 import { situationEngine } from './situation-engine';
 import { detectCompoundThreats } from './compound-threat';
 import type { CompoundThreat, HazardSignal } from './compound-threat';
-import type { Situation, SituationDomain, CausalTemplate } from './situation-types';
+import { situationReportedPoint, type Situation, type SituationDomain, type CausalTemplate } from './situation-types';
 import { CAUSAL_TEMPLATES } from './situation-forecaster';
 import { runClaudeAgent } from './claude-agent';
 import { isFeatureAvailable } from './runtime-config';
@@ -137,9 +137,14 @@ function groupByRegion(situations: Situation[]): Map<string, Situation[]> {
  key = [...sit.geo.countries].sort((a, b) => a.localeCompare(b)).join(',');
  } else {
  // Snap to 5° grid so nearby country-codeless situations share a bucket
- const gridLat = Math.round(sit.geo.lat / 5) * 5;
- const gridLon = Math.round(sit.geo.lon / 5) * 5;
+ const point = situationReportedPoint(sit.geo);
+ if (point) {
+ const gridLat = Math.round(point.lat / 5) * 5;
+ const gridLon = Math.round(point.lon / 5) * 5;
  key = `grid:${gridLat},${gridLon}`;
+ } else {
+ key = `situation:${sit.id}`;
+ }
  }
  const bucket = regionMap.get(key);
  if (bucket) {
@@ -526,13 +531,15 @@ function situationsToHazardSignals(situations: Situation[]): HazardSignal[] {
  if (sit.phase === 'resolved') continue;
  const category = domainToCategory[sit.domain];
  if (!category) continue;
+ const point = situationReportedPoint(sit.geo);
+ if (!point) continue;
 
  signals.push({
  id: `sit-${sit.id}`,
  category,
  severity: confidenceToSeverity(sit.confidence),
- lat: sit.geo.lat,
- lon: sit.geo.lon,
+ lat: point.lat,
+ lon: point.lon,
  label: sit.title,
  sourceService: 'situation-engine',
  });
@@ -628,12 +635,11 @@ function shareTheater(a: Situation, b: Situation, opts: Required<TheaterClusterO
   const dt = Math.abs((a.lastUpdated ?? a.firstSeen) - (b.lastUpdated ?? b.firstSeen));
   if (dt > opts.temporalWindowMs) return false;
 
-  if (
- typeof a.geo.lat !== 'number' || typeof a.geo.lon !== 'number'
- || typeof b.geo.lat !== 'number' || typeof b.geo.lon !== 'number'
-  ) return false;
+  const pointA = situationReportedPoint(a.geo);
+  const pointB = situationReportedPoint(b.geo);
+  if (!pointA || !pointB) return false;
 
-  return haversineKm(a.geo.lat, a.geo.lon, b.geo.lat, b.geo.lon) <= opts.spatialMaxKm;
+  return haversineKm(pointA.lat, pointA.lon, pointB.lat, pointB.lon) <= opts.spatialMaxKm;
 }
 
 /**

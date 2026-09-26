@@ -10,6 +10,7 @@ import type { EvidencePack } from './evidence-pack';
 import { alertDB } from './alert-store';
 import { notificationDispatcher, actionForSeverity } from './notification-dispatcher';
 import type { AlertExplanation } from './intelligence/explainer';
+import { createIdentityLedger, hydrateIdentityLedger, identifyAlert } from './alert-identity';
 
 export type AlertSource =
   | 'breaking-news'
@@ -110,7 +111,7 @@ function isValidUnifiedAlertEntry(e: unknown): e is HydratableUnifiedAlert {
     typeof a['severity'] === 'string' && VALID_SEVERITIES.has(a['severity']) &&
     typeof a['title'] === 'string' &&
     typeof a['body'] === 'string' &&
-    typeof a['timestamp'] === 'number'
+    typeof a['timestamp'] === 'number' && Number.isFinite(a['timestamp'])
   );
 }
 
@@ -122,10 +123,43 @@ function sanitizeHydratedAlert(entry: HydratableUnifiedAlert): UnifiedAlert {
   return alert;
 }
 
-const STORAGE_KEY = 'wm-unified-alerts-v1';
+const LEGACY_STORAGE_KEY = 'wm-unified-alerts-v1';
+const STORAGE_KEY = 'wm-unified-alerts-v2';
 const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
 const PRUNE_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+interface AlertIdentityState {
+  notificationConsidered: boolean;
+  acknowledged: boolean;
+  pinned: boolean;
+  snoozedUntil?: number;
+}
+
+function isIdentityState(value: unknown): value is AlertIdentityState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const state = value as Record<string, unknown>;
+  return typeof state.notificationConsidered === 'boolean'
+    && typeof state.acknowledged === 'boolean'
+    && typeof state.pinned === 'boolean'
+    && (state.snoozedUntil === undefined
+      || (typeof state.snoozedUntil === 'number' && Number.isFinite(state.snoozedUntil)));
+}
+
+function identityState(alert: UnifiedAlert, considered: boolean): AlertIdentityState {
+  return {
+    notificationConsidered: considered,
+    acknowledged: alert.acknowledged === true,
+    pinned: alert.pinned === true,
+    ...(Number.isFinite(alert.snoozedUntil) ? { snoozedUntil: alert.snoozedUntil } : {}),
+  };
+}
+
+function capacityOrder(a: UnifiedAlert, b: UnifiedAlert): number {
+  if (a.pinned !== b.pinned) return a.pinned ? 1 : -1;
+  if (!a.pinned && a.acknowledged !== b.acknowledged) return a.acknowledged ? -1 : 1;
+  return a.timestamp - b.timestamp;
+}
 
 /**
  * Throttle the subscriber fan-out. ~26 subscribers re-run on every notify (each
@@ -193,6 +227,13 @@ function stampDistances(alerts: UnifiedAlert[]): void {
  */
 class UnifiedAlertStore {
   private alerts = new Map<string, UnifiedAlert>();
+  private identities = createIdentityLedger(isIdentityState);
+  private identityLimits: Parameters<typeof createIdentityLedger>[1];
+  private lastPersisted: string | undefined;
+  private storageFailure = false;
+  private migrationPending = false;
+  private capacityFailures = 0;
+  private invalidIdentities = 0;
   private listeners = new Set<() => void>();
   private flushScheduled = false;
   private flushDirty = false;
@@ -203,7 +244,9 @@ class UnifiedAlertStore {
   private notifyDirty = false;
   private lastNotifyAt = 0;
 
-  constructor() {
+  constructor(options: { identityLimits?: Parameters<typeof createIdentityLedger>[1] } = {}) {
+    this.identityLimits = options.identityLimits;
+    this.identities = createIdentityLedger(isIdentityState, this.identityLimits);
     this.loadFromStorage();
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const flush = () => this.flushNow();
@@ -271,12 +314,9 @@ class UnifiedAlertStore {
   }
 
   /**
-   * The single coalesced per-burst work unit: prune → persist (localStorage) →
-   * archive (one IDB putBatch) → notify. Doing prune + the IDB write here rather
-   * than per-ingest collapses N ingests in a frame into ONE spread+sort, ONE
-   * stringify and ONE structured clone — the serialization/GC churn behind the
-   * ingest-burst renderer stall. The subscriber fan-out is throttled separately
-   * (see scheduleNotify) so it cannot fire every frame.
+   * Coalesce pruning, archive writes, user-state persistence and subscriber work.
+   * New notification consideration is already persisted by ingest; unchanged
+   * snapshots skip the write here.
    */
   private flush(immediate: boolean): void {
     this.prune();
@@ -336,42 +376,72 @@ class UnifiedAlertStore {
   /** Add or update alerts. Deduplicates by id. Stamps distance, dispatches notifications for new alerts. */
   ingest(incoming: UnifiedAlert[]): void {
     stampDistances(incoming);
+    const now = Date.now();
+    this.identities.expire(now);
+    const protectedKeys = new Set<string>();
+    for (const stored of this.alerts.values()) {
+      const identity = identifyAlert(stored);
+      if (identity) protectedKeys.add(identity.key);
+    }
     let changed = false;
     const newAlerts: UnifiedAlert[] = [];
     for (const alert of incoming) {
-      const existing = this.alerts.get(alert.id);
-      if (existing) {
-        // Update relevanceScore and timestamp if newer, preserve ack/pin state
-        if (alert.timestamp >= existing.timestamp) {
-          this.alerts.set(alert.id, {
-            ...alert,
-            acknowledged: existing.acknowledged,
-            pinned: existing.pinned,
-          });
-          changed = true;
-        }
-      } else {
-        this.alerts.set(alert.id, alert);
-        newAlerts.push(alert);
+      const live = this.alerts.get(alert.id);
+      const existing = live?.source === alert.source ? live : undefined;
+      const identity = identifyAlert(alert);
+      const previous = identity ? this.identities.get(identity.key) : undefined;
+      const state = existing ? identityState(existing, true) : previous?.value;
+      const restored = state ? {
+        ...alert,
+        acknowledged: state.acknowledged,
+        pinned: state.pinned,
+        snoozedUntil: state.snoozedUntil,
+      } : alert;
+      if (!existing || alert.timestamp >= existing.timestamp) {
+        this.alerts.set(alert.id, restored);
         changed = true;
       }
+      const considered = !!existing || previous?.value.notificationConsidered === true;
+      if (identity) {
+        const status = this.identities.admit(identity, identityState(restored, true), now, protectedKeys);
+        if (status === 'capacity') this.capacityFailures++;
+        else if (status === 'invalid') this.invalidIdentities++;
+        else {
+          if (!this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;
+          protectedKeys.add(identity.key);
+        }
+      } else {
+        this.invalidIdentities++;
+      }
+      if (!existing && !considered) newAlerts.push(restored);
     }
     if (changed) {
-      // Defer prune + persist + the IDB archive write to a single coalesced
-      // flush per burst (see flush()). Accumulate this batch for the one
-      // trailing putBatch instead of cloning on every ingest.
       for (const alert of incoming) this.pendingArchive.push(alert);
-      // Backstop: a single huge ingest (or a long hidden backlog) could grow the
-      // map far past the cap before the deferred flush prunes it. Bound the
-      // transient oversize/memory without re-introducing per-ingest churn for
-      // normal small bursts.
       if (this.alerts.size > MAX_ALERTS * 2) this.prune();
       this.scheduleFlush();
     }
-    // Dispatch notifications for genuinely new alerts (after store update)
+    // The complete data/identity envelope precedes consideration by the dispatcher.
+    // A failed write preserves source-warning eligibility and in-memory deduplication.
+    if (newAlerts.length > 0) this.persist();
     for (const alert of newAlerts) {
       notificationDispatcher.dispatchNotification(alert, actionForSeverity(alert.severity));
     }
+  }
+
+  getIdentityDiagnostics(): {
+    entries: number; bytes: number; storageFailure: boolean; migrationPending: boolean;
+    capacityFailures: number; invalidIdentities: number;
+  } {
+    return {
+      entries: this.identities.size, bytes: this.identities.byteLength,
+      storageFailure: this.storageFailure, migrationPending: this.migrationPending,
+      capacityFailures: this.capacityFailures, invalidIdentities: this.invalidIdentities,
+    };
+  }
+
+  private rememberUserState(alert: UnifiedAlert): void {
+    const identity = identifyAlert(alert);
+    if (identity && this.identities.get(identity.key) && !this.identities.updateValue(identity.key, identityState(alert, true))) this.capacityFailures++;
   }
 
   getAll(): UnifiedAlert[] {
@@ -390,6 +460,7 @@ class UnifiedAlertStore {
     const alert = this.alerts.get(id);
     if (alert && !alert.acknowledged) {
       alert.acknowledged = true;
+      this.rememberUserState(alert);
       this.scheduleFlush();
     }
   }
@@ -401,6 +472,7 @@ class UnifiedAlertStore {
       const alert = this.alerts.get(id);
       if (alert && !alert.acknowledged) {
         alert.acknowledged = true;
+        this.rememberUserState(alert);
         changed = true;
       }
     }
@@ -412,6 +484,7 @@ class UnifiedAlertStore {
     for (const alert of this.alerts.values()) {
       if (!alert.acknowledged) {
         alert.acknowledged = true;
+        this.rememberUserState(alert);
         changed = true;
       }
     }
@@ -424,6 +497,7 @@ class UnifiedAlertStore {
     const alert = this.alerts.get(id);
     if (alert) {
       alert.snoozedUntil = Date.now() + ms;
+      this.rememberUserState(alert);
       this.scheduleFlush();
     }
   }
@@ -432,6 +506,7 @@ class UnifiedAlertStore {
     const alert = this.alerts.get(id);
     if (alert) {
       alert.pinned = !alert.pinned;
+      this.rememberUserState(alert);
       this.scheduleFlush();
     }
   }
@@ -458,11 +533,7 @@ class UnifiedAlertStore {
     // Cap size — evict unpinned acknowledged, then unpinned unacknowledged, then pinned.
     // Oldest source timestamp first within each group; ties keep Map insertion order.
     if (this.alerts.size > MAX_ALERTS) {
-      const sorted = [...this.alerts.values()].sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? 1 : -1;
-        if (!a.pinned && a.acknowledged !== b.acknowledged) return a.acknowledged ? -1 : 1;
-        return a.timestamp - b.timestamp;
-      });
+      const sorted = [...this.alerts.values()].sort(capacityOrder);
       const toDrop = sorted.slice(0, sorted.length - MAX_ALERTS);
       for (const alert of toDrop) {
         this.alerts.delete(alert.id);
@@ -472,57 +543,92 @@ class UnifiedAlertStore {
 
   private persist(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.entriesForPersist()));
-    } catch { /* storage full — silently drop */ }
+      this.identities.expire(Date.now());
+      const serialized = JSON.stringify({
+        version: 2, alerts: this.entriesForPersist(), identities: this.identities.snapshot(),
+      });
+      if (serialized === this.lastPersisted && !this.storageFailure) return;
+      localStorage.setItem(STORAGE_KEY, serialized);
+      if (localStorage.getItem(STORAGE_KEY) !== serialized) {
+        this.storageFailure = true;
+        return;
+      }
+      this.lastPersisted = serialized;
+      this.storageFailure = false;
+      this.migrationPending = false;
+    } catch {
+      this.storageFailure = true;
+    }
   }
 
-  /**
-   * Bound the SERIALIZED payload independent of map size. prune() normally keeps
-   * the map ≤ MAX_ALERTS, but this is a persist-time backstop so the stringify
-   * cost can never blow up regardless of how the map got large: pinned + unacked
-   * alerts are always kept, the remainder is filled most-recent-first.
-   */
   private entriesForPersist(): UnifiedAlert[] {
-    const all = [...this.alerts.values()];
-    let bounded: UnifiedAlert[];
-    if (all.length <= MAX_ALERTS) {
-      bounded = all;
-    } else {
-      const kept = all.filter((a) => a.pinned || !a.acknowledged);
-      const rest = all
-        .filter((a) => !a.pinned && a.acknowledged)
-        .sort((a, b) => b.timestamp - a.timestamp);
-      bounded = [...kept, ...rest].slice(0, Math.max(MAX_ALERTS, kept.length));
-    }
-    // Bound the BYTES, not just the count: `raw` carries the original source
-    // payload (NWS polygons, GDELT docs — tens of KB per alert), which made
-    // this blob multi-MB and each stringify a main-thread rope storm (live
-    // sample: JSRopeString::resolveToBuffer hot; on-disk localStorage WAL
-    // churning at 13 MB). Nothing reads `raw` back from the reloaded store —
-    // the only `raw` consumer (ThreatInboxPanel) reads alertDB rows, not this
-    // blob — so shed it at persist time. JSON.stringify drops undefined.
-    return bounded.map((a) => (a.raw === undefined ? a : { ...a, raw: undefined }));
+    const now = Date.now();
+    const all = [...this.alerts.values()].filter((alert) =>
+      alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS);
+    const evicted = new Set(all.length > MAX_ALERTS
+      ? [...all].sort(capacityOrder).slice(0, all.length - MAX_ALERTS)
+      : []);
+    return all.filter((alert) => !evicted.has(alert))
+      .map((alert) => alert.raw === undefined ? alert : { ...alert, raw: undefined });
   }
 
   private loadFromStorage(): void {
+    const now = Date.now();
+    let entries: unknown;
+    let legacy = false;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed: unknown = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return; // corrupted — start fresh
-      const now = Date.now();
-      const loaded: UnifiedAlert[] = [];
-      for (const entry of parsed) {
-        if (!isValidUnifiedAlertEntry(entry)) continue; // skip malformed entries
-        const alert = sanitizeHydratedAlert(entry);
-        if (alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS) {
-          this.alerts.set(alert.id, alert);
-          loaded.push(alert);
-        }
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          if (parsed && parsed.version === 2 && Array.isArray(parsed.alerts)
+            && parsed.identities && typeof parsed.identities === 'object'
+            && (parsed.identities as Record<string, unknown>).version === 1
+            && Array.isArray((parsed.identities as Record<string, unknown>).entries)) {
+            entries = parsed.alerts;
+            this.identities = hydrateIdentityLedger(parsed.identities, now, isIdentityState, this.identityLimits);
+            const rawEntries = (parsed.identities as { entries: unknown[] }).entries;
+            const configuredAge = this.identityLimits?.maxAgeMs;
+            const maxAge = typeof configuredAge === 'number' && Number.isSafeInteger(configuredAge) && configuredAge > 0
+              ? Math.min(configuredAge, 7 * 86400_000) : 7 * 86400_000;
+            const retainedCount = rawEntries.filter((entry) => {
+              const received = entry && typeof entry === 'object'
+                ? (entry as Record<string, unknown>).firstReceivedAt : undefined;
+              return typeof received !== 'number' || !Number.isFinite(received) || received + maxAge > now;
+            }).length;
+            if (retainedCount !== this.identities.size) this.storageFailure = true;
+            this.lastPersisted = raw;
+          } else this.storageFailure = true;
+        } catch { this.storageFailure = true; }
       }
-      // Re-compute distances with current user location
-      stampDistances(loaded);
-    } catch { /* corrupted — start fresh */ }
+      if (!entries) {
+        const rawLegacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (!rawLegacy) return;
+        entries = JSON.parse(rawLegacy);
+        legacy = true;
+        this.migrationPending = true;
+      }
+      if (!Array.isArray(entries)) return;
+      for (const entry of entries) {
+        if (!isValidUnifiedAlertEntry(entry)) continue;
+        const alert = sanitizeHydratedAlert(entry);
+        if (alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS) this.alerts.set(alert.id, alert);
+      }
+      this.prune();
+      const protectedKeys = new Set<string>();
+      for (const alert of this.alerts.values()) {
+        const identity = identifyAlert(alert);
+        if (!identity) { this.invalidIdentities++; continue; }
+        // Legacy rows seed only their exact report identity; no positional LSR mapping.
+        if (legacy || !this.identities.get(identity.key)) {
+          const status = this.identities.admit(identity, identityState(alert, true), now, protectedKeys);
+          if (status === 'capacity') this.capacityFailures++;
+          else if (status === 'invalid') this.invalidIdentities++;
+        }
+        protectedKeys.add(identity.key);
+      }
+      stampDistances([...this.alerts.values()]);
+    } catch { this.storageFailure = true; }
   }
 }
 

@@ -10,6 +10,9 @@
  * Both the main-thread services and the Web Worker import from here.
  */
 
+import type { ObservationIdentity } from './alert-identity';
+import type { SituationGeo } from './situation-types';
+
 import {
   SIMILARITY_THRESHOLD,
   PREDICTION_SHIFT_THRESHOLD,
@@ -136,6 +139,10 @@ export interface CorrelationSignalCore {
   confidence: number;
   timestamp: Date;
   data: {
+ identity?: ObservationIdentity;
+ geo?: SituationGeo;
+ source?: string;
+ domainHint?: string;
  newsVelocity?: number;
  marketChange?: number;
  predictionShift?: number;

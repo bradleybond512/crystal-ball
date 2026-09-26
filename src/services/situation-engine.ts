@@ -15,16 +15,23 @@
 import type { CorrelationSignalCore, SignalType } from './analysis-core';
 import type { EvidencePack } from './evidence-pack';
 import type { UnifiedAlert } from './unified-alerts';
+import { identifyAlert, identifySignal, createIdentityLedger, hydrateIdentityLedger, validObservationIdentity } from './alert-identity';
+import type { IdentityLedger, IdentityLimits } from './alert-identity';
 import type {
   Situation,
+  SituationDomain,
+  SituationGeo,
   SituationEngineConfig,
   SituationSignalSnapshot,
   VerificationVerdict,
 } from './situation-types';
-import { DEFAULT_ENGINE_CONFIG } from './situation-types';
+import { DEFAULT_ENGINE_CONFIG, validSituationPoint } from './situation-types';
 import {
   correlateSignalToSituation,
   reassessSituations,
+  findSituationForSignal,
+  newSituationId,
+  currentSituationGeo,
 } from './situation-correlator';
 import { projectScenarios } from './situation-forecaster';
 import { personalizeSituation } from './situation-personalizer';
@@ -35,15 +42,106 @@ type SituationListener = (situations: Situation[]) => void;
 
 // ── Engine ────────────────────────────────────────────────────────────────────
 
+export function domainHintForAlertSource(source: string): SituationDomain | undefined {
+  switch (source) {
+    case 'nws': case 'spc': case 'cyclone': case 'gdacs': case 'tsunami': case 'volcano':
+    case 'earthquake': case 'fire': case 'hazard': case 'space-weather': { return 'natural_hazard';
+ }
+    case 'cyber': case 'local-ids': { return 'cyber';
+ }
+    case 'power-grid': case 'comms-health': case 'resource': case 'aviation-hazard': case 'maritime': { return 'infrastructure';
+ }
+    case 'disease': case 'air-quality': case 'radiation': { return 'health';
+ }
+    case 'oref': { return 'military';
+    }
+    default: { return undefined;
+    }
+  }
+}
+
+function alertGeo(alert: UnifiedAlert): SituationGeo {
+  const common = { label: alert.location?.label ?? '', countries: [], radiusKm: 0 };
+  const scope = alert.spatialScope;
+  if (scope?.kind === 'point' && validSituationPoint(alert.location)) {
+    return { ...common, kind: 'point', basis: scope.basis, lat: alert.location.lat, lon: alert.location.lon };
+  }
+  if (scope?.kind === 'area') {
+    return { ...common, kind: 'area', basis: scope.basis,
+      ...(validSituationPoint(alert.location) ? { centroid: { lat: alert.location.lat, lon: alert.location.lon } } : {}) };
+  }
+  return { ...common, kind: scope?.kind === 'global' ? 'global' : 'unknown' };
+}
+
+interface SituationIdentityValue { situationId: string }
+function validIdentityValue(value: unknown): value is SituationIdentityValue {
+  return !!value && typeof value === 'object' && typeof (value as SituationIdentityValue).situationId === 'string'
+    && (value as SituationIdentityValue).situationId.length > 0;
+}
+
+function validPersistedSignal(sig: SituationSignalSnapshot): boolean {
+  if (!sig || typeof sig !== 'object'
+    || (sig.identity !== undefined && !validObservationIdentity(sig.identity))) return false;
+  return identifySignal({ id: sig.id, type: sig.type, title: sig.title, description: '',
+    confidence: sig.confidence, timestamp: new Date(sig.timestamp),
+    data: { relatedTopics: sig.entities, source: sig.source, domainHint: sig.domain, geo: sig.geo },
+  }) !== null && typeof sig.domain === 'string' && Number.isSafeInteger(sig.timestamp) && sig.timestamp >= 0;
+}
+
+function restoreSituation(value: unknown, legacy: boolean): Situation | null {
+  if (!value || typeof value !== 'object') return null;
+  const s = value as Situation;
+  if (typeof s.id !== 'string' || !s.id || typeof s.title !== 'string' || typeof s.summary !== 'string'
+    || !Number.isFinite(s.firstSeen) || !Number.isFinite(s.lastUpdated) || !Number.isFinite(s.confidence)
+    || !['emerging', 'developing', 'active', 'de-escalating', 'resolved'].includes(s.phase)
+    || !['military', 'economic', 'natural_hazard', 'cyber', 'infrastructure', 'health', 'civil_unrest', 'compound'].includes(s.domain)
+    || !Array.isArray(s.signals) || !Array.isArray(s.signalIds) || !s.signalIds.every(id => typeof id === 'string')
+    || !Array.isArray(s.scenarios) || !Array.isArray(s.actions) || !s.geo || !Array.isArray(s.geo.countries)
+    || !s.geo.countries.every(c => typeof c === 'string') || typeof s.geo.label !== 'string') return null;
+  if (!s.signals.every(sig => validPersistedSignal(sig))) return null;
+  const eventTimes = s.signals.map(sig => sig.timestamp).filter(time => Number.isFinite(time));
+  s.latestEventAt = eventTimes.length ? Math.max(...eventTimes) : null;
+  if (legacy) {
+    s.geo = { kind: s.geo.countries.length ? 'country' : 'unknown', countries: s.geo.countries,
+      label: s.geo.label, radiusKm: Number.isFinite(s.geo.radiusKm) ? s.geo.radiusKm : 0 };
+    if (s.signalIds.some(id => id.startsWith('ua-')) || s.signals.some(sig => sig.id.startsWith('ua-'))) s.legacyUnverified = true;
+  } else if (!validPersistedGeo(s.geo)) return null;
+  if (!legacy) s.geo = currentSituationGeo(s.signals);
+  return s;
+}
+
+function validPersistedGeo(geo: SituationGeo): boolean {
+  if (typeof geo.label !== 'string' || !Array.isArray(geo.countries)
+    || !geo.countries.every(country => typeof country === 'string')
+    || !Number.isFinite(geo.radiusKm) || geo.radiusKm < 0) return false;
+  switch (geo.kind) {
+    case 'point': { return validSituationPoint(geo) && ['reported-event', 'centroid', 'regional-centroid'].includes(geo.basis);
+    }
+    case 'area': { return geo.basis === 'nws-geometry' && (geo.centroid === undefined || validSituationPoint(geo.centroid));
+    }
+    case 'country': case 'global': case 'unknown': { return true;
+ }
+    default: { return false;
+    }
+  }
+}
+
 export class SituationEngine {
   private situations: Situation[] = [];
   private listeners = new Set<SituationListener>();
   private config: SituationEngineConfig;
   private reassessTimer: ReturnType<typeof setInterval> | null = null;
   private _signalBuffer: CorrelationSignalCore[] = [];
+  private identities: IdentityLedger<SituationIdentityValue>;
+  private identityLimits: IdentityLimits | undefined;
+  private admissionFailures = 0;
+  private persistenceFailures = 0;
+  private restartProtected = true;
 
-  constructor(config: SituationEngineConfig = DEFAULT_ENGINE_CONFIG) {
+  constructor(config: SituationEngineConfig = DEFAULT_ENGINE_CONFIG, options: { identityLimits?: IdentityLimits } = {}) {
  this.config = config;
+ this.identityLimits = options.identityLimits;
+ this.identities = createIdentityLedger(validIdentityValue, this.identityLimits);
  this.restore();
   }
 
@@ -56,7 +154,11 @@ export class SituationEngine {
   observeSignals(signals: CorrelationSignalCore[]): void {
  if (signals.length === 0) return;
 
- this._signalBuffer.push(...signals);
+ for (const signal of signals) {
+   const identity = identifySignal(signal);
+   if (!identity) { this.admissionFailures++; continue; }
+   this._signalBuffer.push({ ...signal, data: { ...signal.data, identity } });
+ }
  this.processBuffer();
   }
 
@@ -67,11 +169,14 @@ export class SituationEngine {
  */
   observeAlerts(alerts: UnifiedAlert[]): void {
  const highSeverityAlerts = alerts.filter(
- a => a.severity === 'critical' || a.severity === 'high',
+ a => a.source !== 'correlation' && (a.severity === 'critical' || a.severity === 'high'),
  );
 
  for (const alert of highSeverityAlerts) {
+ const identity = identifyAlert(alert);
+ if (!identity) { this.admissionFailures++; continue; }
  const pseudoSignal = SituationEngine.alertToPseudoSignal(alert);
+ pseudoSignal.data.identity = identity;
  this._signalBuffer.push(pseudoSignal);
  }
 
@@ -92,7 +197,10 @@ export class SituationEngine {
  timestamp: new Date(alert.timestamp),
  data: {
  explanation: alert.title,
- placeIds: alert.location ? [alert.location.label ?? ''] : [],
+ domainHint: domainHintForAlertSource(alert.source),
+ geo: alertGeo(alert),
+ source: alert.source,
+ placeIds: [],
  placeSummary: alert.location?.label ?? undefined,
  },
  };
@@ -177,6 +285,7 @@ export class SituationEngine {
 
   /** Resolve a signal snapshot to its coarse source category */
   private static resolveSourceType(s: SituationSignalSnapshot): string {
+ if (s.source) return s.source;
  if (!s.id.startsWith('ua-')) {
  return SituationEngine.SOURCE_TYPE_MAP[s.type] ?? s.type;
  }
@@ -196,7 +305,7 @@ export class SituationEngine {
  const si = signals[i]!;
  const sj = signals[j]!;
  const withinWindow = Math.abs(si.timestamp - sj.timestamp) < WINDOW_MS;
- if (si.type !== sj.type && withinWindow) return true;
+ if (SituationEngine.resolveSourceType(si) !== SituationEngine.resolveSourceType(sj) && withinWindow) return true;
  }
  }
  return false;
@@ -293,35 +402,45 @@ export class SituationEngine {
 
   // ── 3–6. CORRELATE → FORECAST → PERSONALIZE → RECOMMEND ─────────────────
 
+  private processSignal(signal: CorrelationSignalCore, protectedKeys: Set<string>): boolean {
+    if (signal.data.source === 'correlation') return false;
+    const identity = signal.data.identity ?? identifySignal(signal);
+    if (!identity) { this.admissionFailures++; return false; }
+    const previous = this.identities.get(identity.key);
+    if (previous?.revisions.includes(identity.revision)) return false;
+    const targetId = previous?.value.situationId
+      ?? findSituationForSignal(signal, this.situations, this.config)?.id ?? newSituationId();
+    const admitted = this.identities.admit(identity, { situationId: targetId }, Date.now(), protectedKeys);
+    if (admitted === 'duplicate') return false;
+    if (admitted !== 'accepted') {
+      this.admissionFailures++;
+      if (!previous || !this.situations.some(s => s.id === previous.value.situationId)) return false;
+    }
+    const result = correlateSignalToSituation(signal, this.situations, this.config, {
+      situationId: targetId, allowCreate: admitted === 'accepted',
+    });
+    if (!result.situationId) return false;
+    protectedKeys.add(identity.key);
+    if (!result.changed) return false;
+    const situation = this.situations.find(s => s.id === result.situationId);
+    if (!situation) return false;
+    this.verify(situation);
+    situation.scenarios = projectScenarios(situation);
+    situation.actions = personalizeSituation(situation);
+    return true;
+  }
+
   private processBuffer(): void {
- if (this._signalBuffer.length === 0) return;
-
- const signals = this._signalBuffer.splice(0);
- let changed = false;
-
- for (const signal of signals) {
- // CORRELATE: cluster into situation
- const result = correlateSignalToSituation(signal, this.situations, this.config);
- changed = true;
-
- // Get the affected situation
- const situation = this.situations.find(s => s.id === result.situationId);
- if (!situation) continue;
-
- // VERIFY: cross-check evidence
- this.verify(situation);
-
- // FORECAST: project scenarios
- situation.scenarios = projectScenarios(situation);
-
- // PERSONALIZE + RECOMMEND: generate action cards
- situation.actions = personalizeSituation(situation);
- }
-
- if (changed) {
- this.persist();
- this.notify();
- }
+    if (this._signalBuffer.length === 0) return;
+    const signals = this._signalBuffer.splice(0);
+    this.identities.expire(Date.now());
+    const protectedKeys = new Set(this.situations.flatMap(s => s.signals.flatMap(sig => sig.identity ? [sig.identity.key] : [])));
+    let changed = false;
+    for (const signal of signals) if (this.processSignal(signal, protectedKeys)) changed = true;
+    if (changed) {
+      this.persist();
+      this.notify();
+    }
   }
 
   // ── 7. REASSESS — Periodic lifecycle update ──────────────────────────────
@@ -379,14 +498,14 @@ export class SituationEngine {
   /** Get only actionable situations (developing or active) */
   getActionableSituations(): Situation[] {
  return this.getSituations().filter(
- s => s.phase === 'active' || s.phase === 'developing',
+ s => !s.legacyUnverified && (s.phase === 'active' || s.phase === 'developing'),
  );
   }
 
   /** Get count of active + developing situations */
   getActiveCount(): number {
  return this.situations.filter(
- s => s.phase === 'active' || s.phase === 'developing',
+ s => !s.legacyUnverified && (s.phase === 'active' || s.phase === 'developing'),
  ).length;
   }
 
@@ -398,29 +517,52 @@ export class SituationEngine {
 
   // ── Persistence ──────────────────────────────────────────────────────────
 
+  getIdentityDiagnostics(): { size: number; byteLength: number; admissionFailures: number; persistenceFailures: number; restartProtected: boolean } {
+    return { size: this.identities.size, byteLength: this.identities.byteLength,
+      admissionFailures: this.admissionFailures, persistenceFailures: this.persistenceFailures, restartProtected: this.restartProtected };
+  }
+
   private persist(): void {
- try {
- // Only persist non-resolved situations, max 20
- const toStore = this.situations
- .filter(s => s.phase !== 'resolved')
- .slice(0, 20);
- localStorage.setItem('wm-situations-v1', JSON.stringify(toStore));
- } catch { /* quota or private mode */ }
+    try {
+      const situations = this.situations.filter(s => s.phase !== 'resolved').slice(0, this.config.maxSituations);
+      const encoded = JSON.stringify({ version: 2, situations, identities: this.identities.snapshot() });
+      localStorage.setItem('wm-situations-v2', encoded);
+      if (localStorage.getItem('wm-situations-v2') !== encoded) throw new Error('Situation persistence verification failed');
+      this.restartProtected = true;
+    } catch {
+      this.persistenceFailures++;
+      this.restartProtected = false;
+    }
   }
 
   private restore(): void {
- try {
- const raw = localStorage.getItem('wm-situations-v1');
- if (!raw) return;
- const parsed: unknown = JSON.parse(raw);
- if (Array.isArray(parsed)) {
- // Rehydrate — filter out stale situations (>24h old)
- const cutoff = Date.now() - 24 * 60 * 60 * 1000;
- this.situations = (parsed as Situation[]).filter(
- (s: Situation) => s.lastUpdated > cutoff && s.phase !== 'resolved',
- );
- }
- } catch { /* corrupt data */ }
+    try {
+      const current = localStorage.getItem('wm-situations-v2');
+      const raw = current ?? localStorage.getItem('wm-situations-v1');
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      const envelope = parsed as { version?: unknown; situations?: unknown; identities?: unknown };
+      const legacy = !current;
+      const currentEntries = envelope.version === 2 ? envelope.situations : null;
+      const entries = legacy ? parsed : currentEntries;
+      if (!Array.isArray(entries)) { this.restartProtected = false; this.persistenceFailures++; return; }
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const restored = entries.map(s => restoreSituation(s, legacy));
+      if (restored.includes(null)) {
+        this.persistenceFailures++;
+        this.restartProtected = false;
+      }
+      this.situations = restored.filter((s): s is Situation =>
+        s !== null && s.lastUpdated > cutoff && s.phase !== 'resolved').slice(0, this.config.maxSituations);
+      if (!legacy) this.identities = hydrateIdentityLedger(envelope.identities, Date.now(), validIdentityValue, this.identityLimits, () => {
+        this.persistenceFailures++;
+        this.restartProtected = false;
+      });
+      if (legacy) this.persist();
+    } catch {
+      this.persistenceFailures++;
+      this.restartProtected = false;
+    }
   }
 
   private notify(): void {

@@ -20,16 +20,13 @@ export function startSituationFeed(): void {
   situationEngine.start();
 
   // Seed with existing alerts.
-  const initial = unifiedAlertStore.getAll();
+  const initial = unifiedAlertStore.getAll().filter(a => a.source !== 'correlation');
   if (initial.length > 0) situationEngine.observeAlerts(initial);
 
-  // Subscribe to new alerts.
-  let prevIds = new Set(initial.map(a => a.id));
+  // Engine-owned persisted identities decide whether an observation is new.
   unifiedAlertStore.subscribe(() => {
-    const all = unifiedAlertStore.getAll();
-    const newAlerts = all.filter(a => !prevIds.has(a.id));
-    prevIds = new Set(all.map(a => a.id));
-    if (newAlerts.length > 0) situationEngine.observeAlerts(newAlerts);
+    const sourceAlerts = unifiedAlertStore.getAll().filter(a => a.source !== 'correlation');
+    if (sourceAlerts.length > 0) situationEngine.observeAlerts(sourceAlerts);
   });
 
   // Forward situation updates as DOM events for the UI strip.

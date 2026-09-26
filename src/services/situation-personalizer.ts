@@ -16,6 +16,7 @@ import type {
   Situation,
   SituationDomain,
 } from './situation-types';
+import { situationReportedPoint, validSituationPoint } from './situation-types';
 import { CAUSAL_TEMPLATES } from './situation-forecaster';
 
 // ── User Context ─────────────────────────────────────────────────────────────
@@ -30,56 +31,45 @@ export interface UserContext {
   /** Current app mode */
   appMode: 'ghost' | 'gods-vision' | 'default';
   /** User's saved places with coordinates */
-  savedPlaces: Array<{ name: string; lat: number; lon: number; country?: string }>;
+  savedPlaces: { name: string; lat: number; lon: number; country?: string }[];
+}
+
+function readStoredValue(key: string): unknown {
+  try {
+ const raw = localStorage.getItem(key);
+ return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function readStoredArray(key: string): unknown[] {
+  const value = readStoredValue(key);
+  return Array.isArray(value) ? value : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSavedPlace(value: unknown): value is UserContext['savedPlaces'][number] {
+  return isRecord(value) && typeof value.name === 'string'
+ && (value.country === undefined || typeof value.country === 'string') && validSituationPoint(value);
 }
 
 /** Load user context from available app state */
 export function buildUserContext(): UserContext {
-  // Watchlist from localStorage
-  let watchlistCountries: string[] = [];
-  let watchlistTopics: string[] = [];
-  try {
- const raw = localStorage.getItem('crystalball-watchlist');
- if (raw) {
- const wl = JSON.parse(raw);
- if (Array.isArray(wl)) {
- watchlistCountries = wl
- .filter((w: { type?: string }) => w.type === 'country')
- .map((w: { id?: string }) => w.id ?? '')
- .filter(Boolean);
- watchlistTopics = wl
- .filter((w: { type?: string }) => w.type === 'topic' || w.type === 'keyword')
- .map((w: { label?: string }) => w.label ?? '')
- .filter(Boolean);
- }
- }
-  } catch { /* */ }
-
-  // Saved places from localStorage
-  let savedPlaces: UserContext['savedPlaces'] = [];
-  try {
- const raw = localStorage.getItem('crystalball-saved-places');
- if (raw) {
- const sp = JSON.parse(raw);
- if (Array.isArray(sp)) {
- savedPlaces = sp.filter((p: { lat?: number; lon?: number }) =>
- typeof p.lat === 'number' && typeof p.lon === 'number',
- );
- }
- }
-  } catch { /* */ }
-
-  // User location from localStorage
-  let location: UserContext['location'] = null;
-  try {
- const raw = localStorage.getItem('crystalball-user-location');
- if (raw) {
- const loc = JSON.parse(raw);
- if (typeof loc.lat === 'number' && typeof loc.lon === 'number') {
- location = { lat: loc.lat, lon: loc.lon };
- }
- }
-  } catch { /* */ }
+  const watchlist = readStoredArray('crystalball-watchlist').filter(value => isRecord(value));
+  const watchlistCountries = watchlist
+ .filter(w => w.type === 'country')
+ .map(w => w.id)
+ .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  const watchlistTopics = watchlist
+ .filter(w => w.type === 'topic' || w.type === 'keyword')
+ .map(w => w.label)
+ .filter((label): label is string => typeof label === 'string' && label.length > 0);
+  const savedPlaces = readStoredArray('crystalball-saved-places').filter(value => isSavedPlace(value));
+  const storedLocation = readStoredValue('crystalball-user-location');
+  const location = validSituationPoint(storedLocation)
+ ? { lat: storedLocation.lat, lon: storedLocation.lon } : null;
 
   // App mode
   let appMode: UserContext['appMode'] = 'default';
@@ -102,10 +92,41 @@ interface PersonalRelevance {
   watchlistMatch: boolean;
 }
 
+function proximityRelevance(situation: Situation, ctx: UserContext): Pick<PersonalRelevance, 'score' | 'reasons' | 'proximityKm'> {
+  const point = situationReportedPoint(situation.geo);
+  const result: Pick<PersonalRelevance, 'score' | 'reasons' | 'proximityKm'> = { score: 0, reasons: [], proximityKm: null };
+  if (!point) return result;
+  let minDist = Infinity;
+  let closestPlace = '';
+  const checkPoints = [
+ ...(ctx.location ? [{ name: 'your location', lat: ctx.location.lat, lon: ctx.location.lon }] : []),
+ ...ctx.savedPlaces,
+  ];
+  for (const pt of checkPoints) {
+ const dist = haversineKm(pt.lat, pt.lon, point.lat, point.lon);
+ if (dist < minDist) {
+ minDist = dist;
+ closestPlace = pt.name;
+ }
+  }
+  if (minDist === Infinity) return result;
+  result.proximityKm = Math.round(minDist);
+  if (minDist < 100) {
+ result.score = 0.35;
+ result.reasons.push(`Within 100km of ${closestPlace}`);
+  } else if (minDist < 500) {
+ result.score = 0.15;
+ result.reasons.push(`Within 500km of ${closestPlace}`);
+  } else if (minDist < 2000) {
+ result.score = 0.05;
+ result.reasons.push(`Within 2000km of ${closestPlace}`);
+  }
+  return result;
+}
+
 function computePersonalRelevance(situation: Situation, ctx: UserContext): PersonalRelevance {
   let score = 0;
   const reasons: string[] = [];
-  let proximityKm: number | null = null;
   let watchlistMatch = false;
 
   // 1. Watchlist country match (strongest signal)
@@ -132,37 +153,9 @@ function computePersonalRelevance(situation: Situation, ctx: UserContext): Perso
   }
 
   // 3. Geographic proximity to saved places
-  if (situation.geo.lat !== 0 || situation.geo.lon !== 0) {
- let minDist = Infinity;
- let closestPlace = '';
-
- const checkPoints = [
- ...(ctx.location ? [{ name: 'your location', lat: ctx.location.lat, lon: ctx.location.lon }] : []),
- ...ctx.savedPlaces,
- ];
-
- for (const pt of checkPoints) {
- const dist = haversineKm(pt.lat, pt.lon, situation.geo.lat, situation.geo.lon);
- if (dist < minDist) {
- minDist = dist;
- closestPlace = pt.name;
- }
- }
-
- if (minDist < Infinity) {
- proximityKm = Math.round(minDist);
- if (minDist < 100) {
- score += 0.35;
- reasons.push(`Within 100km of ${closestPlace}`);
- } else if (minDist < 500) {
- score += 0.15;
- reasons.push(`Within 500km of ${closestPlace}`);
- } else if (minDist < 2000) {
- score += 0.05;
- reasons.push(`Within 2000km of ${closestPlace}`);
- }
- }
-  }
+  const proximity = proximityRelevance(situation, ctx);
+  score += proximity.score;
+  reasons.push(...proximity.reasons);
 
   // 4. Domain relevance boost — formerly gated on war/finance/disaster mode.
   // Inlined as an unconditional +0.05 for every situation in a monitored
@@ -189,7 +182,7 @@ function computePersonalRelevance(situation: Situation, ctx: UserContext): Perso
   return {
  score: Math.min(1, score),
  reasons,
- proximityKm,
+ proximityKm: proximity.proximityKm,
  watchlistMatch,
   };
 }
@@ -224,10 +217,8 @@ function generateGenericActions(
 ): ActionCard[] {
   const urgency = urgencyFromSituation(situation, relevance);
   const categories = DOMAIN_ACTIONS[situation.domain] ?? ['information'];
-  const actions: ActionCard[] = [];
-
   // Always generate a "stay informed" action
-  actions.push({
+  const actions: ActionCard[] = [{
  id: genActionId(),
  headline: `Monitor: ${situation.title}`,
  rationale: relevance.reasons[0] ?? 'Developing situation requires attention.',
@@ -241,7 +232,7 @@ function generateGenericActions(
  situationId: situation.id,
  scenarioId: null,
  dismissed: false,
-  });
+  }];
 
   // Domain-specific generic action
   if (categories.includes('financial') && situation.confidence > 0.4) {
@@ -284,6 +275,23 @@ function generateGenericActions(
   return actions;
 }
 
+function generateTemplateActions(situation: Situation, relevance: PersonalRelevance): ActionCard[] {
+  const template = CAUSAL_TEMPLATES.find(t => t.id === situation.causalChainId);
+  if (!template) return [];
+  return template.actionTemplates.map(tmpl => {
+ let urgency = tmpl.urgency;
+ if (relevance.score <= 0.5 && urgency === 'immediate') urgency = 'soon';
+ return {
+ ...tmpl,
+ id: genActionId(),
+ urgency,
+ situationId: situation.id,
+ scenarioId: null,
+ dismissed: false,
+ };
+  });
+}
+
 // ── Main Personalizer API ────────────────────────────────────────────────────
 
 /**
@@ -316,26 +324,7 @@ export function personalizeSituation(
  }];
   }
 
-  const actions: ActionCard[] = [];
-
-  // 1. Template-based actions from matched causal chain
-  const template = CAUSAL_TEMPLATES.find(t => t.id === situation.causalChainId);
-  if (template) {
- for (const tmpl of template.actionTemplates) {
- const urgency: ActionUrgency = relevance.score > 0.5
- ? tmpl.urgency
- : (tmpl.urgency === 'immediate' ? 'soon' : tmpl.urgency);
-
- actions.push({
- ...tmpl,
- id: genActionId(),
- urgency,
- situationId: situation.id,
- scenarioId: null,
- dismissed: false,
- });
- }
-  }
+  const actions = generateTemplateActions(situation, relevance);
 
   // 2. Scenario-specific hedging actions
   for (const scenario of situation.scenarios) {

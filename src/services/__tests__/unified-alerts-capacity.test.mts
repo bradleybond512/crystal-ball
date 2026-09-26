@@ -3,7 +3,7 @@ import { beforeEach, test } from 'node:test';
 import type { UnifiedAlert } from '../unified-alerts.ts';
 
 const NOW = 1_790_000_000_000;
-const STORAGE_KEY = 'wm-unified-alerts-v1';
+const STORAGE_KEY = 'wm-unified-alerts-v2';
 const values = new Map<string, string>();
 let writes = 0;
 let archived: UnifiedAlert[][] = [];
@@ -68,7 +68,7 @@ test('501 alerts retain the existing deferred enforcement and evict the acknowle
   const store = new UnifiedAlertStore();
   store.ingest([...batch(500, 'unhandled'), alert('ack', { acknowledged: true, timestamp: NOW })]);
   assert.equal(store.getAll().length, 501);
-  assert.equal(writes, 0);
+  assert.equal(writes, 1, 'consideration is persisted before dispatch');
   store._flushNowForTest();
   assert.deepEqual(ids(store), batch(500, 'unhandled').map((entry) => entry.id));
   assert.equal(writes, 1);
@@ -83,10 +83,10 @@ test('1001 alerts enforce the same priority immediately and persist only the ret
   ]);
   const expected = ['pinned', ...Array.from({ length: 499 }, (_, i) => `unhandled-${i + 1}`)];
   assert.deepEqual(ids(store), expected);
-  assert.equal(writes, 0);
+  assert.equal(writes, 1, 'consideration is persisted before dispatch');
   store._flushNowForTest();
   assert.deepEqual(ids(store), expected);
-  assert.deepEqual((JSON.parse(values.get(STORAGE_KEY)!) as UnifiedAlert[]).map((entry) => entry.id), expected);
+  assert.deepEqual((JSON.parse(values.get(STORAGE_KEY)!) as { alerts: UnifiedAlert[] }).alerts.map((entry) => entry.id), expected);
 });
 
 test('exactly 500 fresh alerts survive capacity enforcement unchanged', () => {
@@ -151,7 +151,7 @@ test('retained IDs, order and user state survive reload without hydration writes
   store.ingest(incoming);
   store._flushNowForTest();
   const expected = ['pin', 'unhandled', ...Array.from({ length: 498 }, (_, i) => `ack-${i + 2}`)];
-  const persisted = JSON.parse(values.get(STORAGE_KEY)!) as UnifiedAlert[];
+  const persisted = (JSON.parse(values.get(STORAGE_KEY)!) as { alerts: UnifiedAlert[] }).alerts;
   assert.deepEqual(persisted.map((entry) => entry.id), expected);
   assert.deepEqual(persisted, store.getAll());
   const before = { writes, notifications: dispatched.length, archives: archived.length };

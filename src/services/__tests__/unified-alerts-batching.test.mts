@@ -140,8 +140,8 @@ test('persist payload stays bounded to MAX_ALERTS and fast with 5,000 synthetic 
     await flush();
     const dt = performance.now() - t0;
 
-    const raw = store.get('wm-unified-alerts-v1')!;
-    const persisted = JSON.parse(raw) as UnifiedAlert[];
+    const raw = store.get('wm-unified-alerts-v2')!;
+    const persisted = (JSON.parse(raw) as { alerts: UnifiedAlert[] }).alerts;
     assert.ok(persisted.length <= 500, `persisted payload capped at MAX_ALERTS, got ${persisted.length}`);
     assert.ok(dt < 500, `ingest+flush of 5,000 alerts under budget, took ${dt.toFixed(0)}ms`);
   } finally {

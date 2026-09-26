@@ -13,7 +13,7 @@
  */
 
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
-import type { Situation } from './situation-types';
+import { situationReportedPoint, validSituationPoint, type Situation } from './situation-types';
 import { situationEngine } from './situation-engine';
 import { notificationDispatcher, actionForSeverity } from './notification-dispatcher';
 
@@ -102,9 +102,10 @@ export function autoResolveStaleSituations(olderThanMs: number = STALE_THRESHOLD
 
 export function handleEscalation(
   situationId: string, previousSeverity: AlertSeverity, newSeverity: AlertSeverity,
-  label: string, lat: number, lon: number,
+  label: string, lat?: number, lon?: number,
 ): void {
   if (SEVERITY_RANK[newSeverity] <= SEVERITY_RANK[previousSeverity]) return;
+  const point = { lat, lon };
   const alert: UnifiedAlert = {
     // Content-stable id: an escalation to a given severity for a situation is a
     // single event. Keying on situation + new severity (instead of Date.now())
@@ -116,7 +117,7 @@ export function handleEscalation(
     title: `Situation Escalated: ${label}`,
     body: `Severity rose from ${previousSeverity} to ${newSeverity}.`,
     timestamp: Date.now(),
-    location: { lat, lon, label },
+    ...(validSituationPoint(point) ? { location: { ...point, label } } : {}),
     relevanceScore: SEVERITY_RANK[newSeverity] * 20,
     acknowledged: false,
     pinned: false,
@@ -148,7 +149,8 @@ function reassess(): void {
     const prevSeverity = lastKnownSeverity.get(sit.id);
     const prevPhase = lastKnownPhase.get(sit.id);
     if (prevSeverity && prevSeverity !== snap.severity) {
-      handleEscalation(sit.id, prevSeverity, snap.severity, sit.geo.label, sit.geo.lat, sit.geo.lon);
+      const point = situationReportedPoint(sit.geo);
+      handleEscalation(sit.id, prevSeverity, snap.severity, sit.geo.label, point?.lat, point?.lon);
     }
     if (prevPhase !== newPhase) {
       emit({

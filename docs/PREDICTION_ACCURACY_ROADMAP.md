@@ -1930,7 +1930,7 @@ Deliverables:
 Status: `IN REVIEW`
 
 Source: PR1731 H10/H16/H22. Codex is taking over PR1732 via a current-main
-replacement draft on `codex/acc509-identity-20260925`; original PR1732 remains
+replacement draft PR1738 on `codex/acc509-identity-20260925`; original PR1732 remains
 held. Approved design: [implementation brief](plans/2026-09-25-acc509-stable-identity.md).
 High assurance: Bradley approved the design on 2026-09-25 before implementation.
 Coordinate with the existing PR owner; do not start a competing loop repair.

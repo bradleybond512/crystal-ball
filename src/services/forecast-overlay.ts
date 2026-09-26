@@ -10,7 +10,7 @@
 
 import { forecastRegions, type ForecastResult } from './ema-forecast';
 import { situationEngine } from './situation-engine';
-import type { SituationDomain } from './situation-types';
+import { situationReportedPoint, type SituationDomain } from './situation-types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -182,7 +182,8 @@ export function buildForecastOverlay(): ForecastRegion[] {
   const situations = situationEngine.getActionableSituations();
   for (const sit of situations) {
  if (!sit.geo || sit.confidence < 0.3) continue;
- if (sit.geo.label === 'Global') continue; // no meaningful map position
+ const center = situationReportedPoint(sit.geo);
+ if (!center) continue;
  const riskScore = Math.round(sit.confidence * 100);
  if (riskScore < 20) continue;
 
@@ -206,7 +207,7 @@ export function buildForecastOverlay(): ForecastRegion[] {
 
  regions.push({
  id: sitKey,
- center: [sit.geo.lon, sit.geo.lat],
+ center: [center.lon, center.lat],
  riskScore,
  velocity: sit.domainDiversity * 0.5, // proxy for cross-domain escalation
  trend: scenarioTrend,

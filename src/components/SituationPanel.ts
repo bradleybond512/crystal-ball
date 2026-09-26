@@ -11,6 +11,7 @@
  */
 
 import { Panel } from './Panel';
+import { situationDisplayCenter } from '@/services/situation-types';
 import { situationEngine } from '@/services/situation-engine';
 import type {
   Situation,
@@ -198,7 +199,7 @@ export class SituationPanel extends Panel {
  `;
 
  // "Show on Map" button
- if (sit.geo.lat !== 0 || sit.geo.lon !== 0) {
+ if (situationDisplayCenter(sit.geo)) {
  const mapBtn = document.createElement('button');
  mapBtn.className = 'sit-map-btn';
  mapBtn.title = 'Show on map';
@@ -425,10 +426,12 @@ export class SituationPanel extends Panel {
   }
 
   private focusOnMap(sit: Situation): void {
+ const center = situationDisplayCenter(sit.geo);
+ if (!center) return;
  document.dispatchEvent(new CustomEvent('wm:focus-situation', {
  detail: {
  situationId: sit.id,
- center: { lat: sit.geo.lat, lon: sit.geo.lon },
+ center,
  signals: sit.signals.map(s => ({ id: s.id, type: s.type, domain: s.domain })),
  },
  }));

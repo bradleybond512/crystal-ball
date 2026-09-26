@@ -52,7 +52,8 @@ test('malformed native context is rejected without interrupting valid members of
 
 test('malformed persisted signals are quarantined with diagnostics while valid rows remain usable', () => {
   for (const fields of [{ entities: [null] }, { source: {} }, { identity: { key: 3 } },
-    { type: 'invented' }, { domain: 'invented' }, { confidence: 7 }, { timestamp: -1 }]) {
+    { type: 'invented' }, { domain: 'invented' }, { confidence: 7 }, { timestamp: -1 },
+    { timestamp: { toString: null, valueOf: null } }]) {
     storage.clear();
     const seed = new SituationEngine(); seed.observeAlerts([alert()]);
     const envelope = JSON.parse(storage.get('wm-situations-v2')!);
@@ -75,6 +76,8 @@ test('material geographic revisions use current source snapshots through restart
   assert.equal(engine.getSituations().length, 1);
   assert.equal(engine.getSituations()[0]!.signals.length, 2);
   now += 1000;
+  engine.observeAlerts([{ ...sources[0]!, timestamp: now, location: { lat: 50, lon: 50 } }]);
+  assert.deepEqual(situationReportedPoint(engine.getSituations()[0]!.geo), { lat: 50, lon: 50 });
   engine.observeAlerts(sources.map(a => ({ ...a, timestamp: now, location: { lat: 50, lon: 50 } })));
   const moved = engine.getSituations()[0]!;
   assert.deepEqual(situationReportedPoint(moved.geo), { lat: 50, lon: 50 });

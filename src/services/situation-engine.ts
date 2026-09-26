@@ -81,11 +81,12 @@ function validIdentityValue(value: unknown): value is SituationIdentityValue {
 
 function validPersistedSignal(sig: SituationSignalSnapshot): boolean {
   if (!sig || typeof sig !== 'object'
+    || !Number.isSafeInteger(sig.timestamp) || sig.timestamp < 0 || sig.timestamp > 8_640_000_000_000_000
     || (sig.identity !== undefined && !validObservationIdentity(sig.identity))) return false;
   return identifySignal({ id: sig.id, type: sig.type, title: sig.title, description: '',
     confidence: sig.confidence, timestamp: new Date(sig.timestamp),
     data: { relatedTopics: sig.entities, source: sig.source, domainHint: sig.domain, geo: sig.geo },
-  }) !== null && typeof sig.domain === 'string' && Number.isSafeInteger(sig.timestamp) && sig.timestamp >= 0;
+  }) !== null && typeof sig.domain === 'string';
 }
 
 function restoreSituation(value: unknown, legacy: boolean): Situation | null {

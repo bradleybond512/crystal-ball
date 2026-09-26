@@ -1,0 +1,1119 @@
+{
+  "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+  "mutants": 30,
+  "killed": 30,
+  "survivedOrInvalid": [],
+  "clean": true,
+  "results": [
+    {
+      "id": "nws-expiry-retention",
+      "behavior": "Validated unexpired NWS retains multi-day source chronology",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=multi-day NWS persists' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.357,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.294,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..2efcb6a6e 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -63,6 +63,6 @@ export function shouldRetainAlert(\n ): boolean {\n   if (alert.pinned || now - alert.timestamp <= SOURCE_AGE_MS) return true;\n   const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);\n-  if (evidence?.kind === 'nws-expiry') return evidence.expiresAt > now;\n+  if (evidence?.kind === 'nws-expiry') return false;\n   return evidence?.kind === 'gdacs-observation' && now - evidence.observedAt <= SOURCE_AGE_MS;\n }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: consideration snapshot must preserve the warning\n  \n  0 !== 1\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:50:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 0,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'"
+    },
+    {
+      "id": "gdacs-observation-retention",
+      "behavior": "Qualifying GDACS observation retains old event chronology",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS qualifying observation retains' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.223,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.292,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.226,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..d368b300d 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -64,5 +64,5 @@ export function shouldRetainAlert(\n   if (alert.pinned || now - alert.timestamp <= SOURCE_AGE_MS) return true;\n   const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);\n   if (evidence?.kind === 'nws-expiry') return evidence.expiresAt > now;\n-  return evidence?.kind === 'gdacs-observation' && now - evidence.observedAt <= SOURCE_AGE_MS;\n+  return false;\n }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + []\n  - [\n  -   'disaster'\n  - ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:74:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "nws-expiry-boundary",
+      "behavior": "NWS exemption ends exactly at expiry without dropping recent history",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS exemption ends' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.227,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.295,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.226,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..7577c426c 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -63,6 +63,6 @@ export function shouldRetainAlert(\n ): boolean {\n   if (alert.pinned || now - alert.timestamp <= SOURCE_AGE_MS) return true;\n   const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);\n-  if (evidence?.kind === 'nws-expiry') return evidence.expiresAt > now;\n+  if (evidence?.kind === 'nws-expiry') return evidence.expiresAt >= now;\n   return evidence?.kind === 'gdacs-observation' && now - evidence.observedAt <= SOURCE_AGE_MS;\n }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n  +   'old',\n      'recent'\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:65:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "gdacs-observation-boundary",
+      "behavior": "GDACS observation exemption lasts the existing 48-hour window",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS qualifying observation retains' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.223,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.287,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..b8ea2cecc 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -64,5 +64,5 @@ export function shouldRetainAlert(\n   if (alert.pinned || now - alert.timestamp <= SOURCE_AGE_MS) return true;\n   const evidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);\n   if (evidence?.kind === 'nws-expiry') return evidence.expiresAt > now;\n-  return evidence?.kind === 'gdacs-observation' && now - evidence.observedAt <= SOURCE_AGE_MS;\n+  return evidence?.kind === 'gdacs-observation' && now - evidence.observedAt < SOURCE_AGE_MS;\n }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + []\n  - [\n  -   'disaster'\n  - ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:74:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "hydrate-retention-predicate",
+      "behavior": "Restart uses the same authoritative retention predicate",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=multi-day NWS persists' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.357,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.296,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.223,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 819e29808..61035e407 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -639,7 +639,7 @@ class UnifiedAlertStore {\n       for (const entry of entries) {\n         if (!isValidUnifiedAlertEntry(entry)) continue;\n         const alert = sanitizeHydratedAlert(entry);\n-        if (shouldRetainAlert(alert, now)) this.alerts.set(alert.id, alert);\n+        if (alert.pinned || now - alert.timestamp <= 48 * 3600_000) this.alerts.set(alert.id, alert);\n       }\n       this.prune();\n       const protectedKeys = new Set<string>();\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + []\n  - [\n  -   'warning'\n  - ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:54:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "persist-retention-predicate",
+      "behavior": "Durable consideration snapshot retains unexpired source warning",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=multi-day NWS persists' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.357,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.297,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.228,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 819e29808..0cbe91b2c 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -591,7 +591,7 @@ class UnifiedAlertStore {\n   private entriesForPersist(): UnifiedAlert[] {\n     const now = Date.now();\n     const all = [...this.alerts.values()].filter((alert) =>\n-      shouldRetainAlert(alert, now));\n+      alert.pinned || now - alert.timestamp <= 48 * 3600_000);\n     const evicted = new Set(all.length > MAX_ALERTS\n       ? [...all].sort(capacityOrder).slice(0, all.length - MAX_ALERTS)\n       : []);\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: consideration snapshot must preserve the warning\n  \n  0 !== 1\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:50:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 0,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'"
+    },
+    {
+      "id": "prune-retention-predicate",
+      "behavior": "Live pruning uses authoritative lifecycle evidence",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=multi-day NWS persists' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.357,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.297,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.231,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 819e29808..f697d60bb 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -553,7 +553,7 @@ class UnifiedAlertStore {\n     const now = Date.now();\n     // Remove old unpinned alerts\n     for (const [id, alert] of this.alerts) {\n-      if (!shouldRetainAlert(alert, now)) {\n+      if (!alert.pinned && now - alert.timestamp > 48 * 3600_000) {\n         this.alerts.delete(id);\n       }\n     }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + []\n  - [\n  -   'warning'\n  - ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:52:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "older-nws-row-preservation",
+      "behavior": "Delayed issuance cannot overwrite current content or user state",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=delayed NWS issuance' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.225,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.298,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.225,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 819e29808..23bc50e6c 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -403,7 +403,7 @@ class UnifiedAlertStore {\n       const previousEvidence = validateAlertRetentionEvidence(alert.source, existing?.retentionEvidence, now);\n       const incomingEvidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);\n       const olderIssuance = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry'\n-        && incomingEvidence.issuedAt < previousEvidence.issuedAt;\n+        && false;\n       const keepExisting = existing && (alert.timestamp < existing.timestamp || olderIssuance);\n       const report = keepExisting ? existing : alert;\n       let materialUnchanged = false;\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'Obsolete warning'\n  - 'Current update'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:113:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'Obsolete warning',\n    expected: 'Current update',"
+    },
+    {
+      "id": "newer-nws-lifecycle",
+      "behavior": "New issuance can shorten expiry; old expiry is not borrowed",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=newer NWS issuance may shorten' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.225,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.29,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.226,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..f16109b7d 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -52,7 +52,7 @@ function mergeNWSEvidence(\n   prior: Extract<AlertRetentionEvidence, { kind: 'nws-expiry' }>,\n   next: Extract<AlertRetentionEvidence, { kind: 'nws-expiry' }>,\n ): AlertRetentionEvidence {\n-  if (next.issuedAt !== prior.issuedAt) return next.issuedAt > prior.issuedAt ? next : prior;\n+  if (next.issuedAt !== prior.issuedAt) return prior;\n   // A conflicting replay cannot establish a new expiry for the same issuance.\n   return next.expiresAt === prior.expiresAt && next.observedAt > prior.observedAt ? next : prior;\n }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + [\n  +   'warning'\n  + ]\n  - []\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:127:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "same-nws-issuance-conflict",
+      "behavior": "Conflicting same-issuance replay cannot extend expiry",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=same issuance cannot extend' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.223,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.293,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.223,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..2d3a64312 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -54,7 +54,7 @@ function mergeNWSEvidence(\n ): AlertRetentionEvidence {\n   if (next.issuedAt !== prior.issuedAt) return next.issuedAt > prior.issuedAt ? next : prior;\n   // A conflicting replay cannot establish a new expiry for the same issuance.\n-  return next.expiresAt === prior.expiresAt && next.observedAt > prior.observedAt ? next : prior;\n+  return next;\n }\n \n export function shouldRetainAlert(\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    {\n  +   expiresAt: 1790259200000,\n  -   expiresAt: 1790086400000,\n      issuedAt: 1789996400000,\n      kind: 'nws-expiry',\n      observedAt: 1790000000000\n    }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:135:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)"
+    },
+    {
+      "id": "gdacs-monotonic-observation",
+      "behavior": "Old GDACS replay cannot replace newer evidence",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=delayed GDACS replay' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.225,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.294,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.225,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..796ac3367 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -40,7 +40,7 @@ export function mergeAlertRetentionEvidence(\n   if (!next) return materialUnchanged ? prior : undefined;\n   if (!prior) return next;\n   if (prior.kind === 'gdacs-observation' && next.kind === 'gdacs-observation') {\n-    return next.observedAt > prior.observedAt ? next : prior;\n+    return next;\n   }\n   if (prior.kind === 'nws-expiry' && next.kind === 'nws-expiry') {\n     return mergeNWSEvidence(prior, next);\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + undefined\n  - {\n  -   kind: 'gdacs-observation',\n  -   observedAt: 1790000000000\n  - }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:101:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,"
+    },
+    {
+      "id": "unknown-unchanged-preservation",
+      "behavior": "Unchanged unknown replay preserves known lifecycle",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS unknown unchanged replay|delayed GDACS replay' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.232,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 2,
+        "seconds": 0.298,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.23,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..592e7d154 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -37,7 +37,7 @@ export function mergeAlertRetentionEvidence(\n ): AlertRetentionEvidence | undefined {\n   const prior = validateAlertRetentionEvidence(source, previous, now);\n   const next = validateAlertRetentionEvidence(source, incoming, now);\n-  if (!next) return materialUnchanged ? prior : undefined;\n+  if (!next) return undefined;\n   if (!prior) return next;\n   if (prior.kind === 'gdacs-observation' && next.kind === 'gdacs-observation') {\n     return next.observedAt > prior.observedAt ? next : prior;\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + undefined\n  - {\n  -   kind: 'gdacs-observation',\n  -   observedAt: 1790000000000\n  - }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:101:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,"
+    },
+    {
+      "id": "unknown-material-no-borrow",
+      "behavior": "Changed unverified reports cannot borrow old lifecycle evidence",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=unknown material update' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.293,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.227,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..a0b98cb47 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -37,7 +37,7 @@ export function mergeAlertRetentionEvidence(\n ): AlertRetentionEvidence | undefined {\n   const prior = validateAlertRetentionEvidence(source, previous, now);\n   const next = validateAlertRetentionEvidence(source, incoming, now);\n-  if (!next) return materialUnchanged ? prior : undefined;\n+  if (!next) return prior;\n   if (!prior) return next;\n   if (prior.kind === 'gdacs-observation' && next.kind === 'gdacs-observation') {\n     return next.observedAt > prior.observedAt ? next : prior;\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + [\n  +   'warning'\n  + ]\n  - []\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:142:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "future-observation-rejected",
+      "behavior": "Future observations cannot manufacture retained freshness",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=future GDACS observations|malformed, future' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 2,
+        "seconds": 0.291,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.227,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..48b908d05 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -19,7 +19,7 @@ export function validateAlertRetentionEvidence(\n ): AlertRetentionEvidence | undefined {\n   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;\n   const evidence = value as Record<string, unknown>;\n-  if (!validTime(evidence.observedAt) || evidence.observedAt > now) return undefined;\n+  if (!validTime(evidence.observedAt)) return undefined;\n   if (source === 'gdacs' && evidence.kind === 'gdacs-observation') {\n     return { kind: 'gdacs-observation', observedAt: evidence.observedAt };\n   }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: invalid evidence 3\n  + actual - expected\n  \n  + [\n  +   'bad-3'\n  + ]\n  - []\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:154:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "source-kind-agreement",
+      "behavior": "Retention evidence is namespaced to its supported producer",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=future GDACS observations|malformed, future' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 2,
+        "seconds": 0.294,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..5b4dff847 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -20,10 +20,10 @@ export function validateAlertRetentionEvidence(\n   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;\n   const evidence = value as Record<string, unknown>;\n   if (!validTime(evidence.observedAt) || evidence.observedAt > now) return undefined;\n-  if (source === 'gdacs' && evidence.kind === 'gdacs-observation') {\n+  if (evidence.kind === 'gdacs-observation') {\n     return { kind: 'gdacs-observation', observedAt: evidence.observedAt };\n   }\n-  if (source === 'nws' && evidence.kind === 'nws-expiry'\n+  if (evidence.kind === 'nws-expiry'\n     && validTime(evidence.issuedAt) && evidence.issuedAt <= evidence.observedAt\n     && validTime(evidence.expiresAt) && evidence.expiresAt > evidence.issuedAt) {\n     return { kind: 'nws-expiry', observedAt: evidence.observedAt,\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: invalid evidence 2\n  + actual - expected\n  \n  + [\n  +   'bad-2'\n  + ]\n  - []\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:154:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "retention-date-range",
+      "behavior": "Lifecycle times must be Date-representable safe integers",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=malformed, future' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.302,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-retention.ts": "98495fe5a73a5e4b23133fd05db8163c5b08b81067d39421fe2883b0254e0b40"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.227,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-retention.ts b/src/services/alert-retention.ts\nindex 135beb0de..f71449701 100644\n--- a/src/services/alert-retention.ts\n+++ b/src/services/alert-retention.ts\n@@ -11,7 +11,7 @@ const SOURCE_AGE_MS = 48 * 60 * 60 * 1000;\n \n function validTime(value: unknown): value is number {\n   return typeof value === 'number' && Number.isSafeInteger(value)\n-    && value >= 0 && value <= 8_640_000_000_000_000;\n+    && value >= 0 && value <= Number.MAX_SAFE_INTEGER;\n }\n \n export function validateAlertRetentionEvidence(\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: invalid evidence 6\n  + actual - expected\n  \n  + [\n  +   'bad-6'\n  + ]\n  - []\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:154:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "hydrated-evidence-validation",
+      "behavior": "Invalid persisted metadata is sanitized instead of trusted",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=hydration sanitizes invalid' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.226,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.298,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.231,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 819e29808..48bf35022 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -123,7 +123,7 @@ function sanitizeHydratedAlert(entry: HydratableUnifiedAlert): UnifiedAlert {\n   return {\n     ...alert,\n     ...(isValidAlertSpatialScope(spatialScope) ? { spatialScope } : {}),\n-    ...retentionFields(validateAlertRetentionEvidence(entry.source, retentionEvidence)),\n+    ...retentionFields(retentionEvidence as AlertRetentionEvidence),\n   };\n }\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + {\n  +   kind: 'bogus'\n  + }\n  - undefined\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:167:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "gdacs-underlying-clock",
+      "behavior": "Loader stamps successful underlying update instead of processing time",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=real verified GDACS loader' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.942,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.812,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.809,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 165054a7d..4f0492c0c 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3178,7 +3178,7 @@ export class DataLoaderManager implements AppModule {\n  throw new Error('GDACS adapter returned circuit-breaker fallback without successful provenance');\n  }\n  dataFreshness.recordUpdate('gdacs', update.itemCount, update.updatedAt);\n- return result.events.map(event => ({ ...event, retrievedAt: update.updatedAt }));\n+ return result.events.map(event => ({ ...event, retrievedAt: Date.now() }));\n   }\n \n   /** NOAA CO-OPS flood gauge observations \u2014 redundant source alongside USGS water data.\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 1790399874062\n  - 1790337600000\n         ^\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:124:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1790399874062,\n    expected: 1790337600000,"
+    },
+    {
+      "id": "gdacs-loader-context",
+      "behavior": "GDACS loader forwards verified/replay provenance",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=real GDACS alert loader' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.828,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.849,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.845,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 165054a7d..7e981cdf4 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3139,9 +3139,7 @@ export class DataLoaderManager implements AppModule {\n  this.ctx.intelligenceCache.gdacsAlerts = events;\n  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update(events);\n  unifiedAlertStore.ingest(events.map(event => normalizeGDACSEvent(event,\n-   snapshot.source === 'network' && event.retrievedAt !== undefined\n-     ? { kind: 'verified-response', observedAt: event.retrievedAt }\n-     : { kind: 'replay' },\n+   { kind: 'unknown' },\n  )));\n \n  // Wire GDACS into correlation matrix\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + undefined\n  - {\n  -   kind: 'gdacs-observation',\n  -   observedAt: 1790337600000\n  - }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:184:12)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',"
+    },
+    {
+      "id": "nws-loader-context",
+      "behavior": "NWS loader preserves verified/replay/storm provenance",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=real NWS loader preserves' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.85,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.829,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.869,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 165054a7d..a56ef3b26 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3295,9 +3295,7 @@ export class DataLoaderManager implements AppModule {\n  const minimalAlerts = alerts.map(nwsAlertMinimal);\n  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);\n  unifiedAlertStore.ingest(alerts.map(alert => normalizeNWSAlert(alert,\n-   alertsSnapshot?.source === 'network' && alert.retrievedAt !== undefined\n-     ? { kind: 'verified-response', observedAt: alert.retrievedAt }\n-     : { kind: 'replay' },\n+   { kind: 'unknown' },\n  )));\n  recordWarningPredictions(minimalAlerts);\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + undefined\n  - 1790337600000\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:174:12)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: 1790337600000,\n    operator: 'strictEqual',"
+    },
+    {
+      "id": "unknown-provenance",
+      "behavior": "Missing explicit provenance cannot create freshness",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=unknown provenance and missing' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.796,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.859,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.782,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex 1a3c2c714..7289fe069 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -121,7 +121,7 @@ const NWS_SEVERITY_MAP: Record<NWSAlert['severity'], AlertSeverity> = {\n const UNKNOWN_OBSERVATION: AlertObservationContext = { kind: 'unknown' };\n \n function observationTime(retrievedAt: number | undefined, context: AlertObservationContext): number | undefined {\n-  if (context.kind === 'unknown') return undefined;\n+  \n   if (context.observedAt !== undefined && context.observedAt !== retrievedAt) return undefined;\n   return retrievedAt;\n }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + {\n  +   expiresAt: 1790510400000,\n  +   issuedAt: 1789992000000,\n  +   kind: 'nws-expiry',\n  +   observedAt: 1790337600000\n  + }\n  - undefined\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:51:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)"
+    },
+    {
+      "id": "observation-context-match",
+      "behavior": "Mismatched context cannot establish a qualifying row observation",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS memory, offline|GDACS qualifying response' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.783,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 2,
+        "seconds": 0.854,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.793,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex 1a3c2c714..05b334ecb 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -122,7 +122,7 @@ const UNKNOWN_OBSERVATION: AlertObservationContext = { kind: 'unknown' };\n \n function observationTime(retrievedAt: number | undefined, context: AlertObservationContext): number | undefined {\n   if (context.kind === 'unknown') return undefined;\n-  if (context.observedAt !== undefined && context.observedAt !== retrievedAt) return undefined;\n+  \n   return retrievedAt;\n }\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + {\n  +   expiresAt: 1790510400000,\n  +   issuedAt: 1789992000000,\n  +   kind: 'nws-expiry',\n  +   observedAt: 1790337600000\n  + }\n  - undefined\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)"
+    },
+    {
+      "id": "replay-original-observation",
+      "behavior": "Replay retains original retrieval clock rather than receipt time",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS memory, offline' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.783,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.861,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.784,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex 1a3c2c714..562b3ed4e 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -123,7 +123,7 @@ const UNKNOWN_OBSERVATION: AlertObservationContext = { kind: 'unknown' };\n function observationTime(retrievedAt: number | undefined, context: AlertObservationContext): number | undefined {\n   if (context.kind === 'unknown') return undefined;\n   if (context.observedAt !== undefined && context.observedAt !== retrievedAt) return undefined;\n-  return retrievedAt;\n+  return Date.now();\n }\n \n export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationContext = UNKNOWN_OBSERVATION): UnifiedAlert {\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    {\n      expiresAt: 1790510400000,\n      issuedAt: 1789992000000,\n      kind: 'nws-expiry',\n  +   observedAt: 1790399887248\n  -   observedAt: 1790399887247\n    }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:41:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)"
+    },
+    {
+      "id": "nws-actual-message-allowlist",
+      "behavior": "Only Actual Alert/Update messages supply expiry exemption",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS malformed dates' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.786,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.852,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-normalizer.ts": "2f3d579a4ea7a82a74507197d86d0c7f9582bb837a0fc75b71fe65309e751ee0"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.791,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-normalizer.ts b/src/services/alert-normalizer.ts\nindex 1a3c2c714..96d0564a5 100644\n--- a/src/services/alert-normalizer.ts\n+++ b/src/services/alert-normalizer.ts\n@@ -127,7 +127,7 @@ function observationTime(retrievedAt: number | undefined, context: AlertObservat\n }\n \n export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationContext = UNKNOWN_OBSERVATION): UnifiedAlert {\n-  const retentionEvidence = alert.status === 'Actual' && (alert.messageType === 'Alert' || alert.messageType === 'Update')\n+  const retentionEvidence = true\n     ? validateAlertRetentionEvidence('nws', {\n       kind: 'nws-expiry',\n       observedAt: observationTime(alert.retrievedAt, context),\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + {\n  +   expiresAt: 1790510400000,\n  +   issuedAt: 1789992000000,\n  +   kind: 'nws-expiry',\n  +   observedAt: 1790337600000\n  + }\n  - undefined\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:61:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)"
+    },
+    {
+      "id": "gdacs-loader-row-immutability",
+      "behavior": "Successful stamping does not mutate breaker-owned cached rows",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=real verified GDACS loader' src/services/__tests__/alert-retention-provenance.test.mts",
+      "files": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.942,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.823,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/app/data-loader.ts": "f2c019a5499bf4f66c10838017009c29d7a3a9d4133306ff2bd57b48a695933d"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.828,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/app/data-loader.ts b/src/app/data-loader.ts\nindex 165054a7d..698ce08aa 100644\n--- a/src/app/data-loader.ts\n+++ b/src/app/data-loader.ts\n@@ -3178,7 +3178,7 @@ export class DataLoaderManager implements AppModule {\n  throw new Error('GDACS adapter returned circuit-breaker fallback without successful provenance');\n  }\n  dataFreshness.recordUpdate('gdacs', update.itemCount, update.updatedAt);\n- return result.events.map(event => ({ ...event, retrievedAt: update.updatedAt }));\n+ return result.events.map(event => Object.assign(event, { retrievedAt: update.updatedAt }));\n   }\n \n   /** NOAA CO-OPS flood gauge observations \u2014 redundant source alongside USGS water data.\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: stamping does not mutate breaker-owned rows\n  + actual - expected\n  \n  + 1790337600000\n  - undefined\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-provenance.test.mts:125:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 1790337600000,\n    expected: undefined,\n    operator: 'strictEqual',"
+    },
+    {
+      "id": "material-issued-at",
+      "behavior": "NWS source issuance is a material revision",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS issuance and expiry' src/services/__tests__/alert-retention-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.279,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.277,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.214,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 36e69c6be..b97c8812f 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -53,7 +53,7 @@ export function identifyAlert(alert: AlertIdentityInput): ObservationIdentity |\n   const scope = alert.spatialScope as { kind: string; basis?: string } | undefined;\n   const material: unknown[] = [alert.timestamp, alert.severity, alert.title, alert.body, location, scope ? [scope.kind, scope.basis ?? null] : null, alert.link ?? null];\n   const lifecycle = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, 8_640_000_000_000_000);\n-  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, lifecycle.expiresAt]);\n+  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, null, lifecycle.expiresAt]);\n   return makeIdentity(['alert', alert.source, alert.id], material, alert.timestamp);\n }\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected \"actual\" to be strictly unequal to:\n  \n  '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",null,1790000001000]]'\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-identity.test.mts:16:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",null,1790000001000]]',\n    expected: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",null,1790000001000]]',\n    operator: 'notStrictEqual',\n    diff: 'simple'"
+    },
+    {
+      "id": "material-expires-at",
+      "behavior": "NWS source expiry is a material revision",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS issuance and expiry' src/services/__tests__/alert-retention-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.279,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.278,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.211,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 36e69c6be..49aa35040 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -53,7 +53,7 @@ export function identifyAlert(alert: AlertIdentityInput): ObservationIdentity |\n   const scope = alert.spatialScope as { kind: string; basis?: string } | undefined;\n   const material: unknown[] = [alert.timestamp, alert.severity, alert.title, alert.body, location, scope ? [scope.kind, scope.basis ?? null] : null, alert.link ?? null];\n   const lifecycle = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, 8_640_000_000_000_000);\n-  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, lifecycle.expiresAt]);\n+  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, null]);\n   return makeIdentity(['alert', alert.source, alert.id], material, alert.timestamp);\n }\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected \"actual\" to be strictly unequal to:\n  \n  '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",1789999999000,null]]'\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-identity.test.mts:16:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",1789999999000,null]]',\n    expected: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",1789999999000,null]]',\n    operator: 'notStrictEqual',\n    diff: 'simple'"
+    },
+    {
+      "id": "nws-observation-not-material",
+      "behavior": "Observation-only NWS refresh cannot create material revisions",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=repeated observations are excluded' src/services/__tests__/alert-retention-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.215,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.278,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.215,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 36e69c6be..6e850c38a 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -53,7 +53,7 @@ export function identifyAlert(alert: AlertIdentityInput): ObservationIdentity |\n   const scope = alert.spatialScope as { kind: string; basis?: string } | undefined;\n   const material: unknown[] = [alert.timestamp, alert.severity, alert.title, alert.body, location, scope ? [scope.kind, scope.basis ?? null] : null, alert.link ?? null];\n   const lifecycle = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, 8_640_000_000_000_000);\n-  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, lifecycle.expiresAt]);\n+  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, lifecycle.expiresAt, lifecycle.observedAt]);\n   return makeIdentity(['alert', alert.source, alert.id], material, alert.timestamp);\n }\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    {\n      eventTime: 1790000000000,\n      key: '[\"alert\",\"nws\",\"warning\"]',\n  +   revision: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",1789999999000,1790000001000,1790000000000]]'\n  -   revision: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,[\"nws-expiry\",1789999999000,1790000001000,1790000000500]]'\n    }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-identity.test.mts:21:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)"
+    },
+    {
+      "id": "gdacs-observation-not-material",
+      "behavior": "Observation-only GDACS refresh cannot create material revisions",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=repeated observations are excluded' src/services/__tests__/alert-retention-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.215,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.279,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "fd536856170a3fdbdb406c62626abcc4c053defba3fc07efe103a2026dc1039a"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.212,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 36e69c6be..c5678514c 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -54,6 +54,7 @@ export function identifyAlert(alert: AlertIdentityInput): ObservationIdentity |\n   const material: unknown[] = [alert.timestamp, alert.severity, alert.title, alert.body, location, scope ? [scope.kind, scope.basis ?? null] : null, alert.link ?? null];\n   const lifecycle = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, 8_640_000_000_000_000);\n   if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, lifecycle.expiresAt]);\n+  if (lifecycle?.kind === 'gdacs-observation') material.push(lifecycle.observedAt);\n   return makeIdentity(['alert', alert.source, alert.id], material, alert.timestamp);\n }\n \n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    {\n      eventTime: 1790000000000,\n      key: '[\"alert\",\"gdacs\",\"warning\"]',\n  +   revision: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null]'\n  -   revision: '[1790000000000,\"high\",\"Warning\",\"Details\",null,null,null,1790000000000]'\n    }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/alert-retention-identity.test.mts:23:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)"
+    },
+    {
+      "id": "unknown-replay-material-comparison",
+      "behavior": "Unknown replay matching excludes known retention metadata",
+      "candidateSha": "acd3bd5f9519ac612611eaf41d9e8c9a0b74f170",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=NWS unknown unchanged replay' src/services/__tests__/unified-alert-retention.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.23,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.294,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "9f11321134fd63f36b44184d60d1c98aa69fadd9d55d2adf79584bcfeea6dfb1"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 819e29808..b72c0bca3 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -408,7 +408,7 @@ class UnifiedAlertStore {\n       const report = keepExisting ? existing : alert;\n       let materialUnchanged = false;\n       if (existing && previousEvidence && !incomingEvidence) {\n-        const priorMaterial = identifyAlert(withoutRetentionEvidence(existing));\n+        const priorMaterial = identifyAlert(existing);\n         const incomingMaterial = identifyAlert(withoutRetentionEvidence(alert));\n         materialUnchanged = !!priorMaterial && priorMaterial.revision === incomingMaterial?.revision;\n       }\n",
+      "assertionExcerpt": "  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + undefined\n  - {\n  -   expiresAt: 1790086400000,\n  -   issuedAt: 1789996400000,\n  -   kind: 'nws-expiry',\n  -   observedAt: 1790000000000\n  - }\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/ux059-mutation-20260926/src/services/__tests__/unified-alert-retention.test.mts:207:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)"
+    }
+  ]
+}

@@ -9,10 +9,12 @@
     "test:diagnostics"
   ],
   "src/services/alert-identity.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:ux059"
   ],
   "src/services/unified-alerts.ts": [
-    "test:acc509"
+    "test:acc509",
+    "test:ux059"
   ],
   "src/services/intel-channels-bridge.ts": [
     "test:acc509"
@@ -55,5 +57,17 @@
   ],
   "src/components/SituationPanel.ts": [
     "test:acc509"
+  ],
+  "src/services/alert-retention.ts": [
+    "test:ux059"
+  ],
+  "src/services/alert-normalizer.ts": [
+    "test:ux059"
+  ],
+  "src/services/gdacs.ts": [
+    "test:ux059"
+  ],
+  "src/app/data-loader.ts": [
+    "test:ux059"
   ]
 }

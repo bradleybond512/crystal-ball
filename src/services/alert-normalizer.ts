@@ -6,6 +6,7 @@
  */
 
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+import { validateAlertRetentionEvidence, type AlertObservationContext } from './alert-retention';
 import type { BreakingAlert } from './breaking-news-alerts';
 import type { CorrelationSignal } from './correlation';
 import type { NWSAlert } from './nws-alerts';
@@ -117,10 +118,27 @@ const NWS_SEVERITY_MAP: Record<NWSAlert['severity'], AlertSeverity> = {
   Unknown: 'info',
 };
 
-export function normalizeNWSAlert(alert: NWSAlert): UnifiedAlert {
+const UNKNOWN_OBSERVATION: AlertObservationContext = { kind: 'unknown' };
+
+function observationTime(retrievedAt: number | undefined, context: AlertObservationContext): number | undefined {
+  if (context.kind === 'unknown') return undefined;
+  if (context.observedAt !== undefined && context.observedAt !== retrievedAt) return undefined;
+  return retrievedAt;
+}
+
+export function normalizeNWSAlert(alert: NWSAlert, context: AlertObservationContext = UNKNOWN_OBSERVATION): UnifiedAlert {
+  const retentionEvidence = alert.status === 'Actual' && (alert.messageType === 'Alert' || alert.messageType === 'Update')
+    ? validateAlertRetentionEvidence('nws', {
+      kind: 'nws-expiry',
+      observedAt: observationTime(alert.retrievedAt, context),
+      issuedAt: typeof alert.sent === 'string' ? Date.parse(alert.sent) : Number.NaN,
+      expiresAt: typeof alert.expires === 'string' ? Date.parse(alert.expires) : Number.NaN,
+    })
+    : undefined;
   return {
  id: `nws-${alert.id}`,
  source: 'nws',
+ retentionEvidence,
  severity: NWS_SEVERITY_MAP[alert.severity] ?? 'info',
  title: alert.event,
  body: alert.headline,
@@ -153,11 +171,14 @@ const GDACS_TYPE_LABEL: Record<string, string> = {
   DR: 'Drought',
 };
 
-export function normalizeGDACSEvent(event: GDACSEvent): UnifiedAlert {
+export function normalizeGDACSEvent(event: GDACSEvent, context: AlertObservationContext = UNKNOWN_OBSERVATION): UnifiedAlert {
   const typeLabel = GDACS_TYPE_LABEL[event.eventType] ?? event.eventType;
   return {
  id: `gdacs-${event.id}`,
  source: 'gdacs',
+ retentionEvidence: validateAlertRetentionEvidence('gdacs', {
+   kind: 'gdacs-observation', observedAt: observationTime(event.retrievedAt, context),
+ }),
  severity: GDACS_SEVERITY_MAP[event.alertLevel] ?? 'info',
  title: `${typeLabel}: ${event.name}`,
  body: event.severity

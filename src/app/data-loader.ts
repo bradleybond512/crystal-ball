@@ -3138,7 +3138,11 @@ export class DataLoaderManager implements AppModule {
  const events = snapshot.data;
  this.ctx.intelligenceCache.gdacsAlerts = events;
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update(events);
- unifiedAlertStore.ingest(events.map(normalizeGDACSEvent));
+ unifiedAlertStore.ingest(events.map(event => normalizeGDACSEvent(event,
+   snapshot.source === 'network' && event.retrievedAt !== undefined
+     ? { kind: 'verified-response', observedAt: event.retrievedAt }
+     : { kind: 'replay' },
+ )));
 
  // Wire GDACS into correlation matrix
  for (const event of events) {
@@ -3174,7 +3178,7 @@ export class DataLoaderManager implements AppModule {
  throw new Error('GDACS adapter returned circuit-breaker fallback without successful provenance');
  }
  dataFreshness.recordUpdate('gdacs', update.itemCount, update.updatedAt);
- return result.events;
+ return result.events.map(event => ({ ...event, retrievedAt: update.updatedAt }));
   }
 
   /** NOAA CO-OPS flood gauge observations — redundant source alongside USGS water data.
@@ -3272,13 +3276,14 @@ export class DataLoaderManager implements AppModule {
  try {
  const stormContext = getStormPreparednessContext();
  const [alertsResult, spcResult, marineResult, rainfallResult, winterResult] = await Promise.allSettled([
- withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000).then(r => r.data),
+ withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
  fetchSpcSummary(),
  fetchMarineHazards(),
  fetchExcessiveRainfallOutlooks(),
  fetchWinterWeatherOutlooks(),
  ]);
- const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : stormContext.nwsAlerts;
+ const alertsSnapshot = alertsResult.status === 'fulfilled' ? alertsResult.value : undefined;
+ const alerts = alertsSnapshot ? alertsSnapshot.data : stormContext.nwsAlerts;
  const spcSummary = spcResult.status === 'fulfilled' ? spcResult.value : stormContext.spcSummary;
  const marineHazards = marineResult.status === 'fulfilled' ? marineResult.value : stormContext.marineHazards;
  const excessiveRainfallOutlooks = rainfallResult.status === 'fulfilled'
@@ -3289,7 +3294,11 @@ export class DataLoaderManager implements AppModule {
  : stormContext.winterWeatherOutlooks;
  const minimalAlerts = alerts.map(nwsAlertMinimal);
  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);
- unifiedAlertStore.ingest(alerts.map(normalizeNWSAlert));
+ unifiedAlertStore.ingest(alerts.map(alert => normalizeNWSAlert(alert,
+   alertsSnapshot?.source === 'network' && alert.retrievedAt !== undefined
+     ? { kind: 'verified-response', observedAt: alert.retrievedAt }
+     : { kind: 'replay' },
+ )));
  recordWarningPredictions(minimalAlerts);
 
  // Route alerts through Personal Storm Mode — find the highest-priority

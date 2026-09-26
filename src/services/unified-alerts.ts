@@ -11,6 +11,8 @@ import { alertDB } from './alert-store';
 import { notificationDispatcher, actionForSeverity } from './notification-dispatcher';
 import type { AlertExplanation } from './intelligence/explainer';
 import { createIdentityLedger, hydrateIdentityLedger, identifyAlert } from './alert-identity';
+import { mergeAlertRetentionEvidence, shouldRetainAlert, validateAlertRetentionEvidence } from './alert-retention';
+import type { AlertRetentionEvidence } from './alert-retention';
 
 export type AlertSource =
   | 'breaking-news'
@@ -53,6 +55,7 @@ export interface UnifiedAlert {
   title: string;
   body: string;
   timestamp: number;
+  retentionEvidence?: AlertRetentionEvidence;
   location?: { lat: number; lon: number; label?: string };
   /** How `location` may be interpreted; absent means impact cannot be inferred. */
   spatialScope?: AlertSpatialScope;
@@ -94,7 +97,7 @@ function isValidAlertSpatialScope(value: unknown): value is AlertSpatialScope {
   }
 }
 
-type HydratableUnifiedAlert = Omit<UnifiedAlert, 'spatialScope'> & { spatialScope?: unknown };
+type HydratableUnifiedAlert = Omit<UnifiedAlert, 'spatialScope' | 'retentionEvidence'> & { spatialScope?: unknown; retentionEvidence?: unknown };
 
 /**
  * Runtime structural guard for localStorage-hydrated alert entries.
@@ -116,18 +119,18 @@ function isValidUnifiedAlertEntry(e: unknown): e is HydratableUnifiedAlert {
 }
 
 function sanitizeHydratedAlert(entry: HydratableUnifiedAlert): UnifiedAlert {
-  if (entry.spatialScope === undefined || isValidAlertSpatialScope(entry.spatialScope)) {
-    return entry as UnifiedAlert;
-  }
-  const { spatialScope: _invalidScope, ...alert } = entry;
-  return alert;
+  const { spatialScope, retentionEvidence, ...alert } = entry;
+  return {
+    ...alert,
+    ...(isValidAlertSpatialScope(spatialScope) ? { spatialScope } : {}),
+    ...retentionFields(validateAlertRetentionEvidence(entry.source, retentionEvidence)),
+  };
 }
 
 const LEGACY_STORAGE_KEY = 'wm-unified-alerts-v1';
 const STORAGE_KEY = 'wm-unified-alerts-v2';
 const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
-const PRUNE_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 interface AlertIdentityState {
   notificationConsidered: boolean;
@@ -153,6 +156,15 @@ function identityState(alert: UnifiedAlert, considered: boolean): AlertIdentityS
     pinned: alert.pinned === true,
     ...(Number.isFinite(alert.snoozedUntil) ? { snoozedUntil: alert.snoozedUntil } : {}),
   };
+}
+
+function withoutRetentionEvidence(alert: UnifiedAlert): UnifiedAlert {
+  const { retentionEvidence: _retentionEvidence, ...report } = alert;
+  return report;
+}
+
+function retentionFields(retentionEvidence: AlertRetentionEvidence | undefined): { retentionEvidence?: AlertRetentionEvidence } {
+  return retentionEvidence ? { retentionEvidence } : {};
 }
 
 function capacityOrder(a: UnifiedAlert, b: UnifiedAlert): number {
@@ -388,19 +400,34 @@ class UnifiedAlertStore {
     for (const alert of incoming) {
       const live = this.alerts.get(alert.id);
       const existing = live?.source === alert.source ? live : undefined;
-      const identity = identifyAlert(alert);
+      const previousEvidence = validateAlertRetentionEvidence(alert.source, existing?.retentionEvidence, now);
+      const incomingEvidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);
+      const olderIssuance = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry'
+        && incomingEvidence.issuedAt < previousEvidence.issuedAt;
+      const keepExisting = existing && (alert.timestamp < existing.timestamp || olderIssuance);
+      const report = keepExisting ? existing : alert;
+      let materialUnchanged = false;
+      if (existing && previousEvidence && !incomingEvidence) {
+        const priorMaterial = identifyAlert(withoutRetentionEvidence(existing));
+        const incomingMaterial = identifyAlert(withoutRetentionEvidence(alert));
+        materialUnchanged = !!priorMaterial && priorMaterial.revision === incomingMaterial?.revision;
+      }
+      const retained = {
+        ...withoutRetentionEvidence(report),
+        ...retentionFields(mergeAlertRetentionEvidence(alert.source, previousEvidence, incomingEvidence,
+          !!keepExisting || materialUnchanged, now)),
+      };
+      const identity = identifyAlert(retained);
       const previous = identity ? this.identities.get(identity.key) : undefined;
       const state = existing ? identityState(existing, true) : previous?.value;
       const restored = state ? {
-        ...alert,
+        ...retained,
         acknowledged: state.acknowledged,
         pinned: state.pinned,
         snoozedUntil: state.snoozedUntil,
-      } : alert;
-      if (!existing || alert.timestamp >= existing.timestamp) {
-        this.alerts.set(alert.id, restored);
-        changed = true;
-      }
+      } : retained;
+      this.alerts.set(alert.id, restored);
+      changed = true;
       const considered = !!existing || previous?.value.notificationConsidered === true;
       if (identity) {
         const status = this.identities.admit(identity, identityState(restored, true), now, protectedKeys);
@@ -526,7 +553,7 @@ class UnifiedAlertStore {
     const now = Date.now();
     // Remove old unpinned alerts
     for (const [id, alert] of this.alerts) {
-      if (!alert.pinned && now - alert.timestamp > PRUNE_AGE_MS) {
+      if (!shouldRetainAlert(alert, now)) {
         this.alerts.delete(id);
       }
     }
@@ -564,7 +591,7 @@ class UnifiedAlertStore {
   private entriesForPersist(): UnifiedAlert[] {
     const now = Date.now();
     const all = [...this.alerts.values()].filter((alert) =>
-      alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS);
+      shouldRetainAlert(alert, now));
     const evicted = new Set(all.length > MAX_ALERTS
       ? [...all].sort(capacityOrder).slice(0, all.length - MAX_ALERTS)
       : []);
@@ -612,7 +639,7 @@ class UnifiedAlertStore {
       for (const entry of entries) {
         if (!isValidUnifiedAlertEntry(entry)) continue;
         const alert = sanitizeHydratedAlert(entry);
-        if (alert.pinned || now - alert.timestamp <= PRUNE_AGE_MS) this.alerts.set(alert.id, alert);
+        if (shouldRetainAlert(alert, now)) this.alerts.set(alert.id, alert);
       }
       this.prune();
       const protectedKeys = new Set<string>();

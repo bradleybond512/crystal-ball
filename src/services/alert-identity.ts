@@ -1,3 +1,5 @@
+import { validateAlertRetentionEvidence } from './alert-retention';
+
 export interface ObservationIdentity { key: string; revision: string; eventTime: number }
 export interface IdentityEntry<T> { key: string; revisions: string[]; firstReceivedAt: number; eventTime: number; value: T }
 export interface IdentitySnapshot<T> { version: 1; entries: IdentityEntry<T>[] }
@@ -29,6 +31,7 @@ export interface AlertIdentityInput {
   id: string; source: string; timestamp: number; severity: string; title: string; body: string;
   location?: { lat: number; lon: number; label?: string };
   spatialScope?: unknown;
+  retentionEvidence?: unknown;
   link?: string;
 }
 export interface SignalIdentityInput {
@@ -48,7 +51,10 @@ export function identifyAlert(alert: AlertIdentityInput): ObservationIdentity | 
   if (alert.spatialScope !== undefined && !validScope(alert.spatialScope)) return null;
   const location = alert.location ? [alert.location.lat, alert.location.lon, alert.location.label ?? null] : null;
   const scope = alert.spatialScope as { kind: string; basis?: string } | undefined;
-  return makeIdentity(['alert', alert.source, alert.id], [alert.timestamp, alert.severity, alert.title, alert.body, location, scope ? [scope.kind, scope.basis ?? null] : null, alert.link ?? null], alert.timestamp);
+  const material: unknown[] = [alert.timestamp, alert.severity, alert.title, alert.body, location, scope ? [scope.kind, scope.basis ?? null] : null, alert.link ?? null];
+  const lifecycle = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, 8_640_000_000_000_000);
+  if (lifecycle?.kind === 'nws-expiry') material.push([lifecycle.kind, lifecycle.issuedAt, lifecycle.expiresAt]);
+  return makeIdentity(['alert', alert.source, alert.id], material, alert.timestamp);
 }
 
 export function identifySignal(signal: SignalIdentityInput): ObservationIdentity | null {

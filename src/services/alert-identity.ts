@@ -4,9 +4,12 @@ export interface ObservationIdentity { key: string; revision: string; eventTime:
 export interface IdentityEntry<T> { key: string; revisions: string[]; firstReceivedAt: number; eventTime: number; value: T }
 export interface IdentitySnapshot<T> { version: 1; entries: IdentityEntry<T>[] }
 export interface IdentityLimits { maxEntries?: number; maxBytes?: number; maxAgeMs?: number }
+type AdmissionStatus = 'accepted' | 'duplicate' | 'invalid' | 'capacity';
+type ScopedAdmission<T> = (identity: ObservationIdentity, value: T) => AdmissionStatus;
 export interface IdentityLedger<T> {
   get(key: string): IdentityEntry<T> | undefined;
-  admit(identity: ObservationIdentity, value: T, now: number, protectedKeys?: ReadonlySet<string>): 'accepted' | 'duplicate' | 'invalid' | 'capacity';
+  admit(identity: ObservationIdentity, value: T, now: number, protectedKeys?: ReadonlySet<string>): AdmissionStatus;
+  withProtectedAdmissions<R>(now: number, initialProtectedKeys: ReadonlySet<string>, callback: (admit: ScopedAdmission<T>) => R): R;
   updateValue(key: string, value: T): boolean;
   expire(now: number): void;
   snapshot(): IdentitySnapshot<T>;
@@ -173,10 +176,16 @@ export function validObservationIdentity(value: unknown): value is ObservationId
 }
 
 interface StoredEntry<T> { entry: IdentityEntry<T>; json: string; bytes: number; revisions: Set<string> }
+interface ProtectionScope {
+  keys: Set<string>;
+  residentCount: number;
+  generation: number;
+}
 class Ledger<T> implements IdentityLedger<T> {
   private entries = new Map<string, StoredEntry<T>>();
   private totalBytes = EMPTY_BYTES;
   private nextExpiry = Infinity;
+  private membershipGeneration = 0;
   private readonly maxEntries: number;
   private readonly maxBytes: number;
   private readonly maxAgeMs: number;
@@ -201,18 +210,43 @@ class Ledger<T> implements IdentityLedger<T> {
       else this.nextExpiry = Math.min(this.nextExpiry, deadline);
     }
   }
-  admit(identity: ObservationIdentity, value: T, now: number, protectedKeys: ReadonlySet<string> = new Set()): 'accepted' | 'duplicate' | 'invalid' | 'capacity' {
+  withProtectedAdmissions<R>(now: number, initialProtectedKeys: ReadonlySet<string>, callback: (admit: ScopedAdmission<T>) => R): R {
+    this.expire(now);
+    const scope: ProtectionScope = { keys: new Set(initialProtectedKeys), residentCount: 0, generation: -1 };
+    this.refreshProtection(scope);
+    let active = true;
+    try {
+      return callback((identity, value) => {
+        if (!active) return 'invalid';
+        const status = this.admitInternal(identity, value, now, scope.keys, scope);
+        if (status === 'accepted' || status === 'duplicate') {
+          this.refreshProtection(scope);
+          if (!scope.keys.has(identity.key)) {
+            scope.keys.add(identity.key);
+            if (this.entries.has(identity.key)) scope.residentCount++;
+          }
+        }
+        return status;
+      });
+    } finally {
+      active = false;
+    }
+  }
+  admit(identity: ObservationIdentity, value: T, now: number, protectedKeys: ReadonlySet<string> = new Set()): AdmissionStatus {
+    return this.admitInternal(identity, value, now, protectedKeys);
+  }
+  private admitInternal(identity: ObservationIdentity, value: T, now: number, protectedKeys: ReadonlySet<string>, scope?: ProtectionScope): AdmissionStatus {
     if (!validObservationIdentity(identity) || !validTime(now)) return 'invalid';
     this.expire(now);
     const existing = this.entries.get(identity.key);
     if (existing?.revisions.has(identity.revision)) return 'duplicate';
     const candidate = this.prepare({ key: identity.key, revisions: [...(existing?.entry.revisions ?? []), identity.revision], firstReceivedAt: existing?.entry.firstReceivedAt ?? now, eventTime: identity.eventTime, value });
     if (!candidate) return 'invalid';
-    const victims = this.victims(candidate, existing, protectedKeys);
+    const victims = this.victims(candidate, existing, protectedKeys, scope);
     if (!victims) return 'capacity';
-    for (const key of victims) this.remove(key);
-    if (existing) this.remove(existing.entry.key);
-    this.insert(candidate);
+    for (const key of victims) this.remove(key, scope);
+    if (existing) this.remove(existing.entry.key, scope);
+    this.insert(candidate, scope);
     return 'accepted';
   }
   updateValue(key: string, value: T): boolean {
@@ -252,15 +286,13 @@ class Ledger<T> implements IdentityLedger<T> {
       return { entry: clone, json, bytes: bytes(json), revisions: new Set(clone.revisions) };
     } catch { return null; }
   }
-  private victims(candidate: StoredEntry<T>, existing: StoredEntry<T> | undefined, protectedKeys: ReadonlySet<string>): string[] | null {
+  private victims(candidate: StoredEntry<T>, existing: StoredEntry<T> | undefined, protectedKeys: ReadonlySet<string>, scope?: ProtectionScope): string[] | null {
     let count = this.size + (existing ? 0 : 1);
     let total = this.totalBytes - (existing?.bytes ?? 0) + candidate.bytes + (!existing && this.size ? 1 : 0);
+    if (scope) this.refreshProtection(scope);
     if (count <= this.maxEntries && total <= this.maxBytes) return [];
-    const available: StoredEntry<T>[] = [];
-    for (const stored of this.entries.values()) {
-      if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);
-    }
-    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));
+    if (scope?.residentCount === this.size) return null;
+    const available = this.availableVictims(existing, protectedKeys);
     const victims: string[] = [];
     for (const stored of available) {
       victims.push(stored.entry.key);
@@ -270,15 +302,39 @@ class Ledger<T> implements IdentityLedger<T> {
     }
     return null;
   }
-  private remove(key: string): void {
+  private availableVictims(existing: StoredEntry<T> | undefined, protectedKeys: ReadonlySet<string>): StoredEntry<T>[] {
+    const available: StoredEntry<T>[] = [];
+    for (const stored of this.entries.values()) {
+      if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);
+    }
+    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));
+    return available;
+  }
+  private refreshProtection(scope: ProtectionScope): void {
+    if (scope.generation === this.membershipGeneration) return;
+    scope.residentCount = 0;
+    for (const key of this.entries.keys()) if (scope.keys.has(key)) scope.residentCount++;
+    scope.generation = this.membershipGeneration;
+  }
+  private remove(key: string, scope?: ProtectionScope): void {
     const stored = this.entries.get(key);
     if (!stored) return;
     this.totalBytes -= stored.bytes + (this.size > 1 ? 1 : 0);
     this.entries.delete(key);
+    this.membershipGeneration++;
+    if (scope) {
+      if (scope.keys.has(key)) scope.residentCount--;
+      scope.generation = this.membershipGeneration;
+    }
   }
-  private insert(stored: StoredEntry<T>): void {
+  private insert(stored: StoredEntry<T>, scope?: ProtectionScope): void {
     this.totalBytes += stored.bytes + (this.size ? 1 : 0);
     this.entries.set(stored.entry.key, stored);
+    this.membershipGeneration++;
+    if (scope) {
+      if (scope.keys.has(stored.entry.key)) scope.residentCount++;
+      scope.generation = this.membershipGeneration;
+    }
     this.nextExpiry = Math.min(this.nextExpiry, stored.entry.firstReceivedAt + this.maxAgeMs);
   }
 }

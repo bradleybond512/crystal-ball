@@ -397,51 +397,52 @@ class UnifiedAlertStore {
     }
     let changed = false;
     const newAlerts: UnifiedAlert[] = [];
-    for (const alert of incoming) {
-      const live = this.alerts.get(alert.id);
-      const existing = live?.source === alert.source ? live : undefined;
-      const previousEvidence = validateAlertRetentionEvidence(alert.source, existing?.retentionEvidence, now);
-      const incomingEvidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);
-      const olderIssuance = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry'
-        && incomingEvidence.issuedAt < previousEvidence.issuedAt;
-      const keepExisting = existing && (alert.timestamp < existing.timestamp || olderIssuance);
-      const report = keepExisting ? existing : alert;
-      let materialUnchanged = false;
-      if (existing && previousEvidence && !incomingEvidence) {
-        const priorMaterial = identifyAlert(withoutRetentionEvidence(existing));
-        const incomingMaterial = identifyAlert(withoutRetentionEvidence(alert));
-        materialUnchanged = !!priorMaterial && priorMaterial.revision === incomingMaterial?.revision;
-      }
-      const retained = {
-        ...withoutRetentionEvidence(report),
-        ...retentionFields(mergeAlertRetentionEvidence(alert.source, previousEvidence, incomingEvidence,
-          !!keepExisting || materialUnchanged, now)),
-      };
-      const identity = identifyAlert(retained);
-      const previous = identity ? this.identities.get(identity.key) : undefined;
-      const state = existing ? identityState(existing, true) : previous?.value;
-      const restored = state ? {
-        ...retained,
-        acknowledged: state.acknowledged,
-        pinned: state.pinned,
-        snoozedUntil: state.snoozedUntil,
-      } : retained;
-      this.alerts.set(alert.id, restored);
-      changed = true;
-      const considered = !!existing || previous?.value.notificationConsidered === true;
-      if (identity) {
-        const status = this.identities.admit(identity, identityState(restored, true), now, protectedKeys);
-        if (status === 'capacity') this.capacityFailures++;
-        else if (status === 'invalid') this.invalidIdentities++;
-        else {
-          if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;
-          protectedKeys.add(identity.key);
+    this.identities.withProtectedAdmissions(now, protectedKeys, (admit) => {
+      for (const alert of incoming) {
+        const live = this.alerts.get(alert.id);
+        const existing = live?.source === alert.source ? live : undefined;
+        const previousEvidence = validateAlertRetentionEvidence(alert.source, existing?.retentionEvidence, now);
+        const incomingEvidence = validateAlertRetentionEvidence(alert.source, alert.retentionEvidence, now);
+        const olderIssuance = previousEvidence?.kind === 'nws-expiry' && incomingEvidence?.kind === 'nws-expiry'
+          && incomingEvidence.issuedAt < previousEvidence.issuedAt;
+        const keepExisting = existing && (alert.timestamp < existing.timestamp || olderIssuance);
+        const report = keepExisting ? existing : alert;
+        let materialUnchanged = false;
+        if (existing && previousEvidence && !incomingEvidence) {
+          const priorMaterial = identifyAlert(withoutRetentionEvidence(existing));
+          const incomingMaterial = identifyAlert(withoutRetentionEvidence(alert));
+          materialUnchanged = !!priorMaterial && priorMaterial.revision === incomingMaterial?.revision;
         }
-      } else {
-        this.invalidIdentities++;
+        const retained = {
+          ...withoutRetentionEvidence(report),
+          ...retentionFields(mergeAlertRetentionEvidence(alert.source, previousEvidence, incomingEvidence,
+            !!keepExisting || materialUnchanged, now)),
+        };
+        const identity = identifyAlert(retained);
+        const previous = identity ? this.identities.get(identity.key) : undefined;
+        const state = existing ? identityState(existing, true) : previous?.value;
+        const restored = state ? {
+          ...retained,
+          acknowledged: state.acknowledged,
+          pinned: state.pinned,
+          snoozedUntil: state.snoozedUntil,
+        } : retained;
+        this.alerts.set(alert.id, restored);
+        changed = true;
+        const considered = !!existing || previous?.value.notificationConsidered === true;
+        if (identity) {
+          const status = admit(identity, identityState(restored, true));
+          if (status === 'capacity') this.capacityFailures++;
+          else if (status === 'invalid') this.invalidIdentities++;
+          else {
+            if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;
+          }
+        } else {
+          this.invalidIdentities++;
+        }
+        if (!existing && !considered) newAlerts.push(restored);
       }
-      if (!existing && !considered) newAlerts.push(restored);
-    }
+    });
     if (changed) {
       for (const alert of incoming) this.pendingArchive.push(alert);
       if (this.alerts.size > MAX_ALERTS * 2) this.prune();

@@ -219,3 +219,173 @@ test('nested material objects preserve identity when their property insertion or
   assert.ok(first);
   assert.deepEqual(reordered, first);
 });
+
+test('scoped admissions match ordinary admission statuses, revisions, state and exact bytes at saturation', () => {
+  const scoped = createIdentityLedger(valid, { maxEntries: 2, maxBytes: 500 });
+  const ordinary = createIdentityLedger(valid, { maxEntries: 2, maxBytes: 500 });
+  const protection = new Set<string>(['absent']);
+  scoped.withProtectedAdmissions(now, protection, (admit) => {
+    for (const [candidate, state] of [
+      [identity('a'), value], [identity('b'), value], [identity('overflow'), value],
+      [identity('bad'), {}], [identity('x'.repeat(4097)), value],
+      [identity('a'), {}], [identity('a', 'r2'), value],
+      [identity('a', 'x'.repeat(1000)), value], [identity('later'), value],
+    ] as const) {
+      const expected = ordinary.admit(candidate, state as typeof value, now, protection);
+      assert.equal(admit(candidate, state as typeof value), expected);
+      if (expected === 'accepted' || expected === 'duplicate') protection.add(candidate.key);
+      assert.deepEqual(scoped.snapshot(), ordinary.snapshot());
+      assert.equal(scoped.byteLength, ordinary.byteLength);
+      assert.equal(scoped.byteLength, Buffer.byteLength(JSON.stringify(scoped.snapshot())));
+    }
+  });
+  assert.equal(scoped.get('a')?.revisions.length, 2);
+});
+
+test('scoped byte rejection cannot suppress a later fitting candidate or revision after value shrink', () => {
+  const validate = (v: unknown): v is string => typeof v === 'string';
+  const scoped = createIdentityLedger(validate, { maxBytes: 400 });
+  const ordinary = createIdentityLedger(validate, { maxBytes: 400 });
+  const protection = new Set<string>();
+  scoped.withProtectedAdmissions(now, protection, (admit) => {
+    const compare = (key: string, state: string, revision = 'revision') => {
+      const expected = ordinary.admit(identity(key, revision), state, now, protection);
+      assert.equal(admit(identity(key, revision), state), expected);
+      if (expected === 'accepted' || expected === 'duplicate') protection.add(key);
+      assert.deepEqual(scoped.snapshot(), ordinary.snapshot());
+      assert.equal(scoped.byteLength, ordinary.byteLength);
+      return expected;
+    };
+    assert.equal(compare('large', 'x'.repeat(500)), 'capacity');
+    assert.equal(compare('small', 'x'.repeat(100)), 'accepted');
+    assert.equal(compare('small', 'x'.repeat(500), 'larger'), 'capacity');
+    assert.equal(scoped.updateValue('small', ''), ordinary.updateValue('small', ''));
+    assert.equal(compare('small', '', 'short'), 'accepted');
+    assert.equal(compare('next', ''), 'accepted');
+  });
+});
+
+test('protection counts resident intersection and owns its initial Set while ordinary callers observe mutations', () => {
+  const ledger = createIdentityLedger(valid, { maxEntries: 2 });
+  ledger.admit(identity('a'), value, now);
+  ledger.admit(identity('b'), value, now);
+  const protection = new Set(['a', 'absent', 'another-absent']);
+  ledger.withProtectedAdmissions(now, protection, (admit) => {
+    protection.delete('a'); protection.add('b');
+    assert.equal(admit(identity('c'), value), 'accepted');
+    assert.equal(ledger.get('b'), undefined, 'scope owns its initial protection copy');
+    assert.equal(admit(identity('d'), value), 'capacity', 'accepted keys become protected');
+  });
+  const mutable = new Set(['a', 'c']);
+  mutable.delete('a'); mutable.add('absent');
+  assert.equal(ledger.admit(identity('d'), value, now, mutable), 'accepted');
+  assert.equal(ledger.get('a'), undefined, 'ordinary API reads same-size Set membership afresh');
+});
+
+test('external and nested membership mutations invalidate scoped resident coverage', () => {
+  for (const nested of [false, true]) {
+    const ledger = createIdentityLedger(valid, { maxEntries: 2 });
+    ledger.admit(identity('a'), value, now);
+    ledger.admit(identity('b'), value, now);
+    ledger.withProtectedAdmissions(now, new Set(['a', 'b']), (admit) => {
+      assert.equal(admit(identity('overflow'), value), 'capacity');
+      if (nested) ledger.withProtectedAdmissions(now, new Set(['b']), (inner) => {
+        assert.equal(inner(identity('c'), value), 'accepted');
+      });
+      else assert.equal(ledger.admit(identity('c'), value, now, new Set(['b'])), 'accepted');
+      assert.equal(admit(identity('d'), value), 'accepted', 'new unprotected resident can be evicted');
+      assert.equal(ledger.get('c'), undefined);
+      assert.equal(admit(identity('overflow-again'), value), 'capacity');
+    });
+  }
+});
+
+test('expiry and revival of absent protected identities preserve count and exact-boundary behavior', () => {
+  const ledger = createIdentityLedger(valid, { maxEntries: 2, maxAgeMs: 10 });
+  ledger.admit(identity('expired'), value, now - 10);
+  ledger.withProtectedAdmissions(now, new Set(['expired', 'revived']), (admit) => {
+    assert.equal(ledger.size, 0);
+    assert.equal(admit(identity('revived'), value), 'accepted');
+    assert.equal(admit(identity('new'), value), 'accepted');
+    assert.equal(admit(identity('overflow'), value), 'capacity');
+    ledger.expire(now + 10);
+    assert.equal(admit(identity('revived', 'r2'), value), 'accepted');
+    assert.equal(admit(identity('last'), value), 'accepted');
+    assert.equal(admit(identity('overflow'), value), 'capacity');
+  });
+  assert.equal(ledger.size, 2);
+});
+
+test('scoped multi-victim byte eviction preserves receipt/key order, commas and hydration', () => {
+  const validate = (v: unknown): v is string => typeof v === 'string';
+  const seed = createIdentityLedger(validate);
+  for (const [key, received] of [['old', now - 2], ['b', now - 1], ['a', now - 1], ['keep', now]] as const) seed.admit(identity(key), 'x'.repeat(20), received);
+  const scoped = hydrateIdentityLedger(seed.snapshot(), now, validate, { maxBytes: seed.byteLength });
+  const ordinary = hydrateIdentityLedger(seed.snapshot(), now, validate, { maxBytes: seed.byteLength });
+  const protection = new Set(['keep', 'absent']);
+  scoped.withProtectedAdmissions(now, protection, (admit) => {
+    assert.equal(admit(identity('new'), 'x'.repeat(100)), ordinary.admit(identity('new'), 'x'.repeat(100), now, protection));
+    assert.deepEqual(scoped.snapshot(), ordinary.snapshot());
+    assert.deepEqual(scoped.snapshot().entries.map((entry) => entry.key), ['b', 'keep', 'new']);
+    assert.equal(scoped.byteLength, Buffer.byteLength(JSON.stringify(scoped.snapshot())));
+  });
+  assert.deepEqual(hydrateIdentityLedger(scoped.snapshot(), now, validate).snapshot(), scoped.snapshot());
+});
+
+test('scopes end after return or exception and reject leaked admission without mutating the ledger', () => {
+  const ledger = createIdentityLedger(valid, { maxEntries: 1 });
+  let leaked: ((candidate: ReturnType<typeof identity>, state: typeof value) => string) | undefined;
+  assert.throws(() => ledger.withProtectedAdmissions(now, new Set(), (admit) => {
+    leaked = admit;
+    assert.equal(admit(identity('a'), value), 'accepted');
+    throw new Error('fixture');
+  }), /fixture/);
+  const before = ledger.snapshot();
+  assert.equal(leaked!(identity('b'), value), 'invalid');
+  assert.deepEqual(ledger.snapshot(), before);
+  ledger.withProtectedAdmissions(now, new Set(), (admit) => {
+    leaked = admit;
+    assert.equal(admit(identity('b'), value), 'accepted');
+  });
+  assert.equal(leaked!(identity('c'), value), 'invalid');
+  assert.equal(ledger.get('b')?.value.considered, false);
+  const validState = ledger.snapshot();
+  ledger.withProtectedAdmissions(Number.NaN, new Set(), (admit) => {
+    assert.equal(admit(identity('invalid-clock'), value), 'invalid');
+  });
+  assert.deepEqual(ledger.snapshot(), validState);
+});
+
+test('hundreds of protected overflow admissions do not enumerate resident victims', () => {
+  const ledger = createIdentityLedger(valid, { maxEntries: 128 });
+  ledger.admit(identity('resident-0'), value, now);
+  const residents = (ledger as unknown as { entries: Map<string, unknown> }).entries;
+  let visited = 0;
+  const originalValues = residents.values.bind(residents);
+  residents.values = function* () {
+    for (const entry of originalValues()) { visited++; yield entry; }
+  } as typeof residents.values;
+  const originalKeys = residents.keys.bind(residents);
+  residents.keys = function* () {
+    for (const key of originalKeys()) { visited++; yield key; }
+  } as typeof residents.keys;
+  ledger.withProtectedAdmissions(now, new Set(['resident-0']), (admit) => {
+    for (let i = 1; i < 128; i++) assert.equal(admit(identity(`resident-${i}`), value), 'accepted');
+    assert.equal(admit(identity('resident-0', 'updated'), value), 'accepted');
+    for (let i = 0; i < 300; i++) assert.equal(admit(identity(`overflow-${i}`), value), 'capacity');
+  });
+  assert.equal(visited, 1, 'only the initial coverage count enumerates a resident; overflow and scope deltas do not');
+  assert.equal(ledger.size, 128);
+});
+
+
+test('a duplicate promotes an initially unprotected resident for the rest of its scope', () => {
+  const ledger = createIdentityLedger(valid, { maxEntries: 2 });
+  ledger.admit(identity('a'), value, now);
+  ledger.admit(identity('b'), value, now);
+  ledger.withProtectedAdmissions(now, new Set(['b']), (admit) => {
+    assert.equal(admit(identity('a'), value), 'duplicate');
+    assert.equal(admit(identity('overflow'), value), 'capacity');
+  });
+  assert.deepEqual(ledger.snapshot().entries.map((entry) => entry.key), ['a', 'b']);
+});

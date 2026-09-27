@@ -238,3 +238,46 @@ test('all-pinned capacity eviction restores pinned tombstone state after restart
   assert.equal(restored.snoozedUntil, NOW + 100_000);
   assert.equal(dispatched.length, before);
 });
+
+test('whole and split ingest batches preserve identity state, overflow diagnostics, archives and warning consideration', (t) => {
+  const run = (split: boolean) => {
+    values.clear(); dispatched = []; snapshots = [];
+    const archived: UnifiedAlert[][] = [];
+    const archive = t.mock.method(alertDB, 'putBatch', async (batch: UnifiedAlert[]) => { archived.push(batch); });
+    const store = new UnifiedAlertStore({ identityLimits: { maxEntries: 3 } });
+    const incoming = [
+      alert('a', { acknowledged: true, pinned: true, snoozedUntil: NOW + 1000 }),
+      alert('b'), alert('c'), alert('overflow', { severity: 'critical' }),
+      alert('a', { timestamp: NOW + 1, body: 'Revised' }), alert('novel', { severity: 'critical' }),
+    ];
+    if (split) {
+      store.ingest(incoming.slice(0, 2));
+      store.ingest(incoming.slice(2, 4));
+      store.ingest(incoming.slice(4));
+    } else store.ingest(incoming);
+    store._flushNowForTest();
+    archive.mock.restore();
+    return { snapshot: JSON.parse(values.get(KEY)!), diagnostics: store.getIdentityDiagnostics(),
+      alerts: store.getAll(), warnings: [...dispatched], archived };
+  };
+  const whole = run(false);
+  assert.deepEqual(run(true), whole);
+  assert.equal(whole.diagnostics.capacityFailures, 2);
+  assert.deepEqual(whole.warnings, ['a', 'b', 'c', 'overflow', 'novel']);
+});
+
+test('store batches avoid repeated resident scans while every overflow warning remains eligible', () => {
+  const store = new UnifiedAlertStore({ identityLimits: { maxEntries: 8 } });
+  const ledger = (store as unknown as { identities: { entries: Map<string, unknown> } }).identities;
+  const residents = ledger.entries;
+  const originalValues = residents.values.bind(residents);
+  let visited = 0;
+  residents.values = function* () {
+    for (const entry of originalValues()) { visited++; yield entry; }
+  } as typeof residents.values;
+  store.ingest(Array.from({ length: 100 }, (_, i) => alert(`batch-${i}`, { severity: 'critical' })));
+  assert.equal(dispatched.length, 100);
+  assert.equal(store.getIdentityDiagnostics().capacityFailures, 92);
+  assert.equal(store.getIdentityDiagnostics().entries, 8);
+  assert.equal(visited, 8, 'only the final persistence snapshot enumerates the protected residents');
+});

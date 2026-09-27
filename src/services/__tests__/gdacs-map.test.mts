@@ -77,7 +77,9 @@ test('five fixed MAP requests share one ten-second deadline and cache the comple
 
 test('captured MAP representations yield 49 centroids and six qualifying warnings without chronology heuristics', async () => {
   const h = harness();
-  assert.deepEqual(TYPES.map(t => h.parseGDACSMapResponse(captured[t], t).length), [4, 7, 7, 18, 13]);
+  assert.doesNotThrow(() => {
+    assert.deepEqual(TYPES.map(t => h.parseGDACSMapResponse(captured[t], t).length), [4, 7, 7, 18, 13]);
+  }, 'captured map representations must remain valid');
   h.respond(async t => new Response(JSON.stringify(captured[t])));
   const result = await h.fetchGDACSEventsTracked();
   assert.equal(result.dataState.mode, 'live');

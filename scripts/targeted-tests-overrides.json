@@ -78,5 +78,11 @@
   ],
   "src/services/api-diagnostic.ts": [
     "test:gdacs-map"
+  ],
+  "src-tauri/src/main.rs": [
+    "test:desktop-updater"
+  ],
+  "src-tauri/src/updater_policy.rs": [
+    "test:desktop-updater"
   ]
 }

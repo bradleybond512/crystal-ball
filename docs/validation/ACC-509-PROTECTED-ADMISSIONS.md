@@ -123,7 +123,9 @@ new tests. Exact-final-tip Claude review and required GitHub CI remain pending.
 # fail 0
 # cancelled 0
 # skipped 0
-``` Do not treat local timings as a
+```
+
+Do not treat local timings as a
 replacement for required CI. No packaged-app manual acceptance was performed;
 this repair changes only ledger computation, with no UI or install change.
 

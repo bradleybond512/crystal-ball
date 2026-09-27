@@ -1,6 +1,7 @@
 import { createCircuitBreaker } from '@/utils';
 import { rehydrateDate } from '@/services/cache-hydration';
 import { fetchWithContext } from '@/services/fetch-with-context';
+import { GDACS_MAP_EVENT_TYPES, GDACS_COVERAGE_NOTE } from '@/services/gdacs-coverage';
 import type { BreakerDataState } from '@/utils/circuit-breaker';
 
 export interface GDACSEvent {
@@ -90,6 +91,77 @@ export function parseGDACSResponse(data: unknown): GDACSEvent[] {
   });
 }
 
+type GDACSMapEventType = typeof GDACS_MAP_EVENT_TYPES[number];
+
+const MAP_AUXILIARY_GEOMETRIES: Record<GDACSMapEventType, Record<string, readonly string[]>> = {
+  EQ: { Poly_Circle: ['Polygon'] },
+  FL: { Point_Affected: ['Point'], Point_Global: ['Point'] },
+  TC: { Poly_Green: ['Polygon', 'MultiPolygon'], Poly_Orange: ['Polygon', 'MultiPolygon'], Poly_Red: ['Polygon'], Poly_Cones: ['Polygon'] },
+  WF: { Poly_area: ['Polygon', 'MultiPolygon'] },
+  DR: { Poly_area: ['Polygon', 'MultiPolygon'] },
+};
+
+function isAuxiliaryRepresentation(eventType: GDACSMapEventType, className: string, geometryType: unknown): boolean {
+  const classes = MAP_AUXILIARY_GEOMETRIES[eventType];
+  if (Object.prototype.hasOwnProperty.call(classes, className)) {
+    return typeof geometryType === 'string' && classes[className]!.includes(geometryType);
+  }
+  if (eventType !== 'TC') return false;
+  return (/^Line_Line_\d+$/.test(className) && geometryType === 'LineString')
+    || (/^Point_Polygon_Point_\d+$/.test(className) && geometryType === 'Polygon');
+}
+
+function isMapEventId(value: unknown): boolean {
+  return (typeof value === 'number' && Number.isFinite(value))
+    || (typeof value === 'string' && value.length > 0);
+}
+
+function uniqueCentroids(centroids: unknown[]): Map<string, GDACSEvent> {
+  const events = new Map<string, GDACSEvent>();
+  for (const event of parseGDACSResponse({ features: centroids })) {
+    const existing = events.get(event.id);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(event)) {
+      throw new Error('GDACS MAP has conflicting centroid representations');
+    }
+    events.set(event.id, event);
+  }
+  return events;
+}
+
+export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventType): GDACSEvent[] {
+  if (!GDACS_MAP_EVENT_TYPES.includes(eventType)) throw new Error('GDACS MAP has an unsupported event type');
+  const collection = record(data);
+  if (collection?.type !== 'FeatureCollection' || !Array.isArray(collection.features)) {
+    throw new Error('GDACS MAP response is not a feature collection');
+  }
+  const centroids: unknown[] = [];
+  const auxiliaryIds = new Set<string>();
+  for (const feature of collection.features) {
+    const row = record(feature);
+    const properties = record(row?.properties);
+    const geometry = record(row?.geometry);
+    const className = properties?.Class;
+    const eventId = properties?.eventid;
+    if (row?.type !== 'Feature' || properties?.eventtype !== eventType
+      || typeof className !== 'string'
+      || !isMapEventId(eventId)) {
+      throw new Error('GDACS MAP feature has invalid representation metadata');
+    }
+    if (className === 'Point_Centroid') {
+      centroids.push(feature);
+    } else if (isAuxiliaryRepresentation(eventType, className, geometry?.type)) {
+      auxiliaryIds.add(`gdacs-${eventType}-${String(eventId)}`);
+    } else {
+      throw new Error('GDACS MAP feature has an unsupported representation');
+    }
+  }
+  const events = uniqueCentroids(centroids);
+  for (const id of auxiliaryIds) {
+    if (!events.has(id)) throw new Error('GDACS MAP representation is missing its event centroid');
+  }
+  return [...events.values()];
+}
+
 const GDACS_API = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP';
 const breaker = createCircuitBreaker<GDACSEvent[]>({ name: 'GDACS', cacheTtlMs: 10 * 60 * 1000, persistCache: true });
 
@@ -116,23 +188,18 @@ export function getGDACSSuccessfulUpdate(result: GDACSFetchResult): GDACSSuccess
 
 export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {
   const { data: events, dataState } = await breaker.executeTracked(async () => {
- const response = await fetchWithContext('GDACS events', GDACS_API, {
- headers: { 'Accept': 'application/json' },
- signal: AbortSignal.timeout(10_000),
- });
-
- if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
- const parsedEvents = parseGDACSResponse(await response.json());
- const seen = new Set<string>();
- return parsedEvents
- .filter(event => {
- if (seen.has(event.id)) return false;
- seen.add(event.id);
- return true;
- })
- .filter(event => event.alertLevel !== 'Green')
- .slice(0, 100);
+    const signal = AbortSignal.timeout(10_000);
+    const feeds = await Promise.all(GDACS_MAP_EVENT_TYPES.map(async eventType => {
+      const response = await fetchWithContext('GDACS events', `${GDACS_API}?eventtype=${eventType}`, {
+        headers: { 'Accept': 'application/json' },
+        signal,
+      });
+      if (!response.ok) throw new Error(`GDACS ${eventType} HTTP ${response.status}`);
+      return parseGDACSMapResponse(await response.json(), eventType);
+    }));
+    return feeds.flat()
+      .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')
+      .slice(0, 100);
   }, []);
   return {
     events: events.map(event => ({
@@ -149,7 +216,7 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
 }
 
 export function getGDACSStatus(): string {
-  return breaker.getStatus();
+  return `${breaker.getStatus()}; ${GDACS_COVERAGE_NOTE}`;
 }
 
 export function getEventTypeIcon(type: GDACSEvent['eventType']): string {

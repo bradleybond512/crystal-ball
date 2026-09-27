@@ -73,6 +73,7 @@
     "test:lazy-panel-tracker": "tsx --test tests/lazy-panel-tracker.test.mjs src/app/__tests__/lazy-panel-order.test.mts",
     "test:data": "tsx --test tests/*.test.mjs tests/*.test.mts",
     "test:adapter-provenance": "tsx --test tests/adapter-provenance.test.mts tests/data-loader-cache-provenance.test.mjs",
+    "test:gdacs-map": "tsx --test src/services/__tests__/gdacs-map.test.mts src/services/__tests__/api-diagnostic.test.mts src/services/__tests__/data-freshness.test.mts src/services/__tests__/persisted-date-hydration.test.mts",
     "test:gdelt-retry": "tsx --test --test-force-exit tests/panels/gdelt-intel-retry.test.mts",
     "test:eslint-runner": "node --test tests/eslint-runner.test.mjs tests/eslint-baseline.test.mjs tests/lint-workflow.test.mjs",
     "test:sanitize": "tsx --test src/utils/__tests__/sanitize.test.mts src/utils/__tests__/degraded-response.test.mts",

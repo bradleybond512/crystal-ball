@@ -1930,7 +1930,8 @@ Deliverables:
 Performance follow-up: **IN REVIEW**, #1743 (`codex/acc509-protected-admissions-20260927`).
 [Approved bounded design](plans/2026-09-27-acc509-protected-admissions.md): avoid
 repeated scans when every resident identity is protected. Preserve admission,
-retention and warning behavior and the existing 500 ms budget. Evidence pending.
+retention and warning behavior and the existing 500 ms budget.
+[Validation and mutation evidence](validation/ACC-509-PROTECTED-ADMISSIONS.md).
 
 Status: `DONE`
 

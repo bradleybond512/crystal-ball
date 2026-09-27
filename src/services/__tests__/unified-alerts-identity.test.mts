@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import type { UnifiedAlert } from '../unified-alerts.ts';
+import { createIdentityLedger } from '../alert-identity.ts';
 
 const NOW = 1_790_000_000_000;
 const KEY = 'wm-unified-alerts-v2';
@@ -58,6 +59,50 @@ test('consideration and bounded data are durable before dispatch, one write per 
   }
   store._flushNowForTest();
   assert.equal(writes, 1, 'deferred archive/notify must not rewrite unchanged snapshot');
+});
+
+test('accepted identities and revisions persist their state without a redundant value update', (t) => {
+  const prototype = Object.getPrototypeOf(createIdentityLedger((value: unknown): value is boolean => typeof value === 'boolean'));
+  const update = t.mock.method(prototype, 'updateValue');
+  const store = new UnifiedAlertStore({ identityLimits: { maxEntries: 1 } });
+  const state = { acknowledged: true, pinned: true, snoozedUntil: NOW + 100_000 };
+  store.ingest([alert('original', state), alert('overflow', { severity: 'critical' })]);
+  assert.equal(update.mock.callCount(), 0, 'accepted admission already stores the complete state');
+  store.ingest([alert('original', { severity: 'critical', body: 'Material update', timestamp: NOW + 1 })]);
+  store._flushNowForTest();
+  assert.equal(update.mock.callCount(), 0, 'accepted revision already stores restored user state');
+  const persisted = JSON.parse(values.get(KEY)!);
+  assert.equal(persisted.identities.entries.length, 1);
+  assert.equal(persisted.identities.entries[0].revisions.length, 2);
+  assert.deepEqual(persisted.identities.entries[0].value, { notificationConsidered: true, ...state });
+  const restored = persisted.alerts.find((entry: UnifiedAlert) => entry.id === 'original');
+  assert.equal(restored.severity, 'critical');
+  assert.equal(restored.acknowledged, true);
+  assert.equal(restored.pinned, true);
+  assert.equal(restored.snoozedUntil, state.snoozedUntil);
+  assert.deepEqual(dispatched, ['original', 'overflow']);
+  assert.equal(store.getIdentityDiagnostics().capacityFailures, 1);
+});
+
+test('duplicate identities refresh persisted user state without reconsidering notifications', (t) => {
+  const initial = new UnifiedAlertStore();
+  initial.ingest([alert('original')]);
+  initial._flushNowForTest();
+  const persisted = JSON.parse(values.get(KEY)!);
+  const state = { acknowledged: true, pinned: true, snoozedUntil: NOW + 100_000 };
+  Object.assign(persisted.alerts[0], state);
+  values.set(KEY, JSON.stringify(persisted));
+  const prototype = Object.getPrototypeOf(createIdentityLedger((value: unknown): value is boolean => typeof value === 'boolean'));
+  const update = t.mock.method(prototype, 'updateValue');
+  const restarted = new UnifiedAlertStore();
+  restarted.ingest([alert('original')]);
+  restarted._flushNowForTest();
+  assert.equal(update.mock.callCount(), 1, 'duplicate admission must refresh the current user state');
+  const refreshed = JSON.parse(values.get(KEY)!);
+  assert.deepEqual(refreshed.identities.entries[0].value, { notificationConsidered: true, ...state });
+  assert.equal(refreshed.identities.entries[0].revisions.length, 1);
+  assert.deepEqual(dispatched, ['original']);
+  assert.equal(restarted.getIdentityDiagnostics().capacityFailures, 0);
 });
 
 test('capacity churn and restart cannot reconsider a retained identity or its new revision', () => {

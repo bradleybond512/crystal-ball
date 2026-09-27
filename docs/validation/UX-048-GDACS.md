@@ -4,7 +4,7 @@
 
 PR #1740 restores validated observations from EQ, FL, TC, WF and DR homepage MAP feeds. Stable IDs, event chronology, Orange/Red selection, the 100-event cap, cache provenance and warning retention are preserved. Volcano MAP is unavailable; diagnostics report degraded coverage explicitly. This does not restore volcano ingestion, recurring warning scheduling or the independent RSS path.
 
-Production changes are confined to `gdacs.ts`, `gdacs-coverage.ts` and `api-diagnostic.ts`. A strict MAP projection validates source/type/class/geometry and canonical centroids before the existing event parser. A provider-local shared operation limits concurrent consumers to five upstream requests; failures abort and drain sibling work before releasing a retry. Results clone mutable event data and provenance for each caller. No dependencies or privileges changed.
+GDACS production changes affect `gdacs.ts`, `gdacs-coverage.ts` and `api-diagnostic.ts`. A subsequent [bounded alert burst performance repair](UX-048-PERFORMANCE.md) addresses the required CI delivery blocker in the shared alert store. A strict MAP projection validates source/type/class/geometry and canonical centroids before the existing event parser. A provider-local shared operation limits concurrent consumers to five upstream requests; failures abort and drain sibling work before releasing a retry. Results clone mutable event data and provenance for each caller. No dependencies or privileges changed.
 
 ## Actual validation
 

@@ -1,0 +1,231 @@
+{
+  "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+  "mutants": 6,
+  "killed": 6,
+  "survivedOrInvalid": [],
+  "clean": true,
+  "results": [
+    {
+      "id": "redundant-accepted-update",
+      "behavior": "Accepted admissions store state once",
+      "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=accepted identities and revisions' src/services/__tests__/unified-alerts-identity.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "6cdf76f8534904b3efd6349453d6b7245c1ebb29ea77cdba27a842e523d5bf1a"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.408,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.279,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "6cdf76f8534904b3efd6349453d6b7245c1ebb29ea77cdba27a842e523d5bf1a"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.221,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 9c5a607e6..819e29808 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -434,7 +434,7 @@ class UnifiedAlertStore {\n         if (status === 'capacity') this.capacityFailures++;\n         else if (status === 'invalid') this.invalidIdentities++;\n         else {\n-          if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;\n+          if (!this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;\n           protectedKeys.add(identity.key);\n         }\n       } else {\n",
+      "assertionOutput": "\u2716 accepted identities and revisions persist their state without a redundant value update (4.493125ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 200.041\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/unified-alerts-identity.test.mts:1:2423\n\u2716 accepted identities and revisions persist their state without a redundant value update (4.493125ms)\n  AssertionError [ERR_ASSERTION]: accepted admission already stores the complete state\n  \n  1 !== 0\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/alert-perf-mutation-20260926/src/services/__tests__/unified-alerts-identity.test.mts:70:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 1,\n    expected: 0,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+    },
+    {
+      "id": "missing-duplicate-update",
+      "behavior": "Duplicate admission refreshes persisted state",
+      "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=duplicate identities refresh' src/services/__tests__/unified-alerts-identity.test.mts",
+      "files": {
+        "src/services/unified-alerts.ts": "6cdf76f8534904b3efd6349453d6b7245c1ebb29ea77cdba27a842e523d5bf1a"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.281,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/unified-alerts.ts": "6cdf76f8534904b3efd6349453d6b7245c1ebb29ea77cdba27a842e523d5bf1a"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.222,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex 9c5a607e6..83947493d 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -434,7 +434,7 @@ class UnifiedAlertStore {\n         if (status === 'capacity') this.capacityFailures++;\n         else if (status === 'invalid') this.invalidIdentities++;\n         else {\n-          if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;\n+          if (status === 'accepted' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;\n           protectedKeys.add(identity.key);\n         }\n       } else {\n",
+      "assertionOutput": "\u2716 duplicate identities refresh persisted user state without reconsidering notifications (4.337209ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 202.979792\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/unified-alerts-identity.test.mts:1:3804\n\u2716 duplicate identities refresh persisted user state without reconsidering notifications (4.337209ms)\n  AssertionError [ERR_ASSERTION]: duplicate admission must refresh the current user state\n  \n  0 !== 1\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/alert-perf-mutation-20260926/src/services/__tests__/unified-alerts-identity.test.mts:100:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 0,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+    },
+    {
+      "id": "protected-eviction",
+      "behavior": "Protected entries remain in ledger",
+      "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=capacity uses oldest unprotected' src/services/__tests__/alert-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.262,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.271,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.217,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 53507691d..c77369d00 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -258,7 +258,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     if (count <= this.maxEntries && total <= this.maxBytes) return [];\n     const available: StoredEntry<T>[] = [];\n     for (const stored of this.entries.values()) {\n-      if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);\n+      if (stored !== existing) available.push(stored);\n     }\n     available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));\n     const victims: string[] = [];\n",
+      "assertionOutput": "\u2716 capacity uses oldest unprotected identity and does not evict protected entries (3.879792ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 194.789417\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/alert-identity.test.mts:1:4364\n\u2716 capacity uses oldest unprotected identity and does not evict protected entries (3.879792ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + {\n  +   eventTime: 1799999999000,\n  +   firstReceivedAt: 1800000000001,\n  +   key: 'b',\n  +   revisions: [\n  +     'revision'\n  +   ],\n  +   value: {\n  +     considered: false\n  +   }\n  + }\n  - undefined\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/alert-perf-mutation-20260926/src/services/__tests__/alert-identity.test.mts:67:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { key: 'b', revisions: [ 'revision' ], firstReceivedAt: 1800000000001, eventTime: 1799999999000, value: { considered: false } },\n    expected: undefined,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+    },
+    {
+      "id": "receipt-order",
+      "behavior": "Victims retain oldest receipt ordering",
+      "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=byte pressure evicts multiple' src/services/__tests__/alert-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.217,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.269,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.215,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 53507691d..81a8c5150 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -260,7 +260,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     for (const stored of this.entries.values()) {\n       if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);\n     }\n-    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));\n+    available.sort((a, b) => b.entry.firstReceivedAt - a.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));\n     const victims: string[] = [];\n     for (const stored of available) {\n       victims.push(stored.entry.key);\n",
+      "assertionOutput": "\u2716 byte pressure evicts multiple eligible entries in receipt and then key order (4.945459ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 191.979709\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/alert-identity.test.mts:1:5328\n\u2716 byte pressure evicts multiple eligible entries in receipt and then key order (4.945459ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n  +   'old',\n  -   'b',\n      'keep',\n      'new'\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/alert-perf-mutation-20260926/src/services/__tests__/alert-identity.test.mts:88:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [ 'old', 'keep', 'new' ],\n    expected: [ 'b', 'keep', 'new' ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n"
+    },
+    {
+      "id": "key-tie-order",
+      "behavior": "Equal receipt victims retain deterministic key order",
+      "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=byte pressure evicts multiple' src/services/__tests__/alert-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.217,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.28,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.216,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 53507691d..b704c9e4a 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -260,7 +260,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     for (const stored of this.entries.values()) {\n       if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);\n     }\n-    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));\n+    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(b.entry.key, a.entry.key));\n     const victims: string[] = [];\n     for (const stored of available) {\n       victims.push(stored.entry.key);\n",
+      "assertionOutput": "\u2716 byte pressure evicts multiple eligible entries in receipt and then key order (4.597917ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 198.621708\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/alert-identity.test.mts:1:5328\n\u2716 byte pressure evicts multiple eligible entries in receipt and then key order (4.597917ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n  +   'a',\n  -   'b',\n      'keep',\n      'new'\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/alert-perf-mutation-20260926/src/services/__tests__/alert-identity.test.mts:88:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [ 'a', 'keep', 'new' ],\n    expected: [ 'b', 'keep', 'new' ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n"
+    },
+    {
+      "id": "atomic-rejection",
+      "behavior": "Failed admission preserves candidates and bytes",
+      "candidateSha": "0ed3185062b681e9c7948e41a2cadfa65e5ada8f",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=unsatisfiable byte pressure' src/services/__tests__/alert-identity.test.mts",
+      "files": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.227,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.277,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/alert-identity.ts": "812ac3f8f06de0646f038e0d30f391c35b2f0b8664b7320c57f36f36bc79f859"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.223,
+        "assertionFailure": false
+      },
+      "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex 53507691d..058c20e8b 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -264,6 +264,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     const victims: string[] = [];\n     for (const stored of available) {\n       victims.push(stored.entry.key);\n+      this.remove(stored.entry.key);\n       count--;\n       total -= stored.bytes + (count > 0 ? 1 : 0);\n       if (count <= this.maxEntries && total <= this.maxBytes) return victims;\n",
+      "assertionOutput": "\u2716 unsatisfiable byte pressure leaves eligible entries and byte accounting unchanged (5.186041ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 198.042125\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/alert-identity.test.mts:1:6061\n\u2716 unsatisfiable byte pressure leaves eligible entries and byte accounting unchanged (5.186041ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    {\n      entries: [\n        {\n          eventTime: 1799999999000,\n  -       firstReceivedAt: 1800000000000,\n  -       key: 'eligible',\n  -       revisions: [\n  -         'revision'\n  -       ],\n  -       value: 'original'\n  -     },\n  -     {\n  -       eventTime: 1799999999000,\n          firstReceivedAt: 1800000000001,\n          key: 'protected',\n          revisions: [\n            'revision'\n          ],\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/alert-perf-mutation-20260926/src/services/__tests__/alert-identity.test.mts:99:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { version: 1, entries: [ [Object] ] },\n    expected: { version: 1, entries: [ [Object], [Object] ] },\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n"
+    }
+  ]
+}

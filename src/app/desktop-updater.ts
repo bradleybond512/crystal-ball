@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, @typescript-eslint/require-await */
+/* eslint-disable no-console, @typescript-eslint/require-await */
 import type { AppContext, AppModule, UpdateState } from '@/app/app-context';
 import { invokeTauri, tryInvokeTauri } from '@/services/tauri-bridge';
 import { trackUpdateShown, trackUpdateClicked, trackUpdateDismissed } from '@/services/analytics';
@@ -6,8 +6,39 @@ import { escapeHtml } from '@/utils/sanitize';
 
 type UpdaterOutcome = 'no_update' | 'update_available' | 'open_failed' | 'fetch_failed';
 
+type NativeUpdateResult =
+  | { status: 'up_to_date'; currentVersion: string; checkedAt: number }
+  | { status: 'ready'; version: string; checkedAt: number }
+  | { status: 'browser_download'; version: string; downloadUrl: string; reason: string; checkedAt: number };
+
+const BROWSER_DOWNLOAD_REASONS = new Set([
+  'unsupported_platform', 'unsupported_architecture', 'no_signer_pin',
+  'missing_manifest', 'invalid_release', 'signer_mismatch',
+]);
+
+function isUpdateVersion(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^(0|[1-9]\d{0,9})\.(0|[1-9]\d{0,9})\.(0|[1-9]\d{0,9})$/.test(value)
+    && value.split('.').every(part => Number(part) <= 4_294_967_295);
+}
+
+function isNativeUpdateResult(value: unknown): value is NativeUpdateResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const result = value as Record<string, unknown>;
+  if (typeof result.checkedAt !== 'number' || !Number.isSafeInteger(result.checkedAt) || result.checkedAt <= 0) return false;
+  if (result.status === 'up_to_date') return isUpdateVersion(result.currentVersion);
+  if (!isUpdateVersion(result.version)) return false;
+  if (result.status === 'ready') return true;
+  return result.status === 'browser_download'
+    && typeof result.reason === 'string' && BROWSER_DOWNLOAD_REASONS.has(result.reason)
+    && result.downloadUrl === `https://github.com/bradleybond512/crystal-ball/releases/tag/v${result.version}`;
+}
+
 export class DesktopUpdater implements AppModule {
   private ctx: AppContext;
+  private checkInFlight = false;
+  private manualCheckRequested = false;
+  private destroyed = false;
   private updateCheckIntervalId: ReturnType<typeof setInterval> | null = null;
   // Hourly background check is the right cadence for a long-running desktop
   // app: short enough that a user who keeps Crystal Ball open in the
@@ -52,6 +83,7 @@ export class DesktopUpdater implements AppModule {
   }
 
   destroy(): void {
+ this.destroyed = true;
  if (this.updateCheckIntervalId) {
  clearInterval(this.updateCheckIntervalId);
  this.updateCheckIntervalId = null;
@@ -93,8 +125,8 @@ export class DesktopUpdater implements AppModule {
  document.dispatchEvent(new CustomEvent('wm:update-state'));
   }
 
-  private markChecked(): void {
- this.lastCheckedAt = Date.now();
+  private markChecked(checkedAt: number): void {
+ this.lastCheckedAt = checkedAt;
  try {
  localStorage.setItem('wm-update-last-checked', String(this.lastCheckedAt));
  } catch {
@@ -102,104 +134,48 @@ export class DesktopUpdater implements AppModule {
  }
   }
 
-  private resolveDownloadInfo(data: { assets?: { name: string; browser_download_url: string }[] }): { url: string; name: string | null } {
- const buildArch = (typeof __BUILD_ARCH__ === 'undefined' ? 'aarch64' : __BUILD_ARCH__) as string;
- const assets = Array.isArray(data.assets) ? data.assets : [];
- const dmg =
- assets.find(a => typeof a.name === 'string' && a.name.endsWith('.dmg') && a.name.includes(buildArch)) ??
- assets.find(a => typeof a.name === 'string' && a.name.endsWith('.dmg'));
- return {
- url: dmg?.browser_download_url ?? 'https://github.com/bradleybond512/crystal-ball/releases/latest',
- name: dmg?.name ?? null,
- };
-  }
-
-  private async fetchExpectedSha256(
- assets: { name: string; browser_download_url: string }[],
- dmgName: string,
-  ): Promise<string | undefined> {
- const manifestAsset = assets.find(a => a.name === 'release-manifest.json');
- if (!manifestAsset) return undefined;
- try {
- const res = await fetch(manifestAsset.browser_download_url, { signal: AbortSignal.timeout(10_000) });
- if (!res.ok) return undefined;
- const manifest = await res.json() as { assets?: { name: string; sha256: string }[] };
- return manifest.assets?.find(a => a.name === dmgName)?.sha256;
- } catch {
- return undefined;
- }
-  }
-
-  // eslint-disable-next-line sonarjs/cognitive-complexity -- linear fetch + parse + state branches; splitting hides the flow
   private async checkForUpdate(manual = false): Promise<void> {
+ if (!this.ctx.isDesktopApp || this.ctx.isDestroyed || this.destroyed) return;
+ this.manualCheckRequested ||= manual;
+ if (this.checkInFlight) return;
+ this.checkInFlight = true;
  this.setUpdateState({ phase: 'checking' });
  try {
- const res = await fetch(
- 'https://api.github.com/repos/bradleybond512/crystal-ball/releases/latest',
- { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(10_000) }
- );
- if (!res.ok) {
- this.logUpdaterOutcome('fetch_failed', { status: res.status });
- // Don't claim up-to-date on a server error — that hides real
- // failures behind a false green check. Reset to null so the sidebar
- // falls back to just the version label and the user can retry.
- this.setUpdateState(null);
- if (manual) this.showInfoToast('Could not reach update server. Check your connection.');
- return;
- }
- const data = await res.json();
-
- const tagName = typeof data.tag_name === 'string' ? data.tag_name : '';
- const remote = tagName.replace(/^v/, '');
- if (!remote) {
- this.logUpdaterOutcome('fetch_failed', { reason: 'missing_remote_version' });
- this.setUpdateState({ phase: 'up-to-date' });
- return;
- }
-
- // The check reached GitHub and returned a usable version — record it for
- // the "last checked" indicator. Fetch/parse failures deliberately don't,
- // so the tooltip always reflects the last SUCCESSFUL check.
- this.markChecked();
-
- const current = __APP_VERSION__;
- if (!this.isNewerVersion(remote, current)) {
- this.logUpdaterOutcome('no_update', { current, remote });
- this.setUpdateState({ phase: 'up-to-date' });
- if (manual) this.showInfoToast(`You're up to date — v${current} is the latest version.`);
- return;
- }
-
- const assets = Array.isArray(data.assets) ? data.assets : [];
- const { url: downloadUrl, name: dmgName } = this.resolveDownloadInfo(data);
- const expectedSha256 = dmgName ? await this.fetchExpectedSha256(assets, dmgName) : undefined;
-
- // On macOS with a real DMG and a verified manifest hash we can auto-download
- // and stage the update in the background, then prompt to restart. Without a
- // hash the Rust side would abort anyway, so we fall back to a browser
- // download there and on web / non-DMG releases.
- await (this.ctx.isDesktopApp && downloadUrl.endsWith('.dmg') && expectedSha256 ? this.stageAndPrompt(current, remote, downloadUrl, expectedSha256, manual) : this.offerBrowserDownload(current, remote, downloadUrl, expectedSha256, manual));
+ const result = await invokeTauri<unknown>('stage_latest_update');
+ if (this.ctx.isDestroyed || this.destroyed) return;
+ if (!isNativeUpdateResult(result)) throw new Error('Invalid native updater result');
+ await this.presentUpdate(result);
  } catch (error) {
+ if (this.ctx.isDestroyed || this.destroyed) return;
  this.logUpdaterOutcome('fetch_failed', {
- error: error instanceof Error ? error.message : String(error),
+ error: error instanceof Error ? error.message : 'Native update check failed',
  });
- // Network or parsing failure — same as the !res.ok branch, don't pretend
- // the user is current.
+ document.querySelector('.update-toast:not(.update-info-toast)')?.remove();
  this.setUpdateState(null);
- if (manual) this.showInfoToast('Could not reach update server. Check your connection.');
-  }
+ if (this.manualCheckRequested) this.showInfoToast('Could not check for updates. Please try again.');
+ } finally {
+ this.checkInFlight = false;
+ this.manualCheckRequested = false;
+ }
   }
 
-  private isNewerVersion(remote: string, current: string): boolean {
- const r = remote.split('.').map(Number);
- const c = current.split('.').map(Number);
- for (let i = 0; i < Math.max(r.length, c.length); i++) {
- const rv = r[i] ?? 0;
- const cv = c[i] ?? 0;
- if (rv > cv) return true;
- if (rv < cv) return false;
+  private async presentUpdate(result: NativeUpdateResult): Promise<void> {
+ this.markChecked(result.checkedAt);
+ const existing = document.querySelector<HTMLElement>('.update-toast:not(.update-info-toast)');
+ const nextKind = result.status === 'ready' ? 'ready' : 'browser';
+ if (result.status === 'up_to_date' || existing?.dataset.version !== result.version || existing.dataset.kind !== nextKind) {
+ existing?.remove();
  }
- return false;
+ const current = __APP_VERSION__;
+ if (result.status === 'up_to_date') {
+ this.logUpdaterOutcome('no_update', { current: result.currentVersion });
+ this.setUpdateState({ phase: 'up-to-date' });
+ if (this.manualCheckRequested) this.showInfoToast(`You're up to date — v${result.currentVersion} is the latest version.`);
+ } else if (result.status === 'ready') {
+ await this.promptReady(current, result.version, this.manualCheckRequested);
+ } else {
+ await this.offerBrowserDownload(current, result.version, result.downloadUrl, this.manualCheckRequested);
+ }
   }
 
   private buildStrokeIcon(
@@ -221,64 +197,14 @@ export class DesktopUpdater implements AppModule {
  return svg;
   }
 
-  // Ask Rust whether the canonical staged bundle on disk is THIS version, and
-  // heal the localStorage hint to match. The hint can go stale (a boot-apply
-  // discarded an invalid bundle, or a prior apply consumed it) or claim "staged"
-  // for a bundle that was never written — so disk truth wins in both directions.
-  private async reconcileStagedOnDisk(stagedKey: string, remote: string): Promise<boolean> {
- let stagedOnDisk: boolean;
- try {
- const diskVersion = await invokeTauri<string | null>('staged_update_status');
- stagedOnDisk = diskVersion === remote;
- } catch {
- // Older desktop binary without the status command — trust the local hint.
- return localStorage.getItem(stagedKey) === '1';
- }
- try {
- if (stagedOnDisk) localStorage.setItem(stagedKey, '1');
- else localStorage.removeItem(stagedKey);
- } catch { /* quota */ }
- return stagedOnDisk;
-  }
-
-  // Background-download + verify + stage the update, then prompt to restart.
-  // Idempotent per remote version: once staged we skip the (re-)download and go
-  // straight to the ready prompt. Any staging failure falls back to a browser
-  // download so the user is never left stuck.
-  private async stageAndPrompt(
- current: string,
- remote: string,
- downloadUrl: string,
- expectedSha256: string,
- manual: boolean,
-  ): Promise<void> {
- const stagedKey = `wm-update-staged-${remote}`;
+  private async promptReady(current: string, remote: string, manual: boolean): Promise<void> {
  const dismissKey = `wm-update-dismissed-${remote}`;
  const notifiedKey = `wm-update-notified-${remote}`;
-
- // The Rust filesystem — not the localStorage hint — is the source of truth
- // for whether THIS version is already staged on disk.
- const stagedOnDisk = await this.reconcileStagedOnDisk(stagedKey, remote);
-
- if (!stagedOnDisk) {
- this.setUpdateState({ phase: 'downloading', version: remote, downloadUrl, expectedSha256 });
- try {
- await invokeTauri<void>('stage_update', { downloadUrl, expectedSha256 });
- try { localStorage.setItem(stagedKey, '1'); } catch { /* quota */ }
- } catch (error) {
- this.logUpdaterOutcome('open_failed', {
- downloadUrl,
- error: error instanceof Error ? error.message : String(error),
- });
- await this.offerBrowserDownload(current, remote, downloadUrl, expectedSha256, manual);
- return;
- }
- }
 
  // Staged and verified — it will apply on the next quit/relaunch even if the
  // user never touches the prompt.
  this.logUpdaterOutcome('update_available', { current, remote, staged: true });
- this.setUpdateState({ phase: 'ready', version: remote, downloadUrl, expectedSha256 });
+ this.setUpdateState({ phase: 'ready', version: remote });
  trackUpdateShown(current, remote);
  if (!localStorage.getItem(dismissKey) || manual) {
  this.showReadyToast(current, remote);
@@ -293,18 +219,16 @@ export class DesktopUpdater implements AppModule {
  }
   }
 
-  // Fallback for web builds, non-DMG releases, or a failed background stage:
-  // surface the update and offer a browser download.
+  // Native policy can offer a manual download without authorizing installation.
   private async offerBrowserDownload(
  current: string,
  remote: string,
  downloadUrl: string,
- expectedSha256: string | undefined,
  manual: boolean,
   ): Promise<void> {
  const dismissKey = `wm-update-dismissed-${remote}`;
  const notifiedKey = `wm-update-notified-${remote}`;
- this.setUpdateState({ phase: 'available', version: remote, downloadUrl, expectedSha256 });
+ this.setUpdateState({ phase: 'available', version: remote, downloadUrl });
  if (localStorage.getItem(dismissKey) && !manual) {
  this.logUpdaterOutcome('update_available', { current, remote, dismissed: true });
  return;
@@ -377,11 +301,9 @@ export class DesktopUpdater implements AppModule {
  this.logUpdaterOutcome('open_failed', {
  error: error instanceof Error ? error.message : String(error),
  });
- // The staged bundle failed to apply (missing / re-verify failed). Clear the
- // "already staged" flag so the next check re-downloads instead of getting
- // stuck offering a phantom ready state.
- try { localStorage.removeItem(`wm-update-staged-${version}`); } catch { /* quota */ }
- if (btn) { btn.textContent = 'Failed — retry?'; btn.disabled = false; }
+ this.setUpdateState(null);
+ toast.remove();
+ this.showInfoToast('Could not apply the update. Check for updates to try again.');
  });
  } else if (action === 'dismiss') {
  trackUpdateDismissed(version);
@@ -399,12 +321,13 @@ export class DesktopUpdater implements AppModule {
 
   private async showUpdateToast(version: string, downloadUrl: string): Promise<void> {
  const existing = document.querySelector<HTMLElement>('.update-toast');
- if (existing?.dataset.version === version) return;
+ if (existing?.dataset.version === version && existing.dataset.kind === 'browser') return;
  existing?.remove();
 
  const toast = document.createElement('div');
  toast.className = 'update-toast';
  toast.dataset.version = version;
+ toast.dataset.kind = 'browser';
 
  const icon = document.createElement('div');
  icon.className = 'update-toast-icon';
@@ -442,8 +365,7 @@ export class DesktopUpdater implements AppModule {
  const clicked = target.closest<HTMLElement>('[data-action]')?.dataset.action;
  if (clicked === 'install') {
  trackUpdateClicked(version);
- // No auto-install on this fallback path — just open the DMG so the user
- // can install it manually.
+ // Open the canonical release page for a manual download.
  if (this.ctx.isDesktopApp) {
  void invokeTauri<void>('open_url', { url: downloadUrl }).catch((error: unknown) => {
  this.logUpdaterOutcome('open_failed', {

@@ -1,4 +1,4 @@
-# Restore validated GDACS map observations
+# UX-048 — Restore validated GDACS map observations
 
 Bradley approved this bounded design on September 26, 2026 after read-only repository analysis, architect review and live API probes.
 
@@ -29,3 +29,7 @@ Run focused provider/diagnostic tests, adapter provenance, UX-059, UX-026, fresh
 The aggregate fails closed when any supported feed fails. Volcano coverage is unavailable; recurring warning ingestion remains a separate scheduling concern. Large map geometry is transferred but never promoted into event rows. No schema migration or user-data deletion is needed. Roll back through a reviewed PR, preserving alert history and cache provenance.
 
 Sources: [GDACS Swagger](https://www.gdacs.org/gdacsapi/swagger/index.html). Captured bodies, summaries and original design are retained under the local diagnostic evidence directory `gdacs-repair-20260926`.
+
+## First independent review refinement
+
+The initial implementation passed local validation but two simultaneous cold callers could start ten requests. Coalesce the entire provider tracked operation locally and abort/drain sibling requests before releasing a failed batch. Preserve per-result provenance and retry after failure. This enforces the approved five-request budget without changing the generic breaker. Add overlapping-caller and failed-sibling regression/mutation cases. The initial intake missed the existing UX-048 tracker; it is linked here before delivery, not represented as a pre-implementation PR claim.

@@ -186,27 +186,48 @@ export function getGDACSSuccessfulUpdate(result: GDACSFetchResult): GDACSSuccess
   return { itemCount: result.events.length, updatedAt: result.dataState.timestamp };
 }
 
-export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {
-  const { data: events, dataState } = await breaker.executeTracked(async () => {
-    const signal = AbortSignal.timeout(10_000);
-    const feeds = await Promise.all(GDACS_MAP_EVENT_TYPES.map(async eventType => {
-      const response = await fetchWithContext('GDACS events', `${GDACS_API}?eventtype=${eventType}`, {
-        headers: { 'Accept': 'application/json' },
-        signal,
-      });
-      if (!response.ok) throw new Error(`GDACS ${eventType} HTTP ${response.status}`);
-      return parseGDACSMapResponse(await response.json(), eventType);
-    }));
+async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {
+  const controller = new AbortController();
+  const deadline = AbortSignal.timeout(10_000);
+  const onTimeout = () => controller.abort(deadline.reason);
+  deadline.addEventListener('abort', onTimeout, { once: true });
+  const signal = controller.signal;
+  const requests = GDACS_MAP_EVENT_TYPES.map(async eventType => {
+    const response = await fetchWithContext('GDACS events', `${GDACS_API}?eventtype=${eventType}`, {
+      headers: { 'Accept': 'application/json' },
+      signal,
+    });
+    if (!response.ok) throw new Error(`GDACS ${eventType} HTTP ${response.status}`);
+    return parseGDACSMapResponse(await response.json(), eventType);
+  });
+  try {
+    const feeds = await Promise.all(requests);
     return feeds.flat()
       .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')
       .slice(0, 100);
-  }, []);
+  } catch (error) {
+    controller.abort(error);
+    await Promise.allSettled(requests);
+    throw error;
+  } finally {
+    deadline.removeEventListener('abort', onTimeout);
+  }
+}
+
+let trackedInFlight: Promise<{ data: GDACSEvent[]; dataState: BreakerDataState }> | null = null;
+
+export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {
+  trackedInFlight ??= breaker.executeTracked(fetchGDACSMapEvents, []).finally(() => {
+    trackedInFlight = null;
+  });
+  const { data: events, dataState } = await trackedInFlight;
   return {
     events: events.map(event => ({
       ...event,
-      fromDate: rehydrateDate(event.fromDate),
+      coordinates: [...event.coordinates] as [number, number],
+      fromDate: new Date(rehydrateDate(event.fromDate)),
     })),
-    dataState,
+    dataState: { ...dataState },
   };
 }
 

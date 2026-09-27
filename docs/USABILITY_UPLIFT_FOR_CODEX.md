@@ -1165,7 +1165,7 @@ Update the row in the same PR that does the work.
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
-| UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md); final review/CI govern delivery |
+| UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md) and [alert burst performance evidence](validation/UX-048-PERFORMANCE.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
 | UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |

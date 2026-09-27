@@ -1,0 +1,1459 @@
+{
+  "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+  "mutants": 38,
+  "killed": 38,
+  "clean": true,
+  "supersededNotCounted": [
+    {
+      "id": "strict-centroid-enum",
+      "run": "mutation-supplement",
+      "reason": "Duplicate-conflict rejection masked enum mutation in this fixture; superseded by independent coordinate-range and unique-event enum proofs."
+    }
+  ],
+  "results": [
+    {
+      "id": "gdacs-five-hazards",
+      "behavior": "Refresh all five supported hazards",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five fixed MAP' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs-coverage.ts": "b7fc957bc7475c78825bde68c835917f5f341b96ad8a42e2e58cefd459e6df9c"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 1.018,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.715,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs-coverage.ts": "b7fc957bc7475c78825bde68c835917f5f341b96ad8a42e2e58cefd459e6df9c"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.803,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs-coverage.ts b/src/services/gdacs-coverage.ts\nindex a43195733..a19c7dae7 100644\n--- a/src/services/gdacs-coverage.ts\n+++ b/src/services/gdacs-coverage.ts\n@@ -1,2 +1,2 @@\n-export const GDACS_MAP_EVENT_TYPES = ['EQ', 'FL', 'TC', 'WF', 'DR'] as const;\n+export const GDACS_MAP_EVENT_TYPES = ['EQ', 'FL', 'TC', 'WF'] as const;\n export const GDACS_COVERAGE_NOTE = 'Volcano coverage unavailable; verified coverage: EQ, FL, TC, WF, DR.';\n",
+      "assertionExcerpt": "kipped 0\n\u2139 todo 0\n\u2139 duration_ms 636.368\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1043\n\u2716 five fixed MAP requests share one ten-second deadline and cache the complete aggregate (4.617667ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n      'EQ',\n      'FL',\n      'TC',\n      'WF',\n  -   'DR'\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:60:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [ 'EQ', 'FL', 'TC', 'WF' ],\n    expected: [ 'EQ', 'FL', 'TC', 'WF', 'DR' ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-required-query",
+      "behavior": "MAP request uses documented singular eventtype",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five fixed MAP' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 1.018,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.793,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.804,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..c3912615e 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -193,7 +193,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n   deadline.addEventListener('abort', onTimeout, { once: true });\n   const signal = controller.signal;\n   const requests = GDACS_MAP_EVENT_TYPES.map(async eventType => {\n-    const response = await fetchWithContext('GDACS events', `${GDACS_API}?eventtype=${eventType}`, {\n+    const response = await fetchWithContext('GDACS events', GDACS_API, {\n       headers: { 'Accept': 'application/json' },\n       signal,\n     });\n",
+      "assertionExcerpt": "ed 0\n\u2139 todo 0\n\u2139 duration_ms 713.932584\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1043\n\u2716 five fixed MAP requests share one ten-second deadline and cache the complete aggregate (92.054083ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'unavailable'\n  - 'live'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:64:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'unavailable',\n    expected: 'live',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-bounded-deadline",
+      "behavior": "Ten-second deadline is bounded",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five fixed MAP' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 1.018,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.808,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.841,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..3a8f25ce8 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -188,7 +188,7 @@ export function getGDACSSuccessfulUpdate(result: GDACSFetchResult): GDACSSuccess\n \n async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n   const controller = new AbortController();\n-  const deadline = AbortSignal.timeout(10_000);\n+  const deadline = AbortSignal.timeout(20_000);\n   const onTimeout = () => controller.abort(deadline.reason);\n   deadline.addEventListener('abort', onTimeout, { once: true });\n   const signal = controller.signal;\n",
+      "assertionExcerpt": "ed 0\n\u2139 todo 0\n\u2139 duration_ms 728.444625\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1043\n\u2716 five fixed MAP requests share one ten-second deadline and cache the complete aggregate (93.694042ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n  +   20000\n  -   10000\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:67:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [ 20000 ],\n    expected: [ 10000 ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-shared-deadline",
+      "behavior": "All five feeds share one deadline",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five fixed MAP' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 1.018,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.804,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.798,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..a7052f25d 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -195,7 +195,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n   const requests = GDACS_MAP_EVENT_TYPES.map(async eventType => {\n     const response = await fetchWithContext('GDACS events', `${GDACS_API}?eventtype=${eventType}`, {\n       headers: { 'Accept': 'application/json' },\n-      signal,\n+      signal: AbortSignal.timeout(10_000),\n     });\n     if (!response.ok) throw new Error(`GDACS ${eventType} HTTP ${response.status}`);\n     return parseGDACSMapResponse(await response.json(), eventType);\n",
+      "assertionExcerpt": "pped 0\n\u2139 todo 0\n\u2139 duration_ms 726.5365\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1043\n\u2716 five fixed MAP requests share one ten-second deadline and cache the complete aggregate (93.817958ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n      10000,\n  +   10000,\n  +   10000,\n  +   10000,\n  +   10000,\n  +   10000\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:67:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [ 10000, 10000, 10000, 10000, 10000, 10000 ],\n    expected: [ 10000 ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-http-boundary",
+      "behavior": "HTTP failure and rate limits cannot be successful even with valid bodies",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=one HTTP failure|one rate limit|each supported feed' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 3,
+        "failed": 0,
+        "seconds": 0.911,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 3,
+        "seconds": 0.953,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 3,
+        "failed": 0,
+        "seconds": 1.026,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..4164eb31c 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -197,7 +197,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n       headers: { 'Accept': 'application/json' },\n       signal,\n     });\n-    if (!response.ok) throw new Error(`GDACS ${eventType} HTTP ${response.status}`);\n+    if (false) throw new Error(`GDACS ${eventType} HTTP ${response.status}`);\n     return parseGDACSMapResponse(await response.json(), eventType);\n   });\n   try {\n",
+      "assertionExcerpt": "\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 873.561459\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:5444\n\u2716 one HTTP failure prevents a fresh aggregate and malformed data is never cached (105.167208ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:145:12)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'live',\n    expected: 'unavailable',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:5444\n\u2716 one rate limit prevents a fresh aggregate and malformed data is never cached (45.580417ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:145:12)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'live',\n    expected: 'unavailable',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:8497\n\u2716 each supported feed independently prevents incomplete fresh evidence on HTTP failure (20.753167ms)\n  AssertionError [ERR_ASSERTION]: EQ\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:221:12)\n      at async Test.run (node:internal/test_runner",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-atomic-refresh",
+      "behavior": "Any failed feed invalidates the fresh aggregate",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=one .* prevents|each supported feed|shared timeout|one malformed eligible' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 8,
+        "failed": 0,
+        "seconds": 1.156,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 8,
+        "seconds": 0.936,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 8,
+        "failed": 0,
+        "seconds": 0.976,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..352f7c83d 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -201,7 +201,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n     return parseGDACSMapResponse(await response.json(), eventType);\n   });\n   try {\n-    const feeds = await Promise.all(requests);\n+    const feeds = await Promise.all(requests.map(promise => promise.catch(() => [])));\n     return feeds.flat()\n       .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')\n       .slice(0, 100);\n",
+      "assertionExcerpt": "\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 852.997292\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:5444\n\u2716 one HTTP failure prevents a fresh aggregate and malformed data is never cached (91.524041ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:145:12)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'live',\n    expected: 'unavailable',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:5444\n\u2716 one rate limit prevents a fresh aggregate and malformed data is never cached (27.32525ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:145:12)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'live',\n    expected: 'unavailable',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:5444\n\u2716 one malformed 200 prevents a fresh aggregate and malformed data is never cached (17.537375ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:145:12)\n      at async Test.r",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-map-envelope",
+      "behavior": "HTTP-200 body must be a validated FeatureCollection",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=representation classes' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.782,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.802,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 1.223,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..8c7455c51 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -131,7 +131,7 @@ function uniqueCentroids(centroids: unknown[]): Map<string, GDACSEvent> {\n export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventType): GDACSEvent[] {\n   if (!GDACS_MAP_EVENT_TYPES.includes(eventType)) throw new Error('GDACS MAP has an unsupported event type');\n   const collection = record(data);\n-  if (collection?.type !== 'FeatureCollection' || !Array.isArray(collection.features)) {\n+  if (!collection || !Array.isArray(collection.features)) {\n     throw new Error('GDACS MAP response is not a feature collection');\n   }\n   const centroids: unknown[] = [];\n",
+      "assertionExcerpt": "elled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 720.953625\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:3117\n\u2716 representation classes and geometry are allowlisted per requested hazard (73.30175ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:112:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /collection/i,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-requested-type",
+      "behavior": "MAP rows must match requested hazard",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=representation classes' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.782,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.975,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.941,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..c6ad5ad5e 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -142,7 +142,7 @@ export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventTyp\n     const geometry = record(row?.geometry);\n     const className = properties?.Class;\n     const eventId = properties?.eventid;\n-    if (row?.type !== 'Feature' || properties?.eventtype !== eventType\n+    if (row?.type !== 'Feature'\n       || typeof className !== 'string'\n       || !isMapEventId(eventId)) {\n       throw new Error('GDACS MAP feature has invalid representation metadata');\n",
+      "assertionExcerpt": "lled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 857.274208\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:3117\n\u2716 representation classes and geometry are allowlisted per requested hazard (94.958208ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:103:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-class-metadata",
+      "behavior": "Missing centroid metadata cannot be guessed",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=representation classes' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.782,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.796,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.812,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..e69bae499 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -140,7 +140,7 @@ export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventTyp\n     const row = record(feature);\n     const properties = record(row?.properties);\n     const geometry = record(row?.geometry);\n-    const className = properties?.Class;\n+    const className = properties?.Class ?? 'Point_Centroid';\n     const eventId = properties?.eventid;\n     if (row?.type !== 'Feature' || properties?.eventtype !== eventType\n       || typeof className !== 'string'\n",
+      "assertionExcerpt": "lled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 714.782959\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:3117\n\u2716 representation classes and geometry are allowlisted per requested hazard (74.085625ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:103:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-class-allowlist",
+      "behavior": "Unknown representations fail closed rather than silently dropping",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=representation classes' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.782,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.841,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.791,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..89beed3b8 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -152,7 +152,7 @@ export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventTyp\n     } else if (isAuxiliaryRepresentation(eventType, className, geometry?.type)) {\n       auxiliaryIds.add(`gdacs-${eventType}-${String(eventId)}`);\n     } else {\n-      throw new Error('GDACS MAP feature has an unsupported representation');\n+      continue;\n     }\n   }\n   const events = uniqueCentroids(centroids);\n",
+      "assertionExcerpt": "celled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 756.0865\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:3117\n\u2716 representation classes and geometry are allowlisted per requested hazard (73.445125ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:103:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-aux-geometry",
+      "behavior": "Allowed auxiliary class requires its observed geometry",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=representation classes' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.782,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.797,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.794,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..145f40a77 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -104,7 +104,7 @@ const MAP_AUXILIARY_GEOMETRIES: Record<GDACSMapEventType, Record<string, readonl\n function isAuxiliaryRepresentation(eventType: GDACSMapEventType, className: string, geometryType: unknown): boolean {\n   const classes = MAP_AUXILIARY_GEOMETRIES[eventType];\n   if (Object.prototype.hasOwnProperty.call(classes, className)) {\n-    return typeof geometryType === 'string' && classes[className]!.includes(geometryType);\n+    return true;\n   }\n   if (eventType !== 'TC') return false;\n   return (/^Line_Line_\\d+$/.test(className) && geometryType === 'LineString')\n",
+      "assertionExcerpt": "celled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 714.86775\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:3117\n\u2716 representation classes and geometry are allowlisted per requested hazard (74.85325ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:111:13)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-orphan-overlay",
+      "behavior": "Every overlay must have its valid centroid",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=valid empty collections' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.795,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.81,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.789,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..c6719a222 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -157,7 +157,7 @@ export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventTyp\n   }\n   const events = uniqueCentroids(centroids);\n   for (const id of auxiliaryIds) {\n-    if (!events.has(id)) throw new Error('GDACS MAP representation is missing its event centroid');\n+    if (false) throw new Error('GDACS MAP representation is missing its event centroid');\n   }\n   return [...events.values()];\n }\n",
+      "assertionExcerpt": " 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 726.506042\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:2683\n\u2716 valid empty collections are empty while overlays without their centroid fail (70.804625ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:96:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /centroid/i,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-conflicting-duplicate",
+      "behavior": "Conflicting duplicate centroid cannot become fresh data",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=equivalent centroid duplicates' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.815,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.813,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.85,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..27e0d4116 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -120,7 +120,7 @@ function uniqueCentroids(centroids: unknown[]): Map<string, GDACSEvent> {\n   const events = new Map<string, GDACSEvent>();\n   for (const event of parseGDACSResponse({ features: centroids })) {\n     const existing = events.get(event.id);\n-    if (existing && JSON.stringify(existing) !== JSON.stringify(event)) {\n+    if (false) {\n       throw new Error('GDACS MAP has conflicting centroid representations');\n     }\n     events.set(event.id, event);\n",
+      "assertionExcerpt": "lled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 732.12675\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:4592\n\u2716 equivalent centroid duplicates collapse and conflicting same-ID data fail (70.625834ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:130:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /conflict/i,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-equivalent-duplicate",
+      "behavior": "Equivalent centroids normalize to one event",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=equivalent centroid duplicates' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.815,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.798,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.813,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..1af912c7b 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -123,7 +123,7 @@ function uniqueCentroids(centroids: unknown[]): Map<string, GDACSEvent> {\n     if (existing && JSON.stringify(existing) !== JSON.stringify(event)) {\n       throw new Error('GDACS MAP has conflicting centroid representations');\n     }\n-    events.set(event.id, event);\n+    events.set(`${event.id}-${events.size}`, event);\n   }\n   return events;\n }\n",
+      "assertionExcerpt": "led 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 718.731458\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:4592\n\u2716 equivalent centroid duplicates collapse and conflicting same-ID data fail (72.756333ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  2 !== 1\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:129:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 2,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-centroid-selection",
+      "behavior": "Auxiliary polygons are not separate event rows",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=captured MAP representations' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.819,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.813,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.83,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..e07931608 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -150,6 +150,7 @@ export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventTyp\n     if (className === 'Point_Centroid') {\n       centroids.push(feature);\n     } else if (isAuxiliaryRepresentation(eventType, className, geometry?.type)) {\n+      centroids.push(feature);\n       auxiliaryIds.add(`gdacs-${eventType}-${String(eventId)}`);\n     } else {\n       throw new Error('GDACS MAP feature has an unsupported representation');\n",
+      "assertionExcerpt": "ation_ms 730.658667\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1972\n\u2716 captured MAP representations yield 49 centroids and six qualifying warnings without chronology heuristics (73.885041ms)\n  AssertionError [ERR_ASSERTION]: Got unwanted exception: captured map representations must remain valid\n  Actual message: \"GDACS feature 1 has an invalid geometry type\"\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:80:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: Error: GDACS feature 1 has an invalid geometry type\n        at eval (eval at evaluate (file:///Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:1:989), <anonymous>:28:19)\n        at Array.map (<anonymous>)\n        at parseGDACSResponse (eval at evaluate (file:///Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:1:989), <anonymous>:23:26)\n        at uniqueCentroids (eval at evaluate (file:///Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:1:989), <anonymous>:99:25)\n        at Object.parseGDACSMapResponse (eval at evaluate (file:///Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:1:989), <anonymous>:139:20)\n        at <anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:81:39)\n        at Array.map (<anonymous>)\n        at <anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdac",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-no-iscurrent-heuristic",
+      "behavior": "Current MAP disasters preserve source chronology independent of iscurrent",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=captured MAP representations' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.819,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.79,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.816,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..ff27d1187 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -148,7 +148,7 @@ export function parseGDACSMapResponse(data: unknown, eventType: GDACSMapEventTyp\n       throw new Error('GDACS MAP feature has invalid representation metadata');\n     }\n     if (className === 'Point_Centroid') {\n-      centroids.push(feature);\n+      if (properties?.iscurrent === 'true') centroids.push(feature);\n     } else if (isAuxiliaryRepresentation(eventType, className, geometry?.type)) {\n       auxiliaryIds.add(`gdacs-${eventType}-${String(eventId)}`);\n     } else {\n",
+      "assertionExcerpt": "ation_ms 708.772208\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1972\n\u2716 captured MAP representations yield 49 centroids and six qualifying warnings without chronology heuristics (73.976375ms)\n  AssertionError [ERR_ASSERTION]: Got unwanted exception: captured map representations must remain valid\n  Actual message: \"GDACS MAP representation is missing its event centroid\"\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:80:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: Error: GDACS MAP representation is missing its event centroid\n        at Object.parseGDACSMapResponse (eval at evaluate (file:///Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:1:989), <anonymous>:142:19)\n        at <anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:81:39)\n        at Array.map (<anonymous>)\n        at <anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:81:28)\n        at getActual (node:assert:609:5)\n        at Function.doesNotThrow (node:assert:777:32)\n        at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:80:10)\n        at Test.runInAsyncScope (node:async_hooks:214:14)\n        at Test.run (node:internal/test_runner/test:1047:25)\n        at Test.start (node:internal/test_runner/test:944:17),\n    expected: undefined,\n    operator: 'doesNotThrow',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-status-gap",
+      "behavior": "Provider status explicitly identifies unavailable volcano coverage",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five fixed MAP' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 1.018,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.814,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.816,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..bcb525e7d 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -237,7 +237,7 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {\n }\n \n export function getGDACSStatus(): string {\n-  return `${breaker.getStatus()}; ${GDACS_COVERAGE_NOTE}`;\n+  return breaker.getStatus();\n }\n \n export function getEventTypeIcon(type: GDACSEvent['eventType']): string {\n",
+      "assertionExcerpt": "ed 0\n\u2139 todo 0\n\u2139 duration_ms 733.348167\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:1043\n\u2716 five fixed MAP requests share one ten-second deadline and cache the complete aggregate (98.009792ms)\n  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Volcano coverage unavailable; verified coverage: EQ, FL, TC, WF, DR\\./. Input:\n  \n  'ok'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:75:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'ok',\n    expected: /Volcano coverage unavailable; verified coverage: EQ, FL, TC, WF, DR\\./,\n    operator: 'match',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-cold-singleflight",
+      "behavior": "Concurrent cold callers share one tracked operation and breaker accounting",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=overlapping cold|overlapping failed' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.849,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 2,
+        "seconds": 0.847,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.875,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..75b3e8699 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -217,7 +217,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n let trackedInFlight: Promise<{ data: GDACSEvent[]; dataState: BreakerDataState }> | null = null;\n \n export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {\n-  trackedInFlight ??= breaker.executeTracked(fetchGDACSMapEvents, []).finally(() => {\n+  trackedInFlight = breaker.executeTracked(fetchGDACSMapEvents, []).finally(() => {\n     trackedInFlight = null;\n   });\n   const { data: events, dataState } = await trackedInFlight;\n",
+      "assertionExcerpt": " 0\n\u2139 todo 0\n\u2139 duration_ms 765.132458\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:9564\n\u2716 overlapping cold callers share five requests and receive independent data and provenance (74.160958ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  10 !== 5\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:250:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 10,\n    expected: 5,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:10546\n\u2716 overlapping failed callers record one breaker failure and release for a later successful retry (49.807875ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  10 !== 5\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:282:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 10,\n    expected: 5,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-singleflight-release",
+      "behavior": "Completed success or failure releases the shared operation for cache or retry",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=overlapping cold|overlapping failed' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.849,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 2,
+        "seconds": 0.852,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 2,
+        "failed": 0,
+        "seconds": 0.856,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..0d3a64b9f 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -218,7 +218,7 @@ let trackedInFlight: Promise<{ data: GDACSEvent[]; dataState: BreakerDataState }\n \n export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {\n   trackedInFlight ??= breaker.executeTracked(fetchGDACSMapEvents, []).finally(() => {\n-    trackedInFlight = null;\n+    void trackedInFlight;\n   });\n   const { data: events, dataState } = await trackedInFlight;\n   return {\n",
+      "assertionExcerpt": " 0\n\u2139 todo 0\n\u2139 duration_ms 769.097084\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:9564\n\u2716 overlapping cold callers share five requests and receive independent data and provenance (97.071958ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  'live' !== 'cached'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:264:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'live',\n    expected: 'cached',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:10546\n\u2716 overlapping failed callers record one breaker failure and release for a later successful retry (28.18075ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'unavailable'\n  - 'live'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:286:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'unavailable',\n    expected: 'live',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-failure-cancellation",
+      "behavior": "Failed feed aborts pending sibling fetch and body",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=failed feed aborts and drains' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.813,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.807,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.81,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..14eff8cee 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -206,7 +206,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n       .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')\n       .slice(0, 100);\n   } catch (error) {\n-    controller.abort(error);\n+    void error;\n     await Promise.allSettled(requests);\n     throw error;\n   } finally {\n",
+      "assertionExcerpt": "do 0\n\u2139 duration_ms 726.974875\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:11353\n\u2716 failed feed aborts and drains pending sibling fetch and body before releasing the shared batch (94.398125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + []\n  - [\n  -   'body',\n  -   'fetch'\n  - ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:313:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [],\n    expected: [ 'body', 'fetch' ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-failure-drain",
+      "behavior": "Shared operation waits for sibling cleanup before failure accounting or retry",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=failed feed aborts and drains' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.813,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.828,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.838,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..ef726bfb0 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -207,7 +207,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n       .slice(0, 100);\n   } catch (error) {\n     controller.abort(error);\n-    await Promise.allSettled(requests);\n+    void requests;\n     throw error;\n   } finally {\n     deadline.removeEventListener('abort', onTimeout);\n",
+      "assertionExcerpt": "todo 0\n\u2139 duration_ms 748.072\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:11353\n\u2716 failed feed aborts and drains pending sibling fetch and body before releasing the shared batch (100.995125ms)\n  AssertionError [ERR_ASSERTION]: failure must wait for sibling cleanup\n  \n  true !== false\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:314:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-timeout-forwarding",
+      "behavior": "Shared deadline aborts the request controller",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=shared timeout rejects' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.821,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.828,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.812,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..84211858f 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -189,7 +189,7 @@ export function getGDACSSuccessfulUpdate(result: GDACSFetchResult): GDACSSuccess\n async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n   const controller = new AbortController();\n   const deadline = AbortSignal.timeout(10_000);\n-  const onTimeout = () => controller.abort(deadline.reason);\n+  const onTimeout = () => undefined;\n   deadline.addEventListener('abort', onTimeout, { once: true });\n   const signal = controller.signal;\n   const requests = GDACS_MAP_EVENT_TYPES.map(async eventType => {\n",
+      "assertionExcerpt": "ed 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 745.31725\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:6101\n\u2716 shared timeout rejects a partial aggregate before any freshness is recorded (100.69825ms)\n  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n  \n    assert.ok(h.requests.every((request: { signal: AbortSignal }) => request.signal.aborted))\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:165:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: '==',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-caller-coordinates",
+      "behavior": "Caller coordinate mutation cannot corrupt other callers or cache",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=overlapping cold' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.816,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.822,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.843,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..be37f5beb 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -224,7 +224,7 @@ export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {\n   return {\n     events: events.map(event => ({\n       ...event,\n-      coordinates: [...event.coordinates] as [number, number],\n+      coordinates: event.coordinates,\n       fromDate: new Date(rehydrateDate(event.fromDate)),\n     })),\n     dataState: { ...dataState },\n",
+      "assertionExcerpt": " 0\n\u2139 todo 0\n\u2139 duration_ms 741.960084\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:9564\n\u2716 overlapping cold callers share five requests and receive independent data and provenance (97.049125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n  +   90,\n      0,\n  -   0\n    ]\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:260:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [ 90, 0 ],\n    expected: [ 0, 0 ],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-caller-dates",
+      "behavior": "Caller date mutation cannot corrupt other callers or cache",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=overlapping cold' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.816,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.813,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.819,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..ff9870580 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -225,7 +225,7 @@ export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {\n     events: events.map(event => ({\n       ...event,\n       coordinates: [...event.coordinates] as [number, number],\n-      fromDate: new Date(rehydrateDate(event.fromDate)),\n+      fromDate: rehydrateDate(event.fromDate),\n     })),\n     dataState: { ...dataState },\n   };\n",
+      "assertionExcerpt": " 0\n\u2139 todo 0\n\u2139 duration_ms 733.660917\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:9564\n\u2716 overlapping cold callers share five requests and receive independent data and provenance (97.912917ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  2000 !== 2026\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:261:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 2000,\n    expected: 2026,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "gdacs-caller-provenance",
+      "behavior": "Caller provenance mutation cannot corrupt concurrent caller result",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=overlapping cold' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.816,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.81,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.802,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..9421b72ca 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -227,7 +227,7 @@ export async function fetchGDACSEventsTracked(): Promise<GDACSFetchResult> {\n       coordinates: [...event.coordinates] as [number, number],\n       fromDate: new Date(rehydrateDate(event.fromDate)),\n     })),\n-    dataState: { ...dataState },\n+    dataState,\n   };\n }\n \n",
+      "assertionExcerpt": " 0\n\u2139 todo 0\n\u2139 duration_ms 729.969958\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:9564\n\u2716 overlapping cold callers share five requests and receive independent data and provenance (96.422625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'unavailable'\n  - 'live'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:262:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'unavailable',\n    expected: 'live',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "diagnostic-coverage-state",
+      "behavior": "diagnostic-coverage-state",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS fresh data' src/services/__tests__/api-diagnostic.test.mts",
+      "files": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.221,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/api-diagnostic.ts b/src/services/api-diagnostic.ts\nindex 93d8eb62d..1c87cf714 100644\n--- a/src/services/api-diagnostic.ts\n+++ b/src/services/api-diagnostic.ts\n@@ -159,7 +159,7 @@ function diagnosticForSource(\n   const diagnostic: SourceDiagnostic = {\n     id: source.id,\n     name: source.name,\n-    status: sourceId === 'gdacs' && status === 'healthy' ? 'degraded' : status,\n+    status,\n     lastUpdateMs: source.lastUpdate?.getTime() ?? null,\n     ageSeconds,\n     lastError: source.lastError,\n",
+      "assertionExcerpt": "elled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 144.119417\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/api-diagnostic.test.mts:1:795\n\u2716 GDACS fresh data remains degraded with explicit five-hazard coverage (3.031708ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'healthy'\n  - 'degraded'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/api-diagnostic.test.mts:27:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'healthy',\n    expected: 'degraded',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "diagnostic-preserve-failure",
+      "behavior": "diagnostic-preserve-failure",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS coverage gap preserves' src/services/__tests__/api-diagnostic.test.mts",
+      "files": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.224,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.227,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.222,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/api-diagnostic.ts b/src/services/api-diagnostic.ts\nindex 93d8eb62d..1cd887633 100644\n--- a/src/services/api-diagnostic.ts\n+++ b/src/services/api-diagnostic.ts\n@@ -159,7 +159,7 @@ function diagnosticForSource(\n   const diagnostic: SourceDiagnostic = {\n     id: source.id,\n     name: source.name,\n-    status: sourceId === 'gdacs' && status === 'healthy' ? 'degraded' : status,\n+    status: sourceId === 'gdacs' ? 'degraded' : status,\n     lastUpdateMs: source.lastUpdate?.getTime() ?? null,\n     ageSeconds,\n     lastError: source.lastError,\n",
+      "assertionExcerpt": "cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 147.942625\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/api-diagnostic.test.mts:1:1193\n\u2716 GDACS coverage gap preserves stronger failing and silent states (3.334583ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'degraded'\n  - 'silent'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/api-diagnostic.test.mts:35:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'degraded',\n    expected: 'silent',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "diagnostic-coverage-note",
+      "behavior": "diagnostic-coverage-note",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS fresh data' src/services/__tests__/api-diagnostic.test.mts",
+      "files": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.226,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.22,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/api-diagnostic.ts b/src/services/api-diagnostic.ts\nindex 93d8eb62d..b36bda984 100644\n--- a/src/services/api-diagnostic.ts\n+++ b/src/services/api-diagnostic.ts\n@@ -136,7 +136,7 @@ function notesForSource(src: SourceDiagnostic): string[] {\n   if (src.requiredForRisk && src.status !== 'healthy') {\n     notes.push('This source feeds the risk/correlation engines \u2014 degradation reduces signal quality.');\n   }\n-  if (src.id.toLowerCase() === 'gdacs') notes.push(GDACS_COVERAGE_NOTE);\n+  if (src.id.toLowerCase() === 'gdacs') notes.push('Full coverage');\n   return notes;\n }\n \n",
+      "assertionExcerpt": "celled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 146.16175\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/api-diagnostic.test.mts:1:795\n\u2716 GDACS fresh data remains degraded with explicit five-hazard coverage (7.764125ms)\n  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n  \n    assert.ok(source.notes.includes('Volcano coverage unavailable; verified coverage: EQ, FL, TC, WF, DR.'))\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/api-diagnostic.test.mts:28:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: false,\n    expected: true,\n    operator: '==',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "diagnostic-no-false-staleness",
+      "behavior": "diagnostic-no-false-staleness",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS fresh data' src/services/__tests__/api-diagnostic.test.mts",
+      "files": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.229,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.224,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.22,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/api-diagnostic.ts b/src/services/api-diagnostic.ts\nindex 93d8eb62d..cb2465489 100644\n--- a/src/services/api-diagnostic.ts\n+++ b/src/services/api-diagnostic.ts\n@@ -124,7 +124,7 @@ function notesForSource(src: SourceDiagnostic): string[] {\n   if (src.status === 'failing' && src.onCooldown) {\n     notes.push(`Circuit breaker tripped; will retry in ${src.cooldownRemainingSeconds}s.`);\n   }\n-  if (src.status === 'degraded' && src.ageSeconds !== null && src.ageSeconds > STALE_AFTER_SEC) {\n+  if (src.status === 'degraded') {\n     notes.push(`Stale \u2014 no update in ${Math.round((src.ageSeconds ?? 0) / 60)}min.`);\n   }\n   if (src.lastError) {\n",
+      "assertionExcerpt": "elled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 143.951625\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/api-diagnostic.test.mts:1:795\n\u2716 GDACS fresh data remains degraded with explicit five-hazard coverage (3.161666ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/api-diagnostic.test.mts:29:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "diagnostic-query",
+      "behavior": "diagnostic-query",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS probe uses' src/services/__tests__/api-diagnostic.test.mts",
+      "files": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.322,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.246,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.245,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/api-diagnostic.ts b/src/services/api-diagnostic.ts\nindex 93d8eb62d..8199e68d8 100644\n--- a/src/services/api-diagnostic.ts\n+++ b/src/services/api-diagnostic.ts\n@@ -93,7 +93,7 @@ const SILENT_AFTER_SEC = 6 * 60 * 60;  // 6 hours (likely no longer updating)\n const PROBE_ENDPOINTS: Record<string, string> = {\n   weather: 'https://api.weather.gov/alerts/active?limit=1',\n   usgs: 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limit=1',\n-  gdacs: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtype=EQ',\n+  gdacs: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtypes=',\n   'open-meteo': 'https://api.open-meteo.com/v1/forecast?latitude=40.7&longitude=-74&current=temperature_2m',\n   rainviewer: 'https://api.rainviewer.com/public/weather-maps.json',\n   'noaa-swpc': 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json',\n",
+      "assertionExcerpt": "d 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 168.519834\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/api-diagnostic.test.mts:1:1742\n\u2716 GDACS probe uses one valid hazard and never certifies aggregate health (25.891584ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtypes='\n  - 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtype=EQ'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/api-diagnostic.test.mts:52:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtypes=',\n    expected: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtype=EQ',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "diagnostic-probe-scope",
+      "behavior": "diagnostic-probe-scope",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=GDACS probe uses' src/services/__tests__/api-diagnostic.test.mts",
+      "files": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.322,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.241,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/api-diagnostic.ts": "ce13423e47476c50ba7c02ab5117b0f3dffa3f425ddae1c647cf2fbacad35f58"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.244,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/api-diagnostic.ts b/src/services/api-diagnostic.ts\nindex 93d8eb62d..147bdb183 100644\n--- a/src/services/api-diagnostic.ts\n+++ b/src/services/api-diagnostic.ts\n@@ -295,7 +295,7 @@ export async function pingSource(sourceId: string): Promise<PingResult> {\n   const url = PROBE_ENDPOINTS[sourceId];\n   const start = Date.now();\n   const scope = sourceId === 'gdacs'\n-    ? { scope: 'EQ endpoint reachability only; not aggregate GDACS coverage.' }\n+    ? { scope: 'All hazard coverage healthy' }\n     : {};\n   if (!url) {\n     return {\n",
+      "assertionExcerpt": "d 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 164.734334\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/api-diagnostic.test.mts:1:1742\n\u2716 GDACS probe uses one valid hazard and never certifies aggregate health (24.012041ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'All hazard coverage healthy'\n  - 'EQ endpoint reachability only; not aggregate GDACS coverage.'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/api-diagnostic.test.mts:54:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'All hazard coverage healthy',\n    expected: 'EQ endpoint reachability only; not aggregate GDACS coverage.',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "cached-observation-provenance",
+      "behavior": "cached-observation-provenance",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=failed stale refresh preserves' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.807,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.809,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.814,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..c5c0523f8 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -182,7 +182,7 @@ export interface GDACSSuccessfulUpdate {\n  * that keeps those outcomes distinct.\n  */\n export function getGDACSSuccessfulUpdate(result: GDACSFetchResult): GDACSSuccessfulUpdate | null {\n-  if (result.dataState.mode !== 'live' || result.dataState.timestamp === null) return null;\n+  if (result.dataState.timestamp === null) return null;\n   return { itemCount: result.events.length, updatedAt: result.dataState.timestamp };\n }\n \n",
+      "assertionExcerpt": "ipped 0\n\u2139 todo 0\n\u2139 duration_ms 730.213125\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:6761\n\u2716 failed stale refresh preserves original cache timestamp and cannot renew observations (94.1895ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + {\n  +   itemCount: 5,\n  +   updatedAt: 1790424000000\n  + }\n  - null\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:183:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { itemCount: 5, updatedAt: 1790424000000 },\n    expected: null,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "bounded-event-output",
+      "behavior": "bounded-event-output",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=severity selection and 100-event' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.788,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.796,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.801,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..ff380c4ad 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -204,7 +204,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n     const feeds = await Promise.all(requests);\n     return feeds.flat()\n       .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')\n-      .slice(0, 100);\n+      .slice(0, 101);\n   } catch (error) {\n     controller.abort(error);\n     await Promise.allSettled(requests);\n",
+      "assertionExcerpt": "elled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 717.789375\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:7288\n\u2716 severity selection and 100-event limit remain after complete validation (94.061375ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  101 !== 100\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:190:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 101,\n    expected: 100,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "validated-empty-is-live",
+      "behavior": "validated-empty-is-live",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five validated empty feeds' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.886,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.807,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.804,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..b639363ef 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -202,6 +202,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n   });\n   try {\n     const feeds = await Promise.all(requests);\n+    if (feeds.every(feed => feed.length === 0)) throw new Error('empty rejected');\n     return feeds.flat()\n       .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')\n       .slice(0, 100);\n",
+      "assertionExcerpt": "s 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 728.283\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:7676\n\u2716 five validated empty feeds are live zero-event evidence (93.180791ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'unavailable'\n  - 'live'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:198:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'unavailable',\n    expected: 'live',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "green-is-not-warning",
+      "behavior": "green-is-not-warning",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=five validated all-Green' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.796,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.81,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.818,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..cb24ea308 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -203,7 +203,7 @@ async function fetchGDACSMapEvents(): Promise<GDACSEvent[]> {\n   try {\n     const feeds = await Promise.all(requests);\n     return feeds.flat()\n-      .filter(event => event.alertLevel === 'Orange' || event.alertLevel === 'Red')\n+      .filter(() => true)\n       .slice(0, 100);\n   } catch (error) {\n     controller.abort(error);\n",
+      "assertionExcerpt": "\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 727.511541\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:9065\n\u2716 five validated all-Green feeds preserve the supported-scope zero-warning result (98.169334ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + [\n  +   {\n  +     alertLevel: 'Green',\n  +     coordinates: [\n  +       0,\n  +       0\n  +     ],\n  +     country: 'Test',\n  +     description: 'Earthquake',\n  +     eventType: 'EQ',\n  +     fromDate: Clock 2026-01-01T00:00:00.000Z,\n  +     id: 'gdacs-EQ-1',\n  +     name: 'EQ disaster',\n  +     severity: '',\n  +     url: ''\n  +   },\n  +   {\n  +     alertLevel: 'Green',\n  +     coordinates: [\n  +       0,\n  +       0\n  +     ],\n  +     country: 'Test',\n  +     description: 'Flood',\n  +     eventType: 'FL',\n  +     fromDate: Clock 2026-01-01T00:00:00.000Z,\n  +     id: 'gdacs-FL-1',\n  +     name: 'FL disaster',\n  +     severity: '',\n  +     url: ''\n  +   },\n  +   {\n  +     alertLevel: 'Green',\n  +     coordinates: [\n  +       0,\n  +       0\n  +     ],\n  +     country: 'Test',\n  +     description: 'Tropical Cyclone',\n  +     eventType: 'TC',\n  +     fromDate: Clock 2026-01-01T00:00:00.000Z,\n  +     id: 'gdacs-TC-1',\n  +     name: 'TC disaster',\n  +     severity: '',\n  +     url: ''\n  +   },\n  +   {\n  +     alertLevel: 'Green',\n  +     coordinates: [\n  +       0,\n  +       0\n  +     ],\n  +     country: 'Test',\n  +     description: 'Wildfire',\n  +     eventType: 'WF',\n  +     fromDate: Clock 2026-01-01T00:00:00.000Z,\n  +     id: 'gdacs-WF-1',\n  +     name: 'WF disaster',\n  +     severity: '',\n  +     url: ''\n  +   },\n  +   {\n  +     alertLevel: 'Green',\n  +     coordinates: [\n  +       0,\n  +       0\n  +     ],\n  +     country: 'Test',\n  +     description: 'Drought',\n  +     eventType: 'DR',\n  +     fromDate: Clock 2026-01-01T00:00:00.000Z,\n  +     id: 'gdacs-DR-1',\n  +     name: 'DR disaster',\n  +     severity: '',\n  +     url: ''\n  +   }\n  + ]\n  - []\n  \n      at TestConte",
+      "restoredStatus": ""
+    },
+    {
+      "id": "one-background-refresh",
+      "behavior": "one-background-refresh",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=stale cache returns immediately' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/utils/circuit-breaker.ts": "c7b50085ccc63b8497105c7674fbb25c024eb56940af959db68489517835519f"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.806,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.815,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/utils/circuit-breaker.ts": "c7b50085ccc63b8497105c7674fbb25c024eb56940af959db68489517835519f"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.861,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/utils/circuit-breaker.ts b/src/utils/circuit-breaker.ts\nindex 9bc36b0eb..dda829e33 100644\n--- a/src/utils/circuit-breaker.ts\n+++ b/src/utils/circuit-breaker.ts\n@@ -243,7 +243,7 @@ export class CircuitBreaker<T> {\n  // Fire-and-forget background refresh \u2014 skip if circuit breaker is cooling\n  // down OR if a previous SWR refresh is already in flight (prevents 20\n  // concurrent calls each spawning their own background refresh).\n- if (!this.isOnCooldown() && !this.swrInFlight) {\n+ if (!this.isOnCooldown()) {\n  this.swrInFlight = true;\n  fn().then(result => this.recordSuccess(result)).catch(error => {\n  // eslint-disable-next-line no-console\n",
+      "assertionExcerpt": "0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 730.457167\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:12960\n\u2716 stale cache returns immediately while only one background batch refreshes it (96.176959ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  15 !== 10\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:339:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 15,\n    expected: 10,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "strict-centroid-coordinate-range",
+      "behavior": "Eligible centroid range validation rejects out of range coordinates",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=eligible centroids retain' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.891,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.789,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.773,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..8f8a0821c 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -47,7 +47,7 @@ export function parseGDACSResponse(data: unknown): GDACSEvent[] {\n     const coordinates = geometry.coordinates;\n     if (!Array.isArray(coordinates) || coordinates.length !== 2\n       || !coordinates.every((coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate))\n-      || Math.abs(coordinates[0] as number) > 180 || Math.abs(coordinates[1] as number) > 90) {\n+      || false) {\n       throw new Error(`GDACS feature ${index} has invalid coordinates`);\n     }\n     const eventType = properties?.eventtype;\n",
+      "assertionExcerpt": "\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 708.667084\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:4029\n\u2716 eligible centroids retain strict validation and zero coordinates (74.117708ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:123:12)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: /coordinates/,\n    operator: 'throws',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    },
+    {
+      "id": "strict-centroid-enum-unique",
+      "behavior": "An invalid enum in a distinct event cannot be hidden by duplicate conflict handling",
+      "candidateSha": "cddb5e7ab0c5ea33dea2f640f2e9a3555b3b88bf",
+      "command": "/opt/homebrew/opt/node@22/bin/node --import tsx --test --test-reporter=spec '--test-name-pattern=one malformed eligible row' src/services/__tests__/gdacs-map.test.mts",
+      "files": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "baseline": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.814,
+        "assertionFailure": false
+      },
+      "mutated": {
+        "exit": 1,
+        "passed": 0,
+        "failed": 1,
+        "seconds": 0.807,
+        "assertionFailure": true
+      },
+      "killed": true,
+      "restoredSha256": {
+        "src/services/gdacs.ts": "4c4db46c35692602360075ced78fdde0de6ee80666047b7ff929da9b6c49eaa5"
+      },
+      "restoredClean": true,
+      "restoredTest": {
+        "exit": 0,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 0.811,
+        "assertionFailure": false
+      },
+      "confirmedAppliedDiff": "diff --git a/src/services/gdacs.ts b/src/services/gdacs.ts\nindex e45ab2e98..39e01eacf 100644\n--- a/src/services/gdacs.ts\n+++ b/src/services/gdacs.ts\n@@ -55,7 +55,7 @@ export function parseGDACSResponse(data: unknown): GDACSEvent[] {\n       throw new Error(`GDACS feature ${index} has an unsupported event type`);\n     }\n     const alertLevel = properties?.alertlevel;\n-    if (typeof alertLevel !== 'string' || !ALERT_LEVELS.has(alertLevel as GDACSEvent['alertLevel'])) {\n+    if (false) {\n       throw new Error(`GDACS feature ${index} has an unsupported alert level`);\n     }\n     const eventId = properties?.eventid;\n",
+      "assertionExcerpt": "d 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 728.324125\n\n\u2716 failing tests:\n\ntest at src/services/__tests__/gdacs-map.test.mts:3:8066\n\u2716 one malformed eligible row invalidates the aggregate even beside valid rows (97.378333ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + 'live'\n  - 'unavailable'\n  \n      at TestContext.<anonymous> (/Users/bradleybond/Developer/crystalball/.worktrees/gdacs-mutation-20260926/src/services/__tests__/gdacs-map.test.mts:210:10)\n      at async Test.run (node:internal/test_runner/test:1054:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 'live',\n    expected: 'unavailable',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+      "restoredStatus": ""
+    }
+  ]
+}

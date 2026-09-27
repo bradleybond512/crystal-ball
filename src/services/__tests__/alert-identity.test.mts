@@ -77,6 +77,29 @@ test('byte budget counts complete UTF8 snapshot and failed revisions preserve ex
   assert.equal(ledger.admit(identity('key', 'é'.repeat(120)), value, now + 1), 'capacity');
   assert.deepEqual(ledger.snapshot(), before);
 });
+test('byte pressure evicts multiple eligible entries in receipt and then key order', () => {
+  const validate = (v: unknown): v is string => typeof v === 'string';
+  const seed = createIdentityLedger(validate);
+  for (const [key, received] of [['old', now], ['b', now + 1], ['a', now + 1], ['keep', now + 2]] as const) {
+    seed.admit(identity(key), 'x'.repeat(20), received);
+  }
+  const ledger = hydrateIdentityLedger(seed.snapshot(), now + 2, validate, { maxBytes: seed.byteLength });
+  assert.equal(ledger.admit(identity('new'), 'x'.repeat(100), now + 3, new Set(['keep', 'absent'])), 'accepted');
+  assert.deepEqual(ledger.snapshot().entries.map((entry) => entry.key), ['b', 'keep', 'new']);
+  assert.equal(ledger.byteLength, Buffer.byteLength(JSON.stringify(ledger.snapshot())));
+  assert.ok(ledger.byteLength <= seed.byteLength);
+});
+test('unsatisfiable byte pressure leaves eligible entries and byte accounting unchanged', () => {
+  const ledger = createIdentityLedger((v: unknown): v is string => typeof v === 'string', { maxBytes: 500 });
+  ledger.admit(identity('eligible'), 'original', now);
+  ledger.admit(identity('protected'), 'retained', now + 1);
+  const before = ledger.snapshot();
+  const beforeBytes = ledger.byteLength;
+  assert.equal(ledger.admit(identity('oversized'), 'x'.repeat(1000), now + 2, new Set(['protected'])), 'capacity');
+  assert.deepEqual(ledger.snapshot(), before);
+  assert.equal(ledger.byteLength, beforeBytes);
+  assert.equal(ledger.byteLength, Buffer.byteLength(JSON.stringify(ledger.snapshot())));
+});
 test('updateValue preserves original on failed validation or capacity', () => {
   const validate = (v: unknown): v is string => typeof v === 'string';
   const ledger = createIdentityLedger(validate, { maxBytes: 220 });

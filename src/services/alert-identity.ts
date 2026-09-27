@@ -256,7 +256,11 @@ class Ledger<T> implements IdentityLedger<T> {
     let count = this.size + (existing ? 0 : 1);
     let total = this.totalBytes - (existing?.bytes ?? 0) + candidate.bytes + (!existing && this.size ? 1 : 0);
     if (count <= this.maxEntries && total <= this.maxBytes) return [];
-    const available = [...this.entries.values()].filter((stored) => stored !== existing && !protectedKeys.has(stored.entry.key)).sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));
+    const available: StoredEntry<T>[] = [];
+    for (const stored of this.entries.values()) {
+      if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);
+    }
+    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));
     const victims: string[] = [];
     for (const stored of available) {
       victims.push(stored.entry.key);

@@ -434,7 +434,7 @@ class UnifiedAlertStore {
         if (status === 'capacity') this.capacityFailures++;
         else if (status === 'invalid') this.invalidIdentities++;
         else {
-          if (!this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;
+          if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;
           protectedKeys.add(identity.key);
         }
       } else {

@@ -13,7 +13,7 @@ const gdacsService = readFileSync(new URL('../src/services/gdacs.ts', import.met
 const breakerService = readFileSync(new URL('../src/utils/circuit-breaker.ts', import.meta.url), 'utf8');
 const faa = readFileSync(new URL('../src/components/FAAWeatherCamsPanel.ts', import.meta.url), 'utf8');
 const NOW = Date.parse('2026-09-14T12:00:00Z');
-const settle = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
+const settle = () => new Promise(resolve => setImmediate(resolve));
 function execute(source, bindings, owner = {}) {
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   return new Function(...Object.keys(bindings), compiled).call(owner, ...Object.values(bindings));

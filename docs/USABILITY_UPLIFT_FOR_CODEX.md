@@ -989,13 +989,15 @@ Acceptance: Schedule authoritative NWS refresh and reconcile updates, cancellati
 
 ### UX-048 — Restore verified GDACS ingestion
 
-Status: IN PROGRESS — HIGH ASSURANCE
+Status: DONE — HIGH ASSURANCE
 Claim: #1740 (`codex/gdacs-feed-repair-20260926`); held for final validation and review.
 Approval: September 26, operator approved five verified MAP feeds, atomic failure behavior, the observed transfer cost and explicit unavailable volcano coverage.
 Design: [approved GDACS repair](plans/2026-09-26-gdacs-map-repair.md).
 Source findings: PR1731 H11.
 
 Acceptance: Probe current response bodies and required parameters before choosing an endpoint; retain request, row count and consumed fields. Contract-test successful, malformed and empty responses without caching malformed bodies.
+
+Evidence: #1740 — [live contract, regression and mutation results](validation/UX-048-GDACS.md). Five-hazard scope approved; volcano remains unavailable. Final review and CI govern delivery.
 
 ### UX-049 — Distinguish quiet sensors from missing observations
 
@@ -1163,7 +1165,7 @@ Update the row in the same PR that does the work.
 | UX-045 | Keep advisories from suppressing warnings | DONE | #1733 |
 | UX-046 | Preserve alert priorities at capacity | DONE — HIGH ASSURANCE | #1734 |
 | UX-047 | Keep national weather warnings current | NOT STARTED — HIGH ASSURANCE | — |
-| UX-048 | Restore verified GDACS ingestion | IN PROGRESS — HIGH ASSURANCE | #1740 — approved five-feed repair; validation/review in progress |
+| UX-048 | Restore verified GDACS ingestion | DONE — HIGH ASSURANCE | #1740 — approved five-feed repair; [validation](validation/UX-048-GDACS.md); final review/CI govern delivery |
 | UX-049 | Distinguish quiet sensors from missing observations | NOT STARTED — HIGH ASSURANCE | — |
 | UX-050 | Make Ghost Mode suppression unmistakable | NOT STARTED — HIGH ASSURANCE | — |
 | UX-051 | Align RSS request budgets across boundaries | NOT STARTED — HIGH ASSURANCE | — |

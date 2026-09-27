@@ -256,7 +256,7 @@ class UnifiedAlertStore {
   private notifyDirty = false;
   private lastNotifyAt = 0;
 
-  constructor(options: { identityLimits?: Parameters<typeof createIdentityLedger>[1] } = {}) {
+  constructor(options: { identityLimits?: Exclude<Parameters<typeof createIdentityLedger>[1], undefined> } = {}) {
     this.identityLimits = options.identityLimits;
     this.identities = createIdentityLedger(isIdentityState, this.identityLimits);
     this.loadFromStorage();

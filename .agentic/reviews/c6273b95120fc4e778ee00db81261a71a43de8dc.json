@@ -1,0 +1,8 @@
+{
+  "reviewedSha": "c6273b95120fc4e778ee00db81261a71a43de8dc",
+  "reviewer": "claude",
+  "verdict": "approve",
+  "blockingFindings": 0,
+  "reviewedAt": "2026-09-27T18:42:29.446Z",
+  "evidence": "## APPROVE\n\n**Candidate:** `c6273b95120fc4e778ee00db81261a71a43de8dc`\n**Blocking findings:** 0"
+}

@@ -1,0 +1,433 @@
+[
+  {
+    "name": "repeated-victim-scans",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      46,
+      2
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 32 - hundreds of protected overflow admissions do not enumerate resident victims",
+      "  name: 'AssertionError'",
+      "not ok 48 - store batches avoid repeated resident scans while every overflow warning remains eligible",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..e83fa9ecc 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -291,7 +291,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     let total = this.totalBytes - (existing?.bytes ?? 0) + candidate.bytes + (!existing && this.size ? 1 : 0);\n     if (scope) this.refreshProtection(scope);\n     if (count <= this.maxEntries && total <= this.maxBytes) return [];\n-    if (scope?.residentCount === this.size) return null;\n+\n     const available = this.availableVictims(existing, protectedKeys);\n     const victims: string[] = [];\n     for (const stored of available) {\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "premature-capacity",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      32,
+      16
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 25 - scoped admissions match ordinary admission statuses, revisions, state and exact bytes at saturation",
+      "  name: 'AssertionError'",
+      "not ok 26 - scoped byte rejection cannot suppress a later fitting candidate or revision after value shrink",
+      "  name: 'AssertionError'",
+      "not ok 28 - external and nested membership mutations invalidate scoped resident coverage",
+      "  name: 'AssertionError'",
+      "not ok 29 - expiry and revival of absent protected identities preserve count and exact-boundary behavior",
+      "  name: 'AssertionError'",
+      "not ok 31 - scopes end after return or exception and reject leaked admission without mutating the ledger",
+      "    'AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\\n' +",
+      "  name: 'AssertionError'",
+      "not ok 32 - hundreds of protected overflow admissions do not enumerate resident victims",
+      "  name: 'AssertionError'",
+      "not ok 35 - accepted identities and revisions persist their state without a redundant value update",
+      "  name: 'AssertionError'",
+      "not ok 36 - duplicate identities refresh persisted user state without reconsidering notifications",
+      "  name: 'AssertionError'",
+      "not ok 37 - capacity churn and restart cannot reconsider a retained identity or its new revision",
+      "  name: 'AssertionError'",
+      "not ok 38 - tombstones restore acknowledgement, pin and snooze after eviction and restart",
+      "  name: 'AssertionError'",
+      "not ok 39 - failed writes degrade restart protection without suppressing novel source warnings or memory deduplication",
+      "  name: 'AssertionError'",
+      "not ok 40 - full protected ledger and invalid oversized identity preserve novel critical-warning eligibility",
+      "  name: 'AssertionError'",
+      "not ok 44 - same public ID from a different source cannot inherit user state or notification consideration",
+      "  name: 'AssertionError'",
+      "not ok 46 - all-pinned capacity eviction restores pinned tombstone state after restart",
+      "  name: 'AssertionError'",
+      "not ok 47 - whole and split ingest batches preserve identity state, overflow diagnostics, archives and warning consideration",
+      "  name: 'AssertionError'",
+      "not ok 48 - store batches avoid repeated resident scans while every overflow warning remains eligible",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..56d9bc907 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -236,6 +236,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     return this.admitInternal(identity, value, now, protectedKeys);\n   }\n   private admitInternal(identity: ObservationIdentity, value: T, now: number, protectedKeys: ReadonlySet<string>, scope?: ProtectionScope): AdmissionStatus {\n+    if (scope && scope.residentCount === this.size) return 'capacity';\n     if (!validObservationIdentity(identity) || !validTime(now)) return 'invalid';\n     this.expire(now);\n     const existing = this.entries.get(identity.key);\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "set-size-coverage",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      46,
+      2
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 27 - protection counts resident intersection and owns its initial Set while ordinary callers observe mutations",
+      "  name: 'AssertionError'",
+      "not ok 28 - external and nested membership mutations invalidate scoped resident coverage",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..c6a1ff392 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -291,7 +291,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     let total = this.totalBytes - (existing?.bytes ?? 0) + candidate.bytes + (!existing && this.size ? 1 : 0);\n     if (scope) this.refreshProtection(scope);\n     if (count <= this.maxEntries && total <= this.maxBytes) return [];\n-    if (scope?.residentCount === this.size) return null;\n+    if (scope && scope.keys.size >= this.size) return null;\n     const available = this.availableVictims(existing, protectedKeys);\n     const victims: string[] = [];\n     for (const stored of available) {\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "stale-generation",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 28 - external and nested membership mutations invalidate scoped resident coverage",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..a1b3b4c3e 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -311,7 +311,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     return available;\n   }\n   private refreshProtection(scope: ProtectionScope): void {\n-    if (scope.generation === this.membershipGeneration) return;\n+    if (scope.generation >= 0) return;\n     scope.residentCount = 0;\n     for (const key of this.entries.keys()) if (scope.keys.has(key)) scope.residentCount++;\n     scope.generation = this.membershipGeneration;\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "accepted-key-protection",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      40,
+      8
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 25 - scoped admissions match ordinary admission statuses, revisions, state and exact bytes at saturation",
+      "  name: 'AssertionError'",
+      "not ok 27 - protection counts resident intersection and owns its initial Set while ordinary callers observe mutations",
+      "  name: 'AssertionError'",
+      "not ok 28 - external and nested membership mutations invalidate scoped resident coverage",
+      "  name: 'AssertionError'",
+      "not ok 29 - expiry and revival of absent protected identities preserve count and exact-boundary behavior",
+      "  name: 'AssertionError'",
+      "not ok 32 - hundreds of protected overflow admissions do not enumerate resident victims",
+      "  name: 'AssertionError'",
+      "not ok 35 - accepted identities and revisions persist their state without a redundant value update",
+      "  name: 'AssertionError'",
+      "not ok 47 - whole and split ingest batches preserve identity state, overflow diagnostics, archives and warning consideration",
+      "  name: 'AssertionError'",
+      "not ok 48 - store batches avoid repeated resident scans while every overflow warning remains eligible",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..1b1ae9f68 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -219,7 +219,7 @@ class Ledger<T> implements IdentityLedger<T> {\n       return callback((identity, value) => {\n         if (!active) return 'invalid';\n         const status = this.admitInternal(identity, value, now, scope.keys, scope);\n-        if (status === 'accepted' || status === 'duplicate') {\n+        if (status === 'duplicate') {\n           this.refreshProtection(scope);\n           if (!scope.keys.has(identity.key)) {\n             scope.keys.add(identity.key);\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "duplicate-key-protection",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 33 - a duplicate promotes an initially unprotected resident for the rest of its scope",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..6f36b6968 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -219,7 +219,7 @@ class Ledger<T> implements IdentityLedger<T> {\n       return callback((identity, value) => {\n         if (!active) return 'invalid';\n         const status = this.admitInternal(identity, value, now, scope.keys, scope);\n-        if (status === 'accepted' || status === 'duplicate') {\n+        if (status === 'accepted') {\n           this.refreshProtection(scope);\n           if (!scope.keys.has(identity.key)) {\n             scope.keys.add(identity.key);\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "caller-set-alias",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 27 - protection counts resident intersection and owns its initial Set while ordinary callers observe mutations",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..89b898d01 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -212,7 +212,7 @@ class Ledger<T> implements IdentityLedger<T> {\n   }\n   withProtectedAdmissions<R>(now: number, initialProtectedKeys: ReadonlySet<string>, callback: (admit: ScopedAdmission<T>) => R): R {\n     this.expire(now);\n-    const scope: ProtectionScope = { keys: new Set(initialProtectedKeys), residentCount: 0, generation: -1 };\n+    const scope: ProtectionScope = { keys: initialProtectedKeys as Set<string>, residentCount: 0, generation: -1 };\n     this.refreshProtection(scope);\n     let active = true;\n     try {\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "scope-lifetime",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 31 - scopes end after return or exception and reject leaked admission without mutating the ledger",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..770396a28 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -217,7 +217,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     let active = true;\n     try {\n       return callback((identity, value) => {\n-        if (!active) return 'invalid';\n+        \n         const status = this.admitInternal(identity, value, now, scope.keys, scope);\n         if (status === 'accepted' || status === 'duplicate') {\n           this.refreshProtection(scope);\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "scope-initial-expiry",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 29 - expiry and revival of absent protected identities preserve count and exact-boundary behavior",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..26cf3adb0 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -211,7 +211,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     }\n   }\n   withProtectedAdmissions<R>(now: number, initialProtectedKeys: ReadonlySet<string>, callback: (admit: ScopedAdmission<T>) => R): R {\n-    this.expire(now);\n+\n     const scope: ProtectionScope = { keys: new Set(initialProtectedKeys), residentCount: 0, generation: -1 };\n     this.refreshProtection(scope);\n     let active = true;\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "remove-protection-delta",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 32 - hundreds of protected overflow admissions do not enumerate resident victims",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..9d42e6c38 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -323,7 +323,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     this.entries.delete(key);\n     this.membershipGeneration++;\n     if (scope) {\n-      if (scope.keys.has(key)) scope.residentCount--;\n+      \n       scope.generation = this.membershipGeneration;\n     }\n   }\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "insert-protection-delta",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 32 - hundreds of protected overflow admissions do not enumerate resident victims",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..b48774b58 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -332,7 +332,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     this.entries.set(stored.entry.key, stored);\n     this.membershipGeneration++;\n     if (scope) {\n-      if (scope.keys.has(stored.entry.key)) scope.residentCount++;\n+      \n       scope.generation = this.membershipGeneration;\n     }\n     this.nextExpiry = Math.min(this.nextExpiry, stored.entry.firstReceivedAt + this.maxAgeMs);\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "fit-after-capacity",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      34,
+      14
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 25 - scoped admissions match ordinary admission statuses, revisions, state and exact bytes at saturation",
+      "  name: 'AssertionError'",
+      "not ok 26 - scoped byte rejection cannot suppress a later fitting candidate or revision after value shrink",
+      "  name: 'AssertionError'",
+      "not ok 29 - expiry and revival of absent protected identities preserve count and exact-boundary behavior",
+      "  name: 'AssertionError'",
+      "not ok 31 - scopes end after return or exception and reject leaked admission without mutating the ledger",
+      "    'AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\\n' +",
+      "  name: 'AssertionError'",
+      "not ok 32 - hundreds of protected overflow admissions do not enumerate resident victims",
+      "  name: 'AssertionError'",
+      "not ok 35 - accepted identities and revisions persist their state without a redundant value update",
+      "  name: 'AssertionError'",
+      "not ok 37 - capacity churn and restart cannot reconsider a retained identity or its new revision",
+      "  name: 'AssertionError'",
+      "not ok 38 - tombstones restore acknowledgement, pin and snooze after eviction and restart",
+      "  name: 'AssertionError'",
+      "not ok 39 - failed writes degrade restart protection without suppressing novel source warnings or memory deduplication",
+      "  name: 'AssertionError'",
+      "not ok 40 - full protected ledger and invalid oversized identity preserve novel critical-warning eligibility",
+      "  name: 'AssertionError'",
+      "not ok 44 - same public ID from a different source cannot inherit user state or notification consideration",
+      "  name: 'AssertionError'",
+      "not ok 46 - all-pinned capacity eviction restores pinned tombstone state after restart",
+      "  name: 'AssertionError'",
+      "not ok 47 - whole and split ingest batches preserve identity state, overflow diagnostics, archives and warning consideration",
+      "  name: 'AssertionError'",
+      "not ok 48 - store batches avoid repeated resident scans while every overflow warning remains eligible",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..8d60b938a 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -290,8 +290,8 @@ class Ledger<T> implements IdentityLedger<T> {\n     let count = this.size + (existing ? 0 : 1);\n     let total = this.totalBytes - (existing?.bytes ?? 0) + candidate.bytes + (!existing && this.size ? 1 : 0);\n     if (scope) this.refreshProtection(scope);\n-    if (count <= this.maxEntries && total <= this.maxBytes) return [];\n     if (scope?.residentCount === this.size) return null;\n+    if (count <= this.maxEntries && total <= this.maxBytes) return [];\n     const available = this.availableVictims(existing, protectedKeys);\n     const victims: string[] = [];\n     for (const stored of available) {\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "victim-order",
+    "file": "src/services/alert-identity.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      45,
+      3
+    ],
+    "sha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "restoredSha256": "690dc59c876090cbb80e99b1b4cd5636a6d72518f2c643d397db766c18c35b9b",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 11 - byte pressure evicts multiple eligible entries in receipt and then key order",
+      "  name: 'AssertionError'",
+      "not ok 19 - expiry precedes protection and oldest receipt/key ordering is deterministic",
+      "  name: 'AssertionError'",
+      "not ok 30 - scoped multi-victim byte eviction preserves receipt/key order, commas and hydration",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/alert-identity.ts b/src/services/alert-identity.ts\nindex b55d48ef8..d10ca69f2 100644\n--- a/src/services/alert-identity.ts\n+++ b/src/services/alert-identity.ts\n@@ -307,7 +307,7 @@ class Ledger<T> implements IdentityLedger<T> {\n     for (const stored of this.entries.values()) {\n       if (stored !== existing && !protectedKeys.has(stored.entry.key)) available.push(stored);\n     }\n-    available.sort((a, b) => a.entry.firstReceivedAt - b.entry.firstReceivedAt || compareKeys(a.entry.key, b.entry.key));\n+    available.sort((a, b) => b.entry.firstReceivedAt - a.entry.firstReceivedAt || compareKeys(b.entry.key, a.entry.key));\n     return available;\n   }\n   private refreshProtection(scope: ProtectionScope): void {\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "capacity-warning-delivery",
+    "file": "src/services/unified-alerts.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      44,
+      4
+    ],
+    "sha256": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+    "restoredSha256": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 35 - accepted identities and revisions persist their state without a redundant value update",
+      "  name: 'AssertionError'",
+      "not ok 40 - full protected ledger and invalid oversized identity preserve novel critical-warning eligibility",
+      "  name: 'AssertionError'",
+      "not ok 47 - whole and split ingest batches preserve identity state, overflow diagnostics, archives and warning consideration",
+      "  name: 'AssertionError'",
+      "not ok 48 - store batches avoid repeated resident scans while every overflow warning remains eligible",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex eab79d1ab..caf7c2b61 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -432,7 +432,7 @@ class UnifiedAlertStore {\n         const considered = !!existing || previous?.value.notificationConsidered === true;\n         if (identity) {\n           const status = admit(identity, identityState(restored, true));\n-          if (status === 'capacity') this.capacityFailures++;\n+          if (status === 'capacity') { this.capacityFailures++; continue; }\n           else if (status === 'invalid') this.invalidIdentities++;\n           else {\n             if (status === 'duplicate' && !this.identities.updateValue(identity.key, identityState(restored, true))) this.capacityFailures++;\n",
+    "reviewedCodeCommit": "769762b55"
+  },
+  {
+    "name": "store-scoped-integration",
+    "file": "src/services/unified-alerts.ts",
+    "kind": "focused",
+    "baseline": [
+      48,
+      0
+    ],
+    "red": [
+      47,
+      1
+    ],
+    "sha256": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+    "restoredSha256": "ff12d3afb53ee0f595b6e2a95c3d7f7b21f905d652247261879547a1940aa6f2",
+    "diffConfirmed": true,
+    "cleanRestored": true,
+    "assertions": [
+      "not ok 48 - store batches avoid repeated resident scans while every overflow warning remains eligible",
+      "  name: 'AssertionError'"
+    ],
+    "appliedDiff": "diff --git a/src/services/unified-alerts.ts b/src/services/unified-alerts.ts\nindex eab79d1ab..74764f8a2 100644\n--- a/src/services/unified-alerts.ts\n+++ b/src/services/unified-alerts.ts\n@@ -431,7 +431,8 @@ class UnifiedAlertStore {\n         changed = true;\n         const considered = !!existing || previous?.value.notificationConsidered === true;\n         if (identity) {\n-          const status = admit(identity, identityState(restored, true));\n+          const status = this.identities.admit(identity, identityState(restored, true), now, protectedKeys);\n+          if (status === 'accepted' || status === 'duplicate') protectedKeys.add(identity.key);\n           if (status === 'capacity') this.capacityFailures++;\n           else if (status === 'invalid') this.invalidIdentities++;\n           else {\n",
+    "reviewedCodeCommit": "769762b55"
+  }
+]

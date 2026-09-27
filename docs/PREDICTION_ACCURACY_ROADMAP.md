@@ -1927,6 +1927,11 @@ Deliverables:
 
 ### ACC-509 — Stable situation identity under delayed and repeated input
 
+Performance follow-up: **IN REVIEW**, `codex/acc509-protected-admissions-20260927`.
+[Approved bounded design](plans/2026-09-27-acc509-protected-admissions.md): avoid
+repeated scans when every resident identity is protected. Preserve admission,
+retention and warning behavior and the existing 500 ms budget. Evidence pending.
+
 Status: `DONE`
 
 Evidence: #1738 — [replay, review repairs and 70 mutation proofs](validation/ACC-509-IDENTITY.md). Delivery requires the linked UX-059 integration gate, final opposite-agent verdict and required CI.

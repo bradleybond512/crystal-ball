@@ -131,7 +131,7 @@ export function countByType(visible: readonly VisibleTimelineEvent[]): Record<Ti
  */
 export function checkpoints(
   events: readonly TimelineEvent[],
-  options: { startMs: number; endMs: number; fadeMs?: CursorOptions['fadeMs'] },
+  options: { startMs: number; endMs: number; fadeMs?: Exclude<CursorOptions['fadeMs'], undefined> },
 ): number[] {
   const fadeOverrides = options.fadeMs ?? {};
   const set = new Set<number>();

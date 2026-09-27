@@ -69,7 +69,7 @@ export function slog(
   message: string,
   opts?: {
     traceId?: string;
-    fields?: SlogRecord['fields'];
+    fields?: Exclude<SlogRecord['fields'], undefined>;
     now?: () => number;
   },
 ): void {

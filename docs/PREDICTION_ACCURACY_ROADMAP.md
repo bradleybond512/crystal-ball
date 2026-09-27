@@ -911,7 +911,7 @@ These tasks retain their detailed designs in
 | ACC-506 | WAITING | Bounded correlation-kernel tunables and safety fixtures | ACC-505 |
 | ACC-507 | DONE | Bounded cross-event correlation ingestion and liveness proof | ACC-502 (DONE) |
 | ACC-508 | TODO | Near-threshold coupling recall gate | ACC-503 (DONE), ACC-504 (DONE) |
-| ACC-509 | DONE | Stable situation identity under delayed and repeated input | #1738; [evidence](validation/ACC-509-IDENTITY.md); UX-059 integration hold |
+| ACC-509 | DONE | Stable situation identity under delayed and repeated input | #1738; #1743 performance follow-up; [evidence](validation/ACC-509-IDENTITY.md); UX-059 integration hold |
 | ACC-510 | TODO | Evidence-based domain for news-derived situations | ACC-509 |
 
 Safety invariant: learned inhibitory evidence remains shadow-only and cannot
@@ -1927,7 +1927,7 @@ Deliverables:
 
 ### ACC-509 — Stable situation identity under delayed and repeated input
 
-Performance follow-up: **IN REVIEW**, #1743 (`codex/acc509-protected-admissions-20260927`).
+Performance follow-up: #1743 (`codex/acc509-protected-admissions-20260927`).
 [Approved bounded design](plans/2026-09-27-acc509-protected-admissions.md): avoid
 repeated scans when every resident identity is protected. Preserve admission,
 retention and warning behavior and the existing 500 ms budget.
@@ -1935,7 +1935,7 @@ retention and warning behavior and the existing 500 ms budget.
 
 Status: `DONE`
 
-Evidence: #1738 — [replay, review repairs and 70 mutation proofs](validation/ACC-509-IDENTITY.md). Delivery requires the linked UX-059 integration gate, final opposite-agent verdict and required CI.
+Evidence: #1738 — [replay, review repairs and 70 mutation proofs](validation/ACC-509-IDENTITY.md); #1743 — [protected-admission performance follow-up](validation/ACC-509-PROTECTED-ADMISSIONS.md). Delivery requires the linked UX-059 integration gate, final opposite-agent verdict and required CI.
 
 Source: PR1731 H10/H16/H22. Codex is taking over PR1732 via a current-main
 replacement draft PR1738 on `codex/acc509-identity-20260925`; original PR1732 remains

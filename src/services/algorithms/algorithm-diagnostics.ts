@@ -93,7 +93,7 @@ export interface RecentAlgorithmEvaluation {
   durationMs: number;
   score?: number;
   label?: string;
-  outcome?: EvaluationRecord['outcome'];
+  outcome?: Exclude<EvaluationRecord['outcome'], undefined>;
   outcomeAt?: number;
   version?: string;
   outcomeOrigin?: OutcomeLabelOrigin;

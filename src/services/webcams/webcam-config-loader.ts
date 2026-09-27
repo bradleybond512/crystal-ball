@@ -20,7 +20,7 @@ export interface WebcamSourceConfig {
     snapshotUrl: Getter;
     /** Path string or function — always resolved against the row. Omit if no stream. */
     streamUrl?: Getter;
-    streamType?: Derive<WebcamStreamType | undefined>;
+    streamType?: Exclude<Derive<WebcamStreamType | undefined>, undefined>;
   };
   category: Derive<WebcamCategory>;
   refreshIntervalSec: number;

@@ -65,9 +65,18 @@
     "test:ux059"
   ],
   "src/services/gdacs.ts": [
-    "test:ux059"
+    "test:ux059",
+    "test:gdacs-map",
+    "test:adapter-provenance",
+    "test:ux026"
   ],
   "src/app/data-loader.ts": [
     "test:ux059"
+  ],
+  "src/services/gdacs-coverage.ts": [
+    "test:gdacs-map"
+  ],
+  "src/services/api-diagnostic.ts": [
+    "test:gdacs-map"
   ]
 }

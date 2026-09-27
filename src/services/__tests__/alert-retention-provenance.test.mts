@@ -199,8 +199,8 @@ test('captured live GDACS HTTP 400 body cannot produce observations or successfu
   console.warn = () => {};
   try {
     const result = await fetchGDACSEventsTracked();
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0], 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP');
+    assert.deepEqual(calls, ['EQ', 'FL', 'TC', 'WF', 'DR'].map(type =>
+      `https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtype=${type}`));
     assert.deepEqual(result.events, []);
     assert.equal(result.dataState.mode, 'unavailable');
     assert.equal(getGDACSSuccessfulUpdate(result), null);

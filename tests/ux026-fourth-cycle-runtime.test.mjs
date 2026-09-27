@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
+import { GDACS_MAP_EVENT_TYPES, GDACS_COVERAGE_NOTE } from '../src/services/gdacs-coverage.ts';
 import { Window } from 'happy-dom';
 import { projectDigestStories } from '../src/services/digest-alert-projection.ts';
 import { DigestOverlay } from '../src/components/DigestOverlay.ts';
@@ -436,16 +437,18 @@ function actualGdacsHarness() {
     Date: Clock, console: { warn() {}, error() {} },
   });
   const fetchTracked = execute(`${gdacsService.replace(/^import .*?;\n/gms, '').replaceAll('export ', '')}\nreturn fetchGDACSEventsTracked;`, {
-    Date: Clock, AbortSignal,
+    Date: Clock, AbortSignal, GDACS_MAP_EVENT_TYPES, GDACS_COVERAGE_NOTE,
     createCircuitBreaker: options => { breaker = new CircuitBreaker({ ...options, persistCache: false }); return breaker; },
     rehydrateDate: value => new Date(value),
-    fetchWithContext: async () => {
+    fetchWithContext: async (_context, input) => {
       calls += 1;
       if (failed) throw new Error('GDACS unavailable');
-      return { ok: true, json: async () => ({ features: [{
+      const type = new URL(input).searchParams.get('eventtype');
+      return { ok: true, json: async () => ({ type: 'FeatureCollection', features: type === 'FL' ? [{
+        type: 'Feature',
         geometry: { type: 'Point', coordinates: [0, 0] },
-        properties: { eventtype: 'FL', eventid: 'flood-1', name: 'Nearby flood', country: 'Test', alertlevel: 'Red', fromdate: new Date(NOW).toISOString() },
-      }] }) };
+        properties: { Class: 'Point_Centroid', eventtype: 'FL', eventid: 'flood-1', name: 'Nearby flood', country: 'Test', alertlevel: 'Red', fromdate: new Date(NOW).toISOString() },
+      }] : [] }) };
     },
   });
   return {
@@ -461,7 +464,7 @@ test('actual healthy GDACS TTL cache retains the flood camera and qualifies row 
   const cached = await gdacs.fetchTracked();
   assert.equal(cached.dataState.mode, 'cached');
   assert.equal(cached.dataState.timestamp, NOW);
-  assert.equal(gdacs.calls, 1);
+  assert.equal(gdacs.calls, 5);
   const h = faaHarness(true, gdacs.fetchTracked);
   const panel = h.create();
   await settle();
@@ -474,7 +477,7 @@ test('actual healthy GDACS TTL cache retains the flood camera and qualifies row 
   assert.match(h.content.textContent, /GDACS alert evidence is cached/);
   row.dispatchEvent(new window.Event('click'));
   assert.match(h.content.querySelector('.faa-cam-viewer').textContent, /Nearby flood.*cached context/);
-  assert.equal(gdacs.calls, 1, 'displaying cached context must not trigger a new GDACS request');
+  assert.equal(gdacs.calls, 5, 'displaying cached context must not trigger a new GDACS request');
   panel.destroy();
 });
 

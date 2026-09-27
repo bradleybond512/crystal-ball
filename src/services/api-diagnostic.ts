@@ -18,6 +18,7 @@
  */
 
 import { dataFreshness, type DataSourceState } from './data-freshness';
+import { GDACS_COVERAGE_NOTE } from './gdacs-coverage';
 import { getCircuitBreakerStatus, getCircuitBreakerCooldownInfo } from '@/utils/circuit-breaker';
 import { getOfflineState, getSourceAge } from './offline-staleness';
 
@@ -70,6 +71,7 @@ export interface DiagnosticReport {
 }
 
 export interface PingResult {
+  scope?: string;
   sourceId: string;
   url: string;
   ok: boolean;
@@ -91,7 +93,7 @@ const SILENT_AFTER_SEC = 6 * 60 * 60;  // 6 hours (likely no longer updating)
 const PROBE_ENDPOINTS: Record<string, string> = {
   weather: 'https://api.weather.gov/alerts/active?limit=1',
   usgs: 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limit=1',
-  gdacs: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtypes=&alertlevel=&country=&fromDate=',
+  gdacs: 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP?eventtype=EQ',
   'open-meteo': 'https://api.open-meteo.com/v1/forecast?latitude=40.7&longitude=-74&current=temperature_2m',
   rainviewer: 'https://api.rainviewer.com/public/weather-maps.json',
   'noaa-swpc': 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json',
@@ -122,7 +124,7 @@ function notesForSource(src: SourceDiagnostic): string[] {
   if (src.status === 'failing' && src.onCooldown) {
     notes.push(`Circuit breaker tripped; will retry in ${src.cooldownRemainingSeconds}s.`);
   }
-  if (src.status === 'degraded') {
+  if (src.status === 'degraded' && src.ageSeconds !== null && src.ageSeconds > STALE_AFTER_SEC) {
     notes.push(`Stale — no update in ${Math.round((src.ageSeconds ?? 0) / 60)}min.`);
   }
   if (src.lastError) {
@@ -134,6 +136,7 @@ function notesForSource(src: SourceDiagnostic): string[] {
   if (src.requiredForRisk && src.status !== 'healthy') {
     notes.push('This source feeds the risk/correlation engines — degradation reduces signal quality.');
   }
+  if (src.id.toLowerCase() === 'gdacs') notes.push(GDACS_COVERAGE_NOTE);
   return notes;
 }
 
@@ -156,7 +159,7 @@ function diagnosticForSource(
   const diagnostic: SourceDiagnostic = {
     id: source.id,
     name: source.name,
-    status,
+    status: sourceId === 'gdacs' && status === 'healthy' ? 'degraded' : status,
     lastUpdateMs: source.lastUpdate?.getTime() ?? null,
     ageSeconds,
     lastError: source.lastError,
@@ -291,6 +294,9 @@ export function diagnoseSource(sourceId: string): SourceDiagnostic | null {
 export async function pingSource(sourceId: string): Promise<PingResult> {
   const url = PROBE_ENDPOINTS[sourceId];
   const start = Date.now();
+  const scope = sourceId === 'gdacs'
+    ? { scope: 'EQ endpoint reachability only; not aggregate GDACS coverage.' }
+    : {};
   if (!url) {
     return {
       sourceId,
@@ -310,6 +316,7 @@ export async function pingSource(sourceId: string): Promise<PingResult> {
     clearTimeout(timeoutId);
     const latencyMs = Date.now() - start;
     return {
+      ...scope,
       sourceId,
       url,
       ok: response.ok,
@@ -320,6 +327,7 @@ export async function pingSource(sourceId: string): Promise<PingResult> {
     };
   } catch (error) {
     return {
+      ...scope,
       sourceId,
       url,
       ok: false,
